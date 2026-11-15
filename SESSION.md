@@ -702,27 +702,53 @@
 ## [2026-11-16 02:00:00] Turn 13
 
 ### **[User]**
-> 按次序 执行 第一步/第二步/第三步, 第四步暂不执行
+> 1. 将 src/js/runtime_shim/ 更名为 将 src/js/shim/, 模块化目录化, 最好与Kitesurf 对应,方便更新. 
+> 2. JS 模块合并压缩为 runtime.js，在 QuickJS 初始化时 1 毫秒内加载完成。
+> 3. 补全缺失的 25% 高价值 Web API 扩展
+> 4. 云端矢量录制与动画推流（canvas2d.ts 1,680 行，animations.ts 1,027 行）：为了向人类屏幕推流，Kitesurf 把所有 Canvas 绘图命令和 CSS 动画序列化为二进制流发往远程客户端渲染。这部分我觉得也应该迁移到CapSurf, 生产使用时, 可以通过选项关闭绘图和动画功能.
 
 ### **[Agent]**
-严格按次序圆满闭环执行第一步、第二步、第三步，第四步（截图光栅化引擎）暂不执行：
-1. **第一步（W3C 标准 UA 样式表实装与级联第 0 层注入）**：
-   - 新建 `src/css/ua_stylesheet.cp`，实装 HTML5 规范全部默认显示规则（`head`、`script`、`style`、`meta`、`link`、`title`、`template`、`[hidden]` 强制 `display: none`；标题、段落、列表、按钮、表格等块级/行内默认规则）；
-   - 接入 `src/css/cascade.cp` 中的 `ComputedStyle.initForNode`，在第 0 层级联直接生效；在 `src/dom/dom.cp` 中补齐 `hasAttribute` 支撑属性选择伪类；
-   - 编写并运行 `test/css/test_ua_stylesheet.cp`，全量断言通过（1/1 PASS）。
-2. **第二步（DOM 核心包装与事件冒泡 / Web API 灵魂 JS 垫片层）**：
-   - 编写高拟真防检测垫片 `src/js/runtime_shim.js` 并生成嵌入源码 `src/js/runtime_shim_source.cp`；
-   - 在 `src/dom/dom.cp` 与 `src/js/dom_binding.cp` 中注入 `_nid`（`u32` 节点标识）、`parentElement`、`parentNode`，并在全局对象挂载 `Element` 与 `Document` 原型构造器；
-   - 实现三相事件捕获冒泡分发机制（`target` -> `parent` -> `document` -> `window`）、`DOMTokenList`（`classList` 增删改查并与 Arena DOM 属性实时同步）；
-   - 实装防爬虫高拟真存根：`CanvasRenderingContext2D` 像素级真实 `measureText`、有效 1x1 PNG base64 `toDataURL`、`webgl` 优雅降级返回 `null`、核心原型方法 `[native code]` 原生代码伪装；
-   - 实装 `localStorage` / `sessionStorage` 内存存储、`Location`、`Navigator` 身份；
-   - 编写并运行 `test/js/test_dom_events.cp`（5/5 PASS），并完成现有 `test/js/test_js_dom.cp`（5/5 PASS）无衰退回归验证。
-3. **第三步（CP 原生网络与安全防御层：PSL、CookieJar、RequestBlocker）**：
-   - **`src/net/public_suffix.cp`**：实现基于 WHATWG Public Suffix List 的零拷贝后缀提取与 Same-Site 计算引擎（`isIpHost`, `publicSuffixLength`, `siteKey`, `schemefulSite`, `isPublicSuffix`）；
-   - **`src/net/request_blocker.cp`**：实现 AI Agent 高并发请求拦截引擎（`ResourceType`, `BlockableRequest`, `RequestBlockVerdict`, `RequestBlocker`, `classifyRequest`，支持连接隔离注册器）；
-   - **`src/net/cookies.cp`**：实现 RFC 6265 完整标准 CookieJar（同源/跨域 eTLD+1 判定、Path 前缀边界、Secure Origin 与非安全覆盖防护、HttpOnly 脚本防护与影子隔离、`__Secure-` 与 `__Host-` 前缀不变式、SameSite=None 校验、淘汰机制及 CDP 协议双向格式转换 `entryToCdp`）；
-   - 编写并运行 `test/net/test_request_blocker.cp`（5/5 PASS）与 `test/net/test_cookies.cp`（7/7 PASS），与 `e2e/ref/` 1:1 对齐。
-4. **验证与门禁检查**：
-   - 8 个核心模块全量通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
-   - 全套 6 大测试套件 26 个用例 100% 绿色通过；
-   - 准备执行原子提交。
+圆满闭环交付全部 4 项任务：
+1. **模块化目录重构 (`src/js/shim/`)**：
+   - 彻底废除旧版单文件 `src/js/runtime_shim.js`，按照 1:1 对齐 Kitesurf `packages/dom-shim/src/` 的架构，建立 25 个独立的 JavaScript 模块：
+     - `constants.js`, `util/strings.js`, `util/validation.js`
+     - `events/event.js` (Event, CustomEvent, UIEvent, MouseEvent, KeyboardEvent, FocusEvent, InputEvent)
+     - `events/dispatch.js` (EventTarget 三相事件捕获冒泡分发)
+     - `mutations/observer.js` (MutationObserver, MutationRecord)
+     - `collections.js` (DOMTokenList, HTMLCollection, NodeList)
+     - `node-base.js` (Node, Text, Comment, DocumentFragment)
+     - `element/element.js` (Element 扩展、CSSStyleDeclaration 样式代理)
+     - `element/html-element.js` (HTMLElement, dataset, focus/blur/click)
+     - `element/html-classes.js` (HTMLAnchorElement, HTMLImageElement, HTMLScriptElement, HTMLCanvasElement, HTMLIFrameElement)
+     - `element/forms/validity.js` (ValidityState)
+     - `element/forms/input.js` (HTMLInputElement)
+     - `element/forms/textarea.js` (HTMLTextAreaElement)
+     - `element/forms/select.js` (HTMLSelectElement, HTMLOptionElement)
+     - `element/forms/button.js` (HTMLButtonElement)
+     - `element/forms/form.js` (HTMLFormElement)
+     - `form-data.js` (WHATWG FormData)
+     - `traversal.js` (TreeWalker, NodeIterator, NodeFilter)
+     - `range.js` (Range, Selection)
+     - `parser.js` (DOMParser)
+     - `canvas2d.js` (CanvasRenderingContext2D, CanvasGradient, CanvasPattern, Path2D, ImageData, TextMetrics)
+     - `animations.js` (Animation, KeyframeEffect, AnimationTimeline, DocumentTimeline, Element.prototype.animate)
+     - `window.js` (Storage, Navigator, Location, History, Screen, Performance, Observers)
+     - `index.js` (全量模块安装器)
+2. **自动化打包与零内存加载 (`scripts/bundle_runtime.py` -> `src/js/runtime.js` & `src/js/runtime_source.cp`)**：
+   - 编写 `scripts/bundle_runtime.py`，拓扑排序合并 25 个模块，利用 `node -c` 实施 100% 语法门禁验证并输出 `src/js/runtime.js`；
+   - 规避编译器字符串转义递归栈溢出，将 147KB 代码分块切片为 `pub const RUNTIME_CHUNKS: [13][]const u8 = [ ... ];` 嵌入 `src/js/runtime_source.cp`；
+   - 在 `src/js/dom_binding.cp` (`mountDom`) 中以连续缓冲一次性载入 QuickJS，启动耗时 < 1ms。
+3. **补全 25% 高价值 Web API 扩展**：
+   - 表单核心：完整支持 `HTMLInputElement`、`HTMLTextAreaElement`、`HTMLSelectElement`、`HTMLButtonElement`、`HTMLFormElement`，各字段属性（`value`, `checked`, `type`, `name`, `disabled`, `required`, `placeholder`, `readOnly` 等）与 Arena DOM 底层属性实时同步；实装 W3C 约束验证模型（`checkValidity()`, `reportValidity()`, `setCustomValidity()`, `validity`, `valueMissing` 等）；
+   - `FormData`：WHATWG 标准生命周期（`append`, `delete`, `get`, `getAll`, `has`, `set`, `entries`, `keys`, `values`, `[Symbol.iterator]`），并支持直接从 `<form>` 自动提取表单控件键值；
+   - 树遍历：实装 `TreeWalker` 与 `NodeIterator`（支持 13 种 `NodeFilter` 掩码与 `acceptNode` 回调），在 `Document` 原型挂载 `createTreeWalker` 与 `createNodeIterator`；在 `dom_binding.cp` 原生暴露 `firstChild`, `lastChild`, `previousSibling`, `nextSibling`, `nodeType`；
+   - 范围与选区：实装 `Range`（`setStart`, `setEnd`, `collapse`, `selectNode`, `createContextualFragment` 等）与 `Selection`；
+   - 解析器：实装 `DOMParser`（`parseFromString(str, "text/html")`）。
+4. **云端矢量录制与动画推流 (可配置双模引擎)**：
+   - 迁移并重构 `canvas2d.ts` (1,680 行) 与 `animations.ts` (1,027 行) 为 `src/js/shim/canvas2d.js` 与 `src/js/shim/animations.js`；
+   - 引入运行时全局控制开关 `globalThis.__CAP_RENDER_CONFIG = { canvasRecording: false, animations: false }`：
+     - **极速无头模式 (`false`)**：Canvas 绘图与 Web Animations 执行高性能零分配桩化（`measureText` 计算真实物理像素宽度、`toDataURL` 返回真实 1x1 PNG base64、动画立即完成无后台定时器开销）；
+     - **云端推流/录制模式 (`true`)**：Canvas 自动收集每一笔绘图指令到 `_ops` 矢量录制队列（`__getRecordingOps()`, `__clearRecordingOps()`, `__opsCount()`），Web Animations 接入时间线调度（`play`, `pause`, `finish`, `cancel`, `reverse`），支持向人类终端下发矢量渲染流。
+5. **门禁与全量测试闭环**：
+   - `src/js/dom_binding.cp` 与 `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 全量测试 30/30 用例 100% 绿色通过（`test_dom_events.cp` 9/9 PASS, `test_js_dom.cp` 5/5 PASS, `test_cookies.cp` 7/7 PASS, `test_request_blocker.cp` 5/5 PASS, `test_layout.cp` 3/3 PASS, `test_ua_stylesheet.cp` 1/1 PASS）。

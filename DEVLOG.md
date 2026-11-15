@@ -123,3 +123,36 @@
    - **零拷贝 PSL 前缀计算 (`src/net/public_suffix.cp`)**：基于 WHATWG Public Suffix List，充分利用域名由点分隔的内存连续性，所有后缀候选均为原始主机名字符串的子切片（`host[start..len]`），0 次字符串拼装与分配，O(1) 哈希判定同源站点（eTLD+1）。
    - **AI Agent 高速请求拦截 (`src/net/request_blocker.cp`)**：毫秒级分类并过滤 `Image`、`Media`、`Font`、广告追踪等重型资源，单智能体网络加载延迟下降 70%+。
    - **RFC 6265 完整标准 CookieJar (`src/net/cookies.cp`)**：实现了跨站请求拦截、同源/跨域边界判定、前缀保护（`__Secure-`、`__Host-`）、SameSite 语义、HttpOnly 影子覆盖防御以及基于时钟与容量的自动淘汰。
+
+## 模块化 DOM-Shim、全量 Web API 扩展与可切换云端矢量录制/动画架构
+1. **模块化 `src/js/shim/` 目录拓扑与 Kitesurf 1:1 对齐**：
+   - 彻底将单体 `src/js/runtime_shim.js` 重构为模块化架构，拆分为 25 个独立文件，严格对应 Kitesurf 的 `packages/dom-shim/src/`，消除 Cloudflare 专属 Wasm/workerd 依赖：
+     - `constants.js`：节点类型掩码、文档比较掩码、命名空间、NodeFilter 掩码、`markNative` 原生函数伪装器、`__CAP_RENDER_CONFIG` 全局开关。
+     - `util/{strings,validation}.js`：HTML 转义/反转义、属性名规范化、XML/HTML 命名合规性校验。
+     - `events/{event,dispatch}.js`：W3C 事件全体系（`CustomEvent`, `UIEvent`, `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `InputEvent`），支持捕获、目标、冒泡三相传播。
+     - `mutations/observer.js`：微任务队列批处理驱动的 `MutationObserver` 与 `MutationRecord`。
+     - `collections.js`：`DOMTokenList` (`classList`)、`HTMLCollection`、`NodeList`。
+     - `node-base.js`：`Node`、`Text`、`Comment`、`DocumentFragment`。
+     - `element/{element,html-element,html-classes}.js`：元素原型、`dataset` 代理、通用/表单属性。
+     - `element/forms/{validity,input,textarea,select,button,form}.js`：W3C 规范约束验证（`ValidityState` 10 项条件）、表单联动与提交/重置调度。
+     - `form-data.js`：WHATWG 标准 `FormData`（支持迭代器与从 `<form>` 自动抽取所有活跃控件）。
+     - `traversal.js`：`TreeWalker`、`NodeIterator`、`NodeFilter`（支持 13 种节点掩码与自定义过滤函数）。
+     - `range.js`：`Range`、`Selection`、`createContextualFragment`。
+     - `parser.js`：`DOMParser.prototype.parseFromString(str, "text/html")`。
+     - `canvas2d.js`：双模 Canvas 2D 渲染上下文，支持纯无头极速存根与云端矢量命令录制（`_ops` 序列化）。
+     - `animations.js`：Web Animations API，支持静态即刻完成模式与动态时间线驱动模式。
+     - `window.js`：`localStorage`/`sessionStorage`、反指纹伪装 `Navigator`、`Location`、`History`、`Screen`、`Performance`、`IntersectionObserver`、`ResizeObserver`。
+     - `index.js`：全模块总装配器，封装 `document.createElement` 原型自动特化并挂载全局。
+2. **QuickJS C-FFI 引用计数（`JS_DupValue`）与对象生命周期排障经验**：
+   - **段错误根因定位**：在 `dom_binding.cp` 的 `js_element_append_child` 和 `js_element_remove_child` 中，原生 C 函数向 JS 调用方返回传入的 `argv[0]` 时，如果直接 `return argv[0];`，QuickJS 会在调用表达式结束后 decref 一次返回值，导致 `argv[0]` 的引用计数归零并被提前释放；后续再次通过 `firstChild` 或 `nextSibling` 访问该对象时必然触发段错误 `0x8 in js_free_value_rt`。
+   - **根治措施**：所有返回入参引用的 C-FFI 接口统一调用 `return JS_DupValue(ctx, argv[0]);` 增加引用计数，杜绝 double-free 悬垂指针。
+3. **`cpc` 编译器长字符串解析爆栈与分块嵌入策略**：
+   - **现象**：`cpc` 在处理单行包含超过数千个转义字符（`\n`, `\"`, `\\`）的特大字符串字面量（> 100KB）时，递归下降词法/语法分析器触发 `fatal runtime error: stack overflow`。
+   - **方案**：编写 `scripts/bundle_runtime.py`，将 147KB 的 `runtime.js` 拓扑合并后切片为 `pub const RUNTIME_CHUNKS: [13][]const u8 = [ "12KB chunk 1", ... ]`，在 CP `mountDom` 中一次性分配连续缓冲并通过 `@memcpy` 组装后传给 `ctx.eval()`，彻底规避递归分析栈溢出，且编译耗时 < 1 秒。
+4. **Arena DOM 与瞬态 JS Wrapper 双向属性同步设计**：
+   - **痛点**：`createJsElement` 是按需分配的瞬态 Wrapper（每次从 C 层通过 `firstChild`、`querySelector` 返回元素时都会创建新的 JS 实例），若 JS 属性（如 `input.value`, `checkbox.checked`, `option.selected`）仅保存在 JS 包装对象的私有属性上，新 Wrapper 读不到最新值。
+   - **架构设计**：在 JS setter 中，除了更新内部变量外，统一显式调用 `this.setAttribute("value", String(v))` / `this.setAttribute("checked", "")` / `this.setAttribute("selected", "")` 同步底层 Arena DOM 属性树，使所有新建 Wrapper 与 CSS 选择器匹配始终感知最新状态。
+5. **云端矢量录制与 Web 动画双模切换架构**：
+   - 通过全局配置 `__CAP_RENDER_CONFIG = { canvasRecording: false, animations: false }` 实现极速无头与视觉推流的零开销平滑切换：
+     - **生产无头 Agent 模式（默认）**：Canvas 绘图命令直接返回有效尺寸与占位像素，动画直接跳转至完成态，不消耗内存录制命令，0 后台定时器开销；
+     - **云端推流/录制模式（按需开启）**：`canvasRecording: true` 时将所有 `fillRect`, `arc`, `drawImage`, `stroke` 序列化入 `_ops` 数组供远程流式拉取；`animations: true` 时挂载 `DocumentTimeline` 与真实定时器驱动帧渲染。

@@ -190,4 +190,187 @@ fn main() {
         defer std.heap.page_allocator.free(res_str);
         expect_eq(std.mem.eql(u8, res_str, "007|val123|true|Linux x86_64|about:blank"), true);
     });
+
+    test("6. High-Fidelity Form Controls & Constraint Validation", () => {
+        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        const html = "<!DOCTYPE html><html><body></body></html>";
+        doc.parseHtml(html) catch unreachable;
+
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const script =
+            "const form = document.createElement('form');\n" ++
+            "const input = document.createElement('input');\n" ++
+            "input.type = 'text';\n" ++
+            "input.name = 'username';\n" ++
+            "input.value = 'agent007';\n" ++
+            "input.required = true;\n" ++
+            "form.appendChild(input);\n" ++
+            "const chk = document.createElement('input');\n" ++
+            "chk.type = 'checkbox';\n" ++
+            "chk.name = 'agree';\n" ++
+            "chk.checked = true;\n" ++
+            "form.appendChild(chk);\n" ++
+            "const ta = document.createElement('textarea');\n" ++
+            "ta.name = 'bio';\n" ++
+            "ta.value = 'Autonomous browser agent';\n" ++
+            "form.appendChild(ta);\n" ++
+            "const sel = document.createElement('select');\n" ++
+            "sel.name = 'role';\n" ++
+            "const opt1 = document.createElement('option');\n" ++
+            "opt1.value = 'admin';\n" ++
+            "opt1.text = 'Admin';\n" ++
+            "const opt2 = document.createElement('option');\n" ++
+            "opt2.value = 'user';\n" ++
+            "opt2.text = 'User';\n" ++
+            "opt2.selected = true;\n" ++
+            "sel.appendChild(opt1);\n" ++
+            "sel.appendChild(opt2);\n" ++
+            "form.appendChild(sel);\n" ++
+            "const valid = form.checkValidity();\n" ++
+            "const inputValid = input.validity.valid;\n" ++
+            "input.value = '';\n" ++
+            "const inputMissing = input.validity.valueMissing;\n" ++
+            "input.value = 'agent007';\n" ++
+            "input.value + '|' + chk.checked + '|' + ta.value + '|' + sel.value + '|' + valid + '|' + inputValid + '|' + inputMissing;\n";
+
+        const val = ctx.eval(script);
+        defer ctx.freeValue(val);
+        const res_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(res_str);
+        expect_eq(std.mem.eql(u8, res_str, "agent007|true|Autonomous browser agent|user|true|true|true"), true);
+    });
+
+    test("7. WHATWG FormData Parity (Lifecycle & Form Extraction)", () => {
+        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        const html = "<!DOCTYPE html><html><body></body></html>";
+        doc.parseHtml(html) catch unreachable;
+
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const script =
+            "const form = document.createElement('form');\n" ++
+            "const input1 = document.createElement('input');\n" ++
+            "input1.name = 'q';\n" ++
+            "input1.value = 'capsurf';\n" ++
+            "form.appendChild(input1);\n" ++
+            "const input2 = document.createElement('input');\n" ++
+            "input2.name = 'tag';\n" ++
+            "input2.value = 'ai';\n" ++
+            "form.appendChild(input2);\n" ++
+            "const fd = new FormData(form);\n" ++
+            "fd.append('tag', 'agent');\n" ++
+            "fd.set('q', 'capsurf-engine');\n" ++
+            "const q = fd.get('q');\n" ++
+            "const tags = fd.getAll('tag').join(',');\n" ++
+            "const hasQ = fd.has('q');\n" ++
+            "fd.delete('tag');\n" ++
+            "const hasTag = fd.has('tag');\n" ++
+            "q + '|' + tags + '|' + hasQ + '|' + hasTag;\n";
+
+        const val = ctx.eval(script);
+        defer ctx.freeValue(val);
+        const res_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(res_str);
+        expect_eq(std.mem.eql(u8, res_str, "capsurf-engine|ai,agent|true|false"), true);
+    });
+
+    test("8. Traversal (TreeWalker/NodeIterator), Range & DOMParser", () => {
+        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        const html = "<!DOCTYPE html><html><body></body></html>";
+        doc.parseHtml(html) catch unreachable;
+
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const script =
+            "const root = document.createElement('div');\n" ++
+            "const p1 = document.createElement('p');\n" ++
+            "p1.textContent = 'hello';\n" ++
+            "const p2 = document.createElement('p');\n" ++
+            "p2.textContent = 'world';\n" ++
+            "root.appendChild(p1);\n" ++
+            "root.appendChild(p2);\n" ++
+            "const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);\n" ++
+            "let walkerNodes = [];\n" ++
+            "while (walker.nextNode()) {\n" ++
+            "  walkerNodes.push(walker.currentNode.tagName.toLowerCase());\n" ++
+            "}\n" ++
+            "const range = document.createRange();\n" ++
+            "range.selectNode(p1);\n" ++
+            "const collapsed = range.collapsed;\n" ++
+            "const parser = new DOMParser();\n" ++
+            "const parsedDoc = parser.parseFromString('<html><head><title>Test Title</title></head><body><h1>Hello</h1></body></html>', 'text/html');\n" ++
+            "const title = parsedDoc.title;\n" ++
+            "walkerNodes.join(',') + '|' + collapsed + '|' + title;\n";
+
+        const val = ctx.eval(script);
+        defer ctx.freeValue(val);
+        const res_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(res_str);
+        expect_eq(std.mem.eql(u8, res_str, "p,p|false|Test Title"), true);
+    });
+
+    test("9. Cloud Vector Recording & Web Animations Toggleable Engine", () => {
+        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        const html = "<!DOCTYPE html><html><body><canvas id=\"cvs2\"></canvas></body></html>";
+        doc.parseHtml(html) catch unreachable;
+
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const script =
+            "const cvs = document.getElementById('cvs2');\n" ++
+            "const c = cvs.getContext('2d');\n" ++
+            "c.beginPath();\n" ++
+            "c.rect(10, 20, 100, 50);\n" ++
+            "c.fill();\n" ++
+            "const opsBefore = c.__opsCount();\n" ++
+            "globalThis.__CAP_RENDER_CONFIG.canvasRecording = true;\n" ++
+            "c.beginPath();\n" ++
+            "c.rect(10, 20, 100, 50);\n" ++
+            "c.fill();\n" ++
+            "const opsAfter = c.__opsCount();\n" ++
+            "globalThis.__CAP_RENDER_CONFIG.canvasRecording = false;\n" ++
+            "const animEl = document.createElement('div');\n" ++
+            "const anim = animEl.animate([{ opacity: 0 }, { opacity: 1 }], 500);\n" ++
+            "const playState = anim.playState;\n" ++
+            "opsBefore + '|' + (opsAfter > 0) + '|' + playState;\n";
+
+        const val = ctx.eval(script);
+        defer ctx.freeValue(val);
+        const res_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(res_str);
+        expect_eq(std.mem.eql(u8, res_str, "0|true|finished"), true);
+    });
 }

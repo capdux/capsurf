@@ -119,3 +119,24 @@
 - **全量测试与代码门禁**：
   - 8 个核心模块通过 `cpc_brief.py` 4 道门禁。
   - 全套 26 / 26 测试用例 100% 绿色通过。
+
+## Modular Web API Runtime Shim, Full Forms/Traversal Extensions & Toggleable Cloud Canvas/Animations
+- **模块化目录架构重构 (`src/js/shim/`)**：
+  - 1:1 对齐 Kitesurf `packages/dom-shim/src/` 结构，将原单体脚本解耦为 25 个微模块（包含 `constants`, `util/`, `events/`, `mutations/`, `collections`, `node-base`, `element/`, `element/forms/`, `form-data`, `traversal`, `range`, `parser`, `canvas2d`, `animations`, `window`, `index`）。
+  - 实现自动化构建脚本 `scripts/bundle_runtime.py`，完成拓扑打包、`node -c` 语法门禁检验，并生成零编译开销的 `src/js/runtime_source.cp`（分块常量数组切片）。
+- **补全 25% 高价值 Web API 扩展**：
+  - **表单控件与约束验证**：完整实现 `HTMLInputElement`、`HTMLTextAreaElement`、`HTMLSelectElement`、`HTMLOptionElement`、`HTMLButtonElement`、`HTMLFormElement`。实现 `value`, `checked`, `selected` 与底层 Arena DOM 属性原子双向同步；实现 W3C `ValidityState` 与 `checkValidity()` / `reportValidity()` / `setCustomValidity()`。
+  - **WHATWG `FormData`**：实现完整增删改查及迭代器，支持以 `HTMLFormElement` 为数据源直接萃取表单控件键值对。
+  - **DOM 树遍历 (Traversal)**：实现 `TreeWalker` 与 `NodeIterator`，支持 13 种 `NodeFilter` 节点类型过滤与过滤函数回调；在 `dom_binding.cp` 原生暴露 `firstChild`, `lastChild`, `previousSibling`, `nextSibling`, `nodeType`。
+  - **范围与选区 (Range & Selection)**：实现 `Range` 边界计算与 `createContextualFragment`，实装 `Selection`。
+  - **DOMParser**：实现 `DOMParser.prototype.parseFromString(str, "text/html")`。
+- **云端矢量录制与动画推流 (可配置双模引擎)**：
+  - **`src/js/shim/canvas2d.js`**：迁移重构 Kitesurf `canvas2d.ts`（1,680 行），支持通过 `globalThis.__CAP_RENDER_CONFIG.canvasRecording` 控制：
+    - `false` 时：极速零开销无头模式，返回精确物理文字盒大小与 1x1 PNG 数据；
+    - `true` 时：记录完整 2D 绘图命令序列到 `_ops` 队列，支持 `__getRecordingOps()` / `__clearRecordingOps()` 导出云端推流。
+  - **`src/js/shim/animations.js`**：迁移重构 Kitesurf `animations.ts`（1,027 行），支持通过 `globalThis.__CAP_RENDER_CONFIG.animations` 控制：
+    - `false` 时：静态极速模式，立即将最终关键帧应用于元素样式并标记 `finished`，无后台循环定时器；
+    - `true` 时：完整时间线驱动调度，支持 `play`, `pause`, `finish`, `cancel`, `reverse` 与动画事件分发。
+- **全量测试与门禁验证**：
+  - 核心模块通过 `cpc_brief.py` 4 道门禁。
+  - 全工程 30 / 30 测试用例 100% 绿色通过（包含新增的 4 个高阶测试场景）。

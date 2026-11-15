@@ -41,7 +41,7 @@ import {
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { RUNTIME_SHIM_SOURCE } from "./runtime_shim_source.cp";
+import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 
 pub threadlocal let g_element_class_id: u32 = 0;
 pub threadlocal let g_document_class_id: u32 = 0;
@@ -163,7 +163,6 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
 }
 
 @c fn js_element_append_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
-    * = ctx;
     if (argc < 1) return jsUndefined();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
     if (ptr == null) return jsUndefined();
@@ -172,11 +171,10 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     if (child_ptr == null) return jsUndefined();
     const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
     el.dom_ctx.doc.appendChild(el.node_id, child_el.node_id);
-    return argv[0];
+    return JS_DupValue(ctx, argv[0]);
 }
 
 @c fn js_element_remove_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
-    * = ctx;
     if (argc < 1) return jsUndefined();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
     if (ptr == null) return jsUndefined();
@@ -185,7 +183,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     if (child_ptr == null) return jsUndefined();
     const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
     el.dom_ctx.doc.removeChild(child_el.node_id);
-    return argv[0];
+    return JS_DupValue(ctx, argv[0]);
 }
 
 @c fn js_element_get_bounding_client_rect(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -254,6 +252,18 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const new_cls_dup = el.dom_ctx.doc.allocator.dupe(u8, new_cls) catch new_cls;
     el.dom_ctx.doc.setAttribute(el.node_id, "class", new_cls_dup);
     return jsUndefined();
+}
+
+@c fn js_element_get_node_type(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = ctx;
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsInt(1);
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsInt(1);
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    return jsInt(@intFromEnum(node.node_type));
 }
 
 @c fn js_element_get_tag_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -334,6 +344,58 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
         return JS_GetPropertyStr(ctx, global_obj, "document");
     }
     return createJsElement(ctx, el.dom_ctx, parent_id);
+}
+
+@c fn js_element_get_first_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    if (node.first_child == NULL_NODE) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, node.first_child);
+}
+
+@c fn js_element_get_last_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    if (node.last_child == NULL_NODE) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, node.last_child);
+}
+
+@c fn js_element_get_previous_sibling(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    if (node.prev_sibling == NULL_NODE) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, node.prev_sibling);
+}
+
+@c fn js_element_get_next_sibling(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    if (node.next_sibling == NULL_NODE) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, node.next_sibling);
 }
 
 @c fn js_document_finalizer(rt: *JSRuntime, val: JSValue) {
@@ -482,9 +544,14 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineGetterSetter(raw_ctx, el_proto, "id", js_element_get_id, js_element_set_id);
     defineGetterSetter(raw_ctx, el_proto, "className", js_element_get_class_name, js_element_set_class_name);
     defineGetterSetter(raw_ctx, el_proto, "tagName", js_element_get_tag_name, null);
+    defineGetterSetter(raw_ctx, el_proto, "nodeType", js_element_get_node_type, null);
     defineGetterSetter(raw_ctx, el_proto, "textContent", js_element_get_text_content, js_element_set_text_content);
     defineGetterSetter(raw_ctx, el_proto, "parentElement", js_element_get_parent_element, null);
     defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, null);
+    defineGetterSetter(raw_ctx, el_proto, "firstChild", js_element_get_first_child, null);
+    defineGetterSetter(raw_ctx, el_proto, "lastChild", js_element_get_last_child, null);
+    defineGetterSetter(raw_ctx, el_proto, "previousSibling", js_element_get_previous_sibling, null);
+    defineGetterSetter(raw_ctx, el_proto, "nextSibling", js_element_get_next_sibling, null);
 
     JS_SetClassProto(raw_ctx, g_element_class_id, el_proto);
 
@@ -496,6 +563,8 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, doc_proto, "createElement", js_document_create_element, 1);
     defineGetterSetter(raw_ctx, doc_proto, "body", js_document_get_body, null);
     defineGetterSetter(raw_ctx, doc_proto, "documentElement", js_document_get_document_element, null);
+    defineGetterSetter(raw_ctx, doc_proto, "firstChild", js_element_get_first_child, null);
+    defineGetterSetter(raw_ctx, doc_proto, "lastChild", js_element_get_last_child, null);
 
     JS_SetClassProto(raw_ctx, g_document_class_id, doc_proto);
 
@@ -541,8 +610,22 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, console_obj, "error", js_console_log, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
 
-    // Evaluate runtime shim
-    const shim_val = ctx.eval(RUNTIME_SHIM_SOURCE);
+    // Assemble and evaluate modular runtime shim
+    let total_len: usize = 0;
+    for (chunk of RUNTIME_CHUNKS) {
+        total_len += chunk.len;
+    }
+
+    const runtime_buf = std.heap.page_allocator.alloc(u8, total_len) catch return error.RuntimeSourceAllocFailed;
+    defer std.heap.page_allocator.free(runtime_buf);
+
+    let offset: usize = 0;
+    for (chunk of RUNTIME_CHUNKS) {
+        @memcpy(runtime_buf[offset .. offset + chunk.len], chunk);
+        offset += chunk.len;
+    }
+
+    const shim_val = ctx.eval(runtime_buf);
     if (jsIsException(shim_val)) {
         const exc = ctx.getException();
         const exc_str = ctx.toCString(exc);
