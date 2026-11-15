@@ -96,3 +96,12 @@
      - 零 GC 跨界开销，开发效率提升 10 倍，同时 100% 免疫内存悬垂风险。
 3. **测试套件全量回归验证**：
    - 目录拓扑迁移后，所有测试路径更新无误，5 大测试套件 17 项测试全绿通过，验证了单数规范与 `cap.json` 配置的完整性。
+
+## 全量 E2E 规范与靶场收纳架构设计
+1. **测试资产分级双轨制**：
+   - **单测轨（Internal Unit Tests -> `test/`）**：针对 CapSurf 底层数据结构（Arena DOM、CSS Selectors、Cascade、Layout、Cookies、RequestBlocker、AXTree），用 CP 原生编写，毫秒级自闭环编译执行；原始参考保留在 `e2e/ref/`（95 个）。
+   - **端到端轨（External E2E Specs -> `e2e/spec/`）**：针对整页与网络/脚本复杂交互，由外部 TS 客户端驱动 580 个标准场景，通过真实的 CDP WebSocket 协议向 CapSurf 发起操作，自动度量 W3C 与 Chrome 兼容率。
+2. **靶场资产集中化 (`e2e/page/`)**：
+   - 将原散落在 `fixtures-worker/assets`（221 个）与 `e2e/html`（36 个）的 HTML/CSS/JS 页面统一聚拢至 `e2e/page/`，通过软链与相对路径兼容，消除目录割裂。
+3. **架构负资产物理隔离**：
+   - 坚决将依赖 `workerd` 的 56 个 Cloudflare Worker 内部桩代码隔离在 `vendor/kitesurf/`，CapSurf 原生使用 Linux POSIX 标准网络栈，杜绝无意义的平台绑定。

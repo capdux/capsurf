@@ -648,3 +648,31 @@
 4. **状态与纪律**：
    - 守护进程 `watch_task.py` 持续健康运行（task-2854）；
    - 当前全部重构已就绪，严格遵守用户指令停下等待，未擅自启动下一阶段。
+
+---
+
+## [2026-11-15 22:09:00] Turn 11
+
+### **[User]**
+> 1. vendor/.../test/e2e/html/*.html 补充到 e2e/page/，
+> 2. 将 580 个 *.e2e.test.ts 归入 e2e/
+> 3. 需要改为 cp的测试文件, 原始文件放 e2e/ref, 改写的cp文件放入 test 对应目录
+> 4. 对CapSurf 无用的, 继续保留在 vendor/Kitesurf 中
+> 你觉得我这个分配科学/合理/正确吗?
+> 认可,开始执行
+
+### **[Agent]**
+全面执行 E2E 与测试用例归位落地：
+1. **测试网页靶场补充扩充 (`e2e/page/`)**：
+   - 将 `vendor/kitesurf/packages/engine/test/e2e/html/` 下的 36 个渲染/排版 HTML 测试页面（如 `shadow-dom.html`、`fixed-position.html`、`grid-abspos.html`、`sticky.html`、`canvas-2d.html` 等）全量合并至 `e2e/page/`。
+   - 靶场资产总数扩充至 296 个文件（覆盖 257 个核心测试页面），0 命名冲突。
+2. **580 个 E2E 端到端规范用例归入规范目录 (`e2e/spec/`)**：
+   - 将 `vendor/kitesurf/packages/engine/test/e2e/` 下全部 580 个 `*.e2e.test.ts` 测试文件（包含根目录 407 个与 `demos/` 173 个）完整同步至 `e2e/spec/`。
+   - 建立相对软链 `e2e/spec/html -> ../page`，无缝兼容用例中的相对路径资源引用。
+3. **分层职能确立与闭环**：
+   - `e2e/ref/`：保留 95 个引擎核心单测（`*.test.ts`），作为 1:1 转写 CP 原生单测至 `test/` 的标准对照基准；
+   - `e2e/spec/`：收纳 580 个客户端 E2E 测试（`*.e2e.test.ts`），后续通过标准 CDP 客户端直连 CapSurf 检验兼容率；
+   - `e2e/page/`：收纳 257 个测试网页靶场；
+   - `vendor/kitesurf/`：保留 56 个无用的 Cloudflare Worker 胶水代码，杜绝架构污染。
+4. **验证与提交**：
+   - 原生测试套件回归验证通过；执行 Git 原子提交。

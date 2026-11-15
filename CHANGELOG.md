@@ -84,3 +84,12 @@
   - `e2e/page/`：全量同步并归档 221 个测试网页资产（HTML、CSS、JS、WASM、SVG、图片等靶场文件）。
   - `e2e/spec/`：端到端规范执行套件目录。
   - `e2e/ref/`：归档 95 个 Kitesurf 原始 TS 测试套件，作为 CP 原生测试 1:1 转写的权威比对基准。
+
+## Test & E2E Infrastructure: Full Spec & Fixture Ingestion
+- **测试网页靶场补充 (`e2e/page/`)**：
+  - 增补 `vendor/.../test/e2e/html/` 下全部 36 个渲染/排版 HTML 测试页面至 `e2e/page/`（覆盖 `shadow-dom.html`、`fixed-position.html`、`grid-abspos.html`、`sticky.html`、`canvas-2d.html` 等），总页面数达到 257 个。
+- **580 个端到端测试用例归位 (`e2e/spec/`)**：
+  - 完整收纳 580 个 `*.e2e.test.ts` 文件至 `e2e/spec/`（含根目录 407 个与 `demos/` 173 个），作为后续 Puppeteer/Playwright 直连 CapSurf CDP 的行为规范基准。
+  - 创建 `e2e/spec/html -> ../page` 符号链接，打通测试套件相对页面引用。
+- **架构纯粹性保障**：
+  - 56 个 Cloudflare Worker 专用胶水代码隔离保存在 `vendor/kitesurf/`，保持 CapSurf 仓零污染。
