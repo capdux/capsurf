@@ -172,3 +172,16 @@
    - **字符字面量与数组推导边界**：在 `switch` 中直接写 `[0x18, ...]` 会默认推导为 `[]const i32` 导致类型不匹配。直接返回转义字符串字面量 `"\x18\x3C..."`（类型推导为零拷贝 `[]const u8`），既提升执行效率又消除类型推导错误。
    - **测试闭包生成器变量命名冲突规避**：在 `cap:test` 的 `() => { ... }` 闭包内部若直接声明名为 `allocator` 的局部变量，闭包捕获结构体会退化为 `*anyopaque` 引发编译失败。将具体测试断言抽离为带错误返回的普通函数（`fn testFoo()!`），在闭包内仅执行单行调用，彻底根除闭包上下文推导退化问题。
    - **标准 C 库链接补齐**：在使用 `cap:pack` 与 `cap:image` 时，底层依赖系统的 `libz.so`，需在 `cap.json` 的 `link_libs` 中补充 `"z"`。
+
+## Phase 1 核心架构闭环与编译排障技术方案（Emulation, Fetch & Network）
+1. **CDP 深度域与会话状态集成架构 (`src/cdp/`)**：
+   - **Emulation 视口夹取与指标覆盖 (`emulation.cp`)**：严格依照 Kitesurf 视口限制规范（最大边 2560px，最大像素数 2560x1440，最小 16px），处理宽高、缩放比（`deviceScaleFactor`）与移动端标志（`mobile`），并联动同步至 `session.layout`。
+   - **Fetch 请求拦截与挂起调度 (`fetch.cp`)**：实现基于环形缓冲区的 `FetchState`，支持 Glob 通配符（`*pattern*`）以及精确匹配；提供 `parkRequest` 与 `buildRequestPausedEvent`，实现拦截后暂停、Mock 状态码/响应体填充（`fulfillRequest`）及主动熔断（`failRequest`）。
+   - **Network 域与 RFC 6265 CookieJar 深度绑定 (`network.cp`)**：直接复用 CapSurf 的 `CookieJar` 引擎，实现 `Network.getCookies`（遍历输出 CDP Cookie 列表 JSON）、`Network.setCookie`（格式化 Set-Cookie 头并写入 CookieJar）与 `Network.setExtraHTTPHeaders`。
+2. **`cpc` 编译器全局符号遮蔽缺陷与 `@c` 头文件去重方案**：
+   - **故障根因**：当 CP 源文件中存在 `@c { "header.h", ... }` 时，`cpc` 编译器（`cpc/src/codegen/mod.rs:709`）会在转译后的 Zig 文件根作用域发射 `pub const c = struct { ... };`。在 Zig 0.17 中，根作用域的 `c` 会禁止任何函数内部使用名为 `c` 的局部变量（如 `const c = ...`、`for (c of ...)`、`fn foo(c: u8)`），导致标准库 `cap:css` 等模块报出大量 `error: local constant shadows declaration of 'c'` 错误。
+   - **工单留痕**：已提取 12 行最小可复现用例 `temp/repro_c_shadow.cp`，并通过 `task_queue.py submit --id "task-capsurf-20261116-c-struct-shadow"` 提交工单给 `cp_agy`。
+   - **解法**：在 CP 中，`@c { fn foo(): i32; }` 内部的头文件字符串并非必填；移除 `cookies.cp` 与 `public_suffix.cp` 中多余的 `"time.h"`、`"stdio.h"` 后，`cpc` 不再发射根作用域 `c` 结构体，彻底消除命名冲突。
+3. **栈缓冲区生命周期与堆复制（Heap Duplication）排障**：
+   - **故障现象**：在 `Network.setCookie` 中使用栈分配缓冲 `raw_buf` 构造 Set-Cookie 字符串，导致写入 `CookieJar` 的切片指向已销毁的栈帧，后续 `getCookies` 读取时内容损坏。
+   - **解决方案**：统一使用 `std.fmt.allocPrint(session.allocator, ...)` 进行持久化堆分配，确保 Cookie 属性字符串在 Session 生命周期内始终有效。

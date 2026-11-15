@@ -6,7 +6,6 @@
 import { isIpHost, isPublicSuffix, siteKey, schemefulSite } from "./public_suffix.cp";
 
 @c {
-    "time.h",
     fn time(t: *void?): c_long;
 }
 

@@ -3,7 +3,6 @@
 // Zero-allocation suffix evaluation for cookie domain and same-site checks.
 
 @c {
-    "stdio.h",
     fn fopen(filename: [*c]const u8, mode: [*c]const u8): *void?;
     fn fread(ptr: [*c]u8, size: usize, count: usize, stream: *void?): usize;
     fn fclose(stream: *void?): i32;

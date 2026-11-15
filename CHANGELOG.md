@@ -162,3 +162,17 @@
   2. PNG 0..9 压缩等级阶梯体积对比与解码还原验证；
   3. HTML5 DOM -> ComputedStyle -> Layout 盒模型 -> PNG 截图端到端输出与解码验证。
 - **门禁检验**：`src/render/` 下全部文件 100% 通过 `cpc_brief.py` 4 道门禁。
+
+## Phase 1: Deep CDP Domains (Emulation, Fetch Interception & Network with CookieJar) (100% Closed)
+- **`src/cdp/session.cp`**：扩充 `CdpPageSession`，增加视口指标（`viewport_width`, `viewport_height`, `device_scale_factor`, `is_mobile`）、自定义 User-Agent、`extra_headers`、集成真实 `CookieJar` 与 `FetchState`。
+- **`src/cdp/emulation.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/viewport.ts`）：实现 `Viewport.clampViewport` 视口边界夹取（最大边 2560px，最大像素数 2560x1440，最小 16px），处理 `setDeviceMetricsOverride`、`clearDeviceMetricsOverride`、`setUserAgentOverride`。
+- **`src/cdp/fetch.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/fetch.ts` 与 `fetch-interception.ts`）：实现请求模式匹配（支持 Glob 通配符 `*pattern*`）、挂起（park）、继续（continue）、Mock 伪造响应（fulfill）与主动中断（fail），构造 `Fetch.requestPaused` CDP 事件。
+- **`src/cdp/network.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/network.ts` 与 `cookies.ts`）：深度打通 `session.cookie_jar`，重构 `Network.getCookies` 为流式游标格式化（避免 `std.io` 依赖），实现 `Network.setCookie`（使用 `allocPrint` 堆复制确保生命周期）、`Network.clearBrowserCookies`、`Network.setExtraHTTPHeaders`。
+- **`src/cdp/dispatch.cp`**：挂载 `EmulationHandler` 与 `FetchHandler` 路由器。
+- **`src/net/cookies.cp` & `src/net/public_suffix.cp`**：优化 `@c` 导入块，去除不必要的文件头字符串以规避 `cpc` 全局 `pub const c` 符号遮蔽缺陷。
+- **`test/cdp/test_cdp.cp`**：修复调试日志中的旧式 `|f|` 语法为 `??` 运算符。
+- **`test/cdp/test_cdp_network_fetch.cp`**：编写并全面通过 3 组深度测试（3/3 passed, 100%）：
+  1. CDP Emulation 域：移动设备视口覆盖、视口尺寸安全夹取与重置；
+  2. CDP Fetch 域：URL 模式拦截匹配、请求挂起、Mock 响应伪造与拦截解除；
+  3. CDP Network 域：真实 CookieJar 注入、Cookie 读写查清与全局 Extra Headers 验证。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道门禁。

@@ -8,7 +8,9 @@ import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { JsRuntime, JsContext, jsToSlice, jsIsException } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
+import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel } from "./types.cp";
+import { FetchState } from "./fetch.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -23,11 +25,25 @@ pub struct CdpPageSession {
     loader_id: []const u8 = "capsurf-loader-001",
     has_document: bool = false,
 
+    // Emulation & Viewport overrides
+    viewport_width: f32 = 1280.0,
+    viewport_height: f32 = 720.0,
+    device_scale_factor: f32 = 1.0,
+    is_mobile: bool = false,
+    user_agent: []const u8 = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+
+    // Network & Fetch state
+    extra_headers: []const u8 = "{}",
+    cookie_jar: CookieJar,
+    fetch_enabled: bool = false,
+    fetch_state: FetchState = FetchState{},
+
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
         const document = Document.init(allocator) catch return error.DocInitFailed;
-        const layout_tree = LayoutTree.init(allocator, 1280.0, 800.0) catch return error.LayoutInitFailed;
+        const layout_tree = LayoutTree.init(allocator, 1280.0, 720.0) catch return error.LayoutInitFailed;
         const js_rt = JsRuntime.init(16 * 1024 * 1024, 200000) catch return error.JsRuntimeFailed;
+        const jar = CookieJar.init(allocator);
 
         ptr.* = CdpPageSession {
             allocator: allocator,
@@ -41,12 +57,22 @@ pub struct CdpPageSession {
             frame_id: "capsurf-frame-001",
             loader_id: "capsurf-loader-001",
             has_document: false,
+            viewport_width: 1280.0,
+            viewport_height: 720.0,
+            device_scale_factor: 1.0,
+            is_mobile: false,
+            user_agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+            extra_headers: "{}",
+            cookie_jar: jar,
+            fetch_enabled: false,
+            fetch_state: FetchState{},
         };
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
         return ptr;
     }
 
     pub fn deinit(*_) {
+        _.cookie_jar.deinit();
         _.ctx.deinit();
         _.rt.deinit();
         _.layout.deinit();

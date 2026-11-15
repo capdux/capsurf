@@ -10,6 +10,8 @@ import { RuntimeHandler } from "./runtime.cp";
 import { TargetHandler } from "./target.cp";
 import { InputHandler } from "./input.cp";
 import { NetworkHandler } from "./network.cp";
+import { EmulationHandler } from "./emulation.cp";
+import { FetchHandler } from "./fetch.cp";
 import { AccessibilityHandler } from "./accessibility.cp";
 import { WebMcpHandler } from "./webmcp.cp";
 
@@ -103,12 +105,18 @@ pub struct CdpDispatcher {
             return NetworkHandler.handle(session, req, out_buf);
         }
 
+        if (std.mem.startsWith(u8, req.method, "Emulation.")) {
+            return EmulationHandler.handle(session, req, out_buf);
+        }
+
+        if (std.mem.startsWith(u8, req.method, "Fetch.")) {
+            return FetchHandler.handle(session, &session.fetch_state, req, out_buf);
+        }
+
         // 3. Permissive stub domains (Puppeteer / Playwright handshake compatibility)
-        if (std.mem.startsWith(u8, req.method, "Emulation.") ||
-            std.mem.startsWith(u8, req.method, "Security.") ||
+        if (std.mem.startsWith(u8, req.method, "Security.") ||
             std.mem.startsWith(u8, req.method, "Performance.") ||
-            std.mem.startsWith(u8, req.method, "Log.") ||
-            std.mem.startsWith(u8, req.method, "Fetch.")) {
+            std.mem.startsWith(u8, req.method, "Log.")) {
             return CdpResponse.ok(req.id, "{}");
         }
 

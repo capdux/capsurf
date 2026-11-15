@@ -191,7 +191,7 @@ fn runWebSocketCdpTest()! {
 
     let ws_buf: [4096]u8 = [0; 4096];
     const frame_opt1 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 1: {s}\n", .{if (frame_opt1) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Frame 1: {s}\n", .{frame_opt1 ?? "NULL"});
     expect_eq(frame_opt1 != null, true);
     if (f1 := frame_opt1) {
         expect_eq(std.mem.indexOf(u8, f1, "\"id\":101") != null, true);
@@ -208,7 +208,7 @@ fn runWebSocketCdpTest()! {
     client.sendClientWsFrame(cmd_nav) catch unreachable;
 
     const frame_opt2 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 2: {s}\n", .{if (frame_opt2) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Frame 2: {s}\n", .{frame_opt2 ?? "NULL"});
     expect_eq(frame_opt2 != null, true);
     if (f2 := frame_opt2) {
         expect_eq(std.mem.indexOf(u8, f2, "\"id\":102") != null, true);
@@ -217,14 +217,14 @@ fn runWebSocketCdpTest()! {
 
     // Read emitted events: Page.frameNavigated & Page.loadEventFired
     const frame_evt1 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Event 1: {s}\n", .{if (frame_evt1) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Event 1: {s}\n", .{frame_evt1 ?? "NULL"});
     expect_eq(frame_evt1 != null, true);
     if (fe1 := frame_evt1) {
         expect_eq(std.mem.indexOf(u8, fe1, "Page.frameNavigated") != null, true);
     }
 
     const frame_evt2 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Event 2: {s}\n", .{if (frame_evt2) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Event 2: {s}\n", .{frame_evt2 ?? "NULL"});
     expect_eq(frame_evt2 != null, true);
     if (fe2 := frame_evt2) {
         expect_eq(std.mem.indexOf(u8, fe2, "Page.loadEventFired") != null, true);
@@ -235,7 +235,7 @@ fn runWebSocketCdpTest()! {
     client.sendClientWsFrame(cmd_qs) catch unreachable;
 
     const frame_opt3 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 3: {s}\n", .{if (frame_opt3) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Frame 3: {s}\n", .{frame_opt3 ?? "NULL"});
     expect_eq(frame_opt3 != null, true);
     let card_node_id: i64 = 0;
     if (f3 := frame_opt3) {
@@ -250,7 +250,7 @@ fn runWebSocketCdpTest()! {
     client.sendClientWsFrame(cmd_bm) catch unreachable;
 
     const frame_opt4 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 4: {s}\n", .{if (frame_opt4) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Frame 4: {s}\n", .{frame_opt4 ?? "NULL"});
     expect_eq(frame_opt4 != null, true);
     if (f4 := frame_opt4) {
         expect_eq(std.mem.indexOf(u8, f4, "\"id\":104") != null, true);
@@ -265,7 +265,7 @@ fn runWebSocketCdpTest()! {
     client.sendClientWsFrame(cmd_eval) catch unreachable;
 
     const frame_opt5 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 5: {s}\n", .{if (frame_opt5) |f| f else "NULL"});
+    std.debug.print("[DEBUG] Frame 5: {s}\n", .{frame_opt5 ?? "NULL"});
     expect_eq(frame_opt5 != null, true);
     if (f5 := frame_opt5) {
         expect_eq(std.mem.indexOf(u8, f5, "\"id\":105") != null, true);

@@ -795,3 +795,30 @@
    - 在 `cap.json` 的 `link_libs` 中补齐标准库系统依赖 `"z"`；
    - `src/render/painter.cp`、`src/render/png.cp`、`src/render/style_extractor.cp`、`src/css/cascade.cp` 全部通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+
+---
+
+## [2026-11-16 10:02:40] Turn 12
+
+### **[User]**
+> 继续按还需要实现的内容清单分步骤完成,完成一个阶段, 更新文档, git 提交后, 继续下一个阶段, 自主推进.
+> 尽量从 Kitesurf中迁移继承, 是在没有办法(Kitesurf和bun中都没有,或者极度不合适), 才考虑自创
+> 从 Kitesurf中迁移的, 文件头备注原始目录, Kitesurf 更新时, 我们好通过文件头直接对比同步更新
+> 你可以拉起两个子智能体并行工作
+> 遇到 cpc bug, 你可以给cp agy 报告, 让其修复
+> 尽量节省 token
+
+### **[Agent]**
+推进 Phase 1（CDP 深度域：Network, Fetch & Emulation）与编译器缺陷治理：
+1. **CDP 深度域完成与集成**：
+   - `src/cdp/session.cp`：扩充 `CdpPageSession`，增加视口指标（`viewport_width`, `viewport_height`, `device_scale_factor`, `is_mobile`）、自定义 User-Agent、`extra_headers`、集成真实 `CookieJar` 与 `FetchState`。
+   - `src/cdp/emulation.cp`（迁移自 `vendor/kitesurf/packages/engine/src/cdp/viewport.ts`）：实现 `Viewport.clampViewport` 视口边界夹取（最大边 2560px，最大像素数 2560x1440，最小 16px），处理 `setDeviceMetricsOverride`、`clearDeviceMetricsOverride`、`setUserAgentOverride`。
+   - `src/cdp/fetch.cp`（迁移自 `vendor/kitesurf/packages/engine/src/cdp/fetch.ts` 与 `fetch-interception.ts`）：实现请求模式匹配、挂起（park）、继续（continue）、Mock 伪造响应（fulfill）与主动中断（fail），构造 `Fetch.requestPaused` CDP 事件。
+   - `src/cdp/network.cp`（迁移自 `vendor/kitesurf/packages/engine/src/cdp/network.ts` 与 `cookies.ts`）：深度打通 `session.cookie_jar`，重构 `Network.getCookies` 为流式游标格式化，实现 `Network.setCookie`、`Network.clearBrowserCookies`、`Network.setExtraHTTPHeaders`。
+   - `src/cdp/dispatch.cp`：挂载 `EmulationHandler` 与 `FetchHandler` 路由。
+   - 编写 `test/cdp/test_cdp_network_fetch.cp` 覆盖 3 组完整链路。
+2. **定位并提交 cpc 编译器全局变量命名空间污染缺陷**：
+   - 发现当存在任何 `@c` C-Header 导入时，`cpc/src/codegen/mod.rs:709` 会在生成的 Zig 根作用域无条件发射 `pub const c = struct { ... };`；
+   - 触发 Zig 0.17 严格顶层作用域标识符遮蔽规则，导致下游所有使用 `const c = ...`、`for (c of ...)`、`fn foo(c: u8)` 的模块（如 `cap:css` 等）编译全面报错 `error: local constant shadows declaration of 'c'`；
+   - 提炼 12 行最小可复现用例 `temp/repro_c_shadow.cp` 并验证必现；
+   - 执行 `scripts/task_queue.py submit --id "task-capsurf-20261116-c-struct-shadow"` 提交工单给 `cp_agy` 修复，将端到端测试标记为 `BLOCKED`，后台守护监听等待结单通知。
