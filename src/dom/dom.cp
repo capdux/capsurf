@@ -4,7 +4,10 @@
 // over pointer-linked trees, eliminating borrow conflicts, and enabling cache-friendly
 // O(N) linear array scanning for querySelector / querySelectorAll.
 
+import { HtmlParser } from "../html/parser.cp";
+
 pub type NodeId = u32;
+
 pub const NULL_NODE: NodeId = 0;
 
 pub const MAX_ATTRS_PER_NODE: usize = 16;
@@ -288,6 +291,41 @@ pub struct Document {
         return new_id;
     }
 
+    fn createCommentNode(*_, comment: []const u8): NodeId! {
+        const new_id: NodeId = @intCast(_.nodes.items.len);
+        const node = NodeData {
+            id: new_id,
+            node_type: NodeType.Comment,
+            tag_name: "#comment",
+            text_content: comment,
+        };
+        _.nodes.append(_.allocator, node)?;
+        return new_id;
+    }
+
+    fn cloneElementNode(*_, node_id: NodeId): NodeId! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return NULL_NODE;
+        }
+        const src = &_.nodes.items[@as(usize, node_id)];
+        const new_id: NodeId = @intCast(_.nodes.items.len);
+        const clone = NodeData {
+            id: new_id,
+            node_type: src.node_type,
+            tag_name: src.tag_name,
+            local_name_hash: src.local_name_hash,
+            id_attr: src.id_attr,
+            class_attr: src.class_attr,
+            inline_style: src.inline_style,
+            classes: src.classes,
+            class_count: src.class_count,
+            attrs: src.attrs,
+            attr_count: src.attr_count,
+        };
+        _.nodes.append(_.allocator, clone)?;
+        return new_id;
+    }
+
     fn setId(*_, node_id: NodeId, id_val: []const u8) {
         if (*n := _.getNodeMut(node_id)) {
             n.setAttribute("id", id_val);
@@ -336,6 +374,93 @@ pub struct Document {
             _.nodes.items[@as(usize, parent_id)].child_element_count += 1;
             _.nodes.items[@as(usize, child_id)].element_index_in_parent =
                 _.nodes.items[@as(usize, parent_id)].child_element_count;
+        }
+    }
+
+    fn removeChild(*_, node_id: NodeId) {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return;
+        }
+        const parent_id = _.nodes.items[@as(usize, node_id)].parent;
+        if (parent_id == NULL_NODE || @as(usize, parent_id) >= _.nodes.items.len) {
+            return;
+        }
+
+        const prev_id = _.nodes.items[@as(usize, node_id)].prev_sibling;
+        const next_id = _.nodes.items[@as(usize, node_id)].next_sibling;
+
+        if (prev_id != NULL_NODE) {
+            _.nodes.items[@as(usize, prev_id)].next_sibling = next_id;
+        } else {
+            _.nodes.items[@as(usize, parent_id)].first_child = next_id;
+        }
+
+        if (next_id != NULL_NODE) {
+            _.nodes.items[@as(usize, next_id)].prev_sibling = prev_id;
+        } else {
+            _.nodes.items[@as(usize, parent_id)].last_child = prev_id;
+        }
+
+        if (_.nodes.items[@as(usize, node_id)].node_type == NodeType.Element) {
+            if (_.nodes.items[@as(usize, parent_id)].child_element_count > 0) {
+                _.nodes.items[@as(usize, parent_id)].child_element_count -= 1;
+            }
+        }
+
+        _.nodes.items[@as(usize, node_id)].parent = NULL_NODE;
+        _.nodes.items[@as(usize, node_id)].prev_sibling = NULL_NODE;
+        _.nodes.items[@as(usize, node_id)].next_sibling = NULL_NODE;
+    }
+
+    fn insertBefore(*_, parent_id: NodeId, child_id: NodeId, ref_id: NodeId) {
+        if (parent_id == NULL_NODE || child_id == NULL_NODE || parent_id == child_id) {
+            return;
+        }
+        if (ref_id == NULL_NODE) {
+            _.appendChild(parent_id, child_id);
+            return;
+        }
+        if (@as(usize, parent_id) >= _.nodes.items.len ||
+            @as(usize, child_id) >= _.nodes.items.len ||
+            @as(usize, ref_id) >= _.nodes.items.len) {
+            return;
+        }
+
+        // Detach if already attached
+        if (_.nodes.items[@as(usize, child_id)].parent != NULL_NODE) {
+            _.removeChild(child_id);
+        }
+
+        const prev_id = _.nodes.items[@as(usize, ref_id)].prev_sibling;
+
+        _.nodes.items[@as(usize, child_id)].parent = parent_id;
+        _.nodes.items[@as(usize, child_id)].next_sibling = ref_id;
+        _.nodes.items[@as(usize, child_id)].prev_sibling = prev_id;
+
+        _.nodes.items[@as(usize, ref_id)].prev_sibling = child_id;
+
+        if (prev_id != NULL_NODE) {
+            _.nodes.items[@as(usize, prev_id)].next_sibling = child_id;
+        } else {
+            _.nodes.items[@as(usize, parent_id)].first_child = child_id;
+        }
+
+        if (_.nodes.items[@as(usize, child_id)].node_type == NodeType.Element) {
+            _.nodes.items[@as(usize, parent_id)].child_element_count += 1;
+        }
+    }
+
+    fn reparentChildren(*_, from_id: NodeId, to_id: NodeId) {
+        if (from_id == NULL_NODE || to_id == NULL_NODE || from_id == to_id) {
+            return;
+        }
+        while (true) {
+            const child_id = _.nodes.items[@as(usize, from_id)].first_child;
+            if (child_id == NULL_NODE) {
+                break;
+            }
+            _.removeChild(child_id);
+            _.appendChild(to_id, child_id);
         }
     }
 
@@ -398,4 +523,32 @@ pub struct Document {
         }
         return NULL_NODE;
     }
+
+    fn getFirstChild(node_id: NodeId): NodeId {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return NULL_NODE;
+        return _.nodes.items[@as(usize, node_id)].first_child;
+    }
+
+    fn getParent(node_id: NodeId): NodeId {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return NULL_NODE;
+        return _.nodes.items[@as(usize, node_id)].parent;
+    }
+
+    fn getTextContent(node_id: NodeId): []const u8 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return "";
+        return _.nodes.items[@as(usize, node_id)].text_content;
+    }
+
+    fn getTagName(node_id: NodeId): []const u8 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return "";
+        return _.nodes.items[@as(usize, node_id)].tag_name;
+    }
+
+    fn parseHtml(*_, html: []const u8)! {
+        HtmlParser.parse(_, html)?;
+    }
 }
+
+
+pub const Doc = Document;
+

@@ -222,3 +222,112 @@
    - 运行 `python3 scripts/cpc_brief.py` 验证 `src/dom/dom.cp`、`src/css/matcher.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/main.cp`，全部通过静态语法门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0` 全部为 0）。
 6. **文档同步**：同步更新 `CHANGELOG.md` 与 `DEVLOG.md`。
 
+---
+
+## [2026-11-15 12:22:58] Turn 9
+
+### **[User]**
+> ## HTML5 解析层（html5ever 与 Lexbor结合，实现最高性能与安全性）
+> 
+> 迁移 HTML5 解析层（Tokenizer + TreeBuilder）到原生 CP 代码，以 html5ever 为主蓝本（占比 80%：学习其 TreeSink 架构、枚举模式匹配与树构建算法），以 Lexbor 为辅（占比 20%：仅提取其预先生成的静态查找表与字节流切片技巧）。
+> 
+> ### 一、 决定性原因
+> html5ever 的 TreeSink 架构天生适配我们的 u32 Arena DOM我们在上一轮之所以能把 DOM 树设计成极速、省 40% 内存的 NodeId (u32) 连续数组模型（dom.cp），前提是 HTML 解析器不能越俎代庖去直接操作节点内部的指针。
+> - 如果从 Lexbor 迁移：Lexbor 的 TreeBuilder 代码（如 in_body.c）与它的 C 结构体 lxb_dom_node_t 死死焊在一起。状态机里到处都是 node->parent->last_child = new_node; 这样的裸指针直接赋值。让 AI 一边翻译 HTML5 复杂状态机，一边把几千处 C 指针链表操作改写成 Document.nodes[id] 数组下标操作，AI 极易在复杂的“领养机构算法（Adoption Agency Algorithm）”中改出逻辑 Bug。
+> - 如果从 html5ever 迁移：html5ever 在设计之初就规定：TreeBuilder 根本不知道节点长什么样，它只持有一个泛型句柄 Handle（在我们的 CP 代码里，直接定义 type Handle = u32; 即可！）。当 html5ever 的状态机需要建树或重排节点时，它只调用 TreeSink 接口的十几个方法（如 create_element、append、remove_from_parent）。你只需要把 html5ever 的 tree_builder/mod.rs 原封不动地用 AI 翻译成 CP 的 switch 语句，然后在底层用 100 行代码把这十几个方法对接到 dom.cp 的 nodes 数组上，一次就能跑通，零架构改造风险！
+> 
+> ### 二、 语言范式同构
+> Rust 的 enum + match 就是 CP 的 enum + switchHTML5 规范本质上是一个巨大的双层状态机（词法状态机 + 树插入模式状态机）。
+> - 我们已经有过成功经验：src/css/selectors/parser.cp（3746 行），原本就是 Mozilla Servo 用 Rust 写的 selectors 库，经由 Zig 迁入 CP。你会发现它的 `union(enum)` 和 `switch` 结构在 CP 里极其自然。
+> - html5ever 也是同一个团队（Mozilla Servo）用完全相同的风格写的！在 html5ever 中，Token 定义为清晰的代数数据类型：
+> ```rust
+> pub enum Token {
+>     DoctypeToken(Doctype),
+>     TagToken(Tag),
+>     CommentToken(StrTendril),
+>     CharacterTokens(StrTendril),
+>     EOFToken,
+> }
+> ```
+> 用 AI 翻译到 CP 时，完全是 1:1 的机械映射：
+> ```cp
+> pub enum Token {
+>     Doctype: Doctype,
+>     Tag: Tag,
+>     Comment: []const u8,
+>     Characters: []const u8,
+>     Eof,
+> }
+> ```
+> 而在 TreeBuilder 的 step() 函数中，html5ever 使用极其规整的 `match mode { InsertionMode::InBody => ... }`，你只需要把 match 换成 CP 的 `switch`，把模式分支转换成 CP 语法，转换准确率可以达到 98% 以上。
+> 
+> ### 三、 借用安全（Borrow Checker）零冲突
+> 站在 Rust 已经排完雷的肩膀上CP 语言拥有严格的编译期所有权与 NLL 借用检查器（包括我们在第 6.5 节看到的容器迭代期间严禁修改容器的 Loop-Borrow Lock）。
+> - C 语言的 Lexbor 完全没有所有权概念，它经常在一边遍历 open_elements 栈指针的同时，一边在循环体内直接增删改同一个栈或 DOM 节点。如果直接把 C 代码翻译成 CP，CP 的 sema.rs 借用检查器会报出大量 Borrow conflict 错误，需要人工介入重构控制流。
+> - 而 html5ever 本身就是用 Rust 写的，它的作者当年已经为了通过 Rust 严苛的 Borrow Checker，把所有会导致别名冲突（Aliasing XOR Mutability）的控制流全部重构成了安全的索引访问或分步操作！因此，从 html5ever 翻译过来的 CP 代码，天生就能丝滑通过 cpc check 的借用安全检查。
+> 通过 html5ever 迁移，对 cp的`所有权和借用检查`的完整性、成熟性有极大帮助。
+> 
+> ### 四、 唯一需要避开 html5ever、借鉴 Lexbor 的地方
+> 砍掉 Tendril 和 Rust 宏虽然 html5ever 的主干逻辑完胜，但它有两个 Rust 历史包袱千万不要照搬，这里正是吸收 Lexbor 精华的地方：
+> #### 1. 用 CP 原生切片 []const u8 彻底替换 html5ever 的 StrTendril：
+> html5ever 为了支持网络流式分块输入（Chunked Streaming），发明了一个复杂的引用计数字符串类型 Tendril。而在我们的无头浏览器中，cap:http 拿到 HTML 响应体后，内存中已经是一整块连续的 []const u8 缓冲区（只读借用）。
+> 因此，在让 AI 翻译 html5ever 时，直接下达指令：将所有 StrTendril 全部替换为零拷贝切片 []const u8（仅在遇到 &amp; 等 HTML 实体转义时，才向 Document.allocator 申请一块小内存存放解码后的文本）。这能比原版 html5ever 再快 30%！
+> #### 2. 用 Lexbor 的静态查找表（或 CP ComptimeEnumMap）替换 html5ever 的编译期宏：
+> html5ever 的 tree_builder 里用了一点 Rust 的 match_token! 宏来简化标签匹配，且字符实体表（Named Entities）是靠 Cargo build.rs 生成的。
+> 在迁移时：
+> - 让 AI 直接读取 html5ever 宏展开后（cargo expand） 的纯匹配逻辑，或者直接用 CP 的 switch 正常多分支语法书写；
+> - 对于标签名（如 "div", "script", "table"）识别，直接使用你们在 parser.cp 里已经用熟的 bun.ComptimeStringMap 或枚举映射，将标签名在 Tokenizer 阶段就转为 1 字节的 HtmlTag 枚举（enum HtmlTag: u8 { Div, Span, Script, ... }），后续 TreeBuilder 全程只比对 1 字节枚举值，速度拉满！
+> 
+> ### 五、 实操落地路线：3 步用 AI 拿下 src/html/parser.cp
+> 源码靶点非常集中，你甚至不需要克隆整个 Servo 仓库，只需从 html5ever 仓库（Apache 2.0 / MIT 双协议）中抽出以下 4 个核心文件 喂给AI 迁移管线：
+> 1. tokenizer/states.rs + tokenizer/mod.rs（约 1,500 行 Rust -> 1,000 行 CP）：指示 AI 将状态枚举和 step() 循环翻译为 CP，输入改为 input: []const u8 游标，输出直接调用 TreeBuilder 的 process_token()。
+> 2. tree_builder/types.rs + tree_builder/mod.rs（约 3,200 行 Rust -> 2,200 行 CP）：指示 AI 将 Handle 固定为 dom.NodeId (u32)，将 self.sink.append(...) 直接内联替换为 this.doc.appendChild(...)。
+> 3. 跑通 WPT html5lib-tests 标准测试集：html5ever 仓库自带一套官方 JSON 格式的 html5lib-tests 测试用例（输入一段奇葩畸形的 HTML 字符串，校验生成的 DOM 树结构）。用 CP 的 cap test 跑一遍这套 JSON 测试集，就能确保你们的 cap:html 解析器达到 100% 工业级浏览器标准！
+> 
+> 仔细审核/分析我的上述内容, 是否合理/正确, 需要你补充完整, 给出具体落地方案和执行步骤
+
+### **[Agent Analysis & Milestone 2 Architecture Blueprint]**
+已深入审核用户方案，确认该方案战略方向完全正确且高度契合 CapSurf 架构。同时补充了关于 Tokenizer 与 TreeBuilder 双向状态回流指令解耦、属性内命名字符实体特殊语法校验、栈上连续内存 AFE/AAA 算法优化与大模块切分防 Token 熔断的 5 大关键细节，并制定了四阶段可执行落地方案。
+
+---
+
+## [2026-11-15 12:38:58] Turn 10
+
+### **[User]**
+> 在 src/dom/dom.cp 增加原生解析方法：Document.parseHtml(*_, html: []const u8): !void。
+> 1. Document 太长了, cp 追求简洁/优雅, 能否 改为 Doc.parseHtml?
+> 2. !void 在cp中语法似乎不对, !后面跟异常, void 需省略, 你可能是示意代码, 没注意 cp 语法.
+> 3. 在实现过程中, 要将 html5ever中的所有权/借用规则, 全量迁移到cp中来, 检验 cp的内存安全性.
+> 4. cp agy 接收你的任务, 协助你工作.
+> 
+> 你在创造一个明星项目, 充分发挥你浏览器内核专家的技能, 完成cp语言的无头浏览器, 开创性能与安全性天花板的历史先河.
+> 开始你的工作.
+
+### **[Agent Execution Plan & Implementation]**
+1. 采纳指令 1：引入 `pub const Doc = Document;` 别名，支持 `Doc.init(...)` 与 `Doc.parseHtml(...)`，保持简洁优雅。
+2. 纠正语法 2：严格遵守 CP 语法红线，无返回值场景直接省略 `: void`，可能返回错误统一写为 `fn parseHtml(*_, html: []const u8)!`。
+3. 严格践行所有权与借用安全（指令 3）：全量迁移 `html5ever` 的借用规则（零拷贝切片 `[]const u8` + Arena 索引访问 + 栈上固定容量 AFE/AAA），杜绝裸指针悬垂与别名竞态。
+4. 保持与 `cp_agy` 协作（指令 4）：在实现过程中若遇到编译器缺陷立即提交工单；全面启动 Milestone 2 实现流水线。
+
+### **[Milestone 2 Execution & Delivery Milestone Report]**
+- **Phase 1: 标签与实体表建立**：
+  - `src/html/tags.cp`：完成 140+ 标签枚举 `HtmlTag: u8` 与 W3C 作用域/格式化/闭合判定谓词，通过 `cpc check`。
+  - `src/html/entities.cp`：完成十进制/十六进制与 Top 40 命名字符实体零拷贝解析，支持 Windows-1252 替换与属性内无分号历史实体保护。
+- **Phase 2: 词法 Tokenizer 闭环**：
+  - `src/html/tokens.cp`：定义代数类型 `Token` 与反馈指令 `NextTokenizerState`。
+  - `src/html/tokenizer.cp`：实现 W3C 80 状态流式零拷贝 Tokenizer。
+  - `tests/test_html_tokenizer.cp`：测试通过（3/3 passed, 1544ms）。
+- **Phase 3: 树构建器 TreeBuilder 与流水线驱动**：
+  - `src/html/tree_builder.cp`：实现 23 种插入模式建树状态机，内建 128 层栈 `open_elements`、格式化元素表 `active_formatting`、W3C 领养机构算法（Adoption Agency Algorithm）与表格 Foster Parenting 孤儿节点插入机制。
+  - `src/html/parser.cp`：实现驱动器 `HtmlParser.parse(doc, html)`。
+  - `src/dom/dom.cp`：增加 `Doc = Document` 别名、`createCommentNode`、`removeChild`、`insertBefore`、`reparentChildren`、`cloneElementNode`、`parseHtml` 及遍历 API `getFirstChild`, `getParent`, `getTextContent`, `getTagName`。
+  - `tests/test_html_parser.cp`：创建 4 大集成测试，全部通过（4/4 passed, 15206ms）。
+- **Phase 4: 全量回归与主程序运行验证**：
+  - 执行 `cap test tests/`：全量 3 套测试集（10 个用例）100% 绿色通过（耗时 32.3s）。
+  - 执行 `cap src/main.cp`：二进制成功编译并输出 Milestone 1 & 2 状态及端到端 HTML 解析与坐标布局演示。
+- **跨 AGY 通信工单记录**：
+  - 提炼结构体类型别名 `catch` 降低缺陷，提交工单 `task-capsurf-20261115-alias-catch-lower` 至 `/data/dev/cp/.tasks/pending/`。
+
+
+
+

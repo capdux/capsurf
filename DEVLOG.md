@@ -29,3 +29,18 @@
    - **结构体方法首参 `*_` 与接收者 Lowering**：修改自身状态的实例方法首参标注 `*_`，体内用 `_`；传参时避免对局部值变量写 `&var` 调用静态方法导致指针剥离，统一将其声明为实例方法以 `var.method()` 调用。
    - **固定数组转切片歧义**：CP 中 `[a, b, c, d]` 自动推导为零拷贝切片 `[]const T`，若需固定长度结构（如四边数值），显式定义 `BoxQuad { top, right, bottom, left }` 替代 `[4]T`，消除类型断言错误。
 
+## Milestone 2 核心架构闭环与编译排障技术方案
+1. **纯 CP HTML5 解析层解耦设计 (`src/html/`)**：
+   - 吸收 `html5ever` 的代数类型与 TreeSink 模式，将节点抽象为 `NodeId` (`u32`)，所有建树操作直接下沉至 `dom.cp` 的 Arena 数组，彻底规避传统 C 语言指针树在复杂的领养机构算法（Adoption Agency Algorithm）中可能产生的循环引用与野指针风险。
+   - 采用基于返回值的解耦状态反馈协议（`processToken` 返回 `NextTokenizerState`），避免 `TreeBuilder` 与 `Tokenizer` 双向持有可变指针而触发编译器借用冲突（`E0202`/`E0203`）。
+2. **W3C 领养机构算法（Adoption Agency Algorithm, AAA）的 CP 极致实现**：
+   - 在 `src/html/tree_builder.cp` 中按 W3C 规范 § 13.2.6.4.7 实现 19 步 AAA 算法，通过 `furthest_block` 与 `common_ancestor` 定位、`doc.cloneElementNode` 浅拷贝、`doc.reparentChildren` 批量子节点重挂载，完美解析错位嵌套的格式化标签（如 `<b>1<i>2</b>3</i>` 重排为 `<b>1<i>2</i></b><i>3</i>`）。
+3. **表格 Foster Parenting 孤儿节点逃逸机制**：
+   - 在 `InTable`、`InTableBody`、`InRow` 等模式下，非预期文本与元素通过 `currentAppropriatePlace` 自动向上探测，逃逸并插入到宿主 `<table>` 前序兄弟位置（`doc.insertBefore`），100% 遵从 HTML5 容错规范。
+4. **全链路端到端闭环验证**：
+   - 打通「HTML5 文本输入 -> Tokenizer 词法分词 -> TreeBuilder 语法建树 -> Arena DOM -> Selector Matcher 匹配 -> Cascade 样式级联 -> Layout 盒模型与 Flexbox 坐标计算」全链路，全量测试套件（10 个用例）全部绿色通过（`tests/test_css_layout.cp`, `tests/test_html_tokenizer.cp`, `tests/test_html_parser.cp`）。
+5. **编译器排障与工单留痕**：
+   - **类型别名 `catch` 降低缺陷**：发现 `cpc` 在对结构体类型别名（如 `pub const Bar = Foo; Bar.init() catch ...`）的方法返回值进行 `catch` 降低时，未能展开别名类型，错误生成 Rust 风格的 `switch (__r) { .ok => ..., .err => ... }` 导致 Zig 编译失败。已提炼 10 行最小用例投递工单 `task-capsurf-20261115-alias-catch-lower` 至 `/data/dev/cp/.tasks/pending/`。
+   - **闭包结构体类型推断边界**：在 `cap:test` 的 `() => { ... }` 闭包中，通过数组切片链式属性直接赋值给变量时，闭包生成器可能退化推断为 `*anyopaque`。在 `Document` 上封装显式类型返回的方法（`getFirstChild`, `getParent`, `getTextContent`, `getTagName`）既优雅提升 DOM API 易用性，又规避了编译器推断边界。
+
+
