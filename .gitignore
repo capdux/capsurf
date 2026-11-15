@@ -13,3 +13,5 @@ bin/
 *.a
 *.so
 *.dylib
+__pycache__/
+*.pyc

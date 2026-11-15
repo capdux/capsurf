@@ -8,14 +8,14 @@
   "mode": "parallel",
   "scripts": {
     "start": "cap src/main.cp",
-    "test": "cap test",
+    "test": "cap test tests/",
     "build": "cap build -r -f",
     "build:nest": "cap build -b"
   },
   "build": {
     "opt": "fast",
     "out_dir": "bin",
-    "c_flags": ["-O3", "-D_GNU_SOURCE"],
+    "c_flags": ["-D_GNU_SOURCE"],
     "link_libs": ["c", "m", "pthread"]
   },
   "nest": {
