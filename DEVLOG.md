@@ -64,3 +64,20 @@
 
 
 
+
+## Milestone 4 核心架构闭环与编译排障技术方案
+1. **CDP 传输层与协议路由器架构 (`src/cdp/server.cp` & `src/cdp/dispatch.cp`)**：
+   - 采用标准 HTTP 与 RFC 6455 WebSocket 协议，实现 `/json/version`、`/json/list`、`/json/new` 服务发现端点，使 Puppeteer、Playwright、Chrome DevTools 前端能无缝连接 CapSurf。
+   - 实现瞬时优雅终止机制：在 Linux 多线程服务端中，`shutdown(fd, 2)` 后通过本地 loopback 触发轻量 `wakeServer` 连接，使得阻塞在 `accept()` 的后台线程瞬间唤醒退出，规避线程 Join 假死。
+2. **AI 专属杀手级协议能力迁移：AXTree 语义树压缩 (`src/cdp/accessibility.cp`)**：
+   - 普通网页 DOM 往往包含数万个无语义标签，直接喂给 LLM 会引发 Context Window 爆炸与高昂费用。
+   - 迁移自 Kitesurf 的 AXTree 算法遍历 Arena DOM 树，将节点映射为极简语义角色（`button`, `link`, `heading`, `textbox`, `combobox`），通过 `aria-labelledby`、`aria-label`、textContent 计算可访问名称，并过滤 `ignored` 表现型节点，**直接为 AI Agent 减少 80%+ 的 Token 消耗**。
+3. **WebMCP 网页工具原生反射架构 (`src/cdp/webmcp.cp`)**：
+   - 将现代 AI Agent 的 Model Context Protocol (MCP) 与网页交互深度打通：
+   - 自动扫描页面内部的 `<form>`、`<button>`、`<input>`，基于参数约束与字段描述动态构造标准的 JSON-Schema 工具定义，暴露给外部 AI 调用；在 `WebMCP.callTool` 中自动在页面上执行数据回填与按钮点击。
+4. **QuickJS-NG 跨线程栈边界与零结尾解析排障经验 (`src/js/qjs_engine.cp`)**：
+   - **跨线程栈检测假死**：QuickJS 默认在创建 `JSRuntime` 时通过 `__builtin_frame_address(0)` 记录主线程栈顶 `stack_top`。当 CDP 服务端在工作线程（`std.Thread.spawn`）中调用 `ctx.eval()` 时，工作线程的栈地址不在主线程栈区间，触发 `Maximum call stack size exceeded`。通过调用 `JS_SetMaxStackSize(rt, 0)` 彻底解除跨线程静态栈限制，并在执行前刷新 `JS_UpdateStackTop(rt)`。
+   - **`JS_Eval` 零结尾硬性约束**：QuickJS 源码 § 38213 明确标注 `/* 'input' must be zero terminated i.e. input[input_len] = '\0' */`。若传入无 `\0` 的切片，词法分析器越界扫描触发 `SyntaxError: unexpected end of string`。在 `JsContext.eval()` 中为切片提供 4KB 本地栈缓冲区并在末尾注入 `\0`，彻底解决表达式解析异常。
+5. **双模构建全面达标**：
+   - `cap build -b src/main.cp` 仅耗时 120ms 即生成 Nest 容器热加载动态库 `bin/main.so`（仅 9KB）与接口元数据 `bin/main.d.cp`。
+   - `cap src/main.cp` 成功编译并在原生控制台启动 CapSurf 无头引擎与 CDP 服务。

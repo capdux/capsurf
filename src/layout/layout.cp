@@ -458,38 +458,33 @@ pub struct LayoutTree {
         }
         const remaining_main = if (main_size > used_main) (main_size - used_main) else 0.0;
 
-        let start_offset: f32 = 0.0;
-        let between_step: f32 = gap;
-
-        switch (pstyle.justify_content) {
-            .FlexStart => {
-                start_offset = 0.0;
-            },
-            .FlexEnd => {
-                start_offset = remaining_main;
-            },
-            .Center => {
-                start_offset = remaining_main / 2.0;
-            },
-            .SpaceBetween => {
-                if (item_count > 1) {
-                    const divisor: f32 = @floatFromInt(item_count - 1);
-                    between_step = gap + remaining_main / divisor;
-                }
-            },
-            .SpaceAround => {
-                const count_f: f32 = @floatFromInt(item_count);
-                const unit_space = remaining_main / count_f;
-                start_offset = unit_space / 2.0;
-                between_step = gap + unit_space;
-            },
-            .SpaceEvenly => {
-                const count_plus_1: f32 = @floatFromInt(item_count + 1);
-                const unit_space = remaining_main / count_plus_1;
-                start_offset = unit_space;
-                between_step = gap + unit_space;
-            },
+        const count_f: f32 = @floatFromInt(item_count);
+        const count_plus_1: f32 = @floatFromInt(item_count + 1);
+        let count_minus_1: f32 = 1.0;
+        if (item_count > 1) {
+            count_minus_1 = @floatFromInt(item_count - 1);
         }
+
+        const start_offset: f32 = switch (pstyle.justify_content) {
+            .FlexStart => 0.0,
+            .FlexEnd => remaining_main,
+            .Center => remaining_main / 2.0,
+            .SpaceAround => (remaining_main / count_f) / 2.0,
+            .SpaceEvenly => remaining_main / count_plus_1,
+            .SpaceBetween => 0.0,
+        };
+
+        let space_between_step = gap;
+        if (item_count > 1) {
+            space_between_step = gap + remaining_main / count_minus_1;
+        }
+
+        const between_step: f32 = switch (pstyle.justify_content) {
+            .SpaceBetween => space_between_step,
+            .SpaceAround => gap + remaining_main / count_f,
+            .SpaceEvenly => gap + remaining_main / count_plus_1,
+            * => gap,
+        };
 
         // Position each flex item and layout its children
         let current_main = start_offset;
@@ -501,30 +496,18 @@ pub struct LayoutTree {
             const cid = itm.node_id;
             const cbox = &_.boxes.items[@as(usize, cid)];
 
-            // Align-items on cross axis
-            let cross_pos: f32 = 0.0;
             const cross_item_size = if (is_row) cbox.borderBoxHeight() else cbox.borderBoxWidth();
+            let cross_pos: f32 = 0.0;
+            if (cross_size > cross_item_size) {
+                if (pstyle.align_items == .FlexEnd) {
+                    cross_pos = cross_size - cross_item_size;
+                } else if (pstyle.align_items == .Center) {
+                    cross_pos = (cross_size - cross_item_size) / 2.0;
+                }
+            }
 
-            switch (pstyle.align_items) {
-                .FlexStart => {
-                    cross_pos = 0.0;
-                },
-                .FlexEnd => {
-                    if (cross_size > cross_item_size) {
-                        cross_pos = cross_size - cross_item_size;
-                    }
-                },
-                .Center => {
-                    if (cross_size > cross_item_size) {
-                        cross_pos = (cross_size - cross_item_size) / 2.0;
-                    }
-                },
-                .Stretch => {
-                    cross_pos = 0.0;
-                    if (cross_size > 0.0) {
-                        itm.target_cross = cross_size;
-                    }
-                },
+            if (pstyle.align_items == .Stretch && cross_size > 0.0) {
+                itm.target_cross = cross_size;
             }
 
             const item_x = if (is_row) (content_x + current_main) else (content_x + cross_pos);

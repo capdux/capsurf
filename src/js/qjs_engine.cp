@@ -26,6 +26,8 @@ pub @c {
     fn JS_NewRuntime(): (*JSRuntime)?;
     fn JS_FreeRuntime(rt: *JSRuntime);
     fn JS_SetMemoryLimit(rt: *JSRuntime, limit: usize);
+    fn JS_SetMaxStackSize(rt: *JSRuntime, stack_size: usize);
+    fn JS_UpdateStackTop(rt: *JSRuntime);
     fn JS_SetInterruptHandler(rt: *JSRuntime, cb: (@c fn(rt: *JSRuntime, opaque_ptr: *!?): i32)?, opaque_ptr: *!?);
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;
@@ -63,6 +65,7 @@ pub @c {
     fn JS_NewStringLen(ctx: *const JSContext, str: [*c]const u8, len: usize): JSValue;
 
     fn JS_Eval(ctx: *const JSContext, input: [*c]const u8, input_len: usize, filename: [*c]const u8, eval_flags: i32): JSValue;
+    fn JS_GetException(ctx: *JSContext): JSValue;
     fn JS_ToCStringLen2(ctx: *const JSContext, plen: *usize, val: JSValue, cesu8: i32): [*]const u8!?;
     fn JS_FreeCString(ctx: *const JSContext, ptr: [*]const u8!?);
     fn JS_FreeValue(ctx: *const JSContext, v: JSValue);
@@ -204,6 +207,7 @@ pub struct JsRuntime {
         if (mem_limit_bytes > 0) {
             JS_SetMemoryLimit(rt, mem_limit_bytes);
         }
+        JS_SetMaxStackSize(rt, 0); // Disable static thread stack limit to support cross-thread execution
         let st = std.heap.c_allocator.create(ReductionState) catch return error.ReductionStateAllocFailed;
         st.* = ReductionState {
             reduction_limit: reduction_slice,
@@ -227,6 +231,7 @@ pub struct JsRuntime {
     }
 
     fn resetReductions(*_) {
+        JS_UpdateStackTop(_.raw_rt);
         _.state.reduction_count = 0;
         _.state.interrupted = false;
     }
@@ -254,7 +259,17 @@ pub struct JsContext {
 
     fn eval(code: []const u8): JSValue {
         _.runtime.resetReductions();
+        let buf: [4096]u8 = [0; 4096];
+        if (code.len + 1 <= buf.len) {
+            @memcpy(buf[0..code.len], code);
+            buf[code.len] = 0;
+            return JS_Eval(_.raw_ctx, buf[0..code.len].ptr, code.len, "<eval>", 0);
+        }
         return JS_Eval(_.raw_ctx, code.ptr, code.len, "<eval>", 0);
+    }
+
+    fn getException(): JSValue {
+        return JS_GetException(_.raw_ctx);
     }
 
     fn toCString(val: JSValue): []const u8 {
