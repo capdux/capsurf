@@ -8,6 +8,8 @@
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
 import { SelectorList, Matcher } from "./matcher.cp";
+import { HtmlTag } from "../html/tags.cp";
+import { UaStylesheet } from "./ua_stylesheet.cp";
 import {
     CssColor,
     CssUnit,
@@ -433,38 +435,110 @@ pub struct ComputedStyle {
     // 64-bit packed cascade weight per property slot
     weights: [40]u64 = [0; 40];
 
-    /// Initializes UA default display and inherits inheritable properties (`visibility`, `font-size`, `color`) from parent.
-    fn initForNode(*_, tag_name: []const u8, parent_style: (*const ComputedStyle)?) {
-        // Inline-level HTML tags default to `display: inline`, `<button>` / `<input>` to `inline-block`
-        if (std.ascii.eqlIgnoreCase(tag_name, "span") ||
-            std.ascii.eqlIgnoreCase(tag_name, "a") ||
-            std.ascii.eqlIgnoreCase(tag_name, "strong") ||
-            std.ascii.eqlIgnoreCase(tag_name, "em") ||
-            std.ascii.eqlIgnoreCase(tag_name, "b") ||
-            std.ascii.eqlIgnoreCase(tag_name, "i") ||
-            std.ascii.eqlIgnoreCase(tag_name, "label"))
-        {
-            _.display = Display.inlineFlow();
-        } else if (std.ascii.eqlIgnoreCase(tag_name, "button") ||
-            std.ascii.eqlIgnoreCase(tag_name, "input") ||
-            std.ascii.eqlIgnoreCase(tag_name, "select"))
-        {
-            _.display = Display.inlineBlock();
-        } else if (std.ascii.eqlIgnoreCase(tag_name, "head") ||
-            std.ascii.eqlIgnoreCase(tag_name, "style") ||
-            std.ascii.eqlIgnoreCase(tag_name, "script") ||
-            std.ascii.eqlIgnoreCase(tag_name, "meta") ||
-            std.ascii.eqlIgnoreCase(tag_name, "title") ||
-            std.ascii.eqlIgnoreCase(tag_name, "template"))
-        {
+    /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
+    fn initForNode(*_, node: *const NodeData, parent_style: (*const ComputedStyle)?) {
+        // [hidden] attribute takes absolute precedence
+        if (node.hasAttribute("hidden")) {
             _.display = Display.none();
-        } else {
-            _.display = Display.block();
+            return;
+        }
+
+        const tag = HtmlTag.fromStr(node.tag_name);
+
+        switch (tag) {
+            .Head, .Style, .Script, .Meta, .Link, .Title, .Template,
+            .Param, .Track, .Source, .Noscript, .Datalist => {
+                _.display = Display.none();
+            },
+            .Dialog => {
+                if (node.hasAttribute("open")) {
+                    _.display = Display.block();
+                } else {
+                    _.display = Display.none();
+                }
+            },
+            .A, .Abbr, .B, .Bdi, .Bdo, .Cite, .Code, .Data, .Dfn, .Em,
+            .I, .Kbd, .Mark, .Q, .S, .Samp, .Small, .Span, .Strong,
+            .Sub, .Sup, .Time, .U, .Var, .Wbr, .Label => {
+                _.display = Display.inlineFlow();
+            },
+            .Button, .Input, .Select, .Textarea, .Img, .Video, .Audio,
+            .Canvas, .Iframe, .Embed, .Object, .Progress, .Meter => {
+                _.display = Display.inlineBlock();
+            },
+            .Table => {
+                _.display = Display.block();
+            },
+            * => {
+                _.display = Display.block();
+            },
+        }
+
+        switch (tag) {
+            .Body => {
+                _.margin_top = LengthPercentageOrAuto.px(8.0);
+                _.margin_right = LengthPercentageOrAuto.px(8.0);
+                _.margin_bottom = LengthPercentageOrAuto.px(8.0);
+                _.margin_left = LengthPercentageOrAuto.px(8.0);
+            },
+            .H1 => {
+                _.font_size_px = 32.0;
+                _.margin_top = LengthPercentageOrAuto.px(21.44);
+                _.margin_bottom = LengthPercentageOrAuto.px(21.44);
+            },
+            .H2 => {
+                _.font_size_px = 24.0;
+                _.margin_top = LengthPercentageOrAuto.px(19.92);
+                _.margin_bottom = LengthPercentageOrAuto.px(19.92);
+            },
+            .H3 => {
+                _.font_size_px = 18.72;
+                _.margin_top = LengthPercentageOrAuto.px(18.72);
+                _.margin_bottom = LengthPercentageOrAuto.px(18.72);
+            },
+            .H4 => {
+                _.font_size_px = 16.0;
+                _.margin_top = LengthPercentageOrAuto.px(21.28);
+                _.margin_bottom = LengthPercentageOrAuto.px(21.28);
+            },
+            .H5 => {
+                _.font_size_px = 13.28;
+                _.margin_top = LengthPercentageOrAuto.px(22.17);
+                _.margin_bottom = LengthPercentageOrAuto.px(22.17);
+            },
+            .H6 => {
+                _.font_size_px = 10.72;
+                _.margin_top = LengthPercentageOrAuto.px(24.97);
+                _.margin_bottom = LengthPercentageOrAuto.px(24.97);
+            },
+            .P => {
+                _.margin_top = LengthPercentageOrAuto.px(16.0);
+                _.margin_bottom = LengthPercentageOrAuto.px(16.0);
+            },
+            .Ul, .Ol => {
+                _.margin_top = LengthPercentageOrAuto.px(16.0);
+                _.margin_bottom = LengthPercentageOrAuto.px(16.0);
+                _.padding_left = LengthPercentageOrAuto.px(40.0);
+            },
+            .Blockquote, .Figure => {
+                _.margin_top = LengthPercentageOrAuto.px(16.0);
+                _.margin_bottom = LengthPercentageOrAuto.px(16.0);
+                _.margin_left = LengthPercentageOrAuto.px(40.0);
+                _.margin_right = LengthPercentageOrAuto.px(40.0);
+            },
+            .Hr => {
+                _.margin_top = LengthPercentageOrAuto.px(8.0);
+                _.margin_bottom = LengthPercentageOrAuto.px(8.0);
+                _.border_top_width = 1.0;
+            },
+            * => {},
         }
 
         if (p := parent_style) {
             _.visibility = p.visibility;
-            _.font_size_px = p.font_size_px;
+            if (tag != .H1 && tag != .H2 && tag != .H3 && tag != .H4 && tag != .H5 && tag != .H6) {
+                _.font_size_px = p.font_size_px;
+            }
             _.color = p.color;
         }
     }
@@ -1006,7 +1080,7 @@ pub struct Cascade {
             if (node.parent != NULL_NODE && @as(usize, node.parent) < nid) {
                 parent_style_ptr = &out_styles[@as(usize, node.parent)];
             }
-            style.initForNode(node.tag_name, parent_style_ptr);
+            style.initForNode(node, parent_style_ptr);
 
             let source_order: u32 = 1;
             const node_id_u32: NodeId = @intCast(nid);

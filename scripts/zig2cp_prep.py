@@ -122,10 +122,12 @@ def code_tx(t):
             continue
         t = re.sub(r'(?<![\w@".])%s(?![\w"])' % kw, '@"%s"' % kw, t)
     t = re.sub(r"^(\s*)(static|in|as|from|impl|meta|macro)(\s*[,=])", r'\1@"\2"\3', t)
-    # single-line struct literal `.{ .a = 1, .b = 2 }` -> `{ a: 1, b: 2 }`
-    if re.search(r"\.\{\s*\.\w+\s*=", t):
-        t = re.sub(r"\.\{(\s*)\.(\w+)\s*=\s*", r"{\1\2: ", t)
-        t = re.sub(r",(\s*)\.(\w+)\s*=(?!>)\s*", r",\1\2: ", t)
+    # CP standard type casts: @intCast -> i32
+    t = re.sub(r"@intCast\(", "i32(", t)
+    # struct literal: `.{ .a = 1, .b = 2 }` -> `{ a: 1, b: 2 }`
+    # Also handle partials like `{ prop: "...", .ty = Value }` -> `{ prop: "...", ty: Value }`
+    t = re.sub(r"(?<=[{,])\s*\.([A-Za-z_]\w*)\s*=(?!>)\s*", r" \1: ", t)
+    t = re.sub(r"\.\{\s*", r"{ ", t)
     return t
 
 

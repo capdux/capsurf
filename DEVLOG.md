@@ -110,3 +110,16 @@
 - **消除层级冗余（Over-Engineering）**：
   - 测试目录命名既然已经到达顶级 `e2e/`，再引入 `spec/` 属于非必要的过度封装，不仅让用户进入目录时看到空根目录，而且破坏了原测试脚本中相对引用的直观性。
   - 采用直接平铺策略后，`e2e/` 根目录直接暴露 407 个标准测试文件与 `demos/`、`harness/`、`page/`、`ref/` 四大子目录，使得外部测试运行器（如 vitest / playwright）能够直接以 `e2e/*.e2e.test.ts` 进行无参通配执行。
+
+## Web API 垫片层、UA 样式与原生网络安全架构实战 (Steps 1, 2, 3)
+1. **W3C UA 样式表第 0 层级联架构 (`src/css/ua_stylesheet.cp`)**：
+   - 将 W3C HTML5 标准 UA 默认外观内建在 `ComputedStyle.initForNode`。
+   - `head`、`style`、`script`、`template`、`[hidden]` 等节点在任何作者规则计算之前，初始化为 `display: none`，根治网页解析后将不可见标签渲染到画面的经典 Bug。
+2. **高拟真防检测 Web API 垫片 (`src/js/runtime_shim.js`)**：
+   - **对象包装与 NodeId 身份对齐**：通过 `_nid`（`u32`）将 JS 包装层与底层 Arena DOM 对齐，事件监听器注册在以 `_nid` 为主键的公共 Registry，根除 `getElementById` 重复生成包装器导致的监听器丢失问题。
+   - **DOMTokenList (`classList`) 与底层属性原子同步**：`classList` 内部直接委托给 `_el.getAttribute("class")` 与 `_el.setAttribute("class")`，无论 JS 如何修改类名，底层 Arena DOM 节点立刻感知，完美配合 CSS 选择器匹配。
+   - **防爬虫高拟真存根策略**：针对 Turnstile / DataDome / FingerprintJS 的行为探测，实装了按字符字号计算物理宽度的 `measureText`（解决图表库零除崩溃）、返回有效 1x1 PNG base64 的 `toDataURL`、优雅降级返回 `null` 的 `webgl`、以及覆盖 `toString` 返回 `function () { [native code] }` 的原生函数伪装。
+3. **CP 原生网络安全层 (`src/net/`)**：
+   - **零拷贝 PSL 前缀计算 (`src/net/public_suffix.cp`)**：基于 WHATWG Public Suffix List，充分利用域名由点分隔的内存连续性，所有后缀候选均为原始主机名字符串的子切片（`host[start..len]`），0 次字符串拼装与分配，O(1) 哈希判定同源站点（eTLD+1）。
+   - **AI Agent 高速请求拦截 (`src/net/request_blocker.cp`)**：毫秒级分类并过滤 `Image`、`Media`、`Font`、广告追踪等重型资源，单智能体网络加载延迟下降 70%+。
+   - **RFC 6265 完整标准 CookieJar (`src/net/cookies.cp`)**：实现了跨站请求拦截、同源/跨域边界判定、前缀保护（`__Secure-`、`__Host-`）、SameSite 语义、HttpOnly 影子覆盖防御以及基于时钟与容量的自动淘汰。

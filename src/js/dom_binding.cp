@@ -33,11 +33,15 @@ import {
     JS_SetPropertyUint32,
     JS_NewObject,
     JS_NewArray,
+    JS_GetGlobalObject,
+    JS_DupValue,
+    JS_FreeValue,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
+import { RUNTIME_SHIM_SOURCE } from "./runtime_shim_source.cp";
 
 pub threadlocal let g_element_class_id: u32 = 0;
 pub threadlocal let g_document_class_id: u32 = 0;
@@ -68,6 +72,7 @@ pub fn createJsElement(ctx: *JSContext, dom_ctx: *JsDomContext, node_id: NodeId)
         node_id: node_id,
     };
     * = JS_SetOpaque(el_val, @ptrCast(el));
+    * = JS_SetPropertyStr(ctx, el_val, "_nid", jsInt(@intCast(node_id)));
     return el_val;
 }
 
@@ -290,6 +295,47 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsUndefined();
 }
 
+@c fn js_element_get_parent_element(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    const parent_id = node.parent;
+    if (parent_id == NULL_NODE || @as(usize, parent_id) >= doc.nodes.items.len) return jsNull();
+    const parent_node = &doc.nodes.items[@as(usize, parent_id)];
+    if (parent_node.node_type == NodeType.Document) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, parent_id);
+}
+
+@c fn js_element_get_parent_node(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    const parent_id = node.parent;
+    if (parent_id == NULL_NODE || @as(usize, parent_id) >= doc.nodes.items.len) {
+        // Parent of root element (or NULL_NODE parent) is the Document node
+        const global_obj = JS_GetGlobalObject(ctx);
+        defer JS_FreeValue(ctx, global_obj);
+        return JS_GetPropertyStr(ctx, global_obj, "document");
+    }
+    const parent_node = &doc.nodes.items[@as(usize, parent_id)];
+    if (parent_node.node_type == NodeType.Document) {
+        const global_obj = JS_GetGlobalObject(ctx);
+        defer JS_FreeValue(ctx, global_obj);
+        return JS_GetPropertyStr(ctx, global_obj, "document");
+    }
+    return createJsElement(ctx, el.dom_ctx, parent_id);
+}
+
 @c fn js_document_finalizer(rt: *JSRuntime, val: JSValue) {
     * = rt;
     const ptr = JS_GetOpaque(val, g_document_class_id);
@@ -437,6 +483,8 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineGetterSetter(raw_ctx, el_proto, "className", js_element_get_class_name, js_element_set_class_name);
     defineGetterSetter(raw_ctx, el_proto, "tagName", js_element_get_tag_name, null);
     defineGetterSetter(raw_ctx, el_proto, "textContent", js_element_get_text_content, js_element_set_text_content);
+    defineGetterSetter(raw_ctx, el_proto, "parentElement", js_element_get_parent_element, null);
+    defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, null);
 
     JS_SetClassProto(raw_ctx, g_element_class_id, el_proto);
 
@@ -463,11 +511,28 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     // Create document instance
     const doc_val = JS_NewObjectClass(raw_ctx, g_document_class_id);
     * = JS_SetOpaque(doc_val, @ptrCast(dom_ctx));
+    * = JS_SetPropertyStr(raw_ctx, doc_val, "_nid", jsInt(0));
 
     // Register globals
     const global_obj = ctx.getGlobal();
+    defer ctx.freeValue(global_obj);
+
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "_nid", jsInt(-1));
+
+    // Expose Element and Document constructors
+    const el_ctor = JS_NewObject(raw_ctx);
+    * = JS_SetPropertyStr(raw_ctx, el_ctor, "prototype", JS_DupValue(raw_ctx, el_proto));
+    * = JS_SetPropertyStr(raw_ctx, el_proto, "constructor", JS_DupValue(raw_ctx, el_ctor));
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "Element", el_ctor);
+
+    const doc_ctor = JS_NewObject(raw_ctx);
+    * = JS_SetPropertyStr(raw_ctx, doc_ctor, "prototype", JS_DupValue(raw_ctx, doc_proto));
+    * = JS_SetPropertyStr(raw_ctx, doc_proto, "constructor", JS_DupValue(raw_ctx, doc_ctor));
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "Document", doc_ctor);
+
     * = JS_SetPropertyStr(raw_ctx, global_obj, "document", doc_val);
-    * = JS_SetPropertyStr(raw_ctx, global_obj, "window", global_obj);
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "window", JS_DupValue(raw_ctx, global_obj));
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "globalThis", JS_DupValue(raw_ctx, global_obj));
 
     // Register console
     const console_obj = JS_NewObject(raw_ctx);
@@ -475,6 +540,17 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, console_obj, "warn", js_console_log, 1);
     defineMethod(raw_ctx, console_obj, "error", js_console_log, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
+
+    // Evaluate runtime shim
+    const shim_val = ctx.eval(RUNTIME_SHIM_SOURCE);
+    if (jsIsException(shim_val)) {
+        const exc = ctx.getException();
+        const exc_str = ctx.toCString(exc);
+        defer std.heap.page_allocator.free(exc_str);
+        defer ctx.freeValue(exc);
+        std.debug.print("Runtime shim eval error: {s}\n", .{exc_str});
+    }
+    ctx.freeValue(shim_val);
 
     return dom_ctx;
 }

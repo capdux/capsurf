@@ -696,3 +696,33 @@
    - 形成清晰扁平架构：`e2e/*.e2e.test.ts`、`e2e/demos/`、`e2e/harness/`、`e2e/page/`、`e2e/ref/`。
 3. **验证与原子提交**：
    - 原生测试自检通过；完成 Git 原子提交。
+
+---
+
+## [2026-11-16 02:00:00] Turn 13
+
+### **[User]**
+> 按次序 执行 第一步/第二步/第三步, 第四步暂不执行
+
+### **[Agent]**
+严格按次序圆满闭环执行第一步、第二步、第三步，第四步（截图光栅化引擎）暂不执行：
+1. **第一步（W3C 标准 UA 样式表实装与级联第 0 层注入）**：
+   - 新建 `src/css/ua_stylesheet.cp`，实装 HTML5 规范全部默认显示规则（`head`、`script`、`style`、`meta`、`link`、`title`、`template`、`[hidden]` 强制 `display: none`；标题、段落、列表、按钮、表格等块级/行内默认规则）；
+   - 接入 `src/css/cascade.cp` 中的 `ComputedStyle.initForNode`，在第 0 层级联直接生效；在 `src/dom/dom.cp` 中补齐 `hasAttribute` 支撑属性选择伪类；
+   - 编写并运行 `test/css/test_ua_stylesheet.cp`，全量断言通过（1/1 PASS）。
+2. **第二步（DOM 核心包装与事件冒泡 / Web API 灵魂 JS 垫片层）**：
+   - 编写高拟真防检测垫片 `src/js/runtime_shim.js` 并生成嵌入源码 `src/js/runtime_shim_source.cp`；
+   - 在 `src/dom/dom.cp` 与 `src/js/dom_binding.cp` 中注入 `_nid`（`u32` 节点标识）、`parentElement`、`parentNode`，并在全局对象挂载 `Element` 与 `Document` 原型构造器；
+   - 实现三相事件捕获冒泡分发机制（`target` -> `parent` -> `document` -> `window`）、`DOMTokenList`（`classList` 增删改查并与 Arena DOM 属性实时同步）；
+   - 实装防爬虫高拟真存根：`CanvasRenderingContext2D` 像素级真实 `measureText`、有效 1x1 PNG base64 `toDataURL`、`webgl` 优雅降级返回 `null`、核心原型方法 `[native code]` 原生代码伪装；
+   - 实装 `localStorage` / `sessionStorage` 内存存储、`Location`、`Navigator` 身份；
+   - 编写并运行 `test/js/test_dom_events.cp`（5/5 PASS），并完成现有 `test/js/test_js_dom.cp`（5/5 PASS）无衰退回归验证。
+3. **第三步（CP 原生网络与安全防御层：PSL、CookieJar、RequestBlocker）**：
+   - **`src/net/public_suffix.cp`**：实现基于 WHATWG Public Suffix List 的零拷贝后缀提取与 Same-Site 计算引擎（`isIpHost`, `publicSuffixLength`, `siteKey`, `schemefulSite`, `isPublicSuffix`）；
+   - **`src/net/request_blocker.cp`**：实现 AI Agent 高并发请求拦截引擎（`ResourceType`, `BlockableRequest`, `RequestBlockVerdict`, `RequestBlocker`, `classifyRequest`，支持连接隔离注册器）；
+   - **`src/net/cookies.cp`**：实现 RFC 6265 完整标准 CookieJar（同源/跨域 eTLD+1 判定、Path 前缀边界、Secure Origin 与非安全覆盖防护、HttpOnly 脚本防护与影子隔离、`__Secure-` 与 `__Host-` 前缀不变式、SameSite=None 校验、淘汰机制及 CDP 协议双向格式转换 `entryToCdp`）；
+   - 编写并运行 `test/net/test_request_blocker.cp`（5/5 PASS）与 `test/net/test_cookies.cp`（7/7 PASS），与 `e2e/ref/` 1:1 对齐。
+4. **验证与门禁检查**：
+   - 8 个核心模块全量通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 全套 6 大测试套件 26 个用例 100% 绿色通过；
+   - 准备执行原子提交。

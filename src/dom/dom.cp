@@ -125,6 +125,10 @@ pub struct NodeData {
         return null;
     }
 
+    fn hasAttribute(attr_name: []const u8): bool {
+        return _.getAttribute(attr_name) != null;
+    }
+
     fn setAttribute(*_, name: []const u8, value: []const u8) {
         if (std.ascii.eqlIgnoreCase(name, "id")) {
             _.id_attr = value;
