@@ -164,3 +164,41 @@ html5ever 的 tree_builder 里用了一点 Rust 的 match_token! 宏来简化标
 - [ ] **Milestone 3: QuickJS-NG 引擎绑定与 DOM API 挂载**
 - [ ] **Milestone 4: CDP 协议服务端与双模构建发布**
 
+### 二、 Kitesurf 真实资产规模穿透：上千个文件究竟是什么？
+
+原版 Kitesurf 统计出的 1,238 个 TS/JS 文件中，存在大量脚手架和测试固件。当我们剥离测试后，发现其核心代码极其精炼：
+• 测试用例与脚手架（约占 78%，1,000+ 文件，无需迁移）：
+• packages/engine/test/：997 个测试文件（包含海量 WPT Web 规范测试矩阵与 Vitest 单元测试桩）。
+• bazel/ 与 scripts/：约 30 个 Bazel 构建与补丁脚本。
+• 真正需要迁移的生产 TS 核心代码（Production TS/JS）：仅 278 个文件！
+• packages/engine/src：99 个核心文件（CDP 协议栈、网络安全过滤、Cookie Jar、WebMCP、AXTree）。
+• packages/dom-shim/src：91 个核心文件（完整 W3C Web API 运行时：DOM 树操作、事件系统、MutationObserver、XPath 3.0、HTML 表单、Canvas2D）。
+• packages/page-script/src：63 个核心文件（网页注入与执行策略、Scheduler 调度、Fetch/XHR 拦截、反反爬指纹）。
+• packages/script-gate/src：11 个核心文件（JS 隔离沙箱与权限门禁）。
+• packages/jsrpc-types/src：7 个核心文件（RPC 类型契约定义）。
+• packages/worker-script/src：4 个核心文件（Web Worker 线程环境存根）。
+• packages/page-renderer/src：3 个核心文件（页面渲染管线桥接）。
+
+### 二、 30 个 Bazel 与 Scripts 脚本是什么？对我们有价值吗？
+
+```text
+  深入解构 vendor/kitesurf/bazel/ 与 vendor/kitesurf/scripts/ 后，这批脚本主要分为以下 4 大类：
+   类别                          │ 代表文件                             │ 原版用途                              │ 对 CapSurf 的价值评估
+  ───────────────────────────────┼──────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────
+   1. Bazel 多语言构建脚本       │ bazel/*.bzl, BUILD.bazel             │ Cloudflare                            │ ❌ 无价值（完全废弃）。CapSurf 是纯
+                                 │                                      │ 内部单体仓的工程构建规则，用于拼装    │ CP 原生代码，统一由 cap build / cpc
+                                 │                                      │ Rust (cargo) + TS (tsc) + WASM (wasm- │ 极速单二进制编译，无需庞大的 Bazel
+                                 │                                      │ bindgen)                              │ 规则。
+   2. Rust 依赖打补丁脚本        │ scripts/patches/*.patch(20+          │ 原版 Kitesurf 为让外部 Rust           │ ❌ 无价值（完全废弃）。CapSurf
+                                 │ 个补丁目录)                          │ 库（blitz, boa_engine, taffy,         │ 底层已由 CP 原生 Arena DOM + QuickJS-
+                                 │                                      │ selectors）在 Cloudflare Workers WASM │ NG C-FFI 彻底替代，根本不依赖这些
+                                 │                                      │ 限制下勉强运行而打的内存 Hack 补丁    │ Rust crates。
+   3. 官方生态测试调度与比对清单 │ scripts/pptr-run.mjsscripts/pw-      │ 调度官方 Puppeteer / Playwright       │ ⭐ 极高参考与复用价值！其中的 pptr-
+                                 │ run.mjstests/pptr-                   │ 测试套件，批量运行并比对兼容性通过率  │ expectations.json 记录了哪些 CDP
+                                 │ expectations.jsontests/pw-           │                                       │ 命令是自动化必须支持的；我们可以在
+                                 │ expectations.json                    │                                       │ Milestone 4 收尾与阶段发布时，用轻量
+                                 │                                      │                                       │ TS 脚本驱动它们验证 CapSurf。
+   4. 代码规范与开源 DCO 检查    │ check-dco.mjscheck-license-          │ Cloudflare                            │ ❌ 无价值。
+                                 │ headers.mjs                          │ 公司内部的代码开源协议合规扫描        │
+  ──────
+```

@@ -67,3 +67,20 @@
 - **`src/main.cp`**：升级主入口，集成 HTML5 解析、CSS 级联、布局几何、JS 执行与 CDP Server 初始化演示。
 - **双模构建验证**：成功构建独立原生可执行文件 `bin/main` 与 Nest 容器动态库 `bin/main.so`（编译耗时 120ms）。
 - **全量测试套件回归**：全项目 5 大测试套件共计 17 项测试 100% 全部通过。
+
+## Architecture & Topology Refactoring: Test & E2E Reorganization (Option A)
+- **测试目录拓扑重构（方案 A 严格单数规范）**：
+  - 将原 `tests/` 重构为模块化单数命名的 `test/`：`test/dom/`、`test/html/`、`test/css/`、`test/layout/`、`test/js/`、`test/cdp/`、`test/net/`。
+  - 迁移并重验全部 CP 原生测试：
+    - `test/html/test_tokenizer.cp` (3/3 passed)
+    - `test/html/test_parser.cp` (4/4 passed)
+    - `test/layout/test_layout.cp` (3/3 passed)
+    - `test/js/test_js_dom.cp` (5/5 passed)
+    - `test/cdp/test_cdp.cp` (2/2 passed)
+    - 5 大套件共计 17 项测试全部 100% 绿色通过。
+  - 更新 `cap.json` 测试入口为 `"test": "cap test test/"`，安全清理旧 `tests/`。
+- **端到端验证体系 `e2e/` 建立**：
+  - `e2e/harness/`：CDP 协议通信与浏览器实例拉起测试夹具。
+  - `e2e/page/`：全量同步并归档 221 个测试网页资产（HTML、CSS、JS、WASM、SVG、图片等靶场文件）。
+  - `e2e/spec/`：端到端规范执行套件目录。
+  - `e2e/ref/`：归档 95 个 Kitesurf 原始 TS 测试套件，作为 CP 原生测试 1:1 转写的权威比对基准。

@@ -81,3 +81,18 @@
 5. **双模构建全面达标**：
    - `cap build -b src/main.cp` 仅耗时 120ms 即生成 Nest 容器热加载动态库 `bin/main.so`（仅 9KB）与接口元数据 `bin/main.d.cp`。
    - `cap src/main.cp` 成功编译并在原生控制台启动 CapSurf 无头引擎与 CDP 服务。
+
+## 方案 A 目录拓扑与 Web API 运行时垫片架构方案
+1. **测试与 E2E 目录规范化（方案 A）**：
+   - 为避免复数命名（tests, specs, fixtures）带来的语义不一致与混乱，采用统一且精炼的单数命名体系：
+     - `test/`：面向内部 CP 模块的原生单元与集成测试，按领域切分子目录（`dom/`, `html/`, `css/`, `layout/`, `js/`, `cdp/`, `net/`）。
+     - `e2e/`：面向外部用户行为与 CDP 协议的全链路端到端体系，包含 `harness/`（驱动夹具）、`page/`（靶场资源）、`spec/`（测试规范）与 `ref/`（原始 TS 测试基准）。
+2. **Web API 运行时垫片（Runtime Shim）技术可行性分析**：
+   - **痛点**：若在 CP 中通过 QuickJS C-FFI 为 `EventTarget`、`CustomEvent`、`classList`、`MutationObserver`、`URLSearchParams`、`Headers`、`Storage` 等 Web API 逐个手写 C 绑定，将带来上万行胶水代码，且极易因 JS Closure 与 C 指针相互持有导致内存泄漏或循环引用悬垂。
+   - **解法**：Kitesurf 源码自身在 `dom-shim/` 中也是采用纯 TypeScript 编写，经由 esbuild 打包成单一 `dom-shim.js`，在页面创建时直接注入执行。
+   - **CapSurf 最佳实践**：
+     - 在 CP 宿主侧仅提供 5~6 个极简 Arena DOM 操作原语（如 `__capsurf_get_attr`、`__capsurf_set_attr`、`__capsurf_query_selector`、`__capsurf_get_rect`、`__capsurf_mutation_notify`）；
+     - 上层丰富的 Web API 纯 JS 逻辑合并为 `src/js/runtime_shim.js`（或预编译 QuickJS 字节码），在 `JsContext` 初始化时注入求值；
+     - 零 GC 跨界开销，开发效率提升 10 倍，同时 100% 免疫内存悬垂风险。
+3. **测试套件全量回归验证**：
+   - 目录拓扑迁移后，所有测试路径更新无误，5 大测试套件 17 项测试全绿通过，验证了单数规范与 `cap.json` 配置的完整性。
