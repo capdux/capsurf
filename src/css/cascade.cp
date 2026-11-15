@@ -1,5 +1,5 @@
 // src/css/cascade.cp
-// CapSurf 64-Bit Bit-Packed Weight CSS Cascade & ComputedStyle Engine (Milestone 1)
+// CapSurf 64-Bit Bit-Packed Weight CSS Cascade & ComputedStyle Engine (Milestone 1 & 5)
 //
 // Packed 64-bit Weight Formula:
 //   weight: u64 = (important << 63) | (is_inline << 62) | (specificity_30bit << 32) | source_order_32bit
@@ -373,13 +373,25 @@ pub const PROP_BG_COLOR: usize = 36;
 pub const PROP_OPACITY: usize = 37;
 pub const PROP_Z_INDEX: usize = 38;
 pub const PROP_GRID_COLS: usize = 39;
-pub const TOTAL_PROP_SLOTS: usize = 40;
+pub const PROP_BORDER_COLOR: usize = 40;
+pub const PROP_BORDER_RADIUS: usize = 41;
+pub const TOTAL_PROP_SLOTS: usize = 42;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     right: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     bottom: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     left: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+}
+
+/// Resolved visual style ready for the 2D software rasterizer (`src/render/painter.cp`)
+pub struct ResolvedPaintStyle {
+    bg_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    border_color: CssColor = CssColor.rgb(0, 0, 0);
+    text_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_width: f32 = 0.0;
+    border_radius: f32 = 0.0;
+    font_size_px: f32 = 16.0;
 }
 
 pub struct ComputedStyle {
@@ -409,6 +421,9 @@ pub struct ComputedStyle {
     border_right_width: f32 = 0.0;
     border_bottom_width: f32 = 0.0;
     border_left_width: f32 = 0.0;
+    border_color: CssColor = CssColor.rgb(0, 0, 0);
+    has_explicit_border_color: bool = false;
+    border_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
     right: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
@@ -433,7 +448,7 @@ pub struct ComputedStyle {
     z_index: i32 = 0;
 
     // 64-bit packed cascade weight per property slot
-    weights: [40]u64 = [0; 40];
+    weights: [42]u64 = [0; 42];
 
     /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
     fn initForNode(*_, node: *const NodeData, parent_style: (*const ComputedStyle)?) {
@@ -530,6 +545,34 @@ pub struct ComputedStyle {
                 _.margin_top = LengthPercentageOrAuto.px(8.0);
                 _.margin_bottom = LengthPercentageOrAuto.px(8.0);
                 _.border_top_width = 1.0;
+                _.border_color = CssColor.rgb(204, 204, 204);
+                _.has_explicit_border_color = true;
+            },
+            .Button => {
+                _.padding_top = LengthPercentageOrAuto.px(4.0);
+                _.padding_right = LengthPercentageOrAuto.px(12.0);
+                _.padding_bottom = LengthPercentageOrAuto.px(4.0);
+                _.padding_left = LengthPercentageOrAuto.px(12.0);
+                _.background_color = CssColor.rgb(239, 239, 239);
+                _.border_top_width = 1.0;
+                _.border_right_width = 1.0;
+                _.border_bottom_width = 1.0;
+                _.border_left_width = 1.0;
+                _.border_color = CssColor.rgb(118, 118, 118);
+                _.has_explicit_border_color = true;
+            },
+            .Input, .Textarea, .Select => {
+                _.padding_top = LengthPercentageOrAuto.px(2.0);
+                _.padding_right = LengthPercentageOrAuto.px(4.0);
+                _.padding_bottom = LengthPercentageOrAuto.px(2.0);
+                _.padding_left = LengthPercentageOrAuto.px(4.0);
+                _.background_color = CssColor.rgb(255, 255, 255);
+                _.border_top_width = 1.0;
+                _.border_right_width = 1.0;
+                _.border_bottom_width = 1.0;
+                _.border_left_width = 1.0;
+                _.border_color = CssColor.rgb(118, 118, 118);
+                _.has_explicit_border_color = true;
             },
             * => {},
         }
@@ -549,6 +592,38 @@ pub struct ComputedStyle {
             return true;
         }
         return false;
+    }
+
+    /// Extracts resolved visual paint parameters for software rasterization (`painter.cp`).
+    fn extractPaintStyle(
+        box_width: f32,
+        root_font_px: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ): ResolvedPaintStyle {
+        let bg = _.background_color;
+        let txt = _.color;
+        // Per CSS spec, if border-color is not explicitly set, it defaults to `currentColor` (`_.color`)
+        let bdr = if (_.has_explicit_border_color) _.border_color else _.color;
+
+        const op = std.math.clamp(_.opacity, 0.0, 1.0);
+        if (op < 1.0) {
+            bg.a = @intFromFloat(@as(f32, @floatFromInt(bg.a)) * op);
+            txt.a = @intFromFloat(@as(f32, @floatFromInt(txt.a)) * op);
+            bdr.a = @intFromFloat(@as(f32, @floatFromInt(bdr.a)) * op);
+        }
+
+        const radius_px = _.border_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
+        const bw_px = @max(@max(_.border_top_width, _.border_right_width), @max(_.border_bottom_width, _.border_left_width));
+
+        return ResolvedPaintStyle {
+            bg_color: bg,
+            border_color: bdr,
+            text_color: txt,
+            border_width: bw_px,
+            border_radius: radius_px,
+            font_size_px: _.font_size_px,
+        };
     }
 
     /// Applies a single `CssProperty` with prepacked 64-bit `weight` onto this ComputedStyle.
@@ -707,18 +782,32 @@ pub struct ComputedStyle {
             return;
         }
 
-        // Border width shorthand & longhands
+        // Border width & color shorthand & longhands
         if (std.ascii.eqlIgnoreCase(name, "border") || std.ascii.eqlIgnoreCase(name, "border-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = bw;
+            if (std.ascii.eqlIgnoreCase(name, "border")) {
+                if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                    if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
+                        _.border_color = c;
+                        _.has_explicit_border_color = true;
+                    }
+                }
+            }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "border-top") || std.ascii.eqlIgnoreCase(name, "border-top-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = bw;
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
+                    _.border_color = c;
+                    _.has_explicit_border_color = true;
+                }
+            }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "border-right") || std.ascii.eqlIgnoreCase(name, "border-right-width")) {
@@ -734,6 +823,26 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "border-left") || std.ascii.eqlIgnoreCase(name, "border-left-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = bw;
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-color") || std.ascii.eqlIgnoreCase(name, "border-top-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
+                    _.border_color = c;
+                    _.has_explicit_border_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-radius") || std.ascii.eqlIgnoreCase(name, "border-top-left-radius")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n/");
+            if (first_tok := it.next()) {
+                if (lpa := LengthPercentageOrAuto.parse(first_tok)) {
+                    if (_.tryClaimSlot(PROP_BORDER_RADIUS, weight)) {
+                        _.border_radius = lpa;
+                    }
+                }
+            }
             return;
         }
 
@@ -913,7 +1022,7 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "background-color") || std.ascii.eqlIgnoreCase(name, "background")) {
-            if (c := CssColor.parse(val)) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
                 if (_.tryClaimSlot(PROP_BG_COLOR, weight)) _.background_color = c;
             }
             return;
@@ -1046,6 +1155,42 @@ pub struct Cascade {
             }
         }
         return 0.0;
+    }
+
+    /// Parses a color value either directly (`#2563eb`, `rgb(1, 2, 3)`) or from a shorthand (`1px solid #2563eb`).
+    static fn parseColorTokenFromShorthand(val_str: []const u8): CssColor? {
+        const s = std.mem.trim(u8, val_str, " \t\r\n");
+        if (direct := CssColor.parse(s)) {
+            return direct;
+        }
+        // Check for `rgb(...)` / `rgba(...)` / `hsl(...)` functional notation inside shorthand
+        if (paren_open := std.mem.indexOfScalar(u8, s, '(')) {
+            if (paren_close := std.mem.indexOfScalarPos(u8, s, paren_open, ')')) {
+                let start = paren_open;
+                while (start > 0 && s[start - 1] != ' ' && s[start - 1] != '\t') : (start -= 1) {}
+                if (func_color := CssColor.parse(s[start .. paren_close + 1])) {
+                    return func_color;
+                }
+            }
+        }
+        let it = std.mem.tokenizeAny(u8, s, " \t\r\n");
+        while (tok := it.next()) {
+            if (std.ascii.eqlIgnoreCase(tok, "solid") ||
+                std.ascii.eqlIgnoreCase(tok, "dashed") ||
+                std.ascii.eqlIgnoreCase(tok, "dotted") ||
+                std.ascii.eqlIgnoreCase(tok, "double") ||
+                std.ascii.eqlIgnoreCase(tok, "none") ||
+                std.ascii.eqlIgnoreCase(tok, "hidden") ||
+                std.ascii.eqlIgnoreCase(tok, "thin") ||
+                std.ascii.eqlIgnoreCase(tok, "medium") ||
+                std.ascii.eqlIgnoreCase(tok, "thick")) {
+                continue;
+            }
+            if (c := CssColor.parse(tok)) {
+                return c;
+            }
+        }
+        return null;
     }
 
     /// Forwarder to ComputedStyle.applyProperty

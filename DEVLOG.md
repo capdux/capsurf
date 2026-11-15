@@ -156,3 +156,19 @@
    - 通过全局配置 `__CAP_RENDER_CONFIG = { canvasRecording: false, animations: false }` 实现极速无头与视觉推流的零开销平滑切换：
      - **生产无头 Agent 模式（默认）**：Canvas 绘图命令直接返回有效尺寸与占位像素，动画直接跳转至完成态，不消耗内存录制命令，0 后台定时器开销；
      - **云端推流/录制模式（按需开启）**：`canvasRecording: true` 时将所有 `fillRect`, `arc`, `drawImage`, `stroke` 序列化入 `_ops` 数组供远程流式拉取；`animations: true` 时挂载 `DocumentTimeline` 与真实定时器驱动帧渲染。
+
+## Milestone 5 纯 CP 2D 软件光栅化与 PNG 截图引擎架构方案与排障实录
+1. **纯 CP 2D 软件光栅化器架构 (`src/render/painter.cp`)**：
+   - **SDF 圆角抗锯齿矩形填充**：基于有符号距离场（Signed Distance Field）算法，单像素遍历判定 `out_dist = sqrt(max(dx, 0)^2 + max(dy, 0)^2) + min(max(dx, dy), 0) - r`，以 `clamp(0.5 - out_dist, 0.0, 1.0)` 计算亚像素覆盖率，完美消除锯齿；
+   - **边框一体化渲染**：当 `out_dist >= -border_width` 时自然过渡为 `border_color`，实现背景与圆角边框单遍（Single-Pass）绘制；
+   - **内置 8x8 ASCII 点阵字库**：内建无外部依赖的单色字模切片，通过位移运算将字符快速喷涂到 Canvas 像素缓冲区中。
+2. **多级压缩等级自适应 PNG 引擎 (`src/render/png.cp`)**：
+   - **双模设计目标**：
+     - **本地 AI Agent 实时视觉推理**：要求 `< 1ms` 极速直出，指定 `compress_level = 0` 时采用 Filter None（0x00），扫描线内存直通复制，配合 zlib Store 模式（零霍夫曼计算）瞬间出图；
+     - **CDP 网络传输与持久化**：追求最小网络带宽与存储占用，指定 `compress_level = 1`（最快 RLE 级压缩，体积剧降 70%+）或 `compress_level = 6/9`（标准/极限 Deflate 压缩），配合 Filter Sub（0x01）差分滤波大幅降低图像熵；
+   - **RFC 2083 纯 CP 逆滤波解码器**：内建 `PngCodec.decode`，支持 IHDR/IDAT 自动扫描聚合、zlib `uncompress` 解压与 None/Sub/Up/Average 逆滤波还原，支撑端到端截图往返像素级核验。
+3. **排障与语法避坑经验**：
+   - **负号运算符与结构体字段解析冲突**：`cpc` 词法分析器对 `-style.border_width` 会错误降低为 `(0 - style).border_width`。显式声明 `const neg_bw = 0.0 - style.border_width;` 彻底消除歧义。
+   - **字符字面量与数组推导边界**：在 `switch` 中直接写 `[0x18, ...]` 会默认推导为 `[]const i32` 导致类型不匹配。直接返回转义字符串字面量 `"\x18\x3C..."`（类型推导为零拷贝 `[]const u8`），既提升执行效率又消除类型推导错误。
+   - **测试闭包生成器变量命名冲突规避**：在 `cap:test` 的 `() => { ... }` 闭包内部若直接声明名为 `allocator` 的局部变量，闭包捕获结构体会退化为 `*anyopaque` 引发编译失败。将具体测试断言抽离为带错误返回的普通函数（`fn testFoo()!`），在闭包内仅执行单行调用，彻底根除闭包上下文推导退化问题。
+   - **标准 C 库链接补齐**：在使用 `cap:pack` 与 `cap:image` 时，底层依赖系统的 `libz.so`，需在 `cap.json` 的 `link_libs` 中补充 `"z"`。

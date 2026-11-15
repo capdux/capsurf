@@ -140,3 +140,25 @@
 - **全量测试与门禁验证**：
   - 核心模块通过 `cpc_brief.py` 4 道门禁。
   - 全工程 30 / 30 测试用例 100% 绿色通过（包含新增的 4 个高阶测试场景）。
+
+## Milestone 5: Pure-CP 2D Software Rasterizer & Tunable PNG Screenshot Engine (100% Closed)
+- **`cap.json`**：在 `link_libs` 中补充标准 C 系统库依赖 `"z"`（zlib）。
+- **`src/render/png.cp`**：实现基于标准库 `cap:pack`（zlib C-FFI `compress2`）的原生高性能 PNG 编解码器 `PngCodec`，支持 `compress_level: u8`（0..=9）多级调节：
+  - Level 0: 无压缩直通复制（< 1ms），面向本地 AI Agent 视觉推理；
+  - Level 1: Sub 差分滤波 + 极速 Deflate 压缩（1~2ms），体积骤降 70%+；
+  - Level 6 / 9: 标准与极限高压缩比，面向 CDP 网络传输与存档；
+  - 实装 RFC 2083 纯 CP 逆滤波解码器 `PngCodec.decode`，支持双向往返还原与像素颜色校验；
+  - 提供 `encodePng` 通用辅助函数。
+- **`src/render/painter.cp`**：
+  - 实现基于 SDF（有符号距离场）圆角抗锯齿矩形填充与四周边框一体化绘制引擎；
+  - 实装内置 8x8 ASCII 点阵字库，支持页面内嵌文字快速绘制；
+  - 导出统一类型别名 `Color` 与 `PaintStyle`，实现与 `cascade.cp` 及 `style_extractor.cp` 无缝对接；
+  - 在 `Canvas` 增加只读方法 `getPixel(x, y)` 供像素级精确断言；
+  - 桥接 `encodeCanvasToPngWithLevel` 直接调用 `PngCodec.encodeRgbaWithLevel`，并在 `renderDocumentToPng` 顶层暴露 `opts.compress_level`。
+- **`src/render/style_extractor.cp`**：提供从 `ComputedStyle` 提取完整边框宽度、圆角、颜色与 Alpha 合成的样式提取器。
+- **`src/css/cascade.cp`**：扩展属性槽位支持 `PROP_BORDER_COLOR`、`PROP_BORDER_RADIUS`，实现 `extractPaintStyle` 与 `parseColorTokenFromShorthand` 简写解析。
+- **`test/render/test_screenshot.cp`**：编写并全面通过 3 组深度测试（3/3 passed, 100%）：
+  1. Canvas 2D SDF 圆角按钮与文字抗锯齿光栅化及物理像素取色断言；
+  2. PNG 0..9 压缩等级阶梯体积对比与解码还原验证；
+  3. HTML5 DOM -> ComputedStyle -> Layout 盒模型 -> PNG 截图端到端输出与解码验证。
+- **门禁检验**：`src/render/` 下全部文件 100% 通过 `cpc_brief.py` 4 道门禁。

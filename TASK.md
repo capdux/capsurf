@@ -532,3 +532,18 @@ EOF
 - `dom-shim/src/` 下：`idl/*`, `webidl.ts`, `css-typed-om*`, `fastpath.ts`, `detached-wrappers.ts`, `record.ts`, `mutations/seq.ts`, `mutations/attached.ts`, `internal-state.ts`, `internals.ts`, `contract.ts`, `trust.ts`, `otel.ts`, `editing/*`。
 - `engine/src/` 下：`rbi*`, `wasm*`, `observability.ts`, `tracing*`, `rate-limit.ts`, `guards.ts`, `host*.ts`, `landing.ts`, `embed.ts`, `fixtures-binding.ts`, `cdp/scene-*`, `cdp/diag-spans.ts`, `eval/*-spans.ts`, `eval/*-tail.ts`, `eval/oopif-render.ts`, `eval/page-renderer.ts`, `eval/font-shaping.ts`, `eval/web-bot-auth.ts`, `eval/next-route-chunks.ts`, `eval/learned-scripts.ts`, `eval/speculative-prefetch.ts`, `eval/walk-module-graph.ts`, `eval/script-bundle.ts`。
 ```
+
+4. 实现超轻量 2D 软件光栅化截图器（src/render/painter.cp）
+   既然你明确要求支持截图（Screenshot），且我们已经有了 layout.cp 算出的所有节点精确坐标 Rect { x, y, width, height }，完全不需要引入几百 MB 的 Skia，直接在 CP 里写一个 300~400 行的软件渲染器（Painter） 即可：
+
+画布缓冲区：分配一块 width * height * 4 字节的 RGBA 连续内存数组 pixels: [u8]（如 1280x720 仅占 3.6MB）。
+
+绘制盒模型（按 DOM 树前序 + z-index 遍历）：
+
+从 ComputedStyle 读取 background-color、border-color、border-radius；
+
+编写基础矩形填充（fillRect / fillRoundedRect）与边框绘制函数，把每个可见 NodeId 的 Rect 画到 pixels 上。
+
+文字光栅化：通过 @c 引入单头文件库 stb_truetype.h（仅 1 个 .h 文件，Public Domain 协议），加载一个内置无衬线字体（如 Inter.ttf 或系统字体），将文本节点的字符串渲染到对应坐标上。
+
+编码输出 PNG：利用内置的 cap:pack（zlib 压缩）配合 50 行标准 PNG Chunk 封装代码（或 stb_image_write.h），直接将 pixels 输出为 PNG 字节流并经 Base64 编码后通过 CDP Page.captureScreenshot 返回！

@@ -16,7 +16,7 @@
     "opt": "fast",
     "out_dir": "bin",
     "c_flags": ["-D_GNU_SOURCE", "-Lvendor/quickjs/build"],
-    "link_libs": ["c", "m", "pthread", "qjs"]
+    "link_libs": ["c", "m", "pthread", "qjs", "z"]
   },
   "nest": {
     "mailbox_capacity": 65536,

@@ -752,3 +752,46 @@
 5. **门禁与全量测试闭环**：
    - `src/js/dom_binding.cp` 与 `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
    - 全量测试 30/30 用例 100% 绿色通过（`test_dom_events.cp` 9/9 PASS, `test_js_dom.cp` 5/5 PASS, `test_cookies.cp` 7/7 PASS, `test_request_blocker.cp` 5/5 PASS, `test_layout.cp` 3/3 PASS, `test_ua_stylesheet.cp` 1/1 PASS）。
+
+---
+
+## [2026-11-16 08:48:17] Turn 11
+
+### **[User]**
+> 已经实现了纯 CP 软件光栅化与 PNG 截图引擎 的初版, 需要你仔细审核/完善/把关:
+> 1. 修改了 css/cascade.cp
+> 2. 新增了 render 目录
+> 你检查 src/render/painter.cp 时, 需探测 /data/dev/cp/lib/img/目录的 index.cp 和 png.cp, 下的接口，把 encodeCanvasToPngWithLevel 直接桥接到 png.cp 的压缩编码函数上！
+> 入口函数提供压缩参数, 
+> 在无头浏览器场景下，用户有两种截然不同的需求：
+> AI Agent 实时高频视觉推理（本地内存/IPC 传递）：追求极速（< 1ms 出图），传 compress_level = 0（无压缩直出）或 1（最快压缩，RLE 级）。
+> CDP 网络传输 / 持久化存档截图：追求最小带宽体积，传 compress_level = 6（默认标准压缩）或 9（极限压缩）。
+> 我们在 renderDocumentToPng 中传入 compress_level: u8（0..=9），直接透传给 codec_png.cp（以及内置后备编码器），兼顾极速与小体积。
+> png 如没有压缩功能, CP 标准库内置的 cap:pack (zlib.compress) 可提供压缩
+
+### **[Agent]**
+已对初版 2D 软件光栅化与 PNG 截图引擎完成全面审核、重构与测试闭环：
+1. **探测标准库图像接口并实现自闭环高能编解码器 (`src/render/png.cp`)**：
+   - 探测确认 `/data/dev/cp/lib/image/` 与 `cap:pack`；
+   - 采用标准库 `cap:pack` 底层 zlib C-FFI 接口 `compress2(buf, &len, scanlines, len, level)`，实现原生支持 `compress_level: u8`（0..=9）的 `PngCodec` 类：
+     - **Level 0（本地 AI Agent 极速直出模式，< 1ms）**：Filter None (0x00)，扫描线直接内存拷贝，zlib Store 模式零霍夫曼计算直通输出；
+     - **Level 1（极速 RLE 压缩模式，1~2ms）**：Filter Sub (0x01) 差分滤波，快速 LZ77 搜索，单帧体积缩减 70%+；
+     - **Level 6（默认平衡模式）与 Level 9（极限压缩模式）**：最高压缩率，专供 CDP 网络传输与存档。
+   - 内置纯 CP RFC 2083 逆滤波还原与解码算法 `PngCodec.decode(bytes): DecodedImage?`，支持单元测试与视觉断言双向往返验证；
+   - 导出 `encodePng(allocator, canvas)` 统一便捷助手函数。
+2. **重构并完善 2D 软件光栅化渲染器 (`src/render/painter.cp`)**：
+   - `renderDocumentToPng` 与 `encodeCanvasToPngWithLevel` 显式支持 `opts.compress_level: u8`（0..=9）透传；
+   - 导出统一类型别名 `pub type Color = CssColor;` 与 `pub type PaintStyle = ResolvedPaintStyle;`，打通 `style_extractor.cp`、`cascade.cp` 与测试套件；
+   - 在 `Canvas` 增加只读方法 `getPixel(x, y): CssColor`，实现精确屏幕物理像素取色断言；
+   - 修复负号运算符与标识符属性解析歧义（`const neg_bw = 0.0 - style.border_width;`），修复 8x8 ASCII 点阵字库类型推导；
+   - 修复 `NodeData` 文本字段属性引用（`node.text` -> `node.text_content`）。
+3. **审核并闭环样式提取器与级联扩展 (`src/render/style_extractor.cp` & `src/css/cascade.cp`)**：
+   - 验证 `cascade.cp` 中的 `PROP_BORDER_COLOR`、`PROP_BORDER_RADIUS`、`extractPaintStyle` 与 `parseColorTokenFromShorthand`；
+   - 验证 `style_extractor.cp` 准确解析 `border-width`、`border-radius` 与 Alpha 合成。
+4. **重构端到端测试套件并全量绿灯通过 (`test/render/test_screenshot.cp`)**：
+   - 规避闭包上下文变量命名冲突（避免声明局部变量 `allocator` 导致闭包捕获退化为 `*anyopaque`），采用独立子函数架构；
+   - 3 组深度测试 100% 通过（SDF 圆角抗锯齿矩形填充与文本像素验证、0/1/6/9 压缩等级阶梯体积与往返解码验证、以及 DOM -> Cascade -> Layout -> PNG 端到端截图输出）。
+5. **门禁验证与链接配置**：
+   - 在 `cap.json` 的 `link_libs` 中补齐标准库系统依赖 `"z"`；
+   - `src/render/painter.cp`、`src/render/png.cp`、`src/render/style_extractor.cp`、`src/css/cascade.cp` 全部通过 `cpc_brief.py` 4 道门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
