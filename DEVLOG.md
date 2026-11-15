@@ -105,3 +105,8 @@
    - 将原散落在 `fixtures-worker/assets`（221 个）与 `e2e/html`（36 个）的 HTML/CSS/JS 页面统一聚拢至 `e2e/page/`，通过软链与相对路径兼容，消除目录割裂。
 3. **架构负资产物理隔离**：
    - 坚决将依赖 `workerd` 的 56 个 Cloudflare Worker 内部桩代码隔离在 `vendor/kitesurf/`，CapSurf 原生使用 Linux POSIX 标准网络栈，杜绝无意义的平台绑定。
+
+## E2E 扁平化架构设计演进
+- **消除层级冗余（Over-Engineering）**：
+  - 测试目录命名既然已经到达顶级 `e2e/`，再引入 `spec/` 属于非必要的过度封装，不仅让用户进入目录时看到空根目录，而且破坏了原测试脚本中相对引用的直观性。
+  - 采用直接平铺策略后，`e2e/` 根目录直接暴露 407 个标准测试文件与 `demos/`、`harness/`、`page/`、`ref/` 四大子目录，使得外部测试运行器（如 vitest / playwright）能够直接以 `e2e/*.e2e.test.ts` 进行无参通配执行。

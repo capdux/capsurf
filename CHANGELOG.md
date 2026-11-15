@@ -93,3 +93,8 @@
   - 创建 `e2e/spec/html -> ../page` 符号链接，打通测试套件相对页面引用。
 - **架构纯粹性保障**：
   - 56 个 Cloudflare Worker 专用胶水代码隔离保存在 `vendor/kitesurf/`，保持 CapSurf 仓零污染。
+
+## E2E Directory Flattening: Direct Root Placement & Spec Layer Removal
+- **扁平化 `e2e/` 目录拓扑**：
+  - 消除冗余的 `e2e/spec/` 中间目录，将 407 个核心 `*.e2e.test.ts` 与 `demos/`（173 个演示测试）直接平铺于 `e2e/` 根目录。
+  - 保留 4 大功能子目录：`e2e/demos/`、`e2e/harness/`、`e2e/page/`（257 个靶场）、`e2e/ref/`（95 个单测参考），结构与 Kitesurf 官方 100% 对齐。
