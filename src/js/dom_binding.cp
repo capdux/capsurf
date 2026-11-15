@@ -1,0 +1,480 @@
+// src/js/dom_binding.cp
+// CapSurf QuickJS DOM API Binding Layer
+// Mounts W3C DOM Living Standard APIs onto QuickJS-NG for native headless execution.
+
+import {
+    JSRuntime,
+    JSContext,
+    JSValue,
+    JSClassDef,
+    JsRuntime,
+    JsContext,
+    jsNull,
+    jsUndefined,
+    jsTrue,
+    jsFalse,
+    jsBool,
+    jsInt,
+    jsFloat,
+    jsException,
+    jsIsException,
+    jsToSlice,
+    jsNewString,
+    defineMethod,
+    defineGetterSetter,
+    JS_NewClassID,
+    JS_NewClass,
+    JS_NewObjectClass,
+    JS_SetClassProto,
+    JS_SetOpaque,
+    JS_GetOpaque,
+    JS_SetPropertyStr,
+    JS_GetPropertyStr,
+    JS_SetPropertyUint32,
+    JS_NewObject,
+    JS_NewArray,
+} from "./qjs_engine.cp";
+
+import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
+import { Matcher } from "../css/matcher.cp";
+import { LayoutTree, Rect } from "../layout/layout.cp";
+
+pub threadlocal let g_element_class_id: u32 = 0;
+pub threadlocal let g_document_class_id: u32 = 0;
+
+pub struct JsDomContext {
+    doc: *Document,
+    layout: *LayoutTree? = null,
+    element_class_id: u32 = 0,
+    document_class_id: u32 = 0,
+}
+
+pub struct JsElement {
+    dom_ctx: *JsDomContext,
+    node_id: NodeId,
+}
+
+pub fn createJsElement(ctx: *JSContext, dom_ctx: *JsDomContext, node_id: NodeId): JSValue {
+    if (node_id == NULL_NODE) {
+        return jsNull();
+    }
+    const el_val = JS_NewObjectClass(ctx, dom_ctx.element_class_id);
+    if (jsIsException(el_val)) {
+        return el_val;
+    }
+    let el = std.heap.c_allocator.create(JsElement) catch return jsNull();
+    el.* = JsElement {
+        dom_ctx: dom_ctx,
+        node_id: node_id,
+    };
+    * = JS_SetOpaque(el_val, @ptrCast(el));
+    return el_val;
+}
+
+fn getNodeText(doc: *Document, node_id: NodeId): []const u8 {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return "";
+    const node = &doc.nodes.items[@as(usize, node_id)];
+    if (node.node_type == NodeType.Text) {
+        return node.text_content;
+    }
+    if (node.text_content.len > 0) {
+        return node.text_content;
+    }
+    let child = node.first_child;
+    while (child != NULL_NODE) {
+        const cnode = &doc.nodes.items[@as(usize, child)];
+        if (cnode.node_type == NodeType.Text && cnode.text_content.len > 0) {
+            return cnode.text_content;
+        }
+        child = cnode.next_sibling;
+    }
+    return "";
+}
+
+fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return;
+    const node = &doc.nodes.items[@as(usize, node_id)];
+    let child = node.first_child;
+    while (child != NULL_NODE) {
+        if (doc.nodes.items[@as(usize, child)].node_type == NodeType.Text) {
+            doc.nodes.items[@as(usize, child)].text_content = text;
+            return;
+        }
+        child = doc.nodes.items[@as(usize, child)].next_sibling;
+    }
+    const text_id = doc.createTextNode(text) catch return;
+    doc.appendChild(node_id, text_id);
+}
+
+@c fn js_element_finalizer(rt: *JSRuntime, val: JSValue) {
+    * = rt;
+    const ptr = JS_GetOpaque(val, g_element_class_id);
+    if (ptr != null) {
+        const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+        std.heap.c_allocator.destroy(el);
+    }
+}
+
+@c fn js_element_get_attribute(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const attr_name = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(attr_name);
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNull();
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    if (val := node.getAttribute(attr_name)) {
+        return jsNewString(ctx, val);
+    }
+    return jsNull();
+}
+
+@c fn js_element_set_attribute(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 2) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const attr_name = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(attr_name);
+    const attr_val = jsToSlice(ctx, argv[1]);
+    defer std.heap.page_allocator.free(attr_val);
+    const attr_name_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_name) catch attr_name;
+    const attr_val_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_val) catch attr_val;
+    el.dom_ctx.doc.setAttribute(el.node_id, attr_name_dup, attr_val_dup);
+    return jsUndefined();
+}
+
+@c fn js_element_has_attribute(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsFalse();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsFalse();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const attr_name = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(attr_name);
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsFalse();
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    return jsBool(node.getAttribute(attr_name) != null);
+}
+
+@c fn js_element_append_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = ctx;
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const child_ptr = JS_GetOpaque(argv[0], g_element_class_id);
+    if (child_ptr == null) return jsUndefined();
+    const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
+    el.dom_ctx.doc.appendChild(el.node_id, child_el.node_id);
+    return argv[0];
+}
+
+@c fn js_element_remove_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = ctx;
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const child_ptr = JS_GetOpaque(argv[0], g_element_class_id);
+    if (child_ptr == null) return jsUndefined();
+    const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
+    el.dom_ctx.doc.removeChild(child_el.node_id);
+    return argv[0];
+}
+
+@c fn js_element_get_bounding_client_rect(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    let rect = Rect.zero();
+    if (lt := el.dom_ctx.layout) {
+        rect = lt.getBoundingClientRect(el.node_id);
+    }
+    const obj = JS_NewObject(ctx);
+    * = JS_SetPropertyStr(ctx, obj, "x", jsFloat(@floatCast(rect.x)));
+    * = JS_SetPropertyStr(ctx, obj, "y", jsFloat(@floatCast(rect.y)));
+    * = JS_SetPropertyStr(ctx, obj, "width", jsFloat(@floatCast(rect.width)));
+    * = JS_SetPropertyStr(ctx, obj, "height", jsFloat(@floatCast(rect.height)));
+    * = JS_SetPropertyStr(ctx, obj, "left", jsFloat(@floatCast(rect.x)));
+    * = JS_SetPropertyStr(ctx, obj, "top", jsFloat(@floatCast(rect.y)));
+    * = JS_SetPropertyStr(ctx, obj, "right", jsFloat(@floatCast(rect.right())));
+    * = JS_SetPropertyStr(ctx, obj, "bottom", jsFloat(@floatCast(rect.bottom())));
+    return obj;
+}
+
+@c fn js_element_get_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNewString(ctx, "");
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    return jsNewString(ctx, node.id_attr);
+}
+
+@c fn js_element_set_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const new_id = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(new_id);
+    const new_id_dup = el.dom_ctx.doc.allocator.dupe(u8, new_id) catch new_id;
+    el.dom_ctx.doc.setAttribute(el.node_id, "id", new_id_dup);
+    return jsUndefined();
+}
+
+@c fn js_element_get_class_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNewString(ctx, "");
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    return jsNewString(ctx, node.class_attr);
+}
+
+@c fn js_element_set_class_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const new_cls = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(new_cls);
+    const new_cls_dup = el.dom_ctx.doc.allocator.dupe(u8, new_cls) catch new_cls;
+    el.dom_ctx.doc.setAttribute(el.node_id, "class", new_cls_dup);
+    return jsUndefined();
+}
+
+@c fn js_element_get_tag_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNewString(ctx, "");
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    let buf: [64]u8 = [0; 64];
+    const len = @min(node.tag_name.len, buf.len);
+    let i: usize = 0;
+    while (i < len) : (i += 1) {
+        buf[i] = std.ascii.toUpper(node.tag_name[i]);
+    }
+    return jsNewString(ctx, buf[0..len]);
+}
+
+@c fn js_element_get_text_content(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const text = getNodeText(el.dom_ctx.doc, el.node_id);
+    return jsNewString(ctx, text);
+}
+
+@c fn js_element_set_text_content(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const new_text = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(new_text);
+    const new_text_dup = el.dom_ctx.doc.allocator.dupe(u8, new_text) catch new_text;
+    setNodeText(el.dom_ctx.doc, el.node_id, new_text_dup);
+    return jsUndefined();
+}
+
+@c fn js_document_finalizer(rt: *JSRuntime, val: JSValue) {
+    * = rt;
+    const ptr = JS_GetOpaque(val, g_document_class_id);
+    if (ptr != null) {
+        const ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+        std.heap.c_allocator.destroy(ctx);
+    }
+}
+
+@c fn js_document_query_selector(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const sel_str = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(sel_str);
+    const target_id = Matcher.querySelector(dom_ctx.doc, sel_str);
+    if (target_id == NULL_NODE) return jsNull();
+    return createJsElement(ctx, dom_ctx, target_id);
+}
+
+@c fn js_document_query_selector_all(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return JS_NewArray(ctx);
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return JS_NewArray(ctx);
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const sel_str = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(sel_str);
+    let matched_ids: [256]NodeId = [@as(NodeId, 0); 256];
+    const matched_count = Matcher.querySelectorAll(dom_ctx.doc, sel_str, &matched_ids);
+    const arr = JS_NewArray(ctx);
+    let i: u32 = 0;
+    while (i < matched_count) : (i += 1) {
+        const el_val = createJsElement(ctx, dom_ctx, matched_ids[@as(usize, i)]);
+        * = JS_SetPropertyUint32(ctx, arr, i, el_val);
+    }
+    return arr;
+}
+
+@c fn js_document_get_element_by_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const id_str = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(id_str);
+    const target_id = dom_ctx.doc.getElementById(id_str);
+    if (target_id == NULL_NODE) return jsNull();
+    return createJsElement(ctx, dom_ctx, target_id);
+}
+
+@c fn js_document_create_element(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const tag_str = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(tag_str);
+    const tag_dup = dom_ctx.doc.allocator.dupe(u8, tag_str) catch tag_str;
+    const new_id = dom_ctx.doc.createElement(tag_dup) catch return jsNull();
+    return createJsElement(ctx, dom_ctx, new_id);
+}
+
+@c fn js_document_get_body(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    let i: usize = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "body")) {
+            return createJsElement(ctx, dom_ctx, @intCast(i));
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_document_get_document_element(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    let i: usize = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "html")) {
+            return createJsElement(ctx, dom_ctx, @intCast(i));
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_console_log(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    let i: usize = 0;
+    const n: usize = @intCast(argc);
+    while (i < n) : (i += 1) {
+        const str = jsToSlice(ctx, argv[i]);
+        defer std.heap.page_allocator.free(str);
+        if (i > 0) std.debug.print(" ", .{});
+        std.debug.print("{s}", .{str});
+    }
+    std.debug.print("\n", .{});
+    return jsUndefined();
+}
+
+pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
+    const raw_ctx = ctx.raw_ctx;
+    const raw_rt = ctx.runtime.raw_rt;
+
+    * = JS_NewClassID(raw_rt, &g_element_class_id);
+    * = JS_NewClassID(raw_rt, &g_document_class_id);
+
+    const el_class_def = JSClassDef {
+        class_name: "Element",
+        finalizer: js_element_finalizer,
+        gc_mark: null,
+        call_fn: null,
+        exotic: null,
+    };
+    * = JS_NewClass(raw_rt, g_element_class_id, &el_class_def);
+
+    const doc_class_def = JSClassDef {
+        class_name: "Document",
+        finalizer: js_document_finalizer,
+        gc_mark: null,
+        call_fn: null,
+        exotic: null,
+    };
+    * = JS_NewClass(raw_rt, g_document_class_id, &doc_class_def);
+
+    // Setup Element Prototype
+    const el_proto = JS_NewObject(raw_ctx);
+    defineMethod(raw_ctx, el_proto, "getAttribute", js_element_get_attribute, 1);
+    defineMethod(raw_ctx, el_proto, "setAttribute", js_element_set_attribute, 2);
+    defineMethod(raw_ctx, el_proto, "hasAttribute", js_element_has_attribute, 1);
+    defineMethod(raw_ctx, el_proto, "appendChild", js_element_append_child, 1);
+    defineMethod(raw_ctx, el_proto, "removeChild", js_element_remove_child, 1);
+    defineMethod(raw_ctx, el_proto, "getBoundingClientRect", js_element_get_bounding_client_rect, 0);
+
+    defineGetterSetter(raw_ctx, el_proto, "id", js_element_get_id, js_element_set_id);
+    defineGetterSetter(raw_ctx, el_proto, "className", js_element_get_class_name, js_element_set_class_name);
+    defineGetterSetter(raw_ctx, el_proto, "tagName", js_element_get_tag_name, null);
+    defineGetterSetter(raw_ctx, el_proto, "textContent", js_element_get_text_content, js_element_set_text_content);
+
+    JS_SetClassProto(raw_ctx, g_element_class_id, el_proto);
+
+    // Setup Document Prototype
+    const doc_proto = JS_NewObject(raw_ctx);
+    defineMethod(raw_ctx, doc_proto, "querySelector", js_document_query_selector, 1);
+    defineMethod(raw_ctx, doc_proto, "querySelectorAll", js_document_query_selector_all, 1);
+    defineMethod(raw_ctx, doc_proto, "getElementById", js_document_get_element_by_id, 1);
+    defineMethod(raw_ctx, doc_proto, "createElement", js_document_create_element, 1);
+    defineGetterSetter(raw_ctx, doc_proto, "body", js_document_get_body, null);
+    defineGetterSetter(raw_ctx, doc_proto, "documentElement", js_document_get_document_element, null);
+
+    JS_SetClassProto(raw_ctx, g_document_class_id, doc_proto);
+
+    // Allocate JsDomContext
+    let dom_ctx = std.heap.c_allocator.create(JsDomContext) catch return error.DomContextAllocFailed;
+    dom_ctx.* = JsDomContext {
+        doc: doc,
+        layout: layout,
+        element_class_id: g_element_class_id,
+        document_class_id: g_document_class_id,
+    };
+
+    // Create document instance
+    const doc_val = JS_NewObjectClass(raw_ctx, g_document_class_id);
+    * = JS_SetOpaque(doc_val, @ptrCast(dom_ctx));
+
+    // Register globals
+    const global_obj = ctx.getGlobal();
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "document", doc_val);
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "window", global_obj);
+
+    // Register console
+    const console_obj = JS_NewObject(raw_ctx);
+    defineMethod(raw_ctx, console_obj, "log", js_console_log, 1);
+    defineMethod(raw_ctx, console_obj, "warn", js_console_log, 1);
+    defineMethod(raw_ctx, console_obj, "error", js_console_log, 1);
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
+
+    return dom_ctx;
+}

@@ -11,7 +11,7 @@ import { LayoutTree, Rect } from "../src/layout/layout.cp";
 
 fn main() {
     test("1. CapSurf HTML5 Document Structure & Tree Building (Doc.parseHtml)", () => {
-        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        let doc = Doc.init(std.heap.page_allocator) catch unreachable;
         defer doc.deinit();
 
         const html =
@@ -69,7 +69,7 @@ fn main() {
     });
 
     test("2. Adoption Agency Algorithm (Misnested Formatting Tags)", () => {
-        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        let doc = Doc.init(std.heap.page_allocator) catch unreachable;
         defer doc.deinit();
 
         // Standard AAA test case: <div><b>Bold <i>Italic</b> Still Italic?</i></div>
@@ -93,7 +93,7 @@ fn main() {
     });
 
     test("3. Table Foster Parenting & Implicit Tbody Construction", () => {
-        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        let doc = Doc.init(std.heap.page_allocator) catch unreachable;
         defer doc.deinit();
 
         // Stray text around table rows triggers foster parenting and implicit tbody insertion
@@ -118,7 +118,7 @@ fn main() {
     });
 
     test("4. Full Pipeline: HTML5 Parsing -> CSS Selectors -> Layout Coordinates", () => {
-        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        let doc = Doc.init(std.heap.page_allocator) catch unreachable;
         defer doc.deinit();
 
         const html =

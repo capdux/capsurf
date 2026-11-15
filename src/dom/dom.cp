@@ -544,6 +544,11 @@ pub struct Document {
         return _.nodes.items[@as(usize, node_id)].tag_name;
     }
 
+    fn getAttribute(node_id: NodeId, name: []const u8): ([]const u8)? {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return null;
+        return _.nodes.items[@as(usize, node_id)].getAttribute(name);
+    }
+
     fn parseHtml(*_, html: []const u8)! {
         HtmlParser.parse(_, html)?;
     }

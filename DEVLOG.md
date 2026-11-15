@@ -43,4 +43,24 @@
    - **类型别名 `catch` 降低缺陷**：发现 `cpc` 在对结构体类型别名（如 `pub const Bar = Foo; Bar.init() catch ...`）的方法返回值进行 `catch` 降低时，未能展开别名类型，错误生成 Rust 风格的 `switch (__r) { .ok => ..., .err => ... }` 导致 Zig 编译失败。已提炼 10 行最小用例投递工单 `task-capsurf-20261115-alias-catch-lower` 至 `/data/dev/cp/.tasks/pending/`。
    - **闭包结构体类型推断边界**：在 `cap:test` 的 `() => { ... }` 闭包中，通过数组切片链式属性直接赋值给变量时，闭包生成器可能退化推断为 `*anyopaque`。在 `Document` 上封装显式类型返回的方法（`getFirstChild`, `getParent`, `getTextContent`, `getTagName`）既优雅提升 DOM API 易用性，又规避了编译器推断边界。
 
+## Milestone 3 核心架构闭环与编译排障技术方案
+1. **QuickJS-NG C-FFI 与 CP 原生类型系统深度融合 (`src/js/qjs_engine.cp`)**：
+   - 利用 CP 的原生 C 调用约定语法 `(@c fn(params): ret)?`，直接将 C 函数指针与回调降低为 Zig 的 `?*const fn (...) callconv(.c)`，精准对接 QuickJS-NG 的 `JS_NewCFunction2`、`JS_SetInterruptHandler`、`JS_DefinePropertyGetSet` 等关键 FFI 接口。
+   - 实现零开销 JSValue 标量构造：利用 64 位值与 64 位 Tag 结构，在寄存器级别内联处理 `jsNull`, `jsUndefined`, `jsTrue`, `jsFalse`, `jsInt`, `jsFloat`。
+2. **基于堆稳定地址的 Reductions 抢占式安全中断机制**：
+   - 为防止恶意网页或不可信脚本死循环阻塞主线程，构建 `ReductionState { reduction_limit, reduction_count, interrupted }` 结构。
+   - 将该状态分配在堆上并将其稳定裸指针挂载到 `JS_SetInterruptHandler`，彻底消除栈局部变量在 `init` 退出后指针失效引发的悬垂野指针假死 Bug。在循环或调用时周期递增，达到上限后向 QuickJS 返回 1 强制熔断抛出异常，毫秒级终止失控脚本。
+3. **CP 借用检查器（Borrow Checker）可变性收窄与多读并行**：
+   - 面对 C 接口句柄 `ctx: *JSContext` 与其产生的字符串切片 `[]const u8`，CP 严格编译器默认会视返回切片具有该入参的独占借用权。当同一作用域调用 `jsToSlice(ctx, argv[0])` 和 `jsToSlice(ctx, argv[1])` 时，触发 `E0202: cannot borrow as mutable while 'attr_name' is still active`。
+   - **收窄方案**：将所有只读接口形参由独占可变 `*JSContext` 收窄为只读引用 `*const JSContext`，利用安全协变转换使得多个入参切片与返回值能够在同一个词法域内共存借用，彻底消除了假性冲突。
+4. **Arena DOM Tear-Off 代理包装模式 (`src/js/dom_binding.cp`)**：
+   - 借鉴 Blink/WebKit 现代浏览器架构：DOM 树自身使用连续数组常驻 Arena，JS 层的 `Element` 与 `Document` 仅为极轻量级代理 Tear-Off（仅存 4 字节 `NodeId` 与上下文句柄）。
+   - 在 JS 动态创建节点或写入属性（`setAttribute`、`className`、`id`、`textContent`）时，统一由 `doc.allocator.dupe` 进行宿主生命周期复制托管，避免临时字符串内存提前释放引发悬垂野指针。
+5. **屏幕像素几何坐标直通 (`getBoundingClientRect`)**：
+   - 通过 JS 脚本调用 `element.getBoundingClientRect()` 直接透传 `LayoutTree.getBoundingClientRect(node_id)` 计算的屏幕物理像素几何框（`x, y, width, height, left, top, right, bottom`），为后续 AI Agent 自动化页面理解与视觉动作定位提供零延迟原生基建。
+6. **编译器排障与工单留痕**：
+   - **`cap.json` C 库依赖传递修复**：上游 `cp_agy` 成功结单 `task-capsurf-20261115-cap-test-link-libs`，使 `cap test` 能够解析 `cap.json` 中的 `c_flags` 与 `link_libs` 并自动传递 `-Lvendor/quickjs/build -lqjs` 给底层链接器。
+   - **`cap run` (runSingleFile) 链接参数遗漏上报**：发现 `cap <file.cp>` 的 `runSingleFile` 尚未镜像 `runTestSingleFile` 的 `cap.json` 链接解析逻辑，已通过 `task_queue.py` 提交专属工单 `task-capsurf-20261115-cap-run-link-libs` 供 `cp_agy` 进一步闭环。
+
+
 
