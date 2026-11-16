@@ -3900,7 +3900,22 @@
         });
       }, "getHighEntropyValues"),
     };
-    global.navigator = navigatorObj;
+    try {
+      Object.defineProperty(global, "navigator", {
+        value: navigatorObj,
+        configurable: true,
+        writable: true,
+        enumerable: true,
+      });
+    } catch (e) {
+      try {
+        if (global.navigator && typeof global.navigator === "object") {
+          Object.assign(global.navigator, navigatorObj);
+        } else {
+          global.navigator = navigatorObj;
+        }
+      } catch (e2) {}
+    }
 
     // 3. Location & History
     let currentHref = "about:blank";
@@ -3950,6 +3965,58 @@
     };
 
     // 5. Performance & Timers
+    let timerIdCounter = 1;
+    const activeTimers = new Map();
+
+    if (!global.setTimeout) {
+      global.setTimeout = markNative(function (cb, ms) {
+        const id = timerIdCounter++;
+        const args = Array.prototype.slice.call(arguments, 2);
+        activeTimers.set(id, true);
+        Promise.resolve().then(function () {
+          if (activeTimers.has(id)) {
+            activeTimers.delete(id);
+            try {
+              if (typeof cb === "function") {
+                cb.apply(global, args);
+              } else if (typeof cb === "string") {
+                (new Function(cb))();
+              }
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) console.error(e);
+            }
+          }
+        });
+        return id;
+      }, "setTimeout");
+    }
+
+    if (!global.clearTimeout) {
+      global.clearTimeout = markNative(function (id) {
+        activeTimers.delete(Number(id));
+      }, "clearTimeout");
+    }
+
+    if (!global.setInterval) {
+      global.setInterval = markNative(function (cb, ms) {
+        const id = timerIdCounter++;
+        activeTimers.set(id, true);
+        function tick() {
+          if (!activeTimers.has(id)) return;
+          try {
+            if (typeof cb === "function") cb();
+          } catch (e) {}
+        }
+        return id;
+      }, "setInterval");
+    }
+
+    if (!global.clearInterval) {
+      global.clearInterval = markNative(function (id) {
+        activeTimers.delete(Number(id));
+      }, "clearInterval");
+    }
+
     if (!global.performance) {
       const originTime = Date.now();
       global.performance = {
@@ -3962,9 +4029,9 @@
 
     if (!global.requestAnimationFrame) {
       global.requestAnimationFrame = markNative(function (cb) {
-        return setTimeout(function () {
+        return global.setTimeout(function () {
           try {
-            cb(performance.now());
+            if (typeof cb === "function") cb((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now());
           } catch (e) {
             if (typeof console !== "undefined" && console.error) console.error(e);
           }
@@ -3974,7 +4041,7 @@
 
     if (!global.cancelAnimationFrame) {
       global.cancelAnimationFrame = markNative(function (id) {
-        clearTimeout(id);
+        global.clearTimeout(id);
       }, "cancelAnimationFrame");
     }
 
@@ -4047,6 +4114,26 @@
     markNative(AudioContext, "AudioContext");
     global.AudioContext = AudioContext;
     global.webkitAudioContext = AudioContext;
+
+    // 9. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
+    if (global.document) {
+      try {
+        Object.defineProperty(global, "document", {
+          value: global.document,
+          writable: false,
+          configurable: false,
+          enumerable: true,
+        });
+      } catch (e) {}
+    }
+    try {
+      Object.defineProperty(global, "window", {
+        value: global,
+        writable: false,
+        configurable: false,
+        enumerable: true,
+      });
+    } catch (e) {}
   }
 
   // =============================================================

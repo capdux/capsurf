@@ -1,4 +1,4 @@
-// test/e2e/harness.js
+// e2e/harness/harness.js
 // CapSurf Native Headless Browser E2E Test Harness
 // Spawns ./bin/main as a native independent child process with Chromium CLI args,
 // discovers CDP WebSocket endpoint, connects via Node.js native WebSocket,

@@ -1,4 +1,4 @@
-// test/e2e/blank-page-document.test.js
+// e2e/blank-page-document.test.js
 // Migrated from vendor/kitesurf/packages/engine/test/e2e/blank-page-document.e2e.test.ts
 // Verifies CapSurf blank page document initialization and CDP protocol communication without explicit navigation.
 

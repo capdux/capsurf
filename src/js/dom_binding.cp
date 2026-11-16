@@ -777,15 +777,18 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;
-    for (chunk of RUNTIME_CHUNKS) {
-        total_len += chunk.len;
+    let chunk_idx: usize = 0;
+    while (chunk_idx < RUNTIME_CHUNKS.len) : (chunk_idx += 1) {
+        total_len += RUNTIME_CHUNKS[chunk_idx].len;
     }
 
     const runtime_buf = std.heap.page_allocator.alloc(u8, total_len) catch return error.RuntimeSourceAllocFailed;
     defer std.heap.page_allocator.free(runtime_buf);
 
     let offset: usize = 0;
-    for (chunk of RUNTIME_CHUNKS) {
+    let copy_idx: usize = 0;
+    while (copy_idx < RUNTIME_CHUNKS.len) : (copy_idx += 1) {
+        const chunk = RUNTIME_CHUNKS[copy_idx];
         @memcpy(runtime_buf[offset .. offset + chunk.len], chunk);
         offset += chunk.len;
     }

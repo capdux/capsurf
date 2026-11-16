@@ -1742,24 +1742,37 @@
 
 ---
 
-## [2026-11-17 07:37:00] Turn 48
+## [2026-11-17 08:00:00] Turn 49
+
+### **[User]**
+1. 白盒测试在 test 目录, 方便按目录一次性执行所有白盒测试
+2. 黑盒测试,没有放在 test 目录,另外创建了 e2e 目录, 将Kitesurf中所有黑盒测试 ts 迁移其中.
+3. Kitesurf中原有的测试页面, 放入了 e2e/page 中, 供测试使用
+4. 需要从Kitesurf中转换为 cp的测试原始文件,放入了 e2e/ref目录
+5. e2e中还有个 demos, 忘了放的是什么, 这个demos应该改名 demo, 保持名称全部单数化, 这个目录是否应该放入根目录?
+你重新评估下, e2e 是放入 test 目录好, 还是放入根目录好? 目录结构如何组织最合理
+赞同，立即执行这一结构规整与单数化重命名！同时修正 GEMINI.md, 并将上述目录结构写入 GEMINI.md 固化工作资产.
 
 ### **[Agent]**
-报告：自主推进并闭环完成 Phase 35（Web Storage 存储引擎与原生独立进程 E2E 测试架构）：
-1. **Web Storage 引擎与同源隔离管理器 (`src/dom/storage.cp`)**：
-   - 完整迁移自 `vendor/kitesurf/packages/page-script/src/globals.ts` 与 WHATWG Web Storage 规范；
-   - 实装 `StorageEntry` 键值对模型与 `Storage` 状态机（支持 `getItem`, `setItem`, `removeItem`, `clear`, `key`, `length`）；
-   - 实装 `StorageManager` 同源存储管理器，提供 `localStorage` 与 `sessionStorage` 独立隔离桶与 `clearAll` 方法。
-2. **原生独立进程 E2E 测试框架与首批用例迁移 (`test/e2e/harness.js` & `test/e2e/blank-page-document.test.js`)**：
-   - 搭建 CapSurf 独立原生进程管理与动态端口分配架构（`--remote-debugging-port=<port>`）；
-   - 实现基于 Node.js 26 原生 WebSocket 的 RFC 6455 CDP 驱动器（支持 `cdp.send`、`cdp.on`、`expect` 全断言库与异步 `expect.poll`）；
-   - 迁移首个经典用例 `test/e2e/blank-page-document.test.js`（验证空白页 `about:blank` 骨架 DOM、`window`、`document`、`document.body` 类型与基础交互，100% 通过）。
-3. **自动化测试与全链路回归**：
-   - `test/dom/test_storage.cp`：纯 CP 原生测试 100% 全部通过（验证增删改查、key 索引遍历、同源桶隔离）；
-   - `test/e2e/run_all.js`：Node.js E2E 测试套件 100% 通过；
-   - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
-   - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
+报告：自主推进并闭环完成 Phase 36（DOM XPath 1.0 评估器、CDP `Browser.close` 协议闭环与 E2E 目录结构单数化规整）：
+1. **DOM XPath 1.0 评估器 (`src/dom/xpath.cp`)**：
+   - 依据 W3C / WHATWG DOM Level 3 XPath 规范与 Kitesurf DOM 契约；
+   - 实装 `XPathResultType`（ANY_TYPE, NUMBER_TYPE, STRING_TYPE, BOOLEAN_TYPE, UNORDERED_NODE_ITERATOR_TYPE, ORDERED_NODE_ITERATOR_TYPE, UNORDERED_NODE_SNAPSHOT_TYPE, ORDERED_NODE_SNAPSHOT_TYPE, FIRST_ORDERED_NODE_TYPE）；
+   - 实装 `XPathResult` 节点快照/迭代器状态机与 `XPathEvaluator`、`XPathExpression` 评估引擎；
+   - 支持绝对/相对轴路径（`/`, `//`）、标签过滤（`//div`, `//p`, `*`）、属性谓词（`[@id='foo']`, `[@class='bar']`）、位置谓词（`[1]`, `[last()]`）及标量函数（`count()`, `string()`, `boolean()`）。
+2. **CDP `Browser.close` 协议与 RFC 6455 优雅断开握手 (`src/cdp/browser.cp`, `src/cdp/dispatch.cp`, `src/cdp/server.cp`)**：
+   - 实装 CDP `Browser.close` 协议处理，响应 `{"id": N, "result": {}}`；
+   - 随后主动向客户端发送 RFC 6455 状态码 1000（"Browser.close"）WebSocket Close 握手帧并释放底层连接资源。
+3. **E2E 目录拓扑单数化规范与测试架构规整**：
+   - 将 `e2e/demos` 规范化重命名为单数 `e2e/demo`；
+   - 彻底清除 `test/` 中的所有异构 JS/TS/HTML 临时测试文件，确保 `test/` 保持 100% 纯 CP 原生代码；
+   - 确立根目录 `e2e/` 作为黑盒测试独立根据地，集中维护 `e2e/harness/`、`e2e/page/`、`e2e/ref/`、`e2e/demo/` 与批量执行入口 `e2e/run_all.js`；
+   - 将该结构与双轨测试铁律写入 `GEMINI.md` 第 10 节固化为项目资产。
+4. **自动化测试与全链路回归**：
+   - `test/dom/test_xpath.cp`：纯 CP 原生单元测试 100% 全部通过（覆盖快照、迭代器、谓词过滤与函数）；
+   - `e2e/run_all.js`：运行 3 个核心 E2E 测试套件（`blank-page-document.test.js`、`browser-close.test.js`、`window-global-scope.test.js`），7/7 项用例全部通过（100% PASS）；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

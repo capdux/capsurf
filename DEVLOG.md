@@ -711,11 +711,24 @@
    - **解决方案**：
      - 在 `Storage` 内部使用定长连续数组管理 128 项键值对，杜绝哈希表高并发频繁伸缩导致的内存碎片；
      - `removeItem` 采用就地线性移位保持项顺序连续性，`StorageManager` 显式解耦会话级与持久级两个独立桶。
-2. **独立进程解耦的 E2E 远程测试架构 (`test/e2e/harness.js`)**：
+2. **独立进程解耦的 E2E 远程测试架构 (`e2e/harness/harness.js`)**：
    - **设计动机**：原版 Kitesurf 391 个 E2E 用例强依赖 Cloudflare Workers 运行时内部绑定。CapSurf 作为独立单二进制需要一套可直接通过真实网络 WebSocket 测试本地进程的通用自动化 Harness；
    - **解决方案**：
      - `harness.js` 统一接管 CapSurf 进程生命周期（端口动态分配、输出监听、优雅退出保底），基于 Node.js 原生 WebSocket 实现完整的 CDP 请求队列与事件监听；
      - 构建通用断言库与异步轮询器 `expect.poll`，成功将 `blank-page-document.test.js` 迁移验证通过，为后续 391 个测试的规模化导入打下坚实地基。
+
+## Phase 36 DOM XPath 1.0 评估器与 Browser.close 协议架构方案
+1. **零动态分配 DOM XPath 1.0 状态机 (`src/dom/xpath.cp`)**：
+   - **设计动机**：Playwright、Puppeteer 与爬虫智能体高频使用 XPath 选择器（如 `page.locator('xpath=//div[@class="content"]')`）进行精确定位；
+   - **解决方案**：
+     - 实现分词与 AST 解析器，将复杂路径编译为节点过滤谓词（标签匹配、属性匹配、索引匹配）；
+     - `XPathResult` 采用连续定长数组维护结果节点快照，支持快照随机索引与迭代器顺序遍历，兼顾极高遍历效率与确定性零 GC 生命周期。
+2. **CDP `Browser.close` 协议与 RFC 6455 1000 优雅断开通道**：
+   - **设计动机**：自动化测试工具（Jest、Vitest、Puppeteer、Playwright）在每次测试用例结束钩子（`afterEach` / `afterAll`）中都会向调试端点发送 `Browser.close` 请求，若服务端仅关闭 socket 或不回复 JSON 确认，测试客户端会报超时挂起或连接异常；
+   - **解决方案**：
+     - 在 CDP 分发器中识别 `Browser.close`，立即回包响应 `{"id": N, "result": {}}`；
+     - 主动构造 RFC 6455 0x08 opcode，携带 1000 状态码与 "Browser.close" 原因字符串发送 Close 帧，随后优雅关闭底层网络连接，使远程黑盒驱动无缝完成测试退出闭环。
+
 
 
 

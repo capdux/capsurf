@@ -764,20 +764,38 @@
 - **`src/dom/storage.cp`**（迁移自 `vendor/kitesurf/packages/page-script/src/globals.ts` 与 WHATWG Web Storage 规范）：
   - 实装 `StorageEntry` 键值对模型与 `Storage` 状态机（支持 `getItem`, `setItem`, `removeItem`, `clear`, `key`, `length`，上限 128 项零动态堆碎片分配）；
   - 实装 `StorageManager` 同源存储管理器，提供 `localStorage` 与 `sessionStorage` 独立隔离桶与 `clearAll` 方法。
-- **`test/e2e/harness.js` & `test/e2e/run_all.js`**：
+- **`e2e/harness/harness.js` & `e2e/run_all.js`**：
   - 搭建 CapSurf 独立原生进程管理与动态端口分配架构（`--remote-debugging-port=<port>`）；
   - 实现基于 Node.js 26 原生 WebSocket 的 RFC 6455 CDP 驱动器（支持 `cdp.send`、`cdp.on`、`expect` 全断言库与异步 `expect.poll`）；
-  - 迁移首个经典用例 `test/e2e/blank-page-document.test.js`（验证空白页 `about:blank` 骨架 DOM、`window`、`document`、`document.body` 类型与基础交互，100% 通过）。
+  - 迁移首个经典用例 `e2e/blank-page-document.test.js`（验证空白页 `about:blank` 骨架 DOM、`window`、`document`、`document.body` 类型与基础交互，100% 通过）。
 - **底层引擎稳健性提升**：
   - `src/cdp/session.cp`：初始化默认骨架 DOM，确保空白页 JS 执行上下文具备完整 DOM 树；
   - `src/js/dom_binding.cp` & `src/js/shim/index.js`：在 Document 原型新增 `title`, `nodeType`, `nodeName` 属性；
   - `src/cdp/runtime.cp` & `src/cdp/server.cp`：完善 JSON 转义与 WebSocket Close 握手。
 - **测试套件与全链路验证**：
   - `test/dom/test_storage.cp`：纯 CP 原生测试 100% 全部通过（验证增删改查、key 索引遍历、同源桶隔离）；
-  - `test/e2e/run_all.js`：Node.js E2E 测试套件 100% 通过；
+  - `e2e/run_all.js`：Node.js E2E 测试套件 100% 通过；
   - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
   - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 36: DOM XPath 1.0 Evaluator, CDP Browser.close & E2E Topology Solidification (100% Closed)
+- **`src/dom/xpath.cp`**（迁移自 W3C DOM Level 3 XPath 与 WHATWG 规范）：
+  - 实装 `XPathResultType`（ANY, NUMBER, STRING, BOOLEAN, UNORDERED_NODE_ITERATOR, ORDERED_NODE_ITERATOR, UNORDERED_NODE_SNAPSHOT, ORDERED_NODE_SNAPSHOT, FIRST_ORDERED_NODE）；
+  - 实装 `XPathResult` 状态机（支持 `iterateNext()`, `snapshotItem(index)`, `snapshotLength`, `numberValue`, `stringValue`, `booleanValue`）；
+  - 实装 `XPathEvaluator` 与 `XPathExpression`，支持 `/`, `//`, 标签过滤（`//div`, `//p`, `*`）、属性谓词（`[@id='...']`, `[@class='...']`）、位置谓词（`[1]`, `[last()]`）与标量函数（`count()`, `string()`, `boolean()`）。
+- **`src/cdp/browser.cp`, `src/cdp/dispatch.cp`, `src/cdp/server.cp`**：
+  - 实装 CDP `Browser.close` 协议处理，返回 `{"id": N, "result": {}}`；
+  - 实现主动发送 RFC 6455 状态码 1000 正常断开 WebSocket 帧，并优雅释放长连接资源。
+- **E2E 目录拓扑单数化规范与测试架构规整**：
+  - 重命名 `e2e/demos` -> `e2e/demo`，清除 `test/` 内所有非 CP 文件，保持 `test/` 100% 纯 CP 原生白盒测试；
+  - 确立根目录 `e2e/`、`e2e/harness/`、`e2e/page/`、`e2e/ref/`、`e2e/demo/` 架构；
+  - 在 `GEMINI.md` 第 10 节固化目录组织拓扑与双轨测试铁律。
+- **测试套件与全链路验证**：
+  - `test/dom/test_xpath.cp`：纯 CP 原生单元测试 100% 全部通过（14 组断言覆盖快照、迭代器、谓词过滤与函数）；
+  - `e2e/run_all.js`：运行 3 个核心 E2E 测试套件（`blank-page-document.test.js`、`browser-close.test.js`、`window-global-scope.test.js`），7/7 项用例全部通过（100% PASS）；
+  - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

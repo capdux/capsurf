@@ -17,6 +17,7 @@ import { WebMcpHandler } from "./webmcp.cp";
 import { LogHandler } from "./log.cp";
 import { DebuggerHandler } from "./debugger.cp";
 import { CssHandler } from "./css.cp";
+import { BrowserHandler } from "./browser.cp";
 
 pub struct CdpDispatcher {
     pub static fn dispatch(
@@ -29,13 +30,8 @@ pub struct CdpDispatcher {
         event_count.* = 0;
 
         // 1. Browser domain methods
-        if (std.mem.eql(u8, req.method, "Browser.getVersion")) {
-            const res = std.fmt.bufPrint(
-                out_buf,
-                "{{\"protocolVersion\":\"1.3\",\"product\":\"CapSurf/1.0.0\",\"revision\":\"cp-native-2026\",\"userAgent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0 QuickJS-NG\",\"jsVersion\":\"QuickJS-NG\"}}",
-                .{},
-            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            return CdpResponse.ok(req.id, res);
+        if (std.mem.startsWith(u8, req.method, "Browser.")) {
+            return BrowserHandler.handle(session, req, out_buf);
         }
 
         // 2. Route by domain prefix

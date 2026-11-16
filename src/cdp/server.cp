@@ -300,7 +300,12 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             if (payload := frame_opt) {
                 if (payload.len == 0) continue;
                 const cdp_req = CdpRequest.parse(payload);
+                const is_browser_close = std.mem.eql(u8, cdp_req.method, "Browser.close");
                 _.dispatchCdpCommand(client_fd, cdp_req) catch break;
+                if (is_browser_close) {
+                    writeWsCloseFrame(client_fd, 1000, "Browser.close") catch {};
+                    break;
+                }
             } else {
                 break;
             }
@@ -406,6 +411,18 @@ pub fn writeWsTextFrame(client_fd: i32, text: []const u8)! {
 
     socketWriteAll(client_fd, header_buf[0..header_len])? ;
     socketWriteAll(client_fd, text)? ;
+}
+
+pub fn writeWsCloseFrame(client_fd: i32, code: u16, reason: []const u8)! {
+    let buf: [128]u8 = [0; 128];
+    buf[0] = 0x88; // FIN + Close
+    const payload_len = 2 + reason.len;
+    buf[1] = @as(u8, @truncate(payload_len));
+    std.mem.writeInt(u16, buf[2..4][0..2], code, .big);
+    if (reason.len > 0) {
+        @memcpy(buf[4..4 + reason.len], reason);
+    }
+    socketWriteAll(client_fd, buf[0..2 + payload_len])? ;
 }
 
 pub fn readWsTextFrame(client_fd: i32, payload_buf: []u8): ([]const u8)?! {

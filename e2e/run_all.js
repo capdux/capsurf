@@ -1,6 +1,6 @@
-// test/e2e/run_all.js
+// e2e/run_all.js
 // CapSurf E2E Test Suite Runner
-// Discovers and executes all migrated E2E test files in test/e2e/,
+// Discovers and executes all migrated E2E test files in e2e/,
 // collects test outcomes, calculates pass rate, and outputs a formatted report.
 
 const fs = require('node:fs');
