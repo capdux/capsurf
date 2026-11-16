@@ -820,6 +820,28 @@
   - 双模构建验证：`bin/main`（8.7MB）与 `bin/main.so`（9.1KB）双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 38: WHATWG File API, MIME Normalization & Hyperlink Decomposition (100% Closed)
+- **`src/net/mime.cp`**：
+  - 实装 `normalizeBlobType`：遵循 WHATWG File API 规范，凡包含 `< 0x20` 或 `> 0x7E` 的非法类型归一化为 `""`，大写字母转小写，原样保留首尾合法空格；
+  - 实装 `MimeType` 结构体及 `parse` 方法，支持 `essence` 与 `charset` 提取。
+- **`src/dom/hyperlink.cp`**：
+  - 实装 `HyperlinkDecomposition` 结构体：对畸形/非法 URL（如 `"http://example.com:80:"`）遵循 W3C 规范回退 `protocol: ":"`、`origin: "null"`，其他字段返回 `""`；
+  - 对合法 URL 精确提取各组件并自动剥离默认端口（80/443）。
+- **`src/js/shim/`**：
+  - `file.js`：实装 WHATWG `Blob` 与 `File` 构造器，类型校验（基本类型 options 抛 `TypeError`），`size`, `type`, `slice`, `text`, `arrayBuffer`，且在 `Request`/`Response.blob()` 时保留原始 MIME 大小写；
+  - `element/html-classes.js`：统一为 `HTMLAnchorElement` 与 `HTMLAreaElement` 安装超链接分解属性（非法 URL 严格返回 `protocol: ":"`）；
+  - `index.js`：在 `document.createElement("area")` 时挂载 `HTMLAreaElement.prototype`。
+- **E2E 黑盒测试套件扩展**：
+  - 新增 `e2e/anchor-invalid-url-protocol.test.js`（验证非法 URL 协议返回 `":"` 与原型链）；
+  - 新增 `e2e/blob-mime-type.test.js`（验证 7 组 MIME 输入归一化、冻结 options、基本类型异常与 Response.blob 透传）；
+- **测试套件与全链路验证**：
+  - `test/dom/test_hyperlink_mime.cp`：纯 CP 原生单元测试 100% 全部通过；
+  - `e2e/run_all.js`：7 套核心 E2E 测试全部自动发现并执行，13/13 项用例 100% PASS（耗时 1.47s）；
+  - `scripts/test_driver_playwright.js`：100% 绿色通过；
+  - 独立单二进制：`bin/main` 构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

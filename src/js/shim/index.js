@@ -28,8 +28,13 @@ function installShim(global) {
   global.MutationObserver = MutationObserver;
   global.MutationRecord = MutationRecord;
 
-  // 4. Expose FormData
+  // 4. Expose FormData, Blob and File
   global.FormData = FormData;
+  global.Blob = Blob;
+  global.File = File;
+  if (typeof Headers !== "undefined") global.Headers = Headers;
+  if (typeof Request !== "undefined") global.Request = Request;
+  if (typeof Response !== "undefined") global.Response = Response;
 
   // 5. Expose Traversal
   global.NodeFilter = NodeFilter;
@@ -136,6 +141,9 @@ function installShim(global) {
             break;
           case "a":
             Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype);
+            break;
+          case "area":
+            Object.setPrototypeOf(el, global.HTMLAreaElement.prototype);
             break;
           case "img":
             Object.setPrototypeOf(el, global.HTMLImageElement.prototype);

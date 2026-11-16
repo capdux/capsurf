@@ -741,6 +741,19 @@
      - `NamedNodeMap` 实例将属性索引作为实例自有属性直接动态挂载，同时将内部管理状态通过 `Object.defineProperty(..., { enumerable: false })` 彻底隐藏；
      - 每次属性修改（`setAttribute`, `removeAttribute`, `removeAttributeNode`）均实时同步 `_attrs` 映射表并刷新索引属性，既保证符合 W3C 规范的 live 动态特性，又完全兼容 React 19 等复杂排空与克隆循环。
 
+## Phase 38 WHATWG File API 与 HyperlinkDecomposition 架构方案
+1. **WHATWG File API 严格边界 MIME 归一化规范 (`src/net/mime.cp` & `src/js/shim/file.js`)**：
+   - **设计动机**：Web 规范（WHATWG File API）对 `Blob` 与 `File` 的 `type` 做了严格的限制：任何含有控制字符（`< 0x20`，如垂直制表符 `\x0B`）或非 ASCII 字符（`> 0x7E`，如 Latin-1 `\xE5`）的媒体串必须被强制归一化为空字符串 `""`，同时 ASCII 大写字母必须转换为小写并保留首尾空格；
+   - **解决方案**：
+     - 在 CP 核心层与 JS Shim 双端实装 `normalizeBlobType`，对字节流进行单趟严格过滤，确保非法字节零容忍快速回退；
+     - `Blob` 与 `File` 构造器严格按照 WebIDL 字典规则校验 `options` 参数：当传入数字、布尔值等基本类型时准确抛出 `TypeError`，并支持从 `Request`/`Response` Content-Type 头保留原大小写 MIME 透传。
+2. **HTMLHyperlinkElementUtils 畸形 URL 协议回退协议 (`src/dom/hyperlink.cp` & `src/js/shim/element/html-classes.js`)**：
+   - **设计动机**：在 HTML5 规范中，`HTMLAnchorElement` 与 `HTMLAreaElement` 实现 `HTMLHyperlinkElementUtils` 接口。当 `href` 设置了畸形 URL（如端口含多冒号 `"http://example.com:80:"`）导致底层 URL 解析器失败时，规范要求 `protocol` 必须返回 `":"`（单一冒号），`origin` 返回 `"null"`，其余字段返回 `""`；
+   - **解决方案**：
+     - 在 CP 核心层实现 `HyperlinkDecomposition.decompose`，对各种非法 URL 场景统一实施规范回退保护；
+     - 在 JS Shim 中为 `HTMLAnchorElement` 与 `HTMLAreaElement` 统一绑定超链接分解属性，使爬虫智能体与前端框架在解析畸形链接时保持完全一致的浏览器行为。
+
+
 
 
 

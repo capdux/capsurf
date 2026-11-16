@@ -1799,6 +1799,31 @@
    - 双驱动回归：`test_driver_playwright.js` 与 `test_e2e_matrix.js` 100% 成功；
    - 双模构建：单二进制 `bin/main`（8.7MB）与 Nest 动态库 `bin/main.so`（9.1KB）均构建成功。
 
+---
+
+## [2026-11-17 08:45:00] Turn 51
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 38（WHATWG File API、MIME 归一化规范、HTMLHyperlinkElementUtils 超链接分解与 E2E 黑盒套件规模化扩充）：
+1. **WHATWG MIME 规范解析与归一化引擎 (`src/net/mime.cp`)**：
+   - 实装 `normalizeBlobType`：严格遵循 WHATWG File API 规范，凡包含 `< 0x20`（如 `\u000b` 0x0B 等 ASCII 控制符）或 `> 0x7E`（如 `\u00e5` 等非 ASCII 扩展符）的非法类型归一化为 `""`，大写 ASCII 字母转换为小写，原样保留首尾合法空格；
+   - 实装 `MimeType` 规范解析器，支持参数提取（`charset`）与引用字符串解包。
+2. **HTMLHyperlinkElementUtils 超链接分解引擎 (`src/dom/hyperlink.cp`)**：
+   - 实装 `HyperlinkDecomposition` 结构体：对畸形/非法 URL（如 `"http://example.com:80:"` 端口语法错误），遵循 W3C 规范回退 `protocol: ":"`、`origin: "null"`，其他属性回退 `""`；
+   - 对合法 URL 准确提取 protocol, host, hostname, port, pathname, search, hash, origin，并自动剥离默认端口（http:80, https:443）。
+3. **JS Shim 规范扩展与全局暴露 (`src/js/shim/`)**：
+   - `src/js/shim/file.js`：实装 WHATWG `Blob` 与 `File` 构造器，校验基本类型 options 抛出 `TypeError`，支持 `size`, `type`, `slice`, `text`, `arrayBuffer`；
+   - 保证 `Request` 与 `Response` 的 `.blob()` 能保留 Content-Type 的原始 MIME 大小写序列化；
+   - `src/js/shim/element/html-classes.js`：为 `HTMLAnchorElement` 与新增的 `HTMLAreaElement` 统一安装超链接分解属性，非法 URL 严格返回 `protocol: ":"`；
+   - `src/js/shim/index.js`：在 `document.createElement("area")` 时挂载 `HTMLAreaElement.prototype`。
+4. **自动化测试与全链路回归验证**：
+   - `test/dom/test_hyperlink_mime.cp`：纯 CP 原生单元测试 100% 全部通过；
+   - `python3 scripts/cpc_brief.py -n 8`：全部修改文件 100% 通过 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - `e2e/run_all.js`：7 套核心 E2E 测试全部自动发现并执行，13/13 项用例 100% PASS（耗时 1.47s）；
+   - 双驱动全链路测试：`test_driver_playwright.js` 100% 成功；
+   - 独立单二进制：`bin/main` 编译构建成功。
+
+
 
 
 

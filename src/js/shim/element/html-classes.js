@@ -4,63 +4,86 @@
 function installHtmlClasses(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
 
-  // 1. HTMLAnchorElement
-  function HTMLAnchorElement() {}
-  HTMLAnchorElement.prototype = Object.create(ElementProto);
-  HTMLAnchorElement.prototype.constructor = HTMLAnchorElement;
-
-  Object.defineProperty(HTMLAnchorElement.prototype, "href", {
-    get: function () {
-      const raw = this.getAttribute("href") || "";
-      if (!raw) return "";
-      try {
-        const base = typeof document !== "undefined" && document.baseURI ? document.baseURI : "http://localhost/";
-        return new URL(raw, base).href;
-      } catch (e) {
-        return raw;
-      }
-    },
-    set: function (v) { this.setAttribute("href", String(v)); },
-    configurable: true,
-  });
-
-  const anchorUrlProps = ["origin", "protocol", "host", "hostname", "port", "pathname", "search", "hash"];
-  for (let i = 0; i < anchorUrlProps.length; i++) {
-    const prop = anchorUrlProps[i];
-    Object.defineProperty(HTMLAnchorElement.prototype, prop, {
+  function installHyperlinkDecomposition(proto) {
+    Object.defineProperty(proto, "href", {
       get: function () {
+        const raw = this.getAttribute("href");
+        if (raw == null) return "";
         try {
-          const u = new URL(this.href);
-          return u[prop];
+          const base = typeof document !== "undefined" && document.baseURI ? document.baseURI : "http://localhost/";
+          return new URL(raw, base).href;
         } catch (e) {
-          return "";
+          return raw;
         }
       },
-      set: function (v) {
-        try {
-          const u = new URL(this.href);
-          u[prop] = v;
-          this.href = u.href;
-        } catch (e) {}
-      },
+      set: function (v) { this.setAttribute("href", String(v)); },
+      configurable: true,
+    });
+
+    const urlProps = ["origin", "protocol", "host", "hostname", "port", "pathname", "search", "hash"];
+    for (let i = 0; i < urlProps.length; i++) {
+      const prop = urlProps[i];
+      Object.defineProperty(proto, prop, {
+        get: function () {
+          const raw = this.getAttribute("href");
+          if (raw == null) {
+            return prop === "protocol" ? ":" : "";
+          }
+          try {
+            const u = new URL(this.href);
+            return u[prop];
+          } catch (e) {
+            if (prop === "protocol") return ":";
+            if (prop === "origin") return "null";
+            return "";
+          }
+        },
+        set: function (v) {
+          const raw = this.getAttribute("href");
+          if (raw == null) return;
+          try {
+            const u = new URL(this.href);
+            u[prop] = v;
+            this.href = u.href;
+          } catch (e) {}
+        },
+        configurable: true,
+      });
+    }
+
+    Object.defineProperty(proto, "target", {
+      get: function () { return this.getAttribute("target") || ""; },
+      set: function (v) { this.setAttribute("target", String(v)); },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "rel", {
+      get: function () { return this.getAttribute("rel") || ""; },
+      set: function (v) { this.setAttribute("rel", String(v)); },
       configurable: true,
     });
   }
 
-  Object.defineProperty(HTMLAnchorElement.prototype, "target", {
-    get: function () { return this.getAttribute("target") || ""; },
-    set: function (v) { this.setAttribute("target", String(v)); },
-    configurable: true,
-  });
-
-  Object.defineProperty(HTMLAnchorElement.prototype, "rel", {
-    get: function () { return this.getAttribute("rel") || ""; },
-    set: function (v) { this.setAttribute("rel", String(v)); },
-    configurable: true,
-  });
-
+  // 1. HTMLAnchorElement
+  function HTMLAnchorElement() {}
+  HTMLAnchorElement.prototype = Object.create(ElementProto);
+  HTMLAnchorElement.prototype.constructor = HTMLAnchorElement;
+  installHyperlinkDecomposition(HTMLAnchorElement.prototype);
   markNative(HTMLAnchorElement, "HTMLAnchorElement");
   global.HTMLAnchorElement = HTMLAnchorElement;
+
+  // 1.1 HTMLAreaElement
+  function HTMLAreaElement() {}
+  HTMLAreaElement.prototype = Object.create(ElementProto);
+  HTMLAreaElement.prototype.constructor = HTMLAreaElement;
+  installHyperlinkDecomposition(HTMLAreaElement.prototype);
+  Object.defineProperty(HTMLAreaElement.prototype, "alt", {
+    get: function () { return this.getAttribute("alt") || ""; },
+    set: function (v) { this.setAttribute("alt", String(v)); },
+    configurable: true,
+  });
+  markNative(HTMLAreaElement, "HTMLAreaElement");
+  global.HTMLAreaElement = HTMLAreaElement;
 
   // 2. HTMLImageElement
   function HTMLImageElement() {}

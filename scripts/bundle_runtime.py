@@ -26,6 +26,7 @@ MODULE_ORDER = [
     "element/forms/select.js",
     "element/forms/button.js",
     "element/forms/form.js",
+    "file.js",
     "form-data.js",
     "traversal.js",
     "range.js",
