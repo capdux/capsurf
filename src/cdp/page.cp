@@ -2,9 +2,10 @@
 // CDP Page Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/page.ts and vendor/kitesurf/packages/engine/src/eval/outbound.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { HttpLoader } from "../net/http_loader.cp";
+import { Base64 } from "cap:encoding";
 import {
     FrameState,
     MainFrameArgs,
@@ -20,8 +21,54 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload")) {
+            std.mem.eql(u8, req.method, "Page.reload") ||
+            std.mem.eql(u8, req.method, "Page.startScreencast") ||
+            std.mem.eql(u8, req.method, "Page.stopScreencast") ||
+            std.mem.eql(u8, req.method, "Page.screencastFrameAck")) {
             return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.captureScreenshot")) {
+            let compress_lvl: u8 = 6;
+            const fmt = extractJsonString(req.params_raw, "format") ?? "png";
+            * = fmt;
+
+            if (q := extractJsonInt(req.params_raw, "quality")) {
+                if (q >= 0 && q <= 9) {
+                    compress_lvl = @as(u8, @intCast(q));
+                } else if (q < 50) {
+                    compress_lvl = 1;
+                } else {
+                    compress_lvl = 6;
+                }
+            }
+
+            if (std.mem.indexOf(u8, req.params_raw, "\"optimizeForSpeed\":true") != null) {
+                compress_lvl = 1;
+            }
+
+            const png_bytes = session.captureScreenshot(compress_lvl) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
+            defer session.allocator.free(png_bytes);
+
+            const b64_str = Base64.encodeAlloc(session.allocator, png_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
+            defer session.allocator.free(b64_str);
+
+            const prefix = "{\"data\":\"";
+            const suffix = "\"}";
+            const total_len = prefix.len + b64_str.len + suffix.len;
+
+            if (out_buf.len >= total_len) {
+                @memcpy(out_buf[0..prefix.len], prefix);
+                @memcpy(out_buf[prefix.len .. prefix.len + b64_str.len], b64_str);
+                @memcpy(out_buf[prefix.len + b64_str.len .. total_len], suffix);
+                return CdpResponse.ok(req.id, out_buf[0..total_len]);
+            } else {
+                let res_mem = session.allocator.alloc(u8, total_len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                @memcpy(res_mem[0..prefix.len], prefix);
+                @memcpy(res_mem[prefix.len .. prefix.len + b64_str.len], b64_str);
+                @memcpy(res_mem[prefix.len + b64_str.len .. total_len], suffix);
+                return CdpResponse.ok(req.id, res_mem);
+            }
         }
 
         if (std.mem.eql(u8, req.method, "Page.navigate")) {

@@ -201,3 +201,12 @@
    - 标准 Chrome DevTools 协议在页面导航时按时序发射 3 个生命周期事件：`Page.frameNavigated` -> `Page.domContentEventFired` -> `Page.loadEventFired`；
    - 之前测试客户端仅读取 2 个 WebSocket 帧，导致后续的 `DOM.querySelector` 读取到了未被消费的第 3 个事件帧引发 JSON-RPC 解析错位；
    - 在 `PageHandler.handle` 与测试用例中严格对齐 3 阶段生命周期事件派发与接收逻辑，确保 CDP 全链路时序精确一致。
+
+## Phase 4 视觉感知与交互式输入流水线架构方案与排障实录
+1. **CDP 截图全链路串联与 Base64 内存流架构 (`src/cdp/page.cp` & `src/cdp/session.cp`)**：
+   - **设计目标**：使 AI Agent 与自动化脚本能通过调用标准 CDP `Page.captureScreenshot` 获取当前页面高保真渲染图。
+   - **实现方案**：在 `session.cp` 中统一封装 `captureScreenshot`，先动态基于当前视口宽度重新执行级联计算 `Cascade.computeStyles`，再由 `LayoutTree.computeLayout` 产出盒模型 `Rect` 数组；最后透传 `ScreenshotOptions`（视口宽高、背景色、压缩级别）至 `renderDocumentToPng` 进行 2D 软件光栅化，在 C 层通过 `Base64.encodeAlloc` 生成 Base64 字符串返回。
+2. **像素级交互命中与双向状态同步设计 (`src/cdp/input.cp`)**：
+   - **焦点与坐标命中判定**：在 `Input.dispatchMouseEvent` 中，基于 `session.layout.boxes` 对屏幕绝对物理坐标 `(x, y)` 执行反向几何查找（Hit Test），定位到最顶层可见元素作为 `target_node`，并维护当前会话的 `session.focused_node`。
+   - **交互文本注入管道 (`applyInputText`)**：在 `Input.insertText` 与 `Input.dispatchKeyEvent` 中，不仅在底层 Arena DOM 的 `NodeData` 上更新/创建 `value` 属性，而且在已挂载的 QuickJS-NG 上下文中触发 DOM 包装对象更新，确保通过 JS 评估读取 `input.value` 与 `element.textContent` 始终返回最新键盘输入内容。
+   - **滚轮与滚动状态跟踪**：在 `Input.dispatchMouseEvent` 的 `mouseWheel` 分支中实时累加 `session.scroll_x` 与 `session.scroll_y`，支撑页面滚动与视口偏移计算。

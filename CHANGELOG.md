@@ -207,3 +207,19 @@
   - `test/cdp/test_cdp.cp`：同步对齐 3 阶段导航事件流，2/2 项测试 100% 通过；
   - `test/cdp/test_cdp_network_fetch.cp`：3/3 项深度测试 100% 通过。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 4: Visual Perception, Screenshots & Interactive CDP Input (100% Closed)
+- **`src/cdp/session.cp`**：
+  - 实装 `captureScreenshot(compress_level: u8)`，打通 ComputedStyle 级联解析、布局盒模型计算与 `renderDocumentToPng` 2D 软件光栅化，支持不同压缩级别极速/高压截图；
+  - 增加 `focused_node: NodeId`、`scroll_x: f32`、`scroll_y: f32` 视口与交互状态管理。
+- **`src/cdp/page.cp`**：
+  - 实装 `Page.captureScreenshot`，解析参数并将截图原始 PNG 字节流经由 `Base64.encodeAlloc` 转为 Base64 字符串，构造标准 CDP `{"data":"<base64>"}` 响应；
+  - 实装 `Page.startScreencast`、`Page.stopScreencast` 与 `Page.screencastFrameAck` 协议交互桩。
+- **`src/cdp/input.cp`**：
+  - 完善 `Input.dispatchMouseEvent`：支持 `mouseWheel` 滚动偏移累加（`scroll_x += deltaX`，`scroll_y += deltaY`），支持 `mousePressed`/`mouseReleased` 精确像素坐标命中判定（`hitTest`）与更新当前 `session.focused_node`，并触发内联 `onclick` 及 JS 上下文函数；
+  - 完善 `Input.insertText` 与 `Input.dispatchKeyEvent`：通过 `applyInputText` 实现向当前焦点元素（`<input>`、`<textarea>` 或普通可编辑元素）追加并同步文本值，并在已挂载的 JS DOM 环境中同步更新 `element.value` 与 `element.textContent`。
+- **`src/cdp/types.cp`**：将 `extractJsonFloat` 与 `extractJsonBool` 规范化上移至协议通用类型层。
+- **测试套件**：
+  - `test/cdp/test_screenshot_input.cp`：4 项测试 100% 全部通过（CDP Page 截图 Base64 解码与 400x300 尺寸校验、鼠标点击命中测试与滚轮滚动、焦点元素文本追加更新、录屏协议握手）；
+  - `test/cdp/test_cdp_screenshot.cp`：3 项测试 100% 全部通过。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

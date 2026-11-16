@@ -2,7 +2,7 @@
 // CDP Input Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/input.ts
 
-import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 
@@ -78,61 +78,6 @@ pub struct KeyEvent {
     auto_repeat: bool = false,
 }
 
-/// Zero-allocation JSON float field extractor.
-pub fn extractJsonFloat(json: []const u8, key: []const u8): (f32)? {
-    let key_pat_buf: [64]u8 = [0; 64];
-    if (key.len + 3 > key_pat_buf.len) return null;
-    key_pat_buf[0] = '"';
-    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
-    key_pat_buf[1 + key.len] = '"';
-    const key_pat = key_pat_buf[0 .. 2 + key.len];
-
-    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
-    let idx = pos + key_pat.len;
-
-    // Skip whitespace and colon
-    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
-    if (idx >= json.len) return null;
-
-    const start = idx;
-    let has_digits = false;
-    while (idx < json.len) : (idx += 1) {
-        const c = json[idx];
-        if (c >= '0' && c <= '9') {
-            has_digits = true;
-        } else if (c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E') {
-            // continue parsing valid float chars
-        } else {
-            break;
-        }
-    }
-
-    if (!has_digits) return null;
-    const slice = json[start..idx];
-    return std.fmt.parseFloat(f32, slice) catch null;
-}
-
-/// Zero-allocation JSON boolean field extractor.
-pub fn extractJsonBool(json: []const u8, key: []const u8): (bool)? {
-    let key_pat_buf: [64]u8 = [0; 64];
-    if (key.len + 3 > key_pat_buf.len) return null;
-    key_pat_buf[0] = '"';
-    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
-    key_pat_buf[1 + key.len] = '"';
-    const key_pat = key_pat_buf[0 .. 2 + key.len];
-
-    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
-    let idx = pos + key_pat.len;
-
-    // Skip whitespace and colon
-    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
-    if (idx >= json.len) return null;
-
-    if (idx + 4 <= json.len && std.mem.eql(u8, json[idx .. idx + 4], "true")) return true;
-    if (idx + 5 <= json.len && std.mem.eql(u8, json[idx .. idx + 5], "false")) return false;
-    return null;
-}
-
 /// Hit-tests screen pixel coordinates (x, y) against session's layout boxes.
 pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
     let best_node: NodeId = NULL_NODE;
@@ -148,6 +93,49 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
         }
     }
     return best_node;
+}
+
+pub fn applyInputText(session: *CdpPageSession, text: []const u8) {
+    if (session.focused_node == NULL_NODE || text.len == 0) return;
+    const nid = session.focused_node;
+    if (@as(usize, nid) >= session.doc.nodes.items.len) return;
+
+    // 1. Update "value" attribute
+    const old_val = session.doc.getAttribute(nid, "value") ?? "";
+    let val_buf: [1024]u8 = [0; 1024];
+    const new_val = std.fmt.bufPrint(&val_buf, "{s}{s}", .{ old_val, text }) catch text;
+    const val_dup = session.allocator.dupe(u8, new_val) catch new_val;
+    session.doc.setAttribute(nid, "value", val_dup);
+
+    // 2. Update text child / text_content
+    const old_text = session.doc.getTextContent(nid);
+    let text_buf: [1024]u8 = [0; 1024];
+    const new_text = std.fmt.bufPrint(&text_buf, "{s}{s}", .{ old_text, text }) catch text;
+    const text_dup = session.allocator.dupe(u8, new_text) catch new_text;
+
+    const first_c = session.doc.getFirstChild(nid);
+    if (first_c != NULL_NODE && session.doc.nodes.items[@as(usize, first_c)].node_type == .Text) {
+        session.doc.nodes.items[@as(usize, first_c)].text_content = text_dup;
+    } else {
+        const tid_res = session.doc.createTextNode(text_dup) catch null;
+        if (tid := tid_res) {
+            session.doc.appendChild(nid, tid);
+        }
+    }
+
+    // 3. Update JS element if active
+    if (session.has_document) {
+        let js_buf: [512]u8 = [0; 512];
+        const js_expr = std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ el.value = '{s}'; el.textContent = '{s}'; }} }})()",
+            .{ nid, val_dup, text_dup },
+        ) catch null;
+        if (e := js_expr) {
+            const val = session.ctx.eval(e);
+            session.ctx.freeValue(val);
+        }
+    }
 }
 
 pub struct InputHandler {
@@ -181,13 +169,33 @@ pub struct InputHandler {
             };
             * = mouse_ev;
 
+            // Handle mouseWheel: scroll_x / scroll_y
+            if (ev_type == .MouseWheel) {
+                session.scroll_x += delta_x;
+                session.scroll_y += delta_y;
+            }
+
             // Hit test and trigger onclick if applicable
             if (ev_type == .MouseReleased || ev_type == .MousePressed) {
                 const target_node = hitTest(session, x, y);
                 if (target_node != NULL_NODE) {
+                    session.focused_node = target_node;
+                    // Trigger onclick JS attribute or property
                     if (onclick_code := session.doc.getAttribute(target_node, "onclick")) {
                         if (session.has_document) {
                             const val = session.ctx.eval(onclick_code);
+                            session.ctx.freeValue(val);
+                        }
+                    }
+                    if (session.has_document) {
+                        let expr_buf: [384]u8 = [0; 384];
+                        const expr = std.fmt.bufPrint(
+                            &expr_buf,
+                            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ if (typeof el.onclick === 'function') el.onclick(); }} }})()",
+                            .{target_node},
+                        ) catch null;
+                        if (e := expr) {
+                            const val = session.ctx.eval(e);
                             session.ctx.freeValue(val);
                         }
                     }
@@ -219,13 +227,17 @@ pub struct InputHandler {
             };
             * = key_ev;
 
+            if (text.len > 0 && (ev_type == .Char || ev_type == .KeyDown || ev_type == .RawKeyDown)) {
+                applyInputText(session, text);
+            }
+
             return CdpResponse.ok(req.id, "{}");
         }
 
         // 3. Text Insertion: insertText
         if (std.mem.eql(u8, req.method, "Input.insertText")) {
             const text = extractJsonString(req.params_raw, "text") ?? "";
-            * = text;
+            applyInputText(session, text);
             return CdpResponse.ok(req.id, "{}");
         }
 

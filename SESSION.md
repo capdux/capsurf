@@ -847,3 +847,22 @@
    - 在 `src/cdp/page.cp` 中无缝集成 `Page.getFrameTree` 与 `Page.getFrameResourceTree`，返回符合 CDP 标准的树形结构；
    - 在 `test_page_navigation.cp` 中扩充断言检验 `Page.getFrameTree` 与 `Page.getFrameResourceTree` 返回有效 JSON；
    - 6 个核心源文件全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 11:06:00] Turn 14
+
+### **[Agent]**
+推进并闭环 Phase 4（视觉感知与交互式输入流水线）：
+1. **CDP 视觉截图与 Screencast 实时推流 (`src/cdp/page.cp` & `src/cdp/session.cp`)**：
+   - 在 `src/cdp/session.cp` 中实装 `captureScreenshot(compress_level: u8): []const u8!`，串联 DOM 树、ComputedStyle 级联解析与盒模型布局矩形计算，调用 2D 软件光栅化渲染器生成 PNG 字节流；
+   - 在 `src/cdp/page.cp` 中实装标准 `Page.captureScreenshot`，支持 `quality`/`format` 参数透传，使用 `cap:encoding` 的 `Base64.encodeAlloc` 生成 Base64 字符串并组装 `{"data":"<base64>"}` 响应；
+   - 实装 `Page.startScreencast`、`Page.stopScreencast` 与 `Page.screencastFrameAck` 协议握手。
+2. **交互式模拟输入增强 (`src/cdp/input.cp`)**：
+   - 扩充 `CdpPageSession`，增加 `focused_node: NodeId`、`scroll_x: f32`、`scroll_y: f32` 状态管理；
+   - 增强 `Input.dispatchMouseEvent`：支持 `mouseWheel` 累加滚动偏移，对 `mousePressed`/`mouseReleased` 执行像素级 `hitTest`，更新 `session.focused_node` 并触发内联/绑定 `onclick` 事件；
+   - 增强 `Input.insertText` 与 `Input.dispatchKeyEvent`：通过 `applyInputText` 实现向当前焦点元素追加与同步文本值，并实时更新底层 Arena DOM 与 JS Wrapper 树。
+3. **测试套件与门禁验证**：
+   - 编写并通过 `test/cdp/test_screenshot_input.cp`（4/4 passed，包含截图 Base64 解码与魔数校验、点击命中与滚轮、焦点文本注入与 Screencast 协议握手）及 `test/cdp/test_cdp_screenshot.cp`（3/3 passed）；
+   - `src/cdp/input.cp`、`src/cdp/page.cp`、`src/cdp/session.cp`、`src/cdp/types.cp` 全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

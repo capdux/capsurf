@@ -11,6 +11,8 @@ import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel } from "./types.cp";
 import { FetchState } from "./fetch.cp";
+import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
+import { CssColor } from "cap:css";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -38,6 +40,11 @@ pub struct CdpPageSession {
     cookie_jar: CookieJar,
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
+
+    // Focus & Scroll state
+    focused_node: NodeId = NULL_NODE,
+    scroll_x: f32 = 0.0,
+    scroll_y: f32 = 0.0,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -68,6 +75,9 @@ pub struct CdpPageSession {
             cookie_jar: jar,
             fetch_enabled: false,
             fetch_state: FetchState{},
+            focused_node: NULL_NODE,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
         };
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
         return ptr;
@@ -118,6 +128,9 @@ pub struct CdpPageSession {
         _.dom_ctx = m;
         _.url = nav_url;
         _.has_document = true;
+        _.focused_node = NULL_NODE;
+        _.scroll_x = 0.0;
+        _.scroll_y = 0.0;
     }
 
     pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
@@ -165,5 +178,34 @@ pub struct CdpPageSession {
             border: .{ l, t, r, t, r, b, l, b },
             content: .{ l, t, r, t, r, b, l, b },
         };
+    }
+
+    pub fn captureScreenshot(*_, compress_level: u8): ([]const u8)! {
+        const count = @max(@as(usize, 1), _.doc.nodeCount());
+        const sheet = StyleSheet{};
+        let styles = _.allocator.alloc(ComputedStyle, count)?;
+        defer _.allocator.free(styles);
+        Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
+
+        _.layout.computeLayout(&_.doc, styles) catch {};
+
+        let rects = _.allocator.alloc(Rect, count)?;
+        defer _.allocator.free(rects);
+        let nid: usize = 0;
+        while (nid < count) : (nid += 1) {
+            rects[nid] = _.layout.getBoundingClientRect(@as(u32, @intCast(nid)));
+        }
+
+        const vw: u32 = if (_.viewport_width > 0.0) @as(u32, @intFromFloat(_.viewport_width)) else 1280;
+        const vh: u32 = if (_.viewport_height > 0.0) @as(u32, @intFromFloat(_.viewport_height)) else 720;
+
+        const opts = ScreenshotOptions{
+            viewport_w: vw,
+            viewport_h: vh,
+            compress_level: if (compress_level <= 9) compress_level else 6,
+            clear_color: CssColor.rgb(255, 255, 255),
+        };
+
+        return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
     }
 }

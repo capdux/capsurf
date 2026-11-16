@@ -153,3 +153,56 @@ pub fn extractJsonInt(json: []const u8, key: []const u8): (i64)? {
     if (!has_digits) return null;
     return if (is_neg) -val else val;
 }
+
+pub fn extractJsonFloat(json: []const u8, key: []const u8): (f32)? {
+    let key_pat_buf: [64]u8 = [0; 64];
+    if (key.len + 3 > key_pat_buf.len) return null;
+    key_pat_buf[0] = '"';
+    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
+    key_pat_buf[1 + key.len] = '"';
+    const key_pat = key_pat_buf[0 .. 2 + key.len];
+
+    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
+    let idx = pos + key_pat.len;
+
+    // Skip whitespace and colon
+    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
+    if (idx >= json.len) return null;
+
+    const start = idx;
+    let has_digits = false;
+    while (idx < json.len) : (idx += 1) {
+        const c = json[idx];
+        if (c >= '0' && c <= '9') {
+            has_digits = true;
+        } else if (c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E') {
+            // continue parsing valid float chars
+        } else {
+            break;
+        }
+    }
+
+    if (!has_digits) return null;
+    const slice = json[start..idx];
+    return std.fmt.parseFloat(f32, slice) catch null;
+}
+
+pub fn extractJsonBool(json: []const u8, key: []const u8): (bool)? {
+    let key_pat_buf: [64]u8 = [0; 64];
+    if (key.len + 3 > key_pat_buf.len) return null;
+    key_pat_buf[0] = '"';
+    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
+    key_pat_buf[1 + key.len] = '"';
+    const key_pat = key_pat_buf[0 .. 2 + key.len];
+
+    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
+    let idx = pos + key_pat.len;
+
+    // Skip whitespace and colon
+    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
+    if (idx >= json.len) return null;
+
+    if (idx + 4 <= json.len && std.mem.eql(u8, json[idx .. idx + 4], "true")) return true;
+    if (idx + 5 <= json.len && std.mem.eql(u8, json[idx .. idx + 5], "false")) return false;
+    return null;
+}
