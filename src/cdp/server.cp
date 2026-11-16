@@ -416,7 +416,11 @@ pub fn readWsTextFrame(client_fd: i32, payload_buf: []u8): ([]const u8)?! {
     const b0 = hdr[0];
     const b1 = hdr[1];
     const opcode = b0 & 0x0F;
-    if (opcode == 0x08) return null; // Close frame
+    if (opcode == 0x08) {
+        let close_resp: [2]u8 = [ 0x88, 0x00 ];
+        * = socketWriteAll(client_fd, &close_resp) catch {};
+        return null; // Close frame
+    }
 
     const masked = (b1 & 0x80) != 0;
     const len7 = b1 & 0x7F;

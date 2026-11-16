@@ -705,6 +705,18 @@
      - `EventStreamParser` 采用单字节与切片扫描双模式状态机，支持跨分片拼接与 UTF-8 BOM 自动剥离；
      - 严格遵循 WHATWG 规范：多行 `data:` 字段以单个 `\n` 连接，空行触发完整事件派发并清空当前数据缓存，非法含 `\0` 的 ID 字段严格忽略以确保跨状态安全性。
 
+## Phase 35 Web Storage 存储引擎与原生独立进程 E2E 测试架构方案
+1. **零堆碎片 Web Storage 状态机 (`src/dom/storage.cp`)**：
+   - **设计动机**：Web 应用程序普遍依赖 `localStorage` 与 `sessionStorage` 暂存用户会话、状态或配置项，规范要求支持通过 `key(index)` 按插入顺序稳定检索并实现同源隔离；
+   - **解决方案**：
+     - 在 `Storage` 内部使用定长连续数组管理 128 项键值对，杜绝哈希表高并发频繁伸缩导致的内存碎片；
+     - `removeItem` 采用就地线性移位保持项顺序连续性，`StorageManager` 显式解耦会话级与持久级两个独立桶。
+2. **独立进程解耦的 E2E 远程测试架构 (`test/e2e/harness.js`)**：
+   - **设计动机**：原版 Kitesurf 391 个 E2E 用例强依赖 Cloudflare Workers 运行时内部绑定。CapSurf 作为独立单二进制需要一套可直接通过真实网络 WebSocket 测试本地进程的通用自动化 Harness；
+   - **解决方案**：
+     - `harness.js` 统一接管 CapSurf 进程生命周期（端口动态分配、输出监听、优雅退出保底），基于 Node.js 原生 WebSocket 实现完整的 CDP 请求队列与事件监听；
+     - 构建通用断言库与异步轮询器 `expect.poll`，成功将 `blank-page-document.test.js` 迁移验证通过，为后续 391 个测试的规模化导入打下坚实地基。
+
 
 
 

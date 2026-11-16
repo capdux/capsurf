@@ -760,6 +760,25 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 35: Web Storage Engine & Native Process E2E Test Harness (100% Closed)
+- **`src/dom/storage.cp`**（迁移自 `vendor/kitesurf/packages/page-script/src/globals.ts` 与 WHATWG Web Storage 规范）：
+  - 实装 `StorageEntry` 键值对模型与 `Storage` 状态机（支持 `getItem`, `setItem`, `removeItem`, `clear`, `key`, `length`，上限 128 项零动态堆碎片分配）；
+  - 实装 `StorageManager` 同源存储管理器，提供 `localStorage` 与 `sessionStorage` 独立隔离桶与 `clearAll` 方法。
+- **`test/e2e/harness.js` & `test/e2e/run_all.js`**：
+  - 搭建 CapSurf 独立原生进程管理与动态端口分配架构（`--remote-debugging-port=<port>`）；
+  - 实现基于 Node.js 26 原生 WebSocket 的 RFC 6455 CDP 驱动器（支持 `cdp.send`、`cdp.on`、`expect` 全断言库与异步 `expect.poll`）；
+  - 迁移首个经典用例 `test/e2e/blank-page-document.test.js`（验证空白页 `about:blank` 骨架 DOM、`window`、`document`、`document.body` 类型与基础交互，100% 通过）。
+- **底层引擎稳健性提升**：
+  - `src/cdp/session.cp`：初始化默认骨架 DOM，确保空白页 JS 执行上下文具备完整 DOM 树；
+  - `src/js/dom_binding.cp` & `src/js/shim/index.js`：在 Document 原型新增 `title`, `nodeType`, `nodeName` 属性；
+  - `src/cdp/runtime.cp` & `src/cdp/server.cp`：完善 JSON 转义与 WebSocket Close 握手。
+- **测试套件与全链路验证**：
+  - `test/dom/test_storage.cp`：纯 CP 原生测试 100% 全部通过（验证增删改查、key 索引遍历、同源桶隔离）；
+  - `test/e2e/run_all.js`：Node.js E2E 测试套件 100% 通过；
+  - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

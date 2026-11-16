@@ -538,6 +538,50 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsNull();
 }
 
+@c fn js_document_get_title(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    let i: usize = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
+            const first_text = dom_ctx.doc.getFirstChild(@intCast(i));
+            if (first_text != NULL_NODE) {
+                const text = getNodeText(dom_ctx.doc, first_text);
+                return jsNewString(ctx, text);
+            }
+            return jsNewString(ctx, "");
+        }
+    }
+    return jsNewString(ctx, "");
+}
+
+@c fn js_document_set_title(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const str = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(str);
+    const str_dup = dom_ctx.doc.allocator.dupe(u8, str) catch str;
+
+    let i: usize = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
+            const first_text = dom_ctx.doc.getFirstChild(@intCast(i));
+            if (first_text != NULL_NODE) {
+                setNodeText(dom_ctx.doc, first_text, str_dup);
+            }
+            return jsUndefined();
+        }
+    }
+    return jsUndefined();
+}
+
 @c fn js_document_get_document_element(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
@@ -552,6 +596,21 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
         }
     }
     return jsNull();
+}
+
+@c fn js_document_get_node_type(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = ctx;
+    * = this_val;
+    * = argc;
+    * = argv;
+    return jsInt(9); // Node.DOCUMENT_NODE
+}
+
+@c fn js_document_get_node_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    * = argc;
+    * = argv;
+    return jsNewString(ctx, "#document");
 }
 
 fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: []const u8): JSValue {
@@ -662,6 +721,9 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, doc_proto, "getElementById", js_document_get_element_by_id, 1);
     defineMethod(raw_ctx, doc_proto, "createElement", js_document_create_element, 1);
     defineGetterSetter(raw_ctx, doc_proto, "body", js_document_get_body, null);
+    defineGetterSetter(raw_ctx, doc_proto, "title", js_document_get_title, js_document_set_title);
+    defineGetterSetter(raw_ctx, doc_proto, "nodeType", js_document_get_node_type, null);
+    defineGetterSetter(raw_ctx, doc_proto, "nodeName", js_document_get_node_name, null);
     defineGetterSetter(raw_ctx, doc_proto, "documentElement", js_document_get_document_element, null);
     defineGetterSetter(raw_ctx, doc_proto, "firstChild", js_element_get_first_child, null);
     defineGetterSetter(raw_ctx, doc_proto, "lastChild", js_element_get_last_child, null);

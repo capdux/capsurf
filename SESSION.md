@@ -1740,6 +1740,27 @@
 ### **[Agent]**
 已将改进的自主推导工作方式、双智能体满负荷流水线、屏幕透明实时透出规范，以及 391 项 Kitesurf E2E 测试规模化迁移架构整理并固化写入 `GEMINI.md` 第 9 节与第 10 节。
 
+---
+
+## [2026-11-17 07:37:00] Turn 48
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 35（Web Storage 存储引擎与原生独立进程 E2E 测试架构）：
+1. **Web Storage 引擎与同源隔离管理器 (`src/dom/storage.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/page-script/src/globals.ts` 与 WHATWG Web Storage 规范；
+   - 实装 `StorageEntry` 键值对模型与 `Storage` 状态机（支持 `getItem`, `setItem`, `removeItem`, `clear`, `key`, `length`）；
+   - 实装 `StorageManager` 同源存储管理器，提供 `localStorage` 与 `sessionStorage` 独立隔离桶与 `clearAll` 方法。
+2. **原生独立进程 E2E 测试框架与首批用例迁移 (`test/e2e/harness.js` & `test/e2e/blank-page-document.test.js`)**：
+   - 搭建 CapSurf 独立原生进程管理与动态端口分配架构（`--remote-debugging-port=<port>`）；
+   - 实现基于 Node.js 26 原生 WebSocket 的 RFC 6455 CDP 驱动器（支持 `cdp.send`、`cdp.on`、`expect` 全断言库与异步 `expect.poll`）；
+   - 迁移首个经典用例 `test/e2e/blank-page-document.test.js`（验证空白页 `about:blank` 骨架 DOM、`window`、`document`、`document.body` 类型与基础交互，100% 通过）。
+3. **自动化测试与全链路回归**：
+   - `test/dom/test_storage.cp`：纯 CP 原生测试 100% 全部通过（验证增删改查、key 索引遍历、同源桶隔离）；
+   - `test/e2e/run_all.js`：Node.js E2E 测试套件 100% 通过；
+   - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+   - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

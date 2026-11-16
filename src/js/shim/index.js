@@ -177,6 +177,20 @@ function installShim(global) {
       return animationsFor(this);
     }, "getAnimations");
 
+    let docTitle = "";
+    Object.defineProperty(docProto, "title", {
+      get: function () {
+        const el = this.querySelector ? this.querySelector("title") : null;
+        return el ? (el.textContent || "") : docTitle;
+      },
+      set: function (v) {
+        docTitle = String(v);
+        const el = this.querySelector ? this.querySelector("title") : null;
+        if (el) el.textContent = docTitle;
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(docProto, "timeline", {
       get: function () { return globalDocTimeline; },
       configurable: true,

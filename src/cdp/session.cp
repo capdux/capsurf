@@ -115,6 +115,7 @@ pub struct CdpPageSession {
             scroll_y: 0.0,
         };
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
+        ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank") catch {};
         return ptr;
     }
 
@@ -168,6 +169,39 @@ pub struct CdpPageSession {
         _.scroll_y = 0.0;
     }
 
+fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
+    let out_idx: usize = 0;
+    let i: usize = 0;
+    while (i < src.len && out_idx + 2 <= dst.len) : (i += 1) {
+        const c = src[i];
+        if (c == '"') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = '"';
+            out_idx += 2;
+        } else if (c == '\\') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = '\\';
+            out_idx += 2;
+        } else if (c == '\n') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 'n';
+            out_idx += 2;
+        } else if (c == '\r') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 'r';
+            out_idx += 2;
+        } else if (c == '\t') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 't';
+            out_idx += 2;
+        } else {
+            dst[out_idx] = c;
+            out_idx += 1;
+        }
+    }
+    return dst[0..out_idx];
+}
+
     pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
         const val = _.ctx.eval(expr);
         defer _.ctx.freeValue(val);
@@ -175,19 +209,30 @@ pub struct CdpPageSession {
         if (jsIsException(val)) {
             const exc = _.ctx.getException();
             defer _.ctx.freeValue(exc);
-            const err_json = "{\"result\":{\"type\":\"undefined\",\"description\":\"EvaluationException\"}}";
-            const len = @min(err_json.len, out_buf.len);
-            @memcpy(out_buf[0..len], err_json[0..len]);
-            return len;
+            const exc_str = _.ctx.toCString(exc);
+            defer std.heap.page_allocator.free(exc_str);
+
+            let esc_exc_buf: [1024]u8 = [0; 1024];
+            const esc_exc = escapeJsonString(exc_str, &esc_exc_buf);
+
+            const err_json = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"description\":\"{s}\"}}}}}}",
+                .{esc_exc},
+            ) catch return 0;
+            return err_json.len;
         }
 
         const res_str = _.ctx.toCString(val);
         defer std.heap.page_allocator.free(res_str);
 
+        let esc_buf: [4096]u8 = [0; 4096];
+        const esc_str = escapeJsonString(res_str, &esc_buf);
+
         const formatted = std.fmt.bufPrint(
             out_buf,
             "{{\"result\":{{\"type\":\"string\",\"value\":\"{s}\"}}}}",
-            .{res_str},
+            .{esc_str},
         ) catch return 0;
         return formatted.len;
     }

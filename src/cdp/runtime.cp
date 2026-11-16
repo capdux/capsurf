@@ -5,6 +5,50 @@
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 
+fn unescapeJsonString(src: []const u8, dst: []u8): []const u8 {
+    let out_idx: usize = 0;
+    let i: usize = 0;
+    while (i < src.len && out_idx < dst.len) {
+        if (src[i] == '\\' && i + 1 < src.len) {
+            const next = src[i + 1];
+            if (next == 'n') {
+                dst[out_idx] = '\n';
+                out_idx += 1;
+                i += 2;
+            } else if (next == 'r') {
+                dst[out_idx] = '\r';
+                out_idx += 1;
+                i += 2;
+            } else if (next == 't') {
+                dst[out_idx] = '\t';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '"') {
+                dst[out_idx] = '"';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '\\') {
+                dst[out_idx] = '\\';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '/') {
+                dst[out_idx] = '/';
+                out_idx += 1;
+                i += 2;
+            } else {
+                dst[out_idx] = src[i];
+                out_idx += 1;
+                i += 1;
+            }
+        } else {
+            dst[out_idx] = src[i];
+            out_idx += 1;
+            i += 1;
+        }
+    }
+    return dst[0..out_idx];
+}
+
 pub struct RuntimeHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
@@ -56,8 +100,11 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.evaluate")) {
-            const expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
-            let eval_res_buf: [2048]u8 = [0; 2048];
+            const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
+            let unesc_buf: [4096]u8 = [0; 4096];
+            const expr = unescapeJsonString(raw_expr, &unesc_buf);
+
+            let eval_res_buf: [4096]u8 = [0; 4096];
             const eval_len = session.evaluate(expr, &eval_res_buf);
             const eval_slice = eval_res_buf[0..eval_len];
 
