@@ -594,6 +594,17 @@
      - `DedicatedWorker` 与 `WorkerUpstreamMessage` 直接使用只读切片 `[]const u8`，彻底消除栈内存切片悬垂引用风险；
      - `buildWorkerScriptModule` 将用户代码包裹在 CommonJS 异步运行体内，严格屏蔽全局变量污染。
 
+## Phase 26 ESM 模块依赖图谱分析、Import Map 动态解析与岛屿探测技术方案
+1. **Import Map 规范解析与前缀/作用域分级决策 (`src/eval/walk_module_graph.cp`)**：
+   - **设计动机**：现代 Web 应用（如 Next.js、Astro、Vite）广泛依赖 import map 映射模块路径。恶意或畸形 import map 可能通过极深前缀或大量规则发起计算耗尽攻击；
+   - **解决方案**：
+     - 引入 `ImportMapBudget` 计量器，严格限制计算单元 `work`（上限 400M），超限后平滑降级（`degraded = true`），避免整个引擎卡死；
+     - `ParsedImportMap` 按作用域（Scope）由长到短、精确匹配优先于前缀通配（以 `/` 结尾）的顺序执行规范化解析。
+2. **HTML 静态岛屿与 Preload 探测 (`src/eval/walk_module_graph.cp`)**：
+   - **设计动机**：为了在 JavaScript 执行前预热模块依赖，需要从 HTML 静态流中快速抓取 Astro 岛屿（`<astro-island component-url>`）与模块预加载（`<link rel="modulepreload">`）；
+   - **解决方案**：
+     - 使用轻量零分配切片扫描算法，快速捕获依赖 URL 并注入预加载种子队列。
+
 
 
 

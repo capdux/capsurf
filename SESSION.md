@@ -1481,6 +1481,27 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 22:40:00] Turn 37
+
+### **[User]**
+> 启动常驻通信进程 / 开启两个子智能体, 继续你的工作
+
+### **[Agent]**
+报告：已成功重启后台常驻任务监听守护进程（Task ID `task-10165`，`scripts/watch_task.py --status resolved --agent capsurf_agy`）。
+同时自主推进完成 Phase 26（ESM 模块依赖图谱分析、Import Map 动态解析与岛屿组件探测）：
+1. **ESM 模块依赖图与 Import Map 规范引擎 (`src/eval/walk_module_graph.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/walk-module-graph.ts`（文件头保留来源溯源注释）；
+   - 实装 `ImportMapBudget` 防 DoS 运算预算计量器（上限 400M Work Units、2MB 源码上限、16384 条目与 256 作用域限制），超时自动降级；
+   - 实装 `ParsedImportMap`（支持精确前缀匹配规则 `ImportMapRule`、作用域由深到浅特异性扫描 `ImportMapScopeGroup`、阻断条目 `is_blocked` 判定）；
+   - 实装 `astroIslandModuleUrls` 零拷贝提取 Astro 岛屿组件动态入口 URL；
+   - 实装 `extractModulePreloadSeeds` 静态分析 `<link rel="modulepreload">` 预加载种子；
+   - 实装 `buildFallbackModuleResolverSource` 生成动态兜底解析器。
+2. **自动化测试与全链路验证**：
+   - 编写并通过 `test/eval/test_walk_module_graph.cp`（6 组测试用例 100% 全部通过：URL-like 规范判定、顶层 Import 与前缀展开、Scope 作用域覆盖、Astro 岛屿解析、Preload 探测、动态解析器源码生成）；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

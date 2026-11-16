@@ -639,6 +639,15 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 26: ESM Module Dependency Graph & Static Export Analysis (100% Closed)
+- **`src/eval/walk_module_graph.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/walk-module-graph.ts`）：
+  - 实装 `ImportMapBudget` 预算计量器（400M Work Units、2MB 体积上限、16384 条目与 256 作用域限制）与降级机制；
+  - 实装 `ParsedImportMap`、`ImportMapRule` 与 `ImportMapScopeGroup`，支持精确匹配与前缀匹配；
+  - 实装 `isUrlLikeSpecifier`、`astroIslandModuleUrls`、`extractModulePreloadSeeds` 与 `buildFallbackModuleResolverSource`。
+- **测试套件与全链路验证**：
+  - `test/eval/test_walk_module_graph.cp`：全量测试 100% 全部通过（6 组测试覆盖 URL 判定、顶层映射、前缀匹配、作用域覆盖、Astro 岛屿提取与预加载分析）；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
