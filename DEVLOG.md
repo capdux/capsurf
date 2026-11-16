@@ -785,6 +785,24 @@
      - 构建 `MockFixtures.isFixtureUrl` 识别请求模式，通过 `handleFixtureRequest` 在内存中毫秒级动态构造合规 JSON 响应并注入回显头；
      - 在 `HttpLoader.fetchDocument` 中直接拦截，实现完全零外部网络依赖的自包含测试能力。
 
+## Phase 41 CDP 异常格式化、Runtime.addBinding 与防篡改生命周期事件架构方案
+1. **CDP RemoteObject 规范级异常序列化与换行契约 (`src/cdp/session.cp`)**：
+   - **设计动机**：Chrome DevTools Protocol 规范对 `Runtime.evaluate` 抛出异常时的 RemoteObject 结构有强约定：`className` 必须返回规范错误类（如 `TypeError`, `RangeError` 等），`description` 必须严格包含完整的调用堆栈或带有末尾换行符的单行描述（`TypeError: message\n`）。若缺少换行符或缺少 `className`，Vitest / Puppeteer 断言库（如 `expect(r.exceptionDetails?.exception?.className).toBe("TypeError")`）将直接失败；
+   - **解决方案**：
+     - 在 `formatCdpException` 中对异常字符串进行前缀冒号分词提取合法类名，并自动补齐末尾 `\n`；
+     - 构造完整的 `exceptionDetails` JSON 对象，精准兼容 CDP 原生测试。
+2. **CDP `Runtime.addBinding` 与 `Runtime.bindingCalled` 双向事件流水线 (`src/cdp/runtime.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`)**：
+   - **设计动机**：自动化测试工具（如 Puppeteer 的 `page.exposeFunction`）通过 `Runtime.addBinding` 向页面注入宿主通信桥梁。页面调用注入的全局函数时，引擎必须在 CDP 连接上即时派发 `Runtime.bindingCalled` 事件供测试客户端捕获并响应；
+   - **解决方案**：
+     - 采用事件队列解耦模式：在 JS Shim 中维护微型队列 `__capsurf_binding_queue`；
+     - 每次执行 `Runtime.evaluate` 返回前调用 `pollBindingEvents` 一次性排空队列并转化为标准 `CdpEvent` 广播；
+     - 在 `e2e/harness.ts` 封装 `page.exposeFunction` 与 `expect.poll`，实现双向闭环。
+3. **HTML5 页面生命周期防篡改派发与多 Runtime 类隔离 (`src/js/shim/window.js` & `src/js/dom_binding.cp`)**：
+   - **设计动机**：部分测试用例（如 `window-global-scope.e2e.test.ts`）会故意覆盖或劫持 `window.Event`，若引擎使用被篡改的构造器分发事件将抛错失败；此外，单进程跨会话创建新 `JSRuntime` 时若跳过 `JS_NewClass` 将导致段错误；
+   - **解决方案**：
+     - 早期备份 `NativeEvent = global.Event`，在 `__capsurf_dispatch_lifecycle` 与 `history` 路由跳转中始终使用未被污染的原生事件对象；
+     - 确保每一个新创建的 `raw_rt` 运行时均显式注册 `Element` 与 `Document` 类定义，根除悬垂类 ID 引发的内存访问越界。
+
 
 
 

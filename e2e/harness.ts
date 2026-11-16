@@ -162,9 +162,32 @@ export class Page {
 
   async click(selector: string): Promise<void> {
     await this.evaluate((sel: string) => {
-      const el = document.querySelector(sel);
-      if (el) (el as any).click?.();
+      const el: any = document.querySelector(sel);
+      if (el) {
+        try {
+          const EvCls = (globalThis as any).__NativeEvent || Event;
+          const ev = new EvCls("click", { bubbles: true });
+          el.dispatchEvent?.(ev);
+        } catch (e) {
+          el.click?.();
+        }
+      }
     }, selector);
+  }
+
+  async type(selector: string, text: string): Promise<void> {
+    await this.evaluate((sel: string, txt: string) => {
+      const el: any = document.querySelector(sel);
+      if (el) {
+        el.focus?.();
+        el.value = (el.value || "") + txt;
+        try {
+          const EvCls = (globalThis as any).__NativeEvent || Event;
+          const ev = new EvCls("input", { bubbles: true });
+          el.dispatchEvent?.(ev);
+        } catch (e) {}
+      }
+    }, selector, text);
   }
 
   async setContent(html: string): Promise<void> {
@@ -172,8 +195,16 @@ export class Page {
   }
 
   async exposeFunction(name: string, fn: (...args: any[]) => any): Promise<void> {
-    // expose function binding stub
-    await this.evaluate(`window[${JSON.stringify(name)}] = function(...args) { return Promise.resolve(); }`);
+    await this.cdp.send("Runtime.addBinding", { name });
+    const fnSource = fn.toString();
+    await this.evaluate(`
+      window[${JSON.stringify(name)}] = function(...args) {
+        return Promise.resolve((${fnSource})(...args));
+      };
+      if (typeof globalThis !== "undefined") {
+        globalThis[${JSON.stringify(name)}] = window[${JSON.stringify(name)}];
+      }
+    `);
   }
 
   async close(): Promise<void> {}

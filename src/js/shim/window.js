@@ -2,6 +2,13 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/window.ts
 
 function installWindow(global) {
+  const NativeEvent = global.Event || function (type, init) {
+    this.type = type;
+    this.bubbles = !!init?.bubbles;
+    this.cancelable = !!init?.cancelable;
+  };
+  global.__NativeEvent = NativeEvent;
+
   // 1. Storage: localStorage & sessionStorage
   function Storage() {
     this._data = new Map();
@@ -115,20 +122,70 @@ function installWindow(global) {
   };
   global.location = locationObj;
 
+  const historyStack = [{ state: null, url: currentHref }];
+  let historyIdx = 0;
+
   const historyObj = {
-    length: 1,
-    state: null,
+    get length() { return historyStack.length; },
+    get state() { return historyStack[historyIdx]?.state ?? null; },
     pushState: markNative(function (st, title, url) {
-      this.state = st;
-      if (url) locationObj.href = url;
+      if (url) {
+        try {
+          const oldUrl = currentHref;
+          const newUrl = new URL(url, currentHref).href;
+          currentHref = newUrl;
+          if (oldUrl.split("#")[0] === newUrl.split("#")[0] && newUrl.includes("#")) {
+            setTimeout(() => {
+              try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+            }, 0);
+          }
+        } catch (e) {
+          currentHref = String(url);
+        }
+      }
+      historyIdx++;
+      historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: st, url: currentHref });
     }, "pushState"),
     replaceState: markNative(function (st, title, url) {
-      this.state = st;
-      if (url) locationObj.href = url;
+      if (url) {
+        try { currentHref = new URL(url, currentHref).href; } catch (e) { currentHref = String(url); }
+      }
+      historyStack[historyIdx] = { state: st, url: currentHref };
     }, "replaceState"),
-    back: markNative(function () {}, "back"),
-    forward: markNative(function () {}, "forward"),
-    go: markNative(function () {}, "go"),
+    back: markNative(function () {
+      if (historyIdx > 0) {
+        historyIdx--;
+        currentHref = historyStack[historyIdx].url;
+        setTimeout(() => {
+          try {
+            global.dispatchEvent(new NativeEvent("popstate"));
+          } catch (e) {}
+        }, 0);
+      }
+    }, "back"),
+    forward: markNative(function () {
+      if (historyIdx + 1 < historyStack.length) {
+        historyIdx++;
+        currentHref = historyStack[historyIdx].url;
+        setTimeout(() => {
+          try {
+            global.dispatchEvent(new NativeEvent("popstate"));
+          } catch (e) {}
+        }, 0);
+      }
+    }, "forward"),
+    go: markNative(function (delta) {
+      const target = historyIdx + (Number(delta) || 0);
+      if (target >= 0 && target < historyStack.length) {
+        historyIdx = target;
+        currentHref = historyStack[historyIdx].url;
+        setTimeout(() => {
+          try {
+            global.dispatchEvent(new NativeEvent("popstate"));
+          } catch (e) {}
+        }, 0);
+      }
+    }, "go"),
   };
   global.history = historyObj;
 
@@ -968,6 +1025,44 @@ function installWindow(global) {
   if (typeof globalThis !== "undefined") {
     globalThis.CSSStyleDeclaration = CSSStyleDeclaration;
     globalThis.getComputedStyle = getComputedStyle;
+  }
+
+  // 12. CDP Runtime.addBinding & Runtime.bindingCalled queue
+  global.__capsurf_binding_queue = [];
+  global.__capsurf_call_binding = function (name, payload) {
+    global.__capsurf_binding_queue.push({
+      name: String(name),
+      payload: String(payload),
+    });
+  };
+  global.__capsurf_drain_bindings = function () {
+    const q = global.__capsurf_binding_queue || [];
+    global.__capsurf_binding_queue = [];
+    return JSON.stringify(q);
+  };
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_binding_queue = global.__capsurf_binding_queue;
+    globalThis.__capsurf_call_binding = global.__capsurf_call_binding;
+    globalThis.__capsurf_drain_bindings = global.__capsurf_drain_bindings;
+  }
+
+  // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
+  global.__capsurf_dispatch_lifecycle = function () {
+    try {
+      if (global.document && global.document.dispatchEvent) {
+        const dcl = new NativeEvent("DOMContentLoaded", { bubbles: true, cancelable: false });
+        global.document.dispatchEvent(dcl);
+      }
+    } catch (e) {}
+    try {
+      if (global.dispatchEvent) {
+        const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
+        global.dispatchEvent(loadEv);
+      }
+    } catch (e) {}
+  };
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_dispatch_lifecycle = global.__capsurf_dispatch_lifecycle;
   }
 
   // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])

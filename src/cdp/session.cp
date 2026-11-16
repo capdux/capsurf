@@ -63,6 +63,7 @@ pub struct CdpPageSession {
     log_event_buf: [1024]u8 = [0; 1024],
     rt_ctx_event_buf: [512]u8 = [0; 512],
     page_frame_event_buf: [2048]u8 = [0; 2048],
+    binding_event_buf: [1024]u8 = [0; 1024],
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
@@ -110,6 +111,7 @@ pub struct CdpPageSession {
             log_event_buf: [0; 1024],
             rt_ctx_event_buf: [0; 512],
             page_frame_event_buf: [0; 2048],
+            binding_event_buf: [0; 1024],
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,
@@ -199,6 +201,10 @@ pub struct CdpPageSession {
                 }
             }
         }
+
+        // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
+        const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
+        _.ctx.freeValue(lc_res);
     }
 
 fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
@@ -238,13 +244,31 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
         const exc_str = _.ctx.toCString(exc);
         defer std.heap.page_allocator.free(exc_str);
 
-        let esc_exc_buf: [1024]u8 = [0; 1024];
-        const esc_exc = escapeJsonString(exc_str, &esc_exc_buf);
+        // Extract className: e.g. "TypeError", "RangeError", "SyntaxError", "Error"
+        let class_name: []const u8 = "Error";
+        if (colon_idx := std.mem.indexOf(u8, exc_str, ":")) {
+            const prefix = exc_str[0..colon_idx];
+            if (prefix.len > 0 && std.mem.indexOf(u8, prefix, " ") == null) {
+                class_name = prefix;
+            }
+        }
+
+        // Format description with trailing newline according to CDP error specs
+        let desc_buf: [2048]u8 = [0; 2048];
+        let desc_slice: []const u8 = "";
+        if (exc_str.len > 0 && exc_str[exc_str.len - 1] == '\n') {
+            desc_slice = exc_str;
+        } else {
+            desc_slice = std.fmt.bufPrint(&desc_buf, "{s}\n", .{exc_str}) catch exc_str;
+        }
+
+        let esc_exc_buf: [2048]u8 = [0; 2048];
+        const esc_exc = escapeJsonString(desc_slice, &esc_exc_buf);
 
         const err_json = std.fmt.bufPrint(
             out_buf,
-            "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"description\":\"{s}\"}}}}}}",
-            .{esc_exc},
+            "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\"}}}}}}",
+            .{ class_name, esc_exc },
         ) catch return 0;
         return err_json.len;
     }
@@ -462,6 +486,61 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
             return ev_idx;
         }
         return 0;
+    }
+
+    pub fn addBinding(*_, name: []const u8) {
+        let script_buf: [512]u8 = [0; 512];
+        const script = std.fmt.bufPrint(
+            &script_buf,
+            "(function(){{const n=\"{s}\";const fn=function(p){{if(typeof __capsurf_call_binding==='function')__capsurf_call_binding(n,p);}};globalThis[n]=fn;if(typeof window!=='undefined')window[n]=fn;}})()",
+            .{name},
+        ) catch return;
+        const v = _.ctx.eval(script);
+        _.ctx.freeValue(v);
+    }
+
+    pub fn pollBindingEvents(*_, out_events: []CdpEvent): usize {
+        const drain_expr = "(function(){if(typeof __capsurf_drain_bindings==='function')return __capsurf_drain_bindings();return '[]';})()";
+        const val = _.ctx.eval(drain_expr);
+        defer _.ctx.freeValue(val);
+
+        const json_str = _.ctx.toCString(val);
+        defer std.heap.page_allocator.free(json_str);
+
+        if (json_str.len <= 2) return 0;
+
+        let ev_idx: usize = 0;
+        let pos: usize = 0;
+        while (ev_idx < out_events.len) {
+            const name_marker = "\"name\":\"";
+            const name_start_opt = std.mem.indexOfPos(u8, json_str, pos, name_marker);
+            if (name_start_opt == null) break;
+            const name_start = name_start_opt.? + name_marker.len;
+            const name_end_opt = std.mem.indexOfPos(u8, json_str, name_start, "\"");
+            if (name_end_opt == null) break;
+            const name = json_str[name_start..name_end_opt.?];
+
+            const payload_marker = "\"payload\":\"";
+            const payload_start_opt = std.mem.indexOfPos(u8, json_str, name_end_opt.?, payload_marker);
+            if (payload_start_opt == null) break;
+            const payload_start = payload_start_opt.? + payload_marker.len;
+            const payload_end_opt = std.mem.indexOfPos(u8, json_str, payload_start, "\"");
+            if (payload_end_opt == null) break;
+            const payload = json_str[payload_start..payload_end_opt.?];
+
+            pos = payload_end_opt.? + 1;
+
+            const rt_json = std.fmt.bufPrint(
+                &_.binding_event_buf,
+                "{{\"name\":\"{s}\",\"payload\":\"{s}\",\"executionContextId\":1}}",
+                .{ name, payload },
+            ) catch break;
+
+            out_events[ev_idx] = CdpEvent.create("Runtime.bindingCalled", rt_json);
+            ev_idx += 1;
+        }
+
+        return ev_idx;
     }
 
     pub fn formatExecutionContextEvent(*_, origin: []const u8): []const u8 {

@@ -886,6 +886,28 @@
   - 独立单二进制：`bin/main`（9.2MB）构建成功；
   - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 41: CDP Exception Details, Runtime.addBinding & Anti-Tampering Lifecycle Events (100% Closed)
+- **`src/cdp/session.cp`**：
+  - 重构 `formatCdpException`：准确提取 `className`（如 `"TypeError"`），构造末尾带换行符的完整 `description: "TypeError: ...\n"`，严格遵循 CDP RemoteObject 错误载荷规范；
+  - 新增 `addBinding(name)` 与 `pollBindingEvents(&out_events)`，在每次 `Runtime.evaluate` 评估完毕后自动消费并派发 `Runtime.bindingCalled` 事件；
+  - 在 `session.navigate` 解析完脚本后触发 `__capsurf_dispatch_lifecycle` 派发生命周期事件。
+- **`src/cdp/runtime.cp`**：
+  - 实装 `Runtime.addBinding` 请求分发处理，解析 `name` 参数并注册绑定；
+  - 在 `Runtime.evaluate` 返回前排空与推入 `Runtime.bindingCalled` CDP 事件。
+- **`src/js/dom_binding.cp`**：
+  - 修复多 Runtime 实例下的类注册 Bug：确保对每一个新创建的 `raw_rt` 均保证调用 `JS_NewClass`，消除单进程切换会话时的段错误。
+- **`src/js/shim/window.js`**：
+  - 固化宿主底层 `NativeEvent = global.Event`；
+  - 实装 `__capsurf_dispatch_lifecycle`：以原生事件派发 `DOMContentLoaded`（至 `document`）与 `load`（至 `window`），防范页面代码劫持覆写；
+  - 升级 `history` 路由栈（`pushState`, `replaceState`, `back`, `forward`, `go`），以 `NativeEvent` 派发 `popstate` 与 `hashchange`。
+- **`e2e/harness.ts`**：
+  - 实装 Puppeteer 规范的 `page.exposeFunction(name, fn)`、`page.click`、`page.type` 与 `expect.poll` 轮询匹配断言器。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_runtime_bindings.cp`：纯 CP 原生单元测试 100% 全部通过；
+  - `bun test`：全量 12 套 `.e2e.test.ts` 测试套件（23 个用例，50 项 expect 断言）100% 绿色通过（仅耗时 2.67s）；
+  - 独立单二进制：`bin/main`（9.2MB）构建成功；
+  - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

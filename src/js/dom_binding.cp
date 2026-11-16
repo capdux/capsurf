@@ -698,27 +698,27 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
 
     if (g_element_class_id == 0) {
         * = JS_NewClassID(raw_rt, &g_element_class_id);
-        const el_class_def = JSClassDef {
-            class_name: "Element",
-            finalizer: js_element_finalizer,
-            gc_mark: null,
-            call_fn: null,
-            exotic: null,
-        };
-        * = JS_NewClass(raw_rt, g_element_class_id, &el_class_def);
     }
+    const el_class_def = JSClassDef {
+        class_name: "Element",
+        finalizer: js_element_finalizer,
+        gc_mark: null,
+        call_fn: null,
+        exotic: null,
+    };
+    * = JS_NewClass(raw_rt, g_element_class_id, &el_class_def);
 
     if (g_document_class_id == 0) {
         * = JS_NewClassID(raw_rt, &g_document_class_id);
-        const doc_class_def = JSClassDef {
-            class_name: "Document",
-            finalizer: null,
-            gc_mark: null,
-            call_fn: null,
-            exotic: null,
-        };
-        * = JS_NewClass(raw_rt, g_document_class_id, &doc_class_def);
     }
+    const doc_class_def = JSClassDef {
+        class_name: "Document",
+        finalizer: null,
+        gc_mark: null,
+        call_fn: null,
+        exotic: null,
+    };
+    * = JS_NewClass(raw_rt, g_document_class_id, &doc_class_def);
 
     // Setup Element Prototype
     const el_proto = JS_NewObject(raw_ctx);

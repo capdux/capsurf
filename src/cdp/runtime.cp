@@ -99,6 +99,16 @@ pub struct RuntimeHandler {
             return CdpResponse.ok(req.id, res);
         }
 
+        if (std.mem.eql(u8, req.method, "Runtime.addBinding")) {
+            const raw_name = extractJsonString(req.params_raw, "name") ?? "";
+            let name_buf: [128]u8 = [0; 128];
+            const name = unescapeJsonString(raw_name, &name_buf);
+            if (name.len > 0) {
+                session.addBinding(name);
+            }
+            return CdpResponse.ok(req.id, "{}");
+        }
+
         if (std.mem.eql(u8, req.method, "Runtime.evaluate")) {
             const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
             let unesc_buf: [4096]u8 = [0; 4096];
@@ -114,6 +124,15 @@ pub struct RuntimeHandler {
             let p_i: usize = 0;
             while (p_i < polled_count && event_count.* < out_events.len) : (p_i += 1) {
                 out_events[event_count.*] = polled_evts[p_i];
+                event_count.* += 1;
+            }
+
+            // Poll any binding events produced during evaluation
+            let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
+            let b_i: usize = 0;
+            while (b_i < polled_b_count && event_count.* < out_events.len) : (b_i += 1) {
+                out_events[event_count.*] = polled_binding_evts[b_i];
                 event_count.* += 1;
             }
 
