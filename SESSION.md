@@ -1005,3 +1005,43 @@
    - 编写并通过 `test/net/test_security_gate.cp`（3/3 全部通过，覆盖 Referrer-Policy 解析/信任判定、跨域与降级决策计算、CSP 策略解析与指令源放行判定）；
    - 运行并通过原 `test/cdp/test_cdp_network_fetch.cp`（3/3 全部通过，涵盖 Emulation、Fetch、Network 域）；
    - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+---
+
+## [2026-11-16 14:40:00] Turn 20
+
+### **[Agent]**
+全面推进并闭环 Phase 10（CDP Debugger 域协议栈、零内存分配二进制图片尺寸嗅探器与 CookieJar 多租户隔离分区）：
+1. **CDP Debugger 域协议引擎与脚本管理 (`src/cdp/debugger.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/debugger.ts`（文件头保留来源溯源注释）；
+   - 实装 `CompiledScriptMeta` 编译脚本元数据结构体与 `DebuggerState` 状态容器，管理已编译脚本清单与调试开关；
+   - 实装 `DebuggerHandler`，完整支撑 `Debugger.enable`、`Debugger.disable`、`Debugger.getScriptSource`，以及 Playwright/Puppeteer 驱动初始化必调桩：`Debugger.setSkipAllPauses`、`Debugger.setBreakpointsActive`、`Debugger.setPauseOnExceptions`、`Debugger.setAsyncCallStackDepth`、`Debugger.setBlackboxPatterns`、`Debugger.setBlackboxedRanges`；
+   - 实装 `emitScriptParsedEvent`：在 `Debugger.enable` 激活时自动向连接扇出广播已加载脚本的 `Debugger.scriptParsed` CDP 事件；
+   - 命名空间隔离：内部 JSON 转义重命名为 `escapeDebuggerJson`，根除跨模块同名符号冲突。
+2. **零内存分配高速二进制图片尺寸嗅探器 (`src/render/image_dims.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/image-dims.ts`（文件头保留来源溯源注释）；
+   - 针对无头渲染流水线资源预加载排版，实装纯二进制字节魔数嗅探：
+     - PNG：解析 8 字节魔数及 IHDR 块提取大端 `width`/`height`；
+     - GIF：解析 `GIF87a`/`GIF89a` 签名提取小端逻辑屏幕尺寸；
+     - BMP：解析 `BM` 签名及 DIB 块头提取尺寸（支持正负高）；
+     - JPEG：解析 `FF D8 FF` 并在分段标记中扫描 `SOF0`/`SOF2`（`FF C0`/`FF C2`）提取大端宽高；
+     - WebP：解析 `RIFF....WEBP` 容器头，支持 `VP8 `（有损）、`VP8L`（无损位流）与 `VP8X`（扩展块）；
+     - SVG：快速扫描 `<svg` 根标签与 XML 声明。
+3. **多租户 CookieJar 隔离分区注册表 (`src/net/cookie_jar_registry.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/cookie-jar-registry.ts`（文件头保留来源溯源注释）；
+   - 采用 Struct-of-Arrays (SoA) 与 2048 字节扁平连续定长键缓冲存储，消除 Zig 切片指针逃逸报错与动态分配；
+   - 实装 `makeKey(conn_id, browser_context_id)` 复合键生成，支持以连接级（如 `conn-1`）与多上下文（如 `conn-1::ctx-A`）精准隔离多智能体并发 Cookie；
+   - 实装 `registerCookieJar`、`getCookieJar`、`unregisterCookieJar` 与 `unregisterConnection`（批量级联清理连接下所有上下文分区）。
+4. **CDP 会话分发集成 (`src/cdp/session.cp` & `src/cdp/dispatch.cp`)**：
+   - 在 `CdpPageSession` 中挂载 `debugger_state: DebuggerState`；
+   - 在 `CdpDispatcher.dispatch` 中路由接管所有 `Debugger.*` 协议方法，协同 `Page` / `Runtime` 域完整闭环。
+5. **上游编译器工单提交与留痕**：
+   - 探测并定位 `cpc -b`（BEAM 模式）在非 actor 结构体普通方法与函数中无条件发射 `return beam.Beam.makeAtom(ctx.self.env.?, "ok");` 导致 `ctx` 未声明的缺陷；
+   - 提炼 9 行最小可复现用例 `temp/repro_beam_non_actor_return.cp`；
+   - 规范化提交工单 `task-capsurf-20261116-beam-non-actor-return` 至 `/data/dev/cp/.tasks/pending/` 由 `cp agy` 处理，主智能体后台守护进程 `watch_task.py` 持续监听中。
+6. **自动化测试套件与驱动验证**：
+   - 编写并通过 `test/cdp/test_debugger_protocol.cp`（2/2 全部通过，覆盖调试生命周期、脚本注册、scriptParsed 事件生成以及驱动兼容桩）；
+   - 编写并通过 `test/render/test_image_dims.cp`（2/2 全部通过，覆盖 6 种主流图片格式快速尺寸嗅探与多租户 CookieJar 注册表全生命周期）；
+   - 运行并通过 `scripts/test_driver_playwright.js`（11 步端到端流程 100% 绿色通过）；
+   - 独立二进制构建验证：`touch src/main.cp && cap build src/main.cp -f` 成功生成 8.4MB 单二进制 `bin/main`；
+   - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

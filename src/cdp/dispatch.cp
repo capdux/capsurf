@@ -15,6 +15,7 @@ import { FetchHandler } from "./fetch.cp";
 import { AccessibilityHandler } from "./accessibility.cp";
 import { WebMcpHandler } from "./webmcp.cp";
 import { LogHandler } from "./log.cp";
+import { DebuggerHandler } from "./debugger.cp";
 
 pub struct CdpDispatcher {
     pub static fn dispatch(
@@ -125,6 +126,18 @@ pub struct CdpDispatcher {
                 out_events[i] = log_evts[i];
             }
             event_count.* = @min(log_cnt, out_events.len);
+            return resp;
+        }
+
+        if (std.mem.startsWith(u8, req.method, "Debugger.")) {
+            let dbg_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            let dbg_cnt: usize = 0;
+            const resp = DebuggerHandler.handle(session, &session.debugger_state, req, out_buf, &dbg_evts, &dbg_cnt);
+            let i: usize = 0;
+            while (i < dbg_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = dbg_evts[i];
+            }
+            event_count.* = @min(dbg_cnt, out_events.len);
             return resp;
         }
 

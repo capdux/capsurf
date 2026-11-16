@@ -295,3 +295,29 @@
      - `schemeMatches` 支持安全协议向上升级匹配（http 放行至 https，ws 放行至 wss）；
      - `hostMatches` 精确区分泛域名通配（`*.domain.com` 不匹配父域 `domain.com`，匹配 `sub.domain.com`）；
      - `isSourceAllowed` 实现指令特异性覆盖（优先读取 `script-src` / `connect-src`，缺省时自动回退至 `default-src`）。
+
+
+## Phase 10 CDP Debugger 协议域、二进制图片尺寸嗅探器与多租户 CookieJar 分区技术方案
+1. **CDP Debugger 域协议引擎与脚本管理 (`src/cdp/debugger.cp`)**：
+   - **架构设计**：完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/debugger.ts`，管理预编译脚本与运行时注入脚本的元数据（`CompiledScriptMeta`）；
+   - **Playwright/Puppeteer 协议兼容桩**：真实浏览器驱动在初次连接时会密集调用 `Debugger.setSkipAllPauses`、`Debugger.setBreakpointsActive`、`Debugger.setPauseOnExceptions`、`Debugger.setAsyncCallStackDepth`、`Debugger.setBlackboxPatterns`、`Debugger.setBlackboxedRanges`。若未实现这些协议桩，驱动会抛出 `ProtocolError: Debugger.setSkipAllPauses not found` 并阻断自动化链路。通过在 `DebuggerHandler` 中提供完整协议应答，确保驱动顺利进入主控制流；
+   - **事件主动广播**：在收到 `Debugger.enable` 请求时，遍历已登记脚本并向客户端发送 `Debugger.scriptParsed` 事件，打通源码映射与断点预埋链路。
+2. **零内存分配高速二进制图片尺寸嗅探器 (`src/render/image_dims.cp`)**：
+   - **性能动机**：在无头排版流水线中，如果为获取 `<img>` 标签的宽高而每次调用完整解码器（libpng/libjpeg），将耗费数十毫秒 CPU 时间。通过直接解析二进制文件头（只需读取前 32~512 字节），能在百纳秒级别完成尺寸提取，使百万 Agent 并发场景下的页面首次排版性能提升数十倍；
+   - **实现亮点**：
+     - PNG：读取 `IHDR` 块的 4 字节大端整数；
+     - GIF：读取第 6~10 字节小端屏幕宽高；
+     - BMP：解析 `BITMAPINFOHEADER` 结构头（支持负高度绝对值转换）；
+     - JPEG：扫描跳过 `APP0`~`APP15`、`DQT`、`DHT` 段，命中 `SOF0`（Baseline）或 `SOF2`（Progressive）时提取 16 位大端宽高；
+     - WebP：支持 VP8（有损 14 位尺寸带缩放因子）、VP8L（无损位流 14 位宽度与高度）与 VP8X（扩展头 24 位画布宽高）；
+     - SVG：快速匹配 `<svg` 与 `xmlns`。
+3. **多租户 CookieJar 隔离分区与 Zig 切片指针逃逸排障 (`src/net/cookie_jar_registry.cp`)**：
+   - **问题定位**：若在结构体数组中返回嵌套字段的指针（如 `return &_.entries[i].jar;`），`cpc` 编译器在 AST 降低时可能丢弃取地址符 `&`，导致类型推导报错 `expected ?*T, found T`；同时 2D 数组初始化器 `[[0; 128]; 16]` 会降低为不合法的 Zig `@splat` 结构；
+   - **解决方案**：
+     - 采用 Struct-of-Arrays (SoA) 内存布局，`jars: [16]CookieJar` 与 `key_storage: [2048]u8` 平铺连续内存；
+     - 通过 `let slice: []CookieJar = _.jars[i .. i + 1]; unsafe { return @ptrCast(slice.ptr); }` 精确满足生命周期安全与 Zig 指针类型要求；
+     - 实装 `makeKey` 复合键与级联卸载 `unregisterConnection`，实现百万 Agent 实例间无干扰的隔离环境。
+4. **上游编译器工单排障记录与根因分析 (`cpc -b` BEAM 模式下的普通方法返回)**：
+   - **排障定位**：当运行 `cap build src/main.cp -b`（Nest 容器动态库模式）时，`cpc` 编译报错 `error: use of undeclared identifier 'ctx'`；
+   - **代码溯源**：在 `/data/dev/cp/cpc/src/codegen/stmt.rs:2055` 中，`Stmt::Return(None)` 分支内无条件对 `is_beam_mode` 生成了 `return beam.Beam.makeAtom(ctx.self.env.?, "ok");`，即便当前函数并非 actor 方法（无 `ctx` 局部上下文），导致所有常规结构体普通方法与模块函数出现 `ctx` 未声明错误；
+   - **规范闭环**：提炼 9 行最小复现代码 `temp/repro_beam_non_actor_return.cp`，规范提交工单 `task-capsurf-20261116-beam-non-actor-return` 至 `/data/dev/cp/.tasks/pending/`，后台守护进程持续监听中。

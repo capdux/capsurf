@@ -15,6 +15,7 @@ import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
+import { DebuggerState } from "./debugger.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -48,6 +49,7 @@ pub struct CdpPageSession {
     runtime_enabled: bool = false,
     log_enabled: bool = false,
     dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
+    debugger_state: DebuggerState = DebuggerState{},
 
     // Dedicated buffers for event formatting
     console_event_buf: [1024]u8 = [0; 1024],
@@ -93,6 +95,7 @@ pub struct CdpPageSession {
             runtime_enabled: false,
             log_enabled: false,
             dedicated_workers: DedicatedWorkerPool.init(),
+            debugger_state: DebuggerState{},
             console_event_buf: [0; 1024],
             log_event_buf: [0; 1024],
             rt_ctx_event_buf: [0; 512],

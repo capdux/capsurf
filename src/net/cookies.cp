@@ -243,7 +243,7 @@ pub fn parseSetCookie(raw: []const u8): ParsedSetCookie? {
 }
 
 pub struct CookieJar {
-    allocator: std.mem.Allocator,
+    allocator: std.mem.Allocator = std.heap.page_allocator,
     entries: std.ArrayListUnmanaged(CookieEntry) = std.ArrayListUnmanaged(CookieEntry).empty,
     clock_skew_ms: i64 = 0,
     seq: i64 = 0,
