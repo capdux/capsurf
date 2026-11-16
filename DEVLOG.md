@@ -478,6 +478,26 @@
      - 封装 `releaseFrameDom` 与 `releaseTargetDom`，确保作用域析构（RAII）与 Arena 批量回收协调运作，保障百万 Agent 并发场景下的极速内存平复。
 
 
+## Phase 19 标签跨度单调提取、脚本预检策略网关与 Isolate 资源治理技术方案
+1. **单调游标无回溯 HTML 标签跨度扫描 (`src/html/tag_spans.cp`)**：
+   - **设计动机**：在页面预处理（如提取/剥离 `<script>` 或 `<meta>`）阶段，如果使用正则表达式或全量 DOM 树构建，前者易受超长字符串畸形标签引发灾难性回溯爆炸（ReDoS），后者会带来极高的解析与内存开销；
+   - **解决方案**：
+     - 采用单调递增游标（Monotone Cursor）扫描算法，在字符流中顺序识别开标签与闭标签（`closingTagEnd`）；
+     - 提供 `removeHtmlTagSpans`：以单次前向切片拷贝跳过所有匹配 span，避免反复产生动态字符串中间分配，达到 $O(N)$ 线性时间与空间开销。
+2. **脚本加载前策略网关 (`src/eval/script_gate.cp`)**：
+   - **设计动机**：网页中的外链脚本可能违背 CSP 策略或包含不安全引用。必须在发起网络 Fetch 前基于页面安全规则执行快速决策，拦截未授权脚本；
+   - **解决方案**：
+     - 实现 RFC 3986 路径规范化算法 `resolveScriptUrl`（准确处理 `../`、`./` 点段消除）；
+     - 接入 `src/net/csp.cp` 的 `isSourceAllowed`，支持 Nonce、SRI SHA 校验与 Host 准入判定，为后续脚本沙箱执行建立硬性防线。
+3. **Isolate 资源配额通知与隔离标定 (`src/eval/limit_registry.cp`, `src/eval/isolate_id.cp` & `src/cdp/arrival.cp`)**：
+   - **设计动机**：多 Agent 高频并发场景下，部分脚本可能陷入死循环（CPU/Wall 时间超限）或触顶内存阈值。引擎必须能在 Reductions 中断或 V8/QuickJS 钩子触发时将超限通知精准派发给对应脚本所有者，并实现失效代（retired generation）的及时扫除；
+   - **解决方案**：
+     - `LimitRegistry` 维护 64 槽定长注册表，在容量满时优先清理 `is_live_fn` 返回 false 的失效监听项，支持基于所有者（Owner）与 TargetId 的批量解绑；
+     - `engineIsolateId` 基于 Linux CSPRNG 生成唯一 UUID，提供 `isForeignIsolate` 防止网络回环误判；
+     - `ArrivalTracker` 采用定长 512 槽 LRU 映射，精确记录请求到达与事件派发的时间差，为调试分析与延迟洞察提供基准数据。
+
+
+
 
 
 

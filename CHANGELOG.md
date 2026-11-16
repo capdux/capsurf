@@ -533,6 +533,26 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 19: Markup Tag Spans, Script Policy Gate, Isolate Limits & Arrival (100% Closed)
+- **`src/html/tag_spans.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/html-tag-spans.ts`）：
+  - 实装单调线性游标扫描算法：`htmlTagSpans` 与 `removeHtmlTagSpans`，支持 `<script>`, `<noscript>`, `<meta>`, `<astro-island>` 标签跨度提取与剥离，彻底杜绝正则回溯。
+- **`src/eval/script_gate.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/script-gate.ts`）：
+  - 实装脚本 URL 解析 `resolveScriptUrl` 与 `<base href>` 计算 `documentBaseUrl`；
+  - 实装预检策略决策门禁 `checkScriptPolicy`，支持 Nonce、SRI hash、URL Host 与 CSP3 内联脚本安全拦截。
+- **`src/eval/limit_registry.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/limit-registry.ts`）：
+  - 实装 `LimitRegistry`（支持 `cpu`, `memory`, `wall`, `gone`, `crashed` 单次超限通知路由，支持所有者与 TargetId 批量自动扫除、`isIsolateGoneError` 捕获）。
+- **`src/eval/isolate_id.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/isolate-id.ts`）：
+  - 实装 `engineIsolateId`（RFC 4122 v4 UUID 生成与保持）与 `isForeignIsolate`。
+- **`src/cdp/arrival.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/arrival.ts`）：
+  - 实装 `ArrivalTracker`（512 槽定长 LRU 映射，支持 `markArrival` 与 `arrivalOf`）。
+- **测试套件与全链路验证**：
+  - `test/eval/test_tag_spans_script_gate.cp`：全量测试 100% 全部通过（标签扫描、剥离清洗、base href 解析、点段规范化与 CSP 拦截）；
+  - `test/eval/test_limit_arrival.cp`：全量测试 100% 全部通过（配额通知、失效代清理、所有者注销、UUID 校验、512 槽淘汰）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

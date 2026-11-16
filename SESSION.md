@@ -1284,6 +1284,30 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 20:05:00] Turn 30
+
+### **[Agent]**
+全面推进并闭环 Phase 19（单调 HTML 标签跨度提取、脚本预检策略网关、Isolate 资源配额通知与隔离标定系统）：
+1. **HTML 标签跨度提取与脚本预检决策网关 (`src/html/tag_spans.cp` & `src/eval/script_gate.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/html-tag-spans.ts` 与 `vendor/kitesurf/packages/engine/src/eval/script-gate.ts`（文件头保留来源溯源注释）；
+   - 实装单调无回溯游标算法 `htmlTagSpans` 与 `removeHtmlTagSpans`，支持查找与剥离 `<script>`, `<noscript>`, `<meta>`, `<astro-island>` 标签跨度，杜绝正则灾难性回溯；
+   - 实装 RFC 3986 点段规范化算法 `resolveScriptUrl` 与 `<base href>` 计算 `documentBaseUrl`；
+   - 实装预检策略决策门禁 `checkScriptPolicy`：联动 `src/net/csp.cp`，支持 Nonce、SRI hash 完整性校验、Host 准入判定与 CSP3 内联脚本安全拦截。
+2. **Isolate 资源配额通知路由、引擎标定与到达时间追踪 (`src/eval/limit_registry.cp`, `src/eval/isolate_id.cp` & `src/cdp/arrival.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/limit-registry.ts`、`vendor/kitesurf/packages/engine/src/eval/isolate-id.ts` 与 `vendor/kitesurf/packages/engine/src/cdp/arrival.ts`（文件头保留来源溯源注释）；
+   - `LimitRegistry`：支持最多 64 个监听槽位，提供 `cpu` / `memory` / `wall` / `gone` / `crashed` 单次超限通知，支持所有者与 TargetId 批量自动扫除、`isIsolateGoneError` 正则捕获；
+   - `engineIsolateId`：基于 Linux CSPRNG 生成与维护唯一 RFC 4122 v4 UUID，支持 `isForeignIsolate` 跨跳回环检测；
+   - `ArrivalTracker`：定长 512 槽位与 LRU 自动淘汰，提供请求毫秒级时间戳记录与检索（`markArrival` / `arrivalOf`）。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/eval/test_tag_spans_script_gate.cp`（包含配对/单标签扫描、剥离清洗、base href 解析、点段规范化与 CSP nonce/integrity/host 拦截 7 组断言）；
+   - 编写并通过 `test/eval/test_limit_arrival.cp`（包含配额单次通知、失效代清理、所有者注销、UUID 格式校验与 Foreign 判断、512 槽位溢出淘汰）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 
