@@ -36,6 +36,8 @@ import {
     JS_GetGlobalObject,
     JS_DupValue,
     JS_FreeValue,
+    JS_SetContextOpaque,
+    JS_GetContextOpaque,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
@@ -43,14 +45,73 @@ import { Matcher } from "../css/matcher.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 
+pub @c {
+    struct TimeVal {
+        tv_sec: i64;
+        tv_usec: i64;
+    }
+    fn gettimeofday(tv: *TimeVal, tz: *!?): i32;
+}
+
+pub fn getMilliTimestamp(): i64 {
+    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
+    * = gettimeofday(&tv, null);
+    return tv.tv_sec * 1000 + @divTrunc(tv.tv_usec, 1000);
+}
+
 pub threadlocal let g_element_class_id: u32 = 0;
 pub threadlocal let g_document_class_id: u32 = 0;
+
+pub struct ConsoleRecord {
+    level: [16]u8 = [0; 16],
+    level_len: usize = 0,
+    text: [512]u8 = [0; 512],
+    text_len: usize = 0,
+    timestamp: i64 = 0,
+
+    fn getLevel(*_): []const u8 {
+        return _.level[0.._.level_len];
+    }
+
+    fn getText(*_): []const u8 {
+        return _.text[0.._.text_len];
+    }
+}
+
+pub const MAX_CONSOLE_RECORDS: usize = 16;
 
 pub struct JsDomContext {
     doc: *Document,
     layout: *LayoutTree? = null,
     element_class_id: u32 = 0,
     document_class_id: u32 = 0,
+    console_records: [MAX_CONSOLE_RECORDS]ConsoleRecord = [ConsoleRecord{}; MAX_CONSOLE_RECORDS],
+    console_count: usize = 0,
+
+    fn addConsoleRecord(*_, level: []const u8, text: []const u8) {
+        if (_.console_count >= MAX_CONSOLE_RECORDS) {
+            let j: usize = 1;
+            while (j < MAX_CONSOLE_RECORDS) : (j += 1) {
+                _.console_records[j - 1] = _.console_records[j];
+            }
+            _.console_count = MAX_CONSOLE_RECORDS - 1;
+        }
+        let rec = &_.console_records[_.console_count];
+        const l_len = @min(level.len, rec.level.len);
+        @memcpy(rec.level[0..l_len], level[0..l_len]);
+        rec.level_len = l_len;
+
+        const t_len = @min(text.len, rec.text.len);
+        @memcpy(rec.text[0..t_len], text[0..t_len]);
+        rec.text_len = t_len;
+
+        rec.timestamp = getMilliTimestamp();
+        _.console_count += 1;
+    }
+
+    fn clearConsoleRecords(*_) {
+        _.console_count = 0;
+    }
 }
 
 pub struct JsElement {
@@ -493,18 +554,57 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsNull();
 }
 
-@c fn js_console_log(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
-    * = this_val;
+fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: []const u8): JSValue {
+    let text_buf: [512]u8 = [0; 512];
+    let offset: usize = 0;
     let i: usize = 0;
     const n: usize = @intCast(argc);
     while (i < n) : (i += 1) {
         const str = jsToSlice(ctx, argv[i]);
         defer std.heap.page_allocator.free(str);
-        if (i > 0) std.debug.print(" ", .{});
-        std.debug.print("{s}", .{str});
+        if (i > 0 && offset < text_buf.len) {
+            text_buf[offset] = ' ';
+            offset += 1;
+        }
+        const to_copy = @min(str.len, text_buf.len - offset);
+        if (to_copy > 0) {
+            @memcpy(text_buf[offset .. offset + to_copy], str[0..to_copy]);
+            offset += to_copy;
+        }
     }
-    std.debug.print("\n", .{});
+    const full_text = text_buf[0..offset];
+
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr != null) {
+        const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaque_ptr));
+        dom_ctx.addConsoleRecord(level, full_text);
+    }
     return jsUndefined();
+}
+
+@c fn js_console_log(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "log");
+}
+
+@c fn js_console_info(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "info");
+}
+
+@c fn js_console_warn(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "warn");
+}
+
+@c fn js_console_error(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "error");
+}
+
+@c fn js_console_debug(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "debug");
 }
 
 pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
@@ -576,6 +676,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
         element_class_id: g_element_class_id,
         document_class_id: g_document_class_id,
     };
+    JS_SetContextOpaque(raw_ctx, @ptrCast(dom_ctx));
 
     // Create document instance
     const doc_val = JS_NewObjectClass(raw_ctx, g_document_class_id);
@@ -606,8 +707,10 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     // Register console
     const console_obj = JS_NewObject(raw_ctx);
     defineMethod(raw_ctx, console_obj, "log", js_console_log, 1);
-    defineMethod(raw_ctx, console_obj, "warn", js_console_log, 1);
-    defineMethod(raw_ctx, console_obj, "error", js_console_log, 1);
+    defineMethod(raw_ctx, console_obj, "info", js_console_info, 1);
+    defineMethod(raw_ctx, console_obj, "warn", js_console_warn, 1);
+    defineMethod(raw_ctx, console_obj, "error", js_console_error, 1);
+    defineMethod(raw_ctx, console_obj, "debug", js_console_debug, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
 
     // Assemble and evaluate modular runtime shim

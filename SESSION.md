@@ -888,3 +888,25 @@
 4. **自动化测试套件与门禁验证**：
    - 编写并通过 `test/cdp/test_target_management.cp`（4/4 passed，100% 覆盖 BrowserContext 生命周期、多 Target 创建与信息查询、显式会话挂载/分离、以及 Playwright 核心依赖的 Auto-Attach 自动附加事件链）；
    - `src/cdp/target.cp`、`src/cdp/dispatch.cp`、`src/cdp/session.cp` 全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 12:18:00] Turn 16
+
+### **[Agent]**
+推进并闭环 Phase 6（Web Workers、执行上下文管理与控制台/日志事件表面），同时记录与 `cp_agy` 的双向通信响应：
+1. **跨智能体异步通信留痕 (`task-capsurf-20261116-c-struct-shadow`)**：
+   - 收到专属结单广播：`cp_agy` 确认为 codegen 真实缺陷，已将 C 命名空间重构为 `__c_stdlib` 彻底消除变量 `c` 遮蔽；顺带修复 `cap:io` 带约束泛型及字面量推导。主智能体已即时重启常驻监听守护进程 `watch_task.py`。
+2. **控制台 API 截获与 Log/Runtime 双域多路复用 (`src/js/dom_binding.cp`, `src/cdp/log.cp`, `src/cdp/session.cp`, `src/cdp/dispatch.cp`)**：
+   - 在 `dom_binding.cp` 中挂载 `console.log`、`console.info`、`console.warn`、`console.error`、`console.debug` 5 大方法，经由 `JS_SetContextOpaque` 绑定，将控制台输出写入 `dom_ctx.console_records`（16 项固定容量循环覆盖缓冲队列），时间戳采用 POSIX `gettimeofday` 微秒级转换；
+   - 新增 `src/cdp/log.cp`（迁移自 `vendor/kitesurf/packages/engine/src/cdp/log.ts`，保留溯源注释），支持 `Log.enable`、`Log.disable`、`Log.clear`；
+   - 在 `session.cp` 中实装 `pollConsoleEvents`，在执行 `Runtime.evaluate` 或页面加载时轮询排队事件，按客户端订阅状态分别派发 `Runtime.consoleAPICalled` 与 `Log.entryAdded`；
+   - 在 `dispatch.cp` 中挂载 `Log.*` 路由，并扩充 `Runtime.*` 事件通道容量至 `[4]CdpEvent`。
+3. **Dedicated Worker 线程池与 Target 生命周期映射 (`src/cdp/workers.cp`)**：
+   - 新增 `src/cdp/workers.cp`（迁移自 `vendor/kitesurf/packages/engine/src/cdp/dedicated-workers.ts` 与 `eval/dedicated-worker.ts`，保留溯源注释）；
+   - 实装 `DedicatedWorkerEntry` 与 `DedicatedWorkerPool`（固定容量 8 项零 GC 数组），提供 `createWorker`、`terminateWorker`、`postMessage` 与双向查询；
+   - 联动 `TargetRegistry`：在创建工作线程时以 `worker` 类型生成目标，在启用 `auto_attach` 时派发 `Target.attachedToTarget`，并在终止时级联派发 `Target.detachedFromTarget` 与 `Target.targetDestroyed`。
+4. **测试套件与门禁验证**：
+   - 编写并通过 `test/cdp/test_runtime_workers.cp`（3 项测试全部 100% 绿色通过，耗时 101s，涵盖 Runtime 执行上下文生命周期、Console API 与 Log 域多路复用、Dedicated Worker 生命周期与 Target 自动附加）；
+   - 9 个核心相关源文件全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

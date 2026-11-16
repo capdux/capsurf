@@ -222,3 +222,15 @@
    - 在 Playwright 连接无头浏览器时，会首先发送 `Target.setAutoAttach({ autoAttach: true, flatten: true })`；
    - 随后的每一个 `Target.createTarget` 调用，引擎必须一次性同步连带派发 `Target.targetCreated` 与 `Target.attachedToTarget` 双事件，告知客户端子页面已就绪且 session 已绑定；
    - 在 `dispatch.cp` 中扩充事件缓冲容量至 `[4]CdpEvent`，完全打通了自动附加事件管道。
+
+## Phase 6 Web Workers、执行上下文管理与控制台/日志事件表面架构方案与排障实录
+1. **控制台 API 截获与 Log/Runtime 双域多路复用方案 (`src/js/dom_binding.cp` & `src/cdp/session.cp`)**：
+   - **设计目标**：捕获 JS 运行时的 `console.log`、`console.info`、`console.warn`、`console.error`、`console.debug`，对齐 Chrome DevTools Protocol 标准，同时向监听客户端按需派发 `Runtime.consoleAPICalled` 与 `Log.entryAdded`；
+   - **架构设计**：利用 QuickJS 的 `JS_SetContextOpaque` 将当前 `JsDomContext` 指针安全绑定至 JSContext；在各原生控制台回调中提取参数拼接为完整文本，写入 `dom_ctx.console_records`（16 项固定容量循环覆盖缓冲队列）；通过 POSIX `gettimeofday` 获取微秒级高保真毫秒时间戳；在 `session.cp` 中提供 `pollConsoleEvents`，在每次执行 `Runtime.evaluate` 或页面加载后自动冲刷并格式化为标准 CDP 事件。
+2. **Dedicated Worker 线程池与 Target 生命周期映射 (`src/cdp/workers.cp`)**：
+   - **设计目标**：支持 Web Worker 拓扑管理与隔离，与 Playwright / Puppeteer 的 Worker 目标附加与消息通道兼容；
+   - **架构设计**：实现 `DedicatedWorkerPool`（容量为 8 项的 `DedicatedWorkerEntry` 零 GC 结构数组）。创建 Worker 时调用 `registry.createTargetWithType(url, "worker", "")` 分配目标；若已启用 `auto_attach`，立即派发 `Target.attachedToTarget`（`waitingForDebugger: false`）；提供 `postMessage` 消息投递记录与 `terminateWorker` 生命周期终结接口，级联触发 `Target.detachedFromTarget` 与 `Target.targetDestroyed`。
+3. **关键编译排障与语法防坑点**：
+   - **数组初始化语法**：在 CP 结构体字段声明中，数组初始化须写为 `[Item{}; N]`，而非 Zig 风格的 `[_]Item{.{}} ** N`；
+   - **可空指针优先级与解包**：`dom_ctx` 字段类型必须书写为 `(*JsDomContext)? = null`（外包括号），避免被解析为指向可选值的指针引发 `((dom).?.console_count)` 冗余解包报错；
+   - **跨平台时钟**：Zig 0.17 的 `std.time` 模块已精简为单纯的分辨率常数与 epoch 转换，通过 C-FFI POSIX `gettimeofday(&tv, null)` 实现稳健高效的毫秒时间戳获取。

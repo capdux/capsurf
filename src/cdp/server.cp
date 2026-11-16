@@ -184,14 +184,18 @@ pub struct CdpServer {
 
     fn handleHttpRequest(*_, client_fd: i32, req: []const u8)! {
         if (std.mem.startsWith(u8, req, "GET /json/version")) {
-            const body =
-                "{\n" ++
+            let body_buf: [1024]u8 = [0; 1024];
+            const body = std.fmt.bufPrint(
+                &body_buf,
+                "{{\n" ++
                 "  \"Browser\": \"CapSurf/1.0.0\",\n" ++
                 "  \"Protocol-Version\": \"1.3\",\n" ++
                 "  \"User-Agent\": \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CapSurf/1.0\",\n" ++
                 "  \"V8-Version\": \"QuickJS-NG\",\n" ++
-                "  \"webSocketDebuggerUrl\": \"ws://127.0.0.1:9222/devtools/browser/capsurf-browser-001\"\n" ++
-                "}";
+                "  \"webSocketDebuggerUrl\": \"ws://127.0.0.1:{d}/devtools/browser/capsurf-browser-001\"\n" ++
+                "}}",
+                .{ _.getPort() },
+            ) catch "{}";
             sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)? ;
             return;
         }

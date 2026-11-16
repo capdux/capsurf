@@ -120,6 +120,11 @@ pub struct TargetRegistry {
         return reg;
     }
 
+    fn setAutoAttach(*_, auto_attach: bool, flatten: bool) {
+        _.auto_attach = auto_attach;
+        _.flatten = flatten;
+    }
+
     fn createBrowserContext(*_): []const u8 {
         let i: usize = 0;
         while (i < _.contexts.len) : (i += 1) {
@@ -190,7 +195,7 @@ pub struct TargetRegistry {
         return "[]";
     }
 
-    fn createTarget(*_, url: []const u8, bctx: []const u8): []const u8 {
+    fn createTargetWithType(*_, url: []const u8, target_type: []const u8, bctx: []const u8): []const u8 {
         let i: usize = 0;
         while (i < _.targets.len) : (i += 1) {
             if (!_.targets[i].active) {
@@ -204,13 +209,15 @@ pub struct TargetRegistry {
                 @memcpy(_.targets[i].url_buf[0..u_len], target_url[0..u_len]);
                 _.targets[i].url_len = u_len;
 
-                const type_str = "page";
-                @memcpy(_.targets[i].type_buf[0..type_str.len], type_str);
-                _.targets[i].type_len = type_str.len;
+                const type_str = if (target_type.len > 0) target_type else "page";
+                const ty_len = @min(type_str.len, _.targets[i].type_buf.len);
+                @memcpy(_.targets[i].type_buf[0..ty_len], type_str[0..ty_len]);
+                _.targets[i].type_len = ty_len;
 
-                const title_str = "CapSurf Page";
-                @memcpy(_.targets[i].title_buf[0..title_str.len], title_str);
-                _.targets[i].title_len = title_str.len;
+                const title_str = if (std.mem.eql(u8, type_str, "worker")) "CapSurf Worker" else "CapSurf Page";
+                const ti_len = @min(title_str.len, _.targets[i].title_buf.len);
+                @memcpy(_.targets[i].title_buf[0..ti_len], title_str[0..ti_len]);
+                _.targets[i].title_len = ti_len;
 
                 const bctx_str = if (bctx.len > 0) bctx else "default";
                 const bc_len = @min(bctx_str.len, _.targets[i].browser_context_id_buf.len);
@@ -224,6 +231,10 @@ pub struct TargetRegistry {
             }
         }
         return "";
+    }
+
+    fn createTarget(*_, url: []const u8, bctx: []const u8): []const u8 {
+        return _.createTargetWithType(url, "page", bctx);
     }
 
     fn closeTarget(*_, target_id: []const u8): bool {

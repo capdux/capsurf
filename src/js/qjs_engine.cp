@@ -32,6 +32,8 @@ pub @c {
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;
     fn JS_FreeContext(ctx: *JSContext);
+    fn JS_SetContextOpaque(ctx: *JSContext, opaque_ptr: *!?);
+    fn JS_GetContextOpaque(ctx: *JSContext): *!?;
 
     fn JS_NewClassID(rt: *JSRuntime, pclass_id: *u32): u32;
     fn JS_NewClass(rt: *JSRuntime, class_id: u32, class_def: *const JSClassDef): i32;

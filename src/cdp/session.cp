@@ -9,11 +9,12 @@ import { LayoutTree, Rect } from "../layout/layout.cp";
 import { JsRuntime, JsContext, jsToSlice, jsIsException } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
-import { CdpBoxModel } from "./types.cp";
+import { CdpBoxModel, CdpEvent } from "./types.cp";
 import { FetchState } from "./fetch.cp";
 import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { TargetRegistry } from "./target.cp";
+import { DedicatedWorkerPool } from "./workers.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -21,7 +22,7 @@ pub struct CdpPageSession {
     layout: LayoutTree,
     rt: JsRuntime,
     ctx: JsContext,
-    dom_ctx: *JsDomContext? = null,
+    dom_ctx: (*JsDomContext)? = null,
     url: []const u8 = "about:blank",
     title: []const u8 = "Blank Page",
     frame_id: []const u8 = "capsurf-frame-001",
@@ -42,6 +43,15 @@ pub struct CdpPageSession {
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
     target_registry: TargetRegistry = TargetRegistry.init(),
+
+    // Runtime & Log domain flags
+    runtime_enabled: bool = false,
+    log_enabled: bool = false,
+    dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
+
+    // Dedicated buffers for event formatting
+    console_event_buf: [1024]u8 = [0; 1024],
+    log_event_buf: [1024]u8 = [0; 1024],
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
@@ -78,6 +88,11 @@ pub struct CdpPageSession {
             fetch_enabled: false,
             fetch_state: FetchState{},
             target_registry: TargetRegistry.init(),
+            runtime_enabled: false,
+            log_enabled: false,
+            dedicated_workers: DedicatedWorkerPool.init(),
+            console_event_buf: [0; 1024],
+            log_event_buf: [0; 1024],
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,
@@ -210,5 +225,59 @@ pub struct CdpPageSession {
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
+    }
+
+    fn clearConsoleLogs(*_) {
+        if (dom := _.dom_ctx) {
+            dom.clearConsoleRecords();
+        }
+    }
+
+    fn pollConsoleEvents(*_, out_events: []CdpEvent): usize {
+        if (dom := _.dom_ctx) {
+            if (dom.console_count == 0) return 0;
+
+            let ev_idx: usize = 0;
+            let i: usize = 0;
+            while (i < dom.console_count && ev_idx < out_events.len) : (i += 1) {
+                let rec = &dom.console_records[i];
+                const lvl = rec.getLevel();
+                const txt = rec.getText();
+
+                if (_.runtime_enabled && ev_idx < out_events.len) {
+                    const rt_json = std.fmt.bufPrint(
+                        &_.console_event_buf,
+                        "{{\"type\":\"{s}\",\"args\":[{{\"type\":\"string\",\"value\":\"{s}\"}}],\"executionContextId\":1,\"timestamp\":{d}}}",
+                        .{ lvl, txt, rec.timestamp },
+                    ) catch "";
+                    if (rt_json.len > 0) {
+                        out_events[ev_idx] = CdpEvent.create("Runtime.consoleAPICalled", rt_json);
+                        ev_idx += 1;
+                    }
+                }
+
+                if (_.log_enabled && ev_idx < out_events.len) {
+                    const log_lvl = if (std.mem.eql(u8, lvl, "error"))
+                        "error"
+                    else if (std.mem.eql(u8, lvl, "warn"))
+                        "warning"
+                    else
+                        "info";
+
+                    const log_json = std.fmt.bufPrint(
+                        &_.log_event_buf,
+                        "{{\"entry\":{{\"source\":\"javascript\",\"level\":\"{s}\",\"text\":\"{s}\",\"timestamp\":{d}}}}}",
+                        .{ log_lvl, txt, rec.timestamp },
+                    ) catch "";
+                    if (log_json.len > 0) {
+                        out_events[ev_idx] = CdpEvent.create("Log.entryAdded", log_json);
+                        ev_idx += 1;
+                    }
+                }
+            }
+            dom.clearConsoleRecords();
+            return ev_idx;
+        }
+        return 0;
     }
 }

@@ -14,6 +14,7 @@ import { EmulationHandler } from "./emulation.cp";
 import { FetchHandler } from "./fetch.cp";
 import { AccessibilityHandler } from "./accessibility.cp";
 import { WebMcpHandler } from "./webmcp.cp";
+import { LogHandler } from "./log.cp";
 
 pub struct CdpDispatcher {
     pub static fn dispatch(
@@ -53,13 +54,14 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Runtime.")) {
-            let rt_evts: [1]CdpEvent = [CdpEvent{}; 1];
+            let rt_evts: [4]CdpEvent = [CdpEvent{}; 4];
             let rt_cnt: usize = 0;
             const resp = RuntimeHandler.handle(session, req, out_buf, &rt_evts, &rt_cnt);
-            if (rt_cnt > 0 && out_events.len > 0) {
-                out_events[0] = rt_evts[0];
-                event_count.* = 1;
+            let i: usize = 0;
+            while (i < rt_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = rt_evts[i];
             }
+            event_count.* = @min(rt_cnt, out_events.len);
             return resp;
         }
 
@@ -114,10 +116,21 @@ pub struct CdpDispatcher {
             return FetchHandler.handle(session, &session.fetch_state, req, out_buf);
         }
 
+        if (std.mem.startsWith(u8, req.method, "Log.")) {
+            let log_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            let log_cnt: usize = 0;
+            const resp = LogHandler.handle(session, req, out_buf, &log_evts, &log_cnt);
+            let i: usize = 0;
+            while (i < log_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = log_evts[i];
+            }
+            event_count.* = @min(log_cnt, out_events.len);
+            return resp;
+        }
+
         // 3. Permissive stub domains (Puppeteer / Playwright handshake compatibility)
         if (std.mem.startsWith(u8, req.method, "Security.") ||
-            std.mem.startsWith(u8, req.method, "Performance.") ||
-            std.mem.startsWith(u8, req.method, "Log.")) {
+            std.mem.startsWith(u8, req.method, "Performance.")) {
             return CdpResponse.ok(req.id, "{}");
         }
 

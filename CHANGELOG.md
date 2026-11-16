@@ -238,3 +238,28 @@
 - **测试套件**：
   - `test/cdp/test_target_management.cp`：4 项测试 100% 全部通过（BrowserContext 分配/查询/注销、多 Target 创建与精准信息查询、显式 Session 挂载与分离、Auto-Attach 自动挂载级联事件链）。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 6: Web Workers, Execution Context Management & Console/Log Event Surface (100% Closed)
+- **`src/cdp/log.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/log.ts`）：
+  - 保留文件头原始目录溯源注释；
+  - 实装 `LogHandler`，支持 `Log.enable`、`Log.disable`、`Log.clear`、`Log.startViolationsReport`、`Log.stopViolationsReport`。
+- **`src/cdp/workers.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/dedicated-workers.ts` 与 `eval/dedicated-worker.ts`）：
+  - 保留文件头原始目录溯源注释；
+  - 实装 `DedicatedWorkerEntry` 与 `DedicatedWorkerPool`（固定容量 8 项零 GC 数组）；
+  - 实装 `createWorker`（分配专属 target 与 session，支持 auto-attach 同步派发 `Target.attachedToTarget`）、`terminateWorker`（级联释放 target 并派发 `Target.detachedFromTarget` 与 `Target.targetDestroyed`）、`postMessage` 与双向查找方法。
+- **`src/cdp/runtime.cp`**（对齐 `vendor/kitesurf/packages/engine/src/cdp/runtime.ts`）：
+  - 增强 `Runtime.enable` 派发标准 `Runtime.executionContextCreated`（携带 context ID、origin、uniqueId、auxData）；
+  - 增强 `Runtime.evaluate`：在 JS 评估执行后自动轮询并收集控制台事件；
+  - 补全 `Runtime.getProperties`、`Runtime.callFunctionOn`、`Runtime.releaseObjectGroup`、`Runtime.discardConsoleEntries`、`Runtime.runIfWaitingForDebugger` 等协议响应。
+- **`src/js/dom_binding.cp` & `src/js/qjs_engine.cp`**：
+  - 在 `qjs_engine.cp` 的 `@c` 块中绑定 `JS_SetContextOpaque` 与 `JS_GetContextOpaque`；
+  - 在 `dom_binding.cp` 中实装 `ConsoleRecord` 环形缓冲队列（16 项），通过 POSIX `gettimeofday` 精确记录时间戳；
+  - 挂载 `console.log`、`console.info`、`console.warn`、`console.error`、`console.debug` 5 大控制台原生钩子。
+- **`src/cdp/session.cp` & `src/cdp/dispatch.cp`**：
+  - `session.cp` 持有 `runtime_enabled`、`log_enabled`、`dedicated_workers` 并实装 `pollConsoleEvents`，按需多路复用派发 `Runtime.consoleAPICalled` 与 `Log.entryAdded`；
+  - `dispatch.cp` 挂载 `Log.*` 路由，并扩充 `Runtime.*` 事件通道容量至 `[4]CdpEvent`。
+- **`src/cdp/server.cp`**：
+  - 在 `/json/version` 发现端点中动态绑定真实端口 `_.getPort()` 格式化 `webSocketDebuggerUrl`。
+- **测试套件**：
+  - `test/cdp/test_runtime_workers.cp`：3 项测试 100% 全部通过（Runtime 执行上下文生命周期、Console API 与 Log 域多路复用、Dedicated Worker 生命周期与 Target Auto-Attach）；
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
