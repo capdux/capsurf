@@ -404,3 +404,29 @@
   - `test/cdp/test_rbi_wheel_session.cp`：综合测试 100% 全部通过（滚轮合并、栅栏排空、RBI 批次编解码、去重过滤、SessionStore 读写删与统计聚合）；
   - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+## Phase 13: ResourceStore Memory-Budget Cache & Continuous Page Screencast Protocol (100% Closed)
+- **`src/cdp/resource_store.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/resource-store.ts`）：
+  - 实装 `ResourceStore`：定长 64 槽零堆分配图片与字体内存缓存，最大条目 8MB，总容量 16MB 预算保护；
+  - 实装 `mintKey`：生成携带 `ENGINE_KEY_MARKER`（第 63 位标记）的 64 位唯一随机资源句柄；
+  - 实装 `putImage` 与 `putFont`：支持内联 1024 字节缓冲区与外部切片引用，超过预算时按连接（Connection）优先 LRU 自动淘汰；
+  - 实装 `dropTarget` 与 `dropConnection`：在 Tab 销毁或网络断开时精准级联释放特定域绑定的资源。
+- **`src/cdp/screencast.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/page.ts`）：
+  - 实装 `ScreencastState` 与 `ScreencastHandler`：控制持续视频流参数（格式 png/jpeg、质量、最大视口宽高、跳帧控制 everyNthFrame）；
+  - 实装 `nextFrameSeq`、`screencastFrameAck` 与背压控制（`hasPendingAck` 在前序帧未被客户端 ACK 时阻断推流，防止网络拥塞堆积）；
+  - 实装 `formatScreencastFrameEvent`：生成标准 `Page.screencastFrame` CDP 事件（包含 base64 图像、视口几何与时间戳）；
+  - 实装 `formatScreencastVisibilityChangedEvent`：通知客户端视口可见性变更。
+- **`src/cdp/session.cp` 与 `src/cdp/page.cp`**：
+  - 在 `CdpPageSession` 中挂载 `screencast_handler: ScreencastHandler` 与 `resource_store: ResourceStore`，分配持久化 `target_id`；
+  - 在 `PageHandler` 中实装并打通 `Page.startScreencast`、`Page.stopScreencast` 与 `Page.screencastFrameAck` 协议分发。
+- **`src/html/tree_builder.cp` 与 `src/html/parser.cp` 规范优化**：
+  - 将 `processToken` 及各模式处理器入参由指针 `tok: *const Token` 彻底优化为标准 CP 只读按值传参 `tok: Token` 与 `switch (tok)`，消除 Zig 后端对 `union(enum)` 取借用指针导致的类型歧义；
+  - 更新 `src/html/parser.cp` 中 `tb.processToken(t)` 调用，全套 HTML 解析回归测试 100% 保持满分通过。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_screencast_resources.cp`：全量测试 100% 全部通过（ResourceStore 键标记、图片/字体存取、LRU 淘汰与作用域释放、Screencast 协议会话、帧序号推进、事件格式化与 ACK 步进同步）；
+  - `test/html/test_parser.cp`：4 项测试 100% 全部通过；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`cap build src/main.cp -f`（8.4MB 独立可执行二进制）与 `cap build src/main.cp -b`（9.6MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+

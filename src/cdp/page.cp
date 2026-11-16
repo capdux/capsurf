@@ -13,6 +13,7 @@ import {
     buildFrameTree,
     buildFrameResourceTree
 } from "./frames.cp";
+import { extractAckSessionId } from "./screencast.cp";
 
 pub struct PageHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
@@ -21,10 +22,23 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload") ||
-            std.mem.eql(u8, req.method, "Page.startScreencast") ||
-            std.mem.eql(u8, req.method, "Page.stopScreencast") ||
-            std.mem.eql(u8, req.method, "Page.screencastFrameAck")) {
+            std.mem.eql(u8, req.method, "Page.reload")) {
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.startScreencast")) {
+            * = session.screencast_handler.startScreencast(req.params_raw, session.target_id);
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.stopScreencast")) {
+            * = session.screencast_handler.stopScreencast();
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.screencastFrameAck")) {
+            const sid = extractAckSessionId(req.params_raw) ?? 0;
+            * = session.screencast_handler.screencastFrameAck(sid);
             return CdpResponse.ok(req.id, "{}");
         }
 

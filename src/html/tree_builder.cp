@@ -757,7 +757,7 @@ pub struct TreeBuilder {
 
     // Token Dispatcher
 
-    fn processToken(*_, tok: *const Token): NextTokenizerState {
+    fn processToken(*_, tok: Token): NextTokenizerState {
         return switch (_.mode) {
             .Initial => _.processInitial(tok),
             .BeforeHtml => _.processBeforeHtml(tok),
@@ -776,8 +776,8 @@ pub struct TreeBuilder {
         };
     }
 
-    fn processInitial(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInitial(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -797,8 +797,8 @@ pub struct TreeBuilder {
         return _.processBeforeHtml(tok);
     }
 
-    fn processBeforeHtml(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processBeforeHtml(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -824,8 +824,8 @@ pub struct TreeBuilder {
         return _.processBeforeHead(tok);
     }
 
-    fn processBeforeHead(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processBeforeHead(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -849,8 +849,8 @@ pub struct TreeBuilder {
         return _.processInHead(tok);
     }
 
-    fn processInHead(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInHead(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -900,8 +900,8 @@ pub struct TreeBuilder {
         return _.processAfterHead(tok);
     }
 
-    fn processAfterHead(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processAfterHead(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -931,8 +931,8 @@ pub struct TreeBuilder {
         return _.processInBody(tok);
     }
 
-    fn processInBody(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInBody(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 _.reconstructActiveFormattingElements();
                 _.insertCharacter(text);
@@ -1114,8 +1114,8 @@ pub struct TreeBuilder {
         return NextTokenizerState.Data;
     }
 
-    fn processText(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processText(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 _.insertCharacter(text);
                 return NextTokenizerState.Data;
@@ -1137,8 +1137,8 @@ pub struct TreeBuilder {
         return NextTokenizerState.Data;
     }
 
-    fn processInTable(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInTable(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 _.foster_parenting = true;
                 _.insertCharacter(text);
@@ -1203,8 +1203,8 @@ pub struct TreeBuilder {
         return res;
     }
 
-    fn processInTableBody(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInTableBody(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Tag => |*tag_tok| {
                 if (tag_tok.kind == TagKind.Start) {
                     if (tag_tok.tag == HtmlTag.Tr) {
@@ -1242,8 +1242,8 @@ pub struct TreeBuilder {
         return _.processInTable(tok);
     }
 
-    fn processInRow(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInRow(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Tag => |*tag_tok| {
                 if (tag_tok.kind == TagKind.Start) {
                     if (tag_tok.tag == HtmlTag.Td || tag_tok.tag == HtmlTag.Th) {
@@ -1277,8 +1277,8 @@ pub struct TreeBuilder {
         return _.processInTable(tok);
     }
 
-    fn processInCell(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processInCell(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Tag => |*tag_tok| {
                 if (tag_tok.kind == TagKind.End) {
                     if (tag_tok.tag == HtmlTag.Td || tag_tok.tag == HtmlTag.Th) {
@@ -1307,8 +1307,8 @@ pub struct TreeBuilder {
         return _.processInBody(tok);
     }
 
-    fn processAfterBody(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processAfterBody(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Characters => |text| {
                 if (TreeBuilder.isAllWhitespace(text)) {
                     return NextTokenizerState.Data;
@@ -1338,8 +1338,8 @@ pub struct TreeBuilder {
         return _.processInBody(tok);
     }
 
-    fn processAfterAfterBody(*_, tok: *const Token): NextTokenizerState {
-        switch (tok.*) {
+    fn processAfterAfterBody(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
             .Comment => |comment| {
                 _.insertComment(comment);
                 return NextTokenizerState.Data;

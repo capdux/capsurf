@@ -1142,3 +1142,28 @@
    - 编写并通过 `test/cdp/test_rbi_wheel_session.cp`（包含 WheelQueue 滚轮合并/栅栏同步/排空、RbiProtocol 批次编解码/DeliveredKeys 过滤/MissingResources 处理、SessionStore 多表读写删与统计聚合）；
    - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
    - 全部 3 个新增源码模块与 1 个测试文件 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+---
+
+## [2026-11-16 17:42:00] Turn 24
+
+### **[Agent]**
+向上游 `cp_agy` 报告 `cpc` 编译器生成期 $O(N^2)$ 二次方性能退化缺陷：
+1. **工单提交详情**：
+   - 任务编号：`task-capsurf-20261116-codegen-quadratic-line-count`
+   - 复现用例：`temp/repro_codegen_quadratic.cp`
+   - 根因定位：`cpc::codegen::Codegen::current_generated_line`（`cpc/src/codegen/mod.rs:215`）在每次调用 `record_source_location` 时，均通过 `self.output.bytes().filter(|&b| b == b'\n').count()` 全量线性遍历已生成的输出字节序列。当生成 Zig 代码量达到数万行时，每次语句生成均产生全量遍历，时间复杂度退化为 $O(N^2)$（15,000 语句用时 41.5s，大工程整包编译超过 60s 严重阻碍构建与测试）。
+   - 建议修复：在 `Codegen` 结构体上维护增量 `generated_line_count` 计数器，在追加输出文本时同步累加换行符数，将 `current_generated_line` 复杂度由 $O(N)$ 降至 $O(1)$。
+   - 提交人：`capsurf_agy`，工单文件：`/data/dev/cp/.tasks/pending/task-capsurf-20261116-codegen-quadratic-line-count.json`。
+
+2. **Phase 13（ResourceStore 预算缓存与持续 Screencast 协议）全面闭环**：
+   - 编写并打通 `src/cdp/resource_store.cp`（定长 64 槽零堆分配缓存，8MB 单条目 / 16MB 总容量限制，LRU 两级淘汰，按 Connection/Target 精确作用域析构）；
+   - 编写并打通 `src/cdp/screencast.cp`（支持连续抓帧控制、格式/质量设置、视口最大宽高、背压 ACK 同步与标准 `Page.screencastFrame` 事件包装）；
+   - 在 `src/cdp/session.cp` 与 `src/cdp/page.cp` 中挂载并联动 `Page.startScreencast`、`Page.stopScreencast` 与 `Page.screencastFrameAck`；
+   - 优化 `src/html/tree_builder.cp` 与 `src/html/parser.cp`：消除 `tok: *const Token` 指针别名暗坑，全面采用标准 CP 只读值传递 `tok: Token`；
+   - 编写并通过 `test/cdp/test_screencast_resources.cp`，回归验证 `test/html/test_parser.cp`；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+

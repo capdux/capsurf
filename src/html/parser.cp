@@ -13,7 +13,7 @@ pub struct HtmlParser {
         let tb = TreeBuilder.init(doc);
 
         while (t := tok.next()) {
-            const next_state = tb.processToken(&t);
+            const next_state = tb.processToken(t);
             tok.setState(next_state);
         }
     }

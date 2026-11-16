@@ -16,6 +16,8 @@ import { CssColor } from "cap:css";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
+import { ScreencastHandler } from "./screencast.cp";
+import { ResourceStore } from "./resource_store.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -28,6 +30,7 @@ pub struct CdpPageSession {
     title: []const u8 = "Blank Page",
     frame_id: []const u8 = "capsurf-frame-001",
     loader_id: []const u8 = "capsurf-loader-001",
+    target_id: []const u8 = "capsurf-target-001",
     has_document: bool = false,
     raw_html: []const u8 = "",
 
@@ -50,6 +53,8 @@ pub struct CdpPageSession {
     log_enabled: bool = false,
     dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
     debugger_state: DebuggerState = DebuggerState{},
+    screencast_handler: ScreencastHandler = ScreencastHandler.init(),
+    resource_store: ResourceStore = ResourceStore.init(),
 
     // Dedicated buffers for event formatting
     console_event_buf: [1024]u8 = [0; 1024],
@@ -80,6 +85,7 @@ pub struct CdpPageSession {
             title: "Blank Page",
             frame_id: "capsurf-frame-001",
             loader_id: "capsurf-loader-001",
+            target_id: "capsurf-target-001",
             has_document: false,
             raw_html: "",
             viewport_width: 1280.0,
@@ -96,6 +102,8 @@ pub struct CdpPageSession {
             log_enabled: false,
             dedicated_workers: DedicatedWorkerPool.init(),
             debugger_state: DebuggerState{},
+            screencast_handler: ScreencastHandler.init(),
+            resource_store: ResourceStore.init(),
             console_event_buf: [0; 1024],
             log_event_buf: [0; 1024],
             rt_ctx_event_buf: [0; 512],
