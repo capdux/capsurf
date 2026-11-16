@@ -548,6 +548,22 @@
      - 针对脚本注释中的换行符实行安全百分号转义，根除注释逃逸风险；
      - 精准对脚本进行分类分桶，为后续渲染树与执行沙箱提供清晰的就绪时序依赖。
 
+## Phase 23 CDP 协议扩展、沙箱世代生命周期与动态环境分发技术方案
+1. **CDP 分发环境动态参数治理 (`src/cdp/dispatch_env.cp`)**：
+   - **设计动机**：在不同的测试与生产运行场景下，AI Agent 对页面的 CPU 耗时、Wall Clock 耗时以及网络出站权限有不同的安全策略。需要统一的分发环境对象在命令处理链路中下发这些约束；
+   - **解决方案**：
+     - 构建 `DispatchEnv` 配置对象，支持在运行时通过键值对动态调整 `page_cpu_ms_cap`、`page_wall_ms_cap` 与 `allow_private_network`；
+     - 将私有网络防 SSRF 策略置于第一优先级，保障在未明确赋权时严禁内网探测。
+2. **PageScript 多世代演进与安全卸载收割 (`src/cdp/page_script_generation.cp`)**：
+   - **设计动机**：页面进行单页跳转（SPA / `history.pushState`）或整页导航时，如果前一代脚本的执行状态未能彻底释放或由于正在执行 RPC 发生悬挂，会导致内存泄漏与数据竞争；
+   - **解决方案**：
+     - 建立 `StubHolder` 世代容器，以单调自增序号追踪活跃的脚本存根（Stub）；
+     - 实现不同意图（`navigate`, `closeTarget`, `wsClosed` 等）的差异化清理路径：整页跳转时主动收割控制台输出与 Cookie 修改并回传新页面，关闭目标时立即斩断进程。
+3. **CapSurf / Kitesurf 协议扩展命令双前缀响应 (`src/cdp/protocol_extensions.cp`)**：
+   - **设计动机**：为了兼容原 Kitesurf 客户端测试套件与 CapSurf 专属扩展，必须在 CDP 协议处理层支持双前缀识别，并输出结构化响应；
+   - **解决方案**：
+     - 抹除前缀差异统一路由到核心命令实现，提供会话诊断 `getSessionInfo`、排版模式动态开关 `setLayoutMode` 以及渲染器指标 `getRendererInfo`。
+
 
 
 

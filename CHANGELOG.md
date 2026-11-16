@@ -599,6 +599,19 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 23: CDP Protocol Extensions, Dispatch Environment & PageScript Generation Lifecycle (100% Closed)
+- **`src/cdp/dispatch_env.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/dispatch-env.ts`）：
+  - 实装 CDP 分发环境变量与安全配置管理器 `DispatchEnv`，动态管控页面 CPU/Wall 耗时配额及私有网络访问权限。
+- **`src/cdp/page_script_generation.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/page-script-generation.ts`）：
+  - 实装脚本世代管理器 `StubHolder`，处理导航与关闭意图（`RetireIntent`），实现旧世代安全析构与卸载状态收割 `UnloadHarvest`。
+- **`src/cdp/protocol_extensions.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/protocol-extensions.ts` 与 `kitesurf.ts`）：
+  - 实装 `CapSurf.*` 与 `Kitesurf.*` 兼容扩展协议命令处理器，覆盖 `getSessionInfo`、`getLayoutMode` / `setLayoutMode`、`getRendererInfo`、`getPageState`、`setControlValue`、`markPaintDamage`、`getPaintDamageSince` 与 `getMemoryStats`。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_protocol_extensions_generation.cp`：全量测试 100% 全部通过（3 组用例覆盖环境配额动态修改、存根发布淘汰与数据收割、扩展协议全命令返回解析）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

@@ -1398,6 +1398,34 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 21:44:00] Turn 34
+
+### **[User]**
+按你的计划继续迁移（Phase 23: CDP 协议扩展、探针代码动态注入与环境变量分发）
+
+### **[Agent]**
+完成 Phase 23 全量模块实装、门禁校验、测试套件验证与端到端驱动回归：
+1. **CDP 环境变量与配置分发 (`src/cdp/dispatch_env.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/dispatch-env.ts`（文件头保留来源溯源注释）；
+   - 实装 `DispatchEnv`（支持 `page_cpu_ms_cap`、`page_wall_ms_cap`、`resource_drain_quiet_turns`、`simulate_prod_eval`、`allow_private_network` 配置）；
+   - 提供动态参数注入与私网准入鉴权判定。
+2. **PageScript 世代演进与租约回收 (`src/cdp/page_script_generation.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/page-script-generation.ts`（文件头保留来源溯源注释）；
+   - 实装 `RetireIntent`（`navigate`, `close_target`, `ws_closed`, `render_failure`, `frame_teardown`）；
+   - 实装 `StubHolder`：支持新世代 `publishStub`、陈旧存根自动拒收与快速丢弃；
+   - 实装 `retireStub` 与卸载数据收割 `UnloadHarvest`（支持页面跳转时的控制台日志与 Cookie 提取）。
+3. **CDP 扩展协议与渲染器状态服务 (`src/cdp/protocol_extensions.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/protocol-extensions.ts` 与 `kitesurf.ts`（文件头保留来源溯源注释）；
+   - 原生支持 `CapSurf.*` 与 `Kitesurf.*` 双前缀兼容；
+   - 实装扩展命令：`getSessionInfo`、`getLayoutMode` / `setLayoutMode`、`getRendererInfo`、`getPageState`、`setControlValue`、`markPaintDamage`、`getPaintDamageSince` 与 `getMemoryStats`。
+4. **自动化测试与驱动回归**：
+   - 编写并通过 `test/cdp/test_protocol_extensions_generation.cp`（3 组测试用例 100% 全部通过：分发环境配置校验、世代演进发布与 Cookie 收割、扩展协议双前缀与排版模式切换）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
