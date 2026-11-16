@@ -1206,29 +1206,34 @@
 
 ---
 
-## [2026-11-16 18:26:00] Turn 26
+## [2026-11-16 19:15:00] Turn 27
+
+### **[User]**
+卡住了吗?
 
 ### **[Agent]**
-全面推进并闭环 Phase 15（流式响应字节预算约束与多租户 Worker 隔离配额系统）：
-1. **网络层流式字节硬预算与连接槽位追踪 (`src/net/read_capped.cp`)**：
-   - 完整迁移自 `vendor/kitesurf/packages/engine/src/read-capped.ts`（文件头保留来源溯源注释）；
-   - 实装四级硬性预算常量：16MB HTML 文档上限、8MB CSS 样式表上限、48MB 全局并发在途上限、24MB 单连接在途上限；
-   - 实装 `CappedFailure` 枚举与标准 Chrome `net::ERR_*` 错误码文本映射；
-   - 实装 `ReadBudgetTracker`：定长 32 槽线性连接映射，支持原子 `charge`、`chargeWithLimit` 与 `refund` 操作，在累加前进行超限拒绝，保障网络层零内存泄漏与严格的资源隔离；
-   - 实装 `ReadLease`：支持 RAII 作用域记账与退出安全扣减；
-   - 实装 `CappedBuffer`：支持预分配与动态分配切片，防止流式块超出硬上限溢出。
-2. **多租户 Worker / Isolate 配额与导航余量保护 (`src/cdp/worker_budget.cp`)**：
-   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/worker-budget.ts`（文件头保留来源溯源注释）；
-   - 实装全局硬上限 `MAX_DYNAMIC_WORKERS = 4`；
-   - 实装关键业务槽位保障：未实例化渲染器时硬性预留 1 槽（`RENDERER_RESERVED_SLOTS`），同时为页面导航预留动态余量（`NAVIGATE_HEADROOM_SLOTS * page_targets`）；
-   - 实装严格限制 `MAX_CONCURRENT_OOPIF = 1`，当余量不足时及时拒绝并记录 `worker_denied` 与 `oopif_denied` 统计；
-   - 实装 `relinquish` 与 `releaseKind`：规避 `cpc` 编译器对 `release` 方法名硬编码自动 Drop 的语义陷阱。
+全面推进并闭环 Phase 16（线性正则 Pike VM 匹配引擎、出站过滤器注册表、投机性预取调度与已学习脚本缓存）：
+1. **Pike VM 非回溯线性正则引擎与出站过滤器 (`src/cdp/linear_regex.cp` & `src/cdp/outbound_filters.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/linear-regex.ts` 与 `vendor/kitesurf/packages/engine/src/cdp/outbound-filter-registry.ts`（文件头保留来源溯源注释）；
+   - 实装 Pike VM 字节码指令体系（`Char`, `Class`, `Dot`, `WordBoundary`, `Bol`, `Eol`, `Match`, `Jmp`, `Split`）；
+   - 设定硬上限 `MAX_REPEAT = 1000`, `MAX_PROGRAM = 8192`，在代码生成前通过 `expandedSize` 进行饱和社会预检，杜绝回溯，执行复杂度严格为 $O(N \times M)$，全面免疫 ReDoS；
+   - 实装首字符预过滤 `StartSet`（ASCII 128 位图与行首锚点标志），实现未命中字符直接快进；
+   - 实装双缓冲 `ThreadList` 世代号标记（generation array），实现零堆分配与零内存泄漏；
+   - 实装出站过滤器注册表 `OutboundFilterRegistry`，支持 `OutboundResourceType`（18 种标准资源类型）及按连接隔离的 `compileOutboundFilters`、`shouldBlock`、`registerOutboundFilters`。
+2. **投机性预取调度与已学习脚本重用缓存 (`src/net/speculative_prefetch.cp` & `src/eval/learned_scripts.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/speculative-prefetch.ts` 与 `vendor/kitesurf/packages/engine/src/eval/learned-scripts.ts`（文件头保留来源溯源注释）；
+   - 实装投机预取协调器：`SPECULATIVE_DEADLINE_MS = 1000`、`SPECULATIVE_CONCURRENCY = 2`；
+   - 实装快速准入判定 `maySpeculate(connection_id, url)`：无缝桥接 `FetchInterceptionState` 路由拦截与 `OutboundFilters` 出站过滤器；
+   - 实装基于时间戳与并发控制的批处理投机预取控制机制 `prefetchBestEffort` 与 `PrefetchBatchRunner`；
+   - 实装已学习脚本重用缓存 `LearnedScriptsStore`：`MIN_LEARNED_BYTES = 8192`、`MAX_URLS_PER_ORIGIN = 24`、`MAX_ORIGINS = 32`、`MAX_IDLE_NAVIGATES = 3`；
+   - 实现基于 Origin 与 Context 双键的 LRU 淘汰机制（`touch`、`trimOldest`、`MAX_IDLE_NAVIGATES` 导航递增淘汰及 query-string 防雪崩二次插入学习机制）。
 3. **自动化测试与驱动回归**：
-   - 编写并通过 `test/net/test_read_capped.cp`（包含常量基准、错误枚举、连接级与全局预算 charge/refund 拦截、连接断开全量释放与峰值保留）；
-   - 编写并通过 `test/cdp/test_worker_budget.cp`（包含标准容量、Worker/OOPIF 租约申请与配额耗尽拒绝、幂等归还、诊断快照与格式化输出）；
+   - 编写并通过 `test/cdp/test_outbound_filters.cp`（覆盖 12 大正则测试组：字面量、锚点、点号通配、字符集/范围、取反集合、转义类、分支选择、量词、词边界、非捕获分组、ReDoS 免疫检查、超限保护拦截，以及出站过滤器拦截规则与注册表管理）；
+   - 编写并通过 `test/net/test_speculative_prefetch.cp`（覆盖 `maySpeculate` 默认允许、路由拦截拒绝、出站过滤器拒绝、`PrefetchBatchRunner` 批量预取、8KB 门槛过滤、Idle 导航计数递增淘汰、Stale 拒绝集合与上下文清理）；
    - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
-   - 独立可执行二进制 `bin/main`（8.4MB）与 BEAM 容器动态库 `bin/main.so`（9.6MB）双模构建验证 100% 成功；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

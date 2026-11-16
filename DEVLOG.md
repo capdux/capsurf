@@ -420,4 +420,27 @@
    - **最佳实践**：在 CP 编写自定义资源归还或租约释放方法时，严禁使用裸词 `release(...)` 命名带参数的常规方法，统一推荐命名为 `relinquish(...)`、`releaseLease(...)` 或 `releaseKind(...)`，彻底规避编译器的隐式 Drop 机制。
 
 
+## Phase 16 Pike VM 线性正则引擎与投机预取/已学习脚本技术方案
+1. **Pike VM 非回溯线性正则匹配器 (`src/cdp/linear_regex.cp`)**：
+   - **设计动机**：CDP 出站过滤器需要对页面请求 URL 匹配用户定义的正则模式。传统 NFA/DFA 引擎（如带有回溯的正则引擎）在面临恶意构造的模式（如 `(a+)+$`）时会发生指数级回溯爆炸（ReDoS），瞬间耗尽 CPU 并导致多租户服务假死；
+   - **解决方案**：
+     - 采用 Pike VM 架构，将正则表达式转译为紧凑的虚拟机指令流（`Char`, `Class`, `Dot`, `WordBoundary`, `Bol`, `Eol`, `Match`, `Jmp`, `Split`）；
+     - 维护当前与下一轮双缓冲 `ThreadList`，并借助基于 `generation` 世代号的已访问记录（`seen` 数组），使得每个字节仅遍历当前存活线程的 Epsilon 闭包，单次匹配耗时严格控制在 $O(N \times M)$（输入长度 $\times$ 程序步数）；
+     - 引入首字符预过滤 `StartSet`（ASCII 128 位图与 `anchored` 锚点判定）：若字符不在有效首字符集中，直接在循环中跳过位置遍历，大幅加速无匹配长 URL 的前向扫描；
+     - 严格设定安全防护上限：`MAX_REPEAT = 1000`、`MAX_PROGRAM = 8192`，在 AST 阶段通过 `expandedSize` 进行饱和预估，拦截反向引用与超限展开。
+2. **投机性预取调度器与拦截门禁 (`src/net/speculative_prefetch.cp`)**：
+   - **设计动机**：W3C Speculation Rules 规范允许页面预取未来可能访问的脚本和资源，但不能阻塞关键渲染路径，且必须受到出站安全规则与 CDP Fetch 拦截规则的严格约束；
+   - **解决方案**：
+     - 设定固定超时 `SPECULATIVE_DEADLINE_MS = 1000` 与并发度 `SPECULATIVE_CONCURRENCY = 2`；
+     - 实现 `maySpeculate` 判定：当连接启用了 `Fetch.enable` 拦截且匹配 `Script` 资源，或命中了 `OutboundFilters` 的黑名单模式时，直接拒绝投机预取，防止无谓的网络抖动与竞态；
+     - 实现 `PrefetchBatchRunner`：利用非阻塞时间戳差值（`getMilliTimestamp`）控制批处理超时，保障 Agent 交互不受投机预取阻塞。
+3. **已学习脚本 Origin/Context 双键复用缓存 (`src/eval/learned_scripts.cp`)**：
+   - **设计动机**：现代单页应用（SPA）与复杂多页面应用在相同 Origin 和 Context 下多次导航时，经常插入相同的大体积公共脚本。重复从网络或磁盘拉取会拖慢并发 Agent 的页面就绪速度；
+   - **解决方案**：
+     - 设定 `MIN_LEARNED_BYTES = 8192`：小脚本不记录，仅对 >= 8KB 的关键业务脚本进行学习；
+     - 采用纯栈/定长结构体数组实现高效 LRU 淘汰：支持单 Origin 最多 24 个 URL、全局最多 32 个 Origin 分区；
+     - 实现 `MAX_IDLE_NAVIGATES = 3` 自动淘汰策略：若连续 3 次页面导航均未使用该学习脚本，自动将其从缓存中清除，实现完全免垃圾回收的高效内存复用。
+
+
+
 

@@ -472,5 +472,30 @@
   - 双模构建验证：`bin/main`（8.4MB 独立可执行二进制）与 `bin/main.so`（9.6MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 16: Linear Regex Pike VM Engine, Speculative Prefetch & Learned Scripts Cache (100% Closed)
+- **`src/cdp/linear_regex.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/linear-regex.ts`）：
+  - 实装 Pike VM 线性正则引擎（Parser, AST Node, ExpandedSize 限制, Emit Bytecode Inst, StartSet 预过滤, ThreadList 双缓冲, matches 匹配）；
+  - 常量 `MAX_REPEAT = 1000`, `MAX_PROGRAM = 8192`，杜绝回溯，执行复杂度严格保证 $O(N \times M)$，全面免疫 ReDoS；
+  - 提供 `LinearRegex` 结构体（提供 `fn @"test"(*_, input: []const u8): bool` 与 `deinit`）及公开编译入口 `compileLinearRegex`。
+- **`src/cdp/outbound_filters.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/outbound-filter-registry.ts`）：
+  - 实装 `OutboundResourceType` 18 种标准资源类型枚举与大小写不敏感解析器；
+  - 实装 `OutboundFilters`：支持各 32 条允许/拒绝正则和 16 种允许/拒绝资源类型；
+  - 实装 `OutboundFilterRegistry`：按连接 ID（`connection_id`）隔离注册与查询，提供 `compileOutboundFilters` 与 `shouldBlock`。
+- **`src/net/speculative_prefetch.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/speculative-prefetch.ts`）：
+  - 实装投机预取协调器常量：`SPECULATIVE_DEADLINE_MS = 1000`、`SPECULATIVE_CONCURRENCY = 2`；
+  - 实装快速准入判定 `maySpeculate(connection_id, url)`：无缝桥接 `FetchInterceptionState` 路由拦截与 `OutboundFilters` 出站过滤器；
+  - 实装批处理投机预取控制机制 `prefetchBestEffort` 与 `PrefetchBatchRunner`。
+- **`src/eval/learned_scripts.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/learned-scripts.ts`）：
+  - 实装已学习脚本重用缓存常量：`MIN_LEARNED_BYTES = 8192`、`MAX_URLS_PER_ORIGIN = 24`、`MAX_ORIGINS = 32`、`MAX_IDLE_NAVIGATES = 3`；
+  - 实装 `InsertedRun`（`boa`, `baked`, `stale`）；
+  - 实装 `LearnedScriptsStore`：基于 Origin 与 Context 双键的 LRU 淘汰机制（`touch`、`trimOldest`、`MAX_IDLE_NAVIGATES` 导航递增淘汰及 query-string 防雪崩二次插入学习机制）。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_outbound_filters.cp`：全量测试 100% 全部通过（覆盖 12 大正则测试组与出站过滤器拦截规则）；
+  - `test/net/test_speculative_prefetch.cp`：全量测试 100% 全部通过（覆盖 `maySpeculate` 准入判定、`PrefetchBatchRunner` 批量预取、8KB 门槛过滤、Idle 导航计数递增淘汰、Stale 拒绝集合与上下文清理）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
