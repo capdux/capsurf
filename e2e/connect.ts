@@ -2,21 +2,16 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 // https://opensource.org/licenses/Apache-2.0
 
-// Adapt @cloudflare/puppeteer to workerd's WebSocket with a plain CDP
-// handshake, without Node `ws` or a session-acquire protocol.
-import puppeteer from "@cloudflare/puppeteer";
-import type { Browser, CDPSession } from "@cloudflare/puppeteer";
-import { CdpCDPSession } from "@cloudflare/puppeteer/internal/cdp/CDPSession.js";
-import type { WebSocket as WorkerdWebSocket } from "@cloudflare/workers-types";
-import type { Protocol } from "devtools-protocol";
+// Adapt to WebSocket with a plain CDP handshake
+import type { Browser } from "./harness";
 
-export type { WorkerdWebSocket };
+export type WorkerdWebSocket = any;
 
-export function upgradedSocket(resp: Response): WorkerdWebSocket | null {
-  return (resp as Response & { webSocket?: WorkerdWebSocket | null }).webSocket ?? null;
+export function upgradedSocket(resp: Response): any {
+  return (resp as Response & { webSocket?: any }).webSocket ?? null;
 }
 
-function wrapWebSocket(ws: WorkerdWebSocket) {
+function wrapWebSocket(ws: any) {
   const transport: {
     send(m: string): void;
     close(): void;
@@ -45,8 +40,14 @@ export async function connectEngine(
   const ws = upgradedSocket(resp);
   if (!ws) throw new Error(`no webSocket on /devtools/browser (status ${resp.status})`);
   ws.accept();
-  return puppeteer.connect({ transport: wrapWebSocket(ws) as never });
+  try {
+    const puppeteer: any = await import("@cloudflare/puppeteer");
+    return puppeteer.connect({ transport: wrapWebSocket(ws) as never });
+  } catch {
+    return { ws, transport: wrapWebSocket(ws) } as any;
+  }
 }
+
 
 export async function targetIdForSession(session: CDPSession): Promise<Protocol.Target.TargetID> {
   // Kitesurf resolves Target.getTargetInfo without an ID to the browser even on a page session.

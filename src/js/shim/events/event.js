@@ -121,3 +121,16 @@ function InputEvent(type, options) {
 InputEvent.prototype = Object.create(UIEvent.prototype);
 InputEvent.prototype.constructor = InputEvent;
 markNative(InputEvent, "InputEvent");
+
+function MessageEvent(type, options) {
+  Event.call(this, type, options);
+  const opts = options || {};
+  this.data = opts.data !== undefined ? opts.data : null;
+  this.origin = opts.origin !== undefined ? String(opts.origin) : "";
+  this.lastEventId = opts.lastEventId !== undefined ? String(opts.lastEventId) : "";
+  this.source = opts.source !== undefined ? opts.source : null;
+  this.ports = Array.isArray(opts.ports) ? Object.freeze(opts.ports.slice()) : Object.freeze([]);
+}
+MessageEvent.prototype = Object.create(Event.prototype);
+MessageEvent.prototype.constructor = MessageEvent;
+markNative(MessageEvent, "MessageEvent");

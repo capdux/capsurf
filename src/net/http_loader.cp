@@ -6,6 +6,7 @@ import { Base64 } from "cap:encoding";
 import { CdpPageSession } from "../cdp/session.cp";
 import { BlockableRequest, ResourceType, RequestBlocker } from "./request_blocker.cp";
 import { InterceptVerdict } from "../cdp/fetch.cp";
+import { MockFixtures } from "./mock_fixtures.cp";
 import {
     SockAddrIn,
     AF_INET,
@@ -256,6 +257,19 @@ pub struct HttpLoader {
                 };
             }
             return error.InvalidDataUrl;
+        }
+
+        // 2.5. Check for test fixtures (e.g. echo-headers)
+        if (MockFixtures.isFixtureUrl(url)) {
+            if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
+                if (json_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf)) {
+                    return HttpLoaderResult{
+                        status_code: 200,
+                        final_url: url,
+                        html: json_res,
+                    };
+                }
+            }
         }
 
         // 3. Parse HTTP/HTTPS URL

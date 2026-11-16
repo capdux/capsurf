@@ -11,6 +11,7 @@ function installShim(global) {
   global.KeyboardEvent = KeyboardEvent;
   global.FocusEvent = FocusEvent;
   global.InputEvent = InputEvent;
+  global.MessageEvent = MessageEvent;
   global.EventTarget = EventTarget;
 
   // 2. Expose DOM Collections and Nodes

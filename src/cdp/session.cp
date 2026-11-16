@@ -6,7 +6,7 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, jsToSlice, jsIsException } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent } from "./types.cp";
@@ -234,25 +234,81 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
     return dst[0..out_idx];
 }
 
-    pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
-        const val = _.ctx.eval(expr);
-        defer _.ctx.freeValue(val);
+    fn formatCdpException(*_, exc: JSValue, out_buf: []u8): usize {
+        const exc_str = _.ctx.toCString(exc);
+        defer std.heap.page_allocator.free(exc_str);
 
-        if (jsIsException(val)) {
-            const exc = _.ctx.getException();
-            defer _.ctx.freeValue(exc);
-            const exc_str = _.ctx.toCString(exc);
-            defer std.heap.page_allocator.free(exc_str);
+        let esc_exc_buf: [1024]u8 = [0; 1024];
+        const esc_exc = escapeJsonString(exc_str, &esc_exc_buf);
 
-            let esc_exc_buf: [1024]u8 = [0; 1024];
-            const esc_exc = escapeJsonString(exc_str, &esc_exc_buf);
+        const err_json = std.fmt.bufPrint(
+            out_buf,
+            "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"description\":\"{s}\"}}}}}}",
+            .{esc_exc},
+        ) catch return 0;
+        return err_json.len;
+    }
 
-            const err_json = std.fmt.bufPrint(
+    fn formatCdpResult(*_, val: JSValue, out_buf: []u8): usize {
+        if (val.tag == JS_TAG_INT) {
+            const n: i32 = @as(i32, @bitCast(@as(u32, @truncate(val.u.uint64))));
+            const formatted = std.fmt.bufPrint(
                 out_buf,
-                "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"description\":\"{s}\"}}}}}}",
-                .{esc_exc},
+                "{{\"result\":{{\"type\":\"number\",\"value\":{d}}}}}",
+                .{n},
             ) catch return 0;
-            return err_json.len;
+            return formatted.len;
+        }
+
+        if (val.tag == JS_TAG_FLOAT64) {
+            const f: f64 = @as(f64, @bitCast(val.u.uint64));
+            const formatted = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"number\",\"value\":{d}}}}}",
+                .{f},
+            ) catch return 0;
+            return formatted.len;
+        }
+
+        if (val.tag == JS_TAG_BOOL) {
+            const b = val.u.uint64 != 0;
+            const formatted = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"boolean\",\"value\":{s}}}}}",
+                .{if (b) "true" else "false"},
+            ) catch return 0;
+            return formatted.len;
+        }
+
+        if (val.tag == JS_TAG_NULL) {
+            const formatted = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"object\",\"value\":null}}}}",
+                .{},
+            ) catch return 0;
+            return formatted.len;
+        }
+
+        if (val.tag == JS_TAG_UNDEFINED) {
+            const formatted = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"undefined\"}}}}",
+                .{},
+            ) catch return 0;
+            return formatted.len;
+        }
+
+        if (val.tag == JS_TAG_OBJECT) {
+            const json_str = _.ctx.jsonStringify(val);
+            defer std.heap.page_allocator.free(json_str);
+            if (json_str.len > 0 && (json_str[0] == '{' || json_str[0] == '[')) {
+                const formatted = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"result\":{{\"type\":\"object\",\"value\":{s}}}}}",
+                    .{json_str},
+                ) catch return 0;
+                return formatted.len;
+            }
         }
 
         const res_str = _.ctx.toCString(val);
@@ -267,6 +323,39 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
             .{esc_str},
         ) catch return 0;
         return formatted.len;
+    }
+
+    pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
+        const val = _.ctx.eval(expr);
+        defer _.ctx.freeValue(val);
+
+        if (_.ctx.isPromise(val)) {
+            let limit: u32 = 100000;
+            while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
+                const r = _.ctx.executePendingJobs();
+                if (r <= 0) break;
+            }
+
+            if (_.ctx.promiseState(val) == 1) {
+                const res_val = _.ctx.promiseResult(val);
+                defer _.ctx.freeValue(res_val);
+                return _.formatCdpResult(res_val, out_buf);
+            } else if (_.ctx.promiseState(val) == 2) {
+                const rej_val = _.ctx.promiseResult(val);
+                defer _.ctx.freeValue(rej_val);
+                return _.formatCdpException(rej_val, out_buf);
+            }
+        }
+
+        _.ctx.drainJobs();
+
+        if (jsIsException(val)) {
+            const exc = _.ctx.getException();
+            defer _.ctx.freeValue(exc);
+            return _.formatCdpException(exc, out_buf);
+        }
+
+        return _.formatCdpResult(val, out_buf);
     }
 
     pub fn querySelector(*_, selector: []const u8): NodeId {

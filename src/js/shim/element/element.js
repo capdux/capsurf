@@ -195,6 +195,8 @@ function installElementExtensions(proto) {
     const key = String(name);
     const val = String(value);
     if (!this._attrs) this._syncAttrs();
+    const oldEntry = this._attrs.get(key.toLowerCase());
+    const oldVal = oldEntry ? oldEntry.value : null;
     this._attrs.set(key.toLowerCase(), { name: key, value: val });
     if (key.toLowerCase() === "id") {
       this.id = val;
@@ -207,6 +209,12 @@ function installElementExtensions(proto) {
     if (this._attributesMap) {
       this._attributesMap._sync();
     }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("attributes", this);
+      rec.attributeName = key;
+      rec.oldValue = oldVal;
+      notifyMutation(rec);
+    }
   };
   markNative(proto.setAttribute, "setAttribute");
 
@@ -215,6 +223,8 @@ function installElementExtensions(proto) {
   proto.removeAttribute = function (name) {
     const key = String(name).toLowerCase();
     if (!this._attrs) this._syncAttrs();
+    const oldEntry = this._attrs.get(key);
+    const oldVal = oldEntry ? oldEntry.value : null;
     this._attrs.delete(key);
     if (key === "id") {
       this.id = "";
@@ -226,6 +236,12 @@ function installElementExtensions(proto) {
     }
     if (this._attributesMap) {
       this._attributesMap._sync();
+    }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("attributes", this);
+      rec.attributeName = name;
+      rec.oldValue = oldVal;
+      notifyMutation(rec);
     }
   };
   markNative(proto.removeAttribute, "removeAttribute");

@@ -29,6 +29,7 @@ pub @c {
     fn JS_SetMaxStackSize(rt: *JSRuntime, stack_size: usize);
     fn JS_UpdateStackTop(rt: *JSRuntime);
     fn JS_SetInterruptHandler(rt: *JSRuntime, cb: (@c fn(rt: *JSRuntime, opaque_ptr: *!?): i32)?, opaque_ptr: *!?);
+    fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;
     fn JS_FreeContext(ctx: *JSContext);
@@ -72,6 +73,10 @@ pub @c {
     fn JS_FreeCString(ctx: *const JSContext, ptr: [*]const u8!?);
     fn JS_FreeValue(ctx: *const JSContext, v: JSValue);
     fn JS_DupValue(ctx: *const JSContext, v: JSValue): JSValue;
+    fn JS_IsPromise(val: JSValue): bool;
+    fn JS_PromiseState(ctx: *JSContext, promise: JSValue): i32;
+    fn JS_PromiseResult(ctx: *JSContext, promise: JSValue): JSValue;
+    fn JS_JSONStringify(ctx: *JSContext, obj: JSValue, replacer: JSValue, space0: JSValue): JSValue;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;
@@ -147,6 +152,20 @@ pub fn jsToSlice(ctx: *const JSContext, val: JSValue): []const u8 {
         defer JS_FreeCString(ctx, str_ptr);
         return std.heap.page_allocator.dupe(u8, str_ptr.?[0..len]) catch "";
     }
+    return "";
+}
+
+pub fn jsJsonStringify(ctx: *JSContext, val: JSValue): []const u8 {
+    const jval = JS_JSONStringify(ctx, val, jsUndefined(), jsUndefined());
+    let len: usize = 0;
+    const str_ptr = JS_ToCStringLen2(ctx, &len, jval, 0);
+    if (str_ptr != null) {
+        defer JS_FreeCString(ctx, str_ptr);
+        const dup = std.heap.page_allocator.dupe(u8, str_ptr.?[0..len]) catch "";
+        JS_FreeValue(ctx, jval);
+        return dup;
+    }
+    JS_FreeValue(ctx, jval);
     return "";
 }
 
@@ -288,5 +307,32 @@ pub struct JsContext {
 
     fn dupValue(val: JSValue): JSValue {
         return JS_DupValue(_.raw_ctx, val);
+    }
+
+    fn executePendingJobs(*_): i32 {
+        let pctx: (*JSContext)? = null;
+        return JS_ExecutePendingJob(_.runtime.raw_rt, &pctx);
+    }
+
+    fn drainJobs(*_) {
+        let pctx: (*JSContext)? = null;
+        while (JS_ExecutePendingJob(_.runtime.raw_rt, &pctx) > 0) {}
+    }
+
+    fn isPromise(val: JSValue): bool {
+        * = _.raw_ctx;
+        return JS_IsPromise(val);
+    }
+
+    fn promiseState(val: JSValue): i32 {
+        return JS_PromiseState(_.raw_ctx, val);
+    }
+
+    fn promiseResult(val: JSValue): JSValue {
+        return JS_PromiseResult(_.raw_ctx, val);
+    }
+
+    fn jsonStringify(val: JSValue): []const u8 {
+        return jsJsonStringify(_.raw_ctx, val);
     }
 }

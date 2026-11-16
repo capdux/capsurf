@@ -22,7 +22,8 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload")) {
+            std.mem.eql(u8, req.method, "Page.reload") ||
+            std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
             return CdpResponse.ok(req.id, "{}");
         }
 

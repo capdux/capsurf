@@ -58,7 +58,7 @@ Node.prototype.contains = function (other) {
   if (!other) return false;
   let curr = other;
   while (curr) {
-    if (curr === this) return true;
+    if (curr === this || (this._nid !== undefined && curr._nid !== undefined && curr._nid === this._nid)) return true;
     curr = curr.parentNode || curr.parentElement;
   }
   return false;

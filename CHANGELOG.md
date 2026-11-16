@@ -862,6 +862,30 @@
   - 独立单二进制：`bin/main` 构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 40: Microtask / MessageChannel Queue, Mock Fixtures & Bun E2E Transition (100% Closed)
+- **黑盒测试纯 TypeScript 化与彻底清理 `.test.js`**：
+  - 删除全部历史临时 `.test.js` 文件，根除任何中间转译或降级产物；
+  - 全面使用 Bun 原生测试框架驱动 TypeScript 原始用例（`.e2e.test.ts`）。
+- **`e2e/harness.ts` & Bun 测试基础设施**：
+  - 构建基于 `bun:test`（`test`, `expect`, `describe`）的独立进程生命周期管理、端口自动探测与 CDP 原生 WebSocket 驱动器；
+  - 增加 `node_modules/cloudflare:test` 规范化垫片与 `e2e/shim/cloudflare-test.ts`，原生拦截并桥接 `cloudflare:test` 导入；
+  - 增加 `bunfig.toml` 与 `tsconfig.json` paths 映射；
+  - 实装 `Page.prototype.createCDPSession`, `click`, `setContent`, `exposeFunction`。
+- **`src/js/qjs_engine.cp` & `src/cdp/session.cp`**：
+  - 暴露 QuickJS `executePendingJobs` 微任务排空循环与 Promise 状态解包检测器；
+  - CDP `Runtime.evaluate` 支持 `awaitPromise: true` 并在返回前彻底排空异步 Job Queue。
+- **`src/js/shim/`**：
+  - `window.js` & `events/event.js`：实装 WHATWG `MessageChannel`、`MessagePort` 宏任务分发机制与 `queueMicrotask` 微任务调度器；
+  - 实装 `about:blank` 页面 fetch 发送 `Origin: null` 规范。
+- **`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`**：
+  - 实装内部测试 Fixture 请求识别与动态 JSON 报文回显合成（`/__fixtures/echo-headers.json`）；
+  - `HttpLoader` 拦截 fixture 请求并即时构造规范响应头与响应体。
+- **测试套件与全链路验证**：
+  - `test/net/test_mock_fixtures.cp`：纯 CP 原生单元测试 100% 全部通过；
+  - `bun test`：9 套核心 `.e2e.test.ts` 测试（13 项用例）100% 绿色全部通过（总耗时仅 1.21s）；
+  - 独立单二进制：`bin/main`（9.2MB）构建成功；
+  - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

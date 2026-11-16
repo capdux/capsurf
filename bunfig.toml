@@ -1,0 +1,3 @@
+[test]
+preload = ["./e2e/preload.ts"]
+root = "./e2e"

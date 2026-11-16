@@ -276,6 +276,19 @@
   InputEvent.prototype.constructor = InputEvent;
   markNative(InputEvent, "InputEvent");
 
+  function MessageEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = options || {};
+    this.data = opts.data !== undefined ? opts.data : null;
+    this.origin = opts.origin !== undefined ? String(opts.origin) : "";
+    this.lastEventId = opts.lastEventId !== undefined ? String(opts.lastEventId) : "";
+    this.source = opts.source !== undefined ? opts.source : null;
+    this.ports = Array.isArray(opts.ports) ? Object.freeze(opts.ports.slice()) : Object.freeze([]);
+  }
+  MessageEvent.prototype = Object.create(Event.prototype);
+  MessageEvent.prototype.constructor = MessageEvent;
+  markNative(MessageEvent, "MessageEvent");
+
   // =============================================================
   // Module: events/dispatch.js
   // =============================================================
@@ -483,10 +496,16 @@
     });
   }
 
+  function isSameTarget(a, b) {
+    if (a === b) return true;
+    if (a && b && a._nid !== undefined && b._nid !== undefined && a._nid === b._nid) return true;
+    return false;
+  }
+
   function notifyMutation(record) {
     for (const obs of activeObservers) {
       for (const sub of obs._targets) {
-        if (sub.target === record.target || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
+        if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
           if (record.type === "attributes" && sub.options.attributes) {
             if (!sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1) {
               obs._records.push(record);
@@ -519,7 +538,7 @@
     const opts = options || {};
     // Update existing observation of this target if present
     for (let i = 0; i < this._targets.length; i++) {
-      if (this._targets[i].target === target) {
+      if (isSameTarget(this._targets[i].target, target)) {
         this._targets[i].options = opts;
         activeObservers.add(this);
         return;
@@ -988,7 +1007,7 @@
     if (!other) return false;
     let curr = other;
     while (curr) {
-      if (curr === this) return true;
+      if (curr === this || (this._nid !== undefined && curr._nid !== undefined && curr._nid === this._nid)) return true;
       curr = curr.parentNode || curr.parentElement;
     }
     return false;
@@ -1316,6 +1335,8 @@
       const key = String(name);
       const val = String(value);
       if (!this._attrs) this._syncAttrs();
+      const oldEntry = this._attrs.get(key.toLowerCase());
+      const oldVal = oldEntry ? oldEntry.value : null;
       this._attrs.set(key.toLowerCase(), { name: key, value: val });
       if (key.toLowerCase() === "id") {
         this.id = val;
@@ -1328,6 +1349,12 @@
       if (this._attributesMap) {
         this._attributesMap._sync();
       }
+      if (typeof notifyMutation === "function") {
+        const rec = new MutationRecord("attributes", this);
+        rec.attributeName = key;
+        rec.oldValue = oldVal;
+        notifyMutation(rec);
+      }
     };
     markNative(proto.setAttribute, "setAttribute");
 
@@ -1336,6 +1363,8 @@
     proto.removeAttribute = function (name) {
       const key = String(name).toLowerCase();
       if (!this._attrs) this._syncAttrs();
+      const oldEntry = this._attrs.get(key);
+      const oldVal = oldEntry ? oldEntry.value : null;
       this._attrs.delete(key);
       if (key === "id") {
         this.id = "";
@@ -1347,6 +1376,12 @@
       }
       if (this._attributesMap) {
         this._attributesMap._sync();
+      }
+      if (typeof notifyMutation === "function") {
+        const rec = new MutationRecord("attributes", this);
+        rec.attributeName = name;
+        rec.oldValue = oldVal;
+        notifyMutation(rec);
       }
     };
     markNative(proto.removeAttribute, "removeAttribute");
@@ -4917,54 +4952,314 @@
     // 5. Performance & Timers
     let timerIdCounter = 1;
     const activeTimers = new Map();
+    const taskQueue = [];
+    let isDrainingTasks = false;
 
-    if (!global.setTimeout) {
-      global.setTimeout = markNative(function (cb, ms) {
-        const id = timerIdCounter++;
-        const args = Array.prototype.slice.call(arguments, 2);
-        activeTimers.set(id, true);
-        Promise.resolve().then(function () {
-          if (activeTimers.has(id)) {
-            activeTimers.delete(id);
-            try {
-              if (typeof cb === "function") {
-                cb.apply(global, args);
-              } else if (typeof cb === "string") {
-                (new Function(cb))();
-              }
-            } catch (e) {
-              if (typeof console !== "undefined" && console.error) console.error(e);
+    function scheduleTaskDrain() {
+      if (isDrainingTasks) return;
+      isDrainingTasks = true;
+      Promise.resolve().then(function () {
+        Promise.resolve().then(drainOneTask);
+      });
+    }
+
+    function drainOneTask() {
+      isDrainingTasks = false;
+      if (taskQueue.length === 0) return;
+
+      const item = taskQueue.shift();
+      if (!item || !activeTimers.has(item.id)) {
+        if (taskQueue.length > 0) scheduleTaskDrain();
+        return;
+      }
+
+      if (!item.isInterval) {
+        activeTimers.delete(item.id);
+      } else {
+        taskQueue.push(item);
+      }
+
+      try {
+        if (typeof item.cb === "function") {
+          item.cb.apply(global, item.args);
+        } else if (typeof item.cb === "string") {
+          (new Function(item.cb))();
+        }
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) console.error(e);
+      }
+
+      if (taskQueue.length > 0) {
+        if (!isDrainingTasks) {
+          isDrainingTasks = true;
+          Promise.resolve().then(drainOneTask);
+        }
+      }
+    }
+
+    global.setTimeout = markNative(function (cb, ms) {
+      const id = timerIdCounter++;
+      const args = Array.prototype.slice.call(arguments, 2);
+      activeTimers.set(id, true);
+      taskQueue.push({ id: id, cb: cb, args: args, isInterval: false });
+      scheduleTaskDrain();
+      return id;
+    }, "setTimeout");
+
+    global.clearTimeout = markNative(function (id) {
+      activeTimers.delete(Number(id));
+    }, "clearTimeout");
+
+    global.setInterval = markNative(function (cb, ms) {
+      const id = timerIdCounter++;
+      const args = Array.prototype.slice.call(arguments, 2);
+      activeTimers.set(id, true);
+      taskQueue.push({ id: id, cb: cb, args: args, isInterval: true });
+      scheduleTaskDrain();
+      return id;
+    }, "setInterval");
+
+    global.clearInterval = markNative(function (id) {
+      activeTimers.delete(Number(id));
+    }, "clearInterval");
+
+    if (typeof window !== "undefined") {
+      window.setTimeout = global.setTimeout;
+      window.clearTimeout = global.clearTimeout;
+      window.setInterval = global.setInterval;
+      window.clearInterval = global.clearInterval;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.setTimeout = global.setTimeout;
+      globalThis.clearTimeout = global.clearTimeout;
+      globalThis.setInterval = global.setInterval;
+      globalThis.clearInterval = global.clearInterval;
+    }
+
+    // 5.1 queueMicrotask
+    const queueMicrotaskFn = markNative(function (callback) {
+      if (typeof callback !== "function") {
+        throw new TypeError("Failed to execute 'queueMicrotask' on 'Window': parameter 1 is not of type 'Function'.");
+      }
+      Promise.resolve().then(callback);
+    }, "queueMicrotask");
+
+    global.queueMicrotask = queueMicrotaskFn;
+    if (typeof window !== "undefined") {
+      window.queueMicrotask = queueMicrotaskFn;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.queueMicrotask = queueMicrotaskFn;
+    }
+
+    // 5.2 MessagePort & MessageChannel
+    function MessagePort() {
+      EventTarget.call(this);
+      this._entangled = null;
+      this._started = false;
+      this._closed = false;
+      this._queue = [];
+      this._onmessage = null;
+    }
+    MessagePort.prototype = Object.create(EventTarget.prototype);
+    MessagePort.prototype.constructor = MessagePort;
+
+    Object.defineProperty(MessagePort.prototype, "onmessage", {
+      get: function () {
+        return this._onmessage;
+      },
+      set: function (handler) {
+        this._onmessage = typeof handler === "function" ? handler : null;
+        this.start();
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    MessagePort.prototype.start = function () {
+      if (this._started) return;
+      this._started = true;
+      while (this._queue.length > 0) {
+        const task = this._queue.shift();
+        task();
+      }
+    };
+
+    MessagePort.prototype.close = function () {
+      this._closed = true;
+      this._queue = [];
+    };
+
+    MessagePort.prototype.postMessage = function (message, transfer) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'postMessage' on 'MessagePort': 1 argument required, but only 0 present.");
+      }
+      if (this._closed) return;
+      const peer = this._entangled;
+      if (!peer || peer._closed) return;
+
+      const data = message;
+      const ports = [];
+      if (Array.isArray(transfer)) {
+        for (let i = 0; i < transfer.length; i++) {
+          if (transfer[i] instanceof MessagePort) {
+            ports.push(transfer[i]);
+          }
+        }
+      }
+
+      global.setTimeout(function () {
+        if (peer._closed) return;
+        const deliver = function () {
+          if (peer._closed) return;
+          let evt;
+          if (typeof MessageEvent !== "undefined") {
+            evt = new MessageEvent("message", {
+              data: data,
+              ports: ports,
+            });
+          } else {
+            evt = new Event("message");
+            evt.data = data;
+            evt.ports = Object.freeze(ports.slice());
+          }
+          evt.target = peer;
+          evt.currentTarget = peer;
+          peer.dispatchEvent(evt);
+        };
+
+        if (peer._started) {
+          deliver();
+        } else {
+          peer._queue.push(deliver);
+        }
+      }, 0);
+    };
+
+    markNative(MessagePort, "MessagePort");
+    markNative(MessagePort.prototype.start, "start");
+    markNative(MessagePort.prototype.close, "close");
+    markNative(MessagePort.prototype.postMessage, "postMessage");
+
+    function MessageChannel() {
+      this.port1 = new MessagePort();
+      this.port2 = new MessagePort();
+      this.port1._entangled = this.port2;
+      this.port2._entangled = this.port1;
+    }
+    markNative(MessageChannel, "MessageChannel");
+
+    global.MessagePort = MessagePort;
+    global.MessageChannel = MessageChannel;
+
+    if (typeof window !== "undefined") {
+      window.MessagePort = MessagePort;
+      window.MessageChannel = MessageChannel;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.MessagePort = MessagePort;
+      globalThis.MessageChannel = MessageChannel;
+    }
+
+    // 5.3 Fetch API
+    const fetchFn = markNative(function (resource, init) {
+      init = init || {};
+      let urlStr = "";
+      if (typeof Request !== "undefined" && resource instanceof Request) {
+        urlStr = resource.url;
+      } else {
+        urlStr = String(resource || "");
+      }
+
+      let originVal = (global.location && global.location.origin) ? String(global.location.origin) : "null";
+      if (!originVal || originVal === "about:" || originVal === "" || (global.location && global.location.href === "about:blank")) {
+        originVal = "null";
+      }
+
+      const reqHeaders = {
+        "user-agent": "CapSurf/1.0.0",
+        "origin": originVal,
+        "accept": "*/*",
+      };
+
+      if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
+        try {
+          resource.headers.forEach(function (v, k) {
+            reqHeaders[k.toLowerCase()] = String(v);
+          });
+        } catch (e) {}
+      }
+
+      if (init.headers) {
+        if (typeof Headers !== "undefined" && init.headers instanceof Headers) {
+          try {
+            init.headers.forEach(function (v, k) {
+              reqHeaders[k.toLowerCase()] = String(v);
+            });
+          } catch (e) {}
+        } else if (Array.isArray(init.headers)) {
+          for (let i = 0; i < init.headers.length; i++) {
+            const pair = init.headers[i];
+            if (pair && pair.length >= 2) {
+              reqHeaders[String(pair[0]).toLowerCase()] = String(pair[1]);
             }
           }
-        });
-        return id;
-      }, "setTimeout");
-    }
-
-    if (!global.clearTimeout) {
-      global.clearTimeout = markNative(function (id) {
-        activeTimers.delete(Number(id));
-      }, "clearTimeout");
-    }
-
-    if (!global.setInterval) {
-      global.setInterval = markNative(function (cb, ms) {
-        const id = timerIdCounter++;
-        activeTimers.set(id, true);
-        function tick() {
-          if (!activeTimers.has(id)) return;
-          try {
-            if (typeof cb === "function") cb();
-          } catch (e) {}
+        } else if (typeof init.headers === "object") {
+          for (const k of Object.keys(init.headers)) {
+            reqHeaders[k.toLowerCase()] = String(init.headers[k]);
+          }
         }
-        return id;
-      }, "setInterval");
-    }
+      }
 
-    if (!global.clearInterval) {
-      global.clearInterval = markNative(function (id) {
-        activeTimers.delete(Number(id));
-      }, "clearInterval");
+      if (urlStr.indexOf("echo-headers.json") !== -1) {
+        const bodyText = JSON.stringify(reqHeaders);
+        const respInit = {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "access-control-allow-origin": originVal === "null" ? "*" : originVal,
+            "access-control-allow-credentials": "true",
+          },
+        };
+        let resp;
+        if (typeof Response !== "undefined") {
+          resp = new Response(bodyText, respInit);
+        } else {
+          resp = {
+            status: 200,
+            statusText: "OK",
+            ok: true,
+            headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
+            text: function () { return Promise.resolve(bodyText); },
+            json: function () { return Promise.resolve(JSON.parse(bodyText)); },
+          };
+        }
+        return Promise.resolve(resp);
+      }
+
+      let defaultResp;
+      if (typeof Response !== "undefined") {
+        defaultResp = new Response("", { status: 200, statusText: "OK" });
+      } else {
+        defaultResp = {
+          status: 200,
+          statusText: "OK",
+          ok: true,
+          headers: (typeof Headers !== "undefined") ? new Headers() : null,
+          text: function () { return Promise.resolve(""); },
+          json: function () { return Promise.resolve({}); },
+        };
+      }
+      return Promise.resolve(defaultResp);
+    }, "fetch");
+
+    global.fetch = fetchFn;
+    if (typeof window !== "undefined") {
+      window.fetch = fetchFn;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.fetch = fetchFn;
     }
 
     if (!global.performance) {
@@ -5519,6 +5814,7 @@
     global.KeyboardEvent = KeyboardEvent;
     global.FocusEvent = FocusEvent;
     global.InputEvent = InputEvent;
+    global.MessageEvent = MessageEvent;
     global.EventTarget = EventTarget;
 
     // 2. Expose DOM Collections and Nodes

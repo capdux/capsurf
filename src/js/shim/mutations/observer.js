@@ -35,10 +35,16 @@ function scheduleMutationDelivery() {
   });
 }
 
+function isSameTarget(a, b) {
+  if (a === b) return true;
+  if (a && b && a._nid !== undefined && b._nid !== undefined && a._nid === b._nid) return true;
+  return false;
+}
+
 function notifyMutation(record) {
   for (const obs of activeObservers) {
     for (const sub of obs._targets) {
-      if (sub.target === record.target || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
+      if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
         if (record.type === "attributes" && sub.options.attributes) {
           if (!sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1) {
             obs._records.push(record);
@@ -71,7 +77,7 @@ MutationObserver.prototype.observe = function (target, options) {
   const opts = options || {};
   // Update existing observation of this target if present
   for (let i = 0; i < this._targets.length; i++) {
-    if (this._targets[i].target === target) {
+    if (isSameTarget(this._targets[i].target, target)) {
       this._targets[i].options = opts;
       activeObservers.add(this);
       return;

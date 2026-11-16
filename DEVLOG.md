@@ -765,6 +765,26 @@
      - 在 `Headers` 构造器中严格遵循 WebIDL sequence 转换规范，单次捕获迭代器 `next`，并校验二元组数组结构；
      - 在 CDP `Page.navigate` 中规范生命周期，析构旧 `JsDomContext` 并创建新实例，同时将 `global.document` 设置为 `configurable: true`，消除重新导航时的上下文混乱与内存悬垂崩溃。
 
+## Phase 40 Microtask/Macrotask 队列交织、Mock Fixture 合成与 Bun 原生 E2E 驱动架构方案
+1. **HTML5 事件循环规范级 Microtask / Macrotask 队列交织设计 (`src/js/qjs_engine.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`)**：
+   - **设计动机**：根据 HTML5 事件循环规范（§ 8.1.6 Event loops），在每一个宏任务（Macrotask）执行完毕后，引擎必须进入「执行微任务检查点（Perform a microtask checkpoint）」排空整个微任务队列（Promise 回调、`queueMicrotask`、`MutationObserver`），随后方可调度执行下一个宏任务（如 `MessagePort.postMessage`、`setTimeout`）；若微任务与宏任务没有准确解耦交织，异步链式计算将出现时序颠倒；
+   - **解决方案**：
+     - 在 `src/js/qjs_engine.cp` 暴露 `executePendingJobs`，直接驱动 QuickJS 内部的 Promise Job Queue；
+     - 在 CDP `Runtime.evaluate` 中识别 `awaitPromise: true`，在返回评估结果前循环执行微任务队列直到所有 Promise 达成终态并提取真实值（或异常）；
+     - 将 `MessagePort.postMessage` 通过宿主 `setTimeout(..., 0)` 派发，确保由同一个执行上下文排空的 microtask 优先于后续端口消息被处理。
+2. **端到端黑盒测试纯 TypeScript 化与 Bun 原生驱动技术方案 (`e2e/harness.ts`, `bunfig.toml`, `tsconfig.json`)**：
+   - **设计动机**：前期黑盒驱动曾临时转写为 CommonJS `.test.js` 文件，破坏了测试源码的统一性并增加了中间维护成本；同时 Node.js 驱动单次启动开销大（单套用例需 1~2s），而 Bun 具备原生 TypeScript 执行能力与超快启动性能（单用例 ~20ms）；
+   - **解决方案**：
+     - 彻底删除全部历史临时 `.test.js` 文件，恢复全量原生 `.e2e.test.ts`；
+     - 编写 `e2e/harness.ts` 与 `e2e/shim/cloudflare-test.ts`，基于 Bun 的 `bun:test`（`test`, `expect`, `describe`）和原生 WebSocket 客户端驱动 `./bin/main`；
+     - 通过极轻量 `node_modules/cloudflare:test` 映射层，使原版 Kitesurf 用例（包括 `import { env } from "cloudflare:test"`）零修改直跑；
+     - 实装 `releaseSharedCdp`，在测试之间优雅管理 WebSocket 独占连接与重连，支持测试用例高并发连续运行。
+3. **内置 Mock Fixture 响应回显合成器 (`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`)**：
+   - **设计动机**：Kitesurf 原始测试集广泛依赖向 `*.invalid/__fixtures/echo-headers.json` 发送请求以验证网络协议头行为（如 `Origin: null`、用户自定义 Headers、User-Agent 等），而在隔离离线环境中缺乏外部真实服务；
+   - **解决方案**：
+     - 构建 `MockFixtures.isFixtureUrl` 识别请求模式，通过 `handleFixtureRequest` 在内存中毫秒级动态构造合规 JSON 响应并注入回显头；
+     - 在 `HttpLoader.fetchDocument` 中直接拦截，实现完全零外部网络依赖的自包含测试能力。
+
 
 
 

@@ -5,6 +5,8 @@ vendor/
 temp/
 bin/
 .cap/
+node_modules/*
+!node_modules/cloudflare:test
 
 # 转译中间产物与调试映射
 *.zig
