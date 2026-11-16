@@ -657,6 +657,18 @@
    - **解决方案**：
      - 编写 11 步端到端自动化矩阵脚本，严格验证标准 HTTP 自省、WebSocket RFC 6455 帧传输、盒模型像素精度、JS 执行与 PNG 二进制魔数。
 
+## Phase 31 DOM 集合模型与 WebIDL 属性反射引擎技术方案
+1. **DOMTokenList 状态机与内建方法命名规避 (`src/dom/collections.cp`)**：
+   - **设计动机**：前端代码高频调用 `element.classList.add/remove/toggle`。在 CP 语言中，`replace` 关键字会被编译器 AST 自动下沉重写为切片替换函数 `std.mem.replaceOwned`，引发类型推导不匹配；
+   - **解决方案**：
+     - 命名重定义为 `replaceToken`，规避内建符号混淆；
+     - `serialize` 采用单次线性拼接，杜绝任何中间字符串对象分配。
+2. **WebIDL 属性反射截幅与空安全 (`src/dom/reflect.cp`)**：
+   - **设计动机**：DOM 属性（如 `tabIndex`, `width`, `maxLength`）的 WebIDL 规范要求进行有符号/无符号截取、默认值回退和枚举规范化；
+   - **解决方案**：
+     - 使用 CP 原生空值合并运算符 `attr_val ?? default_val` 代替局部解包，消除了局部引用生命周期悬垂（`Cannot return reference to local variable`）报错；
+     - `reflectEnum` 结合忽略大小写匹配与多级缺省回退，严格符合 WHATWG HTML 规范。
+
 
 
 

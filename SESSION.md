@@ -1616,6 +1616,32 @@
    - 独立二进制 `bin/main` 与 BEAM 动态库 `bin/main.so` 双模均一次性成功构建；
    - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 23:21:00] Turn 42
+
+### **[User]**
+> 继续你的工作
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 31（DOM 集合模型、DOMTokenList 状态机与 WebIDL 属性反射引擎）：
+1. **DOM 动态集合与 DOMTokenList (classList) 引擎 (`src/dom/collections.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/collections.ts`（文件头保留来源溯源注释）；
+   - 实装 `DOMTokenList` 核心状态机（`fromString`, `length`, `item`, `contains`, `add`, `remove`, `toggle`, `replaceToken`, `serialize`）；
+   - 实装 `NodeList` 顺序索引集合与 `HTMLCollection` 活态元素集合（支持 `item` 与 `namedItem` 按照 `id` 与 `name` 双向精确检索）。
+2. **WebIDL 属性反射与类型收敛引擎 (`src/dom/reflect.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/element/reflect.ts`（文件头保留来源溯源注释）；
+   - 实装 `reflectString` 与空合并降级；
+   - 实装 `reflectBoolean` 依凭属性存在性反射规范；
+   - 实装 `reflectInteger` 与 `reflectUnsignedInteger` 整数解析与区间截断截幅（Clamping）；
+   - 实装 `reflectEnum` 忽略大小写规范枚举匹配与非法/缺省多级回退；
+   - 实装 `reflectUrl` 基于当前 Base URL 的相对路径解析。
+3. **自动化测试与全链路回归**：
+   - 编写并通过 `test/dom/test_collections_reflect.cp`（3 组测试用例 100% 全部通过：DOMTokenList 增删改查/开关/替换/序列化、HTMLCollection 按 id/name 双重匹配、WebIDL 反射数值截幅/枚举回退/URL 展开）；
+   - 运行并通过 `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js` 真实 Node.js 驱动测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

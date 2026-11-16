@@ -702,6 +702,18 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 31: DOM Collections, DOMTokenList & WebIDL Attribute Reflection (100% Closed)
+- **`src/dom/collections.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/collections.ts`）：
+  - 实装 `DOMTokenList` 状态机（`fromString`, `length`, `item`, `contains`, `add`, `remove`, `toggle`, `replaceToken`, `serialize`）；
+  - 实装 `NodeList` 顺序索引集合与 `HTMLCollection` 活态元素集合（支持 `namedItem` 按 id/name 双重匹配）。
+- **`src/dom/reflect.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/element/reflect.ts`）：
+  - 实装 WebIDL 属性反射规则（`reflectString`, `reflectBoolean`, `reflectInteger`, `reflectUnsignedInteger`, `reflectEnum`, `reflectUrl`）。
+- **测试套件与全链路验证**：
+  - `test/dom/test_collections_reflect.cp`：全量测试 100% 全部通过（3 组测试覆盖 DOMTokenList 状态机、HTMLCollection 双向检索、WebIDL 反射数值截幅与枚举回退）；
+  - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
