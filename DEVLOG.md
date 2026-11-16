@@ -564,6 +564,21 @@
    - **解决方案**：
      - 抹除前缀差异统一路由到核心命令实现，提供会话诊断 `getSessionInfo`、排版模式动态开关 `setLayoutMode` 以及渲染器指标 `getRendererInfo`。
 
+## Phase 24 场景流控反压、Host 二进制切片与顶层 Facade 统一路由技术方案
+1. **Scene Host 二进制分块校验与切片服务 (`src/cdp/scene_host.cp`)**：
+   - **设计动机**：在无头浏览器图形画面或远程隔离环境（RBI）下，客户端需要获取匹配版本的渲染器二进制。必须支持严格的 Sha256 校验与 4MB 切片 Range 响应，防止网络突发洪峰；
+   - **解决方案**：
+     - `SceneHostManifest` 提供 32MB 总体积与 4MB 单块边界检查，通过紧凑 JSON-RPC 输出切片数据 Base64。
+2. **多路 RBI 画面推流管理与反压确认机制 (`src/cdp/scene_stream.cp`)**：
+   - **设计动机**：在高并发场景下向多个 AI Agent 客户端推流渲染画面时，若客户端消费不及时，无节制的发帧会导致严重的内存积压与网络拥塞；
+   - **解决方案**：
+     - `SceneStreamManager` 维护基于信用额度（Credit）的流控调度，客户端每渲染完成一帧回传 `sceneFrameAck`；
+     - 若客户端指示丢帧（`painted: false`），流控引擎自动将 `need_full_frame` 置为真，在下一跳强制触发全量关键帧编码，兼顾吞吐与画面一致性。
+3. **顶层 Facade 门面整合 (`src/cdp/kitesurf_facade.cp`)**：
+   - **设计动机**：消除零散扩展方法与流控制器的调用复杂性，对上层提供单一派发入口；
+   - **解决方案**：
+     - 整合 Scene Host、Scene Stream 与 Protocol Extensions，实现多域协议统一路由。
+
 
 
 

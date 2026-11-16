@@ -612,6 +612,19 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 24: Scene Host Artifact Server, Scene Stream Flow & CDP Facade Router (100% Closed)
+- **`src/cdp/scene_host.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/scene-host.ts`）：
+  - 实装 Scene Host 远端载荷与切片管理 `SceneHostManifest`，提供 4MB 分块上限校验 `validateRange` 与 Manifest/分块数据 JSON 序列化。
+- **`src/cdp/scene_stream.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/scene-stream.ts`）：
+  - 实装 RBI 场景推流管理器 `SceneStreamManager`，支持 16 路并发推流、320x240 至 1440 动态尺寸限制、帧率反压 ACK 机制与掉帧全量重传控制。
+- **`src/cdp/kitesurf_facade.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/kitesurf.ts`）：
+  - 实装顶层 Facade 统一门面路由 `KitesurfFacade`，整合 Scene Host、Scene Stream 与 Protocol Extensions，提供单一分发入口 `dispatchCommand`。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_scene_stream_facade.cp`：全量测试 100% 全部通过（3 组测试覆盖分块合法性校验、帧流控自增与 ACK 机制、Facade 顶层路由）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
