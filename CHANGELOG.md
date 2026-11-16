@@ -714,6 +714,20 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 32: DOM Form Controls, Validation & Submission Serialization (100% Closed)
+- **`src/dom/forms.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/element/forms/`）：
+  - 实装 `FormControlType` 枚举与 `ValidityState` 标准约束验证状态机（`valueMissing`, `typeMismatch`, `tooLong`, `tooShort`, `rangeUnderflow`, `rangeOverflow`, `badInput`, `customError`, `valid`）；
+  - 实装 `FormControl` 表单控件模型（支持 `setValue`, `setChecked`, `setCustomValidity`, `checkValidity`, `reset`, 邮箱/URL 格式校验与数值范围判定）；
+  - 实装 `HTMLFormElement` 表单容器模型（支持控件注册、`findControlByName` 检索、`checkValidity` 级联校验与全表单 `reset`）。
+- **`src/dom/form_submission.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/element/forms/submission.ts`）：
+  - 实装表单数据收集器 `collectFormEntries`（自动过滤禁用控件、未勾选复选/单选框及非触发提交按钮）；
+  - 实装 `application/x-www-form-urlencoded` 百分比编码器与 `multipart/form-data` MIME 边界多段报文序列化器 `serializeSubmission`。
+- **测试套件与全链路验证**：
+  - `test/dom/test_forms_validation.cp`：全量测试 100% 全部通过（覆盖表单验证状态机、长度限制、数值溢出/下溢、自定义校验消息、表单级联验证及 URL/多段报文序列化）；
+  - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

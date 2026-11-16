@@ -1642,6 +1642,31 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 23:28:00] Turn 43
+
+### **[User]**
+> 继续你的工作
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 32（DOM 表单控件体系、约束验证状态机与提交序列化引擎）：
+1. **DOM 表单控件与验证引擎 (`src/dom/forms.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/element/forms/`（文件头保留来源溯源注释）；
+   - 实装 `FormControlType` 枚举与 `ValidityState` 标准约束验证状态机（`valueMissing`, `typeMismatch`, `tooLong`, `tooShort`, `rangeUnderflow`, `rangeOverflow`, `badInput`, `customError`, `valid`）；
+   - 实装 `FormControl` 表单控件模型（支持 `setValue`, `setChecked`, `setCustomValidity`, `checkValidity`, `reset`, 邮箱/URL 格式校验与数值范围判定）；
+   - 实装 `HTMLFormElement` 表单容器模型（支持控件注册、`findControlByName` 检索、`checkValidity` 级联校验与全表单 `reset`）。
+2. **表单编码与报文序列化引擎 (`src/dom/form_submission.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/element/forms/submission.ts`（文件头保留来源溯源注释）；
+   - 实装表单数据收集器 `collectFormEntries`（自动过滤禁用控件、未勾选复选/单选框及非触发提交按钮）；
+   - 实装 `application/x-www-form-urlencoded` 百分比编码器与 `multipart/form-data` MIME 边界多段报文序列化器 `serializeSubmission`。
+3. **自动化测试与全链路回归**：
+   - 编写并通过 `test/dom/test_forms_validation.cp`（测试覆盖控件验证状态机、长度限制、数值溢出/下溢、自定义校验消息、表单级联验证及 URL/多段报文序列化全部断言通过）；
+   - 运行并通过全量 DOM 回归测试（`test_collections_reflect.cp`, `test_event_mutation.cp`, `test_traversal_range.cp`）；
+   - 运行并通过 `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js` 真实 Node.js 驱动测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

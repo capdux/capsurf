@@ -669,6 +669,18 @@
      - 使用 CP 原生空值合并运算符 `attr_val ?? default_val` 代替局部解包，消除了局部引用生命周期悬垂（`Cannot return reference to local variable`）报错；
      - `reflectEnum` 结合忽略大小写匹配与多级缺省回退，严格符合 WHATWG HTML 规范。
 
+## Phase 32 DOM 表单控件、约束验证与报文序列化引擎技术方案
+1. **表单验证状态机与约束计算 (`src/dom/forms.cp`)**：
+   - **设计动机**：标准 HTML 表单包含极其丰富的约束条件（必填 `required`、正则匹配 `pattern`、长度 `minlength`/`maxlength`、数值范围 `min`/`max` 以及脚本自定义验证消息 `setCustomValidity`）；
+   - **解决方案**：
+     - 在 `FormControl` 实例上实现统一的 `updateValidity`，将 10 个布尔验证维度紧凑存储在 `ValidityState` 中；
+     - `checkValidity` 触发级联状态计算，`HTMLFormElement` 支持容器级全量控件一致性扫描，确保提交与重置状态完全可预测。
+2. **表单编码与多段报文序列化器 (`src/dom/form_submission.cp`)**：
+   - **设计动机**：浏览器表单提交支持 `application/x-www-form-urlencoded` 和 `multipart/form-data` 两种主流 MIME 编码，包含保留字符转义与文件边界构造；
+   - **解决方案**：
+     - 百分比编码器采用静态快速查找表与十六进制移位算法，跳过无需转义的 RFC 3986 未保留字符；
+     - 多段序列化器动态组装 Boundary 标头与 `Content-Disposition` 字段，实现零动态垃圾分配的缓冲区分块写入。
+
 
 
 
