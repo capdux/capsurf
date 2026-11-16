@@ -1453,6 +1453,34 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 22:25:00] Turn 36
+
+### **[User]**
+> 继续下阶段工作 / 完成当前任务后,自主进行下一阶段任务, 不要停 / 每次交付, 要 做 git 提交
+
+### **[Agent]**
+报告：自主推进已闭环完成 Phase 25（Dedicated Web Worker 桥接、Page Isolate 入口生成器与 PageScript Tail 遥测中继）：
+1. **Page Isolate Entry 隔离区入口生成器 (`src/eval/page_isolate_entry.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/page-isolate-entry.ts`（文件头保留来源溯源注释）；
+   - 实装合法标识符校验 `isValidIdentifier`，生成页面隔离区顶层导出入口 `__ks_entry.js`，动态重新导出 `page.js` 与 Host 类。
+2. **PageScript Tail 遥测跟踪与致命信号中继 (`src/eval/page_script_tail.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/page-script-tail.ts`（文件头保留来源溯源注释）；
+   - 实装 `PageScriptTail` 日志记录器（上限 100 条环形缓冲区），支持致命标记检测 `[ks-kill]` 与死循环挂起标记 `detected that your Worker's code had hung`；
+   - 实装 OTEL JSON 格式化函数 `formatOtelRecord`，直接生成标准 OpenTelemetry 结构体。
+3. **Dedicated Web Worker 桥接与 RPC 会话调度 (`src/eval/dedicated_worker.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/dedicated-worker.ts`（文件头保留来源溯源注释）；
+   - 实装 `buildWorkerScriptModule` 包装器，自动将用户 Worker 脚本封装为 CommonJS 异步执行体，并注入 `use strict` 指令与全局作用域提升保护；
+   - 实装 `WorkerUpstreamEvent` 枚举与双向字符串转换（`worker.message`, `worker.error`, `worker.closed`）；
+   - 实装 `DedicatedWorker` 生命周期状态机（`Init`, `Running`, `Closing`, `Terminated`）、出入站消息计数与异常计数；
+   - 实装 `DedicatedWorkerRegistry` 多路 Worker 池管理（支持最多 32 路并发 Worker 实例管理）。
+4. **自动化测试与驱动回归**：
+   - 编写并通过 `test/eval/test_worker_isolate_tail.cp`（4 组测试用例 100% 全部通过：入口生成与回退逻辑、Tail 日志/标记检测/OTEL 格式化、Worker 模块包装与状态机流转、WorkerRegistry 多路生命周期调度）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

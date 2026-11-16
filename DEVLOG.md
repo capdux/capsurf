@@ -579,6 +579,21 @@
    - **解决方案**：
      - 整合 Scene Host、Scene Stream 与 Protocol Extensions，实现多域协议统一路由。
 
+## Phase 25 Dedicated Web Worker 隔离桥接、页面入口与遥测中继技术方案
+1. **页面隔离区动态入口代码生成 (`src/eval/page_isolate_entry.cp`)**：
+   - **设计动机**：页面隔离脚本加载时需要动态重新导出底层主模块，同时挂载用户自定义的 Host 类。必须具备标识符校验以防止代码注入风险；
+   - **解决方案**：
+     - `pageIsolateEntry` 先行执行词法合法性校验，若检测到非法标识符自动回退至默认入口 `page.js`，否则安全拼接重导出指令。
+2. **遥测环形缓冲区与致命异常检测 (`src/eval/page_script_tail.cp`)**：
+   - **设计动机**：浏览器隔离区内的长任务或死循环会导致宿主无响应。必须在日志收集链路对特定崩溃与超时标记实时探知；
+   - **解决方案**：
+     - 在写入日志时并行匹配 `[ks-kill]` 与 `detected that your Worker's code had hung`，实现微秒级异常标记识别与标准 OTEL 结构生成。
+3. **Dedicated Worker 隔离调度与无拷贝切片架构 (`src/eval/dedicated_worker.cp`)**：
+   - **设计动机**：Web Worker 具备独立的作用域与执行生命周期，而在 CP 架构下若结构体内部使用定长数组并对外切片，按值拷贝会导致局部悬垂引用；
+   - **解决方案**：
+     - `DedicatedWorker` 与 `WorkerUpstreamMessage` 直接使用只读切片 `[]const u8`，彻底消除栈内存切片悬垂引用风险；
+     - `buildWorkerScriptModule` 将用户代码包裹在 CommonJS 异步运行体内，严格屏蔽全局变量污染。
+
 
 
 
