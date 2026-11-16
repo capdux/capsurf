@@ -975,3 +975,33 @@
    - Nest 容器动态库构建：`cap build src/main.cp -b` 成功生成 `bin/main.so`（9.1KB）。
 6. **门禁与代码规范全量达标**：
    - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 14:09:00] Turn 19
+
+### **[Agent]**
+全面推进并闭环 Phase 9（网络请求拦截 Fetch 域与安全网关流水线）：
+1. **CDP Fetch 域网络拦截与非回溯 Glob 状态机 (`src/cdp/fetch_interception.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/fetch-interception.ts`（文件头保留来源溯源注释）；
+   - 实装双指针非回溯线性 O(N) `globMatches(pattern, url)`，支持通配符 `*` 与单字符 `?`，严格避让换行终止符；
+   - 实装 `FetchInterceptionState`，支持最多 64 条并发模式规则匹配、最多 128 条挂起暂停请求环形缓冲；
+   - 实装 `InterceptActionKind`（`Continue`, `Fulfill`, `Fail`）与 `InterceptAction`（支持 URL/方法/首部/PostData 覆写与 Mock 状态/响应头/Body 注入）；
+   - 实装 `errorReasonToNet`：将 CDP 错误代码映射为标准 Chromium `net::ERR_*` 字符串；
+   - 实装 `formatRequestPausedEvent`：零额外堆分配构造标准 CDP `Fetch.requestPaused` JSON 事件。
+2. **W3C Referrer Policy 决策引擎 (`src/net/referrer_policy.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/script-gate/src/referrer-policy.ts`（文件头保留来源溯源注释）；
+   - 实装 `ReferrerPolicy` 8 种标准策略枚举及逗号切分扫描解析器（最后识别 token 胜出规则）；
+   - 实装 `isPotentiallyTrustworthy` 安全上下文判定；
+   - 实装 `determineReferrer`：覆盖同源全量 URL、跨域剥离为 Origin、HTTPS 向不安全 HTTP 降级时剥离清空、以及用户信息与 Hash 截断规则。
+3. **W3C Content Security Policy (CSP) 策略校验引擎 (`src/net/csp.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/script-gate/src/csp.ts`（文件头保留来源溯源注释）；
+   - 实装 `CspDirective` 与 `CspPolicy` 零堆分配定长结构体，支持分号与空白解析多源指令集；
+   - 实装 `schemeMatches`（支持 http->https 与 ws->wss 安全升级匹配）与 `hostMatches`（子域 `*.domain.com` 及全局通配 `*` 匹配）；
+   - 实装 `isSourceAllowed`：针对 `script-src`、`connect-src`、`img-src` 等优先判定，并在缺省时回退至 `default-src`。
+4. **自动化测试套件与门禁验证**：
+   - 编写并通过 `test/cdp/test_fetch_interception.cp`（3/3 全部通过，覆盖非回溯 Glob 匹配、暂停挂起请求事件格式化、以及 Continue / Fulfill / Fail 动作与错误码映射）；
+   - 编写并通过 `test/net/test_security_gate.cp`（3/3 全部通过，覆盖 Referrer-Policy 解析/信任判定、跨域与降级决策计算、CSP 策略解析与指令源放行判定）；
+   - 运行并通过原 `test/cdp/test_cdp_network_fetch.cp`（3/3 全部通过，涵盖 Emulation、Fetch、Network 域）；
+   - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

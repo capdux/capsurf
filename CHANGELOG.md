@@ -304,3 +304,20 @@
   - 独立单二进制构建：`cap build src/main.cp -f` 生成 8.3MB 单二进制 `bin/main`；
   - Nest 容器动态库构建：`cap build src/main.cp -b` 编译生成 `bin/main.so`（9.1KB）与 `bin/main.d.cp`。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 9: Network Request Interception (Fetch Domain) & Script-Gate Security Pipeline (100% Closed)
+- **`src/cdp/fetch_interception.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/fetch-interception.ts`）：
+  - 实装 `globMatches` 线性非回溯 O(N) 匹配算法（支持 `*` 与 `?`）；
+  - 实装 `FetchInterceptionState`：支持 64 条过滤规则，128 条挂起请求环形队列；
+  - 实装 `InterceptActionKind`（Continue, Fulfill, Fail）、`InterceptAction`、`errorReasonToNet` 与 `formatRequestPausedEvent`。
+- **`src/net/referrer_policy.cp`**（迁移自 `vendor/kitesurf/packages/script-gate/src/referrer-policy.ts`）：
+  - 实装 `ReferrerPolicy` 8 种策略及多 Token 逗号解析器；
+  - 实装 `isPotentiallyTrustworthy` 与 W3C 标准 `determineReferrer` 算法。
+- **`src/net/csp.cp`**（迁移自 `vendor/kitesurf/packages/script-gate/src/csp.ts`）：
+  - 实装 `CspDirective` 与 `CspPolicy` 零堆分配策略结构；
+  - 实装 `parseCsp`、`schemeMatches`、`hostMatches` 与 `isSourceAllowed` 多指令判定逻辑。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_fetch_interception.cp`：3 项测试 100% 全部通过（Glob 匹配、暂停事件格式化、动作与错误码转换）；
+  - `test/net/test_security_gate.cp`：3 项测试 100% 全部通过（Referrer 策略解析与降级计算、CSP 解析与指令源放行）；
+  - `test/cdp/test_cdp_network_fetch.cp`：3 项综合测试 100% 全部通过。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

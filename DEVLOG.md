@@ -273,3 +273,25 @@
 4. **C-FFI 重复符号冲突与跨模块符号收敛排障**：
    - **排障定位**：当多个模块通过 `@c` 声明相同名称的 C 函数（如 `close(fd)`）时，`cpc` 转译生成的单体 `main.zig` 根结构体中会出现重复的 `pub extern "c" fn close` 与 `extern "c" fn close` 导致 Zig 编译器报错；
    - **解决方案**：统一收敛底层 POSIX C-FFI 声明至 `src/cdp/server.cp` 的 `pub @c` 导出块，其他上层模块（如 `src/cli/options.cp`）统一通过 `import { open, read, close } from "../cdp/server.cp"` 引用，根除重复符号。
+
+## Phase 9 网络请求拦截 (Fetch 域) 与安全网关 (Referrer/CSP) 架构方案与排障实录
+1. **非回溯线性 Glob 匹配与请求暂停状态机设计 (`src/cdp/fetch_interception.cp`)**：
+   - **设计目标**：对齐 Chromium CDP 的 `Fetch.enable`、`Fetch.requestPaused`、`Fetch.continueRequest`、`Fetch.fulfillRequest`、`Fetch.failRequest`，支撑 Playwright `page.route()` 动态截获与 Mock；
+   - **算法架构**：
+     - 使用双指针 + 单星号标记记录点（`has_star`, `star_j`, `mark`），实现时间复杂度为 $O(N)$ 的零回溯字符扫描；
+     - 严格过滤换行符（`0x0A`, `0x0D`），确保 `*` 与 `?` 不会跨行越界；
+     - `FetchInterceptionState` 维护定长 64 规则数组与 128 挂起请求环形队列，实现零堆分配内存池，防止高频拦截场景下的碎片堆积；
+     - `errorReasonToNet` 提供 13 种常见 Chromium 网络错误代码（`ERR_ABORTED`, `ERR_CONNECTION_REFUSED`, `ERR_TIMED_OUT` 等）的标准映射。
+2. **W3C Referrer Policy 决策与降级剥离算法 (`src/net/referrer_policy.cp`)**：
+   - **设计目标**：保证跨域导航与子资源加载过程中的用户隐私与安全边界；
+   - **算法架构**：
+     - 多 Token 逗号切分扫描（规范要求采用最后一个识别出的有效 Token，其余忽略）；
+     - `isPotentiallyTrustworthy` 快速识别 `localhost`、`127.0.0.1`、`https:`、`wss:` 与 `about:` 安全上下文；
+     - `determineReferrer` 在同源时输出完整去 Hash URL，在跨域时截断为 Origin，在 HTTPS 降级到不安全 HTTP 时完全清空剥离，严格符合 W3C Referrer Policy 规范。
+3. **CSP 策略解析与指令源放行判定 (`src/net/csp.cp`)**：
+   - **设计目标**：解析并执行网页下发的 `Content-Security-Policy` 响应头，阻止未授权脚本执行与非法网络通信；
+   - **算法架构**：
+     - `parseCsp` 按分号与空白切分 Token，首 Token 提取指令名，值存入零堆分配定长数组；
+     - `schemeMatches` 支持安全协议向上升级匹配（http 放行至 https，ws 放行至 wss）；
+     - `hostMatches` 精确区分泛域名通配（`*.domain.com` 不匹配父域 `domain.com`，匹配 `sub.domain.com`）；
+     - `isSourceAllowed` 实现指令特异性覆盖（优先读取 `script-src` / `connect-src`，缺省时自动回退至 `default-src`）。
