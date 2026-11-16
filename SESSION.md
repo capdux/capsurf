@@ -1502,6 +1502,40 @@
    - 编写并通过 `test/eval/test_walk_module_graph.cp`（6 组测试用例 100% 全部通过：URL-like 规范判定、顶层 Import 与前缀展开、Scope 作用域覆盖、Astro 岛屿解析、Preload 探测、动态解析器源码生成）；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 22:50:00] Turn 38
+
+### **[User]**
+> 系统反应式唤醒 / 双智能体交付汇总与收割
+
+### **[Agent]**
+报告：双子智能体（PageScript Worker 与 Renderer Migrator）已全部顺利完成迁移任务，并通过主智能体统一测试验证，闭环完成 Phase 27（页面执行沙箱、RPC 会话追踪、页面渲染管理与 OOPIF 跨进程渲染协调器）：
+1. **PageScript 执行沙箱与 CDP 序列化 (`src/eval/page_script.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/page-script.ts`（文件头保留来源溯源注释）；
+   - 实装 `PageIsolateCaps` 隔离区配额管理（CPU 时间 300,000ms、子请求 10,000 限制）；
+   - 实装 `PageScriptKey` 与 `pageScriptCacheKey` 缓存哈希键计算，支持主帧与 OOPIF 隔离区多重键值空间；
+   - 实装 `hostnameOf` 与 `originOf` 零内存分配 URL 主机名与源提取函数；
+   - 实装 `formatRemoteObject` 与 `formatConsoleLogEntry` CDP 协议事件格式化器。
+2. **PageScript RPC 会话超时与追踪 (`src/eval/page_script_rpc_session.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/page-script-rpc-session.ts`（文件头保留来源溯源注释）；
+   - 实装 `InflightRpcCall` 与 `PageScriptRpcSession`（支持上限 64 路并发在途 RPC 追踪）；
+   - 实装 `nextRequestId` 递增序列号生成、`trackCall` 会话注册与 `completeCall` 确认回收；
+   - 实装 `finishSession` 优雅注销并在连接关闭时安全释放资源；基于 `gettimeofday` 提供高精度毫秒时钟支撑。
+3. **页面与 PDF 离屏渲染管理 (`src/eval/page_renderer.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/page-renderer.ts`（文件头保留来源溯源注释）；
+   - 实装 `RenderStage`（Record, Raster, Encode）与 `renderStageToString`；
+   - 实装 `PageRendererManager`，提供 `renderFrame`（支持 PNG/JPEG/WEBP 格式与设备缩放比）与 `renderPdf`（支持纸张尺寸与边距计算）序列化调度。
+4. **OOPIF 跨进程渲染隔离协调器 (`src/eval/oopif_render.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/oopif-render.ts`（文件头保留来源溯源注释）；
+   - 实装 `clampFrameViewport`（最大单边 4096、最大面积 7.8M 像素限制）；
+   - 实装 `OopifRenderCoordinator`，提供 16 路独立预热帧池 `prespawnFrame`、`recordAndRasterizeFrame` 与 `discardPrespawnedFrame` 生命周期控制。
+5. **自动化测试与驱动回归**：
+   - 编写并通过 `test/eval/test_page_script_render.cp`（4 组测试用例 100% 全部通过：沙箱配额/缓存键/URL 提取、RPC 在途请求/回收/关闭流转、帧与 PDF 渲染指标统计、OOPIF 视口限幅/预热池/光栅化生命周期）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

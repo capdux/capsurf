@@ -605,6 +605,22 @@
    - **解决方案**：
      - 使用轻量零分配切片扫描算法，快速捕获依赖 URL 并注入预加载种子队列。
 
+## Phase 27 页面执行沙箱、RPC 会话追踪与 OOPIF 渲染隔离技术方案
+1. **页面沙箱隔离区与缓存键空间划分 (`src/eval/page_script.cp`)**：
+   - **设计动机**：主页面与不同源 iframe 必须具备物理隔离的执行环境与配额预算。为了快速命中可复用脚本上下文，需要高特异性缓存键；
+   - **解决方案**：
+     - `pageScriptCacheKey` 根据是否包含 `loader_id` 与 `frame_id` 前 8 位生成哈希键空间，有效隔离主文档与跨域子框架；
+     - `hostnameOf` 与 `originOf` 基于纯切片扫描实现零内存分配，消除堆碎片。
+2. **在途 RPC 会话追踪与高精度时钟 (`src/eval/page_script_rpc_session.cp`)**：
+   - **设计动机**：CDP 控制台与脚本执行过程中存在大量的异步请求与超时取消逻辑。标准库时间函数若在某些平台缺少会导致符号丢失；
+   - **解决方案**：
+     - 基于 Linux 系统级 `gettimeofday` 封装微秒级高精时钟 `getNowMs`，支持 64 路无锁在途 RPC 请求的超时探测与槽位回收。
+3. **OOPIF 多进程视口安全限幅与预热池 (`src/eval/oopif_render.cp` & `src/eval/page_renderer.cp`)**：
+   - **设计动机**：跨域 iframe 渲染可能遭遇恶意巨幅视口请求（例如 100000x100000），导致 GPU 或内存爆仓；
+   - **解决方案**：
+     - `clampFrameViewport` 将单边限制在 4096 像素，总面积严格限制在 7.8M 像素以内；
+     - `OopifRenderCoordinator` 维护 16 路预热帧缓冲池，实现跨域渲染生命周期与离屏光栅化快速装配。
+
 
 
 

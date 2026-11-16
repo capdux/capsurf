@@ -648,6 +648,21 @@
   - `test/eval/test_walk_module_graph.cp`：全量测试 100% 全部通过（6 组测试覆盖 URL 判定、顶层映射、前缀匹配、作用域覆盖、Astro 岛屿提取与预加载分析）；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 27: Page Execution Sandbox, RPC Session & OOPIF Render Pipeline (100% Closed)
+- **`src/eval/page_script.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/page-script.ts`）：
+  - 实装沙箱隔离区配额管理 `PageIsolateCaps`、缓存键哈希 `pageScriptCacheKey`、URL 主机名与 Origin 零拷贝提取、CDP 结构格式化。
+- **`src/eval/page_script_rpc_session.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/page-script-rpc-session.ts`）：
+  - 实装在途 RPC 请求追踪 `InflightRpcCall`、序列号分配 `nextRequestId`、超时与确认回收 `completeCall`、`gettimeofday` 高精毫秒时钟。
+- **`src/eval/page_renderer.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/page-renderer.ts`）：
+  - 实装多格式离屏渲染器管理 `PageRendererManager`，支持 `renderFrame` 屏幕像素渲染与 `renderPdf` 文档导出。
+- **`src/eval/oopif_render.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/oopif-render.ts`）：
+  - 实装 OOPIF 跨进程渲染协调器 `OopifRenderCoordinator`，支持视口安全限幅 `clampFrameViewport`、预热帧池与生命周期控制。
+- **测试套件与全链路验证**：
+  - `test/eval/test_page_script_render.cp`：全量测试 100% 全部通过（4 组测试覆盖沙箱配额/缓存键/URL 提取、RPC 在途请求/回收/关闭流转、帧与 PDF 渲染指标统计、OOPIF 视口限幅/预热池/光栅化生命周期）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
