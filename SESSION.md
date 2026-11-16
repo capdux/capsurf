@@ -1334,6 +1334,39 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 20:31:00] Turn 32
+
+### **[User]**
+自主推进下一阶段任务（Phase 21: Next.js 路由分块预取、Web Bot Auth 鉴权签名网关、Span 接收池与 Trace 尾追踪）
+
+### **[Agent]**
+完成 Phase 21 全量模块实装、门禁校验、测试套件验证与端到端驱动回归：
+1. **Next.js 路由分块预取 (`src/eval/next_route_chunks.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/next-route-chunks.ts`（文件头保留来源溯源注释）；
+   - 实装 `isManifestUrl`（严格校验 `/_next/static/.../_buildManifest.js` 并过滤 query/hash）与 `isSkipRoute`（排除 `/_app`, `/_error`, `/404`, `/500`）；
+   - 实装 `parseBuildManifest`，兼容自执行函数形参代换结构 `function(s,a,b){return{...}}(...)` 与普通对象声明形式 `{...}`；
+   - 实装 `rankManifestRoutes` 与 `countRouteMentions`，基于脚本中路由引用频次降序动态排序候选预取路由，提取最多 12 个关键 `.js` 分块 URL。
+2. **Web Bot Auth 请求鉴权签名网关 (`src/eval/web_bot_auth.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/web-bot-auth.ts`（文件头保留来源溯源注释）；
+   - 实装 RFC 8032 Ed25519 JWK 私钥格式判定 `isEd25519PrivateJwk`；
+   - 实装 RFC 9421 / RFC 8941 HTTP Message Signatures 签名头格式化器（`formatSignatureAgent`, `formatSignatureInput`）；
+   - 维护 256 槽循环淘汰缓存 `WbaCache`，支持 5 分钟 TTL（`SIGNATURE_TTL_MS = 300_000`）与 30 秒时钟偏移保护（`REFRESH_SKEW_MS = 30_000`）。
+3. **Span 接收池与尾追踪注册表 (`src/eval/span_sink.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/span-sink.ts` 与 `tail-trace-registry.ts`（文件头保留来源溯源注释）；
+   - 实装 `TailTraceRegistry`（64 槽定长注册表，支持 `registerTailTrace` 与 `getTailTrace`）；
+   - 实装 `SpanSink` 与 `filterSpanRecords`，硬性执行单次最多 2000 条记录与 4MB 字节预算约束。
+4. **载体日志分块与 CPU 归因尾标 (`src/eval/carrier_spans.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/carrier-spans.ts` 与 `attribution-tail.ts`（文件头保留来源溯源注释）；
+   - 实装 `attachChunked`（严格遵守 48KB 字节上限与 1000 条日志上限分块，精确记录超大被剔除项 `oversized`）；
+   - 实装 `checkAttributionTail`，对带头标的 Worker 精准挂载 CPU 耗时追踪。
+5. **自动化测试与驱动回归**：
+   - 编写并通过 `test/eval/test_route_auth_spans.cp`（6 组测试用例 100% 全部通过：Manifest URL 校验、函数式与对象式 Manifest 解析、路由频次排序、WBA 鉴权与缓存、SpanSink 过滤与尾追踪、CarrierSpans 48KB 分块与归因）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

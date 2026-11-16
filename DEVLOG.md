@@ -512,6 +512,24 @@
    - **解决方案**：
      - 基于 Linux `clock_gettime(CLOCK_MONOTONIC)` 提供纳秒级单调不回退时钟，同时提供毫秒与微秒级便捷接口，为全引擎提供统一的时间基准。
 
+## Phase 21 Next.js 路由分块预取、Web Bot Auth 签名与 Span 链路追踪技术方案
+1. **Next.js 路由清单静态分析与动态引用排序 (`src/eval/next_route_chunks.cp`)**：
+   - **设计动机**：基于 Next.js 构建的 SSR/SPA 页面在首屏只会注入当前路由的代码分块，当 AI Agent 决定跳转或执行下一跳操作时，串行发起新路由的 JS 下载将导致数百毫秒的停顿；
+   - **解决方案**：
+     - 在 HTML 加载阶段探测 `_buildManifest.js`，通过纯文本线性扫描解析出函数形参代换表与路由到静态资源的映射关系；
+     - 结合已加载代码中的路由引用字符串扫描（`countRouteMentions`），优先预加载出现频次最高的路由分块（最多 12 个），将路由切换网络耗时彻底消除。
+2. **Web Bot Auth 标准化鉴权签名与缓存控制 (`src/eval/web_bot_auth.cp`)**：
+   - **设计动机**：为了在代表用户自动化访问受保护的服务端资源时提供可信身份认领，现代 Web 标准正在推进 HTTP Message Signatures (RFC 9421)。必须在发起出站 Fetch 时自动为目标 Authority 签名，并对高频发起的请求进行缓存以避免昂贵的重复计算；
+   - **解决方案**：
+     - 严格校验 Ed25519 JWK 结构，构造包含 `created`, `expires`, `keyid` 的规范 `Signature-Input` 与 `Signature-Agent` 头部；
+     - 维护 256 槽容量的 LRU 缓存，在 5 分钟 TTL 内复用签名，并留出 30 秒安全时钟偏移保护。
+3. **分块限额 Span 接收池与 Trace 尾追踪 (`src/eval/span_sink.cp` & `src/eval/carrier_spans.cp`)**：
+   - **设计动机**：在并发高负荷运行环境下，Worker 或沙箱输出的大量追踪 Span 和日志如果不加限制直接汇聚，可能耗尽内存并拖垮主进程 IPC 通道；
+   - **解决方案**：
+     - `span_sink` 对单次调用强制设置 2000 条记录与 4MB 内存上限，超出部分平滑丢弃并计入统计指标；
+     - `carrier_spans` 实行 48KB 字节上限与 1000 条日志上限的分块切分策略，确保每次投递均在单帧安全预算以内；
+     - `tail_trace_registry` 维护 64 槽定长注册表，在异步任务完成与尾标归因触发时准确关联父 Span 上下文。
+
 
 
 

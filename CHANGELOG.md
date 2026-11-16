@@ -571,6 +571,21 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 21: Next.js Route Chunks, Web Bot Auth, Span Sink & Carrier Spans (100% Closed)
+- **`src/eval/next_route_chunks.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/next-route-chunks.ts`）：
+  - 实装 Next.js 路由分块预取扫描器：`parseBuildManifest`，解析自执行函数传参与普通对象形态的 `_buildManifest.js`，基于脚本引用热度排序并提取最多 12 个核心路由分块。
+- **`src/eval/web_bot_auth.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/web-bot-auth.ts`）：
+  - 实装 Web Bot Auth 规范签名网关：`wbaHeadersFor`，校验 Ed25519 私钥 JWK，格式化 RFC 9421 `Signature-Input` / `Signature` / `Signature-Agent` 头部，提供 256 槽 5 分钟 TTL 缓存与时钟漂移保护。
+- **`src/eval/span_sink.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/span-sink.ts` 与 `tail-trace-registry.ts`）：
+  - 实装 Span 接收池 `SpanSink` 与尾追踪注册表 `TailTraceRegistry`，硬性执行 2000 条记录与 4MB 字节预算，提供跨 Worker 链路追踪上下文保持。
+- **`src/eval/carrier_spans.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/carrier-spans.ts` 与 `attribution-tail.ts`）：
+  - 实装日志分块打包器 `attachChunked`，严格控制 48KB 字节上限与 1000 条日志上限，提供超限项记录与 CPU 归因尾标关联。
+- **测试套件与全链路验证**：
+  - `test/eval/test_route_auth_spans.cp`：全量测试 100% 全部通过（6 组测试覆盖分块解析、热度排序、WBA 鉴权与缓存、Span 过滤与尾追踪、48KB 日志分块与归因）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
