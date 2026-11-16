@@ -263,3 +263,23 @@
 - **测试套件**：
   - `test/cdp/test_runtime_workers.cp`：3 项测试 100% 全部通过（Runtime 执行上下文生命周期、Console API 与 Log 域多路复用、Dedicated Worker 生命周期与 Target Auto-Attach）；
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 7: End-to-End Playwright / Puppeteer Protocol Bridge & Dual-Mode Build (100% Closed)
+- **`src/cdp/server.cp`**：
+  - 增强 `dispatchCdpCommand`：支持超限大报文动态安全分配通道（如数十 KB 的 Base64 截屏图像），彻底避免 4KB 局部固定缓冲区截断与静默丢包；
+  - 完善 `readWsTextFrame` 与 `writeWsTextFrame` 大于 125 字节扩展帧头处理（16-bit 0xFE / 64-bit 0xFF）。
+- **`src/cdp/session.cp`**：
+  - 在 `CdpPageSession` 中引入 `rt_ctx_event_buf: [512]u8` 与 `page_frame_event_buf: [2048]u8` 专有持久事件缓冲区；
+  - 实装 `formatExecutionContextEvent` 与 `formatFrameNavigatedEvent` 专用实例方法，确保可变排他性与借用语义合规。
+- **`src/cdp/page.cp`**：
+  - 对接 `session.formatFrameNavigatedEvent`，消除 `PageHandler.handle` 局部栈切片悬垂与长 Data URL 溢出边界问题。
+- **`src/cdp/runtime.cp`**：
+  - 对接 `session.formatExecutionContextEvent`，输出稳定唯一的上下文元数据。
+- **`src/render/style_extractor.cp`**：
+  - 修复 `extractPaintStyle` 中通过只读借用直接修改字段的 `E0201` 编译器报错，重写为结构体完整赋值。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_playwright_e2e.cp`：8 阶段端到端真实套件 100% 绿色通过（HTTP 发现、WebSocket 升级、版本握手与 Auto-Attach、Page/Runtime 域激活、多事件导航、DOM 查询与盒模型几何提取、键鼠点击交互与属性校验、PNG 截图与 Base64 解码校验，耗时 102.4s）。
+- **双模编译产物验证**：
+  - 独立单二进制构建：`cap build src/main.cp -f` 生成 7.2MB 单二进制 `bin/main`；
+  - Nest 容器动态库构建：`cap build src/main.cp -b` 编译生成 `bin/main.so`（9.3KB）与 `bin/main.d.cp`。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

@@ -104,9 +104,9 @@ pub fn extractPaintStyle(
     if (opacity_val := computed.opacity) {
         const op = std.math.clamp(opacity_val, 0.0, 1.0);
         if (op < 1.0) {
-            bg_color.a = @intFromFloat(@as(f32, @floatFromInt(bg_color.a)) * op);
-            border_color.a = @intFromFloat(@as(f32, @floatFromInt(border_color.a)) * op);
-            text_color.a = @intFromFloat(@as(f32, @floatFromInt(text_color.a)) * op);
+            bg_color = painter.Color.rgba(bg_color.r, bg_color.g, bg_color.b, @intFromFloat(@as(f32, @floatFromInt(bg_color.a)) * op));
+            border_color = painter.Color.rgba(border_color.r, border_color.g, border_color.b, @intFromFloat(@as(f32, @floatFromInt(border_color.a)) * op));
+            text_color = painter.Color.rgba(text_color.r, text_color.g, text_color.b, @intFromFloat(@as(f32, @floatFromInt(text_color.a)) * op));
         }
     }
 

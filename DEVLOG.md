@@ -234,3 +234,22 @@
    - **数组初始化语法**：在 CP 结构体字段声明中，数组初始化须写为 `[Item{}; N]`，而非 Zig 风格的 `[_]Item{.{}} ** N`；
    - **可空指针优先级与解包**：`dom_ctx` 字段类型必须书写为 `(*JsDomContext)? = null`（外包括号），避免被解析为指向可选值的指针引发 `((dom).?.console_count)` 冗余解包报错；
    - **跨平台时钟**：Zig 0.17 的 `std.time` 模块已精简为单纯的分辨率常数与 epoch 转换，通过 C-FFI POSIX `gettimeofday(&tv, null)` 实现稳健高效的毫秒时间戳获取。
+
+## Phase 7 Playwright/Puppeteer 协议桥接、大报文流控与双模构建架构方案与排障实录
+1. **端到端 8 步自动化协议流全链路架构 (`test/cdp/test_playwright_e2e.cp`)**：
+   - **设计目标**：脱离 Mock，在真实操作系统 socket 与 RFC 6455 WebSocket 协议通道上，完整复现 Playwright / Puppeteer 驱动无头浏览器的真实生命周期；
+   - **时序流程设计**：
+     - **发现与握手**：客户端连接端口发送 HTTP 请求探测 `/json/version`，随后发送 HTTP Upgrade 请求完成 WebSocket 握手；
+     - **初始握手与挂载**：发送 `Browser.getVersion` 协商协议版本；发送 `Target.setAutoAttach({ autoAttach: true, flatten: true })` 同步消费 RPC 响应及关联的 `Target.attachedToTarget` 事件，避免未消费帧污染后续帧序列；
+     - **领域启用与上下文注册**：发送 `Page.enable` 与 `Runtime.enable`，断言接收到 `Runtime.executionContextCreated`；
+     - **导航流水线**：发送 `Page.navigate`，驱动 HTML 解析并消费 `frameNavigated`、`domContentEventFired`、`loadEventFired` 3 阶段生命周期事件；
+     - **DOM 查询与盒模型几何提取**：调用 `DOM.querySelector` 查找 `#login-btn` 并由 `DOM.getBoxModel` 提取物理像素几何边界；
+     - **交互与 JS 执行**：模拟 `Input.dispatchMouseEvent` 点击操作，并由 `Runtime.evaluate` 执行 JS 查询确认 DOM 属性；
+     - **视觉截图直出**：调用 `Page.captureScreenshot` 经由 2D 软光栅化与 PNG 压缩，返回完整 Base64 编码数据。
+2. **大报文 WebSocket 流控与 Session 缓冲区排障**：
+   - **痛点分析**：在早期实现中，`dispatchCdpCommand` 使用固定的 4096 字节栈缓冲区格式化输出。当执行 `Page.captureScreenshot` 时，Base64 编码后的 PNG 图片体积高达数十 KB，导致 `std.fmt.bufPrint` 缓冲区溢出静默返回，WebSocket 连接无数据返回致使客户端永远挂起在 `recv()`；
+   - **解决方案**：在 `server.cp` 中实现自适应流控逻辑，当响应报文超过 4KB 时自动走 `std.heap.c_allocator.alloc` 动态内存通道，并在数据发送后立即安全释放，根除大体积 Base64 报文传输死锁；
+   - **Session 事件格式化专用方法与 `E0130` 根除**：在静态方法中直接跨结构体以可变指针切片借用 `session.buffer` 会触发 `cpc` 编译器的只读方法可变操作冲突（`E0130`）；将格式化逻辑收敛为 `CdpPageSession` 的专用实例方法（`formatExecutionContextEvent` 与 `formatFrameNavigatedEvent`，显式标注 `*_` 独占接收者），既消除了临时栈指针悬垂逃逸，又保证了编译期生命周期分析严格合规。
+3. **独立二进制与 Nest 容器双模构建验证**：
+   - 验证独立单二进制模式：`cap build src/main.cp -f`，成功编译出 7.2MB 单可执行文件 `bin/main`；
+   - 验证 Nest 容器热加载动态库模式：`cap build src/main.cp -b`，基于 `@is_nest` 宏成功编译出轻量级动态库 `bin/main.so`（9.3KB）及其接口定义 `bin/main.d.cp`。

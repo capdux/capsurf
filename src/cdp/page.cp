@@ -91,14 +91,9 @@ pub struct PageHandler {
             session.navigate(fetch_res.html, fetch_res.final_url) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
 
             // Format dynamic Page.frameNavigated event
-            let fn_buf: [256]u8 = undefined;
-            const fn_json = std.fmt.bufPrint(
-                fn_buf[0..],
-                "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"text/html\"}}}}",
-                .{ session.frame_id, session.loader_id, fetch_res.final_url, fetch_res.final_url },
-            ) catch "{}";
+            const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
 
-            out_events[0] = CdpEvent.create("Page.frameNavigated", session.allocator.dupe(u8, fn_json) catch fn_json);
+            out_events[0] = CdpEvent.create("Page.frameNavigated", fn_json);
             out_events[1] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
             out_events[2] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
             event_count.* = 3;

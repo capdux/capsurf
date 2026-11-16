@@ -297,17 +297,33 @@ pub struct CdpServer {
 
         const resp = CdpDispatcher.dispatch(_.session, req, &res_buf, &events, &event_count);
 
-        let msg_buf: [4096]u8 = [0; 4096];
         if (resp.isOk()) {
-            const msg = std.fmt.bufPrint(
-                &msg_buf,
-                "{{\"id\":{d},\"result\":{s}}}",
-                .{ resp.id, resp.result_json },
-            ) catch return;
-            writeWsTextFrame(client_fd, msg)? ;
+            let stack_buf: [4096]u8 = [0; 4096];
+            let msg_slice: []const u8 = "";
+            let dyn_buf: []u8 = [];
+            const needed_len = resp.result_json.len + 32;
+            if (needed_len <= stack_buf.len) {
+                msg_slice = std.fmt.bufPrint(
+                    &stack_buf,
+                    "{{\"id\":{d},\"result\":{s}}}",
+                    .{ resp.id, resp.result_json },
+                ) catch return;
+            } else {
+                dyn_buf = std.heap.c_allocator.alloc(u8, needed_len) catch return;
+                msg_slice = std.fmt.bufPrint(
+                    dyn_buf,
+                    "{{\"id\":{d},\"result\":{s}}}",
+                    .{ resp.id, resp.result_json },
+                ) catch return;
+            }
+            writeWsTextFrame(client_fd, msg_slice)? ;
+            if (dyn_buf.len > 0) {
+                std.heap.c_allocator.free(dyn_buf);
+            }
         } else {
+            let err_buf: [1024]u8 = [0; 1024];
             const msg = std.fmt.bufPrint(
-                &msg_buf,
+                &err_buf,
                 "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
                 .{ resp.id, resp.error_code, resp.error_message },
             ) catch return;

@@ -14,12 +14,7 @@ pub struct RuntimeHandler {
             let origin = session.url;
             if (origin.len == 0) origin = "about:blank";
 
-            let ctx_json_buf: [512]u8 = [0; 512];
-            const ctx_json = std.fmt.bufPrint(
-                &ctx_json_buf,
-                "{{\"context\":{{\"id\":1,\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
-                .{ origin, session.frame_id },
-            ) catch "{\"context\":{\"id\":1,\"origin\":\"about:blank\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"capsurf-frame-001\"}}}";
+            const ctx_json = session.formatExecutionContextEvent(origin);
 
             out_events[0] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
             event_count.* = 1;

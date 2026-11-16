@@ -910,3 +910,33 @@
 4. **测试套件与门禁验证**：
    - 编写并通过 `test/cdp/test_runtime_workers.cp`（3 项测试全部 100% 绿色通过，耗时 101s，涵盖 Runtime 执行上下文生命周期、Console API 与 Log 域多路复用、Dedicated Worker 生命周期与 Target 自动附加）；
    - 9 个核心相关源文件全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 13:28:00] Turn 17
+
+### **[User]**
+很好, 完成当前 Phase 7 后，立刻开始推进 Phase 8
+
+### **[Agent]**
+全面完成并闭环 Phase 7（Playwright/Puppeteer 真实端到端协议桥接与双模构建发布验证）：
+1. **端到端 8 步自动化协议套件 (`test/cdp/test_playwright_e2e.cp`)**：
+   - 基于原生 POSIX Socket 与 RFC 6455 WebSocket 握手，全链路验证 8 大核心阶段：
+     - Step 1 (HTTP 发现): `GET /json/version` 探测返回产品名与调试 WebSocket 路径；
+     - Step 2 (WebSocket 协议握手): `101 Switching Protocols` 与掩码/分帧双向通信；
+     - Step 3 (Playwright 握手与自动挂载): `Browser.getVersion` 协商与 `Target.setAutoAttach` 自动附加事件链；
+     - Step 4 (领域激活与上下文创建): `Page.enable`、`Runtime.enable` 派发 `Runtime.executionContextCreated`；
+     - Step 5 (导航流水线): `Page.navigate` 级联派发 `frameNavigated`、`domContentEventFired`、`loadEventFired`；
+     - Step 6 (DOM 查询与盒模型几何提取): `DOM.querySelector` 命中 `#login-btn` 并由 `DOM.getBoxModel` 提取像素几何坐标（w=100, h=35）；
+     - Step 7 (交互与 JS 执行): `Input.dispatchMouseEvent` 点击模拟配合 `Runtime.evaluate` 校验属性值；
+     - Step 8 (视觉截图出图): `Page.captureScreenshot` 经由 2D 软光栅化与 PNG 压缩，返回完整 Base64 编码数据。
+   - 测试 100% 绿色通过（`✓ PASSED (102437ms)`）。
+2. **大报文 WebSocket 流控与 Session 缓冲区加固**：
+   - 修复 `src/cdp/server.cp` 中 `dispatchCdpCommand` 因固定 4KB 缓冲区截断 Base64 截屏报文导致客户端挂起的问题，增加大报文动态安全分配通道；
+   - 彻底修复 `src/cdp/page.cp` 局部栈切片悬垂，在 `CdpPageSession` 中引入专有 `page_frame_event_buf` 与 `rt_ctx_event_buf` 格式化方法，根除 `E0130` 编译期可变性借用冲突。
+3. **独立二进制与 Nest 容器双模构建验证**：
+   - 独立可执行程序构建：`cap build src/main.cp -f` 成功编译生成 7.2MB 单二进制 `bin/main`；
+   - Nest 容器动态库构建：`cap build src/main.cp -b` 成功编译生成 `bin/main.so`（9.3KB）与 `bin/main.d.cp`。
+4. **门禁与代码规范全量达标**：
+   - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

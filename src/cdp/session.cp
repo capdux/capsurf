@@ -52,6 +52,8 @@ pub struct CdpPageSession {
     // Dedicated buffers for event formatting
     console_event_buf: [1024]u8 = [0; 1024],
     log_event_buf: [1024]u8 = [0; 1024],
+    rt_ctx_event_buf: [512]u8 = [0; 512],
+    page_frame_event_buf: [2048]u8 = [0; 2048],
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
@@ -93,6 +95,8 @@ pub struct CdpPageSession {
             dedicated_workers: DedicatedWorkerPool.init(),
             console_event_buf: [0; 1024],
             log_event_buf: [0; 1024],
+            rt_ctx_event_buf: [0; 512],
+            page_frame_event_buf: [0; 2048],
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,
@@ -279,5 +283,21 @@ pub struct CdpPageSession {
             return ev_idx;
         }
         return 0;
+    }
+
+    pub fn formatExecutionContextEvent(*_, origin: []const u8): []const u8 {
+        return std.fmt.bufPrint(
+            &_.rt_ctx_event_buf,
+            "{{\"context\":{{\"id\":1,\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
+            .{ origin, _.frame_id },
+        ) catch "{\"context\":{\"id\":1,\"origin\":\"about:blank\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"capsurf-frame-001\"}}}";
+    }
+
+    pub fn formatFrameNavigatedEvent(*_, url: []const u8): []const u8 {
+        return std.fmt.bufPrint(
+            &_.page_frame_event_buf,
+            "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"text/html\"}}}}",
+            .{ _.frame_id, _.loader_id, url, url },
+        ) catch "{}";
     }
 }
