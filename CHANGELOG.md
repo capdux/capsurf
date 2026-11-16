@@ -676,6 +676,19 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 29: DOM TreeWalker, NodeIterator & Range Engine (100% Closed)
+- **`src/dom/traversal.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/traversal.ts`）：
+  - 实装 `NodeFilter`（`FILTER_ACCEPT`, `FILTER_REJECT`, `FILTER_SKIP`）与 `whatToShow` 掩码匹配；
+  - 实装 `TreeWalker` 与 `NodeIterator`，提供 Arena DOM 上高效整型索引树形导航。
+- **`src/dom/range.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/range.ts`）：
+  - 实装 `DOMRange` 核心模型（`setStart`, `setEnd`, `collapse`, `compareBoundaryPoints`, `intersectsNode`）；
+  - 实装公共祖先查找 `findCommonAncestor` 与点位次序比较 `comparePoint`。
+- **测试套件与全链路验证**：
+  - `test/dom/test_traversal_range.cp`：全量测试 100% 全部通过（3 组测试覆盖 TreeWalker 导航、NodeIterator 双向遍历、DOMRange 选区与公共祖先判定）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

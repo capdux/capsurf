@@ -634,6 +634,18 @@
      - `MutationManager` 对目标节点变更进行精准过滤，支持属性旧值保留（`attributeOldValue`）与子节点变动记录；
      - `takeRecords` 提供单次原子消费接口，为后续 CDP `DOM.attributeModified` 与 `DOM.childNodeInserted` 事件提供高效事件源。
 
+## Phase 29 DOM 树遍历器与范围模型计算技术方案
+1. **基于 Arena NodeId 的零拷贝 TreeWalker 漫游 (`src/dom/traversal.cp`)**：
+   - **设计动机**：DOM 树深层遍历如果使用传统递归或指针解引用，深度极大时可能栈溢出，且借用检查成本高；
+   - **解决方案**：
+     - 利用 CapSurf 核心 Arena 树的 `parent`, `first_child`, `next_sibling` 等 4 字节整型下标，将 `TreeWalker` 与 `NodeIterator` 改造成纯迭代状态机；
+     - `traverseChildren` 与 `traverseSiblings` 结合 `whatToShow` 位掩码在 $O(1)$ 辅助空间内完成任意深度的树形导航。
+2. **DOM Range 几何边界与最近公共祖先算法 (`src/dom/range.cp`)**：
+   - **设计动机**：Playwright 文本选区、剪切提取与光标定位需要高精度的边界点（BoundaryPoint）比较与公共祖先计算；
+   - **解决方案**：
+     - `findCommonAncestor` 采用定长数组双路祖先扫描，消除堆分配；
+     - `comparePoint` 通过向祖先回溯判断层级关系，实现 `START_TO_START`、`START_TO_END` 等 4 种规范模式的精确有序判定。
+
 
 
 

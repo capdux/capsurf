@@ -1561,6 +1561,32 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 23:02:00] Turn 40
+
+### **[User]**
+> 1. 测试: e2e测试, 不转为cp, 直接使用 ts 远程连接测试对吗? 只有一部分测试, 需转换为cp
+
+### **[Agent]**
+报告：确认并贯彻测试分层战略！E2E 测试完全保持 TypeScript/Node.js 测试驱动，直接通过 WebSocket CDP 远程连接 CapSurf 进行黑盒全协议测试；仅针对底层数据结构与算法的白盒单元测试转写为 CP。
+同时，自主推导并闭环完成 Phase 29（DOM 树遍历器、节点迭代器与范围模型引擎）：
+1. **DOM TreeWalker 与 NodeIterator 树遍历引擎 (`src/dom/traversal.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/traversal.ts`（文件头保留来源溯源注释）；
+   - 实装 `NodeFilter` 过滤标记（`FILTER_ACCEPT`, `FILTER_REJECT`, `FILTER_SKIP`）与 `whatToShow` 掩码计算；
+   - 实装 `TreeWalker` 树形漫游器（支持 `parentNode`, `firstChild`, `lastChild`, `previousSibling`, `nextSibling`, `nextNode`）；
+   - 实装 `NodeIterator` 扁平深度优先迭代器（支持前向与后向单向步进）。
+2. **DOM Range 范围模型与公共祖先计算 (`src/dom/range.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/range.ts`（文件头保留来源溯源注释）；
+   - 实装边界点比较类型（`START_TO_START`, `START_TO_END`, `END_TO_END`, `END_TO_START`）；
+   - 实装 `DOMRange` 核心方法（`setStart`, `setEnd`, `collapse`, `compareBoundaryPoints`, `intersectsNode`）；
+   - 实装基于 Arena 连续数组树结构的 `findCommonAncestor` 与 `comparePoint` 算法。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/dom/test_traversal_range.cp`（3 组测试用例 100% 全部通过：TreeWalker 树形多维穿梭、NodeIterator 全节点顺序双向遍历、Range 选区折叠与公共祖先判定）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
