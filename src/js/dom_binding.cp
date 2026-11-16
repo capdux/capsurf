@@ -211,6 +211,35 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsUndefined();
 }
 
+@c fn js_element_remove_attribute(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const attr_name = jsToSlice(ctx, argv[0]);
+    defer std.heap.page_allocator.free(attr_name);
+    * = el.dom_ctx.doc.removeAttribute(el.node_id, attr_name);
+    return jsUndefined();
+}
+
+@c fn js_element_get_raw_attrs(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc; * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNull();
+    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    const arr = JS_NewArray(ctx);
+    let i: usize = 0;
+    while (i < node.attr_count) : (i += 1) {
+        const item_obj = JS_NewObject(ctx);
+        * = JS_SetPropertyStr(ctx, item_obj, "name", jsNewString(ctx, node.attrs[i].name));
+        * = JS_SetPropertyStr(ctx, item_obj, "value", jsNewString(ctx, node.attrs[i].value));
+        * = JS_SetPropertyUint32(ctx, arr, @intCast(i), item_obj);
+    }
+    return arr;
+}
+
 @c fn js_element_has_attribute(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     if (argc < 1) return jsFalse();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
@@ -695,7 +724,9 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     const el_proto = JS_NewObject(raw_ctx);
     defineMethod(raw_ctx, el_proto, "getAttribute", js_element_get_attribute, 1);
     defineMethod(raw_ctx, el_proto, "setAttribute", js_element_set_attribute, 2);
+    defineMethod(raw_ctx, el_proto, "removeAttribute", js_element_remove_attribute, 1);
     defineMethod(raw_ctx, el_proto, "hasAttribute", js_element_has_attribute, 1);
+    defineMethod(raw_ctx, el_proto, "_getRawAttrs", js_element_get_raw_attrs, 0);
     defineMethod(raw_ctx, el_proto, "appendChild", js_element_append_child, 1);
     defineMethod(raw_ctx, el_proto, "removeChild", js_element_remove_child, 1);
     defineMethod(raw_ctx, el_proto, "getBoundingClientRect", js_element_get_bounding_client_rect, 0);

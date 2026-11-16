@@ -167,6 +167,30 @@ pub struct CdpPageSession {
         _.focused_node = NULL_NODE;
         _.scroll_x = 0.0;
         _.scroll_y = 0.0;
+
+        // Execute inline <script> tags in document order
+        let nid: usize = 1;
+        while (nid < _.doc.nodes.items.len) : (nid += 1) {
+            const n = &_.doc.nodes.items[nid];
+            if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
+                let code_buf = _.allocator.alloc(u8, 65536) catch break;
+                defer _.allocator.free(code_buf);
+                let code_len: usize = 0;
+                let child = n.first_child;
+                while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                    const cn = &_.doc.nodes.items[@as(usize, child)];
+                    if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
+                        const copy_len = @min(cn.text_content.len, code_buf.len - code_len);
+                        @memcpy(code_buf[code_len..code_len + copy_len], cn.text_content[0..copy_len]);
+                        code_len += copy_len;
+                    }
+                }
+                if (code_len > 0) {
+                    const js_res = _.ctx.eval(code_buf[0..code_len]);
+                    * = js_res;
+                }
+            }
+        }
     }
 
 fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {

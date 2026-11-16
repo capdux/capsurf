@@ -729,6 +729,19 @@
      - 在 CDP 分发器中识别 `Browser.close`，立即回包响应 `{"id": N, "result": {}}`；
      - 主动构造 RFC 6455 0x08 opcode，携带 1000 状态码与 "Browser.close" 原因字符串发送 Close 帧，随后优雅关闭底层网络连接，使远程黑盒驱动无缝完成测试退出闭环。
 
+## Phase 37 DOM Attributes / NamedNodeMap 与 Data URL 百分号解码架构方案
+1. **RFC 2397 规范级 Data URL 解码流水线 (`src/net/http_loader.cp`)**：
+   - **设计动机**：自动化测试与框架常用 `page.goto("data:text/html;charset=utf-8," + encodeURIComponent(html))` 动态注入复杂页面。若仅支持简单固定前缀或未处理 `%XX` 编码，页面内容将被解析为畸形文本甚至导致导航失败；
+   - **解决方案**：
+     - `HttpLoader.decodeDataUrl` 按规范拆分媒体头与 payload 数据段，精准识别 `;base64` 参数以调用 Base64 引擎；
+     - 对纯文本与 URL 编码数据执行单趟流式百分号扫描解码（`%XX` 转换），并在导航阶段保证 `charset=utf-8` 正确还原为真实 DOM 标签与内联脚本。
+2. **零 GC NamedNodeMap 实时同步与 React 19 兼容性设计 (`src/js/shim/collections.js`)**：
+   - **设计动机**：现代前端框架（如 React 19 的 `releaseSingletonInstance`）频繁使用 `while (attrs.length) el.removeAttributeNode(attrs[0])` 排空元素属性，并严格断言 `Object.keys(attrs).length === attrs.length`；
+   - **解决方案**：
+     - `NamedNodeMap` 实例将属性索引作为实例自有属性直接动态挂载，同时将内部管理状态通过 `Object.defineProperty(..., { enumerable: false })` 彻底隐藏；
+     - 每次属性修改（`setAttribute`, `removeAttribute`, `removeAttributeNode`）均实时同步 `_attrs` 映射表并刷新索引属性，既保证符合 W3C 规范的 live 动态特性，又完全兼容 React 19 等复杂排空与克隆循环。
+
+
 
 
 

@@ -1,7 +1,7 @@
 // Migrated from vendor/kitesurf/packages/dom-shim/src/collections.ts
 // Implements WHATWG DOMTokenList (classList), NodeList, and HTMLCollection over Arena DOM tree.
 
-import { Document, NodeData, NodeId, NULL_NODE, NodeType } from "./dom.cp";
+import { Document, NodeData, NodeId, NULL_NODE, NodeType, Attr, MAX_ATTRS_PER_NODE } from "./dom.cp";
 
 pub const MAX_TOKENS: usize = 32;
 pub const MAX_COLLECTION_SIZE: usize = 128;
@@ -183,6 +183,64 @@ pub struct HTMLCollection {
             }
         }
         return NULL_NODE;
+    }
+}
+
+pub struct NamedNodeMap {
+    items: [MAX_ATTRS_PER_NODE]Attr = [Attr{}; 16],
+    count: usize = 0,
+
+    static fn init(): NamedNodeMap {
+        return NamedNodeMap{};
+    }
+
+    fn length(): usize {
+        return _.count;
+    }
+
+    fn item(idx: usize): (Attr)? {
+        if (idx >= _.count) return null;
+        return _.items[idx];
+    }
+
+    fn getNamedItem(name: []const u8): (Attr)? {
+        let i: usize = 0;
+        while (i < _.count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.items[i].name, name)) {
+                return _.items[i];
+            }
+        }
+        return null;
+    }
+
+    fn setNamedItem(*_, attr: Attr) {
+        let i: usize = 0;
+        while (i < _.count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.items[i].name, attr.name)) {
+                _.items[i] = attr;
+                return;
+            }
+        }
+        if (_.count < MAX_ATTRS_PER_NODE) {
+            _.items[_.count] = attr;
+            _.count += 1;
+        }
+    }
+
+    fn removeNamedItem(*_, name: []const u8): (Attr)? {
+        let i: usize = 0;
+        while (i < _.count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.items[i].name, name)) {
+                const removed = _.items[i];
+                let j = i;
+                while (j + 1 < _.count) : (j += 1) {
+                    _.items[j] = _.items[j + 1];
+                }
+                _.count -= 1;
+                return removed;
+            }
+        }
+        return null;
     }
 }
 

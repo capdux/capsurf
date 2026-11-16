@@ -293,7 +293,27 @@ function installWindow(global) {
   global.AudioContext = AudioContext;
   global.webkitAudioContext = AudioContext;
 
-  // 9. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
+  // 9. User Interaction Prompts (silent, non-throwing headless stubs)
+  const alertFn = markNative(function (msg) { return undefined; }, "alert");
+  const confirmFn = markNative(function (msg) { return false; }, "confirm");
+  const promptFn = markNative(function (msg, defaultText) { return null; }, "prompt");
+
+  global.alert = alertFn;
+  global.confirm = confirmFn;
+  global.prompt = promptFn;
+
+  if (typeof window !== "undefined") {
+    window.alert = alertFn;
+    window.confirm = confirmFn;
+    window.prompt = promptFn;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.alert = alertFn;
+    globalThis.confirm = confirmFn;
+    globalThis.prompt = promptFn;
+  }
+
+  // 10. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
   if (global.document) {
     try {
       Object.defineProperty(global, "document", {

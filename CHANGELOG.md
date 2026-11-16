@@ -796,6 +796,30 @@
   - `e2e/run_all.js`：运行 3 个核心 E2E 测试套件（`blank-page-document.test.js`、`browser-close.test.js`、`window-global-scope.test.js`），7/7 项用例全部通过（100% PASS）；
   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 37: DOM Attributes / NamedNodeMap, Window User Prompts, Data URL Percent-Decoding & E2E Scale (100% Closed)
+- **`src/net/http_loader.cp`**：
+  - 增强 `HttpLoader.decodeDataUrl` 支持完整 RFC 2397 标准数据解析；
+  - 支持 `;base64` 参数识别与解码，支持非 Base64 媒体串的 URL 百分号解码（`%XX` 十六进制转字节，支持 `%20`, `%3C`, `%3E`, `%22` 等）；
+  - 支持 `Page.navigate` 直接加载 `data:text/html;charset=utf-8,...` 复杂内联 HTML 页面。
+- **`src/dom/dom.cp` & `src/dom/collections.cp`**：
+  - 在 `NodeData` 实装 `removeAttribute(*_, name: []const u8): bool`，对 `id`, `class`, `style` 及通用 `attrs` 数组就地移位删除；
+  - 在 `ElementHandle` 与 `Document` 暴露 `removeAttribute` 接口；
+  - 在 `src/dom/collections.cp` 实装 WHATWG `NamedNodeMap` 结构体（`length`, `item`, `getNamedItem`, `setNamedItem`, `removeNamedItem`）。
+- **`src/js/shim/`**：
+  - `window.js`：实装静默不抛错的交互接口 `window.alert`（返回 `undefined`）、`window.confirm`（返回 `false`）、`window.prompt`（返回 `null`）；
+  - `collections.js`：实装 `Attr` 与 `NamedNodeMap`，内部状态非枚举保护，完美通过 React 19 `releaseSingletonInstance` 属性排空循环（`Object.keys(attrs).length === attrs.length`）；
+  - `element/element.js`：接入 `Element.prototype.attributes` 实时映射，实装 `removeAttributeNode`, `getAttributeNode`, `setAttributeNode`；
+  - `dom_binding.cp`：在 JS Element 原型上绑定原生 `removeAttribute` 与 `_getRawAttrs`。
+- **E2E 黑盒测试套件扩展**：
+  - 新增 `e2e/alert-non-throwing.test.js`（验证 `alert`, `confirm`, `prompt` 不抛错与返回值）；
+  - 新增 `e2e/attributes-live-namednodemap.test.js`（验证 `el.attributes` 随增删改实时更新与 React 19 排空循环）；
+- **测试套件与全链路验证**：
+  - `test/dom/test_collections_attributes.cp`：纯 CP 原生单元测试 100% 全部通过；
+  - `e2e/run_all.js`：5 套核心 E2E 测试全部自动发现并执行，10/10 项用例 100% PASS（耗时 1.11s）；
+  - `scripts/test_driver_playwright.js` & `scripts/test_e2e_matrix.js`：100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.7MB）与 `bin/main.so`（9.1KB）双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

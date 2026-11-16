@@ -1773,6 +1773,33 @@
    - `e2e/run_all.js`：运行 3 个核心 E2E 测试套件（`blank-page-document.test.js`、`browser-close.test.js`、`window-global-scope.test.js`），7/7 项用例全部通过（100% PASS）；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-17 08:30:00] Turn 50
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 37（DOM Attributes / NamedNodeMap、Window 用户交互防护、RFC 2397 Data URL 百分号解码与 E2E 黑盒套件规模化扩充）：
+1. **RFC 2397 Data URL 百分号与 Base64 解码器增强 (`src/net/http_loader.cp`)**：
+   - 完整支持 `data:[<mediatype>][;base64],<data>` 规范结构解析；
+   - 提取媒体头，精准识别 `;base64` 媒体参数，调用 `Base64.decode` 还原二进制/文本；
+   - 支持非 Base64 的 URL 百分号编码序列（`%XX` 转换，如 `%20` -> `' '`, `%3C` -> `'<'`, `%3E` -> `'>'` 等）解析还原，为 `Page.navigate` 与 Kitesurf 的 `setContent`（`data:text/html;charset=utf-8,...`）提供无缝基础设施。
+2. **DOM 原生属性与集合模型增强 (`src/dom/dom.cp` & `src/dom/collections.cp`)**：
+   - 在 `NodeData` 中实装 `removeAttribute(*_, name: []const u8): bool`，大小写不敏感精准清理 `id_attr`、`class_attr`、`inline_style` 与 `attrs` 数组就地移位；
+   - 在 `ElementHandle` 与 `Document` 暴露 `removeAttribute`；
+   - 在 `collections.cp` 实装 WHATWG `NamedNodeMap` 结构体（`length`, `item`, `getNamedItem`, `setNamedItem`, `removeNamedItem`）。
+3. **JS Shim 稳健性与 React 19 兼容性升级 (`src/js/shim/`)**：
+   - `src/js/shim/window.js`：实装非抛错交互提示 `window.alert`（返回 `undefined`）、`window.confirm`（返回 `false`）、`window.prompt`（返回 `null`），并在 `globalThis` 与 `window` 上同步暴露；
+   - `src/js/shim/collections.js`：实装完整的 `Attr` 与 `NamedNodeMap` 类，内部状态非枚举保护以完美匹配 `Object.keys(attrs).length === attrs.length`，通过 React 19 `releaseSingletonInstance` 属性排空循环；
+   - `src/js/shim/element/element.js`：在 `Element.prototype` 接入 `attributes` live getter，实装 `removeAttributeNode`, `getAttributeNode`, `setAttributeNode`；
+   - `src/js/dom_binding.cp`：挂载原生 `removeAttribute` 与 `_getRawAttrs`。
+4. **自动化测试与全链路回归验证**：
+   - `test/dom/test_collections_attributes.cp`：纯 CP 原生单元测试 100% 全部通过；
+   - `python3 scripts/cpc_brief.py -n 8`：全部修改文件 100% 通过 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - `e2e/run_all.js`：5 套核心 E2E 测试全部自动发现并执行，10/10 项用例 100% PASS（耗时 1.11s）；
+   - 双驱动回归：`test_driver_playwright.js` 与 `test_e2e_matrix.js` 100% 成功；
+   - 双模构建：单二进制 `bin/main`（8.7MB）与 Nest 动态库 `bin/main.so`（9.1KB）均构建成功。
+
+
 
 
 

@@ -143,30 +143,200 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
-  // removeAttribute
-  if (!proto.removeAttribute) {
-    proto.removeAttribute = function (name) {
-      if (this._attrs) this._attrs.delete(String(name).toLowerCase());
-      if (this.setAttribute) this.setAttribute(name, "");
-    };
-    markNative(proto.removeAttribute, "removeAttribute");
-  }
-
-  // getAttributeNames
-  if (!proto.getAttributeNames) {
-    proto.getAttributeNames = function () {
-      const names = [];
-      if (this.id) names.push("id");
-      if (this.className) names.push("class");
-      if (this.hasAttribute && this.hasAttribute("style")) names.push("style");
-      if (this._attrs) {
-        for (const k of this._attrs.keys()) {
-          if (names.indexOf(k) === -1) names.push(k);
+  // Internal attribute synchronization
+  proto._syncAttrs = function () {
+    if (!this._attrs) {
+      this._attrs = new Map();
+      if (typeof this._getRawAttrs === "function") {
+        const raw = this._getRawAttrs();
+        if (raw && Array.isArray(raw)) {
+          for (let i = 0; i < raw.length; i++) {
+            const item = raw[i];
+            if (item && item.name) {
+              this._attrs.set(item.name.toLowerCase(), { name: item.name, value: item.value || "" });
+            }
+          }
         }
       }
-      return names;
-    };
-    markNative(proto.getAttributeNames, "getAttributeNames");
+      if (this.id && !this._attrs.has("id")) {
+        this._attrs.set("id", { name: "id", value: this.id });
+      }
+      if (this.className && !this._attrs.has("class")) {
+        this._attrs.set("class", { name: "class", value: this.className });
+      }
+      if (this.hasAttribute && this.hasAttribute("style") && !this._attrs.has("style")) {
+        this._attrs.set("style", { name: "style", value: this.getAttribute("style") || "" });
+      }
+    }
+  };
+
+  // attributes getter returning live NamedNodeMap
+  Object.defineProperty(proto, "attributes", {
+    get: function () {
+      if (!this._attributesMap) {
+        this._attributesMap = new NamedNodeMap(this);
+      } else {
+        this._attributesMap._sync();
+      }
+      return this._attributesMap;
+    },
+    configurable: true,
+  });
+
+  // setAttribute
+  const origSetAttribute = proto.setAttribute;
+  proto.setAttribute = function (name, value) {
+    const key = String(name);
+    const val = String(value);
+    if (!this._attrs) this._syncAttrs();
+    this._attrs.set(key.toLowerCase(), { name: key, value: val });
+    if (key.toLowerCase() === "id") {
+      this.id = val;
+    } else if (key.toLowerCase() === "class") {
+      this.className = val;
+    }
+    if (origSetAttribute) {
+      origSetAttribute.call(this, key, val);
+    }
+    if (this._attributesMap) {
+      this._attributesMap._sync();
+    }
+  };
+  markNative(proto.setAttribute, "setAttribute");
+
+  // removeAttribute
+  const origRemoveAttribute = proto.removeAttribute;
+  proto.removeAttribute = function (name) {
+    const key = String(name).toLowerCase();
+    if (!this._attrs) this._syncAttrs();
+    this._attrs.delete(key);
+    if (key === "id") {
+      this.id = "";
+    } else if (key === "class") {
+      this.className = "";
+    }
+    if (origRemoveAttribute) {
+      origRemoveAttribute.call(this, name);
+    }
+    if (this._attributesMap) {
+      this._attributesMap._sync();
+    }
+  };
+  markNative(proto.removeAttribute, "removeAttribute");
+
+  // removeAttributeNode
+  proto.removeAttributeNode = function (attr) {
+    if (!attr || !attr.name) return null;
+    if (attr.ownerElement && attr.ownerElement !== this) {
+      const err = new Error("NotFoundError: Attr does not belong to this element");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    this.removeAttribute(attr.name);
+    attr.ownerElement = null;
+    return attr;
+  };
+  markNative(proto.removeAttributeNode, "removeAttributeNode");
+
+  // getAttributeNode & setAttributeNode
+  proto.getAttributeNode = function (name) {
+    if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
+    return this._attributesMap.getNamedItem(name);
+  };
+  markNative(proto.getAttributeNode, "getAttributeNode");
+
+  proto.setAttributeNode = function (attr) {
+    if (!attr || !attr.name) throw new TypeError("Attr required");
+    if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
+    return this._attributesMap.setNamedItem(attr);
+  };
+  markNative(proto.setAttributeNode, "setAttributeNode");
+
+  // getAttribute
+  const origGetAttribute = proto.getAttribute;
+  proto.getAttribute = function (name) {
+    const key = String(name).toLowerCase();
+    if (this._attrs) {
+      const entry = this._attrs.get(key);
+      if (entry) return entry.value;
+      if (origGetAttribute) {
+        const val = origGetAttribute.call(this, name);
+        if (val !== null) return val;
+      }
+      return null;
+    }
+    if (origGetAttribute) {
+      return origGetAttribute.call(this, name);
+    }
+    return null;
+  };
+  markNative(proto.getAttribute, "getAttribute");
+
+  // hasAttribute
+  const origHasAttribute = proto.hasAttribute;
+  proto.hasAttribute = function (name) {
+    const key = String(name).toLowerCase();
+    if (this._attrs) {
+      if (this._attrs.has(key)) return true;
+      if (origHasAttribute) return origHasAttribute.call(this, name);
+      return false;
+    }
+    if (origHasAttribute) {
+      return origHasAttribute.call(this, name);
+    }
+    return false;
+  };
+  markNative(proto.hasAttribute, "hasAttribute");
+
+  // getAttributeNames
+  proto.getAttributeNames = function () {
+    if (!this._attrs) this._syncAttrs();
+    const names = [];
+    for (const entry of this._attrs.values()) {
+      names.push(entry.name);
+    }
+    return names;
+  };
+  markNative(proto.getAttributeNames, "getAttributeNames");
+
+  // Wrap id & className accessors if present
+  const idDesc = Object.getOwnPropertyDescriptor(proto, "id");
+  if (idDesc && idDesc.set) {
+    const origIdSet = idDesc.set;
+    Object.defineProperty(proto, "id", {
+      get: idDesc.get,
+      set: function (v) {
+        origIdSet.call(this, v);
+        const str = String(v);
+        if (!this._attrs) this._syncAttrs();
+        if (str) {
+          this._attrs.set("id", { name: "id", value: str });
+        } else {
+          this._attrs.delete("id");
+        }
+        if (this._attributesMap) this._attributesMap._sync();
+      },
+      configurable: true,
+    });
+  }
+  const clsDesc = Object.getOwnPropertyDescriptor(proto, "className");
+  if (clsDesc && clsDesc.set) {
+    const origClsSet = clsDesc.set;
+    Object.defineProperty(proto, "className", {
+      get: clsDesc.get,
+      set: function (v) {
+        origClsSet.call(this, v);
+        const str = String(v);
+        if (!this._attrs) this._syncAttrs();
+        if (str) {
+          this._attrs.set("class", { name: "class", value: str });
+        } else {
+          this._attrs.delete("class");
+        }
+        if (this._attributesMap) this._attributesMap._sync();
+      },
+      configurable: true,
+    });
   }
 
   // toggleAttribute

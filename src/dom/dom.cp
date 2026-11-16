@@ -151,6 +151,34 @@ pub struct NodeData {
         }
     }
 
+    fn removeAttribute(*_, name: []const u8): bool {
+        let special_cleared = false;
+        if (std.ascii.eqlIgnoreCase(name, "id")) {
+            if (_.id_attr.len > 0) special_cleared = true;
+            _.id_attr = "";
+        } else if (std.ascii.eqlIgnoreCase(name, "class")) {
+            if (_.class_attr.len > 0 || _.class_count > 0) special_cleared = true;
+            _.class_attr = "";
+            _.class_count = 0;
+        } else if (std.ascii.eqlIgnoreCase(name, "style")) {
+            if (_.inline_style.len > 0) special_cleared = true;
+            _.inline_style = "";
+        }
+
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.attrs[i].name, name)) {
+                let j = i;
+                while (j + 1 < _.attr_count) : (j += 1) {
+                    _.attrs[j] = _.attrs[j + 1];
+                }
+                _.attr_count -= 1;
+                return true;
+            }
+        }
+        return special_cleared;
+    }
+
     fn setClassName(*_, class_str: []const u8) {
         _.class_attr = class_str;
         _.class_count = 0;
@@ -187,6 +215,10 @@ pub struct ElementHandle {
 
     fn setAttribute(*_, name: []const u8, value: []const u8) {
         _.doc.setAttribute(_.node_id, name, value);
+    }
+
+    fn removeAttribute(*_, name: []const u8): bool {
+        return _.doc.nodes.items[_.node_id].removeAttribute(name);
     }
 
     fn setId(*_, id_val: []const u8) {
@@ -352,6 +384,13 @@ pub struct Document {
         if (*n := _.getNodeMut(node_id)) {
             n.setAttribute(name, value);
         }
+    }
+
+    fn removeAttribute(*_, node_id: NodeId, name: []const u8): bool {
+        if (*n := _.getNodeMut(node_id)) {
+            return n.removeAttribute(name);
+        }
+        return false;
     }
 
     fn appendChild(*_, parent_id: NodeId, child_id: NodeId) {

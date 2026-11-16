@@ -41,27 +41,54 @@ pub struct HttpLoaderResult {
 }
 
 pub struct HttpLoader {
+    static fn hexVal(c: u8): u8? {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return null;
+    }
+
     /// Decode a data: URL (either data:text/html,... or data:text/html;base64,...)
     pub static fn decodeDataUrl(url: []const u8, out_buf: []u8): ([]const u8)? {
-        const b64_prefix = "data:text/html;base64,";
-        if (std.mem.startsWith(u8, url, b64_prefix)) {
-            const b64_part = url[b64_prefix.len..];
-            const decoded_len = Base64.decode(out_buf, b64_part) catch return null;
+        if (!std.mem.startsWith(u8, url, "data:")) {
+            return null;
+        }
+
+        const comma_pos_opt = std.mem.indexOfScalar(u8, url, ',');
+        if (comma_pos_opt == null) return null;
+        const comma_pos = comma_pos_opt.?;
+        if (comma_pos < 5) return null;
+
+        const header = url[5..comma_pos];
+        const payload = url[comma_pos + 1..];
+
+        const is_base64 = std.mem.indexOf(u8, header, ";base64") != null || std.mem.endsWith(u8, header, ";base64");
+        if (is_base64) {
+            const decoded_len = Base64.decode(out_buf, payload) catch return null;
             return out_buf[0..decoded_len];
         }
 
-        const plain_prefix = "data:text/html,";
-        if (std.mem.startsWith(u8, url, plain_prefix)) {
-            const raw_html = url[plain_prefix.len..];
-            return raw_html;
+        // Percent-decoding for non-base64 payload
+        let out_pos: usize = 0;
+        let i: usize = 0;
+        while (i < payload.len) {
+            if (payload[i] == '%' && i + 2 < payload.len) {
+                if (h1 := HttpLoader.hexVal(payload[i + 1])) {
+                    if (h2 := HttpLoader.hexVal(payload[i + 2])) {
+                        if (out_pos >= out_buf.len) return null;
+                        out_buf[out_pos] = (h1 << 4) | h2;
+                        out_pos += 1;
+                        i += 3;
+                        continue;
+                    }
+                }
+            }
+            if (out_pos >= out_buf.len) return null;
+            out_buf[out_pos] = payload[i];
+            out_pos += 1;
+            i += 1;
         }
-
-        const generic_prefix = "data:,";
-        if (std.mem.startsWith(u8, url, generic_prefix)) {
-            return url[generic_prefix.len..];
-        }
-
-        return null;
+        return out_buf[0..out_pos];
     }
 
     /// Parse an IPv4 string literal into 32-bit big-endian/native integer

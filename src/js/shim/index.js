@@ -17,6 +17,8 @@ function installShim(global) {
   global.DOMTokenList = DOMTokenList;
   global.HTMLCollection = HTMLCollection;
   global.NodeList = NodeList;
+  global.NamedNodeMap = NamedNodeMap;
+  global.Attr = Attr;
   global.Node = Node;
   global.Text = Text;
   global.Comment = Comment;
