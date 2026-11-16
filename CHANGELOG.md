@@ -283,3 +283,24 @@
   - 独立单二进制构建：`cap build src/main.cp -f` 生成 7.2MB 单二进制 `bin/main`；
   - Nest 容器动态库构建：`cap build src/main.cp -b` 编译生成 `bin/main.so`（9.3KB）与 `bin/main.d.cp`。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 8: Standard Chromium CLI Drop-In Replacement & Driver Compatibility Suite (100% Closed)
+- **`src/cli/options.cp`**：
+  - 新增 `CliOptions` 结构体：全面兼容标准 Chromium CLI 参数（`--remote-debugging-port`、`--remote-debugging-address`、`--window-size`、`--user-data-dir`、`--headless`、`--no-sandbox`、`--disable-gpu`、`--demo`、`-v`、`-h`）；
+  - 实装 `parseFromProcess()`：读取 `/proc/self/cmdline` 提取参数列表，无须外部运行时依赖。
+- **`src/main.cp`**：
+  - 集成 `CliOptions.parseFromProcess()` 解析配置，支持动态调试端口与视口；
+  - 输出标准就绪握手行：`DevTools listening on ws://{address}:{port}/devtools/browser/capsurf-browser-001`，支撑驱动自动探活；
+  - 优化 `printUsage()` 字符串拼接，消除多行宏展开语法瑕疵。
+- **`src/cdp/server.cp`**：
+  - 引入 `findHeaderCaseInsensitive` 大小写不敏感标头定位，使 WebSocket 升级握手能够正确匹配 Node.js 全小写首部（`sec-websocket-key`、`upgrade: websocket`）；
+  - 统一 POSIX `open`、`read`、`close` C-FFI 声明，避免多模块重复符号冲突。
+- **`src/net/cookies.cp` & `src/net/public_suffix.cp`**：
+  - 规范 `@c` 外部函数声明类型为 `*!?`，修复 Zig 0.17 严格类型推导报错。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_cli_options.cp`：3 项测试 100% 全部通过（默认参数、Chromium 复合参数与分离参数）；
+  - `scripts/test_driver_playwright.js`：Node.js 22 真实驱动自动化 11 步套件 100% 绿色通过（子进程派生、stdout 握手探活、HTTP 发现、WebSocket 握手、Auto-Attach 目标附加、生命周期导航、DOM 盒模型像素坐标、输入交互、Base64 PNG 截屏校验、SIGTERM 优雅退出）。
+- **双模编译产物验证**：
+  - 独立单二进制构建：`cap build src/main.cp -f` 生成 8.3MB 单二进制 `bin/main`；
+  - Nest 容器动态库构建：`cap build src/main.cp -b` 编译生成 `bin/main.so`（9.1KB）与 `bin/main.d.cp`。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

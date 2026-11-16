@@ -253,3 +253,23 @@
 3. **独立二进制与 Nest 容器双模构建验证**：
    - 验证独立单二进制模式：`cap build src/main.cp -f`，成功编译出 7.2MB 单可执行文件 `bin/main`；
    - 验证 Nest 容器热加载动态库模式：`cap build src/main.cp -b`，基于 `@is_nest` 宏成功编译出轻量级动态库 `bin/main.so`（9.3KB）及其接口定义 `bin/main.d.cp`。
+
+## Phase 8 Chromium CLI 平替架构、RFC 6455 协议加固与驱动端到端兼容排障实录
+1. **Chromium CLI 平替与 Linux `/proc/self/cmdline` 无依赖解析架构 (`src/cli/options.cp`)**：
+   - **设计目标**：使 CapSurf 能够作为标准无头 Chromium 的无感替代品，被 Playwright、Puppeteer、Chrome-launcher 等驱动程序直接通过命令行拉起；
+   - **架构设计**：
+     - 支持 `--remote-debugging-port=<port>`、`--remote-debugging-port <port>` 复合与分离两种端口传参；
+     - 支持 `--remote-debugging-address`、`--window-size=<w>,<h>` 动态视口几何配置；
+     - 优雅兼容 `--headless`、`--no-sandbox`、`--disable-gpu` 等标准 Chrome 启动参数；
+     - 提供 `parseFromProcess()`：直接经由 Linux `/proc/self/cmdline` 读取 NUL (`\0`) 分隔的启动命令行参数，完成轻量解析，避免对外部 libc/wrapper 的脆弱依赖。
+2. **Playwright 驱动自动探活标准握手行设计 (`src/main.cp`)**：
+   - **痛点与机制**：Playwright 和 Puppeteer 在使用 `launch({ executablePath: '...' })` 启动浏览器子进程后，内部会在子进程的 stdout/stderr 输出流中正则匹配监听行；如果未在超时内检测到特定握手输出，驱动会报超时并 SIGKILL 终止浏览器；
+   - **实现方案**：在 CDP 服务端绑定并监听端口后，立即向标准输出发送格式严格规范的调试行：
+     `DevTools listening on ws://{address}:{port}/devtools/browser/capsurf-browser-001`
+     驱动程序捕获后即可立即提取 WebSocket 调试地址并建立通信。
+3. **RFC 6455 协议大小写不敏感标头匹配排障 (`src/cdp/server.cp`)**：
+   - **排障定位**：在 Node.js 22 真实驱动测试中，`new WebSocket('ws://...')` 握手发生 `ErrorEvent`。经网络抓包定位，Node.js 原生客户端在发起 WebSocket 升级握手时，请求头采用全小写字段（`sec-websocket-key: ...`、`upgrade: websocket`）。而服务端原实现使用 `std.mem.indexOf(u8, req, "Sec-WebSocket-Key:")`，导致无法命中键值，静默报 `MissingWsKey` 错误并切断连接；
+   - **解决方案**：实现 `findHeaderCaseInsensitive`，结合 `std.ascii.eqlIgnoreCase` 对 HTTP 请求头进行大小写不敏感扫描，并容忍冒号周围的空白字符，完全遵循 RFC 6455 规范。
+4. **C-FFI 重复符号冲突与跨模块符号收敛排障**：
+   - **排障定位**：当多个模块通过 `@c` 声明相同名称的 C 函数（如 `close(fd)`）时，`cpc` 转译生成的单体 `main.zig` 根结构体中会出现重复的 `pub extern "c" fn close` 与 `extern "c" fn close` 导致 Zig 编译器报错；
+   - **解决方案**：统一收敛底层 POSIX C-FFI 声明至 `src/cdp/server.cp` 的 `pub @c` 导出块，其他上层模块（如 `src/cli/options.cp`）统一通过 `import { open, read, close } from "../cdp/server.cp"` 引用，根除重复符号。

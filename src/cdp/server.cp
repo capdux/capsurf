@@ -23,6 +23,8 @@ pub @c {
     fn connect(fd: i32, addr: *const SockAddrIn, len: u32): i32;
     fn send(fd: i32, buf: [*]const u8, len: usize, flags: i32): isize;
     fn recv(fd: i32, buf: [*]u8, len: usize, flags: i32): isize;
+    fn open(pathname: [*c]const u8, flags: i32): i32;
+    fn read(fd: i32, buf: [*]u8, count: usize): isize;
     fn close(fd: i32): i32;
     fn shutdown(fd: i32, how: i32): i32;
     fn setsockopt(fd: i32, level: i32, optname: i32, optval: *const i32, optlen: u32): i32;
@@ -159,6 +161,17 @@ pub struct CdpServer {
         }
     }
 
+fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
+    if (headers.len < name.len) return null;
+    let i: usize = 0;
+    while (i + name.len <= headers.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(headers[i..i + name.len], name)) {
+            return i;
+        }
+    }
+    return null;
+}
+
     /// Handles a single incoming client connection (HTTP Discovery or WebSocket Session).
     pub fn handleClient(*_, client_fd: i32)! {
         defer {
@@ -171,8 +184,8 @@ pub struct CdpServer {
         const req_str = req_buf[0..@as(usize, @intCast(n))];
 
         // Check if WebSocket Upgrade request
-        if (std.mem.indexOf(u8, req_str, "Upgrade: websocket") != null or
-            std.mem.indexOf(u8, req_str, "upgrade: websocket") != null)
+        if (findHeaderCaseInsensitive(req_str, "upgrade: websocket") != null or
+            (findHeaderCaseInsensitive(req_str, "upgrade") != null and findHeaderCaseInsensitive(req_str, "websocket") != null))
         {
             _.handleWebSocketUpgrade(client_fd, req_str)? ;
             return;
@@ -247,9 +260,13 @@ pub struct CdpServer {
     }
 
     fn handleWebSocketUpgrade(*_, client_fd: i32, req: []const u8)! {
-        const key_marker = "Sec-WebSocket-Key:";
-        const pos = std.mem.indexOf(u8, req, key_marker) orelse return error.MissingWsKey;
-        let idx = pos + key_marker.len;
+        const marker = "sec-websocket-key";
+        const pos = findHeaderCaseInsensitive(req, marker) orelse return error.MissingWsKey;
+        let idx = pos + marker.len;
+        while (idx < req.len and req[idx] != ':') : (idx += 1) {}
+        if (idx < req.len and req[idx] == ':') {
+            idx += 1;
+        }
         while (idx < req.len and (req[idx] == ' ' or req[idx] == '\t')) : (idx += 1) {}
         const key_start = idx;
         while (idx < req.len and req[idx] != '\r' and req[idx] != '\n') : (idx += 1) {}

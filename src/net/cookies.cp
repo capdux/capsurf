@@ -6,7 +6,7 @@
 import { isIpHost, isPublicSuffix, siteKey, schemefulSite } from "./public_suffix.cp";
 
 @c {
-    fn time(t: *void?): c_long;
+    fn time(t: *!?): c_long;
 }
 
 pub const MAX_COOKIE_BYTES: usize = 4096;

@@ -3,11 +3,11 @@
 // Zero-allocation suffix evaluation for cookie domain and same-site checks.
 
 @c {
-    fn fopen(filename: [*c]const u8, mode: [*c]const u8): *void?;
-    fn fread(ptr: [*c]u8, size: usize, count: usize, stream: *void?): usize;
-    fn fclose(stream: *void?): i32;
-    fn fseek(stream: *void?, offset: c_long, whence: c_int): i32;
-    fn ftell(stream: *void?): c_long;
+    fn fopen(filename: [*c]const u8, mode: [*c]const u8): *!?;
+    fn fread(ptr: [*c]u8, size: usize, count: usize, stream: *!?): usize;
+    fn fclose(stream: *!?): i32;
+    fn fseek(stream: *!?, offset: c_long, whence: c_int): i32;
+    fn ftell(stream: *!?): c_long;
 }
 
 pub const DEFAULT_PSL_FALLBACK: []const u8 =

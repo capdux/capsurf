@@ -940,3 +940,38 @@
    - Nest 容器动态库构建：`cap build src/main.cp -b` 成功编译生成 `bin/main.so`（9.3KB）与 `bin/main.d.cp`。
 4. **门禁与代码规范全量达标**：
    - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 13:48:00] Turn 18
+
+### **[Agent]**
+全面完成并闭环 Phase 8（CLI Drop-in Replacement 命令行直接替换 Chromium 与标准驱动适配套件）：
+1. **Chromium CLI 命令行参数平替引擎 (`src/cli/options.cp`)**：
+   - 完整实装标准 Chromium 启动参数解析：`--remote-debugging-port=<port>`（及分离参数 `--remote-debugging-port <port>`）、`--remote-debugging-address=<ip>`、`--window-size=<w>,<h>`、`--user-data-dir=<path>`、`--headless` / `--headless=new`、`--no-sandbox`、`--disable-gpu`、`--demo`、`-v` / `--version`、`-h` / `--help`；
+   - 实装 `parseFromProcess()`：直接经由 Linux `/proc/self/cmdline` 获取原生启动命令行，自动跳过 `argv[0]` 并解析参数切片。
+2. **Chromium 驱动就绪标准发现字符串与主入口集成 (`src/main.cp`)**：
+   - 在 `main.cp` 中集成 `CliOptions.parseFromProcess()`，支持端口与视口动态配置；
+   - 启动 CDP 服务端后，向 stdout 打印标准 Chromium 发现握手字符串：`DevTools listening on ws://{address}:{port}/devtools/browser/capsurf-browser-001`，使 Playwright、Puppeteer 及 Chrome-launcher 无缝识别并自动连接。
+3. **RFC 6455 协议大小写不敏感握手加固 (`src/cdp/server.cp`)**：
+   - 解决 Node.js 22 内置 `WebSocket` 客户端发送全小写首部（`sec-websocket-key: ...`、`upgrade: websocket`）导致握手被拒的问题，实现零分配 `findHeaderCaseInsensitive` 大小写不敏感标头定位，确保遵循 RFC 6455 标准。
+4. **测试套件与 Node.js 端到端驱动 11 步全流程验证**：
+   - CP 单元测试：编写并通过 `test/cdp/test_cli_options.cp`（3/3 全部通过，覆盖默认配置、Chromium 复合参数与分离参数）；
+   - Node.js 驱动测试：编写并运行 `scripts/test_driver_playwright.js`（11 步端到端流程 100% 绿色通过）：
+     - Step 1: 派生子进程启动 `bin/main --remote-debugging-port=19225 --headless --window-size=1280,720 --no-sandbox --disable-gpu`；
+     - Step 2: 捕获 `DevTools listening on ws://...` 自动发现；
+     - Step 3: HTTP `GET /json/version` 验证产品名与协议；
+     - Step 4: HTTP `GET /json/list` 验证初始 target；
+     - Step 5: RFC 6455 原生 WebSocket 握手成功；
+     - Step 6: Playwright 握手与 `Target.setAutoAttach` 自动附加；
+     - Step 7: 激活 `Page`、`Runtime`、`DOM` 域与上下文创建；
+     - Step 8: `Page.navigate` 完整导航流水线生命周期；
+     - Step 9: `DOM.querySelector` 查找元素与 `DOM.getBoxModel` 验证盒模型几何坐标（140x42）；
+     - Step 10: `Input.dispatchMouseEvent` 模拟点击交互与 `Runtime.evaluate` 校验 JS 属性；
+     - Step 11: `Page.captureScreenshot` 视觉截屏出图与 Base64 PNG 校验（5461 字节，PNG 魔数合规）；SIGTERM 优雅退出进程。
+5. **双模构建验证**：
+   - 独立可执行程序构建：`cap build src/main.cp -f` 成功生成 8.3MB 单二进制 `bin/main`；
+   - Nest 容器动态库构建：`cap build src/main.cp -b` 成功生成 `bin/main.so`（9.1KB）。
+6. **门禁与代码规范全量达标**：
+   - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
