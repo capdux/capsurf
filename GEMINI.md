@@ -191,3 +191,33 @@
 2. **Git 原子提交铁律（仅主智能体执行）**：
    - 每完成一个 Milestone 子阶段或 3~5 个模块闭环验证后，先更新 `SESSION.md`、`CHANGELOG.md`、`DEVLOG.md`。
    - 精确 `git add` 变更的源码与文档（排除 `temp/` 与 `*.zig.map`），只执行唯一 **1 次** `git commit`（严禁 `--amend` 或事后二次补交）。
+
+---
+
+## 9. 自主推导演进、双智能体流水线与屏幕透明透出铁律 (AUTONOMOUS EXECUTION & TELEMETRY)
+
+1. **自主推导与持续自驱推进铁律**：
+   - **自驱推进无间断**：主智能体在完成当前 Phase 任务与提交后，不得停滞等待用户指令，必须自行推导分析依赖拓扑、明确下一个 Milestone/Phase 目标，自动派发全新子智能体推进，循环往复。
+   - **双智能体满负荷并行流水线**：始终保持最多 **2 路全新子智能体** 并行推进（严格遵守「用完即弃」铁律，严禁复用已完成上下文）：
+     - 一路攻坚原生核心模块（DOM/CSS/JS/网络/存储等）；
+     - 一路攻坚配套测试套件、适配驱动或验证框架。
+   - **单阶段七步闭环交付**：每个 Phase 必须严格完成「代码编写 -> `cpc fix` -> `cpc_brief.py` 4 门禁 -> 原生单元测试通过 -> E2E 回归验证 -> 四线文档实时更新 -> 唯一 1 次 Git 原子提交」七步闭环，绝不带病进入下一阶段。
+2. **实时工作状态透明透出规范（消除黑盒等待）**：
+   - **操作前屏幕提示**：在下发子智能体任务、启动耗时编译（`cap build`）或进入反应式休眠前，主智能体必须在屏幕显式输出「当前正在执行的动作卡片」（正在处理的模块、分配的子智能体、预期目标与检验标准）。
+   - **唤醒后即时汇总**：子智能体汇报或后台任务完成被系统唤醒时，主智能体必须在屏幕显式打印阶段性成果、测试断言结果看板与后续计划，让用户随时掌握研发动态。
+
+---
+
+## 10. E2E 端到端黑盒测试架构与 391 项 Kitesurf 用例规模化迁移规范
+
+1. **E2E 测试定位与语言纯洁性铁律**：
+   - **端到端测试严格保留为 TypeScript / Node.js 驱动**：**严禁将 E2E 测试转写为 CP 语言**！E2E 测试属于远程黑盒协议验证，必须以真实的外部客户端视角，通过网络 WebSocket 远程连接测试 CapSurf 独立服务。
+   - **白盒与黑盒双轨分工**：
+     - **白盒 / 纯 CP 原生单元测试（`test/**/*.cp`）**：验证内部 Arena DOM 结构、CSS 级联权重算法、URL 展开截幅、内存生命周期等底层算法准确性；
+     - **黑盒 / E2E 远程驱动测试（`test/e2e/*.test.js`）**：验证真实网络监听、HTTP 自省、RFC 6455 帧收发、CDP 域状态同步、JS 页面执行与视觉光栅化截屏。
+2. **进程级解耦适配架构 (`test/e2e/harness.js`)**：
+   - 原版 Kitesurf E2E 深度绑定了 Cloudflare Workers 专有的 `cloudflare:test` 和 `env.ENGINE` 内部句柄。
+   - CapSurf 通过 `test/e2e/harness.js` 统一拉起独立进程（`./bin/main --remote-debugging-port=<port>`），通过标准 CDP 调试端点（`ws://127.0.0.1:<port>/devtools/browser/...`）建立会话，提供标准 `test()` 与 `expect()` 断言器，并在测试结束后优雅销毁进程。
+3. **391 个 Kitesurf E2E 测试规模化迁移流程**：
+   - `vendor/kitesurf/packages/engine/test/e2e/` 下的 391 个 `.e2e.test.ts` 文件按功能域（DOM、CSS、Navigation、Worker、Storage、SVG、Table 等）系统化接入 `test/e2e/`；
+   - 维护统一的批量执行器 `test/e2e/run_all.js`，将其无缝集成到每个 Milestone / Phase 的自动化交付回归流水线中。
