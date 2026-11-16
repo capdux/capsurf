@@ -841,6 +841,28 @@
   - 独立单二进制：`bin/main` 构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 39: CSS attr() Evaluator, getComputedStyle & Headers WebIDL Sequence (100% Closed)
+- **`src/css/attr_evaluator.cp`**：
+  - 实装 W3C CSS Values and Units Level 5 规范的 `parseAttrExpr` 与 `evaluateCssAttr`；
+  - 支持 `type(<url>)` 判定为 attr()-tainted 无效值自动安全回退至 fallback 或 `""`，支持 `type(<number>)` 与常规属性求值。
+- **`src/net/headers_parser.cp`**：
+  - 实装 `FetchOriginPolicy`：对 `about:blank`、`data:` 等不透明源规范返回 `"null"`，提取并自动剥离默认端口（http:80, https:443）；
+  - 实装 RFC 9110 HTTP Token 校验与非法字符过滤。
+- **`src/js/shim/`**：
+  - `window.js`：实装 `window.getComputedStyle(element)`，支持读取内联样式、解析 `<style>` 规则选择器匹配、计算 CSS 自定义属性（`--*`）与 `attr()` 表达式；
+  - `file.js`：Headers 构造函数遵循 WebIDL sequence 规范：单次读取迭代器 `.next`，严格校验二元对序列，平滑支持 `Object.freeze` 冻结 options 字典；
+  - `dom_binding.cp` & `session.cp`：修复 `JsDomContext` 跨导航生命周期管理，优雅注销旧上下文与更新 `document` 实例。
+- **E2E 黑盒测试套件扩展**：
+  - 新增 `e2e/attr-type-url.test.js`（验证 `<style>` 中 `--url: attr(...)` 污染失效与回退）；
+  - 新增 `e2e/fetch-init-headers.test.js`（验证 Request/Response 冻结字典支持、单次迭代器读取与非法 sequence 抛出 `TypeError`）；
+- **测试套件与全链路验证**：
+  - `test/dom/test_attr_headers.cp`：纯 CP 原生单元测试 100% 全部通过；
+  - `e2e/run_all.js`：9 套核心 E2E 测试全部自动发现并执行，16/16 项用例 100% PASS（耗时 1.86s）；
+  - `scripts/test_driver_playwright.js`：100% 绿色通过；
+  - 独立单二进制：`bin/main` 构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

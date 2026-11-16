@@ -11,7 +11,8 @@ function createStyleProxy(element) {
       if (!p) continue;
       const colon = p.indexOf(":");
       if (colon !== -1) {
-        const k = p.slice(0, colon).trim().toLowerCase();
+        const rawKey = p.slice(0, colon).trim();
+        const k = rawKey.startsWith("--") ? rawKey : rawKey.toLowerCase();
         const v = p.slice(colon + 1).trim();
         map.set(k, v);
       }
@@ -40,20 +41,25 @@ function createStyleProxy(element) {
       if (prop === "getPropertyValue") {
         return function (p) {
           const map = parseStyleMap();
-          return map.get(String(p).toLowerCase()) || "";
+          const str = String(p);
+          const key = str.startsWith("--") ? str : str.toLowerCase();
+          return map.get(key) || "";
         };
       }
       if (prop === "setProperty") {
         return function (p, val) {
           const map = parseStyleMap();
-          map.set(String(p).toLowerCase(), String(val));
+          const str = String(p);
+          const key = str.startsWith("--") ? str : str.toLowerCase();
+          map.set(key, String(val));
           serializeStyleMap(map);
         };
       }
       if (prop === "removeProperty") {
         return function (p) {
           const map = parseStyleMap();
-          const key = String(p).toLowerCase();
+          const str = String(p);
+          const key = str.startsWith("--") ? str : str.toLowerCase();
           const old = map.get(key) || "";
           map.delete(key);
           serializeStyleMap(map);

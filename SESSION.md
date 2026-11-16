@@ -1823,6 +1823,34 @@
    - 双驱动全链路测试：`test_driver_playwright.js` 100% 成功；
    - 独立单二进制：`bin/main` 编译构建成功。
 
+---
+
+## [2026-11-17 09:20:00] Turn 52
+
+### **[User]**
+很好, 保持当前这种完成任务后, 自主推导下一阶段任务并执行, 连续工作, 不停顿. 每个阶段完善文档, 提交 git代码库,固化成果.
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 39（CSS `attr()` 变量解析器、`window.getComputedStyle` 规则引擎、WHATWG Headers WebIDL Sequence 转换与 E2E 黑盒套件规模化扩充）：
+1. **W3C CSS `attr()` 计算器与 `type(<url>)` 污染失效机制 (`src/css/attr_evaluator.cp`)**：
+   - 实装 `parseAttrExpr` 与 `evaluateCssAttr` 引擎；
+   - 严格遵循 W3C CSS Values and Units Level 5 规范：解析 `attr( <name> [type(<type>)] [, <fallback>] )`，当指定 `type(<url>)` 时判定为 attr()-tainted，在 computed-value 时期为无效值，自动安全回退至 fallback 或 `""`；
+   - 支持 `type(<number>)` 与普通属性求值。
+2. **WHATWG Headers WebIDL Sequence 转换与 Origin 策略 (`src/net/headers_parser.cp` & `src/js/shim/file.js`)**：
+   - 实装 `FetchOriginPolicy`：对 `about:blank`、`data:` 等不透明源规范返回 `"null"`，并智能提取与剥离默认端口；
+   - Headers 构造函数遵循 WebIDL sequence 规范：单次读取迭代器 `.next` getter，严格校验二元对序列（非数组或非法项抛出 `TypeError`），平滑支持 `Object.freeze` 冻结 options 字典。
+3. **JS Shim 样式计算与运行时稳健性升级 (`src/js/shim/window.js` & `src/cdp/session.cp`)**：
+   - 实装 `window.getComputedStyle(element)` 与 `CSSStyleDeclaration` 代理；
+   - 支持读取内联样式、解析 `<style>` 标签选择器规则匹配，并求值 CSS 变量（`--*`）与 `attr(...)`；
+   - 修复 `JsDomContext` 跨导航生命周期管理，保证 `Page.navigate` 优雅注销旧上下文与更新 `document` 实例，杜绝内存泄漏与悬垂崩溃。
+4. **自动化测试与全链路回归验证**：
+   - `test/dom/test_attr_headers.cp`：纯 CP 原生单元测试 100% 全部通过；
+   - `python3 scripts/cpc_brief.py -n 8`：全部修改文件 100% 通过 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - `e2e/run_all.js`：9 套核心 E2E 测试全部自动发现并执行，16/16 项用例 100% PASS（耗时 1.86s）；
+   - 双驱动全链路测试：`test_driver_playwright.js` 100% 成功；
+   - 独立单二进制：`bin/main` 编译构建成功。
+
+
 
 
 

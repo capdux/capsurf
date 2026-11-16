@@ -314,23 +314,73 @@ function extractMimeFromHeaders(headers) {
 // Request & Response support for .blob() Content-Type passthrough
 function Headers(init) {
   this._map = new Map();
-  if (init) {
-    if (init instanceof Headers) {
-      init._map.forEach((v, k) => this._map.set(k, v));
-    } else if (Array.isArray(init)) {
-      for (let i = 0; i < init.length; i++) {
-        const entry = init[i];
-        if (Array.isArray(entry) && entry.length >= 2) {
-          this.append(entry[0], entry[1]);
-        }
-      }
-    } else if (typeof init === "object") {
-      const keys = Object.keys(init);
-      for (let i = 0; i < keys.length; i++) {
-        const k = keys[i];
-        this.set(k, init[k]);
-      }
+  if (init === undefined) {
+    return;
+  }
+  if (typeof init !== "object" || init === null) {
+    throw new TypeError(
+      "Failed to construct 'Headers': The provided value is not of type '(sequence<sequence<ByteString>> or record<ByteString, ByteString>)'"
+    );
+  }
+
+  if (init instanceof Headers) {
+    init._map.forEach(function (v, k) {
+      this._map.set(k, v);
+    }, this);
+    return;
+  }
+
+  // If init is iterable and not a string: follow Web IDL single-read sequence conversion
+  if (typeof init[Symbol.iterator] === "function") {
+    const it = init[Symbol.iterator]();
+    if (!it || typeof it !== "object") {
+      throw new TypeError("Failed to construct 'Headers': The provided value is not iterable");
     }
+    const nextMethod = it.next;
+    if (typeof nextMethod !== "function") {
+      throw new TypeError("Failed to construct 'Headers': The provided value is not iterable");
+    }
+    while (true) {
+      const step = nextMethod.call(it);
+      if (step.done) break;
+      const item = step.value;
+      let pair = null;
+      if (Array.isArray(item)) {
+        pair = item;
+      } else if (item && typeof item === "object" && typeof item[Symbol.iterator] === "function") {
+        const subIt = item[Symbol.iterator]();
+        if (!subIt || typeof subIt !== "object") {
+          throw new TypeError("Failed to construct 'Headers': Value in sequence is not iterable");
+        }
+        const subNext = subIt.next;
+        if (typeof subNext !== "function") {
+          throw new TypeError("Failed to construct 'Headers': Value in sequence is not iterable");
+        }
+        const items = [];
+        while (true) {
+          const subStep = subNext.call(subIt);
+          if (subStep.done) break;
+          items.push(subStep.value);
+          if (items.length > 2) break;
+        }
+        pair = items;
+      } else {
+        throw new TypeError("Failed to construct 'Headers': Value in sequence is not a sequence");
+      }
+
+      if (pair.length !== 2) {
+        throw new TypeError("Failed to construct 'Headers': Each header entry must be a 2-element sequence");
+      }
+      this.append(pair[0], pair[1]);
+    }
+    return;
+  }
+
+  // Plain record / dictionary: iterate own enumerable properties
+  const keys = Object.keys(init);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    this.set(k, init[k]);
   }
 }
 
@@ -362,15 +412,40 @@ Headers.prototype.forEach = function (cb, thisArg) {
   this._map.forEach(cb, thisArg);
 };
 
+Headers.prototype.entries = function () {
+  return this._map.entries();
+};
+
+Headers.prototype.keys = function () {
+  return this._map.keys();
+};
+
+Headers.prototype.values = function () {
+  return this._map.values();
+};
+
+Headers.prototype[Symbol.iterator] = function () {
+  return this._map.entries();
+};
+
 markNative(Headers, "Headers");
+markNative(Headers.prototype.append, "append");
+markNative(Headers.prototype.set, "set");
+markNative(Headers.prototype.get, "get");
+markNative(Headers.prototype.has, "has");
+markNative(Headers.prototype.delete, "delete");
+markNative(Headers.prototype.forEach, "forEach");
+markNative(Headers.prototype.entries, "entries");
+markNative(Headers.prototype.keys, "keys");
+markNative(Headers.prototype.values, "values");
 
 function Request(input, init) {
   init = init || {};
   this.url = String(input);
   this.method = (init.method || "GET").toUpperCase();
-  this._rawMimeType = extractMimeFromHeaders(init.headers);
-  this._body = init.body !== undefined ? init.body : "";
   this.headers = new Headers(init.headers);
+  this._rawMimeType = extractMimeFromHeaders(this.headers);
+  this._body = init.body !== undefined ? init.body : "";
 }
 
 Request.prototype.blob = function () {
@@ -408,9 +483,9 @@ function Response(body, init) {
   init = init || {};
   this.status = init.status !== undefined ? Number(init.status) : 200;
   this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
-  this._rawMimeType = extractMimeFromHeaders(init.headers);
-  this._body = body !== undefined ? body : "";
   this.headers = new Headers(init.headers);
+  this._rawMimeType = extractMimeFromHeaders(this.headers);
+  this._body = body !== undefined ? body : "";
 }
 
 Response.prototype.blob = function () {
@@ -472,21 +547,21 @@ function patchExistingBodyBlob(Ctor) {
 global.Blob = Blob;
 global.File = File;
 
-if (!global.Headers) global.Headers = Headers;
+global.Headers = Headers;
 if (!global.Request) global.Request = Request; else patchExistingBodyBlob(global.Request);
 if (!global.Response) global.Response = Response; else patchExistingBodyBlob(global.Response);
 
 if (typeof window !== "undefined") {
   window.Blob = Blob;
   window.File = File;
-  if (!window.Headers) window.Headers = global.Headers;
-  if (!window.Request) window.Request = global.Request;
-  if (!window.Response) window.Response = global.Response;
+  window.Headers = Headers;
+  window.Request = Request;
+  window.Response = Response;
 }
 if (typeof globalThis !== "undefined") {
   globalThis.Blob = Blob;
   globalThis.File = File;
-  if (!globalThis.Headers) globalThis.Headers = global.Headers;
-  if (!globalThis.Request) globalThis.Request = global.Request;
-  if (!globalThis.Response) globalThis.Response = global.Response;
+  globalThis.Headers = Headers;
+  globalThis.Request = Request;
+  globalThis.Response = Response;
 }

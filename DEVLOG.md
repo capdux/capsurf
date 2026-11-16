@@ -753,6 +753,19 @@
      - 在 CP 核心层实现 `HyperlinkDecomposition.decompose`，对各种非法 URL 场景统一实施规范回退保护；
      - 在 JS Shim 中为 `HTMLAnchorElement` 与 `HTMLAreaElement` 统一绑定超链接分解属性，使爬虫智能体与前端框架在解析畸形链接时保持完全一致的浏览器行为。
 
+## Phase 39 CSS attr() Evaluator 与 WebIDL Sequence 转换架构方案
+1. **W3C CSS Values and Units Level 5 规范级 `attr()` 计算器 (`src/css/attr_evaluator.cp`)**：
+   - **设计动机**：CSS 变量经常借助 `attr(data-x type(<url>))` 动态读取 DOM 属性。然而根据 W3C 规范，被 `attr()` 提取的 URL 处于 attr()-tainted 状态，无法作为安全合法的外部资源 URL，在计算样式阶段必须作为无效声明处理，回退到 fallback 值或空串；
+   - **解决方案**：
+     - `attr_evaluator.cp` 解析 `attr()` 语法树中的类型声明与回退参数；
+     - 对 `type(<url>)` 显式判定并实施回退策略，配合 `window.getComputedStyle` 的样式规则匹配，精准支持复杂 CSS 自定义属性动态解析。
+2. **WHATWG Headers WebIDL Sequence 规范转换与生命周期隔离 (`src/js/shim/file.js` & `src/cdp/session.cp`)**：
+   - **设计动机**：Playwright 与爬虫框架初始化 `Request` 时广泛传入自定义 Header 迭代器或冻结配置对象（如 `Object.freeze({ headers: [...] })`），同时规范要求迭代器属性只读一次 `next` getter，多余读取或非法序列类型必须准确抛出 `TypeError`；
+   - **解决方案**：
+     - 在 `Headers` 构造器中严格遵循 WebIDL sequence 转换规范，单次捕获迭代器 `next`，并校验二元组数组结构；
+     - 在 CDP `Page.navigate` 中规范生命周期，析构旧 `JsDomContext` 并创建新实例，同时将 `global.document` 设置为 `configurable: true`，消除重新导航时的上下文混乱与内存悬垂崩溃。
+
+
 
 
 

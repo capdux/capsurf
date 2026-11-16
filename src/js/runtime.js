@@ -1132,7 +1132,8 @@
         if (!p) continue;
         const colon = p.indexOf(":");
         if (colon !== -1) {
-          const k = p.slice(0, colon).trim().toLowerCase();
+          const rawKey = p.slice(0, colon).trim();
+          const k = rawKey.startsWith("--") ? rawKey : rawKey.toLowerCase();
           const v = p.slice(colon + 1).trim();
           map.set(k, v);
         }
@@ -1161,20 +1162,25 @@
         if (prop === "getPropertyValue") {
           return function (p) {
             const map = parseStyleMap();
-            return map.get(String(p).toLowerCase()) || "";
+            const str = String(p);
+            const key = str.startsWith("--") ? str : str.toLowerCase();
+            return map.get(key) || "";
           };
         }
         if (prop === "setProperty") {
           return function (p, val) {
             const map = parseStyleMap();
-            map.set(String(p).toLowerCase(), String(val));
+            const str = String(p);
+            const key = str.startsWith("--") ? str : str.toLowerCase();
+            map.set(key, String(val));
             serializeStyleMap(map);
           };
         }
         if (prop === "removeProperty") {
           return function (p) {
             const map = parseStyleMap();
-            const key = String(p).toLowerCase();
+            const str = String(p);
+            const key = str.startsWith("--") ? str : str.toLowerCase();
             const old = map.get(key) || "";
             map.delete(key);
             serializeStyleMap(map);
@@ -3251,23 +3257,73 @@
   // Request & Response support for .blob() Content-Type passthrough
   function Headers(init) {
     this._map = new Map();
-    if (init) {
-      if (init instanceof Headers) {
-        init._map.forEach((v, k) => this._map.set(k, v));
-      } else if (Array.isArray(init)) {
-        for (let i = 0; i < init.length; i++) {
-          const entry = init[i];
-          if (Array.isArray(entry) && entry.length >= 2) {
-            this.append(entry[0], entry[1]);
-          }
-        }
-      } else if (typeof init === "object") {
-        const keys = Object.keys(init);
-        for (let i = 0; i < keys.length; i++) {
-          const k = keys[i];
-          this.set(k, init[k]);
-        }
+    if (init === undefined) {
+      return;
+    }
+    if (typeof init !== "object" || init === null) {
+      throw new TypeError(
+        "Failed to construct 'Headers': The provided value is not of type '(sequence<sequence<ByteString>> or record<ByteString, ByteString>)'"
+      );
+    }
+
+    if (init instanceof Headers) {
+      init._map.forEach(function (v, k) {
+        this._map.set(k, v);
+      }, this);
+      return;
+    }
+
+    // If init is iterable and not a string: follow Web IDL single-read sequence conversion
+    if (typeof init[Symbol.iterator] === "function") {
+      const it = init[Symbol.iterator]();
+      if (!it || typeof it !== "object") {
+        throw new TypeError("Failed to construct 'Headers': The provided value is not iterable");
       }
+      const nextMethod = it.next;
+      if (typeof nextMethod !== "function") {
+        throw new TypeError("Failed to construct 'Headers': The provided value is not iterable");
+      }
+      while (true) {
+        const step = nextMethod.call(it);
+        if (step.done) break;
+        const item = step.value;
+        let pair = null;
+        if (Array.isArray(item)) {
+          pair = item;
+        } else if (item && typeof item === "object" && typeof item[Symbol.iterator] === "function") {
+          const subIt = item[Symbol.iterator]();
+          if (!subIt || typeof subIt !== "object") {
+            throw new TypeError("Failed to construct 'Headers': Value in sequence is not iterable");
+          }
+          const subNext = subIt.next;
+          if (typeof subNext !== "function") {
+            throw new TypeError("Failed to construct 'Headers': Value in sequence is not iterable");
+          }
+          const items = [];
+          while (true) {
+            const subStep = subNext.call(subIt);
+            if (subStep.done) break;
+            items.push(subStep.value);
+            if (items.length > 2) break;
+          }
+          pair = items;
+        } else {
+          throw new TypeError("Failed to construct 'Headers': Value in sequence is not a sequence");
+        }
+
+        if (pair.length !== 2) {
+          throw new TypeError("Failed to construct 'Headers': Each header entry must be a 2-element sequence");
+        }
+        this.append(pair[0], pair[1]);
+      }
+      return;
+    }
+
+    // Plain record / dictionary: iterate own enumerable properties
+    const keys = Object.keys(init);
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      this.set(k, init[k]);
     }
   }
 
@@ -3299,15 +3355,40 @@
     this._map.forEach(cb, thisArg);
   };
 
+  Headers.prototype.entries = function () {
+    return this._map.entries();
+  };
+
+  Headers.prototype.keys = function () {
+    return this._map.keys();
+  };
+
+  Headers.prototype.values = function () {
+    return this._map.values();
+  };
+
+  Headers.prototype[Symbol.iterator] = function () {
+    return this._map.entries();
+  };
+
   markNative(Headers, "Headers");
+  markNative(Headers.prototype.append, "append");
+  markNative(Headers.prototype.set, "set");
+  markNative(Headers.prototype.get, "get");
+  markNative(Headers.prototype.has, "has");
+  markNative(Headers.prototype.delete, "delete");
+  markNative(Headers.prototype.forEach, "forEach");
+  markNative(Headers.prototype.entries, "entries");
+  markNative(Headers.prototype.keys, "keys");
+  markNative(Headers.prototype.values, "values");
 
   function Request(input, init) {
     init = init || {};
     this.url = String(input);
     this.method = (init.method || "GET").toUpperCase();
-    this._rawMimeType = extractMimeFromHeaders(init.headers);
-    this._body = init.body !== undefined ? init.body : "";
     this.headers = new Headers(init.headers);
+    this._rawMimeType = extractMimeFromHeaders(this.headers);
+    this._body = init.body !== undefined ? init.body : "";
   }
 
   Request.prototype.blob = function () {
@@ -3345,9 +3426,9 @@
     init = init || {};
     this.status = init.status !== undefined ? Number(init.status) : 200;
     this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
-    this._rawMimeType = extractMimeFromHeaders(init.headers);
-    this._body = body !== undefined ? body : "";
     this.headers = new Headers(init.headers);
+    this._rawMimeType = extractMimeFromHeaders(this.headers);
+    this._body = body !== undefined ? body : "";
   }
 
   Response.prototype.blob = function () {
@@ -3409,23 +3490,23 @@
   global.Blob = Blob;
   global.File = File;
 
-  if (!global.Headers) global.Headers = Headers;
+  global.Headers = Headers;
   if (!global.Request) global.Request = Request; else patchExistingBodyBlob(global.Request);
   if (!global.Response) global.Response = Response; else patchExistingBodyBlob(global.Response);
 
   if (typeof window !== "undefined") {
     window.Blob = Blob;
     window.File = File;
-    if (!window.Headers) window.Headers = global.Headers;
-    if (!window.Request) window.Request = global.Request;
-    if (!window.Response) window.Response = global.Response;
+    window.Headers = Headers;
+    window.Request = Request;
+    window.Response = Response;
   }
   if (typeof globalThis !== "undefined") {
     globalThis.Blob = Blob;
     globalThis.File = File;
-    if (!globalThis.Headers) globalThis.Headers = global.Headers;
-    if (!globalThis.Request) globalThis.Request = global.Request;
-    if (!globalThis.Response) globalThis.Response = global.Response;
+    globalThis.Headers = Headers;
+    globalThis.Request = Request;
+    globalThis.Response = Response;
   }
 
   // =============================================================
@@ -5004,13 +5085,410 @@
       globalThis.prompt = promptFn;
     }
 
-    // 10. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
+    // 10. CSSOM getComputedStyle & CSSStyleDeclaration
+    function CSSStyleDeclaration() {}
+    markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
+
+    function splitCssDeclarations(block) {
+      const parts = [];
+      let depth = 0;
+      let inQuote = null;
+      let start = 0;
+      for (let i = 0; i < block.length; i++) {
+        const c = block[i];
+        if (inQuote) {
+          if (c === inQuote && block[i - 1] !== "\\") {
+            inQuote = null;
+          }
+        } else if (c === '"' || c === "'") {
+          inQuote = c;
+        } else if (c === "(") {
+          depth++;
+        } else if (c === ")") {
+          depth = Math.max(0, depth - 1);
+        } else if (c === ";" && depth === 0) {
+          parts.push(block.slice(start, i));
+          start = i + 1;
+        }
+      }
+      if (start < block.length) {
+        parts.push(block.slice(start));
+      }
+      return parts;
+    }
+
+    function evaluateAttr(element, inside) {
+      let depth = 0;
+      let inQuote = null;
+      let commaIdx = -1;
+      for (let i = 0; i < inside.length; i++) {
+        const c = inside[i];
+        if (inQuote) {
+          if (c === inQuote && inside[i - 1] !== "\\") {
+            inQuote = null;
+          }
+        } else if (c === '"' || c === "'") {
+          inQuote = c;
+        } else if (c === "(") {
+          depth++;
+        } else if (c === ")") {
+          depth = Math.max(0, depth - 1);
+        } else if (c === "," && depth === 0) {
+          commaIdx = i;
+          break;
+        }
+      }
+
+      let mainPart = inside;
+      let fallback = null;
+      if (commaIdx !== -1) {
+        mainPart = inside.slice(0, commaIdx).trim();
+        let fb = inside.slice(commaIdx + 1).trim();
+        if ((fb.startsWith('"') && fb.endsWith('"')) || (fb.startsWith("'") && fb.endsWith("'"))) {
+          fb = fb.slice(1, -1);
+        }
+        fallback = fb;
+      }
+
+      const tokens = mainPart.split(/\s+/).filter(Boolean);
+      if (tokens.length === 0) return fallback != null ? fallback : "";
+      const attrName = tokens[0];
+      const typePart = tokens.slice(1).join(" ").toLowerCase();
+
+      // W3C: type(<url>) is attr()-tainted and invalid at computed-value time
+      if (typePart.indexOf("url") !== -1) {
+        return fallback != null ? fallback : "";
+      }
+
+      const attrVal = element.getAttribute ? element.getAttribute(attrName) : null;
+
+      if (typePart.indexOf("number") !== -1 || typePart.indexOf("integer") !== -1) {
+        if (attrVal !== null && attrVal !== "") {
+          const trimmed = attrVal.trim();
+          if (!isNaN(Number(trimmed))) {
+            return trimmed;
+          }
+        }
+        return fallback != null ? fallback : "";
+      }
+
+      if (attrVal !== null) {
+        return attrVal;
+      }
+      return fallback != null ? fallback : "";
+    }
+
+    function resolveAttrExpressions(element, val) {
+      if (typeof val !== "string" || val.indexOf("attr(") === -1) return val;
+      let result = "";
+      let i = 0;
+      while (i < val.length) {
+        const idx = val.indexOf("attr(", i);
+        if (idx === -1) {
+          result += val.slice(i);
+          break;
+        }
+        result += val.slice(i, idx);
+        let depth = 1;
+        let j = idx + 5;
+        let inQuote = null;
+        while (j < val.length && depth > 0) {
+          const c = val[j];
+          if (inQuote) {
+            if (c === inQuote && val[j - 1] !== "\\") {
+              inQuote = null;
+            }
+          } else if (c === '"' || c === "'") {
+            inQuote = c;
+          } else if (c === "(") {
+            depth++;
+          } else if (c === ")") {
+            depth--;
+          }
+          j++;
+        }
+        const inside = val.slice(idx + 5, j - 1).trim();
+        const evaluated = evaluateAttr(element, inside);
+        result += evaluated;
+        i = j;
+      }
+      return result;
+    }
+
+    function parseDeclarationsBlockInto(element, declBlock, computedMap) {
+      const decls = splitCssDeclarations(declBlock);
+      for (let i = 0; i < decls.length; i++) {
+        const d = decls[i].trim();
+        if (!d) continue;
+        const colon = d.indexOf(":");
+        if (colon === -1) continue;
+        const prop = d.slice(0, colon).trim();
+        let val = d.slice(colon + 1).trim();
+        if (!prop) continue;
+        if (val.toLowerCase().endsWith("!important")) {
+          val = val.slice(0, -10).trim();
+        }
+        val = resolveAttrExpressions(element, val);
+        const key = prop.startsWith("--") ? prop : prop.toLowerCase();
+        computedMap.set(key, val);
+      }
+    }
+
+    function matchesSingleSelector(el, sel) {
+      if (!el || !sel) return false;
+      const s = sel.trim();
+      if (s === "*") return true;
+
+      // Simple ID selector #id
+      if (s.startsWith("#") && !s.includes(" ") && !s.includes(".") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
+        const id = s.slice(1);
+        return (el.id === id || (el.getAttribute && el.getAttribute("id") === id));
+      }
+
+      // Simple Class selector .cls
+      if (s.startsWith(".") && !s.includes(" ") && !s.includes("#") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
+        const cls = s.slice(1);
+        if (el.classList && el.classList.contains(cls)) return true;
+        if (el.className && el.className.split(/\s+/).includes(cls)) return true;
+        return false;
+      }
+
+      // Simple Tag selector
+      if (/^[a-zA-Z0-9_-]+$/.test(s)) {
+        const tag = s.toLowerCase();
+        const elTag = (el.localName || el.tagName || "").toLowerCase();
+        return elTag === tag;
+      }
+
+      // Element matches
+      if (typeof el.matches === "function") {
+        try {
+          if (el.matches(s)) return true;
+        } catch (e) {}
+      }
+
+      // QuerySelectorAll fallback
+      const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.querySelectorAll === "function") {
+        try {
+          const list = doc.querySelectorAll(s);
+          for (let j = 0; j < list.length; j++) {
+            if (list[j] === el) return true;
+          }
+        } catch (e) {}
+      }
+
+      return false;
+    }
+
+    function matchesSelector(element, selectorStr, normalizedPseudo) {
+      if (!element || !selectorStr) return false;
+      const selectors = selectorStr.split(",");
+      for (let i = 0; i < selectors.length; i++) {
+        const raw = selectors[i].trim();
+        if (!raw) continue;
+
+        let selPseudo = "";
+        let baseSel = raw;
+        const pseudoMatch = raw.match(/(::?[a-zA-Z_-]+)$/);
+        if (pseudoMatch) {
+          let p = pseudoMatch[1].toLowerCase();
+          if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
+          if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection") {
+            selPseudo = p;
+            baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
+          }
+        }
+
+        if (normalizedPseudo) {
+          if (selPseudo !== normalizedPseudo) continue;
+        } else {
+          if (selPseudo !== "") continue;
+        }
+
+        if (matchesSingleSelector(element, baseSel)) return true;
+      }
+      return false;
+    }
+
+    function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
+      const clean = cssText.replace(/\/\*[\s\S]*?\*\//g, "");
+      const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
+      let match;
+      while ((match = ruleRegex.exec(clean)) !== null) {
+        const selectorStr = match[1].trim();
+        const declBlock = match[2];
+        if (matchesSelector(element, selectorStr, normalizedPseudo)) {
+          parseDeclarationsBlockInto(element, declBlock, computedMap);
+        }
+      }
+    }
+
+    function getComputedStyle(element, pseudoElt) {
+      if (!element || typeof element !== "object") {
+        throw new TypeError("Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.");
+      }
+
+      let normalizedPseudo = "";
+      if (pseudoElt) {
+        let p = String(pseudoElt).trim().toLowerCase();
+        if (p.startsWith(":") && !p.startsWith("::")) {
+          p = ":" + p;
+        }
+        normalizedPseudo = p;
+      }
+
+      const computedMap = new Map();
+      const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      if (doc) {
+        let styleNodes = [];
+        try {
+          if (typeof doc.querySelectorAll === "function") {
+            const list = doc.querySelectorAll("style");
+            for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
+          }
+        } catch (e) {}
+
+        if (styleNodes.length === 0) {
+          function scanStyles(node) {
+            if (!node) return;
+            if (node.tagName && String(node.tagName).toLowerCase() === "style") {
+              styleNodes.push(node);
+            }
+            if (node.childNodes && node.childNodes.length) {
+              for (let i = 0; i < node.childNodes.length; i++) {
+                scanStyles(node.childNodes[i]);
+              }
+            }
+          }
+          if (doc.head) scanStyles(doc.head);
+          if (doc.body) scanStyles(doc.body);
+          if (doc.documentElement) scanStyles(doc.documentElement);
+        }
+
+        for (let i = 0; i < styleNodes.length; i++) {
+          const sn = styleNodes[i];
+          const text = (sn && (sn.textContent || sn.innerText)) || "";
+          if (text) {
+            parseCssRulesInto(element, text, computedMap, normalizedPseudo);
+          }
+        }
+      }
+
+      // If no pseudo element, inline styles override stylesheet rules
+      if (!normalizedPseudo) {
+        const rawInline = element.getAttribute ? element.getAttribute("style") : "";
+        if (rawInline) {
+          parseDeclarationsBlockInto(element, rawInline, computedMap);
+        }
+      }
+
+      // Pseudo element inheritance / defaults
+      if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
+        if (!computedMap.has("display")) {
+          computedMap.set("display", "inline");
+        }
+        if (!computedMap.has("color")) {
+          const parentColor = element.style ? element.style.getPropertyValue("color") : "";
+          if (parentColor) computedMap.set("color", parentColor);
+        }
+      }
+
+      const declTarget = Object.create(CSSStyleDeclaration.prototype);
+      const propList = Array.from(computedMap.keys());
+      declTarget.length = propList.length;
+      declTarget.parentRule = null;
+
+      declTarget.item = markNative(function (index) {
+        let idx = Number(index);
+        if (isNaN(idx)) idx = 0;
+        else idx = Math.floor(idx);
+        if (idx < 0 || idx >= propList.length) return "";
+        return propList[idx];
+      }, "item");
+
+      declTarget.getPropertyValue = markNative(function (prop) {
+        const p = String(prop).trim();
+        if (computedMap.has(p)) return computedMap.get(p);
+        if (p.startsWith("--")) return "";
+        const lower = p.toLowerCase();
+        if (computedMap.has(lower)) return computedMap.get(lower);
+        return "";
+      }, "getPropertyValue");
+
+      declTarget.getPropertyPriority = markNative(function () {
+        return "";
+      }, "getPropertyPriority");
+
+      declTarget.setProperty = markNative(function () {}, "setProperty");
+      declTarget.removeProperty = markNative(function () { return ""; }, "removeProperty");
+
+      Object.defineProperty(declTarget, "cssText", {
+        get: function () {
+          const parts = [];
+          for (const [k, v] of computedMap.entries()) {
+            parts.push(k + ": " + v);
+          }
+          return parts.join("; ");
+        },
+        configurable: true,
+      });
+
+      for (let i = 0; i < propList.length; i++) {
+        declTarget[i] = propList[i];
+      }
+
+      return new Proxy(declTarget, {
+        get: function (target, prop, receiver) {
+          if (typeof prop === "symbol") return target[prop];
+          if (prop in target) return target[prop];
+          if (typeof prop === "string") {
+            if (computedMap.has(prop)) return computedMap.get(prop);
+            if (prop.startsWith("--")) return "";
+            const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+            if (computedMap.has(kebab)) return computedMap.get(kebab);
+            const lower = prop.toLowerCase();
+            if (computedMap.has(lower)) return computedMap.get(lower);
+            return "";
+          }
+          return undefined;
+        },
+        set: function () {
+          return true;
+        },
+        has: function (target, prop) {
+          if (prop in target) return true;
+          if (typeof prop === "string") {
+            if (computedMap.has(prop)) return true;
+            const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+            if (computedMap.has(kebab)) return true;
+          }
+          return false;
+        },
+      });
+    }
+
+    markNative(getComputedStyle, "getComputedStyle");
+
+    global.CSSStyleDeclaration = CSSStyleDeclaration;
+    global.getComputedStyle = getComputedStyle;
+
+    if (typeof window !== "undefined") {
+      window.CSSStyleDeclaration = CSSStyleDeclaration;
+      window.getComputedStyle = getComputedStyle;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.CSSStyleDeclaration = CSSStyleDeclaration;
+      globalThis.getComputedStyle = getComputedStyle;
+    }
+
+    // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
     if (global.document) {
       try {
         Object.defineProperty(global, "document", {
           value: global.document,
           writable: false,
-          configurable: false,
+          configurable: true,
           enumerable: true,
         });
       } catch (e) {}

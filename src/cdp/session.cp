@@ -124,6 +124,10 @@ pub struct CdpPageSession {
             _.allocator.free(_.raw_html);
             _.raw_html = "";
         }
+        if (_.dom_ctx != null) {
+            std.heap.c_allocator.destroy(_.dom_ctx.?);
+            _.dom_ctx = null;
+        }
         _.cookie_jar.deinit();
         _.ctx.deinit();
         _.rt.deinit();
@@ -160,6 +164,10 @@ pub struct CdpPageSession {
         _.layout.computeLayout(&_.doc, styles[0..count]) catch {};
 
         // Mount to JS Context
+        if (_.dom_ctx != null) {
+            std.heap.c_allocator.destroy(_.dom_ctx.?);
+            _.dom_ctx = null;
+        }
         const m = mountDom(&_.ctx, &_.doc, &_.layout) catch return error.MountDomFailed;
         _.dom_ctx = m;
         _.url = nav_url;

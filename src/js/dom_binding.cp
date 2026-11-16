@@ -38,6 +38,7 @@ import {
     JS_FreeValue,
     JS_SetContextOpaque,
     JS_GetContextOpaque,
+    JS_DefinePropertyValueStr,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
@@ -490,11 +491,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
 
 @c fn js_document_finalizer(rt: *JSRuntime, val: JSValue) {
     * = rt;
-    const ptr = JS_GetOpaque(val, g_document_class_id);
-    if (ptr != null) {
-        const ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
-        std.heap.c_allocator.destroy(ctx);
-    }
+    * = val;
 }
 
 @c fn js_document_query_selector(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -699,26 +696,29 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
 
-    * = JS_NewClassID(raw_rt, &g_element_class_id);
-    * = JS_NewClassID(raw_rt, &g_document_class_id);
+    if (g_element_class_id == 0) {
+        * = JS_NewClassID(raw_rt, &g_element_class_id);
+        const el_class_def = JSClassDef {
+            class_name: "Element",
+            finalizer: js_element_finalizer,
+            gc_mark: null,
+            call_fn: null,
+            exotic: null,
+        };
+        * = JS_NewClass(raw_rt, g_element_class_id, &el_class_def);
+    }
 
-    const el_class_def = JSClassDef {
-        class_name: "Element",
-        finalizer: js_element_finalizer,
-        gc_mark: null,
-        call_fn: null,
-        exotic: null,
-    };
-    * = JS_NewClass(raw_rt, g_element_class_id, &el_class_def);
-
-    const doc_class_def = JSClassDef {
-        class_name: "Document",
-        finalizer: js_document_finalizer,
-        gc_mark: null,
-        call_fn: null,
-        exotic: null,
-    };
-    * = JS_NewClass(raw_rt, g_document_class_id, &doc_class_def);
+    if (g_document_class_id == 0) {
+        * = JS_NewClassID(raw_rt, &g_document_class_id);
+        const doc_class_def = JSClassDef {
+            class_name: "Document",
+            finalizer: null,
+            gc_mark: null,
+            call_fn: null,
+            exotic: null,
+        };
+        * = JS_NewClass(raw_rt, g_document_class_id, &doc_class_def);
+    }
 
     // Setup Element Prototype
     const el_proto = JS_NewObject(raw_ctx);
@@ -793,7 +793,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     * = JS_SetPropertyStr(raw_ctx, doc_proto, "constructor", JS_DupValue(raw_ctx, doc_ctor));
     * = JS_SetPropertyStr(raw_ctx, global_obj, "Document", doc_ctor);
 
-    * = JS_SetPropertyStr(raw_ctx, global_obj, "document", doc_val);
+    * = JS_DefinePropertyValueStr(raw_ctx, global_obj, "document", doc_val, 1 | 4);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "window", JS_DupValue(raw_ctx, global_obj));
     * = JS_SetPropertyStr(raw_ctx, global_obj, "globalThis", JS_DupValue(raw_ctx, global_obj));
 
