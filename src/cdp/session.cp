@@ -13,6 +13,7 @@ import { CdpBoxModel } from "./types.cp";
 import { FetchState } from "./fetch.cp";
 import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
+import { TargetRegistry } from "./target.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -40,6 +41,7 @@ pub struct CdpPageSession {
     cookie_jar: CookieJar,
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
+    target_registry: TargetRegistry = TargetRegistry.init(),
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
@@ -75,6 +77,7 @@ pub struct CdpPageSession {
             cookie_jar: jar,
             fetch_enabled: false,
             fetch_state: FetchState{},
+            target_registry: TargetRegistry.init(),
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,

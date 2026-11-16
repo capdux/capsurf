@@ -210,3 +210,15 @@
    - **焦点与坐标命中判定**：在 `Input.dispatchMouseEvent` 中，基于 `session.layout.boxes` 对屏幕绝对物理坐标 `(x, y)` 执行反向几何查找（Hit Test），定位到最顶层可见元素作为 `target_node`，并维护当前会话的 `session.focused_node`。
    - **交互文本注入管道 (`applyInputText`)**：在 `Input.insertText` 与 `Input.dispatchKeyEvent` 中，不仅在底层 Arena DOM 的 `NodeData` 上更新/创建 `value` 属性，而且在已挂载的 QuickJS-NG 上下文中触发 DOM 包装对象更新，确保通过 JS 评估读取 `input.value` 与 `element.textContent` 始终返回最新键盘输入内容。
    - **滚轮与滚动状态跟踪**：在 `Input.dispatchMouseEvent` 的 `mouseWheel` 分支中实时累加 `session.scroll_x` 与 `session.scroll_y`，支撑页面滚动与视口偏移计算。
+
+## Phase 5 Target 多目标注册表与 BrowserContext 架构方案与排障实录
+1. **多 Target 与 BrowserContext 拓扑管理架构 (`src/cdp/target.cp`)**：
+   - **设计目标**：对齐 Chrome 与 Kitesurf 标准，支持 Playwright / Puppeteer 的 `browser.newContext()` 与 `context.newPage()` 多页面多租户隔离模式。
+   - **架构设计**：设计固定容量且零动态分配的 `TargetRegistry`，内嵌 `[16]TargetItem` 与 `[8]BrowserContextState`。当调用 `Target.createBrowserContext` 时，生成全局单调递增的 `"ctx-001"` 上下文标识；调用 `Target.createTarget` 时，将页面绑定至目标上下文，并通过 `Target.getTargets` 和 `Target.getTargetInfo` 暴露完整的 `browserContextId`、`url`、`title` 与 `attached` 状态。
+2. **切片生命周期悬垂与响应缓冲区隔离排障**：
+   - **痛点分析**：在早期初稿中，部分方法省略接收者指针（按值传递），生成的临时切片指向当前函数局部栈帧；同时，多个指令在共享的 `out_buf` 上做临时字符串格式化，导致后续生成的 JSON 覆盖了之前生成的 `id` 切片内存。
+   - **解决方案**：在 `TargetRegistry` 结构体内部配置独立的命名专用缓冲区（`create_ctx_resp_buf`、`create_target_resp_buf`、`attach_resp_buf`），并在所有增删改查方法中严格采用可变独占指针接收者 `(*_)`，彻底杜绝切片悬垂与缓冲区相互覆盖。
+3. **Playwright 核心依赖的 Auto-Attach 自动附加机制实装**：
+   - 在 Playwright 连接无头浏览器时，会首先发送 `Target.setAutoAttach({ autoAttach: true, flatten: true })`；
+   - 随后的每一个 `Target.createTarget` 调用，引擎必须一次性同步连带派发 `Target.targetCreated` 与 `Target.attachedToTarget` 双事件，告知客户端子页面已就绪且 session 已绑定；
+   - 在 `dispatch.cp` 中扩充事件缓冲容量至 `[4]CdpEvent`，完全打通了自动附加事件管道。

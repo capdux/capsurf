@@ -64,13 +64,14 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Target.")) {
-            let tgt_evts: [1]CdpEvent = [CdpEvent{}; 1];
+            let tgt_evts: [4]CdpEvent = [CdpEvent{}; 4];
             let tgt_cnt: usize = 0;
             const resp = TargetHandler.handle(session, req, out_buf, &tgt_evts, &tgt_cnt);
-            if (tgt_cnt > 0 && out_events.len > 0) {
-                out_events[0] = tgt_evts[0];
-                event_count.* = 1;
+            let i: usize = 0;
+            while (i < tgt_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = tgt_evts[i];
             }
+            event_count.* = @min(tgt_cnt, out_events.len);
             return resp;
         }
 

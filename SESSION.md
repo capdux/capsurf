@@ -866,3 +866,25 @@
 3. **测试套件与门禁验证**：
    - 编写并通过 `test/cdp/test_screenshot_input.cp`（4/4 passed，包含截图 Base64 解码与魔数校验、点击命中与滚轮、焦点文本注入与 Screencast 协议握手）及 `test/cdp/test_cdp_screenshot.cp`（3/3 passed）；
    - `src/cdp/input.cp`、`src/cdp/page.cp`、`src/cdp/session.cp`、`src/cdp/types.cp` 全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 11:21:00] Turn 15
+
+### **[Agent]**
+推进并闭环 Phase 5（CDP Target 多目标注册表、Auto-Attach 与 BrowserContext 多会话复用）：
+1. **TargetRegistry 与数据结构架构升级 (`src/cdp/target.cp`)**：
+   - 溯源自 `vendor/kitesurf/packages/engine/src/cdp/target.ts`；
+   - 结构体顶层提升：定义 `BrowserContextState`、`TargetItem` 与 `TargetRegistry`，采用 `[16]TargetItem` 与 `[8]BrowserContextState` 固定容量数组实施零 GC 内存管理；
+   - 所有属性方法使用独占借用 `*_` 接收者，并独立配置响应缓冲区，消除栈值切片悬垂与缓冲区复用污染；
+   - 完整实装 9 大生命周期方法：`createBrowserContext`（分配 ctx-xxx）、`disposeBrowserContext`（销毁上下文及关联 target）、`getBrowserContextIds`、`createTarget`、`closeTarget`、`attachToTarget`（分配 capsurf-session-xxx）、`detachFromTarget`、`getTargetsJson` 与 `getTargetInfoJson`。
+2. **TargetHandler.handle 全部协议方法闭环与事件联动**：
+   - 实装 `Target.setDiscoverTargets`、`Target.setAutoAttach`、`Target.getTargets`、`Target.getTargetInfo`、`Target.createBrowserContext`、`Target.disposeBrowserContext`、`Target.getBrowserContexts`、`Target.createTarget`、`Target.closeTarget`、`Target.attachToTarget`、`Target.detachFromTarget`、`Target.activateTarget`；
+   - 派发标准 CDP 生命周期事件：`Target.targetCreated`、`Target.attachedToTarget`、`Target.targetDestroyed` 与 `Target.detachedFromTarget`。
+3. **Session 与 Dispatch 拓扑绑定**：
+   - 在 `CdpPageSession` 中持有 `target_registry: TargetRegistry = TargetRegistry.init()`；
+   - 在 `dispatch.cp` 中扩充 Target 事件缓冲区至 `[4]CdpEvent`，支持单次调用发射级联事件（如创建目标连带自动附加）。
+4. **自动化测试套件与门禁验证**：
+   - 编写并通过 `test/cdp/test_target_management.cp`（4/4 passed，100% 覆盖 BrowserContext 生命周期、多 Target 创建与信息查询、显式会话挂载/分离、以及 Playwright 核心依赖的 Auto-Attach 自动附加事件链）；
+   - `src/cdp/target.cp`、`src/cdp/dispatch.cp`、`src/cdp/session.cp` 全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

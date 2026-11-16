@@ -223,3 +223,18 @@
   - `test/cdp/test_screenshot_input.cp`：4 项测试 100% 全部通过（CDP Page 截图 Base64 解码与 400x300 尺寸校验、鼠标点击命中测试与滚轮滚动、焦点元素文本追加更新、录屏协议握手）；
   - `test/cdp/test_cdp_screenshot.cp`：3 项测试 100% 全部通过。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+## Phase 5: Target Registry, Multi-Target Auto-Attach & BrowserContext Multiplexing (100% Closed)
+- **`src/cdp/target.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/target.ts`）：
+  - 保留文件头原始目录溯源注释；
+  - 实装 `BrowserContextState` 与 `TargetItem` 结构体，统一通过 `TargetRegistry` 实施轻量零 GC 拓扑管理；
+  - 核心方法闭环：`createBrowserContext`（递增分配 ctx-xxx）、`disposeBrowserContext`（级联关闭关联 Target）、`getBrowserContextIds`（JSON 数组输出）、`createTarget`（在指定 context 下生成独立 Target 并派发 `Target.targetCreated`）、`closeTarget`（释放会话并派发 `Target.targetDestroyed`）、`attachToTarget`（分配专属 Session 并派发 `Target.attachedToTarget`）、`detachFromTarget`（派发 `Target.detachedFromTarget`）、`getTargetsJson` 与 `getTargetInfoJson`；
+  - 消除栈切片悬垂：所有方法接收者明确采用独占借用 `*_`，为 ID 生成配置独立缓冲区。
+- **`src/cdp/session.cp`**：
+  - 在 `CdpPageSession` 中持久化持有 `target_registry: TargetRegistry`，绑定会话生命周期。
+- **`src/cdp/dispatch.cp`**：
+  - 挂载持久化 `target_registry` 调度；
+  - 扩充事件缓冲区至 `[4]CdpEvent` 支持单操作多事件派发（如 `createTarget` 连带 `auto_attach` 派发 `targetCreated` 与 `attachedToTarget`）。
+- **测试套件**：
+  - `test/cdp/test_target_management.cp`：4 项测试 100% 全部通过（BrowserContext 分配/查询/注销、多 Target 创建与精准信息查询、显式 Session 挂载与分离、Auto-Attach 自动挂载级联事件链）。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
