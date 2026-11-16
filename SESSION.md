@@ -1111,3 +1111,34 @@
    - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
    - 运行并通过现有 `test/net/test_security_gate.cp` 测试套件；
    - 全部 4 个源码模块与 2 个测试文件 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 15:22:00] Turn 23
+
+### **[Agent]**
+全面推进并闭环 Phase 12（远端串流 RBI 二进制协议、输入滚动队列合并与会话存储表）：
+1. **输入平滑滚动事件合并与栅栏同步队列 (`src/cdp/wheel_queue.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/wheel-queue.ts`（文件头保留来源溯源注释）；
+   - 实装 `WheelBatch` 载荷结构体（支持 x, y, delta_x, delta_y, modifiers, click_count, buttons, is_fence, fence_id）；
+   - 实装 `canCoalesceWheel`：在坐标、修饰键与按键一致且非栅栏时自动合并连续滚轮事件并累加滚动距离（delta_x / delta_y）；
+   - 实装 `WheelQueue` 定长 32 槽环形状态队列，提供 `enqueue`、`fence`（插入同步栅栏，阻断跨栅栏合并并跟踪待处理栅栏数）、`drain`（FIFO 弹出）与 `drainAll`；
+   - 实装 `WheelQueueStore`：支持多 Target / Session 级别的滚动队列路由与查找。
+2. **纯内存高性能结构体会话存储表 (`src/cdp/session_store.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/state/session-store.ts`（文件头保留来源溯源注释）；
+   - 实装 `StoreStats` 内存诊断（追踪 bytes, value_bytes, key_count, table_count）；
+   - 实装 `StoreTable` 定长内存表（最多 64 条条目，支持内联存储与外部大切片，提供 get, set, has, delete, clear, count, stats）；
+   - 实装 `SessionStore` 多表会话存储容器（支持最多 16 个命名表，内建 TABLE_NETWORK_LOGS, TABLE_RESPONSE_BODIES, TABLE_SCRIPT_SOURCES, TABLE_COOKIE_JARS, TABLE_CHECKPOINTS），提供 `table()` 延迟创建与全局聚合 `stats()`。
+3. **远端浏览器串流 RBI 二进制批次编解码协议 (`src/cdp/rbi_protocol.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/rbi-protocol.ts`（文件头保留来源溯源注释）；
+   - 实装标准二进制布局：`[count u32 LE]` 紧随 `[kind u8][hash u64 LE][length u32 LE][payload]` 紧凑批次；
+   - 实装 `encodeResourceBatch` 与 `decodeResourceBatch` 零堆分配极速编解码；
+   - 实装 `DeliveredKeys` 定长 128 槽循环 FIFO 去重哈希追踪器；
+   - 实装 `dropAlreadySent` 过滤远程客户端已缓存资源（排除已交付的图片与字体）；
+   - 实装 `noteDelivered` 记录已传输实体哈希；
+   - 实装 `encodeMissingResources` 与 `decodeMissingResources` 缺失资源请求编解码。
+4. **自动化测试与驱动回归**：
+   - 编写并通过 `test/cdp/test_rbi_wheel_session.cp`（包含 WheelQueue 滚轮合并/栅栏同步/排空、RbiProtocol 批次编解码/DeliveredKeys 过滤/MissingResources 处理、SessionStore 多表读写删与统计聚合）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 全部 3 个新增源码模块与 1 个测试文件 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

@@ -383,3 +383,24 @@
   - `test/net/test_private_network_redirect.cp`：8 项测试 100% 全部通过；
   - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+## Phase 12: Remote Streaming RBI Protocol, Input Wheel Queue & SessionStore (100% Closed)
+- **`src/cdp/wheel_queue.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/wheel-queue.ts`）：
+  - 实装 `WheelBatch` 结构体（包含坐标、滚动 delta_x/delta_y 累加量、修饰键与栅栏标记）；
+  - 实装 `canCoalesceWheel`：坐标与修饰符一致时合并连续滚动事件；
+  - 实装 `WheelQueue` 定长 32 槽环形状态队列（支持 `enqueue`、`fence` 栅栏同步、`drain` FIFO 提取、`peek`、`drainAll`）；
+  - 实装 `WheelQueueStore` 多目标会话层级队列路由器。
+- **`src/cdp/session_store.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/state/session-store.ts`）：
+  - 实装纯内存高性能结构体会话存储表 `StoreTable` 与多表容器 `SessionStore`（最多 16 个命名表）；
+  - 内建标准表：`TABLE_NETWORK_LOGS`, `TABLE_RESPONSE_BODIES`, `TABLE_SCRIPT_SOURCES`, `TABLE_COOKIE_JARS`, `TABLE_CHECKPOINTS`；
+  - 实装 `StoreStats` 聚合诊断统计。
+- **`src/cdp/rbi_protocol.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/rbi-protocol.ts`）：
+  - 实装 RBI 矢量流与资源批次紧凑二进制序列化/反序列化（`encodeResourceBatch` / `decodeResourceBatch`）；
+  - 实装 `DeliveredKeys` 定长 128 槽循环去重哈希追踪器（`contains`, `add`, `clear`）；
+  - 实装 `dropAlreadySent` 与 `noteDelivered`：过滤远程客户端已交付资源，消除网络带宽浪费；
+  - 实装 `encodeMissingResources` 与 `decodeMissingResources` 缺失资源请求编解码。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_rbi_wheel_session.cp`：综合测试 100% 全部通过（滚轮合并、栅栏排空、RBI 批次编解码、去重过滤、SessionStore 读写删与统计聚合）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
