@@ -621,6 +621,19 @@
      - `clampFrameViewport` 将单边限制在 4096 像素，总面积严格限制在 7.8M 像素以内；
      - `OopifRenderCoordinator` 维护 16 路预热帧缓冲池，实现跨域渲染生命周期与离屏光栅化快速装配。
 
+## Phase 28 DOM 事件流水线传播与变更观察器技术方案
+1. **DOM 三阶段事件传播与微秒级事件拦截 (`src/dom/event_target.cp`)**：
+   - **设计动机**：Web 自动化测试与页面交互（点击、输入、键盘事件）依赖严谨的 DOM Level 3 事件传播机制。若缺乏捕获（Capturing）与冒泡（Bubbling）阶段支持，大量前端框架（如 React 合成事件系统）将无法正常触发；
+   - **解决方案**：
+     - `DOMEventSystem` 构建从根节点到目标节点的祖先链数组 `path`；
+     - 按标准顺序执行捕获阶段（根至目标父级）、目标阶段（AtTarget）、冒泡阶段（目标父级回溯至根）；
+     - 提供 `stopPropagation` 与 `stopImmediatePropagation` 中断机制以及 `once` 监听器的单次触发自动失效。
+2. **轻量无锁 MutationObserver 变更聚合 (`src/dom/mutation_observer.cp`)**：
+   - **设计动机**：AI Agent 驱动页面时，频繁监听 DOM 节点增删与属性变化以感知页面加载完成或 UI 状态变更。直接轮询开销巨大；
+   - **解决方案**：
+     - `MutationManager` 对目标节点变更进行精准过滤，支持属性旧值保留（`attributeOldValue`）与子节点变动记录；
+     - `takeRecords` 提供单次原子消费接口，为后续 CDP `DOM.attributeModified` 与 `DOM.childNodeInserted` 事件提供高效事件源。
+
 
 
 

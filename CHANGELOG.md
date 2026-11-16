@@ -663,6 +663,19 @@
   - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 28: DOM Event Target Pipeline & Mutation Observer Engine (100% Closed)
+- **`src/dom/event_target.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/events/dispatch.ts`）：
+  - 实装 DOM 事件阶段枚举 `EventPhase`（None, Capturing, AtTarget, Bubbling）与事件对象 `DOMEvent`（`preventDefault`, `stopPropagation`, `stopImmediatePropagation`）；
+  - 实装 `DOMEventSystem`，支持捕获/冒泡三阶段精确事件分发与单次监听器 `once`。
+- **`src/dom/mutation_observer.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/mutations/observer.ts`）：
+  - 实装 `MutationType`（Attributes, CharacterData, ChildList）与 `MutationRecord`；
+  - 实装 `MutationObserver` 与 `MutationManager`，支持属性变更（带旧值记录）与子节点增删的异步队列缓冲与提取。
+- **测试套件与全链路验证**：
+  - `test/dom/test_event_mutation.cp`：全量测试 100% 全部通过（3 组测试覆盖捕获/目标/冒泡三阶段顺序执行、once 自动注销、preventDefault 阻断、DOM 变更队列缓冲与清空）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

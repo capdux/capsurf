@@ -1536,6 +1536,31 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 22:54:00] Turn 39
+
+### **[User]**
+> 最后几个文件迁移完成后, 你计划完成哪一部分? 迁移测试文件吗? / 完整当前任务后, 继续自行推导, 完成下一阶段任务, 如此继续, 不要停
+
+### **[Agent]**
+报告：在完成 Kitesurf 引擎所有 77 个核心业务模块迁移后，主智能体自主规划并闭环完成 Phase 28（DOM 事件目标流水线与变更观察器引擎）：
+1. **DOM 事件目标与捕获/冒泡派发引擎 (`src/dom/event_target.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/events/dispatch.ts`（文件头保留来源溯源注释）；
+   - 实装 `EventPhase`（None, Capturing, AtTarget, Bubbling）；
+   - 实装 `DOMEvent`，提供 `preventDefault`、`stopPropagation`、`stopImmediatePropagation`；
+   - 实装 `DOMEventSystem`，支持 `addEventListener`（包含 `capture` 与 `once` 选项）与完整树路径事件传播（捕获 -> 目标 -> 冒泡）。
+2. **DOM 变更观察器引擎 (`src/dom/mutation_observer.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/mutations/observer.ts`（文件头保留来源溯源注释）；
+   - 实装 `MutationType`（Attributes, CharacterData, ChildList）；
+   - 实装 `MutationRecord` 与 `MutationObserverInit` 选项（`attributes`, `childList`, `attributeOldValue`）；
+   - 实装 `MutationManager` 与 `MutationObserver`，支持精准属性与子节点变化拦截、队列缓冲与 `takeRecords` 一次性提取清空。
+3. **自动化测试与全链路回归**：
+   - 编写并通过 `test/dom/test_event_mutation.cp`（3 组测试用例 100% 全部通过：事件三阶段派发顺序校验、once 监听器单次触发失效、preventDefault 标记检测、Mutation 属性与子节点变化批量捕获与清空）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
