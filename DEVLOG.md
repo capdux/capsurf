@@ -402,3 +402,22 @@
      - 实现 `siteKey` 零分配切片返回原字符串中的 eTLD+1 子串，同时为 `schemefulSite` 提供原位栈缓冲区写入，完全实现零内存分配的 SameSite 站点隔离。
 
 
+## Phase 15 流式响应字节预算约束与多租户 Worker 隔离配额技术方案
+1. **网络层流式字节硬预算与连接槽位追踪 (`src/net/read_capped.cp`)**：
+   - **设计动机**：恶意或畸形网页可能会通过超大响应体（如数百 MB 甚至数 GB 的压缩流或畸形 HTML）对无头浏览器发起内存耗尽拒绝服务攻击，特别是在多 Agent 并发场景下必须设定硬性资源天花板；
+   - **解决方案**：
+     - 设定四级防护常量：单文档 16MB、单样式表 8MB、单连接最大在途 24MB、全宿主全局并发在途 48MB；
+     - `ReadBudgetTracker` 维护定长 32 槽连接记录，提供原子 `chargeWithLimit` 与 `refund` 操作，在累加前进行超限拒绝，保障网络层零内存泄漏与严格的资源隔离；
+     - `ReadLease` 结合 RAII 提供租约保护，连接断开时支持批量安全扣减。
+2. **多租户 Worker / Isolate 配额与导航余量保护 (`src/cdp/worker_budget.cp`)**：
+   - **设计动机**：网页中的 Web Worker、Service Worker 以及 OOPIF（Out-of-Process iframe）会无节制派生 JavaScript Isolate。为防止 CPU 和内存耗尽，同时保证主页面重排重绘和导航请求永远有槽位可用，必须严格限制动态 Worker 上限；
+   - **解决方案**：
+     - 设置全局硬上限 `MAX_DYNAMIC_WORKERS = 4`；
+     - 保障关键业务槽位：未实例化渲染器时硬性预留 1 槽（`RENDERER_RESERVED_SLOTS`），同时为页面导航预留动态余量（`NAVIGATE_HEADROOM_SLOTS * page_targets`）；
+     - 严格限制 `MAX_CONCURRENT_OOPIF = 1`，当余量不足时及时拒绝并记录 `worker_denied` 与 `oopif_denied` 统计。
+3. **`cpc` 编译器对 `release` 方法命名的特定语义规避**：
+   - **踩坑定位**：在 CP 中，如果一个结构体定义了名为 `release(...)` 的成员方法，`cpc` 编译器会将其硬编码判定为类似析构函数的 0 实参 Drop 方法，不仅会自动在作用域末尾插入 `defer val.release();`，而且在表达式调用处会将实参强制丢弃剥离为 `val.release()`，引发 Zig 编译报错 `member function expected 1 argument(s), found 0`；
+   - **最佳实践**：在 CP 编写自定义资源归还或租约释放方法时，严禁使用裸词 `release(...)` 命名带参数的常规方法，统一推荐命名为 `relinquish(...)`、`releaseLease(...)` 或 `releaseKind(...)`，彻底规避编译器的隐式 Drop 机制。
+
+
+

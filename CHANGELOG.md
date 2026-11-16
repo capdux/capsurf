@@ -454,3 +454,23 @@
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
 
+## Phase 15: Streaming Body Byte Capping & Dynamic Worker Isolate Budget (100% Closed)
+- **`src/net/read_capped.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/read-capped.ts`）：
+  - 实装流式读取与响应体硬性字节预算常量：16MB HTML 文档上限、8MB CSS 样式表上限、48MB 全局并发在途上限、24MB 单连接在途上限；
+  - 实装 `CappedFailure` 枚举与标准 Chrome `net::ERR_*` 错误码文本映射；
+  - 实装 `ReadBudgetTracker`：定长 32 槽线性映射，提供原子 `charge`、`chargeWithLimit` 与 `refund`，全局在途字节峰值记录与状态诊断；
+  - 实装 `ReadLease`：支持 RAII 作用域记账与退出安全扣减；
+  - 实装 `CappedBuffer`：支持预分配与动态分配切片，防止流式块超出硬上限溢出。
+- **`src/cdp/worker_budget.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/worker-budget.ts`）：
+  - 实装动态 Worker 与 Isolate 隔离配额：最大 4 个并发 Worker、预留 1 个渲染器槽位、预留 1 个导航裕度槽位、最大 1 个并发 OOPIF（跨进程 iframe）；
+  - 实装 `DynamicWorkerKind`（`PageScript`, `Renderer`, `Oopif`, `Worker`）与 `WorkerLease`；
+  - 实装 `DynamicWorkerBudget`：实时槽位 `freeSlots()` 计算、准入拒绝统计（`oopif_denied`, `worker_denied`）、租约释放 `relinquish`、Isolate 销毁追踪与格式化诊断文本 `describe()`。
+- **测试套件与全链路验证**：
+  - `test/net/test_read_capped.cp`：全量测试 100% 全部通过（常量基准、错误枚举、连接级与全局预算 charge/refund 拦截、连接断开全量释放与峰值保留）；
+  - `test/cdp/test_worker_budget.cp`：全量测试 100% 全部通过（标准容量、Worker/OOPIF 租约申请与配额耗尽拒绝、幂等归还、诊断快照与格式化输出）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.4MB 独立可执行二进制）与 `bin/main.so`（9.6MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+
