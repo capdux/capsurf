@@ -646,6 +646,17 @@
      - `findCommonAncestor` 采用定长数组双路祖先扫描，消除堆分配；
      - `comparePoint` 通过向祖先回溯判断层级关系，实现 `START_TO_START`、`START_TO_END` 等 4 种规范模式的精确有序判定。
 
+## Phase 30 CDP 统一分发增强与综合端到端矩阵技术方案
+1. **CDP 协议分发器多域补全与扩展挂载 (`src/cdp/dispatch.cp`)**：
+   - **设计动机**：为了向客户端提供无死角的 CDP 协议覆盖，原有的 `CSS` 域方法与 `CapSurf` 扩展命令需要与基础 Page、DOM、Runtime 域享受平等的路由调度待遇；
+   - **解决方案**：
+     - 将 `CSS.getComputedStyleForNode` 与 `CSS.enable` 直接挂接至 `CssHandler`，支持动态几何与样式属性提取；
+     - 通过 `session.facade` 统一路由 `CapSurf.*` 与 `Kitesurf.*` 双前缀扩展协议。
+2. **基于 Node.js 原生 WebSocket 的黑盒端到端回归矩阵 (`scripts/test_e2e_matrix.js`)**：
+   - **设计动机**：端到端（E2E）测试必须脱离浏览器内部单元 mock，以最真实的远程客户端角度验证从网络握手、协议多路复用到图形光栅化的全生命周期；
+   - **解决方案**：
+     - 编写 11 步端到端自动化矩阵脚本，严格验证标准 HTTP 自省、WebSocket RFC 6455 帧传输、盒模型像素精度、JS 执行与 PNG 二进制魔数。
+
 
 
 

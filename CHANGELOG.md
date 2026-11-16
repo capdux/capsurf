@@ -689,6 +689,19 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 30: CDP Protocol Routing Complete & E2E Test Matrix (100% Closed)
+- **`src/cdp/dispatch.cp` & `src/cdp/session.cp`**：
+  - 接入 `CSS.*` 域全量方法（计算样式查询 `CSS.getComputedStyleForNode`）；
+  - 接入 `CapSurf.*` 与 `Kitesurf.*` 双前缀扩展协议路由；
+  - 优化 `src/cdp/fetch.cp` 中 `Fetch.fulfillRequest` 响应体安全解包。
+- **`scripts/test_e2e_matrix.js`**：
+  - 编写 11 步端到端自动化综合测试矩阵，覆盖 HTTP 自省、WebSocket RFC 6455、Target 挂载、四域激活、盒模型与 CSS 样式计算、扩展调用、鼠标交互与视口截屏。
+- **测试套件与全链路验证**：
+  - `scripts/test_e2e_matrix.js`：11 项全链路测试 100% SUCCESS；
+  - `scripts/test_driver_playwright.js`：11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

@@ -16,6 +16,7 @@ import { AccessibilityHandler } from "./accessibility.cp";
 import { WebMcpHandler } from "./webmcp.cp";
 import { LogHandler } from "./log.cp";
 import { DebuggerHandler } from "./debugger.cp";
+import { CssHandler } from "./css.cp";
 
 pub struct CdpDispatcher {
     pub static fn dispatch(
@@ -140,6 +141,18 @@ pub struct CdpDispatcher {
             }
             event_count.* = @min(dbg_cnt, out_events.len);
             return resp;
+        }
+
+        if (std.mem.startsWith(u8, req.method, "CSS.")) {
+            return CssHandler.handle(session, req, out_buf);
+        }
+
+        if (std.mem.startsWith(u8, req.method, "Kitesurf.") ||
+            std.mem.startsWith(u8, req.method, "CapSurf.")) {
+            if (res := session.facade.dispatchCommand(req.method, req.params_raw, session.target_id, out_buf)) {
+                return CdpResponse.ok(req.id, res);
+            }
+            return CdpResponse.ok(req.id, "{}");
         }
 
         // 3. Permissive stub domains (Puppeteer / Playwright handshake compatibility)

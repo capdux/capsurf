@@ -179,7 +179,11 @@ pub struct FetchHandler {
                 p.verdict = InterceptVerdict.Fulfill;
                 const code = extractJsonInt(req.params_raw, "responseCode") ?? 200;
                 p.mock_status = if (code > 0) @intCast(code) else 200;
-                p.mock_body = extractJsonString(req.params_raw, "body") ?? "";
+                if (b := extractJsonString(req.params_raw, "body")) {
+                    p.mock_body = b;
+                } else {
+                    p.mock_body = "";
+                }
             }
             return CdpResponse.ok(req.id, "{}");
         }

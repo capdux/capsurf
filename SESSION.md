@@ -1587,6 +1587,35 @@
    - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 23:14:00] Turn 41
+
+### **[User]**
+> 继续你的工作
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 30（CDP 协议分发扩展、CSS/Facade 路由补全与全特性端到端测试矩阵）：
+1. **CDP 协议分发器路由增强与 Facade 挂载 (`src/cdp/dispatch.cp` & `src/cdp/session.cp`)**：
+   - 将 `CSS.*` 域全量方法（`CSS.enable`, `CSS.getComputedStyleForNode`）统一接入主分发流，支持动态提取已计算样式；
+   - 将 `CapSurf.*` 与 `Kitesurf.*` 双前缀扩展协议（Scene Host、Scene Stream、Session Info 等）挂载至 `session.facade`；
+   - 修复 `src/cdp/fetch.cp` 中 `Fetch.fulfillRequest` 响应体安全解包逻辑，杜绝空切片比较缺陷。
+2. **综合端到端测试矩阵建设 (`scripts/test_e2e_matrix.js`)**：
+   - 编写 11 步覆盖全协议链路的自动化 Node.js/TypeScript 远程驱动测试：
+     - HTTP 协议与浏览器元数据自省（`/json/version`）；
+     - WebSocket RFC 6455 全双工会话多路复用与 Target 自动挂载；
+     - Page、DOM、Runtime、CSS 四大核心域协同激活；
+     - 复杂 DOM 盒模型几何计算（`DOM.getBoxModel`）与计算样式提取（`CSS.getComputedStyleForNode`）；
+     - CapSurf 扩展协议调用与 ABI 校验；
+     - 鼠标点击事件派发（`Input.dispatchMouseEvent`）与状态变更验证；
+     - 高分辨率视口 PNG 屏幕截图光栅化编码校验。
+3. **全量回归与双模构建验证**：
+   - 运行 `node scripts/test_e2e_matrix.js`：11 项全链路测试 100% SUCCESS；
+   - 运行 `node scripts/test_driver_playwright.js`：传统 Playwright 流程 100% 通过；
+   - 运行 `cap test test/dom/test_event_mutation.cp` 与 `test_traversal_range.cp`：单元级测试 100% 通过；
+   - 独立二进制 `bin/main` 与 BEAM 动态库 `bin/main.so` 双模均一次性成功构建；
+   - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

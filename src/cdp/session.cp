@@ -18,6 +18,7 @@ import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
 import { ScreencastHandler } from "./screencast.cp";
 import { ResourceStore } from "./resource_store.cp";
+import { KitesurfFacade } from "./kitesurf_facade.cp";
 
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
@@ -55,6 +56,7 @@ pub struct CdpPageSession {
     debugger_state: DebuggerState = DebuggerState{},
     screencast_handler: ScreencastHandler = ScreencastHandler.init(),
     resource_store: ResourceStore = ResourceStore.init(),
+    facade: KitesurfFacade = KitesurfFacade{},
 
     // Dedicated buffers for event formatting
     console_event_buf: [1024]u8 = [0; 1024],
