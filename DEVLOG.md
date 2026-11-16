@@ -463,6 +463,22 @@
      - 提供 `isWebSocketUpgrade` 快速入口点判别，与 kitesurf 官方对齐 fail-open 保护策略。
 
 
+## Phase 18 网络事件追踪、子框架生命周期与 DOM 安全释放技术方案
+1. **CDP 网络事件追踪器与主体响应持久化 (`src/cdp/network_events.cp`)**：
+   - **设计动机**：Playwright 与 Puppeteer 等外部自动化框架高度依赖完整的 CDP Network 生命周期事件（`requestWillBeSent`, `responseReceived`, `loadingFinished`, `getResponseBody`）。若无头浏览器只提供模拟的 HTTP 响应而不做内部状态记录，Agent 将无法提取网络响应正文；
+   - **解决方案**：
+     - 限制在途与归档请求：定长 512 槽记录映射，提供严格的单主体 4MB 与全局 16MB 缓冲上限；
+     - 请求序号命名法：基于连接前缀与递增序号生成如 `cs-conn-1` 的唯一请求标识；
+     - 修复上游 MIME 推断优先级缺陷：在 `inferResourceType` 中将 `application/manifest+json` 提前至普通 `+json` 之前判定，确保 Web Manifest 资源类型精确识别。
+2. **子框架附着流与 DOM 安全析构管理 (`src/cdp/iframe_events.cp` & `src/cdp/dom_release.cp`)**：
+   - **设计动机**：页面导航或跨域 iframe 挂载时，如果 DOM 树析构不彻底，会因为跨 Arena 的引用指针导致悬垂借用或内存泄漏；
+   - **解决方案**：
+     - 零堆分配格式化子框架四个核心生命周期事件（`Page.frameAttached`, `Page.frameStartedLoading`, `Page.frameNavigated`, `Page.lifecycleEvent`）；
+     - `stripNoscript`：在解析和析构时主动清理 `<noscript>` 标签子树，消除无用表现型噪音；
+     - 封装 `releaseFrameDom` 与 `releaseTargetDom`，确保作用域析构（RAII）与 Arena 批量回收协调运作，保障百万 Agent 并发场景下的极速内存平复。
+
+
+
 
 
 

@@ -515,6 +515,25 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 18: Network Event Tracker, Frame Lifecycle & DOM Safe Release (100% Closed)
+- **`src/cdp/network_events.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/network-events.ts`）：
+  - 实装 `NetworkEventTracker`：支持请求序列生成、在途计数、响应体持久缓存与读取（`getResponseBody`）、会话启用与缓冲容量自动降级/淘汰；
+  - 实装 `inferResourceType`（修正 `application/manifest+json` 匹配优先级 Bug）与 `isTextLikeMime`。
+- **`src/cdp/network_events_registry.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/network-events-registry.ts`）：
+  - 实装 `NetworkEventTrackerRegistry`：按连接 ID 管理活跃网络跟踪器，暴露专属追踪报头 `x-kitesurf-connection-id` 与 `x-kitesurf-frame-id`。
+- **`src/cdp/iframe_events.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/iframe-events.ts`）：
+  - 实装子框架挂载完整事件流：`Page.frameAttached`, `Page.frameStartedLoading`, `Page.frameNavigated`, `Page.lifecycleEvent` (init)。
+- **`src/cdp/dom_release.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/dom-release.ts`）：
+  - 实装 `stripNoscript` 表现型节点清洗与移除；
+  - 实装 `releaseFrameDom` 与 `releaseTargetDom`，联动 `Document.deinit()` 与 Arena 生命周期，消除孤立 DOM 树引起的内存泄漏。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_network_events.cp`：全量测试 100% 全部通过（请求追踪、响应体缓存、MIME 推断与注册表）；
+  - `test/cdp/test_iframe_dom_release.cp`：全量测试 100% 全部通过（子框架事件序列与 DOM 释放清洗）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

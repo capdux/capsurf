@@ -1259,6 +1259,32 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 19:50:00] Turn 29
+
+### **[Agent]**
+全面推进并闭环 Phase 18（CDP 网络事件追踪器、连接注册表、子框架附着事件与 DOM 安全析构管理系统）：
+1. **CDP 网络事件追踪器与连接注册表 (`src/cdp/network_events.cp` & `src/cdp/network_events_registry.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/network-events.ts` 与 `vendor/kitesurf/packages/engine/src/cdp/network-events-registry.ts`（文件头保留来源溯源注释）；
+   - 常量设定：`MAX_RETAINED_BODY_BYTES = 16MB`, `RESPONSE_BODY_CAP = 4MB`，单连接上限 512 请求记录；
+   - 实装 `NetworkEventTracker`：支持请求序号生成（`cs-conn-1`）、在途计数统计（`in_flight`）、响应体持久缓存与 `getResponseBody` 查询（带 Base64 编码标识）；
+   - 实装 Target/Frame 归属记录（`targetAttributions`）与失效加载项响应体清理（`dropStaleLoaderBodies`）；
+   - 实装 `inferResourceType`（修复上游 `manifest+json` 先于 `+json` 判定的截断 Bug）与 `isTextLikeMime`；
+   - 实装连接级注册表 `NetworkEventTrackerRegistry` 与专属跟踪报头（`x-kitesurf-connection-id`, `x-kitesurf-frame-id`）。
+2. **子 Frame 附着生命周期与 DOM 安全析构 (`src/cdp/iframe_events.cp` & `src/cdp/dom_release.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/iframe-events.ts` 与 `vendor/kitesurf/packages/engine/src/cdp/dom-release.ts`（文件头保留来源溯源注释）；
+   - 实装子框架挂载完整事件生成流：`Page.frameAttached`, `Page.frameStartedLoading`, `Page.frameNavigated`, `Page.lifecycleEvent` (init)；
+   - 实装 `stripNoscript`：基于选择器遍历与安全删除清理 `<noscript>` 表现型噪音节点；
+   - 实装 `releaseFrameDom` 与 `releaseTargetDom`，联动 `Document.deinit()` 与 Arena 生命周期，彻底消除孤立 DOM 树引起的内存泄漏。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/cdp/test_network_events.cp`（覆盖请求开始、响应接收、主体提取、失败记录、MIME 推导与连接注册表全链路）；
+   - 编写并通过 `test/cdp/test_iframe_dom_release.cp`（覆盖子框架事件发射格式、目标/框架 DOM 树释放与 noscript 清理）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 
