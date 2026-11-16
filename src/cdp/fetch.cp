@@ -80,6 +80,11 @@ pub struct FetchState {
     }
 
     pub fn parkRequest(*_, req_id: []const u8, url: []const u8, method: []const u8): (*ParkedRequest)? {
+        if (existing := _.findParked(req_id)) {
+            existing.url = url;
+            existing.method = method;
+            return existing;
+        }
         if (_.parked_count >= _.parked.len) {
             _.parked_count = 0; // Rotate ring buffer if full
         }
@@ -107,6 +112,16 @@ pub struct FetchState {
         }
         return null;
     }
+
+    pub fn findParkedByUrl(*_, url: []const u8): (*ParkedRequest)? {
+        let i: usize = 0;
+        while (i < _.parked_count) : (i += 1) {
+            if (std.mem.eql(u8, _.parked[i].url, url)) {
+                return &_.parked[i];
+            }
+        }
+        return null;
+    }
 }
 
 pub struct FetchHandler {
@@ -122,6 +137,7 @@ pub struct FetchHandler {
         // 1. Fetch.enable: activate interception
         if (std.mem.eql(u8, req.method, "Fetch.enable")) {
             state.enabled = true;
+            session.fetch_enabled = true;
             state.pattern_count = 0;
             session.fetch_enabled = true;
 

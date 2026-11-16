@@ -176,3 +176,34 @@
   2. CDP Fetch 域：URL 模式拦截匹配、请求挂起、Mock 响应伪造与拦截解除；
   3. CDP Network 域：真实 CookieJar 注入、Cookie 读写查清与全局 Extra Headers 验证。
 - **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道门禁。
+
+## Phase 2 & Phase 3: Navigation Pipeline, Real HTTP Loading & Multi-Frame Isolation (100% Closed)
+- **`src/net/http_loader.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/outbound.ts` 与 `src/cdp/page.ts`）：
+  - 实现基于底层 POSIX Socket 的真实 HTTP/1.1 TCP 获取管道，集成 User-Agent、Extra-Headers 与动态 Cookie 头注入；
+  - 实现独立的 `ParsedHttpUrl` 结构体与 `parseHttpUrl` 解析器，支持带端口 URL（如 `http://127.0.0.1:9876/index.html`）、IPv6 字面量以及查询串；
+  - 支持 `data:text/html,...`（明文与 Base64 解码）即时解析加载与 `about:blank` 哨兵文档；
+  - 自动解析响应头中 `Set-Cookie` 指令并双向持久化至 `session.cookie_jar`；
+  - 支持 HTTP 301/302/303/307/308 重定向自旋跟随（最大深度 5）。
+- **`src/cdp/frames.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/frames.ts`）：
+  - 保留文件头原始目录溯源注释；
+  - 实装 `FrameState` 完整多 Frame 隔离状态机，支持主框架（`makeMainFrameState`）与子框架（`makeChildFrameState`）；
+  - 实现 `frameContextOf` 安全上下文分析、`committedFrameOriginOf` 与 `frameAncestorOrigins`（支持最大 8 层 IFrame 嵌套解析与不可信边界隔离）；
+  - 实现 `makeFrameInfo`、`buildFrameTree` 与 `buildFrameResourceTree`，导出树形 CDP 协议结构；
+  - 独立命名 `FrameJsonWriter`，根除跨模块（如 `accessibility.cp`）同名结构体遮蔽冲突。
+- **`src/cdp/page.cp`**：
+  - 升级 `Page.navigate`，动态调用 `HttpLoader.fetchDocument`，派发完整的 3 阶段导航生命周期事件（`Page.frameNavigated`、`Page.domContentEventFired`、`Page.loadEventFired`），返回 `{ frameId, loaderId }`；
+  - 挂载 `Page.getFrameTree` 与 `Page.getFrameResourceTree` 路由，对接 `frames.cp` 树形协议构建函数；
+  - 完善 `Page.getLayoutMetrics` 动态视口指标上报。
+- **`src/cdp/session.cp`**：
+  - 在 `CdpPageSession` 中增加 `raw_html` 堆持有缓冲区，导航时执行深拷贝 `dupe`，彻底杜绝 DOM 属性切片悬垂引用；
+  - 完善 `fetch_enabled` 状态联动。
+- **`src/cdp/fetch.cp`**：
+  - 增加 `findParkedByUrl` 检索辅助函数；
+  - 完善 `parkRequest` 重复请求复用与 `Fetch.enable` 状态联动。
+- **`src/cdp/dispatch.cp`**：扩充派发事件缓冲区至 `[4]CdpEvent`。
+- **测试套件与全量回归**：
+  - `test/cdp/test_page_navigation.cp`：4 大综合测试 100% 全部通过（Data URL 明文/Base64 导航、视口布局与 FrameTree 同步、Fetch 请求拦截 Mock 伪造响应、真实 TCP 本地 HTTP 服务器全双工数据加载与 Cookie 往返同步）；
+  - `test/cdp/test_frames.cp`：Frame/Loader ID 生成、Origin 计算、安全上下文、8 层祖先链隔离断言 100% 全部通过；
+  - `test/cdp/test_cdp.cp`：同步对齐 3 阶段导航事件流，2/2 项测试 100% 通过；
+  - `test/cdp/test_cdp_network_fetch.cp`：3/3 项深度测试 100% 通过。
+- **门禁检验**：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

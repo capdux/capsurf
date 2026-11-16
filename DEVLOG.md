@@ -185,3 +185,19 @@
 3. **栈缓冲区生命周期与堆复制（Heap Duplication）排障**：
    - **故障现象**：在 `Network.setCookie` 中使用栈分配缓冲 `raw_buf` 构造 Set-Cookie 字符串，导致写入 `CookieJar` 的切片指向已销毁的栈帧，后续 `getCookies` 读取时内容损坏。
    - **解决方案**：统一使用 `std.fmt.allocPrint(session.allocator, ...)` 进行持久化堆分配，确保 Cookie 属性字符串在 Session 生命周期内始终有效。
+
+## Phase 2 & Phase 3 导航加载流水线与多 Frame 隔离架构技术方案与排障实录
+1. **真实 HTTP 加载与 URL 端口解析架构 (`src/net/http_loader.cp`)**：
+   - **痛点分析**：原 Cookie 模块中的 `parseUrlParts` 仅用于 Cookie 域名与路径匹配，遇冒号 `:` 即刻截断主机名并丢弃端口，导致 `http://127.0.0.1:9876/index.html` 被截断为 `127.0.0.1`，底层 TCP `connect` 连入缺省 80 端口，造成本地测试服务器线程一直阻塞在 `accept`。
+   - **架构设计**：实现独立的 `ParsedHttpUrl` 结构体与 `parseHttpUrl` 解析器，区分 authority 与 path/query，支持标准 IPv4/IPv6 主机名、端口显式解析、路径与查询参数提取，并向后过滤 `#hash` 锚点。在 `fetchDocument` 中直接透传解析后的目标端口与 Host 头部，彻底打通真实本地网络测试。
+2. **DOM 属性切片生命周期保障机制 (`src/cdp/session.cp`)**：
+   - **痛点分析**：`Document.parseHtml` 解析 DOM 节点（如 `id="hero"`、`class="box"`）时直接切片输入 HTML 缓冲区。若输入的 HTML 字符串位于临时栈缓冲区或随 `handle()` 退出而被 `defer allocator.free()` 释放，DOM 树中将产生致命的悬垂指针（Dangling Pointer），在后续 `hasId` 或 `querySelector` 扫描时触发 Segmentation fault。
+   - **解决方案**：在 `CdpPageSession` 中维护专属拥有的 `raw_html: []const u8` 成员，在 `session.navigate(html, url)` 内部显式通过 `allocator.dupe(u8, html)` 复制并持有整份 HTML 数据，确保其生命周期与 `session.doc` 绝对对齐，并在 `session.deinit()` 时安全回收。
+3. **多 Frame / IFrame 隔离与安全上下文计算 (`src/cdp/frames.cp`)**：
+   - **迁移架构**：完整吸收 Kitesurf 的 CDP 框架树机制，基于连续切片与结构体顶层提升规范，建立轻量 `FrameState`。
+   - **安全上下文链条演算**：通过 `frameContextOf` 自顶向下迭代祖先链路，综合评估 `about:blank`、`about:srcdoc` 来源继承、HTTPS/WSS/Localhost 可信源判定、跨域隔离（`cross_origin_isolated_context_type`）与进程内/跨进程归属（`same_site_as_parent`）。
+   - **结构体命名遮蔽排障**：由于 `accessibility.cp` 内部已导出 `pub struct JsonWriter`，在 `frames.cp` 中若重复定义顶层 `pub struct JsonWriter` 会导致 `cpc` lowering 在生成的 Zig 代码顶层触发 `error: duplicate struct member name 'JsonWriter'`。将 `frames.cp` 内置流式写入器重命名为 `FrameJsonWriter`，实现模块级隔离。
+4. **CDP 导航生命周期事件对齐与协议同步**：
+   - 标准 Chrome DevTools 协议在页面导航时按时序发射 3 个生命周期事件：`Page.frameNavigated` -> `Page.domContentEventFired` -> `Page.loadEventFired`；
+   - 之前测试客户端仅读取 2 个 WebSocket 帧，导致后续的 `DOM.querySelector` 读取到了未被消费的第 3 个事件帧引发 JSON-RPC 解析错位；
+   - 在 `PageHandler.handle` 与测试用例中严格对齐 3 阶段生命周期事件派发与接收逻辑，确保 CDP 全链路时序精确一致。

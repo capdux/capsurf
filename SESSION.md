@@ -822,3 +822,28 @@
    - 触发 Zig 0.17 严格顶层作用域标识符遮蔽规则，导致下游所有使用 `const c = ...`、`for (c of ...)`、`fn foo(c: u8)` 的模块（如 `cap:css` 等）编译全面报错 `error: local constant shadows declaration of 'c'`；
    - 提炼 12 行最小可复现用例 `temp/repro_c_shadow.cp` 并验证必现；
    - 执行 `scripts/task_queue.py submit --id "task-capsurf-20261116-c-struct-shadow"` 提交工单给 `cp_agy` 修复，将端到端测试标记为 `BLOCKED`，后台守护监听等待结单通知。
+
+
+---
+
+## [2026-11-16 10:44:11] Turn 13
+
+### **[User]**
+> 你可以开启两个子智能体协调工作, 比如一个做文件迁移, 一个做测试, 不用等
+
+### **[Agent]**
+遵照指令启动两路全新子智能体并行协作，全面闭环 Phase 2（真实 HTTP 导航加载流水线）与 Phase 3（多 Frame / IFrame 隔离与 FrameTree 协议）：
+1. **双子智能体并行调度与任务闭环**：
+   - **子智能体 1（CDP Test Runner）**：
+     - 在 `src/net/http_loader.cp` 中实现独立 `ParsedHttpUrl` 与 `parseHttpUrl` 解析器，支持 IPv4/IPv6、自定义端口、请求路径与查询串解析，消除此前因 `parseUrlParts` 截断端口导致 TCP 误连 80 端口从而阻塞 `localHttpServerWorker` 的缺陷；
+     - 在 `test/cdp/test_cdp.cp` 中对齐三阶段导航生命周期事件（`Page.frameNavigated` -> `Page.domContentEventFired` -> `Page.loadEventFired`）；
+     - 跑通 `test_page_navigation.cp`（4/4 passed）、`test_cdp.cp`（2/2 passed）、`test_cdp_network_fetch.cp`（3/3 passed），全量回归 0 regression。
+   - **子智能体 2（Frames Migrator）**：
+     - 从 `vendor/kitesurf/packages/engine/src/cdp/frames.ts` 完整迁移实现纯 CP `src/cdp/frames.cp`，在文件头保留原始溯源注释；
+     - 实现 `FrameState`、`makeMainFrameState`、`makeChildFrameState`、`frameContextOf`、`committedFrameOriginOf`、`frameAncestorOrigins`、`makeFrameInfo`、`buildFrameTree` 与 `buildFrameResourceTree`；
+     - 编写并通过 `test/cdp/test_frames.cp`（全部断言 100% 绿色通过）；
+     - 将序列化器统一命名为 `FrameJsonWriter`，根除跨模块（如 `accessibility.cp`）同名结构体遮蔽冲突。
+2. **Page 领域框架树接口联动**：
+   - 在 `src/cdp/page.cp` 中无缝集成 `Page.getFrameTree` 与 `Page.getFrameResourceTree`，返回符合 CDP 标准的树形结构；
+   - 在 `test_page_navigation.cp` 中扩充断言检验 `Page.getFrameTree` 与 `Page.getFrameResourceTree` 返回有效 JSON；
+   - 6 个核心源文件全部 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

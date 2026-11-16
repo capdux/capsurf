@@ -24,6 +24,7 @@ pub struct CdpPageSession {
     frame_id: []const u8 = "capsurf-frame-001",
     loader_id: []const u8 = "capsurf-loader-001",
     has_document: bool = false,
+    raw_html: []const u8 = "",
 
     // Emulation & Viewport overrides
     viewport_width: f32 = 1280.0,
@@ -57,6 +58,7 @@ pub struct CdpPageSession {
             frame_id: "capsurf-frame-001",
             loader_id: "capsurf-loader-001",
             has_document: false,
+            raw_html: "",
             viewport_width: 1280.0,
             viewport_height: 720.0,
             device_scale_factor: 1.0,
@@ -72,6 +74,10 @@ pub struct CdpPageSession {
     }
 
     pub fn deinit(*_) {
+        if (_.raw_html.len > 0) {
+            _.allocator.free(_.raw_html);
+            _.raw_html = "";
+        }
         _.cookie_jar.deinit();
         _.ctx.deinit();
         _.rt.deinit();
@@ -82,8 +88,13 @@ pub struct CdpPageSession {
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8)! {
         _.doc.deinit();
+        if (_.raw_html.len > 0) {
+            _.allocator.free(_.raw_html);
+            _.raw_html = "";
+        }
+        _.raw_html = _.allocator.dupe(u8, html) catch return error.AllocFailed;
         _.doc = Document.init(_.allocator) catch return error.DocReinitFailed;
-        _.doc.parseHtml(html) catch return error.HtmlParseFailed;
+        _.doc.parseHtml(_.raw_html) catch return error.HtmlParseFailed;
 
         // Extract Title
         const title_node = Matcher.querySelector(&_.doc, "title");

@@ -41,14 +41,14 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Page.")) {
-            let page_evts: [2]CdpEvent = [CdpEvent{}; 2];
+            let page_evts: [4]CdpEvent = [CdpEvent{}; 4];
             let page_cnt: usize = 0;
             const resp = PageHandler.handle(session, req, out_buf, &page_evts, &page_cnt);
             let i: usize = 0;
             while (i < page_cnt && i < out_events.len) : (i += 1) {
                 out_events[i] = page_evts[i];
             }
-            event_count.* = page_cnt;
+            event_count.* = @min(page_cnt, out_events.len);
             return resp;
         }
 

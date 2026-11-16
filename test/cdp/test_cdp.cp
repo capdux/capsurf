@@ -215,7 +215,7 @@ fn runWebSocketCdpTest()! {
         expect_eq(std.mem.indexOf(u8, f2, "frameId") != null, true);
     }
 
-    // Read emitted events: Page.frameNavigated & Page.loadEventFired
+    // Read emitted events: Page.frameNavigated, Page.domContentEventFired & Page.loadEventFired
     const frame_evt1 = client.readClientWsFrame(&ws_buf) catch unreachable;
     std.debug.print("[DEBUG] Event 1: {s}\n", .{frame_evt1 ?? "NULL"});
     expect_eq(frame_evt1 != null, true);
@@ -227,7 +227,14 @@ fn runWebSocketCdpTest()! {
     std.debug.print("[DEBUG] Event 2: {s}\n", .{frame_evt2 ?? "NULL"});
     expect_eq(frame_evt2 != null, true);
     if (fe2 := frame_evt2) {
-        expect_eq(std.mem.indexOf(u8, fe2, "Page.loadEventFired") != null, true);
+        expect_eq(std.mem.indexOf(u8, fe2, "Page.domContentEventFired") != null, true);
+    }
+
+    const frame_evt3 = client.readClientWsFrame(&ws_buf) catch unreachable;
+    std.debug.print("[DEBUG] Event 3: {s}\n", .{frame_evt3 ?? "NULL"});
+    expect_eq(frame_evt3 != null, true);
+    if (fe3 := frame_evt3) {
+        expect_eq(std.mem.indexOf(u8, fe3, "Page.loadEventFired") != null, true);
     }
 
     // 4. CDP Command: DOM.querySelector
