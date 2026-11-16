@@ -586,6 +586,19 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 22: Terminal Mode Stylesheet, Font Shaping Policy, Guards & Script Bundle Packager (100% Closed)
+- **`src/tty/nav_params.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/tty/nav-params.ts` 与 `stylesheet.ts`）：
+  - 实装终端模式导航参数解析器 `applyTtyNavParams` 与网格校验 `parseCell`，生成 `--ks-tty-cell-w` / `--ks-tty-cell-h` 样式与终端基线样式表。
+- **`src/eval/font_shaping.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/font-shaping.ts`）：
+  - 实装字体签名校验 `isSupportedFont`（TrueType, OpenType, WOFF, WOFF2）与 4 路并发控制 `FontShapingSlotManager`，限制 8MB 单字体预算。
+- **`src/eval/script_bundle.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/script-bundle.ts` 与 `guards.ts`）：
+  - 实装 Base64 VLQ 编码器 `encodeVLQ`、行统计与安全注释转义 `commentSafe`、脚本类型分类与分桶打包 `buildScriptBundle`、类型防御守卫 `isOneOf`。
+- **测试套件与全链路验证**：
+  - `test/tty/test_tty_font_bundle.cp`：全量测试 100% 全部通过（3 组测试覆盖 TTY 网格尺寸与参数提取、字体格式判定与并发排队、VLQ 编码与脚本分桶打包）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

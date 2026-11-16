@@ -1367,6 +1367,37 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 20:36:00] Turn 33
+
+### **[User]**
+自主推进下一阶段任务（Phase 22: 终端模式样式表与导航参数、字体整形网格约束、脚本打包器与安全防卫）
+
+### **[Agent]**
+完成 Phase 22 全量模块实装、门禁校验、测试套件验证与端到端驱动回归：
+1. **终端模式样式表与导航参数 (`src/tty/nav_params.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/tty/nav-params.ts` 与 `tty/stylesheet.ts`（文件头保留来源溯源注释）；
+   - 实装 `parseCell`（解析 `<w>x<h>` 网格尺寸，严格限定范围 `[1, 64]` 像素，缺省宽 8 高 17）；
+   - 实装 `applyTtyNavParams`，解析 URL 参数中 `ks_tty_css`、`ks_color_scheme` 与 `ks_tty_cell`；
+   - 实装 `ttyUaStylesheet` 与 `ttyFocusStylesheet`，输出终端基线等宽字体、CSS 变量 `--ks-tty-cell-w` / `--ks-tty-cell-h` 与 Level 2 overflow 约束。
+2. **字体整形并发网格与签名校验 (`src/eval/font_shaping.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/font-shaping.ts`（文件头保留来源溯源注释）；
+   - 实装 `isSupportedFont`（快速校验 TrueType `0x00010000` / `true`、OpenType `OTTO`、WOFF `wOFF`、WOFF2 `wOF2` 头部签名）；
+   - 实装 `FontShapingSlotManager`，限制最大 4 路并发整形（`MAX_CONCURRENT_TRANSFORMS = 4`），多余任务受控排队；
+   - 严格限定单字体上限 8MB（`MAX_SHAPED_FONT_BYTES = 8MB`）。
+3. **脚本打包器、VLQ Source Map 与防御式守卫 (`src/eval/script_bundle.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/script-bundle.ts` 与 `guards.ts`（文件头保留来源溯源注释）；
+   - 实装 RFC 4648 Base64 VLQ 编码器 `encodeVLQ`（支持负数符号位、5 位切片与连续位打包）；
+   - 实装 `commentSafe`（安全转义 `\n`、`\r` 防止行截断注释逃逸）与 `countLines`；
+   - 实装 `categorizeScript` 与 `buildScriptBundle`（精准区分 regular, deferred, async, module, injected 脚本）；
+   - 实装参数防御守卫 `isOneOf` 与 `isNonEmptyString`。
+4. **自动化测试与驱动回归**：
+   - 编写并通过 `test/tty/test_tty_font_bundle.cp`（3 组测试用例 100% 全部通过：Cell 范围解析与样式生成、字体签名判定与并发槽排队、VLQ 编码与脚本分类）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
