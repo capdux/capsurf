@@ -1045,3 +1045,69 @@
    - 运行并通过 `scripts/test_driver_playwright.js`（11 步端到端流程 100% 绿色通过）；
    - 独立二进制构建验证：`touch src/main.cp && cap build src/main.cp -f` 成功生成 8.4MB 单二进制 `bin/main`；
    - 全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+---
+
+## [2026-11-16 15:00:00] Turn 21
+
+### **[Agent]**
+双模构建解封与上游工单结单闭环：
+1. **上游工单结单通知响应**：
+   - 收到 `cp_agy` 结单通知：`task-capsurf-20261116-beam-non-actor-return` 成功解决；
+   - 最小复现用例 `temp/repro_beam_non_actor_return.cp` 经新 `cpc -b` 转译验证，非 actor 结构体普通方法正确生成 `void` 与 `return;`，彻底根除 `ctx` 未声明错误；
+   - 重新拉起后台常驻监听守护进程（`watch_task.py --status resolved --agent capsurf_agy`）。
+2. **QuickJS 静态库 `-fPIC` 重编译**：
+   - 定位 Nest 容器动态库链接时的 `relocation R_X86_64_32 cannot be used against local symbol; recompile with -fPIC` 报错；
+   - 重新配置并编译 `vendor/quickjs`：`cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON .. && make -j qjs`，生成完全支持动态库链接的位置无关代码静态库 `libqjs.a`。
+3. **双模构建双绿闭环**：
+   - 独立单二进制：`bin/main`（8.4MB，构建耗时 113s）；
+   - Nest 容器动态库：`bin/main.so`（9.6MB，构建耗时 113s，`bin/main.d.cp` 导出正常）；
+   - CapSurf 原生独立运行与 Nest 容器热加载双模式 100% 验证通过。
+4. **推进 Phase 11（网络安全与 W3C Fetch 基础设施）**：
+   - 并行派发 2 路子智能体推进：
+     - 子智能体 1 (`041a14ed`)：负责 `src/net/forbidden_headers.cp` 与 `src/net/cors.cp`；
+     - 子智能体 2 (`c8c18b93`)：负责 `src/net/private_network.cp` 与 `src/net/redirect_walk.cp`。
+
+
+---
+
+## [2026-11-16 15:10:00] Turn 22
+
+### **[Agent]**
+全面推进并闭环 Phase 11（网络安全与 W3C Fetch 基础设施：CORS 引擎、禁制标头、私有网络保护与 HTTP 重定向决策）：
+1. **Fetch §2.2.2 禁制请求头与响应头拦截器 (`src/net/forbidden_headers.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/forbidden-headers.ts`（文件头保留来源溯源注释）；
+   - 实装 `isForbiddenRequestHeaderName`：拦截 21 个标准受控标头（`host`, `cookie`, `origin`, `referer`, `connection` 等）及 `proxy-*`, `sec-*` 前缀；
+   - 实装 `isMethodOverrideHeaderName` 与 `isForbiddenMethod`：拦截 `x-http-method-override` 等非法方法覆写（`CONNECT`, `TRACE`, `TRACK`）；
+   - 实装 `isForbiddenResponseHeader`：拦截 `set-cookie`, `set-cookie2`；
+   - 实装 `isForbiddenRequestHeader(name, value)` 统一判定接口。
+2. **W3C CORS 预检、响应校验与 TTL 缓存引擎 (`src/net/cors.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/cors.ts`（文件头保留来源溯源注释）；
+   - 实装 `CredentialsMode`（Omit, SameOrigin, Include）与 `CorsError` 枚举；
+   - 实装 `TokenList`：定长 32 槽零堆分配 Token 列表，支持逗号切分扫描与 HTTP 空白剥离；
+   - 实装 `isSafelistMethod`（GET, HEAD, POST）与 `isSafelistRequestHeader` / `isSafelistedResponseHeader`；
+   - 实装 `checkCorsResponse` 与 `checkCorsPreflight`：严格核验 `Access-Control-Allow-Origin`、凭据模式排斥（通配符 `*` 与 credentials 互斥）、方法与首部放行；
+   - 实装 `PreflightCache`：定长 64 槽环形/TTL 缓存池（最大 TTL 600 秒），支持方法与请求头授权结果毫秒级极速命中与自动淘汰。
+3. **W3C Private Network Access (PNA) 私网安全保护 (`src/net/private_network.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/private-network.ts`（文件头保留来源溯源注释）；
+   - 实装 `AddressSpace`（loopback = 0, private = 1, public = 2）及等级比较 `rank()`；
+   - 实装 `ipv4Space`：零堆分配识别 127.0.0.0/8 与 0.0.0.0/8（loopback）、RFC 1918 私网（10/8, 172.16/12, 192.168/16）、链路本地（169.254/16）、RFC 6598 运营商级 NAT（100.64/10）及组播/保留地址；
+   - 实装 `ipv6Space`：识别回环 `::1`、IPv4 映射 `::ffff:x.x.x.x`、唯一本地 ULA `fc00::/7`、链路本地 `fe80::/10` 与组播 `ff00::/8`；
+   - 实装 `extractHostname` 与 `addressSpaceOf`；
+   - 实装 `privateNetworkRefusal`：公网访问私网/环回或私网访问环回时强制拒绝，防止公网页面恶意探测本地 Agent 端口。
+4. **HTTP 重定向跳转策略与循环探测 (`src/net/redirect_walk.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/redirect-walk.ts`（文件头保留来源溯源注释）；
+   - 实装常量 `MAX_REDIRECT_HOPS = 20` 与状态码识别（301, 302, 303, 307, 308）；
+   - 实装 `computeNextMethod` 与 `shouldDiscardRequestBody`：301/302/303 转 GET 并丢弃请求体，307/308 严格保持原方法与请求体；
+   - 实装 `UrlOriginView` 与 `parseUrlOrigin`：零堆分配提取 Origin 要素及标准默认端口；
+   - 实装 `isCrossOrigin`、`isProtocolDowngrade` 与 `computeNextReferrer`：协议降级（HTTPS -> HTTP）完全清空 Referrer，跨域降级为 Origin 根路径，同源保持完整 Referrer；
+   - 实装 `checkRedirectLoop` 与 `RedirectWalkState` 环路熔断检测。
+5. **踩坑记录与规范更新**：
+   - 更新 `CP_PITFALLS.md`：记录 `for (x of ARRAY)` 在固定数组 `[N]T` 下由 `cp_iter_slice` 产生局部栈悬垂切片的暗坑与下标索引遍历避坑方案。
+6. **自动化测试与驱动回归**：
+   - 编写并通过 `test/net/test_cors_headers.cp`（8 组全面测试，涵盖禁制标头、方法覆写、CORS 响应/预检校验及 PreflightCache 存取/TTL 过期淘汰）；
+   - 编写并通过 `test/net/test_private_network_redirect.cp`（8 组全面测试，涵盖 IPv4/IPv6 私网/环回地址空间判定、PNA 越界拒绝、重定向方法转换、Referer 跨域降级及循环检测）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 运行并通过现有 `test/net/test_security_gate.cp` 测试套件；
+   - 全部 4 个源码模块与 2 个测试文件 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。

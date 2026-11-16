@@ -321,3 +321,30 @@
    - **排障定位**：当运行 `cap build src/main.cp -b`（Nest 容器动态库模式）时，`cpc` 编译报错 `error: use of undeclared identifier 'ctx'`；
    - **代码溯源**：在 `/data/dev/cp/cpc/src/codegen/stmt.rs:2055` 中，`Stmt::Return(None)` 分支内无条件对 `is_beam_mode` 生成了 `return beam.Beam.makeAtom(ctx.self.env.?, "ok");`，即便当前函数并非 actor 方法（无 `ctx` 局部上下文），导致所有常规结构体普通方法与模块函数出现 `ctx` 未声明错误；
    - **规范闭环**：提炼 9 行最小复现代码 `temp/repro_beam_non_actor_return.cp`，规范提交工单 `task-capsurf-20261116-beam-non-actor-return` 至 `/data/dev/cp/.tasks/pending/`，后台守护进程持续监听中。
+
+
+## Phase 11 网络安全与 W3C Fetch 基础设施 (CORS / 禁制标头 / PNA / 重定向) 技术方案
+1. **Fetch §2.2.2 禁制标头拦截与安全防护 (`src/net/forbidden_headers.cp`)**：
+   - **设计动机**：在无头浏览器中，网页恶意脚本可能会试图伪造 `Host`、`Cookie`、`Sec-Fetch-*` 或 `Proxy-*` 标头以进行请求走私或伪造用户凭据。同时，恶意脚本常通过 `X-HTTP-Method-Override: CONNECT` 等非法伪装攻击内网代理；
+   - **解决方案**：实现零堆分配的快速前缀与集合判定，拦截所有 21 种受控标头与非法方法重写，确保发往网络的 HTTP 报文完全由浏览器底层安全管道掌控。
+2. **W3C CORS 预检与 64 槽零堆分配 TTL 缓存 (`src/net/cors.cp`)**：
+   - **设计动机**：Cross-Origin Resource Sharing (CORS) 是保护跨源资源的核心屏障。对于复杂跨域请求，必须发起 `OPTIONS` 预检并校验服务器允许的方法与标头；
+   - **技术亮点**：
+     - `TokenList` 采用定长 32 槽零分配数组，支持逗号分割标头的高性能解析；
+     - `PreflightCache` 采用 64 槽固定内存环形结构，支持基于单调时钟的 TTL 失效机制（最大 600 秒），在百万 Agent 高频请求场景下大幅降低网络预检往返时延（RTT）；
+     - 凭据隔离规则：严格执行 W3C 规范，当 `allow_credentials` 为 `true` 时，`allow_origin` 禁止为通配符 `*`。
+3. **Private Network Access (PNA) 私网防护 (`src/net/private_network.cp`)**：
+   - **设计动机**：当无头浏览器访问公网未授信网站时，该网站的脚本可能利用浏览器作为跳板对 Agent 所在的内网（如 `10.0.0.0/8`, `192.168.0.0/16`）或本地微服务（`127.0.0.1:9222`）进行端口扫描与未授权调用（SSRF 攻击）；
+   - **技术方案**：
+     - 划分 `AddressSpace`（loopback: 0, private: 1, public: 2）；
+     - 零堆分配解析 IPv4/IPv6，覆盖 RFC 1918、RFC 6598（100.64.0.0/10 运营商级共享地址）、链路本地与组播；
+     - 比较 `target.rank < initiator.rank`，当公网页面尝试访问私网或环回地址时直接抛出拒绝拒绝请求，保障智能体本地宿主安全。
+4. **HTTP 重定向策略与循环熔断 (`src/net/redirect_walk.cp`)**：
+   - **设计动机**：网页重定向（301, 302, 303, 307, 308）涉及复杂的语义转换（如 301/302/303 必须将 POST 转为 GET 并清空 Body，而 307/308 必须原样保留），以及跨域或协议降级（HTTPS -> HTTP）时的 Referer 剥离与 Authorization 标头清理；
+   - **技术方案**：
+     - `RedirectWalkState` 追踪跳数上限（20 次）与环路探测（记录已访问 URL 列表）；
+     - `computeNextReferrer` 严格执行隐私规则：HTTPS 降级到 HTTP 清空 Referer，跨域时剥离为 Origin 根路径，同源保持完整 Referer；
+     - 跨域跳转时自动剥离 `Authorization` 敏感凭据标头。
+5. **固定数组切片迭代陷阱与规避经验**：
+   - **踩坑定位**：在 CP 中，对固定长度数组 `arr: [N]T` 使用 `for (x of arr)` 语法时，底层生成的 `cp_iter_slice` 会按值复制数组到迭代器栈帧，导致返回的切片指针成为临时局部栈悬垂引用，触发 Zig 编译器的未定义行为或逃逸报错；
+   - **最佳实践**：对静态固定大小数组的遍历，推荐统一使用标准的下标步进循环：`let i: usize = 0; while (i < arr.len) : (i += 1) { const x = arr[i]; ... }`，完全零开销且 100% 免疫栈逃逸。

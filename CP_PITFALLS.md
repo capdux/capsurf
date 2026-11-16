@@ -37,6 +37,7 @@
 - `?? return / ?? break` 语法非法：`??` 是表达式运算符，`return`/`break` 是语句，语法解析失败或引发连带级联。必须拆分为 `if (opt == null) return ...;` 或 `if (v := opt) { ... } else return ...;`。
 - `@root struct` 组织铁律：文件级辅助结构体/枚举必须置于顶层（位于 `@root struct Name { ... }` 外部），`@root struct` 仅包含根字段与方法，确保内部 `_`/`*_` 正常绑定且辅助类型被完整 CP lowering。
 - 自动化修复：`/data/dev/cp/cap/bin/cpc fix <file.cp>`（或 `cpc check --fix`）可自动就地修复 `E0101`..`E0104`, `E0115`..`E0123`, `E0126`（如 `if (let v = e)` 会自动修正为 `if (v := e)`）。
+- `for (x of ARRAY)` 陷阱：若 `ARRAY` 为数组 `[N]T`，`cpc` 生成 `cp_iter_slice` 按值传参导致局部栈切片悬垂引用；对常量数组遍历统一使用 `while (i < ARR.len) : (i += 1)` 下标索引访问。
 
 ## C. 工作流（节省 Token）
 

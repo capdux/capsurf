@@ -351,3 +351,35 @@
   - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
   - 独立单二进制构建验证：`cap build src/main.cp -f` 成功生成 8.4MB 单二进制 `bin/main`；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+## Phase 11: Network Security & W3C Fetch Subsystem (CORS, Forbidden Headers, PNA & Redirect Walk) (100% Closed)
+- **`src/net/forbidden_headers.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/forbidden-headers.ts`）：
+  - 实装 W3C Fetch §2.2.2 规范受限标头过滤器 `isForbiddenRequestHeaderName`（拦截 `host`, `cookie`, `origin`, `referer`, `connection` 等及 `proxy-*`, `sec-*` 前缀）；
+  - 实装 `isMethodOverrideHeaderName` 与 `isForbiddenMethod`（拦截 `x-http-method-override` 等非法方法覆写 `CONNECT`, `TRACE`, `TRACK`）；
+  - 实装 `isForbiddenResponseHeader`（拦截 `set-cookie`, `set-cookie2`）；
+  - 实装 `isForbiddenRequestHeader(name, value)` 统一判定。
+- **`src/net/cors.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/cors.ts`）：
+  - 实装 `CredentialsMode`、`CorsError` 与 `TokenList`（定长 32 槽零堆分配 Token 列表）；
+  - 实装 `isSafelistMethod`（GET, HEAD, POST）与 `isSafelistRequestHeader` / `isSafelistedResponseHeader`；
+  - 实装 `checkCorsResponse` 与 `checkCorsPreflight`：严格校验 Origin、通配符凭据排斥、自定义请求头与请求方法授权；
+  - 实装 `PreflightCache`（定长 64 槽环形/TTL 缓存池，最大 TTL 600 秒）。
+- **`src/net/private_network.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/private-network.ts`）：
+  - 实装 W3C Private Network Access 规范枚举 `AddressSpace`（loopback, private, public）及等级比较；
+  - 实装 `ipv4Space`（零分配识别 loopback 127/8 与 0/8, RFC 1918 私网, 链路本地 169.254/16, RFC 6598 运营商级 NAT 100.64/10 及组播）；
+  - 实装 `ipv6Space`（回环 ::1, IPv4 映射 ::ffff:x.x.x.x, 唯一本地 ULA fc00::/7, 链路本地 fe80::/10 与组播 ff00::/8）；
+  - 实装 `addressSpaceOf` 与 `privateNetworkRefusal`（公网非法跨界访问私网/环回强制阻断）。
+- **`src/net/redirect_walk.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/redirect-walk.ts`）：
+  - 实装 HTTP 301/302/303/307/308 重定向状态识别与 `computeNextMethod` 方法/请求体丢弃决策；
+  - 实装 `UrlOriginView` 零堆分配 Origin 提取及标准端口计算；
+  - 实装 `isCrossOrigin`、`isProtocolDowngrade` 与 `computeNextReferrer`（HTTPS -> HTTP 协议降级清空，跨域降级为 Origin 根路径）；
+  - 实装 `checkRedirectLoop` 与 `RedirectWalkState` 环路熔断机制（最大 20 跳）。
+- **双模构建解封与上游工单闭环**：
+  - `cpc -b` 非 actor 普通方法返回缺陷结单解封（`task-capsurf-20261116-beam-non-actor-return`）；
+  - `vendor/quickjs` 启用 `-fPIC` 重新编译完成 `libqjs.a`；
+  - 双模构建验证全部通过：`bin/main`（8.4MB）、`bin/main.so`（9.6MB）。
+- **测试套件与全链路验证**：
+  - `test/net/test_cors_headers.cp`：8 项测试 100% 全部通过；
+  - `test/net/test_private_network_redirect.cp`：8 项测试 100% 全部通过；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
