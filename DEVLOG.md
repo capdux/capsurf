@@ -693,6 +693,18 @@
      - `HTMLCanvasElement` 内部通过可空指针缓存关联的上下文实例，仅在首调 `getContext("2d")` 时按需分配像素缓冲区；
      - 导出流程直通无拷贝 `PngCodec.encodeRgbaWithLevel`，再通过标准库 Base64 编码器前缀 `data:image/png;base64,`，完全兼容标准无头浏览器行为。
 
+## Phase 34 HTML5 进程间通信通道与 SSE 流式事件解释器技术方案
+1. **MessageChannel 纠缠端口与延迟排队状态机 (`src/eval/message_channel.cp`)**：
+   - **设计动机**：HTML5 Web Workers、Service Workers 与 Iframes 依赖 `MessageChannel` 进行轻量异步报文交换，W3C 规范要求在调用 `start()` 或安装事件监听器前，消息需在端口内部安全缓冲；
+   - **解决方案**：
+     - 在 `MessagePort` 内部构建环形/线性定长消息队列，支持至多 64 条待投递报文零动态分配暂存；
+     - `postMessage` 直通对端端口缓冲，未 `start` 前禁止出队；当端口调用 `close()` 时就地丢弃剩余排队项并阻断双向后续流转。
+2. **Server-Sent Events 跨分块流式解释器 (`src/net/sse_parser.cp`)**：
+   - **设计动机**：AI Agent 与现代 Web 实时数据流高频依赖 `text/event-stream`，网络数据包到达往往在行边界（CR/LF）、BOM 标记或冒号分割处发生任意跨分片截断；
+   - **解决方案**：
+     - `EventStreamParser` 采用单字节与切片扫描双模式状态机，支持跨分片拼接与 UTF-8 BOM 自动剥离；
+     - 严格遵循 WHATWG 规范：多行 `data:` 字段以单个 `\n` 连接，空行触发完整事件派发并清空当前数据缓存，非法含 `\0` 的 ID 字段严格忽略以确保跨状态安全性。
+
 
 
 

@@ -744,6 +744,22 @@
   - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 34: HTML5 Inter-Process Channel & Server-Sent Events Streaming Engine (100% Closed)
+- **`src/eval/message_channel.cp`**（迁移自 `vendor/kitesurf/packages/page-script/src/message-channel.ts`）：
+  - 实装 `MessagePacket` 消息封装与 `MessagePort` 状态机（支持 `postMessage`, `start`, `close`, `popMessage`, `pendingCount`）；
+  - 实装 `MessageChannel` 双向纠缠端口对通信模型（`post1To2`, `post2To1`，支持未启动前异步排队与 FIFO 消费缓冲）；
+  - 实装端口生命周期安全防护（闭合端口消息自动丢弃与队列清空）。
+- **`src/net/sse_parser.cp`**（迁移自 `vendor/kitesurf/packages/page-script/src/event-source.ts`）：
+  - 实装 Server-Sent Events 流式事件解释器 `EventStreamParser`；
+  - 支持 UTF-8 BOM 剥离、跨 chunk CRLF/LF 行切分、多行 `data:` 换行拼接与尾随换行规范化剥离；
+  - 支持 `event:` 自定义事件类型、`id:`（含空字符 `\0` 畸形防护与状态保持）、`retry:` 纯数字重连延迟更新与空行事件触发分发。
+- **测试套件与全链路验证**：
+  - `test/eval/test_message_channel.cp`：全量测试 100% 全部通过（覆盖双向端口通信、未启动前消息排队、FIFO 顺序出队、闭合状态防护与容量边界）；
+  - `test/net/test_sse_parser.cp`：全量测试 100% 全部通过（14 组测试覆盖基础事件、UTF-8 BOM、注释过滤、自定义 event、id 状态保持、多行 data 拼接、CRLF 跨 chunk 边界、retry 字段、单字节流式切片分发）；
+  - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
