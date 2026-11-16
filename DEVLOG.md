@@ -681,6 +681,18 @@
      - 百分比编码器采用静态快速查找表与十六进制移位算法，跳过无需转义的 RFC 3986 未保留字符；
      - 多段序列化器动态组装 Boundary 标头与 `Content-Disposition` 字段，实现零动态垃圾分配的缓冲区分块写入。
 
+## Phase 33 Canvas 2D 图形引擎与离屏位图光栅化表面技术方案
+1. **状态栈与路径 Bresenham 光栅化 (`src/dom/canvas2d.cp`)**：
+   - **设计动机**：W3C Canvas 2D 规范要求支持级联状态压栈/出栈（`save`/`restore`），以及包含移动、连线、闭合和描边的矢量路径绘制；
+   - **解决方案**：
+     - 在 `CanvasRenderingContext2D` 中维护连续固定容量的状态栈与路径折线点数组，杜绝频繁动态堆分配；
+     - 采用整型增量 Bresenham 算法进行直线与闭合轮廓光栅化，并结合 Alpha 通道 Porter-Duff 混合公式写入像素。
+2. **HTMLCanvasElement 离屏上下文关联与 PNG DataURL 导出 (`src/dom/canvas_element.cp`)**：
+   - **设计动机**：Web 页面高频通过 `canvas.getContext('2d')` 惰性获取上下文，并通过 `canvas.toDataURL()` 导出 Base64 位图供视觉 Agent 消费；
+   - **解决方案**：
+     - `HTMLCanvasElement` 内部通过可空指针缓存关联的上下文实例，仅在首调 `getContext("2d")` 时按需分配像素缓冲区；
+     - 导出流程直通无拷贝 `PngCodec.encodeRgbaWithLevel`，再通过标准库 Base64 编码器前缀 `data:image/png;base64,`，完全兼容标准无头浏览器行为。
+
 
 
 

@@ -728,6 +728,22 @@
   - 双模构建验证：`bin/main`（8.5MB）与 `bin/main.so`（9.7MB）双模均构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 33: Canvas 2D Graphics Engine & HTMLCanvasElement Offscreen Raster Surface (100% Closed)
+- **`src/dom/canvas2d.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/canvas2d.ts`）：
+  - 实装 `CanvasRenderingContext2D` 2D 图形上下文核心（状态栈 `save`/`restore`、`fillStyle`/`strokeStyle`/`lineWidth`/`globalAlpha` 样式状态机）；
+  - 实装矩形绘制与擦除（`fillRect`, `strokeRect`, `clearRect`）；
+  - 实装路径构建与光栅化（`beginPath`, `moveTo`, `lineTo`, `rect`, `closePath`, `stroke` 使用 Bresenham 算法绘制）；
+  - 实装像素缓冲区直接读写与提取（`getImageData`, `putImageData`, Alpha 混合算法）；
+  - 实装位图编码器（调用 `PngCodec.encodeRgbaWithLevel` 输出二进制 PNG 字节流）。
+- **`src/dom/canvas_element.cp`**（迁移自 `vendor/kitesurf/packages/dom-shim/src/element/canvas.ts`）：
+  - 实装 `HTMLCanvasElement` 核心属性（`width`, `height`, 动态关联 `CanvasRenderingContext2D` 缓存上下文）；
+  - 实装 `getContext("2d")` 驱动与 `toDataURL` 序列化为 `data:image/png;base64,...`。
+- **测试套件与全链路验证**：
+  - `test/dom/test_canvas2d.cp`：全量测试 100% 全部通过（验证状态保存恢复、矩形填充与像素校验、路径绘制、ImageData 写入与读取、PNG 编码魔数与 DataURL Base64 格式）；
+  - `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js`：双驱动全链路测试 100% 绿色通过；
+  - 双模构建验证：`bin/main` 与 `bin/main.so` 双模均构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

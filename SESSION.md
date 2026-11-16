@@ -1667,6 +1667,33 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 23:34:00] Turn 44
+
+### **[User]**
+> 继续你的工作
+
+### **[Agent]**
+报告：自主推进并闭环完成 Phase 33（Canvas 2D 图形引擎与离屏位图光栅化表面）：
+1. **Canvas 2D 绘图引擎 (`src/dom/canvas2d.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/canvas2d.ts`（文件头保留来源溯源注释）；
+   - 实装 `CanvasRenderingContext2D` 上下文状态机（状态栈 `save`/`restore`，`fillStyle`, `strokeStyle`, `lineWidth`, `globalAlpha`）；
+   - 实装直接矩形操作（`fillRect`, `strokeRect`, `clearRect`）；
+   - 实装路径构建与 Bresenham 光栅化（`beginPath`, `moveTo`, `lineTo`, `rect`, `closePath`, `stroke`）；
+   - 实装直接像素缓冲区读写与 Alpha 混合（`getImageData`, `putImageData`）；
+   - 实装 PNG 导出通道（`encodePng` 直接下沉至 `PngCodec.encodeRgbaWithLevel`）。
+2. **HTMLCanvasElement 宿主元素与位图导出 (`src/dom/canvas_element.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/dom-shim/src/element/canvas.ts`（文件头保留来源溯源注释）；
+   - 实装画布尺寸（默认 300x150）与按需惰性上下文构造缓存；
+   - 实装 `toDataURL` 导出 RFC 2045 Base64 编码的 `data:image/png;base64,...` 图像协议字符串。
+3. **自动化测试与全链路回归**：
+   - 编写并通过 `test/dom/test_canvas2d.cp`（状态栈、矩形填充与像素校验、路径连线、ImageData 提取写入、PNG 编码魔数与 DataURL 序列化全部断言通过）；
+   - 运行并通过全量 DOM 回归测试（`test_forms_validation.cp`, `test_collections_reflect.cp`, `test_event_mutation.cp`, `test_traversal_range.cp`）；
+   - 运行并通过 `scripts/test_e2e_matrix.js` 与 `scripts/test_driver_playwright.js` 真实 Node.js 驱动测试；
+   - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
+   - 全部新增源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
