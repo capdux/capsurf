@@ -430,3 +430,27 @@
   - 双模构建验证：`cap build src/main.cp -f`（8.4MB 独立可执行二进制）与 `cap build src/main.cp -b`（9.6MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+
+## Phase 14: W3C Accessibility AXTree Engine & Public Suffix List / Schemeful Site Isolation (100% Closed)
+- **`src/cdp/accessibility.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/accessibility.ts`）：
+  - 实装 `AXProperty`、`AXNode`、`AXTree` 核心可访问性结构体（全部提升至顶层）；
+  - 实装基于 Arena DOM 树的递归可访问性树构建，树根生成标准 `RootWebArea`（`chromeRole: 144`）；
+  - 实装 HTML5 语义标签 ARIA 角色映射（`button`, `link`, `heading`, `checkbox`, `radio`, `textbox`, `text`, `table`, `row`, `cell`, `generic` 等 40+ 种语义）及 `role` 显式覆写；
+  - 实装 W3C AccName 1.2 可访问名称计算规范（`aria-labelledby` 递归子树提取、`aria-label`、语义原生规则 `alt`/`placeholder`/`<label>`、标签内容与 `textContent` 兜底）；
+  - 实装隐藏节点识别（`display: none`, `visibility: hidden`, `aria-hidden="true"`, `hidden` 属性及 `input[type="hidden"]`）并赋予精确 `ignoredReasons`，针对无盒模型节点进行剪枝保护；
+  - 实装 `buildAXTree(doc, out_buf)` 与 `AccessibilityHandler.handle`，完整打通 `Accessibility.enable`（发射 `Accessibility.loadComplete` 事件）、`Accessibility.disable`、`Accessibility.getFullAXTree`、`Accessibility.getRootAXNode`、`Accessibility.getChildAXNodes`。
+- **`src/net/public_suffix.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/public-suffix.ts`）：
+  - 实装定长二分查找表 `MULTI_SUFFIXES: [390][]const u8`，覆盖主流多段 gTLD/ccTLD 后缀（`.co.uk`, `.com.au`, `.co.jp`, `.edu.cn`, `.gov.uk`, `.github.io`, `.com.cn`, `.org.uk`, `.s3.amazonaws.com` 等）；
+  - 实装 `isIpHost`：零堆分配识别 IPv4 点分十进制与 IPv6（含 `[::1]` 方括号格式）；
+  - 实装 `isPublicSuffix`：零堆分配判定域名自身是否为不可注册的公共后缀（如 `com`, `co.uk` 返回 true，`example.com` 返回 false）；
+  - 实装 `siteKey`：零堆分配切片提取 eTLD+1 可注册顶级域（如 `sub.news.bbc.co.uk` -> `bbc.co.uk`，`api.example.com` -> `example.com`）；
+  - 实装 `schemefulSite`：零堆分配提取 `scheme://siteKey`（如 `https://sub.example.com:8080/path` -> `https://example.com`），支持 `ws:`->`http:`、`wss:`->`https:` 规范归一化；
+  - 同步优化 `src/net/cookies.cp` 接入 `schemefulSite` 栈缓冲计算，实现 SameSite 站点隔离完全零堆分配。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_accessibility.cp`：综合测试 100% 全部通过（AXTree 结构、RootWebArea、语义 role 识别、aria-label 覆写、隐藏节点 ignored、CDP enable/loadComplete/getRootAXNode/getFullAXTree 协议流程）；
+  - `test/net/test_public_suffix.cp`：综合测试 100% 全部通过（IPv4/IPv6、单/多段 PSL 识别、eTLD+1 提取、WebSocket scheme 归一化与 Schemeful Site 提取）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.4MB）与 `bin/main.so`（9.6MB）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+

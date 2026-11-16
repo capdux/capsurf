@@ -1,6 +1,6 @@
+// Migrated from vendor/kitesurf/packages/engine/src/cdp/accessibility.ts
 // src/cdp/accessibility.cp
 // CDP Accessibility Domain Handler for CapSurf
-// Migrated from vendor/kitesurf/packages/engine/src/cdp/accessibility.ts
 // Builds AXTree (Accessibility Tree) and handles CDP Accessibility protocol commands.
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
@@ -9,9 +9,11 @@ import { NodeId, NULL_NODE, NodeData, NodeType, Document } from "../dom/dom.cp";
 
 pub const MAX_AX_NODES: usize = 256;
 pub const MAX_CHILDREN_PER_AX_NODE: usize = 32;
-pub const MAX_PROPERTIES_PER_AX_NODE: usize = 8;
+pub const MAX_PROPERTIES_PER_AX_NODE: usize = 16;
 pub const TEXT_POOL_SIZE: usize = 8192;
 pub const ID_BUFFER_SIZE: usize = MAX_AX_NODES * 16;
+
+@tls let ax_event_buf: [4096]u8 = [0; 4096];
 
 pub enum AxValueKind {
     String,
@@ -67,22 +69,25 @@ pub struct AxValue {
     }
 }
 
-pub struct AxProperty {
+pub struct AXProperty {
     name: []const u8 = "",
     value: AxValue = AxValue{},
 
-    static fn create(name: []const u8, val: AxValue): AxProperty {
-        return AxProperty {
+    static fn create(name: []const u8, val: AxValue): AXProperty {
+        return AXProperty {
             name: name,
             value: val,
         };
     }
 }
+pub const AxProperty = AXProperty;
 
-pub struct AxNode {
+pub struct AXNode {
     node_id: []const u8 = "",
     ignored: bool = false,
+    ignored_reason: []const u8 = "notRendered",
     role: AxValue? = null,
+    chrome_role: i64 = 0,
     name: AxValue? = null,
     description: AxValue? = null,
     value: AxValue? = null,
@@ -91,7 +96,7 @@ pub struct AxNode {
     frame_id: []const u8 = "",
     child_ids: [MAX_CHILDREN_PER_AX_NODE][]const u8 = [""; MAX_CHILDREN_PER_AX_NODE],
     child_count: usize = 0,
-    properties: [MAX_PROPERTIES_PER_AX_NODE]AxProperty = [AxProperty{}; MAX_PROPERTIES_PER_AX_NODE],
+    properties: [MAX_PROPERTIES_PER_AX_NODE]AXProperty = [AXProperty{}; MAX_PROPERTIES_PER_AX_NODE],
     prop_count: usize = 0,
 
     fn addChildId(*_, cid: []const u8) {
@@ -101,13 +106,14 @@ pub struct AxNode {
         }
     }
 
-    fn addProperty(*_, prop: AxProperty) {
+    fn addProperty(*_, prop: AXProperty) {
         if (_.prop_count < MAX_PROPERTIES_PER_AX_NODE) {
             _.properties[_.prop_count] = prop;
             _.prop_count += 1;
         }
     }
 }
+pub const AxNode = AXNode;
 
 pub struct JsonWriter {
     buf: []u8,
@@ -194,7 +200,7 @@ pub struct JsonWriter {
         _.writeByte('}');
     }
 
-    fn writeAxProperty(*_, prop: AxProperty) {
+    fn writeAxProperty(*_, prop: AXProperty) {
         _.writeRaw("{\"name\":");
         _.writeEscapedString(prop.name);
         _.writeRaw(",\"value\":");
@@ -202,19 +208,26 @@ pub struct JsonWriter {
         _.writeByte('}');
     }
 
-    fn writeAxNode(*_, node: *const AxNode) {
+    fn writeAxNode(*_, node: *const AXNode) {
         _.writeRaw("{\"nodeId\":");
         _.writeEscapedString(node.node_id);
         _.writeRaw(",\"ignored\":");
         _.writeBool(node.ignored);
 
         if (node.ignored) {
-            _.writeRaw(",\"ignoredReasons\":[{\"name\":\"notRendered\",\"value\":{\"type\":\"boolean\",\"value\":true}}]");
+            _.writeRaw(",\"ignoredReasons\":[{\"name\":");
+            _.writeEscapedString(node.ignored_reason);
+            _.writeRaw(",\"value\":{\"type\":\"boolean\",\"value\":true}}]");
             _.writeRaw(",\"role\":{\"type\":\"internalRole\",\"value\":\"none\"}");
         } else {
             if (r := node.role) {
                 _.writeRaw(",\"role\":");
                 _.writeAxValue(r);
+            }
+            if (node.chrome_role > 0) {
+                _.writeRaw(",\"chromeRole\":{\"type\":\"internalRole\",\"value\":");
+                _.writeInt(node.chrome_role);
+                _.writeByte('}');
             }
             if (n := node.name) {
                 _.writeRaw(",\"name\":");
@@ -282,7 +295,7 @@ fn isSkipTag(tag: []const u8): bool {
         std.ascii.eqlIgnoreCase(tag, "title");
 }
 
-fn inlineStyleHidden(style: []const u8): bool {
+fn inlineStyleDisplayNone(style: []const u8): bool {
     let it = std.mem.splitScalar(u8, style, ';');
     while (decl := it.next()) {
         const colon_opt = std.mem.indexOfScalar(u8, decl, ':');
@@ -296,6 +309,19 @@ fn inlineStyleHidden(style: []const u8): bool {
                 return true;
             }
         }
+    }
+    return false;
+}
+
+fn inlineStyleVisibilityHidden(style: []const u8): bool {
+    let it = std.mem.splitScalar(u8, style, ';');
+    while (decl := it.next()) {
+        const colon_opt = std.mem.indexOfScalar(u8, decl, ':');
+        if (colon_opt == null) continue;
+        const colon = colon_opt.?;
+        if (colon == 0) continue;
+        const prop = std.mem.trim(u8, decl[0..colon], " \t\r\n");
+        const val = std.mem.trim(u8, decl[colon + 1 ..], " \t\r\n");
         if (std.ascii.eqlIgnoreCase(prop, "visibility")) {
             if (std.ascii.startsWithIgnoreCase(val, "hidden")) {
                 return true;
@@ -305,29 +331,15 @@ fn inlineStyleHidden(style: []const u8): bool {
     return false;
 }
 
-fn isIgnored(node: *const NodeData): bool {
-    if (std.ascii.eqlIgnoreCase(node.tag_name, "html")) {
-        return true;
-    }
-    if (role_attr := node.getAttribute("role")) {
-        const first_tok = getFirstToken(role_attr);
-        if (std.ascii.eqlIgnoreCase(first_tok, "presentation") ||
-            std.ascii.eqlIgnoreCase(first_tok, "none")) {
-            return true;
+fn isNoBox(node: *const NodeData): bool {
+    if (node.getAttribute("hidden") != null) return true;
+    if (std.ascii.eqlIgnoreCase(node.tag_name, "input")) {
+        if (typ := node.getAttribute("type")) {
+            if (std.ascii.eqlIgnoreCase(typ, "hidden")) return true;
         }
-    }
-    if (ah := node.getAttribute("aria-hidden")) {
-        if (std.ascii.eqlIgnoreCase(ah, "true")) {
-            return true;
-        }
-    }
-    if (node.getAttribute("hidden") != null) {
-        return true;
     }
     if (node.inline_style.len > 0) {
-        if (inlineStyleHidden(node.inline_style)) {
-            return true;
-        }
+        if (inlineStyleDisplayNone(node.inline_style)) return true;
     }
     return false;
 }
@@ -436,6 +448,12 @@ fn computeImplicitRole(tag: []const u8, node: *const NodeData): []const u8 {
     if (std.ascii.eqlIgnoreCase(tag, "svg")) return "graphics-document";
     if (std.ascii.eqlIgnoreCase(tag, "html")) return "document";
     if (std.ascii.eqlIgnoreCase(tag, "body")) return "generic";
+    if (std.ascii.eqlIgnoreCase(tag, "option")) return "option";
+    if (std.ascii.eqlIgnoreCase(tag, "datalist")) return "listbox";
+    if (std.ascii.eqlIgnoreCase(tag, "meter")) return "meter";
+    if (std.ascii.eqlIgnoreCase(tag, "progress")) return "progressbar";
+    if (std.ascii.eqlIgnoreCase(tag, "search")) return "search";
+    if (std.ascii.eqlIgnoreCase(tag, "iframe")) return "Iframe";
     return "generic";
 }
 
@@ -443,7 +461,8 @@ fn isFocusable(tag: []const u8, node: *const NodeData): bool {
     if (std.ascii.eqlIgnoreCase(tag, "button") ||
         std.ascii.eqlIgnoreCase(tag, "select") ||
         std.ascii.eqlIgnoreCase(tag, "textarea") ||
-        std.ascii.eqlIgnoreCase(tag, "summary")) {
+        std.ascii.eqlIgnoreCase(tag, "summary") ||
+        std.ascii.eqlIgnoreCase(tag, "iframe")) {
         return true;
     }
     if (std.ascii.eqlIgnoreCase(tag, "input")) {
@@ -498,8 +517,8 @@ fn collectSubtreeTextInternal(
     return offset;
 }
 
-pub struct AxTreeBuilder {
-    nodes: [MAX_AX_NODES]AxNode = [AxNode{}; MAX_AX_NODES],
+pub struct AXTree {
+    nodes: [MAX_AX_NODES]AXNode = [AXNode{}; MAX_AX_NODES],
     node_count: usize = 0,
     id_buffers: [ID_BUFFER_SIZE]u8 = [0; ID_BUFFER_SIZE],
     text_pool: [TEXT_POOL_SIZE]u8 = [0; TEXT_POOL_SIZE],
@@ -509,7 +528,7 @@ pub struct AxTreeBuilder {
         if (_.node_count >= MAX_AX_NODES) return null;
         const idx = _.node_count;
         _.node_count += 1;
-        _.nodes[idx] = AxNode{};
+        _.nodes[idx] = AXNode{};
         return idx;
     }
 
@@ -686,7 +705,7 @@ pub struct AxTreeBuilder {
             if (title_text := _.findChildTextByTag(doc, node.id, "title")) return title_text;
         }
 
-        // 4. Content naming tags
+        // 4. Content naming tags / roles
         if (std.ascii.eqlIgnoreCase(tag, "button") ||
             std.ascii.eqlIgnoreCase(tag, "a") ||
             std.ascii.eqlIgnoreCase(tag, "summary") ||
@@ -703,13 +722,34 @@ pub struct AxTreeBuilder {
             (tag.len == 2 && (tag[0] == 'h' || tag[0] == 'H') && tag[1] >= '1' && tag[1] <= '6') ||
             std.mem.eql(u8, role, "button") ||
             std.mem.eql(u8, role, "link") ||
-            std.mem.eql(u8, role, "heading")) {
+            std.mem.eql(u8, role, "heading") ||
+            std.mem.eql(u8, role, "cell") ||
+            std.mem.eql(u8, role, "checkbox") ||
+            std.mem.eql(u8, role, "columnheader") ||
+            std.mem.eql(u8, role, "gridcell") ||
+            std.mem.eql(u8, role, "menuitem") ||
+            std.mem.eql(u8, role, "option") ||
+            std.mem.eql(u8, role, "radio") ||
+            std.mem.eql(u8, role, "row") ||
+            std.mem.eql(u8, role, "rowheader") ||
+            std.mem.eql(u8, role, "switch") ||
+            std.mem.eql(u8, role, "tab") ||
+            std.mem.eql(u8, role, "tooltip") ||
+            std.mem.eql(u8, role, "treeitem")) {
             const txt = _.collectSubtreeText(doc, node.id);
             if (txt.len > 0) return txt;
         }
 
         // 5. Title fallback
-        if (title := node.getAttribute("title")) return title;
+        if (title := node.getAttribute("title")) {
+            const trimmed = std.mem.trim(u8, title, " \t\r\n");
+            if (trimmed.len > 0) return trimmed;
+        }
+
+        // 6. Subtree text fallback
+        const fallback_txt = _.collectSubtreeText(doc, node.id);
+        if (fallback_txt.len > 0) return fallback_txt;
+
         return "";
     }
 
@@ -760,44 +800,65 @@ pub struct AxTreeBuilder {
         if (node.tag_name.len == 2 && (node.tag_name[0] == 'h' || node.tag_name[0] == 'H')) {
             const c = node.tag_name[1];
             if (c >= '1' && c <= '6') {
-                node_ref.addProperty(AxProperty.create("level", AxValue.fromInt("integer", @as(i64, c - '0'))));
+                node_ref.addProperty(AXProperty.create("level", AxValue.fromInt("integer", @as(i64, c - '0'))));
             }
         }
         if (al := node.getAttribute("aria-level")) {
             const level_num = std.fmt.parseInt(i64, std.mem.trim(u8, al, " \t\r\n"), 10) catch 0;
             if (level_num > 0) {
-                node_ref.addProperty(AxProperty.create("level", AxValue.fromInt("integer", level_num)));
+                node_ref.addProperty(AXProperty.create("level", AxValue.fromInt("integer", level_num)));
             }
         }
 
         if (std.mem.eql(u8, role, "link")) {
             if (href := node.getAttribute("href")) {
-                node_ref.addProperty(AxProperty.create("url", AxValue.fromString("string", href)));
+                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", href)));
             }
         } else if (std.ascii.eqlIgnoreCase(node.tag_name, "img")) {
             if (src := node.getAttribute("src")) {
-                node_ref.addProperty(AxProperty.create("url", AxValue.fromString("string", src)));
+                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", src)));
             }
         }
 
         if (isFocusable(node.tag_name, node)) {
-            node_ref.addProperty(AxProperty.create("focusable", AxValue.fromBool("booleanOrUndefined", true)));
+            node_ref.addProperty(AXProperty.create("focusable", AxValue.fromBool("booleanOrUndefined", true)));
         }
 
         if (node.getAttribute("disabled") != null) {
-            node_ref.addProperty(AxProperty.create("disabled", AxValue.fromBool("boolean", true)));
+            node_ref.addProperty(AXProperty.create("disabled", AxValue.fromBool("boolean", true)));
         }
 
         if (node.getAttribute("checked") != null) {
-            node_ref.addProperty(AxProperty.create("checked", AxValue.fromBool("boolean", true)));
+            node_ref.addProperty(AXProperty.create("checked", AxValue.fromBool("boolean", true)));
         }
 
         if (node.getAttribute("required") != null) {
-            node_ref.addProperty(AxProperty.create("required", AxValue.fromBool("boolean", true)));
+            node_ref.addProperty(AXProperty.create("required", AxValue.fromBool("boolean", true)));
         }
 
         if (node.getAttribute("readonly") != null) {
-            node_ref.addProperty(AxProperty.create("readonly", AxValue.fromBool("boolean", true)));
+            node_ref.addProperty(AXProperty.create("readonly", AxValue.fromBool("boolean", true)));
+        }
+
+        if (node.getAttribute("selected") != null) {
+            node_ref.addProperty(AXProperty.create("selected", AxValue.fromBool("boolean", true)));
+        }
+
+        if (ae := node.getAttribute("aria-expanded")) {
+            if (std.ascii.eqlIgnoreCase(ae, "true")) {
+                node_ref.addProperty(AXProperty.create("expanded", AxValue.fromBool("boolean", true)));
+            } else if (std.ascii.eqlIgnoreCase(ae, "false")) {
+                node_ref.addProperty(AXProperty.create("expanded", AxValue.fromBool("boolean", false)));
+            }
+        } else if (std.ascii.eqlIgnoreCase(node.tag_name, "details") && node.getAttribute("open") != null) {
+            node_ref.addProperty(AXProperty.create("expanded", AxValue.fromBool("boolean", true)));
+        }
+
+        if (hp := node.getAttribute("aria-haspopup")) {
+            if (!std.ascii.eqlIgnoreCase(hp, "false")) {
+                const pop_val = if (std.ascii.eqlIgnoreCase(hp, "true")) "menu" else hp;
+                node_ref.addProperty(AXProperty.create("hasPopup", AxValue.fromString("token", pop_val)));
+            }
         }
     }
 
@@ -807,6 +868,8 @@ pub struct AxTreeBuilder {
         dom_id: NodeId,
         parent_ax_idx: usize,
         frame_id: []const u8,
+        inherited_hidden: bool,
+        inherited_aria_hidden: bool,
     ): usize? {
         if (dom_id == NULL_NODE) return null;
         const opt = doc.getNode(dom_id);
@@ -824,9 +887,17 @@ pub struct AxTreeBuilder {
             _.nodes[ax_idx].node_id = id_str;
             _.nodes[ax_idx].backend_dom_node_id = dom_id;
             _.nodes[ax_idx].frame_id = frame_id;
-            _.nodes[ax_idx].role = AxValue.fromRole("StaticText", true);
-            _.nodes[ax_idx].name = AxValue.fromComputedString(txt);
             _.nodes[ax_idx].parent_id = _.nodes[parent_ax_idx].node_id;
+
+            if (inherited_hidden) {
+                _.nodes[ax_idx].ignored = true;
+                _.nodes[ax_idx].ignored_reason = if (inherited_aria_hidden) "ariaHiddenSubtree" else "notRendered";
+                _.nodes[ax_idx].role = AxValue.fromRole("none", true);
+            } else {
+                _.nodes[ax_idx].ignored = false;
+                _.nodes[ax_idx].role = AxValue.fromRole("StaticText", true);
+                _.nodes[ax_idx].name = AxValue.fromComputedString(txt);
+            }
 
             _.nodes[parent_ax_idx].addChildId(id_str);
             return ax_idx;
@@ -847,14 +918,48 @@ pub struct AxTreeBuilder {
 
             _.nodes[parent_ax_idx].addChildId(id_str);
 
-            const ignored = isIgnored(node);
+            let self_aria_hidden = false;
+            if (ah := node.getAttribute("aria-hidden")) {
+                self_aria_hidden = std.ascii.eqlIgnoreCase(ah, "true");
+            }
+            const aria_hidden = inherited_aria_hidden || self_aria_hidden;
+            const self_no_box = isNoBox(node);
+            let self_vis_hidden = false;
+            if (node.inline_style.len > 0) {
+                self_vis_hidden = inlineStyleVisibilityHidden(node.inline_style);
+            }
+            const self_hidden = self_no_box || self_vis_hidden || aria_hidden;
+            const node_hidden = inherited_hidden || self_hidden;
+
+            const explicit_role = getExplicitRole(node);
+            const role_str = if (explicit_role != null) explicit_role.? else computeImplicitRole(node.tag_name, node);
+
+            let ignored = false;
+            let reason: []const u8 = "notRendered";
+
+            if (node_hidden) {
+                ignored = true;
+                if (self_aria_hidden) {
+                    reason = "ariaHiddenElement";
+                } else if (aria_hidden) {
+                    reason = "ariaHiddenSubtree";
+                } else {
+                    reason = "notRendered";
+                }
+            } else if (std.ascii.eqlIgnoreCase(role_str, "presentation") || std.ascii.eqlIgnoreCase(role_str, "none")) {
+                ignored = true;
+                reason = "presentationalRole";
+            } else if (std.ascii.eqlIgnoreCase(node.tag_name, "html")) {
+                ignored = true;
+                reason = "uninteresting";
+            }
+
             _.nodes[ax_idx].ignored = ignored;
+            _.nodes[ax_idx].ignored_reason = reason;
 
             if (ignored) {
                 _.nodes[ax_idx].role = AxValue.fromRole("none", true);
             } else {
-                const explicit_role = getExplicitRole(node);
-                const role_str = if (explicit_role != null) explicit_role.? else computeImplicitRole(node.tag_name, node);
                 _.nodes[ax_idx].role = AxValue.fromRole(role_str, explicit_role == null);
 
                 const name_str = _.computeName(doc, node, role_str);
@@ -874,12 +979,17 @@ pub struct AxTreeBuilder {
                 _.populateProperties(ax_idx, node, role_str);
             }
 
+            // If boxless (display:none or hidden attr), children are not rendered and have no boxes
+            if (self_no_box) {
+                return ax_idx;
+            }
+
             // Recurse children
             let child_id = node.first_child;
             while (child_id != NULL_NODE) {
                 if (c_node := doc.getNode(child_id)) {
                     const next_sib = c_node.next_sibling;
-                    * = _.buildNode(doc, child_id, ax_idx, frame_id);
+                    * = _.buildNode(doc, child_id, ax_idx, frame_id, node_hidden, aria_hidden);
                     child_id = next_sib;
                 } else {
                     break;
@@ -892,7 +1002,13 @@ pub struct AxTreeBuilder {
         return null;
     }
 
-    fn build(*_, session: *CdpPageSession) {
+    fn buildFromDoc(
+        *_,
+        doc: *const Document,
+        root_title: []const u8,
+        root_url: []const u8,
+        frame_id: []const u8,
+    ) {
         _.node_count = 0;
         _.text_pool_len = 0;
 
@@ -904,18 +1020,71 @@ pub struct AxTreeBuilder {
         _.nodes[root_idx].node_id = "root";
         _.nodes[root_idx].ignored = false;
         _.nodes[root_idx].role = AxValue.fromRole("RootWebArea", true);
-        _.nodes[root_idx].name = AxValue.fromComputedString(session.title);
-        _.nodes[root_idx].value = AxValue.fromString("string", session.url);
-        _.nodes[root_idx].backend_dom_node_id = session.doc.root_element;
-        _.nodes[root_idx].frame_id = session.frame_id;
+        _.nodes[root_idx].chrome_role = 144;
+        _.nodes[root_idx].name = AxValue.fromComputedString(root_title);
+        _.nodes[root_idx].value = AxValue.fromString("string", root_url);
+        _.nodes[root_idx].backend_dom_node_id = doc.root_element;
+        _.nodes[root_idx].frame_id = frame_id;
 
-        _.nodes[root_idx].addProperty(AxProperty.create("url", AxValue.fromString("string", session.url)));
-        _.nodes[root_idx].addProperty(AxProperty.create("focusable", AxValue.fromBool("booleanOrUndefined", true)));
+        _.nodes[root_idx].addProperty(AXProperty.create("url", AxValue.fromString("string", root_url)));
+        _.nodes[root_idx].addProperty(AXProperty.create("focusable", AxValue.fromBool("booleanOrUndefined", true)));
 
-        if (session.doc.root_element != NULL_NODE) {
-            * = _.buildNode(&session.doc, session.doc.root_element, root_idx, session.frame_id);
+        if (doc.root_element != NULL_NODE) {
+            * = _.buildNode(doc, doc.root_element, root_idx, frame_id, false, false);
         }
     }
+
+    fn buildFromSession(*_, session: *CdpPageSession) {
+        _.buildFromDoc(&session.doc, session.title, session.url, session.frame_id);
+    }
+}
+pub const AxTree = AXTree;
+pub const AxTreeBuilder = AXTree;
+
+fn findDocumentTitle(doc: *const Document): []const u8 {
+    let i: usize = 1;
+    while (i < doc.nodeCount()) : (i += 1) {
+        if (n := doc.getNode(@intCast(i))) {
+            if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "title")) {
+                let curr = n.first_child;
+                while (curr != NULL_NODE) {
+                    if (c := doc.getNode(curr)) {
+                        if (c.node_type == NodeType.Text) {
+                            const trimmed = std.mem.trim(u8, c.text_content, " \t\r\n");
+                            if (trimmed.len > 0) return trimmed;
+                        }
+                        curr = c.next_sibling;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return "";
+}
+
+pub fn buildAXTree(doc: *Document, out_buf: []u8): []const u8 {
+    let tree = std.heap.c_allocator.create(AXTree) catch return "{\"nodes\":[]}";
+    defer std.heap.c_allocator.destroy(tree);
+
+    let doc_title = findDocumentTitle(doc);
+    if (doc_title.len == 0) doc_title = "Document";
+
+    tree.buildFromDoc(doc, doc_title, "", "capsurf-frame-001");
+
+    let w = JsonWriter.init(out_buf);
+    w.writeRaw("{\"nodes\":[");
+    let i: usize = 0;
+    while (i < tree.node_count) : (i += 1) {
+        if (i > 0) w.writeByte(',');
+        w.writeAxNode(&tree.nodes[i]);
+    }
+    w.writeRaw("]}");
+    if (w.overflow) {
+        return "{\"nodes\":[]}";
+    }
+    return w.getWritten();
 }
 
 pub struct AccessibilityHandler {
@@ -923,7 +1092,7 @@ pub struct AccessibilityHandler {
         session: *CdpPageSession,
         req: CdpRequest,
         out_buf: []u8,
-        out_events: *[1]CdpEvent,
+        out_events: *[4]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
         event_count.* = 0;
@@ -932,17 +1101,16 @@ pub struct AccessibilityHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
-        let builder = std.heap.c_allocator.create(AxTreeBuilder) catch {
+        let builder = std.heap.c_allocator.create(AXTree) catch {
             return CdpResponse.err(req.id, -32000, "Out of memory");
         };
         defer std.heap.c_allocator.destroy(builder);
 
-        builder.build(session);
+        builder.buildFromSession(session);
 
         if (std.mem.eql(u8, req.method, "Accessibility.enable")) {
             if (builder.node_count > 0) {
-                let evt_buf: [2048]u8 = [0; 2048];
-                let ew = JsonWriter.init(&evt_buf);
+                let ew = JsonWriter.init(&ax_event_buf);
                 ew.writeRaw("{\"root\":");
                 ew.writeAxNode(&builder.nodes[0]);
                 ew.writeByte('}');

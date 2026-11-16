@@ -322,10 +322,10 @@ pub struct CookieJar {
         // Cross-site top-level write check
         if (ctx != null && !ctx.?.top_level && parsed.same_site != SameSite.None) {
             if (ctx.?.initiator_origin.len > 0) {
-                const s1 = schemefulSite(ctx.?.initiator_origin, _.allocator);
-                defer if (s1 != null) _.allocator.free(s1.?);
-                const s2 = schemefulSite(url_str, _.allocator);
-                defer if (s2 != null) _.allocator.free(s2.?);
+                let s1_buf: [256]u8 = [0; 256];
+                let s2_buf: [256]u8 = [0; 256];
+                const s1 = schemefulSite(ctx.?.initiator_origin, s1_buf[0..256]);
+                const s2 = schemefulSite(url_str, s2_buf[0..256]);
                 if (s1 == null || s2 == null || !std.mem.eql(u8, s1.?, s2.?)) return null;
             }
         }

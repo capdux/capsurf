@@ -83,13 +83,14 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Accessibility.")) {
-            let ax_evts: [1]CdpEvent = [CdpEvent{}; 1];
+            let ax_evts: [4]CdpEvent = [CdpEvent{}; 4];
             let ax_cnt: usize = 0;
             const resp = AccessibilityHandler.handle(session, req, out_buf, &ax_evts, &ax_cnt);
-            if (ax_cnt > 0 && out_events.len > 0) {
-                out_events[0] = ax_evts[0];
-                event_count.* = 1;
+            let i: usize = 0;
+            while (i < ax_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = ax_evts[i];
             }
+            event_count.* = @min(ax_cnt, out_events.len);
             return resp;
         }
 

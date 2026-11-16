@@ -1166,4 +1166,44 @@
    - 独立可执行二进制 `bin/main` 与 BEAM 容器动态库 `bin/main.so` 双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+3. **上游 `cp_agy` 专属结单通知与编译吞吐实测**：
+   - 结单时间：`2026-11-16 17:58:59`
+   - 工单编号：`task-capsurf-20261116-codegen-quadratic-line-count`
+   - 修复方案：`cp_agy` 在 `cpc/src/codegen/mod.rs` 中引入 `OutputBuffer` 结构体，内部携带 `newline_count: usize` 并在追加字符/切片时增量统计换行符，将 `current_generated_line()` 查询彻底化为 $O(1)$ 常数时间操作。
+   - 性能提速实测验证：
+     - 15,000 语句极速复现用例编译时间由 **41.5 秒骤降至 0.43 秒**（**95 倍加速**）；
+     - CapSurf 真实完整模块 `test_screencast_resources.cp` 全编译转译时间由 **89.1 秒骤降至 1.25 秒**（**71 倍加速**）；
+     - 已第一时间重启常驻监听守护进程（`scripts/watch_task.py --status resolved --agent capsurf_agy`），保持双向通信通畅。
+
+---
+
+## [2026-11-16 18:10:00] Turn 25
+
+### **[Agent]**
+全面推进并闭环 Phase 14（W3C Accessibility AXTree 语义树引擎与 Public Suffix 站点隔离安全体系）：
+1. **W3C Accessibility 语义树引擎与 CDP 协议分发 (`src/cdp/accessibility.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/accessibility.ts`（文件头保留来源溯源注释）；
+   - 实装 `AXProperty`、`AXNode`、`AXTree` 顶层数据结构（包含角色、可访问名称、描述、属性、父子关系及 BackendDOMNodeId）；
+   - 实装 Arena DOM 递归构建 AXTree，树根生成标准 `RootWebArea`（`chromeRole: 144`）；
+   - 实装 HTML5 语义标签与 ARIA role 自动映射（支持 `button`, `link`, `heading`, `checkbox`, `radio`, `textbox`, `text` 等 40+ 种语义）及 `role="..."` 显式覆写；
+   - 实装 W3C AccName 1.2 规范计算（`aria-labelledby` 递归子树文本拼装、`aria-label`、语义原生属性 `alt`/`placeholder`/`<label>` 关联、标签子树文本内容与 `title` 兜底）；
+   - 实装隐藏节点精准标注（`display: none`, `visibility: hidden`, `aria-hidden="true"`, `hidden` 属性及 `<input type="hidden">`）与标准 `ignoredReasons`，无盒模型节点无冗余 AX 子树剪枝；
+   - 实装 `buildAXTree(doc, out_buf)` 与 `AccessibilityHandler.handle`，完整支持 `Accessibility.enable`（发射 `Accessibility.loadComplete` 事件）、`Accessibility.disable`、`Accessibility.getFullAXTree`、`Accessibility.getRootAXNode`、`Accessibility.getChildAXNodes`。
+2. **零堆分配 Public Suffix List 与 eTLD+1 提取 (`src/net/public_suffix.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/public-suffix.ts`（文件头保留来源溯源注释）；
+   - 实装排序定长查找表 `MULTI_SUFFIXES: [390][]const u8`，覆盖主流 gTLD/ccTLD 多段后缀（`.co.uk`, `.com.au`, `.co.jp`, `.edu.cn`, `.gov.uk`, `.github.io`, `.com.cn`, `.org.uk`, `.s3.amazonaws.com` 等）；
+   - 实装 `isIpHost`：零分配识别 IPv4 点分十进制与 IPv6（含 `[::1]` 方括号格式）；
+   - 实装 `isPublicSuffix`：零分配判定域名自身是否为不可注册的公共后缀（如 `com`, `co.uk` 返回 true，`example.com` 返回 false）；
+   - 实装 `siteKey`：零分配切片提取 eTLD+1 可注册顶级域（如 `sub.news.bbc.co.uk` -> `bbc.co.uk`，`api.example.com` -> `example.com`）；
+   - 实装 `schemefulSite`：零分配提取 `scheme://siteKey`（如 `https://sub.example.com:8080/path` -> `https://example.com`），支持 `ws:`->`http:`、`wss:`->`https:` 规范归一化；
+   - 优化 `src/net/cookies.cp` 接入 `schemefulSite` 栈缓冲计算，实现 SameSite 站点隔离完全零堆分配。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/cdp/test_accessibility.cp`（包含 AXTree 结构、RootWebArea、语义 role 识别、aria-label 覆写、隐藏节点 ignored、CDP enable/loadComplete/getRootAXNode/getFullAXTree 协议流程）；
+   - 编写并通过 `test/net/test_public_suffix.cp`（包含 IPv4/IPv6、单/多段 PSL 识别、eTLD+1 提取、WebSocket scheme 归一化与 Schemeful Site 提取）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.4MB）与 BEAM 容器动态库 `bin/main.so`（9.6MB）双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
+
 

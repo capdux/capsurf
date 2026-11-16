@@ -387,3 +387,18 @@
    - **踩坑定位**：当函数形参写为指针 `tok: *const Token` 时，调用方调用 `tb.processToken(&token_val)` 在 `cpc` 编译器生成 Zig 代码时可能会因为类类型推导判定导致取地址符 `&` 被剥离，从而产生 `expected '*const Token', found 'Token'` 编译报错；
    - **最佳实践**：完全遵循 CP 官方语言规范第 2 节铁律——只读实例方法与函数形参一律按值声明 `tok: Token`（体内统一只读解包 `switch (tok)`），不仅消除了显式取地址 `&` 的类型剥离风险，还能充分享受 Zig 内部根据体系结构自动寄存器/常量引用优化的最大性能。
 
+
+## Phase 14 W3C 可访问性 AXTree 引擎与 Public Suffix 站点隔离安全技术方案
+1. **W3C Accessibility 语义树与 AI Agent 视觉推理优化 (`src/cdp/accessibility.cp`)**：
+   - **设计动机**：现代 AI Agent（如 Browser-Use、Claude Computer Use、Playwright AI 等）并不依赖复杂的庞大 HTML DOM 树，而是首选读取语义紧凑的 `Accessibility.getFullAXTree`。AXTree 清洗了冗余的样式容器节点，仅输出具备实际语义与交互价值的节点；
+   - **解决方案**：
+     - 构建纯 CP 递归遍历引擎，对 40+ 种 HTML 标签提供标准 ARIA Role 自动映射，并支持 `role="..."` 显式覆写；
+     - 严格遵循 W3C AccName 1.2 规范计算 Accessible Name：优先读取 `aria-labelledby`（递归拼装引用的多节点文本）、`aria-label`、语义原生规则（如 `alt`、`<label>` 关联、`placeholder`），再兜底子树文本内容；
+     - 隐藏节点剪枝：对 `display: none`、`visibility: hidden`、`aria-hidden="true"` 以及 `<input type="hidden">` 设置 `ignored: true` 并赋予规范的标准原因（`notRendered`, `ariaHiddenElement`, `uninteresting`），无盒模型（boxless）节点阻断子树冗余生成，极大减轻 Agent 上下文 Token 负担。
+2. **零堆分配 Public Suffix List 与 eTLD+1 提取 (`src/net/public_suffix.cp`)**：
+   - **设计动机**：Cookie 域安全性（RFC 6265bis 杜绝 super-cookie 如在 `.com` 或 `.co.uk` 种 Cookie）与 W3C SameSite 站点隔离判定需要准确计算可注册顶级域 eTLD+1。在百万 Agent 高并发下，每次请求如果动态构建规则 Set 会带来巨大的 GC 压力；
+   - **解决方案**：
+     - 采用排序定长数组 `MULTI_SUFFIXES: [390][]const u8`，通过二分查找配合无分配大小写不敏感比对，单次匹配耗时仅需几个纳秒；
+     - 实现 `siteKey` 零分配切片返回原字符串中的 eTLD+1 子串，同时为 `schemefulSite` 提供原位栈缓冲区写入，完全实现零内存分配的 SameSite 站点隔离。
+
+
