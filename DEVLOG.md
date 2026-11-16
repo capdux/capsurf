@@ -496,6 +496,22 @@
      - `engineIsolateId` 基于 Linux CSPRNG 生成唯一 UUID，提供 `isForeignIsolate` 防止网络回环误判；
      - `ArrivalTracker` 采用定长 512 槽 LRU 映射，精确记录请求到达与事件派发的时间差，为调试分析与延迟洞察提供基准数据。
 
+## Phase 20 WASM 预取扫描、引擎错误分类、脚本预加载与宿主时钟技术方案
+1. **轻量 WASM 二进制与脚本多模态预取引擎 (`src/eval/prefetch_wasm.cp` & `src/eval/prefetch_scripts.cp`)**：
+   - **设计动机**：现代重前端与 AI Agent 交互页面往往加载大型 WebAssembly 模块或数十个分块 JavaScript 脚本。如果在主线程执行到 `WebAssembly.instantiateStreaming` 或 `<script>` 时才串行发起网络请求，网络往返延迟（RTT）将严重制约 Agent 执行效率；
+   - **解决方案**：
+     - `prefetch_wasm` 提供无正则极速文本扫描器，分别在 HTML 标签属性与内联/外部 JS 代码字面量中快速捕获以 `.wasm` 结尾的静态资源路径，并支持 32 个槽位去重；
+     - `prefetch_scripts` 维护基于同源性优先级的脚本预取队列，结合 CSP 准入网关在 HTML 初始流解析阶段即向网络层下发并行 Fetch 请求，将 WASM 与脚本载入延迟隐藏在解析周期内。
+2. **多源引擎错误统一分类与标准化 JSON 序列化 (`src/eval/engine_errors.cp` & `src/eval/denied_outbound.cp`)**：
+   - **设计动机**：Agent 在执行自动化指令或脚本求值时，可能遭遇脚本语法错误、沙箱超时、内存超限或策略阻断。必须向 CDP 协议层和日志系统输出结构清晰、包含精准错误类别（Error Kind）的规范响应；
+   - **解决方案**：
+     - `engine_errors` 建立统一的错误类别映射表（OOM, Timeout, EvalError, NetworkBlocked 等），格式化输出符合 Chrome DevTools 规范的 JSON 错误负载；
+     - `denied_outbound` 针对被 CSP 或安全过滤器拦截的外链出站请求维护滚动环形审计日志，便于安全排障与合规审计，且完全零堆分配。
+3. **高精度宿主单调时钟与跨模块时间戳基准 (`src/eval/host_clock.cp`)**：
+   - **设计动机**：网络请求跟踪、CDP 性能分析（Performance Metrics）与超时控制严重依赖精确时间戳，普通系统时钟（Wall Clock）在 NTP 同步或时钟跳变时可能发生回退，导致计算出的时间差为负数；
+   - **解决方案**：
+     - 基于 Linux `clock_gettime(CLOCK_MONOTONIC)` 提供纳秒级单调不回退时钟，同时提供毫秒与微秒级便捷接口，为全引擎提供统一的时间基准。
+
 
 
 

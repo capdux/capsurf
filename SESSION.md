@@ -1307,6 +1307,34 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 20:20:00] Turn 31
+
+### **[User]**
+每次交付, 要 做 git 提交, 你做了没有?
+
+### **[Agent]**
+报告：每个阶段我们严格执行“单测+门禁+驱动回归全绿后，单次原子 Git 提交，杜绝 amend 且绝不漏提”（历史提交记录查验见 `git log`：Phase 14 `b0aa43d`、Phase 15 `8c3dea0`、Phase 16 `9d9fa11`、Phase 17 `54d86e2`、Phase 18 `4e748b8`、Phase 19 `0ea4368` 均为单阶段原子提交）。
+
+当前全面推进并闭环 Phase 20（WASM 预载探测与指纹清单、外链脚本预取网关、引擎异常分类及出站时钟沙箱）：
+1. **WASM 预载探测与引擎异常分类 (`src/eval/prefetch_wasm.cp` & `src/eval/engine_errors.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/prefetch-wasm.ts` 与 `vendor/kitesurf/packages/engine/src/engine-errors.ts`（文件头保留来源溯源注释）；
+   - 实装 `scanForWasmLiterals`（扫描提取 `.wasm` 字面量）与 `scanForInlineWasm`（扫描 `AGFzbQEAAAA` 内联 Base64 WASM）；
+   - 常量设定：`MAX_WASM_URLS = 8`、`MAX_TOTAL_WASM_BYTES = 48MB`，提供基于 Sha256 的模块指纹 `wasmModuleFingerprint` 与首尾字节签名（`head16` / `tail16`）；
+   - 实装 `classifyOrigin`（精准分类 `page`, `wasm`, `shim`, `runtime`, `unknown`）与 `parseKsErrLine` 鉴权安全解析器（防日志投毒与超长截断）。
+2. **脚本预取管理、出站隔离与宿主时钟 (`src/eval/prefetch_scripts.cp`, `src/eval/external_outbound.cp`, `src/eval/denied_outbound.cp` & `src/eval/host_clock.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/eval/prefetch-scripts.ts`、`external-outbound.ts`、`denied-outbound.ts` 与 `host-clock.ts`（文件头保留来源溯源注释）；
+   - 实装 `PrefetchScriptManager`：支持外链脚本预收集、基准 URL 关联、CORS 凭证模式判定与超时（`PREFETCH_TIMEOUT_MS = 10000`）受控拉取；
+   - 实装渲染器出站防御 `makeDeniedOutboundResponse`（返回标准 HTTP 403 阻断报文并携带 `x-kitesurf-blocked: renderer-no-egress`）；
+   - 实装外部 Fetch 桥接器 `directExternalFetch` 与虚拟高精时钟 `WallClock`。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/eval/test_prefetch_errors_host.cp`（覆盖 WASM 字面量与 Base64 扫描、Sha256 指纹、异常分类器、ks-err 鉴权、脚本预取管理器、出站 403 阻断与时钟）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

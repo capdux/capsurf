@@ -552,6 +552,25 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 20: WASM Prefetch Scanner, Engine Error Classifier, Script Prefetch Manager, Denied Outbound & Host Clock (100% Closed)
+- **`src/eval/prefetch_wasm.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/prefetch-wasm.ts`）：
+  - 实装 WebAssembly 预取扫描器：`findWasmUrlsInHtml` 与 `findWasmUrlsInJs`，解析 `.wasm` 二进制路径，支持 32 个槽位去重提取与单行长度截断，加速 Agent 场景下的 WASM 模块提前并行载入。
+- **`src/eval/engine_errors.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/engine-errors.ts`）：
+  - 实装引擎错误分类与格式化器：`formatEngineError` 与 `classifyOrigin`，精准识别 OOM、CPU 超时、网络拒绝、未定义异常等 9 类引擎错误并构造规范 JSON-RPC 异常载荷。
+- **`src/eval/prefetch_scripts.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/prefetch-scripts.ts`）：
+  - 实装脚本预取队列管理器：`ScriptPrefetchManager`，支持同源与跨域脚本预判、32 个候选槽位优先级排序与去重过滤。
+- **`src/eval/external_outbound.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/external-outbound.ts`）：
+  - 实装出站外链探测器：`detectExternalOutbound`，快速区分内部 API 路由与外部第三方资源。
+- **`src/eval/denied_outbound.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/denied-outbound.ts`）：
+  - 实装被拒绝出站请求审计记录器：`DeniedOutboundLog`，定长滚动记录被安全策略或 CSP 拦截的外呼请求，包含时间戳、阻断原因与请求元数据。
+- **`src/eval/host_clock.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/eval/host-clock.ts`）：
+  - 实装高精度宿主时间戳提供者：`HostClock`（支持 `nowMicros`, `nowMillis`, `monotonicNanos`，单调不回退时钟与时钟漂移防护）。
+- **测试套件与全链路验证**：
+  - `test/eval/test_prefetch_errors_host.cp`：全量测试 100% 全部通过（8/8 组用例：WASM HTML/JS 提取、引擎错误分类与 JSON 生成、脚本预取管理器去重与配额、出站探测、拒绝出站日志审计与宿主单调时钟）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
