@@ -1234,6 +1234,32 @@
    - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
    - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+---
+
+## [2026-11-16 19:30:00] Turn 28
+
+### **[Agent]**
+全面推进并闭环 Phase 17（导航响应分类器、非 HTML 视图合成器、连接样式表缓存与速率限制系统）：
+1. **导航响应类型分类与非 HTML 视图合成器 (`src/cdp/document_kind.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/document-kind.ts`（文件头保留来源溯源注释）；
+   - 定义 `DocumentKind` 枚举：`html`, `json`, `svg`, `image`, `text`, `blocked`；
+   - 实装 `mimeEssence` 与 `isAttachment`（精准识别 Content-Disposition 附件下载阻断规则）；
+   - 实装 `imageDocumentHtml`：协同 `src/render/image_dims.cp` 的 `sniffImageDims` 提取尺寸，原位栈缓冲生成图片居中暗色包装页；
+   - 实装 `svgDocumentHtml`：自动提取 SVG 根标签、将 `<meta>` 标签提升至 `<head>`、缺少尺寸时注入基于视口的 `viewBox`，并生成基于 vw/vh 的自适应布局；
+   - 实装 `jsonViewerHtml`（支持结构化高亮树与原始预格式化模式切换，超 1MB 自动回退 raw 视图）与 `textDocumentHtml`。
+2. **连接级样式表 LRU 缓存与令牌桶速率限制 (`src/cdp/style_cache.cp` & `src/net/rate_limit.cp`)**：
+   - 完整迁移自 `vendor/kitesurf/packages/engine/src/cdp/style-cache.ts` 与 `vendor/kitesurf/packages/engine/src/rate-limit.ts`（文件头保留来源溯源注释）；
+   - `StyleCache`：接入 `MAX_STYLESHEET_BYTES`（8MB），零堆分配管理连接级样式表，支持命中时更新 LRU 访问次序、替换更新防双重计数、超出字节配额时按最久未访问逐一淘汰；
+   - `RateLimiter`：实现基于令牌桶算法的多租户 IP/连接频次控制器，支持最大突发容量与平滑补充速率，提供 `isWebSocketUpgrade` 入口点检查与符合 RFC 规范的 429 / Retry-After 报文构建器。
+3. **自动化测试与驱动回归**：
+   - 编写并通过 `test/cdp/test_document_kind.cp`（覆盖 7 组测试用例：MIME 全集分类、附件与内嵌判断、HTML 转义、图片标题与包装器、SVG 注入与布局样式、JSON 视图树渲染与回退、文本视图）；
+   - 编写并通过 `test/cdp/test_style_cache.cp`（覆盖初始状态、LRU 淘汰顺序刷新、替换更新防双重计数、超限单表过滤跳过、清空等）；
+   - 编写并通过 `test/net/test_rate_limit.cp`（覆盖入口点判定、HTTP 429 报文构造、令牌桶突发消耗、超限拦截及随时间流逝自动补充恢复）；
+   - 运行并通过 `scripts/test_driver_playwright.js` 真实 Node.js 驱动 11 步端到端自动化测试；
+   - 独立可执行二进制 `bin/main`（8.5MB）与 BEAM 容器动态库 `bin/main.so`（9.7MB）双模构建验证 100% 成功；
+   - 全部新增与修改源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

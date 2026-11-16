@@ -496,6 +496,26 @@
   - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
   - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 17: Document Kind Classification, Non-HTML Viewers & Style Cache (100% Closed)
+- **`src/cdp/document_kind.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/document-kind.ts`）：
+  - 实装导航响应类型判定（`html`, `json`, `svg`, `image`, `text`, `blocked`），支持 MIME essence 提取与 Content-Disposition 附件判定；
+  - 实装非 HTML 响应自动视图页面合成器：`imageDocumentHtml`（提取真实图片尺寸并生成暗色居中视图）、`svgDocumentHtml`（提取根标签、`<meta>` 上提、`viewBox` 自适应与 vw/vh 布局）、`jsonViewerHtml`（结构化语法树与折叠展开、1MB 超限 raw 兜底）与 `textDocumentHtml`。
+- **`src/cdp/style_cache.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/cdp/style-cache.ts`）：
+  - 接入 `MAX_STYLESHEET_BYTES`（8MB），零堆分配管理连接级样式表缓存；
+  - 实装 `StyleCache`：LRU 顺序刷新、单表超限跳过、替换更新防双重计数、超额逐一淘汰最久未访问样式表。
+- **`src/net/rate_limit.cp`**（迁移自 `vendor/kitesurf/packages/engine/src/rate-limit.ts`）：
+  - 实装标准 HTTP 429 纯文本响应与 `Retry-After` 秒数计算构建器；
+  - 实装 `isWebSocketUpgrade` 入口点判定；
+  - 实装基于令牌桶算法的 `RateLimiter`，按客户端 IP/连接键追踪并发频次，支持 LRU 过期淘汰。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_document_kind.cp`：全量测试 100% 全部通过（7 组分类、转义与视图合成断言）；
+  - `test/cdp/test_style_cache.cp`：全量测试 100% 全部通过（LRU 命中刷新与超额淘汰断言）；
+  - `test/net/test_rate_limit.cp`：全量测试 100% 全部通过（429 格式化、令牌桶突发与自动恢复断言）；
+  - `scripts/test_driver_playwright.js`：Node.js 驱动 11 步端到端自动化测试 100% 绿色通过；
+  - 双模构建验证：`bin/main`（8.5MB 独立可执行二进制）与 `bin/main.so`（9.7MB BEAM 容器动态库）均一次性构建成功；
+  - 门禁检验：全部相关源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
+
 
 
 

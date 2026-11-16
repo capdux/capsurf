@@ -442,5 +442,27 @@
      - 实现 `MAX_IDLE_NAVIGATES = 3` 自动淘汰策略：若连续 3 次页面导航均未使用该学习脚本，自动将其从缓存中清除，实现完全免垃圾回收的高效内存复用。
 
 
+## Phase 17 导航响应分类器、非 HTML 视图合成器与样式表 LRU 缓存技术方案
+1. **多格式导航响应分类与合成 (`src/cdp/document_kind.cp`)**：
+   - **设计动机**：浏览器导航不仅限于 HTML 网页，用户和 Agent 也经常直接导航至独立图片、SVG 矢量图、JSON API 接口、纯文本文件或二进制下载资源。无头浏览器若不对非 HTML 响应进行视图合成，DOM 树和渲染树将无法呈现或无法提取盒模型；
+   - **解决方案**：
+     - MIME 与处置判定：通过 `mimeEssence` 提取纯净类型，结合 `isAttachment`（排查 `inline` 与非附件属性）阻断危险附件下载；
+     - 图片视图合成器（`imageDocumentHtml`）：联动 `src/render/image_dims.cp` 的 `sniffImageDims` 极速嗅探尺寸（如 `2x3`），合成包含 `<img src="data:...">` 的暗色居中 Flexbox 视图，便于截屏和 Agent 视觉定位；
+     - SVG 视图合成器（`svgDocumentHtml`）：提取根标签与 `<meta>` 标签提升，当 SVG 缺少绝对尺寸与 `viewBox` 时自动注入基于客户端视口的长宽比 `viewBox="0 0 W H"`，并通过 `vw/vh` 生成自适应拉伸样式；
+     - JSON 语法树视图合成器（`jsonViewerHtml`）：基于 `cap:json` 进行语法树遍历，渲染可折叠展开的交互式 DOM 树，且在响应体超过 1MB（`JSON_PARSED_MAX_CHARS`）或遇到畸形格式时安全回退至 `<pre>` 文本，防止内存爆炸。
+2. **连接级样式表 LRU 缓存 (`src/cdp/style_cache.cp`)**：
+   - **设计动机**：截图引擎与样式重排阶段需要复用远程样式表内容。若每个会话每次绘制都重复发网络请求或在内存中无限缓存，会导致严重的网络抖动与内存泄漏；
+   - **解决方案**：
+     - 接入 Phase 15 `MAX_STYLESHEET_BYTES`（8MB）作为全局上限；
+     - 采用基于访问计数的定长槽位 LRU 淘汰算法，当总保留字符数超限时按最久未访问次序逐一淘汰旧样式表；
+     - 更新条目时先扣减旧尺寸再追加新尺寸，严防内存计数漂移。
+3. **HTTP 429 速率限制与滑动令牌桶 (`src/net/rate_limit.cp`)**：
+   - **设计动机**：面对数以百万计的并发 Agent 连接，必须具备对恶性频次调用的过载防护能力，并提供标准化的 HTTP/1.1 429 协议响应；
+   - **解决方案**：
+     - 实装基于浮点毫秒时间戳的令牌桶（Token Bucket）算法，支持最大突发容量与平滑平摊速率，自动计算并返回合规的 `Retry-After` 秒数；
+     - 提供 `isWebSocketUpgrade` 快速入口点判别，与 kitesurf 官方对齐 fail-open 保护策略。
+
+
+
 
 
