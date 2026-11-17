@@ -2,7 +2,7 @@
 // CDP Runtime Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 
 fn unescapeJsonString(src: []const u8, dst: []u8): []const u8 {
@@ -95,8 +95,25 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.callFunctionOn")) {
-            const res = std.fmt.bufPrint(out_buf, "{{\"result\":{{\"type\":\"undefined\"}}}}", .{}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            return CdpResponse.ok(req.id, res);
+            const object_id = extractJsonString(req.params_raw, "objectId") ?? "";
+            const func_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
+            const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+            const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
+            
+            let res_buf: [4096]u8 = [0; 4096];
+            const res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, &res_buf);
+            const res_slice = res_buf[0..res_len];
+            
+            // Poll any console events produced during callFunctionOn
+            let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_count = session.pollConsoleEvents(&polled_evts);
+            let p_i: usize = 0;
+            while (p_i < polled_count && event_count.* < out_events.len) : (p_i += 1) {
+                out_events[event_count.*] = polled_evts[p_i];
+                event_count.* += 1;
+            }
+            
+            return CdpResponse.ok(req.id, res_slice);
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.addBinding")) {
@@ -113,9 +130,12 @@ pub struct RuntimeHandler {
             const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
             let unesc_buf: [4096]u8 = [0; 4096];
             const expr = unescapeJsonString(raw_expr, &unesc_buf);
+            
+            const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+            const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
 
             let eval_res_buf: [4096]u8 = [0; 4096];
-            const eval_len = session.evaluate(expr, &eval_res_buf);
+            const eval_len = session.evaluateWithOptions(expr, return_by_value, await_promise, &eval_res_buf);
             const eval_slice = eval_res_buf[0..eval_len];
 
             // Poll any console events produced during evaluation
@@ -145,12 +165,7 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
-            const res = std.fmt.bufPrint(
-                out_buf,
-                "{s}",
-                .{eval_slice},
-            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            return CdpResponse.ok(req.id, res);
+            return CdpResponse.ok(req.id, eval_slice);
         }
 
         return CdpResponse.err(req.id, -32601, "'Runtime' domain method not implemented");

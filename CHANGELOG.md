@@ -949,6 +949,32 @@
   - 独立单二进制：`bin/main`（9.2MB）构建成功；
   - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 44: CDP RemoteObject 格式化、Runtime.callFunctionOn、事件靶标篡改免疫与用例隔离闭环 (100% Closed)
+- **`src/cdp/session.cp`**：
+  - 实装 `callFunctionOn` 原生方法，支持基于 `objectId` 解析、参数传递与函数执行；
+  - 实装 `formatCdpRemoteObject`，对非基本类型（Object、Array、Function）输出标准 CDP `RemoteObject` 响应（包含 `className`、`objectId`、`type` 与 `subtype`）；
+  - 实装 `evaluateWithOptions` 支持 CDP `Runtime.evaluate` 细粒度控制 `returnByValue` 与 `awaitPromise`；
+  - 修复页面内联 `<script>` 执行时的 `JSValue` 资源释放与未捕获异常清理，杜绝 Realm 污染。
+- **`src/cdp/runtime.cp`**：
+  - 实装 `Runtime.callFunctionOn` 协议指令路由，解析 `objectId`、`functionDeclaration`、`returnByValue`、`awaitPromise` 并联动控制台日志与绑定事件轮询；
+  - 导入 `extractJsonBool` 工具函数。
+- **`src/js/dom_binding.cp`**：
+  - 挂载全局远程对象暂存与类名提取辅助脚本（`__capsurf_store_object`, `__capsurf_get_object`, `__capsurf_get_class_name`）；
+  - 优化 `handleJsConsole`，通过栈缓冲区拷贝消除 `ctx` 的可变借用冲突。
+- **`src/js/qjs_engine.cp`**：
+  - 在 `setPropertyStr` 中对属性值显式执行 `JS_DupValue` 引用计数提升，消除 QuickJS 属性设置所有权消耗导致的 double-free 内存崩溃。
+- **`src/js/shim/events/dispatch.js`**：
+  - 将事件分发逻辑中对全局 `Event.CAPTURING_PHASE` 等常量的依赖替换为局部安全常量，确保页面篡改 `window.Event` 时引擎生命周期事件仍能可靠派发。
+- **`e2e/harness.ts`**：
+  - 实装 `Page.target()` 结构支持 Puppeteer 靶标会话创建；
+  - 在用例启动前清除在途暴露函数字典，消除跨用例绑定泄漏；
+  - 优化跨文档跳转评估打断机制。
+- **双轨测试与门禁验证**：
+  - `test/cdp/test_runtime_call_function_on.cp`：纯 CP 原生单元测试 4 项测试 100% 全部 PASS；
+  - 全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - 独立单二进制 `bin/main`（9.3MB）构建成功。
+
+
 
 
 

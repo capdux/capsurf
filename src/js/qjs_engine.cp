@@ -57,6 +57,7 @@ pub @c {
     fn JS_NewObject(ctx: *JSContext): JSValue;
     fn JS_NewArray(ctx: *JSContext): JSValue;
     fn JS_IsArray(ctx: *JSContext, val: JSValue): i32;
+    fn JS_IsFunction(ctx: *JSContext, val: JSValue): bool;
     fn JS_NewCFunction2(
         ctx: *JSContext,
         func: (@c fn(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue),
@@ -301,6 +302,10 @@ pub struct JsContext {
         return JS_NewStringLen(_.raw_ctx, s.ptr, s.len);
     }
 
+    fn newArray(): JSValue {
+        return JS_NewArray(_.raw_ctx);
+    }
+
     fn freeValue(val: JSValue) {
         JS_FreeValue(_.raw_ctx, val);
     }
@@ -334,5 +339,21 @@ pub struct JsContext {
 
     fn jsonStringify(val: JSValue): []const u8 {
         return jsJsonStringify(_.raw_ctx, val);
+    }
+
+    fn setPropertyStr(name: []const u8, val: JSValue) {
+        let name_buf: [128]u8 = [0; 128];
+        const to_copy = @min(name.len, name_buf.len - 1);
+        @memcpy(name_buf[0..to_copy], name[0..to_copy]);
+        name_buf[to_copy] = 0;
+        * = JS_SetPropertyStr(_.raw_ctx, _.getGlobal(), @ptrCast(&name_buf), JS_DupValue(_.raw_ctx, val));
+    }
+
+    fn isArray(val: JSValue): bool {
+        return JS_IsArray(_.raw_ctx, val) != 0;
+    }
+
+    fn isFunction(val: JSValue): bool {
+        return JS_IsFunction(_.raw_ctx, val);
     }
 }

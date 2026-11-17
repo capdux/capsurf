@@ -833,6 +833,23 @@
    - **解决方案**：
      - 在 `window.js` 的 `parseHostPort` 辅助函数中对冒号数量及端口数字字符添加严格的正则校验（`/^[0-9]+$/`），未通过时统一抛出 `TypeError`，使 `anchor-invalid-url-protocol` 100% 达标。
 
+## Phase 44 CDP RemoteObject 格式化、Runtime.callFunctionOn 与事件篡改免疫技术方案
+1. **CDP RemoteObject 规范级序列化与 callFunctionOn 原生调度 (`src/cdp/session.cp` & `src/cdp/runtime.cp`)**：
+   - **设计动机**：Puppeteer / Playwright 客户端广泛依赖 `Runtime.callFunctionOn` 在远程对象（如 `globalThis`、DOM Element、通用 Object / Array）上执行函数求值。若返回值只支持按值展开（`returnByValue: true`），客户端无法获取携带 `objectId` 与正确 `className`（如 `"Object"`、`"Array"`、`"Function"`）的 RemoteObject 句柄；
+   - **解决方案**：
+     - 在 `session.cp` 中实装 `formatCdpRemoteObject`，自动区分基本类型与引用类型。对引用类型生成持久化 `objectId`（`capsurf:obj:N`）并记录入 `__capsurf_remote_objects` 映射表，输出标准 `RemoteObject` 结构体；
+     - 实装 `callFunctionOn`：在 JS 环境中提取目标对象并安全绑定为执行函数接收者（`fn.apply(targetObj, args)`），支持 `returnByValue` 与 `awaitPromise`；
+     - 在 `runtime.cp` 中打通 `Runtime.callFunctionOn` 协议分发，并在执行前后同步轮询控制台事件与全局绑定事件。
+2. **QuickJS Property 所有权消耗与内存双重释放 (Double Free) 根因修复 (`src/js/qjs_engine.cp`)**：
+   - **设计动机**：测试运行中偶发出现 QuickJS 析构时的 `__malloc_usable_size` 内存崩溃。经深度调试发现：QuickJS 的 `JS_SetPropertyStr(ctx, obj, prop, val)` C-API 会**主动转移消费**传入的 `val` 所有权；若调用者后续自行调用 `JS_FreeValue` 或使用 `defer ctx.freeValue(val)`，会导致严重的 double-free 内存损坏；
+   - **解决方案**：
+     - 在 `setPropertyStr` 中将 `JS_SetPropertyStr` 的形参包装为 `JS_DupValue(_.raw_ctx, val)`，显式提升传入值的引用计数，与 CP 语言侧的资源生命周期严格对齐，彻底根除了该类内存崩溃。
+3. **EventTarget 机制防页面环境投毒篡改 (`src/js/shim/events/dispatch.js`)**：
+   - **设计动机**：部分测试用例会恶意覆写全局 `window.Event = function Hijacked() {}`，若事件分发代码从全局读取 `Event.CAPTURING_PHASE` 或 `Event.BUBBLING_PHASE`，将因为全局属性缺失而中断，导致 `DOMContentLoaded` / `load` 等关键生命周期事件无法到达监听器；
+   - **解决方案**：
+     - 在 `dispatch.js` 内部建立完全脱钩的不可篡改局部安全常量：`PHASE_CAPTURING = 1`, `PHASE_AT_TARGET = 2`, `PHASE_BUBBLING = 3`, `PHASE_NONE = 0`，确保无论外部页面脚本如何劫持篡改 `window.Event`，引擎内部事件总线始终 100% 免疫且可靠派发。
+
+
 
 
 

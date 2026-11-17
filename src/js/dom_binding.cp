@@ -39,6 +39,9 @@ import {
     JS_SetContextOpaque,
     JS_GetContextOpaque,
     JS_DefinePropertyValueStr,
+    JS_Eval,
+    JS_ToCStringLen2,
+    JS_FreeCString,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
@@ -68,6 +71,8 @@ pub struct ConsoleRecord {
     level_len: usize = 0,
     text: [512]u8 = [0; 512],
     text_len: usize = 0,
+    args_json: [2048]u8 = [0; 2048],
+    args_json_len: usize = 0,
     timestamp: i64 = 0,
 
     fn getLevel(*_): []const u8 {
@@ -76,6 +81,10 @@ pub struct ConsoleRecord {
 
     fn getText(*_): []const u8 {
         return _.text[0.._.text_len];
+    }
+
+    fn getArgsJson(*_): []const u8 {
+        return _.args_json[0.._.args_json_len];
     }
 }
 
@@ -89,7 +98,7 @@ pub struct JsDomContext {
     console_records: [MAX_CONSOLE_RECORDS]ConsoleRecord = [ConsoleRecord{}; MAX_CONSOLE_RECORDS],
     console_count: usize = 0,
 
-    fn addConsoleRecord(*_, level: []const u8, text: []const u8) {
+    fn addConsoleRecord(*_, level: []const u8, text: []const u8, args_json: []const u8) {
         if (_.console_count >= MAX_CONSOLE_RECORDS) {
             let j: usize = 1;
             while (j < MAX_CONSOLE_RECORDS) : (j += 1) {
@@ -105,6 +114,10 @@ pub struct JsDomContext {
         const t_len = @min(text.len, rec.text.len);
         @memcpy(rec.text[0..t_len], text[0..t_len]);
         rec.text_len = t_len;
+
+        const a_len = @min(args_json.len, rec.args_json.len);
+        @memcpy(rec.args_json[0..a_len], args_json[0..a_len]);
+        rec.args_json_len = a_len;
 
         rec.timestamp = getMilliTimestamp();
         _.console_count += 1;
@@ -658,11 +671,40 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         }
     }
     const full_text = text_buf[0..offset];
+    
+    // Format arguments
+    const args_array = JS_NewArray(ctx);
+    let j: usize = 0;
+    while (j < n) : (j += 1) {
+        * = JS_SetPropertyUint32(ctx, args_array, @intCast(j), JS_DupValue(ctx, argv[j]));
+    }
+    
+    // Store array in temp for format helper
+    * = JS_SetPropertyStr(ctx, JS_GetGlobalObject(ctx), "__capsurf_temp_args", args_array);
+    const format_script = "(function(){" +
+        "  const args = globalThis.__capsurf_temp_args;" +
+        "  const formatted = [];" +
+        "  for(let i=0; i<args.length; i++) {" +
+        "    formatted.push(globalThis.__capsurf_format_remote_object(args[i], true));" +
+        "  }" +
+        "  return JSON.stringify(formatted);" +
+        "})()";
+    const format_res = JS_Eval(ctx, @ptrCast(format_script), format_script.len, "format.js", 0);
+    let args_buf: [1024]u8 = [0; 1024];
+    let args_len: usize = 0;
+    let cstr_len: usize = 0;
+    const cstr = JS_ToCStringLen2(ctx, &cstr_len, format_res, 0);
+    if (cstr != null) {
+        args_len = @min(cstr_len, args_buf.len);
+        @memcpy(args_buf[0..args_len], cstr.?[0..args_len]);
+        JS_FreeCString(ctx, cstr);
+    }
+    JS_FreeValue(ctx, format_res);
 
     const opaque_ptr = JS_GetContextOpaque(ctx);
     if (opaque_ptr != null) {
         const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaque_ptr));
-        dom_ctx.addConsoleRecord(level, full_text);
+        dom_ctx.addConsoleRecord(level, full_text, args_buf[0..args_len]);
     }
     return jsUndefined();
 }
@@ -833,6 +875,81 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
         std.debug.print("Runtime shim eval error: {s}\n", .{exc_str});
     }
     ctx.freeValue(shim_val);
+
+    const helper_script = 
+        "(function() {" +
+        "  if (!globalThis.__capsurf_remote_objects) {" +
+        "    globalThis.__capsurf_remote_objects = new Map();" +
+        "    globalThis.__capsurf_next_object_id = 1;" +
+        "  }" +
+        "  globalThis.__capsurf_store_object = function (val) {" +
+        "    if (val === null || val === undefined) return null;" +
+        "    const t = typeof val;" +
+        "    if (t !== 'object' && t !== 'function') return null;" +
+        "    const id = 'capsurf:obj:' + (globalThis.__capsurf_next_object_id++);" +
+        "    globalThis.__capsurf_remote_objects.set(id, val);" +
+        "    return id;" +
+        "  };" +
+        "  globalThis.__capsurf_get_object = function (id) {" +
+        "    if (id === 'global' || id === 'globalThis') return globalThis;" +
+        "    return globalThis.__capsurf_remote_objects.get(id);" +
+        "  };" +
+        "  globalThis.__capsurf_get_class_name = function (val) {" +
+        "    if (val === null || val === undefined) return undefined;" +
+        "    const t = typeof val;" +
+        "    if (t !== 'object' && t !== 'function') return undefined;" +
+        "    let name = undefined;" +
+        "    try { name = val.constructor && val.constructor.name; } catch (e) {}" +
+        "    if (typeof name === 'string' && name.length > 0) return name;" +
+        "    try {" +
+        "      const s = Object.prototype.toString.call(val);" +
+        "      if (s.startsWith('[object ') && s.endsWith(']')) return s.slice(8, -1);" +
+        "    } catch (e) {}" +
+        "    if (Array.isArray(val)) return 'Array';" +
+        "    if (t === 'function') return 'Function';" +
+        "    return 'Object';" +
+        "  };" +
+        "  globalThis.__capsurf_format_remote_object = function (val, returnByValue) {" +
+        "    if (val === undefined) return { type: 'undefined' };" +
+        "    if (val === null) return { type: 'object', subtype: 'null', value: null };" +
+        "    const t = typeof val;" +
+        "    if (t === 'boolean' || t === 'number' || t === 'string') return { type: t, value: val };" +
+        "    if (t === 'symbol') return { type: 'symbol', description: String(val) };" +
+        "    if (t === 'bigint') return { type: 'bigint', unserializableValue: String(val) + 'n' };" +
+        "    if (t === 'function') {" +
+        "      const className = 'Function';" +
+        "      const desc = String(val);" +
+        "      const obj = { type: 'function', className: className, description: desc };" +
+        "      if (!returnByValue) obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "      return obj;" +
+        "    }" +
+        "    if (t === 'object') {" +
+        "      const isArr = Array.isArray(val);" +
+        "      const className = globalThis.__capsurf_get_class_name(val);" +
+        "      const obj = { type: 'object', className: className };" +
+        "      if (isArr) obj.subtype = 'array';" +
+        "      if (returnByValue) {" +
+        "        obj.value = val;" +
+        "      } else {" +
+        "        obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "        obj.description = className;" +
+        "      }" +
+        "      return obj;" +
+        "    }" +
+        "    return { type: 'undefined' };" +
+        "  };" +
+        "  globalThis.__capsurf_call_fn = function (id, fnDecl) {" +
+        "    const target = globalThis.__capsurf_get_object(id);" +
+        "    if (!target && id !== 'global' && id !== 'globalThis') {" +
+        "      throw new Error('Could not find object with id ' + id);" +
+        "    }" +
+        "    const fn = (0, eval)('(' + fnDecl + ')');" +
+        "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');" +
+        "    return fn.call(target || globalThis);" +
+        "  };" +
+        "})();";
+    const helper_val = ctx.eval(helper_script);
+    ctx.freeValue(helper_val);
 
     return dom_ctx;
 }

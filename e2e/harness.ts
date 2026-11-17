@@ -383,14 +383,16 @@ export class Page {
 
           if (navResult.pending) {
             const targetUrl = navResult.pending;
+            // Automatically drive page to load the new target page first so the next evaluate runs on the loaded page
+            try {
+              await this.goto(targetUrl);
+            } catch {}
             if (!settled) {
               settled = true;
               this.inFlightEvaluates.delete(item);
               this.cancelInFlightEvaluations();
               reject(new Error("Execution context was destroyed -- most likely because of a navigation."));
             }
-            // Automatically drive page to load the new target page
-            await this.goto(targetUrl);
             return;
           }
         }
@@ -435,6 +437,12 @@ export class Page {
 
   async createCDPSession(): Promise<CDPClient> {
     return this.cdp;
+  }
+
+  target() {
+    return {
+      createCDPSession: () => this.createCDPSession(),
+    };
   }
 
   async click(selector: string): Promise<void> {
@@ -588,7 +596,10 @@ export async function getSharedSession(): Promise<{
   cdp: CDPClient;
 }> {
   await ensureServerRunning();
-  if (!sharedCdp || !sharedPage || !sharedBrowser) {
+  if (!sharedCdp || !sharedPage || !sharedBrowser || !sharedCdp.ws || (sharedCdp.ws as any).readyState !== 1) {
+    if (sharedCdp) {
+      try { await sharedCdp.close(); } catch {}
+    }
     sharedCdp = new CDPClient(sharedWsUrl!);
     await sharedCdp.connect();
     sharedPage = new Page(sharedCdp);
@@ -615,6 +626,7 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
   bunTest(name, async () => {
     if (fn.length > 0) {
       const fixtures = await getSharedSession();
+      fixtures.page.exposedFunctions.clear();
       if ((name.includes("blank page") || name.includes("fresh page")) && fixtures.page.url() !== "about:blank") {
         await fixtures.page.goto("about:blank");
       }

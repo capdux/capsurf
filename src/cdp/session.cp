@@ -148,6 +148,7 @@ pub struct CdpPageSession {
     runtime_enabled: bool = false,
     log_enabled: bool = false,
     dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
+
     debugger_state: DebuggerState = DebuggerState{},
     screencast_handler: ScreencastHandler = ScreencastHandler.init(),
     resource_store: ResourceStore = ResourceStore.init(),
@@ -173,6 +174,7 @@ pub struct CdpPageSession {
     focused_node: NodeId = NULL_NODE,
     scroll_x: f32 = 0.0,
     scroll_y: f32 = 0.0,
+    next_object_id: u32 = 1,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -223,6 +225,7 @@ pub struct CdpPageSession {
             next_nav_id: 1,
             pending_same_doc_urls: [""; 4],
             pending_same_doc_count: 0,
+            next_object_id: 1,
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,
@@ -351,7 +354,11 @@ pub struct CdpPageSession {
                 }
                 if (code_len > 0) {
                     const js_res = _.ctx.eval(code_buf[0..code_len]);
-                    * = js_res;
+                    if (jsIsException(js_res)) {
+                        const exc = _.ctx.getException();
+                        _.ctx.freeValue(exc);
+                    }
+                    _.ctx.freeValue(js_res);
                 }
             }
         }
@@ -476,11 +483,39 @@ pub struct CdpPageSession {
         return formatted.len;
     }
 
-    pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
-        const val = _.ctx.eval(expr);
+    pub fn formatCdpRemoteObject(*_, val: JSValue, return_by_value: bool, out_buf: []u8): usize {
+        _.ctx.setPropertyStr("__capsurf_temp_val", val);
+        const script = if (return_by_value)
+            "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true)"
+        else
+            "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, false)";
+        const res_val = _.ctx.eval(script);
+        defer _.ctx.freeValue(res_val);
+
+        if (jsIsException(res_val)) {
+             return _.formatCdpException(_.ctx.getException(), out_buf);
+        }
+
+        const json_str = _.ctx.jsonStringify(res_val);
+        defer std.heap.page_allocator.free(json_str);
+        
+        const formatted = std.fmt.bufPrint(out_buf, "{{\"result\":{s}}}", .{json_str}) catch return 0;
+        return formatted.len;
+    }
+
+    pub fn callFunctionOn(*_, objectId: []const u8, functionDeclaration: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+        const id_val = _.ctx.newString(objectId);
+        defer _.ctx.freeValue(id_val);
+        _.ctx.setPropertyStr("__capsurf_call_id", id_val);
+
+        const decl_val = _.ctx.newString(functionDeclaration);
+        defer _.ctx.freeValue(decl_val);
+        _.ctx.setPropertyStr("__capsurf_call_decl", decl_val);
+
+        const val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl)");
         defer _.ctx.freeValue(val);
 
-        if (_.ctx.isPromise(val)) {
+        if (await_promise && _.ctx.isPromise(val)) {
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
@@ -490,7 +525,7 @@ pub struct CdpPageSession {
             if (_.ctx.promiseState(val) == 1) {
                 const res_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(res_val);
-                return _.formatCdpResult(res_val, out_buf);
+                return _.formatCdpRemoteObject(res_val, return_by_value, out_buf);
             } else if (_.ctx.promiseState(val) == 2) {
                 const rej_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(rej_val);
@@ -506,7 +541,44 @@ pub struct CdpPageSession {
             return _.formatCdpException(exc, out_buf);
         }
 
-        return _.formatCdpResult(val, out_buf);
+        return _.formatCdpRemoteObject(val, return_by_value, out_buf);
+    }
+
+    pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
+        return _.evaluateWithOptions(expr, false, true, out_buf);
+    }
+
+    pub fn evaluateWithOptions(*_, expr: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+        const val = _.ctx.eval(expr);
+        defer _.ctx.freeValue(val);
+
+        if (await_promise && _.ctx.isPromise(val)) {
+            let limit: u32 = 100000;
+            while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
+                const r = _.ctx.executePendingJobs();
+                if (r <= 0) break;
+            }
+
+            if (_.ctx.promiseState(val) == 1) {
+                const res_val = _.ctx.promiseResult(val);
+                defer _.ctx.freeValue(res_val);
+                return _.formatCdpRemoteObject(res_val, return_by_value, out_buf);
+            } else if (_.ctx.promiseState(val) == 2) {
+                const rej_val = _.ctx.promiseResult(val);
+                defer _.ctx.freeValue(rej_val);
+                return _.formatCdpException(rej_val, out_buf);
+            }
+        }
+
+        _.ctx.drainJobs();
+
+        if (jsIsException(val)) {
+            const exc = _.ctx.getException();
+            defer _.ctx.freeValue(exc);
+            return _.formatCdpException(exc, out_buf);
+        }
+
+        return _.formatCdpRemoteObject(val, return_by_value, out_buf);
     }
 
     pub fn querySelector(*_, selector: []const u8): NodeId {
@@ -579,10 +651,12 @@ pub struct CdpPageSession {
                 const txt = rec.getText();
 
                 if (_.runtime_enabled && ev_idx < out_events.len) {
+                    const args_slice = rec.getArgsJson();
+                    const args_json = if (args_slice.len > 0) args_slice else "[{\"type\":\"string\",\"value\":\"\"}]";
                     const rt_json = std.fmt.bufPrint(
                         &_.console_event_buf,
-                        "{{\"type\":\"{s}\",\"args\":[{{\"type\":\"string\",\"value\":\"{s}\"}}],\"executionContextId\":1,\"timestamp\":{d}}}",
-                        .{ lvl, txt, rec.timestamp },
+                        "{{\"type\":\"{s}\",\"args\":{s},\"executionContextId\":1,\"timestamp\":{d}}}",
+                        .{ lvl, args_json, rec.timestamp },
                     ) catch "";
                     if (rt_json.len > 0) {
                         out_events[ev_idx] = CdpEvent.create("Runtime.consoleAPICalled", rt_json);

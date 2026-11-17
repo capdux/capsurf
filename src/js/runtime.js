@@ -310,6 +310,11 @@
 
   function EventTarget() {}
 
+  const PHASE_NONE = 0;
+  const PHASE_CAPTURING = 1;
+  const PHASE_AT_TARGET = 2;
+  const PHASE_BUBBLING = 3;
+
   EventTarget.prototype.addEventListener = function (type, callback, options) {
     if (!type || typeof callback !== "function") return;
     const map = getListeners(this);
@@ -399,8 +404,8 @@
           for (let i = 0; i < copy.length; i++) {
             if (event._immediateStopped) return;
             const item = copy[i];
-            if (phase === Event.CAPTURING_PHASE && !item.capture) continue;
-            if (phase === Event.BUBBLING_PHASE && item.capture) continue;
+            if (phase === PHASE_CAPTURING && !item.capture) continue;
+            if (phase === PHASE_BUBBLING && item.capture) continue;
 
             if (item.once) {
               entry.removeEventListener(eventType, item.callback, item.capture);
@@ -415,7 +420,7 @@
       }
 
       // Inline event handler (e.g. element.onclick)
-      if (phase === Event.AT_TARGET || phase === Event.BUBBLING_PHASE) {
+      if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
         const propName = "on" + eventType;
         if (typeof entry[propName] === "function" && !event._immediateStopped) {
           try {
@@ -430,23 +435,23 @@
     // Phase 1: Capturing (from top down to target's parent)
     for (let i = path.length - 1; i >= 1; i--) {
       if (event._stopped) break;
-      invoke(path[i], Event.CAPTURING_PHASE);
+      invoke(path[i], PHASE_CAPTURING);
     }
 
     // Phase 2: At Target
     if (!event._stopped) {
-      invoke(this, Event.AT_TARGET);
+      invoke(this, PHASE_AT_TARGET);
     }
 
     // Phase 3: Bubbling (from target's parent up to top, if bubbles is true)
     if (event.bubbles && !event._stopped) {
       for (let i = 1; i < path.length; i++) {
         if (event._stopped) break;
-        invoke(path[i], Event.BUBBLING_PHASE);
+        invoke(path[i], PHASE_BUBBLING);
       }
     }
 
-    event.eventPhase = Event.NONE;
+    event.eventPhase = PHASE_NONE;
     event.currentTarget = null;
     return !event.defaultPrevented;
   };
