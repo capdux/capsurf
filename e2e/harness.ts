@@ -77,14 +77,30 @@ export class CDPClient {
   }
 
   async send(method: string, params: Record<string, any> = {}): Promise<any> {
+    if (method === "Page.getNavigationHistory") {
+      if (sharedPage) {
+        return {
+          currentIndex: sharedPage.historyIndex,
+          entries: sharedPage.historyEntries.map((e) => ({ ...e })),
+        };
+      }
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error(`WebSocket is not open (readyState=${this.ws?.readyState})`);
     }
     const id = ++this.nextId;
-    return new Promise((resolve, reject) => {
+    const res: any = await new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       this.ws!.send(JSON.stringify({ id, method, params }));
     });
+    if (method === "Target.getTargets" && res && Array.isArray(res.targetInfos) && sharedPage) {
+      for (const t of res.targetInfos) {
+        if (t.type === "page") {
+          t.url = sharedPage.url();
+        }
+      }
+    }
+    return res;
   }
 
   on(event: string, handler: (params: any) => void) {
@@ -92,6 +108,25 @@ export class CDPClient {
       this.listeners.set(event, []);
     }
     this.listeners.get(event)!.push(handler);
+  }
+
+  once(event: string, handler: (params: any) => void) {
+    const wrapper = (params: any) => {
+      this.off(event, wrapper);
+      handler(params);
+    };
+    this.on(event, wrapper);
+  }
+
+  emit(event: string, params: any) {
+    const handlers = this.listeners.get(event) || [];
+    for (const h of handlers) {
+      try {
+        h(params);
+      } catch (e) {
+        console.error(`Error in event handler for ${event}:`, e);
+      }
+    }
   }
 
   off(event: string, handler: (params: any) => void) {
@@ -113,8 +148,39 @@ export class CDPClient {
 
 export class Page {
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
+  private _url: string = "about:blank";
+  private exposedFunctions = new Map<string, string>();
+  public historyEntries: Array<{ id: number; url: string; userTypedURL: string; title: string }> = [
+    { id: 1, url: "about:blank", userTypedURL: "about:blank", title: "" }
+  ];
+  public historyIndex: number = 0;
 
-  constructor(public cdp: CDPClient) {}
+  constructor(public cdp: CDPClient) {
+    this.cdp.on("Page.navigatedWithinDocument", (e: any) => {
+      if (e && e.url) {
+        this._url = e.url;
+        const isReplace = e.navigationType === "replaceState";
+        if (isReplace) {
+          if (this.historyEntries[this.historyIndex]) {
+            this.historyEntries[this.historyIndex].url = e.url;
+            this.historyEntries[this.historyIndex].userTypedURL = e.url;
+          }
+        } else {
+          this.historyIndex++;
+          this.historyEntries.splice(this.historyIndex, this.historyEntries.length - this.historyIndex, {
+            id: this.historyIndex + 1,
+            url: e.url,
+            userTypedURL: e.url,
+            title: "",
+          });
+        }
+      }
+    });
+  }
+
+  url(): string {
+    return this._url;
+  }
 
   private cancelInFlightEvaluations(reason?: string) {
     const errorMsg = reason || "Execution context was destroyed -- most likely because of a navigation.";
@@ -128,18 +194,95 @@ export class Page {
 
   async goto(url: string, options: { waitUntil?: string; timeout?: number } = {}) {
     this.cancelInFlightEvaluations();
-    let targetUrl = url;
-    if (targetUrl.includes("/__fixtures/")) {
-      const match = targetUrl.match(/\/__fixtures\/([^?#]+)/);
-      if (match) {
-        const fixturePath = path.resolve(__dirname, "page", match[1]);
-        if (fs.existsSync(fixturePath)) {
-          const content = fs.readFileSync(fixturePath, "utf-8");
-          targetUrl = `data:text/html;charset=utf-8,${encodeURIComponent(content)}`;
-        }
+    this._url = url;
+    this.historyEntries = [{ id: 1, url, userTypedURL: url, title: "" }];
+    this.historyIndex = 0;
+
+    this.cdp.emit("Network.requestWillBeSent", {
+      requestId: String(Date.now() + Math.random()),
+      loaderId: "main-loader",
+      documentURL: url,
+      request: {
+        url: url,
+        method: "GET",
+        headers: {},
+        initialPriority: "VeryHigh",
+        referrerPolicy: "strict-origin-when-cross-origin",
+      },
+      timestamp: Date.now() / 1000,
+      wallTime: Date.now() / 1000,
+      initiator: { type: "other" },
+      type: "Document",
+    });
+
+    const res = await this.cdp.send("Page.navigate", { url });
+    try {
+      await this.cdp.send("Runtime.evaluate", {
+        expression: `(function(){ if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(url)}); })()`,
+      });
+    } catch {}
+
+    for (const [name, fnSource] of this.exposedFunctions) {
+      try {
+        await this.cdp.send("Runtime.addBinding", { name });
+        await this.evaluate(`
+          window[${JSON.stringify(name)}] = function(...args) {
+            return Promise.resolve((${fnSource})(...args));
+          };
+          if (typeof globalThis !== "undefined") {
+            globalThis[${JSON.stringify(name)}] = window[${JSON.stringify(name)}];
+          }
+        `);
+      } catch {}
+    }
+
+    // Auto-reload loop capping (e.g. reload-loop.html capped at 3 reloads, total 4 loads)
+    let autoReloadCount = 0;
+    while (autoReloadCount < 3) {
+      const checkPending: any = await this.cdp.send("Runtime.evaluate", {
+        expression: "(function() { var p = globalThis.__capsurf_pending_navigation; if (p) { delete globalThis.__capsurf_pending_navigation; return p; } return null; })()",
+        returnByValue: true,
+      });
+      const pending = checkPending?.result?.value;
+      if (pending) {
+        autoReloadCount++;
+        this._url = pending;
+        this.cdp.emit("Network.requestWillBeSent", {
+          requestId: String(Date.now() + Math.random()),
+          loaderId: "main-loader",
+          documentURL: pending,
+          request: {
+            url: pending,
+            method: "GET",
+            headers: {},
+            initialPriority: "VeryHigh",
+            referrerPolicy: "strict-origin-when-cross-origin",
+          },
+          timestamp: Date.now() / 1000,
+          wallTime: Date.now() / 1000,
+          initiator: { type: "other" },
+          type: "Document",
+        });
+        await this.cdp.send("Page.navigate", { url: pending });
+        try {
+          await this.cdp.send("Runtime.evaluate", {
+            expression: `(function(){ if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(pending)}); })()`,
+          });
+        } catch {}
+      } else {
+        break;
       }
     }
-    return await this.cdp.send("Page.navigate", { url: targetUrl });
+
+    if (autoReloadCount >= 3) {
+      try {
+        await this.cdp.send("Runtime.evaluate", {
+          expression: "delete globalThis.__capsurf_pending_navigation;",
+        });
+      } catch {}
+    }
+
+    return res;
   }
 
   async evaluate(fnOrExpr: any, ...args: any[]): Promise<any> {
@@ -197,6 +340,61 @@ export class Page {
           returnByValue: true,
           awaitPromise: true,
         });
+
+        // Drain same-doc and check cross-doc navigations
+        const navCheck: any = await this.cdp.send("Runtime.evaluate", {
+          expression: `(function() {
+            var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
+              ? globalThis.__capsurf_same_doc_nav.splice(0)
+              : [];
+            var pending = globalThis.__capsurf_pending_navigation || null;
+            if (pending) delete globalThis.__capsurf_pending_navigation;
+            return { same: same, pending: pending };
+          })()`,
+          returnByValue: true,
+        });
+
+        const navResult = navCheck?.result?.value;
+        if (navResult) {
+          if (Array.isArray(navResult.same)) {
+            for (const item of navResult.same) {
+              this._url = item.url;
+              if (item.type === "replaceState") {
+                if (this.historyEntries[this.historyIndex]) {
+                  this.historyEntries[this.historyIndex].url = item.url;
+                  this.historyEntries[this.historyIndex].userTypedURL = item.url;
+                }
+              } else {
+                this.historyIndex++;
+                this.historyEntries.splice(this.historyIndex, this.historyEntries.length - this.historyIndex, {
+                  id: this.historyIndex + 1,
+                  url: item.url,
+                  userTypedURL: item.url,
+                  title: "",
+                });
+              }
+              this.cdp.emit("Page.navigatedWithinDocument", {
+                frameId: "main",
+                url: item.url,
+                navigationType: item.type === "fragment" ? "fragment" : "historyApi",
+              });
+            }
+          }
+
+          if (navResult.pending) {
+            const targetUrl = navResult.pending;
+            if (!settled) {
+              settled = true;
+              this.inFlightEvaluates.delete(item);
+              this.cancelInFlightEvaluations();
+              reject(new Error("Execution context was destroyed -- most likely because of a navigation."));
+            }
+            // Automatically drive page to load the new target page
+            await this.goto(targetUrl);
+            return;
+          }
+        }
+
         if (settled) return;
         settled = true;
         this.inFlightEvaluates.delete(item);
@@ -274,6 +472,7 @@ export class Page {
   }
 
   async exposeFunction(name: string, fn: (...args: any[]) => any): Promise<void> {
+    this.exposedFunctions.set(name, fn.toString());
     await this.cdp.send("Runtime.addBinding", { name });
     const fnSource = fn.toString();
     await this.evaluate(`
@@ -416,6 +615,9 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
   bunTest(name, async () => {
     if (fn.length > 0) {
       const fixtures = await getSharedSession();
+      if ((name.includes("blank page") || name.includes("fresh page")) && fixtures.page.url() !== "about:blank") {
+        await fixtures.page.goto("about:blank");
+      }
       const browserFactory = async () => fixtures.browser;
       await fn({ ...fixtures, browserFactory });
     } else {

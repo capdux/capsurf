@@ -3,7 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/page.ts and vendor/kitesurf/packages/engine/src/eval/outbound.ts
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { Base64 } from "cap:encoding";
 import {
@@ -165,6 +165,57 @@ pub struct PageHandler {
                 .{ tree_json },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.getNavigationHistory")) {
+            if (session.current_nav_index < session.nav_entry_count) {
+                if (session.title.len > 0) {
+                    session.updateCurrentNavTitle(session.title);
+                }
+            }
+
+            let cur: usize = 0;
+            const prefix = std.fmt.bufPrint(
+                out_buf[cur..],
+                "{{\"currentIndex\":{d},\"entries\":[",
+                .{session.current_nav_index},
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            cur += prefix.len;
+
+            let i: usize = 0;
+            while (i < session.nav_entry_count) : (i += 1) {
+                const entry = &session.nav_entries[i];
+                let esc_url_buf: [1024]u8 = [0; 1024];
+                const esc_url = escapeJsonString(entry.url, &esc_url_buf);
+                let esc_title_buf: [512]u8 = [0; 512];
+                const esc_title = escapeJsonString(entry.title, &esc_title_buf);
+
+                const sep = if (i > 0) "," else "";
+                const entry_str = std.fmt.bufPrint(
+                    out_buf[cur..],
+                    "{s}{{\"id\":{d},\"url\":\"{s}\",\"userTypedURL\":\"{s}\",\"title\":\"{s}\",\"transitionType\":\"link\"}}",
+                    .{ sep, entry.id, esc_url, esc_url, esc_title },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                cur += entry_str.len;
+            }
+
+            if (cur + 2 > out_buf.len) return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            out_buf[cur] = ']';
+            out_buf[cur + 1] = '}';
+            cur += 2;
+
+            return CdpResponse.ok(req.id, out_buf[0..cur]);
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.navigateToHistoryEntry")) {
+            const entry_id = extractJsonInt(req.params_raw, "entryId") ?? -1;
+            if (entry_id < 0) {
+                return CdpResponse.err(req.id, -32602, "Invalid entryId");
+            }
+            if (!session.navigateToHistoryEntry(@as(i32, @intCast(entry_id)))) {
+                return CdpResponse.err(req.id, -32000, "No entry with given id");
+            }
+            return CdpResponse.ok(req.id, "{}");
         }
 
         return CdpResponse.err(req.id, -32601, "'Page' domain method not implemented");

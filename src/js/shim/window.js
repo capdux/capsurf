@@ -9,6 +9,316 @@ function installWindow(global) {
   };
   global.__NativeEvent = NativeEvent;
 
+  // 0. DOMException & WHATWG URL Implementation
+  function DOMException(message, name) {
+    const err = new Error(message || "");
+    err.name = name || "Error";
+    err.code = name === "SecurityError" ? 18 : 0;
+    Object.setPrototypeOf(err, DOMException.prototype);
+    return err;
+  }
+  DOMException.prototype = Object.create(Error.prototype);
+  DOMException.prototype.constructor = DOMException;
+  markNative(DOMException, "DOMException");
+  global.DOMException = DOMException;
+  if (typeof window !== "undefined") window.DOMException = DOMException;
+  if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
+
+  function resolveRelativePath(p) {
+    const segments = p.split("/");
+    const resolved = [];
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      if (s === "." || (s === "" && i > 0 && i < segments.length - 1)) {
+        continue;
+      } else if (s === "..") {
+        if (resolved.length > 1) {
+          resolved.pop();
+        }
+      } else {
+        resolved.push(s);
+      }
+    }
+    let res = resolved.join("/");
+    if (!res.startsWith("/")) res = "/" + res;
+    return res;
+  }
+
+  function parseHostPort(authHost) {
+    let hostname = "";
+    let port = "";
+    if (authHost.startsWith("[")) {
+      const closeBracket = authHost.indexOf("]");
+      if (closeBracket !== -1) {
+        hostname = authHost.slice(0, closeBracket + 1);
+        const after = authHost.slice(closeBracket + 1);
+        if (after.startsWith(":")) {
+          port = after.slice(1);
+          if (port === "" || !/^[0-9]+$/.test(port)) {
+            throw new TypeError("Invalid URL port: " + port);
+          }
+        } else if (after.length > 0) {
+          throw new TypeError("Invalid URL IPv6: " + authHost);
+        } else {
+          port = "";
+        }
+      } else {
+        throw new TypeError("Unclosed IPv6 bracket in URL: " + authHost);
+      }
+    } else {
+      const colons = authHost.split(":");
+      if (colons.length > 2) {
+        throw new TypeError("Invalid URL host/port: " + authHost);
+      }
+      if (colons.length === 2) {
+        hostname = colons[0];
+        port = colons[1];
+        if (port === "" || !/^[0-9]+$/.test(port)) {
+          throw new TypeError("Invalid URL port: " + port);
+        }
+      } else {
+        hostname = authHost;
+        port = "";
+      }
+    }
+    const host = port ? hostname + ":" + port : hostname;
+    return { hostname, port, host };
+  }
+
+  function parseUrlString(input, base) {
+    let inStr = String(input).trim();
+    let baseObj = null;
+    if (base !== undefined && base !== null) {
+      if (base instanceof URL) {
+        baseObj = base._parsed;
+      } else if (typeof base === "object" && base._parsed) {
+        baseObj = base._parsed;
+      } else {
+        baseObj = parseUrlString(String(base));
+      }
+    }
+
+    const schemeMatch = inStr.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$/);
+    let protocol = "";
+    let rest = inStr;
+
+    if (schemeMatch) {
+      protocol = schemeMatch[1].toLowerCase() + ":";
+      rest = schemeMatch[2];
+    } else if (baseObj) {
+      protocol = baseObj.protocol;
+    } else {
+      throw new TypeError("Invalid URL: " + inStr);
+    }
+
+    let username = "";
+    let password = "";
+    let host = "";
+    let hostname = "";
+    let port = "";
+    let pathname = "";
+    let search = "";
+    let hash = "";
+
+    const hashIdx = rest.indexOf("#");
+    if (hashIdx !== -1) {
+      hash = rest.slice(hashIdx);
+      rest = rest.slice(0, hashIdx);
+    }
+
+    const searchIdx = rest.indexOf("?");
+    if (searchIdx !== -1) {
+      search = rest.slice(searchIdx);
+      rest = rest.slice(0, searchIdx);
+    }
+
+    const isSpecial = (protocol === "http:" || protocol === "https:" || protocol === "ws:" || protocol === "wss:" || protocol === "ftp:");
+
+    if (isSpecial) {
+      if (schemeMatch && rest.startsWith("//")) {
+        rest = rest.slice(2);
+        const slashIdx = rest.indexOf("/");
+        let authHost = slashIdx !== -1 ? rest.slice(0, slashIdx) : rest;
+        pathname = slashIdx !== -1 ? rest.slice(slashIdx) : "/";
+
+        const atIdx = authHost.indexOf("@");
+        if (atIdx !== -1) {
+          const userPass = authHost.slice(0, atIdx);
+          authHost = authHost.slice(atIdx + 1);
+          const colonIdx = userPass.indexOf(":");
+          if (colonIdx !== -1) {
+            username = userPass.slice(0, colonIdx);
+            password = userPass.slice(colonIdx + 1);
+          } else {
+            username = userPass;
+          }
+        }
+
+        const hp1 = parseHostPort(authHost);
+        hostname = hp1.hostname;
+        port = hp1.port;
+        host = hp1.host;
+      } else if (!schemeMatch && baseObj) {
+        host = baseObj.host;
+        hostname = baseObj.hostname;
+        port = baseObj.port;
+        username = baseObj.username;
+        password = baseObj.password;
+
+        if (rest.startsWith("//")) {
+          rest = rest.slice(2);
+          const slashIdx = rest.indexOf("/");
+          let authHost = slashIdx !== -1 ? rest.slice(0, slashIdx) : rest;
+          pathname = slashIdx !== -1 ? rest.slice(slashIdx) : "/";
+          const hp2 = parseHostPort(authHost);
+          hostname = hp2.hostname;
+          port = hp2.port;
+          host = hp2.host;
+        } else if (rest.startsWith("/")) {
+          pathname = rest;
+        } else if (rest === "" && search === "" && hash !== "") {
+          pathname = baseObj.pathname;
+          search = baseObj.search;
+        } else if (rest === "" && search !== "") {
+          pathname = baseObj.pathname;
+        } else {
+          const basePath = baseObj.pathname || "/";
+          const lastSlash = basePath.lastIndexOf("/");
+          const dir = lastSlash !== -1 ? basePath.slice(0, lastSlash + 1) : "/";
+          pathname = resolveRelativePath(dir + rest);
+        }
+      } else {
+        pathname = rest ? (rest.startsWith("/") ? rest : "/" + rest) : "/";
+      }
+    } else {
+      if (schemeMatch) {
+        pathname = rest;
+      } else if (baseObj) {
+        if (rest === "" && search === "" && hash !== "") {
+          pathname = baseObj.pathname;
+          search = baseObj.search;
+        } else {
+          pathname = rest;
+        }
+      } else {
+        pathname = rest;
+      }
+    }
+
+    let origin = "null";
+    if (isSpecial && host) {
+      origin = `${protocol}//${host}`;
+    }
+
+    let href = `${protocol}`;
+    if (host || isSpecial) {
+      href += `//${host}${pathname}${search}${hash}`;
+    } else {
+      href += `${pathname}${search}${hash}`;
+    }
+
+    return {
+      protocol,
+      username,
+      password,
+      host,
+      hostname,
+      port,
+      pathname,
+      search,
+      hash,
+      origin,
+      href,
+    };
+  }
+
+  function URL(url, base) {
+    if (arguments.length === 0) throw new TypeError("Failed to construct 'URL': 1 argument required, but only 0 present.");
+    this._parsed = parseUrlString(url, base);
+  }
+  Object.defineProperties(URL.prototype, {
+    href: {
+      get: function () { return this._parsed.href; },
+      set: function (val) { this._parsed = parseUrlString(val); },
+      enumerable: true,
+      configurable: true,
+    },
+    origin: {
+      get: function () { return this._parsed.origin; },
+      enumerable: true,
+      configurable: true,
+    },
+    protocol: {
+      get: function () { return this._parsed.protocol; },
+      set: function (val) {
+        let v = String(val);
+        if (!v.endsWith(":")) v += ":";
+        this._parsed = parseUrlString(v + this._parsed.href.slice(this._parsed.protocol.length));
+      },
+      enumerable: true,
+      configurable: true,
+    },
+    host: {
+      get: function () { return this._parsed.host; },
+      enumerable: true,
+      configurable: true,
+    },
+    hostname: {
+      get: function () { return this._parsed.hostname; },
+      enumerable: true,
+      configurable: true,
+    },
+    port: {
+      get: function () { return this._parsed.port; },
+      enumerable: true,
+      configurable: true,
+    },
+    pathname: {
+      get: function () { return this._parsed.pathname; },
+      set: function (val) {
+        let v = String(val);
+        if (!v.startsWith("/")) v = "/" + v;
+        this._parsed.pathname = v;
+        this._parsed = parseUrlString(this._parsed.href);
+      },
+      enumerable: true,
+      configurable: true,
+    },
+    search: {
+      get: function () { return this._parsed.search; },
+      set: function (val) {
+        let v = String(val);
+        if (v && !v.startsWith("?")) v = "?" + v;
+        this._parsed.search = v;
+        this._parsed = parseUrlString(this._parsed.href);
+      },
+      enumerable: true,
+      configurable: true,
+    },
+    hash: {
+      get: function () { return this._parsed.hash; },
+      set: function (val) {
+        let v = String(val);
+        if (v && !v.startsWith("#")) v = "#" + v;
+        this._parsed.hash = v;
+        this._parsed = parseUrlString(this._parsed.href);
+      },
+      enumerable: true,
+      configurable: true,
+    },
+  });
+  URL.prototype.toString = function () { return this._parsed.href; };
+  URL.prototype.toJSON = function () { return this._parsed.href; };
+  markNative(URL, "URL");
+  global.URL = URL;
+  if (typeof window !== "undefined") window.URL = URL;
+  if (typeof globalThis !== "undefined") globalThis.URL = URL;
+
+  const HistoryURL = URL;
+  const historyOriginGetter = Object.getOwnPropertyDescriptor(HistoryURL.prototype, "origin").get;
+  const historyHrefGetter = Object.getOwnPropertyDescriptor(HistoryURL.prototype, "href").get;
+  const historyProtoGetter = Object.getOwnPropertyDescriptor(HistoryURL.prototype, "protocol").get;
+
   // 1. Storage: localStorage & sessionStorage
   function Storage() {
     this._data = new Map();
@@ -104,20 +414,113 @@ function installWindow(global) {
 
   // 3. Location & History
   let currentHref = "about:blank";
+  let committedDocUrl = "about:blank";
+
+  function setDocumentUrl(newUrl) {
+    currentHref = String(newUrl);
+    committedDocUrl = String(newUrl);
+    historyStack.length = 0;
+    historyStack.push({ state: null, url: currentHref });
+    historyIdx = 0;
+    if (global.document) {
+      global.document.URL = currentHref;
+      global.document.documentURI = currentHref;
+    }
+  }
+  global.__capsurf_set_document_url = setDocumentUrl;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_set_document_url = setDocumentUrl;
+  }
+
+  global.__capsurf_same_doc_nav = [];
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_same_doc_nav = global.__capsurf_same_doc_nav;
+  }
+
+  function handleLocationNavigate(targetInput, isReplace) {
+    const targetStr = String(targetInput);
+    let targetUrl;
+    try {
+      targetUrl = new HistoryURL(targetStr, currentHref).href;
+    } catch (e) {
+      targetUrl = targetStr;
+    }
+
+    const sameDoc = (targetUrl.split("#")[0] === currentHref.split("#")[0]);
+    if (sameDoc && targetUrl.includes("#")) {
+      currentHref = targetUrl;
+      if (isReplace) {
+        historyStack[historyIdx] = { state: null, url: currentHref };
+      } else {
+        historyIdx++;
+        historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: null, url: currentHref });
+      }
+      if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+      global.__capsurf_same_doc_nav.push({ url: currentHref, type: isReplace ? "replaceState" : "fragment" });
+      setTimeout(() => {
+        try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+      }, 0);
+    } else {
+      currentHref = targetUrl;
+      global.__capsurf_pending_navigation = targetUrl;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_pending_navigation = targetUrl;
+      }
+      if (typeof global.__capsurf_on_location_navigate === "function") {
+        try { global.__capsurf_on_location_navigate(targetUrl); } catch (e) {}
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+        try { globalThis.__capsurf_on_location_navigate(targetUrl); } catch (e) {}
+      }
+    }
+  }
+
   const locationObj = {
     get href() { return currentHref; },
-    set href(val) { currentHref = String(val); },
-    get protocol() { try { return new URL(currentHref).protocol; } catch(e) { return "about:"; } },
-    get host() { try { return new URL(currentHref).host; } catch(e) { return ""; } },
-    get hostname() { try { return new URL(currentHref).hostname; } catch(e) { return ""; } },
-    get port() { try { return new URL(currentHref).port; } catch(e) { return ""; } },
-    get pathname() { try { return new URL(currentHref).pathname; } catch(e) { return "blank"; } },
-    get search() { try { return new URL(currentHref).search; } catch(e) { return ""; } },
-    get hash() { try { return new URL(currentHref).hash; } catch(e) { return ""; } },
-    get origin() { try { return new URL(currentHref).origin; } catch(e) { return "null"; } },
-    assign: markNative(function (url) { currentHref = String(url); }, "assign"),
-    replace: markNative(function (url) { currentHref = String(url); }, "replace"),
-    reload: markNative(function () {}, "reload"),
+    set href(val) { handleLocationNavigate(val, false); },
+    get protocol() { try { return new HistoryURL(currentHref).protocol; } catch(e) { return "about:"; } },
+    get host() { try { return new HistoryURL(currentHref).host; } catch(e) { return ""; } },
+    get hostname() { try { return new HistoryURL(currentHref).hostname; } catch(e) { return ""; } },
+    get port() { try { return new HistoryURL(currentHref).port; } catch(e) { return ""; } },
+    get pathname() { try { return new HistoryURL(currentHref).pathname; } catch(e) { return "blank"; } },
+    get search() { try { return new HistoryURL(currentHref).search; } catch(e) { return ""; } },
+    get hash() {
+      try {
+        return new HistoryURL(currentHref).hash;
+      } catch (e) {
+        const idx = currentHref.indexOf("#");
+        return idx !== -1 ? currentHref.slice(idx) : "";
+      }
+    },
+    set hash(val) {
+      let h = String(val);
+      if (h && !h.startsWith("#")) h = "#" + h;
+      const base = currentHref.split("#")[0];
+      const newUrl = base + h;
+      if (newUrl !== currentHref) {
+        currentHref = newUrl;
+        historyIdx++;
+        historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: null, url: currentHref });
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "fragment" });
+        setTimeout(() => {
+          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+        }, 0);
+      }
+    },
+    get origin() { try { return new HistoryURL(currentHref).origin; } catch(e) { return "null"; } },
+    assign: markNative(function (url) { handleLocationNavigate(url, false); }, "assign"),
+    replace: markNative(function (url) { handleLocationNavigate(url, true); }, "replace"),
+    reload: markNative(function () {
+      global.__capsurf_pending_navigation = currentHref;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_pending_navigation = currentHref;
+      }
+      if (typeof global.__capsurf_on_location_navigate === "function") {
+        try { global.__capsurf_on_location_navigate(currentHref); } catch (e) {}
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+        try { globalThis.__capsurf_on_location_navigate(currentHref); } catch (e) {}
+      }
+    }, "reload"),
     toString: function () { return currentHref; },
   };
   global.location = locationObj;
@@ -125,52 +528,122 @@ function installWindow(global) {
   const historyStack = [{ state: null, url: currentHref }];
   let historyIdx = 0;
 
+  function resolveHistoryUrl(rawUrl, method) {
+    let cur = null;
+    try {
+      cur = new HistoryURL(committedDocUrl || currentHref);
+    } catch (e) {}
+
+    if (rawUrl === undefined || rawUrl === null) {
+      return historyStack[historyIdx]?.url ?? (cur ? historyHrefGetter.call(cur) : "");
+    }
+
+    if (!cur) {
+      throw new DOMException(`Failed to execute '${method}' on 'History': The current document URL is invalid.`, "SecurityError");
+    }
+
+    const curStr = historyHrefGetter.call(cur);
+    let target;
+    try {
+      target = new HistoryURL(String(rawUrl), curStr);
+    } catch (e) {
+      throw new DOMException(`Failed to execute '${method}' on 'History': '${rawUrl}' could not be parsed as a URL.`, "SecurityError");
+    }
+
+    const targetHref = historyHrefGetter.call(target);
+    const targetOrigin = historyOriginGetter.call(target);
+    const curOrigin = historyOriginGetter.call(cur);
+    const targetProtocol = historyProtoGetter.call(target);
+    const curProtocol = historyProtoGetter.call(cur);
+
+    const curBase = curStr.split("#")[0];
+    const targetBase = targetHref.split("#")[0];
+
+    // Opaque origin handling: e.g. data:, about:
+    if (curOrigin === "null" || targetOrigin === "null") {
+      if (curOrigin !== targetOrigin || targetProtocol !== curProtocol || targetBase !== curBase) {
+        throw new DOMException(
+          `Failed to execute '${method}' on 'History': A history state object cannot be created in an opaque-origin document with URL '${targetHref}'.`,
+          "SecurityError"
+        );
+      }
+    } else if (targetOrigin !== curOrigin) {
+      throw new DOMException(
+        `Failed to execute '${method}' on 'History': A history state object with URL '${targetHref}' cannot be created in a document with origin '${curOrigin}' and URL '${curStr}'.`,
+        "SecurityError"
+      );
+    }
+
+    return targetHref;
+  }
+
   const historyObj = {
     get length() { return historyStack.length; },
     get state() { return historyStack[historyIdx]?.state ?? null; },
     pushState: markNative(function (st, title, url) {
-      if (url) {
-        try {
-          const oldUrl = currentHref;
-          const newUrl = new URL(url, currentHref).href;
-          currentHref = newUrl;
-          if (oldUrl.split("#")[0] === newUrl.split("#")[0] && newUrl.includes("#")) {
-            setTimeout(() => {
-              try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
-            }, 0);
-          }
-        } catch (e) {
-          currentHref = String(url);
-        }
-      }
+      const target = resolveHistoryUrl(url, "pushState");
+      const oldUrl = currentHref;
+      currentHref = target;
       historyIdx++;
       historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: st, url: currentHref });
+      if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+      global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
+      if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+        setTimeout(() => {
+          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+        }, 0);
+      }
     }, "pushState"),
     replaceState: markNative(function (st, title, url) {
-      if (url) {
-        try { currentHref = new URL(url, currentHref).href; } catch (e) { currentHref = String(url); }
-      }
+      const target = resolveHistoryUrl(url, "replaceState");
+      const oldUrl = currentHref;
+      currentHref = target;
       historyStack[historyIdx] = { state: st, url: currentHref };
+      if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+      global.__capsurf_same_doc_nav.push({ url: currentHref, type: "replaceState" });
+      if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+        setTimeout(() => {
+          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+        }, 0);
+      }
     }, "replaceState"),
     back: markNative(function () {
       if (historyIdx > 0) {
         historyIdx--;
+        const oldUrl = currentHref;
         currentHref = historyStack[historyIdx].url;
+        const st = historyStack[historyIdx].state;
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
         setTimeout(() => {
           try {
-            global.dispatchEvent(new NativeEvent("popstate"));
+            const ev = new NativeEvent("popstate");
+            ev.state = st;
+            global.dispatchEvent(ev);
           } catch (e) {}
+          if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+          }
         }, 0);
       }
     }, "back"),
     forward: markNative(function () {
       if (historyIdx + 1 < historyStack.length) {
         historyIdx++;
+        const oldUrl = currentHref;
         currentHref = historyStack[historyIdx].url;
+        const st = historyStack[historyIdx].state;
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
         setTimeout(() => {
           try {
-            global.dispatchEvent(new NativeEvent("popstate"));
+            const ev = new NativeEvent("popstate");
+            ev.state = st;
+            global.dispatchEvent(ev);
           } catch (e) {}
+          if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+          }
         }, 0);
       }
     }, "forward"),
@@ -178,16 +651,35 @@ function installWindow(global) {
       const target = historyIdx + (Number(delta) || 0);
       if (target >= 0 && target < historyStack.length) {
         historyIdx = target;
+        const oldUrl = currentHref;
         currentHref = historyStack[historyIdx].url;
+        const st = historyStack[historyIdx].state;
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
         setTimeout(() => {
           try {
-            global.dispatchEvent(new NativeEvent("popstate"));
+            const ev = new NativeEvent("popstate");
+            ev.state = st;
+            global.dispatchEvent(ev);
           } catch (e) {}
+          if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+          }
         }, 0);
       }
     }, "go"),
   };
   global.history = historyObj;
+
+  if (typeof window !== "undefined") {
+    window.location = locationObj;
+    window.history = historyObj;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.location = locationObj;
+    globalThis.history = historyObj;
+    globalThis.__capsurf_same_doc_nav = global.__capsurf_same_doc_nav;
+  }
 
   // 4. Screen
   global.screen = {

@@ -812,8 +812,26 @@
 2. **跨导航在途评估销毁取消机制与 Matcher 扩展 (`e2e/harness.ts`)**：
    - **设计动机**：当页面正在执行长耗时异步 evaluate（如未决 Promise 或定时器）时，若测试触发导航（`goto` 或 `setContent`），Chrome 标准行为是立即销毁执行上下文并拒绝在途 Promise（`Execution context was destroyed`）。若引擎没有销毁机制，挂起的 Promise 将导致测试用例挂死；
    - **解决方案**：
-     - 在 `Page` 中维护 `inFlightEvaluates` 集合，在导航动作发生瞬间统一 reject 并清空；
+     - 在 `Page` 中维护 `inFlightEvaluates`集合，在导航动作发生瞬间统一 reject 并清空；
      - 基于 Proxy 扩展 `expect(promise).rejects.toThrow(...)`，完善异步断言支持。
+
+## Phase 43 导航历史体系、Page.getNavigationHistory 与同文档/跨文档安全隔离技术方案
+1. **环形滑动导航历史记录与 Chrome 规范对齐 (`src/cdp/session.cp` & `src/cdp/page.cp`)**：
+   - **设计动机**：Chrome CDP 协议要求 `Page.getNavigationHistory` 准确返回页面完整的浏览轨迹、当前所处索引（`currentIndex`）以及所有历史条目（`id`, `url`, `userTypedURL`, `title`, `transitionType`）。当页面进行前进/后退后再导航时，历史链条必须在当前索引截断；
+   - **解决方案**：
+     - 在 `session.cp` 中实装 16 槽环形滑动历史记录缓冲区 `nav_entries: [NavigationEntry]` 与 `current_nav_index`；
+     - 当连续导航达到 16 槽上限时，触发滑动窗口左移淘汰最久历史；若在历史回退状态发生新导航，自动截断当前索引之后的全部条目；
+     - 在 `page.cp` 中准确构造 JSON 返回结构，并通过 `Page.navigateToHistoryEntry` 实现历史快照的原生跳转。
+2. **同文档/跨文档导航隔离与同源安全防护 (`src/js/shim/window.js` & `src/cdp/session.cp`)**：
+   - **设计动机**：页面可通过 `history.pushState`、`history.replaceState`、`location.assign`、`location.replace` 与 `location.href` 改变当前 URL。恶意脚本可能尝试利用 `history.pushState` 伪造跨域地址或越界操纵不透明源（`data:` / `about:`）的 URL；
+   - **解决方案**：
+     - 在 `window.js` 中提取原生 `HistoryURL.prototype` 不可篡改访问器（`historyOriginGetter` 等），当检测到跨域跳转或对不透明源执行非 Fragment 修改时，直接阻断并抛出符合 Chrome 规范的 `DOMException("SecurityError", 18)`；
+     - 在 `session.navigate` 中区分同文档与跨文档导航：若为跨文档新导航，主动释放销毁旧 `JSContext`（`_.ctx.deinit()`）并重新分配纯净 Realm，杜绝跨文档内存及全局对象泄露污染；
+     - 在 `session.pollNavigatedWithinDocEvents` 中捕获 JS 垫片内部记录的同文档事件队列，以 `Page.navigatedWithinDocument` CDP 事件实时派发至客户端。
+3. **WHATWG URL 非法端口语法校验排查经验 (`src/js/shim/window.js`)**：
+   - **设计动机**：根据 WHATWG URL 规范，当解析含有非法端口格式（如端口为空或含非数字字符 `example.com:80:`）的 URL 时必须抛出 `TypeError("Invalid URL")`。若宽松解析，会导致 `HTMLAnchorElement.prototype.protocol` 错误解析为 `http:` 而非规范规定的回退回 `:`；
+   - **解决方案**：
+     - 在 `window.js` 的 `parseHostPort` 辅助函数中对冒号数量及端口数字字符添加严格的正则校验（`/^[0-9]+$/`），未通过时统一抛出 `TypeError`，使 `anchor-invalid-url-protocol` 100% 达标。
 
 
 

@@ -136,6 +136,15 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Poll any same-document navigation events produced during evaluation
+            let polled_nav_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_n_count = session.pollNavigatedWithinDocEvents(&polled_nav_evts);
+            let n_i: usize = 0;
+            while (n_i < polled_n_count && event_count.* < out_events.len) : (n_i += 1) {
+                out_events[event_count.*] = polled_nav_evts[n_i];
+                event_count.* += 1;
+            }
+
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{s}",

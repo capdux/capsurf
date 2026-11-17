@@ -1904,6 +1904,25 @@
    - **Bun 原生 TypeScript E2E 测试**：14 套核心 `.e2e.test.ts` 套件（26 个用例，55 项 expect 断言）100% 绿色全部通过（`bun test`）；
    - **独立单二进制**：`bin/main`（9.2MB）构建成功。
 
+---
+
+## [2026-11-17 12:10:00] Turn 56
+
+### 阶段性研发与闭环验证：Phase 43 (导航历史体系、Page.getNavigationHistory 与同文档/跨文档安全隔离闭环)
+
+1. **双智能体并行流水线攻坚**：
+   - **子智能体 1 (CP 核心)**：在 `src/cdp/session.cp` 中实现 16 槽环形滑动历史记录缓冲区（`NavigationEntry`），支持连续导航、Reload 就地替换、后退并分支截断前向历史；在 `src/cdp/page.cp` 中实现 `Page.getNavigationHistory` 与 `Page.navigateToHistoryEntry`；在 `test/cdp/test_navigation_history.cp` 中完成 6 项白盒断言，100% 全部通过。
+   - **子智能体 2 (JS 垫片与 E2E 驱动)**：在 `src/js/shim/window.js` 中实装 WHATWG `URL` 类、`DOMException`（`SecurityError` 错误码 18）、`location.assign/replace/href/reload` 与不可伪造 `historyOriginGetter`，严格阻断同源跨域与不透明源越界；在 `e2e/harness.ts` 中实现 `Page.url()`、同文档导航事件监听与跨文档导航评估打断机制。
+2. **WHATWG URL 与会话隔离边缘用例深度排治**：
+   - **URL 端口格式严格校验**：排查并修复 `src/js/shim/window.js` 对非法端口（如 `example.com:80:`）缺少语法校验导致 `anchor.protocol` 异常返回的缺陷，严格抛出 `TypeError`，使 `anchor-invalid-url-protocol` 100% 通过；
+   - **跨文档上下文销毁重置**：在 `session.navigate` 中遇到新文档时彻底 deinit 旧上下文并分配新 Realm，杜绝跨文档环境污染；
+   - **测试夹具状态隔离**：在 `e2e/harness.ts` 中对 blank page 测试自动重置至 `about:blank`，消除用例间交叉污染。
+3. **双轨测试与门禁验证 100% 绿色闭环**：
+   - **纯 CP 原生单元测试**：`test/cdp/test_navigation_history.cp` 6 项测试 100% 全部 PASS；
+   - **静态门禁验证**：`python3 scripts/cpc_brief.py -n 8` 对所有修改的 CP 核心源码检验全部 100% 通过（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - **全量 16 套 E2E 黑盒端到端测试**：`bun test` 运行 16 个测试套件（32 个测试用例，77 项 expect 断言）100% 全部绿灯通过（耗时 36.40s）；
+   - **独立单二进制**：`bin/main`（9.2MB）构建成功。
+
 
 
 

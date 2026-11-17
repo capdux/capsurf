@@ -20,6 +20,101 @@ import { ScreencastHandler } from "./screencast.cp";
 import { ResourceStore } from "./resource_store.cp";
 import { KitesurfFacade } from "./kitesurf_facade.cp";
 
+pub struct NavigationEntry {
+    id: i32 = 0,
+    url: []const u8 = "",
+    title: []const u8 = "",
+}
+
+pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
+    let out_idx: usize = 0;
+    let i: usize = 0;
+    while (i < src.len && out_idx + 2 <= dst.len) : (i += 1) {
+        const c = src[i];
+        if (c == '"') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = '"';
+            out_idx += 2;
+        } else if (c == '\\') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = '\\';
+            out_idx += 2;
+        } else if (c == '\n') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 'n';
+            out_idx += 2;
+        } else if (c == '\r') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 'r';
+            out_idx += 2;
+        } else if (c == '\t') {
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 't';
+            out_idx += 2;
+        } else {
+            dst[out_idx] = c;
+            out_idx += 1;
+        }
+    }
+    return dst[0..out_idx];
+}
+
+pub fn canRewriteDocumentUrl(doc_url: []const u8, target_url: []const u8): bool {
+    if (target_url.len == 0) return true;
+    if (target_url[0] == '#') return true;
+
+    const target_scheme_end = std.mem.indexOf(u8, target_url, "://");
+    const doc_scheme_end = std.mem.indexOf(u8, doc_url, "://");
+
+    if (target_scheme_end == null) {
+        return true;
+    }
+
+    if (doc_scheme_end == null) {
+        let doc_base = doc_url;
+        if (d_h := std.mem.indexOf(u8, doc_url, "#")) {
+            doc_base = doc_url[0..d_h];
+        }
+        let tgt_base = target_url;
+        if (t_h := std.mem.indexOf(u8, target_url, "#")) {
+            tgt_base = target_url[0..t_h];
+        }
+        return std.mem.eql(u8, doc_base, tgt_base);
+    }
+
+    const doc_scheme = doc_url[0..doc_scheme_end.?];
+    const target_scheme = target_url[0..target_scheme_end.?];
+    if (!std.mem.eql(u8, doc_scheme, target_scheme)) return false;
+
+    const doc_auth_start = doc_scheme_end.? + 3;
+    let doc_auth = doc_url[doc_auth_start..];
+    if (d_slash := std.mem.indexOfPos(u8, doc_url, doc_auth_start, "/")) {
+        doc_auth = doc_url[doc_auth_start..d_slash];
+    }
+
+    const tgt_auth_start = target_scheme_end.? + 3;
+    let tgt_auth = target_url[tgt_auth_start..];
+    if (t_slash := std.mem.indexOfPos(u8, target_url, tgt_auth_start, "/")) {
+        tgt_auth = target_url[tgt_auth_start..t_slash];
+    }
+
+    if (!std.mem.eql(u8, doc_auth, tgt_auth)) return false;
+
+    if (std.mem.eql(u8, target_scheme, "http") || std.mem.eql(u8, target_scheme, "https")) {
+        return true;
+    }
+
+    let doc_base = doc_url;
+    if (d_h := std.mem.indexOf(u8, doc_url, "#")) {
+        doc_base = doc_url[0..d_h];
+    }
+    let tgt_base = target_url;
+    if (t_h := std.mem.indexOf(u8, target_url, "#")) {
+        tgt_base = target_url[0..t_h];
+    }
+    return std.mem.eql(u8, doc_base, tgt_base);
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -64,6 +159,15 @@ pub struct CdpPageSession {
     rt_ctx_event_buf: [512]u8 = [0; 512],
     page_frame_event_buf: [2048]u8 = [0; 2048],
     binding_event_buf: [1024]u8 = [0; 1024],
+    same_doc_event_buf: [2048]u8 = [0; 2048],
+
+    // Navigation History state
+    nav_entries: [16]NavigationEntry = [NavigationEntry{}; 16],
+    nav_entry_count: usize = 0,
+    current_nav_index: usize = 0,
+    next_nav_id: i32 = 1,
+    pending_same_doc_urls: [4][]const u8 = [""; 4],
+    pending_same_doc_count: usize = 0,
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
@@ -112,6 +216,13 @@ pub struct CdpPageSession {
             rt_ctx_event_buf: [0; 512],
             page_frame_event_buf: [0; 2048],
             binding_event_buf: [0; 1024],
+            same_doc_event_buf: [0; 2048],
+            nav_entries: [NavigationEntry{}; 16],
+            nav_entry_count: 0,
+            current_nav_index: 0,
+            next_nav_id: 1,
+            pending_same_doc_urls: [""; 4],
+            pending_same_doc_count: 0,
             focused_node: NULL_NODE,
             scroll_x: 0.0,
             scroll_y: 0.0,
@@ -122,6 +233,30 @@ pub struct CdpPageSession {
     }
 
     pub fn deinit(*_) {
+        const nav_count = @min(_.nav_entry_count, _.nav_entries.len);
+        let ni: usize = 0;
+        while (ni < nav_count) : (ni += 1) {
+            if (_.nav_entries[ni].url.len > 0) {
+                _.allocator.free(_.nav_entries[ni].url);
+                _.nav_entries[ni].url = "";
+            }
+            if (_.nav_entries[ni].title.len > 0) {
+                _.allocator.free(_.nav_entries[ni].title);
+                _.nav_entries[ni].title = "";
+            }
+        }
+        _.nav_entry_count = 0;
+
+        const p_count = @min(_.pending_same_doc_count, _.pending_same_doc_urls.len);
+        let pi: usize = 0;
+        while (pi < p_count) : (pi += 1) {
+            if (_.pending_same_doc_urls[pi].len > 0) {
+                _.allocator.free(_.pending_same_doc_urls[pi]);
+                _.pending_same_doc_urls[pi] = "";
+            }
+        }
+        _.pending_same_doc_count = 0;
+
         if (_.raw_html.len > 0) {
             _.allocator.free(_.raw_html);
             _.raw_html = "";
@@ -139,6 +274,7 @@ pub struct CdpPageSession {
     }
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8)! {
+        _.title = "";
         _.doc.deinit();
         if (_.raw_html.len > 0) {
             _.allocator.free(_.raw_html);
@@ -170,6 +306,10 @@ pub struct CdpPageSession {
             std.heap.c_allocator.destroy(_.dom_ctx.?);
             _.dom_ctx = null;
         }
+        if (_.has_document) {
+            _.ctx.deinit();
+            _.ctx = _.rt.createContext() catch return error.JsContextFailed;
+        }
         const m = mountDom(&_.ctx, &_.doc, &_.layout) catch return error.MountDomFailed;
         _.dom_ctx = m;
         _.url = nav_url;
@@ -177,6 +317,20 @@ pub struct CdpPageSession {
         _.focused_node = NULL_NODE;
         _.scroll_x = 0.0;
         _.scroll_y = 0.0;
+
+        // Set document url in JS environment
+        let set_url_buf: [1024]u8 = undefined;
+        let set_url_json_buf: [512]u8 = undefined;
+        const escaped_nav_url = escapeJsonString(nav_url, set_url_json_buf[0..]);
+        const set_url_script = std.fmt.bufPrint(
+            &set_url_buf,
+            "(function(){{if(typeof __capsurf_set_document_url==='function')__capsurf_set_document_url(\"{s}\");}})()",
+            .{escaped_nav_url},
+        ) catch "";
+        if (set_url_script.len > 0) {
+            const v = _.ctx.eval(set_url_script);
+            _.ctx.freeValue(v);
+        }
 
         // Execute inline <script> tags in document order
         let nid: usize = 1;
@@ -205,40 +359,13 @@ pub struct CdpPageSession {
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
         const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
         _.ctx.freeValue(lc_res);
-    }
 
-fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
-    let out_idx: usize = 0;
-    let i: usize = 0;
-    while (i < src.len && out_idx + 2 <= dst.len) : (i += 1) {
-        const c = src[i];
-        if (c == '"') {
-            dst[out_idx] = '\\';
-            dst[out_idx + 1] = '"';
-            out_idx += 2;
-        } else if (c == '\\') {
-            dst[out_idx] = '\\';
-            dst[out_idx + 1] = '\\';
-            out_idx += 2;
-        } else if (c == '\n') {
-            dst[out_idx] = '\\';
-            dst[out_idx + 1] = 'n';
-            out_idx += 2;
-        } else if (c == '\r') {
-            dst[out_idx] = '\\';
-            dst[out_idx + 1] = 'r';
-            out_idx += 2;
-        } else if (c == '\t') {
-            dst[out_idx] = '\\';
-            dst[out_idx + 1] = 't';
-            out_idx += 2;
-        } else {
-            dst[out_idx] = c;
-            out_idx += 1;
+        // Record navigation in history
+        _.recordNavigation(nav_url, _.title);
+        if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+            _.url = _.nav_entries[_.current_nav_index].url;
         }
     }
-    return dst[0..out_idx];
-}
 
     fn formatCdpException(*_, exc: JSValue, out_buf: []u8): usize {
         const exc_str = _.ctx.toCString(exc);
@@ -506,6 +633,9 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
 
         const json_str = _.ctx.toCString(val);
         defer std.heap.page_allocator.free(json_str);
+        if (json_str.len > 2) {
+            std.debug.print("drain_expr json_str: {s}\n", .{json_str});
+        }
 
         if (json_str.len <= 2) return 0;
 
@@ -537,6 +667,238 @@ fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
             ) catch break;
 
             out_events[ev_idx] = CdpEvent.create("Runtime.bindingCalled", rt_json);
+            ev_idx += 1;
+        }
+
+        return ev_idx;
+    }
+
+    fn recordNavigation(*_, nav_url: []const u8, nav_title: []const u8) {
+        // If current entry has the same URL, update its title (e.g. reload)
+        if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+            if (std.mem.eql(u8, _.nav_entries[_.current_nav_index].url, nav_url)) {
+                if (nav_title.len > 0) {
+                    if (_.nav_entries[_.current_nav_index].title.len > 0) {
+                        _.allocator.free(_.nav_entries[_.current_nav_index].title);
+                    }
+                    _.nav_entries[_.current_nav_index].title = _.allocator.dupe(u8, nav_title) catch "";
+                }
+                return;
+            }
+        }
+
+        // Truncate any forward entries if we navigated after back
+        if (_.current_nav_index + 1 < _.nav_entry_count) {
+            let tr: usize = _.current_nav_index + 1;
+            while (tr < _.nav_entry_count) : (tr += 1) {
+                if (_.nav_entries[tr].url.len > 0) {
+                    _.allocator.free(_.nav_entries[tr].url);
+                    _.nav_entries[tr].url = "";
+                }
+                if (_.nav_entries[tr].title.len > 0) {
+                    _.allocator.free(_.nav_entries[tr].title);
+                    _.nav_entries[tr].title = "";
+                }
+            }
+            _.nav_entry_count = _.current_nav_index + 1;
+        }
+
+        const dup_url = _.allocator.dupe(u8, nav_url) catch "";
+        let dup_title: []const u8 = "";
+        if (nav_title.len > 0) {
+            dup_title = _.allocator.dupe(u8, nav_title) catch "";
+        }
+
+        const entry_id = _.next_nav_id;
+        _.next_nav_id += 1;
+
+        if (_.nav_entry_count < 16) {
+            const idx = _.nav_entry_count;
+            _.nav_entries[idx] = NavigationEntry{
+                id: entry_id,
+                url: dup_url,
+                title: dup_title,
+            };
+            _.current_nav_index = idx;
+            _.nav_entry_count += 1;
+        } else {
+            // Drop oldest entry (slot 0)
+            if (_.nav_entries[0].url.len > 0) {
+                _.allocator.free(_.nav_entries[0].url);
+            }
+            if (_.nav_entries[0].title.len > 0) {
+                _.allocator.free(_.nav_entries[0].title);
+            }
+
+            let s: usize = 0;
+            while (s < 15) : (s += 1) {
+                _.nav_entries[s] = _.nav_entries[s + 1];
+            }
+
+            _.nav_entries[15] = NavigationEntry{
+                id: entry_id,
+                url: dup_url,
+                title: dup_title,
+            };
+            _.current_nav_index = 15;
+        }
+    }
+
+    pub fn updateCurrentNavTitle(*_, new_title: []const u8) {
+        if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+            if (!std.mem.eql(u8, _.nav_entries[_.current_nav_index].title, new_title)) {
+                if (_.nav_entries[_.current_nav_index].title.len > 0) {
+                    _.allocator.free(_.nav_entries[_.current_nav_index].title);
+                }
+                _.nav_entries[_.current_nav_index].title = _.allocator.dupe(u8, new_title) catch "";
+            }
+        }
+    }
+
+    pub fn navigateToHistoryEntry(*_, entry_id: i32): bool {
+        let i: usize = 0;
+        while (i < _.nav_entry_count) : (i += 1) {
+            if (_.nav_entries[i].id == entry_id) {
+                _.current_nav_index = i;
+                _.url = _.nav_entries[i].url;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn pushNavigatedWithinDocEvent(*_, url: []const u8) {
+        _.recordSameDocNavigation(url, true);
+        if (_.pending_same_doc_count < _.pending_same_doc_urls.len) {
+            _.pending_same_doc_urls[_.pending_same_doc_count] = _.allocator.dupe(u8, url) catch url;
+            _.pending_same_doc_count += 1;
+        }
+    }
+
+    pub fn recordSameDocNavigation(*_, url: []const u8, is_push: bool) {
+        if (!canRewriteDocumentUrl(_.url, url)) return;
+        if (is_push) {
+            _.recordNavigation(url, _.title);
+            if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+                _.url = _.nav_entries[_.current_nav_index].url;
+            }
+        } else {
+            if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+                if (_.nav_entries[_.current_nav_index].url.len > 0) {
+                    _.allocator.free(_.nav_entries[_.current_nav_index].url);
+                }
+                _.nav_entries[_.current_nav_index].url = _.allocator.dupe(u8, url) catch "";
+                _.url = _.nav_entries[_.current_nav_index].url;
+            }
+        }
+    }
+
+    pub fn pollNavigatedWithinDocEvents(*_, out_events: []CdpEvent): usize {
+        let ev_idx: usize = 0;
+
+        // Pass A: Drain pending same-doc navigations from JS context into local stack buffer
+        let js_urls: [4][]const u8 = [""; 4];
+        let js_pushes: [4]bool = [true; 4];
+        let js_count: usize = 0;
+
+        const drain_expr = "(function(){if(typeof __capsurf_drain_same_doc_nav==='function')return __capsurf_drain_same_doc_nav();const q=globalThis.__capsurf_same_doc_nav||[];globalThis.__capsurf_same_doc_nav=[];return JSON.stringify(q);})()";
+        const val = _.ctx.eval(drain_expr);
+        defer _.ctx.freeValue(val);
+
+        const json_str = _.ctx.toCString(val);
+        defer std.heap.page_allocator.free(json_str);
+
+        if (json_str.len > 2) {
+            let pos: usize = 0;
+            while (js_count < js_urls.len) {
+                const url_marker = "\"url\":\"";
+                const url_start_opt = std.mem.indexOfPos(u8, json_str, pos, url_marker);
+                if (url_start_opt == null) break;
+                const url_start = url_start_opt.? + url_marker.len;
+                const url_end_opt = std.mem.indexOfPos(u8, json_str, url_start, "\"");
+                if (url_end_opt == null) break;
+                const url_val = json_str[url_start..url_end_opt.?];
+
+                let is_push = true;
+                if (push_start_opt := std.mem.indexOfPos(u8, json_str, url_end_opt.?, "\"isPush\":")) {
+                    const p_start = push_start_opt + 9;
+                    if (p_start + 5 <= json_str.len && std.mem.eql(u8, json_str[p_start..p_start + 5], "false")) {
+                        is_push = false;
+                    }
+                } else if (type_start_opt := std.mem.indexOfPos(u8, json_str, url_end_opt.?, "\"type\":\"")) {
+                    const t_start = type_start_opt + 8;
+                    if (t_end_opt := std.mem.indexOfPos(u8, json_str, t_start, "\"")) {
+                        const type_val = json_str[t_start..t_end_opt];
+                        if (std.mem.eql(u8, type_val, "replaceState")) {
+                            is_push = false;
+                        }
+                    }
+                }
+
+                pos = url_end_opt.? + 1;
+
+                if (canRewriteDocumentUrl(_.url, url_val)) {
+                    js_urls[js_count] = url_val;
+                    js_pushes[js_count] = is_push;
+                    js_count += 1;
+                }
+            }
+        }
+
+        // Pass B: Apply same-doc navigation state updates (all mutable operations)
+        let ji: usize = 0;
+        while (ji < js_count) : (ji += 1) {
+            _.recordSameDocNavigation(js_urls[ji], js_pushes[ji]);
+        }
+
+        // Pass C: Format and emit pending events from CP queue
+        const p_count = _.pending_same_doc_count;
+        _.pending_same_doc_count = 0;
+
+        let pi: usize = 0;
+        while (pi < p_count && ev_idx < out_events.len) : (pi += 1) {
+            const pending_url = _.pending_same_doc_urls[pi];
+            const offset = ev_idx * 512;
+            const chunk = _.same_doc_event_buf[offset .. offset + 512];
+
+            let esc_buf: [512]u8 = [0; 512];
+            const esc_url = escapeJsonString(pending_url, &esc_buf);
+
+            const nav_json = std.fmt.bufPrint(
+                chunk,
+                "{{\"frameId\":\"{s}\",\"url\":\"{s}\",\"navigationType\":\"historyApi\"}}",
+                .{ _.frame_id, esc_url },
+            ) catch "";
+
+            if (pending_url.len > 0) {
+                _.allocator.free(pending_url);
+                _.pending_same_doc_urls[pi] = "";
+            }
+
+            if (nav_json.len > 0) {
+                out_events[ev_idx] = CdpEvent.create("Page.navigatedWithinDocument", nav_json);
+                ev_idx += 1;
+            }
+        }
+
+        // Pass D: Format and emit events from JS queue
+        let ki: usize = 0;
+        while (ki < js_count && ev_idx < out_events.len) : (ki += 1) {
+            const url_val = js_urls[ki];
+            const offset = ev_idx * 512;
+            const chunk = _.same_doc_event_buf[offset .. offset + 512];
+
+            let esc_buf: [512]u8 = [0; 512];
+            const esc_url = escapeJsonString(url_val, &esc_buf);
+
+            const nav_type = if (js_pushes[ki]) "historyApi" else "replaceState";
+            const nav_json = std.fmt.bufPrint(
+                chunk,
+                "{{\"frameId\":\"{s}\",\"url\":\"{s}\",\"navigationType\":\"{s}\"}}",
+                .{ _.frame_id, esc_url, nav_type },
+            ) catch break;
+
+            out_events[ev_idx] = CdpEvent.create("Page.navigatedWithinDocument", nav_json);
             ev_idx += 1;
         }
 

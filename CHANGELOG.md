@@ -927,6 +927,28 @@
   - 独立单二进制：`bin/main`（9.2MB）构建成功；
   - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 43: Navigation History, Page.getNavigationHistory & Same-Doc Origin Security (100% Closed)
+- **`src/cdp/session.cp`**：
+  - 实装 `NavigationEntry` 结构与 16 槽循环历史缓冲区（`nav_entries`），支持 `current_nav_index` 跟踪、超限滑动窗口平移与分支后退截断；
+  - 实装 `recordSameDocNavigation` 与 `pollNavigatedWithinDocEvents`，实现 JS 同文档哈希/pushState 状态无缝捕获；
+  - 实装跨文档 Realm 彻底重置机制，导航至新文档时重置并重新初始化 `JSContext`，清除执行域污染。
+- **`src/cdp/page.cp`**：
+  - 实装 `Page.getNavigationHistory`，规范生成符合 Chrome 规范的 `currentIndex` 与 `entries` 响应；
+  - 实装 `Page.navigateToHistoryEntry` 原生路由分发。
+- **`src/js/shim/window.js`**：
+  - 实装 WHATWG `URL` 类与严格端口格式校验（排除空端口与非数字如 `example.com:80:`），抛出 `TypeError` 支撑 `anchor.protocol` 回退；
+  - 实装 `DOMException`（`SecurityError: 18`）；
+  - 实装 `location.assign`、`replace`、`href` setter 与 `reload` 路由触发；
+  - 实装不可伪造 `historyOriginGetter`，强制校验跨域与不透明源，阻止恶意 URL 劫持。
+- **`e2e/harness.ts`**：
+  - 实装 `Page.url()` 动态同步、`Page.navigatedWithinDocument` 事件监听与在途评估跨文档中断拒绝；
+  - 实装 blank page 测试环境重置隔离，消除用例间交叉污染。
+- **测试套件与全链路验证**：
+  - `test/cdp/test_navigation_history.cp`：纯 CP 原生单元测试 6 项测试 100% 全部 PASS；
+  - `bun test`：全量 16 套 `.e2e.test.ts` 测试套件（32 个用例，77 项 expect 断言）100% 绿色通过（36.40s）；
+  - 独立单二进制：`bin/main`（9.2MB）构建成功；
+  - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 
