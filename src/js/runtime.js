@@ -923,11 +923,15 @@
   };
   markNative(NodeList, "NodeList");
 
-  function Attr(name, value, ownerElement) {
+  function Attr(name, value, ownerElement, namespaceURI, localName, prefix) {
     this.name = String(name);
     this._value = value == null ? "" : String(value);
     this.specified = true;
     this.ownerElement = ownerElement || null;
+    this._namespaceURI = namespaceURI !== undefined ? namespaceURI : null;
+    const colon = this.name.indexOf(":");
+    this._prefix = prefix !== undefined ? prefix : (colon !== -1 ? this.name.slice(0, colon) : null);
+    this._localName = localName !== undefined ? localName : (colon !== -1 ? this.name.slice(colon + 1) : this.name);
   }
 
   Object.defineProperty(Attr.prototype, "value", {
@@ -962,7 +966,27 @@
   });
 
   Object.defineProperty(Attr.prototype, "localName", {
-    get: function () { return this.name.toLowerCase(); },
+    get: function () {
+      if (this._localName !== undefined) return this._localName;
+      const colon = this.name.indexOf(":");
+      return colon !== -1 ? this.name.slice(colon + 1) : this.name.toLowerCase();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Attr.prototype, "prefix", {
+    get: function () {
+      if (this._prefix !== undefined) return this._prefix;
+      const colon = this.name.indexOf(":");
+      return colon !== -1 ? this.name.slice(0, colon) : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Attr.prototype, "namespaceURI", {
+    get: function () {
+      return this._namespaceURI !== undefined ? this._namespaceURI : null;
+    },
     configurable: true,
   });
 
@@ -1007,8 +1031,7 @@
     if (typeof this._owner._syncAttrs === "function") {
       this._owner._syncAttrs();
     }
-    const attrsMap = this._owner._attrs;
-    const currentAttrs = attrsMap ? Array.from(attrsMap.values()) : [];
+    const currentAttrs = this._owner._attrList || (this._owner._attrs ? Array.from(this._owner._attrs.values()) : []);
 
     for (let i = 0; i < this._length; i++) {
       delete this[i];
@@ -1019,7 +1042,11 @@
 
     for (let i = 0; i < currentAttrs.length; i++) {
       const item = currentAttrs[i];
-      const attrNode = new Attr(item.name, item.value, this._owner);
+      const colon = item.name.indexOf(":");
+      const pfx = item.prefix !== undefined ? item.prefix : (colon !== -1 ? item.name.slice(0, colon) : null);
+      const loc = item.localName !== undefined ? item.localName : (colon !== -1 ? item.name.slice(colon + 1) : item.name);
+      const ns = item.namespaceURI !== undefined ? item.namespaceURI : null;
+      const attrNode = new Attr(item.name, item.value, this._owner, ns, loc, pfx);
       this[i] = attrNode;
       this._list.push(attrNode);
       this._byName[item.name.toLowerCase()] = attrNode;
@@ -1074,6 +1101,44 @@
     return old;
   };
 
+  NamedNodeMap.prototype.getNamedItemNS = function (namespace, localName) {
+    this._sync();
+    const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+    const loc = String(localName).toLowerCase();
+    for (let i = 0; i < this._length; i++) {
+      const a = this._list[i];
+      const aNs = a.namespaceURI || null;
+      const aLoc = (a.localName || a.name).toLowerCase();
+      if (aNs === ns && aLoc === loc) return a;
+    }
+    return null;
+  };
+
+  NamedNodeMap.prototype.setNamedItemNS = function (attr) {
+    if (!attr || !attr.name) throw new TypeError("Attr required");
+    const old = this.getNamedItemNS(attr.namespaceURI, attr.localName || attr.name);
+    if (this._owner && typeof this._owner.setAttributeNS === "function") {
+      this._owner.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+    }
+    this._sync();
+    return old;
+  };
+
+  NamedNodeMap.prototype.removeNamedItemNS = function (namespace, localName) {
+    this._sync();
+    const old = this.getNamedItemNS(namespace, localName);
+    if (!old) {
+      const err = new Error("NotFoundError: No attribute matching namespace and localName");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    if (this._owner && typeof this._owner.removeAttributeNS === "function") {
+      this._owner.removeAttributeNS(namespace, localName);
+    }
+    this._sync();
+    return old;
+  };
+
   NamedNodeMap.prototype[Symbol.iterator] = function () {
     this._sync();
     const list = this._list.slice();
@@ -1091,8 +1156,11 @@
   markNative(NamedNodeMap, "NamedNodeMap");
   markNative(NamedNodeMap.prototype.item, "item");
   markNative(NamedNodeMap.prototype.getNamedItem, "getNamedItem");
+  markNative(NamedNodeMap.prototype.getNamedItemNS, "getNamedItemNS");
   markNative(NamedNodeMap.prototype.setNamedItem, "setNamedItem");
+  markNative(NamedNodeMap.prototype.setNamedItemNS, "setNamedItemNS");
   markNative(NamedNodeMap.prototype.removeNamedItem, "removeNamedItem");
+  markNative(NamedNodeMap.prototype.removeNamedItemNS, "removeNamedItemNS");
 
   if (typeof globalThis !== "undefined") {
     globalThis.NamedNodeMap = NamedNodeMap;
@@ -1452,25 +1520,47 @@
     proto._syncAttrs = function () {
       if (!this._attrs) {
         this._attrs = new Map();
+        this._attrList = [];
         if (typeof this._getRawAttrs === "function") {
           const raw = this._getRawAttrs();
           if (raw && Array.isArray(raw)) {
             for (let i = 0; i < raw.length; i++) {
               const item = raw[i];
               if (item && item.name) {
-                this._attrs.set(item.name.toLowerCase(), { name: item.name, value: item.value || "" });
+                const colon = item.name.indexOf(":");
+                const prefix = colon !== -1 ? item.name.slice(0, colon) : null;
+                const localName = colon !== -1 ? item.name.slice(colon + 1) : item.name;
+                let ns = null;
+                if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
+                else if (prefix === "xmlns" || item.name === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+                else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
+                const entry = {
+                  name: item.name,
+                  value: item.value || "",
+                  namespaceURI: ns,
+                  localName: localName,
+                  prefix: prefix,
+                };
+                this._attrList.push(entry);
+                this._attrs.set(item.name.toLowerCase(), entry);
               }
             }
           }
         }
         if (this.id && !this._attrs.has("id")) {
-          this._attrs.set("id", { name: "id", value: this.id });
+          const entry = { name: "id", value: this.id, namespaceURI: null, localName: "id", prefix: null };
+          this._attrList.push(entry);
+          this._attrs.set("id", entry);
         }
         if (this.className && !this._attrs.has("class")) {
-          this._attrs.set("class", { name: "class", value: this.className });
+          const entry = { name: "class", value: this.className, namespaceURI: null, localName: "class", prefix: null };
+          this._attrList.push(entry);
+          this._attrs.set("class", entry);
         }
         if (this.hasAttribute && this.hasAttribute("style") && !this._attrs.has("style")) {
-          this._attrs.set("style", { name: "style", value: this.getAttribute("style") || "" });
+          const entry = { name: "style", value: this.getAttribute("style") || "", namespaceURI: null, localName: "style", prefix: null };
+          this._attrList.push(entry);
+          this._attrs.set("style", entry);
         }
       }
     };
@@ -1494,8 +1584,36 @@
       const key = String(name);
       const val = String(value);
       if (!this._attrs) this._syncAttrs();
-      const oldEntry = this._attrs.get(key.toLowerCase());
-      const oldVal = oldEntry ? oldEntry.value : null;
+      let existing = null;
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          if (this._attrList[i].name.toLowerCase() === key.toLowerCase()) {
+            existing = this._attrList[i];
+            break;
+          }
+        }
+      }
+      const oldVal = existing ? existing.value : (this._attrs.get(key.toLowerCase())?.value ?? null);
+      if (existing) {
+        existing.value = val;
+      } else {
+        const colon = key.indexOf(":");
+        const prefix = colon !== -1 ? key.slice(0, colon) : null;
+        const localName = colon !== -1 ? key.slice(colon + 1) : key;
+        let ns = null;
+        if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
+        else if (prefix === "xmlns" || key === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+        else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
+        const entry = {
+          name: key,
+          value: val,
+          namespaceURI: ns,
+          localName: localName,
+          prefix: prefix,
+        };
+        if (!this._attrList) this._attrList = [];
+        this._attrList.push(entry);
+      }
       this._attrs.set(key.toLowerCase(), { name: key, value: val });
       if (key.toLowerCase() === "id") {
         this.id = val;
@@ -1522,8 +1640,18 @@
     proto.removeAttribute = function (name) {
       const key = String(name).toLowerCase();
       if (!this._attrs) this._syncAttrs();
+      let oldVal = null;
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          if (this._attrList[i].name.toLowerCase() === key) {
+            oldVal = this._attrList[i].value;
+            this._attrList.splice(i, 1);
+            break;
+          }
+        }
+      }
       const oldEntry = this._attrs.get(key);
-      const oldVal = oldEntry ? oldEntry.value : null;
+      if (!oldVal && oldEntry) oldVal = oldEntry.value;
       this._attrs.delete(key);
       if (key === "id") {
         this.id = "";
@@ -1566,6 +1694,12 @@
     };
     markNative(proto.getAttributeNode, "getAttributeNode");
 
+    proto.getAttributeNodeNS = function (namespace, localName) {
+      if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
+      return this._attributesMap.getNamedItemNS(namespace, localName);
+    };
+    markNative(proto.getAttributeNodeNS, "getAttributeNodeNS");
+
     proto.setAttributeNode = function (attr) {
       if (!attr || !attr.name) throw new TypeError("Attr required");
       if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
@@ -1577,6 +1711,14 @@
     const origGetAttribute = proto.getAttribute;
     proto.getAttribute = function (name) {
       const key = String(name).toLowerCase();
+      if (!this._attrs) this._syncAttrs();
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          if (this._attrList[i].name.toLowerCase() === key) {
+            return this._attrList[i].value;
+          }
+        }
+      }
       if (this._attrs) {
         const entry = this._attrs.get(key);
         if (entry) return entry.value;
@@ -1597,6 +1739,14 @@
     const origHasAttribute = proto.hasAttribute;
     proto.hasAttribute = function (name) {
       const key = String(name).toLowerCase();
+      if (!this._attrs) this._syncAttrs();
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          if (this._attrList[i].name.toLowerCase() === key) {
+            return true;
+          }
+        }
+      }
       if (this._attrs) {
         if (this._attrs.has(key)) return true;
         if (origHasAttribute) return origHasAttribute.call(this, name);
@@ -1613,12 +1763,186 @@
     proto.getAttributeNames = function () {
       if (!this._attrs) this._syncAttrs();
       const names = [];
-      for (const entry of this._attrs.values()) {
-        names.push(entry.name);
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          names.push(this._attrList[i].name);
+        }
+      } else {
+        for (const entry of this._attrs.values()) {
+          names.push(entry.name);
+        }
       }
       return names;
     };
     markNative(proto.getAttributeNames, "getAttributeNames");
+
+    // getAttributeNS
+    proto.getAttributeNS = function (namespace, localName) {
+      if (typeof localName !== "string") return null;
+      if (!this._attrs) this._syncAttrs();
+      const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+      const loc = String(localName).toLowerCase();
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          const item = this._attrList[i];
+          const itemNs = item.namespaceURI || null;
+          const itemLoc = (item.localName || item.name).toLowerCase();
+          if (itemNs === ns && itemLoc === loc) {
+            return item.value;
+          }
+        }
+        if (ns === null) {
+          for (let i = 0; i < this._attrList.length; i++) {
+            const item = this._attrList[i];
+            if ((item.namespaceURI === null || item.namespaceURI === undefined) &&
+                item.name.toLowerCase() === loc) {
+              return item.value;
+            }
+          }
+        }
+        return null;
+      }
+      return null;
+    };
+    markNative(proto.getAttributeNS, "getAttributeNS");
+
+    // hasAttributeNS
+    proto.hasAttributeNS = function (namespace, localName) {
+      return this.getAttributeNS(namespace, localName) !== null;
+    };
+    markNative(proto.hasAttributeNS, "hasAttributeNS");
+
+    // setAttributeNS
+    proto.setAttributeNS = function (namespace, qualifiedName, value) {
+      const qname = String(qualifiedName);
+      const val = String(value);
+      const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+      const colon = qname.indexOf(":");
+      const prefix = colon !== -1 ? qname.slice(0, colon) : null;
+      const localName = colon !== -1 ? qname.slice(colon + 1) : qname;
+
+      if (!this._attrs) this._syncAttrs();
+
+      let existing = null;
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          const item = this._attrList[i];
+          const itemNs = item.namespaceURI || null;
+          const itemLoc = (item.localName || item.name).toLowerCase();
+          if (itemNs === ns && itemLoc === localName.toLowerCase()) {
+            existing = item;
+            break;
+          }
+        }
+      }
+
+      const oldVal = existing ? existing.value : null;
+
+      if (existing) {
+        existing.value = val;
+        existing.name = qname;
+        existing.prefix = prefix;
+      } else {
+        const newEntry = {
+          name: qname,
+          value: val,
+          namespaceURI: ns,
+          localName: localName,
+          prefix: prefix,
+        };
+        if (!this._attrList) this._attrList = [];
+        this._attrList.push(newEntry);
+      }
+
+      this._attrs.set(qname.toLowerCase(), {
+        name: qname,
+        value: val,
+        namespaceURI: ns,
+        localName: localName,
+        prefix: prefix,
+      });
+
+      if (qname.toLowerCase() === "id" && ns === null) {
+        this.id = val;
+      } else if (qname.toLowerCase() === "class" && ns === null) {
+        this.className = val;
+      }
+
+      if (origSetAttribute) {
+        origSetAttribute.call(this, qname, val);
+      }
+      if (this._attributesMap) {
+        this._attributesMap._sync();
+      }
+      if (typeof notifyMutation === "function") {
+        const rec = new MutationRecord("attributes", this);
+        rec.attributeName = qname;
+        rec.attributeNamespace = ns;
+        rec.oldValue = oldVal;
+        notifyMutation(rec);
+      }
+    };
+    markNative(proto.setAttributeNS, "setAttributeNS");
+
+    // removeAttributeNS
+    proto.removeAttributeNS = function (namespace, localName) {
+      if (typeof localName !== "string" || localName.length === 0) return;
+      if (!this._attrs) this._syncAttrs();
+      const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+      const loc = String(localName).toLowerCase();
+
+      let removed = null;
+      if (this._attrList) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          const item = this._attrList[i];
+          const itemNs = item.namespaceURI || null;
+          const itemLoc = (item.localName || item.name).toLowerCase();
+          if (itemNs === ns && itemLoc === loc) {
+            removed = item;
+            this._attrList.splice(i, 1);
+            break;
+          }
+        }
+        if (!removed && ns === null) {
+          for (let i = 0; i < this._attrList.length; i++) {
+            const item = this._attrList[i];
+            if ((item.namespaceURI === null || item.namespaceURI === undefined) &&
+                item.name.toLowerCase() === loc) {
+              removed = item;
+              this._attrList.splice(i, 1);
+              break;
+            }
+          }
+        }
+      }
+
+      const oldVal = removed ? removed.value : null;
+      const removedName = removed ? removed.name : localName;
+
+      this._attrs.delete(removedName.toLowerCase());
+      this._attrs.delete(localName.toLowerCase());
+
+      if (removedName.toLowerCase() === "id" && ns === null) {
+        this.id = "";
+      } else if (removedName.toLowerCase() === "class" && ns === null) {
+        this.className = "";
+      }
+
+      if (origRemoveAttribute) {
+        origRemoveAttribute.call(this, removedName);
+      }
+      if (this._attributesMap) {
+        this._attributesMap._sync();
+      }
+      if (typeof notifyMutation === "function") {
+        const rec = new MutationRecord("attributes", this);
+        rec.attributeName = removedName;
+        rec.attributeNamespace = ns;
+        rec.oldValue = oldVal;
+        notifyMutation(rec);
+      }
+    };
+    markNative(proto.removeAttributeNS, "removeAttributeNS");
 
     // Wrap id & className accessors if present
     const idDesc = Object.getOwnPropertyDescriptor(proto, "id");
@@ -1631,9 +1955,29 @@
           const str = String(v);
           if (!this._attrs) this._syncAttrs();
           if (str) {
-            this._attrs.set("id", { name: "id", value: str });
+            const entry = { name: "id", value: str, namespaceURI: null, localName: "id", prefix: null };
+            this._attrs.set("id", entry);
+            if (this._attrList) {
+              let found = false;
+              for (let i = 0; i < this._attrList.length; i++) {
+                if (this._attrList[i].name.toLowerCase() === "id") {
+                  this._attrList[i].value = str;
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) this._attrList.push(entry);
+            }
           } else {
             this._attrs.delete("id");
+            if (this._attrList) {
+              for (let i = 0; i < this._attrList.length; i++) {
+                if (this._attrList[i].name.toLowerCase() === "id") {
+                  this._attrList.splice(i, 1);
+                  break;
+                }
+              }
+            }
           }
           if (this._attributesMap) this._attributesMap._sync();
         },
@@ -1650,9 +1994,29 @@
           const str = String(v);
           if (!this._attrs) this._syncAttrs();
           if (str) {
-            this._attrs.set("class", { name: "class", value: str });
+            const entry = { name: "class", value: str, namespaceURI: null, localName: "class", prefix: null };
+            this._attrs.set("class", entry);
+            if (this._attrList) {
+              let found = false;
+              for (let i = 0; i < this._attrList.length; i++) {
+                if (this._attrList[i].name.toLowerCase() === "class") {
+                  this._attrList[i].value = str;
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) this._attrList.push(entry);
+            }
           } else {
             this._attrs.delete("class");
+            if (this._attrList) {
+              for (let i = 0; i < this._attrList.length; i++) {
+                if (this._attrList[i].name.toLowerCase() === "class") {
+                  this._attrList.splice(i, 1);
+                  break;
+                }
+              }
+            }
           }
           if (this._attributesMap) this._attributesMap._sync();
         },
@@ -1688,6 +2052,9 @@
       proto.matches = function (selector) {
         if (!selector || typeof selector !== "string") return false;
         const s = selector.trim();
+        if (s === ":checked") return Boolean(this.checked);
+        if (s === ":disabled") return Boolean(this.disabled);
+        if (s === ":enabled") return !this.disabled;
         if (s === "*") return true;
         if (s.startsWith("#") && this.id === s.slice(1)) return true;
         if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
@@ -1787,16 +2154,12 @@
 
     Object.defineProperty(proto, "checked", {
       get: function () {
-        if (this._checked !== undefined) return this._checked;
+        if (this._checkedDirty) return this._checked;
         return this.hasAttribute("checked");
       },
       set: function (v) {
+        this._checkedDirty = true;
         this._checked = Boolean(v);
-        if (v) {
-          if (this.setAttribute) this.setAttribute("checked", "");
-        } else {
-          if (this.removeAttribute) this.removeAttribute("checked");
-        }
       },
       configurable: true,
     });
@@ -2451,16 +2814,12 @@
 
     Object.defineProperty(HTMLInputElement.prototype, "checked", {
       get: function () {
-        if (this._checked !== undefined) return this._checked;
+        if (this._checkedDirty) return this._checked;
         return this.hasAttribute("checked");
       },
       set: function (v) {
+        this._checkedDirty = true;
         this._checked = Boolean(v);
-        if (v) {
-          if (this.setAttribute) this.setAttribute("checked", "");
-        } else {
-          if (this.removeAttribute) this.removeAttribute("checked");
-        }
       },
       configurable: true,
     });
@@ -3680,9 +4039,63 @@
     }
   }
 
+  // ... (existing code, added at the end)
+
+  function TextDecoder(label, options) {
+    let enc = (label || 'utf-8').trim().toLowerCase();
+    if (enc === 'utf8') enc = 'utf-8';
+    this.label = enc;
+    this.encoding = enc;
+    this.fatal = options ? !!options.fatal : false;
+    this.ignoreBOM = options ? !!options.ignoreBOM : false;
+  }
+
+  TextDecoder.prototype.decode = function(input, options) {
+    if (input === undefined || input === null) {
+      return "";
+    }
+    let label = (this.label || 'utf-8').trim().toLowerCase();
+    if (label === 'utf8') label = 'utf-8';
+
+    let bytes;
+    if (input instanceof ArrayBuffer) {
+      bytes = new Uint8Array(input);
+    } else if (ArrayBuffer.isView(input)) {
+      bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+    } else {
+      throw new TypeError("The provided value is not of type '(ArrayBufferView or ArrayBuffer)'");
+    }
+
+    if (label === 'utf-8') {
+      return utf8ToString(bytes);
+    } else if (label === 'latin1' || label === 'iso-8859-1' || label === 'windows-1252') {
+      let str = "";
+      for (let i = 0; i < bytes.length; i++) {
+        str += String.fromCharCode(bytes[i]);
+      }
+      return str;
+    }
+
+    throw new Error('Encoding not supported: ' + this.label);
+  };
+
+  markNative(TextDecoder, "TextDecoder");
+  markNative(TextDecoder.prototype.decode, "decode");
+
+  function TextEncoder() {
+    this.encoding = "utf-8";
+  }
+  TextEncoder.prototype.encode = function (input) {
+    return stringToUtf8(input === undefined ? "" : String(input));
+  };
+  markNative(TextEncoder, "TextEncoder");
+  markNative(TextEncoder.prototype.encode, "encode");
+
   // Expose globals
   global.Blob = Blob;
   global.File = File;
+  global.TextDecoder = TextDecoder;
+  global.TextEncoder = TextEncoder;
 
   global.Headers = Headers;
   if (!global.Request) global.Request = Request; else patchExistingBodyBlob(global.Request);
@@ -3691,6 +4104,8 @@
   if (typeof window !== "undefined") {
     window.Blob = Blob;
     window.File = File;
+    window.TextDecoder = TextDecoder;
+    window.TextEncoder = TextEncoder;
     window.Headers = Headers;
     window.Request = Request;
     window.Response = Response;
@@ -3698,10 +4113,13 @@
   if (typeof globalThis !== "undefined") {
     globalThis.Blob = Blob;
     globalThis.File = File;
+    globalThis.TextDecoder = TextDecoder;
+    globalThis.TextEncoder = TextEncoder;
     globalThis.Headers = Headers;
     globalThis.Request = Request;
     globalThis.Response = Response;
   }
+
 
   // =============================================================
   // Module: form-data.js

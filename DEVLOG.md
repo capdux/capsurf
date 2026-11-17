@@ -866,3 +866,24 @@
 2. **包装器身份缓存**：原生每次访问新建 JS 对象会破坏 `===`。以全局 `__capsurf_wrappers` 对象按 `w<docptr>:<nid>` 缓存，节点 id 不复用故安全；代价是包装器随上下文销毁才释放。
 3. **cpc 小缺陷（未提单）**：`out: *ArrayListUnmanaged` 出参调用丢失 `&`，改为返回切片规避。
 4. **配额**：子智能体曾遇 429，切换模型后重派恢复。
+
+## Phase 46 HTML 序列化、TextDecoder/TextEncoder、命名空间属性与核心 DOM 扩展技术方案
+1. **HTML 序列化器架构 (`src/dom/dom.cp: HtmlSerializer`)**：
+   - **设计动机**：此前 DOM 节点缺乏对 `innerHTML` 与 `outerHTML` 的精确序列化能力。根据 WHATWG DOM / HTML 序列化标准，14 类自闭合 void 标签（`img`, `input`, `br`, `hr`, `meta`, `link`, `area`, `base`, `col`, `embed`, `param`, `source`, `track`, `wbr`）严禁输出闭合标签，而 `script` 与 `style` 等 raw text 元素内部文本不应进行 HTML 实体转义；
+   - **解决方案**：
+     - 在 `src/dom/dom.cp` 实现高效流式 `HtmlSerializer`，自动递归遍历子树；
+     - 对文本节点进行标准的 `&`, `<`, `>`, `"` 字符转义，对 raw text 元素直通输出原始文本；
+     - 新增 `Document.getInnerHtml(node_id)` 与 `Document.getOuterHtml(node_id)`，并在 `dom_binding.cp` 挂载 `innerHTML` / `outerHTML` 原生访问器。
+2. **JS 垫片 innerHTML 覆写陷阱修复 (`src/js/shim/element/html-element.js`)**：
+   - **问题现象**：原生实装 `innerHTML` 后，E2E 用例中 `innerHTML` 取值依然退化为 `textContent`，且子标签丢失；
+   - **根因分析**：`html-element.js` 原先定义了兜底的 `innerHTML` getter/setter（内部映射到 `textContent`）。在初始化扩展原型链时，由于 `installHtmlElementExtensions` 在原生 `el_proto` 之后执行，导致 JS 层的同名属性覆盖了原生 getter/setter；
+   - **修复措施**：彻底清理 `html-element.js` 中的旧兜底定义，保证原生 `innerHTML` 访问器直接透出。
+3. **WHATWG TextDecoder 多编码支持 (`src/js/shim/file.js`)**：
+   - **设计动机**：多个 E2E 测试用例（如 `boa-typed-array-natives`、`page-renderer-pdf`）显式指定 `latin1` / `iso-8859-1` / `windows-1252` 等单字节编码构造 `TextDecoder`；若缺失将导致 `ReferenceError: TextDecoder is not defined` 或编码不支持异常；
+   - **解决方案**：
+     - 在 `src/js/shim/file.js` 实现完整的 `TextDecoder` 与 `TextEncoder` 类；
+     - 对 `utf-8` / `utf8` 执行多字节 UTF-8 解码，对 `latin1` / `iso-8859-1` / `windows-1252` 执行单字节码点映射，挂载至 `global`、`window` 与 `globalThis`。
+4. **命名空间属性与表单 Dirty Checked 保持 (`src/dom/dom.cp`, `src/js/shim/element/element.js`, `input.js`)**：
+   - 在 `Document` 与 `ElementHandle` 实现 `getAttributeNS`, `setAttributeNS`, `removeAttributeNS`, `getAttributeNames`；
+   - 修复 `input.js` 中 `removeAttributeNS('checked')` 时的状态保持：通过内部 `_checkedDirty` 标志位判定用户交互脏状态，若已发生用户修改则移除属性不再重置选框选中态，精准符合 WHATWG HTML 规范。
+

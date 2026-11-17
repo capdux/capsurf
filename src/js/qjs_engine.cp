@@ -78,6 +78,7 @@ pub @c {
     fn JS_PromiseState(ctx: *JSContext, promise: JSValue): i32;
     fn JS_PromiseResult(ctx: *JSContext, promise: JSValue): JSValue;
     fn JS_JSONStringify(ctx: *JSContext, obj: JSValue, replacer: JSValue, space0: JSValue): JSValue;
+    fn JS_ToBool(ctx: *JSContext, val: JSValue): i32;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;
@@ -116,6 +117,10 @@ pub fn jsFalse(): JSValue {
 
 pub fn jsBool(b: bool): JSValue {
     return if (b) jsTrue() else jsFalse();
+}
+
+pub fn jsToBool(ctx: *JSContext, val: JSValue): bool {
+    return JS_ToBool(ctx, val) > 0;
 }
 
 pub fn jsInt(n: i32): JSValue {

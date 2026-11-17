@@ -59,16 +59,12 @@ function installInputElement(global) {
 
   Object.defineProperty(HTMLInputElement.prototype, "checked", {
     get: function () {
-      if (this._checked !== undefined) return this._checked;
+      if (this._checkedDirty) return this._checked;
       return this.hasAttribute("checked");
     },
     set: function (v) {
+      this._checkedDirty = true;
       this._checked = Boolean(v);
-      if (v) {
-        if (this.setAttribute) this.setAttribute("checked", "");
-      } else {
-        if (this.removeAttribute) this.removeAttribute("checked");
-      }
     },
     configurable: true,
   });

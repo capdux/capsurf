@@ -14,6 +14,9 @@ import {
     jsTrue,
     jsFalse,
     jsBool,
+    jsToBool,
+    JS_TAG_NULL,
+    JS_TAG_UNDEFINED,
     jsInt,
     jsFloat,
     jsException,
@@ -193,14 +196,26 @@ fn getNodeText(doc: *Document, node_id: NodeId): []const u8 {
         return node.text_content;
     }
     let child = node.first_child;
+    if (child == NULL_NODE) return "";
+    if (doc.nodes.items[@as(usize, child)].next_sibling == NULL_NODE &&
+        doc.nodes.items[@as(usize, child)].node_type == NodeType.Text) {
+        return doc.nodes.items[@as(usize, child)].text_content;
+    }
+    let buf = std.ArrayListUnmanaged(u8).empty;
+    errdefer buf.deinit(doc.allocator);
     while (child != NULL_NODE) {
         const cnode = &doc.nodes.items[@as(usize, child)];
-        if (cnode.node_type == NodeType.Text && cnode.text_content.len > 0) {
-            return cnode.text_content;
+        if (cnode.node_type == NodeType.Text) {
+            buf.appendSlice(doc.allocator, cnode.text_content) catch {};
+        } else if (cnode.node_type == NodeType.Element) {
+            const sub = getNodeText(doc, child);
+            if (sub.len > 0) {
+                buf.appendSlice(doc.allocator, sub) catch {};
+            }
         }
         child = cnode.next_sibling;
     }
-    return "";
+    return buf.toOwnedSlice(doc.allocator) catch "";
 }
 
 fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
@@ -441,6 +456,17 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsUndefined();
 }
 
+@c fn js_element_get_inner_html(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const html = el.dom_ctx.doc.getInnerHtml(el.node_id) catch return jsNewString(ctx, "");
+    defer el.dom_ctx.doc.allocator.free(html);
+    return jsNewString(ctx, html);
+}
+
 @c fn js_element_set_inner_html(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     if (argc < 1) return jsUndefined();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
@@ -449,6 +475,125 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const html = jsToSlice(ctx, argv[0]);
     defer std.heap.page_allocator.free(html);
     el.dom_ctx.doc.setInnerHtml(el.node_id, html) catch return jsUndefined();
+    return jsUndefined();
+}
+
+@c fn js_element_get_outer_html(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNewString(ctx, "");
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const html = el.dom_ctx.doc.getOuterHtml(el.node_id) catch return jsNewString(ctx, "");
+    defer el.dom_ctx.doc.allocator.free(html);
+    return jsNewString(ctx, html);
+}
+
+@c fn js_element_clone_node(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    let deep = false;
+    if (argc >= 1) {
+        deep = jsToBool(ctx, argv[0]);
+    }
+    const clone_id = el.dom_ctx.doc.cloneNode(el.node_id, deep) catch return jsNull();
+    if (clone_id == NULL_NODE) return jsNull();
+    return createJsElement(ctx, el.dom_ctx, clone_id);
+}
+
+@c fn js_element_get_attribute_names(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return JS_NewArray(ctx);
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const names = el.dom_ctx.doc.getAttributeNames(el.node_id) catch return JS_NewArray(ctx);
+    defer el.dom_ctx.doc.allocator.free(names);
+    const arr = JS_NewArray(ctx);
+    let i: usize = 0;
+    while (i < names.len) : (i += 1) {
+        const item_str = jsNewString(ctx, names[i]);
+        * = JS_SetPropertyUint32(ctx, arr, @intCast(i), item_str);
+    }
+    return arr;
+}
+
+@c fn js_element_get_attribute_ns(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 2) return jsNull();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+
+    let ns: []const u8 = "";
+    let free_ns = false;
+    if (argv[0].tag != JS_TAG_NULL && argv[0].tag != JS_TAG_UNDEFINED) {
+        ns = jsToSlice(ctx, argv[0]);
+        free_ns = true;
+    }
+    defer {
+        if (free_ns) std.heap.page_allocator.free(ns);
+    }
+
+    const local_name = jsToSlice(ctx, argv[1]);
+    defer std.heap.page_allocator.free(local_name);
+
+    if (val := el.dom_ctx.doc.getAttributeNS(el.node_id, ns, local_name)) {
+        return jsNewString(ctx, val);
+    }
+    return jsNull();
+}
+
+@c fn js_element_set_attribute_ns(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 3) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+
+    let ns: []const u8 = "";
+    let free_ns = false;
+    if (argv[0].tag != JS_TAG_NULL && argv[0].tag != JS_TAG_UNDEFINED) {
+        ns = jsToSlice(ctx, argv[0]);
+        free_ns = true;
+    }
+    defer {
+        if (free_ns) std.heap.page_allocator.free(ns);
+    }
+
+    const qname = jsToSlice(ctx, argv[1]);
+    defer std.heap.page_allocator.free(qname);
+
+    const val = jsToSlice(ctx, argv[2]);
+    defer std.heap.page_allocator.free(val);
+
+    const ns_dup = if (ns.len > 0) el.dom_ctx.doc.allocator.dupe(u8, ns) catch ns else "";
+    const qname_dup = el.dom_ctx.doc.allocator.dupe(u8, qname) catch qname;
+    const val_dup = el.dom_ctx.doc.allocator.dupe(u8, val) catch val;
+
+    el.dom_ctx.doc.setAttributeNS(el.node_id, ns_dup, qname_dup, val_dup);
+    return jsUndefined();
+}
+
+@c fn js_element_remove_attribute_ns(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 2) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+
+    let ns: []const u8 = "";
+    let free_ns = false;
+    if (argv[0].tag != JS_TAG_NULL && argv[0].tag != JS_TAG_UNDEFINED) {
+        ns = jsToSlice(ctx, argv[0]);
+        free_ns = true;
+    }
+    defer {
+        if (free_ns) std.heap.page_allocator.free(ns);
+    }
+
+    const local_name = jsToSlice(ctx, argv[1]);
+    defer std.heap.page_allocator.free(local_name);
+
+    * = el.dom_ctx.doc.removeAttributeNS(el.node_id, ns, local_name);
     return jsUndefined();
 }
 
@@ -889,6 +1034,11 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, el_proto, "setAttribute", js_element_set_attribute, 2);
     defineMethod(raw_ctx, el_proto, "removeAttribute", js_element_remove_attribute, 1);
     defineMethod(raw_ctx, el_proto, "hasAttribute", js_element_has_attribute, 1);
+    defineMethod(raw_ctx, el_proto, "getAttributeNames", js_element_get_attribute_names, 0);
+    defineMethod(raw_ctx, el_proto, "getAttributeNS", js_element_get_attribute_ns, 2);
+    defineMethod(raw_ctx, el_proto, "setAttributeNS", js_element_set_attribute_ns, 3);
+    defineMethod(raw_ctx, el_proto, "removeAttributeNS", js_element_remove_attribute_ns, 2);
+    defineMethod(raw_ctx, el_proto, "cloneNode", js_element_clone_node, 1);
     defineMethod(raw_ctx, el_proto, "_getRawAttrs", js_element_get_raw_attrs, 0);
     defineMethod(raw_ctx, el_proto, "appendChild", js_element_append_child, 1);
     defineMethod(raw_ctx, el_proto, "removeChild", js_element_remove_child, 1);
@@ -899,7 +1049,8 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineGetterSetter(raw_ctx, el_proto, "tagName", js_element_get_tag_name, null);
     defineGetterSetter(raw_ctx, el_proto, "nodeType", js_element_get_node_type, null);
     defineGetterSetter(raw_ctx, el_proto, "textContent", js_element_get_text_content, js_element_set_text_content);
-    defineGetterSetter(raw_ctx, el_proto, "innerHTML", null, js_element_set_inner_html);
+    defineGetterSetter(raw_ctx, el_proto, "innerHTML", js_element_get_inner_html, js_element_set_inner_html);
+    defineGetterSetter(raw_ctx, el_proto, "outerHTML", js_element_get_outer_html, null);
     defineGetterSetter(raw_ctx, el_proto, "parentElement", js_element_get_parent_element, null);
     defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, null);
     defineGetterSetter(raw_ctx, el_proto, "firstChild", js_element_get_first_child, null);

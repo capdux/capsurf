@@ -348,11 +348,15 @@ NodeList.prototype[Symbol.iterator] = function () {
 };
 markNative(NodeList, "NodeList");
 
-function Attr(name, value, ownerElement) {
+function Attr(name, value, ownerElement, namespaceURI, localName, prefix) {
   this.name = String(name);
   this._value = value == null ? "" : String(value);
   this.specified = true;
   this.ownerElement = ownerElement || null;
+  this._namespaceURI = namespaceURI !== undefined ? namespaceURI : null;
+  const colon = this.name.indexOf(":");
+  this._prefix = prefix !== undefined ? prefix : (colon !== -1 ? this.name.slice(0, colon) : null);
+  this._localName = localName !== undefined ? localName : (colon !== -1 ? this.name.slice(colon + 1) : this.name);
 }
 
 Object.defineProperty(Attr.prototype, "value", {
@@ -387,7 +391,27 @@ Object.defineProperty(Attr.prototype, "textContent", {
 });
 
 Object.defineProperty(Attr.prototype, "localName", {
-  get: function () { return this.name.toLowerCase(); },
+  get: function () {
+    if (this._localName !== undefined) return this._localName;
+    const colon = this.name.indexOf(":");
+    return colon !== -1 ? this.name.slice(colon + 1) : this.name.toLowerCase();
+  },
+  configurable: true,
+});
+
+Object.defineProperty(Attr.prototype, "prefix", {
+  get: function () {
+    if (this._prefix !== undefined) return this._prefix;
+    const colon = this.name.indexOf(":");
+    return colon !== -1 ? this.name.slice(0, colon) : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(Attr.prototype, "namespaceURI", {
+  get: function () {
+    return this._namespaceURI !== undefined ? this._namespaceURI : null;
+  },
   configurable: true,
 });
 
@@ -432,8 +456,7 @@ NamedNodeMap.prototype._sync = function () {
   if (typeof this._owner._syncAttrs === "function") {
     this._owner._syncAttrs();
   }
-  const attrsMap = this._owner._attrs;
-  const currentAttrs = attrsMap ? Array.from(attrsMap.values()) : [];
+  const currentAttrs = this._owner._attrList || (this._owner._attrs ? Array.from(this._owner._attrs.values()) : []);
 
   for (let i = 0; i < this._length; i++) {
     delete this[i];
@@ -444,7 +467,11 @@ NamedNodeMap.prototype._sync = function () {
 
   for (let i = 0; i < currentAttrs.length; i++) {
     const item = currentAttrs[i];
-    const attrNode = new Attr(item.name, item.value, this._owner);
+    const colon = item.name.indexOf(":");
+    const pfx = item.prefix !== undefined ? item.prefix : (colon !== -1 ? item.name.slice(0, colon) : null);
+    const loc = item.localName !== undefined ? item.localName : (colon !== -1 ? item.name.slice(colon + 1) : item.name);
+    const ns = item.namespaceURI !== undefined ? item.namespaceURI : null;
+    const attrNode = new Attr(item.name, item.value, this._owner, ns, loc, pfx);
     this[i] = attrNode;
     this._list.push(attrNode);
     this._byName[item.name.toLowerCase()] = attrNode;
@@ -499,6 +526,44 @@ NamedNodeMap.prototype.removeNamedItem = function (name) {
   return old;
 };
 
+NamedNodeMap.prototype.getNamedItemNS = function (namespace, localName) {
+  this._sync();
+  const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+  const loc = String(localName).toLowerCase();
+  for (let i = 0; i < this._length; i++) {
+    const a = this._list[i];
+    const aNs = a.namespaceURI || null;
+    const aLoc = (a.localName || a.name).toLowerCase();
+    if (aNs === ns && aLoc === loc) return a;
+  }
+  return null;
+};
+
+NamedNodeMap.prototype.setNamedItemNS = function (attr) {
+  if (!attr || !attr.name) throw new TypeError("Attr required");
+  const old = this.getNamedItemNS(attr.namespaceURI, attr.localName || attr.name);
+  if (this._owner && typeof this._owner.setAttributeNS === "function") {
+    this._owner.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+  }
+  this._sync();
+  return old;
+};
+
+NamedNodeMap.prototype.removeNamedItemNS = function (namespace, localName) {
+  this._sync();
+  const old = this.getNamedItemNS(namespace, localName);
+  if (!old) {
+    const err = new Error("NotFoundError: No attribute matching namespace and localName");
+    err.name = "NotFoundError";
+    throw err;
+  }
+  if (this._owner && typeof this._owner.removeAttributeNS === "function") {
+    this._owner.removeAttributeNS(namespace, localName);
+  }
+  this._sync();
+  return old;
+};
+
 NamedNodeMap.prototype[Symbol.iterator] = function () {
   this._sync();
   const list = this._list.slice();
@@ -516,8 +581,11 @@ NamedNodeMap.prototype[Symbol.iterator] = function () {
 markNative(NamedNodeMap, "NamedNodeMap");
 markNative(NamedNodeMap.prototype.item, "item");
 markNative(NamedNodeMap.prototype.getNamedItem, "getNamedItem");
+markNative(NamedNodeMap.prototype.getNamedItemNS, "getNamedItemNS");
 markNative(NamedNodeMap.prototype.setNamedItem, "setNamedItem");
+markNative(NamedNodeMap.prototype.setNamedItemNS, "setNamedItemNS");
 markNative(NamedNodeMap.prototype.removeNamedItem, "removeNamedItem");
+markNative(NamedNodeMap.prototype.removeNamedItemNS, "removeNamedItemNS");
 
 if (typeof globalThis !== "undefined") {
   globalThis.NamedNodeMap = NamedNodeMap;

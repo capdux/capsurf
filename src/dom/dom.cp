@@ -7,6 +7,7 @@
 import { HtmlParser } from "../html/parser.cp";
 
 pub type NodeId = u32;
+pub type StringSlice = []const u8;
 
 pub const NULL_NODE: NodeId = 0;
 
@@ -23,6 +24,7 @@ pub enum NodeType {
 pub struct Attr {
     name: []const u8 = "";
     value: []const u8 = "";
+    namespace: []const u8 = "";
 }
 
 pub struct NodeData {
@@ -106,6 +108,16 @@ pub struct NodeData {
         return false;
     }
 
+    fn hasAttrInAttrs(name: []const u8): bool {
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.attrs[i].name, name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     fn getAttribute(attr_name: []const u8): ([]const u8)? {
         if (std.ascii.eqlIgnoreCase(attr_name, "id") && _.id_attr.len > 0) {
             return _.id_attr;
@@ -123,6 +135,54 @@ pub struct NodeData {
             }
         }
         return null;
+    }
+
+    fn getAttributeNS(ns: []const u8, local_name: []const u8): ([]const u8)? {
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            const attr_name = _.attrs[i].name;
+            let attr_local = attr_name;
+            if (idx := std.mem.indexOfScalar(u8, attr_name, ':')) {
+                attr_local = attr_name[idx + 1 ..];
+            }
+            if (!std.ascii.eqlIgnoreCase(attr_local, local_name)) {
+                continue;
+            }
+            if (_.attrs[i].namespace.len > 0) {
+                if (std.mem.eql(u8, _.attrs[i].namespace, ns)) {
+                    return _.attrs[i].value;
+                }
+            } else {
+                if (std.mem.startsWith(u8, attr_name, "xlink:") && std.mem.eql(u8, ns, "http://www.w3.org/1999/xlink")) {
+                    return _.attrs[i].value;
+                } else if (std.mem.startsWith(u8, attr_name, "xml:") && std.mem.eql(u8, ns, "http://www.w3.org/XML/1998/namespace")) {
+                    return _.attrs[i].value;
+                } else if ((std.mem.startsWith(u8, attr_name, "xmlns:") || std.mem.eql(u8, attr_name, "xmlns")) && std.mem.eql(u8, ns, "http://www.w3.org/2000/xmlns/")) {
+                    return _.attrs[i].value;
+                } else if (ns.len == 0 && std.mem.indexOfScalar(u8, attr_name, ':') == null) {
+                    return _.attrs[i].value;
+                }
+            }
+        }
+        return null;
+    }
+
+    fn getAttributeNames(allocator: std.mem.Allocator): []StringSlice! {
+        let names = std.ArrayListUnmanaged(StringSlice).empty;
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            names.append(allocator, _.attrs[i].name) catch unreachable;
+        }
+        if (_.id_attr.len > 0 && !_.hasAttrInAttrs("id")) {
+            names.append(allocator, "id") catch unreachable;
+        }
+        if (_.class_attr.len > 0 && !_.hasAttrInAttrs("class")) {
+            names.append(allocator, "class") catch unreachable;
+        }
+        if (_.inline_style.len > 0 && !_.hasAttrInAttrs("style")) {
+            names.append(allocator, "style") catch unreachable;
+        }
+        return names.toOwnedSlice(allocator);
     }
 
     fn hasAttribute(attr_name: []const u8): bool {
@@ -148,6 +208,64 @@ pub struct NodeData {
         if (_.attr_count < MAX_ATTRS_PER_NODE) {
             _.attrs[_.attr_count] = Attr { name: name, value: value };
             _.attr_count += 1;
+        }
+    }
+
+    fn setAttributeNS(*_, ns: []const u8, qualified_name: []const u8, value: []const u8) {
+        let target_local = qualified_name;
+        if (idx := std.mem.indexOfScalar(u8, qualified_name, ':')) {
+            target_local = qualified_name[idx + 1 ..];
+        }
+
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            const attr_name = _.attrs[i].name;
+            let attr_local = attr_name;
+            if (idx := std.mem.indexOfScalar(u8, attr_name, ':')) {
+                attr_local = attr_name[idx + 1 ..];
+            }
+            if (!std.ascii.eqlIgnoreCase(attr_local, target_local)) {
+                continue;
+            }
+            let ns_match = false;
+            if (_.attrs[i].namespace.len > 0) {
+                ns_match = std.mem.eql(u8, _.attrs[i].namespace, ns);
+            } else {
+                if (std.mem.startsWith(u8, attr_name, "xlink:") && std.mem.eql(u8, ns, "http://www.w3.org/1999/xlink")) {
+                    ns_match = true;
+                } else if (std.mem.startsWith(u8, attr_name, "xml:") && std.mem.eql(u8, ns, "http://www.w3.org/XML/1998/namespace")) {
+                    ns_match = true;
+                } else if ((std.mem.startsWith(u8, attr_name, "xmlns:") || std.mem.eql(u8, attr_name, "xmlns")) && std.mem.eql(u8, ns, "http://www.w3.org/2000/xmlns/")) {
+                    ns_match = true;
+                } else if (ns.len == 0 && std.mem.indexOfScalar(u8, attr_name, ':') == null) {
+                    ns_match = true;
+                }
+            }
+            if (ns_match) {
+                _.attrs[i].name = qualified_name;
+                _.attrs[i].value = value;
+                _.attrs[i].namespace = ns;
+                if (std.ascii.eqlIgnoreCase(qualified_name, "id")) {
+                    _.id_attr = value;
+                } else if (std.ascii.eqlIgnoreCase(qualified_name, "class")) {
+                    _.setClassName(value);
+                } else if (std.ascii.eqlIgnoreCase(qualified_name, "style")) {
+                    _.inline_style = value;
+                }
+                return;
+            }
+        }
+
+        if (_.attr_count < MAX_ATTRS_PER_NODE) {
+            _.attrs[_.attr_count] = Attr { name: qualified_name, value: value, namespace: ns };
+            _.attr_count += 1;
+        }
+        if (std.ascii.eqlIgnoreCase(qualified_name, "id")) {
+            _.id_attr = value;
+        } else if (std.ascii.eqlIgnoreCase(qualified_name, "class")) {
+            _.setClassName(value);
+        } else if (std.ascii.eqlIgnoreCase(qualified_name, "style")) {
+            _.inline_style = value;
         }
     }
 
@@ -179,6 +297,51 @@ pub struct NodeData {
         return special_cleared;
     }
 
+    fn removeAttributeNS(*_, ns: []const u8, local_name: []const u8): bool {
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            const attr_name = _.attrs[i].name;
+            let attr_local = attr_name;
+            if (idx := std.mem.indexOfScalar(u8, attr_name, ':')) {
+                attr_local = attr_name[idx + 1 ..];
+            }
+            if (!std.ascii.eqlIgnoreCase(attr_local, local_name)) {
+                continue;
+            }
+            let ns_match = false;
+            if (_.attrs[i].namespace.len > 0) {
+                ns_match = std.mem.eql(u8, _.attrs[i].namespace, ns);
+            } else {
+                if (std.mem.startsWith(u8, attr_name, "xlink:") && std.mem.eql(u8, ns, "http://www.w3.org/1999/xlink")) {
+                    ns_match = true;
+                } else if (std.mem.startsWith(u8, attr_name, "xml:") && std.mem.eql(u8, ns, "http://www.w3.org/XML/1998/namespace")) {
+                    ns_match = true;
+                } else if ((std.mem.startsWith(u8, attr_name, "xmlns:") || std.mem.eql(u8, attr_name, "xmlns")) && std.mem.eql(u8, ns, "http://www.w3.org/2000/xmlns/")) {
+                    ns_match = true;
+                } else if (ns.len == 0 && std.mem.indexOfScalar(u8, attr_name, ':') == null) {
+                    ns_match = true;
+                }
+            }
+            if (ns_match) {
+                if (std.ascii.eqlIgnoreCase(attr_name, "id")) {
+                    _.id_attr = "";
+                } else if (std.ascii.eqlIgnoreCase(attr_name, "class")) {
+                    _.class_attr = "";
+                    _.class_count = 0;
+                } else if (std.ascii.eqlIgnoreCase(attr_name, "style")) {
+                    _.inline_style = "";
+                }
+                let j = i;
+                while (j + 1 < _.attr_count) : (j += 1) {
+                    _.attrs[j] = _.attrs[j + 1];
+                }
+                _.attr_count -= 1;
+                return true;
+            }
+        }
+        return false;
+    }
+
     fn setClassName(*_, class_str: []const u8) {
         _.class_attr = class_str;
         _.class_count = 0;
@@ -189,6 +352,13 @@ pub struct NodeData {
             }
             _.classes[_.class_count] = tok;
             _.class_count += 1;
+        }
+        let i: usize = 0;
+        while (i < _.attr_count) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(_.attrs[i].name, "class")) {
+                _.attrs[i].value = class_str;
+                return;
+            }
         }
     }
 }
@@ -210,7 +380,23 @@ pub struct ElementHandle {
     }
 
     fn getAttribute(name: []const u8): ([]const u8)? {
-        return _.doc.nodes.items[_.node_id].getAttribute(name);
+        return _.doc.getAttribute(_.node_id, name);
+    }
+
+    fn getAttributeNS(ns: []const u8, local_name: []const u8): ([]const u8)? {
+        return _.doc.getAttributeNS(_.node_id, ns, local_name);
+    }
+
+    fn setAttributeNS(*_, ns: []const u8, qualified_name: []const u8, value: []const u8) {
+        _.doc.setAttributeNS(_.node_id, ns, qualified_name, value);
+    }
+
+    fn removeAttributeNS(*_, ns: []const u8, local_name: []const u8): bool {
+        return _.doc.removeAttributeNS(_.node_id, ns, local_name);
+    }
+
+    fn getAttributeNames(): []StringSlice! {
+        return _.doc.getAttributeNames(_.node_id);
     }
 
     fn setAttribute(*_, name: []const u8, value: []const u8) {
@@ -218,7 +404,7 @@ pub struct ElementHandle {
     }
 
     fn removeAttribute(*_, name: []const u8): bool {
-        return _.doc.nodes.items[_.node_id].removeAttribute(name);
+        return _.doc.removeAttribute(_.node_id, name);
     }
 
     fn setId(*_, id_val: []const u8) {
@@ -235,6 +421,160 @@ pub struct ElementHandle {
 
     fn appendChild(*_, child_id: NodeId) {
         _.doc.appendChild(_.node_id, child_id);
+    }
+
+    fn cloneNode(*_, deep: bool): NodeId! {
+        return _.doc.cloneNode(_.node_id, deep);
+    }
+
+    fn getInnerHtml(): ([]const u8)! {
+        return _.doc.getInnerHtml(_.node_id);
+    }
+
+    fn setInnerHtml(*_, html: []const u8)! {
+        return _.doc.setInnerHtml(_.node_id, html);
+    }
+
+    fn getOuterHtml(): ([]const u8)! {
+        return _.doc.getOuterHtml(_.node_id);
+    }
+}
+
+pub struct HtmlSerializer {
+    doc: *const Document;
+    buf: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8).empty;
+
+    static fn init(doc: *const Document): HtmlSerializer {
+        return HtmlSerializer {
+            doc: doc,
+            buf: std.ArrayListUnmanaged(u8).empty,
+        };
+    }
+
+    static fn isVoidTag(tag: []const u8): bool {
+        if (tag.len == 2) {
+            return std.ascii.eqlIgnoreCase(tag, "br") || std.ascii.eqlIgnoreCase(tag, "hr");
+        }
+        if (tag.len == 3) {
+            return std.ascii.eqlIgnoreCase(tag, "col") || std.ascii.eqlIgnoreCase(tag, "img") || std.ascii.eqlIgnoreCase(tag, "wbr");
+        }
+        if (tag.len == 4) {
+            return std.ascii.eqlIgnoreCase(tag, "area") || std.ascii.eqlIgnoreCase(tag, "base") || std.ascii.eqlIgnoreCase(tag, "link") || std.ascii.eqlIgnoreCase(tag, "meta");
+        }
+        if (tag.len == 5) {
+            return std.ascii.eqlIgnoreCase(tag, "embed") || std.ascii.eqlIgnoreCase(tag, "input") || std.ascii.eqlIgnoreCase(tag, "param") || std.ascii.eqlIgnoreCase(tag, "track");
+        }
+        if (tag.len == 6) {
+            return std.ascii.eqlIgnoreCase(tag, "source");
+        }
+        return false;
+    }
+
+    static fn isRawTextTag(tag: []const u8): bool {
+        return std.ascii.eqlIgnoreCase(tag, "script") || std.ascii.eqlIgnoreCase(tag, "style");
+    }
+
+    fn serializeNode(*_, node_id: NodeId)! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.doc.nodes.items.len) {
+            return;
+        }
+        const node = &_.doc.nodes.items[@as(usize, node_id)];
+        switch (node.node_type) {
+            NodeType.Text => {
+                let is_raw = false;
+                if (node.parent != NULL_NODE && @as(usize, node.parent) < _.doc.nodes.items.len) {
+                    const ptag = _.doc.nodes.items[@as(usize, node.parent)].tag_name;
+                    if (HtmlSerializer.isRawTextTag(ptag)) {
+                        is_raw = true;
+                    }
+                }
+                if (is_raw) {
+                    _.buf.appendSlice(_.doc.allocator, node.text_content)?;
+                } else {
+                    let i: usize = 0;
+                    while (i < node.text_content.len) : (i += 1) {
+                        const c = node.text_content[i];
+                        switch (c) {
+                            '&' => _.buf.appendSlice(_.doc.allocator, "&amp;")?,
+                            '<' => _.buf.appendSlice(_.doc.allocator, "&lt;")?,
+                            '>' => _.buf.appendSlice(_.doc.allocator, "&gt;")?,
+                            else => _.buf.append(_.doc.allocator, c)?,
+                        }
+                    }
+                }
+            },
+            NodeType.Comment => {
+                _.buf.appendSlice(_.doc.allocator, "<!--")?;
+                _.buf.appendSlice(_.doc.allocator, node.text_content)?;
+                _.buf.appendSlice(_.doc.allocator, "-->")?;
+            },
+            NodeType.Element => {
+                _.buf.append(_.doc.allocator, '<')?;
+                _.buf.appendSlice(_.doc.allocator, node.tag_name)?;
+
+                let i: usize = 0;
+                while (i < node.attr_count) : (i += 1) {
+                    const aname = node.attrs[i].name;
+                    const avalue = node.attrs[i].value;
+                    _.buf.append(_.doc.allocator, ' ')?;
+                    _.buf.appendSlice(_.doc.allocator, aname)?;
+                    _.buf.appendSlice(_.doc.allocator, "=\"")?;
+                    let j: usize = 0;
+                    while (j < avalue.len) : (j += 1) {
+                        const ac = avalue[j];
+                        switch (ac) {
+                            '&' => _.buf.appendSlice(_.doc.allocator, "&amp;")?,
+                            '"' => _.buf.appendSlice(_.doc.allocator, "&quot;")?,
+                            '<' => _.buf.appendSlice(_.doc.allocator, "&lt;")?,
+                            '>' => _.buf.appendSlice(_.doc.allocator, "&gt;")?,
+                            else => _.buf.append(_.doc.allocator, ac)?,
+                        }
+                    }
+                    _.buf.append(_.doc.allocator, '"')?;
+                }
+
+                if (node.id_attr.len > 0 && !node.hasAttrInAttrs("id")) {
+                    _.buf.appendSlice(_.doc.allocator, " id=\"")?;
+                    _.buf.appendSlice(_.doc.allocator, node.id_attr)?;
+                    _.buf.append(_.doc.allocator, '"')?;
+                }
+                if (node.class_attr.len > 0 && !node.hasAttrInAttrs("class")) {
+                    _.buf.appendSlice(_.doc.allocator, " class=\"")?;
+                    _.buf.appendSlice(_.doc.allocator, node.class_attr)?;
+                    _.buf.append(_.doc.allocator, '"')?;
+                }
+                if (node.inline_style.len > 0 && !node.hasAttrInAttrs("style")) {
+                    _.buf.appendSlice(_.doc.allocator, " style=\"")?;
+                    _.buf.appendSlice(_.doc.allocator, node.inline_style)?;
+                    _.buf.append(_.doc.allocator, '"')?;
+                }
+
+                _.buf.append(_.doc.allocator, '>')?;
+
+                if (HtmlSerializer.isVoidTag(node.tag_name)) {
+                    return;
+                }
+
+                let child = node.first_child;
+                while (child != NULL_NODE) {
+                    const next_child = _.doc.nodes.items[@as(usize, child)].next_sibling;
+                    _.serializeNode(child)?;
+                    child = next_child;
+                }
+
+                _.buf.appendSlice(_.doc.allocator, "</")?;
+                _.buf.appendSlice(_.doc.allocator, node.tag_name)?;
+                _.buf.append(_.doc.allocator, '>')?;
+            },
+            NodeType.Document => {
+                let child = node.first_child;
+                while (child != NULL_NODE) {
+                    const next_child = _.doc.nodes.items[@as(usize, child)].next_sibling;
+                    _.serializeNode(child)?;
+                    child = next_child;
+                }
+            },
+        }
     }
 }
 
@@ -362,6 +702,46 @@ pub struct Document {
         return new_id;
     }
 
+    fn cloneNode(*_, node_id: NodeId, deep: bool): NodeId! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return NULL_NODE;
+        }
+
+        const sn_type = _.nodes.items[@as(usize, node_id)].node_type;
+        const sn_text = _.nodes.items[@as(usize, node_id)].text_content;
+        const sn_first_child = _.nodes.items[@as(usize, node_id)].first_child;
+
+        let new_id: NodeId = NULL_NODE;
+
+        if (sn_type == NodeType.Element) {
+            new_id = _.cloneElementNode(node_id)?;
+        } else if (sn_type == NodeType.Text) {
+            new_id = _.createTextNode(sn_text)?;
+        } else if (sn_type == NodeType.Comment) {
+            new_id = _.createCommentNode(sn_text)?;
+        } else {
+            return NULL_NODE;
+        }
+
+        if (deep) {
+            let child = sn_first_child;
+            while (child != NULL_NODE) {
+                const next_child = _.nodes.items[@as(usize, child)].next_sibling;
+                const clone_child = _.cloneNode(child, true)?;
+                _.appendChild(new_id, clone_child);
+                child = next_child;
+            }
+        }
+        return new_id;
+    }
+
+    fn getAttributeNS(node_id: NodeId, ns: []const u8, local_name: []const u8): ([]const u8)? {
+        if (n := _.getNode(node_id)) {
+            return n.getAttributeNS(ns, local_name);
+        }
+        return null;
+    }
+
     fn setId(*_, node_id: NodeId, id_val: []const u8) {
         if (*n := _.getNodeMut(node_id)) {
             n.setAttribute("id", id_val);
@@ -386,11 +766,31 @@ pub struct Document {
         }
     }
 
+    fn setAttributeNS(*_, node_id: NodeId, ns: []const u8, qualified_name: []const u8, value: []const u8) {
+        if (*n := _.getNodeMut(node_id)) {
+            n.setAttributeNS(ns, qualified_name, value);
+        }
+    }
+
     fn removeAttribute(*_, node_id: NodeId, name: []const u8): bool {
         if (*n := _.getNodeMut(node_id)) {
             return n.removeAttribute(name);
         }
         return false;
+    }
+
+    fn removeAttributeNS(*_, node_id: NodeId, ns: []const u8, local_name: []const u8): bool {
+        if (*n := _.getNodeMut(node_id)) {
+            return n.removeAttributeNS(ns, local_name);
+        }
+        return false;
+    }
+
+    fn getAttributeNames(node_id: NodeId): []StringSlice! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return _.allocator.alloc(StringSlice, 0);
+        }
+        return _.nodes.items[@as(usize, node_id)].getAttributeNames(_.allocator);
     }
 
     fn appendChild(*_, parent_id: NodeId, child_id: NodeId) {
@@ -627,7 +1027,12 @@ pub struct Document {
             while (ai < sn.attr_count) : (ai += 1) {
                 const an = _.allocator.dupe(u8, sn.attrs[ai].name)?;
                 const av = _.allocator.dupe(u8, sn.attrs[ai].value)?;
-                _.setAttribute(new_id, an, av);
+                if (sn.attrs[ai].namespace.len > 0) {
+                    const ans = _.allocator.dupe(u8, sn.attrs[ai].namespace)?;
+                    _.setAttributeNS(new_id, ans, an, av);
+                } else {
+                    _.setAttribute(new_id, an, av);
+                }
             }
         } else if (sn.node_type == NodeType.Text) {
             new_id = _.createTextNode(_.allocator.dupe(u8, sn.text_content)?)?;
@@ -672,6 +1077,34 @@ pub struct Document {
                 break;
             }
         }
+    }
+
+    fn getInnerHtml(*_, node_id: NodeId): ([]const u8)! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return _.allocator.dupe(u8, "");
+        }
+        let s = HtmlSerializer.init(_);
+        errdefer s.buf.deinit(_.allocator);
+
+        let child = _.nodes.items[@as(usize, node_id)].first_child;
+        while (child != NULL_NODE) {
+            const next_child = _.nodes.items[@as(usize, child)].next_sibling;
+            s.serializeNode(child)?;
+            child = next_child;
+        }
+
+        return s.buf.toOwnedSlice(_.allocator);
+    }
+
+    fn getOuterHtml(*_, node_id: NodeId): ([]const u8)! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return _.allocator.dupe(u8, "");
+        }
+        let s = HtmlSerializer.init(_);
+        errdefer s.buf.deinit(_.allocator);
+
+        s.serializeNode(node_id)?;
+        return s.buf.toOwnedSlice(_.allocator);
     }
 }
 

@@ -153,25 +153,47 @@ function installElementExtensions(proto) {
   proto._syncAttrs = function () {
     if (!this._attrs) {
       this._attrs = new Map();
+      this._attrList = [];
       if (typeof this._getRawAttrs === "function") {
         const raw = this._getRawAttrs();
         if (raw && Array.isArray(raw)) {
           for (let i = 0; i < raw.length; i++) {
             const item = raw[i];
             if (item && item.name) {
-              this._attrs.set(item.name.toLowerCase(), { name: item.name, value: item.value || "" });
+              const colon = item.name.indexOf(":");
+              const prefix = colon !== -1 ? item.name.slice(0, colon) : null;
+              const localName = colon !== -1 ? item.name.slice(colon + 1) : item.name;
+              let ns = null;
+              if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
+              else if (prefix === "xmlns" || item.name === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+              else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
+              const entry = {
+                name: item.name,
+                value: item.value || "",
+                namespaceURI: ns,
+                localName: localName,
+                prefix: prefix,
+              };
+              this._attrList.push(entry);
+              this._attrs.set(item.name.toLowerCase(), entry);
             }
           }
         }
       }
       if (this.id && !this._attrs.has("id")) {
-        this._attrs.set("id", { name: "id", value: this.id });
+        const entry = { name: "id", value: this.id, namespaceURI: null, localName: "id", prefix: null };
+        this._attrList.push(entry);
+        this._attrs.set("id", entry);
       }
       if (this.className && !this._attrs.has("class")) {
-        this._attrs.set("class", { name: "class", value: this.className });
+        const entry = { name: "class", value: this.className, namespaceURI: null, localName: "class", prefix: null };
+        this._attrList.push(entry);
+        this._attrs.set("class", entry);
       }
       if (this.hasAttribute && this.hasAttribute("style") && !this._attrs.has("style")) {
-        this._attrs.set("style", { name: "style", value: this.getAttribute("style") || "" });
+        const entry = { name: "style", value: this.getAttribute("style") || "", namespaceURI: null, localName: "style", prefix: null };
+        this._attrList.push(entry);
+        this._attrs.set("style", entry);
       }
     }
   };
@@ -195,8 +217,36 @@ function installElementExtensions(proto) {
     const key = String(name);
     const val = String(value);
     if (!this._attrs) this._syncAttrs();
-    const oldEntry = this._attrs.get(key.toLowerCase());
-    const oldVal = oldEntry ? oldEntry.value : null;
+    let existing = null;
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        if (this._attrList[i].name.toLowerCase() === key.toLowerCase()) {
+          existing = this._attrList[i];
+          break;
+        }
+      }
+    }
+    const oldVal = existing ? existing.value : (this._attrs.get(key.toLowerCase())?.value ?? null);
+    if (existing) {
+      existing.value = val;
+    } else {
+      const colon = key.indexOf(":");
+      const prefix = colon !== -1 ? key.slice(0, colon) : null;
+      const localName = colon !== -1 ? key.slice(colon + 1) : key;
+      let ns = null;
+      if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
+      else if (prefix === "xmlns" || key === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+      else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
+      const entry = {
+        name: key,
+        value: val,
+        namespaceURI: ns,
+        localName: localName,
+        prefix: prefix,
+      };
+      if (!this._attrList) this._attrList = [];
+      this._attrList.push(entry);
+    }
     this._attrs.set(key.toLowerCase(), { name: key, value: val });
     if (key.toLowerCase() === "id") {
       this.id = val;
@@ -223,8 +273,18 @@ function installElementExtensions(proto) {
   proto.removeAttribute = function (name) {
     const key = String(name).toLowerCase();
     if (!this._attrs) this._syncAttrs();
+    let oldVal = null;
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        if (this._attrList[i].name.toLowerCase() === key) {
+          oldVal = this._attrList[i].value;
+          this._attrList.splice(i, 1);
+          break;
+        }
+      }
+    }
     const oldEntry = this._attrs.get(key);
-    const oldVal = oldEntry ? oldEntry.value : null;
+    if (!oldVal && oldEntry) oldVal = oldEntry.value;
     this._attrs.delete(key);
     if (key === "id") {
       this.id = "";
@@ -267,6 +327,12 @@ function installElementExtensions(proto) {
   };
   markNative(proto.getAttributeNode, "getAttributeNode");
 
+  proto.getAttributeNodeNS = function (namespace, localName) {
+    if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
+    return this._attributesMap.getNamedItemNS(namespace, localName);
+  };
+  markNative(proto.getAttributeNodeNS, "getAttributeNodeNS");
+
   proto.setAttributeNode = function (attr) {
     if (!attr || !attr.name) throw new TypeError("Attr required");
     if (!this._attributesMap) this._attributesMap = new NamedNodeMap(this);
@@ -278,6 +344,14 @@ function installElementExtensions(proto) {
   const origGetAttribute = proto.getAttribute;
   proto.getAttribute = function (name) {
     const key = String(name).toLowerCase();
+    if (!this._attrs) this._syncAttrs();
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        if (this._attrList[i].name.toLowerCase() === key) {
+          return this._attrList[i].value;
+        }
+      }
+    }
     if (this._attrs) {
       const entry = this._attrs.get(key);
       if (entry) return entry.value;
@@ -298,6 +372,14 @@ function installElementExtensions(proto) {
   const origHasAttribute = proto.hasAttribute;
   proto.hasAttribute = function (name) {
     const key = String(name).toLowerCase();
+    if (!this._attrs) this._syncAttrs();
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        if (this._attrList[i].name.toLowerCase() === key) {
+          return true;
+        }
+      }
+    }
     if (this._attrs) {
       if (this._attrs.has(key)) return true;
       if (origHasAttribute) return origHasAttribute.call(this, name);
@@ -314,12 +396,186 @@ function installElementExtensions(proto) {
   proto.getAttributeNames = function () {
     if (!this._attrs) this._syncAttrs();
     const names = [];
-    for (const entry of this._attrs.values()) {
-      names.push(entry.name);
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        names.push(this._attrList[i].name);
+      }
+    } else {
+      for (const entry of this._attrs.values()) {
+        names.push(entry.name);
+      }
     }
     return names;
   };
   markNative(proto.getAttributeNames, "getAttributeNames");
+
+  // getAttributeNS
+  proto.getAttributeNS = function (namespace, localName) {
+    if (typeof localName !== "string") return null;
+    if (!this._attrs) this._syncAttrs();
+    const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+    const loc = String(localName).toLowerCase();
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        const item = this._attrList[i];
+        const itemNs = item.namespaceURI || null;
+        const itemLoc = (item.localName || item.name).toLowerCase();
+        if (itemNs === ns && itemLoc === loc) {
+          return item.value;
+        }
+      }
+      if (ns === null) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          const item = this._attrList[i];
+          if ((item.namespaceURI === null || item.namespaceURI === undefined) &&
+              item.name.toLowerCase() === loc) {
+            return item.value;
+          }
+        }
+      }
+      return null;
+    }
+    return null;
+  };
+  markNative(proto.getAttributeNS, "getAttributeNS");
+
+  // hasAttributeNS
+  proto.hasAttributeNS = function (namespace, localName) {
+    return this.getAttributeNS(namespace, localName) !== null;
+  };
+  markNative(proto.hasAttributeNS, "hasAttributeNS");
+
+  // setAttributeNS
+  proto.setAttributeNS = function (namespace, qualifiedName, value) {
+    const qname = String(qualifiedName);
+    const val = String(value);
+    const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+    const colon = qname.indexOf(":");
+    const prefix = colon !== -1 ? qname.slice(0, colon) : null;
+    const localName = colon !== -1 ? qname.slice(colon + 1) : qname;
+
+    if (!this._attrs) this._syncAttrs();
+
+    let existing = null;
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        const item = this._attrList[i];
+        const itemNs = item.namespaceURI || null;
+        const itemLoc = (item.localName || item.name).toLowerCase();
+        if (itemNs === ns && itemLoc === localName.toLowerCase()) {
+          existing = item;
+          break;
+        }
+      }
+    }
+
+    const oldVal = existing ? existing.value : null;
+
+    if (existing) {
+      existing.value = val;
+      existing.name = qname;
+      existing.prefix = prefix;
+    } else {
+      const newEntry = {
+        name: qname,
+        value: val,
+        namespaceURI: ns,
+        localName: localName,
+        prefix: prefix,
+      };
+      if (!this._attrList) this._attrList = [];
+      this._attrList.push(newEntry);
+    }
+
+    this._attrs.set(qname.toLowerCase(), {
+      name: qname,
+      value: val,
+      namespaceURI: ns,
+      localName: localName,
+      prefix: prefix,
+    });
+
+    if (qname.toLowerCase() === "id" && ns === null) {
+      this.id = val;
+    } else if (qname.toLowerCase() === "class" && ns === null) {
+      this.className = val;
+    }
+
+    if (origSetAttribute) {
+      origSetAttribute.call(this, qname, val);
+    }
+    if (this._attributesMap) {
+      this._attributesMap._sync();
+    }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("attributes", this);
+      rec.attributeName = qname;
+      rec.attributeNamespace = ns;
+      rec.oldValue = oldVal;
+      notifyMutation(rec);
+    }
+  };
+  markNative(proto.setAttributeNS, "setAttributeNS");
+
+  // removeAttributeNS
+  proto.removeAttributeNS = function (namespace, localName) {
+    if (typeof localName !== "string" || localName.length === 0) return;
+    if (!this._attrs) this._syncAttrs();
+    const ns = (namespace === undefined || namespace === null || namespace === "") ? null : String(namespace);
+    const loc = String(localName).toLowerCase();
+
+    let removed = null;
+    if (this._attrList) {
+      for (let i = 0; i < this._attrList.length; i++) {
+        const item = this._attrList[i];
+        const itemNs = item.namespaceURI || null;
+        const itemLoc = (item.localName || item.name).toLowerCase();
+        if (itemNs === ns && itemLoc === loc) {
+          removed = item;
+          this._attrList.splice(i, 1);
+          break;
+        }
+      }
+      if (!removed && ns === null) {
+        for (let i = 0; i < this._attrList.length; i++) {
+          const item = this._attrList[i];
+          if ((item.namespaceURI === null || item.namespaceURI === undefined) &&
+              item.name.toLowerCase() === loc) {
+            removed = item;
+            this._attrList.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    const oldVal = removed ? removed.value : null;
+    const removedName = removed ? removed.name : localName;
+
+    this._attrs.delete(removedName.toLowerCase());
+    this._attrs.delete(localName.toLowerCase());
+
+    if (removedName.toLowerCase() === "id" && ns === null) {
+      this.id = "";
+    } else if (removedName.toLowerCase() === "class" && ns === null) {
+      this.className = "";
+    }
+
+    if (origRemoveAttribute) {
+      origRemoveAttribute.call(this, removedName);
+    }
+    if (this._attributesMap) {
+      this._attributesMap._sync();
+    }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("attributes", this);
+      rec.attributeName = removedName;
+      rec.attributeNamespace = ns;
+      rec.oldValue = oldVal;
+      notifyMutation(rec);
+    }
+  };
+  markNative(proto.removeAttributeNS, "removeAttributeNS");
 
   // Wrap id & className accessors if present
   const idDesc = Object.getOwnPropertyDescriptor(proto, "id");
@@ -332,9 +588,29 @@ function installElementExtensions(proto) {
         const str = String(v);
         if (!this._attrs) this._syncAttrs();
         if (str) {
-          this._attrs.set("id", { name: "id", value: str });
+          const entry = { name: "id", value: str, namespaceURI: null, localName: "id", prefix: null };
+          this._attrs.set("id", entry);
+          if (this._attrList) {
+            let found = false;
+            for (let i = 0; i < this._attrList.length; i++) {
+              if (this._attrList[i].name.toLowerCase() === "id") {
+                this._attrList[i].value = str;
+                found = true;
+                break;
+              }
+            }
+            if (!found) this._attrList.push(entry);
+          }
         } else {
           this._attrs.delete("id");
+          if (this._attrList) {
+            for (let i = 0; i < this._attrList.length; i++) {
+              if (this._attrList[i].name.toLowerCase() === "id") {
+                this._attrList.splice(i, 1);
+                break;
+              }
+            }
+          }
         }
         if (this._attributesMap) this._attributesMap._sync();
       },
@@ -351,9 +627,29 @@ function installElementExtensions(proto) {
         const str = String(v);
         if (!this._attrs) this._syncAttrs();
         if (str) {
-          this._attrs.set("class", { name: "class", value: str });
+          const entry = { name: "class", value: str, namespaceURI: null, localName: "class", prefix: null };
+          this._attrs.set("class", entry);
+          if (this._attrList) {
+            let found = false;
+            for (let i = 0; i < this._attrList.length; i++) {
+              if (this._attrList[i].name.toLowerCase() === "class") {
+                this._attrList[i].value = str;
+                found = true;
+                break;
+              }
+            }
+            if (!found) this._attrList.push(entry);
+          }
         } else {
           this._attrs.delete("class");
+          if (this._attrList) {
+            for (let i = 0; i < this._attrList.length; i++) {
+              if (this._attrList[i].name.toLowerCase() === "class") {
+                this._attrList.splice(i, 1);
+                break;
+              }
+            }
+          }
         }
         if (this._attributesMap) this._attributesMap._sync();
       },
@@ -389,6 +685,9 @@ function installElementExtensions(proto) {
     proto.matches = function (selector) {
       if (!selector || typeof selector !== "string") return false;
       const s = selector.trim();
+      if (s === ":checked") return Boolean(this.checked);
+      if (s === ":disabled") return Boolean(this.disabled);
+      if (s === ":enabled") return !this.disabled;
       if (s === "*") return true;
       if (s.startsWith("#") && this.id === s.slice(1)) return true;
       if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
@@ -488,16 +787,12 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "checked", {
     get: function () {
-      if (this._checked !== undefined) return this._checked;
+      if (this._checkedDirty) return this._checked;
       return this.hasAttribute("checked");
     },
     set: function (v) {
+      this._checkedDirty = true;
       this._checked = Boolean(v);
-      if (v) {
-        if (this.setAttribute) this.setAttribute("checked", "");
-      } else {
-        if (this.removeAttribute) this.removeAttribute("checked");
-      }
     },
     configurable: true,
   });

@@ -1,7 +1,7 @@
 // Migrated from vendor/kitesurf/packages/dom-shim/src/range.ts
 // Implements DOM Range, BoundaryPoint comparison, and Common Ancestor computation over Arena DOM tree.
 
-import { Document, NodeData, NodeId, NULL_NODE } from "./dom.cp";
+import { Document, NodeData, NodeId, NULL_NODE, NodeType } from "./dom.cp";
 
 pub const START_TO_START: u16 = 0;
 pub const START_TO_END: u16 = 1;
@@ -81,6 +81,33 @@ pub struct DOMRange {
         let cmp2 = comparePoint(doc, p_id, idx + 1, _.start_container, _.start_offset);
 
         return (cmp1 < 0 && cmp2 > 0);
+    }
+
+    fn selectNodeContents(*_, doc: *const Document, node: NodeId) {
+        _.start_container = node;
+        _.start_offset = 0;
+        _.end_container = node;
+        if (n := doc.getNode(node)) {
+            if (n.node_type == NodeType.Text) {
+                _.end_offset = @intCast(n.text_content.len);
+            } else {
+                let count: u32 = 0;
+                let child = n.first_child;
+                while (child != NULL_NODE) {
+                    count += 1;
+                    let cnode = doc.getNode(child);
+                    if (cnode != null) {
+                        child = cnode.?.next_sibling;
+                    } else {
+                        break;
+                    }
+                }
+                _.end_offset = count;
+            }
+        } else {
+            _.end_offset = 0;
+        }
+        _.updateCollapsedAndAncestor(doc);
     }
 }
 

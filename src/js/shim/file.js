@@ -543,9 +543,63 @@ function patchExistingBodyBlob(Ctor) {
   }
 }
 
+// ... (existing code, added at the end)
+
+function TextDecoder(label, options) {
+  let enc = (label || 'utf-8').trim().toLowerCase();
+  if (enc === 'utf8') enc = 'utf-8';
+  this.label = enc;
+  this.encoding = enc;
+  this.fatal = options ? !!options.fatal : false;
+  this.ignoreBOM = options ? !!options.ignoreBOM : false;
+}
+
+TextDecoder.prototype.decode = function(input, options) {
+  if (input === undefined || input === null) {
+    return "";
+  }
+  let label = (this.label || 'utf-8').trim().toLowerCase();
+  if (label === 'utf8') label = 'utf-8';
+  
+  let bytes;
+  if (input instanceof ArrayBuffer) {
+    bytes = new Uint8Array(input);
+  } else if (ArrayBuffer.isView(input)) {
+    bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  } else {
+    throw new TypeError("The provided value is not of type '(ArrayBufferView or ArrayBuffer)'");
+  }
+  
+  if (label === 'utf-8') {
+    return utf8ToString(bytes);
+  } else if (label === 'latin1' || label === 'iso-8859-1' || label === 'windows-1252') {
+    let str = "";
+    for (let i = 0; i < bytes.length; i++) {
+      str += String.fromCharCode(bytes[i]);
+    }
+    return str;
+  }
+  
+  throw new Error('Encoding not supported: ' + this.label);
+};
+
+markNative(TextDecoder, "TextDecoder");
+markNative(TextDecoder.prototype.decode, "decode");
+
+function TextEncoder() {
+  this.encoding = "utf-8";
+}
+TextEncoder.prototype.encode = function (input) {
+  return stringToUtf8(input === undefined ? "" : String(input));
+};
+markNative(TextEncoder, "TextEncoder");
+markNative(TextEncoder.prototype.encode, "encode");
+
 // Expose globals
 global.Blob = Blob;
 global.File = File;
+global.TextDecoder = TextDecoder;
+global.TextEncoder = TextEncoder;
 
 global.Headers = Headers;
 if (!global.Request) global.Request = Request; else patchExistingBodyBlob(global.Request);
@@ -554,6 +608,8 @@ if (!global.Response) global.Response = Response; else patchExistingBodyBlob(glo
 if (typeof window !== "undefined") {
   window.Blob = Blob;
   window.File = File;
+  window.TextDecoder = TextDecoder;
+  window.TextEncoder = TextEncoder;
   window.Headers = Headers;
   window.Request = Request;
   window.Response = Response;
@@ -561,7 +617,10 @@ if (typeof window !== "undefined") {
 if (typeof globalThis !== "undefined") {
   globalThis.Blob = Blob;
   globalThis.File = File;
+  globalThis.TextDecoder = TextDecoder;
+  globalThis.TextEncoder = TextEncoder;
   globalThis.Headers = Headers;
   globalThis.Request = Request;
   globalThis.Response = Response;
 }
+

@@ -990,3 +990,25 @@
 - **`src/js/dom_binding.cp`**：新增 `Document.getElementsByName`、`document.head`、`document.implementation.createHTMLDocument`、`Element.innerHTML` setter；`createJsElement` 增加包装器身份缓存，保证同节点 `===`。
 - **`src/js/shim/collections.js` / `index.js`**：Proxy 实现 live `HTMLCollection`；Document 上 `images/links/forms/scripts/embeds/plugins/anchors/applets` live 访问器。
 - **测试**：`test/dom/test_document_collections.cp` PASS；`e2e/document-collections.e2e.test.ts` 2/2 PASS；相关 19 个 E2E 回归 + `test_js_dom.cp` 5/5 PASS。
+
+## Phase 46: HTML 序列化、TextDecoder/TextEncoder、命名空间属性与核心 DOM 扩展 (100% Closed)
+- **`src/dom/dom.cp`**：
+  - 实装 `HtmlSerializer` 结构体：支持 Element、Text、Comment、14 种空元素（`img`, `input`, `br`, `hr`, `meta`, `link` 等）与 raw text 元素（`script`, `style`）的原生序列化；
+  - 实装 `Document.getInnerHtml(node_id)` 与 `getOuterHtml(node_id)`；
+  - 实装 `Document.cloneNode(node_id, deep)`，支持深拷贝标签及属性；
+  - 实装 `Document.getAttributeNames(node_id)`，自动聚合缓存属性与显式属性列表；
+  - 实装 `getAttributeNS`、`setAttributeNS`、`removeAttributeNS` 及其 ElementHandle 封装。
+- **`src/dom/range.cp`**：实装 `DOMRange.selectNodeContents`。
+- **`src/js/qjs_engine.cp`**：`@c` 导出 `jsToBool`。
+- **`src/js/dom_binding.cp`**：在 `el_proto` 上挂载 `innerHTML`（可读写）、`outerHTML`（只读）、`cloneNode`、`getAttributeNames`、`getAttributeNS`、`setAttributeNS`、`removeAttributeNS`。
+- **`src/js/shim/file.js`**：实装 WHATWG `TextDecoder`（支持 `utf-8`/`utf8`、`latin1`、`iso-8859-1`、`windows-1252`）与 `TextEncoder`。
+- **`src/js/shim/element/element.js` & `collections.js`**：
+  - 完善 `Element.prototype` 上的命名空间属性方法；
+  - `Attr` 与 `NamedNodeMap` 增加对 `namespaceURI`、`localName`、`prefix` 及 `*ItemNS` 支持；
+  - 完善 dirty checkbox 属性移除时的状态保持逻辑。
+- **测试与门禁验证**：
+  - 白盒测试：`test/dom/test_dom_api_extensions.cp` PASS，`test/js/test_js_dom.cp` 5/5 PASS，`test/dom/test_document_collections.cp` PASS；
+  - 4 道静态门禁：所有修改的 CP 文件 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：`checkbox-remove-attribute-ns`、`raw-text-inner-html`、`document-collections`、`prefixed-attribute-writes`、`boa-typed-array-natives` 100% 绿灯通过；
+  - 独立单二进制：`bin/main`（9.6MB）构建成功。
+

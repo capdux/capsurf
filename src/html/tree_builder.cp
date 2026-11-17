@@ -493,7 +493,21 @@ pub struct TreeBuilder {
 
     fn insertCharacter(*_, text: []const u8) {
         if (text.len == 0) return;
-        const tid = _.doc.createTextNode(text) catch NULL_NODE;
+        if (!_.foster_parenting) {
+            const parent_id = _.currentAppropriatePlace();
+            if (parent_id != NULL_NODE) {
+                const last_child = _.doc.nodes.items[@as(usize, parent_id)].last_child;
+                if (last_child != NULL_NODE && _.doc.nodes.items[@as(usize, last_child)].node_type == NodeType.Text) {
+                    const old_text = _.doc.nodes.items[@as(usize, last_child)].text_content;
+                    const new_text = std.fmt.allocPrint(_.doc.allocator, "{s}{s}", .{old_text, text}) catch return;
+                    _.doc.nodes.items[@as(usize, last_child)].text_content = new_text;
+                    return;
+                }
+            }
+        }
+
+        const text_dup = _.doc.allocator.dupe(u8, text) catch text;
+        const tid = _.doc.createTextNode(text_dup) catch NULL_NODE;
         if (tid == NULL_NODE) return;
 
         if (_.foster_parenting) {

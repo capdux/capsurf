@@ -1964,3 +1964,22 @@
 ### Phase 45 闭环（DOM 集合 / implementation / getElementsByName / innerHTML）
 - 双子智能体完成原生与 JS 垫片；主智能体补齐 innerHTML 原生 setter 与包装器身份缓存。
 - 验证：白盒 `test_document_collections` PASS、`test_js_dom` 5/5；E2E `document-collections` 2/2 与 19 项回归全绿；`cpc_brief` 门禁通过。
+
+## [2026-11-18 00:30:00] Turn 59
+### Phase 46 闭环：HTML 序列化、TextDecoder/TextEncoder、命名空间属性与核心 DOM 扩展
+- **原生能力攻坚**：
+  - `src/dom/dom.cp` 实现 `HtmlSerializer`、`Document.getInnerHtml/getOuterHtml`、`cloneNode`、`getAttributeNames` 及 `*AttributeNS` 命名空间属性方法；
+  - `src/dom/range.cp` 补充 `DOMRange.selectNodeContents`；
+  - `src/js/qjs_engine.cp` 导出 `jsToBool`；
+  - `src/js/dom_binding.cp` 挂载 `innerHTML` (getter/setter)、`outerHTML` (getter)、`cloneNode`、`getAttributeNames` 与 `*AttributeNS` 到 Element 原型。
+- **JS 垫片增强**：
+  - `src/js/shim/file.js` 实现多编码 WHATWG `TextDecoder` 与 `TextEncoder`；
+  - `src/js/shim/element/html-element.js` 清除覆写原生属性的旧兜底 getter/setter；
+  - `src/js/shim/element/element.js` 与 `collections.js` 扩展 `Attr` / `NamedNodeMap` 命名空间属性与 live 映射；
+  - `src/js/shim/element/forms/input.js` 修复 `removeAttributeNS` 下的 dirty checkbox 选中状态维持。
+- **验证与闭环**：
+  - 白盒单元测试 `test/dom/test_dom_api_extensions.cp` PASS；`test_js_dom.cp` (5/5) PASS；`test_document_collections.cp` PASS；
+  - 静态门禁 `cpc_brief.py -n 8` 100% 通过（0 violations）；
+  - E2E 目标用例 `checkbox-remove-attribute-ns`、`raw-text-inner-html`、`document-collections`、`prefixed-attribute-writes`、`boa-typed-array-natives` 100% 绿色通过；
+  - 独立可执行二进制 `bin/main`（9.6MB）构建无误。
+
