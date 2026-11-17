@@ -1,6 +1,8 @@
 // src/net/mock_fixtures.cp
 // CapSurf Internal Test Fixtures Handler for Mock Network Endpoints
-// Aligned with vendor/kitesurf/packages/engine/test/fixtures-worker/src/dynamic/cors.ts
+// Aligned with vendor/kitesurf/packages/engine/test/fixtures-worker/src/serve.ts
+
+import { open, read, close, lseek } from "../cdp/server.cp";
 
 pub struct MockFixtures {
     static fn extractHost(url: []const u8): []const u8 {
@@ -45,36 +47,244 @@ pub struct MockFixtures {
         if (host.len >= 8 && std.ascii.endsWithIgnoreCase(host, ".invalid")) {
             return true;
         }
+        let clean = url;
+        if (q_idx := std.mem.indexOfScalar(u8, clean, '?')) {
+            clean = clean[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, clean, '#')) {
+            clean = clean[0..h_idx];
+        }
+        if (clean.len >= 8 && std.ascii.endsWithIgnoreCase(clean, ".invalid")) {
+            return true;
+        }
         return false;
     }
 
-    /// Handle fixture requests. Currently implements /echo-headers.json by synthesizing
-    /// a JSON response containing incoming request headers (origin, user-agent, accept).
+    /// Extract fixture filename from URL.
+    /// Supports /__fixtures/<filename> or paths on .invalid domains.
+    static fn extractFilename(url: []const u8): []const u8 {
+        if (fix_pos := std.mem.indexOf(u8, url, "/__fixtures/")) {
+            let rest = url[fix_pos + 12..];
+            if (q_idx := std.mem.indexOfScalar(u8, rest, '?')) {
+                rest = rest[0..q_idx];
+            }
+            if (h_idx := std.mem.indexOfScalar(u8, rest, '#')) {
+                rest = rest[0..h_idx];
+            }
+            while (rest.len > 0 && rest[0] == '/') {
+                rest = rest[1..];
+            }
+            return rest;
+        }
+
+        if (!MockFixtures.isFixtureUrl(url)) {
+            return "";
+        }
+
+        // For .invalid domains without /__fixtures/, extract the path
+        let rest = url;
+        if (std.mem.startsWith(u8, rest, "http://")) {
+            rest = rest[7..];
+        } else if (std.mem.startsWith(u8, rest, "https://")) {
+            rest = rest[8..];
+        } else if (idx := std.mem.indexOf(u8, rest, "://")) {
+            rest = rest[idx + 3..];
+        }
+
+        let auth_end: usize = 0;
+        while (auth_end < rest.len) : (auth_end += 1) {
+            const ch = rest[auth_end];
+            if (ch == '/' || ch == '?' || ch == '#') break;
+        }
+        let path_part = rest[auth_end..];
+
+        if (q_idx := std.mem.indexOfScalar(u8, path_part, '?')) {
+            path_part = path_part[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, path_part, '#')) {
+            path_part = path_part[0..h_idx];
+        }
+
+        while (path_part.len > 0 && path_part[0] == '/') {
+            path_part = path_part[1..];
+        }
+
+        return path_part;
+    }
+
+    /// Determine Content-Type based on file extension.
+    /// .html -> text/html
+    /// .js -> application/javascript
+    /// .css -> text/css
+    /// .png -> image/png
+    /// .json -> application/json
+    static fn getContentType(path_or_url: []const u8): []const u8 {
+        let clean = path_or_url;
+        if (q_idx := std.mem.indexOfScalar(u8, clean, '?')) {
+            clean = clean[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, clean, '#')) {
+            clean = clean[0..h_idx];
+        }
+
+        if (std.ascii.endsWithIgnoreCase(clean, ".html") || std.ascii.eqlIgnoreCase(clean, "html")) {
+            return "text/html";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".js") || std.ascii.eqlIgnoreCase(clean, "js")) {
+            return "application/javascript";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".css") || std.ascii.eqlIgnoreCase(clean, "css")) {
+            return "text/css";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".png") || std.ascii.eqlIgnoreCase(clean, "png")) {
+            return "image/png";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".json") || std.ascii.eqlIgnoreCase(clean, "json")) {
+            return "application/json";
+        }
+        return "application/octet-stream";
+    }
+
+    /// Helper to read file from disk into buffer or allocated memory.
+    static fn readFileContent(path: []const u8, out_buf: []u8): ([]const u8)? {
+        let path_z: [512]u8 = [0; 512];
+        if (path.len >= 511) return null;
+        @memcpy(path_z[0..path.len], path);
+        path_z[path.len] = 0;
+
+        const fd = open(&path_z, 0);
+        if (fd < 0) return null;
+        defer * = close(fd);
+
+        const size = lseek(fd, 0, 2);
+        if (size <= 0) return "";
+        * = lseek(fd, 0, 0);
+
+        const usize_sz: usize = @as(usize, @intCast(size));
+
+        if (usize_sz <= out_buf.len) {
+            let total: usize = 0;
+            while (total < usize_sz) {
+                const chunk = read(fd, out_buf.ptr + total, usize_sz - total);
+                if (chunk <= 0) break;
+                total += @as(usize, @intCast(chunk));
+            }
+            return out_buf[0..total];
+        } else {
+            const heap_buf = std.heap.page_allocator.alloc(u8, usize_sz) catch return null;
+            let total: usize = 0;
+            while (total < usize_sz) {
+                const chunk = read(fd, heap_buf.ptr + total, usize_sz - total);
+                if (chunk <= 0) break;
+                total += @as(usize, @intCast(chunk));
+            }
+            return heap_buf[0..total];
+        }
+    }
+
+    /// Read static fixture file from e2e/page/<filename>.
+    static fn readPageFile(filename: []const u8, out_buf: []u8): ([]const u8)? {
+        if (filename.len == 0) return null;
+
+        // 1. Try relative path: e2e/page/<filename>
+        let path_buf: [512]u8 = [0; 512];
+        const rel_path = std.fmt.bufPrint(&path_buf, "e2e/page/{s}", .{ filename }) catch return null;
+        if (res1 := MockFixtures.readFileContent(rel_path, out_buf)) {
+            return res1;
+        }
+
+        // 2. Try absolute path: /data/dev/capsurf/e2e/page/<filename>
+        let abs_buf: [512]u8 = [0; 512];
+        const abs_path = std.fmt.bufPrint(&abs_buf, "/data/dev/capsurf/e2e/page/{s}", .{ filename }) catch return null;
+        if (res2 := MockFixtures.readFileContent(abs_path, out_buf)) {
+            return res2;
+        }
+
+        // 3. Fallback to basename if filename contains '/'
+        if (last_slash := std.mem.lastIndexOfScalar(u8, filename, '/')) {
+            const base = filename[last_slash + 1..];
+            if (base.len > 0) {
+                let base_buf: [512]u8 = [0; 512];
+                const base_rel = std.fmt.bufPrint(&base_buf, "e2e/page/{s}", .{ base }) catch return null;
+                if (res3 := MockFixtures.readFileContent(base_rel, out_buf)) {
+                    return res3;
+                }
+
+                let abs_base: [512]u8 = [0; 512];
+                const base_abs = std.fmt.bufPrint(&abs_base, "/data/dev/capsurf/e2e/page/{s}", .{ base }) catch return null;
+                if (res4 := MockFixtures.readFileContent(base_abs, out_buf)) {
+                    return res4;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// Handle fixture requests.
+    /// 1. /echo-headers.json: synthesizes JSON response with request headers.
+    /// 2. Dynamic endpoints:
+    ///    - /policy-doc.html: "<!DOCTYPE html><html><head><title>policy</title></head><body>policy doc</body></html>"
+    ///    - /policy-script.js: "window.__policy_loaded = true;"
+    /// 3. Static files:
+    ///    - /__fixtures/<filename> or .invalid URL -> e2e/page/<filename>
     static fn handleFixtureRequest(
         url: []const u8,
         origin: []const u8,
         user_agent: []const u8,
         out_buf: []u8,
     ): ([]const u8)? {
-        if (std.mem.indexOf(u8, url, "/echo-headers.json") == null) {
-            return null;
+        // 1. /echo-headers.json
+        if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
+            const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
+            const orig = if (origin.len == 0) "null" else origin;
+
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"accept\":\"*/*\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"}}",
+                .{ orig, ua },
+            ) catch return null;
+
+            return res;
         }
 
-        const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
-        const orig = if (origin.len == 0) "null" else origin;
+        // 2. Dynamic endpoints
+        if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
+            const doc = "<!DOCTYPE html><html><head><title>policy</title></head><body>policy doc</body></html>";
+            if (doc.len <= out_buf.len) {
+                @memcpy(out_buf[0..doc.len], doc);
+                return out_buf[0..doc.len];
+            }
+            return doc;
+        }
 
-        const res = std.fmt.bufPrint(
-            out_buf,
-            "{{\"accept\":\"*/*\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"}}",
-            .{ orig, ua },
-        ) catch return null;
+        if (std.mem.indexOf(u8, url, "/policy-script.js") != null) {
+            const script = "window.__policy_loaded = true;";
+            if (script.len <= out_buf.len) {
+                @memcpy(out_buf[0..script.len], script);
+                return out_buf[0..script.len];
+            }
+            return script;
+        }
 
-        return res;
+        // 3. Static fixture files from e2e/page/
+        const filename = MockFixtures.extractFilename(url);
+        if (filename.len > 0) {
+            if (content := MockFixtures.readPageFile(filename, out_buf)) {
+                return content;
+            }
+        }
+
+        return null;
     }
 }
 
 pub fn isFixtureUrl(url: []const u8): bool {
     return MockFixtures.isFixtureUrl(url);
+}
+
+pub fn extractFilename(url: []const u8): []const u8 {
+    return MockFixtures.extractFilename(url);
+}
+
+pub fn getContentType(path_or_url: []const u8): []const u8 {
+    return MockFixtures.getContentType(path_or_url);
 }
 
 pub fn handleFixtureRequest(

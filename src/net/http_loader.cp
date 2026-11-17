@@ -259,16 +259,14 @@ pub struct HttpLoader {
             return error.InvalidDataUrl;
         }
 
-        // 2.5. Check for test fixtures (e.g. echo-headers)
+        // 2.5. Check for test fixtures (e.g. echo-headers, static pages, dynamic endpoints)
         if (MockFixtures.isFixtureUrl(url)) {
-            if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
-                if (json_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf)) {
-                    return HttpLoaderResult{
-                        status_code: 200,
-                        final_url: url,
-                        html: json_res,
-                    };
-                }
+            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf)) {
+                return HttpLoaderResult{
+                    status_code: 200,
+                    final_url: url,
+                    html: fixture_res,
+                };
             }
         }
 

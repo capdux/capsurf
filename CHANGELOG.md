@@ -908,6 +908,25 @@
   - 独立单二进制：`bin/main`（9.2MB）构建成功；
   - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
 
+## Phase 42: Static Asset Fixtures, Dynamic Policy Synthesis & Navigation Abort Protocol (100% Closed)
+- **`src/net/mock_fixtures.cp`**：
+  - 实装 `MockFixtures.extractFilename(url)`：精准提取 `/__fixtures/<filename>` 及虚拟主机下的测试文件路径，剥离 Query 与 Fragment；
+  - 实装 `e2e/page/<filename>` 静态资产读取与交付流水线，支持 HTML, JS, CSS, PNG, JSON；
+  - 实装动态 Mock 端点响应合成：`/policy-doc.html` 与 `/policy-script.js`；
+  - 实装基于文件扩展名的 MIME Content-Type 自动映射。
+- **`src/cdp/server.cp`**：
+  - 重构 C-FFI 声明，导出 `lseek` 供网络模块复用，彻底清除重复声明符号冲突。
+- **`src/net/http_loader.cp`**：
+  - 扩展 fixture 请求拦截机制，使全部静态测试固件与动态脚本均能无外部网络依赖地极速交付。
+- **`e2e/harness.ts`**：
+  - 在 `Page` 中实装跨导航在途评估销毁取消机制（`inFlightEvaluates`），在 `goto()` 与 `setContent()` 开始时立即以规范级错误 reject；
+  - 扩展 `expect(promise).rejects.toThrow(...)` 与长延迟定时器时钟对齐。
+- **测试套件与全链路验证**：
+  - `test/net/test_mock_fixtures.cp`：纯 CP 原生单元测试 5 项测试 100% 全部 PASS；
+  - `bun test`：全量 14 套 `.e2e.test.ts` 测试套件（26 个用例，55 项 expect 断言）100% 绿色通过；
+  - 独立单二进制：`bin/main`（9.2MB）构建成功；
+  - 门禁检验：全部修改的 CP 源码 100% 通过 `cpc_brief.py` 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+
 
 
 

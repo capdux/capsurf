@@ -1879,6 +1879,31 @@
    - **Bun 原生 TypeScript E2E 测试套件**：全量 12 套 `.e2e.test.ts` 套件（23 个用例，50 项 expect 断言）100% 绿色全部通过（`bun test` 仅耗时 2.67s，单测试平均 110ms）；
    - **独立单二进制**：`bin/main`（9.2MB）构建成功。
 
+---
+
+## [2026-11-17 10:55:00] Turn 55
+
+### **[User]**
+> 配额恢复了, 开启常驻通信进程和两个子智能体, 继续你的工作
+
+### **[Agent]**
+报告：已成功重启常驻监听守护进程（`scripts/watch_task.py --status resolved --agent capsurf_agy`），并派发 2 路子智能体满负荷并行攻坚，圆满闭环完成 Phase 42（全量静态测试资产动态加载服务、动态策略端点合成、跨导航在途评估销毁取消机制与 E2E 规模化回归）：
+1. **静态测试资产文件加载与动态策略端点合成 (`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`)**：
+   - 增强 `MockFixtures.extractFilename(url)`：精准提取 `/__fixtures/<filename>` 及 `.invalid` 虚拟域名下的相对路径，自动剥离 Query 与 Fragment；
+   - 挂载 `e2e/page/` 静态文件读取引擎：通过 POSIX C-FFI 接口极速读取磁盘静态测试资产，并在内存中完成高效复制交付；
+   - 动态 Mock 端点支持：实装 `/policy-doc.html` 与 `/policy-script.js` 响应合成；
+   - MIME Content-Type 自动映射：根据后缀准确推导 `text/html`、`application/javascript`、`text/css`、`image/png`、`application/json`；
+   - 符号冲突排治：规范 `src/cdp/server.cp` 与 `mock_fixtures.cp` 的 C-FFI `lseek` 声明，杜绝多文件符号冲突。
+2. **在途 Evaluate 生命周期维护与导航销毁取消机制 (`e2e/harness.ts`)**：
+   - 在 `Page` 中建立 `inFlightEvaluates: Set<{ reject: (err: any) => void }>` 跟踪在途 Promise；
+   - 当 `Page.goto()` 或 `Page.setContent()` 开始导航时，触发取消拦截器，将当前所有在途未决评估立即以 `new Error("Execution context was destroyed -- most likely because of a navigation.")` 全部触发 reject；
+   - 扩展 `expect(promise).rejects.toThrow(...)` 与超长延迟评估时钟对齐，圆满支持 `await rejected;` 语法与长耗时定时器测试。
+3. **双轨测试与门禁验证 100% 绿色闭环**：
+   - **纯 CP 原生单元测试**：`test/net/test_mock_fixtures.cp` 5 项测试 100% 全部 PASS；
+   - **门禁验证**：`python3 scripts/cpc_brief.py -n 8` 4 个修改核心文件 100% 通过 4 道静态门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - **Bun 原生 TypeScript E2E 测试**：14 套核心 `.e2e.test.ts` 套件（26 个用例，55 项 expect 断言）100% 绿色全部通过（`bun test`）；
+   - **独立单二进制**：`bin/main`（9.2MB）构建成功。
+
 
 
 

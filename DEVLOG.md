@@ -803,6 +803,18 @@
      - 早期备份 `NativeEvent = global.Event`，在 `__capsurf_dispatch_lifecycle` 与 `history` 路由跳转中始终使用未被污染的原生事件对象；
      - 确保每一个新创建的 `raw_rt` 运行时均显式注册 `Element` 与 `Document` 类定义，根除悬垂类 ID 引发的内存访问越界。
 
+## Phase 42 静态测试资产服务、动态策略端点合成与跨导航评估取消架构方案
+1. **测试静态资产与动态策略端点服务架构 (`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`)**：
+   - **设计动机**：Kitesurf 原始测试集大量引用 `/__fixtures/events.html`、`webfont.html`、`solid-red.png` 等各类静态文件，同时依赖 `/policy-doc.html`、`/policy-script.js` 等动态端点。在完全隔离的无外网环境中，必须由内部引擎自给自足地提供文件检索与响应合成；
+   - **解决方案**：
+     - 在 `mock_fixtures.cp` 中实装基于 POSIX C-FFI 的静态资产检索器，映射到 `e2e/page/`，根据扩展名推导合法 MIME Content-Type；
+     - 动态合成 `/policy-*` 报文，配合 `HttpLoader` 拦截分发，实现零外网依赖的自包含测试基座。
+2. **跨导航在途评估销毁取消机制与 Matcher 扩展 (`e2e/harness.ts`)**：
+   - **设计动机**：当页面正在执行长耗时异步 evaluate（如未决 Promise 或定时器）时，若测试触发导航（`goto` 或 `setContent`），Chrome 标准行为是立即销毁执行上下文并拒绝在途 Promise（`Execution context was destroyed`）。若引擎没有销毁机制，挂起的 Promise 将导致测试用例挂死；
+   - **解决方案**：
+     - 在 `Page` 中维护 `inFlightEvaluates` 集合，在导航动作发生瞬间统一 reject 并清空；
+     - 基于 Proxy 扩展 `expect(promise).rejects.toThrow(...)`，完善异步断言支持。
+
 
 
 

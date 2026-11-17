@@ -26,6 +26,7 @@ pub @c {
     fn open(pathname: [*c]const u8, flags: i32): i32;
     fn read(fd: i32, buf: [*]u8, count: usize): isize;
     fn close(fd: i32): i32;
+    fn lseek(fd: i32, offset: i64, whence: i32): i64;
     fn shutdown(fd: i32, how: i32): i32;
     fn setsockopt(fd: i32, level: i32, optname: i32, optval: *const i32, optlen: u32): i32;
 }

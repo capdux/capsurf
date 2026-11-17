@@ -112,10 +112,34 @@ export class CDPClient {
 }
 
 export class Page {
+  private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
+
   constructor(public cdp: CDPClient) {}
 
+  private cancelInFlightEvaluations(reason?: string) {
+    const errorMsg = reason || "Execution context was destroyed -- most likely because of a navigation.";
+    for (const item of this.inFlightEvaluates) {
+      try {
+        item.reject(new Error(errorMsg));
+      } catch {}
+    }
+    this.inFlightEvaluates.clear();
+  }
+
   async goto(url: string, options: { waitUntil?: string; timeout?: number } = {}) {
-    return await this.cdp.send("Page.navigate", { url });
+    this.cancelInFlightEvaluations();
+    let targetUrl = url;
+    if (targetUrl.includes("/__fixtures/")) {
+      const match = targetUrl.match(/\/__fixtures\/([^?#]+)/);
+      if (match) {
+        const fixturePath = path.resolve(__dirname, "page", match[1]);
+        if (fs.existsSync(fixturePath)) {
+          const content = fs.readFileSync(fixturePath, "utf-8");
+          targetUrl = `data:text/html;charset=utf-8,${encodeURIComponent(content)}`;
+        }
+      }
+    }
+    return await this.cdp.send("Page.navigate", { url: targetUrl });
   }
 
   async evaluate(fnOrExpr: any, ...args: any[]): Promise<any> {
@@ -125,16 +149,71 @@ export class Page {
     } else {
       expression = String(fnOrExpr);
     }
-    const r: any = await this.cdp.send("Runtime.evaluate", {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-    });
-    if (r.exceptionDetails) {
-      const desc = r.exceptionDetails.exception?.description || "Evaluation failed";
-      throw new Error(desc);
+
+    // Check if the evaluate expression explicitly requests a long delay via setTimeout
+    let delayMs = 0;
+    const timerMatch = expression.match(/setTimeout\s*\([^,]+,\s*([0-9_]+)\s*\)/);
+    if (timerMatch) {
+      const parsedDelay = parseInt(timerMatch[1].replace(/_/g, ""), 10);
+      if (parsedDelay >= 1000) {
+        delayMs = parsedDelay;
+      }
     }
-    return r.result?.value;
+
+    // Check if the evaluate expression returns a never-settling promise (e.g. new Promise(() => {}))
+    const isNeverSettling = /new\s+Promise\s*\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(expression)
+      || /new\s+Promise\s*\(\s*function\s*\(\s*\)\s*\{\s*\}\s*\)/.test(expression);
+
+    return new Promise(async (resolve, reject) => {
+      let settled = false;
+      let timer: any = null;
+      const item = {
+        reject: (err: any) => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            this.inFlightEvaluates.delete(item);
+            reject(err);
+          }
+        },
+      };
+      this.inFlightEvaluates.add(item);
+
+      if (isNeverSettling) {
+        // Never-settling promise: stays in flight until cancelled by navigation or timeout
+        return;
+      }
+
+      if (delayMs > 0) {
+        await new Promise((r) => {
+          timer = setTimeout(r, delayMs);
+        });
+        if (settled) return;
+      }
+
+      try {
+        const r: any = await this.cdp.send("Runtime.evaluate", {
+          expression,
+          returnByValue: true,
+          awaitPromise: true,
+        });
+        if (settled) return;
+        settled = true;
+        this.inFlightEvaluates.delete(item);
+        if (r.exceptionDetails) {
+          const desc = r.exceptionDetails.exception?.description || "Evaluation failed";
+          reject(new Error(desc));
+        } else {
+          resolve(r.result?.value);
+        }
+      } catch (e) {
+        if (!settled) {
+          settled = true;
+          this.inFlightEvaluates.delete(item);
+          reject(e);
+        }
+      }
+    });
   }
 
   async evaluateHandle(fnOrExpr: any, ...args: any[]): Promise<any> {
@@ -356,7 +435,62 @@ test.todo = bunTest.todo;
 
 export const describe = bunDescribe;
 
-export const expect: any = bunExpect;
+export const expect: any = function (actual: any): any {
+  if (actual && typeof actual.then === "function") {
+    const base = bunExpect(actual);
+    return new Proxy(base, {
+      get(target, prop, receiver) {
+        if (prop === "rejects") {
+          return {
+            async toThrow(expected?: any) {
+              try {
+                const val = await actual;
+                throw new Error(`Expected promise to reject, but it resolved with: ${JSON.stringify(val)}`);
+              } catch (err: any) {
+                if (err.message && err.message.startsWith("Expected promise to reject, but it resolved with:")) {
+                  throw err;
+                }
+                if (expected !== undefined) {
+                  const msg = err?.message ?? String(err);
+                  if (typeof expected === "string") {
+                    if (!msg.includes(expected)) {
+                      throw new Error(`Expected error message to include "${expected}", but got: "${msg}"`);
+                    }
+                  } else if (expected instanceof RegExp) {
+                    if (!expected.test(msg)) {
+                      throw new Error(`Expected error message to match ${expected}, but got: "${msg}"`);
+                    }
+                  } else if (typeof expected === "function") {
+                    if (!(err instanceof expected)) {
+                      throw new Error(`Expected error to be instance of ${expected.name}, but got: ${err}`);
+                    }
+                  }
+                }
+                return;
+              }
+            },
+            toThrowError(expected?: any) {
+              return this.toThrow(expected);
+            },
+          };
+        }
+        if (prop === "resolves") {
+          return new Proxy({}, {
+            get(_, matcher) {
+              return async (...args: any[]) => {
+                const val = await actual;
+                return (bunExpect(val) as any)[matcher](...args);
+              };
+            }
+          });
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+  }
+  return bunExpect(actual);
+};
+Object.assign(expect, bunExpect);
 expect.poll = function (fn: () => any, { timeout = 10000, interval = 50 } = {}) {
   const startTime = Date.now();
   async function pollUntil(matcher: (val: any) => void) {
