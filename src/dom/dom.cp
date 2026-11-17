@@ -567,6 +567,26 @@ pub struct Document {
         return NULL_NODE;
     }
 
+    // 返回按文档节点顺序匹配的 NodeId 切片，调用方用 _.allocator 释放
+    fn getElementsByName(target: []const u8): ([]NodeId)! {
+        let out = std.ArrayListUnmanaged(NodeId).empty;
+        if (target.len == 0) {
+            return out.toOwnedSlice(_.allocator);
+        }
+        let i: usize = 1;
+        while (i < _.nodes.items.len) : (i += 1) {
+            const node = &_.nodes.items[i];
+            if (node.node_type == NodeType.Element) {
+                if (v := node.getAttribute("name")) {
+                    if (std.mem.eql(u8, v, target)) {
+                        out.append(_.allocator, @intCast(i))?;
+                    }
+                }
+            }
+        }
+        return out.toOwnedSlice(_.allocator);
+    }
+
     fn getFirstChild(node_id: NodeId): NodeId {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return NULL_NODE;
         return _.nodes.items[@as(usize, node_id)].first_child;
@@ -594,6 +614,64 @@ pub struct Document {
 
     fn parseHtml(*_, html: []const u8)! {
         HtmlParser.parse(_, html)?;
+    }
+
+    // 深拷贝 src 文档中的 src_id 子树到本文档并挂到 parent_id 下（字符串全部 dupe）
+    fn copySubtreeFrom(*_, src: *Document, src_id: NodeId, parent_id: NodeId)! {
+        const sn = &src.nodes.items[@as(usize, src_id)];
+        let new_id: NodeId = NULL_NODE;
+        if (sn.node_type == NodeType.Element) {
+            const tag = _.allocator.dupe(u8, sn.tag_name)?;
+            new_id = _.createElement(tag)?;
+            let ai: usize = 0;
+            while (ai < sn.attr_count) : (ai += 1) {
+                const an = _.allocator.dupe(u8, sn.attrs[ai].name)?;
+                const av = _.allocator.dupe(u8, sn.attrs[ai].value)?;
+                _.setAttribute(new_id, an, av);
+            }
+        } else if (sn.node_type == NodeType.Text) {
+            new_id = _.createTextNode(_.allocator.dupe(u8, sn.text_content)?)?;
+        } else if (sn.node_type == NodeType.Comment) {
+            new_id = _.createCommentNode(_.allocator.dupe(u8, sn.text_content)?)?;
+        } else {
+            return;
+        }
+        _.appendChild(parent_id, new_id);
+        let child = sn.first_child;
+        while (child != NULL_NODE) {
+            _.copySubtreeFrom(src, child, new_id)?;
+            child = src.nodes.items[@as(usize, child)].next_sibling;
+        }
+    }
+
+    // innerHTML setter：清空子节点，解析片段并拷贝进 node_id
+    fn setInnerHtml(*_, node_id: NodeId, html: []const u8)! {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
+            return;
+        }
+        while (_.nodes.items[@as(usize, node_id)].first_child != NULL_NODE) {
+            _.removeChild(_.nodes.items[@as(usize, node_id)].first_child);
+        }
+        if (html.len == 0) {
+            return;
+        }
+        const wrapped = std.fmt.allocPrint(_.allocator, "<html><body>{s}", .{html})?;
+        defer _.allocator.free(wrapped);
+        let tmp = Document.init(_.allocator)?;
+        defer tmp.deinit();
+        tmp.parseHtml(wrapped)?;
+        let i: usize = 1;
+        while (i < tmp.nodes.items.len) : (i += 1) {
+            const n = &tmp.nodes.items[i];
+            if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "body")) {
+                let c = n.first_child;
+                while (c != NULL_NODE) {
+                    _.copySubtreeFrom(&tmp, c, node_id)?;
+                    c = tmp.nodes.items[@as(usize, c)].next_sibling;
+                }
+                break;
+            }
+        }
     }
 }
 

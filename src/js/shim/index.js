@@ -188,6 +188,39 @@ function installShim(global) {
       return animationsFor(this);
     }, "getAnimations");
 
+    function defineLiveCollection(name, pred) {
+      Object.defineProperty(docProto, name, {
+        get: function () {
+          const doc = this;
+          return makeHtmlCollection(function () {
+            return pred ? getAllDocumentElements(doc).filter(pred) : [];
+          });
+        },
+        configurable: true,
+      });
+    }
+    function tagIs() {
+      const names = arguments;
+      return function (el) {
+        const t = String(el.localName || el.tagName || "").toLowerCase();
+        for (let i = 0; i < names.length; i++) if (t === names[i]) return true;
+        return false;
+      };
+    }
+    const isEmbed = tagIs("embed");
+    defineLiveCollection("images", tagIs("img"));
+    defineLiveCollection("forms", tagIs("form"));
+    defineLiveCollection("scripts", tagIs("script"));
+    defineLiveCollection("embeds", isEmbed);
+    defineLiveCollection("plugins", isEmbed);
+    defineLiveCollection("links", function (el) {
+      return tagIs("a", "area")(el) && el.hasAttribute("href");
+    });
+    defineLiveCollection("anchors", function (el) {
+      return tagIs("a")(el) && el.hasAttribute("name");
+    });
+    defineLiveCollection("applets", null);
+
     let docTitle = "";
     Object.defineProperty(docProto, "title", {
       get: function () {

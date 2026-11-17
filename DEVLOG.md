@@ -860,3 +860,9 @@
 
 
 
+
+## Phase 45 DOM 集合与 innerHTML 技术方案
+1. **innerHTML 原生实现**：HTML 解析器无片段模式，采用「包装 `<html><body>` + 临时 Document 解析 + 深拷贝（字符串 dupe 进目标 arena）」，兼容独立创建的文档。
+2. **包装器身份缓存**：原生每次访问新建 JS 对象会破坏 `===`。以全局 `__capsurf_wrappers` 对象按 `w<docptr>:<nid>` 缓存，节点 id 不复用故安全；代价是包装器随上下文销毁才释放。
+3. **cpc 小缺陷（未提单）**：`out: *ArrayListUnmanaged` 出参调用丢失 `&`，改为返回切片规避。
+4. **配额**：子智能体曾遇 429，切换模型后重派恢复。

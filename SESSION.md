@@ -1959,3 +1959,8 @@
    - **端到端黑盒测试**：目标测试套件 `runtime-remote-object-classname`、`document-title-svg`、`location-assign-navigates`、`same-document-origin`、`window-global-scope` 均通过验证；
    - **独立单二进制**：`bin/main`（9.3MB）构建成功。
 
+
+## [2026-11-17 16:10:00] Turn 58
+### Phase 45 闭环（DOM 集合 / implementation / getElementsByName / innerHTML）
+- 双子智能体完成原生与 JS 垫片；主智能体补齐 innerHTML 原生 setter 与包装器身份缓存。
+- 验证：白盒 `test_document_collections` PASS、`test_js_dom` 5/5；E2E `document-collections` 2/2 与 19 项回归全绿；`cpc_brief` 门禁通过。

@@ -984,3 +984,9 @@
 
 
 
+
+## Phase 45: DOM 集合、Document.implementation、getElementsByName 与 innerHTML (100% Closed)
+- **`src/dom/dom.cp`**：新增 `getElementsByName`（name 属性字面量字节匹配）、`copySubtreeFrom` 跨文档深拷贝、`setInnerHtml`（片段解析进临时文档后拷贝）。
+- **`src/js/dom_binding.cp`**：新增 `Document.getElementsByName`、`document.head`、`document.implementation.createHTMLDocument`、`Element.innerHTML` setter；`createJsElement` 增加包装器身份缓存，保证同节点 `===`。
+- **`src/js/shim/collections.js` / `index.js`**：Proxy 实现 live `HTMLCollection`；Document 上 `images/links/forms/scripts/embeds/plugins/anchors/applets` live 访问器。
+- **测试**：`test/dom/test_document_collections.cp` PASS；`e2e/document-collections.e2e.test.ts` 2/2 PASS；相关 19 个 E2E 回归 + `test_js_dom.cp` 5/5 PASS。
