@@ -17,6 +17,8 @@ pub struct ScreenshotOptions {
     /// PNG 压缩级别 (0 = 不压缩极速直出, 1 = 最快 RLE 级压缩, 6 = 默认平衡压缩, 9 = 最高极限压缩)
     compress_level: u8 = 6;
     clear_color: CssColor = CssColor.rgb(255, 255, 255);
+    focused_node: NodeId = NULL_NODE;
+    caret_pos: usize = 0;
 }
 
 pub struct Canvas {
@@ -152,6 +154,7 @@ fn paintNodeRecursive(
     node_id: NodeId,
     vw: f32,
     vh: f32,
+    opts: *const ScreenshotOptions,
 ) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
         return;
@@ -167,11 +170,33 @@ fn paintNodeRecursive(
 
     if (node.node_type == NodeType.Element) {
         canvas.paintBox(r, paint_style);
-        // 若元素自身带有直接 text (如按钮文本)，绘制在盒子内侧
-        if (node.text_content.len > 0) {
+        
+        let display_text = node.text_content;
+        const tag = node.tag_name;
+        const is_input = std.mem.eql(u8, tag, "input") || std.mem.eql(u8, tag, "textarea");
+        if (display_text.len == 0 && is_input) {
+            // Get value text from attribute
+            const val: []const u8 = node.getAttribute("value") ?? "";
+            display_text = val;
+        }
+
+        if (display_text.len > 0) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
-            canvas.drawText(r.x + pad_l + 2.0, r.y + pad_t + 2.0, node.text_content, paint_style.text_color);
+            canvas.drawText(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color);
+        }
+
+        if (node_id == opts.focused_node && is_input) {
+            const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+            const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+            const caret_x = @as(i32, @intFromFloat(r.x + pad_l + 2.0)) + @as(i32, @intCast(@min(opts.caret_pos, display_text.len) * 8));
+            const caret_y = @as(i32, @intFromFloat(r.y + pad_t + 2.0));
+            // drawCaret (1x10px)
+            let cy: i32 = caret_y + 1;
+            while (cy <= caret_y + 9) : (cy += 1) {
+                canvas.blendPixel(caret_x, cy, paint_style.text_color);
+                canvas.blendPixel(caret_x + 1, cy, paint_style.text_color);
+            }
         }
     } else if (node.node_type == NodeType.Text && node.text_content.len > 0) {
         const parent_id = node.parent;
@@ -181,7 +206,7 @@ fn paintNodeRecursive(
 
     let child = node.first_child;
     while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh);
+        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts);
         child = doc.nodes.items[@as(usize, child)].next_sibling;
     }
 }
@@ -202,7 +227,7 @@ pub fn renderDocumentToPng(
 
     // 从根节点 (NodeId = 1) 开始前序遍历绘制整棵 DOM 树
     if (doc.nodes.items.len > 1) {
-        paintNodeRecursive(&canvas, doc, styles, rects, 1, vw, vh);
+        paintNodeRecursive(&canvas, doc, styles, rects, 1, vw, vh, &opts);
     }
 
     // 直接桥接到 png.cp 的编码函数并透传指定的 compress_level

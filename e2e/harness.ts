@@ -136,6 +136,10 @@ export class CDPClient {
     if (idx !== -1) list.splice(idx, 1);
   }
 
+  async detach() {
+    await this.close();
+  }
+
   async close() {
     if (this.ws) {
       if (this.ws.readyState === WebSocket.OPEN) {

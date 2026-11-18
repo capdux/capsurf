@@ -10,19 +10,11 @@ function installWindow(global) {
   global.__NativeEvent = NativeEvent;
 
   // 0. DOMException & WHATWG URL Implementation
-  function DOMException(message, name) {
-    const err = new Error(message || "");
-    err.name = name || "Error";
-    err.code = name === "SecurityError" ? 18 : 0;
-    Object.setPrototypeOf(err, DOMException.prototype);
-    return err;
+  if (typeof DOMException !== "undefined") {
+    global.DOMException = DOMException;
+    if (typeof window !== "undefined") window.DOMException = DOMException;
+    if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
   }
-  DOMException.prototype = Object.create(Error.prototype);
-  DOMException.prototype.constructor = DOMException;
-  markNative(DOMException, "DOMException");
-  global.DOMException = DOMException;
-  if (typeof window !== "undefined") window.DOMException = DOMException;
-  if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
 
   function resolveRelativePath(p) {
     const segments = p.split("/");

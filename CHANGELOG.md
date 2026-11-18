@@ -1041,6 +1041,36 @@
     - `e2e/domparser-fragment-remove-child.e2e.test.ts`（1/1 PASS）
   - 独立单二进制：`bin/main`（9.7MB）构建成功。
 
+## [2026-11-18 15:28:00] Phase 49
+- **`src/js/shim/selector.js`**：新增选择器语法校验模块，捕获非法伪类构造并抛出 `DOMException("...", "SyntaxError")`；伪元素选择器返回空 `NodeList`。
+- **`src/render/painter.cp` & `src/cdp/session.cp`**：实装 2px 聚焦输入光标（Caret Bar）光栅化渲染与坐标计算。
+- **`src/cdp/input.cp` & `src/js/shim/element/forms/selection.js`**：
+  - 实现绕过前端框架属性访问器间谍的直接值写入通道（`getValueRaw` / `setValueRaw`）；
+  - 键盘事件优先定向派发至 `document.activeElement` 并派发 `input` 事件与选区更新。
+- **`src/html/tree_builder.cp`**：HTML5 树构建引擎 `InBody` 模式支持 `<option>` / `<optgroup>` 标签隐式弹出，防止未闭合选项错误层叠。
+- **`src/js/shim/element/forms/select.js` & `form.js`**：
+  - 建立基于 Arena `_nid` 的持久化状态映射，消除 C-FFI / JS 包装器实例别名缺陷；
+  - 实装单选下拉列表首项默认选中、动态 `setAttribute("selected", "")` 抢占与 `selectedIndex = -1` 复位；
+  - 完善 `form.reset()` 状态恢复与 `FormData` 序列化。
+- **`src/cdp/accessibility.cp`**：
+  - 堆分配 `AXTree` 节点树及遍历进入点实施结构体零值重置（`builder.* = AXTree{};`）；
+  - 增加 `fetchLiveState` 运行时提取协议，在 `Accessibility.getFullAXTree` 实时同步表单下拉选项选择态与实时值。
+- **`src/js/shim/window.js`**：复用全局唯一 `DOMException`，消除重复构造器导致的原型链断裂。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试（9 个测试套件 32 项用例全部 100% 绿灯，179 项断言通过）：
+    - `e2e/invalid-selector-throws.e2e.test.ts` (2/2 PASS)
+    - `e2e/caret-after-typing.e2e.test.ts` (1/1 PASS)
+    - `e2e/typed-input-value-tracker.e2e.test.ts` (1/1 PASS)
+    - `e2e/select-default-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/accessibility-live-select.e2e.test.ts` (2/2 PASS)
+    - `e2e/xpath.e2e.test.ts` (9/9 PASS)
+    - `e2e/accessibility.e2e.test.ts` (7/7 PASS, 111 项断言通过)
+    - `e2e/button-descendant-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/cdp-input-and-box-model.e2e.test.ts` (4/4 PASS)
+  - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
+
 ## Phase 48: CDP Input/ScrollIntoView/BoxModel、表单按钮冒泡提交与 AXTree 动态属性反射 (100% Closed)
 - **`src/cdp/input.cp`**：实装 `Input.insertText` 原生指令，根据当前焦点元素追加输入字符并派发输入事件。
 - **`src/cdp/dom.cp` & `src/layout/layout.cp`**：
@@ -1068,6 +1098,36 @@
     - `e2e/domparser-adoption-handle-privacy.e2e.test.ts` (1/1 PASS)
     - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
   - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
+## [2026-11-18 15:28:00] Phase 49
+- **`src/js/shim/selector.js`**：新增选择器语法校验模块，捕获非法伪类构造并抛出 `DOMException("...", "SyntaxError")`；伪元素选择器返回空 `NodeList`。
+- **`src/render/painter.cp` & `src/cdp/session.cp`**：实装 2px 聚焦输入光标（Caret Bar）光栅化渲染与坐标计算。
+- **`src/cdp/input.cp` & `src/js/shim/element/forms/selection.js`**：
+  - 实现绕过前端框架属性访问器间谍的直接值写入通道（`getValueRaw` / `setValueRaw`）；
+  - 键盘事件优先定向派发至 `document.activeElement` 并派发 `input` 事件与选区更新。
+- **`src/html/tree_builder.cp`**：HTML5 树构建引擎 `InBody` 模式支持 `<option>` / `<optgroup>` 标签隐式弹出，防止未闭合选项错误层叠。
+- **`src/js/shim/element/forms/select.js` & `form.js`**：
+  - 建立基于 Arena `_nid` 的持久化状态映射，消除 C-FFI / JS 包装器实例别名缺陷；
+  - 实装单选下拉列表首项默认选中、动态 `setAttribute("selected", "")` 抢占与 `selectedIndex = -1` 复位；
+  - 完善 `form.reset()` 状态恢复与 `FormData` 序列化。
+- **`src/cdp/accessibility.cp`**：
+  - 堆分配 `AXTree` 节点树及遍历进入点实施结构体零值重置（`builder.* = AXTree{};`）；
+  - 增加 `fetchLiveState` 运行时提取协议，在 `Accessibility.getFullAXTree` 实时同步表单下拉选项选择态与实时值。
+- **`src/js/shim/window.js`**：复用全局唯一 `DOMException`，消除重复构造器导致的原型链断裂。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试（9 个测试套件 32 项用例全部 100% 绿灯，179 项断言通过）：
+    - `e2e/invalid-selector-throws.e2e.test.ts` (2/2 PASS)
+    - `e2e/caret-after-typing.e2e.test.ts` (1/1 PASS)
+    - `e2e/typed-input-value-tracker.e2e.test.ts` (1/1 PASS)
+    - `e2e/select-default-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/accessibility-live-select.e2e.test.ts` (2/2 PASS)
+    - `e2e/xpath.e2e.test.ts` (9/9 PASS)
+    - `e2e/accessibility.e2e.test.ts` (7/7 PASS, 111 项断言通过)
+    - `e2e/button-descendant-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/cdp-input-and-box-model.e2e.test.ts` (4/4 PASS)
+  - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
 
 
 

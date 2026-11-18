@@ -712,12 +712,33 @@ pub struct CdpPageSession {
 
         const vw: u32 = if (_.viewport_width > 0.0) @as(u32, @intFromFloat(_.viewport_width)) else 1280;
         const vh: u32 = if (_.viewport_height > 0.0) @as(u32, @intFromFloat(_.viewport_height)) else 720;
+        
+        // Get focused node info from JS
+        let focused_node: NodeId = NULL_NODE;
+        let caret_pos: usize = 0;
+        if (_.has_document) {
+            const js_expr = "(function() { const el = document.activeElement; if (!el || el === document.body || el === document.documentElement) return ''; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) return ''; const start = (typeof el.selectionStart === 'number') ? el.selectionStart : 0; return nid + ':' + start; })();";
+            const val = _.ctx.eval(js_expr);
+            const cstr = _.ctx.toCString(val);
+            if (cstr.len > 0) {
+                let parts = std.mem.splitAny(u8, cstr, ":");
+                if (nid_str := parts.next()) {
+                    focused_node = @as(NodeId, std.fmt.parseInt(u32, nid_str, 10) catch 0);
+                }
+                if (start_str := parts.next()) {
+                    caret_pos = std.fmt.parseInt(usize, start_str, 10) catch 0;
+                }
+            }
+            _.ctx.freeValue(val);
+        }
 
         const opts = ScreenshotOptions{
             viewport_w: vw,
             viewport_h: vh,
             compress_level: if (compress_level <= 9) compress_level else 6,
             clear_color: CssColor.rgb(255, 255, 255),
+            focused_node: focused_node,
+            caret_pos: caret_pos,
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);

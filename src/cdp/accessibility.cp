@@ -612,6 +612,13 @@ fn collectSubtreeTextInternal(
     return offset;
 }
 
+pub struct LiveSelect {
+    select_nid: NodeId = NULL_NODE,
+    selected_index: i32 = -1,
+    selected_opts: [16]NodeId = [NULL_NODE; 16],
+    selected_opts_len: usize = 0,
+}
+
 pub struct AXTree {
     nodes: [MAX_AX_NODES]AXNode = [AXNode{}; MAX_AX_NODES],
     node_count: usize = 0,
@@ -619,6 +626,9 @@ pub struct AXTree {
     text_pool: [TEXT_POOL_SIZE]u8 = [0; TEXT_POOL_SIZE],
     text_pool_len: usize = 0,
     root_url: []const u8 = "",
+    live_selects: [32]LiveSelect = [LiveSelect{}; 32],
+    live_selects_len: usize = 0,
+    has_live_state: bool = false,
 
     fn allocNode(*_): usize? {
         if (_.node_count >= MAX_AX_NODES) return null;
@@ -691,7 +701,76 @@ pub struct AXTree {
         return null;
     }
 
+    fn fetchLiveState(*_, session: *CdpPageSession) {
+        if (!session.has_document) return;
+        const js_expr = "(() => { const selects = document.querySelectorAll ? document.querySelectorAll('select') : []; const res = []; for (let i = 0; i < selects.length; i++) { const s = selects[i]; const s_nid = (typeof s._nid === 'number') ? s._nid : 0; const s_idx = typeof s.selectedIndex === 'number' ? s.selectedIndex : -1; const opts = s.options; const opt_ids = []; if (opts) { for (let j = 0; j < opts.length; j++) { if (opts[j].selected) { const o_nid = (typeof opts[j]._nid === 'number') ? opts[j]._nid : 0; if (o_nid > 0) opt_ids.push(o_nid); } } } res.push(s_nid + ':' + s_idx + ';' + opt_ids.join(',')); } return res.join('|'); })()";
+        const val = session.ctx.eval(js_expr);
+        const cstr = session.ctx.toCString(val);
+        if (cstr.len > 0) {
+            _.has_live_state = true;
+            let sel_it = std.mem.splitScalar(u8, cstr, '|');
+            while (sel_chunk := sel_it.next()) {
+                if (_.live_selects_len >= 32) break;
+                let semi_it = std.mem.splitScalar(u8, sel_chunk, ';');
+                const head = semi_it.next() ?? "";
+                const opts_str = semi_it.next() ?? "";
+
+                let colon_it = std.mem.splitScalar(u8, head, ':');
+                const s_nid_str = colon_it.next() ?? "";
+                const s_idx_str = colon_it.next() ?? "";
+
+                const s_nid = @as(NodeId, std.fmt.parseInt(u32, s_nid_str, 10) catch 0);
+                const s_idx = std.fmt.parseInt(i32, s_idx_str, 10) catch -1;
+
+                let ls = LiveSelect{
+                    select_nid: s_nid,
+                    selected_index: s_idx,
+                    selected_opts: [NULL_NODE; 16],
+                    selected_opts_len: 0,
+                };
+
+                if (opts_str.len > 0) {
+                    let opt_it = std.mem.splitScalar(u8, opts_str, ',');
+                    while (opt_str := opt_it.next()) {
+                        if (ls.selected_opts_len >= 16) break;
+                        const onid = @as(NodeId, std.fmt.parseInt(u32, opt_str, 10) catch 0);
+                        if (onid != NULL_NODE) {
+                            ls.selected_opts[ls.selected_opts_len] = onid;
+                            ls.selected_opts_len += 1;
+                        }
+                    }
+                }
+
+                _.live_selects[_.live_selects_len] = ls;
+                _.live_selects_len += 1;
+            }
+        }
+        session.ctx.freeValue(val);
+    }
+
     fn findSelectedOptionText(*_, doc: *const Document, select_id: NodeId): ([]const u8)? {
+        if (_.has_live_state) {
+            let i: usize = 0;
+            while (i < _.live_selects_len) : (i += 1) {
+                if (_.live_selects[i].select_nid == select_id) {
+                    const ls = &_.live_selects[i];
+                    if (ls.selected_index < 0 || ls.selected_opts_len == 0) {
+                        return null;
+                    }
+                    const chosen = ls.selected_opts[0];
+                    if (chosen != NULL_NODE) {
+                        if (opt_node := doc.getNode(chosen)) {
+                            if (lbl := opt_node.getAttribute("label")) return lbl;
+                            const txt = _.collectSubtreeText(doc, chosen);
+                            if (txt.len > 0) return txt;
+                            if (val := opt_node.getAttribute("value")) return val;
+                        }
+                    }
+                    return null;
+                }
+            }
+        }
+
         let first_opt: NodeId = NULL_NODE;
         let selected_opt: NodeId = NULL_NODE;
         let curr = doc.getFirstChild(select_id);
@@ -712,8 +791,9 @@ pub struct AXTree {
         if (chosen != NULL_NODE) {
             if (opt_node := doc.getNode(chosen)) {
                 if (lbl := opt_node.getAttribute("label")) return lbl;
+                const txt = _.collectSubtreeText(doc, chosen);
+                if (txt.len > 0) return txt;
                 if (val := opt_node.getAttribute("value")) return val;
-                return _.collectSubtreeText(doc, chosen);
             }
         }
         return null;
@@ -1030,7 +1110,25 @@ pub struct AXTree {
             node_ref.addProperty(AXProperty.create("readonly", AxValue.fromBool("boolean", true)));
         }
 
-        if (node.getAttribute("selected") != null) {
+        let is_selected = false;
+        if (_.has_live_state && std.ascii.eqlIgnoreCase(node.tag_name, "option")) {
+            let si: usize = 0;
+            while (si < _.live_selects_len) : (si += 1) {
+                const ls = &_.live_selects[si];
+                let oi: usize = 0;
+                while (oi < ls.selected_opts_len) : (oi += 1) {
+                    if (ls.selected_opts[oi] == node.id) {
+                        is_selected = true;
+                        break;
+                    }
+                }
+                if (is_selected) break;
+            }
+        } else if (node.getAttribute("selected") != null) {
+            is_selected = true;
+        }
+
+        if (is_selected) {
             node_ref.addProperty(AXProperty.create("selected", AxValue.fromBool("boolean", true)));
         }
 
@@ -1243,6 +1341,11 @@ pub struct AXTree {
     }
 
     fn buildFromSession(*_, session: *CdpPageSession) {
+        _.live_selects_len = 0;
+        _.has_live_state = false;
+        if (session.has_document) {
+            _.fetchLiveState(session);
+        }
         _.buildFromDoc(&session.doc, session.title, session.url, session.frame_id);
     }
 }
@@ -1275,6 +1378,7 @@ fn findDocumentTitle(doc: *const Document): []const u8 {
 pub fn buildAXTree(doc: *Document, out_buf: []u8): []const u8 {
     let tree = std.heap.c_allocator.create(AXTree) catch return "{\"nodes\":[]}";
     defer std.heap.c_allocator.destroy(tree);
+    tree.* = AXTree{};
 
     let doc_title = findDocumentTitle(doc);
     if (doc_title.len == 0) doc_title = "Document";
@@ -1313,6 +1417,7 @@ pub struct AccessibilityHandler {
             return CdpResponse.err(req.id, -32000, "Out of memory");
         };
         defer std.heap.c_allocator.destroy(builder);
+        builder.* = AXTree{};
 
         builder.buildFromSession(session);
 

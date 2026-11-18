@@ -928,5 +928,20 @@
      - 保证单选框（Radio）同名互斥更新时正确派发取消选中态；
      - 在 `src/cdp/accessibility.cp` 的 `computeValue` 与 `populateProperties` 中，优先检索活态属性与计算状态，精准将 `input.value` 反射到 AXNode 的 `value` 字段，将 `checkbox.checked` 反射为 tristate 属性。
 
+## Phase 49 选择器语法校验、光标渲染、输入拦截绕过与下拉表单状态技术方案
+1. **选择器语法合法性校验与伪元素结果隔离 (`src/js/shim/selector.js`)**：
+   - **设计动机**：DOM 规范规定 `querySelector` / `querySelectorAll` 在接收到语法不合规的选择器（如空伪类 `:not()`、`:is()` 或畸形括号）时，必须抛出 `SyntaxError` 类型的 `DOMException`，而非静默吞掉或当作普通类名；同时合规伪元素选择器（如 `div::after`）必须返回空的 `NodeList`，而非报错或返回真实元素；
+   - **解决方案**：实现词法状态机校验器，先通过预编译模式与平衡括号算法识别非法构造，遇合规伪元素时拦截查询底层引擎并立即封装返回长度为 0 的标准只读 `NodeList`。
+2. **文本选区与原生光标光栅化绘制 (`src/render/painter.cp` & `src/cdp/session.cp`)**：
+   - **设计动机**：端到端用例对比输入光标前后移动的 PNG 截图，若未在聚焦控件上绘制实际的光标竖线，不同 `selectionStart` 的渲染帧将发生二进制哈希一致而断言失败；
+   - **解决方案**：在渲染管道中捕获 `opts.focused_node` 与 `opts.caret_pos`，从控件内边距与字体等宽矩阵推导 `caret_x`，在对应像素坐标处绘制 2 像素宽深色光标条，真实还原无头浏览器在文字输入时的屏幕渲染画面。
+3. **输入框架间谍绕过与直接值槽写入 (`src/cdp/input.cp` & `selection.js`)**：
+   - **设计动机**：现代前端框架（如 React / Vue）在挂载组件时会在原生节点上定义 `value` 访问器间谍（Spy Descriptor）用以追踪变更。浏览器原生键盘事件（`Input.dispatchKeyEvent`）的写入应直接作用于底层存储槽，不应触发框架的自定义属性 Setter；
+   - **解决方案**：定义 `getValueRaw` 与 `setValueRaw`，直接读写 `_value` 内部槽与底层属性，阻断向上遍历原型链触发实例上的 Spy 劫持，而后按需派发标准 `input` 与 `selection` 事件。
+4. **Arena DOM 稳定标识驱动的下拉选区持久化 (`src/js/shim/element/forms/select.js`)**：
+   - **设计动机**：QuickJS 在跨 C 边界提取 `parentNode` 或遍历 `options` 集合时，每次都会封装出全新的 JS `JsElement` 临时包装对象。若将状态存储在当前包装对象上，会导致状态随包装对象生命周期而丢失，导致单选下拉框状态混乱；
+   - **解决方案**：基于底层 Arena 的固定 4 字节 `_nid` 建立全局弱持久映射表（`__capsurf_selectState` / `__capsurf_optionState`），配合 `isSameElement` 语义，确保任何临时封装对象均能寻址到统一的响应式选择态。
+
+
 
 

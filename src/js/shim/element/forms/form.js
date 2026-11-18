@@ -209,6 +209,15 @@ function installFormElement(global) {
       if (c.defaultValue !== undefined) c.value = c.defaultValue;
       if (c.defaultChecked !== undefined) c.checked = c.defaultChecked;
       if (c.defaultSelected !== undefined) c.selected = c.defaultSelected;
+      if ((c.tagName || "").toLowerCase() === "select") {
+        if (typeof getSelectState === "function") getSelectState(c).selectedIndex = undefined;
+        c._selectedIndex = undefined;
+        const opts = c.options;
+        for (let j = 0; j < opts.length; j++) {
+          if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
+          opts[j]._selected = undefined;
+        }
+      }
     }
     const evt = new Event("reset", { bubbles: true, cancelable: true });
     this.dispatchEvent(evt);

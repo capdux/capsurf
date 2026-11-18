@@ -2025,5 +2025,37 @@
     - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
   - **独立单二进制**：`bin/main`（9.7MB）构建成功。
 
+## [2026-11-18 15:28:00] Turn 62
+### Phase 49 闭环：选择器语法校验、光标光栅化渲染、输入框架拦截绕过与无障碍表单活态联动
+- **攻坚与实现落地**：
+  - **`src/js/shim/selector.js`**：实现选择器语法校验器与伪元素包装器，非法伪类语法严格抛出 `DOMException("...", "SyntaxError")`；合规伪元素选择器（如 `div::after`）的 `querySelectorAll` 规范返回空 `NodeList`；
+  - **`src/render/painter.cp` & `src/cdp/session.cp`**：实现输入焦点光标条（2px 竖直光标条）光栅化绘制，精准定位在文本起始与当前选区位置（`caret_x = pad_l + caret_pos * 8`），通过前后截图像素差异验证；
+  - **`src/cdp/input.cp` & `src/js/shim/element/forms/selection.js`**：
+    - 实装原生按键直接写入（`getValueRaw` / `setValueRaw`），完美绕过前端框架（如 React / Vue / Angular）在实例上安装的属性访问器间谍（Spy Descriptors）；
+    - 键盘事件优先定向派发至 JS 当前激活元素（`document.activeElement`），精准联动派发 `input` 事件与光标移动；
+  - **`src/html/tree_builder.cp`**：在 HTML5 树构建引擎的 `InBody` 模式正确处理 `<option>` 与 `<optgroup>` 标签，遇到同级标签前置弹出，彻底根除无闭合标签时的错误嵌套解析偏差；
+  - **`src/js/shim/element/forms/select.js` & `form.js`**：
+    - 引入基于 Arena 稳定节点 ID（`_nid`）的持久态映射，消除 C-FFI / JS 实例别名导致的属性丢失；
+    - 实现单选下拉框第一有效项默认选中逻辑、动态 `setAttribute("selected", "")` 抢占与 `selectedIndex = -1` 复位；
+    - 完善 `form.reset()` 下拉框状态还原与 `FormData` 序列化；
+  - **`src/cdp/accessibility.cp`**：
+    - 在堆分配 `AXTree` 节点树及 `buildFromSession` 循环进入点实施结构体零值重置（`builder.* = AXTree{};`），杜绝脏数据错读；
+    - 实装 `fetchLiveState` 协议通道，将 JS 运行时的实时选择态无缝映射到 CDP AXTree（`Accessibility.getFullAXTree`）；
+  - **`src/js/shim/window.js`**：统一复用 `constants.js` 全局唯一 `DOMException`，保证在 XPath 与页面全局原型链 `instanceof DOMException` 严格匹配。
+- **双轨测试与门禁验证 100% 闭环**：
+  - **静态门禁验证**：`python3 scripts/cpc_brief.py -n 8` 对所有修改的 CP 核心源码检验 100% 全部通过（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - **端到端黑盒测试**：全部 9 个目标测试套件 32 项用例 100% 绿灯（179 项断言全部通过）：
+    - `e2e/invalid-selector-throws.e2e.test.ts` (2/2 PASS)
+    - `e2e/caret-after-typing.e2e.test.ts` (1/1 PASS)
+    - `e2e/typed-input-value-tracker.e2e.test.ts` (1/1 PASS)
+    - `e2e/select-default-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/accessibility-live-select.e2e.test.ts` (2/2 PASS)
+    - `e2e/xpath.e2e.test.ts` (9/9 PASS)
+    - `e2e/accessibility.e2e.test.ts` (7/7 PASS, 111 项断言通过)
+    - `e2e/button-descendant-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/cdp-input-and-box-model.e2e.test.ts` (4/4 PASS)
+  - **独立单二进制**：`bin/main`（9.7MB）构建成功。
+
+
 
 

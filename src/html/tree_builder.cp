@@ -1028,6 +1028,21 @@ pub struct TreeBuilder {
                         }
                         _.insertElement(tag_tok);
                         return NextTokenizerState.Data;
+                    } else if (tag == HtmlTag.Option) {
+                        if (_.currentTag() == HtmlTag.Option) {
+                            _.popElement();
+                        }
+                        _.insertElement(tag_tok);
+                        return NextTokenizerState.Data;
+                    } else if (tag == HtmlTag.Optgroup) {
+                        if (_.currentTag() == HtmlTag.Option) {
+                            _.popElement();
+                        }
+                        if (_.currentTag() == HtmlTag.Optgroup) {
+                            _.popElement();
+                        }
+                        _.insertElement(tag_tok);
+                        return NextTokenizerState.Data;
                     } else if (tag == HtmlTag.Table) {
                         if (_.inButtonScope(HtmlTag.P)) {
                             _.generateImpliedEndTags(HtmlTag.P);

@@ -333,6 +333,24 @@ function installElementExtensions(proto) {
       this.id = val;
     } else if (key.toLowerCase() === "class") {
       this.className = val;
+    } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
+      this._selected = true;
+      let curr = this.parentElement || this.parentNode;
+      while (curr) {
+        if ((curr.tagName || "").toLowerCase() === "select") {
+          if (!curr.multiple) {
+            curr._selectedIndex = undefined;
+            const opts = curr.options;
+            for (let i = 0; i < opts.length; i++) {
+              if (opts[i] !== this && (!this._nid || opts[i]._nid !== this._nid)) {
+                opts[i]._selected = false;
+              }
+            }
+          }
+          break;
+        }
+        curr = curr.parentElement || curr.parentNode;
+      }
     }
     if (origSetAttribute) {
       origSetAttribute.call(this, key, val);
@@ -371,6 +389,18 @@ function installElementExtensions(proto) {
       this.id = "";
     } else if (key === "class") {
       this.className = "";
+    } else if (key === "selected" && (this.tagName || "").toLowerCase() === "option") {
+      this._selected = false;
+      let curr = this.parentElement || this.parentNode;
+      while (curr) {
+        if ((curr.tagName || "").toLowerCase() === "select") {
+          if (!curr.multiple) {
+            curr._selectedIndex = undefined;
+          }
+          break;
+        }
+        curr = curr.parentElement || curr.parentNode;
+      }
     }
     if (origRemoveAttribute) {
       origRemoveAttribute.call(this, name);
@@ -1071,10 +1101,18 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "selected", {
     get: function () {
+      if ((this.tagName || "").toLowerCase() === "option" && typeof global !== "undefined" && global.HTMLOptionElement) {
+        const desc = Object.getOwnPropertyDescriptor(global.HTMLOptionElement.prototype, "selected");
+        if (desc && desc.get) return desc.get.call(this);
+      }
       if (this._selected !== undefined) return this._selected;
       return this.hasAttribute("selected");
     },
     set: function (v) {
+      if ((this.tagName || "").toLowerCase() === "option" && typeof global !== "undefined" && global.HTMLOptionElement) {
+        const desc = Object.getOwnPropertyDescriptor(global.HTMLOptionElement.prototype, "selected");
+        if (desc && desc.set) return desc.set.call(this, v);
+      }
       this._selected = Boolean(v);
       if (v) {
         if (this.setAttribute) this.setAttribute("selected", "");
@@ -1112,9 +1150,11 @@ function installElementExtensions(proto) {
   Object.defineProperty(proto, "options", {
     get: function () {
       const opts = [];
+      const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
       let child = this.firstChild;
       while (child) {
         if ((child.tagName || "").toLowerCase() === "option") {
+          if (up) up(child);
           opts.push(child);
         }
         child = child.nextSibling;
@@ -1126,6 +1166,10 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "selectedIndex", {
     get: function () {
+      if ((this.tagName || "").toLowerCase() === "select" && typeof global !== "undefined" && global.HTMLSelectElement) {
+        const desc = Object.getOwnPropertyDescriptor(global.HTMLSelectElement.prototype, "selectedIndex");
+        if (desc && desc.get) return desc.get.call(this);
+      }
       const opts = this.options;
       for (let i = 0; i < opts.length; i++) {
         if (opts[i].selected) return i;
@@ -1133,6 +1177,10 @@ function installElementExtensions(proto) {
       return opts.length > 0 && !this.multiple ? 0 : -1;
     },
     set: function (idx) {
+      if ((this.tagName || "").toLowerCase() === "select" && typeof global !== "undefined" && global.HTMLSelectElement) {
+        const desc = Object.getOwnPropertyDescriptor(global.HTMLSelectElement.prototype, "selectedIndex");
+        if (desc && desc.set) return desc.set.call(this, idx);
+      }
       const i = Number(idx);
       const opts = this.options;
       for (let j = 0; j < opts.length; j++) {

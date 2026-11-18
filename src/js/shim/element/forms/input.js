@@ -23,9 +23,13 @@ function installInputElement(global) {
     this._value = "";
     this._checked = false;
     this._customValidityMessage = "";
+    this._selectionStart = 0;
+    this._selectionEnd = 0;
+    this._selectionDirection = "none";
   }
   HTMLInputElement.prototype = Object.create(ElementProto);
   HTMLInputElement.prototype.constructor = HTMLInputElement;
+  installSelectionMixin(HTMLInputElement);
 
   Object.defineProperty(HTMLInputElement.prototype, "type", {
     get: function () {
@@ -51,6 +55,8 @@ function installInputElement(global) {
       }
       this._value = String(v);
       if (this.setAttribute) this.setAttribute("value", String(v));
+      this._selectionStart = this._value.length;
+      this._selectionEnd = this._value.length;
     },
     configurable: true,
   });
@@ -185,9 +191,6 @@ function installInputElement(global) {
   HTMLInputElement.prototype.reportValidity = function () {
     return this.checkValidity();
   };
-
-  HTMLInputElement.prototype.select = function () {};
-  HTMLInputElement.prototype.setSelectionRange = function () {};
 
   markNative(HTMLInputElement, "HTMLInputElement");
   markNative(HTMLInputElement.prototype.setCustomValidity, "setCustomValidity");

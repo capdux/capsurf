@@ -97,6 +97,23 @@ function installShim(global) {
       }
       return null;
     }, "getContext");
+    
+    // Add selector methods
+    global.Element.prototype.querySelector = wrapQuerySelector(function(sel) {
+        const all = document.querySelectorAll(sel);
+        for(let i = 0; i < all.length; i++) {
+            if (this !== all[i] && this.contains(all[i])) return all[i];
+        }
+        return null;
+    });
+    global.Element.prototype.querySelectorAll = wrapQuerySelectorAll(function(sel) {
+        const all = document.querySelectorAll(sel);
+        const matches = [];
+        for(let i = 0; i < all.length; i++) {
+            if (this !== all[i] && this.contains(all[i])) matches.push(all[i]);
+        }
+        return matches;
+    });
 
     global.Element.prototype.toDataURL = markNative(function () {
       return VALID_PNG_BASE64;
@@ -114,6 +131,32 @@ function installShim(global) {
   // 12. Install window environment
   installWindow(global);
 
+  function upgradeElement(el) {
+    if (!el || typeof el !== "object" || el._upgraded) return el;
+    el._upgraded = true;
+    const tag = String(el.localName || el.tagName || "").toLowerCase();
+    switch (tag) {
+      case "input": Object.setPrototypeOf(el, global.HTMLInputElement.prototype); break;
+      case "textarea": Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype); break;
+      case "select": Object.setPrototypeOf(el, global.HTMLSelectElement.prototype); break;
+      case "option": Object.setPrototypeOf(el, global.HTMLOptionElement.prototype); break;
+      case "button": Object.setPrototypeOf(el, global.HTMLButtonElement.prototype); break;
+      case "form": Object.setPrototypeOf(el, global.HTMLFormElement.prototype); break;
+      case "a": Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype); break;
+      case "area": Object.setPrototypeOf(el, global.HTMLAreaElement.prototype); break;
+      case "img": Object.setPrototypeOf(el, global.HTMLImageElement.prototype); break;
+      case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
+      case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
+      case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
+      default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
+    }
+    return el;
+  }
+  global.upgradeElement = upgradeElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.upgradeElement = upgradeElement;
+  }
+
   // 13. Enhance Document prototype and instance
   if (global.Document && global.Document.prototype) {
     const docProto = global.Document.prototype;
@@ -121,57 +164,47 @@ function installShim(global) {
     // Inherit from Node
     Object.setPrototypeOf(docProto, Node.prototype);
 
+    const origQS = docProto.querySelector;
+    docProto.querySelector = wrapQuerySelector(origQS);
+    const origQSA = docProto.querySelectorAll;
+    docProto.querySelectorAll = wrapQuerySelectorAll(origQSA);
+
     if (docProto.createElement) {
       const origCreateElement = docProto.createElement;
       docProto.createElement = function (tagName) {
-        const el = origCreateElement.call(this, tagName);
-        if (!el) return el;
-        const tag = String(tagName).toLowerCase();
-        switch (tag) {
-          case "input":
-            Object.setPrototypeOf(el, global.HTMLInputElement.prototype);
-            break;
-          case "textarea":
-            Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype);
-            break;
-          case "select":
-            Object.setPrototypeOf(el, global.HTMLSelectElement.prototype);
-            break;
-          case "option":
-            Object.setPrototypeOf(el, global.HTMLOptionElement.prototype);
-            break;
-          case "button":
-            Object.setPrototypeOf(el, global.HTMLButtonElement.prototype);
-            break;
-          case "form":
-            Object.setPrototypeOf(el, global.HTMLFormElement.prototype);
-            break;
-          case "a":
-            Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype);
-            break;
-          case "area":
-            Object.setPrototypeOf(el, global.HTMLAreaElement.prototype);
-            break;
-          case "img":
-            Object.setPrototypeOf(el, global.HTMLImageElement.prototype);
-            break;
-          case "canvas":
-            Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype);
-            break;
-          case "script":
-            Object.setPrototypeOf(el, global.HTMLScriptElement.prototype);
-            break;
-          case "iframe":
-            Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype);
-            break;
-          default:
-            Object.setPrototypeOf(el, global.HTMLElement.prototype);
-            break;
-        }
-        return el;
+        return upgradeElement(origCreateElement.call(this, tagName));
       };
       markNative(docProto.createElement, "createElement");
     }
+
+    if (docProto.getElementById) {
+      const origGetElementById = docProto.getElementById;
+      docProto.getElementById = function (id) {
+        return upgradeElement(origGetElementById.call(this, id));
+      };
+      markNative(docProto.getElementById, "getElementById");
+    }
+
+    if (docProto.querySelector) {
+      const origQuerySelector = docProto.querySelector;
+      docProto.querySelector = function (sel) {
+        return upgradeElement(origQuerySelector.call(this, sel));
+      };
+      markNative(docProto.querySelector, "querySelector");
+    }
+
+    if (docProto.querySelectorAll) {
+      const origQuerySelectorAll = docProto.querySelectorAll;
+      docProto.querySelectorAll = function (sel) {
+        const nodes = origQuerySelectorAll.call(this, sel);
+        if (nodes && nodes.length) {
+          for (let i = 0; i < nodes.length; i++) upgradeElement(nodes[i]);
+        }
+        return nodes;
+      };
+      markNative(docProto.querySelectorAll, "querySelectorAll");
+    }
+
 
     docProto.createRange = markNative(function () {
       return new Range();

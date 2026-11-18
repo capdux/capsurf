@@ -7,9 +7,13 @@ function installTextAreaElement(global) {
   function HTMLTextAreaElement() {
     this._value = undefined;
     this._customValidityMessage = "";
+    this._selectionStart = 0;
+    this._selectionEnd = 0;
+    this._selectionDirection = "none";
   }
   HTMLTextAreaElement.prototype = Object.create(ElementProto);
   HTMLTextAreaElement.prototype.constructor = HTMLTextAreaElement;
+  installSelectionMixin(HTMLTextAreaElement);
 
   Object.defineProperty(HTMLTextAreaElement.prototype, "type", {
     get: function () { return "textarea"; },
@@ -25,6 +29,8 @@ function installTextAreaElement(global) {
       this._value = String(v);
       if (this.setAttribute) this.setAttribute("value", String(v));
       this.textContent = String(v);
+      this._selectionStart = this._value.length;
+      this._selectionEnd = this._value.length;
     },
     configurable: true,
   });

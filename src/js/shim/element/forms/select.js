@@ -1,6 +1,110 @@
 // src/js/shim/element/forms/select.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/select.ts
 
+if (!globalThis.__capsurf_selectState) globalThis.__capsurf_selectState = new Map();
+if (!globalThis.__capsurf_optionState) globalThis.__capsurf_optionState = new Map();
+
+function getSelectState(el) {
+  const nid = (el && typeof el._nid === "number") ? el._nid : 0;
+  let st = globalThis.__capsurf_selectState.get(nid);
+  if (!st) {
+    st = { selectedIndex: undefined };
+    if (nid > 0) globalThis.__capsurf_selectState.set(nid, st);
+  }
+  return st;
+}
+
+function getOptionState(el) {
+  const nid = (el && typeof el._nid === "number") ? el._nid : 0;
+  let st = globalThis.__capsurf_optionState.get(nid);
+  if (!st) {
+    st = { selected: undefined, value: undefined };
+    if (nid > 0) globalThis.__capsurf_optionState.set(nid, st);
+  }
+  return st;
+}
+
+function isSameElement(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (typeof a._nid === "number" && typeof b._nid === "number" && a._nid > 0) {
+    return a._nid === b._nid;
+  }
+  return false;
+}
+
+function findOwnerSelect(opt) {
+  let curr = opt.parentNode;
+  while (curr) {
+    if ((curr.tagName || "").toLowerCase() === "select") return curr;
+    curr = curr.parentNode;
+  }
+  return null;
+}
+
+function getSelectOptions(selectEl) {
+  const opts = [];
+  const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+  function collect(node) {
+    let child = node.firstChild;
+    while (child) {
+      const tag = (child.tagName || "").toLowerCase();
+      if (tag === "option") {
+        if (up) up(child);
+        opts.push(child);
+      } else if (tag === "optgroup") {
+        collect(child);
+      }
+      child = child.nextSibling;
+    }
+  }
+  collect(selectEl);
+  return opts;
+}
+
+function computeSelectedIndex(selectEl) {
+  const selState = getSelectState(selectEl);
+  if (selState.selectedIndex !== undefined) {
+    return selState.selectedIndex;
+  }
+  const opts = selectEl.options;
+  if (opts.length === 0) return -1;
+
+  if (selectEl.multiple) {
+    for (let i = 0; i < opts.length; i++) {
+      const ost = getOptionState(opts[i]);
+      if (ost.selected === true || (ost.selected === undefined && opts[i].hasAttribute && opts[i].hasAttribute("selected"))) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  // Single select:
+  // 1. Check if any option has _selected explicitly set to true
+  for (let i = opts.length - 1; i >= 0; i--) {
+    const ost = getOptionState(opts[i]);
+    if (ost.selected === true) {
+      return i;
+    }
+  }
+
+  // 2. Check if any option has selected attribute (last one wins per WHATWG spec if multiple)
+  for (let i = opts.length - 1; i >= 0; i--) {
+    const ost = getOptionState(opts[i]);
+    if (ost.selected === undefined && opts[i].hasAttribute && opts[i].hasAttribute("selected")) {
+      return i;
+    }
+  }
+
+  // 3. Default selection: first enabled option
+  for (let i = 0; i < opts.length; i++) {
+    if (!opts[i].disabled) return i;
+  }
+  // Fallback to first option if all are disabled
+  return 0;
+}
+
 function installSelectElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
 
@@ -13,12 +117,13 @@ function installSelectElement(global) {
 
   Object.defineProperty(HTMLOptionElement.prototype, "value", {
     get: function () {
-      if (this._value !== undefined) return this._value;
+      const ost = getOptionState(this);
+      if (ost.value !== undefined) return ost.value;
       if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value");
       return this.textContent || "";
     },
     set: function (v) {
-      this._value = String(v);
+      getOptionState(this).value = String(v);
       if (this.setAttribute) this.setAttribute("value", String(v));
     },
     configurable: true,
@@ -32,31 +137,94 @@ function installSelectElement(global) {
 
   Object.defineProperty(HTMLOptionElement.prototype, "selected", {
     get: function () {
-      if (this._selected !== undefined) return this._selected;
-      return this.hasAttribute("selected");
+      const ost = getOptionState(this);
+      const owner = findOwnerSelect(this);
+      if (!owner) {
+        if (ost.selected !== undefined) return ost.selected;
+        return this.hasAttribute && this.hasAttribute("selected");
+      }
+      if (owner.multiple) {
+        if (ost.selected !== undefined) return ost.selected;
+        return this.hasAttribute && this.hasAttribute("selected");
+      }
+      // Single select:
+      const selIdx = computeSelectedIndex(owner);
+      if (selIdx === -1) return false;
+      return isSameElement(owner.options[selIdx], this);
     },
     set: function (v) {
-      this._selected = Boolean(v);
-      if (v) {
-        if (this.setAttribute) this.setAttribute("selected", "");
-      } else {
-        if (this.removeAttribute) this.removeAttribute("selected");
+      const ost = getOptionState(this);
+      ost.selected = Boolean(v);
+      const owner = findOwnerSelect(this);
+      if (owner && !owner.multiple) {
+        const selState = getSelectState(owner);
+        const opts = owner.options;
+        if (v) {
+          for (let i = 0; i < opts.length; i++) {
+            if (isSameElement(opts[i], this)) {
+              selState.selectedIndex = i;
+            } else {
+              getOptionState(opts[i]).selected = false;
+            }
+          }
+        } else {
+          const curIdx = owner.selectedIndex;
+          if (curIdx !== -1 && isSameElement(opts[curIdx], this)) {
+            selState.selectedIndex = -1;
+          }
+        }
       }
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLOptionElement.prototype, "defaultSelected", {
-    get: function () { return this.hasAttribute("selected"); },
-    set: function (v) { if (v) this.setAttribute("selected", ""); else this.removeAttribute("selected"); },
+    get: function () { return this.hasAttribute && this.hasAttribute("selected"); },
+    set: function (v) {
+      if (v) {
+        this.setAttribute("selected", "");
+      } else {
+        this.removeAttribute("selected");
+      }
+    },
     configurable: true,
   });
 
   Object.defineProperty(HTMLOptionElement.prototype, "disabled", {
-    get: function () { return this.hasAttribute("disabled"); },
+    get: function () { return this.hasAttribute && this.hasAttribute("disabled"); },
     set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
     configurable: true,
   });
+
+  const origOptSetAttr = HTMLOptionElement.prototype.setAttribute;
+  HTMLOptionElement.prototype.setAttribute = function (name, value) {
+    if (origOptSetAttr) origOptSetAttr.call(this, name, value);
+    if (String(name).toLowerCase() === "selected") {
+      getOptionState(this).selected = true;
+      const owner = findOwnerSelect(this);
+      if (owner && !owner.multiple) {
+        getSelectState(owner).selectedIndex = undefined;
+        const opts = owner.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (!isSameElement(opts[i], this)) {
+            getOptionState(opts[i]).selected = false;
+          }
+        }
+      }
+    }
+  };
+
+  const origOptRemoveAttr = HTMLOptionElement.prototype.removeAttribute;
+  HTMLOptionElement.prototype.removeAttribute = function (name) {
+    if (origOptRemoveAttr) origOptRemoveAttr.call(this, name);
+    if (String(name).toLowerCase() === "selected") {
+      getOptionState(this).selected = false;
+      const owner = findOwnerSelect(this);
+      if (owner && !owner.multiple) {
+        getSelectState(owner).selectedIndex = undefined;
+      }
+    }
+  };
 
   markNative(HTMLOptionElement, "HTMLOptionElement");
   global.HTMLOptionElement = HTMLOptionElement;
@@ -83,15 +251,7 @@ function installSelectElement(global) {
 
   Object.defineProperty(HTMLSelectElement.prototype, "options", {
     get: function () {
-      const opts = [];
-      let child = this.firstChild;
-      while (child) {
-        if ((child.tagName || "").toLowerCase() === "option") {
-          opts.push(child);
-        }
-        child = child.nextSibling;
-      }
-      return new HTMLCollection(opts);
+      return new HTMLCollection(getSelectOptions(this));
     },
     configurable: true,
   });
@@ -103,17 +263,14 @@ function installSelectElement(global) {
 
   Object.defineProperty(HTMLSelectElement.prototype, "selectedIndex", {
     get: function () {
-      const opts = this.options;
-      for (let i = 0; i < opts.length; i++) {
-        if (opts[i].selected) return i;
-      }
-      return opts.length > 0 && !this.multiple ? 0 : -1;
+      return computeSelectedIndex(this);
     },
     set: function (idx) {
       const i = Number(idx);
+      getSelectState(this).selectedIndex = i;
       const opts = this.options;
       for (let j = 0; j < opts.length; j++) {
-        opts[j].selected = (j === i);
+        getOptionState(opts[j]).selected = (j === i);
       }
     },
     configurable: true,
@@ -209,16 +366,21 @@ function installSelectElement(global) {
   };
 
   HTMLSelectElement.prototype.add = function (element, before) {
+    getSelectState(this).selectedIndex = undefined;
     if (this.appendChild) {
       this.appendChild(element);
     }
   };
 
   HTMLSelectElement.prototype.remove = function (index) {
+    getSelectState(this).selectedIndex = undefined;
     const opts = this.options;
     const i = Number(index);
-    if (i >= 0 && i < opts.length && this.removeChild) {
-      this.removeChild(opts[i]);
+    if (i >= 0 && i < opts.length) {
+      const node = opts[i];
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
     }
   };
 

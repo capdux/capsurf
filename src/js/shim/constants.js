@@ -69,3 +69,17 @@ if (typeof globalThis.__CAP_RENDER_CONFIG === "undefined") {
     animations: false,      // Default false: static headless mode; true: full WAAPI animation tick & timeline
   };
 }
+
+// 0. DOMException Implementation (Available from start)
+function DOMException(message, name) {
+  const err = new Error(message || "");
+  err.name = name || "Error";
+  Object.setPrototypeOf(err, DOMException.prototype);
+  return err;
+}
+DOMException.prototype = Object.create(Error.prototype);
+DOMException.prototype.constructor = DOMException;
+markNative(DOMException, "DOMException");
+if (typeof globalThis !== "undefined") {
+  globalThis.DOMException = DOMException;
+}

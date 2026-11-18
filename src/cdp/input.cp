@@ -95,50 +95,52 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
     return best_node;
 }
 
-pub fn applyInputText(session: *CdpPageSession, text: []const u8) {
-    if (text.len == 0) return;
+pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u8) {
+    if (text.len == 0 && key.len == 0) return;
 
-    // Filter control characters (< 32 or == 127)
+    // Filter and escape text and key
     let clean_buf: [1024]u8 = [0; 1024];
     let clean_len: usize = 0;
-    let ci: usize = 0;
-    while (ci < text.len && clean_len < clean_buf.len) : (ci += 1) {
-        const c = text[ci];
-        if (c >= 32 && c != 127) {
+    for (c of text) {
+        if (c >= 32 && c != 127 && clean_len < clean_buf.len) {
             clean_buf[clean_len] = c;
             clean_len += 1;
         }
     }
-    if (clean_len == 0) return;
     const clean_text = clean_buf[0..clean_len];
-
-    // Escape clean_text for JS string literal
+    
+    // Escaping helper
     let esc_buf: [2048]u8 = [0; 2048];
-    let ei: usize = 0;
-    let si: usize = 0;
-    while (si < clean_text.len && ei + 2 < esc_buf.len) : (si += 1) {
-        const c = clean_text[si];
-        if (c == '"' || c == '\\' || c == '\'') {
-            esc_buf[ei] = '\\';
+    fn escape(input_str: []const u8, out: []u8): usize {
+        let ei: usize = 0;
+        for (c of input_str) {
+            if (c == '"' || c == '\\' || c == '\'') {
+                if (ei + 1 < out.len) out[ei] = '\\';
+                ei += 1;
+            }
+            if (ei < out.len) out[ei] = c;
             ei += 1;
         }
-        esc_buf[ei] = c;
-        ei += 1;
+        return ei;
     }
-    const escaped_text = esc_buf[0..ei];
+    const escaped_text_len = escape(clean_text, &esc_buf);
+    const escaped_text = esc_buf[0..escaped_text_len];
+    
+    let k_esc_buf: [1024]u8 = [0; 1024];
+    const escaped_key_len = escape(key, &k_esc_buf);
+    const escaped_key = k_esc_buf[0..escaped_key_len];
 
     if (session.has_document) {
-        let js_buf: [2048]u8 = [0; 2048];
+        let js_buf: [4096]u8 = [0; 4096];
         const js_expr = std.fmt.bufPrint(
             &js_buf,
-            "(() => {{ let el = null; if ({d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (!el) {{ el = document.activeElement; }} if (!el || el === document.body || el === document.documentElement) return 0; const prev = el.value !== undefined ? String(el.value) : ''; const next = prev + \"{s}\"; el.value = next; if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{ try {{ const ev = typeof InputEvent !== 'undefined' ? new InputEvent('input', {{ bubbles: true, cancelable: false, data: \"{s}\" }}) : new Event('input', {{ bubbles: true }}); el.dispatchEvent(ev); }} catch (e) {{ try {{ el.dispatchEvent(new Event('input', {{ bubbles: true }})); }} catch (e2) {{}} }} }} return (typeof el._nid === 'number') ? el._nid : 0; }})()",
-            .{ session.focused_node, session.focused_node, escaped_text, escaped_text },
+            "(() => {{ let el = document.activeElement; if (!el || el === document.body || el === document.documentElement) {{ if ({d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} }} if (!el || el === document.body || el === document.documentElement) return 0; const getRaw = (typeof getValueRaw === 'function') ? getValueRaw : (e) => (e._value !== undefined ? e._value : (e.value || '')); const setRaw = (typeof setValueRaw === 'function') ? setValueRaw : (e, v) => {{ e._value = String(v); if (e.setAttribute) e.setAttribute('value', String(v)); }}; const oldVal = getRaw(el); const oldLen = oldVal.length; const start = typeof el.selectionStart === 'number' ? el.selectionStart : oldLen; const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start; let nextVal = oldVal; let cursor = start; const isPrintable = '{s}'.length > 0; if (isPrintable) {{ nextVal = oldVal.slice(0, start) + '{s}' + oldVal.slice(end); cursor = start + '{s}'.length; }} else if ('{s}' === 'Backspace') {{ if (start !== end) {{ nextVal = oldVal.slice(0, start) + oldVal.slice(end); cursor = start; }} else if (start > 0) {{ nextVal = oldVal.slice(0, start - 1) + oldVal.slice(end); cursor = start - 1; }} }} else if ('{s}' === 'Delete') {{ if (start !== end) {{ nextVal = oldVal.slice(0, start) + oldVal.slice(end); cursor = start; }} else if (start < oldLen) {{ nextVal = oldVal.slice(0, start) + oldVal.slice(start + 1); cursor = start; }} }} if (nextVal !== oldVal) {{ setRaw(el, nextVal); if (typeof notifyControlValueMutation === 'function') {{ notifyControlValueMutation(el, cursor); }} else if (typeof el.setSelectionRange === 'function') {{ el.setSelectionRange(cursor, cursor); }} }} return (typeof el._nid === 'number') ? el._nid : 0; }})()",
+            .{ session.focused_node, session.focused_node, escaped_text, escaped_text, escaped_text, escaped_key, escaped_key },
         ) catch null;
         if (e := js_expr) {
             const val = session.ctx.eval(e);
             if (val.tag == 0 && val.u.uint64 > 0) {
-                const nid = @as(u32, @truncate(val.u.uint64));
-                session.focused_node = nid;
+                session.focused_node = @as(u32, @truncate(val.u.uint64));
             }
             session.ctx.freeValue(val);
         }
@@ -235,7 +237,10 @@ pub struct InputHandler {
             * = key_ev;
 
             if (text.len > 0 && (ev_type == .Char || ev_type == .KeyDown || ev_type == .RawKeyDown)) {
-                applyInputText(session, text);
+                applyInputText(session, text, key);
+            }
+            if (ev_type == .KeyDown && (std.mem.eql(u8, key, "Backspace") || std.mem.eql(u8, key, "Delete"))) {
+                applyInputText(session, "", key);
             }
 
             return CdpResponse.ok(req.id, "{}");
@@ -246,7 +251,7 @@ pub struct InputHandler {
             const raw_text = extractJsonString(req.params_raw, "text") ?? "";
             let unesc_buf: [1024]u8 = [0; 1024];
             const text = unescapeJsonString(raw_text, &unesc_buf);
-            applyInputText(session, text);
+            applyInputText(session, text, "");
             return CdpResponse.ok(req.id, "{}");
         }
 

@@ -80,6 +80,20 @@
     };
   }
 
+  // 0. DOMException Implementation (Available from start)
+  function DOMException(message, name) {
+    const err = new Error(message || "");
+    err.name = name || "Error";
+    Object.setPrototypeOf(err, DOMException.prototype);
+    return err;
+  }
+  DOMException.prototype = Object.create(Error.prototype);
+  DOMException.prototype.constructor = DOMException;
+  markNative(DOMException, "DOMException");
+  if (typeof globalThis !== "undefined") {
+    globalThis.DOMException = DOMException;
+  }
+
   // =============================================================
   // Module: util/strings.js
   // =============================================================
@@ -1756,6 +1770,76 @@
   }
 
   // =============================================================
+  // Module: selector.js
+  // =============================================================
+  // src/js/shim/selector.js
+  // CSS Selector validation and QuerySelector wrappers
+
+  function validateSelector(selector) {
+    if (typeof selector !== "string") {
+      selector = String(selector);
+    }
+    const s = selector.trim();
+    if (s.length === 0 || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) {
+      throw new DOMException("The provided selector is invalid.", "SyntaxError");
+    }
+    if (s.includes("::")) {
+      const pseudoPattern = /::([a-zA-Z-]+)(.*)$/;
+      const m = s.match(pseudoPattern);
+      if (m) {
+        const rest = m[2].trim();
+        if (rest.length > 0) {
+          throw new DOMException("The provided selector is invalid.", "SyntaxError");
+        }
+      }
+    }
+  }
+
+  function isPurePseudoElementSelector(s) {
+    return /::(before|after|selection|marker|placeholder|first-line|first-letter)$/i.test(s) ||
+           /:(before|after|first-line|first-letter)$/i.test(s);
+  }
+
+  function wrapQuerySelector(origFn) {
+    return function (sel) {
+      if (arguments.length === 0) throw new TypeError("querySelector: 1 argument required");
+      const s = String(sel).trim();
+      validateSelector(s);
+      if (isPurePseudoElementSelector(s)) {
+        return null;
+      }
+      if (origFn) {
+        const res = origFn.call(this, s);
+        return typeof upgradeElement === "function" ? upgradeElement(res) : res;
+      }
+      return null;
+    };
+  }
+
+  function wrapQuerySelectorAll(origFn) {
+    return function (sel) {
+      if (arguments.length === 0) throw new TypeError("querySelectorAll: 1 argument required");
+      const s = String(sel).trim();
+      validateSelector(s);
+      if (isPurePseudoElementSelector(s)) {
+        return new NodeList([]);
+      }
+      let raw = null;
+      if (origFn) {
+        raw = origFn.call(this, s);
+      }
+      const list = [];
+      if (raw && raw.length) {
+        for (let i = 0; i < raw.length; i++) {
+          const el = typeof upgradeElement === "function" ? upgradeElement(raw[i]) : raw[i];
+          list.push(el);
+        }
+      }
+      return new NodeList(list);
+    };
+  }
+
+  // =============================================================
   // Module: element/element.js
   // =============================================================
   // src/js/shim/element/element.js
@@ -2093,6 +2177,24 @@
         this.id = val;
       } else if (key.toLowerCase() === "class") {
         this.className = val;
+      } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
+        this._selected = true;
+        let curr = this.parentElement || this.parentNode;
+        while (curr) {
+          if ((curr.tagName || "").toLowerCase() === "select") {
+            if (!curr.multiple) {
+              curr._selectedIndex = undefined;
+              const opts = curr.options;
+              for (let i = 0; i < opts.length; i++) {
+                if (opts[i] !== this && (!this._nid || opts[i]._nid !== this._nid)) {
+                  opts[i]._selected = false;
+                }
+              }
+            }
+            break;
+          }
+          curr = curr.parentElement || curr.parentNode;
+        }
       }
       if (origSetAttribute) {
         origSetAttribute.call(this, key, val);
@@ -2131,6 +2233,18 @@
         this.id = "";
       } else if (key === "class") {
         this.className = "";
+      } else if (key === "selected" && (this.tagName || "").toLowerCase() === "option") {
+        this._selected = false;
+        let curr = this.parentElement || this.parentNode;
+        while (curr) {
+          if ((curr.tagName || "").toLowerCase() === "select") {
+            if (!curr.multiple) {
+              curr._selectedIndex = undefined;
+            }
+            break;
+          }
+          curr = curr.parentElement || curr.parentNode;
+        }
       }
       if (origRemoveAttribute) {
         origRemoveAttribute.call(this, name);
@@ -2831,10 +2945,18 @@
 
     Object.defineProperty(proto, "selected", {
       get: function () {
+        if ((this.tagName || "").toLowerCase() === "option" && typeof global !== "undefined" && global.HTMLOptionElement) {
+          const desc = Object.getOwnPropertyDescriptor(global.HTMLOptionElement.prototype, "selected");
+          if (desc && desc.get) return desc.get.call(this);
+        }
         if (this._selected !== undefined) return this._selected;
         return this.hasAttribute("selected");
       },
       set: function (v) {
+        if ((this.tagName || "").toLowerCase() === "option" && typeof global !== "undefined" && global.HTMLOptionElement) {
+          const desc = Object.getOwnPropertyDescriptor(global.HTMLOptionElement.prototype, "selected");
+          if (desc && desc.set) return desc.set.call(this, v);
+        }
         this._selected = Boolean(v);
         if (v) {
           if (this.setAttribute) this.setAttribute("selected", "");
@@ -2872,9 +2994,11 @@
     Object.defineProperty(proto, "options", {
       get: function () {
         const opts = [];
+        const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
         let child = this.firstChild;
         while (child) {
           if ((child.tagName || "").toLowerCase() === "option") {
+            if (up) up(child);
             opts.push(child);
           }
           child = child.nextSibling;
@@ -2886,6 +3010,10 @@
 
     Object.defineProperty(proto, "selectedIndex", {
       get: function () {
+        if ((this.tagName || "").toLowerCase() === "select" && typeof global !== "undefined" && global.HTMLSelectElement) {
+          const desc = Object.getOwnPropertyDescriptor(global.HTMLSelectElement.prototype, "selectedIndex");
+          if (desc && desc.get) return desc.get.call(this);
+        }
         const opts = this.options;
         for (let i = 0; i < opts.length; i++) {
           if (opts[i].selected) return i;
@@ -2893,6 +3021,10 @@
         return opts.length > 0 && !this.multiple ? 0 : -1;
       },
       set: function (idx) {
+        if ((this.tagName || "").toLowerCase() === "select" && typeof global !== "undefined" && global.HTMLSelectElement) {
+          const desc = Object.getOwnPropertyDescriptor(global.HTMLSelectElement.prototype, "selectedIndex");
+          if (desc && desc.set) return desc.set.call(this, idx);
+        }
         const i = Number(idx);
         const opts = this.options;
         for (let j = 0; j < opts.length; j++) {
@@ -3422,6 +3554,102 @@
   markNative(ValidityState, "ValidityState");
 
   // =============================================================
+  // Module: element/forms/selection.js
+  // =============================================================
+  // src/js/shim/element/forms/selection.js
+
+  function supportsSelection(control) {
+    if (!control) return false;
+    const tag = (control.tagName || "").toLowerCase();
+    if (tag === "textarea") return true;
+    if (tag === "input") {
+      const type = (control.getAttribute("type") || "text").toLowerCase();
+      return ["text", "search", "url", "tel", "password"].includes(type);
+    }
+    return false;
+  }
+
+  function getValueRaw(el) {
+    if (el._value !== undefined) return el._value;
+    let proto = Object.getPrototypeOf(el);
+    while (proto) {
+      const desc = Object.getOwnPropertyDescriptor(proto, "value");
+      if (desc && typeof desc.get === "function") {
+        const v = desc.get.call(el);
+        return typeof v === "string" ? v : String(v ?? "");
+      }
+      proto = Object.getPrototypeOf(proto);
+    }
+    return el.getAttribute ? (el.getAttribute("value") || "") : "";
+  }
+
+  function setValueRaw(el, newValue) {
+    el._value = String(newValue);
+    if (el.setAttribute) el.setAttribute("value", String(newValue));
+  }
+
+  function notifyControlValueMutation(control, cursor) {
+    if (typeof control.setSelectionRange === "function") {
+      control.setSelectionRange(cursor, cursor);
+    }
+    try {
+      const inputEvt = typeof InputEvent !== "undefined"
+        ? new InputEvent("input", { bubbles: true, cancelable: false })
+        : new Event("input", { bubbles: true });
+      control.dispatchEvent(inputEvt);
+    } catch (e) {}
+  }
+
+  function installSelectionMixin(Cls) {
+    Object.defineProperty(Cls.prototype, "selectionStart", {
+      get: function () {
+        if (!supportsSelection(this)) return null;
+        return this._selectionStart || 0;
+      },
+      set: function (v) {
+        if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
+        const n = Math.max(0, Number(v) >>> 0);
+        this.setSelectionRange(n, Math.max(n, this._selectionEnd || 0), this._selectionDirection);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(Cls.prototype, "selectionEnd", {
+      get: function () {
+        if (!supportsSelection(this)) return null;
+        return this._selectionEnd || 0;
+      },
+      set: function (v) {
+        if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
+        const n = Math.max(0, Number(v) >>> 0);
+        this.setSelectionRange(this._selectionStart || 0, n, this._selectionDirection);
+      },
+      configurable: true,
+    });
+
+    Cls.prototype.setSelectionRange = function (start, end, direction) {
+      if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
+      const len = (this.value || "").length;
+      let b = Math.min(Math.max(0, Number(end) || 0), len);
+      let a = Math.min(Math.max(0, Number(start) || 0), b);
+      this._selectionStart = a;
+      this._selectionEnd = b;
+      this._selectionDirection = (direction === "forward" || direction === "backward") ? direction : "none";
+    };
+  }
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.getValueRaw = getValueRaw;
+    globalThis.setValueRaw = setValueRaw;
+    globalThis.notifyControlValueMutation = notifyControlValueMutation;
+  }
+  if (typeof global !== "undefined") {
+    global.getValueRaw = getValueRaw;
+    global.setValueRaw = setValueRaw;
+    global.notifyControlValueMutation = notifyControlValueMutation;
+  }
+
+  // =============================================================
   // Module: element/forms/input.js
   // =============================================================
   // src/js/shim/element/forms/input.js
@@ -3449,9 +3677,13 @@
       this._value = "";
       this._checked = false;
       this._customValidityMessage = "";
+      this._selectionStart = 0;
+      this._selectionEnd = 0;
+      this._selectionDirection = "none";
     }
     HTMLInputElement.prototype = Object.create(ElementProto);
     HTMLInputElement.prototype.constructor = HTMLInputElement;
+    installSelectionMixin(HTMLInputElement);
 
     Object.defineProperty(HTMLInputElement.prototype, "type", {
       get: function () {
@@ -3477,6 +3709,8 @@
         }
         this._value = String(v);
         if (this.setAttribute) this.setAttribute("value", String(v));
+        this._selectionStart = this._value.length;
+        this._selectionEnd = this._value.length;
       },
       configurable: true,
     });
@@ -3612,9 +3846,6 @@
       return this.checkValidity();
     };
 
-    HTMLInputElement.prototype.select = function () {};
-    HTMLInputElement.prototype.setSelectionRange = function () {};
-
     markNative(HTMLInputElement, "HTMLInputElement");
     markNative(HTMLInputElement.prototype.setCustomValidity, "setCustomValidity");
     markNative(HTMLInputElement.prototype.checkValidity, "checkValidity");
@@ -3635,9 +3866,13 @@
     function HTMLTextAreaElement() {
       this._value = undefined;
       this._customValidityMessage = "";
+      this._selectionStart = 0;
+      this._selectionEnd = 0;
+      this._selectionDirection = "none";
     }
     HTMLTextAreaElement.prototype = Object.create(ElementProto);
     HTMLTextAreaElement.prototype.constructor = HTMLTextAreaElement;
+    installSelectionMixin(HTMLTextAreaElement);
 
     Object.defineProperty(HTMLTextAreaElement.prototype, "type", {
       get: function () { return "textarea"; },
@@ -3653,6 +3888,8 @@
         this._value = String(v);
         if (this.setAttribute) this.setAttribute("value", String(v));
         this.textContent = String(v);
+        this._selectionStart = this._value.length;
+        this._selectionEnd = this._value.length;
       },
       configurable: true,
     });
@@ -3771,6 +4008,110 @@
   // src/js/shim/element/forms/select.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/select.ts
 
+  if (!globalThis.__capsurf_selectState) globalThis.__capsurf_selectState = new Map();
+  if (!globalThis.__capsurf_optionState) globalThis.__capsurf_optionState = new Map();
+
+  function getSelectState(el) {
+    const nid = (el && typeof el._nid === "number") ? el._nid : 0;
+    let st = globalThis.__capsurf_selectState.get(nid);
+    if (!st) {
+      st = { selectedIndex: undefined };
+      if (nid > 0) globalThis.__capsurf_selectState.set(nid, st);
+    }
+    return st;
+  }
+
+  function getOptionState(el) {
+    const nid = (el && typeof el._nid === "number") ? el._nid : 0;
+    let st = globalThis.__capsurf_optionState.get(nid);
+    if (!st) {
+      st = { selected: undefined, value: undefined };
+      if (nid > 0) globalThis.__capsurf_optionState.set(nid, st);
+    }
+    return st;
+  }
+
+  function isSameElement(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (typeof a._nid === "number" && typeof b._nid === "number" && a._nid > 0) {
+      return a._nid === b._nid;
+    }
+    return false;
+  }
+
+  function findOwnerSelect(opt) {
+    let curr = opt.parentNode;
+    while (curr) {
+      if ((curr.tagName || "").toLowerCase() === "select") return curr;
+      curr = curr.parentNode;
+    }
+    return null;
+  }
+
+  function getSelectOptions(selectEl) {
+    const opts = [];
+    const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+    function collect(node) {
+      let child = node.firstChild;
+      while (child) {
+        const tag = (child.tagName || "").toLowerCase();
+        if (tag === "option") {
+          if (up) up(child);
+          opts.push(child);
+        } else if (tag === "optgroup") {
+          collect(child);
+        }
+        child = child.nextSibling;
+      }
+    }
+    collect(selectEl);
+    return opts;
+  }
+
+  function computeSelectedIndex(selectEl) {
+    const selState = getSelectState(selectEl);
+    if (selState.selectedIndex !== undefined) {
+      return selState.selectedIndex;
+    }
+    const opts = selectEl.options;
+    if (opts.length === 0) return -1;
+
+    if (selectEl.multiple) {
+      for (let i = 0; i < opts.length; i++) {
+        const ost = getOptionState(opts[i]);
+        if (ost.selected === true || (ost.selected === undefined && opts[i].hasAttribute && opts[i].hasAttribute("selected"))) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    // Single select:
+    // 1. Check if any option has _selected explicitly set to true
+    for (let i = opts.length - 1; i >= 0; i--) {
+      const ost = getOptionState(opts[i]);
+      if (ost.selected === true) {
+        return i;
+      }
+    }
+
+    // 2. Check if any option has selected attribute (last one wins per WHATWG spec if multiple)
+    for (let i = opts.length - 1; i >= 0; i--) {
+      const ost = getOptionState(opts[i]);
+      if (ost.selected === undefined && opts[i].hasAttribute && opts[i].hasAttribute("selected")) {
+        return i;
+      }
+    }
+
+    // 3. Default selection: first enabled option
+    for (let i = 0; i < opts.length; i++) {
+      if (!opts[i].disabled) return i;
+    }
+    // Fallback to first option if all are disabled
+    return 0;
+  }
+
   function installSelectElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
 
@@ -3783,12 +4124,13 @@
 
     Object.defineProperty(HTMLOptionElement.prototype, "value", {
       get: function () {
-        if (this._value !== undefined) return this._value;
+        const ost = getOptionState(this);
+        if (ost.value !== undefined) return ost.value;
         if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value");
         return this.textContent || "";
       },
       set: function (v) {
-        this._value = String(v);
+        getOptionState(this).value = String(v);
         if (this.setAttribute) this.setAttribute("value", String(v));
       },
       configurable: true,
@@ -3802,31 +4144,94 @@
 
     Object.defineProperty(HTMLOptionElement.prototype, "selected", {
       get: function () {
-        if (this._selected !== undefined) return this._selected;
-        return this.hasAttribute("selected");
+        const ost = getOptionState(this);
+        const owner = findOwnerSelect(this);
+        if (!owner) {
+          if (ost.selected !== undefined) return ost.selected;
+          return this.hasAttribute && this.hasAttribute("selected");
+        }
+        if (owner.multiple) {
+          if (ost.selected !== undefined) return ost.selected;
+          return this.hasAttribute && this.hasAttribute("selected");
+        }
+        // Single select:
+        const selIdx = computeSelectedIndex(owner);
+        if (selIdx === -1) return false;
+        return isSameElement(owner.options[selIdx], this);
       },
       set: function (v) {
-        this._selected = Boolean(v);
-        if (v) {
-          if (this.setAttribute) this.setAttribute("selected", "");
-        } else {
-          if (this.removeAttribute) this.removeAttribute("selected");
+        const ost = getOptionState(this);
+        ost.selected = Boolean(v);
+        const owner = findOwnerSelect(this);
+        if (owner && !owner.multiple) {
+          const selState = getSelectState(owner);
+          const opts = owner.options;
+          if (v) {
+            for (let i = 0; i < opts.length; i++) {
+              if (isSameElement(opts[i], this)) {
+                selState.selectedIndex = i;
+              } else {
+                getOptionState(opts[i]).selected = false;
+              }
+            }
+          } else {
+            const curIdx = owner.selectedIndex;
+            if (curIdx !== -1 && isSameElement(opts[curIdx], this)) {
+              selState.selectedIndex = -1;
+            }
+          }
         }
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLOptionElement.prototype, "defaultSelected", {
-      get: function () { return this.hasAttribute("selected"); },
-      set: function (v) { if (v) this.setAttribute("selected", ""); else this.removeAttribute("selected"); },
+      get: function () { return this.hasAttribute && this.hasAttribute("selected"); },
+      set: function (v) {
+        if (v) {
+          this.setAttribute("selected", "");
+        } else {
+          this.removeAttribute("selected");
+        }
+      },
       configurable: true,
     });
 
     Object.defineProperty(HTMLOptionElement.prototype, "disabled", {
-      get: function () { return this.hasAttribute("disabled"); },
+      get: function () { return this.hasAttribute && this.hasAttribute("disabled"); },
       set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
       configurable: true,
     });
+
+    const origOptSetAttr = HTMLOptionElement.prototype.setAttribute;
+    HTMLOptionElement.prototype.setAttribute = function (name, value) {
+      if (origOptSetAttr) origOptSetAttr.call(this, name, value);
+      if (String(name).toLowerCase() === "selected") {
+        getOptionState(this).selected = true;
+        const owner = findOwnerSelect(this);
+        if (owner && !owner.multiple) {
+          getSelectState(owner).selectedIndex = undefined;
+          const opts = owner.options;
+          for (let i = 0; i < opts.length; i++) {
+            if (!isSameElement(opts[i], this)) {
+              getOptionState(opts[i]).selected = false;
+            }
+          }
+        }
+      }
+    };
+
+    const origOptRemoveAttr = HTMLOptionElement.prototype.removeAttribute;
+    HTMLOptionElement.prototype.removeAttribute = function (name) {
+      if (origOptRemoveAttr) origOptRemoveAttr.call(this, name);
+      if (String(name).toLowerCase() === "selected") {
+        getOptionState(this).selected = false;
+        const owner = findOwnerSelect(this);
+        if (owner && !owner.multiple) {
+          getSelectState(owner).selectedIndex = undefined;
+        }
+      }
+    };
 
     markNative(HTMLOptionElement, "HTMLOptionElement");
     global.HTMLOptionElement = HTMLOptionElement;
@@ -3853,15 +4258,7 @@
 
     Object.defineProperty(HTMLSelectElement.prototype, "options", {
       get: function () {
-        const opts = [];
-        let child = this.firstChild;
-        while (child) {
-          if ((child.tagName || "").toLowerCase() === "option") {
-            opts.push(child);
-          }
-          child = child.nextSibling;
-        }
-        return new HTMLCollection(opts);
+        return new HTMLCollection(getSelectOptions(this));
       },
       configurable: true,
     });
@@ -3873,17 +4270,14 @@
 
     Object.defineProperty(HTMLSelectElement.prototype, "selectedIndex", {
       get: function () {
-        const opts = this.options;
-        for (let i = 0; i < opts.length; i++) {
-          if (opts[i].selected) return i;
-        }
-        return opts.length > 0 && !this.multiple ? 0 : -1;
+        return computeSelectedIndex(this);
       },
       set: function (idx) {
         const i = Number(idx);
+        getSelectState(this).selectedIndex = i;
         const opts = this.options;
         for (let j = 0; j < opts.length; j++) {
-          opts[j].selected = (j === i);
+          getOptionState(opts[j]).selected = (j === i);
         }
       },
       configurable: true,
@@ -3979,16 +4373,21 @@
     };
 
     HTMLSelectElement.prototype.add = function (element, before) {
+      getSelectState(this).selectedIndex = undefined;
       if (this.appendChild) {
         this.appendChild(element);
       }
     };
 
     HTMLSelectElement.prototype.remove = function (index) {
+      getSelectState(this).selectedIndex = undefined;
       const opts = this.options;
       const i = Number(index);
-      if (i >= 0 && i < opts.length && this.removeChild) {
-        this.removeChild(opts[i]);
+      if (i >= 0 && i < opts.length) {
+        const node = opts[i];
+        if (node.parentNode) {
+          node.parentNode.removeChild(node);
+        }
       }
     };
 
@@ -4358,6 +4757,15 @@
         if (c.defaultValue !== undefined) c.value = c.defaultValue;
         if (c.defaultChecked !== undefined) c.checked = c.defaultChecked;
         if (c.defaultSelected !== undefined) c.selected = c.defaultSelected;
+        if ((c.tagName || "").toLowerCase() === "select") {
+          if (typeof getSelectState === "function") getSelectState(c).selectedIndex = undefined;
+          c._selectedIndex = undefined;
+          const opts = c.options;
+          for (let j = 0; j < opts.length; j++) {
+            if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
+            opts[j]._selected = undefined;
+          }
+        }
       }
       const evt = new Event("reset", { bubbles: true, cancelable: true });
       this.dispatchEvent(evt);
@@ -8648,19 +9056,11 @@
     global.__NativeEvent = NativeEvent;
 
     // 0. DOMException & WHATWG URL Implementation
-    function DOMException(message, name) {
-      const err = new Error(message || "");
-      err.name = name || "Error";
-      err.code = name === "SecurityError" ? 18 : 0;
-      Object.setPrototypeOf(err, DOMException.prototype);
-      return err;
+    if (typeof DOMException !== "undefined") {
+      global.DOMException = DOMException;
+      if (typeof window !== "undefined") window.DOMException = DOMException;
+      if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
     }
-    DOMException.prototype = Object.create(Error.prototype);
-    DOMException.prototype.constructor = DOMException;
-    markNative(DOMException, "DOMException");
-    global.DOMException = DOMException;
-    if (typeof window !== "undefined") window.DOMException = DOMException;
-    if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
 
     function resolveRelativePath(p) {
       const segments = p.split("/");
@@ -10371,6 +10771,23 @@
         return null;
       }, "getContext");
 
+      // Add selector methods
+      global.Element.prototype.querySelector = wrapQuerySelector(function(sel) {
+          const all = document.querySelectorAll(sel);
+          for(let i = 0; i < all.length; i++) {
+              if (this !== all[i] && this.contains(all[i])) return all[i];
+          }
+          return null;
+      });
+      global.Element.prototype.querySelectorAll = wrapQuerySelectorAll(function(sel) {
+          const all = document.querySelectorAll(sel);
+          const matches = [];
+          for(let i = 0; i < all.length; i++) {
+              if (this !== all[i] && this.contains(all[i])) matches.push(all[i]);
+          }
+          return matches;
+      });
+
       global.Element.prototype.toDataURL = markNative(function () {
         return VALID_PNG_BASE64;
       }, "toDataURL");
@@ -10387,6 +10804,32 @@
     // 12. Install window environment
     installWindow(global);
 
+    function upgradeElement(el) {
+      if (!el || typeof el !== "object" || el._upgraded) return el;
+      el._upgraded = true;
+      const tag = String(el.localName || el.tagName || "").toLowerCase();
+      switch (tag) {
+        case "input": Object.setPrototypeOf(el, global.HTMLInputElement.prototype); break;
+        case "textarea": Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype); break;
+        case "select": Object.setPrototypeOf(el, global.HTMLSelectElement.prototype); break;
+        case "option": Object.setPrototypeOf(el, global.HTMLOptionElement.prototype); break;
+        case "button": Object.setPrototypeOf(el, global.HTMLButtonElement.prototype); break;
+        case "form": Object.setPrototypeOf(el, global.HTMLFormElement.prototype); break;
+        case "a": Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype); break;
+        case "area": Object.setPrototypeOf(el, global.HTMLAreaElement.prototype); break;
+        case "img": Object.setPrototypeOf(el, global.HTMLImageElement.prototype); break;
+        case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
+        case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
+        case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
+        default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
+      }
+      return el;
+    }
+    global.upgradeElement = upgradeElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.upgradeElement = upgradeElement;
+    }
+
     // 13. Enhance Document prototype and instance
     if (global.Document && global.Document.prototype) {
       const docProto = global.Document.prototype;
@@ -10394,57 +10837,47 @@
       // Inherit from Node
       Object.setPrototypeOf(docProto, Node.prototype);
 
+      const origQS = docProto.querySelector;
+      docProto.querySelector = wrapQuerySelector(origQS);
+      const origQSA = docProto.querySelectorAll;
+      docProto.querySelectorAll = wrapQuerySelectorAll(origQSA);
+
       if (docProto.createElement) {
         const origCreateElement = docProto.createElement;
         docProto.createElement = function (tagName) {
-          const el = origCreateElement.call(this, tagName);
-          if (!el) return el;
-          const tag = String(tagName).toLowerCase();
-          switch (tag) {
-            case "input":
-              Object.setPrototypeOf(el, global.HTMLInputElement.prototype);
-              break;
-            case "textarea":
-              Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype);
-              break;
-            case "select":
-              Object.setPrototypeOf(el, global.HTMLSelectElement.prototype);
-              break;
-            case "option":
-              Object.setPrototypeOf(el, global.HTMLOptionElement.prototype);
-              break;
-            case "button":
-              Object.setPrototypeOf(el, global.HTMLButtonElement.prototype);
-              break;
-            case "form":
-              Object.setPrototypeOf(el, global.HTMLFormElement.prototype);
-              break;
-            case "a":
-              Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype);
-              break;
-            case "area":
-              Object.setPrototypeOf(el, global.HTMLAreaElement.prototype);
-              break;
-            case "img":
-              Object.setPrototypeOf(el, global.HTMLImageElement.prototype);
-              break;
-            case "canvas":
-              Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype);
-              break;
-            case "script":
-              Object.setPrototypeOf(el, global.HTMLScriptElement.prototype);
-              break;
-            case "iframe":
-              Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype);
-              break;
-            default:
-              Object.setPrototypeOf(el, global.HTMLElement.prototype);
-              break;
-          }
-          return el;
+          return upgradeElement(origCreateElement.call(this, tagName));
         };
         markNative(docProto.createElement, "createElement");
       }
+
+      if (docProto.getElementById) {
+        const origGetElementById = docProto.getElementById;
+        docProto.getElementById = function (id) {
+          return upgradeElement(origGetElementById.call(this, id));
+        };
+        markNative(docProto.getElementById, "getElementById");
+      }
+
+      if (docProto.querySelector) {
+        const origQuerySelector = docProto.querySelector;
+        docProto.querySelector = function (sel) {
+          return upgradeElement(origQuerySelector.call(this, sel));
+        };
+        markNative(docProto.querySelector, "querySelector");
+      }
+
+      if (docProto.querySelectorAll) {
+        const origQuerySelectorAll = docProto.querySelectorAll;
+        docProto.querySelectorAll = function (sel) {
+          const nodes = origQuerySelectorAll.call(this, sel);
+          if (nodes && nodes.length) {
+            for (let i = 0; i < nodes.length; i++) upgradeElement(nodes[i]);
+          }
+          return nodes;
+        };
+        markNative(docProto.querySelectorAll, "querySelectorAll");
+      }
+
 
       docProto.createRange = markNative(function () {
         return new Range();
