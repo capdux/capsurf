@@ -1009,3 +1009,31 @@
    - **解决方案**：
      - 构建集中式的 `CustomElementRegistry` 与属性快照暂存队列；
      - 将自定义元素的构造升级集成至 `src/js/shim/index.js` 的 `docProto.createElement` 核心拦截链中，消除模块间顺序覆盖隐患。
+
+## Phase 53 事件信任安全防护、Dialog 状态机与 CSSOM 规则层级标准技术方案
+1. **Document Referrer 导航协议打通 (`src/cdp/page.cp`, `src/cdp/session.cp` & `src/js/shim/window.js`)**：
+   - **设计动机**：测试用例 `document.referrer reports the goto referer` 验证 Playwright / Puppeteer 在调用 `page.goto(url, { referer: "..." })` 时，页面中的 `document.referrer` 必须准确反映指定的 Referrer，而在未指定时返回空字符串 `""`；
+   - **解决方案**：
+     - 在 `src/cdp/page.cp` 处理 `Page.navigate` 请求时提取 `referrer` 字段；
+     - 在 `src/cdp/session.cp` 的 `session.navigate` 中动态向当前 JS 上下文注入并执行 `__capsurf_set_document_referrer`；
+     - 在 `src/js/shim/window.js` 的 `Document.prototype` 上挂载只读属性 `referrer`，并在 `e2e/harness.ts` 中透传 `page.goto` 的 `referer` 参数，彻底打通来源地址传递全链路。
+2. **Event isTrusted 安全沙箱与重入派发防护 (`src/js/shim/events/event.js` & `src/js/shim/events/dispatch.js`)**：
+   - **设计动机**：DOM 规范规定 `event.isTrusted` 必须为 unforgeable 只读属性（用户脚本无法通过 Proxy、Object.defineProperty 伪造）；构造函数 `new Event("forged", init)` 绝不得探测 `init` 上的任何 Symbol 属性；正在派发的事件再次调用 `dispatchEvent` 必须抛出 `InvalidStateError`；而当用户代码重新分发先前由浏览器派发的受信任事件时，`event.isTrusted` 必须被重置为 `false`；表单 `reset()` 必须仅限 HTML 命名空间元素调用，且派发事件时必须使用内部私有槽读取事件类型，免疫属性拦截劫持；
+   - **解决方案**：
+     - `Event.prototype.isTrusted` 采用只读 Getter，返回 `Boolean(this && this._isTrusted)`；
+     - `Event` 构造函数仅以普通字符串键提取 options（`bubbles`, `cancelable`, `composed`），阻断对 Proxy Symbol 的触碰；
+     - 在 `dispatchEvent` 中前置检查 `event._isDispatching`，已置位时抛出 `InvalidStateError`；非重入调用时立即将 `event._isTrusted` 重置为 `false`，派发结束后恢复 `_isDispatching = false`；
+     - 实现 `dispatchTrustedEvent` 专供内核与表单派发内置受信任事件，`form.reset()` 严格校验 `this instanceof HTMLFormElement` 与 HTML 命名空间，并读取私有 `_type` 防止事件类型被 Setter 篡改。
+3. **HTMLDialogElement 规范状态机与异步关闭队列 (`src/js/shim/element/dialog.js`)**：
+   - **设计动机**：HTML 标准中 `<dialog>` 的 `show()` 与 `showModal()` 属于互斥状态机——在自身模式内重复调用满足幂等性（无报错），但若在非 modal 状态下调用 `showModal()` 或在 modal 状态下调用 `show()`，必须规范抛出 `InvalidStateError`；同时 `close()` 方法必须将 `close` 事件排队为异步微任务或计时器任务，保证调用当时 `closeSync` 计数严格为 0；
+   - **解决方案**：
+     - 采用 WeakMap 隔离存储各个 Dialog 实例的 `returnValue` 与 `isModal` 标志；
+     - `show()` / `showModal()` 精准检查已有打开态与 modal 标志；
+     - `close()` 移除 `open` 属性并使用 `setTimeout(..., 0)` 异步排队分发 `close` 事件。
+4. **CSSOM 规则层级派生、CSS.supports 三态语法解析与 StyleDeclaration 原型 (`src/js/shim/cssom.js` & `element/element.js`)**：
+   - **设计动机**：用例 `CSSOM rules carry real interfaces, constraints and validation` 与 `CSS.supports evaluates the full supports-condition grammar` 验证完整的 CSSOM 规范：`CSSRule` 及其 13 项常量、`CSSGroupingRule`、`CSSStyleRule`、`CSSMediaRule`、`CSSImportRule`、`CSSFontPaletteValuesRule` 等原型继承关系；`sheet.insertRule()` 必须严格执行参数与语法校验；`CSS.supports` 必须解析复杂的逻辑语法并遵循 CSS Conditional Rules 规范的三态逻辑（未知函数作为 unknown，结合 `not` 返回 false，结合 `or` 返回 true）；`element.style` 必须继承 `CSSStyleDeclaration.prototype` 且属性 `in` 操作符必须区分标准前缀大小写；
+   - **解决方案**：
+     - 在 `src/js/shim/cssom.js` 中构建完整符合 Web IDL 的 CSSOM 规则类与原型继承链；
+     - 实现规则变更联动同步：`insertRule` 与 `deleteRule` 修改时自动更新关联 `<style>` 的 `textContent`，驱动态级联实时响应；
+     - 实现支持嵌套括号、`selector(...)` 与未知函数词法状态机的 `CSS.supports` 条件解析器；
+     - 在 `element.js` 的 `createStyleProxy` 中以 `CSSStyleDeclaration.prototype` 为原型创建目标代理，精细控制 `has` 拦截器对标准前缀与连字符属性的反馈。

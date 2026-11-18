@@ -196,7 +196,7 @@ export class Page {
     this.inFlightEvaluates.clear();
   }
 
-  async goto(url: string, options: { waitUntil?: string; timeout?: number } = {}) {
+  async goto(url: string, options: { waitUntil?: string; timeout?: number; referer?: string } = {}) {
     this.cancelInFlightEvaluations();
     this._url = url;
     this.historyEntries = [{ id: 1, url, userTypedURL: url, title: "" }];
@@ -219,7 +219,11 @@ export class Page {
       type: "Document",
     });
 
-    const res = await this.cdp.send("Page.navigate", { url });
+    const navParams: Record<string, unknown> = { url };
+    if (options && options.referer) {
+      navParams.referrer = options.referer;
+    }
+    const res = await this.cdp.send("Page.navigate", navParams);
     try {
       await this.cdp.send("Runtime.evaluate", {
         expression: `(function(){ if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(url)}); })()`,

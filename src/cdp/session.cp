@@ -123,6 +123,7 @@ pub struct CdpPageSession {
     ctx: JsContext,
     dom_ctx: (*JsDomContext)? = null,
     url: []const u8 = "about:blank",
+    referrer: []const u8 = "",
     title: []const u8 = "Blank Page",
     frame_id: []const u8 = "capsurf-frame-001",
     loader_id: []const u8 = "capsurf-loader-001",
@@ -231,7 +232,7 @@ pub struct CdpPageSession {
             scroll_y: 0.0,
         };
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
-        ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank") catch {};
+        ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
     }
 
@@ -276,7 +277,7 @@ pub struct CdpPageSession {
         std.heap.c_allocator.destroy(_);
     }
 
-    pub fn navigate(*_, html: []const u8, nav_url: []const u8)! {
+    pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
         _.title = "";
         _.doc.deinit();
         if (_.raw_html.len > 0) {
@@ -342,12 +343,13 @@ pub struct CdpPageSession {
         const m = mountDom(&_.ctx, &_.doc, &_.layout) catch return error.MountDomFailed;
         _.dom_ctx = m;
         _.url = nav_url;
+        _.referrer = nav_referrer;
         _.has_document = true;
         _.focused_node = NULL_NODE;
         _.scroll_x = 0.0;
         _.scroll_y = 0.0;
 
-        // Set document url in JS environment
+        // Set document url and referrer in JS environment
         let set_url_buf: [1024]u8 = undefined;
         let set_url_json_buf: [512]u8 = undefined;
         const escaped_nav_url = escapeJsonString(nav_url, set_url_json_buf[0..]);
@@ -359,6 +361,19 @@ pub struct CdpPageSession {
         if (set_url_script.len > 0) {
             const v = _.ctx.eval(set_url_script);
             _.ctx.freeValue(v);
+        }
+
+        let set_ref_buf: [1024]u8 = undefined;
+        let set_ref_json_buf: [512]u8 = undefined;
+        const escaped_ref = escapeJsonString(nav_referrer, set_ref_json_buf[0..]);
+        const set_ref_script = std.fmt.bufPrint(
+            &set_ref_buf,
+            "(function(){{if(typeof __capsurf_set_document_referrer==='function')__capsurf_set_document_referrer(\"{s}\");}})()",
+            .{escaped_ref},
+        ) catch "";
+        if (set_ref_script.len > 0) {
+            const vr = _.ctx.eval(set_ref_script);
+            _.ctx.freeValue(vr);
         }
 
         // Execute inline <script> tags in document order

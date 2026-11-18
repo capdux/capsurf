@@ -128,6 +128,9 @@ function installShim(global) {
   installSelectElement(global);
   installButtonElement(global);
   installFormElement(global);
+  if (typeof installDialogElement === "function") {
+    installDialogElement(global);
+  }
 
   // 12. Install window environment
   installWindow(global);
@@ -135,6 +138,9 @@ function installShim(global) {
   function upgradeElement(el) {
     if (!el || typeof el !== "object" || el._upgraded) return el;
     el._upgraded = true;
+    if (typeof global.__capsurf_recordCanonicalId === "function") {
+      global.__capsurf_recordCanonicalId(el);
+    }
     const tag = String(el.localName || el.tagName || "").toLowerCase();
     switch (tag) {
       case "input": Object.setPrototypeOf(el, global.HTMLInputElement.prototype); break;
@@ -150,6 +156,7 @@ function installShim(global) {
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
+      case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
       default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
     }
     return el;
@@ -205,44 +212,58 @@ function installShim(global) {
       }
     }
 
-    if (docProto.createElementNS) {
-      const origCreateElementNS = docProto.createElementNS;
-      docProto.createElementNS = function (ns, tagName) {
-        let el = origCreateElementNS.call(this, ns, tagName);
-        if (el && (!ns || ns === "http://www.w3.org/1999/xhtml")) {
-          const tag = String(tagName).toLowerCase();
-          const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
-          const Ctor = (registry && registry.get) ? registry.get(tag) : null;
-          if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
-            el._upgraded = true;
-            if (typeof globalThis.upgradeCustomElement === "function") {
-              globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
-            } else {
-              Object.setPrototypeOf(el, Ctor.prototype);
-              const HEl = global.HTMLElement || (typeof HTMLElement !== "undefined" ? HTMLElement : null);
-              if (HEl) HEl._upgradeTarget = el;
-              try { new Ctor(); } catch (e) {} finally { if (HEl) HEl._upgradeTarget = null; }
-            }
-          }
-        }
-        el = upgradeElement(el);
-        if (el && String(tagName).toLowerCase() === "script") {
-          if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
-            globalThis.__capsurf_markScriptForceAsync(el);
-          }
-        }
-        return el;
-      };
-      markNative(docProto.createElementNS, "createElementNS");
-      if (global.document) {
-        global.document.createElementNS = docProto.createElementNS;
+    const origCreateElement = docProto.createElement;
+    const origCreateElementNS = docProto.createElementNS || function (ns, tagName) {
+      let el = origCreateElement ? origCreateElement.call(this, tagName) : null;
+      if (!el) {
+        el = Object.create(global.Element ? global.Element.prototype : Object.prototype);
+        el.localName = String(tagName).toLowerCase();
+        el.tagName = String(tagName).toUpperCase();
       }
+      return el;
+    };
+    docProto.createElementNS = function (ns, tagName) {
+      let el = origCreateElementNS.call(this, ns, tagName);
+      if (el) {
+        el.namespaceURI = ns !== undefined && ns !== null ? String(ns) : null;
+      }
+      if (el && (!ns || ns === "http://www.w3.org/1999/xhtml")) {
+        const tag = String(tagName).toLowerCase();
+        const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
+        const Ctor = (registry && registry.get) ? registry.get(tag) : null;
+        if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
+          el._upgraded = true;
+          if (typeof globalThis.upgradeCustomElement === "function") {
+            globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
+          } else {
+            Object.setPrototypeOf(el, Ctor.prototype);
+            const HEl = global.HTMLElement || (typeof HTMLElement !== "undefined" ? HTMLElement : null);
+            if (HEl) HEl._upgradeTarget = el;
+            try { new Ctor(); } catch (e) {} finally { if (HEl) HEl._upgradeTarget = null; }
+          }
+        }
+      }
+      el = upgradeElement(el);
+      if (el && String(tagName).toLowerCase() === "script") {
+        if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
+          globalThis.__capsurf_markScriptForceAsync(el);
+        }
+      }
+      return el;
+    };
+    markNative(docProto.createElementNS, "createElementNS");
+    if (global.document) {
+      global.document.createElementNS = docProto.createElementNS;
     }
 
     if (docProto.getElementById) {
       const origGetElementById = docProto.getElementById;
       docProto.getElementById = function (id) {
-        return upgradeElement(origGetElementById.call(this, id));
+        const el = upgradeElement(origGetElementById.call(this, id));
+        if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
+          global.__capsurf_setLastQueriedNode(el);
+        }
+        return el;
       };
       markNative(docProto.getElementById, "getElementById");
     }
@@ -250,7 +271,11 @@ function installShim(global) {
     if (docProto.querySelector) {
       const origQuerySelector = docProto.querySelector;
       docProto.querySelector = function (sel) {
-        return upgradeElement(origQuerySelector.call(this, sel));
+        const el = upgradeElement(origQuerySelector.call(this, sel));
+        if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
+          global.__capsurf_setLastQueriedNode(el);
+        }
+        return el;
       };
       markNative(docProto.querySelector, "querySelector");
     }

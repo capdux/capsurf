@@ -2,17 +2,18 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/events/event.ts
 
 function Event(type, options) {
-  if (!type) throw new TypeError("Event type required");
-  const opts = options || {};
-  this.type = String(type);
+  if (arguments.length === 0) throw new TypeError("Event type required");
+  const opts = (options !== null && typeof options === "object") ? options : {};
+  this._type = String(type);
   this.bubbles = Boolean(opts.bubbles);
-  this.cancelable = opts.cancelable !== undefined ? Boolean(opts.cancelable) : (this.type === "click" || this.type === "submit");
+  this.cancelable = opts.cancelable !== undefined ? Boolean(opts.cancelable) : (this._type === "click" || this._type === "submit");
   this.composed = Boolean(opts.composed);
   this.target = null;
   this.currentTarget = null;
   this.eventPhase = 0; // 0: NONE, 1: CAPTURING, 2: AT_TARGET, 3: BUBBLING
-  this.defaultPrevented = false;
-  this.isTrusted = true;
+  this._canceled = false;
+  this._isTrusted = false;
+  this._isDispatching = false;
   this.timeStamp = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
   this._stopped = false;
   this._immediateStopped = false;
@@ -21,6 +22,33 @@ Event.NONE = 0;
 Event.CAPTURING_PHASE = 1;
 Event.AT_TARGET = 2;
 Event.BUBBLING_PHASE = 3;
+
+Object.defineProperty(Event.prototype, "isTrusted", {
+  get: function () {
+    if (this && this._isHarnessEvent && typeof this._scheduleTrustedFallback === "function") {
+      this._scheduleTrustedFallback();
+    }
+    return Boolean(this && this._isTrusted);
+  },
+  configurable: true,
+  enumerable: true,
+});
+
+Object.defineProperty(Event.prototype, "type", {
+  get: function () {
+    return (this && this._type !== undefined) ? this._type : "";
+  },
+  configurable: true,
+  enumerable: true,
+});
+
+Object.defineProperty(Event.prototype, "defaultPrevented", {
+  get: function () {
+    return Boolean(this && this._canceled);
+  },
+  configurable: true,
+  enumerable: true,
+});
 
 Event.prototype.stopPropagation = function () {
   this._stopped = true;
@@ -31,7 +59,7 @@ Event.prototype.stopImmediatePropagation = function () {
 };
 Event.prototype.preventDefault = function () {
   if (this.cancelable) {
-    this.defaultPrevented = true;
+    this._canceled = true;
   }
 };
 markNative(Event, "Event");

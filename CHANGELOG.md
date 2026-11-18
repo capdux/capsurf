@@ -1220,3 +1220,54 @@
     - `e2e/svg-attribute-case.e2e.test.ts` (1/1 PASS in 278ms)
   - 回归套件：Phase 51 5 大回归套件 7 项用例全部 100% 绿灯（1.95s 通过）；
   - 独立单二进制：`bin/main`（10.7MB ReleaseFast）构建成功。
+
+## [2026-11-18 20:20:00] Phase 53
+- **`src/cdp/page.cp` 与 `src/cdp/session.cp`**：
+  - 在 `Page.navigate` 中解析 `referrer` 字段，并在 `session.navigate` 中向 JS 运行环境动态执行注入 `__capsurf_set_document_referrer(escaped_ref)`；
+  - 补全 `session.navigate` 调用链对 `nav_referrer` 的多端传参支撑。
+- **`e2e/harness.ts`**：
+  - 在 `page.goto` 转发入参中增加 `referrer: options.referer`，无缝桥接 Playwright / CDP 导航来源传递。
+- **`src/js/shim/window.js`**：
+  - 挂载 `global.__capsurf_set_document_referrer` 回调函数与 `documentReferrer` 作用域状态；
+  - 在 `Document.prototype` 上实装只读 `referrer` 存取器，默认返回 `""`，导航时动态汇报来源 URL。
+- **`src/js/shim/events/event.js` & `src/js/shim/events/dispatch.js`**：
+  - `Event.prototype.isTrusted` 改为只读 getter，返回 `Boolean(this && this._isTrusted)`；
+  - `Event` 构造函数初始化 `this._isTrusted = false`，严格使用字符串键读取 options，杜绝触发 Proxy Symbol 读取；
+  - 挂载 `_isDispatching` 内部标志，重入调用 `dispatchEvent` 时抛出 `InvalidStateError`（`DOMException`）；
+  - 用户调用 `dispatchEvent` 重新分发时，按 DOM 规范自动将 `event._isTrusted` 重置为 `false`；
+  - 导出 `dispatchTrustedEvent` 供内核与表单内部派发受信任事件。
+- **`src/js/shim/element/forms/form.js`**：
+  - `HTMLFormElement.prototype.reset()` 严格校验 `this instanceof HTMLFormElement` 且命名空间为 HTML（非 HTML 抛 `TypeError`），杜绝非法接收者借用或跨命名空间调用；
+  - 通过 `dispatchTrustedEvent` 触发受信任的 `reset` 事件（`_isTrusted = true`），并优先读取内部私有 `_type` 规避原型属性 Getter 劫持。
+- **`src/js/shim/element/dialog.js` & `src/js/shim/index.js`**：
+  - 新增 `src/js/shim/element/dialog.js`，完整实装 `HTMLDialogElement.prototype`：`show()`, `showModal()`, `close()`, `requestClose()`, `open`, `returnValue`；
+  - `show()` 与 `showModal()` 满足单模式幂等，混用模式时抛出 `InvalidStateError`；
+  - `close()` 异步排队发出 `close` 事件（`setTimeout(..., 0)`），保证调用当时 `closeSync` 计数为 0；
+  - 在 `index.js` 中挂载 `installDialogElement`，并在 `upgradeElement` 中识别 `<dialog>` 标签挂载对应原型。
+- **`src/js/shim/cssom.js`**：
+  - 新增 `src/js/shim/cssom.js`，实装完整的 CSSOM 规则层级体系：
+    - `CSSRule`（包含 13 项标准规则类型静态与原型常量：`STYLE_RULE: 1`, `IMPORT_RULE: 3`, `MEDIA_RULE: 4` 等）；
+    - `CSSGroupingRule`、`CSSConditionRule`、`CSSMediaRule`、`CSSSupportsRule`、`CSSStyleRule`、`CSSImportRule` (href, media, layerName, supportsText)、`CSSFontPaletteValuesRule` (name)、`CSSPageRule`、`CSSMarginRule` 等；
+  - 实装 `CSSStyleSheet`：`cssRules` (`CSSRuleList`), `insertRule(text, index)`, `deleteRule(index)`；
+    - 参数校验：0 参抛出 `TypeError`，非法选择器（如 `::before::selection`）抛出 `SyntaxError`，越界索引抛出 `IndexSizeError`；
+    - 规则变更时自动同步关联 `<style>` 的 `textContent`，驱动态级联计算实时生效；
+  - 实装 `CSS.supports`：
+    - 双参模式 `CSS.supports(property, value)` 校验 CSS 属性有效性及常见前缀（`color`, `display`, `-webkit-transform`, `-moz-animation` 等）；
+    - 单参模式 `CSS.supports(condition)` 解析 `(prop: val)`、`selector(...)`、`not`、`and`、`or` 与括号嵌套；遵循 CSS 条件规则规范的三态逻辑（Unknown 函数如 `random-function` 结合 `not` 为 false，结合 `or` 为 true，结合 `and` 为 false；无括号混用 `and` 与 `or` 返回 false）。
+- **`src/js/shim/element/element.js`**：
+  - 更新 `createStyleProxy` 使其返回的对象继承 `CSSStyleDeclaration.prototype`（满足 `instanceof CSSStyleDeclaration`）；
+  - `has` 拦截器支持标准成员与属性检查：支持 `"color" in style`, `"-webkit-transform" in style`, `"webkitTransform" in style`, `"MozAnimation" in style`（为 true），拒绝 `"mozAnimation"`、`"webkit-transform"`、`"--declared"`（为 false）；
+  - 补全 `Symbol.iterator` 与各项样式方法原型链。
+- **`src/js/shim/element/html-classes.js`**：
+  - 实装 `HTMLStyleElement.prototype.sheet` 属性访问器，返回绑定的 `CSSStyleSheet` 单例。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 53 6 大测试套件 9 项用例全部 100% 绿灯（2.69s 极速通过）：
+    - `e2e/css-supports-condition.e2e.test.ts` (2/2 PASS in 176ms)
+    - `e2e/cssom-insert-rule-cascade.e2e.test.ts` (1/1 PASS in 63ms)
+    - `e2e/cssom-rule-interfaces.e2e.test.ts` (2/2 PASS in 88ms)
+    - `e2e/dialog-methods.e2e.test.ts` (1/1 PASS in 302ms)
+    - `e2e/document-referrer.e2e.test.ts` (2/2 PASS in 926ms)
+    - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1080ms)
+  - 回归套件：Phase 51 & Phase 52 14 大回归套件 18 项用例全部 100% 绿灯（4.63s 通过）；
+  - 独立单二进制：`bin/main`（11.2MB ReleaseFast）构建成功。

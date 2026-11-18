@@ -28,7 +28,7 @@ pub struct PageHandler {
 
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
             if (html := extractJsonString(req.params_raw, "html")) {
-                session.navigate(html, session.url) catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+                session.navigate(html, session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
             }
             return CdpResponse.ok(req.id, "{}");
         }
@@ -94,6 +94,7 @@ pub struct PageHandler {
 
         if (std.mem.eql(u8, req.method, "Page.navigate")) {
             const url = extractJsonString(req.params_raw, "url") ?? "about:blank";
+            const referrer = extractJsonString(req.params_raw, "referrer") ?? "";
 
             // Allocate buffer for document fetching
             let fetch_buf = session.allocator.alloc(u8, 65536) catch return CdpResponse.err(req.id, -32000, "Out of memory");
@@ -109,7 +110,7 @@ pub struct PageHandler {
                 return CdpResponse.err(req.id, -32000, "Navigation failed");
             };
 
-            session.navigate(fetch_res.html, fetch_res.final_url) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            session.navigate(fetch_res.html, fetch_res.final_url, referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
 
             // Format dynamic Page.frameNavigated event
             const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);

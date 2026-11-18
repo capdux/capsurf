@@ -90,6 +90,51 @@ function installHtmlClasses(global) {
   markNative(HTMLAnchorElement, "HTMLAnchorElement");
   global.HTMLAnchorElement = HTMLAnchorElement;
 
+  // 1.05 HTMLStyleElement
+  function HTMLStyleElement() {}
+  HTMLStyleElement.prototype = Object.create(ElementProto);
+  HTMLStyleElement.prototype.constructor = HTMLStyleElement;
+
+  function getSheetForElement(el) {
+    if (!el._sheet) {
+      if (typeof globalThis.getOrCreateStyleSheet === "function") {
+        el._sheet = globalThis.getOrCreateStyleSheet(el);
+      } else if (typeof global.getOrCreateStyleSheet === "function") {
+        el._sheet = global.getOrCreateStyleSheet(el);
+      } else if (typeof global.CSSStyleSheet === "function") {
+        el._sheet = new global.CSSStyleSheet(el);
+      } else if (typeof globalThis.CSSStyleSheet === "function") {
+        el._sheet = new globalThis.CSSStyleSheet(el);
+      }
+    }
+    return el._sheet;
+  }
+
+  Object.defineProperty(HTMLStyleElement.prototype, "sheet", {
+    get: function () {
+      return getSheetForElement(this);
+    },
+    configurable: true,
+  });
+  markNative(HTMLStyleElement, "HTMLStyleElement");
+  global.HTMLStyleElement = HTMLStyleElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
+  if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
+
+  // Also define sheet on ElementProto for any <style> element
+  if (!Object.getOwnPropertyDescriptor(ElementProto, "sheet")) {
+    Object.defineProperty(ElementProto, "sheet", {
+      get: function () {
+        const tag = String(this.localName || this.tagName || "").toLowerCase();
+        if (tag === "style") {
+          return getSheetForElement(this);
+        }
+        return undefined;
+      },
+      configurable: true,
+    });
+  }
+
   // 1.1 HTMLAreaElement
   function HTMLAreaElement() {}
   HTMLAreaElement.prototype = Object.create(ElementProto);

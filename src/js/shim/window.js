@@ -2,12 +2,45 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/window.ts
 
 function installWindow(global) {
-  const NativeEvent = global.Event || function (type, init) {
-    this.type = type;
-    this.bubbles = !!init?.bubbles;
-    this.cancelable = !!init?.cancelable;
+  let lastQueriedNode = null;
+  global.__capsurf_setLastQueriedNode = function (node) {
+    lastQueriedNode = node;
   };
+  global.__capsurf_getLastQueriedNode = function () {
+    return lastQueriedNode;
+  };
+
+  function NativeEvent(type, init) {
+    Event.call(this, type, init);
+    this._isHarnessEvent = true;
+    const target = lastQueriedNode;
+    let fallbackDispatched = false;
+    Object.defineProperty(this, "_scheduleTrustedFallback", {
+      value: function () {
+        if (!fallbackDispatched && target) {
+          fallbackDispatched = true;
+          if (typeof queueMicrotask === "function") {
+            queueMicrotask(function () {
+              const tev = new MouseEvent(type, Object.assign({}, init, { bubbles: true, cancelable: true }));
+              if (typeof dispatchTrustedEvent === "function") {
+                dispatchTrustedEvent(target, tev);
+              } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+                global.__capsurf_dispatchTrustedEvent(target, tev);
+              }
+            });
+          }
+        }
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+  NativeEvent.prototype = Object.create(Event.prototype);
+  NativeEvent.prototype.constructor = NativeEvent;
   global.__NativeEvent = NativeEvent;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__NativeEvent = NativeEvent;
+  }
 
   // 0. DOMException & WHATWG URL Implementation
   if (typeof DOMException !== "undefined") {
@@ -439,6 +472,18 @@ function installWindow(global) {
   global.__capsurf_set_document_url = setDocumentUrl;
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_set_document_url = setDocumentUrl;
+  }
+
+  let documentReferrer = "";
+  function setDocumentReferrer(newRef) {
+    documentReferrer = String(newRef || "");
+    if (global.document) {
+      global.document.referrer = documentReferrer;
+    }
+  }
+  global.__capsurf_set_document_referrer = setDocumentReferrer;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_set_document_referrer = setDocumentReferrer;
   }
 
   global.__capsurf_same_doc_nav = [];
@@ -1703,6 +1748,17 @@ function installWindow(global) {
         return null;
       },
       configurable: true,
+    });
+  }
+
+  // referrer
+  if (!Object.getOwnPropertyDescriptor(docProto, "referrer")) {
+    Object.defineProperty(docProto, "referrer", {
+      get: function () {
+        return (this._referrer !== undefined) ? this._referrer : documentReferrer;
+      },
+      configurable: true,
+      enumerable: true,
     });
   }
 

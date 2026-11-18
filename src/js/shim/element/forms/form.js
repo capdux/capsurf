@@ -203,6 +203,19 @@ function installFormElement(global) {
   };
 
   HTMLFormElement.prototype.reset = function () {
+    if (!(this instanceof HTMLFormElement)) {
+      throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
+    }
+    if (this.namespaceURI && this.namespaceURI !== "http://www.w3.org/1999/xhtml") {
+      throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
+    }
+    if (Object.prototype.hasOwnProperty.call(this, "_id")) {
+      const canonical = typeof global.__capsurf_getCanonicalId === "function" ? global.__capsurf_getCanonicalId(this) : undefined;
+      if (canonical !== undefined && this._id !== canonical) {
+        throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Invalid trusted event target");
+      }
+    }
+
     const list = collectFormControls(this);
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
@@ -220,7 +233,14 @@ function installFormElement(global) {
       }
     }
     const evt = new Event("reset", { bubbles: true, cancelable: true });
-    this.dispatchEvent(evt);
+    evt._isTrusted = true;
+    if (typeof dispatchTrustedEvent === "function") {
+      dispatchTrustedEvent(this, evt);
+    } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+      global.__capsurf_dispatchTrustedEvent(this, evt);
+    } else {
+      this.dispatchEvent(evt);
+    }
   };
 
   HTMLFormElement.prototype.checkValidity = function () {

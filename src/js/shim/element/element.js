@@ -1,6 +1,11 @@
 // src/js/shim/element/element.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/element.ts
 
+const STYLE_DECL_MEMBERS = new Set([
+  "cssText", "length", "parentRule", "item", "setProperty",
+  "getPropertyValue", "getPropertyPriority", "removeProperty"
+]);
+
 function createStyleProxy(element) {
   function parseStyleMap() {
     const raw = element.getAttribute("style") || "";
@@ -13,8 +18,13 @@ function createStyleProxy(element) {
       if (colon !== -1) {
         const rawKey = p.slice(0, colon).trim();
         const k = rawKey.startsWith("--") ? rawKey : rawKey.toLowerCase();
-        const v = p.slice(colon + 1).trim();
-        map.set(k, v);
+        let v = p.slice(colon + 1).trim();
+        let pri = "";
+        if (/!important\s*$/i.test(v)) {
+          pri = "important";
+          v = v.replace(/\s*!important\s*$/i, "").trim();
+        }
+        map.set(k, { name: rawKey, value: v, priority: pri });
       }
     }
     return map;
@@ -22,8 +32,10 @@ function createStyleProxy(element) {
 
   function serializeStyleMap(map) {
     const arr = [];
-    for (const [k, v] of map.entries()) {
-      arr.push(k + ": " + v);
+    for (const [k, entry] of map.entries()) {
+      let s = entry.name + ": " + entry.value;
+      if (entry.priority) s += " !" + entry.priority;
+      arr.push(s);
     }
     const res = arr.join("; ");
     if (res.length > 0) {
@@ -33,25 +45,67 @@ function createStyleProxy(element) {
     }
   }
 
-  return new Proxy({}, {
-    get: function (target, prop) {
+  const declTarget = Object.create(
+    (typeof global !== "undefined" && global.CSSStyleDeclaration && global.CSSStyleDeclaration.prototype) ||
+    (typeof globalThis !== "undefined" && globalThis.CSSStyleDeclaration && globalThis.CSSStyleDeclaration.prototype) ||
+    Object.prototype
+  );
+
+  return new Proxy(declTarget, {
+    get: function (target, prop, receiver) {
+      if (typeof prop === "symbol") {
+        if (prop === Symbol.iterator) {
+          return function* () {
+            const map = parseStyleMap();
+            for (const entry of map.values()) yield entry.name;
+          };
+        }
+        return target[prop];
+      }
       if (typeof prop !== "string") return undefined;
       if (prop === "cssText") return element.getAttribute("style") || "";
       if (prop === "length") return parseStyleMap().size;
+      if (prop === "parentRule") return null;
+      if (prop === "item") {
+        return function (idx) {
+          const i = Number(idx) >>> 0;
+          const map = parseStyleMap();
+          let count = 0;
+          for (const entry of map.values()) {
+            if (count === i) return entry.name;
+            count++;
+          }
+          return "";
+        };
+      }
       if (prop === "getPropertyValue") {
         return function (p) {
           const map = parseStyleMap();
           const str = String(p);
           const key = str.startsWith("--") ? str : str.toLowerCase();
-          return map.get(key) || "";
+          const entry = map.get(key);
+          return entry ? entry.value : "";
         };
       }
-      if (prop === "setProperty") {
-        return function (p, val) {
+      if (prop === "getPropertyPriority") {
+        return function (p) {
           const map = parseStyleMap();
           const str = String(p);
           const key = str.startsWith("--") ? str : str.toLowerCase();
-          map.set(key, String(val));
+          const entry = map.get(key);
+          return entry ? entry.priority : "";
+        };
+      }
+      if (prop === "setProperty") {
+        return function (p, val, priority) {
+          if (priority !== undefined && priority !== null && priority !== "") {
+            if (priority !== "important" && priority !== "!important") return;
+          }
+          const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
+          const map = parseStyleMap();
+          const str = String(p);
+          const key = str.startsWith("--") ? str : str.toLowerCase();
+          map.set(key, { name: str, value: String(val), priority: pPriority });
           serializeStyleMap(map);
         };
       }
@@ -60,32 +114,65 @@ function createStyleProxy(element) {
           const map = parseStyleMap();
           const str = String(p);
           const key = str.startsWith("--") ? str : str.toLowerCase();
-          const old = map.get(key) || "";
+          const old = map.get(key);
           map.delete(key);
           serializeStyleMap(map);
-          return old;
+          return old ? old.value : "";
         };
       }
-      // CamelCase to kebab-case
-      const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      if (prop in target) return target[prop];
+
+      // CamelCase or kebab-case lookup
       const map = parseStyleMap();
-      return map.get(kebab) || "";
+      if (map.has(prop)) return map.get(prop).value;
+      const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      if (map.has(kebab)) return map.get(kebab).value;
+      let vendorKebab = kebab;
+      if (prop.startsWith("webkit")) vendorKebab = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      else if (prop.startsWith("Moz")) vendorKebab = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      if (map.has(vendorKebab)) return map.get(vendorKebab).value;
+      return "";
     },
     set: function (target, prop, value) {
+      if (typeof prop === "symbol") {
+        target[prop] = value;
+        return true;
+      }
       if (typeof prop !== "string") return true;
       if (prop === "cssText") {
         element.setAttribute("style", String(value));
         return true;
       }
-      const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      let key = prop;
+      if (!prop.startsWith("--")) {
+        if (prop.startsWith("webkit")) key = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+        else if (prop.startsWith("Moz")) key = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+        else key = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      }
       const map = parseStyleMap();
       if (value === null || value === undefined || value === "") {
-        map.delete(kebab);
+        map.delete(key.startsWith("--") ? key : key.toLowerCase());
       } else {
-        map.set(kebab, String(value));
+        map.set(key.startsWith("--") ? key : key.toLowerCase(), { name: key, value: String(value), priority: "" });
       }
       serializeStyleMap(map);
       return true;
+    },
+    has: function (target, prop) {
+      if (typeof prop === "symbol") return prop === Symbol.iterator || prop in target;
+      const pStr = String(prop);
+      if (STYLE_DECL_MEMBERS.has(pStr)) return true;
+      if (prop in target) return true;
+      if (pStr.startsWith("--")) return false;
+      if (/^(?:webkit|moz|ms|o)-/.test(pStr)) return false;
+      if (!pStr.includes("-") && /^(?:moz|ms|o)[A-Z]/.test(pStr)) return false;
+      if (typeof global !== "undefined" && typeof global.__isCssPropertySupported === "function") {
+        return global.__isCssPropertySupported(pStr);
+      }
+      if (typeof globalThis !== "undefined" && typeof globalThis.__isCssPropertySupported === "function") {
+        return globalThis.__isCssPropertySupported(pStr);
+      }
+      return false;
     }
   });
 }
