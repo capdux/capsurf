@@ -1100,3 +1100,35 @@
      - 在 `crypto.js` 中实装符合 IDL 的 `CryptoKey` 体系；
      - 在 `generateKey` 中严格校验算法名称、哈希算法有效性，遇非法参数或非支持哈希返回 `NotSupportedError`（`DOMException`）；
      - 成功调用时解析为原生 `CryptoKey` 实例并绑定规范算法对象。
+
+## Phase 57 键盘 Tab/Shift+Tab 顺序焦点链、Enter 激活、:focus 伪类与 BrowserContext 跨域 Iframe Cookie 隔离
+1. **键盘事件调度与 Tab/Shift+Tab 顺序焦点链算法 (`src/cdp/input.cp`)**：
+   - **设计动机**：测试用例 `Tab and Shift+Tab follow sequential focus order and honor cancellation` 验证浏览器无障碍键盘焦点核心行为：通过 Tab 与 Shift+Tab 在文档可聚焦元素间循环导航；若 `keydown` 事件被 `event.preventDefault()` 取消则不得跳转焦点；聚焦末尾元素时必须自动调用视口滚动算法；按下 Enter 必须触发聚焦链接的点击与导航；
+   - **技术方案**：
+     - 在 `Input.dispatchKeyEvent` 中分发 `keydown` 真实事件到 `document.activeElement`；
+     - 检查事件的 `defaultPrevented` 返回值；
+     - 构建顺序焦点元素序列：
+       - DOM 树前序扫描，排除祖先或当前具有 `inert` 属性的整棵子树、`display: none` 隐藏元素、`disabled` 表单控件、以及负值 `tabindex < 0`；
+       - 判定元素的自然可聚焦性（`<a href>`, `<button>`, `<input>`, `<select>`, `<textarea>`, `[contenteditable="true"]` 默认 tabindex 0）；
+       - 严格校验 `tabindex` 属性字符串（非纯整数如 `"abc"`, `"3abc"` 回退为自然可聚焦性，非自然可聚焦元素则排除）；
+       - 双阶段排序：所有正整数 `tabindex` 按数值升序排列，后续紧随所有 `tabindex = 0` 的元素（保持 DOM 树自然顺序）；
+       - 根据 `modifiers & 8` 确定正向推进或逆向循环索引；
+       - 执行焦点切换：派发旧元素 `blur`、新元素 `focus`、设置 `document.activeElement` 并执行 `scrollIntoView`，使得视口 `window.scrollY > 0`；
+     - 当按下 Enter 键且焦点为 `<a href>` 或 `<button>` 时，派发 `click` 事件并执行规范哈希跳转。
+2. **CSS 与 DOM `:focus` 伪类闭环匹配 (`src/dom/dom.cp`, `src/css/matcher.cp`, `src/js/shim/window.js`)**：
+   - **设计动机**：页面样式中包含 `a:focus { background-color: rgb(1, 2, 3) }`，在元素获得焦点后，`getComputedStyle(link).backgroundColor` 必须准确反映 `:focus` 规则匹配结果；
+   - **技术方案**：
+     - 在 `Document` 中维护 `focused_node: NodeId`；
+     - 在 `src/css/matcher.cp` 中新增 `PseudoKind.Focus`，并赋予类选择器级权重（specificity）；
+     - 在 `Matcher.matchesPseudo` 中判断 `node_id == doc.focused_node`；
+     - 在 JS 运行时 `window.js` 的 `matchesSingleSelector` 与 `matchesSelector` 中补齐 `:focus` 判定（`document.activeElement === el`）。
+3. **BrowserContext 与 CDP `Storage.setCookies` 批量入库 (`src/cdp/network.cp`, `e2e/harness.ts`)**：
+   - **设计动机**：测试用例 `an out-of-process iframe uses its browser context's cookies` 验证通过 `browser.createBrowserContext()` 创建隔离上下文，调用 `Storage.setCookies` 注入特定域名 Cookie，并在该上下文中拉取 Iframe 与执行 `fetch` 时必须携带正确的 Cookie；
+   - **技术方案**：
+     - 在 `harness.ts` 中补齐 `BrowserContext` 类与 `browser.createBrowserContext()`，底层对接 CDP `Target.createBrowserContext` 与 `Target.disposeBrowserContext`；
+     - 在 `src/cdp/network.cp` 中重构 `Storage.setCookies` 与 `Network.setCookies`，逐项解析参数中的 `cookies` 数组，并通过 `session.cookie_jar.setFromHeader` 存入内核 CookieJar。
+4. **跨域 Iframe 执行上下文感知与 Cookie 自动注入 (`src/cdp/runtime.cp`, `src/cdp/session.cp`, `src/js/dom_binding.cp`, `src/js/shim/window.js`)**：
+   - **技术方案**：
+     - 在 `session.cp` 中追踪 DOM 中添加的跨域 Iframe 节点，捕获其源并排队派发 `Runtime.executionContextCreated` 事件；
+     - 在 `Runtime.evaluate` 中支持 `contextId` 分区求值；
+     - 导出 `@c fn js_capsurf_get_cookie_header(url)`，在 JS `fetch` 中检测同源与 `credentials: "include"`，自动向内核 CookieJar 查询匹配的 Cookie 字符串并挂载至 `cookie` 请求头，确保测试中 `/__fixtures/echo-headers.json` 能够正确回显 `who=context`。

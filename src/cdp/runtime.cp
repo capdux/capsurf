@@ -28,6 +28,15 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Check for pending execution context events
+            let polled_ctx_evts: [2]CdpEvent = [CdpEvent{}; 2];
+            const polled_c_count = session.pollExecutionContextEvents(&polled_ctx_evts);
+            let c_i: usize = 0;
+            while (c_i < polled_c_count && event_count.* < out_events.len) : (c_i += 1) {
+                out_events[event_count.*] = polled_ctx_evts[c_i];
+                event_count.* += 1;
+            }
+
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -92,8 +101,9 @@ pub struct RuntimeHandler {
             
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
+            const context_id = extractJsonInt(req.params_raw, "contextId");
 
-            const eval_len = session.evaluateWithOptions(expr, return_by_value, await_promise, out_buf);
+            const eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
             const eval_slice = out_buf[0..eval_len];
 
             // Poll any console events produced during evaluation
@@ -120,6 +130,15 @@ pub struct RuntimeHandler {
             let n_i: usize = 0;
             while (n_i < polled_n_count && event_count.* < out_events.len) : (n_i += 1) {
                 out_events[event_count.*] = polled_nav_evts[n_i];
+                event_count.* += 1;
+            }
+
+            // Poll any execution context created events (e.g. out-of-process iframe added)
+            let polled_ctx_evts: [2]CdpEvent = [CdpEvent{}; 2];
+            const polled_c_count = session.pollExecutionContextEvents(&polled_ctx_evts);
+            let c_i: usize = 0;
+            while (c_i < polled_c_count && event_count.* < out_events.len) : (c_i += 1) {
+                out_events[event_count.*] = polled_ctx_evts[c_i];
                 event_count.* += 1;
             }
 

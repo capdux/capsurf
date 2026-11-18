@@ -101,6 +101,23 @@ function installHtmlElementExtensions(proto) {
     proto.click = function () {
       const evt = new MouseEvent("click", { bubbles: true, cancelable: true });
       this.dispatchEvent(evt);
+      if (!evt.defaultPrevented) {
+        const tag = String(this.tagName || this.localName || "").toLowerCase();
+        const hasHref = (this.hasAttribute ? this.hasAttribute("href") : false) || Boolean(this.href);
+        if (tag === "a" && hasHref) {
+          const href = (this.getAttribute ? this.getAttribute("href") : this.href) || "";
+          if (href) {
+            const loc = (typeof location !== "undefined") ? location : ((typeof window !== "undefined") ? window.location : null);
+            if (loc) {
+              if (href.startsWith("#")) {
+                loc.hash = href;
+              } else {
+                loc.href = href;
+              }
+            }
+          }
+        }
+      }
     };
     markNative(proto.click, "click");
   }
@@ -108,7 +125,15 @@ function installHtmlElementExtensions(proto) {
   if (!proto.focus) {
     proto.focus = function () {
       if (typeof document !== "undefined") {
+        if (document.activeElement && document.activeElement !== this && typeof document.activeElement.blur === "function") {
+          document.activeElement.blur();
+        }
         document.activeElement = this;
+      }
+      if (typeof this.scrollIntoViewIfNeeded === "function") {
+        this.scrollIntoViewIfNeeded();
+      } else if (typeof this.scrollIntoView === "function") {
+        this.scrollIntoView();
       }
       const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
       this.dispatchEvent(evt);

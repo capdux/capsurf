@@ -166,6 +166,17 @@ pub struct CdpPageSession {
     page_frame_event_buf: [2048]u8 = [0; 2048],
     binding_event_buf: [1024]u8 = [0; 1024],
     same_doc_event_buf: [2048]u8 = [0; 2048],
+    iframe_ctx_event_buf: [512]u8 = [0; 512],
+
+    // Execution context tracking
+    next_context_id: i64 = 2,
+    iframe_ctx_created: bool = false,
+    iframe_ctx_id: i64 = 2,
+    iframe_origin_buf: [256]u8 = [0; 256],
+    iframe_origin_len: usize = 0,
+    iframe_frame_id_buf: [64]u8 = [0; 64],
+    iframe_frame_id_len: usize = 0,
+    pending_iframe_ctx_event: bool = false,
 
     // Navigation History state
     nav_entries: [16]NavigationEntry = [NavigationEntry{}; 16],
@@ -226,6 +237,15 @@ pub struct CdpPageSession {
             page_frame_event_buf: [0; 2048],
             binding_event_buf: [0; 1024],
             same_doc_event_buf: [0; 2048],
+            iframe_ctx_event_buf: [0; 512],
+            next_context_id: 2,
+            iframe_ctx_created: false,
+            iframe_ctx_id: 2,
+            iframe_origin_buf: [0; 256],
+            iframe_origin_len: 0,
+            iframe_frame_id_buf: [0; 64],
+            iframe_frame_id_len: 0,
+            pending_iframe_ctx_event: false,
             nav_entries: [NavigationEntry{}; 16],
             nav_entry_count: 0,
             current_nav_index: 0,
@@ -373,13 +393,17 @@ pub struct CdpPageSession {
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
         }
         const m = mountDom(&_.ctx, &_.doc, &_.layout) catch return error.MountDomFailed;
+        m.cookie_jar = &_.cookie_jar;
         _.dom_ctx = m;
         _.url = nav_url;
         _.referrer = nav_referrer;
         _.has_document = true;
         _.focused_node = NULL_NODE;
+        _.doc.focused_node = NULL_NODE;
         _.scroll_x = 0.0;
         _.scroll_y = 0.0;
+        _.iframe_ctx_created = false;
+        _.pending_iframe_ctx_event = false;
 
         // Set document url and referrer in JS environment
         let set_url_buf: [1024]u8 = undefined;
@@ -634,8 +658,23 @@ pub struct CdpPageSession {
         return _.evaluateWithOptions(expr, false, true, out_buf);
     }
 
-    pub fn evaluateWithOptions(*_, expr: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
-        const val = _.ctx.eval(expr);
+    pub fn evaluateInContext(
+        *_,
+        context_id: (i64)?,
+        expr: []const u8,
+        return_by_value: bool,
+        await_promise: bool,
+        out_buf: []u8,
+    ): usize {
+        let val: JSValue = undefined;
+        if (context_id != null && context_id.? > 1) {
+            const expr_val = _.ctx.newString(expr);
+            defer _.ctx.freeValue(expr_val);
+            _.ctx.setPropertyStr("__capsurf_eval_expr", expr_val);
+            val = _.ctx.eval("globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr)");
+        } else {
+            val = _.ctx.eval(expr);
+        }
         defer _.ctx.freeValue(val);
 
         if (await_promise && _.ctx.isPromise(val)) {
@@ -665,6 +704,81 @@ pub struct CdpPageSession {
         }
 
         return _.formatCdpRemoteObject(val, return_by_value, out_buf);
+    }
+
+    pub fn evaluateWithOptions(*_, expr: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+        return _.evaluateInContext(null, expr, return_by_value, await_promise, out_buf);
+    }
+
+    pub static fn extractOriginFromUrl(url: []const u8): []const u8 {
+        let scheme_end: usize = 0;
+        if (std.mem.startsWith(u8, url, "https://")) {
+            scheme_end = 8;
+        } else if (std.mem.startsWith(u8, url, "http://")) {
+            scheme_end = 7;
+        } else {
+            return "";
+        }
+        let pos = scheme_end;
+        while (pos < url.len) : (pos += 1) {
+            const c = url[pos];
+            if (c == '/' || c == '?' || c == '#') break;
+        }
+        return url[0..pos];
+    }
+
+    pub fn pollExecutionContextEvents(*_, out_events: []CdpEvent): usize {
+        let ev_idx: usize = 0;
+        if (!_.iframe_ctx_created) {
+            let found_origin_buf: [256]u8 = [0; 256];
+            let found_origin_len: usize = 0;
+
+            let i: usize = 0;
+            while (i < _.doc.nodes.items.len) : (i += 1) {
+                const node = &_.doc.nodes.items[i];
+                if (node.isElement() && node.hasTag("iframe")) {
+                    if (src_attr := _.doc.getAttribute(node.id, "src")) {
+                        const ifr_origin = extractOriginFromUrl(src_attr);
+                        const main_origin = extractOriginFromUrl(_.url);
+                        if (ifr_origin.len > 0 && !std.mem.eql(u8, ifr_origin, main_origin)) {
+                            const o_len = @min(ifr_origin.len, found_origin_buf.len);
+                            @memcpy(found_origin_buf[0..o_len], ifr_origin[0..o_len]);
+                            found_origin_len = o_len;
+                        }
+                    }
+                    if (found_origin_len > 0) break;
+                }
+            }
+
+            if (found_origin_len > 0) {
+                const cid = _.next_context_id;
+                _.next_context_id += 1;
+                _.iframe_ctx_id = cid;
+                @memcpy(_.iframe_origin_buf[0..found_origin_len], found_origin_buf[0..found_origin_len]);
+                _.iframe_origin_len = found_origin_len;
+                const fid = std.fmt.bufPrint(&_.iframe_frame_id_buf, "capsurf-frame-{d:0>3}", .{cid}) catch "capsurf-frame-002";
+                _.iframe_frame_id_len = fid.len;
+                _.iframe_ctx_created = true;
+                _.pending_iframe_ctx_event = true;
+            }
+        }
+
+        if (_.pending_iframe_ctx_event && ev_idx < out_events.len) {
+            const cid = _.iframe_ctx_id;
+            const origin_str = _.iframe_origin_buf[0.._.iframe_origin_len];
+            const frame_id_str = _.iframe_frame_id_buf[0.._.iframe_frame_id_len];
+            const evt_json = std.fmt.bufPrint(
+                &_.iframe_ctx_event_buf,
+                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-{d}\",\"auxData\":{{\"isDefault\":false,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
+                .{ cid, origin_str, cid, frame_id_str },
+            ) catch "";
+            if (evt_json.len > 0) {
+                out_events[ev_idx] = CdpEvent.create("Runtime.executionContextCreated", evt_json);
+                ev_idx += 1;
+                _.pending_iframe_ctx_event = false;
+            }
+        }
+        return ev_idx;
     }
 
     pub fn querySelector(*_, selector: []const u8): NodeId {
@@ -791,6 +905,9 @@ pub struct CdpPageSession {
             }
             _.ctx.freeValue(val);
         }
+
+        _.focused_node = focused_node;
+        _.doc.focused_node = focused_node;
 
         const opts = ScreenshotOptions{
             viewport_w: vw,

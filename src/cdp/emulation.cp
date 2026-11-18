@@ -65,6 +65,19 @@ pub struct EmulationHandler {
                 session.is_mobile = false;
             }
 
+            if (session.has_document) {
+                let js_buf: [256]u8 = [0; 256];
+                const js_expr = std.fmt.bufPrint(
+                    &js_buf,
+                    "(() => {{ const w = {d}; const h = {d}; if (typeof window !== 'undefined') {{ window.innerWidth = w; window.innerHeight = h; }} if (typeof global !== 'undefined') {{ global.innerWidth = w; global.innerHeight = h; }} if (typeof globalThis !== 'undefined') {{ globalThis.innerWidth = w; globalThis.innerHeight = h; }} }})()",
+                    .{ @as(i64, @intFromFloat(clamped.width)), @as(i64, @intFromFloat(clamped.height)) },
+                ) catch null;
+                if (e := js_expr) {
+                    const val = session.ctx.eval(e);
+                    session.ctx.freeValue(val);
+                }
+            }
+
             return CdpResponse.ok(req.id, "{}");
         }
 

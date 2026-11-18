@@ -1080,8 +1080,9 @@ function installWindow(global) {
       urlStr = String(resource || "");
     }
 
-    let originVal = (global.location && global.location.origin) ? String(global.location.origin) : "null";
-    if (!originVal || originVal === "about:" || originVal === "" || (global.location && global.location.href === "about:blank")) {
+    const loc = (this && this.location) ? this.location : (global.location || (typeof window !== "undefined" ? window.location : null));
+    let originVal = (loc && loc.origin) ? String(loc.origin) : "null";
+    if (!originVal || originVal === "about:" || originVal === "" || (loc && loc.href === "about:blank")) {
       originVal = "null";
     }
 
@@ -1140,6 +1141,43 @@ function installWindow(global) {
 
     if (reqHeaders["accept-encoding"]) {
       reqHeaders["accept-encoding"] = decodableAcceptEncoding(reqHeaders["accept-encoding"]);
+    }
+
+    let docOrigin = (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") ? String(loc.origin) : "";
+
+    let fullUrl = urlStr;
+    if (urlStr.startsWith("/")) {
+      fullUrl = (docOrigin ? docOrigin : "http://localhost") + urlStr;
+    } else if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
+      const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : (docOrigin ? docOrigin + "/" : "http://localhost/");
+      try {
+        fullUrl = new URL(urlStr, base).href;
+      } catch (e) {
+        fullUrl = (docOrigin ? docOrigin : "http://localhost") + "/" + urlStr;
+      }
+    }
+
+    let isSameOrigin = false;
+    try {
+      const u = new URL(fullUrl);
+      if (docOrigin && u.origin === docOrigin) {
+        isSameOrigin = true;
+      }
+    } catch (e) {}
+
+    const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
+    if (cred === "include" || (cred === "same-origin" && isSameOrigin) || isSameOrigin) {
+      if (!reqHeaders["cookie"]) {
+        let cookieHdr = null;
+        if (typeof __capsurf_get_cookie_header === "function") {
+          cookieHdr = __capsurf_get_cookie_header(fullUrl);
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_cookie_header === "function") {
+          cookieHdr = globalThis.__capsurf_get_cookie_header(fullUrl);
+        }
+        if (cookieHdr) {
+          reqHeaders["cookie"] = String(cookieHdr);
+        }
+      }
     }
 
     if (urlStr.indexOf("echo-headers.json") !== -1) {
@@ -1524,6 +1562,19 @@ function installWindow(global) {
     if (!el || !sel) return false;
     const s = sel.trim();
     if (s === "*") return true;
+
+    // :focus support
+    if (s === ":focus") {
+      const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      return Boolean(doc && doc.activeElement === el);
+    }
+    if (s.endsWith(":focus")) {
+      const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      if (!doc || doc.activeElement !== el) return false;
+      const base = s.slice(0, -6).trim();
+      if (!base || base === "*") return true;
+      return matchesSingleSelector(el, base);
+    }
 
     // Simple ID selector #id
     if (s.startsWith("#") && !s.includes(" ") && !s.includes(".") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
@@ -2247,6 +2298,14 @@ function installWindow(global) {
     try {
       if (child && this && (this === global.document || this === global.document?.body || this.isConnected)) {
         stampNamedGlobals(child);
+        const tag = String(child.localName || child.tagName || "").toLowerCase();
+        if (tag === "iframe") {
+          try {
+            if (typeof child.contentWindow !== "undefined") {
+              const _ = child.contentWindow;
+            }
+          } catch (e) {}
+        }
       }
     } catch (e) {}
     return res;
@@ -2562,4 +2621,235 @@ function installWindow(global) {
     globalThis.CryptoKeyPair = CryptoKeyPair;
     globalThis.SubtleCrypto = SubtleCrypto;
   }
+
+  // 13. Keyboard Event Dispatch & Sequential Tab Navigation
+  function isTabFocusHidden(el) {
+    if (!el || el.nodeType !== 1) return true;
+    if (el.hidden || (el.hasAttribute && el.hasAttribute("hidden"))) return true;
+    if (el.style && el.style.display === "none") return true;
+    if (typeof getComputedStyle === "function") {
+      try {
+        const cs = getComputedStyle(el);
+        if (cs && cs.display === "none") return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  function isTabFocusDisabled(el) {
+    if (!el) return false;
+    return Boolean(el.disabled || (el.hasAttribute && el.hasAttribute("disabled")));
+  }
+
+  function isTabFocusInert(el) {
+    if (!el) return false;
+    return Boolean(el.inert || (el.hasAttribute && el.hasAttribute("inert")));
+  }
+
+  function isNaturallyFocusable(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = String(el.tagName || el.localName || "").toLowerCase();
+    if (tag === "a") {
+      return (el.hasAttribute ? el.hasAttribute("href") : false) || Boolean(el.href);
+    }
+    if (tag === "button" || tag === "select" || tag === "textarea") {
+      return true;
+    }
+    if (tag === "input") {
+      const type = String((el.getAttribute ? el.getAttribute("type") : el.type) || "").toLowerCase();
+      return type !== "hidden";
+    }
+    const ce = el.getAttribute ? el.getAttribute("contenteditable") : null;
+    if (ce === "true" || ce === "" || el.contentEditable === "true") {
+      return true;
+    }
+    return false;
+  }
+
+  function parseTabIndex(el) {
+    const hasAttr = (el.hasAttribute ? el.hasAttribute("tabindex") : false) || (el.getAttribute && el.getAttribute("tabindex") !== null);
+    if (hasAttr) {
+      const raw = String(el.getAttribute("tabindex")).trim();
+      if (/^[+-]?\d+$/.test(raw)) {
+        return parseInt(raw, 10);
+      }
+      if (isNaturallyFocusable(el)) {
+        return 0;
+      }
+      return null;
+    }
+    if (isNaturallyFocusable(el)) {
+      return 0;
+    }
+    return null;
+  }
+
+  function getSequentialFocusList(doc) {
+    const items = [];
+
+    function traverse(node, parentInert, parentHidden) {
+      if (!node || node.nodeType !== 1) return;
+
+      const inert = parentInert || isTabFocusInert(node);
+      if (inert) return;
+
+      const hidden = parentHidden || isTabFocusHidden(node);
+      if (hidden) return;
+
+      if (!isTabFocusDisabled(node)) {
+        const ti = parseTabIndex(node);
+        if (ti !== null && ti >= 0) {
+          items.push({ el: node, tabindex: ti, order: items.length });
+        }
+      }
+
+      const children = node.children || node.childNodes || [];
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].nodeType === 1) {
+          traverse(children[i], inert, hidden);
+        }
+      }
+    }
+
+    const root = doc.documentElement || doc.body || doc;
+    traverse(root, false, false);
+
+    const positive = [];
+    const zero = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].tabindex > 0) {
+        positive.push(items[i]);
+      } else {
+        zero.push(items[i]);
+      }
+    }
+
+    positive.sort((a, b) => {
+      if (a.tabindex !== b.tabindex) return a.tabindex - b.tabindex;
+      return a.order - b.order;
+    });
+
+    const list = [];
+    for (let i = 0; i < positive.length; i++) list.push(positive[i].el);
+    for (let i = 0; i < zero.length; i++) list.push(zero[i].el);
+    return list;
+  }
+
+  function navigateTabFocus(isShift) {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    if (!doc) return;
+    const list = getSequentialFocusList(doc);
+    if (list.length === 0) return;
+
+    const current = doc.activeElement;
+    let curIdx = -1;
+    if (current) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] === current) {
+          curIdx = i;
+          break;
+        }
+      }
+    }
+
+    let nextIdx;
+    if (curIdx === -1) {
+      nextIdx = isShift ? list.length - 1 : 0;
+    } else {
+      if (!isShift) {
+        nextIdx = (curIdx + 1) % list.length;
+      } else {
+        nextIdx = (curIdx - 1 + list.length) % list.length;
+      }
+    }
+
+    const nextEl = list[nextIdx];
+    if (current && current !== nextEl && typeof current.blur === "function") {
+      current.blur();
+    }
+    if (nextEl && typeof nextEl.focus === "function") {
+      nextEl.focus();
+    }
+  }
+
+  function dispatchKeyEvent(type, key, code, modifiers) {
+    const isShift = (Number(modifiers || 0) & 8) !== 0;
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
+    if (!target) return 0;
+
+    const keyStr = String(key || "");
+    const codeStr = String(code || "");
+
+    if (type === "keyup") {
+      const evt = new KeyboardEvent("keyup", {
+        key: keyStr,
+        code: codeStr,
+        shiftKey: isShift,
+        cancelable: true,
+        bubbles: true,
+      });
+      target.dispatchEvent(evt);
+      const active = doc ? doc.activeElement : null;
+      return (active && typeof active._nid === "number") ? active._nid : 0;
+    }
+
+    if (type === "keydown") {
+      const evt = new KeyboardEvent("keydown", {
+        key: keyStr,
+        code: codeStr,
+        shiftKey: isShift,
+        cancelable: true,
+        bubbles: true,
+      });
+      target.dispatchEvent(evt);
+      const defaultPrevented = Boolean(evt.defaultPrevented);
+
+      if (!defaultPrevented) {
+        if (keyStr === "Tab") {
+          navigateTabFocus(isShift);
+        } else if (keyStr === "Enter") {
+          const active = doc ? doc.activeElement : null;
+          if (active) {
+            const tag = String(active.tagName || active.localName || "").toLowerCase();
+            const isButton = (tag === "button");
+            const isLink = (tag === "a" && ((active.hasAttribute ? active.hasAttribute("href") : false) || Boolean(active.href)));
+            if (isButton || isLink) {
+              if (typeof active.click === "function") {
+                active.click();
+              }
+            }
+          }
+        }
+      }
+
+      const active = doc ? doc.activeElement : null;
+      return (active && typeof active._nid === "number") ? active._nid : 0;
+    }
+
+    return 0;
+  }
+
+  global.__capsurf_dispatch_key_event = dispatchKeyEvent;
+  if (typeof window !== "undefined") {
+    window.__capsurf_dispatch_key_event = dispatchKeyEvent;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_dispatch_key_event = dispatchKeyEvent;
+  }
+
+  function evalInIframe(expr) {
+    const iframeEl = document.querySelector("iframe");
+    const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
+    try {
+      const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "return (" + expr + ");");
+      return fn.call(win, win, win.document, win.location, win.fetch, win, win);
+    } catch (e) {
+      const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", expr);
+      return stmtFn.call(win, win, win.document, win.location, win.fetch, win, win);
+    }
+  }
+  global.__capsurf_eval_in_iframe = evalInIframe;
+  if (typeof window !== "undefined") window.__capsurf_eval_in_iframe = evalInIframe;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_eval_in_iframe = evalInIframe;
 }

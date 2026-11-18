@@ -585,6 +585,7 @@ pub struct Document {
     paint_damage_marked: bool = false;
     mutation_seq: u32 = 1;
     root_element: NodeId = NULL_NODE;
+    focused_node: NodeId = NULL_NODE;
 
     static fn init(allocator: std.mem.Allocator): Document! {
         let doc = Document {
@@ -594,6 +595,7 @@ pub struct Document {
             paint_damage_marked: false,
             mutation_seq: 1,
             root_element: NULL_NODE,
+            focused_node: NULL_NODE,
         };
         // Slot 0 is reserved for NULL_NODE sentinel
         doc.nodes.append(allocator, NodeData {

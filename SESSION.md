@@ -2448,3 +2448,41 @@
    - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 57：攻坚键盘 Tab/Shift+Tab 顺序焦点链、Enter 链接激活与 :focus 伪类匹配，以及 BrowserContext 多上下文隔离、Storage 批量 Cookie 入库与跨域 Iframe 执行上下文同步
+
+### **[Agent Execution & Phase 57 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - Keyboard Tab Focus Navigation & Enter Activation)**：
+     - 在 `src/cdp/input.cp` 中实装完整的 `Input.dispatchKeyEvent` 键盘事件处理流水线（`KeyDown` 与 `KeyUp`）；
+     - `KeyDown` 阶段：向当前 `document.activeElement`（或 document）派发 `KeyboardEvent("keydown", { key, code, shiftKey, cancelable: true, bubbles: true })`；
+     - 若事件被 `preventDefault()` 取消，则直接中止焦点转移与默认激活行为；
+     - 当 `key === "Tab"` 且未被取消时，执行规范级顺序焦点链计算：
+       - DOM 树前序深度遍历，严格排除隐藏节点（`display: none`）、禁用控件（`disabled`）、`inert` 节点或其整棵祖先子树、以及负值 `tabindex < 0`；
+       - 自然可聚焦元素（`<a href>`, `<button>`, `<input>`, `<select>`, `<textarea>`, `contenteditable="true"`）默认 `tabindex = 0`；
+       - 严格正则校验整数 `tabindex`（`/^[+-]?\d+$/`），非法字符串如 `"abc"`, `"3abc"` 回退为自然可聚焦性或跳过；
+       - 顺序优先级：正整数 `tabindex` 升序排列（`1`, `2`），随后为 `tabindex = 0`（按 DOM 树序排列）；
+       - 支持反向导航：`modifiers & 8`（Shift 键）触发倒序循环；
+       - 焦点转移：旧元素失焦、新元素获得焦点、同步 `session.focused_node` 与 `doc.focused_node`，并通过 `scrollIntoView` 联动视口滚动计算（`window.scrollY > 0`）；
+     - 当 `key === "Enter"` 且未被取消时：若当前焦点元素为 `<a href>` 或 `<button>`，自动触发 `click()`（并联动更新 `location.hash`）；
+     - 在 `src/dom/dom.cp` 中增加 `focused_node` 状态；
+     - 在 `src/css/matcher.cp` 与 `src/js/shim/window.js` 中完整支持 `:focus` 伪类匹配与级联计算（支持 `a:focus` 动态样式与 `getComputedStyle` 获取）；
+     - 验证通过 `e2e/tab-focus.e2e.test.ts` (17/17 expect 100% PASS)。
+   - **Subagent 2 (Track 2 - BrowserContext & Iframe Cookies Isolation)**：
+     - 在 `e2e/harness.ts` 中实装 `BrowserContext` 类，提供 `id`, `browser`, `newPage()`, `close()`（联动 CDP `Target.disposeBrowserContext`），并在 `Browser` 上增加 `createBrowserContext()`；
+     - 在 `src/cdp/network.cp` 中实装 `Storage.setCookies` 与 `Network.setCookies` 的批量 JSON 数组解析与 `session.cookie_jar` 持久入库；
+     - 在 `src/js/dom_binding.cp` 与 `src/js/shim/window.js` 中导出 `@c fn js_capsurf_get_cookie_header(url)` 原生桥接，使 `fetch` 在 `credentials: "include"` 或同源请求时自动附带匹配的 Cookie 头；
+     - 在 `src/cdp/session.cp` 与 `src/cdp/runtime.cp` 中追踪 Iframe 执行上下文：检测跨域 Iframe 动态派发 `Runtime.executionContextCreated` 事件，并在 `Runtime.evaluate` 中完整支持 `contextId` 分区求值；
+     - 验证通过 `e2e/browser-context-iframe.e2e.test.ts` (2/2 expect 100% PASS)。
+2. **Phase 57 全量黑盒测试验证（2 大测试套件 19 项断言全部 100% 绿灯，3.55s 极速通过）**：
+   - `e2e/browser-context-iframe.e2e.test.ts` (1 pass, 2 expect calls in 521ms)
+   - `e2e/tab-focus.e2e.test.ts` (1 pass, 17 expect calls in 2979ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54 ~ Phase 56 全量 8 大回归测试套件（17 项测试用例，45 项 expect 断言）100% PASS（6.84s 全绿）；
+   - 4 道静态门禁检验：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main` 编译成功。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。

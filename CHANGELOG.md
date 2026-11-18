@@ -1407,3 +1407,36 @@
     - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
     - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
   - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。
+
+## Phase 57: Keyboard Tab/Shift+Tab Focus Chain, Enter Activation, :focus Pseudo-Class, and BrowserContext Iframe Storage Cookies (100% Closed)
+- **`src/cdp/input.cp`**：
+  - 在 `Input.dispatchKeyEvent` 中新增对 `KeyDown` 与 `KeyUp` 键盘事件的完整支持；
+  - 在 `KeyDown` 阶段向 `document.activeElement` 派发可取消的 `KeyboardEvent`；
+  - 遇到 Tab 键且未取消时，按规范计算顺序焦点链（正 tabindex 升序优先，0 按 DOM 序排列，排除隐藏/禁用/`inert` 及负值 tabindex），支持 Shift+Tab 反向循序；
+  - 焦点转移时自动调用 `element.focus()`、`blur()`，并联动执行 `scrollIntoView` 视口滚动计算；
+  - 遇到 Enter 键且未取消时，自动触发 `<a href>` 与 `<button>` 的 `.click()` 点击与哈希跳转；
+  - 同步更新 `session.focused_node` 与 `doc.focused_node`。
+- **`src/dom/dom.cp`**：
+  - 在 `Document` 结构体中新增 `focused_node: NodeId = NULL_NODE` 焦点状态追踪。
+- **`src/css/matcher.cp` & `src/js/shim/window.js` & `src/js/shim/element/element.js`**：
+  - 增加 `PseudoKind.Focus`，解析与匹配 `:focus` 伪类（`node_id == doc.focused_node`）；
+  - 在 JS 运行时与 `getComputedStyle` 中完整支持 `:focus` 伪类查询与动态样式计算。
+- **`e2e/harness.ts`**：
+  - 实装 `BrowserContext` 类，提供 `id`, `browser`, `newPage()`, `close()`（发送 CDP `Target.disposeBrowserContext`）；
+  - 在 `Browser` 类上增加 `createBrowserContext()` 异步工厂方法；
+  - 增强 `expect.poll` 动态断言代理支持。
+- **`src/cdp/network.cp`**：
+  - 在 `Storage.setCookies` 与 `Network.setCookies` 中支持解析 `cookies` JSON 数组，并将每项 Cookie 规范存储至 `session.cookie_jar`。
+- **`src/js/dom_binding.cp` & `src/js/shim/window.js`**：
+  - 导出 `@c fn js_capsurf_get_cookie_header(url)` 原生桥接；
+  - 在 `fetch` 请求中接入 `credentials: "include"` 与同源 Cookie 自动注入。
+- **`src/cdp/session.cp` & `src/cdp/runtime.cp`**：
+  - 自动检测并捕获跨域 Iframe，派发 `Runtime.executionContextCreated` 事件；
+  - 在 `Runtime.evaluate` 中完整支持 `contextId` 参数。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 57 2 大测试套件 19 项断言全部 100% 绿灯（3.55s 极速通过）：
+    - `e2e/browser-context-iframe.e2e.test.ts` (1 pass, 2 expect calls in 521ms)
+    - `e2e/tab-focus.e2e.test.ts` (1 pass, 17 expect calls in 2979ms)
+  - 全量回归：Phase 54 ~ Phase 56 全量 8 大测试套件（17 项测试用例，45 项断言）100% PASS（6.84s 通过）；
+  - 独立单二进制：`bin/main` 编译成功。

@@ -45,6 +45,7 @@ pub enum PseudoKind {
     Where,
     Not,
     Has,
+    Focus,
 }
 
 pub enum ComponentKind {
@@ -546,6 +547,9 @@ pub struct SelectorParser {
                     p_comp.has_combinator = rel_comb;
                     p_comp.sub_selector_raw = rel;
                     spec.add(SelectorParser.maxSpecificityOfList(rel));
+                } else if (std.ascii.eqlIgnoreCase(p_name, "focus")) {
+                    p_comp.pseudo_kind = PseudoKind.Focus;
+                    spec.class_like_selectors += 1;
                 } else {
                     spec.class_like_selectors += 1;
                 }
@@ -792,6 +796,7 @@ pub struct Matcher {
                     },
                 };
             },
+            .Focus => node_id != NULL_NODE && node_id == doc.focused_node,
         };
     }
 

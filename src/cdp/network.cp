@@ -2,7 +2,7 @@
 // CDP Network & Storage Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/network.ts and cookies.ts
 
-import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CookieEntry, entryToCdp } from "../net/cookies.cp";
 
@@ -182,6 +182,89 @@ pub struct NetworkHandler {
 
         if (std.mem.eql(u8, req.method, "Network.setCookies") ||
             std.mem.eql(u8, req.method, "Storage.setCookies")) {
+            const cookies_key = "\"cookies\"";
+            if (cookies_pos := std.mem.indexOf(u8, req.params_raw, cookies_key)) {
+                let pos = cookies_pos + cookies_key.len;
+                while (pos < req.params_raw.len && req.params_raw[pos] != '[') : (pos += 1) {}
+                if (pos < req.params_raw.len && req.params_raw[pos] == '[') {
+                    pos += 1;
+                    while (pos < req.params_raw.len) {
+                        while (pos < req.params_raw.len && (req.params_raw[pos] == ' ' || req.params_raw[pos] == ',' || req.params_raw[pos] == '\t' || req.params_raw[pos] == '\r' || req.params_raw[pos] == '\n')) : (pos += 1) {}
+                        if (pos >= req.params_raw.len || req.params_raw[pos] == ']') break;
+                        if (req.params_raw[pos] == '{') {
+                            const obj_start = pos;
+                            let depth: i32 = 0;
+                            let in_str = false;
+                            let escaped = false;
+                            while (pos < req.params_raw.len) : (pos += 1) {
+                                const ch = req.params_raw[pos];
+                                if (escaped) {
+                                    escaped = false;
+                                    continue;
+                                }
+                                if (ch == '\\' && in_str) {
+                                    escaped = true;
+                                    continue;
+                                }
+                                if (ch == '"') {
+                                    in_str = !in_str;
+                                    continue;
+                                }
+                                if (!in_str) {
+                                    if (ch == '{') depth += 1;
+                                    if (ch == '}') {
+                                        depth -= 1;
+                                        if (depth == 0) {
+                                            pos += 1;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            const obj_str = req.params_raw[obj_start..pos];
+                            const name = extractJsonString(obj_str, "name") ?? "";
+                            const val = extractJsonString(obj_str, "value") ?? "";
+                            const domain = extractJsonString(obj_str, "domain") ?? "";
+                            const path = extractJsonString(obj_str, "path") ?? "";
+                            const is_secure = extractJsonBool(obj_str, "secure") ?? false;
+                            const same_site = extractJsonString(obj_str, "sameSite") ?? "";
+                            const is_http_only = extractJsonBool(obj_str, "httpOnly") ?? false;
+
+                            if (name.len > 0) {
+                                let d = if (domain.len > 0) domain else "localhost";
+                                if (d.len > 0 && d[0] == '.') d = d[1..];
+                                const p = if (path.len > 0) path else "/";
+                                const scheme = if (is_secure) "https" else "http";
+                                const url_str = std.fmt.allocPrint(
+                                    session.allocator,
+                                    "{s}://{s}{s}",
+                                    .{ scheme, d, p },
+                                ) catch "";
+
+                                let ss_buf: [32]u8 = [0; 32];
+                                let ss_str: []const u8 = "";
+                                if (same_site.len > 0) {
+                                    ss_str = std.fmt.bufPrint(&ss_buf, "; SameSite={s}", .{ same_site }) catch "";
+                                }
+                                const sec_str = if (is_secure) "; Secure" else "";
+                                const ho_str = if (is_http_only) "; HttpOnly" else "";
+
+                                const set_cookie_str = std.fmt.allocPrint(
+                                    session.allocator,
+                                    "{s}={s}; Domain={s}; Path={s}{s}{s}{s}",
+                                    .{ name, val, d, p, sec_str, ho_str, ss_str },
+                                ) catch "";
+
+                                if (url_str.len > 0 && set_cookie_str.len > 0) {
+                                    * = session.cookie_jar.setFromHeader(url_str, set_cookie_str, null);
+                                }
+                            }
+                        } else {
+                            pos += 1;
+                        }
+                    }
+                }
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

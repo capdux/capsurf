@@ -437,7 +437,7 @@ function installHtmlClasses(global) {
     "Blob", "FormData", "Headers", "Request", "Response",
     "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
     "setTimeout", "clearTimeout", "setInterval", "clearInterval",
-    "requestAnimationFrame", "cancelAnimationFrame", "console"
+    "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch"
   ];
 
   function decorateIframeWindow(win) {
@@ -447,6 +447,11 @@ function installHtmlClasses(global) {
       if (win[key] === undefined && pageGlobal[key] !== undefined) {
         win[key] = pageGlobal[key];
       }
+    }
+    if (pageGlobal.fetch) {
+      win.fetch = function (resource, init) {
+        return pageGlobal.fetch.call(win, resource, init);
+      };
     }
   }
 

@@ -95,6 +95,21 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
     return best_node;
 }
 
+fn escapeJsString(input_str: []const u8, out: []u8): usize {
+    let ei: usize = 0;
+    let i: usize = 0;
+    while (i < input_str.len) : (i += 1) {
+        const c = input_str[i];
+        if (c == '"' || c == '\\' || c == '\'') {
+            if (ei + 1 < out.len) out[ei] = '\\';
+            ei += 1;
+        }
+        if (ei < out.len) out[ei] = c;
+        ei += 1;
+    }
+    return ei;
+}
+
 pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u8) {
     if (text.len == 0 && key.len == 0) return;
 
@@ -111,23 +126,11 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
     
     // Escaping helper
     let esc_buf: [2048]u8 = [0; 2048];
-    fn escape(input_str: []const u8, out: []u8): usize {
-        let ei: usize = 0;
-        for (c of input_str) {
-            if (c == '"' || c == '\\' || c == '\'') {
-                if (ei + 1 < out.len) out[ei] = '\\';
-                ei += 1;
-            }
-            if (ei < out.len) out[ei] = c;
-            ei += 1;
-        }
-        return ei;
-    }
-    const escaped_text_len = escape(clean_text, &esc_buf);
+    const escaped_text_len = escapeJsString(clean_text, &esc_buf);
     const escaped_text = esc_buf[0..escaped_text_len];
     
     let k_esc_buf: [1024]u8 = [0; 1024];
-    const escaped_key_len = escape(key, &k_esc_buf);
+    const escaped_key_len = escapeJsString(key, &k_esc_buf);
     const escaped_key = k_esc_buf[0..escaped_key_len];
 
     if (session.has_document) {
@@ -235,6 +238,36 @@ pub struct InputHandler {
                 auto_repeat: repeat,
             };
             * = key_ev;
+
+            if (session.has_document) {
+                if (ev_type == .KeyDown || ev_type == .KeyUp) {
+                    let k_esc_buf: [256]u8 = [0; 256];
+                    let c_esc_buf: [256]u8 = [0; 256];
+
+                    const escaped_key_len = escapeJsString(key, &k_esc_buf);
+                    const escaped_key = k_esc_buf[0..escaped_key_len];
+
+                    const escaped_code_len = escapeJsString(code, &c_esc_buf);
+                    const escaped_code = c_esc_buf[0..escaped_code_len];
+
+                    const type_str_js = if (ev_type == .KeyDown) "keydown" else "keyup";
+
+                    let js_buf: [1024]u8 = [0; 1024];
+                    const js_expr = std.fmt.bufPrint(
+                        &js_buf,
+                        "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
+                        .{ type_str_js, escaped_key, escaped_code, modifiers },
+                    ) catch null;
+                    if (e := js_expr) {
+                        const val = session.ctx.eval(e);
+                        if (val.tag == 0 && val.u.uint64 > 0) {
+                            session.focused_node = @as(u32, @truncate(val.u.uint64));
+                            session.doc.focused_node = session.focused_node;
+                        }
+                        session.ctx.freeValue(val);
+                    }
+                }
+            }
 
             if (text.len > 0 && (ev_type == .Char || ev_type == .KeyDown || ev_type == .RawKeyDown)) {
                 applyInputText(session, text, key);

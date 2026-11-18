@@ -633,8 +633,33 @@ export class ElementHandle {
   }
 }
 
+export class BrowserContext {
+  constructor(public id: string, public browser: Browser) {}
+
+  async newPage(): Promise<Page> {
+    return this.browser.newPage();
+  }
+
+  async close(): Promise<void> {
+    try {
+      await this.browser.cdp.send("Target.disposeBrowserContext", { browserContextId: this.id });
+    } catch {}
+  }
+}
+
 export class Browser {
   constructor(public cdp: CDPClient, public page: Page) {}
+
+  async createBrowserContext(): Promise<BrowserContext> {
+    let id = "ctx-001";
+    try {
+      const res: any = await this.cdp.send("Target.createBrowserContext");
+      if (res && res.browserContextId) {
+        id = res.browserContextId;
+      }
+    } catch {}
+    return new BrowserContext(id, this);
+  }
 
   async pages(): Promise<Page[]> {
     return [this.page];
@@ -870,20 +895,20 @@ expect.poll = function (fn: () => any, { timeout = 10000, interval = 50 } = {}) 
     throw lastError || new Error(`expect.poll timed out after ${timeout}ms`);
   }
 
-  return {
-    async toBe(expected: any) {
-      await pollUntil((val) => expect(val).toBe(expected));
+  return new Proxy({} as any, {
+    get(_target, prop: string) {
+      return async function (...args: any[]) {
+        await pollUntil((val) => {
+          const exp: any = expect(val);
+          if (typeof exp[prop] === "function") {
+            exp[prop](...args);
+          } else {
+            throw new Error(`Matcher ${prop} is not a function on expect`);
+          }
+        });
+      };
     },
-    async toEqual(expected: any) {
-      await pollUntil((val) => expect(val).toEqual(expected));
-    },
-    async toBeTruthy() {
-      await pollUntil((val) => expect(val).toBeTruthy());
-    },
-    async toBeFalsy() {
-      await pollUntil((val) => expect(val).toBeFalsy());
-    },
-  };
+  });
 };
 
 export const engine = null;

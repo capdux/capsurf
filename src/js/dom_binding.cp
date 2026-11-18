@@ -54,6 +54,7 @@ import { Matcher } from "../css/matcher.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
+import { CookieJar } from "../net/cookies.cp";
 
 pub @c {
     struct TimeVal {
@@ -98,7 +99,8 @@ pub const MAX_CONSOLE_RECORDS: usize = 16;
 
 pub struct JsDomContext {
     doc: *Document,
-    layout: *LayoutTree? = null,
+    layout: (*LayoutTree)? = null,
+    cookie_jar: (*CookieJar)? = null,
     element_class_id: u32 = 0,
     document_class_id: u32 = 0,
     console_records: [MAX_CONSOLE_RECORDS]ConsoleRecord = [ConsoleRecord{}; MAX_CONSOLE_RECORDS],
@@ -1073,6 +1075,33 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsNull();
 }
 
+@c fn js_capsurf_get_cookie_header(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    if (dom_ctx.cookie_jar == null) return jsNull();
+
+    let len: usize = 0;
+    const str_ptr = JS_ToCStringLen2(ctx, &len, argv[0], 0);
+    if (str_ptr != null) {
+        defer JS_FreeCString(ctx, str_ptr);
+        let url_buf: [4096]u8 = [0; 4096];
+        const actual_len = @min(len, url_buf.len);
+        @memcpy(url_buf[0..actual_len], str_ptr.?[0..actual_len]);
+        const url_slice = url_buf[0..actual_len];
+
+        const jar = dom_ctx.cookie_jar.?;
+        const maybe_hdr = jar.cookieHeaderForUrl(url_slice, null, std.heap.page_allocator);
+        if (hdr := maybe_hdr) {
+            defer std.heap.page_allocator.free(hdr);
+            return jsNewString(ctx, hdr);
+        }
+    }
+    return jsNull();
+}
+
 pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
@@ -1157,6 +1186,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     dom_ctx.* = JsDomContext {
         doc: doc,
         layout: layout,
+        cookie_jar: null,
         element_class_id: g_element_class_id,
         document_class_id: g_document_class_id,
     };
@@ -1205,6 +1235,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_load_fixture", js_capsurf_load_fixture, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_get_cookie_header", js_capsurf_get_cookie_header, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;
