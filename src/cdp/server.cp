@@ -314,34 +314,32 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     }
 
     fn dispatchCdpCommand(*_, client_fd: i32, req: CdpRequest)! {
-        let res_buf: [4096]u8 = [0; 4096];
+        const res_buf = std.heap.c_allocator.alloc(u8, 262144) catch return;
+        defer std.heap.c_allocator.free(res_buf);
         let events: [4]CdpEvent = [CdpEvent{}; 4];
         let event_count: usize = 0;
 
-        const resp = CdpDispatcher.dispatch(_.session, req, &res_buf, &events, &event_count);
+        const resp = CdpDispatcher.dispatch(_.session, req, res_buf, &events, &event_count);
 
         if (resp.isOk()) {
-            let stack_buf: [4096]u8 = [0; 4096];
-            let msg_slice: []const u8 = "";
-            let dyn_buf: []u8 = [];
             const needed_len = resp.result_json.len + 32;
-            if (needed_len <= stack_buf.len) {
-                msg_slice = std.fmt.bufPrint(
+            if (needed_len <= 4096) {
+                let stack_buf: [4096]u8 = [0; 4096];
+                const msg_slice = std.fmt.bufPrint(
                     &stack_buf,
                     "{{\"id\":{d},\"result\":{s}}}",
                     .{ resp.id, resp.result_json },
                 ) catch return;
+                writeWsTextFrame(client_fd, msg_slice)? ;
             } else {
-                dyn_buf = std.heap.c_allocator.alloc(u8, needed_len) catch return;
-                msg_slice = std.fmt.bufPrint(
+                const dyn_buf = std.heap.c_allocator.alloc(u8, needed_len) catch return;
+                defer std.heap.c_allocator.free(dyn_buf);
+                const msg_slice = std.fmt.bufPrint(
                     dyn_buf,
                     "{{\"id\":{d},\"result\":{s}}}",
                     .{ resp.id, resp.result_json },
                 ) catch return;
-            }
-            writeWsTextFrame(client_fd, msg_slice)? ;
-            if (dyn_buf.len > 0) {
-                std.heap.c_allocator.free(dyn_buf);
+                writeWsTextFrame(client_fd, msg_slice)? ;
             }
         } else {
             let err_buf: [1024]u8 = [0; 1024];
@@ -356,13 +354,25 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         // Emit any triggered asynchronous events
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
-            let evt_buf: [1024]u8 = [0; 1024];
-            const evt_msg = std.fmt.bufPrint(
-                &evt_buf,
-                "{{\"method\":\"{s}\",\"params\":{s}}}",
-                .{ events[i].method, events[i].params_json },
-            ) catch continue;
-            writeWsTextFrame(client_fd, evt_msg)? ;
+            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
+            if (evt_needed <= 4096) {
+                let evt_buf: [4096]u8 = [0; 4096];
+                const evt_msg = std.fmt.bufPrint(
+                    &evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)? ;
+            } else {
+                const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
+                defer std.heap.c_allocator.free(dyn_evt_buf);
+                const evt_msg = std.fmt.bufPrint(
+                    dyn_evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)? ;
+            }
         }
     }
 }

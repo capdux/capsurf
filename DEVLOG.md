@@ -887,3 +887,26 @@
    - 在 `Document` 与 `ElementHandle` 实现 `getAttributeNS`, `setAttributeNS`, `removeAttributeNS`, `getAttributeNames`；
    - 修复 `input.js` 中 `removeAttributeNS('checked')` 时的状态保持：通过内部 `_checkedDirty` 标志位判定用户交互脏状态，若已发生用户修改则移除属性不再重置选框选中态，精准符合 WHATWG HTML 规范。
 
+## Phase 47 XPath 1.0 规范引擎、DOMParser 隔离与 CDP Accessibility 大报文技术方案
+1. **XPath 1.0 规范引擎与迭代器状态失效 (`src/js/shim/xpath.js`)**：
+   - **设计动机**：W3C DOM Level 3 XPath 规范要求全面支持 13 种轴（含 `ancestor`, `preceding-sibling`, `descendant-or-self`）、谓词表达式、核心函数（`count`, `sum`, `id`, `normalize-space` 等）以及双模求值（迭代器 `ORDERED_NODE_ITERATOR_TYPE` 与快照 `ORDERED_NODE_SNAPSHOT_TYPE`）。其中迭代器模式必须在 DOM 树结构发生变更（如 `appendChild`/`remove`）时立即将 `invalidIteratorState` 置为 `true`，而在纯绘制行为（滚动/选区/Canvas 绘制）下保持有效；
+   - **解决方案**：
+     - 在 `src/js/shim/xpath.js` 实现完整的 Tokenizer、Lexer、AST Parser 与 Evaluator；
+     - 引入全局 `__treeSeq` 计数器，在 `notifyMutation` 触发结构突变时自增；
+     - `XPathResult` 迭代器创建时快照记录当前 `__treeSeq`，在后续访问 `invalidIteratorState` 与 `iterateNext()` 时比对，若不一致抛出非法状态异常；
+     - 修复 `NodeType.Text` 底层返回值标准对齐（`3` 替代原内部枚举值 `2`），根除将文本节点误判为属性节点截断兄弟遍历的问题。
+2. **DOMParser 隔离与防伪造安全领养 (`src/js/shim/parser.js` & `node-base.js`)**：
+   - **设计动机**：`DOMParser.parseFromString` 创建的文档必须与宿主文档实现双向隔离。当页面试图向活动节点 `appendChild` 时，若传入恶意伪造对象（`{ _dom: ..., _id: -1 }`）必须严格防御抛出 `TypeError`，而当合法追加 `DOMParser` 解析的子节点时，必须将其干净领养入目标文档，且页面可见的节点包装器上绝对不能泄露私有 `_dom` 内部句柄；
+   - **解决方案**：
+     - 在 `node-base.js` 引入内部 `WeakSet`（`parsedNodeRegistry`）对解析节点进行私有跟踪；
+     - `Node.prototype.appendChild` 增加 `isGenuineNode` 严格校验，杜绝伪造对象挂载；
+     - 领养 `ParsedElement` 时自动将其子树解绑（`_children = []`），仅保留当前元素与属性，符合 W3C 跨句柄领养行为；
+     - `ParsedFragment.removeChild` 在非直接子节点调用时规范抛出 `DOMException("...", "NotFoundError")`。
+3. **CDP 大报文溢出消除与 Accessibility getPartialAXTree (`src/cdp/server.cp` & `accessibility.cp`)**：
+   - **设计动机**：测试大型页面的无障碍树时，原 `src/cdp/server.cp` 中固定的 4KB 栈缓冲区在序列化数十个节点的完整属性树时瞬时触发 `Buffer overflow (-32000)`；同时此前 `Accessibility.getPartialAXTree` 返回死数据 `{"nodes":[]}`；
+   - **解决方案**：
+     - 在 `server.cp` 中将命令分发缓冲区重构为 256KB 堆动态分配，并联动事件分发动态打包，彻底消除了序列化溢出崩溃；
+     - 在 `accessibility.cp` 完整实装 `Accessibility.getPartialAXTree`：根据传入的 `nodeId` / `backendNodeId` 准确定位目标节点，当 `fetchRelatives: true` 时向上递归遍历父级收集祖先路径（直至 `RootWebArea`），向下递归收集所有子节点，输出完整的节点集合；
+     - 启发式无数据表格自动降级为 `presentationalRole`（`role: none`），支持嵌套列表层深、`visibility` 反转显现与 Tristate 属性。
+
+

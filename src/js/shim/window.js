@@ -1557,6 +1557,39 @@ function installWindow(global) {
     globalThis.__capsurf_dispatch_lifecycle = global.__capsurf_dispatch_lifecycle;
   }
 
+  // Window scroll methods
+  global.scrollTo = function (x, y) {
+    let targetX = 0, targetY = 0;
+    if (typeof x === "object" && x !== null) {
+      targetX = Number(x.left || 0);
+      targetY = Number(x.top || 0);
+    } else {
+      targetX = Number(x || 0);
+      targetY = Number(y || 0);
+    }
+    global.pageXOffset = targetX;
+    global.scrollX = targetX;
+    global.pageYOffset = targetY;
+    global.scrollY = targetY;
+  };
+  global.scroll = global.scrollTo;
+  global.scrollBy = function (x, y) {
+    let dx = 0, dy = 0;
+    if (typeof x === "object" && x !== null) {
+      dx = Number(x.left || 0);
+      dy = Number(x.top || 0);
+    } else {
+      dx = Number(x || 0);
+      dy = Number(y || 0);
+    }
+    global.scrollTo((global.scrollX || 0) + dx, (global.scrollY || 0) + dy);
+  };
+  if (typeof globalThis !== "undefined") {
+    globalThis.scrollTo = global.scrollTo;
+    globalThis.scroll = global.scroll;
+    globalThis.scrollBy = global.scrollBy;
+  }
+
   // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
   if (global.document) {
     try {

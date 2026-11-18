@@ -22,8 +22,14 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload") ||
-            std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
+            std.mem.eql(u8, req.method, "Page.reload")) {
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
+            if (html := extractJsonString(req.params_raw, "html")) {
+                session.navigate(html, session.url) catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

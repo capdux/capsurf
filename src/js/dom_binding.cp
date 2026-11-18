@@ -414,7 +414,12 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const el: *JsElement = @ptrCast(@alignCast(ptr.?));
     if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsInt(1);
     const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
-    return jsInt(@intFromEnum(node.node_type));
+    switch (node.node_type) {
+        NodeType.Document => return jsInt(9),
+        NodeType.Element => return jsInt(1),
+        NodeType.Text => return jsInt(3),
+        NodeType.Comment => return jsInt(8),
+    }
 }
 
 @c fn js_element_get_tag_name(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -636,6 +641,14 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
         return JS_GetPropertyStr(ctx, global_obj, "document");
     }
     return createJsElement(ctx, el.dom_ctx, parent_id);
+}
+
+@c fn js_element_set_parent_node(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = ctx;
+    * = this_val;
+    * = argc;
+    * = argv;
+    return jsUndefined();
 }
 
 @c fn js_element_get_first_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -1052,7 +1065,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineGetterSetter(raw_ctx, el_proto, "innerHTML", js_element_get_inner_html, js_element_set_inner_html);
     defineGetterSetter(raw_ctx, el_proto, "outerHTML", js_element_get_outer_html, null);
     defineGetterSetter(raw_ctx, el_proto, "parentElement", js_element_get_parent_element, null);
-    defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, null);
+    defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, js_element_set_parent_node);
     defineGetterSetter(raw_ctx, el_proto, "firstChild", js_element_get_first_child, null);
     defineGetterSetter(raw_ctx, el_proto, "lastChild", js_element_get_last_child, null);
     defineGetterSetter(raw_ctx, el_proto, "previousSibling", js_element_get_previous_sibling, null);

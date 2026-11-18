@@ -31,6 +31,7 @@ MODULE_ORDER = [
     "traversal.js",
     "range.js",
     "parser.js",
+    "xpath.js",
     "canvas2d.js",
     "animations.js",
     "window.js",

@@ -116,7 +116,7 @@ pub fn hostMatches(source_host: []const u8, target_host: []const u8): bool {
     return std.ascii.eqlIgnoreCase(source_host, target_host);
 }
 
-fn pathMatches(source_path: []const u8, target_path: []const u8): bool {
+fn cspPathMatches(source_path: []const u8, target_path: []const u8): bool {
     if (source_path.len == 0 || std.mem.eql(u8, source_path, "/")) return true;
     if (std.mem.endsWith(u8, source_path, "/")) {
         return std.mem.startsWith(u8, target_path, source_path);
@@ -320,7 +320,7 @@ pub fn isSourceAllowed(policy: *const CspPolicy, directive_name: []const u8, tar
             }
         }
 
-        if (pathMatches(path, target.pathname)) return true;
+        if (cspPathMatches(path, target.pathname)) return true;
     }
 
     return false;

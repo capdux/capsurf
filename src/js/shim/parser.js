@@ -1,57 +1,1030 @@
 // src/js/shim/parser.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/parser.ts
 
-function DOMParser() {}
+const SUPPORTED_MIME_TYPES = new Set([
+  "text/html",
+  "text/xml",
+  "application/xml",
+  "application/xhtml+xml",
+  "image/svg+xml",
+]);
 
-DOMParser.prototype.parseFromString = function (str, mimeType) {
-  const type = String(mimeType || "text/html").toLowerCase();
-  const html = String(str || "");
+const HTML_VOID_TAGS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input",
+  "link", "meta", "param", "source", "track", "wbr",
+]);
 
-  // Create a synthetic document container
-  const doc = {
-    nodeType: DOCUMENT_NODE,
-    nodeName: "#document",
-    contentType: type,
-    compatMode: "CSS1Compat",
-    characterSet: "UTF-8",
-    _html: html,
+function camelToDash(str) {
+  return String(str).replace(/[A-Z]/g, function (m) {
+    return "-" + m.toLowerCase();
+  });
+}
+
+function dashToCamel(str) {
+  return String(str).replace(/-([a-z])/g, function (_, c) {
+    return c.toUpperCase();
+  });
+}
+
+function leadingDoctype(source, html) {
+  const m = /^<!doctype(?:\s+([^\s>]+))?([^>]*)>/i.exec(source);
+  if (!m) return null;
+  const rest = m[2] || "";
+  const quoted = function (s) {
+    return /^\s*("([^"]*)"|'([^']*)')/.exec(s);
   };
+  let publicId = "";
+  let systemId = "";
+  const kw = /^\s*(public|system)/i.exec(rest);
+  if (kw) {
+    let after = rest.slice(kw[0].length);
+    const first = quoted(after);
+    if (first) {
+      const value = first[2] !== undefined ? first[2] : (first[3] !== undefined ? first[3] : "");
+      after = after.slice(first[0].length);
+      if ((kw[1] || "").toLowerCase() === "public") {
+        publicId = value;
+        const second = quoted(after);
+        if (second) {
+          systemId = second[2] !== undefined ? second[2] : (second[3] !== undefined ? second[3] : "");
+        }
+      } else {
+        systemId = value;
+      }
+    }
+  }
+  const name = m[1] || "";
+  return {
+    name: html ? name.toLowerCase() : name,
+    publicId: publicId,
+    systemId: systemId,
+  };
+}
 
-  if (typeof document !== "undefined" && document.createElement) {
-    const root = document.createElement("html");
-    const head = document.createElement("head");
-    const body = document.createElement("body");
+function unescapeEntities(str) {
+  return str.replace(/&([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);/g, function (match, ent) {
+    if (ent === "amp") return "&";
+    if (ent === "lt") return "<";
+    if (ent === "gt") return ">";
+    if (ent === "quot") return '"';
+    if (ent === "apos") return "'";
+    if (ent.startsWith("#x") || ent.startsWith("#X")) {
+      const code = parseInt(ent.slice(2), 16);
+      return !isNaN(code) ? String.fromCharCode(code) : match;
+    }
+    if (ent.startsWith("#")) {
+      const code = parseInt(ent.slice(1), 10);
+      return !isNaN(code) ? String.fromCharCode(code) : match;
+    }
+    return match;
+  });
+}
+
+function matchesSimpleSelector(el, s) {
+  if (!el || el.nodeType !== 1) return false;
+  s = s.trim();
+  if (s === "*") return true;
+
+  let rest = s;
+  const tagMatch = rest.match(/^[a-zA-Z0-9_-]+/);
+  if (tagMatch) {
+    const tag = tagMatch[0].toLowerCase();
+    rest = rest.slice(tag.length);
+    const elTag = (el.localName || el.tagName || "").toLowerCase();
+    if (elTag !== tag) return false;
+  }
+
+  while (rest.length > 0) {
+    if (rest.startsWith("#")) {
+      const idMatch = rest.match(/^#([a-zA-Z0-9_-]+)/);
+      if (!idMatch) return false;
+      const id = idMatch[1];
+      if (el.getAttribute("id") !== id && el.id !== id) return false;
+      rest = rest.slice(idMatch[0].length);
+    } else if (rest.startsWith(".")) {
+      const clsMatch = rest.match(/^\.([a-zA-Z0-9_-]+)/);
+      if (!clsMatch) return false;
+      const cls = clsMatch[1];
+      const clsAttr = el.getAttribute("class") || el.className || "";
+      if (!clsAttr.split(/\s+/).includes(cls)) return false;
+      rest = rest.slice(clsMatch[0].length);
+    } else if (rest.startsWith("[")) {
+      const attrMatch = rest.match(/^\[([a-zA-Z0-9_:-]+)(?:([*^$]?=)(?:"([^"]*)"|'([^']*)'|([^\]]+)))?\]/);
+      if (!attrMatch) return false;
+      const attrName = attrMatch[1];
+      const op = attrMatch[2];
+      const attrVal = attrMatch[3] !== undefined ? attrMatch[3] : (attrMatch[4] !== undefined ? attrMatch[4] : attrMatch[5]);
+      if (!el.hasAttribute(attrName)) return false;
+      if (op) {
+        const actual = el.getAttribute(attrName) || "";
+        if (op === "=" && actual !== attrVal) return false;
+        if (op === "*=" && !actual.includes(attrVal)) return false;
+        if (op === "^=" && !actual.startsWith(attrVal)) return false;
+        if (op === "$=" && !actual.endsWith(attrVal)) return false;
+      }
+      rest = rest.slice(attrMatch[0].length);
+    } else {
+      break;
+    }
+  }
+
+  return true;
+}
+
+function matchesSelector(el, sel) {
+  if (!el || el.nodeType !== 1) return false;
+  const s = sel.trim();
+  if (s === "*") return true;
+
+  if (s.includes(",")) {
+    const parts = s.split(",");
+    for (let i = 0; i < parts.length; i++) {
+      if (matchesSelector(el, parts[i])) return true;
+    }
+    return false;
+  }
+
+  const parts = s.split(/\s+/);
+  if (parts.length > 1) {
+    if (!matchesSimpleSelector(el, parts[parts.length - 1])) return false;
+    let curr = el.parentNode;
+    let pIdx = parts.length - 2;
+    while (curr && pIdx >= 0) {
+      if (curr.nodeType === 1 && matchesSimpleSelector(curr, parts[pIdx])) {
+        pIdx--;
+      }
+      curr = curr.parentNode;
+    }
+    return pIdx < 0;
+  }
+
+  return matchesSimpleSelector(el, s);
+}
+
+function ParsedText(data, ownerDoc) {
+  this.nodeType = TEXT_NODE;
+  this.nodeName = "#text";
+  this.data = String(data !== undefined ? data : "");
+  this.ownerDocument = ownerDoc || null;
+  this.parentNode = null;
+  registerParsedNode(this);
+}
+Object.defineProperty(ParsedText.prototype, "textContent", {
+  get: function () { return this.data; },
+  set: function (v) { this.data = String(v); },
+  configurable: true,
+});
+Object.defineProperty(ParsedText.prototype, "nodeValue", {
+  get: function () { return this.data; },
+  set: function (v) { this.data = String(v); },
+  configurable: true,
+});
+Object.defineProperty(ParsedText.prototype, "length", {
+  get: function () { return this.data.length; },
+  configurable: true,
+});
+Object.defineProperty(ParsedText.prototype, "parentElement", {
+  get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
+  configurable: true,
+});
+
+function ParsedComment(data, ownerDoc) {
+  this.nodeType = COMMENT_NODE;
+  this.nodeName = "#comment";
+  this.data = String(data !== undefined ? data : "");
+  this.ownerDocument = ownerDoc || null;
+  this.parentNode = null;
+  registerParsedNode(this);
+}
+Object.defineProperty(ParsedComment.prototype, "textContent", {
+  get: function () { return this.data; },
+  set: function (v) { this.data = String(v); },
+  configurable: true,
+});
+Object.defineProperty(ParsedComment.prototype, "nodeValue", {
+  get: function () { return this.data; },
+  set: function (v) { this.data = String(v); },
+  configurable: true,
+});
+Object.defineProperty(ParsedComment.prototype, "length", {
+  get: function () { return this.data.length; },
+  configurable: true,
+});
+Object.defineProperty(ParsedComment.prototype, "parentElement", {
+  get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
+  configurable: true,
+});
+
+function ParsedFragment(ownerDoc) {
+  this.nodeType = DOCUMENT_FRAGMENT_NODE;
+  this.nodeName = "#document-fragment";
+  this.ownerDocument = ownerDoc || null;
+  this.parentNode = null;
+  this._children = [];
+  registerParsedNode(this);
+}
+ParsedFragment.prototype.appendChild = function (child) {
+  if (!child || typeof child !== "object") {
+    throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    const kids = Array.from(child.childNodes || child._children || []);
+    for (let i = 0; i < kids.length; i++) {
+      this.appendChild(kids[i]);
+    }
+    if (child._children) child._children.length = 0;
+    return child;
+  }
+  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+    try { child.parentNode.removeChild(child); } catch (e) {}
+  }
+  child.parentNode = this;
+  child.ownerDocument = this.ownerDocument || this;
+  this._children.push(child);
+  return child;
+};
+ParsedFragment.prototype.removeChild = function (child) {
+  if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+    }
+    const err = new Error("NotFoundError: Node was not found");
+    err.name = "NotFoundError";
+    throw err;
+  }
+  const idx = this._children.indexOf(child);
+  if (idx >= 0) this._children.splice(idx, 1);
+  child.parentNode = null;
+  return child;
+};
+Object.defineProperty(ParsedFragment.prototype, "childNodes", {
+  get: function () {
+    return new NodeList(this._children);
+  },
+  configurable: true,
+});
+Object.defineProperty(ParsedFragment.prototype, "children", {
+  get: function () {
+    return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+  },
+  configurable: true,
+});
+Object.defineProperty(ParsedFragment.prototype, "firstChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[0] : null;
+  },
+  configurable: true,
+});
+Object.defineProperty(ParsedFragment.prototype, "lastChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+  },
+  configurable: true,
+});
+
+function ParsedElement(tagName, ownerDoc) {
+  this.nodeType = ELEMENT_NODE;
+  const isHtml = !ownerDoc || ownerDoc.contentType === "text/html";
+  this.localName = String(tagName).toLowerCase();
+  this.tagName = isHtml ? String(tagName).toUpperCase() : this.localName;
+  this.nodeName = this.tagName;
+  this.ownerDocument = ownerDoc || null;
+  this.parentNode = null;
+  this._attrs = new Map();
+  this._attrCases = new Map();
+  this._children = [];
+  registerParsedNode(this);
+}
+
+ParsedElement.prototype.getAttribute = function (name) {
+  const k = String(name).toLowerCase();
+  return this._attrs.has(k) ? this._attrs.get(k) : null;
+};
+
+ParsedElement.prototype.setAttribute = function (name, value) {
+  const k = String(name).toLowerCase();
+  const val = String(value);
+  this._attrs.set(k, val);
+  if (!this._attrCases.has(k)) {
+    this._attrCases.set(k, String(name));
+  }
+};
+
+ParsedElement.prototype.hasAttribute = function (name) {
+  const k = String(name).toLowerCase();
+  return this._attrs.has(k);
+};
+
+ParsedElement.prototype.removeAttribute = function (name) {
+  const k = String(name).toLowerCase();
+  this._attrs.delete(k);
+  this._attrCases.delete(k);
+};
+
+ParsedElement.prototype.getAttributeNames = function () {
+  return Array.from(this._attrCases.values());
+};
+
+Object.defineProperty(ParsedElement.prototype, "id", {
+  get: function () { return this.getAttribute("id") || ""; },
+  set: function (v) { this.setAttribute("id", v); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "className", {
+  get: function () { return this.getAttribute("class") || ""; },
+  set: function (v) { this.setAttribute("class", v); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "classList", {
+  get: function () {
+    const cls = this.className;
+    const tokens = cls.split(/\s+/).filter(Boolean);
+    const self = this;
+    tokens.contains = function (t) { return tokens.indexOf(t) >= 0; };
+    tokens.add = function (t) {
+      if (!tokens.contains(t)) {
+        tokens.push(t);
+        self.className = tokens.join(" ");
+      }
+    };
+    tokens.remove = function (t) {
+      const i = tokens.indexOf(t);
+      if (i >= 0) {
+        tokens.splice(i, 1);
+        self.className = tokens.join(" ");
+      }
+    };
+    return tokens;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "dataset", {
+  get: function () {
+    const el = this;
+    return new Proxy(Object.create(null), {
+      get: function (target, prop) {
+        if (typeof prop !== "string") return undefined;
+        const attrName = "data-" + camelToDash(prop);
+        return el.hasAttribute(attrName) ? el.getAttribute(attrName) : undefined;
+      },
+      set: function (target, prop, value) {
+        if (typeof prop !== "string") return true;
+        const attrName = "data-" + camelToDash(prop);
+        el.setAttribute(attrName, String(value));
+        return true;
+      },
+      has: function (target, prop) {
+        if (typeof prop !== "string") return false;
+        const attrName = "data-" + camelToDash(prop);
+        return el.hasAttribute(attrName);
+      },
+      deleteProperty: function (target, prop) {
+        if (typeof prop !== "string") return true;
+        const attrName = "data-" + camelToDash(prop);
+        el.removeAttribute(attrName);
+        return true;
+      },
+      ownKeys: function () {
+        const keys = [];
+        const names = el.getAttributeNames ? el.getAttributeNames() : [];
+        for (let i = 0; i < names.length; i++) {
+          if (names[i].startsWith("data-")) {
+            keys.push(dashToCamel(names[i].slice(5)));
+          }
+        }
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (target, prop) {
+        if (typeof prop === "string") {
+          const attrName = "data-" + camelToDash(prop);
+          if (el.hasAttribute(attrName)) {
+            return {
+              value: el.getAttribute(attrName),
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            };
+          }
+        }
+        return undefined;
+      },
+    });
+  },
+  configurable: true,
+});
+
+function collectParsedText(node) {
+  if (node.nodeType === TEXT_NODE) return node.data || "";
+  if (node.nodeType === ELEMENT_NODE || node.nodeType === DOCUMENT_FRAGMENT_NODE || node.nodeType === DOCUMENT_NODE) {
+    let res = "";
+    const kids = node._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      res += collectParsedText(kids[i]);
+    }
+    return res;
+  }
+  return "";
+}
+
+Object.defineProperty(ParsedElement.prototype, "textContent", {
+  get: function () {
+    return collectParsedText(this);
+  },
+  set: function (v) {
+    this._children = [];
+    const val = String(v);
+    if (val.length > 0) {
+      const t = this.ownerDocument ? this.ownerDocument.createTextNode(val) : new ParsedText(val, null);
+      t.parentNode = this;
+      this._children.push(t);
+    }
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "childNodes", {
+  get: function () {
+    return new NodeList(this._children);
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "children", {
+  get: function () {
+    return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "firstChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[0] : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "lastChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "previousSibling", {
+  get: function () {
+    if (!this.parentNode || !this.parentNode._children) return null;
+    const idx = this.parentNode._children.indexOf(this);
+    return idx > 0 ? this.parentNode._children[idx - 1] : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "nextSibling", {
+  get: function () {
+    if (!this.parentNode || !this.parentNode._children) return null;
+    const idx = this.parentNode._children.indexOf(this);
+    return (idx >= 0 && idx < this.parentNode._children.length - 1) ? this.parentNode._children[idx + 1] : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "parentElement", {
+  get: function () {
+    return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null;
+  },
+  configurable: true,
+});
+
+ParsedElement.prototype.appendChild = function (child) {
+  if (!child || typeof child !== "object") {
+    throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    const kids = Array.from(child.childNodes || child._children || []);
+    for (let i = 0; i < kids.length; i++) {
+      this.appendChild(kids[i]);
+    }
+    if (child._children) child._children.length = 0;
+    return child;
+  }
+  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+    try { child.parentNode.removeChild(child); } catch (e) {}
+  }
+  child.parentNode = this;
+  child.ownerDocument = this.ownerDocument || this;
+  this._children.push(child);
+  return child;
+};
+
+ParsedElement.prototype.removeChild = function (child) {
+  if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+    }
+    const err = new Error("NotFoundError: Node was not found");
+    err.name = "NotFoundError";
+    throw err;
+  }
+  const idx = this._children.indexOf(child);
+  if (idx >= 0) this._children.splice(idx, 1);
+  child.parentNode = null;
+  return child;
+};
+
+ParsedElement.prototype.insertBefore = function (newChild, refChild) {
+  if (!newChild || typeof newChild !== "object") {
+    throw new TypeError("Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  if (refChild == null) {
+    return this.appendChild(newChild);
+  }
+  const idx = this._children.indexOf(refChild);
+  if (idx === -1) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+    }
+    const err = new Error("NotFoundError: Node was not found");
+    err.name = "NotFoundError";
+    throw err;
+  }
+  if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    const kids = Array.from(newChild.childNodes || newChild._children || []);
+    for (let i = 0; i < kids.length; i++) {
+      this.insertBefore(kids[i], refChild);
+    }
+    if (newChild._children) newChild._children.length = 0;
+    return newChild;
+  }
+  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+    try { newChild.parentNode.removeChild(newChild); } catch (e) {}
+  }
+  newChild.parentNode = this;
+  newChild.ownerDocument = this.ownerDocument || this;
+  const curIdx = this._children.indexOf(refChild);
+  this._children.splice(curIdx >= 0 ? curIdx : this._children.length, 0, newChild);
+  return newChild;
+};
+
+ParsedElement.prototype.querySelector = function (sel) {
+  if (arguments.length === 0) throw new TypeError("querySelector: 1 argument required");
+  function walk(node) {
+    const kids = node._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k.nodeType === ELEMENT_NODE) {
+        if (matchesSelector(k, sel)) return k;
+        const found = walk(k);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  return walk(this);
+};
+
+ParsedElement.prototype.querySelectorAll = function (sel) {
+  if (arguments.length === 0) throw new TypeError("querySelectorAll: 1 argument required");
+  const results = [];
+  function walk(node) {
+    const kids = node._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k.nodeType === ELEMENT_NODE) {
+        if (matchesSelector(k, sel)) results.push(k);
+        walk(k);
+      }
+    }
+  }
+  walk(this);
+  return new NodeList(results);
+};
+
+ParsedElement.prototype.getElementById = function (id) {
+  return this.querySelector("#" + id);
+};
+
+ParsedElement.prototype.getElementsByTagName = function (tag) {
+  return this.querySelectorAll(tag);
+};
+
+ParsedElement.prototype.getElementsByClassName = function (cls) {
+  return this.querySelectorAll("." + cls);
+};
+
+ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
+  const p = prefix === "" || prefix === undefined ? null : String(prefix);
+  let n = this;
+  while (n && n.nodeType === ELEMENT_NODE) {
+    if (p === null) {
+      if (n.hasAttribute("xmlns")) return n.getAttribute("xmlns") || null;
+    } else {
+      if (n.hasAttribute("xmlns:" + p)) return n.getAttribute("xmlns:" + p) || null;
+      const attrs = n.attributes;
+      if (attrs) {
+        for (let i = 0; i < attrs.length; i++) {
+          const a = attrs[i];
+          if (a && a.prefix === "xmlns" && a.localName === p) {
+            return a.value || null;
+          }
+        }
+      }
+    }
+    n = n.parentElement || n.parentNode;
+  }
+  return null;
+};
+
+function ParsedDocument(contentType, compatMode) {
+  this.nodeType = DOCUMENT_NODE;
+  this.nodeName = "#document";
+  this.contentType = contentType || "text/html";
+  this.compatMode = compatMode || "CSS1Compat";
+  this.characterSet = "UTF-8";
+  this.charset = "UTF-8";
+  this.referrer = "";
+  this.URL = "";
+  this.documentURI = "";
+  this.baseURI = "";
+  this.defaultView = null;
+  this.ownerDocument = null;
+  this.parentNode = null;
+  this._children = [];
+  this.documentElement = null;
+  this.head = null;
+  this.body = null;
+  this._title = "";
+  this._doctypeInfo = null;
+  this._doctypeNode = null;
+  registerParsedNode(this);
+}
+
+Object.defineProperty(ParsedDocument.prototype, "title", {
+  get: function () {
+    const titleEl = this.querySelector ? this.querySelector("title") : null;
+    return titleEl ? (titleEl.textContent || "") : this._title;
+  },
+  set: function (v) {
+    this._title = String(v);
+    const titleEl = this.querySelector ? this.querySelector("title") : null;
+    if (titleEl) {
+      titleEl.textContent = this._title;
+    }
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "doctype", {
+  get: function () {
+    if (!this._doctypeInfo) return null;
+    if (!this._doctypeNode) {
+      this._doctypeNode = {
+        nodeType: DOCUMENT_TYPE_NODE,
+        nodeName: this._doctypeInfo.name,
+        name: this._doctypeInfo.name,
+        publicId: this._doctypeInfo.publicId,
+        systemId: this._doctypeInfo.systemId,
+        ownerDocument: this,
+        parentNode: this,
+      };
+    }
+    return this._doctypeNode;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "childNodes", {
+  get: function () {
+    return new NodeList(this._children);
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "children", {
+  get: function () {
+    return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "firstChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[0] : null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "lastChild", {
+  get: function () {
+    return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+  },
+  configurable: true,
+});
+
+ParsedDocument.prototype.createElement = function (tagName) {
+  return new ParsedElement(tagName, this);
+};
+
+ParsedDocument.prototype.createTextNode = function (text) {
+  return new ParsedText(text, this);
+};
+
+ParsedDocument.prototype.createComment = function (data) {
+  return new ParsedComment(data, this);
+};
+
+ParsedDocument.prototype.createDocumentFragment = function () {
+  return new ParsedFragment(this);
+};
+
+ParsedDocument.prototype.querySelector = function (sel) {
+  if (arguments.length === 0) throw new TypeError("querySelector: 1 argument required");
+  for (let i = 0; i < this._children.length; i++) {
+    const root = this._children[i];
+    if (root.nodeType === ELEMENT_NODE) {
+      if (matchesSelector(root, sel)) return root;
+      const found = root.querySelector(sel);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+ParsedDocument.prototype.querySelectorAll = function (sel) {
+  if (arguments.length === 0) throw new TypeError("querySelectorAll: 1 argument required");
+  const list = [];
+  for (let i = 0; i < this._children.length; i++) {
+    const root = this._children[i];
+    if (root.nodeType === ELEMENT_NODE) {
+      if (matchesSelector(root, sel)) list.push(root);
+      const sub = root.querySelectorAll(sel);
+      for (let j = 0; j < sub.length; j++) list.push(sub[j]);
+    }
+  }
+  return new NodeList(list);
+};
+
+ParsedDocument.prototype.getElementById = function (id) {
+  return this.querySelector("#" + id);
+};
+
+ParsedDocument.prototype.getElementsByTagName = function (tag) {
+  return this.querySelectorAll(tag);
+};
+
+ParsedDocument.prototype.getElementsByClassName = function (cls) {
+  return this.querySelectorAll("." + cls);
+};
+
+ParsedDocument.prototype.createNSResolver = function (nodeResolver) {
+  return nodeResolver;
+};
+
+ParsedDocument.prototype.evaluate = function (expression, contextNode, resolver, type, result) {
+  if (typeof evaluateXPath !== "undefined") {
+    return evaluateXPath(expression, contextNode || this, resolver, type, result);
+  }
+  throw new TypeError("evaluateXPath is not available");
+};
+
+ParsedDocument.prototype.createExpression = function (expression, resolver) {
+  if (typeof createExpression !== "undefined") {
+    return createExpression(expression, resolver);
+  }
+  throw new TypeError("createExpression is not available");
+};
+
+ParsedDocument.prototype.lookupNamespaceURI = function (prefix) {
+  return this.documentElement ? this.documentElement.lookupNamespaceURI(prefix) : null;
+};
+
+function parseDocument(str, mime) {
+  const type = String(mime || "").toLowerCase();
+  if (!SUPPORTED_MIME_TYPES.has(type)) {
+    throw new TypeError(
+      "Failed to execute 'parseFromString' on 'DOMParser': The provided value '" +
+        mime +
+        "' is not a valid enum value of type SupportedType."
+    );
+  }
+
+  let input = typeof str === "string" ? str : String(str ?? "");
+  const trimmed = input.replace(/^\uFEFF/, "").trim();
+  const isHtml = type === "text/html";
+  const compatMode = isHtml ? (/^<!doctype\s+html\s*>/i.test(trimmed) ? "CSS1Compat" : "BackCompat") : "CSS1Compat";
+  const doc = new ParsedDocument(type, compatMode);
+  doc._doctypeInfo = leadingDoctype(trimmed, isHtml);
+
+  if (isHtml) {
+    if (input.startsWith("<?")) {
+      const end = input.indexOf(">");
+      const rawPI = input.slice(1, end < 0 ? undefined : end);
+      const cNode = doc.createComment(rawPI);
+      cNode.parentNode = doc;
+      doc._children.push(cNode);
+      input = end < 0 ? "" : input.slice(end + 1);
+    }
+
+    const root = doc.createElement("html");
+    const head = doc.createElement("head");
+    const body = doc.createElement("body");
     root.appendChild(head);
     root.appendChild(body);
-
+    root.parentNode = doc;
+    doc._children.push(root);
     doc.documentElement = root;
     doc.head = head;
     doc.body = body;
 
-    // Extract title if present
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    if (titleMatch) {
-      doc.title = titleMatch[1];
-      const titleEl = document.createElement("title");
-      titleEl.textContent = titleMatch[1];
-      head.appendChild(titleEl);
-    } else {
-      doc.title = "";
+    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+    let stack = [body];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = tokenRegex.exec(input)) !== null) {
+      if (match.index > lastIndex) {
+        const text = unescapeEntities(input.slice(lastIndex, match.index));
+        if (text.length > 0) {
+          const tNode = doc.createTextNode(text);
+          stack[stack.length - 1].appendChild(tNode);
+        }
+      }
+      lastIndex = tokenRegex.lastIndex;
+
+      if (match[1] !== undefined) {
+        // Comment
+        const cNode = doc.createComment(match[1]);
+        stack[stack.length - 1].appendChild(cNode);
+      } else if (match[2] !== undefined) {
+        // CDATA
+        const tNode = doc.createTextNode(match[2]);
+        stack[stack.length - 1].appendChild(tNode);
+      } else if (match[3] !== undefined) {
+        // PI
+        const cNode = doc.createComment("?" + match[3]);
+        stack[stack.length - 1].appendChild(cNode);
+      } else if (match[4] !== undefined) {
+        // End tag
+        const endTag = match[4].toLowerCase();
+        for (let i = stack.length - 1; i > 0; i--) {
+          if (stack[i].localName === endTag) {
+            stack.length = i;
+            break;
+          }
+        }
+      } else if (match[5] !== undefined) {
+        // Start tag
+        const tagName = match[5];
+        const lowerTag = tagName.toLowerCase();
+        const attrStr = match[6] || "";
+        const isSelfClosing = Boolean(match[7]);
+
+        if (lowerTag === "html") {
+          applyAttributes(root, attrStr);
+        } else if (lowerTag === "head") {
+          applyAttributes(head, attrStr);
+          stack = [head];
+        } else if (lowerTag === "body") {
+          applyAttributes(body, attrStr);
+          stack = [body];
+        } else {
+          const el = doc.createElement(tagName);
+          applyAttributes(el, attrStr);
+
+          if (lowerTag === "title" || lowerTag === "meta" || lowerTag === "link" || lowerTag === "style") {
+            head.appendChild(el);
+            if (lowerTag === "title" && !isSelfClosing) {
+              stack.push(el);
+            }
+          } else {
+            stack[stack.length - 1].appendChild(el);
+            if (!isSelfClosing && !HTML_VOID_TAGS.has(lowerTag)) {
+              stack.push(el);
+            }
+          }
+        }
+      }
     }
 
-    doc.querySelector = function (sel) { return root.querySelector ? root.querySelector(sel) : null; };
-    doc.querySelectorAll = function (sel) { return root.querySelectorAll ? root.querySelectorAll(sel) : new NodeList([]); };
-    doc.getElementById = function (id) {
-      if (root.querySelectorAll) {
-        const matches = root.querySelectorAll("#" + id);
-        return matches.length > 0 ? matches[0] : null;
+    if (lastIndex < input.length) {
+      const text = unescapeEntities(input.slice(lastIndex));
+      if (text.length > 0) {
+        const tNode = doc.createTextNode(text);
+        stack[stack.length - 1].appendChild(tNode);
       }
-      return null;
-    };
+    }
+
+    const titleEl = head.querySelector("title");
+    if (titleEl) {
+      doc._title = titleEl.textContent;
+    }
+  } else {
+    // XML / SVG mode
+    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+    let stack = [doc];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = tokenRegex.exec(input)) !== null) {
+      if (match.index > lastIndex) {
+        const text = unescapeEntities(input.slice(lastIndex, match.index));
+        if (text.length > 0 && stack.length > 1) {
+          const tNode = doc.createTextNode(text);
+          stack[stack.length - 1].appendChild(tNode);
+        }
+      }
+      lastIndex = tokenRegex.lastIndex;
+
+      if (match[1] !== undefined) {
+        const cNode = doc.createComment(match[1]);
+        if (stack.length === 1) {
+          cNode.parentNode = doc;
+          doc._children.push(cNode);
+        } else {
+          stack[stack.length - 1].appendChild(cNode);
+        }
+      } else if (match[2] !== undefined) {
+        if (stack.length > 1) {
+          const tNode = doc.createTextNode(match[2]);
+          stack[stack.length - 1].appendChild(tNode);
+        }
+      } else if (match[3] !== undefined) {
+        const cNode = doc.createComment("?" + match[3]);
+        if (stack.length === 1) {
+          cNode.parentNode = doc;
+          doc._children.push(cNode);
+        } else {
+          stack[stack.length - 1].appendChild(cNode);
+        }
+      } else if (match[4] !== undefined) {
+        const endTag = match[4].toLowerCase();
+        for (let i = stack.length - 1; i > 0; i--) {
+          if (stack[i].localName === endTag) {
+            stack.length = i;
+            break;
+          }
+        }
+      } else if (match[5] !== undefined) {
+        const tagName = match[5];
+        const attrStr = match[6] || "";
+        const isSelfClosing = Boolean(match[7]);
+
+        const el = doc.createElement(tagName);
+        applyAttributes(el, attrStr);
+
+        if (stack.length === 1) {
+          el.parentNode = doc;
+          doc._children.push(el);
+          doc.documentElement = el;
+          if (!isSelfClosing) {
+            stack.push(el);
+          }
+        } else {
+          stack[stack.length - 1].appendChild(el);
+          if (!isSelfClosing) {
+            stack.push(el);
+          }
+        }
+      }
+    }
+
+    if (lastIndex < input.length) {
+      const text = unescapeEntities(input.slice(lastIndex));
+      if (text.length > 0 && stack.length > 1) {
+        const tNode = doc.createTextNode(text);
+        stack[stack.length - 1].appendChild(tNode);
+      }
+    }
   }
 
   return doc;
+}
+
+function applyAttributes(el, attrStr) {
+  if (!attrStr) return;
+  const attrRegex = /([a-zA-Z0-9_:-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let m;
+  while ((m = attrRegex.exec(attrStr)) !== null) {
+    const name = m[1];
+    const val = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : (m[4] !== undefined ? m[4] : ""));
+    el.setAttribute(name, unescapeEntities(val));
+  }
+}
+
+function DOMParser() {}
+
+DOMParser.prototype.parseFromString = function (str, mimeType) {
+  return parseDocument(str, mimeType);
 };
 
 markNative(DOMParser, "DOMParser");
 markNative(DOMParser.prototype.parseFromString, "parseFromString");
+
+if (typeof globalThis !== "undefined") {
+  globalThis.DOMParser = DOMParser;
+}
+if (typeof window !== "undefined") {
+  window.DOMParser = DOMParser;
+}

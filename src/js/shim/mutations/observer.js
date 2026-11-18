@@ -42,6 +42,9 @@ function isSameTarget(a, b) {
 }
 
 function notifyMutation(record) {
+  if (typeof globalThis !== "undefined") {
+    globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
+  }
   for (const obs of activeObservers) {
     for (const sub of obs._targets) {
       if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {

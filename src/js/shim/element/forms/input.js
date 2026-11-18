@@ -65,6 +65,26 @@ function installInputElement(global) {
     set: function (v) {
       this._checkedDirty = true;
       this._checked = Boolean(v);
+      const isRadio = (this.getAttribute("type") || "").toLowerCase() === "radio";
+      if (isRadio && v && this.name) {
+        const form = findAssociatedForm(this);
+        const root = form || (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+        if (root && root.querySelectorAll) {
+          const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+          for (let i = 0; i < radios.length; i++) {
+            if (radios[i] !== this) {
+              radios[i]._checkedDirty = true;
+              radios[i]._checked = false;
+              if (radios[i].removeAttribute) radios[i].removeAttribute("checked");
+            }
+          }
+        }
+      }
+      if (v) {
+        if (this.setAttribute) this.setAttribute("checked", "");
+      } else {
+        if (this.removeAttribute) this.removeAttribute("checked");
+      }
     },
     configurable: true,
   });

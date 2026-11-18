@@ -1983,3 +1983,21 @@
   - E2E 目标用例 `checkbox-remove-attribute-ns`、`raw-text-inner-html`、`document-collections`、`prefixed-attribute-writes`、`boa-typed-array-natives` 100% 绿色通过；
   - 独立可执行二进制 `bin/main`（9.6MB）构建无误。
 
+## [2026-11-18 12:20:00] Turn 60
+### Phase 47 闭环：XPath 1.0 规范引擎、DOMParser 隔离与 CDP Accessibility 大报文闭环
+- **3 路并行攻坚协作**：
+  - **子智能体 1 (`fb0dfcaa`)**：在 `src/js/shim/xpath.js` 实现完整的 XPath 1.0 Tokenizer / Lexer、AST 递归下降解析器与求值器，导出 `XPathResult`、`XPathExpression`、`XPathEvaluator`，修复 QuickJS 严格模式 setter 报错与 `NodeType.Text` 规范值映射，打通 `e2e/xpath.e2e.test.ts` 全部 9 项用例。
+  - **子智能体 2 (`d9ac39ae`)**：重构 `src/js/shim/parser.js` 与 `node-base.js`，实装严密的 MIME 校验门禁、`ParsedDocument` 隔离树、Proxy `dataset` 访问、`ParsedFragment` 及其 `NotFoundError` 校验、`WeakSet` 追踪与防伪造安全跨文档领养，打通 3 项 DOMParser E2E 用例。
+  - **子智能体 3 (`1cd332c8`)**：重构 `src/cdp/server.cp` 将 4KB 缓冲区升级为 256KB 动态分配，根除无障碍树序列化 `Buffer overflow (-32000)`；在 `src/cdp/accessibility.cp` 完整实装 `Accessibility.getPartialAXTree` 与 `getAXNodeAndAncestors`，打通 `e2e/accessibility.e2e.test.ts` 全部 7 项用例（111 项断言）。
+- **验证与闭环**：
+  - 白盒单元测试：`test_js_dom.cp` (5/5 PASS)、`test_dom_api_extensions.cp` PASS、`test_document_collections.cp` PASS；
+  - 静态门禁：所有修改的 CP 源码 100% 通过 4 道编译器门禁（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 黑盒用例（19 项用例全部 100% 绿灯）：
+    - `e2e/xpath.e2e.test.ts` (9/9 PASS)
+    - `e2e/accessibility.e2e.test.ts` (7/7 PASS, 111 expect 断言通过)
+    - `e2e/dom-parser-dataset.e2e.test.ts` (1/1 PASS)
+    - `e2e/domparser-adoption-handle-privacy.e2e.test.ts` (1/1 PASS)
+    - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
+  - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
+

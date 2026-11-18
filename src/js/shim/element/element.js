@@ -95,6 +95,9 @@ function installElementExtensions(proto) {
 
   // Make Element inherit from Node / EventTarget
   Object.setPrototypeOf(proto, Node.prototype);
+  proto.appendChild = Node.prototype.appendChild;
+  proto.insertBefore = Node.prototype.insertBefore;
+  proto.removeChild = Node.prototype.removeChild;
 
   if (proto.nodeType === undefined) {
     Object.defineProperty(proto, "nodeType", {
@@ -117,6 +120,84 @@ function installElementExtensions(proto) {
     },
     configurable: true,
   });
+
+  Object.defineProperty(proto, "prefix", {
+    get: function () {
+      if (this._prefix !== undefined) return this._prefix;
+      const tag = this.tagName || "";
+      const colon = tag.indexOf(":");
+      return colon !== -1 ? tag.slice(0, colon) : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "namespaceURI", {
+    get: function () {
+      if (this._namespaceURI !== undefined) return this._namespaceURI;
+      if (this.getAttribute) {
+        const xmlns = this.getAttribute("xmlns");
+        if (xmlns !== null && xmlns !== undefined && xmlns !== "") return xmlns;
+      }
+      let curr = this;
+      while (curr) {
+        const tag = String(curr.localName || curr.tagName || "").toLowerCase();
+        if (tag === "svg") return "http://www.w3.org/2000/svg";
+        if (tag === "math") return "http://www.w3.org/1998/Math/MathML";
+        curr = curr.parentElement || curr.parentNode;
+      }
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (!doc || !doc.contentType || doc.contentType === "text/html") {
+        return "http://www.w3.org/1999/xhtml";
+      }
+      return null;
+    },
+    set: function (v) {
+      this._namespaceURI = v;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "data", {
+    get: function () { return this.textContent || ""; },
+    set: function (v) {
+      this.textContent = String(v);
+      if (typeof notifyMutation === "function") {
+        notifyMutation(new MutationRecord("characterData", this));
+      }
+    },
+    configurable: true,
+  });
+
+  if (!proto.lookupNamespaceURI) {
+    proto.lookupNamespaceURI = Node.prototype.lookupNamespaceURI;
+  }
+
+  if (!proto.append) {
+    proto.append = function (...nodes) {
+      for (const n of nodes) {
+        let node;
+        if (n && typeof n === "object" && typeof n.nodeType === "number") {
+          node = n;
+        } else if (typeof document !== "undefined" && document.createTextNode) {
+          node = document.createTextNode(String(n));
+        } else {
+          node = new Text(String(n));
+        }
+        this.appendChild(node);
+      }
+    };
+    markNative(proto.append, "append");
+  }
+
+  if (!proto.remove) {
+    proto.remove = function () {
+      const parent = this.parentElement || this.parentNode;
+      if (parent && parent.removeChild) {
+        parent.removeChild(this);
+      }
+    };
+    markNative(proto.remove, "remove");
+  }
 
   // classList getter
   Object.defineProperty(proto, "classList", {
@@ -793,6 +874,25 @@ function installElementExtensions(proto) {
     set: function (v) {
       this._checkedDirty = true;
       this._checked = Boolean(v);
+      const isRadio = (this.getAttribute && (this.getAttribute("type") || "").toLowerCase() === "radio");
+      if (isRadio && v && this.name) {
+        const root = (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+        if (root && root.querySelectorAll) {
+          const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+          for (let i = 0; i < radios.length; i++) {
+            if (radios[i] !== this) {
+              radios[i]._checkedDirty = true;
+              radios[i]._checked = false;
+              if (radios[i].removeAttribute) radios[i].removeAttribute("checked");
+            }
+          }
+        }
+      }
+      if (v) {
+        if (this.setAttribute) this.setAttribute("checked", "");
+      } else {
+        if (this.removeAttribute) this.removeAttribute("checked");
+      }
     },
     configurable: true,
   });

@@ -1012,3 +1012,33 @@
   - E2E 测试：`checkbox-remove-attribute-ns`、`raw-text-inner-html`、`document-collections`、`prefixed-attribute-writes`、`boa-typed-array-natives` 100% 绿灯通过；
   - 独立单二进制：`bin/main`（9.6MB）构建成功。
 
+## Phase 47: XPath 1.0 规范引擎、DOMParser 隔离与 CDP Accessibility 大报文闭环 (100% Closed)
+- **`src/js/shim/xpath.js`**：
+  - 完整实现 XPath 1.0 Tokenizer / Lexer、AST 递归下降解析器与求值器；
+  - 暴露 `XPathResult`, `XPathExpression`, `XPathEvaluator`, `createExpression`, `evaluateXPath`，并挂载至全局及 Document 原型；
+  - `XPathResult` 常量严格只读，直接构造抛出 `TypeError("Illegal constructor")`；
+  - 异常体系对齐 DOMException：语法错误抛 `SyntaxError`，命名空间未解抛 `NamespaceError`；
+  - 支持全部 13 种轴（含 `ancestor`、`preceding-sibling`、`descendant-or-self` 等）、属性大小写不敏感匹配、核心函数库（`count`、`string`、`normalize-space`、`boolean`、`not`、`substring`、`translate`、`sum`、`id`、`mod`、`div`、`1 div 0 -> Infinity` 等）；
+  - 迭代器模式支持树变更失效（`invalidIteratorState` 随 `appendChild`/`remove` 置位，绘制操作/滚动/选区安全共存）。
+- **`src/js/shim/parser.js` & `node-base.js`**：
+  - 实现标准 `DOMParser` MIME 校验门禁（支持 `text/html`、`text/xml`、`application/xml`、`application/xhtml+xml`、`image/svg+xml`，非法类型抛 `TypeError`）；
+  - 实装隔离 `ParsedDocument`、`ParsedElement`、`ParsedFragment`、`ParsedText`、`ParsedComment` 树结构；
+  - `ParsedElement.dataset` 通过 Proxy 实现 `data-foo-bar` 与 `dataset.fooBar` 双向读写与 `in` 操作符支持；
+  - `ParsedFragment.removeChild` 在非直接子节点调用时抛出 `DOMException("...", "NotFoundError")`；
+  - `node-base.js` 引入 `WeakSet` 解析节点追踪与安全跨文档领养，严密防护伪造对象（`_id: -1`）抛 `TypeError`，页面可见包装器杜绝内部 `_dom` 句柄泄露。
+- **`src/cdp/server.cp` & `src/cdp/accessibility.cp`**：
+  - `src/cdp/server.cp` 将固定 4KB 响应缓冲区重构为 256KB 动态分配，彻底消除大型无障碍树序列化触发的 `Buffer overflow (-32000)`；
+  - `src/cdp/accessibility.cp` 实装 `Accessibility.getPartialAXTree` 与 `getAXNodeAndAncestors`，支持相对祖先与子树递归检索；
+  - 启发式无数据表格自动降级为 `presentationalRole`（`role: none`），支持嵌套列表层深、`visibility` 反转显现、快捷键与 Tristate 属性。
+- **测试与门禁验证**：
+  - 白盒测试：`test_js_dom.cp` (5/5 PASS)、`test_dom_api_extensions.cp` (PASS)、`test_document_collections.cp` (PASS) 100% 绿色回归；
+  - 4 道静态门禁：所有修改的 CP 文件 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试（19 项用例全部 100% 绿灯）：
+    - `e2e/xpath.e2e.test.ts`（9/9 PASS）
+    - `e2e/accessibility.e2e.test.ts`（7/7 PASS, 111 项断言通过）
+    - `e2e/dom-parser-dataset.e2e.test.ts`（1/1 PASS）
+    - `e2e/domparser-adoption-handle-privacy.e2e.test.ts`（1/1 PASS）
+    - `e2e/domparser-fragment-remove-child.e2e.test.ts`（1/1 PASS）
+  - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
+

@@ -439,6 +439,17 @@ export class Page {
     return this.cdp;
   }
 
+  async setViewport(viewport: { width: number; height: number; deviceScaleFactor?: number }): Promise<void> {
+    try {
+      await this.cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: viewport.deviceScaleFactor ?? 1,
+        mobile: false,
+      });
+    } catch {}
+  }
+
   target() {
     return {
       createCDPSession: () => this.createCDPSession(),

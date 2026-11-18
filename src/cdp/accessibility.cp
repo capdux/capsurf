@@ -3,14 +3,15 @@
 // CDP Accessibility Domain Handler for CapSurf
 // Builds AXTree (Accessibility Tree) and handles CDP Accessibility protocol commands.
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { NodeId, NULL_NODE, NodeData, NodeType, Document } from "../dom/dom.cp";
+import { resolveUrl } from "../eval/script_gate.cp";
 
 pub const MAX_AX_NODES: usize = 256;
 pub const MAX_CHILDREN_PER_AX_NODE: usize = 32;
 pub const MAX_PROPERTIES_PER_AX_NODE: usize = 16;
-pub const TEXT_POOL_SIZE: usize = 8192;
+pub const TEXT_POOL_SIZE: usize = 32768;
 pub const ID_BUFFER_SIZE: usize = MAX_AX_NODES * 16;
 
 @tls let ax_event_buf: [4096]u8 = [0; 4096];
@@ -331,6 +332,24 @@ fn inlineStyleVisibilityHidden(style: []const u8): bool {
     return false;
 }
 
+fn inlineStyleVisibilityVisible(style: []const u8): bool {
+    let it = std.mem.splitScalar(u8, style, ';');
+    while (decl := it.next()) {
+        const colon_opt = std.mem.indexOfScalar(u8, decl, ':');
+        if (colon_opt == null) continue;
+        const colon = colon_opt.?;
+        if (colon == 0) continue;
+        const prop = std.mem.trim(u8, decl[0..colon], " \t\r\n");
+        const val = std.mem.trim(u8, decl[colon + 1 ..], " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(prop, "visibility")) {
+            if (std.ascii.startsWithIgnoreCase(val, "visible")) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn isNoBox(node: *const NodeData): bool {
     if (node.getAttribute("hidden") != null) return true;
     if (std.ascii.eqlIgnoreCase(node.tag_name, "input")) {
@@ -342,6 +361,81 @@ fn isNoBox(node: *const NodeData): bool {
         if (inlineStyleDisplayNone(node.inline_style)) return true;
     }
     return false;
+}
+
+fn isTablePart(tag: []const u8): bool {
+    return std.ascii.eqlIgnoreCase(tag, "caption") ||
+        std.ascii.eqlIgnoreCase(tag, "thead") ||
+        std.ascii.eqlIgnoreCase(tag, "tbody") ||
+        std.ascii.eqlIgnoreCase(tag, "tfoot") ||
+        std.ascii.eqlIgnoreCase(tag, "tr") ||
+        std.ascii.eqlIgnoreCase(tag, "th") ||
+        std.ascii.eqlIgnoreCase(tag, "td") ||
+        std.ascii.eqlIgnoreCase(tag, "colgroup") ||
+        std.ascii.eqlIgnoreCase(tag, "col");
+}
+
+fn isLayoutTable(doc: *const Document, table_id: NodeId): bool {
+    if (t_node := doc.getNode(table_id)) {
+        if (t_node.getAttribute("summary") != null) return false;
+    }
+    let data_signals: usize = 0;
+    let stack: [64]NodeId = [@as(NodeId, 0); 64];
+    let depths: [64]usize = [@as(usize, 0); 64];
+    let stack_len: usize = 0;
+
+    if (t_node := doc.getNode(table_id)) {
+        let c = t_node.first_child;
+        while (c != NULL_NODE) {
+            if (stack_len < 64) {
+                stack[stack_len] = c;
+                depths[stack_len] = 1;
+                stack_len += 1;
+            }
+            if (cn := doc.getNode(c)) {
+                c = cn.next_sibling;
+            } else break;
+        }
+    }
+
+    while (stack_len > 0) {
+        stack_len -= 1;
+        const curr_id = stack[stack_len];
+        const depth = depths[stack_len];
+        if (curr := doc.getNode(curr_id)) {
+            if (curr.node_type == NodeType.Element) {
+                const tag = curr.tag_name;
+                if (std.ascii.eqlIgnoreCase(tag, "caption") || std.ascii.eqlIgnoreCase(tag, "th")) {
+                    data_signals += 1;
+                    break;
+                }
+                if (std.ascii.eqlIgnoreCase(tag, "td")) {
+                    if (curr.getAttribute("scope") != null ||
+                        curr.getAttribute("headers") != null ||
+                        curr.getAttribute("abbr") != null) {
+                        data_signals += 1;
+                        break;
+                    }
+                }
+                if (std.ascii.eqlIgnoreCase(tag, "table")) continue;
+                if (depth < 5) {
+                    let c = curr.first_child;
+                    while (c != NULL_NODE) {
+                        if (stack_len < 64) {
+                            stack[stack_len] = c;
+                            depths[stack_len] = depth + 1;
+                            stack_len += 1;
+                        }
+                        if (cn := doc.getNode(c)) {
+                            c = cn.next_sibling;
+                        } else break;
+                    }
+                }
+            }
+        }
+    }
+
+    return data_signals == 0;
 }
 
 fn getFirstToken(s: []const u8): []const u8 {
@@ -458,6 +552,7 @@ fn computeImplicitRole(tag: []const u8, node: *const NodeData): []const u8 {
 }
 
 fn isFocusable(tag: []const u8, node: *const NodeData): bool {
+    if (node.getAttribute("disabled") != null) return false;
     if (std.ascii.eqlIgnoreCase(tag, "button") ||
         std.ascii.eqlIgnoreCase(tag, "select") ||
         std.ascii.eqlIgnoreCase(tag, "textarea") ||
@@ -523,6 +618,7 @@ pub struct AXTree {
     id_buffers: [ID_BUFFER_SIZE]u8 = [0; ID_BUFFER_SIZE],
     text_pool: [TEXT_POOL_SIZE]u8 = [0; TEXT_POOL_SIZE],
     text_pool_len: usize = 0,
+    root_url: []const u8 = "",
 
     fn allocNode(*_): usize? {
         if (_.node_count >= MAX_AX_NODES) return null;
@@ -794,7 +890,7 @@ pub struct AXTree {
         return null;
     }
 
-    fn populateProperties(*_, ax_idx: usize, node: *const NodeData, role: []const u8) {
+    fn populateProperties(*_, doc: *const Document, ax_idx: usize, node: *const NodeData, role: []const u8) {
         let node_ref = &_.nodes[ax_idx];
 
         if (node.tag_name.len == 2 && (node.tag_name[0] == 'h' || node.tag_name[0] == 'H')) {
@@ -808,15 +904,73 @@ pub struct AXTree {
             if (level_num > 0) {
                 node_ref.addProperty(AXProperty.create("level", AxValue.fromInt("integer", level_num)));
             }
+        } else if (std.ascii.eqlIgnoreCase(node.tag_name, "li") || std.ascii.eqlIgnoreCase(role, "listitem")) {
+            let depth: i64 = 0;
+            let p_dom = node.parent;
+            while (p_dom != NULL_NODE) {
+                if (p_node := doc.getNode(p_dom)) {
+                    if (p_node.node_type == NodeType.Element) {
+                        if (std.ascii.eqlIgnoreCase(p_node.tag_name, "ul") ||
+                            std.ascii.eqlIgnoreCase(p_node.tag_name, "ol") ||
+                            std.ascii.eqlIgnoreCase(p_node.tag_name, "menu")) {
+                            depth += 1;
+                        }
+                    }
+                    p_dom = p_node.parent;
+                } else {
+                    break;
+                }
+            }
+            if (depth > 0) {
+                node_ref.addProperty(AXProperty.create("level", AxValue.fromInt("integer", depth)));
+            }
         }
 
-        if (std.mem.eql(u8, role, "link")) {
+        if (std.mem.eql(u8, role, "link") || std.ascii.eqlIgnoreCase(node.tag_name, "a") || std.ascii.eqlIgnoreCase(node.tag_name, "area")) {
             if (href := node.getAttribute("href")) {
-                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", href)));
+                let resolved = href;
+                if (_.root_url.len > 0) {
+                    const remain = TEXT_POOL_SIZE - _.text_pool_len;
+                    if (remain >= 256) {
+                        const start = _.text_pool_len;
+                        const res = resolveUrl(href, _.root_url, _.text_pool[start..]);
+                        if (res.len > 0) {
+                            _.text_pool_len += res.len;
+                            resolved = _.text_pool[start .. start + res.len];
+                        }
+                    }
+                }
+                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", resolved)));
             }
         } else if (std.ascii.eqlIgnoreCase(node.tag_name, "img")) {
             if (src := node.getAttribute("src")) {
-                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", src)));
+                let resolved = src;
+                if (_.root_url.len > 0) {
+                    const remain = TEXT_POOL_SIZE - _.text_pool_len;
+                    if (remain >= 256) {
+                        const start = _.text_pool_len;
+                        const res = resolveUrl(src, _.root_url, _.text_pool[start..]);
+                        if (res.len > 0) {
+                            _.text_pool_len += res.len;
+                            resolved = _.text_pool[start .. start + res.len];
+                        }
+                    }
+                }
+                node_ref.addProperty(AXProperty.create("url", AxValue.fromString("string", resolved)));
+            }
+        }
+
+        if (aks := node.getAttribute("aria-keyshortcuts")) {
+            node_ref.addProperty(AXProperty.create("keyshortcuts", AxValue.fromString("string", aks)));
+        } else if (ak := node.getAttribute("accesskey")) {
+            const remain = TEXT_POOL_SIZE - _.text_pool_len;
+            if (remain >= 32) {
+                const out_slice = _.text_pool[_.text_pool_len..];
+                const ks_str = std.fmt.bufPrint(out_slice, "Ctrl+Alt+{s}", .{ak}) catch "";
+                if (ks_str.len > 0) {
+                    _.text_pool_len += ks_str.len;
+                    node_ref.addProperty(AXProperty.create("keyshortcuts", AxValue.fromString("string", ks_str)));
+                }
             }
         }
 
@@ -828,8 +982,44 @@ pub struct AXTree {
             node_ref.addProperty(AXProperty.create("disabled", AxValue.fromBool("boolean", true)));
         }
 
-        if (node.getAttribute("checked") != null) {
-            node_ref.addProperty(AXProperty.create("checked", AxValue.fromBool("boolean", true)));
+        if (std.ascii.eqlIgnoreCase(node.tag_name, "input")) {
+            const typ = node.getAttribute("type") ?? "text";
+            if (std.ascii.eqlIgnoreCase(typ, "checkbox") || std.ascii.eqlIgnoreCase(typ, "radio")) {
+                const is_chk = node.getAttribute("checked") != null;
+                node_ref.addProperty(AXProperty.create("checked", AxValue.fromString("tristate", if (is_chk) "true" else "false")));
+            } else if (std.ascii.eqlIgnoreCase(typ, "range") || std.ascii.eqlIgnoreCase(typ, "number")) {
+                if (min_str := node.getAttribute("min")) {
+                    const min_val = std.fmt.parseInt(i64, std.mem.trim(u8, min_str, " \t\r\n"), 10) catch -1;
+                    if (min_val >= 0) node_ref.addProperty(AXProperty.create("valuemin", AxValue.fromInt("number", min_val)));
+                }
+                if (max_str := node.getAttribute("max")) {
+                    const max_val = std.fmt.parseInt(i64, std.mem.trim(u8, max_str, " \t\r\n"), 10) catch -1;
+                    if (max_val >= 0) node_ref.addProperty(AXProperty.create("valuemax", AxValue.fromInt("number", max_val)));
+                }
+                if (now_str := node.getAttribute("value")) {
+                    const now_val = std.fmt.parseInt(i64, std.mem.trim(u8, now_str, " \t\r\n"), 10) catch -1;
+                    if (now_val >= 0) node_ref.addProperty(AXProperty.create("valuenow", AxValue.fromInt("number", now_val)));
+                }
+            }
+        } else if (ac := node.getAttribute("aria-checked")) {
+            node_ref.addProperty(AXProperty.create("checked", AxValue.fromString("tristate", ac)));
+        }
+
+        if (vmin := node.getAttribute("aria-valuemin")) {
+            const min_val = std.fmt.parseInt(i64, std.mem.trim(u8, vmin, " \t\r\n"), 10) catch 0;
+            node_ref.addProperty(AXProperty.create("valuemin", AxValue.fromInt("number", min_val)));
+        }
+        if (vmax := node.getAttribute("aria-valuemax")) {
+            const max_val = std.fmt.parseInt(i64, std.mem.trim(u8, vmax, " \t\r\n"), 10) catch 0;
+            node_ref.addProperty(AXProperty.create("valuemax", AxValue.fromInt("number", max_val)));
+        }
+        if (vnow := node.getAttribute("aria-valuenow")) {
+            const now_val = std.fmt.parseInt(i64, std.mem.trim(u8, vnow, " \t\r\n"), 10) catch 0;
+            node_ref.addProperty(AXProperty.create("valuenow", AxValue.fromInt("number", now_val)));
+        }
+
+        if (ap := node.getAttribute("aria-pressed")) {
+            node_ref.addProperty(AXProperty.create("pressed", AxValue.fromString("tristate", ap)));
         }
 
         if (node.getAttribute("required") != null) {
@@ -870,6 +1060,8 @@ pub struct AXTree {
         frame_id: []const u8,
         inherited_hidden: bool,
         inherited_aria_hidden: bool,
+        inherited_vis_hidden: bool,
+        inh_layout_table: bool,
     ): usize? {
         if (dom_id == NULL_NODE) return null;
         const opt = doc.getNode(dom_id);
@@ -889,7 +1081,8 @@ pub struct AXTree {
             _.nodes[ax_idx].frame_id = frame_id;
             _.nodes[ax_idx].parent_id = _.nodes[parent_ax_idx].node_id;
 
-            if (inherited_hidden) {
+            const text_hidden = inherited_hidden || inherited_vis_hidden;
+            if (text_hidden) {
                 _.nodes[ax_idx].ignored = true;
                 _.nodes[ax_idx].ignored_reason = if (inherited_aria_hidden) "ariaHiddenSubtree" else "notRendered";
                 _.nodes[ax_idx].role = AxValue.fromRole("none", true);
@@ -925,14 +1118,28 @@ pub struct AXTree {
             const aria_hidden = inherited_aria_hidden || self_aria_hidden;
             const self_no_box = isNoBox(node);
             let self_vis_hidden = false;
+            let self_vis_visible = false;
             if (node.inline_style.len > 0) {
                 self_vis_hidden = inlineStyleVisibilityHidden(node.inline_style);
+                self_vis_visible = inlineStyleVisibilityVisible(node.inline_style);
             }
-            const self_hidden = self_no_box || self_vis_hidden || aria_hidden;
-            const node_hidden = inherited_hidden || self_hidden;
+
+            let vis_hidden = inherited_vis_hidden;
+            if (self_vis_visible) {
+                vis_hidden = false;
+            } else if (self_vis_hidden) {
+                vis_hidden = true;
+            }
+
+            const node_hidden = self_no_box || aria_hidden || vis_hidden;
 
             const explicit_role = getExplicitRole(node);
             const role_str = if (explicit_role != null) explicit_role.? else computeImplicitRole(node.tag_name, node);
+
+            const is_table = std.ascii.eqlIgnoreCase(node.tag_name, "table") && explicit_role == null;
+            const starts_layout_table = is_table && isLayoutTable(doc, dom_id);
+            const in_layout_table = if (is_table) starts_layout_table else inh_layout_table;
+            const demoted_by_table = starts_layout_table || (inh_layout_table && isTablePart(node.tag_name) && explicit_role == null);
 
             let ignored = false;
             let reason: []const u8 = "notRendered";
@@ -946,7 +1153,7 @@ pub struct AXTree {
                 } else {
                     reason = "notRendered";
                 }
-            } else if (std.ascii.eqlIgnoreCase(role_str, "presentation") || std.ascii.eqlIgnoreCase(role_str, "none")) {
+            } else if (std.ascii.eqlIgnoreCase(role_str, "presentation") || std.ascii.eqlIgnoreCase(role_str, "none") || demoted_by_table) {
                 ignored = true;
                 reason = "presentationalRole";
             } else if (std.ascii.eqlIgnoreCase(node.tag_name, "html")) {
@@ -976,7 +1183,7 @@ pub struct AXTree {
                     _.nodes[ax_idx].value = AxValue.fromString("string", val_str);
                 }
 
-                _.populateProperties(ax_idx, node, role_str);
+                _.populateProperties(doc, ax_idx, node, role_str);
             }
 
             // If boxless (display:none or hidden attr), children are not rendered and have no boxes
@@ -989,7 +1196,7 @@ pub struct AXTree {
             while (child_id != NULL_NODE) {
                 if (c_node := doc.getNode(child_id)) {
                     const next_sib = c_node.next_sibling;
-                    * = _.buildNode(doc, child_id, ax_idx, frame_id, node_hidden, aria_hidden);
+                    * = _.buildNode(doc, child_id, ax_idx, frame_id, node_hidden, aria_hidden, vis_hidden, in_layout_table);
                     child_id = next_sib;
                 } else {
                     break;
@@ -1011,6 +1218,7 @@ pub struct AXTree {
     ) {
         _.node_count = 0;
         _.text_pool_len = 0;
+        _.root_url = root_url;
 
         // Allocate node 0: RootWebArea
         const root_ax_opt = _.allocNode();
@@ -1030,7 +1238,7 @@ pub struct AXTree {
         _.nodes[root_idx].addProperty(AXProperty.create("focusable", AxValue.fromBool("booleanOrUndefined", true)));
 
         if (doc.root_element != NULL_NODE) {
-            * = _.buildNode(doc, doc.root_element, root_idx, frame_id, false, false);
+            * = _.buildNode(doc, doc.root_element, root_idx, frame_id, false, false, false, false);
         }
     }
 
@@ -1224,10 +1432,138 @@ pub struct AccessibilityHandler {
 
         if (std.mem.eql(u8, req.method, "Accessibility.getPartialAXTree") ||
             std.mem.eql(u8, req.method, "Accessibility.getAXNodeAndAncestors")) {
-            const res = std.fmt.bufPrint(out_buf, "{{\"nodes\":[]}}", .{}) catch {
+            let target_idx: usize? = null;
+            let target_dom_id: u32? = null;
+
+            if (b_id := extractJsonInt(req.params_raw, "backendNodeId")) {
+                if (b_id > 0) target_dom_id = @as(u32, @intCast(b_id));
+            } else if (n_id := extractJsonInt(req.params_raw, "nodeId")) {
+                if (n_id > 0) target_dom_id = @as(u32, @intCast(n_id));
+            } else if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                let num_str: []const u8 = "";
+                if (std.mem.startsWith(u8, obj_id, "node:")) {
+                    num_str = obj_id[5..];
+                } else if (std.mem.startsWith(u8, obj_id, "ps:")) {
+                    if (last_colon := std.mem.lastIndexOfScalar(u8, obj_id, ':')) {
+                        num_str = obj_id[last_colon + 1 ..];
+                    }
+                }
+                if (num_str.len > 0) {
+                    const parsed = std.fmt.parseInt(u32, num_str, 10) catch 0;
+                    if (parsed > 0) target_dom_id = parsed;
+                }
+            }
+
+            if (dom_id := target_dom_id) {
+                // Match by backend_dom_node_id. Prefer element nodes (index >= 1)
+                let i: usize = 1;
+                while (i < builder.node_count) : (i += 1) {
+                    if (builder.nodes[i].backend_dom_node_id == dom_id) {
+                        target_idx = i;
+                        break;
+                    }
+                }
+                if (target_idx == null && builder.node_count > 0) {
+                    if (builder.nodes[0].backend_dom_node_id == dom_id) {
+                        target_idx = 0;
+                    }
+                }
+            } else if (id_str := extractJsonString(req.params_raw, "id")) {
+                let i: usize = 0;
+                while (i < builder.node_count) : (i += 1) {
+                    if (std.mem.eql(u8, builder.nodes[i].node_id, id_str)) {
+                        target_idx = i;
+                        break;
+                    }
+                }
+            } else {
+                if (builder.node_count > 0) {
+                    target_idx = 0;
+                }
+            }
+
+            if (target_idx == null) {
+                let w = JsonWriter.init(out_buf);
+                w.writeRaw("{\"nodes\":[]}");
+                if (w.overflow) {
+                    return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                }
+                return CdpResponse.ok(req.id, w.getWritten());
+            }
+
+            const t_idx = target_idx.?;
+            const is_and_ancestors = std.mem.eql(u8, req.method, "Accessibility.getAXNodeAndAncestors");
+            const want_subtree = !is_and_ancestors;
+            const want_ancestors = if (is_and_ancestors) true else (extractJsonBool(req.params_raw, "fetchRelatives") ?? true);
+
+            let selected: [256]bool = [false; 256];
+            selected[t_idx] = true;
+
+            if (want_subtree) {
+                let stack: [256]usize = [@as(usize, 0); 256];
+                let stack_len: usize = 1;
+                stack[0] = t_idx;
+
+                while (stack_len > 0) {
+                    stack_len -= 1;
+                    const curr_idx = stack[stack_len];
+                    const curr_node = &builder.nodes[curr_idx];
+                    let c: usize = 0;
+                    while (c < curr_node.child_count) : (c += 1) {
+                        const cid = curr_node.child_ids[c];
+                        let j: usize = 0;
+                        while (j < builder.node_count) : (j += 1) {
+                            if (std.mem.eql(u8, builder.nodes[j].node_id, cid)) {
+                                if (!selected[j]) {
+                                    selected[j] = true;
+                                    if (stack_len < MAX_AX_NODES) {
+                                        stack[stack_len] = j;
+                                        stack_len += 1;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (want_ancestors) {
+                let cur_idx: usize? = t_idx;
+                let depth: usize = 0;
+                while (cur_idx != null && depth < MAX_AX_NODES) : (depth += 1) {
+                    const cur_node = &builder.nodes[cur_idx.?];
+                    if (cur_node.parent_id.len == 0) break;
+                    let p_idx: usize? = null;
+                    let j: usize = 0;
+                    while (j < builder.node_count) : (j += 1) {
+                        if (std.mem.eql(u8, builder.nodes[j].node_id, cur_node.parent_id)) {
+                            p_idx = j;
+                            break;
+                        }
+                    }
+                    if (p_idx == null) break;
+                    selected[p_idx.?] = true;
+                    cur_idx = p_idx;
+                }
+            }
+
+            let w = JsonWriter.init(out_buf);
+            w.writeRaw("{\"nodes\":[");
+            let written_count: usize = 0;
+            let i: usize = 0;
+            while (i < builder.node_count) : (i += 1) {
+                if (selected[i]) {
+                    if (written_count > 0) w.writeByte(',');
+                    w.writeAxNode(&builder.nodes[i]);
+                    written_count += 1;
+                }
+            }
+            w.writeRaw("]}");
+            if (w.overflow) {
                 return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            };
-            return CdpResponse.ok(req.id, res);
+            }
+            return CdpResponse.ok(req.id, w.getWritten());
         }
 
         return CdpResponse.ok(req.id, "{}");

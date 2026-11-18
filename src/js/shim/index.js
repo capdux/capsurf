@@ -49,6 +49,13 @@ function installShim(global) {
   // 7. Expose DOMParser
   global.DOMParser = DOMParser;
 
+  // 7.5. Expose XPath
+  if (typeof XPathResult !== "undefined") {
+    global.XPathResult = XPathResult;
+    global.XPathExpression = XPathExpression;
+    global.XPathEvaluator = XPathEvaluator;
+  }
+
   // 8. Expose Canvas 2D
   global.CanvasRenderingContext2D = CanvasRenderingContext2D;
   global.CanvasGradient = CanvasGradient;
@@ -263,6 +270,18 @@ function installShim(global) {
       },
       configurable: true,
     });
+
+    if (typeof evaluateXPath !== "undefined") {
+      docProto.evaluate = markNative(function (expression, contextNode, resolver, type, result) {
+        return evaluateXPath(expression, contextNode || this, resolver, type, result);
+      }, "evaluate");
+      docProto.createExpression = markNative(function (expression, resolver) {
+        return createExpression(expression, resolver);
+      }, "createExpression");
+      docProto.createNSResolver = markNative(function (nodeResolver) {
+        return nodeResolver;
+      }, "createNSResolver");
+    }
   }
 
   if (global.document) {
@@ -272,6 +291,11 @@ function installShim(global) {
       if (!global.document._selection) global.document._selection = new Selection();
       return global.document._selection;
     };
+    if (typeof evaluateXPath !== "undefined") {
+      if (!global.document.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
+      if (!global.document.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
+      if (!global.document.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+    }
   }
 
   // 14. Mount window EventTarget methods

@@ -508,6 +508,9 @@
   }
 
   function notifyMutation(record) {
+    if (typeof globalThis !== "undefined") {
+      globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
+    }
     for (const obs of activeObservers) {
       for (const sub of obs._targets) {
         if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
@@ -1177,6 +1180,19 @@
   // src/js/shim/node-base.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/node-base.ts
 
+  const parsedNodeRegistry = (global.__parsedNodeRegistry = global.__parsedNodeRegistry || new WeakSet());
+
+  function isParsedNode(node) {
+    return typeof node === "object" && node !== null && parsedNodeRegistry.has(node);
+  }
+
+  function registerParsedNode(node) {
+    if (typeof node === "object" && node !== null) {
+      parsedNodeRegistry.add(node);
+    }
+    return node;
+  }
+
   function Node() {
     EventTarget.call(this);
   }
@@ -1225,7 +1241,11 @@
   Object.defineProperty(Node.prototype, "ownerDocument", {
     get: function () {
       if (this.nodeType === DOCUMENT_NODE) return null;
+      if (this._ownerDocument !== undefined) return this._ownerDocument;
       return typeof document !== "undefined" ? document : null;
+    },
+    set: function (doc) {
+      this._ownerDocument = doc;
     },
     configurable: true,
   });
@@ -1286,27 +1306,321 @@
     return this;
   };
 
+  function isGenuineNode(obj) {
+    if (!obj || typeof obj !== "object") return false;
+    if (obj instanceof Node) return true;
+    if (isParsedNode(obj)) return true;
+    return false;
+  }
+
+  function ensureChildren(node) {
+    if (!node._children) {
+      node._children = [];
+    }
+    return node._children;
+  }
+
+  const nativeElementAppendChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.appendChild : null;
+  const nativeElementRemoveChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.removeChild : null;
+  const nativeElementGetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.get : null;
+  const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.set : null;
+
+  Node.prototype.appendChild = function (child) {
+    if (!this || typeof this !== "object") {
+      throw new TypeError("Illegal invocation");
+    }
+    if (!child || typeof child !== "object" || !isGenuineNode(child)) {
+      throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+
+    // Handle DocumentFragment
+    if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const kids = Array.from(child.childNodes || child._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        this.appendChild(kids[i]);
+      }
+      if (child._children) child._children.length = 0;
+      return child;
+    }
+
+    // If child already has a parent, remove from it
+    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+      try {
+        child.parentNode.removeChild(child);
+      } catch (e) {}
+    }
+
+    // If child is a parsed node, adopt it safely into this document
+    if (isParsedNode(child)) {
+      child.parentNode = this;
+      child.ownerDocument = this.ownerDocument || this;
+      if (child.nodeType === 1) { // ELEMENT_NODE
+        // When adopted, child's subtree in parsed document is not adopted into live tree
+        child._children = [];
+      }
+      ensureChildren(this).push(child);
+      return child;
+    }
+
+    // Handle native element / node
+    child.parentNode = this;
+    child.ownerDocument = this.ownerDocument || this;
+    ensureChildren(this).push(child);
+
+    if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
+      try {
+        nativeElementAppendChild.call(this, child);
+      } catch (e) {}
+    }
+
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.addedNodes = [child];
+      notifyMutation(rec);
+    }
+
+    return child;
+  };
+
+  Node.prototype.insertBefore = function (newChild, refChild) {
+    if (!this || typeof this !== "object") {
+      throw new TypeError("Illegal invocation");
+    }
+    if (!newChild || typeof newChild !== "object" || !isGenuineNode(newChild)) {
+      throw new TypeError("Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+    if (refChild == null) {
+      return this.appendChild(newChild);
+    }
+
+    const children = ensureChildren(this);
+    const idx = children.indexOf(refChild);
+    if (idx === -1 && refChild.parentNode !== this) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+
+    if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const kids = Array.from(newChild.childNodes || newChild._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        this.insertBefore(kids[i], refChild);
+      }
+      if (newChild._children) newChild._children.length = 0;
+      return newChild;
+    }
+
+    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+      try {
+        newChild.parentNode.removeChild(newChild);
+      } catch (e) {}
+    }
+
+    newChild.parentNode = this;
+    newChild.ownerDocument = this.ownerDocument || this;
+    if (isParsedNode(newChild) && newChild.nodeType === 1) {
+      newChild._children = [];
+    }
+
+    const curIdx = children.indexOf(refChild);
+    children.splice(curIdx >= 0 ? curIdx : children.length, 0, newChild);
+
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.addedNodes = [newChild];
+      notifyMutation(rec);
+    }
+
+    return newChild;
+  };
+
+  Node.prototype.removeChild = function (child) {
+    if (!this || typeof this !== "object") {
+      throw new TypeError("Illegal invocation");
+    }
+    if (!child || typeof child !== "object") {
+      throw new TypeError("Failed to execute 'removeChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+
+    const children = ensureChildren(this);
+    const idx = children.indexOf(child);
+    if (idx === -1 && child.parentNode !== this) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+
+    if (idx >= 0) {
+      children.splice(idx, 1);
+    }
+    child.parentNode = null;
+
+    if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+      try {
+        nativeElementRemoveChild.call(this, child);
+      } catch (e) {}
+    }
+
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.removedNodes = [child];
+      notifyMutation(rec);
+    }
+
+    return child;
+  };
+
+  Object.defineProperty(Node.prototype, "childNodes", {
+    get: function () {
+      return new NodeList(ensureChildren(this));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Node.prototype, "firstChild", {
+    get: function () {
+      const c = ensureChildren(this);
+      return c.length > 0 ? c[0] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Node.prototype, "lastChild", {
+    get: function () {
+      const c = ensureChildren(this);
+      return c.length > 0 ? c[c.length - 1] : null;
+    },
+    configurable: true,
+  });
+
+  Node.prototype.hasChildNodes = function () {
+    return ensureChildren(this).length > 0;
+  };
+
+  if (typeof Element !== "undefined" && Element.prototype) {
+    Object.defineProperty(Element.prototype, "textContent", {
+      get: function () {
+        if (this._children && this._children.length > 0) {
+          return this._children.map(function (c) {
+            return c.textContent || "";
+          }).join("");
+        }
+        if (nativeElementGetTextContent) {
+          return nativeElementGetTextContent.call(this);
+        }
+        return "";
+      },
+      set: function (v) {
+        if (this._children) {
+          this._children.length = 0;
+        }
+        if (nativeElementSetTextContent) {
+          try {
+            nativeElementSetTextContent.call(this, v);
+          } catch (e) {}
+        }
+        const val = String(v);
+        if (val.length > 0) {
+          const t = new Text(val);
+          t.parentNode = this;
+          t.ownerDocument = this.ownerDocument || this;
+          ensureChildren(this).push(t);
+        }
+      },
+      configurable: true,
+    });
+
+    Element.prototype.appendChild = Node.prototype.appendChild;
+    Element.prototype.insertBefore = Node.prototype.insertBefore;
+    Element.prototype.removeChild = Node.prototype.removeChild;
+  }
+
+  Node.prototype.lookupNamespaceURI = function (prefix) {
+    let p = prefix === "" ? null : prefix;
+    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
+    if (this.nodeType === 1) { // ELEMENT_NODE
+      let n = this;
+      while (n && n.nodeType === 1) {
+        if (n.prefix === p && n.namespaceURI) return n.namespaceURI;
+        const attrs = n.attributes;
+        if (attrs) {
+          const len = attrs.length || 0;
+          for (let i = 0; i < len; i++) {
+            const a = attrs[i];
+            if (!a) continue;
+            const aPrefix = a.prefix || null;
+            const aLocal = a.localName || a.name;
+            if (p === null) {
+              if (a.name === "xmlns" || (aPrefix === null && aLocal === "xmlns")) {
+                return a.value || null;
+              }
+            } else {
+              if (aPrefix === "xmlns" && aLocal === p) {
+                return a.value || null;
+              }
+              if (a.name === "xmlns:" + p) {
+                return a.value || null;
+              }
+            }
+          }
+        }
+        n = n.parentElement || n.parentNode;
+      }
+      return null;
+    }
+    if (this.nodeType === 9) { // DOCUMENT_NODE
+      return this.documentElement ? this.documentElement.lookupNamespaceURI(p) : null;
+    }
+    if (this.nodeType === 2) { // ATTRIBUTE_NODE
+      return this.ownerElement ? this.ownerElement.lookupNamespaceURI(p) : null;
+    }
+    const parent = this.parentElement || this.parentNode;
+    return parent ? parent.lookupNamespaceURI(p) : null;
+  };
+
   markNative(Node, "Node");
   markNative(Node.prototype.contains, "contains");
   markNative(Node.prototype.compareDocumentPosition, "compareDocumentPosition");
   markNative(Node.prototype.cloneNode, "cloneNode");
+  markNative(Node.prototype.appendChild, "appendChild");
+  markNative(Node.prototype.insertBefore, "insertBefore");
+  markNative(Node.prototype.removeChild, "removeChild");
+  markNative(Node.prototype.hasChildNodes, "hasChildNodes");
+  markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
 
   function Text(data) {
     Node.call(this);
-    this.data = String(data !== undefined ? data : "");
+    this._data = String(data !== undefined ? data : "");
     this.nodeType = TEXT_NODE;
     this.nodeName = "#text";
   }
   Text.prototype = Object.create(Node.prototype);
   Text.prototype.constructor = Text;
+  Object.defineProperty(Text.prototype, "data", {
+    get: function () { return this._data !== undefined ? this._data : ""; },
+    set: function (v) {
+      this._data = String(v);
+      if (typeof notifyMutation === "function") {
+        notifyMutation(new MutationRecord("characterData", this));
+      }
+    },
+    configurable: true,
+  });
   Object.defineProperty(Text.prototype, "textContent", {
     get: function () { return this.data; },
-    set: function (v) { this.data = String(v); },
+    set: function (v) { this.data = v; },
     configurable: true,
   });
   Object.defineProperty(Text.prototype, "nodeValue", {
     get: function () { return this.data; },
-    set: function (v) { this.data = String(v); },
+    set: function (v) { this.data = v; },
     configurable: true,
   });
   Object.defineProperty(Text.prototype, "length", {
@@ -1348,10 +1662,23 @@
   DocumentFragment.prototype = Object.create(Node.prototype);
   DocumentFragment.prototype.constructor = DocumentFragment;
   DocumentFragment.prototype.appendChild = function (child) {
-    if (child) {
-      this._children.push(child);
-      child.parentNode = this;
+    return Node.prototype.appendChild.call(this, child);
+  };
+  DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
+    return Node.prototype.insertBefore.call(this, newChild, refChild);
+  };
+  DocumentFragment.prototype.removeChild = function (child) {
+    if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
     }
+    const idx = this._children.indexOf(child);
+    if (idx >= 0) this._children.splice(idx, 1);
+    child.parentNode = null;
     return child;
   };
   Object.defineProperty(DocumentFragment.prototype, "childNodes", {
@@ -1361,6 +1688,27 @@
     configurable: true,
   });
   markNative(DocumentFragment, "DocumentFragment");
+
+  if (typeof Document !== "undefined" && Document.prototype) {
+    if (!Document.prototype.createTextNode) {
+      Document.prototype.createTextNode = function (text) {
+        return new Text(text);
+      };
+      markNative(Document.prototype.createTextNode, "createTextNode");
+    }
+    if (!Document.prototype.createComment) {
+      Document.prototype.createComment = function (data) {
+        return new Comment(data);
+      };
+      markNative(Document.prototype.createComment, "createComment");
+    }
+    if (!Document.prototype.createDocumentFragment) {
+      Document.prototype.createDocumentFragment = function () {
+        return new DocumentFragment();
+      };
+      markNative(Document.prototype.createDocumentFragment, "createDocumentFragment");
+    }
+  }
 
   // =============================================================
   // Module: element/element.js
@@ -1462,6 +1810,9 @@
 
     // Make Element inherit from Node / EventTarget
     Object.setPrototypeOf(proto, Node.prototype);
+    proto.appendChild = Node.prototype.appendChild;
+    proto.insertBefore = Node.prototype.insertBefore;
+    proto.removeChild = Node.prototype.removeChild;
 
     if (proto.nodeType === undefined) {
       Object.defineProperty(proto, "nodeType", {
@@ -1484,6 +1835,84 @@
       },
       configurable: true,
     });
+
+    Object.defineProperty(proto, "prefix", {
+      get: function () {
+        if (this._prefix !== undefined) return this._prefix;
+        const tag = this.tagName || "";
+        const colon = tag.indexOf(":");
+        return colon !== -1 ? tag.slice(0, colon) : null;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "namespaceURI", {
+      get: function () {
+        if (this._namespaceURI !== undefined) return this._namespaceURI;
+        if (this.getAttribute) {
+          const xmlns = this.getAttribute("xmlns");
+          if (xmlns !== null && xmlns !== undefined && xmlns !== "") return xmlns;
+        }
+        let curr = this;
+        while (curr) {
+          const tag = String(curr.localName || curr.tagName || "").toLowerCase();
+          if (tag === "svg") return "http://www.w3.org/2000/svg";
+          if (tag === "math") return "http://www.w3.org/1998/Math/MathML";
+          curr = curr.parentElement || curr.parentNode;
+        }
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (!doc || !doc.contentType || doc.contentType === "text/html") {
+          return "http://www.w3.org/1999/xhtml";
+        }
+        return null;
+      },
+      set: function (v) {
+        this._namespaceURI = v;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "data", {
+      get: function () { return this.textContent || ""; },
+      set: function (v) {
+        this.textContent = String(v);
+        if (typeof notifyMutation === "function") {
+          notifyMutation(new MutationRecord("characterData", this));
+        }
+      },
+      configurable: true,
+    });
+
+    if (!proto.lookupNamespaceURI) {
+      proto.lookupNamespaceURI = Node.prototype.lookupNamespaceURI;
+    }
+
+    if (!proto.append) {
+      proto.append = function (...nodes) {
+        for (const n of nodes) {
+          let node;
+          if (n && typeof n === "object" && typeof n.nodeType === "number") {
+            node = n;
+          } else if (typeof document !== "undefined" && document.createTextNode) {
+            node = document.createTextNode(String(n));
+          } else {
+            node = new Text(String(n));
+          }
+          this.appendChild(node);
+        }
+      };
+      markNative(proto.append, "append");
+    }
+
+    if (!proto.remove) {
+      proto.remove = function () {
+        const parent = this.parentElement || this.parentNode;
+        if (parent && parent.removeChild) {
+          parent.removeChild(this);
+        }
+      };
+      markNative(proto.remove, "remove");
+    }
 
     // classList getter
     Object.defineProperty(proto, "classList", {
@@ -2160,6 +2589,25 @@
       set: function (v) {
         this._checkedDirty = true;
         this._checked = Boolean(v);
+        const isRadio = (this.getAttribute && (this.getAttribute("type") || "").toLowerCase() === "radio");
+        if (isRadio && v && this.name) {
+          const root = (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+          if (root && root.querySelectorAll) {
+            const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+            for (let i = 0; i < radios.length; i++) {
+              if (radios[i] !== this) {
+                radios[i]._checkedDirty = true;
+                radios[i]._checked = false;
+                if (radios[i].removeAttribute) radios[i].removeAttribute("checked");
+              }
+            }
+          }
+        }
+        if (v) {
+          if (this.setAttribute) this.setAttribute("checked", "");
+        } else {
+          if (this.removeAttribute) this.removeAttribute("checked");
+        }
       },
       configurable: true,
     });
@@ -2820,6 +3268,26 @@
       set: function (v) {
         this._checkedDirty = true;
         this._checked = Boolean(v);
+        const isRadio = (this.getAttribute("type") || "").toLowerCase() === "radio";
+        if (isRadio && v && this.name) {
+          const form = findAssociatedForm(this);
+          const root = form || (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+          if (root && root.querySelectorAll) {
+            const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+            for (let i = 0; i < radios.length; i++) {
+              if (radios[i] !== this) {
+                radios[i]._checkedDirty = true;
+                radios[i]._checked = false;
+                if (radios[i].removeAttribute) radios[i].removeAttribute("checked");
+              }
+            }
+          }
+        }
+        if (v) {
+          if (this.setAttribute) this.setAttribute("checked", "");
+        } else {
+          if (this.removeAttribute) this.removeAttribute("checked");
+        }
       },
       configurable: true,
     });
@@ -4697,60 +5165,2390 @@
   // src/js/shim/parser.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/parser.ts
 
-  function DOMParser() {}
+  const SUPPORTED_MIME_TYPES = new Set([
+    "text/html",
+    "text/xml",
+    "application/xml",
+    "application/xhtml+xml",
+    "image/svg+xml",
+  ]);
 
-  DOMParser.prototype.parseFromString = function (str, mimeType) {
-    const type = String(mimeType || "text/html").toLowerCase();
-    const html = String(str || "");
+  const HTML_VOID_TAGS = new Set([
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr",
+  ]);
 
-    // Create a synthetic document container
-    const doc = {
-      nodeType: DOCUMENT_NODE,
-      nodeName: "#document",
-      contentType: type,
-      compatMode: "CSS1Compat",
-      characterSet: "UTF-8",
-      _html: html,
+  function camelToDash(str) {
+    return String(str).replace(/[A-Z]/g, function (m) {
+      return "-" + m.toLowerCase();
+    });
+  }
+
+  function dashToCamel(str) {
+    return String(str).replace(/-([a-z])/g, function (_, c) {
+      return c.toUpperCase();
+    });
+  }
+
+  function leadingDoctype(source, html) {
+    const m = /^<!doctype(?:\s+([^\s>]+))?([^>]*)>/i.exec(source);
+    if (!m) return null;
+    const rest = m[2] || "";
+    const quoted = function (s) {
+      return /^\s*("([^"]*)"|'([^']*)')/.exec(s);
     };
+    let publicId = "";
+    let systemId = "";
+    const kw = /^\s*(public|system)/i.exec(rest);
+    if (kw) {
+      let after = rest.slice(kw[0].length);
+      const first = quoted(after);
+      if (first) {
+        const value = first[2] !== undefined ? first[2] : (first[3] !== undefined ? first[3] : "");
+        after = after.slice(first[0].length);
+        if ((kw[1] || "").toLowerCase() === "public") {
+          publicId = value;
+          const second = quoted(after);
+          if (second) {
+            systemId = second[2] !== undefined ? second[2] : (second[3] !== undefined ? second[3] : "");
+          }
+        } else {
+          systemId = value;
+        }
+      }
+    }
+    const name = m[1] || "";
+    return {
+      name: html ? name.toLowerCase() : name,
+      publicId: publicId,
+      systemId: systemId,
+    };
+  }
 
-    if (typeof document !== "undefined" && document.createElement) {
-      const root = document.createElement("html");
-      const head = document.createElement("head");
-      const body = document.createElement("body");
+  function unescapeEntities(str) {
+    return str.replace(/&([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);/g, function (match, ent) {
+      if (ent === "amp") return "&";
+      if (ent === "lt") return "<";
+      if (ent === "gt") return ">";
+      if (ent === "quot") return '"';
+      if (ent === "apos") return "'";
+      if (ent.startsWith("#x") || ent.startsWith("#X")) {
+        const code = parseInt(ent.slice(2), 16);
+        return !isNaN(code) ? String.fromCharCode(code) : match;
+      }
+      if (ent.startsWith("#")) {
+        const code = parseInt(ent.slice(1), 10);
+        return !isNaN(code) ? String.fromCharCode(code) : match;
+      }
+      return match;
+    });
+  }
+
+  function matchesSimpleSelector(el, s) {
+    if (!el || el.nodeType !== 1) return false;
+    s = s.trim();
+    if (s === "*") return true;
+
+    let rest = s;
+    const tagMatch = rest.match(/^[a-zA-Z0-9_-]+/);
+    if (tagMatch) {
+      const tag = tagMatch[0].toLowerCase();
+      rest = rest.slice(tag.length);
+      const elTag = (el.localName || el.tagName || "").toLowerCase();
+      if (elTag !== tag) return false;
+    }
+
+    while (rest.length > 0) {
+      if (rest.startsWith("#")) {
+        const idMatch = rest.match(/^#([a-zA-Z0-9_-]+)/);
+        if (!idMatch) return false;
+        const id = idMatch[1];
+        if (el.getAttribute("id") !== id && el.id !== id) return false;
+        rest = rest.slice(idMatch[0].length);
+      } else if (rest.startsWith(".")) {
+        const clsMatch = rest.match(/^\.([a-zA-Z0-9_-]+)/);
+        if (!clsMatch) return false;
+        const cls = clsMatch[1];
+        const clsAttr = el.getAttribute("class") || el.className || "";
+        if (!clsAttr.split(/\s+/).includes(cls)) return false;
+        rest = rest.slice(clsMatch[0].length);
+      } else if (rest.startsWith("[")) {
+        const attrMatch = rest.match(/^\[([a-zA-Z0-9_:-]+)(?:([*^$]?=)(?:"([^"]*)"|'([^']*)'|([^\]]+)))?\]/);
+        if (!attrMatch) return false;
+        const attrName = attrMatch[1];
+        const op = attrMatch[2];
+        const attrVal = attrMatch[3] !== undefined ? attrMatch[3] : (attrMatch[4] !== undefined ? attrMatch[4] : attrMatch[5]);
+        if (!el.hasAttribute(attrName)) return false;
+        if (op) {
+          const actual = el.getAttribute(attrName) || "";
+          if (op === "=" && actual !== attrVal) return false;
+          if (op === "*=" && !actual.includes(attrVal)) return false;
+          if (op === "^=" && !actual.startsWith(attrVal)) return false;
+          if (op === "$=" && !actual.endsWith(attrVal)) return false;
+        }
+        rest = rest.slice(attrMatch[0].length);
+      } else {
+        break;
+      }
+    }
+
+    return true;
+  }
+
+  function matchesSelector(el, sel) {
+    if (!el || el.nodeType !== 1) return false;
+    const s = sel.trim();
+    if (s === "*") return true;
+
+    if (s.includes(",")) {
+      const parts = s.split(",");
+      for (let i = 0; i < parts.length; i++) {
+        if (matchesSelector(el, parts[i])) return true;
+      }
+      return false;
+    }
+
+    const parts = s.split(/\s+/);
+    if (parts.length > 1) {
+      if (!matchesSimpleSelector(el, parts[parts.length - 1])) return false;
+      let curr = el.parentNode;
+      let pIdx = parts.length - 2;
+      while (curr && pIdx >= 0) {
+        if (curr.nodeType === 1 && matchesSimpleSelector(curr, parts[pIdx])) {
+          pIdx--;
+        }
+        curr = curr.parentNode;
+      }
+      return pIdx < 0;
+    }
+
+    return matchesSimpleSelector(el, s);
+  }
+
+  function ParsedText(data, ownerDoc) {
+    this.nodeType = TEXT_NODE;
+    this.nodeName = "#text";
+    this.data = String(data !== undefined ? data : "");
+    this.ownerDocument = ownerDoc || null;
+    this.parentNode = null;
+    registerParsedNode(this);
+  }
+  Object.defineProperty(ParsedText.prototype, "textContent", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedText.prototype, "nodeValue", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedText.prototype, "length", {
+    get: function () { return this.data.length; },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedText.prototype, "parentElement", {
+    get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
+    configurable: true,
+  });
+
+  function ParsedComment(data, ownerDoc) {
+    this.nodeType = COMMENT_NODE;
+    this.nodeName = "#comment";
+    this.data = String(data !== undefined ? data : "");
+    this.ownerDocument = ownerDoc || null;
+    this.parentNode = null;
+    registerParsedNode(this);
+  }
+  Object.defineProperty(ParsedComment.prototype, "textContent", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedComment.prototype, "nodeValue", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedComment.prototype, "length", {
+    get: function () { return this.data.length; },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedComment.prototype, "parentElement", {
+    get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
+    configurable: true,
+  });
+
+  function ParsedFragment(ownerDoc) {
+    this.nodeType = DOCUMENT_FRAGMENT_NODE;
+    this.nodeName = "#document-fragment";
+    this.ownerDocument = ownerDoc || null;
+    this.parentNode = null;
+    this._children = [];
+    registerParsedNode(this);
+  }
+  ParsedFragment.prototype.appendChild = function (child) {
+    if (!child || typeof child !== "object") {
+      throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+    if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const kids = Array.from(child.childNodes || child._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        this.appendChild(kids[i]);
+      }
+      if (child._children) child._children.length = 0;
+      return child;
+    }
+    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+      try { child.parentNode.removeChild(child); } catch (e) {}
+    }
+    child.parentNode = this;
+    child.ownerDocument = this.ownerDocument || this;
+    this._children.push(child);
+    return child;
+  };
+  ParsedFragment.prototype.removeChild = function (child) {
+    if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    const idx = this._children.indexOf(child);
+    if (idx >= 0) this._children.splice(idx, 1);
+    child.parentNode = null;
+    return child;
+  };
+  Object.defineProperty(ParsedFragment.prototype, "childNodes", {
+    get: function () {
+      return new NodeList(this._children);
+    },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedFragment.prototype, "children", {
+    get: function () {
+      return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+    },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedFragment.prototype, "firstChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[0] : null;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedFragment.prototype, "lastChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+    },
+    configurable: true,
+  });
+
+  function ParsedElement(tagName, ownerDoc) {
+    this.nodeType = ELEMENT_NODE;
+    const isHtml = !ownerDoc || ownerDoc.contentType === "text/html";
+    this.localName = String(tagName).toLowerCase();
+    this.tagName = isHtml ? String(tagName).toUpperCase() : this.localName;
+    this.nodeName = this.tagName;
+    this.ownerDocument = ownerDoc || null;
+    this.parentNode = null;
+    this._attrs = new Map();
+    this._attrCases = new Map();
+    this._children = [];
+    registerParsedNode(this);
+  }
+
+  ParsedElement.prototype.getAttribute = function (name) {
+    const k = String(name).toLowerCase();
+    return this._attrs.has(k) ? this._attrs.get(k) : null;
+  };
+
+  ParsedElement.prototype.setAttribute = function (name, value) {
+    const k = String(name).toLowerCase();
+    const val = String(value);
+    this._attrs.set(k, val);
+    if (!this._attrCases.has(k)) {
+      this._attrCases.set(k, String(name));
+    }
+  };
+
+  ParsedElement.prototype.hasAttribute = function (name) {
+    const k = String(name).toLowerCase();
+    return this._attrs.has(k);
+  };
+
+  ParsedElement.prototype.removeAttribute = function (name) {
+    const k = String(name).toLowerCase();
+    this._attrs.delete(k);
+    this._attrCases.delete(k);
+  };
+
+  ParsedElement.prototype.getAttributeNames = function () {
+    return Array.from(this._attrCases.values());
+  };
+
+  Object.defineProperty(ParsedElement.prototype, "id", {
+    get: function () { return this.getAttribute("id") || ""; },
+    set: function (v) { this.setAttribute("id", v); },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "className", {
+    get: function () { return this.getAttribute("class") || ""; },
+    set: function (v) { this.setAttribute("class", v); },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "classList", {
+    get: function () {
+      const cls = this.className;
+      const tokens = cls.split(/\s+/).filter(Boolean);
+      const self = this;
+      tokens.contains = function (t) { return tokens.indexOf(t) >= 0; };
+      tokens.add = function (t) {
+        if (!tokens.contains(t)) {
+          tokens.push(t);
+          self.className = tokens.join(" ");
+        }
+      };
+      tokens.remove = function (t) {
+        const i = tokens.indexOf(t);
+        if (i >= 0) {
+          tokens.splice(i, 1);
+          self.className = tokens.join(" ");
+        }
+      };
+      return tokens;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "dataset", {
+    get: function () {
+      const el = this;
+      return new Proxy(Object.create(null), {
+        get: function (target, prop) {
+          if (typeof prop !== "string") return undefined;
+          const attrName = "data-" + camelToDash(prop);
+          return el.hasAttribute(attrName) ? el.getAttribute(attrName) : undefined;
+        },
+        set: function (target, prop, value) {
+          if (typeof prop !== "string") return true;
+          const attrName = "data-" + camelToDash(prop);
+          el.setAttribute(attrName, String(value));
+          return true;
+        },
+        has: function (target, prop) {
+          if (typeof prop !== "string") return false;
+          const attrName = "data-" + camelToDash(prop);
+          return el.hasAttribute(attrName);
+        },
+        deleteProperty: function (target, prop) {
+          if (typeof prop !== "string") return true;
+          const attrName = "data-" + camelToDash(prop);
+          el.removeAttribute(attrName);
+          return true;
+        },
+        ownKeys: function () {
+          const keys = [];
+          const names = el.getAttributeNames ? el.getAttributeNames() : [];
+          for (let i = 0; i < names.length; i++) {
+            if (names[i].startsWith("data-")) {
+              keys.push(dashToCamel(names[i].slice(5)));
+            }
+          }
+          return keys;
+        },
+        getOwnPropertyDescriptor: function (target, prop) {
+          if (typeof prop === "string") {
+            const attrName = "data-" + camelToDash(prop);
+            if (el.hasAttribute(attrName)) {
+              return {
+                value: el.getAttribute(attrName),
+                writable: true,
+                enumerable: true,
+                configurable: true,
+              };
+            }
+          }
+          return undefined;
+        },
+      });
+    },
+    configurable: true,
+  });
+
+  function collectParsedText(node) {
+    if (node.nodeType === TEXT_NODE) return node.data || "";
+    if (node.nodeType === ELEMENT_NODE || node.nodeType === DOCUMENT_FRAGMENT_NODE || node.nodeType === DOCUMENT_NODE) {
+      let res = "";
+      const kids = node._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        res += collectParsedText(kids[i]);
+      }
+      return res;
+    }
+    return "";
+  }
+
+  Object.defineProperty(ParsedElement.prototype, "textContent", {
+    get: function () {
+      return collectParsedText(this);
+    },
+    set: function (v) {
+      this._children = [];
+      const val = String(v);
+      if (val.length > 0) {
+        const t = this.ownerDocument ? this.ownerDocument.createTextNode(val) : new ParsedText(val, null);
+        t.parentNode = this;
+        this._children.push(t);
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "childNodes", {
+    get: function () {
+      return new NodeList(this._children);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "children", {
+    get: function () {
+      return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "firstChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[0] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "lastChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "previousSibling", {
+    get: function () {
+      if (!this.parentNode || !this.parentNode._children) return null;
+      const idx = this.parentNode._children.indexOf(this);
+      return idx > 0 ? this.parentNode._children[idx - 1] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "nextSibling", {
+    get: function () {
+      if (!this.parentNode || !this.parentNode._children) return null;
+      const idx = this.parentNode._children.indexOf(this);
+      return (idx >= 0 && idx < this.parentNode._children.length - 1) ? this.parentNode._children[idx + 1] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "parentElement", {
+    get: function () {
+      return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null;
+    },
+    configurable: true,
+  });
+
+  ParsedElement.prototype.appendChild = function (child) {
+    if (!child || typeof child !== "object") {
+      throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+    if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const kids = Array.from(child.childNodes || child._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        this.appendChild(kids[i]);
+      }
+      if (child._children) child._children.length = 0;
+      return child;
+    }
+    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+      try { child.parentNode.removeChild(child); } catch (e) {}
+    }
+    child.parentNode = this;
+    child.ownerDocument = this.ownerDocument || this;
+    this._children.push(child);
+    return child;
+  };
+
+  ParsedElement.prototype.removeChild = function (child) {
+    if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    const idx = this._children.indexOf(child);
+    if (idx >= 0) this._children.splice(idx, 1);
+    child.parentNode = null;
+    return child;
+  };
+
+  ParsedElement.prototype.insertBefore = function (newChild, refChild) {
+    if (!newChild || typeof newChild !== "object") {
+      throw new TypeError("Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+    if (refChild == null) {
+      return this.appendChild(newChild);
+    }
+    const idx = this._children.indexOf(refChild);
+    if (idx === -1) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+    if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const kids = Array.from(newChild.childNodes || newChild._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        this.insertBefore(kids[i], refChild);
+      }
+      if (newChild._children) newChild._children.length = 0;
+      return newChild;
+    }
+    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+      try { newChild.parentNode.removeChild(newChild); } catch (e) {}
+    }
+    newChild.parentNode = this;
+    newChild.ownerDocument = this.ownerDocument || this;
+    const curIdx = this._children.indexOf(refChild);
+    this._children.splice(curIdx >= 0 ? curIdx : this._children.length, 0, newChild);
+    return newChild;
+  };
+
+  ParsedElement.prototype.querySelector = function (sel) {
+    if (arguments.length === 0) throw new TypeError("querySelector: 1 argument required");
+    function walk(node) {
+      const kids = node._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (k.nodeType === ELEMENT_NODE) {
+          if (matchesSelector(k, sel)) return k;
+          const found = walk(k);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    return walk(this);
+  };
+
+  ParsedElement.prototype.querySelectorAll = function (sel) {
+    if (arguments.length === 0) throw new TypeError("querySelectorAll: 1 argument required");
+    const results = [];
+    function walk(node) {
+      const kids = node._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (k.nodeType === ELEMENT_NODE) {
+          if (matchesSelector(k, sel)) results.push(k);
+          walk(k);
+        }
+      }
+    }
+    walk(this);
+    return new NodeList(results);
+  };
+
+  ParsedElement.prototype.getElementById = function (id) {
+    return this.querySelector("#" + id);
+  };
+
+  ParsedElement.prototype.getElementsByTagName = function (tag) {
+    return this.querySelectorAll(tag);
+  };
+
+  ParsedElement.prototype.getElementsByClassName = function (cls) {
+    return this.querySelectorAll("." + cls);
+  };
+
+  ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
+    const p = prefix === "" || prefix === undefined ? null : String(prefix);
+    let n = this;
+    while (n && n.nodeType === ELEMENT_NODE) {
+      if (p === null) {
+        if (n.hasAttribute("xmlns")) return n.getAttribute("xmlns") || null;
+      } else {
+        if (n.hasAttribute("xmlns:" + p)) return n.getAttribute("xmlns:" + p) || null;
+        const attrs = n.attributes;
+        if (attrs) {
+          for (let i = 0; i < attrs.length; i++) {
+            const a = attrs[i];
+            if (a && a.prefix === "xmlns" && a.localName === p) {
+              return a.value || null;
+            }
+          }
+        }
+      }
+      n = n.parentElement || n.parentNode;
+    }
+    return null;
+  };
+
+  function ParsedDocument(contentType, compatMode) {
+    this.nodeType = DOCUMENT_NODE;
+    this.nodeName = "#document";
+    this.contentType = contentType || "text/html";
+    this.compatMode = compatMode || "CSS1Compat";
+    this.characterSet = "UTF-8";
+    this.charset = "UTF-8";
+    this.referrer = "";
+    this.URL = "";
+    this.documentURI = "";
+    this.baseURI = "";
+    this.defaultView = null;
+    this.ownerDocument = null;
+    this.parentNode = null;
+    this._children = [];
+    this.documentElement = null;
+    this.head = null;
+    this.body = null;
+    this._title = "";
+    this._doctypeInfo = null;
+    this._doctypeNode = null;
+    registerParsedNode(this);
+  }
+
+  Object.defineProperty(ParsedDocument.prototype, "title", {
+    get: function () {
+      const titleEl = this.querySelector ? this.querySelector("title") : null;
+      return titleEl ? (titleEl.textContent || "") : this._title;
+    },
+    set: function (v) {
+      this._title = String(v);
+      const titleEl = this.querySelector ? this.querySelector("title") : null;
+      if (titleEl) {
+        titleEl.textContent = this._title;
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "doctype", {
+    get: function () {
+      if (!this._doctypeInfo) return null;
+      if (!this._doctypeNode) {
+        this._doctypeNode = {
+          nodeType: DOCUMENT_TYPE_NODE,
+          nodeName: this._doctypeInfo.name,
+          name: this._doctypeInfo.name,
+          publicId: this._doctypeInfo.publicId,
+          systemId: this._doctypeInfo.systemId,
+          ownerDocument: this,
+          parentNode: this,
+        };
+      }
+      return this._doctypeNode;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "childNodes", {
+    get: function () {
+      return new NodeList(this._children);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "children", {
+    get: function () {
+      return this._children.filter(function (n) { return n.nodeType === ELEMENT_NODE; });
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "firstChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[0] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "lastChild", {
+    get: function () {
+      return this._children.length > 0 ? this._children[this._children.length - 1] : null;
+    },
+    configurable: true,
+  });
+
+  ParsedDocument.prototype.createElement = function (tagName) {
+    return new ParsedElement(tagName, this);
+  };
+
+  ParsedDocument.prototype.createTextNode = function (text) {
+    return new ParsedText(text, this);
+  };
+
+  ParsedDocument.prototype.createComment = function (data) {
+    return new ParsedComment(data, this);
+  };
+
+  ParsedDocument.prototype.createDocumentFragment = function () {
+    return new ParsedFragment(this);
+  };
+
+  ParsedDocument.prototype.querySelector = function (sel) {
+    if (arguments.length === 0) throw new TypeError("querySelector: 1 argument required");
+    for (let i = 0; i < this._children.length; i++) {
+      const root = this._children[i];
+      if (root.nodeType === ELEMENT_NODE) {
+        if (matchesSelector(root, sel)) return root;
+        const found = root.querySelector(sel);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  ParsedDocument.prototype.querySelectorAll = function (sel) {
+    if (arguments.length === 0) throw new TypeError("querySelectorAll: 1 argument required");
+    const list = [];
+    for (let i = 0; i < this._children.length; i++) {
+      const root = this._children[i];
+      if (root.nodeType === ELEMENT_NODE) {
+        if (matchesSelector(root, sel)) list.push(root);
+        const sub = root.querySelectorAll(sel);
+        for (let j = 0; j < sub.length; j++) list.push(sub[j]);
+      }
+    }
+    return new NodeList(list);
+  };
+
+  ParsedDocument.prototype.getElementById = function (id) {
+    return this.querySelector("#" + id);
+  };
+
+  ParsedDocument.prototype.getElementsByTagName = function (tag) {
+    return this.querySelectorAll(tag);
+  };
+
+  ParsedDocument.prototype.getElementsByClassName = function (cls) {
+    return this.querySelectorAll("." + cls);
+  };
+
+  ParsedDocument.prototype.createNSResolver = function (nodeResolver) {
+    return nodeResolver;
+  };
+
+  ParsedDocument.prototype.evaluate = function (expression, contextNode, resolver, type, result) {
+    if (typeof evaluateXPath !== "undefined") {
+      return evaluateXPath(expression, contextNode || this, resolver, type, result);
+    }
+    throw new TypeError("evaluateXPath is not available");
+  };
+
+  ParsedDocument.prototype.createExpression = function (expression, resolver) {
+    if (typeof createExpression !== "undefined") {
+      return createExpression(expression, resolver);
+    }
+    throw new TypeError("createExpression is not available");
+  };
+
+  ParsedDocument.prototype.lookupNamespaceURI = function (prefix) {
+    return this.documentElement ? this.documentElement.lookupNamespaceURI(prefix) : null;
+  };
+
+  function parseDocument(str, mime) {
+    const type = String(mime || "").toLowerCase();
+    if (!SUPPORTED_MIME_TYPES.has(type)) {
+      throw new TypeError(
+        "Failed to execute 'parseFromString' on 'DOMParser': The provided value '" +
+          mime +
+          "' is not a valid enum value of type SupportedType."
+      );
+    }
+
+    let input = typeof str === "string" ? str : String(str ?? "");
+    const trimmed = input.replace(/^\uFEFF/, "").trim();
+    const isHtml = type === "text/html";
+    const compatMode = isHtml ? (/^<!doctype\s+html\s*>/i.test(trimmed) ? "CSS1Compat" : "BackCompat") : "CSS1Compat";
+    const doc = new ParsedDocument(type, compatMode);
+    doc._doctypeInfo = leadingDoctype(trimmed, isHtml);
+
+    if (isHtml) {
+      if (input.startsWith("<?")) {
+        const end = input.indexOf(">");
+        const rawPI = input.slice(1, end < 0 ? undefined : end);
+        const cNode = doc.createComment(rawPI);
+        cNode.parentNode = doc;
+        doc._children.push(cNode);
+        input = end < 0 ? "" : input.slice(end + 1);
+      }
+
+      const root = doc.createElement("html");
+      const head = doc.createElement("head");
+      const body = doc.createElement("body");
       root.appendChild(head);
       root.appendChild(body);
-
+      root.parentNode = doc;
+      doc._children.push(root);
       doc.documentElement = root;
       doc.head = head;
       doc.body = body;
 
-      // Extract title if present
-      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      if (titleMatch) {
-        doc.title = titleMatch[1];
-        const titleEl = document.createElement("title");
-        titleEl.textContent = titleMatch[1];
-        head.appendChild(titleEl);
-      } else {
-        doc.title = "";
+      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+      let stack = [body];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = tokenRegex.exec(input)) !== null) {
+        if (match.index > lastIndex) {
+          const text = unescapeEntities(input.slice(lastIndex, match.index));
+          if (text.length > 0) {
+            const tNode = doc.createTextNode(text);
+            stack[stack.length - 1].appendChild(tNode);
+          }
+        }
+        lastIndex = tokenRegex.lastIndex;
+
+        if (match[1] !== undefined) {
+          // Comment
+          const cNode = doc.createComment(match[1]);
+          stack[stack.length - 1].appendChild(cNode);
+        } else if (match[2] !== undefined) {
+          // CDATA
+          const tNode = doc.createTextNode(match[2]);
+          stack[stack.length - 1].appendChild(tNode);
+        } else if (match[3] !== undefined) {
+          // PI
+          const cNode = doc.createComment("?" + match[3]);
+          stack[stack.length - 1].appendChild(cNode);
+        } else if (match[4] !== undefined) {
+          // End tag
+          const endTag = match[4].toLowerCase();
+          for (let i = stack.length - 1; i > 0; i--) {
+            if (stack[i].localName === endTag) {
+              stack.length = i;
+              break;
+            }
+          }
+        } else if (match[5] !== undefined) {
+          // Start tag
+          const tagName = match[5];
+          const lowerTag = tagName.toLowerCase();
+          const attrStr = match[6] || "";
+          const isSelfClosing = Boolean(match[7]);
+
+          if (lowerTag === "html") {
+            applyAttributes(root, attrStr);
+          } else if (lowerTag === "head") {
+            applyAttributes(head, attrStr);
+            stack = [head];
+          } else if (lowerTag === "body") {
+            applyAttributes(body, attrStr);
+            stack = [body];
+          } else {
+            const el = doc.createElement(tagName);
+            applyAttributes(el, attrStr);
+
+            if (lowerTag === "title" || lowerTag === "meta" || lowerTag === "link" || lowerTag === "style") {
+              head.appendChild(el);
+              if (lowerTag === "title" && !isSelfClosing) {
+                stack.push(el);
+              }
+            } else {
+              stack[stack.length - 1].appendChild(el);
+              if (!isSelfClosing && !HTML_VOID_TAGS.has(lowerTag)) {
+                stack.push(el);
+              }
+            }
+          }
+        }
       }
 
-      doc.querySelector = function (sel) { return root.querySelector ? root.querySelector(sel) : null; };
-      doc.querySelectorAll = function (sel) { return root.querySelectorAll ? root.querySelectorAll(sel) : new NodeList([]); };
-      doc.getElementById = function (id) {
-        if (root.querySelectorAll) {
-          const matches = root.querySelectorAll("#" + id);
-          return matches.length > 0 ? matches[0] : null;
+      if (lastIndex < input.length) {
+        const text = unescapeEntities(input.slice(lastIndex));
+        if (text.length > 0) {
+          const tNode = doc.createTextNode(text);
+          stack[stack.length - 1].appendChild(tNode);
         }
-        return null;
-      };
+      }
+
+      const titleEl = head.querySelector("title");
+      if (titleEl) {
+        doc._title = titleEl.textContent;
+      }
+    } else {
+      // XML / SVG mode
+      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+      let stack = [doc];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = tokenRegex.exec(input)) !== null) {
+        if (match.index > lastIndex) {
+          const text = unescapeEntities(input.slice(lastIndex, match.index));
+          if (text.length > 0 && stack.length > 1) {
+            const tNode = doc.createTextNode(text);
+            stack[stack.length - 1].appendChild(tNode);
+          }
+        }
+        lastIndex = tokenRegex.lastIndex;
+
+        if (match[1] !== undefined) {
+          const cNode = doc.createComment(match[1]);
+          if (stack.length === 1) {
+            cNode.parentNode = doc;
+            doc._children.push(cNode);
+          } else {
+            stack[stack.length - 1].appendChild(cNode);
+          }
+        } else if (match[2] !== undefined) {
+          if (stack.length > 1) {
+            const tNode = doc.createTextNode(match[2]);
+            stack[stack.length - 1].appendChild(tNode);
+          }
+        } else if (match[3] !== undefined) {
+          const cNode = doc.createComment("?" + match[3]);
+          if (stack.length === 1) {
+            cNode.parentNode = doc;
+            doc._children.push(cNode);
+          } else {
+            stack[stack.length - 1].appendChild(cNode);
+          }
+        } else if (match[4] !== undefined) {
+          const endTag = match[4].toLowerCase();
+          for (let i = stack.length - 1; i > 0; i--) {
+            if (stack[i].localName === endTag) {
+              stack.length = i;
+              break;
+            }
+          }
+        } else if (match[5] !== undefined) {
+          const tagName = match[5];
+          const attrStr = match[6] || "";
+          const isSelfClosing = Boolean(match[7]);
+
+          const el = doc.createElement(tagName);
+          applyAttributes(el, attrStr);
+
+          if (stack.length === 1) {
+            el.parentNode = doc;
+            doc._children.push(el);
+            doc.documentElement = el;
+            if (!isSelfClosing) {
+              stack.push(el);
+            }
+          } else {
+            stack[stack.length - 1].appendChild(el);
+            if (!isSelfClosing) {
+              stack.push(el);
+            }
+          }
+        }
+      }
+
+      if (lastIndex < input.length) {
+        const text = unescapeEntities(input.slice(lastIndex));
+        if (text.length > 0 && stack.length > 1) {
+          const tNode = doc.createTextNode(text);
+          stack[stack.length - 1].appendChild(tNode);
+        }
+      }
     }
 
     return doc;
+  }
+
+  function applyAttributes(el, attrStr) {
+    if (!attrStr) return;
+    const attrRegex = /([a-zA-Z0-9_:-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+    let m;
+    while ((m = attrRegex.exec(attrStr)) !== null) {
+      const name = m[1];
+      const val = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : (m[4] !== undefined ? m[4] : ""));
+      el.setAttribute(name, unescapeEntities(val));
+    }
+  }
+
+  function DOMParser() {}
+
+  DOMParser.prototype.parseFromString = function (str, mimeType) {
+    return parseDocument(str, mimeType);
   };
 
   markNative(DOMParser, "DOMParser");
   markNative(DOMParser.prototype.parseFromString, "parseFromString");
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.DOMParser = DOMParser;
+  }
+  if (typeof window !== "undefined") {
+    window.DOMParser = DOMParser;
+  }
+
+  // =============================================================
+  // Module: xpath.js
+  // =============================================================
+  // src/js/shim/xpath.js
+  // CapSurf XPath 1.0 Specification Engine
+  // Aligned with vendor/kitesurf/packages/dom-shim/src/xpath.ts
+
+  const XPATH_RESULT_TYPES = {
+    ANY_TYPE: 0,
+    NUMBER_TYPE: 1,
+    STRING_TYPE: 2,
+    BOOLEAN_TYPE: 3,
+    UNORDERED_NODE_ITERATOR_TYPE: 4,
+    ORDERED_NODE_ITERATOR_TYPE: 5,
+    UNORDERED_NODE_SNAPSHOT_TYPE: 6,
+    ORDERED_NODE_SNAPSHOT_TYPE: 7,
+    ANY_UNORDERED_NODE_TYPE: 8,
+    FIRST_ORDERED_NODE_TYPE: 9,
+  };
+
+  const AXES = new Set([
+    "ancestor",
+    "ancestor-or-self",
+    "attribute",
+    "child",
+    "descendant",
+    "descendant-or-self",
+    "following",
+    "following-sibling",
+    "namespace",
+    "parent",
+    "preceding",
+    "preceding-sibling",
+    "self",
+  ]);
+
+  const REVERSE_AXES = new Set([
+    "ancestor",
+    "ancestor-or-self",
+    "preceding",
+    "preceding-sibling",
+  ]);
+
+  const NODE_TYPES = new Set(["comment", "text", "processing-instruction", "node"]);
+  const OPERATOR_NAMES = new Set(["and", "or", "mod", "div"]);
+
+  const EOF_TOKEN = { t: "eof", v: "" };
+
+  function getDOMException(message, name) {
+    if (typeof DOMException !== "undefined") {
+      return new DOMException(message, name);
+    }
+    if (typeof globalThis !== "undefined" && globalThis.DOMException) {
+      return new globalThis.DOMException(message, name);
+    }
+    const err = new Error(message);
+    err.name = name;
+    return err;
+  }
+
+  function syntaxError(src) {
+    return getDOMException("The expression is not a legal expression.", "SyntaxError");
+  }
+
+  function namespaceError(prefix) {
+    return getDOMException(
+      "The expression contains an unresolvable namespace prefix.",
+      "NamespaceError"
+    );
+  }
+
+  function isNameStart(codePoint) {
+    return (
+      codePoint === 0x5f ||
+      (codePoint >= 0x41 && codePoint <= 0x5a) ||
+      (codePoint >= 0x61 && codePoint <= 0x7a) ||
+      (codePoint >= 0xc0 && codePoint <= 0xd6) ||
+      (codePoint >= 0xd8 && codePoint <= 0xf6) ||
+      (codePoint >= 0xf8 && codePoint <= 0x2ff) ||
+      (codePoint >= 0x370 && codePoint <= 0x37d) ||
+      (codePoint >= 0x37f && codePoint <= 0x1fff) ||
+      (codePoint >= 0x200c && codePoint <= 0x200d) ||
+      (codePoint >= 0x2070 && codePoint <= 0x218f) ||
+      (codePoint >= 0x2c00 && codePoint <= 0x2fef) ||
+      (codePoint >= 0x3001 && codePoint <= 0xd7ff) ||
+      (codePoint >= 0xf900 && codePoint <= 0xfdcf) ||
+      (codePoint >= 0xfdf0 && codePoint <= 0xfffd) ||
+      (codePoint >= 0x10000 && codePoint <= 0xeffff)
+    );
+  }
+
+  function isNameChar(codePoint) {
+    return (
+      isNameStart(codePoint) ||
+      (codePoint >= 0x30 && codePoint <= 0x39) ||
+      codePoint === 0x2d ||
+      codePoint === 0x2e ||
+      codePoint === 0xb7 ||
+      (codePoint >= 0x300 && codePoint <= 0x36f) ||
+      (codePoint >= 0x203f && codePoint <= 0x2040)
+    );
+  }
+
+  function lex(src) {
+    const toks = [];
+    const n = src.length;
+    let i = 0;
+
+    const operatorMayFollow = function () {
+      const p = toks[toks.length - 1];
+      if (!p) return false;
+      if (p.t === "op") return false;
+      return !(
+        p.t === "punct" &&
+        (p.v === "@" || p.v === "::" || p.v === "(" || p.v === "[" || p.v === ",")
+      );
+    };
+
+    const readNcName = function () {
+      const start = i;
+      const first = src.codePointAt(i) ?? -1;
+      if (!isNameStart(first)) throw syntaxError(src);
+      i += first > 0xffff ? 2 : 1;
+      while (i < n) {
+        const next = src.codePointAt(i) ?? -1;
+        if (!isNameChar(next)) break;
+        i += next > 0xffff ? 2 : 1;
+      }
+      return src.slice(start, i);
+    };
+
+    const peekNonSpace = function (from) {
+      let j = from;
+      while (j < n && " \t\r\n".includes(src.charAt(j))) j++;
+      return j;
+    };
+
+    while (i < n) {
+      const c = src.charAt(i);
+      if (" \t\r\n".includes(c)) {
+        i++;
+        continue;
+      }
+      if (c === '"' || c === "'") {
+        const end = src.indexOf(c, i + 1);
+        if (end < 0) throw syntaxError(src);
+        toks.push({ t: "str", v: src.slice(i + 1, end) });
+        i = end + 1;
+        continue;
+      }
+      if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(src[i + 1] ?? ""))) {
+        const m = /^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)/.exec(src.slice(i));
+        if (!m) throw syntaxError(src);
+        toks.push({ t: "num", v: m[0] });
+        i += m[0].length;
+        continue;
+      }
+      const two = src.slice(i, i + 2);
+      if (two === ".." || two === "::") {
+        toks.push({ t: "punct", v: two });
+        i += 2;
+        continue;
+      }
+      if ("().[]@,".includes(c)) {
+        toks.push({ t: "punct", v: c });
+        i++;
+        continue;
+      }
+      if (two === "//" || two === "!=" || two === "<=" || two === ">=") {
+        toks.push({ t: "op", v: two });
+        i += 2;
+        continue;
+      }
+      if ("/|+-=<>".includes(c)) {
+        toks.push({ t: "op", v: c });
+        i++;
+        continue;
+      }
+      if (c === "*") {
+        toks.push(operatorMayFollow() ? { t: "op", v: "*" } : { t: "name", v: "*" });
+        i++;
+        continue;
+      }
+      if (c === "$") {
+        i++;
+        let name = readNcName();
+        if (src[i] === ":" && src[i + 1] !== ":") {
+          i++;
+          name += ":" + readNcName();
+        }
+        toks.push({ t: "var", v: name });
+        continue;
+      }
+      if (!isNameStart(src.codePointAt(i) ?? -1)) throw syntaxError(src);
+      let name = readNcName();
+      if (operatorMayFollow()) {
+        if (!OPERATOR_NAMES.has(name)) throw syntaxError(src);
+        toks.push({ t: "op", v: name });
+        continue;
+      }
+      if (src[i] === ":" && src[i + 1] !== ":") {
+        i++;
+        if (src[i] === "*") {
+          i++;
+          toks.push({ t: "name", v: `${name}:*` });
+          continue;
+        }
+        name += ":" + readNcName();
+      }
+      const next = peekNonSpace(i);
+      if (src[next] === "(") {
+        toks.push({ t: NODE_TYPES.has(name) ? "type" : "fn", v: name });
+      } else if (src.slice(next, next + 2) === "::") {
+        if (!AXES.has(name)) throw syntaxError(src);
+        toks.push({ t: "axis", v: name });
+      } else {
+        toks.push({ t: "name", v: name });
+      }
+    }
+    toks.push(EOF_TOKEN);
+    return toks;
+  }
+
+  function resolvePrefix(resolver, prefix) {
+    let ns = null;
+    try {
+      if (typeof resolver === "function") {
+        ns = resolver(prefix);
+      } else if (resolver !== null && typeof resolver === "object") {
+        const lookupNamespaceURI = resolver.lookupNamespaceURI;
+        if (typeof lookupNamespaceURI !== "function") {
+          throw new TypeError("XPathNSResolver.lookupNamespaceURI is not callable");
+        }
+        ns = lookupNamespaceURI.call(resolver, prefix);
+      }
+    } catch (error) {
+      throw namespaceError(prefix);
+    }
+    if (ns === null || ns === undefined) {
+      throw namespaceError(prefix);
+    }
+    if (typeof ns === "symbol") {
+      throw namespaceError(prefix);
+    }
+    try {
+      return String(ns);
+    } catch (error) {
+      throw namespaceError(prefix);
+    }
+  }
+
+  class Parser {
+    constructor(src, toks, resolver) {
+      this.src = src;
+      this.toks = toks;
+      this.resolver = resolver;
+      this.i = 0;
+    }
+
+    parse() {
+      const e = this.orExpr();
+      if (this.peek().t !== "eof") throw syntaxError(this.src);
+      return e;
+    }
+
+    peek(k = 0) {
+      return this.toks[Math.min(this.i + k, this.toks.length - 1)] ?? EOF_TOKEN;
+    }
+
+    next() {
+      return this.toks[this.i++] ?? EOF_TOKEN;
+    }
+
+    is(t, v) {
+      const p = this.peek();
+      return p.t === t && (v === undefined || p.v === v);
+    }
+
+    expect(t, v) {
+      if (!this.is(t, v)) throw syntaxError(this.src);
+      return this.next();
+    }
+
+    binary(sub, ops, make) {
+      let l = sub.call(this);
+      while (this.peek().t === "op" && ops.includes(this.peek().v)) {
+        const op = this.next().v;
+        l = make(op, l, sub.call(this));
+      }
+      return l;
+    }
+
+    orExpr() {
+      return this.binary(
+        this.andExpr,
+        ["or"],
+        (_op, l, r) => ({ t: "or", l, r })
+      );
+    }
+
+    andExpr() {
+      return this.binary(
+        this.equalityExpr,
+        ["and"],
+        (_op, l, r) => ({ t: "and", l, r })
+      );
+    }
+
+    equalityExpr() {
+      return this.binary(
+        this.relationalExpr,
+        ["=", "!="],
+        (op, l, r) => ({ t: "cmp", op, l, r })
+      );
+    }
+
+    relationalExpr() {
+      return this.binary(
+        this.additiveExpr,
+        ["<", ">", "<=", ">="],
+        (op, l, r) => ({ t: "cmp", op, l, r })
+      );
+    }
+
+    additiveExpr() {
+      return this.binary(
+        this.multiplicativeExpr,
+        ["+", "-"],
+        (op, l, r) => ({ t: "arith", op, l, r })
+      );
+    }
+
+    multiplicativeExpr() {
+      return this.binary(
+        this.unaryExpr,
+        ["*", "div", "mod"],
+        (op, l, r) => ({ t: "arith", op, l, r })
+      );
+    }
+
+    unaryExpr() {
+      if (this.is("op", "-")) {
+        this.next();
+        return { t: "neg", e: this.unaryExpr() };
+      }
+      return this.unionExpr();
+    }
+
+    unionExpr() {
+      return this.binary(
+        this.pathExpr,
+        ["|"],
+        (_op, l, r) => ({ t: "union", l, r })
+      );
+    }
+
+    pathExpr() {
+      const p = this.peek();
+      const startsFilter =
+        p.t === "var" ||
+        p.t === "str" ||
+        p.t === "num" ||
+        p.t === "fn" ||
+        (p.t === "punct" && p.v === "(");
+      if (!startsFilter) return this.locationPath();
+      const primary = this.primaryExpr();
+      const preds = this.predicates();
+      let e = preds.length ? { t: "filter", e: primary, preds } : primary;
+      if (this.is("op", "/") || this.is("op", "//")) {
+        const steps = [];
+        this.relativePath(steps, true);
+        e = { t: "path", start: e, steps };
+      }
+      return e;
+    }
+
+    primaryExpr() {
+      const p = this.next();
+      if (p.t === "num") return { t: "num", v: Number(p.v) };
+      if (p.t === "str") return { t: "str", v: p.v };
+      if (p.t === "var") throw syntaxError(this.src);
+      if (p.t === "punct" && p.v === "(") {
+        const e = this.orExpr();
+        this.expect("punct", ")");
+        return e;
+      }
+      if (p.t === "fn") {
+        const fn = FUNCTIONS.get(p.v);
+        if (!fn) throw syntaxError(this.src);
+        this.expect("punct", "(");
+        const args = [];
+        if (!this.is("punct", ")")) {
+          args.push(this.orExpr());
+          while (this.is("punct", ",")) {
+            this.next();
+            args.push(this.orExpr());
+          }
+        }
+        this.expect("punct", ")");
+        const [min, max] = fn.arity;
+        if (args.length < min || args.length > max) throw syntaxError(this.src);
+        return { t: "fn", name: p.v, args };
+      }
+      throw syntaxError(this.src);
+    }
+
+    predicates() {
+      const preds = [];
+      while (this.is("punct", "[")) {
+        this.next();
+        preds.push(this.orExpr());
+        this.expect("punct", "]");
+      }
+      return preds;
+    }
+
+    locationPath() {
+      const steps = [];
+      if (this.is("op", "/")) {
+        this.next();
+        if (this.startsStep()) this.relativePath(steps, false);
+        return { t: "path", start: "root", steps };
+      }
+      if (this.is("op", "//")) {
+        this.relativePath(steps, true);
+        return { t: "path", start: "root", steps };
+      }
+      this.relativePath(steps, false);
+      return { t: "path", start: "context", steps };
+    }
+
+    startsStep() {
+      const p = this.peek();
+      return (
+        p.t === "name" ||
+        p.t === "type" ||
+        p.t === "axis" ||
+        (p.t === "punct" && (p.v === "@" || p.v === "." || p.v === ".."))
+      );
+    }
+
+    relativePath(steps, leadingSeparator) {
+      if (leadingSeparator) this.separator(steps);
+      steps.push(this.step());
+      while (this.is("op", "/") || this.is("op", "//")) {
+        this.separator(steps);
+        steps.push(this.step());
+      }
+    }
+
+    separator(steps) {
+      const sep = this.next().v;
+      if (sep === "//") steps.push({ axis: "descendant-or-self", test: { k: "node" }, preds: [] });
+    }
+
+    step() {
+      if (this.is("punct", ".")) {
+        this.next();
+        return { axis: "self", test: { k: "node" }, preds: [] };
+      }
+      if (this.is("punct", "..")) {
+        this.next();
+        return { axis: "parent", test: { k: "node" }, preds: [] };
+      }
+      let axis = "child";
+      if (this.is("axis")) {
+        axis = this.next().v;
+        this.expect("punct", "::");
+      } else if (this.is("punct", "@")) {
+        this.next();
+        axis = "attribute";
+      }
+      const test = this.nodeTest();
+      return { axis, test, preds: this.predicates() };
+    }
+
+    nodeTest() {
+      const p = this.next();
+      if (p.t === "type") {
+        this.expect("punct", "(");
+        let target = null;
+        if (p.v === "processing-instruction" && this.is("str")) target = this.next().v;
+        this.expect("punct", ")");
+        if (p.v === "node") return { k: "node" };
+        if (p.v === "text") return { k: "text" };
+        if (p.v === "comment") return { k: "comment" };
+        return { k: "pi", target };
+      }
+      if (p.t !== "name") throw syntaxError(this.src);
+      if (p.v === "*") return { k: "any", ns: null };
+      const colon = p.v.indexOf(":");
+      if (colon < 0) return { k: "name", ns: null, local: p.v };
+      const ns = resolvePrefix(this.resolver, p.v.slice(0, colon));
+      const local = p.v.slice(colon + 1);
+      return local === "*" ? { k: "any", ns } : { k: "name", ns, local };
+    }
+  }
+
+  function compile(src, resolver) {
+    return new Parser(src, lex(src), resolver).parse();
+  }
+
+  function isAttr(n) {
+    return n?.nodeType === 2 && ("ownerElement" in n || "specified" in n);
+  }
+
+  function parentOf(n) {
+    if (isAttr(n)) return n.ownerElement || null;
+    const p = n.parentNode || n.parentElement;
+    if (!p && n.ownerDocument && n !== n.ownerDocument) {
+      if (n === n.ownerDocument.documentElement) return n.ownerDocument;
+    }
+    return p || null;
+  }
+
+  function inModel(n) {
+    const t = n.nodeType;
+    return t !== 10 && t !== 12 && t !== 5 && t !== 6;
+  }
+
+  function firstChild(n) {
+    let c;
+    if (n.nodeType === 9) { // DOCUMENT_NODE
+      c = n.firstChild || n.documentElement;
+    } else {
+      c = isAttr(n) ? null : n.firstChild;
+    }
+    while (c && !inModel(c)) c = c.nextSibling;
+    return c || null;
+  }
+
+  function lastChild(n) {
+    let c;
+    if (n.nodeType === 9) {
+      c = n.lastChild || n.documentElement;
+    } else {
+      c = isAttr(n) ? null : n.lastChild;
+    }
+    while (c && !inModel(c)) c = c.previousSibling;
+    return c || null;
+  }
+
+  function nextSibling(n) {
+    let c = isAttr(n) ? null : n.nextSibling;
+    while (c && !inModel(c)) c = c.nextSibling;
+    return c || null;
+  }
+
+  function previousSibling(n) {
+    let c = isAttr(n) ? null : n.previousSibling;
+    while (c && !inModel(c)) c = c.previousSibling;
+    return c || null;
+  }
+
+  function descendants(n, out) {
+    for (let c = firstChild(n); c; c = nextSibling(c)) {
+      out.push(c);
+      descendants(c, out);
+    }
+  }
+
+  function descendantsReversed(n, out) {
+    for (let c = lastChild(n); c; c = previousSibling(c)) {
+      descendantsReversed(c, out);
+      out.push(c);
+    }
+  }
+
+  function attributesOf(n) {
+    if (!n || n.nodeType !== 1) return []; // ELEMENT_NODE
+    const list = n.attributes;
+    const out = [];
+    if (!list) return out;
+    const len = list.length || 0;
+    for (let i = 0; i < len; i++) {
+      const a = list[i];
+      if (
+        !a ||
+        a.namespaceURI === "http://www.w3.org/2000/xmlns/" ||
+        a.name === "xmlns" ||
+        String(a.name).startsWith("xmlns:")
+      ) {
+        continue;
+      }
+      out.push(a);
+    }
+    return out;
+  }
+
+  function axisNodes(axis, n) {
+    const out = [];
+    switch (axis) {
+      case "self":
+        out.push(n);
+        break;
+      case "child":
+        for (let c = firstChild(n); c; c = nextSibling(c)) out.push(c);
+        break;
+      case "descendant":
+        descendants(n, out);
+        break;
+      case "descendant-or-self":
+        out.push(n);
+        descendants(n, out);
+        break;
+      case "parent": {
+        const p = parentOf(n);
+        if (p) out.push(p);
+        break;
+      }
+      case "ancestor":
+      case "ancestor-or-self":
+        if (axis === "ancestor-or-self") out.push(n);
+        for (let p = parentOf(n); p; p = parentOf(p)) out.push(p);
+        break;
+      case "following-sibling":
+        for (let s = nextSibling(n); s; s = nextSibling(s)) out.push(s);
+        break;
+      case "preceding-sibling":
+        for (let s = previousSibling(n); s; s = previousSibling(s)) out.push(s);
+        break;
+      case "following": {
+        let a = n;
+        if (isAttr(n)) {
+          a = n.ownerElement;
+          if (!a) break;
+          descendants(a, out);
+        }
+        for (; a; a = parentOf(a)) {
+          for (let s = nextSibling(a); s; s = nextSibling(s)) {
+            out.push(s);
+            descendants(s, out);
+          }
+        }
+        break;
+      }
+      case "preceding": {
+        for (let a = isAttr(n) ? n.ownerElement : n; a; a = parentOf(a)) {
+          for (let s = previousSibling(a); s; s = previousSibling(s)) {
+            descendantsReversed(s, out);
+            out.push(s);
+          }
+        }
+        break;
+      }
+      case "attribute":
+        out.push(...attributesOf(n));
+        break;
+      case "namespace":
+        break;
+    }
+    return out;
+  }
+
+  function isHtmlDocumentNode(el) {
+    if (!el) return false;
+    const doc = el.ownerDocument || (el.nodeType === 9 ? el : (typeof document !== "undefined" ? document : null));
+    if (!doc) return false;
+    if (doc.contentType) return doc.contentType === "text/html";
+    return true;
+  }
+
+  function asciiLowercase(s) {
+    return String(s || "").toLowerCase();
+  }
+
+  function matches(test, axis, n) {
+    const t = n.nodeType;
+    switch (test.k) {
+      case "node":
+        return true;
+      case "text":
+        return t === 3 || t === 4; // TEXT_NODE || CDATA_SECTION_NODE
+      case "comment":
+        return t === 8; // COMMENT_NODE
+      case "pi":
+        return t === 7 && (test.target === null || n.target === test.target); // PROCESSING_INSTRUCTION_NODE
+    }
+    if (axis === "attribute") {
+      if (t !== 2) return false; // ATTRIBUTE_NODE
+      const ns = n.namespaceURI || null;
+      if (test.k === "any") return test.ns === null || ns === test.ns;
+      const owner = n.ownerElement;
+      if (
+        test.ns === null &&
+        ns === null &&
+        owner &&
+        (owner.namespaceURI === "http://www.w3.org/1999/xhtml" || !owner.namespaceURI) &&
+        isHtmlDocumentNode(owner)
+      ) {
+        return asciiLowercase(n.localName || n.name) === asciiLowercase(test.local);
+      }
+      return (n.localName || n.name) === test.local && ns === test.ns;
+    }
+    if (t !== 1) return false; // ELEMENT_NODE
+    const ns = n.namespaceURI || null;
+    if (test.k === "any") return test.ns === null || ns === test.ns;
+    if (isHtmlDocumentNode(n)) {
+      if (ns === "http://www.w3.org/1999/xhtml" || ns === null) {
+        return (
+          asciiLowercase(n.localName || n.tagName) === asciiLowercase(test.local) &&
+          (test.ns === null || test.ns === "http://www.w3.org/1999/xhtml")
+        );
+      }
+      return (n.localName || n.tagName) === test.local && test.ns !== null && ns === test.ns;
+    }
+    return (n.localName || n.tagName) === test.local && ns === test.ns;
+  }
+
+  class Evaluation {
+    constructor(root) {
+      this.root = root;
+      this.order = null;
+    }
+
+    index() {
+      if (this.order) return this.order;
+      const order = new Map();
+      let k = 0;
+      const visit = (n) => {
+        order.set(n, k++);
+        if (n.nodeType === 1) { // ELEMENT_NODE
+          const attrs = attributesOf(n);
+          for (let i = 0; i < attrs.length; i++) order.set(attrs[i], k++);
+        }
+        for (let c = firstChild(n); c; c = nextSibling(c)) visit(c);
+      };
+      visit(this.root);
+      this.order = order;
+      return order;
+    }
+
+    sort(nodes) {
+      const unique = [...new Set(nodes)];
+      if (unique.length < 2) return unique;
+      const order = this.index();
+      const key = (n) => {
+        const parent = parentOf(n);
+        return order.get(n) ?? (parent ? order.get(parent) : undefined) ?? Number.MAX_SAFE_INTEGER;
+      };
+      return unique.sort((a, b) => key(a) - key(b));
+    }
+  }
+
+  function rootOf(node) {
+    let root = node;
+    for (let parent = parentOf(root); parent; parent = parentOf(parent)) {
+      root = parent;
+    }
+    return root;
+  }
+
+  function stringValue(n) {
+    switch (n.nodeType) {
+      case 1: // ELEMENT_NODE
+      case 11: // DOCUMENT_FRAGMENT_NODE
+        return String(n.textContent ?? "");
+      case 9: { // DOCUMENT_NODE
+        let s = "";
+        for (let c = firstChild(n); c; c = nextSibling(c)) {
+          if (c.nodeType === 1 || c.nodeType === 3 || c.nodeType === 4) {
+            s += c.textContent ?? "";
+          }
+        }
+        return s;
+      }
+      case 2: // ATTRIBUTE_NODE
+        return String(n.value ?? "");
+      default:
+        return String(n.nodeValue ?? n.data ?? n.textContent ?? "");
+    }
+  }
+
+  function isNodeSet(v) {
+    return Array.isArray(v);
+  }
+
+  function toBoolean(v) {
+    if (isNodeSet(v)) return v.length > 0;
+    if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+    if (typeof v === "string") return v.length > 0;
+    return Boolean(v);
+  }
+
+  function stringToNumber(s) {
+    return /^[\t\n\r ]*-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)[\t\n\r ]*$/.test(s)
+      ? Number(s.trim())
+      : NaN;
+  }
+
+  function toNumber(v) {
+    if (isNodeSet(v)) return stringToNumber(toStringValue(v));
+    if (typeof v === "string") return stringToNumber(v);
+    if (typeof v === "boolean") return v ? 1 : 0;
+    return Number(v);
+  }
+
+  function numberToString(x) {
+    if (Number.isNaN(x)) return "NaN";
+    if (x === Infinity) return "Infinity";
+    if (x === -Infinity) return "-Infinity";
+    if (x === 0) return "0";
+    const s = String(x);
+    if (!/e/i.test(s)) return s;
+    const [mant, expStr] = s.toLowerCase().split("e");
+    const neg = mant.startsWith("-");
+    const digits = mant.replace(/^-/, "").replace(".", "");
+    const intLen = (mant.replace(/^-/, "").split(".")[0] || "").length;
+    const exp = Number(expStr) + intLen;
+    let out;
+    if (exp <= 0) out = "0." + "0".repeat(-exp) + digits;
+    else if (exp >= digits.length) out = digits + "0".repeat(exp - digits.length);
+    else out = digits.slice(0, exp) + "." + digits.slice(exp);
+    return (neg ? "-" : "") + out;
+  }
+
+  function toStringValue(v) {
+    if (isNodeSet(v)) return v.length ? stringValue(v[0]) : "";
+    if (typeof v === "number") return numberToString(v);
+    if (typeof v === "boolean") return v ? "true" : "false";
+    return String(v);
+  }
+
+  function compareAtoms(op, a, b) {
+    if (op === "=" || op === "!=") {
+      let eq;
+      if (typeof a === "boolean" || typeof b === "boolean") eq = toBoolean(a) === toBoolean(b);
+      else if (typeof a === "number" || typeof b === "number") eq = toNumber(a) === toNumber(b);
+      else eq = toStringValue(a) === toStringValue(b);
+      return op === "=" ? eq : !eq;
+    }
+    const x = toNumber(a);
+    const y = toNumber(b);
+    if (op === "<") return x < y;
+    if (op === "<=") return x <= y;
+    if (op === ">") return x > y;
+    return x >= y;
+  }
+
+  function compare(op, a, b) {
+    if (isNodeSet(a) && isNodeSet(b)) {
+      const bs = b.map(stringValue);
+      return a.some((n) => {
+        const s = stringValue(n);
+        return bs.some((t) => compareAtoms(op, s, t));
+      });
+    }
+    if (isNodeSet(a) || isNodeSet(b)) {
+      const set = isNodeSet(a) ? a : b;
+      const other = isNodeSet(a) ? b : a;
+      if (typeof other === "boolean") {
+        return isNodeSet(a)
+          ? compareAtoms(op, toBoolean(set), other)
+          : compareAtoms(op, other, toBoolean(set));
+      }
+      return set.some((n) => {
+        const s = typeof other === "number" ? stringToNumber(stringValue(n)) : stringValue(n);
+        return isNodeSet(a) ? compareAtoms(op, s, other) : compareAtoms(op, other, s);
+      });
+    }
+    return compareAtoms(op, a, b);
+  }
+
+  function nodeSetOf(v) {
+    if (!isNodeSet(v)) throw new TypeError("The expression does not evaluate to a node-set.");
+    return v;
+  }
+
+  function xpathRound(x) {
+    if (!Number.isFinite(x)) return x;
+    if (x < 0 && x >= -0.5) return -0;
+    return Math.floor(x + 0.5);
+  }
+
+  function localNameOf(n) {
+    const t = n.nodeType;
+    if (t === 1 || t === 2) return String(n.localName ?? "");
+    if (t === 7) return String(n.target ?? "");
+    return "";
+  }
+
+  function qualifiedNameOf(n) {
+    const t = n.nodeType;
+    if (t === 1 || t === 2) {
+      return n.prefix ? `${n.prefix}:${n.localName}` : String(n.localName ?? "");
+    }
+    if (t === 7) return String(n.target ?? "");
+    return "";
+  }
+
+  function firstOf(c, args) {
+    if (!args.length) return c.node;
+    const set = c.ev.sort(nodeSetOf(evaluate(arg(args, 0), c)));
+    return set[0] ?? null;
+  }
+
+  function idLookup(c, ids) {
+    const root = c.ev.root;
+    const found = [];
+    const wanted = new Set(ids.filter(Boolean));
+    if (!wanted.size) return found;
+    const walk = (n) => {
+      if (n.nodeType === 1) {
+        const id = typeof n.getAttribute === "function" ? n.getAttribute("id") : n.id;
+        if (id !== null && id !== undefined && wanted.has(id)) {
+          found.push(n);
+          wanted.delete(id);
+        }
+      }
+      for (let k = firstChild(n); k && wanted.size; k = nextSibling(k)) walk(k);
+    };
+    walk(root);
+    return c.ev.sort(found);
+  }
+
+  function arg(args, i) {
+    const e = args[i];
+    if (!e) throw new Error(`xpath: missing argument ${i}`);
+    return e;
+  }
+
+  const str = (c, args, i) => toStringValue(evaluate(arg(args, i), c));
+  const num = (c, args, i) => toNumber(evaluate(arg(args, i), c));
+
+  const FUNCTIONS = new Map(
+    Object.entries({
+      last: { arity: [0, 0], run: (c) => c.size },
+      position: { arity: [0, 0], run: (c) => c.pos },
+      count: { arity: [1, 1], run: (c, a) => nodeSetOf(evaluate(arg(a, 0), c)).length },
+      id: {
+        arity: [1, 1],
+        run: (c, a) => {
+          const v = evaluate(arg(a, 0), c);
+          const tokens = isNodeSet(v)
+            ? v.flatMap((n) => stringValue(n).split(/[\t\n\r ]+/))
+            : toStringValue(v).split(/[\t\n\r ]+/);
+          return idLookup(c, tokens);
+        },
+      },
+      "local-name": {
+        arity: [0, 1],
+        run: (c, a) => {
+          const n = firstOf(c, a);
+          return n ? localNameOf(n) : "";
+        },
+      },
+      "namespace-uri": {
+        arity: [0, 1],
+        run: (c, a) => {
+          const n = firstOf(c, a);
+          return n && (n.nodeType === 1 || n.nodeType === 2)
+            ? String(n.namespaceURI ?? "")
+            : "";
+        },
+      },
+      name: {
+        arity: [0, 1],
+        run: (c, a) => {
+          const n = firstOf(c, a);
+          return n ? qualifiedNameOf(n) : "";
+        },
+      },
+      string: { arity: [0, 1], run: (c, a) => (a.length ? str(c, a, 0) : stringValue(c.node)) },
+      concat: { arity: [2, Infinity], run: (c, a) => a.map((_, i) => str(c, a, i)).join("") },
+      "starts-with": { arity: [2, 2], run: (c, a) => str(c, a, 0).startsWith(str(c, a, 1)) },
+      contains: { arity: [2, 2], run: (c, a) => str(c, a, 0).includes(str(c, a, 1)) },
+      "substring-before": {
+        arity: [2, 2],
+        run: (c, a) => {
+          const s = str(c, a, 0);
+          const i = s.indexOf(str(c, a, 1));
+          return i < 0 ? "" : s.slice(0, i);
+        },
+      },
+      "substring-after": {
+        arity: [2, 2],
+        run: (c, a) => {
+          const s = str(c, a, 0);
+          const t = str(c, a, 1);
+          const i = s.indexOf(t);
+          return i < 0 ? "" : s.slice(i + t.length);
+        },
+      },
+      substring: {
+        arity: [2, 3],
+        run: (c, a) => {
+          const chars = Array.from(str(c, a, 0));
+          const start = xpathRound(num(c, a, 1));
+          const end = a.length > 2 ? start + xpathRound(num(c, a, 2)) : Infinity;
+          return chars.filter((_, i) => i + 1 >= start && i + 1 < end).join("");
+        },
+      },
+      "string-length": {
+        arity: [0, 1],
+        run: (c, a) => Array.from(a.length ? str(c, a, 0) : stringValue(c.node)).length,
+      },
+      "normalize-space": {
+        arity: [0, 1],
+        run: (c, a) =>
+          (a.length ? str(c, a, 0) : stringValue(c.node))
+            .replace(/[\t\n\r ]+/g, " ")
+            .replace(/^ | $/g, ""),
+      },
+      translate: {
+        arity: [3, 3],
+        run: (c, a) => {
+          const from = Array.from(str(c, a, 1));
+          const to = Array.from(str(c, a, 2));
+          return Array.from(str(c, a, 0))
+            .map((ch) => {
+              const i = from.indexOf(ch);
+              return i < 0 ? ch : (to[i] ?? "");
+            })
+            .join("");
+        },
+      },
+      boolean: { arity: [1, 1], run: (c, a) => toBoolean(evaluate(arg(a, 0), c)) },
+      not: { arity: [1, 1], run: (c, a) => !toBoolean(evaluate(arg(a, 0), c)) },
+      true: { arity: [0, 0], run: () => true },
+      false: { arity: [0, 0], run: () => false },
+      lang: {
+        arity: [1, 1],
+        run: (c, a) => {
+          const want = str(c, a, 0).toLowerCase();
+          for (let n = isAttr(c.node) ? c.node.ownerElement : c.node; n; n = parentOf(n)) {
+            if (n.nodeType !== 1) continue;
+            const lang = typeof n.getAttributeNS === "function"
+              ? (n.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") ?? n.getAttribute?.("xml:lang") ?? n.getAttribute?.("lang"))
+              : (typeof n.getAttribute === "function" ? n.getAttribute("lang") : null);
+            if (lang === null || lang === undefined) continue;
+            const l = String(lang).toLowerCase();
+            return l === want || l.startsWith(want + "-");
+          }
+          return false;
+        },
+      },
+      number: {
+        arity: [0, 1],
+        run: (c, a) => (a.length ? num(c, a, 0) : stringToNumber(stringValue(c.node))),
+      },
+      sum: {
+        arity: [1, 1],
+        run: (c, a) =>
+          nodeSetOf(evaluate(arg(a, 0), c)).reduce((s, n) => s + stringToNumber(stringValue(n)), 0),
+      },
+      floor: { arity: [1, 1], run: (c, a) => Math.floor(num(c, a, 0)) },
+      ceiling: { arity: [1, 1], run: (c, a) => Math.ceil(num(c, a, 0)) },
+      round: { arity: [1, 1], run: (c, a) => xpathRound(num(c, a, 0)) },
+    })
+  );
+
+  function filterByPredicates(nodes, preds, ev) {
+    let cur = nodes;
+    for (const pred of preds) {
+      const size = cur.length;
+      cur = cur.filter((node, i) => {
+        const v = evaluate(pred, { node, pos: i + 1, size, ev });
+        return typeof v === "number" ? v === i + 1 : toBoolean(v);
+      });
+    }
+    return cur;
+  }
+
+  function applyStep(step, contexts, ev) {
+    const out = [];
+    for (const n of contexts) {
+      const picked = axisNodes(step.axis, n).filter((m) => matches(step.test, step.axis, m));
+      out.push(...filterByPredicates(picked, step.preds, ev));
+    }
+    if (contexts.length === 1) return REVERSE_AXES.has(step.axis) ? out.reverse() : out;
+    return ev.sort(out);
+  }
+
+  function evaluate(e, c) {
+    switch (e.t) {
+      case "num":
+        return e.v;
+      case "str":
+        return e.v;
+      case "fn": {
+        const fn = FUNCTIONS.get(e.name);
+        if (!fn) throw syntaxError(e.name);
+        return fn.run(c, e.args);
+      }
+      case "or":
+        return toBoolean(evaluate(e.l, c)) || toBoolean(evaluate(e.r, c));
+      case "and":
+        return toBoolean(evaluate(e.l, c)) && toBoolean(evaluate(e.r, c));
+      case "cmp":
+        return compare(e.op, evaluate(e.l, c), evaluate(e.r, c));
+      case "arith": {
+        const x = toNumber(evaluate(e.l, c));
+        const y = toNumber(evaluate(e.r, c));
+        if (e.op === "+") return x + y;
+        if (e.op === "-") return x - y;
+        if (e.op === "*") return x * y;
+        if (e.op === "div") return x / y;
+        return x % y;
+      }
+      case "neg":
+        return -toNumber(evaluate(e.e, c));
+      case "union":
+        return c.ev.sort([...nodeSetOf(evaluate(e.l, c)), ...nodeSetOf(evaluate(e.r, c))]);
+      case "filter":
+        return filterByPredicates(c.ev.sort(nodeSetOf(evaluate(e.e, c))), e.preds, c.ev);
+      case "path": {
+        let nodes;
+        if (e.start === "root") nodes = [c.ev.root];
+        else if (e.start === "context") nodes = [c.node];
+        else nodes = c.ev.sort(nodeSetOf(evaluate(e.start, c)));
+        for (const step of e.steps) nodes = applyStep(step, nodes, c.ev);
+        return nodes;
+      }
+    }
+  }
+
+  function isNode(v) {
+    return !!v && typeof v === "object" && typeof v.nodeType === "number";
+  }
+
+  const INTERNAL_CONSTRUCT = Symbol("kitesurfInternalConstruct");
+  const xpathResultInstances = new WeakSet();
+
+  function need(ok, what) {
+    if (!ok) throw new TypeError(`The result type is not ${what}.`);
+  }
+
+  function XPathResult(token, type = 0, value = false) {
+    if (token !== INTERNAL_CONSTRUCT) throw new TypeError("Illegal constructor");
+    this._type = type;
+    this._value = value;
+    this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+    this._cursor = 0;
+    xpathResultInstances.add(this);
+  }
+
+  XPathResult.prototype._refill = function (type, value) {
+    this._type = type;
+    this._value = value;
+    this._cursor = 0;
+    this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+  };
+
+  Object.defineProperty(XPathResult.prototype, "resultType", {
+    get: function () {
+      return this._type;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "numberValue", {
+    get: function () {
+      need(this._type === XPATH_RESULT_TYPES.NUMBER_TYPE, "a number");
+      return this._value;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "stringValue", {
+    get: function () {
+      need(this._type === XPATH_RESULT_TYPES.STRING_TYPE, "a string");
+      return this._value;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "booleanValue", {
+    get: function () {
+      need(this._type === XPATH_RESULT_TYPES.BOOLEAN_TYPE, "a boolean");
+      return this._value;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "singleNodeValue", {
+    get: function () {
+      need(
+        this._type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
+          this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE,
+        "a single node"
+      );
+      return this._value[0] ?? null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "invalidIteratorState", {
+    get: function () {
+      return (
+        (this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+          this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE) &&
+        ((typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0) !== this._seq
+      );
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(XPathResult.prototype, "snapshotLength", {
+    get: function () {
+      need(
+        this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+          this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
+        "a snapshot"
+      );
+      return this._value.length;
+    },
+    configurable: true,
+  });
+
+  XPathResult.prototype.iterateNext = function () {
+    need(
+      this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE,
+      "an iterator"
+    );
+    if (this.invalidIteratorState) {
+      throw getDOMException(
+        "The document has mutated since the result was returned.",
+        "InvalidStateError"
+      );
+    }
+    return this._value[this._cursor++] ?? null;
+  };
+
+  XPathResult.prototype.snapshotItem = function (index) {
+    need(
+      this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
+      "a snapshot"
+    );
+    return this._value[Number(index)] ?? null;
+  };
+
+  for (const [k, v] of Object.entries(XPATH_RESULT_TYPES)) {
+    Object.defineProperty(XPathResult, k, { value: v, writable: false, enumerable: true, configurable: false });
+    Object.defineProperty(XPathResult.prototype, k, { value: v, writable: false, enumerable: true, configurable: false });
+  }
+
+  function toXPathResultType(value) {
+    if (typeof value === "bigint") {
+      throw new TypeError("Cannot convert a BigInt value to a number");
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number) || number === 0) return 0;
+    const modulo = Math.trunc(number) % 0x10000;
+    return (modulo + 0x10000) % 0x10000;
+  }
+
+  function makeResult(value, type, reuse = null) {
+    let t = toXPathResultType(type);
+    if (t === XPATH_RESULT_TYPES.ANY_TYPE) {
+      t = isNodeSet(value)
+        ? XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE
+        : typeof value === "number"
+          ? XPATH_RESULT_TYPES.NUMBER_TYPE
+          : typeof value === "string"
+            ? XPATH_RESULT_TYPES.STRING_TYPE
+            : XPATH_RESULT_TYPES.BOOLEAN_TYPE;
+    }
+    let resultValue;
+    if (t === XPATH_RESULT_TYPES.NUMBER_TYPE) resultValue = toNumber(value);
+    else if (t === XPATH_RESULT_TYPES.STRING_TYPE) resultValue = toStringValue(value);
+    else if (t === XPATH_RESULT_TYPES.BOOLEAN_TYPE) resultValue = toBoolean(value);
+    else {
+      if (t < 0 || t > XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE) {
+        throw getDOMException("The result type is not supported.", "NotSupportedError");
+      }
+      if (!isNodeSet(value)) {
+        throw new TypeError(
+          "The result is not a node set, and therefore cannot be converted to the desired type."
+        );
+      }
+      resultValue = value;
+    }
+    if (reuse) {
+      reuse._refill(t, resultValue);
+      return reuse;
+    }
+    return new XPathResult(INTERNAL_CONSTRUCT, t, resultValue);
+  }
+
+  function isXPathResult(value) {
+    return typeof value === "object" && value !== null && xpathResultInstances.has(value);
+  }
+
+  function reusableResult(value) {
+    if (value === null || value === undefined) return null;
+    if (!isXPathResult(value)) throw new TypeError("The result is not an XPathResult.");
+    return value;
+  }
+
+  function XPathExpression(token, expr) {
+    if (token !== INTERNAL_CONSTRUCT || !expr) throw new TypeError("Illegal constructor");
+    this._expr = expr;
+  }
+
+  XPathExpression.prototype.evaluate = function (contextNode, type = 0, result = null) {
+    if (!isNode(contextNode)) {
+      throw new TypeError(
+        "Failed to execute 'evaluate' on 'XPathExpression': parameter 1 is not of type 'Node'."
+      );
+    }
+    const reuse = reusableResult(result);
+    const ev = new Evaluation(rootOf(contextNode));
+    const value = evaluate(this._expr, { node: contextNode, pos: 1, size: 1, ev });
+    return makeResult(isNodeSet(value) ? ev.sort(value) : value, type, reuse);
+  };
+
+  function createExpression(expression, resolver = null) {
+    return new XPathExpression(INTERNAL_CONSTRUCT, compile(String(expression), resolver));
+  }
+
+  function evaluateXPath(
+    expression,
+    contextNode,
+    resolver = null,
+    type = 0,
+    result = null
+  ) {
+    reusableResult(result);
+    return createExpression(expression, resolver).evaluate(contextNode, type, result);
+  }
+
+  function XPathEvaluator() {}
+
+  XPathEvaluator.prototype.createExpression = function (expression, resolver = null) {
+    return createExpression(expression, resolver);
+  };
+
+  XPathEvaluator.prototype.createNSResolver = function (nodeResolver) {
+    return nodeResolver;
+  };
+
+  XPathEvaluator.prototype.evaluate = function (
+    expression,
+    contextNode,
+    resolver = null,
+    type = 0,
+    result = null
+  ) {
+    return evaluateXPath(expression, contextNode, resolver, type, result);
+  };
+
+  if (typeof markNative === "function") {
+    markNative(XPathResult, "XPathResult");
+    markNative(XPathExpression, "XPathExpression");
+    markNative(XPathEvaluator, "XPathEvaluator");
+    markNative(XPathEvaluator.prototype.createExpression, "createExpression");
+    markNative(XPathEvaluator.prototype.createNSResolver, "createNSResolver");
+    markNative(XPathEvaluator.prototype.evaluate, "evaluate");
+    markNative(XPathExpression.prototype.evaluate, "evaluate");
+    markNative(XPathResult.prototype.iterateNext, "iterateNext");
+    markNative(XPathResult.prototype.snapshotItem, "snapshotItem");
+    markNative(createExpression, "createExpression");
+    markNative(evaluateXPath, "evaluateXPath");
+  }
 
   // =============================================================
   // Module: canvas2d.js
@@ -6941,6 +9739,39 @@
       globalThis.__capsurf_dispatch_lifecycle = global.__capsurf_dispatch_lifecycle;
     }
 
+    // Window scroll methods
+    global.scrollTo = function (x, y) {
+      let targetX = 0, targetY = 0;
+      if (typeof x === "object" && x !== null) {
+        targetX = Number(x.left || 0);
+        targetY = Number(x.top || 0);
+      } else {
+        targetX = Number(x || 0);
+        targetY = Number(y || 0);
+      }
+      global.pageXOffset = targetX;
+      global.scrollX = targetX;
+      global.pageYOffset = targetY;
+      global.scrollY = targetY;
+    };
+    global.scroll = global.scrollTo;
+    global.scrollBy = function (x, y) {
+      let dx = 0, dy = 0;
+      if (typeof x === "object" && x !== null) {
+        dx = Number(x.left || 0);
+        dy = Number(x.top || 0);
+      } else {
+        dx = Number(x || 0);
+        dy = Number(y || 0);
+      }
+      global.scrollTo((global.scrollX || 0) + dx, (global.scrollY || 0) + dy);
+    };
+    if (typeof globalThis !== "undefined") {
+      globalThis.scrollTo = global.scrollTo;
+      globalThis.scroll = global.scroll;
+      globalThis.scrollBy = global.scrollBy;
+    }
+
     // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
     if (global.document) {
       try {
@@ -7015,6 +9846,13 @@
 
     // 7. Expose DOMParser
     global.DOMParser = DOMParser;
+
+    // 7.5. Expose XPath
+    if (typeof XPathResult !== "undefined") {
+      global.XPathResult = XPathResult;
+      global.XPathExpression = XPathExpression;
+      global.XPathEvaluator = XPathEvaluator;
+    }
 
     // 8. Expose Canvas 2D
     global.CanvasRenderingContext2D = CanvasRenderingContext2D;
@@ -7230,6 +10068,18 @@
         },
         configurable: true,
       });
+
+      if (typeof evaluateXPath !== "undefined") {
+        docProto.evaluate = markNative(function (expression, contextNode, resolver, type, result) {
+          return evaluateXPath(expression, contextNode || this, resolver, type, result);
+        }, "evaluate");
+        docProto.createExpression = markNative(function (expression, resolver) {
+          return createExpression(expression, resolver);
+        }, "createExpression");
+        docProto.createNSResolver = markNative(function (nodeResolver) {
+          return nodeResolver;
+        }, "createNSResolver");
+      }
     }
 
     if (global.document) {
@@ -7239,6 +10089,11 @@
         if (!global.document._selection) global.document._selection = new Selection();
         return global.document._selection;
       };
+      if (typeof evaluateXPath !== "undefined") {
+        if (!global.document.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
+        if (!global.document.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
+        if (!global.document.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+      }
     }
 
     // 14. Mount window EventTarget methods
