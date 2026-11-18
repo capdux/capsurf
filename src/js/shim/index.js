@@ -14,6 +14,55 @@ function installShim(global) {
   global.MessageEvent = MessageEvent;
   global.SubmitEvent = SubmitEvent;
   global.EventTarget = EventTarget;
+  global.DeviceMotionEvent = DeviceMotionEvent;
+  global.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
+  global.DeviceMotionEventRotationRate = DeviceMotionEventRotationRate;
+  global.DeviceOrientationEvent = DeviceOrientationEvent;
+  global.PromiseRejectionEvent = PromiseRejectionEvent;
+  global.WheelEvent = WheelEvent;
+  global.PointerEvent = PointerEvent;
+  global.DragEvent = DragEvent;
+  global.TextEvent = TextEvent;
+  global.CompositionEvent = CompositionEvent;
+  global.StorageEvent = StorageEvent;
+  global.ErrorEvent = ErrorEvent;
+  global.HashChangeEvent = HashChangeEvent;
+  global.PopStateEvent = PopStateEvent;
+  global.PageTransitionEvent = PageTransitionEvent;
+  global.TransitionEvent = TransitionEvent;
+  global.AnimationEvent = AnimationEvent;
+  global.BeforeUnloadEvent = BeforeUnloadEvent;
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.Event = Event;
+    globalThis.CustomEvent = CustomEvent;
+    globalThis.UIEvent = UIEvent;
+    globalThis.MouseEvent = MouseEvent;
+    globalThis.KeyboardEvent = KeyboardEvent;
+    globalThis.FocusEvent = FocusEvent;
+    globalThis.InputEvent = InputEvent;
+    globalThis.MessageEvent = MessageEvent;
+    globalThis.SubmitEvent = SubmitEvent;
+    globalThis.EventTarget = EventTarget;
+    globalThis.DeviceMotionEvent = DeviceMotionEvent;
+    globalThis.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
+    globalThis.DeviceMotionEventRotationRate = DeviceMotionEventRotationRate;
+    globalThis.DeviceOrientationEvent = DeviceOrientationEvent;
+    globalThis.PromiseRejectionEvent = PromiseRejectionEvent;
+    globalThis.WheelEvent = WheelEvent;
+    globalThis.PointerEvent = PointerEvent;
+    globalThis.DragEvent = DragEvent;
+    globalThis.TextEvent = TextEvent;
+    globalThis.CompositionEvent = CompositionEvent;
+    globalThis.StorageEvent = StorageEvent;
+    globalThis.ErrorEvent = ErrorEvent;
+    globalThis.HashChangeEvent = HashChangeEvent;
+    globalThis.PopStateEvent = PopStateEvent;
+    globalThis.PageTransitionEvent = PageTransitionEvent;
+    globalThis.TransitionEvent = TransitionEvent;
+    globalThis.AnimationEvent = AnimationEvent;
+    globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
+  }
 
   // 2. Expose DOM Collections and Nodes
   global.DOMTokenList = DOMTokenList;
@@ -35,6 +84,8 @@ function installShim(global) {
   global.FormData = FormData;
   global.Blob = Blob;
   global.File = File;
+  global.FileReader = FileReader;
+  if (typeof globalThis !== "undefined") globalThis.FileReader = FileReader;
   if (typeof Headers !== "undefined") global.Headers = Headers;
   if (typeof Request !== "undefined") global.Request = Request;
   if (typeof Response !== "undefined") global.Response = Response;

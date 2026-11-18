@@ -2179,6 +2179,15 @@
 5. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
 
+### **[cp agy Task Resolution Notice]**
+- **任务编号**：`task-capsurf-20261117-pack-native-allocator`
+- **结单时间**：`2026-11-18T20:42:08` (Resolved by `cp_agy`)
+- **结单备注**：`lib/pack/native.cp Allocator changed to std.mem.Allocator`
+- **复现文件**：`/data/dev/capsurf/temp/repro_pack.cp`
+- **状态追踪**：已成功捕获结单通知并记录留痕，守护进程已自动重新拉起。
+
+---
+
 ### **[User (Self-Driven Next Phase Milestone)]**
 > 自主推进 Phase 53：攻坚 Document Referrer 跨页面传递、Trusted Events 受信任事件沙箱防护、HTMLDialogElement 完整状态机与 CSSOM 规则层级规范（CSSRule、CSSStyleSheet、CSS.supports 与 CSSStyleDeclaration）
 
@@ -2210,6 +2219,47 @@
    - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1080ms)
 3. **全量回归验证与 4 道静态门禁**：
    - Phase 51 & Phase 52 14 大测试套件 18 项用例全部 100% 绿灯（4.63s 通过）；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+### **[cp agy Task Resolution Notice]**
+- **任务编号**：`task-capsurf-20261117-compiler-borrow-conflict`
+- **结单时间**：`2026-11-18T20:59:31` (Resolved by `cp_agy`)
+- **结单备注**：`Verified cpc compiles dom_binding.cp cleanly; raw pointer ctx in C functions no longer triggers borrow conflict`
+- **复现文件**：`/data/dev/capsurf/src/js/dom_binding.cp`
+- **状态追踪**：已成功捕获结单通知并记录留痕，守护进程已自动重新拉起。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 54：攻坚 CDP 运行时动态内存扩容（根除巨型 JSON 截断）、CSSCounterStyleRule 描述符校验、CSSPageRule 边距规范、Web IDL Event 原型只读存取器与 FileReader 异步任务模型
+
+### **[Agent Execution & Phase 54 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **主智能体重构 CDP 内存模型与解决 WebSocket 截断**：
+     - 在 `src/cdp/runtime.cp` 中消除硬编码 4KB 栈缓冲区，使用 `session.allocator` 动态支持 64KB+ 表达式转义与求值，直接输出至 256KB 的 `out_buf`；
+     - 彻底修复巨型 CSSOM/DOM 规则注入时的 WebSocket `SyntaxError: JSON Parse error: Unterminated string`。
+   - **Subagent 1 (Track 1 - CSSOM Counter & Page Rules)**：
+     - 在 `src/js/shim/cssom.js` 中实装 `CSSCounterStyleRule`（`type: 11`），完整支持全套描述符校验（保留关键字、`extends decimal` 算法族系锁定、空前缀/后缀拦截、`\ufffd` 转义修复）；
+     - 实装 `CSSPageRule`（`type: 6`）与 `CSSMarginRule`（`type: 9`），支持 `@page` 选择器与页边距框名称规范化（如 `@t\6f p-left` 转 `@top-left`）；
+     - 验证通过 `e2e/cssom-counter-style-rule.e2e.test.ts` (1/1 PASS in 99ms) 与 `e2e/cssom-page-rules.e2e.test.ts` (1/1 PASS in 45ms)。
+   - **Subagent 2 (Track 2 - Event Own Properties, Legacy Inits & FileReader)**：
+     - 在 `src/js/shim/events/event.js` 中将所有事件子类标准字段提升至原型 Getter，确保 `Object.keys(event)` 仅有 `['isTrusted']`；实装 `DeviceMotionEvent` 等新事件与传统 `init*Event` 方法；
+     - 在 `src/js/shim/events/dispatch.js` 中保证 `dispatchEvent` 始终传递 `trusted = false`，杜绝重新派发时受信任标志泄露；
+     - 在 `src/js/shim/file.js` 中实装 `FileReader` 规范微任务（`loadstart`）、宏任务（`load`/`loadend`）调度与 `_gen` 操作取消；
+     - 验证通过 `e2e/legacy-event-init.e2e.test.ts` (1/1 PASS), `e2e/event-own-properties.e2e.test.ts` (1/1 PASS), `e2e/event-target-instance-listeners.e2e.test.ts` (1/1 PASS) 与 `e2e/filereader-event-tasks.e2e.test.ts` (2/2 PASS)。
+2. **Phase 54 全量黑盒测试验证（7 大测试套件 8 项用例全部 100% 绿灯，2.46s 极速通过）**：
+   - `e2e/cssom-counter-style-rule.e2e.test.ts` (1/1 PASS in 99ms)
+   - `e2e/cssom-page-rules.e2e.test.ts` (1/1 PASS in 45ms)
+   - `e2e/legacy-event-init.e2e.test.ts` (1/1 PASS in 208ms)
+   - `e2e/event-own-properties.e2e.test.ts` (1/1 PASS in 208ms)
+   - `e2e/event-target-instance-listeners.e2e.test.ts` (1/1 PASS in 335ms)
+   - `e2e/filereader-event-tasks.e2e.test.ts` (2/2 PASS in 414ms)
+   - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1090ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 51, 52, 53 共 20 大回归套件全量 100% 绿灯；
    - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
    - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
 4. **四线文档同步与阶段性 Git 原子提交**：

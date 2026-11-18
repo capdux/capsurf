@@ -169,176 +169,1339 @@
   // src/js/shim/events/event.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/events/event.ts
 
-  function Event(type, options) {
-    if (arguments.length === 0) throw new TypeError("Event type required");
-    const opts = (options !== null && typeof options === "object") ? options : {};
-    this._type = String(type);
-    this.bubbles = Boolean(opts.bubbles);
-    this.cancelable = opts.cancelable !== undefined ? Boolean(opts.cancelable) : (this._type === "click" || this._type === "submit");
-    this.composed = Boolean(opts.composed);
-    this.target = null;
-    this.currentTarget = null;
-    this.eventPhase = 0; // 0: NONE, 1: CAPTURING, 2: AT_TARGET, 3: BUBBLING
-    this._canceled = false;
-    this._isTrusted = false;
-    this._isDispatching = false;
-    this.timeStamp = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
-    this._stopped = false;
-    this._immediateStopped = false;
+  const _eventState = new WeakMap();
+  const _trustedFlags = new WeakMap();
+  const _customEventState = new WeakMap();
+  const _uiEventState = new WeakMap();
+  const _mouseEventState = new WeakMap();
+  const _keyboardEventState = new WeakMap();
+  const _focusEventState = new WeakMap();
+  const _inputEventState = new WeakMap();
+  const _messageEventState = new WeakMap();
+  const _submitEventState = new WeakMap();
+  const _storageEventState = new WeakMap();
+  const _compositionEventState = new WeakMap();
+  const _textEventState = new WeakMap();
+  const _wheelEventState = new WeakMap();
+  const _pointerEventState = new WeakMap();
+  const _dragEventState = new WeakMap();
+  const _errorEventState = new WeakMap();
+  const _promiseRejectionEventState = new WeakMap();
+  const _deviceMotionEventState = new WeakMap();
+  const _accelerationState = new WeakMap();
+  const _rotationRateState = new WeakMap();
+  const _deviceOrientationEventState = new WeakMap();
+  const _pageTransitionEventState = new WeakMap();
+  const _hashChangeEventState = new WeakMap();
+  const _popStateEventState = new WeakMap();
+  const _transitionEventState = new WeakMap();
+  const _animationEventState = new WeakMap();
+  const _beforeUnloadEventState = new WeakMap();
+
+  const _internalConstruct = Symbol("internalConstruct");
+
+  function nullableDouble(value, member) {
+    if (value === undefined || value === null) return null;
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw new TypeError(member + " is not a finite number.");
+    return n;
   }
+
+  // -------------------------------------------------------------
+  // Base Event
+  // -------------------------------------------------------------
+  function Event(type, options) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'Event': 1 argument required, but only 0 present.");
+    }
+    const typeStr = String(type);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    const s = {
+      type: typeStr,
+      bubbles: Boolean(opts.bubbles),
+      cancelable: opts.cancelable !== undefined ? Boolean(opts.cancelable) : (typeStr === "click" || typeStr === "submit"),
+      composed: Boolean(opts.composed),
+      timeStamp: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now(),
+      target: null,
+      currentTarget: null,
+      relatedTarget: null,
+      eventPhase: 0,
+      stopPropagation: false,
+      stopImmediatePropagation: false,
+      canceled: false,
+      isDispatching: false,
+      dispatched: false,
+      initialized: true,
+      path: null,
+    };
+    _eventState.set(this, s);
+    _trustedFlags.set(this, false);
+
+    Object.defineProperty(this, "isTrusted", {
+      get: function () {
+        return Boolean(_trustedFlags.get(this));
+      },
+      set: undefined,
+      enumerable: true,
+      configurable: false,
+    });
+  }
+
   Event.NONE = 0;
   Event.CAPTURING_PHASE = 1;
   Event.AT_TARGET = 2;
   Event.BUBBLING_PHASE = 3;
 
-  Object.defineProperty(Event.prototype, "isTrusted", {
-    get: function () {
-      if (this && this._isHarnessEvent && typeof this._scheduleTrustedFallback === "function") {
-        this._scheduleTrustedFallback();
-      }
-      return Boolean(this && this._isTrusted);
-    },
-    configurable: true,
-    enumerable: true,
-  });
+  Event.prototype.NONE = 0;
+  Event.prototype.CAPTURING_PHASE = 1;
+  Event.prototype.AT_TARGET = 2;
+  Event.prototype.BUBBLING_PHASE = 3;
 
   Object.defineProperty(Event.prototype, "type", {
     get: function () {
-      return (this && this._type !== undefined) ? this._type : "";
+      const s = _eventState.get(this);
+      return s ? s.type : "";
     },
+    enumerable: false,
     configurable: true,
-    enumerable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "bubbles", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.bubbles : false;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "cancelable", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.cancelable : false;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "composed", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.composed : false;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "timeStamp", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.timeStamp : 0;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "target", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.target : null;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.target = v;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "srcElement", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.target : null;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "currentTarget", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.currentTarget : null;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.currentTarget = v;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "eventPhase", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.eventPhase : 0;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.eventPhase = Number(v);
+    },
+    enumerable: false,
+    configurable: true,
   });
 
   Object.defineProperty(Event.prototype, "defaultPrevented", {
     get: function () {
-      return Boolean(this && this._canceled);
+      const s = _eventState.get(this);
+      return s ? s.canceled : false;
     },
+    enumerable: false,
     configurable: true,
-    enumerable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "returnValue", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? !s.canceled : true;
+    },
+    set: function (v) {
+      if (v === false) this.preventDefault();
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "cancelBubble", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.stopPropagation : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s && v) s.stopPropagation = true;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  // Non-enumerable internal helpers for dispatch.js
+  Object.defineProperty(Event.prototype, "_stopped", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.stopPropagation : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.stopPropagation = Boolean(v);
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_immediateStopped", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.stopImmediatePropagation : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.stopImmediatePropagation = Boolean(v);
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_canceled", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.canceled : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.canceled = Boolean(v);
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_isDispatching", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.isDispatching : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) {
+        s.isDispatching = Boolean(v);
+        if (v) s.dispatched = true;
+      }
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_isTrusted", {
+    get: function () {
+      return Boolean(_trustedFlags.get(this));
+    },
+    set: function (v) {
+      _trustedFlags.set(this, Boolean(v));
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_type", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.type : "";
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_path", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.path : null;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.path = v;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(Event.prototype, "_dispatched", {
+    get: function () {
+      const s = _eventState.get(this);
+      return s ? s.dispatched : false;
+    },
+    set: function (v) {
+      const s = _eventState.get(this);
+      if (s) s.dispatched = Boolean(v);
+    },
+    enumerable: false,
+    configurable: true,
   });
 
   Event.prototype.stopPropagation = function () {
-    this._stopped = true;
+    const s = _eventState.get(this);
+    if (s) s.stopPropagation = true;
   };
+
   Event.prototype.stopImmediatePropagation = function () {
-    this._stopped = true;
-    this._immediateStopped = true;
-  };
-  Event.prototype.preventDefault = function () {
-    if (this.cancelable) {
-      this._canceled = true;
+    const s = _eventState.get(this);
+    if (s) {
+      s.stopPropagation = true;
+      s.stopImmediatePropagation = true;
     }
   };
+
+  Event.prototype.preventDefault = function () {
+    const s = _eventState.get(this);
+    if (s && s.cancelable) {
+      s.canceled = true;
+    }
+  };
+
+  Event.prototype.composedPath = function () {
+    const s = _eventState.get(this);
+    return (s && s.path) ? s.path.slice() : [];
+  };
+
+  Event.prototype.initEvent = function (type, bubbles, cancelable) {
+    if (arguments.length < 1) {
+      throw new TypeError("Event.initEvent: type argument is required");
+    }
+    const s = _eventState.get(this);
+    if (!s || s.dispatched) return;
+    s.type = String(type);
+    s.bubbles = Boolean(bubbles);
+    s.cancelable = Boolean(cancelable);
+    s.canceled = false;
+    s.stopPropagation = false;
+    s.stopImmediatePropagation = false;
+    s.target = null;
+    s.initialized = true;
+  };
+
   markNative(Event, "Event");
   markNative(Event.prototype.stopPropagation, "stopPropagation");
   markNative(Event.prototype.stopImmediatePropagation, "stopImmediatePropagation");
   markNative(Event.prototype.preventDefault, "preventDefault");
+  markNative(Event.prototype.composedPath, "composedPath");
+  markNative(Event.prototype.initEvent, "initEvent");
 
+  // -------------------------------------------------------------
+  // CustomEvent
+  // -------------------------------------------------------------
   function CustomEvent(type, options) {
     Event.call(this, type, options);
-    const opts = options || {};
-    this.detail = opts.detail !== undefined ? opts.detail : null;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _customEventState.set(this, {
+      detail: opts.detail !== undefined ? opts.detail : null,
+    });
   }
   CustomEvent.prototype = Object.create(Event.prototype);
   CustomEvent.prototype.constructor = CustomEvent;
   markNative(CustomEvent, "CustomEvent");
 
+  Object.defineProperty(CustomEvent.prototype, "detail", {
+    get: function () {
+      const s = _customEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.detail;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  CustomEvent.prototype.initCustomEvent = function (type, bubbles, cancelable, detail) {
+    if (arguments.length < 1) {
+      throw new TypeError("CustomEvent.initCustomEvent: type argument is required");
+    }
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initEvent(type, bubbles, cancelable);
+    const s = _customEventState.get(this);
+    if (s) {
+      s.detail = detail !== undefined ? detail : null;
+    }
+  };
+  markNative(CustomEvent.prototype.initCustomEvent, "initCustomEvent");
+
+  // -------------------------------------------------------------
+  // UIEvent
+  // -------------------------------------------------------------
   function UIEvent(type, options) {
     Event.call(this, type, options);
-    const opts = options || {};
-    this.view = opts.view !== undefined ? opts.view : (typeof window !== "undefined" ? window : null);
-    this.detail = opts.detail !== undefined ? Number(opts.detail) : 0;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    if (opts.view != null && typeof opts.view !== "object") {
+      throw new TypeError("UIEvent: view must be a Window or null");
+    }
+    _uiEventState.set(this, {
+      view: opts.view !== undefined ? opts.view : (typeof window !== "undefined" ? window : null),
+      detail: typeof opts.detail === "number" ? opts.detail : 0,
+      which: typeof opts.which === "number" ? opts.which : 0,
+    });
   }
   UIEvent.prototype = Object.create(Event.prototype);
   UIEvent.prototype.constructor = UIEvent;
   markNative(UIEvent, "UIEvent");
 
+  ["view", "detail", "which"].forEach(function (prop) {
+    Object.defineProperty(UIEvent.prototype, prop, {
+      get: function () {
+        const s = _uiEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  UIEvent.prototype.initUIEvent = function (type, bubbles, cancelable, view, detail) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initEvent(type, bubbles, cancelable);
+    const s = _uiEventState.get(this);
+    if (s) {
+      s.view = view ?? null;
+      s.detail = typeof detail === "number" ? detail : 0;
+    }
+  };
+  markNative(UIEvent.prototype.initUIEvent, "initUIEvent");
+
+  // -------------------------------------------------------------
+  // MouseEvent
+  // -------------------------------------------------------------
   function MouseEvent(type, options) {
     UIEvent.call(this, type, options);
-    const opts = options || {};
-    this.screenX = Number(opts.screenX || 0);
-    this.screenY = Number(opts.screenY || 0);
-    this.clientX = Number(opts.clientX || 0);
-    this.clientY = Number(opts.clientY || 0);
-    this.pageX = Number(opts.pageX || this.clientX);
-    this.pageY = Number(opts.pageY || this.clientY);
-    this.offsetX = Number(opts.offsetX || this.clientX);
-    this.offsetY = Number(opts.offsetY || this.clientY);
-    this.ctrlKey = Boolean(opts.ctrlKey);
-    this.shiftKey = Boolean(opts.shiftKey);
-    this.altKey = Boolean(opts.altKey);
-    this.metaKey = Boolean(opts.metaKey);
-    this.button = Number(opts.button || 0);
-    this.buttons = Number(opts.buttons || (this.button === 0 ? 1 : 0));
-    this.relatedTarget = opts.relatedTarget || null;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    const clientX = typeof opts.clientX === "number" ? opts.clientX : 0;
+    const clientY = typeof opts.clientY === "number" ? opts.clientY : 0;
+    const relatedTarget = opts.relatedTarget == null ? null : opts.relatedTarget;
+    const s = {
+      screenX: typeof opts.screenX === "number" ? opts.screenX : 0,
+      screenY: typeof opts.screenY === "number" ? opts.screenY : 0,
+      clientX: clientX,
+      clientY: clientY,
+      pageX: typeof opts.pageX === "number" ? opts.pageX : clientX,
+      pageY: typeof opts.pageY === "number" ? opts.pageY : clientY,
+      offsetX: typeof opts.offsetX === "number" ? opts.offsetX : clientX,
+      offsetY: typeof opts.offsetY === "number" ? opts.offsetY : clientY,
+      movementX: typeof opts.movementX === "number" ? opts.movementX : 0,
+      movementY: typeof opts.movementY === "number" ? opts.movementY : 0,
+      button: typeof opts.button === "number" ? opts.button : 0,
+      buttons: typeof opts.buttons === "number" ? opts.buttons : (typeof opts.button === "number" && opts.button === 0 ? 1 : 0),
+      ctrlKey: Boolean(opts.ctrlKey),
+      shiftKey: Boolean(opts.shiftKey),
+      altKey: Boolean(opts.altKey),
+      metaKey: Boolean(opts.metaKey),
+      relatedTarget: relatedTarget,
+    };
+    _mouseEventState.set(this, s);
+    const es = _eventState.get(this);
+    if (es) es.relatedTarget = relatedTarget;
   }
   MouseEvent.prototype = Object.create(UIEvent.prototype);
   MouseEvent.prototype.constructor = MouseEvent;
   markNative(MouseEvent, "MouseEvent");
 
+  ["screenX", "screenY", "clientX", "clientY", "pageX", "pageY", "offsetX", "offsetY", "movementX", "movementY", "button", "buttons", "ctrlKey", "shiftKey", "altKey", "metaKey", "relatedTarget"].forEach(function (prop) {
+    Object.defineProperty(MouseEvent.prototype, prop, {
+      get: function () {
+        const s = _mouseEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  Object.defineProperty(MouseEvent.prototype, "x", {
+    get: function () {
+      const s = _mouseEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.clientX;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(MouseEvent.prototype, "y", {
+    get: function () {
+      const s = _mouseEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.clientY;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  MouseEvent.prototype.getModifierState = function (name) {
+    const s = _mouseEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    switch (name) {
+      case "Alt": return s.altKey;
+      case "Control": return s.ctrlKey;
+      case "Shift": return s.shiftKey;
+      case "Meta": return s.metaKey;
+      default: return false;
+    }
+  };
+  markNative(MouseEvent.prototype.getModifierState, "getModifierState");
+
+  MouseEvent.prototype.initMouseEvent = function (
+    type, bubbles, cancelable, view, detail,
+    screenX, screenY, clientX, clientY,
+    ctrlKey, altKey, shiftKey, metaKey,
+    button, relatedTarget
+  ) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initUIEvent(type, bubbles, cancelable, view, detail);
+    const s = _mouseEventState.get(this);
+    if (s) {
+      s.screenX = typeof screenX === "number" ? screenX : 0;
+      s.screenY = typeof screenY === "number" ? screenY : 0;
+      s.clientX = typeof clientX === "number" ? clientX : 0;
+      s.clientY = typeof clientY === "number" ? clientY : 0;
+      s.pageX = s.clientX;
+      s.pageY = s.clientY;
+      s.ctrlKey = Boolean(ctrlKey);
+      s.altKey = Boolean(altKey);
+      s.shiftKey = Boolean(shiftKey);
+      s.metaKey = Boolean(metaKey);
+      s.button = typeof button === "number" ? button : 0;
+      s.relatedTarget = relatedTarget ?? null;
+    }
+    es.relatedTarget = relatedTarget ?? null;
+  };
+  markNative(MouseEvent.prototype.initMouseEvent, "initMouseEvent");
+
+  // -------------------------------------------------------------
+  // KeyboardEvent
+  // -------------------------------------------------------------
   function KeyboardEvent(type, options) {
     UIEvent.call(this, type, options);
-    const opts = options || {};
-    this.key = String(opts.key || "");
-    this.code = String(opts.code || "");
-    this.location = Number(opts.location || 0);
-    this.ctrlKey = Boolean(opts.ctrlKey);
-    this.shiftKey = Boolean(opts.shiftKey);
-    this.altKey = Boolean(opts.altKey);
-    this.metaKey = Boolean(opts.metaKey);
-    this.repeat = Boolean(opts.repeat);
-    this.isComposing = Boolean(opts.isComposing);
-    this.charCode = Number(opts.charCode || (this.key.length === 1 ? this.key.charCodeAt(0) : 0));
-    this.keyCode = Number(opts.keyCode || (this.charCode || 0));
-    this.which = Number(opts.which || this.keyCode);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    const key = typeof opts.key === "string" ? opts.key : "";
+    let keyCode = 0;
+    if (typeof opts.keyCode === "number") {
+      keyCode = opts.keyCode;
+    } else if (key && key.length === 1) {
+      keyCode = key.toUpperCase().charCodeAt(0);
+    }
+    let charCode = 0;
+    if (typeof opts.charCode === "number") {
+      charCode = opts.charCode;
+    } else if (type === "keypress" && key && key.length === 1) {
+      charCode = key.charCodeAt(0);
+    }
+    const which = typeof opts.which === "number" ? opts.which : keyCode;
+    const s = {
+      key: key,
+      code: typeof opts.code === "string" ? opts.code : "",
+      location: typeof opts.location === "number" ? opts.location : 0,
+      repeat: Boolean(opts.repeat),
+      isComposing: Boolean(opts.isComposing),
+      keyCode: keyCode,
+      charCode: charCode,
+      which: which,
+      ctrlKey: Boolean(opts.ctrlKey),
+      shiftKey: Boolean(opts.shiftKey),
+      altKey: Boolean(opts.altKey),
+      metaKey: Boolean(opts.metaKey),
+    };
+    _keyboardEventState.set(this, s);
+    const uis = _uiEventState.get(this);
+    if (uis) uis.which = which;
   }
   KeyboardEvent.prototype = Object.create(UIEvent.prototype);
   KeyboardEvent.prototype.constructor = KeyboardEvent;
   markNative(KeyboardEvent, "KeyboardEvent");
 
+  ["key", "code", "location", "repeat", "isComposing", "keyCode", "charCode", "which", "ctrlKey", "shiftKey", "altKey", "metaKey"].forEach(function (prop) {
+    Object.defineProperty(KeyboardEvent.prototype, prop, {
+      get: function () {
+        const s = _keyboardEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  KeyboardEvent.prototype.getModifierState = function (name) {
+    const s = _keyboardEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    switch (name) {
+      case "Alt": return s.altKey;
+      case "Control": return s.ctrlKey;
+      case "Shift": return s.shiftKey;
+      case "Meta": return s.metaKey;
+      default: return false;
+    }
+  };
+  markNative(KeyboardEvent.prototype.getModifierState, "getModifierState");
+
+  KeyboardEvent.prototype.initKeyboardEvent = function (
+    type, bubbles, cancelable, view,
+    key, location, ctrlKey, altKey, shiftKey, metaKey
+  ) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initUIEvent(type, bubbles, cancelable, view, 0);
+    const s = _keyboardEventState.get(this);
+    if (s) {
+      s.key = key !== undefined ? String(key) : "";
+      s.location = location !== undefined ? (Number(location) >>> 0) : 0;
+      s.ctrlKey = Boolean(ctrlKey);
+      s.altKey = Boolean(altKey);
+      s.shiftKey = Boolean(shiftKey);
+      s.metaKey = Boolean(metaKey);
+    }
+  };
+  markNative(KeyboardEvent.prototype.initKeyboardEvent, "initKeyboardEvent");
+
+  // -------------------------------------------------------------
+  // FocusEvent
+  // -------------------------------------------------------------
   function FocusEvent(type, options) {
     UIEvent.call(this, type, options);
-    const opts = options || {};
-    this.relatedTarget = opts.relatedTarget || null;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    const relatedTarget = opts.relatedTarget == null ? null : opts.relatedTarget;
+    _focusEventState.set(this, {
+      relatedTarget: relatedTarget,
+    });
+    const es = _eventState.get(this);
+    if (es) es.relatedTarget = relatedTarget;
   }
   FocusEvent.prototype = Object.create(UIEvent.prototype);
   FocusEvent.prototype.constructor = FocusEvent;
   markNative(FocusEvent, "FocusEvent");
 
+  Object.defineProperty(FocusEvent.prototype, "relatedTarget", {
+    get: function () {
+      const s = _focusEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.relatedTarget;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  // -------------------------------------------------------------
+  // InputEvent
+  // -------------------------------------------------------------
   function InputEvent(type, options) {
     UIEvent.call(this, type, options);
-    const opts = options || {};
-    this.data = opts.data !== undefined ? String(opts.data) : null;
-    this.isComposing = Boolean(opts.isComposing);
-    this.inputType = String(opts.inputType || "insertText");
-    this.dataTransfer = opts.dataTransfer || null;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _inputEventState.set(this, {
+      data: opts.data !== undefined ? (opts.data === null ? null : String(opts.data)) : null,
+      isComposing: Boolean(opts.isComposing),
+      inputType: typeof opts.inputType === "string" ? opts.inputType : "",
+      dataTransfer: opts.dataTransfer || null,
+      targetRanges: Array.isArray(opts.targetRanges) ? opts.targetRanges.slice() : [],
+    });
   }
   InputEvent.prototype = Object.create(UIEvent.prototype);
   InputEvent.prototype.constructor = InputEvent;
   markNative(InputEvent, "InputEvent");
 
+  ["data", "isComposing", "inputType", "dataTransfer"].forEach(function (prop) {
+    Object.defineProperty(InputEvent.prototype, prop, {
+      get: function () {
+        const s = _inputEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  InputEvent.prototype.getTargetRanges = function () {
+    const s = _inputEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.targetRanges.slice();
+  };
+  markNative(InputEvent.prototype.getTargetRanges, "getTargetRanges");
+
+  // -------------------------------------------------------------
+  // MessageEvent
+  // -------------------------------------------------------------
   function MessageEvent(type, options) {
     Event.call(this, type, options);
-    const opts = options || {};
-    this.data = opts.data !== undefined ? opts.data : null;
-    this.origin = opts.origin !== undefined ? String(opts.origin) : "";
-    this.lastEventId = opts.lastEventId !== undefined ? String(opts.lastEventId) : "";
-    this.source = opts.source !== undefined ? opts.source : null;
-    this.ports = Array.isArray(opts.ports) ? Object.freeze(opts.ports.slice()) : Object.freeze([]);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _messageEventState.set(this, {
+      data: opts.data !== undefined ? opts.data : null,
+      origin: opts.origin !== undefined ? String(opts.origin) : "",
+      lastEventId: opts.lastEventId !== undefined ? String(opts.lastEventId) : "",
+      source: opts.source !== undefined ? opts.source : null,
+      ports: Array.isArray(opts.ports) ? Object.freeze(opts.ports.slice()) : Object.freeze([]),
+    });
   }
   MessageEvent.prototype = Object.create(Event.prototype);
   MessageEvent.prototype.constructor = MessageEvent;
   markNative(MessageEvent, "MessageEvent");
 
+  ["data", "origin", "lastEventId", "source", "ports"].forEach(function (prop) {
+    Object.defineProperty(MessageEvent.prototype, prop, {
+      get: function () {
+        const s = _messageEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  MessageEvent.prototype.initMessageEvent = function (
+    type, bubbles, cancelable, data, origin, lastEventId, source, ports
+  ) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initEvent(type, bubbles, cancelable);
+    const s = _messageEventState.get(this);
+    if (s) {
+      s.data = data === undefined ? null : data;
+      s.origin = origin !== undefined ? String(origin) : "";
+      s.lastEventId = lastEventId !== undefined ? String(lastEventId) : "";
+      s.source = source ?? null;
+      s.ports = Array.isArray(ports) ? Object.freeze(ports.slice()) : Object.freeze([]);
+    }
+  };
+  markNative(MessageEvent.prototype.initMessageEvent, "initMessageEvent");
+
+  // -------------------------------------------------------------
+  // SubmitEvent
+  // -------------------------------------------------------------
   function SubmitEvent(type, options) {
     Event.call(this, type, options);
-    const opts = options || {};
-    this.submitter = opts.submitter !== undefined ? opts.submitter : null;
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _submitEventState.set(this, {
+      submitter: opts.submitter !== undefined ? opts.submitter : null,
+    });
   }
   SubmitEvent.prototype = Object.create(Event.prototype);
   SubmitEvent.prototype.constructor = SubmitEvent;
   markNative(SubmitEvent, "SubmitEvent");
+
+  Object.defineProperty(SubmitEvent.prototype, "submitter", {
+    get: function () {
+      const s = _submitEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.submitter;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  // -------------------------------------------------------------
+  // StorageEvent
+  // -------------------------------------------------------------
+  function StorageEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _storageEventState.set(this, {
+      key: opts.key !== undefined ? (opts.key === null ? null : String(opts.key)) : null,
+      oldValue: opts.oldValue !== undefined ? (opts.oldValue === null ? null : String(opts.oldValue)) : null,
+      newValue: opts.newValue !== undefined ? (opts.newValue === null ? null : String(opts.newValue)) : null,
+      url: opts.url !== undefined ? String(opts.url) : "",
+      storageArea: opts.storageArea !== undefined ? opts.storageArea : null,
+    });
+  }
+  StorageEvent.prototype = Object.create(Event.prototype);
+  StorageEvent.prototype.constructor = StorageEvent;
+  markNative(StorageEvent, "StorageEvent");
+
+  ["key", "oldValue", "newValue", "url", "storageArea"].forEach(function (prop) {
+    Object.defineProperty(StorageEvent.prototype, prop, {
+      get: function () {
+        const s = _storageEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  StorageEvent.prototype.initStorageEvent = function (
+    type, bubbles, cancelable, key, oldValue, newValue, url, storageArea
+  ) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initEvent(type, bubbles, cancelable);
+    const s = _storageEventState.get(this);
+    if (s) {
+      s.key = (key === undefined || key === null) ? null : String(key);
+      s.oldValue = (oldValue === undefined || oldValue === null) ? null : String(oldValue);
+      s.newValue = (newValue === undefined || newValue === null) ? null : String(newValue);
+      s.url = url !== undefined ? String(url) : "";
+      s.storageArea = storageArea ?? null;
+    }
+  };
+  markNative(StorageEvent.prototype.initStorageEvent, "initStorageEvent");
+
+  // -------------------------------------------------------------
+  // CompositionEvent
+  // -------------------------------------------------------------
+  function CompositionEvent(type, options) {
+    UIEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _compositionEventState.set(this, {
+      data: typeof opts.data === "string" ? opts.data : "",
+    });
+  }
+  CompositionEvent.prototype = Object.create(UIEvent.prototype);
+  CompositionEvent.prototype.constructor = CompositionEvent;
+  markNative(CompositionEvent, "CompositionEvent");
+
+  Object.defineProperty(CompositionEvent.prototype, "data", {
+    get: function () {
+      const s = _compositionEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.data;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  CompositionEvent.prototype.initCompositionEvent = function (type, bubbles, cancelable, view, data) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initUIEvent(type, bubbles, cancelable, view, 0);
+    const s = _compositionEventState.get(this);
+    if (s) {
+      s.data = data !== undefined ? String(data) : "";
+    }
+  };
+  markNative(CompositionEvent.prototype.initCompositionEvent, "initCompositionEvent");
+
+  // -------------------------------------------------------------
+  // TextEvent
+  // -------------------------------------------------------------
+  function TextEvent(type, options) {
+    UIEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _textEventState.set(this, {
+      data: opts.data !== undefined ? String(opts.data) : "",
+    });
+  }
+  TextEvent.prototype = Object.create(UIEvent.prototype);
+  TextEvent.prototype.constructor = TextEvent;
+  markNative(TextEvent, "TextEvent");
+
+  Object.defineProperty(TextEvent.prototype, "data", {
+    get: function () {
+      const s = _textEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.data;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  TextEvent.prototype.initTextEvent = function (type, bubbles, cancelable, view, data) {
+    const es = _eventState.get(this);
+    if (!es || es.dispatched) return;
+    this.initUIEvent(type, bubbles, cancelable, view, 0);
+    const s = _textEventState.get(this);
+    if (s) {
+      s.data = data === undefined ? "undefined" : String(data);
+    }
+  };
+  markNative(TextEvent.prototype.initTextEvent, "initTextEvent");
+
+  // -------------------------------------------------------------
+  // WheelEvent
+  // -------------------------------------------------------------
+  function WheelEvent(type, options) {
+    MouseEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _wheelEventState.set(this, {
+      deltaX: typeof opts.deltaX === "number" ? opts.deltaX : 0,
+      deltaY: typeof opts.deltaY === "number" ? opts.deltaY : 0,
+      deltaZ: typeof opts.deltaZ === "number" ? opts.deltaZ : 0,
+      deltaMode: typeof opts.deltaMode === "number" ? opts.deltaMode : 0,
+      momentum: Boolean(opts.momentum),
+    });
+  }
+  WheelEvent.prototype = Object.create(MouseEvent.prototype);
+  WheelEvent.prototype.constructor = WheelEvent;
+  WheelEvent.DOM_DELTA_PIXEL = 0;
+  WheelEvent.DOM_DELTA_LINE = 1;
+  WheelEvent.DOM_DELTA_PAGE = 2;
+  WheelEvent.prototype.DOM_DELTA_PIXEL = 0;
+  WheelEvent.prototype.DOM_DELTA_LINE = 1;
+  WheelEvent.prototype.DOM_DELTA_PAGE = 2;
+  markNative(WheelEvent, "WheelEvent");
+
+  ["deltaX", "deltaY", "deltaZ", "deltaMode", "momentum"].forEach(function (prop) {
+    Object.defineProperty(WheelEvent.prototype, prop, {
+      get: function () {
+        const s = _wheelEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // PointerEvent
+  // -------------------------------------------------------------
+  function PointerEvent(type, options) {
+    MouseEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _pointerEventState.set(this, {
+      pointerId: typeof opts.pointerId === "number" ? opts.pointerId : 0,
+      width: typeof opts.width === "number" ? opts.width : 1,
+      height: typeof opts.height === "number" ? opts.height : 1,
+      pressure: typeof opts.pressure === "number" ? opts.pressure : 0,
+      tangentialPressure: typeof opts.tangentialPressure === "number" ? opts.tangentialPressure : 0,
+      tiltX: typeof opts.tiltX === "number" ? opts.tiltX : 0,
+      tiltY: typeof opts.tiltY === "number" ? opts.tiltY : 0,
+      twist: typeof opts.twist === "number" ? opts.twist : 0,
+      altitudeAngle: typeof opts.altitudeAngle === "number" ? opts.altitudeAngle : Math.PI / 2,
+      azimuthAngle: typeof opts.azimuthAngle === "number" ? opts.azimuthAngle : 0,
+      pointerType: typeof opts.pointerType === "string" ? opts.pointerType : "",
+      isPrimary: Boolean(opts.isPrimary),
+      persistentDeviceId: typeof opts.persistentDeviceId === "number" ? opts.persistentDeviceId : 0,
+      coalesced: Array.isArray(opts.coalescedEvents) ? opts.coalescedEvents.slice() : [],
+      predicted: Array.isArray(opts.predictedEvents) ? opts.predictedEvents.slice() : [],
+    });
+  }
+  PointerEvent.prototype = Object.create(MouseEvent.prototype);
+  PointerEvent.prototype.constructor = PointerEvent;
+  markNative(PointerEvent, "PointerEvent");
+
+  ["pointerId", "width", "height", "pressure", "tangentialPressure", "tiltX", "tiltY", "twist", "altitudeAngle", "azimuthAngle", "pointerType", "isPrimary", "persistentDeviceId"].forEach(function (prop) {
+    Object.defineProperty(PointerEvent.prototype, prop, {
+      get: function () {
+        const s = _pointerEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  PointerEvent.prototype.getCoalescedEvents = function () {
+    const s = _pointerEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.coalesced.slice();
+  };
+  markNative(PointerEvent.prototype.getCoalescedEvents, "getCoalescedEvents");
+
+  PointerEvent.prototype.getPredictedEvents = function () {
+    const s = _pointerEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.predicted.slice();
+  };
+  markNative(PointerEvent.prototype.getPredictedEvents, "getPredictedEvents");
+
+  // -------------------------------------------------------------
+  // DragEvent
+  // -------------------------------------------------------------
+  function DragEvent(type, options) {
+    MouseEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _dragEventState.set(this, {
+      dataTransfer: opts.dataTransfer || null,
+    });
+  }
+  DragEvent.prototype = Object.create(MouseEvent.prototype);
+  DragEvent.prototype.constructor = DragEvent;
+  markNative(DragEvent, "DragEvent");
+
+  Object.defineProperty(DragEvent.prototype, "dataTransfer", {
+    get: function () {
+      const s = _dragEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.dataTransfer;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  // -------------------------------------------------------------
+  // ErrorEvent
+  // -------------------------------------------------------------
+  function ErrorEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _errorEventState.set(this, {
+      message: typeof opts.message === "string" ? opts.message : "",
+      filename: typeof opts.filename === "string" ? opts.filename : "",
+      lineno: (opts.lineno | 0) || 0,
+      colno: (opts.colno | 0) || 0,
+      error: opts.error !== undefined ? opts.error : null,
+    });
+  }
+  ErrorEvent.prototype = Object.create(Event.prototype);
+  ErrorEvent.prototype.constructor = ErrorEvent;
+  markNative(ErrorEvent, "ErrorEvent");
+
+  ["message", "filename", "lineno", "colno", "error"].forEach(function (prop) {
+    Object.defineProperty(ErrorEvent.prototype, prop, {
+      get: function () {
+        const s = _errorEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // PromiseRejectionEvent
+  // -------------------------------------------------------------
+  function PromiseRejectionEvent(type, options) {
+    const promise = (options == null) ? undefined : options.promise;
+    if (promise === null || (typeof promise !== "object" && typeof promise !== "function")) {
+      throw new TypeError("Failed to construct 'PromiseRejectionEvent': the init dictionary needs a promise object.");
+    }
+    Event.call(this, type, options);
+    _promiseRejectionEventState.set(this, {
+      promise: promise,
+      reason: options.reason,
+    });
+  }
+  PromiseRejectionEvent.prototype = Object.create(Event.prototype);
+  PromiseRejectionEvent.prototype.constructor = PromiseRejectionEvent;
+  markNative(PromiseRejectionEvent, "PromiseRejectionEvent");
+
+  ["promise", "reason"].forEach(function (prop) {
+    Object.defineProperty(PromiseRejectionEvent.prototype, prop, {
+      get: function () {
+        const s = _promiseRejectionEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // DeviceMotionEventAcceleration & DeviceMotionEventRotationRate
+  // -------------------------------------------------------------
+  function DeviceMotionEventAcceleration(token, init) {
+    if (token !== _internalConstruct) throw new TypeError("Illegal constructor");
+    const i = init || {};
+    _accelerationState.set(this, {
+      x: nullableDouble(i.x, "x"),
+      y: nullableDouble(i.y, "y"),
+      z: nullableDouble(i.z, "z"),
+    });
+  }
+  DeviceMotionEventAcceleration.prototype = Object.create(Object.prototype);
+  DeviceMotionEventAcceleration.prototype.constructor = DeviceMotionEventAcceleration;
+  markNative(DeviceMotionEventAcceleration, "DeviceMotionEventAcceleration");
+
+  ["x", "y", "z"].forEach(function (prop) {
+    Object.defineProperty(DeviceMotionEventAcceleration.prototype, prop, {
+      get: function () {
+        const s = _accelerationState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  function DeviceMotionEventRotationRate(token, init) {
+    if (token !== _internalConstruct) throw new TypeError("Illegal constructor");
+    const i = init || {};
+    _rotationRateState.set(this, {
+      alpha: nullableDouble(i.alpha, "alpha"),
+      beta: nullableDouble(i.beta, "beta"),
+      gamma: nullableDouble(i.gamma, "gamma"),
+    });
+  }
+  DeviceMotionEventRotationRate.prototype = Object.create(Object.prototype);
+  DeviceMotionEventRotationRate.prototype.constructor = DeviceMotionEventRotationRate;
+  markNative(DeviceMotionEventRotationRate, "DeviceMotionEventRotationRate");
+
+  ["alpha", "beta", "gamma"].forEach(function (prop) {
+    Object.defineProperty(DeviceMotionEventRotationRate.prototype, prop, {
+      get: function () {
+        const s = _rotationRateState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // DeviceMotionEvent
+  // -------------------------------------------------------------
+  function DeviceMotionEvent(type, options) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'DeviceMotionEvent': 1 argument required, but only 0 present.");
+    }
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    let acceleration = null;
+    if (opts.acceleration != null) {
+      acceleration = new DeviceMotionEventAcceleration(_internalConstruct, opts.acceleration);
+    }
+    let accelerationIncludingGravity = null;
+    if (opts.accelerationIncludingGravity != null) {
+      accelerationIncludingGravity = new DeviceMotionEventAcceleration(_internalConstruct, opts.accelerationIncludingGravity);
+    }
+    let rotationRate = null;
+    if (opts.rotationRate != null) {
+      rotationRate = new DeviceMotionEventRotationRate(_internalConstruct, opts.rotationRate);
+    }
+    _deviceMotionEventState.set(this, {
+      acceleration: acceleration,
+      accelerationIncludingGravity: accelerationIncludingGravity,
+      rotationRate: rotationRate,
+      interval: typeof opts.interval === "number" ? opts.interval : 0,
+    });
+  }
+  DeviceMotionEvent.prototype = Object.create(Event.prototype);
+  DeviceMotionEvent.prototype.constructor = DeviceMotionEvent;
+  markNative(DeviceMotionEvent, "DeviceMotionEvent");
+
+  ["acceleration", "accelerationIncludingGravity", "rotationRate", "interval"].forEach(function (prop) {
+    Object.defineProperty(DeviceMotionEvent.prototype, prop, {
+      get: function () {
+        const s = _deviceMotionEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // DeviceOrientationEvent
+  // -------------------------------------------------------------
+  function DeviceOrientationEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _deviceOrientationEventState.set(this, {
+      alpha: opts.alpha != null ? Number(opts.alpha) : null,
+      beta: opts.beta != null ? Number(opts.beta) : null,
+      gamma: opts.gamma != null ? Number(opts.gamma) : null,
+      absolute: Boolean(opts.absolute),
+    });
+  }
+  DeviceOrientationEvent.prototype = Object.create(Event.prototype);
+  DeviceOrientationEvent.prototype.constructor = DeviceOrientationEvent;
+  markNative(DeviceOrientationEvent, "DeviceOrientationEvent");
+
+  ["alpha", "beta", "gamma", "absolute"].forEach(function (prop) {
+    Object.defineProperty(DeviceOrientationEvent.prototype, prop, {
+      get: function () {
+        const s = _deviceOrientationEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // Other Lifecycle / Transition Events
+  // -------------------------------------------------------------
+  function HashChangeEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _hashChangeEventState.set(this, {
+      oldURL: typeof opts.oldURL === "string" ? opts.oldURL : "",
+      newURL: typeof opts.newURL === "string" ? opts.newURL : "",
+    });
+  }
+  HashChangeEvent.prototype = Object.create(Event.prototype);
+  HashChangeEvent.prototype.constructor = HashChangeEvent;
+  markNative(HashChangeEvent, "HashChangeEvent");
+  ["oldURL", "newURL"].forEach(function (prop) {
+    Object.defineProperty(HashChangeEvent.prototype, prop, {
+      get: function () {
+        const s = _hashChangeEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  function PopStateEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _popStateEventState.set(this, {
+      state: opts.state !== undefined ? opts.state : null,
+      hasUAVisualTransition: Boolean(opts.hasUAVisualTransition),
+    });
+  }
+  PopStateEvent.prototype = Object.create(Event.prototype);
+  PopStateEvent.prototype.constructor = PopStateEvent;
+  markNative(PopStateEvent, "PopStateEvent");
+  ["state", "hasUAVisualTransition"].forEach(function (prop) {
+    Object.defineProperty(PopStateEvent.prototype, prop, {
+      get: function () {
+        const s = _popStateEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  function PageTransitionEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _pageTransitionEventState.set(this, {
+      persisted: Boolean(opts.persisted),
+    });
+  }
+  PageTransitionEvent.prototype = Object.create(Event.prototype);
+  PageTransitionEvent.prototype.constructor = PageTransitionEvent;
+  markNative(PageTransitionEvent, "PageTransitionEvent");
+  Object.defineProperty(PageTransitionEvent.prototype, "persisted", {
+    get: function () {
+      const s = _pageTransitionEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.persisted;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  function TransitionEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _transitionEventState.set(this, {
+      propertyName: opts.propertyName != null ? String(opts.propertyName) : "",
+      elapsedTime: typeof opts.elapsedTime === "number" ? opts.elapsedTime : 0,
+      pseudoElement: opts.pseudoElement != null ? String(opts.pseudoElement) : "",
+    });
+  }
+  TransitionEvent.prototype = Object.create(Event.prototype);
+  TransitionEvent.prototype.constructor = TransitionEvent;
+  markNative(TransitionEvent, "TransitionEvent");
+  ["propertyName", "elapsedTime", "pseudoElement"].forEach(function (prop) {
+    Object.defineProperty(TransitionEvent.prototype, prop, {
+      get: function () {
+        const s = _transitionEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  function AnimationEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _animationEventState.set(this, {
+      animationName: opts.animationName != null ? String(opts.animationName) : "",
+      elapsedTime: typeof opts.elapsedTime === "number" ? opts.elapsedTime : 0,
+      pseudoElement: opts.pseudoElement != null ? String(opts.pseudoElement) : "",
+    });
+  }
+  AnimationEvent.prototype = Object.create(Event.prototype);
+  AnimationEvent.prototype.constructor = AnimationEvent;
+  markNative(AnimationEvent, "AnimationEvent");
+  ["animationName", "elapsedTime", "pseudoElement"].forEach(function (prop) {
+    Object.defineProperty(AnimationEvent.prototype, prop, {
+      get: function () {
+        const s = _animationEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  });
+
+  function BeforeUnloadEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _beforeUnloadEventState.set(this, {
+      returnValue: typeof opts.returnValue === "string" ? opts.returnValue : "",
+    });
+  }
+  BeforeUnloadEvent.prototype = Object.create(Event.prototype);
+  BeforeUnloadEvent.prototype.constructor = BeforeUnloadEvent;
+  markNative(BeforeUnloadEvent, "BeforeUnloadEvent");
+  Object.defineProperty(BeforeUnloadEvent.prototype, "returnValue", {
+    get: function () {
+      const s = _beforeUnloadEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.returnValue;
+    },
+    set: function (v) {
+      const s = _beforeUnloadEventState.get(this);
+      if (s) s.returnValue = String(v ?? "");
+    },
+    enumerable: false,
+    configurable: true,
+  });
 
   // =============================================================
   // Module: events/dispatch.js
@@ -595,9 +1758,8 @@
     if (event._isDispatching) {
       throw new DOMException("The event is already being dispatched.", "InvalidStateError");
     }
-    const isHarness = Boolean(event._isHarnessEvent);
     event._isTrusted = false;
-    return internalDispatch(this, event, isHarness);
+    return internalDispatch(this, event, false);
   };
 
   function dispatchTrustedEvent(target, event) {
@@ -2179,6 +3341,9 @@
           if (context === "page" && rawName.toLowerCase() === "size") {
             val = val.toLowerCase();
           }
+          if (context === "margin" && rawName.toLowerCase() === "size") {
+            continue;
+          }
           const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
           if (!data.has(key)) {
             authoredOrder.push(key);
@@ -2219,8 +3384,51 @@
       decl.getPropertyValue = function (prop) {
         const p = String(prop).trim();
         const key = p.startsWith("--") ? p : p.toLowerCase();
+        if (context === "margin" && key === "size") return "";
         if (data.has(key)) {
           return serializeCssValue(data.get(key).value);
+        }
+        if (key === "margin-top" || key === "margin-right" || key === "margin-bottom" || key === "margin-left") {
+          if (data.has("margin")) {
+            const parts = data.get("margin").value.trim().split(/\s+/);
+            if (parts.length === 1) return serializeCssValue(parts[0]);
+            if (parts.length === 2) {
+              if (key === "margin-top" || key === "margin-bottom") return serializeCssValue(parts[0]);
+              return serializeCssValue(parts[1]);
+            }
+            if (parts.length === 3) {
+              if (key === "margin-top") return serializeCssValue(parts[0]);
+              if (key === "margin-bottom") return serializeCssValue(parts[2]);
+              return serializeCssValue(parts[1]);
+            }
+            if (parts.length === 4) {
+              if (key === "margin-top") return serializeCssValue(parts[0]);
+              if (key === "margin-right") return serializeCssValue(parts[1]);
+              if (key === "margin-bottom") return serializeCssValue(parts[2]);
+              if (key === "margin-left") return serializeCssValue(parts[3]);
+            }
+          }
+        }
+        if (key === "padding-top" || key === "padding-right" || key === "padding-bottom" || key === "padding-left") {
+          if (data.has("padding")) {
+            const parts = data.get("padding").value.trim().split(/\s+/);
+            if (parts.length === 1) return serializeCssValue(parts[0]);
+            if (parts.length === 2) {
+              if (key === "padding-top" || key === "padding-bottom") return serializeCssValue(parts[0]);
+              return serializeCssValue(parts[1]);
+            }
+            if (parts.length === 3) {
+              if (key === "padding-top") return serializeCssValue(parts[0]);
+              if (key === "padding-bottom") return serializeCssValue(parts[2]);
+              return serializeCssValue(parts[1]);
+            }
+            if (parts.length === 4) {
+              if (key === "padding-top") return serializeCssValue(parts[0]);
+              if (key === "padding-right") return serializeCssValue(parts[1]);
+              if (key === "padding-bottom") return serializeCssValue(parts[2]);
+              if (key === "padding-left") return serializeCssValue(parts[3]);
+            }
+          }
         }
         if (SHORTHAND_LONGHANDS[key]) {
           const longhands = SHORTHAND_LONGHANDS[key];
@@ -2274,6 +3482,9 @@
         }
         if (context === "page" && key === "size") {
           v = v.toLowerCase();
+        }
+        if (context === "margin" && key === "size") {
+          return;
         }
 
         if (SHORTHAND_LONGHANDS[key]) {
@@ -2576,13 +3787,140 @@
     markNative(CSSFontPaletteValuesRule, "CSSFontPaletteValuesRule");
     global.CSSFontPaletteValuesRule = CSSFontPaletteValuesRule;
 
+    const MARGIN_BOX_NAMES = new Set([
+      "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
+      "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
+      "left-top", "left-middle", "left-bottom", "right-top", "right-middle", "right-bottom"
+    ]);
+
+    function atKeywordNameOf(text) {
+      const s = String(text || "").trim();
+      if (s[0] !== "@") return null;
+      let name = "";
+      for (let i = 1; i < s.length;) {
+        const ch = s[i];
+        if (/[a-zA-Z0-9_-]/.test(ch)) {
+          name += ch;
+          i++;
+          continue;
+        }
+        if (ch !== "\\" || i + 1 >= s.length || /[\n\r\f]/.test(s[i + 1])) return null;
+        i++;
+        const hex = s.slice(i).match(/^[0-9a-fA-F]{1,6}/)?.[0];
+        if (hex) {
+          const cp = Number.parseInt(hex, 16);
+          name += (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff))
+            ? "\ufffd"
+            : String.fromCodePoint(cp);
+          i += hex.length;
+          if (/[\t\n\f\r ]/.test(s[i] || "")) {
+            i += s[i] === "\r" && s[i + 1] === "\n" ? 2 : 1;
+          }
+        } else {
+          name += s[i++];
+        }
+      }
+      return name ? name.toLowerCase() : null;
+    }
+
+    function canonicalizePageSelectorList(str) {
+      if (str == null) return null;
+      const s = String(str).trim();
+      if (s === "") return "";
+
+      const parts = [];
+      let cur = "";
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === "\\") {
+          cur += ch;
+          if (i + 1 < s.length) cur += s[++i];
+          continue;
+        }
+        if (ch === ",") {
+          if (!cur.trim()) return null;
+          parts.push(cur.trim());
+          cur = "";
+          continue;
+        }
+        cur += ch;
+      }
+      if (!cur.trim()) return null;
+      parts.push(cur.trim());
+
+      const VALID_PSEUDO_PAGES = new Set([":left", ":right", ":first", ":blank"]);
+      const canonParts = [];
+
+      for (const part of parts) {
+        if (!part) return null;
+        let i = 0;
+        let ident = "";
+        if (part[0] !== ":") {
+          while (i < part.length && part[i] !== ":") {
+            if (part[i] === "\\") {
+              ident += part[i];
+              if (i + 1 < part.length) {
+                ident += part[++i];
+                i++;
+              } else {
+                return null;
+              }
+              continue;
+            }
+            if (/\s/.test(part[i])) break;
+            ident += part[i++];
+          }
+          if (ident.startsWith("--")) return null;
+          while (i < part.length && /\s/.test(part[i])) i++;
+        }
+
+        let pseudos = "";
+        while (i < part.length) {
+          if (part[i] !== ":") return null;
+          let pseudo = ":";
+          i++;
+          while (i < part.length && /[a-zA-Z0-9_-]/.test(part[i])) {
+            pseudo += part[i++];
+          }
+          const pseudoLower = pseudo.toLowerCase();
+          if (!VALID_PSEUDO_PAGES.has(pseudoLower)) return null;
+          pseudos += pseudoLower;
+          while (i < part.length && /\s/.test(part[i])) i++;
+        }
+
+        if (!ident && !pseudos) return null;
+        canonParts.push(ident + pseudos);
+      }
+
+      return canonParts.join(", ");
+    }
+
     // 5.8 CSSPageRule
     function CSSPageRule() {
       CSSGroupingRule.call(this);
       this._type = 6;
+      this._selectorText = "";
+      this._style = null;
     }
     CSSPageRule.prototype = Object.create(CSSGroupingRule.prototype);
     CSSPageRule.prototype.constructor = CSSPageRule;
+    Object.defineProperty(CSSPageRule.prototype, "selectorText", {
+      get: function () { return this._selectorText || ""; },
+      set: function (v) {
+        const canon = canonicalizePageSelectorList(v);
+        if (canon === null) return;
+        this._selectorText = canon;
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+    Object.defineProperty(CSSPageRule.prototype, "style", {
+      get: function () { return this._style; },
+      set: function (v) {
+        if (this._style) this._style.cssText = String(v == null ? "" : v);
+      },
+      configurable: true,
+    });
     CSSPageRule.prototype.insertRule = function (ruleText, index) {
       if (arguments.length === 0) {
         throw new TypeError("Failed to execute 'insertRule': 1 argument required, but only 0 present.");
@@ -2591,10 +3929,17 @@
       if (idx > this.cssRules.length) {
         throw new DOMException("Index out of bounds", "IndexSizeError");
       }
-      const parsed = parseSingleRuleOrThrow(ruleText);
-      if (parsed.kind !== "margin") {
+      const split = splitStylesheetRules(ruleText);
+      if (split.unbalanced || split.length !== 1 || split.trailingGarbage) {
+        throw new DOMException("Failed to parse CSS rule: " + ruleText, "SyntaxError");
+      }
+      const parsed = split[0];
+      const marginName = atKeywordNameOf(parsed.selectorText);
+      if (!marginName || !MARGIN_BOX_NAMES.has(marginName)) {
         throw new DOMException("Only margin at-rules may be inserted into a @page rule", "SyntaxError");
       }
+      parsed.kind = "margin";
+      parsed.marginName = marginName;
       const rule = constructRule(parsed, this.parentStyleSheet, this, () => {
         if (this._onMutate) this._onMutate();
       });
@@ -2602,19 +3947,46 @@
       if (this._onMutate) this._onMutate();
       return idx;
     };
+    CSSPageRule.prototype.deleteRule = function (index) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'deleteRule': 1 argument required, but only 0 present.");
+      }
+      const idx = Number(index) >>> 0;
+      if (idx >= this.cssRules.length) {
+        throw new DOMException("Index out of bounds", "IndexSizeError");
+      }
+      this.cssRules.splice(idx, 1);
+      if (this._onMutate) this._onMutate();
+    };
     markNative(CSSPageRule, "CSSPageRule");
     global.CSSPageRule = CSSPageRule;
+    if (typeof globalThis !== "undefined") globalThis.CSSPageRule = CSSPageRule;
+    if (typeof window !== "undefined") window.CSSPageRule = CSSPageRule;
 
     // 5.9 CSSMarginRule
     function CSSMarginRule() {
       CSSRule.call(this);
       this._type = 9;
-      this.name = "";
+      this._name = "";
+      this._style = null;
     }
     CSSMarginRule.prototype = Object.create(CSSRule.prototype);
     CSSMarginRule.prototype.constructor = CSSMarginRule;
+    Object.defineProperty(CSSMarginRule.prototype, "name", {
+      get: function () { return this._name || ""; },
+      configurable: true,
+    });
+    Object.defineProperty(CSSMarginRule.prototype, "style", {
+      get: function () { return this._style; },
+      set: function (v) {
+        if (this._style) this._style.cssText = String(v == null ? "" : v);
+      },
+      configurable: true,
+    });
     markNative(CSSMarginRule, "CSSMarginRule");
     global.CSSMarginRule = CSSMarginRule;
+    if (typeof globalThis !== "undefined") globalThis.CSSMarginRule = CSSMarginRule;
+    if (typeof window !== "undefined") window.CSSMarginRule = CSSMarginRule;
 
     // 5.10 CSSFontFaceRule
     function CSSFontFaceRule() {
@@ -2665,15 +4037,230 @@
     global.CSSNamespaceRule = CSSNamespaceRule;
 
     // 5.13 CSSCounterStyleRule
+    const COUNTER_STYLE_IDL_TO_DESC = {
+      system: "system",
+      symbols: "symbols",
+      additiveSymbols: "additive-symbols",
+      negative: "negative",
+      prefix: "prefix",
+      suffix: "suffix",
+      range: "range",
+      pad: "pad",
+      speakAs: "speak-as",
+      fallback: "fallback",
+    };
+    const COUNTER_STYLE_RESERVED_NAMES = new Set([
+      "none", "decimal", "initial", "inherit", "unset", "revert", "revert-layer", "default"
+    ]);
+    const COUNTER_STYLE_SYSTEM_FAMILIES = new Set([
+      "cyclic", "numeric", "alphabetic", "symbolic", "additive", "fixed", "extends"
+    ]);
+
+    function canonicalizePad(val) {
+      const s = String(val == null ? "" : val).trim();
+      if (!s) return "";
+      const m1 = s.match(/^(\d+)\s+(.+)$/);
+      if (m1) return m1[1] + " " + m1[2];
+      const m2 = s.match(/^(.+?)\s+(\d+)$/);
+      if (m2) return m2[2] + " " + m2[1];
+      return s;
+    }
+
+    function canonicalizeAdditiveSymbols(val) {
+      const s = String(val == null ? "" : val).trim();
+      if (!s) return "";
+      const pairs = s.split(",").map((p) => p.trim()).filter(Boolean);
+      return pairs.map((p) => {
+        const m1 = p.match(/^(\d+)\s+(.+)$/);
+        if (m1) return m1[1] + " " + m1[2];
+        const m2 = p.match(/^(.+?)\s+(\d+)$/);
+        if (m2) return m2[2] + " " + m2[1];
+        return p;
+      }).join(", ");
+    }
+
+    function parseCounterStyleRule(cssText) {
+      const text = String(cssText == null ? "" : cssText).trim();
+      const brace = text.indexOf("{");
+      const lastBrace = text.lastIndexOf("}");
+      if (brace === -1 || lastBrace === -1 || lastBrace <= brace) return null;
+      const prelude = text.slice(0, brace).trim();
+      if (!/^@counter-style\b/i.test(prelude)) return null;
+
+      const nameRaw = prelude.replace(/^@counter-style/i, "").trim();
+      if (!nameRaw) return null;
+      if (nameRaw.endsWith("\\") || nameRaw.includes("\\ ") || /\s/.test(nameRaw)) return null;
+      if (COUNTER_STYLE_RESERVED_NAMES.has(nameRaw.toLowerCase())) return null;
+
+      const body = text.slice(brace + 1, lastBrace).trim();
+      if (body.includes("\\;") || /\\(?:\s*)$/.test(body)) return null;
+
+      const descriptors = new Map();
+      const decls = splitCssDeclarations(body);
+      for (let i = 0; i < decls.length; i++) {
+        const d = decls[i].trim();
+        if (!d) continue;
+        const colon = d.indexOf(":");
+        if (colon <= 0) continue;
+        const rawName = d.slice(0, colon).trim().toLowerCase();
+        let val = d.slice(colon + 1).trim();
+
+        if (rawName === "system") {
+          const fam = val.split(/\s+/)[0]?.toLowerCase();
+          if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(fam)) {
+            continue;
+          }
+        } else if (rawName === "pad") {
+          val = canonicalizePad(val);
+        } else if (rawName === "additive-symbols") {
+          val = canonicalizeAdditiveSymbols(val);
+        } else if (rawName === "suffix") {
+          if (!val) continue;
+        } else if (!Object.values(COUNTER_STYLE_IDL_TO_DESC).includes(rawName)) {
+          continue;
+        }
+
+        descriptors.set(rawName, val);
+      }
+
+      return { name: nameRaw, descriptors };
+    }
+
     function CSSCounterStyleRule() {
       CSSRule.call(this);
       this._type = 11;
-      this.name = "";
+      this._name = "";
+      this._descriptors = new Map();
     }
     CSSCounterStyleRule.prototype = Object.create(CSSRule.prototype);
     CSSCounterStyleRule.prototype.constructor = CSSCounterStyleRule;
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "name", {
+      get: function () { return this._name || ""; },
+      set: function (v) {
+        const s = String(v);
+        if (s === "\\") {
+          this._name = "\ufffd";
+          if (this._onMutate) this._onMutate();
+          return;
+        }
+        const trimmed = s.trim();
+        if (!trimmed || /\s/.test(trimmed)) return;
+        if (COUNTER_STYLE_RESERVED_NAMES.has(trimmed.toLowerCase())) return;
+        this._name = trimmed;
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "system", {
+      get: function () { return this._descriptors.get("system") || ""; },
+      set: function (v) {
+        const val = String(v).trim();
+        if (!val) return;
+        const newFamily = val.split(/\s+/)[0]?.toLowerCase();
+        if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(newFamily)) return;
+        const oldVal = this._descriptors.get("system") || "";
+        const oldFamily = oldVal ? oldVal.split(/\s+/)[0]?.toLowerCase() : "";
+        if (oldFamily && oldFamily !== newFamily) return;
+        this._descriptors.set("system", val);
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "symbols", {
+      get: function () { return this._descriptors.get("symbols") || ""; },
+      set: function (v) {
+        this._descriptors.set("symbols", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "additiveSymbols", {
+      get: function () { return this._descriptors.get("additive-symbols") || ""; },
+      set: function (v) {
+        this._descriptors.set("additive-symbols", canonicalizeAdditiveSymbols(String(v)));
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "negative", {
+      get: function () { return this._descriptors.get("negative") || ""; },
+      set: function (v) {
+        this._descriptors.set("negative", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "prefix", {
+      get: function () { return this._descriptors.get("prefix") || ""; },
+      set: function (v) {
+        this._descriptors.set("prefix", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "suffix", {
+      get: function () { return this._descriptors.get("suffix") || ""; },
+      set: function (v) {
+        if (v === "") return;
+        const s = String(v);
+        if (s === "\\") {
+          this._descriptors.set("suffix", '"\\ufffd"');
+          if (this._onMutate) this._onMutate();
+          return;
+        }
+        this._descriptors.set("suffix", s.trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "range", {
+      get: function () { return this._descriptors.get("range") || ""; },
+      set: function (v) {
+        this._descriptors.set("range", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "pad", {
+      get: function () { return this._descriptors.get("pad") || ""; },
+      set: function (v) {
+        this._descriptors.set("pad", canonicalizePad(String(v)));
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "speakAs", {
+      get: function () { return this._descriptors.get("speak-as") || ""; },
+      set: function (v) {
+        this._descriptors.set("speak-as", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSCounterStyleRule.prototype, "fallback", {
+      get: function () { return this._descriptors.get("fallback") || ""; },
+      set: function (v) {
+        this._descriptors.set("fallback", String(v).trim());
+        if (this._onMutate) this._onMutate();
+      },
+      configurable: true,
+    });
+
     markNative(CSSCounterStyleRule, "CSSCounterStyleRule");
     global.CSSCounterStyleRule = CSSCounterStyleRule;
+    if (typeof globalThis !== "undefined") globalThis.CSSCounterStyleRule = CSSCounterStyleRule;
+    if (typeof window !== "undefined") window.CSSCounterStyleRule = CSSCounterStyleRule;
 
     // 5.14 CSSFontFeatureValuesRule
     function CSSFontFeatureValuesRule() {
@@ -2685,12 +4272,6 @@
     CSSFontFeatureValuesRule.prototype.constructor = CSSFontFeatureValuesRule;
     markNative(CSSFontFeatureValuesRule, "CSSFontFeatureValuesRule");
     global.CSSFontFeatureValuesRule = CSSFontFeatureValuesRule;
-
-    const MARGIN_BOX_NAMES = new Set([
-      "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
-      "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
-      "left-top", "left-middle", "left-bottom", "right-top", "right-middle", "right-bottom"
-    ]);
 
     // =========================================================================
     // 6. Stylesheet Rule Parsing & Splitting
@@ -2813,6 +4394,18 @@
       if (kind === "charset" || kind === "invalid" || kind === "margin") {
         throw new DOMException("Failed to parse CSS rule: invalid rule", "SyntaxError");
       }
+      if (kind === "page") {
+        const canonSel = canonicalizePageSelectorList(parsed.selectorText.replace(/^@page/i, ""));
+        if (canonSel === null) {
+          throw new DOMException("Failed to parse CSS rule: invalid page selector", "SyntaxError");
+        }
+      }
+      if (kind === "counter-style") {
+        const cs = parseCounterStyleRule(parsed.cssText);
+        if (!cs) {
+          throw new DOMException("Failed to parse CSS rule: invalid counter-style", "SyntaxError");
+        }
+      }
       if (kind === "style") {
         validateSelectorOrThrow(parsed.selectorText);
       }
@@ -2923,18 +4516,24 @@
       }
 
       if (kind === "page") {
+        const canonSel = canonicalizePageSelectorList(sel.replace(/^@page/i, ""));
+        if (canonSel === null) return null;
+
         const rule = new CSSPageRule();
         rule.parentRule = parentRule || null;
         rule.parentStyleSheet = parentSheet || null;
         rule._onMutate = onMutate || null;
-        rule.selectorText = sel.replace(/^@page/i, "").trim();
+        rule._selectorText = canonSel;
 
         const declParts = [];
         const childRules = makeRuleList([]);
         const pageBody = splitStylesheetRules(parsed.declText || "");
         for (let i = 0; i < pageBody.length; i++) {
           const part = pageBody[i];
-          if (classifyRuleKind(part) === "margin") {
+          const mName = atKeywordNameOf(part.selectorText);
+          if (mName && MARGIN_BOX_NAMES.has(mName)) {
+            part.kind = "margin";
+            part.marginName = mName;
             const mRule = constructRule(part, parentSheet, rule, onMutate);
             if (mRule) childRules.push(mRule);
           } else if (!part.selectorText && !/^@/.test(String(part.cssText || "").trim())) {
@@ -2947,7 +4546,7 @@
 
         const style = makeRuleStyleDeclaration(declParts.join("; "), "page", null, onMutate);
         style._parentRule = rule;
-        rule.style = style;
+        rule._style = style;
         rule.cssRules = childRules;
 
         rule._serialize = function () {
@@ -2971,14 +4570,36 @@
         rule.parentRule = parentRule || null;
         rule.parentStyleSheet = parentSheet || null;
         rule._onMutate = onMutate || null;
-        rule.name = sel.replace(/^@/i, "").trim();
-        const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
+        rule._name = parsed.marginName || atKeywordNameOf(sel) || "";
+        const style = makeRuleStyleDeclaration(parsed.declText || "", "margin", null, onMutate);
         style._parentRule = rule;
-        rule.style = style;
+        rule._style = style;
         rule._serialize = function () {
           let d = style.cssText;
           if (d && !d.endsWith(";")) d += ";";
           return "@" + rule.name + (d ? " { " + d + " }" : " { }");
+        };
+        return rule;
+      }
+
+      if (kind === "counter-style") {
+        const csData = parseCounterStyleRule(parsed.cssText);
+        if (!csData) return null;
+
+        const rule = new CSSCounterStyleRule();
+        rule.parentRule = parentRule || null;
+        rule.parentStyleSheet = parentSheet || null;
+        rule._onMutate = onMutate || null;
+        rule._name = csData.name;
+        for (const [k, v] of csData.descriptors) {
+          rule._descriptors.set(k, v);
+        }
+        rule._serialize = function () {
+          const parts = [];
+          for (const [k, v] of rule._descriptors) {
+            parts.push(k + ": " + v + ";");
+          }
+          return "@counter-style " + rule.name + (parts.length ? " { " + parts.join(" ") + " }" : " { }");
         };
         return rule;
       }
@@ -8796,9 +10417,234 @@
   markNative(TextEncoder, "TextEncoder");
   markNative(TextEncoder.prototype.encode, "encode");
 
+  // -------------------------------------------------------------
+  // FileReader
+  // -------------------------------------------------------------
+  const _b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function base64Encode(bytes) {
+    let result = "";
+    let i = 0;
+    const len = bytes.length;
+    for (; i + 2 < len; i += 3) {
+      result += _b64chars[bytes[i] >> 2];
+      result += _b64chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+      result += _b64chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+      result += _b64chars[bytes[i + 2] & 63];
+    }
+    if (i < len) {
+      result += _b64chars[bytes[i] >> 2];
+      if (i + 1 < len) {
+        result += _b64chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+        result += _b64chars[(bytes[i + 1] & 15) << 2];
+        result += "=";
+      } else {
+        result += _b64chars[(bytes[i] & 3) << 4];
+        result += "==";
+      }
+    }
+    return result;
+  }
+
+  function _safeQueueMicrotask(fn) {
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(fn);
+    } else {
+      Promise.resolve().then(fn);
+    }
+  }
+
+  function FileReader() {
+    if (!(this instanceof FileReader)) {
+      throw new TypeError("Failed to construct 'FileReader': Please use the 'new' operator.");
+    }
+    EventTarget.call(this);
+    this._gen = 0;
+    this.readyState = 0;
+    this.result = null;
+    this.error = null;
+    this.onloadstart = null;
+    this.onprogress = null;
+    this.onload = null;
+    this.onabort = null;
+    this.onerror = null;
+    this.onloadend = null;
+  }
+
+  FileReader.EMPTY = 0;
+  FileReader.LOADING = 1;
+  FileReader.DONE = 2;
+
+  FileReader.prototype = Object.create(EventTarget.prototype);
+  FileReader.prototype.constructor = FileReader;
+
+  FileReader.prototype.EMPTY = 0;
+  FileReader.prototype.LOADING = 1;
+  FileReader.prototype.DONE = 2;
+
+  FileReader.prototype._fire = function (type, detail) {
+    let event;
+    try {
+      event = new Event(type, { bubbles: false, cancelable: false });
+      if (detail) {
+        for (const k in detail) {
+          if (Object.prototype.hasOwnProperty.call(detail, k)) {
+            event[k] = detail[k];
+          }
+        }
+      }
+    } catch (e) {
+      event = { type: type, bubbles: false, cancelable: false };
+      if (detail) {
+        for (const k in detail) {
+          if (Object.prototype.hasOwnProperty.call(detail, k)) {
+            event[k] = detail[k];
+          }
+        }
+      }
+    }
+    const handler = this["on" + type];
+    if (typeof handler === "function") {
+      try {
+        handler.call(this, event);
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) console.error(e);
+      }
+    }
+    try {
+      this.dispatchEvent(event);
+    } catch (e) {}
+  };
+
+  FileReader.prototype._read = function (blob, readType, encoding) {
+    const readGeneration = ++this._gen;
+    const later = (callback) => {
+      setTimeout(() => {
+        setTimeout(() => {
+          if (this._gen !== readGeneration) return;
+          callback();
+        }, 0);
+      }, 0);
+    };
+    const fireLoadendLater = () => later(() => this._fire("loadend"));
+
+    if (blob == null || typeof blob.arrayBuffer !== "function") {
+      let error;
+      const DOMEx = (typeof window !== "undefined" && window.DOMException) ||
+                    (typeof globalThis !== "undefined" && globalThis.DOMException);
+      if (typeof DOMEx === "function") {
+        error = new DOMEx("Argument is not a Blob", "TypeError");
+      } else {
+        error = new TypeError("FileReader: argument is not a Blob");
+      }
+      this.error = error;
+      this.readyState = 2; // DONE
+      _safeQueueMicrotask(() => {
+        if (this._gen !== readGeneration) return;
+        this._fire("error");
+        fireLoadendLater();
+      });
+      return;
+    }
+
+    this.readyState = 1; // LOADING
+    this.result = null;
+    this.error = null;
+
+    _safeQueueMicrotask(() => {
+      if (this._gen !== readGeneration) return;
+      this._fire("loadstart");
+    });
+
+    Promise.resolve()
+      .then(() => blob.arrayBuffer())
+      .then((buffer) => {
+        if (this._gen !== readGeneration) return;
+        const bytes = new Uint8Array(buffer);
+        let result;
+        if (readType === "arrayBuffer") {
+          result = buffer;
+        } else if (readType === "text") {
+          try {
+            const decoder = new TextDecoder(encoding || "utf-8");
+            result = decoder.decode(bytes);
+          } catch (e) {
+            result = "";
+          }
+        } else if (readType === "binaryString") {
+          let binaryString = "";
+          for (let i = 0; i < bytes.length; i++) {
+            binaryString += String.fromCharCode(bytes[i]);
+          }
+          result = binaryString;
+        } else {
+          let binaryString = "";
+          for (let i = 0; i < bytes.length; i++) {
+            binaryString += String.fromCharCode(bytes[i]);
+          }
+          const base64 = (typeof btoa === "function") ? btoa(binaryString) : base64Encode(bytes);
+          const mediaType = (blob.type && String(blob.type)) || "application/octet-stream";
+          result = "data:" + mediaType + ";base64," + base64;
+        }
+
+        this._fire("progress", {
+          lengthComputable: true,
+          loaded: bytes.length,
+          total: bytes.length,
+        });
+
+        later(() => {
+          this.result = result;
+          this.readyState = 2; // DONE
+          this._fire("load");
+          fireLoadendLater();
+        });
+      })
+      .catch((error) => {
+        if (this._gen !== readGeneration) return;
+        this.error = error;
+        this.readyState = 2; // DONE
+        this._fire("error");
+        fireLoadendLater();
+      });
+  };
+
+  FileReader.prototype.readAsText = function (blob, encoding) {
+    this._read(blob, "text", encoding);
+  };
+  FileReader.prototype.readAsArrayBuffer = function (blob) {
+    this._read(blob, "arrayBuffer");
+  };
+  FileReader.prototype.readAsDataURL = function (blob) {
+    this._read(blob, "dataURL");
+  };
+  FileReader.prototype.readAsBinaryString = function (blob) {
+    this._read(blob, "binaryString");
+  };
+
+  FileReader.prototype.abort = function () {
+    if (this.readyState === 0) {
+      this.result = null;
+      return;
+    }
+    if (this.readyState === 2) return;
+    this._gen++;
+    this.readyState = 2;
+    this.result = null;
+    this._fire("abort");
+    this._fire("loadend");
+  };
+
+  markNative(FileReader, "FileReader");
+  markNative(FileReader.prototype.readAsText, "readAsText");
+  markNative(FileReader.prototype.readAsArrayBuffer, "readAsArrayBuffer");
+  markNative(FileReader.prototype.readAsDataURL, "readAsDataURL");
+  markNative(FileReader.prototype.readAsBinaryString, "readAsBinaryString");
+  markNative(FileReader.prototype.abort, "abort");
+
   // Expose globals
   global.Blob = Blob;
   global.File = File;
+  global.FileReader = FileReader;
   global.TextDecoder = TextDecoder;
   global.TextEncoder = TextEncoder;
 
@@ -8809,6 +10655,7 @@
   if (typeof window !== "undefined") {
     window.Blob = Blob;
     window.File = File;
+    window.FileReader = FileReader;
     window.TextDecoder = TextDecoder;
     window.TextEncoder = TextEncoder;
     window.Headers = Headers;
@@ -8818,6 +10665,7 @@
   if (typeof globalThis !== "undefined") {
     globalThis.Blob = Blob;
     globalThis.File = File;
+    globalThis.FileReader = FileReader;
     globalThis.TextDecoder = TextDecoder;
     globalThis.TextEncoder = TextEncoder;
     globalThis.Headers = Headers;
@@ -15486,6 +17334,55 @@
     global.MessageEvent = MessageEvent;
     global.SubmitEvent = SubmitEvent;
     global.EventTarget = EventTarget;
+    global.DeviceMotionEvent = DeviceMotionEvent;
+    global.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
+    global.DeviceMotionEventRotationRate = DeviceMotionEventRotationRate;
+    global.DeviceOrientationEvent = DeviceOrientationEvent;
+    global.PromiseRejectionEvent = PromiseRejectionEvent;
+    global.WheelEvent = WheelEvent;
+    global.PointerEvent = PointerEvent;
+    global.DragEvent = DragEvent;
+    global.TextEvent = TextEvent;
+    global.CompositionEvent = CompositionEvent;
+    global.StorageEvent = StorageEvent;
+    global.ErrorEvent = ErrorEvent;
+    global.HashChangeEvent = HashChangeEvent;
+    global.PopStateEvent = PopStateEvent;
+    global.PageTransitionEvent = PageTransitionEvent;
+    global.TransitionEvent = TransitionEvent;
+    global.AnimationEvent = AnimationEvent;
+    global.BeforeUnloadEvent = BeforeUnloadEvent;
+
+    if (typeof globalThis !== "undefined") {
+      globalThis.Event = Event;
+      globalThis.CustomEvent = CustomEvent;
+      globalThis.UIEvent = UIEvent;
+      globalThis.MouseEvent = MouseEvent;
+      globalThis.KeyboardEvent = KeyboardEvent;
+      globalThis.FocusEvent = FocusEvent;
+      globalThis.InputEvent = InputEvent;
+      globalThis.MessageEvent = MessageEvent;
+      globalThis.SubmitEvent = SubmitEvent;
+      globalThis.EventTarget = EventTarget;
+      globalThis.DeviceMotionEvent = DeviceMotionEvent;
+      globalThis.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
+      globalThis.DeviceMotionEventRotationRate = DeviceMotionEventRotationRate;
+      globalThis.DeviceOrientationEvent = DeviceOrientationEvent;
+      globalThis.PromiseRejectionEvent = PromiseRejectionEvent;
+      globalThis.WheelEvent = WheelEvent;
+      globalThis.PointerEvent = PointerEvent;
+      globalThis.DragEvent = DragEvent;
+      globalThis.TextEvent = TextEvent;
+      globalThis.CompositionEvent = CompositionEvent;
+      globalThis.StorageEvent = StorageEvent;
+      globalThis.ErrorEvent = ErrorEvent;
+      globalThis.HashChangeEvent = HashChangeEvent;
+      globalThis.PopStateEvent = PopStateEvent;
+      globalThis.PageTransitionEvent = PageTransitionEvent;
+      globalThis.TransitionEvent = TransitionEvent;
+      globalThis.AnimationEvent = AnimationEvent;
+      globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
+    }
 
     // 2. Expose DOM Collections and Nodes
     global.DOMTokenList = DOMTokenList;
@@ -15507,6 +17404,8 @@
     global.FormData = FormData;
     global.Blob = Blob;
     global.File = File;
+    global.FileReader = FileReader;
+    if (typeof globalThis !== "undefined") globalThis.FileReader = FileReader;
     if (typeof Headers !== "undefined") global.Headers = Headers;
     if (typeof Request !== "undefined") global.Request = Request;
     if (typeof Response !== "undefined") global.Response = Response;

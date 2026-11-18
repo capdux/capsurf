@@ -1271,3 +1271,35 @@
     - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1080ms)
   - 回归套件：Phase 51 & Phase 52 14 大回归套件 18 项用例全部 100% 绿灯（4.63s 通过）；
   - 独立单二进制：`bin/main`（11.2MB ReleaseFast）构建成功。
+
+## Phase 54: CSSOM Counter/Page Rules, Web IDL Event Hierarchy, Legacy Inits & FileReader (100% Closed)
+- **`src/cdp/runtime.cp`**：
+  - 将 `Runtime.evaluate` 与 `Runtime.callFunctionOn` 中硬编码的 4KB 栈缓冲区（`decl_buf`、`unesc_buf`、`eval_res_buf`）重构为动态基于 `session.allocator` 扩容（支持 64KB+ 表达式）并直接写入 256KB 的 `out_buf`；
+  - 彻底解决 WebSocket 巨型 JSON 字符串截断导致 `SyntaxError: JSON Parse error: Unterminated string` 的核心缺陷。
+- **`src/js/shim/cssom.js`**：
+  - 实装 `CSSCounterStyleRule`（`type: 11`）及其全套属性描述符（`name`, `system`, `symbols`, `additiveSymbols`, `negative`, `prefix`, `suffix`, `range`, `pad`, `fallback`, `speakAs`）；
+  - 严密实装描述符规范校验：拒绝关键字标识符（`none`, `initial` 等）、锁定算法族系（`extends decimal`）、拒绝空前缀/后缀、尾随反斜杠规范化为 `\ufffd`、并准确序列化为 `cssText`；
+  - 实装 `CSSPageRule`（`type: 6`）与 `CSSMarginRule`（`type: 9`），支持页边距框名称规范化（如 `@t\6f p-left` 规范化为 `@top-left`），嵌套边距规则识别，并在插入非边距规则时抛出 `HierarchyRequestError`。
+- **`src/js/shim/events/event.js` & `src/js/shim/events/dispatch.js`**：
+  - 全面将 `Event` 及其各子类（`MouseEvent`, `KeyboardEvent`, `FocusEvent`, `InputEvent` 等）从实例属性重构为基于原型的只读 Getter（`clientX`, `relatedTarget`, `keyCode`, `detail`, `persistentDeviceId` 等），使 `Object.keys(event)` 严格仅返回 `['isTrusted']`；
+  - 实装 `DeviceMotionEvent`, `DeviceMotionEventAcceleration`（直接构造抛 `TypeError`）, `DeviceMotionEventRotationRate`, `PromiseRejectionEvent`, `WheelEvent`（`momentum`）, `TextEvent`, `CompositionEvent`；
+  - 实装传统 Web IDL `init*Event` 方法：`initEvent`, `initMessageEvent`, `initStorageEvent`, `initCompositionEvent`, `initTextEvent`, `initKeyboardEvent`, `initMouseEvent`, `initUIEvent`（已派发的事件调用时静默忽略）；
+  - 将 `new Event(null/undefined/0).type` 规范化为 `"null"` / `"undefined"` / `"0"`；
+  - 修复 `EventTarget.prototype.dispatchEvent`：严格传递 `trusted = false`，确保重新派发先前受信任的事件时 `isTrusted` 不被伪造。
+- **`src/js/shim/file.js`**：
+  - 实装 `FileReader` 完整状态机，继承 `EventTarget`（常量 `EMPTY = 0`, `LOADING = 1`, `DONE = 2`，方法 `readAsArrayBuffer`, `readAsText`, `readAsDataURL`, `readAsBinaryString`, `abort`，属性 `readyState`, `result`, `error`）；
+  - 严格按照 W3C 规范的任务调度模型分发事件：在微任务中触发 `loadstart`，随后触发 `progress`，并在独立宏任务中（`setTimeout(..., 0)`）触发 `load` 与 `loadend`；
+  - 支持多代操作取消机制（`_gen`），在 `abort()` 时安全取消后续任务并重置状态。
+- **`src/js/shim/index.js`**：
+  - 导出 `FileReader`, `CSSCounterStyleRule`, `DeviceMotionEvent`, `DeviceMotionEventAcceleration` 等标准类至 `globalThis` 与 `window`。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 54 7 大测试套件 8 项用例全部 100% 绿灯（2.46s 极速通过）：
+    - `e2e/cssom-counter-style-rule.e2e.test.ts` (1/1 PASS in 99ms)
+    - `e2e/cssom-page-rules.e2e.test.ts` (1/1 PASS in 45ms)
+    - `e2e/legacy-event-init.e2e.test.ts` (1/1 PASS in 208ms)
+    - `e2e/event-own-properties.e2e.test.ts` (1/1 PASS in 208ms)
+    - `e2e/event-target-instance-listeners.e2e.test.ts` (1/1 PASS in 335ms)
+    - `e2e/filereader-event-tasks.e2e.test.ts` (2/2 PASS in 414ms)
+    - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1090ms)
+  - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。

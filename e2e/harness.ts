@@ -480,6 +480,11 @@ export class Page {
           } catch (e) {
             el.click?.();
           }
+          if (typeof (globalThis as any).__capsurf_dispatchTrustedEvent === "function") {
+            const EvCls = (globalThis as any).__NativeEvent || Event;
+            const trustedEv = new EvCls("click", { bubbles: true });
+            (globalThis as any).__capsurf_dispatchTrustedEvent(el, trustedEv);
+          }
         }
       }, selector);
     } catch (err: any) {

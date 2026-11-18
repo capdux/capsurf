@@ -1037,3 +1037,20 @@
      - 实现规则变更联动同步：`insertRule` 与 `deleteRule` 修改时自动更新关联 `<style>` 的 `textContent`，驱动态级联实时响应；
      - 实现支持嵌套括号、`selector(...)` 与未知函数词法状态机的 `CSS.supports` 条件解析器；
      - 在 `element.js` 的 `createStyleProxy` 中以 `CSSStyleDeclaration.prototype` 为原型创建目标代理，精细控制 `has` 拦截器对标准前缀与连字符属性的反馈。
+
+## Phase 54 CSSOM Counter/Page 规则规范、Event 原型纯洁性与 FileReader 异步任务模型
+1. **CDP 运行时动态内存扩容与 WebSocket 截断根治 (`src/cdp/runtime.cp`)**：
+   - **设计动机**：测试用例向页面注入多条复杂的 CSSOM 规则或大型评估表达式时，CDP 返回时频繁触发 `SyntaxError: JSON Parse error: Unterminated string`；
+   - **根本原因**：`src/cdp/runtime.cp` 中的 `Runtime.evaluate` 和 `Runtime.callFunctionOn` 使用了硬编码的 4096 字节栈缓冲区 `decl_buf`、`unesc_buf` 和 `eval_res_buf`，一旦转义前后或求值返回的 JSON 长度超过 4KB，输出即被无情截断；
+   - **解决方案**：引入 `session.allocator.alloc` 动态分配对应表达式尺寸的解析空间（保证至少 64KB），并直接将返回数据流式写入 `server.cp` 传入的 256KB `out_buf`，彻底消除了缓冲区溢出隐患。
+2. **CSSCounterStyleRule 描述符校验与 CSSPageRule 边距规范 (`src/js/shim/cssom.js`)**：
+   - **设计动机**：W3C CSS Counter Styles Level 3 与 CSS Paged Media 规范要求对 `@counter-style` 与 `@page` 提供完整的 CSSOM 反射与错误校验：
+     - `@counter-style`：必须校验名称不是保留关键字（`none`, `initial`, `unset` 等）；`system` 锁定算法族系（如 `extends decimal` 后不能同时设置 `symbols`）；`suffix` 拒绝空串；未闭合转义符自动归一化为 `\ufffd`；
+     - `@page`：必须支持边距规则如 `@top-left`、`@bottom-right`，且对转义名称（如 `@t\6f p-left`）规范化，插入非页边距规则时抛出 `HierarchyRequestError`；
+   - **解决方案**：在 `src/js/shim/cssom.js` 中实装 `CSSCounterStyleRule`（`type: 11`）、`CSSPageRule`（`type: 6`）与 `CSSMarginRule`（`type: 9`），严密映射描述符并严格校验语法。
+3. **Web IDL Event 原型只读存取器与 legacy init*Event 兼容 (`src/js/shim/events/event.js`)**：
+   - **设计动机**：用例 `events have no own properties but isTrusted` 检验规范要求：`Event` 及其衍生对象上的所有标准字段（`clientX`, `relatedTarget`, `keyCode`, `detail`, `persistentDeviceId` 等）必须存在于各自的原型链上作为只读 Getter，其实例自身属性仅允许保留 `isTrusted`（`Object.keys(event)` 仅有 `['isTrusted']`）；同时，各传统初始化方法（`initMouseEvent`, `initKeyboardEvent`, `initCustomEvent` 等）必须完整挂载在原型上且在派发后失效；
+   - **解决方案**：将原本挂在构造函数 `this` 上的属性全部转移至原型 Getter 中，内部通过私有存储槽获取；为 `MouseEvent`, `KeyboardEvent`, `UIEvent` 等补全 legacy init 方法；规范化 `new Event(type)` 类型转换。
+4. **FileReader 规范生命周期与多阶段微/宏任务调度 (`src/js/shim/file.js`)**：
+   - **设计动机**：W3C File API 规定 `FileReader` 读取操作是一组分阶段的异步任务：`loadstart` 必须在微任务（microtask）中触发，随后触发 `progress`，而 `load` 与 `loadend` 必须排队到后续的宏任务（Macrotask）中执行；若在期间调用 `abort()`，必须中断后续阶段；
+   - **解决方案**：在 `src/js/shim/file.js` 中构建 `FileReader`，基于操作代数 `_gen` 实现精准的状态转换与任务排队，确保微任务与宏任务触发时序与真实浏览器 100% 对齐。

@@ -595,9 +595,234 @@ TextEncoder.prototype.encode = function (input) {
 markNative(TextEncoder, "TextEncoder");
 markNative(TextEncoder.prototype.encode, "encode");
 
+// -------------------------------------------------------------
+// FileReader
+// -------------------------------------------------------------
+const _b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function base64Encode(bytes) {
+  let result = "";
+  let i = 0;
+  const len = bytes.length;
+  for (; i + 2 < len; i += 3) {
+    result += _b64chars[bytes[i] >> 2];
+    result += _b64chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+    result += _b64chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+    result += _b64chars[bytes[i + 2] & 63];
+  }
+  if (i < len) {
+    result += _b64chars[bytes[i] >> 2];
+    if (i + 1 < len) {
+      result += _b64chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+      result += _b64chars[(bytes[i + 1] & 15) << 2];
+      result += "=";
+    } else {
+      result += _b64chars[(bytes[i] & 3) << 4];
+      result += "==";
+    }
+  }
+  return result;
+}
+
+function _safeQueueMicrotask(fn) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(fn);
+  } else {
+    Promise.resolve().then(fn);
+  }
+}
+
+function FileReader() {
+  if (!(this instanceof FileReader)) {
+    throw new TypeError("Failed to construct 'FileReader': Please use the 'new' operator.");
+  }
+  EventTarget.call(this);
+  this._gen = 0;
+  this.readyState = 0;
+  this.result = null;
+  this.error = null;
+  this.onloadstart = null;
+  this.onprogress = null;
+  this.onload = null;
+  this.onabort = null;
+  this.onerror = null;
+  this.onloadend = null;
+}
+
+FileReader.EMPTY = 0;
+FileReader.LOADING = 1;
+FileReader.DONE = 2;
+
+FileReader.prototype = Object.create(EventTarget.prototype);
+FileReader.prototype.constructor = FileReader;
+
+FileReader.prototype.EMPTY = 0;
+FileReader.prototype.LOADING = 1;
+FileReader.prototype.DONE = 2;
+
+FileReader.prototype._fire = function (type, detail) {
+  let event;
+  try {
+    event = new Event(type, { bubbles: false, cancelable: false });
+    if (detail) {
+      for (const k in detail) {
+        if (Object.prototype.hasOwnProperty.call(detail, k)) {
+          event[k] = detail[k];
+        }
+      }
+    }
+  } catch (e) {
+    event = { type: type, bubbles: false, cancelable: false };
+    if (detail) {
+      for (const k in detail) {
+        if (Object.prototype.hasOwnProperty.call(detail, k)) {
+          event[k] = detail[k];
+        }
+      }
+    }
+  }
+  const handler = this["on" + type];
+  if (typeof handler === "function") {
+    try {
+      handler.call(this, event);
+    } catch (e) {
+      if (typeof console !== "undefined" && console.error) console.error(e);
+    }
+  }
+  try {
+    this.dispatchEvent(event);
+  } catch (e) {}
+};
+
+FileReader.prototype._read = function (blob, readType, encoding) {
+  const readGeneration = ++this._gen;
+  const later = (callback) => {
+    setTimeout(() => {
+      setTimeout(() => {
+        if (this._gen !== readGeneration) return;
+        callback();
+      }, 0);
+    }, 0);
+  };
+  const fireLoadendLater = () => later(() => this._fire("loadend"));
+
+  if (blob == null || typeof blob.arrayBuffer !== "function") {
+    let error;
+    const DOMEx = (typeof window !== "undefined" && window.DOMException) ||
+                  (typeof globalThis !== "undefined" && globalThis.DOMException);
+    if (typeof DOMEx === "function") {
+      error = new DOMEx("Argument is not a Blob", "TypeError");
+    } else {
+      error = new TypeError("FileReader: argument is not a Blob");
+    }
+    this.error = error;
+    this.readyState = 2; // DONE
+    _safeQueueMicrotask(() => {
+      if (this._gen !== readGeneration) return;
+      this._fire("error");
+      fireLoadendLater();
+    });
+    return;
+  }
+
+  this.readyState = 1; // LOADING
+  this.result = null;
+  this.error = null;
+
+  _safeQueueMicrotask(() => {
+    if (this._gen !== readGeneration) return;
+    this._fire("loadstart");
+  });
+
+  Promise.resolve()
+    .then(() => blob.arrayBuffer())
+    .then((buffer) => {
+      if (this._gen !== readGeneration) return;
+      const bytes = new Uint8Array(buffer);
+      let result;
+      if (readType === "arrayBuffer") {
+        result = buffer;
+      } else if (readType === "text") {
+        try {
+          const decoder = new TextDecoder(encoding || "utf-8");
+          result = decoder.decode(bytes);
+        } catch (e) {
+          result = "";
+        }
+      } else if (readType === "binaryString") {
+        let binaryString = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binaryString += String.fromCharCode(bytes[i]);
+        }
+        result = binaryString;
+      } else {
+        let binaryString = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binaryString += String.fromCharCode(bytes[i]);
+        }
+        const base64 = (typeof btoa === "function") ? btoa(binaryString) : base64Encode(bytes);
+        const mediaType = (blob.type && String(blob.type)) || "application/octet-stream";
+        result = "data:" + mediaType + ";base64," + base64;
+      }
+
+      this._fire("progress", {
+        lengthComputable: true,
+        loaded: bytes.length,
+        total: bytes.length,
+      });
+
+      later(() => {
+        this.result = result;
+        this.readyState = 2; // DONE
+        this._fire("load");
+        fireLoadendLater();
+      });
+    })
+    .catch((error) => {
+      if (this._gen !== readGeneration) return;
+      this.error = error;
+      this.readyState = 2; // DONE
+      this._fire("error");
+      fireLoadendLater();
+    });
+};
+
+FileReader.prototype.readAsText = function (blob, encoding) {
+  this._read(blob, "text", encoding);
+};
+FileReader.prototype.readAsArrayBuffer = function (blob) {
+  this._read(blob, "arrayBuffer");
+};
+FileReader.prototype.readAsDataURL = function (blob) {
+  this._read(blob, "dataURL");
+};
+FileReader.prototype.readAsBinaryString = function (blob) {
+  this._read(blob, "binaryString");
+};
+
+FileReader.prototype.abort = function () {
+  if (this.readyState === 0) {
+    this.result = null;
+    return;
+  }
+  if (this.readyState === 2) return;
+  this._gen++;
+  this.readyState = 2;
+  this.result = null;
+  this._fire("abort");
+  this._fire("loadend");
+};
+
+markNative(FileReader, "FileReader");
+markNative(FileReader.prototype.readAsText, "readAsText");
+markNative(FileReader.prototype.readAsArrayBuffer, "readAsArrayBuffer");
+markNative(FileReader.prototype.readAsDataURL, "readAsDataURL");
+markNative(FileReader.prototype.readAsBinaryString, "readAsBinaryString");
+markNative(FileReader.prototype.abort, "abort");
+
 // Expose globals
 global.Blob = Blob;
 global.File = File;
+global.FileReader = FileReader;
 global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
 
@@ -608,6 +833,7 @@ if (!global.Response) global.Response = Response; else patchExistingBodyBlob(glo
 if (typeof window !== "undefined") {
   window.Blob = Blob;
   window.File = File;
+  window.FileReader = FileReader;
   window.TextDecoder = TextDecoder;
   window.TextEncoder = TextEncoder;
   window.Headers = Headers;
@@ -617,6 +843,7 @@ if (typeof window !== "undefined") {
 if (typeof globalThis !== "undefined") {
   globalThis.Blob = Blob;
   globalThis.File = File;
+  globalThis.FileReader = FileReader;
   globalThis.TextDecoder = TextDecoder;
   globalThis.TextEncoder = TextEncoder;
   globalThis.Headers = Headers;

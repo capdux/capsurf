@@ -53,14 +53,14 @@ pub struct RuntimeHandler {
         if (std.mem.eql(u8, req.method, "Runtime.callFunctionOn")) {
             const object_id = extractJsonString(req.params_raw, "objectId") ?? "";
             const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
-            let decl_buf: [4096]u8 = [0; 4096];
-            const func_decl = unescapeJsonString(raw_decl, &decl_buf);
+            let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(decl_buf);
+            const func_decl = unescapeJsonString(raw_decl, decl_buf);
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             
-            let res_buf: [4096]u8 = [0; 4096];
-            const res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, &res_buf);
-            const res_slice = res_buf[0..res_len];
+            const res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, out_buf);
+            const res_slice = out_buf[0..res_len];
             
             // Poll any console events produced during callFunctionOn
             let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];
@@ -86,15 +86,15 @@ pub struct RuntimeHandler {
 
         if (std.mem.eql(u8, req.method, "Runtime.evaluate")) {
             const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
-            let unesc_buf: [4096]u8 = [0; 4096];
-            const expr = unescapeJsonString(raw_expr, &unesc_buf);
+            let unesc_buf = session.allocator.alloc(u8, @max(raw_expr.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(unesc_buf);
+            const expr = unescapeJsonString(raw_expr, unesc_buf);
             
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
 
-            let eval_res_buf: [4096]u8 = [0; 4096];
-            const eval_len = session.evaluateWithOptions(expr, return_by_value, await_promise, &eval_res_buf);
-            const eval_slice = eval_res_buf[0..eval_len];
+            const eval_len = session.evaluateWithOptions(expr, return_by_value, await_promise, out_buf);
+            const eval_slice = out_buf[0..eval_len];
 
             // Poll any console events produced during evaluation
             let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];

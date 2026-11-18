@@ -551,6 +551,9 @@
         if (context === "page" && rawName.toLowerCase() === "size") {
           val = val.toLowerCase();
         }
+        if (context === "margin" && rawName.toLowerCase() === "size") {
+          continue;
+        }
         const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
         if (!data.has(key)) {
           authoredOrder.push(key);
@@ -591,8 +594,51 @@
     decl.getPropertyValue = function (prop) {
       const p = String(prop).trim();
       const key = p.startsWith("--") ? p : p.toLowerCase();
+      if (context === "margin" && key === "size") return "";
       if (data.has(key)) {
         return serializeCssValue(data.get(key).value);
+      }
+      if (key === "margin-top" || key === "margin-right" || key === "margin-bottom" || key === "margin-left") {
+        if (data.has("margin")) {
+          const parts = data.get("margin").value.trim().split(/\s+/);
+          if (parts.length === 1) return serializeCssValue(parts[0]);
+          if (parts.length === 2) {
+            if (key === "margin-top" || key === "margin-bottom") return serializeCssValue(parts[0]);
+            return serializeCssValue(parts[1]);
+          }
+          if (parts.length === 3) {
+            if (key === "margin-top") return serializeCssValue(parts[0]);
+            if (key === "margin-bottom") return serializeCssValue(parts[2]);
+            return serializeCssValue(parts[1]);
+          }
+          if (parts.length === 4) {
+            if (key === "margin-top") return serializeCssValue(parts[0]);
+            if (key === "margin-right") return serializeCssValue(parts[1]);
+            if (key === "margin-bottom") return serializeCssValue(parts[2]);
+            if (key === "margin-left") return serializeCssValue(parts[3]);
+          }
+        }
+      }
+      if (key === "padding-top" || key === "padding-right" || key === "padding-bottom" || key === "padding-left") {
+        if (data.has("padding")) {
+          const parts = data.get("padding").value.trim().split(/\s+/);
+          if (parts.length === 1) return serializeCssValue(parts[0]);
+          if (parts.length === 2) {
+            if (key === "padding-top" || key === "padding-bottom") return serializeCssValue(parts[0]);
+            return serializeCssValue(parts[1]);
+          }
+          if (parts.length === 3) {
+            if (key === "padding-top") return serializeCssValue(parts[0]);
+            if (key === "padding-bottom") return serializeCssValue(parts[2]);
+            return serializeCssValue(parts[1]);
+          }
+          if (parts.length === 4) {
+            if (key === "padding-top") return serializeCssValue(parts[0]);
+            if (key === "padding-right") return serializeCssValue(parts[1]);
+            if (key === "padding-bottom") return serializeCssValue(parts[2]);
+            if (key === "padding-left") return serializeCssValue(parts[3]);
+          }
+        }
       }
       if (SHORTHAND_LONGHANDS[key]) {
         const longhands = SHORTHAND_LONGHANDS[key];
@@ -646,6 +692,9 @@
       }
       if (context === "page" && key === "size") {
         v = v.toLowerCase();
+      }
+      if (context === "margin" && key === "size") {
+        return;
       }
 
       if (SHORTHAND_LONGHANDS[key]) {
@@ -948,13 +997,140 @@
   markNative(CSSFontPaletteValuesRule, "CSSFontPaletteValuesRule");
   global.CSSFontPaletteValuesRule = CSSFontPaletteValuesRule;
 
+  const MARGIN_BOX_NAMES = new Set([
+    "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
+    "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
+    "left-top", "left-middle", "left-bottom", "right-top", "right-middle", "right-bottom"
+  ]);
+
+  function atKeywordNameOf(text) {
+    const s = String(text || "").trim();
+    if (s[0] !== "@") return null;
+    let name = "";
+    for (let i = 1; i < s.length;) {
+      const ch = s[i];
+      if (/[a-zA-Z0-9_-]/.test(ch)) {
+        name += ch;
+        i++;
+        continue;
+      }
+      if (ch !== "\\" || i + 1 >= s.length || /[\n\r\f]/.test(s[i + 1])) return null;
+      i++;
+      const hex = s.slice(i).match(/^[0-9a-fA-F]{1,6}/)?.[0];
+      if (hex) {
+        const cp = Number.parseInt(hex, 16);
+        name += (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff))
+          ? "\ufffd"
+          : String.fromCodePoint(cp);
+        i += hex.length;
+        if (/[\t\n\f\r ]/.test(s[i] || "")) {
+          i += s[i] === "\r" && s[i + 1] === "\n" ? 2 : 1;
+        }
+      } else {
+        name += s[i++];
+      }
+    }
+    return name ? name.toLowerCase() : null;
+  }
+
+  function canonicalizePageSelectorList(str) {
+    if (str == null) return null;
+    const s = String(str).trim();
+    if (s === "") return "";
+
+    const parts = [];
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\") {
+        cur += ch;
+        if (i + 1 < s.length) cur += s[++i];
+        continue;
+      }
+      if (ch === ",") {
+        if (!cur.trim()) return null;
+        parts.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    if (!cur.trim()) return null;
+    parts.push(cur.trim());
+
+    const VALID_PSEUDO_PAGES = new Set([":left", ":right", ":first", ":blank"]);
+    const canonParts = [];
+
+    for (const part of parts) {
+      if (!part) return null;
+      let i = 0;
+      let ident = "";
+      if (part[0] !== ":") {
+        while (i < part.length && part[i] !== ":") {
+          if (part[i] === "\\") {
+            ident += part[i];
+            if (i + 1 < part.length) {
+              ident += part[++i];
+              i++;
+            } else {
+              return null;
+            }
+            continue;
+          }
+          if (/\s/.test(part[i])) break;
+          ident += part[i++];
+        }
+        if (ident.startsWith("--")) return null;
+        while (i < part.length && /\s/.test(part[i])) i++;
+      }
+
+      let pseudos = "";
+      while (i < part.length) {
+        if (part[i] !== ":") return null;
+        let pseudo = ":";
+        i++;
+        while (i < part.length && /[a-zA-Z0-9_-]/.test(part[i])) {
+          pseudo += part[i++];
+        }
+        const pseudoLower = pseudo.toLowerCase();
+        if (!VALID_PSEUDO_PAGES.has(pseudoLower)) return null;
+        pseudos += pseudoLower;
+        while (i < part.length && /\s/.test(part[i])) i++;
+      }
+
+      if (!ident && !pseudos) return null;
+      canonParts.push(ident + pseudos);
+    }
+
+    return canonParts.join(", ");
+  }
+
   // 5.8 CSSPageRule
   function CSSPageRule() {
     CSSGroupingRule.call(this);
     this._type = 6;
+    this._selectorText = "";
+    this._style = null;
   }
   CSSPageRule.prototype = Object.create(CSSGroupingRule.prototype);
   CSSPageRule.prototype.constructor = CSSPageRule;
+  Object.defineProperty(CSSPageRule.prototype, "selectorText", {
+    get: function () { return this._selectorText || ""; },
+    set: function (v) {
+      const canon = canonicalizePageSelectorList(v);
+      if (canon === null) return;
+      this._selectorText = canon;
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+  Object.defineProperty(CSSPageRule.prototype, "style", {
+    get: function () { return this._style; },
+    set: function (v) {
+      if (this._style) this._style.cssText = String(v == null ? "" : v);
+    },
+    configurable: true,
+  });
   CSSPageRule.prototype.insertRule = function (ruleText, index) {
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'insertRule': 1 argument required, but only 0 present.");
@@ -963,10 +1139,17 @@
     if (idx > this.cssRules.length) {
       throw new DOMException("Index out of bounds", "IndexSizeError");
     }
-    const parsed = parseSingleRuleOrThrow(ruleText);
-    if (parsed.kind !== "margin") {
+    const split = splitStylesheetRules(ruleText);
+    if (split.unbalanced || split.length !== 1 || split.trailingGarbage) {
+      throw new DOMException("Failed to parse CSS rule: " + ruleText, "SyntaxError");
+    }
+    const parsed = split[0];
+    const marginName = atKeywordNameOf(parsed.selectorText);
+    if (!marginName || !MARGIN_BOX_NAMES.has(marginName)) {
       throw new DOMException("Only margin at-rules may be inserted into a @page rule", "SyntaxError");
     }
+    parsed.kind = "margin";
+    parsed.marginName = marginName;
     const rule = constructRule(parsed, this.parentStyleSheet, this, () => {
       if (this._onMutate) this._onMutate();
     });
@@ -974,19 +1157,46 @@
     if (this._onMutate) this._onMutate();
     return idx;
   };
+  CSSPageRule.prototype.deleteRule = function (index) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'deleteRule': 1 argument required, but only 0 present.");
+    }
+    const idx = Number(index) >>> 0;
+    if (idx >= this.cssRules.length) {
+      throw new DOMException("Index out of bounds", "IndexSizeError");
+    }
+    this.cssRules.splice(idx, 1);
+    if (this._onMutate) this._onMutate();
+  };
   markNative(CSSPageRule, "CSSPageRule");
   global.CSSPageRule = CSSPageRule;
+  if (typeof globalThis !== "undefined") globalThis.CSSPageRule = CSSPageRule;
+  if (typeof window !== "undefined") window.CSSPageRule = CSSPageRule;
 
   // 5.9 CSSMarginRule
   function CSSMarginRule() {
     CSSRule.call(this);
     this._type = 9;
-    this.name = "";
+    this._name = "";
+    this._style = null;
   }
   CSSMarginRule.prototype = Object.create(CSSRule.prototype);
   CSSMarginRule.prototype.constructor = CSSMarginRule;
+  Object.defineProperty(CSSMarginRule.prototype, "name", {
+    get: function () { return this._name || ""; },
+    configurable: true,
+  });
+  Object.defineProperty(CSSMarginRule.prototype, "style", {
+    get: function () { return this._style; },
+    set: function (v) {
+      if (this._style) this._style.cssText = String(v == null ? "" : v);
+    },
+    configurable: true,
+  });
   markNative(CSSMarginRule, "CSSMarginRule");
   global.CSSMarginRule = CSSMarginRule;
+  if (typeof globalThis !== "undefined") globalThis.CSSMarginRule = CSSMarginRule;
+  if (typeof window !== "undefined") window.CSSMarginRule = CSSMarginRule;
 
   // 5.10 CSSFontFaceRule
   function CSSFontFaceRule() {
@@ -1037,15 +1247,230 @@
   global.CSSNamespaceRule = CSSNamespaceRule;
 
   // 5.13 CSSCounterStyleRule
+  const COUNTER_STYLE_IDL_TO_DESC = {
+    system: "system",
+    symbols: "symbols",
+    additiveSymbols: "additive-symbols",
+    negative: "negative",
+    prefix: "prefix",
+    suffix: "suffix",
+    range: "range",
+    pad: "pad",
+    speakAs: "speak-as",
+    fallback: "fallback",
+  };
+  const COUNTER_STYLE_RESERVED_NAMES = new Set([
+    "none", "decimal", "initial", "inherit", "unset", "revert", "revert-layer", "default"
+  ]);
+  const COUNTER_STYLE_SYSTEM_FAMILIES = new Set([
+    "cyclic", "numeric", "alphabetic", "symbolic", "additive", "fixed", "extends"
+  ]);
+
+  function canonicalizePad(val) {
+    const s = String(val == null ? "" : val).trim();
+    if (!s) return "";
+    const m1 = s.match(/^(\d+)\s+(.+)$/);
+    if (m1) return m1[1] + " " + m1[2];
+    const m2 = s.match(/^(.+?)\s+(\d+)$/);
+    if (m2) return m2[2] + " " + m2[1];
+    return s;
+  }
+
+  function canonicalizeAdditiveSymbols(val) {
+    const s = String(val == null ? "" : val).trim();
+    if (!s) return "";
+    const pairs = s.split(",").map((p) => p.trim()).filter(Boolean);
+    return pairs.map((p) => {
+      const m1 = p.match(/^(\d+)\s+(.+)$/);
+      if (m1) return m1[1] + " " + m1[2];
+      const m2 = p.match(/^(.+?)\s+(\d+)$/);
+      if (m2) return m2[2] + " " + m2[1];
+      return p;
+    }).join(", ");
+  }
+
+  function parseCounterStyleRule(cssText) {
+    const text = String(cssText == null ? "" : cssText).trim();
+    const brace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (brace === -1 || lastBrace === -1 || lastBrace <= brace) return null;
+    const prelude = text.slice(0, brace).trim();
+    if (!/^@counter-style\b/i.test(prelude)) return null;
+
+    const nameRaw = prelude.replace(/^@counter-style/i, "").trim();
+    if (!nameRaw) return null;
+    if (nameRaw.endsWith("\\") || nameRaw.includes("\\ ") || /\s/.test(nameRaw)) return null;
+    if (COUNTER_STYLE_RESERVED_NAMES.has(nameRaw.toLowerCase())) return null;
+
+    const body = text.slice(brace + 1, lastBrace).trim();
+    if (body.includes("\\;") || /\\(?:\s*)$/.test(body)) return null;
+
+    const descriptors = new Map();
+    const decls = splitCssDeclarations(body);
+    for (let i = 0; i < decls.length; i++) {
+      const d = decls[i].trim();
+      if (!d) continue;
+      const colon = d.indexOf(":");
+      if (colon <= 0) continue;
+      const rawName = d.slice(0, colon).trim().toLowerCase();
+      let val = d.slice(colon + 1).trim();
+
+      if (rawName === "system") {
+        const fam = val.split(/\s+/)[0]?.toLowerCase();
+        if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(fam)) {
+          continue;
+        }
+      } else if (rawName === "pad") {
+        val = canonicalizePad(val);
+      } else if (rawName === "additive-symbols") {
+        val = canonicalizeAdditiveSymbols(val);
+      } else if (rawName === "suffix") {
+        if (!val) continue;
+      } else if (!Object.values(COUNTER_STYLE_IDL_TO_DESC).includes(rawName)) {
+        continue;
+      }
+
+      descriptors.set(rawName, val);
+    }
+
+    return { name: nameRaw, descriptors };
+  }
+
   function CSSCounterStyleRule() {
     CSSRule.call(this);
     this._type = 11;
-    this.name = "";
+    this._name = "";
+    this._descriptors = new Map();
   }
   CSSCounterStyleRule.prototype = Object.create(CSSRule.prototype);
   CSSCounterStyleRule.prototype.constructor = CSSCounterStyleRule;
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "name", {
+    get: function () { return this._name || ""; },
+    set: function (v) {
+      const s = String(v);
+      if (s === "\\") {
+        this._name = "\ufffd";
+        if (this._onMutate) this._onMutate();
+        return;
+      }
+      const trimmed = s.trim();
+      if (!trimmed || /\s/.test(trimmed)) return;
+      if (COUNTER_STYLE_RESERVED_NAMES.has(trimmed.toLowerCase())) return;
+      this._name = trimmed;
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "system", {
+    get: function () { return this._descriptors.get("system") || ""; },
+    set: function (v) {
+      const val = String(v).trim();
+      if (!val) return;
+      const newFamily = val.split(/\s+/)[0]?.toLowerCase();
+      if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(newFamily)) return;
+      const oldVal = this._descriptors.get("system") || "";
+      const oldFamily = oldVal ? oldVal.split(/\s+/)[0]?.toLowerCase() : "";
+      if (oldFamily && oldFamily !== newFamily) return;
+      this._descriptors.set("system", val);
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "symbols", {
+    get: function () { return this._descriptors.get("symbols") || ""; },
+    set: function (v) {
+      this._descriptors.set("symbols", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "additiveSymbols", {
+    get: function () { return this._descriptors.get("additive-symbols") || ""; },
+    set: function (v) {
+      this._descriptors.set("additive-symbols", canonicalizeAdditiveSymbols(String(v)));
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "negative", {
+    get: function () { return this._descriptors.get("negative") || ""; },
+    set: function (v) {
+      this._descriptors.set("negative", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "prefix", {
+    get: function () { return this._descriptors.get("prefix") || ""; },
+    set: function (v) {
+      this._descriptors.set("prefix", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "suffix", {
+    get: function () { return this._descriptors.get("suffix") || ""; },
+    set: function (v) {
+      if (v === "") return;
+      const s = String(v);
+      if (s === "\\") {
+        this._descriptors.set("suffix", '"\\ufffd"');
+        if (this._onMutate) this._onMutate();
+        return;
+      }
+      this._descriptors.set("suffix", s.trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "range", {
+    get: function () { return this._descriptors.get("range") || ""; },
+    set: function (v) {
+      this._descriptors.set("range", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "pad", {
+    get: function () { return this._descriptors.get("pad") || ""; },
+    set: function (v) {
+      this._descriptors.set("pad", canonicalizePad(String(v)));
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "speakAs", {
+    get: function () { return this._descriptors.get("speak-as") || ""; },
+    set: function (v) {
+      this._descriptors.set("speak-as", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSCounterStyleRule.prototype, "fallback", {
+    get: function () { return this._descriptors.get("fallback") || ""; },
+    set: function (v) {
+      this._descriptors.set("fallback", String(v).trim());
+      if (this._onMutate) this._onMutate();
+    },
+    configurable: true,
+  });
+
   markNative(CSSCounterStyleRule, "CSSCounterStyleRule");
   global.CSSCounterStyleRule = CSSCounterStyleRule;
+  if (typeof globalThis !== "undefined") globalThis.CSSCounterStyleRule = CSSCounterStyleRule;
+  if (typeof window !== "undefined") window.CSSCounterStyleRule = CSSCounterStyleRule;
 
   // 5.14 CSSFontFeatureValuesRule
   function CSSFontFeatureValuesRule() {
@@ -1057,12 +1482,6 @@
   CSSFontFeatureValuesRule.prototype.constructor = CSSFontFeatureValuesRule;
   markNative(CSSFontFeatureValuesRule, "CSSFontFeatureValuesRule");
   global.CSSFontFeatureValuesRule = CSSFontFeatureValuesRule;
-
-  const MARGIN_BOX_NAMES = new Set([
-    "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
-    "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
-    "left-top", "left-middle", "left-bottom", "right-top", "right-middle", "right-bottom"
-  ]);
 
   // =========================================================================
   // 6. Stylesheet Rule Parsing & Splitting
@@ -1185,6 +1604,18 @@
     if (kind === "charset" || kind === "invalid" || kind === "margin") {
       throw new DOMException("Failed to parse CSS rule: invalid rule", "SyntaxError");
     }
+    if (kind === "page") {
+      const canonSel = canonicalizePageSelectorList(parsed.selectorText.replace(/^@page/i, ""));
+      if (canonSel === null) {
+        throw new DOMException("Failed to parse CSS rule: invalid page selector", "SyntaxError");
+      }
+    }
+    if (kind === "counter-style") {
+      const cs = parseCounterStyleRule(parsed.cssText);
+      if (!cs) {
+        throw new DOMException("Failed to parse CSS rule: invalid counter-style", "SyntaxError");
+      }
+    }
     if (kind === "style") {
       validateSelectorOrThrow(parsed.selectorText);
     }
@@ -1295,18 +1726,24 @@
     }
 
     if (kind === "page") {
+      const canonSel = canonicalizePageSelectorList(sel.replace(/^@page/i, ""));
+      if (canonSel === null) return null;
+
       const rule = new CSSPageRule();
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;
-      rule.selectorText = sel.replace(/^@page/i, "").trim();
+      rule._selectorText = canonSel;
 
       const declParts = [];
       const childRules = makeRuleList([]);
       const pageBody = splitStylesheetRules(parsed.declText || "");
       for (let i = 0; i < pageBody.length; i++) {
         const part = pageBody[i];
-        if (classifyRuleKind(part) === "margin") {
+        const mName = atKeywordNameOf(part.selectorText);
+        if (mName && MARGIN_BOX_NAMES.has(mName)) {
+          part.kind = "margin";
+          part.marginName = mName;
           const mRule = constructRule(part, parentSheet, rule, onMutate);
           if (mRule) childRules.push(mRule);
         } else if (!part.selectorText && !/^@/.test(String(part.cssText || "").trim())) {
@@ -1319,7 +1756,7 @@
 
       const style = makeRuleStyleDeclaration(declParts.join("; "), "page", null, onMutate);
       style._parentRule = rule;
-      rule.style = style;
+      rule._style = style;
       rule.cssRules = childRules;
 
       rule._serialize = function () {
@@ -1343,14 +1780,36 @@
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;
-      rule.name = sel.replace(/^@/i, "").trim();
-      const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
+      rule._name = parsed.marginName || atKeywordNameOf(sel) || "";
+      const style = makeRuleStyleDeclaration(parsed.declText || "", "margin", null, onMutate);
       style._parentRule = rule;
-      rule.style = style;
+      rule._style = style;
       rule._serialize = function () {
         let d = style.cssText;
         if (d && !d.endsWith(";")) d += ";";
         return "@" + rule.name + (d ? " { " + d + " }" : " { }");
+      };
+      return rule;
+    }
+
+    if (kind === "counter-style") {
+      const csData = parseCounterStyleRule(parsed.cssText);
+      if (!csData) return null;
+
+      const rule = new CSSCounterStyleRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule._onMutate = onMutate || null;
+      rule._name = csData.name;
+      for (const [k, v] of csData.descriptors) {
+        rule._descriptors.set(k, v);
+      }
+      rule._serialize = function () {
+        const parts = [];
+        for (const [k, v] of rule._descriptors) {
+          parts.push(k + ": " + v + ";");
+        }
+        return "@counter-style " + rule.name + (parts.length ? " { " + parts.join(" ") + " }" : " { }");
       };
       return rule;
     }

@@ -250,9 +250,8 @@ EventTarget.prototype.dispatchEvent = function (event) {
   if (event._isDispatching) {
     throw new DOMException("The event is already being dispatched.", "InvalidStateError");
   }
-  const isHarness = Boolean(event._isHarnessEvent);
   event._isTrusted = false;
-  return internalDispatch(this, event, isHarness);
+  return internalDispatch(this, event, false);
 };
 
 function dispatchTrustedEvent(target, event) {
