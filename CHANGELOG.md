@@ -1440,3 +1440,26 @@
     - `e2e/tab-focus.e2e.test.ts` (1 pass, 17 expect calls in 2979ms)
   - 全量回归：Phase 54 ~ Phase 56 全量 8 大测试套件（17 项测试用例，45 项断言）100% PASS（6.84s 通过）；
   - 独立单二进制：`bin/main` 编译成功。
+
+## Phase 58: Storage Cookie Round-trip, Live document.cookie Linkage, BrowserContext Jar Isolation, and Network Attribution Events (100% Closed)
+- **`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`**：
+  - 新增 `/__fixtures/cookies.html` fixture 动态处理器，写入规范的 `server_cookie=hello; Max-Age=3600` 与 `session_only=keep` 响应头；
+  - 在页面导航与拉取 fixture 时传递当前上下文的 `CookieJar`，自动存入内核。
+- **`src/js/dom_binding.cp` & `src/js/shim/index.js`**：
+  - 导出 `@c fn js_capsurf_set_cookie` 原生桥接；
+  - 重构 `document.cookie` 的 getter 与 setter，分别对接 `__capsurf_get_cookie_header` 与 `__capsurf_set_cookie`，消除与内核 CookieJar 的割裂；
+  - 新增 `__capsurf_clear_doc_cookie` 辅助方法。
+- **`src/cdp/session.cp` & `src/cdp/target.cp` & `src/cdp/network.cp`**：
+  - 在 `BrowserContextState` 中为每个上下文维护专属 `CookieJar`，实现多上下文 Cookie 互不污染；
+  - 在所有 Storage/Network Cookie CDP 方法中增加 `browserContextId` 有效性校验，遇到未知上下文一律拒绝返回 `-32000` 错误；
+  - 导出 `pollNetworkEvents`，捕获子资源 `fetch` 并发射带 `frameId` 与 `loaderId` 归属属性的 `Network.requestWillBeSent` 与 `Network.responseReceived` 事件。
+- **`e2e/harness.ts`**：
+  - 在 `Page` 上增加 `isClosed(): boolean` 方法；
+  - 在 `BrowserContext.prototype.close()` 中标记当前上下文关联的页面为已关闭。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 58 2 大测试套件 23 项断言全部 100% 绿灯（3.01s 极速通过）：
+    - `e2e/browser-context.e2e.test.ts` (5 pass, 19 expect calls in 2.34s)
+    - `e2e/storage-cookies.e2e.test.ts` (1 pass, 4 expect calls in 668ms)
+  - 全量回归：Phase 54 ~ Phase 57 全量 11 大测试套件（20 项测试用例，65 项断言）100% PASS（10.71s 通过）；
+  - 独立单二进制：`bin/main` 编译成功。

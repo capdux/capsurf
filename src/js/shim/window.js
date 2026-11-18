@@ -1165,6 +1165,21 @@ function installWindow(global) {
       }
     } catch (e) {}
 
+    let reqMime = "application/octet-stream";
+    if (fullUrl.indexOf(".png") !== -1) reqMime = "image/png";
+    else if (fullUrl.indexOf(".jpg") !== -1 || fullUrl.indexOf(".jpeg") !== -1) reqMime = "image/jpeg";
+    else if (fullUrl.indexOf(".gif") !== -1) reqMime = "image/gif";
+    else if (fullUrl.indexOf(".json") !== -1) reqMime = "application/json; charset=utf-8";
+    else if (fullUrl.indexOf(".js") !== -1) reqMime = "application/javascript";
+    else if (fullUrl.indexOf(".html") !== -1 || fullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
+    else if (fullUrl.indexOf(".css") !== -1) reqMime = "text/css";
+
+    if (typeof __capsurf_native_record_fetch === "function") {
+      __capsurf_native_record_fetch(fullUrl, reqMime);
+    } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
+      globalThis.__capsurf_native_record_fetch(fullUrl, reqMime);
+    }
+
     const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
     if (cred === "include" || (cred === "same-origin" && isSameOrigin) || isSameOrigin) {
       if (!reqHeaders["cookie"]) {

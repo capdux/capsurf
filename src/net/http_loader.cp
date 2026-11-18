@@ -261,7 +261,7 @@ pub struct HttpLoader {
 
         // 2.5. Check for test fixtures (e.g. echo-headers, static pages, dynamic endpoints)
         if (MockFixtures.isFixtureUrl(url)) {
-            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf)) {
+            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf, &session.cookie_jar)) {
                 return HttpLoaderResult{
                     status_code: 200,
                     final_url: url,

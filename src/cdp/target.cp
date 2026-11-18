@@ -4,11 +4,13 @@
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonBool, extractJsonInt } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
+import { CookieJar } from "../net/cookies.cp";
 
 pub struct BrowserContextState {
     id_buf: [32]u8 = [0; 32],
     id_len: usize = 0,
     active: bool = false,
+    cookie_jar: CookieJar = CookieJar{},
 
     fn id(*_): []const u8 {
         return _.id_buf[0.._.id_len];
@@ -134,6 +136,7 @@ pub struct TargetRegistry {
                 const formatted = std.fmt.bufPrint(&_.contexts[i].id_buf, "ctx-{d:0>3}", .{cid}) catch return "";
                 _.contexts[i].id_len = formatted.len;
                 _.contexts[i].active = true;
+                _.contexts[i].cookie_jar = CookieJar.init(std.heap.page_allocator);
                 return _.contexts[i].id();
             }
         }
@@ -146,6 +149,8 @@ pub struct TargetRegistry {
         while (i < _.contexts.len) : (i += 1) {
             if (_.contexts[i].active && std.mem.eql(u8, _.contexts[i].id(), ctx_id)) {
                 _.contexts[i].active = false;
+                _.contexts[i].cookie_jar.deinit();
+                _.contexts[i].cookie_jar = CookieJar.init(std.heap.page_allocator);
                 found = true;
                 break;
             }
@@ -161,6 +166,16 @@ pub struct TargetRegistry {
             }
         }
         return true;
+    }
+
+    fn getCookieJarForContext(*_, ctx_id: []const u8): (*CookieJar)? {
+        let i: usize = 0;
+        while (i < _.contexts.len) : (i += 1) {
+            if (_.contexts[i].active && std.mem.eql(u8, _.contexts[i].id(), ctx_id)) {
+                return &_.contexts[i].cookie_jar;
+            }
+        }
+        return null;
     }
 
     fn getBrowserContextIds(*_): []const u8 {

@@ -93,6 +93,10 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.navigate")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0) {
+                session.setContextId(bctx);
+            }
             const url = extractJsonString(req.params_raw, "url") ?? "about:blank";
             const referrer = extractJsonString(req.params_raw, "referrer") ?? "";
 

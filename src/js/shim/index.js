@@ -461,11 +461,46 @@ function installShim(global) {
     });
 
     let docCookie = "";
+    function clearDocCookie() {
+      docCookie = "";
+    }
+    global.__capsurf_clear_doc_cookie = clearDocCookie;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_clear_doc_cookie = clearDocCookie;
+    }
+
+    function getDocUrl(doc) {
+      if (doc && doc.URL) return String(doc.URL);
+      if (global && global.document && global.document.URL) return String(global.document.URL);
+      if (typeof globalThis !== "undefined" && globalThis.document && globalThis.document.URL) return String(globalThis.document.URL);
+      if (global && global.location && global.location.href) return String(global.location.href);
+      if (typeof globalThis !== "undefined" && globalThis.location && globalThis.location.href) return String(globalThis.location.href);
+      return "about:blank";
+    }
+
     Object.defineProperty(docProto, "cookie", {
-      get: function () { return docCookie; },
+      get: function () {
+        const docUrl = getDocUrl(this);
+        const getFn = (typeof __capsurf_get_cookie_header === "function") ? __capsurf_get_cookie_header : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_cookie_header === "function") ? globalThis.__capsurf_get_cookie_header : null);
+        if (getFn) {
+          const hdr = getFn(docUrl);
+          if (hdr !== null && hdr !== undefined) {
+            return String(hdr);
+          }
+        }
+        if (docUrl.startsWith("http://") || docUrl.startsWith("https://")) {
+          return "";
+        }
+        return docCookie;
+      },
       set: function (v) {
         const str = String(v || "").trim();
         if (!str) return;
+        const docUrl = getDocUrl(this);
+        const setFn = (typeof __capsurf_set_cookie === "function") ? __capsurf_set_cookie : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_cookie === "function") ? globalThis.__capsurf_set_cookie : null);
+        if (setFn) {
+          setFn(docUrl, str);
+        }
         const pair = str.split(";")[0].trim();
         const eq = pair.indexOf("=");
         if (eq !== -1) {

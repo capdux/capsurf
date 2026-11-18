@@ -73,10 +73,12 @@ pub struct NetworkHandler {
         if (std.mem.eql(u8, req.method, "Network.enable")) {
             const max_buf = extractJsonInt(req.params_raw, "maxTotalBufferSize");
             * = max_buf;
+            session.network_enabled = true;
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "Network.disable")) {
+            session.network_enabled = false;
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -109,7 +111,12 @@ pub struct NetworkHandler {
         if (std.mem.eql(u8, req.method, "Network.getCookies") ||
             std.mem.eql(u8, req.method, "Network.getAllCookies") ||
             std.mem.eql(u8, req.method, "Storage.getCookies")) {
-            const cookies = session.cookie_jar.getAll();
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
+                return CdpResponse.err(req.id, -32000, "Failed to find browser context");
+            }
+            const jar = session.getCookieJarForContext(bctx) ?? session.getActiveCookieJar();
+            const cookies = jar.getAll();
             if (cookies.len == 0) {
                 return CdpResponse.ok(req.id, "{\"cookies\":[]}");
             }
@@ -157,6 +164,12 @@ pub struct NetworkHandler {
 
         // 5. Cookie mutation: real storage into session.cookie_jar
         if (std.mem.eql(u8, req.method, "Network.setCookie")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
+                return CdpResponse.err(req.id, -32000, "Failed to find browser context");
+            }
+            const jar = session.getCookieJarForContext(bctx) ?? session.getActiveCookieJar();
+
             const name = extractJsonString(req.params_raw, "name") ?? "";
             const val = extractJsonString(req.params_raw, "value") ?? "";
             const domain = extractJsonString(req.params_raw, "domain") ?? "";
@@ -174,7 +187,7 @@ pub struct NetworkHandler {
                 if (set_cookie_str.len > 0) {
                     let url_buf: [128]u8 = undefined;
                     const url_str = std.fmt.bufPrint(url_buf[0..], "http://{s}{s}", .{ d, p }) catch "http://localhost/";
-                    * = session.cookie_jar.setFromHeader(url_str, set_cookie_str, null);
+                    * = jar.setFromHeader(url_str, set_cookie_str, null);
                 }
             }
             return CdpResponse.ok(req.id, "{\"success\":true}");
@@ -182,6 +195,12 @@ pub struct NetworkHandler {
 
         if (std.mem.eql(u8, req.method, "Network.setCookies") ||
             std.mem.eql(u8, req.method, "Storage.setCookies")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
+                return CdpResponse.err(req.id, -32000, "Failed to find browser context");
+            }
+            const jar = session.getCookieJarForContext(bctx) ?? session.getActiveCookieJar();
+
             const cookies_key = "\"cookies\"";
             if (cookies_pos := std.mem.indexOf(u8, req.params_raw, cookies_key)) {
                 let pos = cookies_pos + cookies_key.len;
@@ -256,7 +275,7 @@ pub struct NetworkHandler {
                                 ) catch "";
 
                                 if (url_str.len > 0 && set_cookie_str.len > 0) {
-                                    * = session.cookie_jar.setFromHeader(url_str, set_cookie_str, null);
+                                    * = jar.setFromHeader(url_str, set_cookie_str, null);
                                 }
                             }
                         } else {
@@ -268,10 +287,32 @@ pub struct NetworkHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
-        if (std.mem.eql(u8, req.method, "Network.deleteCookies") ||
-            std.mem.eql(u8, req.method, "Network.clearBrowserCookies") ||
+        if (std.mem.eql(u8, req.method, "Network.deleteCookies")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
+                return CdpResponse.err(req.id, -32000, "Failed to find browser context");
+            }
+            const jar = session.getCookieJarForContext(bctx) ?? session.getActiveCookieJar();
+            const name = extractJsonString(req.params_raw, "name") ?? "";
+            if (name.len > 0) {
+                const url = extractJsonString(req.params_raw, "url") ?? "";
+                const domain = extractJsonString(req.params_raw, "domain") ?? "";
+                const path = extractJsonString(req.params_raw, "path") ?? "";
+                * = jar.remove(name, url, domain, path);
+            } else {
+                jar.clear();
+            }
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Network.clearBrowserCookies") ||
             std.mem.eql(u8, req.method, "Storage.clearCookies")) {
-            session.cookie_jar.clear();
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
+                return CdpResponse.err(req.id, -32000, "Failed to find browser context");
+            }
+            const jar = session.getCookieJarForContext(bctx) ?? session.getActiveCookieJar();
+            jar.clear();
             return CdpResponse.ok(req.id, "{}");
         }
 

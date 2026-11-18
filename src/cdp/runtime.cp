@@ -94,6 +94,11 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.evaluate")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0) {
+                session.setContextId(bctx);
+            }
+
             const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
             let unesc_buf = session.allocator.alloc(u8, @max(raw_expr.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(unesc_buf);
@@ -105,6 +110,15 @@ pub struct RuntimeHandler {
 
             const eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
             const eval_slice = out_buf[0..eval_len];
+
+            // Poll any network events produced during evaluation
+            let polled_net_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
+            let net_i: usize = 0;
+            while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
+                out_events[event_count.*] = polled_net_evts[net_i];
+                event_count.* += 1;
+            }
 
             // Poll any console events produced during evaluation
             let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];

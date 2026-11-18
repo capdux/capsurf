@@ -16517,6 +16517,21 @@
         }
       } catch (e) {}
 
+      let reqMime = "application/octet-stream";
+      if (fullUrl.indexOf(".png") !== -1) reqMime = "image/png";
+      else if (fullUrl.indexOf(".jpg") !== -1 || fullUrl.indexOf(".jpeg") !== -1) reqMime = "image/jpeg";
+      else if (fullUrl.indexOf(".gif") !== -1) reqMime = "image/gif";
+      else if (fullUrl.indexOf(".json") !== -1) reqMime = "application/json; charset=utf-8";
+      else if (fullUrl.indexOf(".js") !== -1) reqMime = "application/javascript";
+      else if (fullUrl.indexOf(".html") !== -1 || fullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
+      else if (fullUrl.indexOf(".css") !== -1) reqMime = "text/css";
+
+      if (typeof __capsurf_native_record_fetch === "function") {
+        __capsurf_native_record_fetch(fullUrl, reqMime);
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
+        globalThis.__capsurf_native_record_fetch(fullUrl, reqMime);
+      }
+
       const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
       if (cred === "include" || (cred === "same-origin" && isSameOrigin) || isSameOrigin) {
         if (!reqHeaders["cookie"]) {
@@ -18939,11 +18954,46 @@
       });
 
       let docCookie = "";
+      function clearDocCookie() {
+        docCookie = "";
+      }
+      global.__capsurf_clear_doc_cookie = clearDocCookie;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_clear_doc_cookie = clearDocCookie;
+      }
+
+      function getDocUrl(doc) {
+        if (doc && doc.URL) return String(doc.URL);
+        if (global && global.document && global.document.URL) return String(global.document.URL);
+        if (typeof globalThis !== "undefined" && globalThis.document && globalThis.document.URL) return String(globalThis.document.URL);
+        if (global && global.location && global.location.href) return String(global.location.href);
+        if (typeof globalThis !== "undefined" && globalThis.location && globalThis.location.href) return String(globalThis.location.href);
+        return "about:blank";
+      }
+
       Object.defineProperty(docProto, "cookie", {
-        get: function () { return docCookie; },
+        get: function () {
+          const docUrl = getDocUrl(this);
+          const getFn = (typeof __capsurf_get_cookie_header === "function") ? __capsurf_get_cookie_header : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_cookie_header === "function") ? globalThis.__capsurf_get_cookie_header : null);
+          if (getFn) {
+            const hdr = getFn(docUrl);
+            if (hdr !== null && hdr !== undefined) {
+              return String(hdr);
+            }
+          }
+          if (docUrl.startsWith("http://") || docUrl.startsWith("https://")) {
+            return "";
+          }
+          return docCookie;
+        },
         set: function (v) {
           const str = String(v || "").trim();
           if (!str) return;
+          const docUrl = getDocUrl(this);
+          const setFn = (typeof __capsurf_set_cookie === "function") ? __capsurf_set_cookie : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_cookie === "function") ? globalThis.__capsurf_set_cookie : null);
+          if (setFn) {
+            setFn(docUrl, str);
+          }
           const pair = str.split(";")[0].trim();
           const eq = pair.indexOf("=");
           if (eq !== -1) {

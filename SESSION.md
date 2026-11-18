@@ -2486,3 +2486,31 @@
    - 独立单二进制构建：`bin/main` 编译成功。
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 58：攻坚 Storage Cookie Round-trip、cookies.html 动态响应与 document.cookie 实时联动，以及多 BrowserContext 独立 CookieJar 隔离、非法 contextId 异常拒绝与 Network 请求/响应事件归属
+
+### **[Agent Execution & Phase 58 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - Storage Cookies Round-trip & Document.cookie Live Jar)**：
+     - 在 `src/net/mock_fixtures.cp` 与 `http_loader.cp` 中实装 `/__fixtures/cookies.html` 动态响应，解析并自动入库 `server_cookie=hello` 与 `session_only=keep` 响应头；
+     - 在 `src/js/dom_binding.cp`、`src/js/shim/index.js` 中打通 `document.cookie` 的 getter 与 setter 直接读写内核 `session.cookie_jar`；
+     - 在 `src/cdp/session.cp` 中实装 `clearCookies`，联动清除内核 CookieJar 与 JS 本地缓存，支撑 `Storage.clearCookies`；
+     - 验证通过 `e2e/storage-cookies.e2e.test.ts` (4/4 expect 100% PASS) 与 `e2e/cookie-private-suffix.e2e.test.ts` (100% PASS)。
+   - **Subagent 2 (Track 2 - BrowserContext Cookie Isolation & Network Events)**：
+     - 在 `src/cdp/target.cp` 与 `session.cp` 中为每个 `BrowserContext` 维护完全独立的 `CookieJar`，在 `createBrowserContext` 初始化、在 `disposeBrowserContext` 析构；
+     - 在 `Storage.getCookies`、`Storage.setCookies`、`Storage.clearCookies`、`Network.getCookies`、`Network.setCookie` 等全系方法中执行 `browserContextId` 严格鉴权：遇到非法未注册 contextId 立即返回错误 `-32000: "Failed to find browser context"`；
+     - 在 `src/cdp/session.cp`、`runtime.cp`、`src/js/shim/window.js` 中捕获子资源 `fetch` 并派发携带 `frameId` 与 `loaderId` 归属的 `Network.requestWillBeSent` 与 `Network.responseReceived` 事件；
+     - 在 `e2e/harness.ts` 中为 `Page` 增加 `isClosed()` 状态并完善 `BrowserContext.close()` 级联生命周期；
+     - 验证通过 `e2e/browser-context.e2e.test.ts` (5/5 tests, 19 expect 100% PASS)。
+2. **Phase 58 全量黑盒测试验证（2 大测试套件 23 项断言全部 100% 绿灯，3.01s 极速通过）**：
+   - `e2e/browser-context.e2e.test.ts` (5 pass, 19 expect calls in 2.34s)
+   - `e2e/storage-cookies.e2e.test.ts` (1 pass, 4 expect calls in 668ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54 ~ Phase 57 全量 11 大回归测试套件（20 项测试用例，65 项断言）100% PASS（10.71s 全绿）；
+   - 4 道静态门禁检验：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main` 编译成功。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。

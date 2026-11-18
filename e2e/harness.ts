@@ -151,6 +151,9 @@ export class CDPClient {
 }
 
 export class Page {
+  public _closed: boolean = false;
+  public browserContextId: string = "default";
+  public frameId: string = "capsurf-frame-001";
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
   private _url: string = "about:blank";
   private exposedFunctions = new Map<string, string>();
@@ -159,7 +162,11 @@ export class Page {
   ];
   public historyIndex: number = 0;
 
-  constructor(public cdp: CDPClient) {
+  constructor(public cdp: CDPClient, browserContextId?: string) {
+    if (browserContextId) {
+      this.browserContextId = browserContextId;
+      this.frameId = `capsurf-frame-${browserContextId}`;
+    }
     this.cdp.on("Page.navigatedWithinDocument", (e: any) => {
       if (e && e.url) {
         this._url = e.url;
@@ -222,6 +229,9 @@ export class Page {
     const navParams: Record<string, unknown> = { url };
     if (options && options.referer) {
       navParams.referrer = options.referer;
+    }
+    if (this.browserContextId && this.browserContextId !== "default") {
+      navParams.browserContextId = this.browserContextId;
     }
     const res = await this.cdp.send("Page.navigate", navParams);
     try {
@@ -354,14 +364,18 @@ export class Page {
       }
 
       try {
-        const r: any = await this.cdp.send("Runtime.evaluate", {
+        const evalParams: any = {
           expression,
           returnByValue: true,
           awaitPromise: true,
-        });
+        };
+        if (this.browserContextId && this.browserContextId !== "default") {
+          evalParams.browserContextId = this.browserContextId;
+        }
+        const r: any = await this.cdp.send("Runtime.evaluate", evalParams);
 
         // Drain same-doc and check cross-doc navigations
-        const navCheck: any = await this.cdp.send("Runtime.evaluate", {
+        const navCheckParams: any = {
           expression: `(function() {
             var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
               ? globalThis.__capsurf_same_doc_nav.splice(0)
@@ -371,7 +385,11 @@ export class Page {
             return { same: same, pending: pending };
           })()`,
           returnByValue: true,
-        });
+        };
+        if (this.browserContextId && this.browserContextId !== "default") {
+          navCheckParams.browserContextId = this.browserContextId;
+        }
+        const navCheck: any = await this.cdp.send("Runtime.evaluate", navCheckParams);
 
         const navResult = navCheck?.result?.value;
         if (navResult) {
@@ -454,7 +472,31 @@ export class Page {
     throw err;
   }
 
+  isClosed(): boolean {
+    return this._closed;
+  }
+
   async createCDPSession(): Promise<CDPClient> {
+    if (this.browserContextId && this.browserContextId !== "default") {
+      const page = this;
+      const sessionClient = Object.create(this.cdp) as CDPClient;
+      sessionClient.send = async (method: string, params: Record<string, any> = {}) => {
+        const p = { ...params };
+        if (p.browserContextId === undefined) {
+          p.browserContextId = page.browserContextId;
+        }
+        return page.cdp.send(method, p);
+      };
+      sessionClient.on = (event: string, handler: (params: any) => void) => {
+        page.cdp.on(event, (params: any) => {
+          if (params && params.frameId && params.frameId !== page.frameId) {
+            return;
+          }
+          handler(params);
+        });
+      };
+      return sessionClient;
+    }
     return this.cdp;
   }
 
@@ -576,7 +618,9 @@ export class Page {
     return new ElementHandle(this, res.result, selector);
   }
 
-  async close(): Promise<void> {}
+  async close(): Promise<void> {
+    this._closed = true;
+  }
 }
 
 export class ElementHandle {
@@ -634,16 +678,23 @@ export class ElementHandle {
 }
 
 export class BrowserContext {
+  private pagesList: Page[] = [];
+
   constructor(public id: string, public browser: Browser) {}
 
   async newPage(): Promise<Page> {
-    return this.browser.newPage();
+    const page = new Page(this.browser.cdp, this.id);
+    this.pagesList.push(page);
+    return page;
   }
 
   async close(): Promise<void> {
     try {
       await this.browser.cdp.send("Target.disposeBrowserContext", { browserContextId: this.id });
     } catch {}
+    for (const p of this.pagesList) {
+      p._closed = true;
+    }
   }
 }
 

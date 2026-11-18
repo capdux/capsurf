@@ -96,6 +96,34 @@ pub struct ConsoleRecord {
 }
 
 pub const MAX_CONSOLE_RECORDS: usize = 16;
+pub const MAX_FETCH_RECORDS: usize = 16;
+
+pub struct FetchRecord {
+    url_buf: [512]u8 = [0; 512],
+    url_len: usize = 0,
+    mime_buf: [64]u8 = [0; 64],
+    mime_len: usize = 0,
+    frame_id_buf: [64]u8 = [0; 64],
+    frame_id_len: usize = 0,
+    loader_id_buf: [64]u8 = [0; 64],
+    loader_id_len: usize = 0,
+
+    fn getUrl(*_): []const u8 {
+        return _.url_buf[0.._.url_len];
+    }
+
+    fn getMimeType(*_): []const u8 {
+        return if (_.mime_len > 0) _.mime_buf[0.._.mime_len] else "application/octet-stream";
+    }
+
+    fn getFrameId(*_): []const u8 {
+        return _.frame_id_buf[0.._.frame_id_len];
+    }
+
+    fn getLoaderId(*_): []const u8 {
+        return _.loader_id_buf[0.._.loader_id_len];
+    }
+}
 
 pub struct JsDomContext {
     doc: *Document,
@@ -105,6 +133,38 @@ pub struct JsDomContext {
     document_class_id: u32 = 0,
     console_records: [MAX_CONSOLE_RECORDS]ConsoleRecord = [ConsoleRecord{}; MAX_CONSOLE_RECORDS],
     console_count: usize = 0,
+    fetch_records: [MAX_FETCH_RECORDS]FetchRecord = [FetchRecord{}; MAX_FETCH_RECORDS],
+    fetch_count: usize = 0,
+    frame_id_buf: [64]u8 = [0; 64],
+    frame_id_len: usize = 0,
+    loader_id_buf: [64]u8 = [0; 64],
+    loader_id_len: usize = 0,
+
+    fn addFetchRecord(*_, url: []const u8, mime_type: []const u8) {
+        if (_.fetch_count >= MAX_FETCH_RECORDS) return;
+        let rec = &_.fetch_records[_.fetch_count];
+        const u_len = @min(url.len, rec.url_buf.len);
+        @memcpy(rec.url_buf[0..u_len], url[0..u_len]);
+        rec.url_len = u_len;
+
+        const m_len = @min(mime_type.len, rec.mime_buf.len);
+        @memcpy(rec.mime_buf[0..m_len], mime_type[0..m_len]);
+        rec.mime_len = m_len;
+
+        const f_len = @min(_.frame_id_len, rec.frame_id_buf.len);
+        @memcpy(rec.frame_id_buf[0..f_len], _.frame_id_buf[0..f_len]);
+        rec.frame_id_len = f_len;
+
+        const l_len = @min(_.loader_id_len, rec.loader_id_buf.len);
+        @memcpy(rec.loader_id_buf[0..l_len], _.loader_id_buf[0..l_len]);
+        rec.loader_id_len = l_len;
+
+        _.fetch_count += 1;
+    }
+
+    fn clearFetchRecords(*_) {
+        _.fetch_count = 0;
+    }
 
     fn addConsoleRecord(*_, level: []const u8, text: []const u8, args_json: []const u8) {
         if (_.console_count >= MAX_CONSOLE_RECORDS) {
@@ -1067,8 +1127,14 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         @memcpy(url_buf[0..actual_len], ptr.?[0..actual_len]);
         const url_slice = url_buf[0..actual_len];
 
+        let cookie_jar_ptr: (*CookieJar)? = null;
+        if (opaq := JS_GetContextOpaque(ctx)) {
+            const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+            cookie_jar_ptr = dom_ctx.cookie_jar;
+        }
+
         let out_buf: [65536]u8 = [0; 65536];
-        if (res := MockFixtures.handleFixtureRequest(url_slice, "", "", &out_buf)) {
+        if (res := MockFixtures.handleFixtureRequest(url_slice, "", "", &out_buf, cookie_jar_ptr)) {
             return jsNewString(ctx, res);
         }
     }
@@ -1102,7 +1168,68 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsNull();
 }
 
-pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
+@c fn js_capsurf_set_cookie(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsNull();
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    if (dom_ctx.cookie_jar == null) return jsNull();
+
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, argv[0], 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+
+    let val_len: usize = 0;
+    const val_ptr = JS_ToCStringLen2(ctx, &val_len, argv[1], 0);
+    if (val_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, val_ptr);
+
+    let url_buf: [4096]u8 = [0; 4096];
+    const actual_url_len = @min(url_len, url_buf.len);
+    @memcpy(url_buf[0..actual_url_len], url_ptr.?[0..actual_url_len]);
+    const url_slice = url_buf[0..actual_url_len];
+
+    let val_buf: [4096]u8 = [0; 4096];
+    const actual_val_len = @min(val_len, val_buf.len);
+    @memcpy(val_buf[0..actual_val_len], val_ptr.?[0..actual_val_len]);
+    const val_slice = val_buf[0..actual_val_len];
+
+    const jar = dom_ctx.cookie_jar.?;
+    const u_dupe = jar.allocator.dupe(u8, url_slice) catch url_slice;
+    const v_dupe = jar.allocator.dupe(u8, val_slice) catch val_slice;
+    * = jar.setFromDocumentCookie(u_dupe, v_dupe);
+    return jsNull();
+}
+
+@c fn js_capsurf_record_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+
+    let u_len: usize = 0;
+    const u_ptr = JS_ToCStringLen2(ctx, &u_len, argv[0], 0);
+    if (u_ptr != null) {
+        defer JS_FreeCString(ctx, u_ptr);
+        let m_str: []const u8 = "application/octet-stream";
+        if (argc >= 2) {
+            let m_len: usize = 0;
+            const m_ptr = JS_ToCStringLen2(ctx, &m_len, argv[1], 0);
+            if (m_ptr != null) {
+                defer JS_FreeCString(ctx, m_ptr);
+                dom_ctx.addFetchRecord(u_ptr.?[0..u_len], m_ptr.?[0..m_len]);
+                return jsNull();
+            }
+        }
+        dom_ctx.addFetchRecord(u_ptr.?[0..u_len], m_str);
+    }
+    return jsNull();
+}
+
+pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?, cookie_jar: (*CookieJar)? = null): (*JsDomContext)! {
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
 
@@ -1186,7 +1313,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     dom_ctx.* = JsDomContext {
         doc: doc,
         layout: layout,
-        cookie_jar: null,
+        cookie_jar: cookie_jar,
         element_class_id: g_element_class_id,
         document_class_id: g_document_class_id,
     };
@@ -1236,6 +1363,8 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_load_fixture", js_capsurf_load_fixture, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_get_cookie_header", js_capsurf_get_cookie_header, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_record_fetch, 2);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

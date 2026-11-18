@@ -3,6 +3,7 @@
 // Aligned with vendor/kitesurf/packages/engine/test/fixtures-worker/src/serve.ts
 
 import { open, read, close, lseek } from "../cdp/server.cp";
+import { CookieJar } from "./cookies.cp";
 
 pub struct MockFixtures {
     static fn extractHost(url: []const u8): []const u8 {
@@ -311,6 +312,7 @@ pub struct MockFixtures {
         origin: []const u8,
         user_agent: []const u8,
         out_buf: []u8,
+        cookie_jar: (*CookieJar)? = null,
     ): ([]const u8)? {
         // 1. /echo-headers.json
         if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
@@ -351,6 +353,24 @@ pub struct MockFixtures {
             return res;
         }
 
+        // 1.6. /cookies.html
+        if (std.mem.indexOf(u8, url, "/cookies.html") != null) {
+            if (cookie_jar != null) {
+                const u_dupe = cookie_jar.?.allocator.dupe(u8, url) catch url;
+                const h1_dupe = cookie_jar.?.allocator.dupe(u8, "server_cookie=hello; Path=/; Max-Age=3600") catch "server_cookie=hello; Path=/; Max-Age=3600";
+                const h2_dupe = cookie_jar.?.allocator.dupe(u8, "session_only=keep; Path=/") catch "session_only=keep; Path=/";
+                * = cookie_jar.?.setFromHeader(u_dupe, h1_dupe, null);
+                * = cookie_jar.?.setFromHeader(u_dupe, h2_dupe, null);
+            }
+            if (content := MockFixtures.readPageFile("cookies.html", out_buf)) {
+                return content;
+            }
+            const fallback_html = "<!doctype html><html><head><title>cookies</title></head><body><h1>cookies</h1><script>globalThis.__ks_initial_cookie = document.cookie;document.cookie = \"page_set=v1; Path=/\";document.cookie = \"another=v2; Path=/__fixtures/\";globalThis.__ks_after_set_cookie = document.cookie;</script></body></html>";
+            const len = @min(fallback_html.len, out_buf.len);
+            @memcpy(out_buf[0..len], fallback_html[0..len]);
+            return out_buf[0..len];
+        }
+
         // 2. Dynamic endpoints
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
             let body_val: []const u8 = "";
@@ -382,6 +402,13 @@ pub struct MockFixtures {
             return res;
         }
 
+        if (std.mem.indexOf(u8, url, "slow-headers-red.png") != null) {
+            if (content := MockFixtures.readPageFile("solid-red.png", out_buf)) {
+                return content;
+            }
+            return "";
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {
@@ -411,6 +438,7 @@ pub fn handleFixtureRequest(
     origin: []const u8,
     user_agent: []const u8,
     out_buf: []u8,
+    cookie_jar: (*CookieJar)? = null,
 ): ([]const u8)? {
-    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf);
+    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar);
 }

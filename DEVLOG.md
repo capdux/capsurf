@@ -1132,3 +1132,23 @@
      - 在 `session.cp` 中追踪 DOM 中添加的跨域 Iframe 节点，捕获其源并排队派发 `Runtime.executionContextCreated` 事件；
      - 在 `Runtime.evaluate` 中支持 `contextId` 分区求值；
      - 导出 `@c fn js_capsurf_get_cookie_header(url)`，在 JS `fetch` 中检测同源与 `credentials: "include"`，自动向内核 CookieJar 查询匹配的 Cookie 字符串并挂载至 `cookie` 请求头，确保测试中 `/__fixtures/echo-headers.json` 能够正确回显 `who=context`。
+
+## Phase 58 Storage Cookie 往返、Live document.cookie 贯通、多 BrowserContext 独立 Cookie 隔离与网络事件归属
+1. **Fixture 动态 Set-Cookie 与 document.cookie 双向读写贯通 (`src/net/mock_fixtures.cp`, `src/js/dom_binding.cp`, `src/js/shim/index.js`)**：
+   - **设计动机**：测试用例 `Storage cookie round-trip: get, set, next-nav visibility, clear` 验证：页面访问特定 fixture 时服务端响应头种植的 Cookie 必须进入内核 CookieJar；JS 环境中执行 `document.cookie` 必须能直接读取内核中的有效 Cookie；通过 `document.cookie = ...` 写入的 Cookie 在后续页面跳转与跨域请求中必须依旧保持可见；调用 `Storage.clearCookies` 后全域 Cookie 必须彻底清空；
+   - **技术方案**：
+     - 在 `mock_fixtures.cp` 中实装 `/__fixtures/cookies.html`，提取并解析 `Set-Cookie` 头直接写入会话绑定的 `cookie_jar`；
+     - 导出原生 C-FFI 桥接函数 `@c fn js_capsurf_set_cookie`，在 JS 中拦截 `document.cookie` 的 setter，解析属性并调用 `cookie_jar.setFromDocumentCookie`；
+     - 在 getter 中调用 `__capsurf_get_cookie_header`，确保实时反映内核最新过期与覆盖状态；
+     - `Storage.clearCookies` 联动执行 `session.clearCookies()`，重置 CookieJar 并清空本地缓存。
+2. **多 BrowserContext 独立 Cookie 隔离与未知 contextId 严格拦截 (`src/cdp/target.cp`, `src/cdp/network.cp`, `src/cdp/session.cp`)**：
+   - **设计动机**：测试用例 `browser contexts isolate cookies` 与 `Storage cookies on an unknown browserContextId rejects` 验证：不同 `browserContextId` 必须拥有完全隔离的 Cookie 空间，互不渗透覆盖；当向不存在的 `browserContextId`（如 `"ctx-nonexistent"`）发起 Storage 查询或设置时，必须以明确的 JSON-RPC 错误拒绝；
+   - **技术方案**：
+     - 在 `target.cp` 的 `BrowserContextState` 中为每个上下文维护专用的 `CookieJar` 实例，随上下文创建与销毁（`disposeBrowserContext`）；
+     - 在 `network.cp` 拦截所有传入 `browserContextId` 的操作，未注册上下文立即返回 `-32000: "Failed to find browser context"`；
+     - 页面在当前上下文中执行 `fetch` 时，直接路由至该上下文专属的 CookieJar，实现多上下文彻底物理隔离。
+3. **子资源 Fetch 网络事件发射与 Frame/Loader 归属属性 (`src/cdp/session.cp`, `src/cdp/runtime.cp`, `src/js/shim/window.js`)**：
+   - **设计动机**：用例 `Network events retain their target attribution while a sibling navigates` 监听 `Network.requestWillBeSent` 与 `Network.responseReceived`，断言每个网络事件所附带的 `frameId` 与 `loaderId` 必须与触发它的页面精准绑定，且兄弟页面的导航不得污染事件监听链；
+   - **技术方案**：
+     - 在 `window.fetch` 触发时调用 `__capsurf_native_record_fetch` 记录出站请求；
+     - 在 `pollNetworkEvents` 中按需生成附带 `session.frame_id` 与 `session.loader_id` 的规范 CDP 事件并在执行评估时向订阅客户端广播。

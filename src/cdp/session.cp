@@ -148,6 +148,11 @@ pub struct CdpPageSession {
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
     target_registry: TargetRegistry = TargetRegistry.init(),
+    network_enabled: bool = false,
+    current_browser_context_id_buf: [64]u8 = [0; 64],
+    current_browser_context_id_len: usize = 0,
+    net_req_event_buf: [2048]u8 = [0; 2048],
+    net_resp_event_buf: [2048]u8 = [0; 2048],
 
     // Runtime & Log domain flags
     runtime_enabled: bool = false,
@@ -225,6 +230,11 @@ pub struct CdpPageSession {
             fetch_enabled: false,
             fetch_state: FetchState{},
             target_registry: TargetRegistry.init(),
+            network_enabled: false,
+            current_browser_context_id_buf: [0; 64],
+            current_browser_context_id_len: 0,
+            net_req_event_buf: [0; 2048],
+            net_resp_event_buf: [0; 2048],
             runtime_enabled: false,
             log_enabled: false,
             dedicated_workers: DedicatedWorkerPool.init(),
@@ -301,6 +311,14 @@ pub struct CdpPageSession {
         _.layout.deinit();
         _.doc.deinit();
         std.heap.c_allocator.destroy(_);
+    }
+
+    pub fn clearCookies(*_) {
+        _.cookie_jar.clear();
+        if (_.dom_ctx != null) {
+            const v = _.ctx.eval("(function(){if(typeof __capsurf_clear_doc_cookie==='function')__capsurf_clear_doc_cookie();})()");
+            _.ctx.freeValue(v);
+        }
     }
 
     pub fn setUserAgentOverride(*_, ua: []const u8) {
@@ -392,8 +410,23 @@ pub struct CdpPageSession {
             _.ctx.deinit();
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
         }
-        const m = mountDom(&_.ctx, &_.doc, &_.layout) catch return error.MountDomFailed;
-        m.cookie_jar = &_.cookie_jar;
+        const active_jar = _.getActiveCookieJar();
+        const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar) catch return error.MountDomFailed;
+        m.cookie_jar = active_jar;
+        if (_.current_browser_context_id_len > 0) {
+            const f_slice = std.fmt.bufPrint(&m.frame_id_buf, "capsurf-frame-{s}", .{_.currentBrowserContextId()}) catch "capsurf-frame-001";
+            m.frame_id_len = f_slice.len;
+            const l_slice = std.fmt.bufPrint(&m.loader_id_buf, "capsurf-loader-{s}", .{_.currentBrowserContextId()}) catch "capsurf-loader-001";
+            m.loader_id_len = l_slice.len;
+        } else {
+            const f_len = @min(_.frame_id.len, m.frame_id_buf.len);
+            @memcpy(m.frame_id_buf[0..f_len], _.frame_id[0..f_len]);
+            m.frame_id_len = f_len;
+
+            const l_len = @min(_.loader_id.len, m.loader_id_buf.len);
+            @memcpy(m.loader_id_buf[0..l_len], _.loader_id[0..l_len]);
+            m.loader_id_len = l_len;
+        }
         _.dom_ctx = m;
         _.url = nav_url;
         _.referrer = nav_referrer;
@@ -919,6 +952,94 @@ pub struct CdpPageSession {
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
+    }
+
+    fn currentBrowserContextId(): []const u8 {
+        return _.current_browser_context_id_buf[0.._.current_browser_context_id_len];
+    }
+
+    fn setContextId(*_, ctx_id: []const u8) {
+        if (ctx_id.len == 0 || std.mem.eql(u8, ctx_id, "default")) {
+            _.current_browser_context_id_len = 0;
+            if (dom := _.dom_ctx) {
+                dom.cookie_jar = &_.cookie_jar;
+                const f_len = @min(_.frame_id.len, dom.frame_id_buf.len);
+                @memcpy(dom.frame_id_buf[0..f_len], _.frame_id[0..f_len]);
+                dom.frame_id_len = f_len;
+
+                const l_len = @min(_.loader_id.len, dom.loader_id_buf.len);
+                @memcpy(dom.loader_id_buf[0..l_len], _.loader_id[0..l_len]);
+                dom.loader_id_len = l_len;
+            }
+            return;
+        }
+        const c_len = @min(ctx_id.len, _.current_browser_context_id_buf.len);
+        @memcpy(_.current_browser_context_id_buf[0..c_len], ctx_id[0..c_len]);
+        _.current_browser_context_id_len = c_len;
+
+        if (dom := _.dom_ctx) {
+            dom.cookie_jar = _.getActiveCookieJar();
+            const f_slice = std.fmt.bufPrint(&dom.frame_id_buf, "capsurf-frame-{s}", .{ctx_id}) catch "capsurf-frame-001";
+            dom.frame_id_len = f_slice.len;
+            const l_slice = std.fmt.bufPrint(&dom.loader_id_buf, "capsurf-loader-{s}", .{ctx_id}) catch "capsurf-loader-001";
+            dom.loader_id_len = l_slice.len;
+        }
+    }
+
+    fn getCookieJarForContext(*_, ctx_id: []const u8): (*CookieJar)? {
+        if (ctx_id.len == 0 || std.mem.eql(u8, ctx_id, "default")) {
+            return &_.cookie_jar;
+        }
+        return _.target_registry.getCookieJarForContext(ctx_id);
+    }
+
+    fn getActiveCookieJar(*_): *CookieJar {
+        if (_.current_browser_context_id_len > 0) {
+            if (jar := _.target_registry.getCookieJarForContext(_.currentBrowserContextId())) {
+                return jar;
+            }
+        }
+        return &_.cookie_jar;
+    }
+
+    fn pollNetworkEvents(*_, out_events: []CdpEvent): usize {
+        if (!_.network_enabled) return 0;
+        if (dom := _.dom_ctx) {
+            if (dom.fetch_count == 0) return 0;
+
+            let ev_idx: usize = 0;
+            let i: usize = 0;
+            while (i < dom.fetch_count && ev_idx + 2 <= out_events.len) : (i += 1) {
+                let rec = &dom.fetch_records[i];
+                const fetch_url = rec.getUrl();
+                const fetch_mime = rec.getMimeType();
+                const fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
+                const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
+
+                const req_json = std.fmt.bufPrint(
+                    &_.net_req_event_buf,
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"Fetch\",\"frameId\":\"{s}\"}}",
+                    .{ i + 1, lid, _.url, fetch_url, fid },
+                ) catch "";
+                if (req_json.len > 0) {
+                    out_events[ev_idx] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                    ev_idx += 1;
+                }
+
+                const resp_json = std.fmt.bufPrint(
+                    &_.net_resp_event_buf,
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"Fetch\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                    .{ i + 1, lid, fetch_url, fetch_mime, fid },
+                ) catch "";
+                if (resp_json.len > 0) {
+                    out_events[ev_idx] = CdpEvent.create("Network.responseReceived", resp_json);
+                    ev_idx += 1;
+                }
+            }
+            dom.clearFetchRecords();
+            return ev_idx;
+        }
+        return 0;
     }
 
     fn clearConsoleLogs(*_) {
