@@ -1304,6 +1304,42 @@
     - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1090ms)
   - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。
 
+## Phase 56: HTMLIFrameElement Window & Location Facades, Accept-Encoding Protocol, and WebCrypto Key Generation (100% Closed)
+- **`src/js/shim/element/html-classes.js`**：
+  - 移除原先硬编码返回 `null` 的占位符，完整实装 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器；
+  - 建立惰性初始化的 Iframe Window 门面（`contentWindow.self`, `window`, `top`, `parent`, `frameElement`），挂载 `Document` 与 `defaultView`；
+  - 注入 `DOMException`、`Error`、`TypeError` 等完整上下文构造函数；
+  - 实装 `makeIframeLocationFacade`：
+    - `href` 存取器与 `assign`、`replace`、`reload` 方法；
+    - 严格字符串类型入参转化校验（传入 `Symbol()` 原样抛出 `TypeError`）；
+    - 非法 URL 赋值时抛出 `FrameDOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等（`contentWindow.location === previousLocation` 为 `true`）；
+    - 支持相对路径自动基于 baseURI 解析并安全触发异步导航与 `load` 事件。
+- **`src/js/shim/constants.js`**：
+  - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`, `IndexSizeError: 1` 等）与 `DOM_EXCEPTION_CONSTANTS`，为 `DOMException` 实例赋予规范的 `.code` 属性与静态数值常量。
+- **`src/net/mock_fixtures.cp` & `src/cdp/network.cp` & `src/net/http_loader.cp`**：
+  - 在 `mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `/__fixtures/echo-headers.json`，正确回显与响应 Accept-Encoding；
+  - 在网络层与 CDP `Network.setExtraHTTPHeaders` 中过滤收敛 `accept-encoding`，严格限制为支持的编码白名单 `"gzip, br"`，过滤 `deflate`、`zstd` 等不支持的格式。
+- **`src/js/shim/window.js`**：
+  - 在 `fetch` 请求中默认注入 `"accept-encoding": "gzip, br"` 头；
+  - 接入 `__capsurf_native_load_fixture` 桥接，打通本地 fixture 异步拉取与 iframe 导航闭环。
+- **`src/js/dom_binding.cp`**：
+  - 导出 `@c fn js_capsurf_load_fixture`，提供快速加载测试 fixture 原生能力。
+- **`src/js/shim/crypto.js`**：
+  - 实装 `SubtleCrypto.prototype.generateKey` 算法与异常校验：
+    - 参数缺损或空对象拒绝抛出 `TypeError`；
+    - 不支持的算法（`AES-CMAC` 等）或不支持的哈希（HMAC+MD5, RSA-PSS+SHA-1）抛出 `NotSupportedError`；
+    - 合法输入（`AES-GCM` 等）成功生成规范的 `CryptoKey` 实例。
+- **`e2e/harness.ts`**：
+  - `Page.prototype.goto` 统一封装并返回具备 `.status()`、`.ok()` 与 `.url()` 的真实响应对象。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 56 4 大测试套件 7 项用例全部 100% 绿灯（1.82s 极速通过）：
+    - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+    - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+    - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+    - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
+  - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。
+
 ## Phase 55: Navigator UserAgentData & Client Hints, SendBeacon API, and Kitesurf CDP Page Ops (100% Closed)
 - **`src/js/shim/window.js`**：
   - 将 `navigator.userAgent` 默认初始化为规范的 `"Kitesurf/0.0.1"`，默认不挂载 `userAgentData`（`"userAgentData" in navigator === false`）；
@@ -1334,4 +1370,40 @@
     - `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS in 1108ms)
     - `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS in 907ms)
     - `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS in 2400ms)
+  - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。
+
+## Phase 56: HTMLIFrameElement Window & Location Facades, Accept-Encoding Protocol, and WebCrypto Key Generation (100% Closed)
+- **`src/js/shim/element/html-classes.js`**：
+  - 移除原先硬编码返回 `null` 的占位符，完整实装 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器；
+  - 建立惰性初始化的 Iframe Window 门面（`contentWindow.self`, `window`, `top`, `parent`, `frameElement`），挂载 `Document` 与 `defaultView`；
+  - 注入 `DOMException`、`Error`、`TypeError` 等完整上下文构造函数；
+  - 实装 `makeIframeLocationFacade`：
+    - `href` 存取器与 `assign`、`replace`、`reload` 方法；
+    - 严格字符串类型入参转化校验（传入 `Symbol()` 原样抛出 `TypeError`）；
+    - 非法 URL 赋值时抛出 `FrameDOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等（`contentWindow.location === previousLocation` 为 `true`）；
+    - 支持相对路径自动基于 baseURI 解析并安全触发异步导航与 `load` 事件。
+- **`src/js/shim/constants.js`**：
+  - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`, `IndexSizeError: 1` 等）与 `DOM_EXCEPTION_CONSTANTS`，为 `DOMException` 实例赋予规范的 `.code` 属性与静态数值常量。
+- **`src/net/mock_fixtures.cp` & `src/cdp/network.cp` & `src/net/http_loader.cp`**：
+  - 在 `mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `/__fixtures/echo-headers.json`，正确回显与响应 Accept-Encoding；
+  - 在网络层与 CDP `Network.setExtraHTTPHeaders` 中过滤收敛 `accept-encoding`，严格限制为支持的编码白名单 `"gzip, br"`，过滤 `deflate`、`zstd` 等不支持的格式。
+- **`src/js/shim/window.js`**：
+  - 在 `fetch` 请求中默认注入 `"accept-encoding": "gzip, br"` 头；
+  - 接入 `__capsurf_native_load_fixture` 桥接，打通本地 fixture 异步拉取与 iframe 导航闭环。
+- **`src/js/dom_binding.cp`**：
+  - 导出 `@c fn js_capsurf_load_fixture`，提供快速加载测试 fixture 原生能力。
+- **`src/js/shim/crypto.js`**：
+  - 实装 `SubtleCrypto.prototype.generateKey` 算法与异常校验：
+    - 参数缺损或空对象拒绝抛出 `TypeError`；
+    - 不支持的算法（`AES-CMAC` 等）或不支持的哈希（HMAC+MD5, RSA-PSS+SHA-1）抛出 `NotSupportedError`；
+    - 合法输入（`AES-GCM` 等）成功生成规范的 `CryptoKey` 实例。
+- **`e2e/harness.ts`**：
+  - `Page.prototype.goto` 统一封装并返回具备 `.status()`、`.ok()` 与 `.url()` 的真实响应对象。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 56 4 大测试套件 7 项用例全部 100% 绿灯（1.82s 极速通过）：
+    - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+    - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+    - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+    - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
   - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。

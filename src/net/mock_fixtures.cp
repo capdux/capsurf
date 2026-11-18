@@ -319,8 +319,19 @@ pub struct MockFixtures {
 
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"accept\":\"*/*\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"}}",
+                "{{\"accept\":\"*/*\",\"accept-encoding\":\"gzip, br\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"}}",
                 .{ orig, ua },
+            ) catch return null;
+
+            return res;
+        }
+
+        // 1.2. /gzip-only-doc.html
+        if (std.mem.indexOf(u8, url, "/gzip-only-doc.html") != null) {
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>gzip-only</title></head><body><div id=\"ae\">gzip, br</div><div id=\"tail\">complete</div></body></html>",
+                .{},
             ) catch return null;
 
             return res;

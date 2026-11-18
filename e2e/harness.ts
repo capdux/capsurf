@@ -290,7 +290,14 @@ export class Page {
       } catch {}
     }
 
-    return res;
+    const navResponse = {
+      ...(typeof res === "object" && res !== null ? res : {}),
+      status: () => ((res as any)?.errorText ? 500 : 200),
+      ok: () => !((res as any)?.errorText),
+      url: () => this._url,
+    };
+
+    return navResponse;
   }
 
   async title(): Promise<string> {
@@ -432,12 +439,12 @@ export class Page {
     return await this.evaluate(fnOrExpr, ...args);
   }
 
-  async waitForFunction(fnOrExpr: any, options: { timeout?: number; polling?: number } = {}): Promise<any> {
+  async waitForFunction(fnOrExpr: any, options: { timeout?: number; polling?: number } = {}, ...args: any[]): Promise<any> {
     const timeout = options.timeout ?? 30000;
     const start = Date.now();
     while (Date.now() - start < timeout) {
       try {
-        const val = await this.evaluate(fnOrExpr);
+        const val = await this.evaluate(fnOrExpr, ...args);
         if (val) return val;
       } catch {}
       await new Promise((r) => setTimeout(r, 50));

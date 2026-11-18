@@ -327,14 +327,14 @@ pub struct HttpLoader {
         if ((parsed.secure && parsed.port != 443) || (!parsed.secure && parsed.port != 80)) {
             const req_line = std.fmt.bufPrint(
                 req_buf[req_pos..],
-                "GET {s} HTTP/1.1\r\nHost: {s}:{d}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nConnection: close\r\n",
+                "GET {s} HTTP/1.1\r\nHost: {s}:{d}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Encoding: gzip, br\r\nConnection: close\r\n",
                 .{ parsed.path, parsed.host, parsed.port, session.user_agent },
             ) catch return error.BufferOverflow;
             req_line_len = req_line.len;
         } else {
             const req_line = std.fmt.bufPrint(
                 req_buf[req_pos..],
-                "GET {s} HTTP/1.1\r\nHost: {s}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nConnection: close\r\n",
+                "GET {s} HTTP/1.1\r\nHost: {s}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Encoding: gzip, br\r\nConnection: close\r\n",
                 .{ parsed.path, parsed.host, session.user_agent },
             ) catch return error.BufferOverflow;
             req_line_len = req_line.len;

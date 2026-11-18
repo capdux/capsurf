@@ -6,8 +6,69 @@ import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt } from "./ty
 import { CdpPageSession } from "./session.cp";
 import { CookieEntry, entryToCdp } from "../net/cookies.cp";
 
+fn sanitizeAcceptEncoding(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
+    const search_key = "accept-encoding";
+    let found_idx: usize? = null;
+    const key_len = search_key.len;
+
+    let i: usize = 0;
+    while (i + key_len <= raw.len) : (i += 1) {
+        let is_match = true;
+        let j: usize = 0;
+        while (j < key_len) : (j += 1) {
+            if (std.ascii.toLower(raw[i + j]) != search_key[j]) {
+                is_match = false;
+                break;
+            }
+        }
+        if (is_match) {
+            found_idx = i;
+            break;
+        }
+    }
+
+    if (found_idx == null) {
+        return allocator.dupe(u8, raw) catch raw;
+    }
+
+    let cursor = found_idx.? + key_len;
+    while (cursor < raw.len && (raw[cursor] == '"' || raw[cursor] == ':' || raw[cursor] == ' ' || raw[cursor] == '\t')) : (cursor += 1) {}
+    if (cursor >= raw.len) return allocator.dupe(u8, raw) catch raw;
+
+    let val_start: usize = cursor;
+    let val_end: usize = cursor;
+    if (cursor > 0 && raw[cursor - 1] == '"') {
+        while (val_end < raw.len && raw[val_end] != '"') : (val_end += 1) {}
+    } else if (raw[cursor] == '"') {
+        cursor += 1;
+        val_start = cursor;
+        val_end = cursor;
+        while (val_end < raw.len && raw[val_end] != '"') : (val_end += 1) {}
+    } else {
+        while (val_end < raw.len && raw[val_end] != '\r' && raw[val_end] != '\n' && raw[val_end] != '}') : (val_end += 1) {}
+    }
+
+    const val = raw[val_start..val_end];
+    let needs_sanitize = false;
+    if (std.mem.indexOf(u8, val, "deflate") != null || std.mem.indexOf(u8, val, "zstd") != null) {
+        needs_sanitize = true;
+    }
+
+    if (!needs_sanitize) {
+        return allocator.dupe(u8, raw) catch raw;
+    }
+
+    const repl = "gzip, br";
+    const new_len = raw.len - val.len + repl.len;
+    let buf = allocator.alloc(u8, new_len) catch return allocator.dupe(u8, raw) catch raw;
+    @memcpy(buf[0..val_start], raw[0..val_start]);
+    @memcpy(buf[val_start .. val_start + repl.len], repl);
+    @memcpy(buf[val_start + repl.len .. new_len], raw[val_end..]);
+    return buf;
+}
+
 pub struct NetworkHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
+    static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
         // 1. Network lifecycle & buffering
         if (std.mem.eql(u8, req.method, "Network.enable")) {
             const max_buf = extractJsonInt(req.params_raw, "maxTotalBufferSize");
@@ -36,11 +97,11 @@ pub struct NetworkHandler {
         if (std.mem.eql(u8, req.method, "Network.setExtraHTTPHeaders")) {
             // Save extra headers JSON for subsequent fetch and navigation pipelines
             const headers_str = extractJsonString(req.params_raw, "headers") ?? "";
+            let raw_to_save: []const u8 = req.params_raw;
             if (headers_str.len > 0) {
-                session.extra_headers = session.allocator.dupe(u8, headers_str) catch headers_str;
-            } else {
-                session.extra_headers = session.allocator.dupe(u8, req.params_raw) catch req.params_raw;
+                raw_to_save = headers_str;
             }
+            session.extra_headers = sanitizeAcceptEncoding(session.allocator, raw_to_save);
             return CdpResponse.ok(req.id, "{}");
         }
 

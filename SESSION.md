@@ -2227,6 +2227,37 @@
 ---
 
 ### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 56：攻坚 HTMLIFrameElement Window 与 Location 门面体系、Accept-Encoding 编码收敛白名单限制、以及 WebCrypto SubtleCrypto.generateKey 算法族系规范
+
+### **[Agent Execution & Phase 56 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - IFrame Window & Location Facades)**：
+     - 在 `src/js/shim/element/html-classes.js` 中实装完整的 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器，建立具备独立 `document`、`DOMException`、`location`、`window` 的 Iframe 窗口门面；
+     - 实装 `makeIframeLocationFacade`：受保护的 `href` 存取器与导航方法，严格执行字符串转化校验（遇 `Symbol()` 抛出原生 `TypeError`），非法 URL 抛出该 iframe 上下文的 `DOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等；
+     - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`），并在 `src/js/dom_binding.cp` 与 `window.js` 中接入 `__capsurf_native_load_fixture`，打通本地 fixture 异步拉取与 iframe 导航闭环；
+     - 验证通过 `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS) 与 `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Accept-Encoding Protocol & WebCrypto Key Generation)**：
+     - 在 `src/net/mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `echo-headers.json` 动态响应支持；
+     - 在 `src/cdp/network.cp` 与 `src/net/http_loader.cp` 中实装 `sanitizeAcceptEncoding`，将请求头收敛限制为内核支持的白名单 `"gzip, br"`，过滤不支持格式；
+     - 在 `src/js/shim/window.js` 的 `fetch` 实现中默认注入 `"accept-encoding": "gzip, br"` 头；
+     - 在 `src/js/shim/crypto.js` 中实装 `SubtleCrypto.prototype.generateKey` 完整算法与异常校验（参数缺损抛 `TypeError`，不支持算法如 `AES-CMAC` 抛 `NotSupportedError`，非法哈希如 HMAC+MD5, RSA-PSS+SHA 抛 `NotSupportedError`，合法输入成功解析为原生 `CryptoKey` 实例）；
+     - 在 `e2e/harness.ts` 中为 `Page.prototype.goto` 补充标准响应门面（`status()`, `ok()`, `url()`）；
+     - 验证通过 `e2e/accept-encoding.e2e.test.ts` (3/3 PASS) 与 `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS)。
+2. **Phase 56 全量黑盒测试验证（4 大测试套件 7 项用例全部 100% 绿灯，1.82s 极速通过）**：
+   - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+   - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+   - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+   - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54, Phase 55 共 12 大回归用例全量 100% 绿灯（6.22s 通过）；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
 > 自主推进 Phase 55：攻坚 Navigator UserAgentData 客户端提示规范、SendBeacon 规范实现、以及 Kitesurf 扩展 CDP 协议（getPageState, setControlValue, markPaintDamage, getPaintDamageSince）
 
 ### **[Agent Execution & Phase 55 Completion Report]**
@@ -2250,6 +2281,37 @@
 3. **全量回归验证与 4 道静态门禁**：
    - Phase 54 7 大回归套件 8 项用例全量 100% 绿灯（2.42s 通过）；
    - 4 道静态门禁检验：所有 10 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 56：攻坚 HTMLIFrameElement Window 与 Location 门面体系、Accept-Encoding 编码收敛白名单限制、以及 WebCrypto SubtleCrypto.generateKey 算法族系规范
+
+### **[Agent Execution & Phase 56 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - IFrame Window & Location Facades)**：
+     - 在 `src/js/shim/element/html-classes.js` 中实装完整的 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器，建立具备独立 `document`、`DOMException`、`location`、`window` 的 Iframe 窗口门面；
+     - 实装 `makeIframeLocationFacade`：受保护的 `href` 存取器与导航方法，严格执行字符串转化校验（遇 `Symbol()` 抛出原生 `TypeError`），非法 URL 抛出该 iframe 上下文的 `DOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等；
+     - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`），并在 `src/js/dom_binding.cp` 与 `window.js` 中接入 `__capsurf_native_load_fixture`，打通本地 fixture 异步拉取与 iframe 导航闭环；
+     - 验证通过 `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS) 与 `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Accept-Encoding Protocol & WebCrypto Key Generation)**：
+     - 在 `src/net/mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `echo-headers.json` 动态响应支持；
+     - 在 `src/cdp/network.cp` 与 `src/net/http_loader.cp` 中实装 `sanitizeAcceptEncoding`，将请求头收敛限制为内核支持的白名单 `"gzip, br"`，过滤不支持格式；
+     - 在 `src/js/shim/window.js` 的 `fetch` 实现中默认注入 `"accept-encoding": "gzip, br"` 头；
+     - 在 `src/js/shim/crypto.js` 中实装 `SubtleCrypto.prototype.generateKey` 完整算法与异常校验（参数缺损抛 `TypeError`，不支持算法如 `AES-CMAC` 抛 `NotSupportedError`，非法哈希如 HMAC+MD5, RSA-PSS+SHA 抛 `NotSupportedError`，合法输入成功解析为原生 `CryptoKey` 实例）；
+     - 在 `e2e/harness.ts` 中为 `Page.prototype.goto` 补充标准响应门面（`status()`, `ok()`, `url()`）；
+     - 验证通过 `e2e/accept-encoding.e2e.test.ts` (3/3 PASS) 与 `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS)。
+2. **Phase 56 全量黑盒测试验证（4 大测试套件 7 项用例全部 100% 绿灯，1.82s 极速通过）**：
+   - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+   - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+   - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+   - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54, Phase 55 共 12 大回归用例全量 100% 绿灯（6.22s 通过）；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
    - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
@@ -2298,6 +2360,37 @@
 ---
 
 ### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 56：攻坚 HTMLIFrameElement Window 与 Location 门面体系、Accept-Encoding 编码收敛白名单限制、以及 WebCrypto SubtleCrypto.generateKey 算法族系规范
+
+### **[Agent Execution & Phase 56 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - IFrame Window & Location Facades)**：
+     - 在 `src/js/shim/element/html-classes.js` 中实装完整的 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器，建立具备独立 `document`、`DOMException`、`location`、`window` 的 Iframe 窗口门面；
+     - 实装 `makeIframeLocationFacade`：受保护的 `href` 存取器与导航方法，严格执行字符串转化校验（遇 `Symbol()` 抛出原生 `TypeError`），非法 URL 抛出该 iframe 上下文的 `DOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等；
+     - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`），并在 `src/js/dom_binding.cp` 与 `window.js` 中接入 `__capsurf_native_load_fixture`，打通本地 fixture 异步拉取与 iframe 导航闭环；
+     - 验证通过 `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS) 与 `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Accept-Encoding Protocol & WebCrypto Key Generation)**：
+     - 在 `src/net/mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `echo-headers.json` 动态响应支持；
+     - 在 `src/cdp/network.cp` 与 `src/net/http_loader.cp` 中实装 `sanitizeAcceptEncoding`，将请求头收敛限制为内核支持的白名单 `"gzip, br"`，过滤不支持格式；
+     - 在 `src/js/shim/window.js` 的 `fetch` 实现中默认注入 `"accept-encoding": "gzip, br"` 头；
+     - 在 `src/js/shim/crypto.js` 中实装 `SubtleCrypto.prototype.generateKey` 完整算法与异常校验（参数缺损抛 `TypeError`，不支持算法如 `AES-CMAC` 抛 `NotSupportedError`，非法哈希如 HMAC+MD5, RSA-PSS+SHA 抛 `NotSupportedError`，合法输入成功解析为原生 `CryptoKey` 实例）；
+     - 在 `e2e/harness.ts` 中为 `Page.prototype.goto` 补充标准响应门面（`status()`, `ok()`, `url()`）；
+     - 验证通过 `e2e/accept-encoding.e2e.test.ts` (3/3 PASS) 与 `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS)。
+2. **Phase 56 全量黑盒测试验证（4 大测试套件 7 项用例全部 100% 绿灯，1.82s 极速通过）**：
+   - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+   - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+   - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+   - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54, Phase 55 共 12 大回归用例全量 100% 绿灯（6.22s 通过）；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
 > 自主推进 Phase 55：攻坚 Navigator UserAgentData 客户端提示规范、SendBeacon 规范实现、以及 Kitesurf 扩展 CDP 协议（getPageState, setControlValue, markPaintDamage, getPaintDamageSince）
 
 ### **[Agent Execution & Phase 55 Completion Report]**
@@ -2321,6 +2414,37 @@
 3. **全量回归验证与 4 道静态门禁**：
    - Phase 54 7 大回归套件 8 项用例全量 100% 绿灯（2.42s 通过）；
    - 4 道静态门禁检验：所有 10 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 56：攻坚 HTMLIFrameElement Window 与 Location 门面体系、Accept-Encoding 编码收敛白名单限制、以及 WebCrypto SubtleCrypto.generateKey 算法族系规范
+
+### **[Agent Execution & Phase 56 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - IFrame Window & Location Facades)**：
+     - 在 `src/js/shim/element/html-classes.js` 中实装完整的 `HTMLIFrameElement.prototype.contentWindow` 与 `contentDocument` 访问器，建立具备独立 `document`、`DOMException`、`location`、`window` 的 Iframe 窗口门面；
+     - 实装 `makeIframeLocationFacade`：受保护的 `href` 存取器与导航方法，严格执行字符串转化校验（遇 `Symbol()` 抛出原生 `TypeError`），非法 URL 抛出该 iframe 上下文的 `DOMException("Invalid URL", "SyntaxError")`（`code: 12`），且保护 `contentWindow.location` 门面引用恒等；
+     - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`），并在 `src/js/dom_binding.cp` 与 `window.js` 中接入 `__capsurf_native_load_fixture`，打通本地 fixture 异步拉取与 iframe 导航闭环；
+     - 验证通过 `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS) 与 `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Accept-Encoding Protocol & WebCrypto Key Generation)**：
+     - 在 `src/net/mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 与 `echo-headers.json` 动态响应支持；
+     - 在 `src/cdp/network.cp` 与 `src/net/http_loader.cp` 中实装 `sanitizeAcceptEncoding`，将请求头收敛限制为内核支持的白名单 `"gzip, br"`，过滤不支持格式；
+     - 在 `src/js/shim/window.js` 的 `fetch` 实现中默认注入 `"accept-encoding": "gzip, br"` 头；
+     - 在 `src/js/shim/crypto.js` 中实装 `SubtleCrypto.prototype.generateKey` 完整算法与异常校验（参数缺损抛 `TypeError`，不支持算法如 `AES-CMAC` 抛 `NotSupportedError`，非法哈希如 HMAC+MD5, RSA-PSS+SHA 抛 `NotSupportedError`，合法输入成功解析为原生 `CryptoKey` 实例）；
+     - 在 `e2e/harness.ts` 中为 `Page.prototype.goto` 补充标准响应门面（`status()`, `ok()`, `url()`）；
+     - 验证通过 `e2e/accept-encoding.e2e.test.ts` (3/3 PASS) 与 `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS)。
+2. **Phase 56 全量黑盒测试验证（4 大测试套件 7 项用例全部 100% 绿灯，1.82s 极速通过）**：
+   - `e2e/accept-encoding.e2e.test.ts` (3/3 PASS in 714ms)
+   - `e2e/iframe-location-invalid-assignment.e2e.test.ts` (2/2 PASS in 248ms)
+   - `e2e/iframe-location-relative.e2e.test.ts` (1/1 PASS in 250ms)
+   - `e2e/subtlecrypto-generatekey-errors.e2e.test.ts` (1/1 PASS in 331ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54, Phase 55 共 12 大回归用例全量 100% 绿灯（6.22s 通过）；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
    - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。

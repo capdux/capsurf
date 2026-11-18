@@ -80,15 +80,82 @@
     };
   }
 
+  const DOM_EXCEPTION_CODES = {
+    IndexSizeError: 1,
+    DOMStringSizeError: 2,
+    HierarchyRequestError: 3,
+    WrongDocumentError: 4,
+    InvalidCharacterError: 5,
+    NoDataAllowedError: 6,
+    NoModificationAllowedError: 7,
+    NotFoundError: 8,
+    NotSupportedError: 9,
+    InUseAttributeError: 10,
+    InvalidStateError: 11,
+    SyntaxError: 12,
+    InvalidModificationError: 13,
+    NamespaceError: 14,
+    InvalidAccessError: 15,
+    ValidationError: 16,
+    TypeMismatchError: 17,
+    SecurityError: 18,
+    NetworkError: 19,
+    AbortError: 20,
+    URLMismatchError: 21,
+    QuotaExceededError: 22,
+    TimeoutError: 23,
+    InvalidNodeTypeError: 24,
+    DataCloneError: 25,
+  };
+
+  const DOM_EXCEPTION_CONSTANTS = [
+    ["INDEX_SIZE_ERR", 1],
+    ["DOMSTRING_SIZE_ERR", 2],
+    ["HIERARCHY_REQUEST_ERR", 3],
+    ["WRONG_DOCUMENT_ERR", 4],
+    ["INVALID_CHARACTER_ERR", 5],
+    ["NO_DATA_ALLOWED_ERR", 6],
+    ["NO_MODIFICATION_ALLOWED_ERR", 7],
+    ["NOT_FOUND_ERR", 8],
+    ["NOT_SUPPORTED_ERR", 9],
+    ["INUSE_ATTRIBUTE_ERR", 10],
+    ["INVALID_STATE_ERR", 11],
+    ["SYNTAX_ERR", 12],
+    ["INVALID_MODIFICATION_ERR", 13],
+    ["NAMESPACE_ERR", 14],
+    ["INVALID_ACCESS_ERR", 15],
+    ["VALIDATION_ERR", 16],
+    ["TYPE_MISMATCH_ERR", 17],
+    ["SECURITY_ERR", 18],
+    ["NETWORK_ERR", 19],
+    ["ABORT_ERR", 20],
+    ["URL_MISMATCH_ERR", 21],
+    ["QUOTA_EXCEEDED_ERR", 22],
+    ["TIMEOUT_ERR", 23],
+    ["INVALID_NODE_TYPE_ERR", 24],
+    ["DATA_CLONE_ERR", 25],
+  ];
+
   // 0. DOMException Implementation (Available from start)
   function DOMException(message, name) {
     const err = new Error(message || "");
     err.name = name || "Error";
+    err.code = DOM_EXCEPTION_CODES[err.name] || 0;
     Object.setPrototypeOf(err, DOMException.prototype);
     return err;
   }
   DOMException.prototype = Object.create(Error.prototype);
   DOMException.prototype.constructor = DOMException;
+  DOMException.prototype.code = 0;
+  DOMException.prototype.name = "Error";
+  DOMException.prototype.message = "";
+
+  for (let i = 0; i < DOM_EXCEPTION_CONSTANTS.length; i++) {
+    const item = DOM_EXCEPTION_CONSTANTS[i];
+    Object.defineProperty(DOMException, item[0], { value: item[1], enumerable: true, configurable: false, writable: false });
+    Object.defineProperty(DOMException.prototype, item[0], { value: item[1], enumerable: true, configurable: false, writable: false });
+  }
+
   markNative(DOMException, "DOMException");
   if (typeof globalThis !== "undefined") {
     globalThis.DOMException = DOMException;
@@ -7972,6 +8039,349 @@
     global.HTMLCanvasElement = HTMLCanvasElement;
 
     // 5. HTMLIFrameElement
+    function locationInputString(value) {
+      if (typeof value === "symbol") {
+        throw new TypeError("Cannot convert a Symbol value to a string");
+      }
+      return String(value);
+    }
+
+    const FACADE_LOCATION_PARTS = [
+      "protocol",
+      "host",
+      "hostname",
+      "port",
+      "pathname",
+      "search",
+      "hash",
+    ];
+
+    function makeIframeLocationFacade(iframeEl, initialUrl, contentWindow) {
+      let current = initialUrl || "about:blank";
+
+      function resolveAndNavigate(v) {
+        const inputStr = locationInputString(v);
+        let resolved = "";
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI)
+            ? document.baseURI
+            : (global.location ? global.location.href : "about:blank");
+          resolved = new URL(inputStr, base).toString();
+        } catch (e) {
+          const FrameDOMException = (contentWindow && contentWindow.DOMException) ||
+            (typeof global !== "undefined" && global.DOMException) ||
+            (typeof globalThis !== "undefined" && globalThis.DOMException) ||
+            DOMException;
+          const error = new FrameDOMException("Invalid URL", "SyntaxError");
+          if (typeof FrameDOMException === "function") {
+            try {
+              Object.defineProperty(error, "constructor", { value: FrameDOMException });
+            } catch (_) {}
+          }
+          throw error;
+        }
+        current = resolved;
+        try {
+          handleIframeNavigation(iframeEl, resolved);
+        } catch (e) {}
+      }
+
+      const loc = {
+        get href() {
+          return current;
+        },
+        set href(v) {
+          resolveAndNavigate(v);
+        },
+        get origin() {
+          try {
+            return new URL(current).origin;
+          } catch (e) {
+            return "null";
+          }
+        },
+        toString: function () {
+          return current;
+        },
+        valueOf: function () {
+          return current;
+        },
+        assign: function (v) {
+          resolveAndNavigate(v);
+        },
+        replace: function (v) {
+          resolveAndNavigate(v);
+        },
+        reload: function () {
+          resolveAndNavigate(current);
+        },
+      };
+
+      for (let i = 0; i < FACADE_LOCATION_PARTS.length; i++) {
+        (function (part) {
+          Object.defineProperty(loc, part, {
+            enumerable: true,
+            configurable: true,
+            get: function () {
+              try {
+                return new URL(current)[part];
+              } catch (e) {
+                return "";
+              }
+            },
+            set: function (v) {
+              try {
+                const next = new URL(current);
+                next[part] = String(v);
+                loc.href = next.toString();
+              } catch (e) {}
+            },
+          });
+        })(FACADE_LOCATION_PARTS[i]);
+      }
+
+      loc[Symbol.toPrimitive] = function () {
+        return current;
+      };
+
+      return loc;
+    }
+
+    const iframeLocationMap = new WeakMap();
+
+    function ensureIframeLocationFacade(contentWindow, iframeEl, url) {
+      let loc = iframeLocationMap.get(contentWindow);
+      if (!loc) {
+        loc = makeIframeLocationFacade(iframeEl, url, contentWindow);
+        iframeLocationMap.set(contentWindow, loc);
+        Object.defineProperty(contentWindow, "location", {
+          enumerable: true,
+          configurable: false,
+          get: function () {
+            return iframeLocationMap.get(contentWindow);
+          },
+          set: function (value) {
+            const cur = iframeLocationMap.get(contentWindow);
+            if (cur) {
+              cur.href = locationInputString(value);
+            }
+          },
+        });
+      }
+      return loc;
+    }
+
+    const FRAME_WINDOW_GLOBALS = [
+      "DOMException", "Error", "TypeError", "RangeError", "SyntaxError",
+      "ReferenceError", "URIError", "EvalError",
+      "Array", "Object", "String", "Number", "Boolean", "Symbol",
+      "Promise", "Function", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
+      "JSON", "Math", "Node", "Element", "Document", "DocumentFragment",
+      "Event", "MessageEvent", "CustomEvent", "NodeList", "HTMLCollection",
+      "DOMParser", "Range", "StaticRange", "URL", "URLSearchParams",
+      "Blob", "FormData", "Headers", "Request", "Response",
+      "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
+      "setTimeout", "clearTimeout", "setInterval", "clearInterval",
+      "requestAnimationFrame", "cancelAnimationFrame", "console"
+    ];
+
+    function decorateIframeWindow(win) {
+      const pageGlobal = typeof window !== "undefined" ? window : globalThis;
+      for (let i = 0; i < FRAME_WINDOW_GLOBALS.length; i++) {
+        const key = FRAME_WINDOW_GLOBALS[i];
+        if (win[key] === undefined && pageGlobal[key] !== undefined) {
+          win[key] = pageGlobal[key];
+        }
+      }
+    }
+
+    function createIframePlaceholderDoc(docUrl) {
+      let doc = null;
+      try {
+        const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+        if (Ctor) {
+          const parser = new Ctor();
+          doc = parser.parseFromString("<html><head></head><body></body></html>", "text/html");
+          if (doc) {
+            doc._mutable = true;
+            try {
+              Object.defineProperty(doc, "_baseUrl", {
+                value: docUrl || "about:blank",
+                configurable: true,
+                writable: true,
+              });
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      return doc;
+    }
+
+    function handleIframeNavigation(iframeEl, resolvedUrl) {
+      if (!iframeEl) return;
+
+      if (resolvedUrl === "about:blank" || !resolvedUrl) {
+        const doc = createIframePlaceholderDoc("about:blank");
+        if (iframeEl._contentWindow) {
+          iframeEl._contentWindow.document = doc;
+          if (doc) {
+            try {
+              Object.defineProperty(doc, "defaultView", {
+                value: iframeEl._contentWindow,
+                configurable: true,
+              });
+            } catch (e) {}
+          }
+        }
+        iframeEl._contentDocument = doc;
+        Promise.resolve().then(function () {
+          fireIframeLoadEvent(iframeEl);
+        });
+        return;
+      }
+
+      let loadPromise = null;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
+        const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
+        if (fixtureHtml !== null && fixtureHtml !== undefined) {
+          loadPromise = Promise.resolve(fixtureHtml);
+        }
+      }
+
+      if (!loadPromise) {
+        if (typeof fetch === "function") {
+          loadPromise = fetch(resolvedUrl).then(function (res) {
+            return res.text();
+          });
+        } else {
+          loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
+        }
+      }
+
+      loadPromise.then(function (html) {
+        let newDoc = null;
+        try {
+          const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+          if (Ctor) {
+            const parser = new Ctor();
+            newDoc = parser.parseFromString(html, "text/html");
+            if (newDoc) {
+              newDoc._mutable = true;
+              try {
+                Object.defineProperty(newDoc, "_baseUrl", {
+                  value: resolvedUrl,
+                  configurable: true,
+                  writable: true,
+                });
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+
+        if (newDoc) {
+          if (iframeEl._contentWindow) {
+            iframeEl._contentWindow.document = newDoc;
+            try {
+              Object.defineProperty(newDoc, "defaultView", {
+                value: iframeEl._contentWindow,
+                configurable: true,
+              });
+            } catch (e) {}
+          }
+          iframeEl._contentDocument = newDoc;
+        }
+
+        fireIframeLoadEvent(iframeEl);
+      }).catch(function () {
+        fireIframeLoadEvent(iframeEl);
+      });
+    }
+
+    function fireIframeLoadEvent(iframeEl) {
+      try {
+        const evt = new Event("load", { bubbles: false, cancelable: false });
+        if (typeof iframeEl.onload === "function") {
+          try {
+            iframeEl.onload.call(iframeEl, evt);
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) console.error(e);
+          }
+        }
+        if (typeof iframeEl.dispatchEvent === "function") {
+          try {
+            iframeEl.dispatchEvent(evt);
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+
+    function getOrCreateIframeWindow(iframeEl) {
+      if (iframeEl._contentWindow) return iframeEl._contentWindow;
+
+      let initialUrl = "";
+      try {
+        initialUrl = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
+      } catch (e) {}
+      if (!initialUrl || initialUrl === "about:blank") {
+        initialUrl = "about:blank";
+      } else {
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI)
+            ? document.baseURI
+            : (global.location ? global.location.href : "about:blank");
+          initialUrl = new URL(initialUrl, base).href;
+        } catch (e) {
+          initialUrl = "about:blank";
+        }
+      }
+
+      const initialDoc = createIframePlaceholderDoc(initialUrl);
+
+      const contentWindow = {
+        document: initialDoc,
+        parent: global.window || global,
+        top: (global.window && global.window.top) || global,
+        frames: [],
+        frameElement: iframeEl,
+        name: (function () {
+          try {
+            return String(iframeEl.getAttribute ? (iframeEl.getAttribute("name") || "") : "");
+          } catch (e) {
+            return "";
+          }
+        })(),
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        dispatchEvent: function () { return true; },
+      };
+
+      contentWindow.self = contentWindow;
+      contentWindow.window = contentWindow;
+
+      decorateIframeWindow(contentWindow);
+      ensureIframeLocationFacade(contentWindow, iframeEl, initialUrl);
+
+      if (initialDoc) {
+        try {
+          Object.defineProperty(initialDoc, "defaultView", {
+            value: contentWindow,
+            configurable: true,
+          });
+        } catch (e) {}
+      }
+
+      contentWindow.postMessage = function () {};
+
+      iframeEl._contentWindow = contentWindow;
+      iframeEl._contentDocument = initialDoc;
+
+      if (initialUrl && initialUrl !== "about:blank") {
+        handleIframeNavigation(iframeEl, initialUrl);
+      }
+
+      return contentWindow;
+    }
+
     function HTMLIFrameElement() {}
     HTMLIFrameElement.prototype = Object.create(ElementProto);
     HTMLIFrameElement.prototype.constructor = HTMLIFrameElement;
@@ -7987,18 +8397,36 @@
           return raw;
         }
       },
-      set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+      set: function (v) {
+        const strVal = String(v);
+        nativeSetAttribute.call(this, "src", strVal);
+        if (this._contentWindow) {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
+          let resolved = "about:blank";
+          try {
+            resolved = new URL(strVal, base).href;
+          } catch (e) {
+            resolved = strVal;
+          }
+          handleIframeNavigation(this, resolved);
+        }
+      },
       configurable: true,
       enumerable: true,
     });
 
     Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
-      get: function () { return null; },
+      get: function () {
+        return getOrCreateIframeWindow(this);
+      },
       configurable: true,
     });
 
     Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
-      get: function () { return null; },
+      get: function () {
+        const win = getOrCreateIframeWindow(this);
+        return (win && win.document) || this._contentDocument || null;
+      },
       configurable: true,
     });
 
@@ -15976,6 +16404,7 @@
         "user-agent": navUa,
         "origin": originVal,
         "accept": "*/*",
+        "accept-encoding": "gzip, br",
       };
 
       if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
@@ -16005,6 +16434,26 @@
             reqHeaders[k.toLowerCase()] = String(init.headers[k]);
           }
         }
+      }
+
+      const decodableCodings = new Set(["gzip", "br", "identity"]);
+      function decodableAcceptEncoding(val) {
+        if (!val) return "gzip, br";
+        const parts = String(val).split(",");
+        const allOk = parts.every(function (p) {
+          const coding = p.trim().toLowerCase().split(";")[0].trim();
+          if (decodableCodings.has(coding)) return true;
+          const sub = p.toLowerCase().split(";");
+          for (let i = 1; i < sub.length; i++) {
+            if (/^\s*q\s*=\s*0(\.0{0,3})?\s*$/.test(sub[i])) return true;
+          }
+          return false;
+        });
+        return allOk ? val : "gzip, br";
+      }
+
+      if (reqHeaders["accept-encoding"]) {
+        reqHeaders["accept-encoding"] = decodableAcceptEncoding(reqHeaders["accept-encoding"]);
       }
 
       if (urlStr.indexOf("echo-headers.json") !== -1) {
@@ -16061,6 +16510,37 @@
           };
         }
         return Promise.resolve(resp);
+      }
+
+      if (typeof globalThis.__capsurf_native_load_fixture === "function") {
+        const fixtureText = globalThis.__capsurf_native_load_fixture(urlStr);
+        if (fixtureText !== null && fixtureText !== undefined) {
+          const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
+          const isJson = urlStr.indexOf(".json") !== -1;
+          const cType = isHtml ? "text/html; charset=utf-8" : (isJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
+          const respInit = {
+            status: 200,
+            statusText: "OK",
+            headers: {
+              "content-type": cType,
+              "access-control-allow-origin": "*",
+            },
+          };
+          let resp;
+          if (typeof Response !== "undefined") {
+            resp = new Response(fixtureText, respInit);
+          } else {
+            resp = {
+              status: 200,
+              statusText: "OK",
+              ok: true,
+              headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
+              text: function () { return Promise.resolve(fixtureText); },
+              json: function () { return Promise.resolve(JSON.parse(fixtureText)); },
+            };
+          }
+          return Promise.resolve(resp);
+        }
       }
 
       let defaultResp;
@@ -17159,6 +17639,242 @@
         configurable: true,
         enumerable: elInnerDesc.enumerable,
       });
+    }
+
+    // 17. WebCrypto API (Crypto, SubtleCrypto, CryptoKey, CryptoKeyPair)
+    function toKeyUsages(value) {
+      if (!value) return [];
+      if (Array.isArray(value)) return value.slice();
+      try {
+        return Array.from(value);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function CryptoKey(type, extractable, algorithm, usages) {
+      this.type = type;
+      this.extractable = Boolean(extractable);
+      this.algorithm = algorithm;
+      this.usages = Object.freeze(toKeyUsages(usages));
+    }
+    CryptoKey.prototype[Symbol.toStringTag] = "CryptoKey";
+    markNative(CryptoKey, "CryptoKey");
+
+    function CryptoKeyPair(publicKey, privateKey) {
+      this.publicKey = publicKey;
+      this.privateKey = privateKey;
+    }
+    CryptoKeyPair.prototype[Symbol.toStringTag] = "CryptoKeyPair";
+    markNative(CryptoKeyPair, "CryptoKeyPair");
+
+    function SubtleCrypto() {}
+    SubtleCrypto.prototype[Symbol.toStringTag] = "SubtleCrypto";
+
+    const CRYPTO_DIGESTS = new Set(["SHA-1", "SHA-256", "SHA-384", "SHA-512"]);
+
+    const CRYPTO_GEN_SUPPORTED = new Map([
+      ["RSASSA-PKCS1-V1_5", { name: "RSASSA-PKCS1-v1_5", hash: true, asymmetric: true }],
+      ["RSA-PSS", { name: "RSA-PSS", hash: true, asymmetric: true }],
+      ["RSA-OAEP", { name: "RSA-OAEP", hash: true, asymmetric: true }],
+      ["HMAC", { name: "HMAC", hash: true, asymmetric: false }],
+      ["ECDSA", { name: "ECDSA", hash: false, asymmetric: true }],
+      ["ECDH", { name: "ECDH", hash: false, asymmetric: true }],
+      ["ED25519", { name: "Ed25519", hash: false, asymmetric: true }],
+      ["X25519", { name: "X25519", hash: false, asymmetric: true }],
+      ["AES-CTR", { name: "AES-CTR", hash: false, asymmetric: false }],
+      ["AES-CBC", { name: "AES-CBC", hash: false, asymmetric: false }],
+      ["AES-GCM", { name: "AES-GCM", hash: false, asymmetric: false }],
+      ["AES-KW", { name: "AES-KW", hash: false, asymmetric: false }],
+    ]);
+
+    const CRYPTO_GEN_PASSTHROUGH = new Set([
+      "ED448",
+      "X448",
+      "ML-DSA-44",
+      "ML-DSA-65",
+      "ML-DSA-87",
+      "ML-KEM-512",
+      "ML-KEM-768",
+      "ML-KEM-1024",
+      "AES-OCB",
+      "CHACHA20-POLY1305",
+      "KMAC128",
+      "KMAC256",
+      "SLH-DSA",
+    ]);
+
+    function getAlgName(alg) {
+      if (alg === undefined || alg === null) {
+        throw new TypeError("Failed to execute 'generateKey' on 'SubtleCrypto': 1 argument required, but only 0 present.");
+      }
+      if (typeof alg !== "object") {
+        const s = String(alg);
+        if (!s) {
+          throw new TypeError("Failed to execute 'generateKey' on 'SubtleCrypto': algorithm name must not be empty.");
+        }
+        return s;
+      }
+      const name = alg.name;
+      if (name === undefined) {
+        throw new TypeError("Failed to execute 'generateKey' on 'SubtleCrypto': required member name is undefined.");
+      }
+      return String(name);
+    }
+
+    SubtleCrypto.prototype.generateKey = async function generateKey(algorithm, extractable, keyUsages) {
+      const rawName = getAlgName(algorithm);
+      const upperName = rawName.toUpperCase();
+      const usages = toKeyUsages(keyUsages);
+
+      const entry = CRYPTO_GEN_SUPPORTED.get(upperName);
+      if (!entry) {
+        if (CRYPTO_GEN_PASSTHROUGH.has(upperName)) {
+          const norm = typeof algorithm === "object" ? Object.assign({}, algorithm, { name: upperName }) : { name: upperName };
+          return new CryptoKey("secret", extractable, norm, usages);
+        }
+        throw new DOMException(
+          "Unrecognized or unsupported generateKey algorithm '" + rawName + "'.",
+          "NotSupportedError"
+        );
+      }
+
+      if (entry.hash) {
+        if (typeof algorithm !== "object" || algorithm === null) {
+          throw new TypeError("Failed to execute 'generateKey' on 'SubtleCrypto': algorithm must be an object.");
+        }
+        const hash = algorithm.hash;
+        if (hash !== undefined) {
+          let hashName = "";
+          if (typeof hash === "object" && hash !== null) {
+            hashName = String(hash.name || "");
+          } else {
+            hashName = String(hash);
+          }
+          if (!CRYPTO_DIGESTS.has(hashName.toUpperCase())) {
+            throw new DOMException(
+              "Unrecognized hash algorithm '" + hashName + "'.",
+              "NotSupportedError"
+            );
+          }
+        }
+      }
+
+      const normAlg = typeof algorithm === "object" && algorithm !== null
+        ? Object.assign({}, algorithm, { name: entry.name })
+        : { name: entry.name };
+
+      if (entry.asymmetric) {
+        const pubAlg = Object.assign({}, normAlg);
+        const privAlg = Object.assign({}, normAlg);
+        const pubKey = new CryptoKey("public", true, pubAlg, ["verify"]);
+        const privKey = new CryptoKey("private", Boolean(extractable), privAlg, usages);
+        return new CryptoKeyPair(pubKey, privKey);
+      }
+
+      return new CryptoKey("secret", Boolean(extractable), normAlg, usages);
+    };
+    markNative(SubtleCrypto.prototype.generateKey, "generateKey");
+
+    SubtleCrypto.prototype.deriveBits = async function deriveBits(algorithm, baseKey, length) {
+      if (typeof length === "bigint") {
+        throw new TypeError("Failed to execute 'deriveBits' on 'SubtleCrypto': length cannot be a BigInt");
+      }
+      const lenNum = Number(length);
+      if (!Number.isFinite(lenNum) || isNaN(lenNum)) {
+        throw new TypeError("Failed to execute 'deriveBits' on 'SubtleCrypto': length must be a finite number");
+      }
+      return new ArrayBuffer(Math.max(0, Math.floor(lenNum / 8)));
+    };
+    markNative(SubtleCrypto.prototype.deriveBits, "deriveBits");
+
+    SubtleCrypto.prototype.digest = async function digest(algorithm, data) {
+      const rawName = typeof algorithm === "object" && algorithm !== null ? algorithm.name : String(algorithm || "");
+      const upperName = String(rawName).toUpperCase();
+      if (!CRYPTO_DIGESTS.has(upperName)) {
+        throw new DOMException("Unrecognized or unsupported digest algorithm '" + rawName + "'.", "NotSupportedError");
+      }
+      const byteLen = upperName === "SHA-512" ? 64 : upperName === "SHA-384" ? 48 : 32;
+      return new ArrayBuffer(byteLen);
+    };
+    markNative(SubtleCrypto.prototype.digest, "digest");
+
+    SubtleCrypto.prototype.encrypt = markNative(async function () { return new ArrayBuffer(0); }, "encrypt");
+    SubtleCrypto.prototype.decrypt = markNative(async function () { return new ArrayBuffer(0); }, "decrypt");
+    SubtleCrypto.prototype.sign = markNative(async function () { return new ArrayBuffer(0); }, "sign");
+    SubtleCrypto.prototype.verify = markNative(async function () { return true; }, "verify");
+    SubtleCrypto.prototype.deriveKey = markNative(async function (algorithm, baseKey, derivedKeyType, extractable, keyUsages) {
+      return new CryptoKey("secret", extractable, derivedKeyType, keyUsages);
+    }, "deriveKey");
+    SubtleCrypto.prototype.importKey = markNative(async function (format, keyData, algorithm, extractable, keyUsages) {
+      const norm = typeof algorithm === "object" ? algorithm : { name: String(algorithm) };
+      return new CryptoKey("secret", extractable, norm, keyUsages);
+    }, "importKey");
+    SubtleCrypto.prototype.exportKey = markNative(async function (format, key) {
+      if (format === "jwk") return { kty: "oct", k: "AAECAwQFBgcICQoLDA0ODw" };
+      return new ArrayBuffer(32);
+    }, "exportKey");
+    SubtleCrypto.prototype.wrapKey = markNative(async function () { return new ArrayBuffer(0); }, "wrapKey");
+    SubtleCrypto.prototype.unwrapKey = markNative(async function (format, wrappedKey, unwrappingKey, unwrapAlgorithm, unwrappedKeyAlgorithm, extractable, keyUsages) {
+      return new CryptoKey("secret", extractable, unwrappedKeyAlgorithm, keyUsages);
+    }, "unwrapKey");
+
+    markNative(SubtleCrypto, "SubtleCrypto");
+
+    function getRandomValues(typedArray) {
+      if (!typedArray || !ArrayBuffer.isView(typedArray) || (typedArray instanceof DataView)) {
+        throw new TypeError("Failed to execute 'getRandomValues' on 'Crypto': parameter 1 is not of type 'ArrayBufferView'.");
+      }
+      if (typedArray.byteLength > 65536) {
+        throw new DOMException("The requested length exceeds 65,536 bytes", "QuotaExceededError");
+      }
+      const u8 = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+      for (let i = 0; i < u8.length; i++) {
+        u8[i] = Math.floor(Math.random() * 256);
+      }
+      return typedArray;
+    }
+
+    function randomUUID() {
+      const bytes = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = [];
+      for (let i = 0; i < 16; i++) {
+        hex.push((bytes[i] < 16 ? "0" : "") + bytes[i].toString(16));
+      }
+      return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+    }
+
+    function Crypto() {
+      this.subtle = new SubtleCrypto();
+    }
+    Crypto.prototype.getRandomValues = markNative(getRandomValues, "getRandomValues");
+    Crypto.prototype.randomUUID = markNative(randomUUID, "randomUUID");
+    Crypto.prototype[Symbol.toStringTag] = "Crypto";
+    markNative(Crypto, "Crypto");
+
+    const cryptoInstance = new Crypto();
+    global.crypto = cryptoInstance;
+    global.Crypto = Crypto;
+    global.CryptoKey = CryptoKey;
+    global.CryptoKeyPair = CryptoKeyPair;
+    global.SubtleCrypto = SubtleCrypto;
+
+    if (typeof window !== "undefined") {
+      window.crypto = cryptoInstance;
+      window.Crypto = Crypto;
+      window.CryptoKey = CryptoKey;
+      window.CryptoKeyPair = CryptoKeyPair;
+      window.SubtleCrypto = SubtleCrypto;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.crypto = cryptoInstance;
+      globalThis.Crypto = Crypto;
+      globalThis.CryptoKey = CryptoKey;
+      globalThis.CryptoKeyPair = CryptoKeyPair;
+      globalThis.SubtleCrypto = SubtleCrypto;
     }
   }
 

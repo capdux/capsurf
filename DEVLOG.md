@@ -1079,3 +1079,24 @@
 5. **重绘受损追踪与祖先子树排除 (`src/dom/dom.cp`, `src/cdp/session.cp`)**：
    - **设计动机**：`markPaintDamage` 与 `getPaintDamageSince` 用于支持增量局部渲染与受损区域上报，且支持 `excludeNodeId` 将用户操作的节点及其祖先树整体排除；
    - **解决方案**：在 `Document` 中维护绘制受损节点集，重绘时记录受损 `node_id`；查询时利用 `doc.isLineageOrSubtree` 递归向上与向下核验，高效完成过滤。
+
+## Phase 56 HTMLIFrameElement 窗口/Location 门面体系、Accept-Encoding 编码收敛与 WebCrypto 算法校验
+1. **HTMLIFrameElement contentWindow / contentDocument 门面与原型集成 (`src/js/shim/element/html-classes.js`)**：
+   - **设计动机**：测试用例 `iframe location assignment throws SyntaxError without replacing its facade` 与 `a relative location write on an about:blank iframe navigates the frame` 要求 `iframe.contentWindow` 与 `iframe.contentDocument` 返回符合 W3C HTML 规范的窗口对象，具备独立的 `DOMException`、`location`、`document`，且当向 `contentWindow.location` 赋予非法 URL 时，抛出由其自身环境创建的 `SyntaxError`（`code: 12`），并且绝对不得替换 `location` 门面引用；
+   - **解决方案**：
+     - 在 `html-classes.js` 中建立懒初始化的 Iframe Window 门面，注入 `DOMException`、`Error`、`TypeError`、`Node`、`Document` 等全局构造器；
+     - 实现 `makeIframeLocationFacade`：受保护的 `href` 存取器与 `assign`/`replace`/`reload`；严格对入参执行字符串转化，遇 `Symbol()` 抛出原生 `TypeError`；URL 解析失败抛出 `FrameDOMException("Invalid URL", "SyntaxError")`；
+     - `contentWindow.location` 存取器拦截非法写入并保护门面对象恒等（`contentWindow.location === previousLocation` 为 `true`）；
+     - 补全 `DOM_EXCEPTION_CODES`（`SyntaxError: 12`）。
+2. **Accept-Encoding 协议白名单限制与回显支持 (`src/net/mock_fixtures.cp`, `src/cdp/network.cp`, `src/js/shim/window.js`)**：
+   - **设计动机**：HTTP 规范中浏览器客户端应上报其支持的压缩格式，当测试通过 `setExtraHTTPHeaders` 尝试注入未实现算法（如 `deflate`, `zstd`）时，网络层必须将编码集限制为内核支持的白名单 `"gzip, br"`；
+   - **解决方案**：
+     - 在 `mock_fixtures.cp` 中实装 `/__fixtures/gzip-only-doc.html` 动态响应与 `echo-headers.json` 回显；
+     - 在 `network.cp` 与 `http_loader.cp` 中实现 `sanitizeAcceptEncoding` 过滤器，收敛请求头至 `"gzip, br"`；
+     - 在 `window.js` 的 `fetch` 实现中默认注入 `"accept-encoding": "gzip, br"`。
+3. **WebCrypto SubtleCrypto.generateKey 算法族系与参数校验 (`src/js/shim/crypto.js`)**：
+   - **设计动机**：W3C Web Cryptography 规范规定 `generateKey` 必须支持标准算法（如 `AES-GCM`），而对缺少必要参数的算法必须返回 rejected Promise with `TypeError`，对不支持的算法（`AES-CMAC`）或不安全哈希（HMAC with `MD5`、RSA-PSS with `SHA`）返回 rejected Promise with `NotSupportedError`；
+   - **解决方案**：
+     - 在 `crypto.js` 中实装符合 IDL 的 `CryptoKey` 体系；
+     - 在 `generateKey` 中严格校验算法名称、哈希算法有效性，遇非法参数或非支持哈希返回 `NotSupportedError`（`DOMException`）；
+     - 成功调用时解析为原生 `CryptoKey` 实例并绑定规范算法对象。

@@ -53,6 +53,7 @@ import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
 
 pub @c {
     struct TimeVal {
@@ -1052,6 +1053,26 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return createJsElement(ctx, dom_ctx, node_id);
 }
 
+@c fn js_capsurf_load_fixture(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let len: usize = 0;
+    const ptr = JS_ToCStringLen2(ctx, &len, argv[0], 0);
+    if (ptr != null) {
+        defer JS_FreeCString(ctx, ptr);
+        let url_buf: [4096]u8 = [0; 4096];
+        const actual_len = @min(len, url_buf.len);
+        @memcpy(url_buf[0..actual_len], ptr.?[0..actual_len]);
+        const url_slice = url_buf[0..actual_len];
+
+        let out_buf: [65536]u8 = [0; 65536];
+        if (res := MockFixtures.handleFixtureRequest(url_slice, "", "", &out_buf)) {
+            return jsNewString(ctx, res);
+        }
+    }
+    return jsNull();
+}
+
 pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
@@ -1183,6 +1204,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, console_obj, "debug", js_console_debug, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_load_fixture", js_capsurf_load_fixture, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

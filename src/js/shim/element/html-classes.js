@@ -294,6 +294,349 @@ function installHtmlClasses(global) {
   global.HTMLCanvasElement = HTMLCanvasElement;
 
   // 5. HTMLIFrameElement
+  function locationInputString(value) {
+    if (typeof value === "symbol") {
+      throw new TypeError("Cannot convert a Symbol value to a string");
+    }
+    return String(value);
+  }
+
+  const FACADE_LOCATION_PARTS = [
+    "protocol",
+    "host",
+    "hostname",
+    "port",
+    "pathname",
+    "search",
+    "hash",
+  ];
+
+  function makeIframeLocationFacade(iframeEl, initialUrl, contentWindow) {
+    let current = initialUrl || "about:blank";
+
+    function resolveAndNavigate(v) {
+      const inputStr = locationInputString(v);
+      let resolved = "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI)
+          ? document.baseURI
+          : (global.location ? global.location.href : "about:blank");
+        resolved = new URL(inputStr, base).toString();
+      } catch (e) {
+        const FrameDOMException = (contentWindow && contentWindow.DOMException) ||
+          (typeof global !== "undefined" && global.DOMException) ||
+          (typeof globalThis !== "undefined" && globalThis.DOMException) ||
+          DOMException;
+        const error = new FrameDOMException("Invalid URL", "SyntaxError");
+        if (typeof FrameDOMException === "function") {
+          try {
+            Object.defineProperty(error, "constructor", { value: FrameDOMException });
+          } catch (_) {}
+        }
+        throw error;
+      }
+      current = resolved;
+      try {
+        handleIframeNavigation(iframeEl, resolved);
+      } catch (e) {}
+    }
+
+    const loc = {
+      get href() {
+        return current;
+      },
+      set href(v) {
+        resolveAndNavigate(v);
+      },
+      get origin() {
+        try {
+          return new URL(current).origin;
+        } catch (e) {
+          return "null";
+        }
+      },
+      toString: function () {
+        return current;
+      },
+      valueOf: function () {
+        return current;
+      },
+      assign: function (v) {
+        resolveAndNavigate(v);
+      },
+      replace: function (v) {
+        resolveAndNavigate(v);
+      },
+      reload: function () {
+        resolveAndNavigate(current);
+      },
+    };
+
+    for (let i = 0; i < FACADE_LOCATION_PARTS.length; i++) {
+      (function (part) {
+        Object.defineProperty(loc, part, {
+          enumerable: true,
+          configurable: true,
+          get: function () {
+            try {
+              return new URL(current)[part];
+            } catch (e) {
+              return "";
+            }
+          },
+          set: function (v) {
+            try {
+              const next = new URL(current);
+              next[part] = String(v);
+              loc.href = next.toString();
+            } catch (e) {}
+          },
+        });
+      })(FACADE_LOCATION_PARTS[i]);
+    }
+
+    loc[Symbol.toPrimitive] = function () {
+      return current;
+    };
+
+    return loc;
+  }
+
+  const iframeLocationMap = new WeakMap();
+
+  function ensureIframeLocationFacade(contentWindow, iframeEl, url) {
+    let loc = iframeLocationMap.get(contentWindow);
+    if (!loc) {
+      loc = makeIframeLocationFacade(iframeEl, url, contentWindow);
+      iframeLocationMap.set(contentWindow, loc);
+      Object.defineProperty(contentWindow, "location", {
+        enumerable: true,
+        configurable: false,
+        get: function () {
+          return iframeLocationMap.get(contentWindow);
+        },
+        set: function (value) {
+          const cur = iframeLocationMap.get(contentWindow);
+          if (cur) {
+            cur.href = locationInputString(value);
+          }
+        },
+      });
+    }
+    return loc;
+  }
+
+  const FRAME_WINDOW_GLOBALS = [
+    "DOMException", "Error", "TypeError", "RangeError", "SyntaxError",
+    "ReferenceError", "URIError", "EvalError",
+    "Array", "Object", "String", "Number", "Boolean", "Symbol",
+    "Promise", "Function", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
+    "JSON", "Math", "Node", "Element", "Document", "DocumentFragment",
+    "Event", "MessageEvent", "CustomEvent", "NodeList", "HTMLCollection",
+    "DOMParser", "Range", "StaticRange", "URL", "URLSearchParams",
+    "Blob", "FormData", "Headers", "Request", "Response",
+    "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
+    "setTimeout", "clearTimeout", "setInterval", "clearInterval",
+    "requestAnimationFrame", "cancelAnimationFrame", "console"
+  ];
+
+  function decorateIframeWindow(win) {
+    const pageGlobal = typeof window !== "undefined" ? window : globalThis;
+    for (let i = 0; i < FRAME_WINDOW_GLOBALS.length; i++) {
+      const key = FRAME_WINDOW_GLOBALS[i];
+      if (win[key] === undefined && pageGlobal[key] !== undefined) {
+        win[key] = pageGlobal[key];
+      }
+    }
+  }
+
+  function createIframePlaceholderDoc(docUrl) {
+    let doc = null;
+    try {
+      const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+      if (Ctor) {
+        const parser = new Ctor();
+        doc = parser.parseFromString("<html><head></head><body></body></html>", "text/html");
+        if (doc) {
+          doc._mutable = true;
+          try {
+            Object.defineProperty(doc, "_baseUrl", {
+              value: docUrl || "about:blank",
+              configurable: true,
+              writable: true,
+            });
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+    return doc;
+  }
+
+  function handleIframeNavigation(iframeEl, resolvedUrl) {
+    if (!iframeEl) return;
+
+    if (resolvedUrl === "about:blank" || !resolvedUrl) {
+      const doc = createIframePlaceholderDoc("about:blank");
+      if (iframeEl._contentWindow) {
+        iframeEl._contentWindow.document = doc;
+        if (doc) {
+          try {
+            Object.defineProperty(doc, "defaultView", {
+              value: iframeEl._contentWindow,
+              configurable: true,
+            });
+          } catch (e) {}
+        }
+      }
+      iframeEl._contentDocument = doc;
+      Promise.resolve().then(function () {
+        fireIframeLoadEvent(iframeEl);
+      });
+      return;
+    }
+
+    let loadPromise = null;
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
+      const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
+      if (fixtureHtml !== null && fixtureHtml !== undefined) {
+        loadPromise = Promise.resolve(fixtureHtml);
+      }
+    }
+
+    if (!loadPromise) {
+      if (typeof fetch === "function") {
+        loadPromise = fetch(resolvedUrl).then(function (res) {
+          return res.text();
+        });
+      } else {
+        loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
+      }
+    }
+
+    loadPromise.then(function (html) {
+      let newDoc = null;
+      try {
+        const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+        if (Ctor) {
+          const parser = new Ctor();
+          newDoc = parser.parseFromString(html, "text/html");
+          if (newDoc) {
+            newDoc._mutable = true;
+            try {
+              Object.defineProperty(newDoc, "_baseUrl", {
+                value: resolvedUrl,
+                configurable: true,
+                writable: true,
+              });
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+
+      if (newDoc) {
+        if (iframeEl._contentWindow) {
+          iframeEl._contentWindow.document = newDoc;
+          try {
+            Object.defineProperty(newDoc, "defaultView", {
+              value: iframeEl._contentWindow,
+              configurable: true,
+            });
+          } catch (e) {}
+        }
+        iframeEl._contentDocument = newDoc;
+      }
+
+      fireIframeLoadEvent(iframeEl);
+    }).catch(function () {
+      fireIframeLoadEvent(iframeEl);
+    });
+  }
+
+  function fireIframeLoadEvent(iframeEl) {
+    try {
+      const evt = new Event("load", { bubbles: false, cancelable: false });
+      if (typeof iframeEl.onload === "function") {
+        try {
+          iframeEl.onload.call(iframeEl, evt);
+        } catch (e) {
+          if (typeof console !== "undefined" && console.error) console.error(e);
+        }
+      }
+      if (typeof iframeEl.dispatchEvent === "function") {
+        try {
+          iframeEl.dispatchEvent(evt);
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  function getOrCreateIframeWindow(iframeEl) {
+    if (iframeEl._contentWindow) return iframeEl._contentWindow;
+
+    let initialUrl = "";
+    try {
+      initialUrl = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
+    } catch (e) {}
+    if (!initialUrl || initialUrl === "about:blank") {
+      initialUrl = "about:blank";
+    } else {
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI)
+          ? document.baseURI
+          : (global.location ? global.location.href : "about:blank");
+        initialUrl = new URL(initialUrl, base).href;
+      } catch (e) {
+        initialUrl = "about:blank";
+      }
+    }
+
+    const initialDoc = createIframePlaceholderDoc(initialUrl);
+
+    const contentWindow = {
+      document: initialDoc,
+      parent: global.window || global,
+      top: (global.window && global.window.top) || global,
+      frames: [],
+      frameElement: iframeEl,
+      name: (function () {
+        try {
+          return String(iframeEl.getAttribute ? (iframeEl.getAttribute("name") || "") : "");
+        } catch (e) {
+          return "";
+        }
+      })(),
+      addEventListener: function () {},
+      removeEventListener: function () {},
+      dispatchEvent: function () { return true; },
+    };
+
+    contentWindow.self = contentWindow;
+    contentWindow.window = contentWindow;
+
+    decorateIframeWindow(contentWindow);
+    ensureIframeLocationFacade(contentWindow, iframeEl, initialUrl);
+
+    if (initialDoc) {
+      try {
+        Object.defineProperty(initialDoc, "defaultView", {
+          value: contentWindow,
+          configurable: true,
+        });
+      } catch (e) {}
+    }
+
+    contentWindow.postMessage = function () {};
+
+    iframeEl._contentWindow = contentWindow;
+    iframeEl._contentDocument = initialDoc;
+
+    if (initialUrl && initialUrl !== "about:blank") {
+      handleIframeNavigation(iframeEl, initialUrl);
+    }
+
+    return contentWindow;
+  }
+
   function HTMLIFrameElement() {}
   HTMLIFrameElement.prototype = Object.create(ElementProto);
   HTMLIFrameElement.prototype.constructor = HTMLIFrameElement;
@@ -309,18 +652,36 @@ function installHtmlClasses(global) {
         return raw;
       }
     },
-    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+    set: function (v) {
+      const strVal = String(v);
+      nativeSetAttribute.call(this, "src", strVal);
+      if (this._contentWindow) {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
+        let resolved = "about:blank";
+        try {
+          resolved = new URL(strVal, base).href;
+        } catch (e) {
+          resolved = strVal;
+        }
+        handleIframeNavigation(this, resolved);
+      }
+    },
     configurable: true,
     enumerable: true,
   });
 
   Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
-    get: function () { return null; },
+    get: function () {
+      return getOrCreateIframeWindow(this);
+    },
     configurable: true,
   });
 
   Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
-    get: function () { return null; },
+    get: function () {
+      const win = getOrCreateIframeWindow(this);
+      return (win && win.document) || this._contentDocument || null;
+    },
     configurable: true,
   });
 
