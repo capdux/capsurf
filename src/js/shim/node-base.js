@@ -226,6 +226,14 @@ const nativeElementNextSibling = (typeof Element !== "undefined" && Element.prot
 
 function ensureChildren(node) {
   if (!node || typeof node !== "object") return [];
+  const tag = String(node.localName || node.tagName || "").toLowerCase();
+  if (tag === "template") {
+    if (typeof node.content !== "undefined") {
+      const _ = node.content;
+    }
+    if (!node._children) node._children = [];
+    return node._children;
+  }
   if (!node._children) {
     node._children = [];
     try {
@@ -248,6 +256,99 @@ function ensureChildren(node) {
   return node._children;
 }
 
+function executeConnectedScripts(node) {
+  if (!node || typeof node !== "object") return;
+  if (!node.isConnected) return;
+  const tag = String(node.localName || node.tagName || "").toLowerCase();
+  if (tag === "script" && !node._alreadyStarted) {
+    node._alreadyStarted = true;
+    const nativeGetAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.getAttribute)
+      ? Element.prototype.getAttribute
+      : (node.getAttribute ? node.getAttribute.bind(node) : null);
+    const type = String(
+      (nativeGetAttr ? nativeGetAttr.call(node, "type") : node.type) || ""
+    ).trim().toLowerCase();
+    const isJs = !type || type === "module" || /^(?:text|application)\/(?:javascript|ecmascript)$/i.test(type);
+    if (isJs) {
+      const nativeHasAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute)
+        ? Element.prototype.hasAttribute
+        : (node.hasAttribute ? node.hasAttribute.bind(node) : null);
+      const hasNoModule = nativeHasAttr ? nativeHasAttr.call(node, "nomodule") : (node.hasAttribute ? node.hasAttribute("nomodule") : false);
+      const src = (nativeGetAttr ? nativeGetAttr.call(node, "src") : null) || node.src || null;
+      const code = node.text || node.textContent || "";
+
+      if (!src && !code) {
+        node._alreadyStarted = false;
+        return;
+      }
+
+      if (type !== "module" && hasNoModule) {
+        return;
+      }
+
+      if (src) {
+        if (typeof fetch === "function") {
+          fetch(src)
+            .then(function (res) {
+              if (!res.ok && res.status !== 200) {
+                throw new Error("HTTP " + res.status);
+              }
+              return res.text();
+            })
+            .then(function (code) {
+              try {
+                (1, eval)(code);
+              } catch (evalErr) {
+                if (typeof console !== "undefined" && console.error) {
+                  console.error("Error executing script " + src, evalErr);
+                }
+              }
+              const evt = new Event("load", { bubbles: false, cancelable: false });
+              if (typeof node.onload === "function") {
+                try { node.onload.call(node, evt); } catch (e) {
+                  if (typeof console !== "undefined" && console.error) console.error(e);
+                }
+              }
+              if (typeof node.dispatchEvent === "function") {
+                try { node.dispatchEvent(evt); } catch (e) {}
+              }
+            })
+            .catch(function (fetchErr) {
+              const evt = new Event("error", { bubbles: false, cancelable: false });
+              if (typeof node.onerror === "function") {
+                try { node.onerror.call(node, evt); } catch (e) {
+                  if (typeof console !== "undefined" && console.error) console.error(e);
+                }
+              }
+              if (typeof node.dispatchEvent === "function") {
+                try { node.dispatchEvent(evt); } catch (e) {}
+              }
+            });
+        }
+      } else {
+        const code = node.text || node.textContent || "";
+        if (code) {
+          try {
+            (1, eval)(code);
+          } catch (e) {
+            if (typeof reportError === "function") {
+              reportError(e);
+            } else if (typeof console !== "undefined" && console.error) {
+              console.error(e);
+            }
+          }
+        }
+      }
+    }
+  }
+  const kids = node.childNodes || node._children;
+  if (kids && kids.length) {
+    for (let i = 0; i < kids.length; i++) {
+      executeConnectedScripts(kids[i]);
+    }
+  }
+}
+
 Node.prototype.appendChild = function (child) {
   if (!this || typeof this !== "object") {
     throw new TypeError("Illegal invocation");
@@ -266,7 +367,13 @@ Node.prototype.appendChild = function (child) {
     return child;
   }
 
-  // If child already has a parent, remove from it
+  // If child already has a parent or owner fragment, remove from it
+  if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+    try {
+      child._ownerFragment.removeChild(child);
+    } catch (e) {}
+    child._ownerFragment = null;
+  }
   if (child.parentNode && typeof child.parentNode.removeChild === "function") {
     try {
       child.parentNode.removeChild(child);
@@ -282,6 +389,7 @@ Node.prototype.appendChild = function (child) {
       child._children = [];
     }
     ensureChildren(this).push(child);
+    executeConnectedScripts(child);
     return child;
   }
 
@@ -301,6 +409,8 @@ Node.prototype.appendChild = function (child) {
     rec.addedNodes = [child];
     notifyMutation(rec);
   }
+
+  executeConnectedScripts(child);
 
   return child;
 };
@@ -336,6 +446,12 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     return newChild;
   }
 
+  if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+    try {
+      newChild._ownerFragment.removeChild(newChild);
+    } catch (e) {}
+    newChild._ownerFragment = null;
+  }
   if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
     try {
       newChild.parentNode.removeChild(newChild);
@@ -356,6 +472,8 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     rec.addedNodes = [newChild];
     notifyMutation(rec);
   }
+
+  executeConnectedScripts(newChild);
 
   return newChild;
 };
@@ -471,6 +589,9 @@ if (typeof Element !== "undefined" && Element.prototype) {
           this._children.length = 0;
         }
         origSetInnerHtml.call(this, v);
+        if (typeof processSubtreeTemplates === "function") {
+          processSubtreeTemplates(this);
+        }
       },
       configurable: true,
       enumerable: nativeElementInnerHtmlDesc.enumerable,
@@ -601,13 +722,36 @@ function DocumentFragment() {
 DocumentFragment.prototype = Object.create(Node.prototype);
 DocumentFragment.prototype.constructor = DocumentFragment;
 DocumentFragment.prototype.appendChild = function (child) {
-  return Node.prototype.appendChild.call(this, child);
+  if (!child || typeof child !== "object") return child;
+  if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+    try { child._ownerFragment.removeChild(child); } catch (e) {}
+  }
+  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+    try { child.parentNode.removeChild(child); } catch (e) {}
+  }
+  child._ownerFragment = this;
+  const res = Node.prototype.appendChild.call(this, child);
+  child._ownerFragment = this;
+  return res;
 };
 DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
-  return Node.prototype.insertBefore.call(this, newChild, refChild);
+  if (!newChild || typeof newChild !== "object") return newChild;
+  if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+    try { newChild._ownerFragment.removeChild(newChild); } catch (e) {}
+  }
+  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+    try { newChild.parentNode.removeChild(newChild); } catch (e) {}
+  }
+  newChild._ownerFragment = this;
+  const res = Node.prototype.insertBefore.call(this, newChild, refChild);
+  newChild._ownerFragment = this;
+  return res;
 };
 DocumentFragment.prototype.removeChild = function (child) {
-  if (!child || child.parentNode !== this || this._children.indexOf(child) === -1) {
+  if (!child) return child;
+  const kids = this._children || [];
+  const idx = kids.indexOf(child);
+  if (idx === -1 && child._ownerFragment !== this && child.parentNode !== this) {
     if (typeof DOMException !== "undefined") {
       throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
     }
@@ -615,8 +759,8 @@ DocumentFragment.prototype.removeChild = function (child) {
     err.name = "NotFoundError";
     throw err;
   }
-  const idx = this._children.indexOf(child);
-  if (idx >= 0) this._children.splice(idx, 1);
+  if (idx >= 0) kids.splice(idx, 1);
+  if (child._ownerFragment === this) child._ownerFragment = null;
   child.parentNode = null;
   return child;
 };
@@ -627,6 +771,52 @@ Object.defineProperty(DocumentFragment.prototype, "childNodes", {
   configurable: true,
 });
 markNative(DocumentFragment, "DocumentFragment");
+
+Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
+  get: function () {
+    const kids = ensureChildren(this);
+    let html = "";
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k.nodeType === 1) html += k.outerHTML || "";
+      else if (k.nodeType === 3) html += k.textContent || "";
+      else if (k.nodeType === 8) html += "<!--" + (k.data || "") + "-->";
+    }
+    return html;
+  },
+  set: function (val) {
+    while (this.firstChild) {
+      this.removeChild(this.firstChild);
+    }
+    const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+    const temp = doc ? doc.createElement("div") : null;
+    if (temp) {
+      temp.innerHTML = val;
+      while (temp.firstChild) {
+        const ch = temp.firstChild;
+        try { temp.removeChild(ch); } catch (e) {}
+        this.appendChild(ch);
+      }
+    }
+  },
+  configurable: true,
+});
+
+function ShadowRoot(host, mode) {
+  DocumentFragment.call(this);
+  this.nodeType = DOCUMENT_FRAGMENT_NODE;
+  this.nodeName = "#document-fragment";
+  this.host = host || null;
+  this.mode = mode || "open";
+  this._children = [];
+}
+ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
+ShadowRoot.prototype.constructor = ShadowRoot;
+markNative(ShadowRoot, "ShadowRoot");
+global.ShadowRoot = ShadowRoot;
+if (typeof globalThis !== "undefined") {
+  globalThis.ShadowRoot = ShadowRoot;
+}
 
 if (typeof Document !== "undefined" && Document.prototype) {
   if (!Document.prototype.createTextNode) {

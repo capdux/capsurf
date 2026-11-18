@@ -964,3 +964,27 @@
    - **解决方案**：
      - 在 `CanvasRenderingContext2D` 构造器中引入内部私钥 `_INTERNAL_CTX_SECRET` 校验，在 `fillRect` 等全部方法体前置注入 `checkCtx(this)` 接收者校验；
      - 在 `src/layout/layout.cp` 中实装可替换元素固有尺寸推导函数 `ReplacedSize`，为 `<canvas>` 设置默认 300px × 150px 并在盒模型计算中正确结合 CSS `max-width` 实施等比缩放。
+
+## Phase 51 脚本 IDL 访问器、Force-Async 状态机、元素可见性与声明式 Shadow DOM 死循环根治技术方案
+1. **游离节点父级泄漏修复与 checkVisibility 可见性状态机 (`src/js/dom_binding.cp` & `src/js/shim/element/element.js`)**：
+   - **设计动机**：测试用例 `checkVisibility reports boxless, transparent and hidden elements` 发现刚创建的游离元素 `document.createElement("div").checkVisibility()` 错误返回 `true`；
+   - **根因分析**：`js_element_get_parent_node` 原先在 `parent_id == NULL_NODE` 时兜底返回了 `document`，使得所有未挂载游离节点误判为 `parentNode === document` 且 `isConnected === true`；
+   - **解决方案**：
+     - 将 `document` 返回范围严格收窄为 `el.node_id == doc.root_element && doc.root_element != NULL_NODE`；
+     - 在 `src/js/shim/element/element.js` 中实装完整的 `Element.prototype.checkVisibility(options)`，结合 CSS 级联计算与 DOM 连通性，精确校验 `!this.isConnected`、`display: none / contents`、`checkOpacity`、`checkVisibilityCSS`、零尺寸边界与视口可见性。
+2. **WHATWG Script 自身访问器与强异步（Force-Async）标记机制 (`src/js/shim/element/html-classes.js`)**：
+   - **设计动机**：用例 `src, type and async are own accessors, and async follows force async` 验证规范细节：`src`、`type`、`async` 必须作为 own property 描述符直接定义在 `HTMLScriptElement.prototype` 上；且 `script.async` 受非阻塞（"force-async"）内部标志控制——动态 `createElement("script")` 默认为 true，解析器插入默认为 false，任何属性 Setter 写入或 `setAttribute("async")` 必须清除该标志；
+   - **解决方案**：
+     - 在 `installHtmlClasses` 中通过 `Object.defineProperty` 直接为 `HTMLScriptElement.prototype` 注册自身访问器，并在原型链断开拦截时保持独立；
+     - 维护弱映射 `scriptForceAsyncMap`，在 `async` 属性 Getter 中结合 `this.hasAttribute("async")` 与 `forceAsync` 标志返回布尔值；
+     - 在 `setAttribute`、`setAttributeNS`、`removeAttribute` 以及 `async` Setter 中精确联动清除该内部标志。
+3. **声明式 Shadow DOM 模版迁移死循环根治与跨环境片段父级桥接 (`src/js/dom_binding.cp` & `src/js/shim/node-base.js` & `html-classes.js`)**：
+   - **设计动机**：`template-content-parse.e2e.test.ts` 测试耗时高达 16.3 秒（触发 QuickJS Reductions 超时熔断），并在并发执行时偶发状态死锁；
+   - **根因定位**：
+     - `DocumentFragment` 与 `ShadowRoot` 属于纯 JS 运行环境构建的容器对象，底层 Arena DOM 并不为模版内容子节点分配原生父节点（`parent_id == NULL_NODE`）；
+     - `processSubtreeTemplates` 解析 `<template shadowrootmode="open">` 声明式影子根并向 `ShadowRoot` 转移子树时，循环体 `while (content.firstChild) { shadow.appendChild(content.firstChild); }` 依赖 `shadow.appendChild` 调用 `child.parentNode.removeChild(child)`；
+     - 由于 `child.parentNode` 原生 getter 返回 `null`，移除调用未能执行，导致 `content.firstChild` 永远指向首项子节点，在 QuickJS 主线程陷入 100% CPU 死循环直至超时；
+   - **解决方案**：
+     - 在 `src/js/dom_binding.cp` 中打通原生到 JS 片段的父级桥接：当 Arena `parent_id == NULL_NODE` 时检查 JS 层 `_ownerFragment`，使加入片段的原生节点正确汇报 `parentNode === DocumentFragment`；
+     - 在 `Node.prototype.appendChild` / `insertBefore` 与 `DocumentFragment.prototype.removeChild` 中，加入 `_ownerFragment` 自动解除与联动；
+     - 在 `processSubtreeTemplates` 与 `DocumentFragment.prototype.set innerHTML` 中加入防御性就地移除逻辑，彻底消除死循环，使套件执行耗时从 16.3 秒降至 248 毫秒。

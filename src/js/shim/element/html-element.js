@@ -41,13 +41,23 @@ function installHtmlElementExtensions(proto) {
     configurable: true,
   });
 
+  const nativeHasAttribute = proto.hasAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute);
+  const nativeSetAttribute = proto.setAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.setAttribute);
+  const nativeRemoveAttribute = proto.removeAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.removeAttribute);
+
   Object.defineProperty(proto, "hidden", {
     get: function () {
-      return this.hasAttribute("hidden");
+      if (nativeHasAttribute) return nativeHasAttribute.call(this, "hidden");
+      return this.hasAttribute ? this.hasAttribute("hidden") : false;
     },
     set: function (v) {
-      if (v) this.setAttribute("hidden", "");
-      else this.removeAttribute("hidden");
+      if (v) {
+        if (nativeSetAttribute) nativeSetAttribute.call(this, "hidden", "");
+        else if (this.setAttribute) this.setAttribute("hidden", "");
+      } else {
+        if (nativeRemoveAttribute) nativeRemoveAttribute.call(this, "hidden");
+        else if (this.removeAttribute) this.removeAttribute("hidden");
+      }
     },
     configurable: true,
   });

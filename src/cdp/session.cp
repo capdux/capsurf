@@ -362,10 +362,17 @@ pub struct CdpPageSession {
         }
 
         // Execute inline <script> tags in document order
+        const initial_node_count = _.doc.nodes.items.len;
         let nid: usize = 1;
-        while (nid < _.doc.nodes.items.len) : (nid += 1) {
+        while (nid < initial_node_count) : (nid += 1) {
             const n = &_.doc.nodes.items[nid];
             if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
+                const has_nomodule = n.hasAttribute("nomodule");
+                const type_attr = n.getAttribute("type") ?? "";
+                const is_module = std.ascii.eqlIgnoreCase(type_attr, "module");
+                if (has_nomodule && !is_module) {
+                    continue;
+                }
                 let code_buf = _.allocator.alloc(u8, 65536) catch break;
                 defer _.allocator.free(code_buf);
                 let code_len: usize = 0;
@@ -382,6 +389,9 @@ pub struct CdpPageSession {
                     const js_res = _.ctx.eval(code_buf[0..code_len]);
                     if (jsIsException(js_res)) {
                         const exc = _.ctx.getException();
+                        let exc_str_buf: [256]u8 = undefined;
+                        const exc_len = _.formatCdpException(exc, &exc_str_buf);
+                        std.debug.print("[INLINE_SCRIPT_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
                         _.ctx.freeValue(exc);
                     }
                     _.ctx.freeValue(js_res);

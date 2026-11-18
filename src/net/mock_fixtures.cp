@@ -217,11 +217,65 @@ pub struct MockFixtures {
         return null;
     }
 
+    static fn hexVal(c: u8): u8? {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return null;
+    }
+
+    static fn decodeUri(src: []const u8, dst: []u8): []const u8 {
+        let i: usize = 0;
+        let out_len: usize = 0;
+        while (i < src.len && out_len < dst.len) {
+            if (src[i] == '+') {
+                dst[out_len] = ' ';
+                out_len += 1;
+                i += 1;
+            } else if (src[i] == '%' && i + 2 < src.len) {
+                const h1 = MockFixtures.hexVal(src[i + 1]);
+                const h2 = MockFixtures.hexVal(src[i + 2]);
+                if (h1 != null && h2 != null) {
+                    dst[out_len] = (h1.? << 4) | h2.?;
+                    out_len += 1;
+                    i += 3;
+                } else {
+                    dst[out_len] = src[i];
+                    out_len += 1;
+                    i += 1;
+                }
+            } else {
+                dst[out_len] = src[i];
+                out_len += 1;
+                i += 1;
+            }
+        }
+        return dst[0..out_len];
+    }
+
+    static fn extractQueryParam(url: []const u8, param: []const u8): ([]const u8)? {
+        const q_pos = std.mem.indexOfScalar(u8, url, '?') ?? return null;
+        let search = url[q_pos + 1..];
+        if (h_pos := std.mem.indexOfScalar(u8, search, '#')) {
+            search = search[0..h_pos];
+        }
+        let it = std.mem.splitScalar(u8, search, '&');
+        while (part := it.next()) {
+            const eq_pos = std.mem.indexOfScalar(u8, part, '=') ?? continue;
+            const k = part[0..eq_pos];
+            const v = part[eq_pos + 1..];
+            if (std.mem.eql(u8, k, param)) {
+                return v;
+            }
+        }
+        return null;
+    }
+
     /// Handle fixture requests.
     /// 1. /echo-headers.json: synthesizes JSON response with request headers.
     /// 2. Dynamic endpoints:
-    ///    - /policy-doc.html: "<!DOCTYPE html><html><head><title>policy</title></head><body>policy doc</body></html>"
-    ///    - /policy-script.js: "window.__policy_loaded = true;"
+    ///    - /policy-doc.html: dynamic html with body
+    ///    - /policy-script.js: script that appends tag to __ksRan
     /// 3. Static files:
     ///    - /__fixtures/<filename> or .invalid URL -> e2e/page/<filename>
     static fn handleFixtureRequest(
@@ -246,21 +300,31 @@ pub struct MockFixtures {
 
         // 2. Dynamic endpoints
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
-            const doc = "<!DOCTYPE html><html><head><title>policy</title></head><body>policy doc</body></html>";
-            if (doc.len <= out_buf.len) {
-                @memcpy(out_buf[0..doc.len], doc);
-                return out_buf[0..doc.len];
+            let body_val: []const u8 = "";
+            let decoded_buf: [32768]u8 = undefined;
+            if (raw_body := MockFixtures.extractQueryParam(url, "body")) {
+                body_val = MockFixtures.decodeUri(raw_body, &decoded_buf);
             }
-            return doc;
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>policy-doc</title></head><body>{s}</body></html>",
+                .{ body_val },
+            ) catch return null;
+            return res;
         }
 
         if (std.mem.indexOf(u8, url, "/policy-script.js") != null) {
-            const script = "window.__policy_loaded = true;";
-            if (script.len <= out_buf.len) {
-                @memcpy(out_buf[0..script.len], script);
-                return out_buf[0..script.len];
+            let tag: []const u8 = "script";
+            let tag_buf: [128]u8 = undefined;
+            if (raw_tag := MockFixtures.extractQueryParam(url, "tag")) {
+                tag = MockFixtures.decodeUri(raw_tag, &tag_buf);
             }
-            return script;
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "globalThis.__ksRan = (globalThis.__ksRan || []).concat([\"{s}\"]);\n",
+                .{ tag },
+            ) catch return null;
+            return res;
         }
 
         // 3. Static fixture files from e2e/page/

@@ -953,6 +953,21 @@ pub struct Document {
         return true;
     }
 
+    fn isConnectedNode(nid: NodeId): bool {
+        if (nid == NULL_NODE || nid == 0) return false;
+        if (_.root_element == NULL_NODE) return false;
+        let curr = nid;
+        while (curr != NULL_NODE && @as(usize, curr) < _.nodes.items.len) {
+            if (curr == _.root_element) return true;
+            const sn = &_.nodes.items[@as(usize, curr)];
+            if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "template")) {
+                if (curr != nid) return false;
+            }
+            curr = sn.parent;
+        }
+        return false;
+    }
+
     fn getElementById(target_id: []const u8): NodeId {
         if (target_id.len == 0) {
             return NULL_NODE;
@@ -961,7 +976,10 @@ pub struct Document {
         while (i < _.nodes.items.len) : (i += 1) {
             const node = &_.nodes.items[i];
             if (node.node_type == NodeType.Element && node.hasId(target_id)) {
-                return @intCast(i);
+                const nid: NodeId = @intCast(i);
+                if (_.isConnectedNode(nid)) {
+                    return nid;
+                }
             }
         }
         return NULL_NODE;

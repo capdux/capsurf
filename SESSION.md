@@ -2094,3 +2094,51 @@
 
 
 
+
+## [2026-11-18 16:42:00] Turn 64
+### **[User]**
+> 收回子智能体,准备退出
+> 准备退出当前会话, 回顾/总结下, 你觉得有什么心得和能降低token 提高效率的工作方式/规则, 可以写入 GEMINI.md 固化, 下次进来时, 能更好的工作.
+
+### **[Agent]**
+1. **立即回收子智能体与清理现场**：
+   - 调用 `manage_subagents(Action='kill_all')` 彻底终止所有后台子智能体（包含 Track 2 与 Track 3），销毁对应临时分支，保全系统资源；
+   - 检查常驻通信监听守护进程 `watch_task.py`，确保其在后台静默守候。
+2. **深度技术复盘与黑盒测试破局思考**：
+   - 梳理了从 Kitesurf 迁移的 JS 运行时与 CapSurf CP 原生引擎之间的 5 大深层架构失配（C-FFI 包装器身份多重化、双源真理数据脱节、WHATWG 边缘规范盲区、QuickJS-NG 与 V8 行为差、全链路异步时序严苛性）。
+3. **沉淀 5 项核心能效与架构准则并固化写入 `GEMINI.md` 第 11 节**：
+   - **11.1 多子智能体构建权限隔离（Build Isolation）**：杜绝多子智能体并发 `cap build` 争抢覆盖 `bin/main` 导致假死报错；纯 JS 修改仅需轻量 `bundle_runtime.py`；
+   - **11.2 Arena DOM 唯一真理源与包装器单例化（Single Source of Truth）**：以底层 `_nid` 为绝对权威，弱映射表保障 `===` 恒等，惰性镜像杜绝双端冗余追加；
+   - **11.3 分域精准聚类攻坚（Domain-Clustered Milestones）**：拒绝全量 391 用例盲跑，挑选高内聚小集合定向突破；
+   - **11.4 Bun 测试诊断流向铁律**：明确 `bun test` 输出在 `stderr` 且以 `exitCode === 0` 作为判定基准；
+   - **11.5 精益 Prompt 模板（Ultra-Lean Prompts）**：4 要素紧凑模板，单次 Prompt 消耗控制在 500 Tokens 以内。
+
+---
+
+## [2026-11-18 18:24:00 ~ 18:42:00] Turn 65
+### **[User]**
+> 开启常驻通信进程, 两个子智能体, 工作中, 要想办法不过度消耗token情况下, 提高效率, 继续你的工作
+
+### **[Agent Execution & Phase 51 Completion Report]**
+1. **常驻通信守护进程状态核验**：
+   - 验证后台守护任务 `python3 scripts/watch_task.py --status resolved --agent capsurf_agy` 维持运行中 (`task-15444`)。
+2. **Phase 51 模版死循环深度排查与修复闭环**：
+   - **问题定位**：`template-content-parse.e2e.test.ts` 单用例耗时高达 16.3 秒（触发 QuickJS 抢占中断），并发测试时偶发超时失败；
+   - **根因分析**：`DocumentFragment` 在 JS 层管理子节点，底层 Arena DOM 中 `parent_id == NULL_NODE`。在 `processSubtreeTemplates` 解析 `<template shadowrootmode="open">` 声明式影子根并向 `ShadowRoot` 转移子树时，循环体 `while (content.firstChild) { shadow.appendChild(content.firstChild); }` 依赖 `shadow.appendChild` 调用 `child.parentNode.removeChild(child)`。由于原生 `js_element_get_parent_node` 返回 `null`，移除被跳过，导致 `content.firstChild` 永远指向首项子节点，在主线程陷入 100% CPU 死循环；
+   - **技术方案**：
+     - 在 `src/js/dom_binding.cp` 的 `js_element_get_parent_node` 中增加对 `_ownerFragment` 属性的检查，当在 Arena 中无父节点时正确向 JS 汇报所属 `DocumentFragment`；
+     - 在 `src/js/shim/node-base.js` 的 `Node.prototype.appendChild` / `insertBefore` 与 `DocumentFragment.prototype.removeChild` 中，加入 `_ownerFragment` 联动解除；
+     - 在 `src/js/shim/element/html-classes.js` 的 `processSubtreeTemplates` 中加入防御性就地移除保障；
+     - 执行 `python3 scripts/bundle_runtime.py` 重新打包运行时，并重编 `bin/main`（10.7MB ReleaseFast）；
+     - `template-content-parse` 执行耗时从 16.3 秒断崖式下降至 248 毫秒！
+3. **Phase 51 全量黑盒测试验证（5 大测试套件 100% 绿灯，1.90s 极速通过）**：
+   - `e2e/check-visibility.e2e.test.ts` (1/1 PASS in 289ms)
+   - `e2e/script-element-idl.e2e.test.ts` (3/3 PASS in 831ms)
+   - `e2e/script-text.e2e.test.ts` (1/1 PASS in 249ms)
+   - `e2e/template-content-parse.e2e.test.ts` (1/1 PASS in 248ms)
+   - `e2e/window-constructors.e2e.test.ts` (1/1 PASS in 239ms)
+4. **全量回归验证与 4 道静态门禁**：
+   - Phase 48-50 核心回归套件（`options-collection-interface`, `children-options-sameobject`, `canvas-context-interface`, `document-node-members`, `xpath`, `accessibility`）：20 项用例全部 100% 绿灯；
+   - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）。
+5. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。

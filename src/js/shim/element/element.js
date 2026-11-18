@@ -385,6 +385,11 @@ function installElementExtensions(proto) {
       this._attrList.push(entry);
     }
     this._attrs.set(key.toLowerCase(), { name: key, value: val });
+    if (key.toLowerCase() === "async") {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
+        globalThis.__capsurf_clearScriptForceAsync(this);
+      }
+    }
     if (key.toLowerCase() === "id") {
       this.id = val;
     } else if (key.toLowerCase() === "class") {
@@ -441,6 +446,11 @@ function installElementExtensions(proto) {
     const oldEntry = this._attrs.get(key);
     if (!oldVal && oldEntry) oldVal = oldEntry.value;
     this._attrs.delete(key);
+    if (key === "async") {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
+        globalThis.__capsurf_clearScriptForceAsync(this);
+      }
+    }
     if (key === "id") {
       this.id = "";
     } else if (key === "class") {
@@ -458,6 +468,7 @@ function installElementExtensions(proto) {
         curr = curr.parentElement || curr.parentNode;
       }
     }
+
     if (origRemoveAttribute) {
       origRemoveAttribute.call(this, name);
     }
@@ -662,6 +673,12 @@ function installElementExtensions(proto) {
       prefix: prefix,
     });
 
+    if (qname.toLowerCase() === "async" || (localName && String(localName).toLowerCase() === "async")) {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
+        globalThis.__capsurf_clearScriptForceAsync(this);
+      }
+    }
+
     if (qname.toLowerCase() === "id" && ns === null) {
       this.id = val;
     } else if (qname.toLowerCase() === "class" && ns === null) {
@@ -726,6 +743,12 @@ function installElementExtensions(proto) {
       this.id = "";
     } else if (removedName.toLowerCase() === "class" && ns === null) {
       this.className = "";
+    }
+
+    if (loc === "async") {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
+        globalThis.__capsurf_clearScriptForceAsync(this);
+      }
     }
 
     if (origRemoveAttribute) {
@@ -1050,6 +1073,142 @@ function installElementExtensions(proto) {
     scrollElementIntoView(this, centerIfNeeded !== false);
   };
   markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
+
+  proto.checkVisibility = function (options) {
+    if (!this.isConnected) return false;
+
+    function getStyle(el) {
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(el);
+          if (cs) return cs;
+        } catch (e) {}
+      }
+      if (typeof getComputedStyle === "function") {
+        try {
+          const cs = getComputedStyle(el);
+          if (cs) return cs;
+        } catch (e) {}
+      }
+      if (typeof globalThis !== "undefined" && typeof globalThis.getComputedStyle === "function") {
+        try {
+          const cs = globalThis.getComputedStyle(el);
+          if (cs) return cs;
+        } catch (e) {}
+      }
+      return el.style || null;
+    }
+
+    function getProp(el, name) {
+      if (!el) return "";
+      const s = getStyle(el);
+      let v = "";
+      if (s) {
+        if (typeof s.getPropertyValue === "function") {
+          const val = s.getPropertyValue(name);
+          if (val !== undefined && val !== null && val !== "") v = String(val).trim();
+        }
+        if (!v) {
+          const camel = name.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
+          if (s[camel] !== undefined && s[camel] !== null && s[camel] !== "") {
+            v = String(s[camel]).trim();
+          } else if (s[name] !== undefined && s[name] !== null && s[name] !== "") {
+            v = String(s[name]).trim();
+          }
+        }
+      }
+      if (!v && el.style) {
+        if (typeof el.style.getPropertyValue === "function") {
+          const val = el.style.getPropertyValue(name);
+          if (val !== undefined && val !== null && val !== "") v = String(val).trim();
+        }
+        if (!v) {
+          const camel = name.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
+          if (el.style[camel] !== undefined && el.style[camel] !== null && el.style[camel] !== "") {
+            v = String(el.style[camel]).trim();
+          }
+        }
+      }
+      return v;
+    }
+
+    function isZero(val) {
+      if (val === "" || val === null || val === undefined) return false;
+      const num = Number(val);
+      return !isNaN(num) && num === 0;
+    }
+
+    const selfDisplay = getProp(this, "display").toLowerCase();
+    if (selfDisplay === "none" || selfDisplay === "contents") return false;
+
+    const checkOpacity = Boolean(options && options.checkOpacity === true);
+    const checkVisibilityCSS = Boolean(options && options.checkVisibilityCSS === true);
+
+    if (checkOpacity) {
+      const selfOpacity = getProp(this, "opacity");
+      if (isZero(selfOpacity)) return false;
+    }
+
+    if (checkVisibilityCSS) {
+      const selfVis = getProp(this, "visibility").toLowerCase();
+      if (selfVis === "hidden" || selfVis === "collapse") return false;
+    }
+
+    let cur = this.parentElement || this.parentNode;
+    while (cur) {
+      if (cur.nodeType === 1) { // ELEMENT_NODE
+        const d = getProp(cur, "display").toLowerCase();
+        if (d === "none") return false;
+
+        if (checkOpacity) {
+          const op = getProp(cur, "opacity");
+          if (isZero(op)) return false;
+        }
+      } else if (cur.nodeType === 11 && cur.host) { // ShadowRoot
+        cur = cur.host;
+        continue;
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+
+    return true;
+  };
+  markNative(proto.checkVisibility, "checkVisibility");
+
+  proto.attachShadow = function (init) {
+    if (!init || typeof init !== "object" || !init.mode) {
+      throw new TypeError("Failed to execute 'attachShadow' on 'Element': 1 argument required, but only 0 present.");
+    }
+    const mode = String(init.mode);
+    if (mode !== "open" && mode !== "closed") {
+      throw new TypeError("Failed to execute 'attachShadow' on 'Element': The provided value '" + mode + "' is not a valid enum value of type ShadowRootMode.");
+    }
+    if (this._shadowRoot) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("Shadow root cannot be created on a host which already hosts a shadow tree", "InvalidStateError");
+      }
+      const err = new Error("Shadow root cannot be created on a host which already hosts a shadow tree");
+      err.name = "InvalidStateError";
+      throw err;
+    }
+    const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
+    const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
+    shadow.host = this;
+    shadow.mode = mode;
+    this._shadowRoot = shadow;
+    return shadow;
+  };
+  markNative(proto.attachShadow, "attachShadow");
+
+  Object.defineProperty(proto, "shadowRoot", {
+    get: function () {
+      if (this._shadowRoot && this._shadowRoot.mode === "open") {
+        return this._shadowRoot;
+      }
+      return null;
+    },
+    configurable: true,
+  });
 
   // Universal Form & Control Properties on Element
   Object.defineProperty(proto, "name", {

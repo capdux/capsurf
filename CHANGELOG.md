@@ -1150,3 +1150,31 @@
     - `e2e/canvas-natural-size.e2e.test.ts` (1/1 PASS)
     - `e2e/canvas-image-data-bigint.e2e.test.ts` (1/1 PASS)
   - 独立单二进制：`bin/main`（9.7MB）构建成功。
+
+## [2026-11-18 18:40:00] Phase 51
+- **`src/js/dom_binding.cp`**：
+  - 修复 `js_element_get_parent_node`：仅当 `el.node_id == doc.root_element && doc.root_element != NULL_NODE` 时返回 `document`，避免游离断开节点误判为连接；Arena `parent_id == NULL_NODE` 时检查 JS 层 `_ownerFragment`，使加入 `DocumentFragment` / `template.content` 的原生节点正确汇报父节点。
+  - 修复 `js_document_set_title`：直接对 `<title>` 元素节点执行 `setNodeText`，修复 `title` 文本被当作子文本追加的重复错误。
+  - 导出 `Window` 构造器（非法调用抛出 `TypeError("Illegal constructor")`），绑定 `self` 指向全局对象。
+- **`src/js/shim/element/html-classes.js`**：
+  - 实装 `HTMLScriptElement.prototype.text` 属性访问器（读写文本内容并在设置时支持动态内联脚本执行标记）。
+  - 实装 `HTMLScriptElement.prototype` 自身访问器：`src`、`type` 与 WHATWG 强异步（`force-async`）标记算法驱动的 `async` 属性。
+  - 实装 `HTMLTemplateElement.prototype.content`（返回专属 `DocumentFragment` 隔离子树）。
+  - 实装 `processSubtreeTemplates` 解析声明式 Shadow DOM（`<template shadowrootmode="open|closed">`）并将子树迁移至宿主元素 `ShadowRoot`，通过 `_ownerFragment` 解除与防御性移除彻底根除迁移死循环（耗时从 16.3s 降至 248ms）。
+- **`src/js/shim/element/element.js`**：
+  - 实装 `Element.prototype.checkVisibility(options)`：精确判定 `!this.isConnected`、`display: none / contents`、`checkOpacity`、`checkVisibilityCSS`、零尺寸边界与视口遮蔽。
+  - 实装 `Element.prototype.attachShadow(init)`，支持 open/closed 模式与 `shadowRoot` 挂载。
+- **`src/js/shim/node-base.js`**：
+  - 实装 `executeConnectedScripts` 确保动态插入 DOM 树的脚本按 WHATWG 规范自动执行。
+  - 实装 `DocumentFragment` 与 `ShadowRoot` 完整规范层级、`innerHTML` 读写器、`getElementById`、`querySelector` / `querySelectorAll` 子树遍历。
+- **`e2e/harness.ts`**：增加 `Page.prototype.title()` 辅助方法。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 51 5 大测试套件 7 项用例全部 100% 绿灯（1.90s 极速通过）：
+    - `e2e/check-visibility.e2e.test.ts` (1/1 PASS in 289ms)
+    - `e2e/script-element-idl.e2e.test.ts` (3/3 PASS in 831ms)
+    - `e2e/script-text.e2e.test.ts` (1/1 PASS in 249ms)
+    - `e2e/template-content-parse.e2e.test.ts` (1/1 PASS in 248ms)
+    - `e2e/window-constructors.e2e.test.ts` (1/1 PASS in 239ms)
+  - 回归套件：Phase 48-50 6 大回归套件 20 项用例全部 100% 绿灯；
+  - 独立单二进制：`bin/main`（10.7MB ReleaseFast）构建成功。

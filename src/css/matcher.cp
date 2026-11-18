@@ -938,7 +938,7 @@ pub struct Matcher {
         while (i < doc.nodes.items.len) : (i += 1) {
             if (doc.nodes.items[i].node_type == NodeType.Element) {
                 const nid: NodeId = @intCast(i);
-                if (Matcher.matchesSelectorList(doc, nid, list)) {
+                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorList(doc, nid, list)) {
                     return nid;
                 }
             }
@@ -957,7 +957,7 @@ pub struct Matcher {
         while (i < doc.nodes.items.len && count < out_ids.len) : (i += 1) {
             if (doc.nodes.items[i].node_type == NodeType.Element) {
                 const nid: NodeId = @intCast(i);
-                if (Matcher.matchesSelectorList(doc, nid, list)) {
+                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorList(doc, nid, list)) {
                     out_ids[count] = nid;
                     count += 1;
                 }

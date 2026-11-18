@@ -624,10 +624,17 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const node = &doc.nodes.items[@as(usize, el.node_id)];
     const parent_id = node.parent;
     if (parent_id == NULL_NODE || @as(usize, parent_id) >= doc.nodes.items.len) {
-        // Parent of root element (or NULL_NODE parent) is the Document node
-        const global_obj = JS_GetGlobalObject(ctx);
-        defer JS_FreeValue(ctx, global_obj);
-        return JS_GetPropertyStr(ctx, global_obj, "document");
+        if (el.node_id == doc.root_element && doc.root_element != NULL_NODE) {
+            const global_obj = JS_GetGlobalObject(ctx);
+            defer JS_FreeValue(ctx, global_obj);
+            return JS_GetPropertyStr(ctx, global_obj, "document");
+        }
+        const frag = JS_GetPropertyStr(ctx, this_val, "_ownerFragment");
+        if (jsIsObject(frag)) {
+            return frag;
+        }
+        JS_FreeValue(ctx, frag);
+        return jsNull();
     }
     const parent_node = &doc.nodes.items[@as(usize, parent_id)];
     if (parent_node.node_type == NodeType.Document) {
@@ -783,12 +790,8 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
         const node = &dom_ctx.doc.nodes.items[i];
         if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
-            const first_text = dom_ctx.doc.getFirstChild(@intCast(i));
-            if (first_text != NULL_NODE) {
-                const text = getNodeText(dom_ctx.doc, first_text);
-                return jsNewString(ctx, text);
-            }
-            return jsNewString(ctx, "");
+            const text = getNodeText(dom_ctx.doc, @intCast(i));
+            return jsNewString(ctx, text);
         }
     }
     return jsNewString(ctx, "");
@@ -807,13 +810,39 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
         const node = &dom_ctx.doc.nodes.items[i];
         if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
-            const first_text = dom_ctx.doc.getFirstChild(@intCast(i));
-            if (first_text != NULL_NODE) {
-                setNodeText(dom_ctx.doc, first_text, str_dup);
-            }
+            setNodeText(dom_ctx.doc, @intCast(i), str_dup);
             return jsUndefined();
         }
     }
+
+    // No <title> found; create <title> in <head>
+    let head_id: NodeId = NULL_NODE;
+    let html_id: NodeId = NULL_NODE;
+    i = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element) {
+            if (std.ascii.eqlIgnoreCase(node.tag_name, "head")) {
+                head_id = @intCast(i);
+                break;
+            } else if (std.ascii.eqlIgnoreCase(node.tag_name, "html") && html_id == NULL_NODE) {
+                html_id = @intCast(i);
+            }
+        }
+    }
+
+    if (head_id == NULL_NODE) {
+        head_id = dom_ctx.doc.createElement("head") catch return jsUndefined();
+        if (html_id != NULL_NODE) {
+            dom_ctx.doc.appendChild(html_id, head_id);
+        } else if (dom_ctx.doc.root_element != NULL_NODE) {
+            dom_ctx.doc.appendChild(dom_ctx.doc.root_element, head_id);
+        }
+    }
+
+    const title_id = dom_ctx.doc.createElement("title") catch return jsUndefined();
+    dom_ctx.doc.appendChild(head_id, title_id);
+    setNodeText(dom_ctx.doc, title_id, str_dup);
     return jsUndefined();
 }
 
@@ -1119,9 +1148,16 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     * = JS_SetPropertyStr(raw_ctx, doc_proto, "constructor", JS_DupValue(raw_ctx, doc_ctor));
     * = JS_SetPropertyStr(raw_ctx, global_obj, "Document", doc_ctor);
 
+    const win_proto = JS_NewObject(raw_ctx);
+    const win_ctor = JS_NewObject(raw_ctx);
+    * = JS_SetPropertyStr(raw_ctx, win_ctor, "prototype", JS_DupValue(raw_ctx, win_proto));
+    * = JS_SetPropertyStr(raw_ctx, win_proto, "constructor", JS_DupValue(raw_ctx, win_ctor));
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "Window", win_ctor);
+
     * = JS_DefinePropertyValueStr(raw_ctx, global_obj, "document", doc_val, 1 | 4);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "window", JS_DupValue(raw_ctx, global_obj));
     * = JS_SetPropertyStr(raw_ctx, global_obj, "globalThis", JS_DupValue(raw_ctx, global_obj));
+    * = JS_SetPropertyStr(raw_ctx, global_obj, "self", JS_DupValue(raw_ctx, global_obj));
 
     // Register console
     const console_obj = JS_NewObject(raw_ctx);

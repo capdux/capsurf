@@ -289,6 +289,10 @@ export class Page {
     return res;
   }
 
+  async title(): Promise<string> {
+    return await this.evaluate(() => document.title);
+  }
+
   async evaluate(fnOrExpr: any, ...args: any[]): Promise<any> {
     let expression: string;
     if (typeof fnOrExpr === "function") {

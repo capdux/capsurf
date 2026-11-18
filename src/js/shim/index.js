@@ -149,6 +149,7 @@ function installShim(global) {
       case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
+      case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
       default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
     }
     return el;
@@ -173,9 +174,29 @@ function installShim(global) {
     if (docProto.createElement) {
       const origCreateElement = docProto.createElement;
       docProto.createElement = function (tagName) {
-        return upgradeElement(origCreateElement.call(this, tagName));
+        const el = upgradeElement(origCreateElement.call(this, tagName));
+        if (el && String(tagName).toLowerCase() === "script") {
+          if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
+            globalThis.__capsurf_markScriptForceAsync(el);
+          }
+        }
+        return el;
       };
       markNative(docProto.createElement, "createElement");
+    }
+
+    if (docProto.createElementNS) {
+      const origCreateElementNS = docProto.createElementNS;
+      docProto.createElementNS = function (ns, tagName) {
+        const el = upgradeElement(origCreateElementNS.call(this, ns, tagName));
+        if (el && String(tagName).toLowerCase() === "script") {
+          if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
+            globalThis.__capsurf_markScriptForceAsync(el);
+          }
+        }
+        return el;
+      };
+      markNative(docProto.createElementNS, "createElementNS");
     }
 
     if (docProto.getElementById) {
@@ -297,19 +318,21 @@ function installShim(global) {
     });
     defineLiveCollection("applets", null);
 
-    let docTitle = "";
-    Object.defineProperty(docProto, "title", {
-      get: function () {
-        const el = this.querySelector ? this.querySelector("title") : null;
-        return el ? (el.textContent || "") : docTitle;
-      },
-      set: function (v) {
-        docTitle = String(v);
-        const el = this.querySelector ? this.querySelector("title") : null;
-        if (el) el.textContent = docTitle;
-      },
-      configurable: true,
-    });
+    if (!Object.getOwnPropertyDescriptor(docProto, "title")) {
+      let docTitle = "";
+      Object.defineProperty(docProto, "title", {
+        get: function () {
+          const el = this.querySelector ? this.querySelector("title") : null;
+          return el ? (el.textContent || "") : docTitle;
+        },
+        set: function (v) {
+          docTitle = String(v);
+          const el = this.querySelector ? this.querySelector("title") : null;
+          if (el) el.textContent = docTitle;
+        },
+        configurable: true,
+      });
+    }
 
     Object.defineProperty(docProto, "timeline", {
       get: function () { return globalDocTimeline; },
@@ -364,6 +387,9 @@ function installShim(global) {
       if (!global.document.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
       if (!global.document.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
       if (!global.document.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+    }
+    if (typeof processSubtreeTemplates === "function") {
+      processSubtreeTemplates(global.document);
     }
   }
 

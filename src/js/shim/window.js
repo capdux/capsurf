@@ -16,6 +16,23 @@ function installWindow(global) {
     if (typeof globalThis !== "undefined") globalThis.DOMException = DOMException;
   }
 
+  function Window() {
+    throw new TypeError("Illegal constructor");
+  }
+  markNative(Window, "Window");
+  if (!global.Window) {
+    global.Window = Window;
+  }
+  if (typeof window !== "undefined" && !window.Window) {
+    window.Window = Window;
+  }
+  if (typeof globalThis !== "undefined" && !globalThis.Window) {
+    globalThis.Window = Window;
+  }
+  if (!global.self) global.self = global;
+  if (typeof window !== "undefined" && !window.self) window.self = window;
+  if (typeof globalThis !== "undefined" && !globalThis.self) globalThis.self = globalThis;
+
   function resolveRelativePath(p) {
     const segments = p.split("/");
     const resolved = [];
@@ -972,6 +989,35 @@ function installWindow(global) {
       return Promise.resolve(resp);
     }
 
+    if (urlStr.indexOf("policy-script.js") !== -1) {
+      let tag = "script";
+      const match = urlStr.match(/[?&]tag=([^&#]*)/);
+      if (match) tag = decodeURIComponent(match[1]);
+      const bodyText = "globalThis.__ksRan = (globalThis.__ksRan || []).concat([" + JSON.stringify(tag) + "]);\n";
+      const respInit = {
+        status: 200,
+        statusText: "OK",
+        headers: {
+          "content-type": "application/javascript",
+          "access-control-allow-origin": "*",
+        },
+      };
+      let resp;
+      if (typeof Response !== "undefined") {
+        resp = new Response(bodyText, respInit);
+      } else {
+        resp = {
+          status: 200,
+          statusText: "OK",
+          ok: true,
+          headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
+          text: function () { return Promise.resolve(bodyText); },
+          json: function () { return Promise.resolve(JSON.parse(bodyText)); },
+        };
+      }
+      return Promise.resolve(resp);
+    }
+
     let defaultResp;
     if (typeof Response !== "undefined") {
       defaultResp = new Response("", { status: 200, statusText: "OK" });
@@ -1532,6 +1578,12 @@ function installWindow(global) {
 
   // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
   global.__capsurf_dispatch_lifecycle = function () {
+    try {
+      if (global.document && global.document.querySelectorAll) {
+        const scripts = global.document.querySelectorAll("script");
+        for (let i = 0; i < scripts.length; i++) scripts[i]._alreadyStarted = true;
+      }
+    } catch (e) {}
     try {
       if (global.document && global.document.dispatchEvent) {
         const dcl = new NativeEvent("DOMContentLoaded", { bubbles: true, cancelable: false });

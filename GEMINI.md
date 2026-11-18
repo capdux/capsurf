@@ -242,3 +242,45 @@
 4. **391 项 Kitesurf E2E 测试规模化迁移流水线**：
    - `e2e/` 根目录下的 391 个 `.e2e.test.ts` 用例按功能域（DOM、CSS、Navigation、Worker、Storage、SVG、Table 等）系统化适配为原生 Node.js 测试；
    - 维护统一的批量执行器 `node e2e/run_all.js`，将其无缝集成到每个 Milestone / Phase 的自动化交付回归流水线中。
+
+
+---
+
+## 11. 实战深度复盘：Token 极致节省、高效并发与架构防坑准则 (TOKEN OPTIMIZATION & WORKFLOW SOLIDIFICATION)
+
+在百万级无头浏览器工程演进中，针对长上下文消耗、多智能体并发冲突与 C-FFI / Arena DOM 阻抗失配，必须严格执行以下实战准则：
+
+### 11.1 多子智能体构建权限隔离与防冲突铁律 (Build Isolation & Race Prevention)
+- **痛点根因**：多路子智能体并发运行时，若各自调用 `cap build src/main.cp -f`，会并发争抢写入同一个 `bin/main` 二进制产物。一旦某个子智能体的编译动作删除了正在被 `bun test` 调用的二进制，就会引发 `CapSurf process exited prematurely (code=0)` 偶发假死报错，导致子智能体陷入无谓的排错与盲目重试，浪费数万 Tokens！
+- **执行规范**：
+  1. **纯 JS/TS Shim 优先轻量打包**：若当前任务仅修改 `src/js/shim/` 下的代码，**严禁执行耗时的 `cap build`**！只需运行毫秒级的 `python3 scripts/bundle_runtime.py` 重新生成 `runtime.js` 与 `runtime_source.cp`，若主二进制已具备动态运行时挂载即可直接运行测试；
+  2. **原生 CP 修改的门禁前置与串行编译**：若涉及修改底层 `.cp` 文件，子智能体先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8` 静态门禁；编译必须保证独占（由主控协调或串行触发），杜绝并发覆盖 `bin/main`。
+
+### 11.2 Arena DOM 唯一真理源与 C-FFI 包装器单例铁律 (Single Source of Truth & Identity Bridge)
+- **痛点根因**：Kitesurf 原始运行时的 `_children`、`childNodes` 纯 JS 镜像与底层 CP 原生 Arena DOM 发生脱节：
+  - 双写导致倍增（如原生写入文本节点后，JS 端又 new 了一个 `Text` 放入 `_children`，读出 `"cc"` 重复文本）；
+  - C-FFI 跨界生成的临时对象导致引用不恒等（`el.parentNode !== el.parentNode`），破坏 JS 的对象恒等律（Equality）并导致临时状态丢失。
+- **执行规范**：
+  1. **Arena `_nid`（`NodeId`）为绝对权威**：所有节点状态以底层 CP 原生 Arena 数据结构为唯一源头；
+  2. **弱引用包装器单例化**：QuickJS 端通过 `__capsurf_wrappers` 或 `WeakMap` 基于 `_nid` 复用包装器，保证对同一个底层的多次读取 `===` 恒等；
+  3. **惰性镜像与清空同步**：JS 端的 `_children` 仅作为惰性只读投影，在设置 `textContent` 或 `innerHTML` 时必须同步清空 `this._children = []` 或删除缓存，严禁双端冗余追加。
+
+### 11.3 分域精准聚类攻坚（Domain-Clustered Milestones）
+- **痛点根因**：全量 391 个测试若盲目批量执行，遇到包含 20s/60s 超时的未实现特性测试会长时间阻塞；且发散修复多个不同领域的用例会导致上下文膨胀。
+- **执行规范**：
+  1. 每个 Phase 主智能体依据拓扑依赖，挑选 3~5 个具有共同协议或 DOM 机制的紧凑领域用例（如 Options/Select 集合组、Script IDL 组、Canvas 2D 组、Template 隔离组）；
+  2. 派给子智能体的任务明确限制在专属用例范围，跑通即收割，绝不跨域漫游。
+
+### 11.4 Bun 测试诊断流向铁律 (Bun Test Diagnostics Flow)
+- **执行规范**：`bun test` 的测试断言详情与执行摘要默认输出在 **`stderr`**，进程返回码 `exitCode === 0` 即代表该文件全部测试 100% 绿色通过。自动化脚本与子智能体诊断测试结果时，必须同时读取 `stderr` 与 `exitCode`，切勿仅因 `stdout` 为空而误判。
+
+### 11.5 精益 Prompt 模板（Ultra-Lean Subagent Prompts）
+- **执行规范**：派发全新子智能体时，严禁在 Prompt 中内联长篇背景、代码大纲或复杂正则字符串。统一使用 4 要素极简模板（消耗 `< 500` Tokens）：
+  ```text
+  你负责 Phase XX Track Y：[模块名称与核心目标]
+  1. 先读根目录下 CP_PITFALLS.md；
+  2. 核心修改点：[3~5 行明确的代码位置与逻辑动作]；
+  3. 门禁验证：运行 cpc fix 与 python3 scripts/cpc_brief.py -n 8；
+  4. 目标测试：运行 bun test e2e/<target>.e2e.test.ts 确保 100% PASS。
+  完成即汇报修改清单与结果。
+  ```

@@ -3,6 +3,24 @@
 
 function installHtmlClasses(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const nativeGetAttribute = ElementProto.getAttribute || function (name) { return this.getAttribute(name); };
+  const nativeSetAttribute = ElementProto.setAttribute || function (name, val) { this.setAttribute(name, val); };
+  const nativeRemoveAttribute = ElementProto.removeAttribute || function (name) { this.removeAttribute(name); };
+  const nativeHasAttribute = ElementProto.hasAttribute || function (name) { return this.hasAttribute(name); };
+
+  const forceAsyncScripts = new WeakSet();
+  function markScriptForceAsync(el) {
+    if (el && typeof el === "object") forceAsyncScripts.add(el);
+  }
+  function clearScriptForceAsync(el) {
+    if (el && typeof el === "object") forceAsyncScripts.delete(el);
+  }
+  function isScriptForceAsync(el) {
+    return (el && typeof el === "object") ? forceAsyncScripts.has(el) : false;
+  }
+  global.__capsurf_markScriptForceAsync = markScriptForceAsync;
+  global.__capsurf_clearScriptForceAsync = clearScriptForceAsync;
+  global.__capsurf_isScriptForceAsync = isScriptForceAsync;
 
   function installHyperlinkDecomposition(proto) {
     Object.defineProperty(proto, "href", {
@@ -91,9 +109,19 @@ function installHtmlClasses(global) {
   HTMLImageElement.prototype.constructor = HTMLImageElement;
 
   Object.defineProperty(HTMLImageElement.prototype, "src", {
-    get: function () { return this.getAttribute("src") || ""; },
-    set: function (v) { this.setAttribute("src", String(v)); },
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
     configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "alt", {
@@ -134,32 +162,67 @@ function installHtmlClasses(global) {
   global.Image = HTMLImageElement;
 
   // 3. HTMLScriptElement
-  function HTMLScriptElement() {}
+  function HTMLScriptElement() {
+    markScriptForceAsync(this);
+  }
   HTMLScriptElement.prototype = Object.create(ElementProto);
   HTMLScriptElement.prototype.constructor = HTMLScriptElement;
 
-  Object.defineProperty(HTMLScriptElement.prototype, "src", {
-    get: function () { return this.getAttribute("src") || ""; },
-    set: function (v) { this.setAttribute("src", String(v)); },
+  Object.defineProperty(HTMLScriptElement.prototype, "text", {
+    get: function () {
+      return this.textContent || "";
+    },
+    set: function (v) {
+      this.textContent = String(v);
+    },
     configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLScriptElement.prototype, "src", {
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+    configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLScriptElement.prototype, "type", {
-    get: function () { return this.getAttribute("type") || ""; },
-    set: function (v) { this.setAttribute("type", String(v)); },
+    get: function () {
+      const v = nativeGetAttribute.call(this, "type");
+      return v == null ? "" : v;
+    },
+    set: function (v) { nativeSetAttribute.call(this, "type", String(v)); },
     configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLScriptElement.prototype, "async", {
-    get: function () { return this.hasAttribute("async"); },
-    set: function (v) { if (v) this.setAttribute("async", ""); else this.removeAttribute("async"); },
+    get: function () {
+      return isScriptForceAsync(this) || nativeHasAttribute.call(this, "async");
+    },
+    set: function (v) {
+      clearScriptForceAsync(this);
+      if (v) nativeSetAttribute.call(this, "async", "");
+      else nativeRemoveAttribute.call(this, "async");
+    },
     configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLScriptElement.prototype, "defer", {
-    get: function () { return this.hasAttribute("defer"); },
-    set: function (v) { if (v) this.setAttribute("defer", ""); else this.removeAttribute("defer"); },
+    get: function () { return nativeHasAttribute.call(this, "defer"); },
+    set: function (v) { if (v) nativeSetAttribute.call(this, "defer", ""); else nativeRemoveAttribute.call(this, "defer"); },
     configurable: true,
+    enumerable: true,
   });
 
   markNative(HTMLScriptElement, "HTMLScriptElement");
@@ -191,9 +254,19 @@ function installHtmlClasses(global) {
   HTMLIFrameElement.prototype.constructor = HTMLIFrameElement;
 
   Object.defineProperty(HTMLIFrameElement.prototype, "src", {
-    get: function () { return this.getAttribute("src") || ""; },
-    set: function (v) { this.setAttribute("src", String(v)); },
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
     configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
@@ -215,4 +288,155 @@ function installHtmlClasses(global) {
   HTMLElement.prototype.constructor = HTMLElement;
   markNative(HTMLElement, "HTMLElement");
   global.HTMLElement = HTMLElement;
+
+  // 7. HTMLTemplateElement
+  function HTMLTemplateElement() {
+    HTMLElement.call(this);
+  }
+  HTMLTemplateElement.prototype = Object.create(HTMLElement.prototype);
+  HTMLTemplateElement.prototype.constructor = HTMLTemplateElement;
+
+  Object.defineProperty(HTMLTemplateElement.prototype, "content", {
+    get: function () {
+      if (!this._templateContent) {
+        this._templateContent = initTemplateContent(this);
+      }
+      return this._templateContent;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLTemplateElement.prototype, "innerHTML", {
+    get: function () {
+      return this.content ? this.content.innerHTML || "" : "";
+    },
+    set: function (val) {
+      const content = this.content;
+      if (content) {
+        while (content.firstChild) {
+          content.removeChild(content.firstChild);
+        }
+        const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+        const temp = doc ? doc.createElement("div") : null;
+        if (temp) {
+          temp.innerHTML = val;
+          while (temp.firstChild) {
+            content.appendChild(temp.firstChild);
+          }
+        }
+      }
+    },
+    configurable: true,
+  });
+
+  markNative(HTMLTemplateElement, "HTMLTemplateElement");
+  global.HTMLTemplateElement = HTMLTemplateElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLTemplateElement = HTMLTemplateElement;
+  }
+}
+
+function initTemplateContent(template) {
+  if (template._templateContent) return template._templateContent;
+  const doc = template.ownerDocument || (typeof document !== "undefined" ? document : null);
+  const frag = (doc && typeof doc.createDocumentFragment === "function")
+    ? doc.createDocumentFragment()
+    : new DocumentFragment();
+  template._templateContent = frag;
+
+  // Move existing JS _children if any
+  if (template._children && template._children.length > 0) {
+    const kids = template._children.slice();
+    template._children.length = 0;
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i]) frag.appendChild(typeof upgradeElement === "function" ? upgradeElement(kids[i]) : kids[i]);
+    }
+  }
+
+  // Move native CP children if any
+  if (typeof nativeElementFirstChild === "function") {
+    let c = null;
+    try { c = nativeElementFirstChild.call(template); } catch (e) {}
+    const nativeKids = [];
+    while (c) {
+      nativeKids.push(c);
+      let next = null;
+      if (typeof nativeElementNextSibling === "function") {
+        try { next = nativeElementNextSibling.call(c); } catch (e) {}
+      }
+      c = next;
+    }
+    for (let i = 0; i < nativeKids.length; i++) {
+      const k = nativeKids[i];
+      try {
+        if (typeof nativeElementRemoveChild === "function") {
+          nativeElementRemoveChild.call(template, k);
+        }
+      } catch (e) {}
+      const upgraded = typeof upgradeElement === "function" ? upgradeElement(k) : k;
+      upgraded._ownerFragment = frag;
+      frag.appendChild(upgraded);
+    }
+  }
+
+  template._children = [];
+  return frag;
+}
+
+function processSubtreeTemplates(root) {
+  if (!root) return;
+  let tpls = [];
+  try {
+    if (typeof root.querySelectorAll === "function") {
+      const q = root.querySelectorAll("template");
+      if (q && q.length) {
+        for (let i = 0; i < q.length; i++) tpls.push(q[i]);
+      }
+    }
+  } catch (e) {}
+
+  const rootTag = String(root.localName || root.tagName || "").toLowerCase();
+  if (rootTag === "template") {
+    tpls.unshift(root);
+  }
+
+  for (let i = 0; i < tpls.length; i++) {
+    const tpl = typeof upgradeElement === "function" ? upgradeElement(tpls[i]) : tpls[i];
+    if (!tpl) continue;
+    const content = tpl.content;
+
+    // Check declarative shadow DOM
+    const shadowMode = tpl.getAttribute && tpl.getAttribute("shadowrootmode");
+    if (shadowMode) {
+      const mode = String(shadowMode).toLowerCase();
+      if (mode === "open" || mode === "closed") {
+        const host = tpl.parentNode || tpl.parentElement;
+        if (host && host.nodeType === 1) { // ELEMENT_NODE
+          let shadow = null;
+          try {
+            shadow = host.attachShadow({
+              mode: mode,
+              delegatesFocus: Boolean(tpl.hasAttribute && tpl.hasAttribute("shadowrootdelegatesfocus")),
+            });
+          } catch (e) {
+            shadow = host.shadowRoot || host._shadowRoot;
+          }
+          if (shadow && content) {
+            while (content.firstChild) {
+              const ch = content.firstChild;
+              try { content.removeChild(ch); } catch (e) {}
+              shadow.appendChild(ch);
+            }
+          }
+          try {
+            if (typeof tpl.remove === "function") {
+              tpl.remove();
+            } else if (host.removeChild) {
+              host.removeChild(tpl);
+            }
+          } catch (e) {}
+        }
+      }
+    }
+  }
 }
