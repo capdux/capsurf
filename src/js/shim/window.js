@@ -398,16 +398,16 @@ function installWindow(global) {
   global.localStorage = new Storage();
   global.sessionStorage = new Storage();
 
-  // 2. Navigator: modern Chrome 132 anti-fingerprint shield
+  // 2. Navigator: modern lightweight shield & Client Hints
   const navigatorObj = {
-    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 CapSurf/1.0.0",
-    appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 CapSurf/1.0.0",
+    userAgent: "Kitesurf/0.0.1",
+    appVersion: "Kitesurf/0.0.1",
     platform: "Linux x86_64",
     appName: "Netscape",
     appCodeName: "Mozilla",
     product: "Gecko",
     productSub: "20030107",
-    vendor: "Google Inc.",
+    vendor: "",
     vendorSub: "",
     language: "en-US",
     languages: ["en-US", "en"],
@@ -418,25 +418,138 @@ function installWindow(global) {
     maxTouchPoints: 0,
     webdriver: false, // Critical: anti-bot bot-detection override
     pdfViewerEnabled: true,
+    sendBeacon: markNative(function (url, data) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'sendBeacon' on 'Navigator': 1 argument required, but only 0 present.");
+      }
+      const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
+      new URL(String(url), base);
+      return true;
+    }, "sendBeacon"),
   };
-  navigatorObj.userAgentData = {
-    brands: [
-      { brand: "Not A(Brand", version: "8" },
-      { brand: "Chromium", version: "132" },
-      { brand: "Google Chrome", version: "132" }
-    ],
-    mobile: false,
-    platform: "Linux",
-    getHighEntropyValues: markNative(function () {
-      return Promise.resolve({
-        architecture: "x86",
-        bitness: "64",
-        model: "",
-        platformVersion: "6.5.0",
-        uaFullVersion: "132.0.6834.110"
-      });
-    }, "getHighEntropyValues"),
-  };
+
+  function setUserAgent(ua) {
+    const rawUa = ua ? String(ua) : "";
+    if (!rawUa) {
+      navigatorObj.userAgent = "Kitesurf/0.0.1";
+      navigatorObj.appVersion = "Kitesurf/0.0.1";
+      delete navigatorObj.userAgentData;
+      if (global.navigator) {
+        global.navigator.userAgent = "Kitesurf/0.0.1";
+        global.navigator.appVersion = "Kitesurf/0.0.1";
+        delete global.navigator.userAgentData;
+      }
+      if (typeof window !== "undefined" && window.navigator) {
+        window.navigator.userAgent = "Kitesurf/0.0.1";
+        window.navigator.appVersion = "Kitesurf/0.0.1";
+        delete window.navigator.userAgentData;
+      }
+      if (typeof globalThis !== "undefined" && globalThis.navigator) {
+        globalThis.navigator.userAgent = "Kitesurf/0.0.1";
+        globalThis.navigator.appVersion = "Kitesurf/0.0.1";
+        delete globalThis.navigator.userAgentData;
+      }
+      return;
+    }
+
+    navigatorObj.userAgent = rawUa;
+    navigatorObj.appVersion = rawUa.startsWith("Mozilla/") ? rawUa.slice(8) : rawUa;
+    if (global.navigator) {
+      global.navigator.userAgent = navigatorObj.userAgent;
+      global.navigator.appVersion = navigatorObj.appVersion;
+    }
+    if (typeof window !== "undefined" && window.navigator) {
+      window.navigator.userAgent = navigatorObj.userAgent;
+      window.navigator.appVersion = navigatorObj.appVersion;
+    }
+    if (typeof globalThis !== "undefined" && globalThis.navigator) {
+      globalThis.navigator.userAgent = navigatorObj.userAgent;
+      globalThis.navigator.appVersion = navigatorObj.appVersion;
+    }
+
+    const chromeMatch = rawUa.match(/\bChrome\/(\d+)(?:\.([0-9.]+))?/);
+    if (chromeMatch) {
+      const majorVersion = chromeMatch[1];
+      const fullVersion = chromeMatch[1] + (chromeMatch[2] ? ("." + chromeMatch[2]) : "");
+
+      let plat = "Linux";
+      if (/Windows/i.test(rawUa)) plat = "Windows";
+      else if (/Mac OS X|Macintosh/i.test(rawUa)) plat = "macOS";
+      else if (/Android/i.test(rawUa)) plat = "Android";
+      else if (/CrOS/i.test(rawUa)) plat = "Chrome OS";
+
+      let arch = "x86";
+      if (/aarch64|arm/i.test(rawUa)) {
+        arch = "arm";
+      }
+
+      const isMobile = /Mobile|Android/i.test(rawUa);
+
+      const brands = [
+        { brand: "Not A(Brand", version: "8" },
+        { brand: "Chromium", version: majorVersion },
+        { brand: "Google Chrome", version: majorVersion },
+      ];
+
+      const uad = {
+        brands: brands,
+        mobile: isMobile,
+        platform: plat,
+        toJSON: markNative(function () {
+          return {
+            brands: this.brands,
+            mobile: this.mobile,
+            platform: this.platform,
+          };
+        }, "toJSON"),
+        getHighEntropyValues: markNative(function (hints) {
+          const res = {
+            brands: brands,
+            mobile: isMobile,
+            platform: plat,
+            architecture: arch,
+            bitness: "64",
+            model: "",
+            platformVersion: "6.5.0",
+            uaFullVersion: fullVersion,
+            fullVersionList: [
+              { brand: "Not A(Brand", version: "8.0.0.0" },
+              { brand: "Chromium", version: fullVersion },
+              { brand: "Google Chrome", version: fullVersion },
+            ],
+          };
+          return Promise.resolve(res);
+        }, "getHighEntropyValues"),
+      };
+
+      navigatorObj.userAgentData = uad;
+      if (global.navigator) {
+        global.navigator.userAgentData = uad;
+      }
+      if (typeof window !== "undefined" && window.navigator) {
+        window.navigator.userAgentData = uad;
+      }
+      if (typeof globalThis !== "undefined" && globalThis.navigator) {
+        globalThis.navigator.userAgentData = uad;
+      }
+    } else {
+      delete navigatorObj.userAgentData;
+      if (global.navigator) {
+        delete global.navigator.userAgentData;
+      }
+      if (typeof window !== "undefined" && window.navigator) {
+        delete window.navigator.userAgentData;
+      }
+      if (typeof globalThis !== "undefined" && globalThis.navigator) {
+        delete globalThis.navigator.userAgentData;
+      }
+    }
+  }
+
+  global.__capsurf_set_user_agent = setUserAgent;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_set_user_agent = setUserAgent;
+  }
   try {
     Object.defineProperty(global, "navigator", {
       value: navigatorObj,
@@ -972,8 +1085,9 @@ function installWindow(global) {
       originVal = "null";
     }
 
+    const navUa = (global.navigator && global.navigator.userAgent) ? global.navigator.userAgent : "CapSurf/1.0.0";
     const reqHeaders = {
-      "user-agent": "CapSurf/1.0.0",
+      "user-agent": navUa,
       "origin": originVal,
       "accept": "*/*",
     };

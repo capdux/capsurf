@@ -15284,16 +15284,16 @@
     global.localStorage = new Storage();
     global.sessionStorage = new Storage();
 
-    // 2. Navigator: modern Chrome 132 anti-fingerprint shield
+    // 2. Navigator: modern lightweight shield & Client Hints
     const navigatorObj = {
-      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 CapSurf/1.0.0",
-      appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 CapSurf/1.0.0",
+      userAgent: "Kitesurf/0.0.1",
+      appVersion: "Kitesurf/0.0.1",
       platform: "Linux x86_64",
       appName: "Netscape",
       appCodeName: "Mozilla",
       product: "Gecko",
       productSub: "20030107",
-      vendor: "Google Inc.",
+      vendor: "",
       vendorSub: "",
       language: "en-US",
       languages: ["en-US", "en"],
@@ -15304,25 +15304,138 @@
       maxTouchPoints: 0,
       webdriver: false, // Critical: anti-bot bot-detection override
       pdfViewerEnabled: true,
+      sendBeacon: markNative(function (url, data) {
+        if (arguments.length === 0) {
+          throw new TypeError("Failed to execute 'sendBeacon' on 'Navigator': 1 argument required, but only 0 present.");
+        }
+        const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
+        new URL(String(url), base);
+        return true;
+      }, "sendBeacon"),
     };
-    navigatorObj.userAgentData = {
-      brands: [
-        { brand: "Not A(Brand", version: "8" },
-        { brand: "Chromium", version: "132" },
-        { brand: "Google Chrome", version: "132" }
-      ],
-      mobile: false,
-      platform: "Linux",
-      getHighEntropyValues: markNative(function () {
-        return Promise.resolve({
-          architecture: "x86",
-          bitness: "64",
-          model: "",
-          platformVersion: "6.5.0",
-          uaFullVersion: "132.0.6834.110"
-        });
-      }, "getHighEntropyValues"),
-    };
+
+    function setUserAgent(ua) {
+      const rawUa = ua ? String(ua) : "";
+      if (!rawUa) {
+        navigatorObj.userAgent = "Kitesurf/0.0.1";
+        navigatorObj.appVersion = "Kitesurf/0.0.1";
+        delete navigatorObj.userAgentData;
+        if (global.navigator) {
+          global.navigator.userAgent = "Kitesurf/0.0.1";
+          global.navigator.appVersion = "Kitesurf/0.0.1";
+          delete global.navigator.userAgentData;
+        }
+        if (typeof window !== "undefined" && window.navigator) {
+          window.navigator.userAgent = "Kitesurf/0.0.1";
+          window.navigator.appVersion = "Kitesurf/0.0.1";
+          delete window.navigator.userAgentData;
+        }
+        if (typeof globalThis !== "undefined" && globalThis.navigator) {
+          globalThis.navigator.userAgent = "Kitesurf/0.0.1";
+          globalThis.navigator.appVersion = "Kitesurf/0.0.1";
+          delete globalThis.navigator.userAgentData;
+        }
+        return;
+      }
+
+      navigatorObj.userAgent = rawUa;
+      navigatorObj.appVersion = rawUa.startsWith("Mozilla/") ? rawUa.slice(8) : rawUa;
+      if (global.navigator) {
+        global.navigator.userAgent = navigatorObj.userAgent;
+        global.navigator.appVersion = navigatorObj.appVersion;
+      }
+      if (typeof window !== "undefined" && window.navigator) {
+        window.navigator.userAgent = navigatorObj.userAgent;
+        window.navigator.appVersion = navigatorObj.appVersion;
+      }
+      if (typeof globalThis !== "undefined" && globalThis.navigator) {
+        globalThis.navigator.userAgent = navigatorObj.userAgent;
+        globalThis.navigator.appVersion = navigatorObj.appVersion;
+      }
+
+      const chromeMatch = rawUa.match(/\bChrome\/(\d+)(?:\.([0-9.]+))?/);
+      if (chromeMatch) {
+        const majorVersion = chromeMatch[1];
+        const fullVersion = chromeMatch[1] + (chromeMatch[2] ? ("." + chromeMatch[2]) : "");
+
+        let plat = "Linux";
+        if (/Windows/i.test(rawUa)) plat = "Windows";
+        else if (/Mac OS X|Macintosh/i.test(rawUa)) plat = "macOS";
+        else if (/Android/i.test(rawUa)) plat = "Android";
+        else if (/CrOS/i.test(rawUa)) plat = "Chrome OS";
+
+        let arch = "x86";
+        if (/aarch64|arm/i.test(rawUa)) {
+          arch = "arm";
+        }
+
+        const isMobile = /Mobile|Android/i.test(rawUa);
+
+        const brands = [
+          { brand: "Not A(Brand", version: "8" },
+          { brand: "Chromium", version: majorVersion },
+          { brand: "Google Chrome", version: majorVersion },
+        ];
+
+        const uad = {
+          brands: brands,
+          mobile: isMobile,
+          platform: plat,
+          toJSON: markNative(function () {
+            return {
+              brands: this.brands,
+              mobile: this.mobile,
+              platform: this.platform,
+            };
+          }, "toJSON"),
+          getHighEntropyValues: markNative(function (hints) {
+            const res = {
+              brands: brands,
+              mobile: isMobile,
+              platform: plat,
+              architecture: arch,
+              bitness: "64",
+              model: "",
+              platformVersion: "6.5.0",
+              uaFullVersion: fullVersion,
+              fullVersionList: [
+                { brand: "Not A(Brand", version: "8.0.0.0" },
+                { brand: "Chromium", version: fullVersion },
+                { brand: "Google Chrome", version: fullVersion },
+              ],
+            };
+            return Promise.resolve(res);
+          }, "getHighEntropyValues"),
+        };
+
+        navigatorObj.userAgentData = uad;
+        if (global.navigator) {
+          global.navigator.userAgentData = uad;
+        }
+        if (typeof window !== "undefined" && window.navigator) {
+          window.navigator.userAgentData = uad;
+        }
+        if (typeof globalThis !== "undefined" && globalThis.navigator) {
+          globalThis.navigator.userAgentData = uad;
+        }
+      } else {
+        delete navigatorObj.userAgentData;
+        if (global.navigator) {
+          delete global.navigator.userAgentData;
+        }
+        if (typeof window !== "undefined" && window.navigator) {
+          delete window.navigator.userAgentData;
+        }
+        if (typeof globalThis !== "undefined" && globalThis.navigator) {
+          delete globalThis.navigator.userAgentData;
+        }
+      }
+    }
+
+    global.__capsurf_set_user_agent = setUserAgent;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_set_user_agent = setUserAgent;
+    }
     try {
       Object.defineProperty(global, "navigator", {
         value: navigatorObj,
@@ -15858,8 +15971,9 @@
         originVal = "null";
       }
 
+      const navUa = (global.navigator && global.navigator.userAgent) ? global.navigator.userAgent : "CapSurf/1.0.0";
       const reqHeaders = {
-        "user-agent": "CapSurf/1.0.0",
+        "user-agent": navUa,
         "origin": originVal,
         "accept": "*/*",
       };
@@ -17837,6 +17951,151 @@
       if (global.document && global.document.getSelection) return global.document.getSelection();
       return new Selection();
     };
+
+    // 15. Kitesurf page operations support (getPageState, setControlValue)
+    if (typeof global.__treeSeq === "undefined") {
+      global.__treeSeq = 1;
+    }
+    if (typeof globalThis !== "undefined" && typeof globalThis.__treeSeq === "undefined") {
+      globalThis.__treeSeq = 1;
+    }
+
+    function setControlValueAsUser(control, value) {
+      const tag = String(control?.localName || control?.tagName || "").toLowerCase();
+      const type = String(control?.type || "").toLowerCase();
+      const toggle = tag === "input" && (type === "checkbox" || type === "radio");
+      const NO_USER_VALUE = new Set(["hidden", "file", "button", "submit", "reset", "image"]);
+      const entry = tag === "textarea" || (tag === "input" && !toggle && !NO_USER_VALUE.has(type));
+      if (tag !== "select" && !toggle && !entry) {
+        return { changed: false };
+      }
+      const isDisabled = Boolean(control.disabled || (control.hasAttribute && control.hasAttribute("disabled")));
+      if (isDisabled) {
+        return { changed: false, error: "control is disabled" };
+      }
+      const isReadOnly = Boolean(control.readOnly || (control.hasAttribute && control.hasAttribute("readonly")));
+      if (entry && isReadOnly) {
+        return { changed: false, error: "control is read-only" };
+      }
+      if (tag === "select") {
+        const wanted = control.multiple === true && Array.isArray(value)
+          ? value.map(String)
+          : [value == null ? "" : String(value)];
+        const options = Array.from(control.options || []);
+        const optionEnabled = (opt) => {
+          if (opt.disabled || (opt.hasAttribute && opt.hasAttribute("disabled"))) return false;
+          const group = opt.parentNode;
+          if (group && String(group.localName || group.tagName || "").toLowerCase() === "optgroup") {
+            if (group.disabled || (group.hasAttribute && group.hasAttribute("disabled"))) return false;
+          }
+          return true;
+        };
+        const offered = new Set(options.filter(optionEnabled).map((o) => String(o.value ?? "")));
+        if (!wanted.every((w) => offered.has(w))) {
+          return { changed: false, error: "no such option" };
+        }
+      }
+
+      let changed = false;
+      if (type === "checkbox") {
+        const want = value === true;
+        if (control.checked !== want) {
+          control.checked = want;
+          changed = true;
+        }
+      } else if (type === "radio") {
+        const want = String(control.value || "on") === String(value);
+        if (control.checked !== want) {
+          control.checked = want;
+          changed = true;
+        }
+      } else if (tag === "select" && control.multiple === true && Array.isArray(value)) {
+        const selected = new Set(value.map(String));
+        const options = control.options || [];
+        for (let j = 0; j < options.length; j++) {
+          const opt = options[j];
+          const want = selected.has(String(opt.value));
+          if (opt.selected !== want) {
+            opt.selected = want;
+            changed = true;
+          }
+        }
+      } else {
+        const want = value == null ? "" : String(value);
+        if (String(control.value || "") !== want) {
+          control.value = want;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        try {
+          const inputEvt = typeof InputEvent !== "undefined"
+            ? new InputEvent("input", { bubbles: true, cancelable: false })
+            : new Event("input", { bubbles: true, cancelable: false });
+          if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+            global.__capsurf_dispatchTrustedEvent(control, inputEvt);
+          } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+            globalThis.__capsurf_dispatchTrustedEvent(control, inputEvt);
+          } else if (control.dispatchEvent) {
+            control.dispatchEvent(inputEvt);
+          }
+        } catch (e) {}
+        try {
+          const changeEvt = new Event("change", { bubbles: true, cancelable: false });
+          if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+            global.__capsurf_dispatchTrustedEvent(control, changeEvt);
+          } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+            globalThis.__capsurf_dispatchTrustedEvent(control, changeEvt);
+          } else if (control.dispatchEvent) {
+            control.dispatchEvent(changeEvt);
+          }
+        } catch (e) {}
+      }
+      return { changed: changed, value: control.value !== undefined ? control.value : "" };
+    }
+
+    function findNodeById(nodeId) {
+      let el = null;
+      if (typeof global.__capsurf_native_find_node_by_id === "function") {
+        el = global.__capsurf_native_find_node_by_id(nodeId);
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_find_node_by_id === "function") {
+        el = globalThis.__capsurf_native_find_node_by_id(nodeId);
+      }
+      if (el && typeof upgradeElement === "function") {
+        upgradeElement(el);
+      }
+      return el;
+    }
+
+    global.__capsurf_find_node_by_id = findNodeById;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_find_node_by_id = findNodeById;
+    }
+
+    function setControlValueJson(paramsJson) {
+      let params;
+      try {
+        params = JSON.parse(paramsJson);
+      } catch (e) {
+        return JSON.stringify({ changed: false, error: "bad nodeId" });
+      }
+      const inner = (params && typeof params.params === "object" && params.params !== null) ? params.params : params;
+      const nodeId = inner.nodeId;
+      if (typeof nodeId !== "number" || !(nodeId > 0)) {
+        return JSON.stringify({ changed: false, error: "bad nodeId" });
+      }
+      const el = findNodeById(nodeId);
+      if (!el) {
+        return JSON.stringify({ changed: false, error: "bad nodeId" });
+      }
+      return JSON.stringify(setControlValueAsUser(el, inner.value));
+    }
+
+    global.__capsurf_setControlValueJson = setControlValueJson;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_setControlValueJson = setControlValueJson;
+    }
   }
 
   // Auto-install on globalThis/window

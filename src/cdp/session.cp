@@ -6,10 +6,10 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
-import { CdpBoxModel, CdpEvent } from "./types.cp";
+import { CdpBoxModel, CdpEvent, extractJsonInt } from "./types.cp";
 import { FetchState } from "./fetch.cp";
 import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
@@ -115,6 +115,8 @@ pub fn canRewriteDocumentUrl(doc_url: []const u8, target_url: []const u8): bool 
     return std.mem.eql(u8, doc_base, tgt_base);
 }
 
+pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -136,7 +138,9 @@ pub struct CdpPageSession {
     viewport_height: f32 = 720.0,
     device_scale_factor: f32 = 1.0,
     is_mobile: bool = false,
-    user_agent: []const u8 = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+    user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
+    js_user_agent: []const u8 = "",
+    user_agent_buf: [512]u8 = [0; 512],
 
     // Network & Fetch state
     extra_headers: []const u8 = "{}",
@@ -202,7 +206,9 @@ pub struct CdpPageSession {
             viewport_height: 720.0,
             device_scale_factor: 1.0,
             is_mobile: false,
-            user_agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+            user_agent: DEFAULT_HTTP_USER_AGENT,
+            js_user_agent: "",
+            user_agent_buf: [0; 512],
             extra_headers: "{}",
             cookie_jar: jar,
             fetch_enabled: false,
@@ -275,6 +281,32 @@ pub struct CdpPageSession {
         _.layout.deinit();
         _.doc.deinit();
         std.heap.c_allocator.destroy(_);
+    }
+
+    pub fn setUserAgentOverride(*_, ua: []const u8) {
+        if (ua.len == 0) {
+            _.user_agent = DEFAULT_HTTP_USER_AGENT;
+            _.js_user_agent = "";
+        } else {
+            const copy_len = @min(ua.len, _.user_agent_buf.len);
+            @memcpy(_.user_agent_buf[0..copy_len], ua[0..copy_len]);
+            _.user_agent = _.user_agent_buf[0..copy_len];
+            _.js_user_agent = _.user_agent;
+        }
+        _.syncUserAgentToJs();
+    }
+
+    pub fn syncUserAgentToJs(*_) {
+        let ua_buf: [2048]u8 = undefined;
+        let json_buf: [1024]u8 = undefined;
+        const esc_ua = escapeJsonString(_.js_user_agent, json_buf[0..]);
+        const script = std.fmt.bufPrint(
+            &ua_buf,
+            "(function(){{if(typeof __capsurf_set_user_agent==='function')__capsurf_set_user_agent(\"{s}\");}})()",
+            .{esc_ua},
+        ) catch return;
+        const v = _.ctx.eval(script);
+        _.ctx.freeValue(v);
     }
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
@@ -375,6 +407,9 @@ pub struct CdpPageSession {
             const vr = _.ctx.eval(set_ref_script);
             _.ctx.freeValue(vr);
         }
+
+        // Sync User-Agent override to JS environment
+        _.syncUserAgentToJs();
 
         // Execute inline <script> tags in document order
         const initial_node_count = _.doc.nodes.items.len;
@@ -1129,5 +1164,152 @@ pub struct CdpPageSession {
             "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"text/html\"}}}}",
             .{ _.frame_id, _.loader_id, url, url },
         ) catch "{}";
+    }
+
+    pub fn getTitle(*_): []const u8 {
+        const title_node = Matcher.querySelector(&_.doc, "title");
+        if (title_node != NULL_NODE) {
+            const first_text = _.doc.getFirstChild(title_node);
+            if (first_text != NULL_NODE) {
+                const t = _.doc.getTextContent(first_text);
+                if (t.len > 0) return t;
+            }
+            const t2 = _.doc.getTextContent(title_node);
+            if (t2.len > 0) return t2;
+        }
+        if (_.title.len > 0) return _.title;
+        return "";
+    }
+
+    pub fn getPageStateJson(*_, out_buf: []u8): ([]const u8)? {
+        let js_seq: u32 = 0;
+        if (_.has_document) {
+            const v = _.ctx.eval("globalThis.__treeSeq || 0");
+            if (!jsIsException(v)) {
+                let n: i32 = 0;
+                * = JS_ToInt32(_.ctx.raw_ctx, &n, v);
+                if (n > 0) js_seq = @as(u32, @intCast(n));
+            }
+            _.ctx.freeValue(v);
+        }
+        const total_seq: u32 = _.doc.mutation_seq + js_seq;
+        const title_str = _.getTitle();
+
+        let esc_title_buf: [512]u8 = undefined;
+        const esc_title = escapeJsonString(title_str, &esc_title_buf);
+
+        let esc_url_buf: [1024]u8 = undefined;
+        const esc_url = escapeJsonString(_.url, &esc_url_buf);
+
+        const sx: i32 = @intFromFloat(_.scroll_x);
+        const sy: i32 = @intFromFloat(_.scroll_y);
+
+        const res = std.fmt.bufPrint(
+            out_buf,
+            "{{\"seq\":{d},\"scrollX\":{d},\"scrollY\":{d},\"href\":\"{s}\",\"title\":\"{s}\"}}",
+            .{ total_seq, sx, sy, esc_url, esc_title },
+        ) catch return null;
+        return res;
+    }
+
+    pub fn setControlValueJson(*_, params_json: []const u8, out_buf: []u8): ([]const u8)? {
+        const node_id = extractJsonInt(params_json, "nodeId") ?? -1;
+        if (node_id <= 0) {
+            const bad_res = "{\"changed\":false,\"error\":\"bad nodeId\"}";
+            if (bad_res.len > out_buf.len) return null;
+            @memcpy(out_buf[0..bad_res.len], bad_res);
+            return out_buf[0..bad_res.len];
+        }
+        if (@as(usize, @intCast(node_id)) >= _.doc.nodes.items.len) {
+            const bad_res = "{\"changed\":false,\"error\":\"bad nodeId\"}";
+            if (bad_res.len > out_buf.len) return null;
+            @memcpy(out_buf[0..bad_res.len], bad_res);
+            return out_buf[0..bad_res.len];
+        }
+        if (!_.has_document) {
+            const bad_res = "{\"changed\":false,\"error\":\"bad nodeId\"}";
+            if (bad_res.len > out_buf.len) return null;
+            @memcpy(out_buf[0..bad_res.len], bad_res);
+            return out_buf[0..bad_res.len];
+        }
+
+        const global_obj = _.ctx.getGlobal();
+        defer _.ctx.freeValue(global_obj);
+
+        const params_val = _.ctx.newString(params_json);
+        * = JS_SetPropertyStr(_.ctx.raw_ctx, global_obj, "__capsurf_temp_control_params", params_val);
+
+        const res_val = _.ctx.eval("(function(){ if (typeof __capsurf_setControlValueJson === 'function') { return __capsurf_setControlValueJson(globalThis.__capsurf_temp_control_params); } return JSON.stringify({changed:false,error:'bad nodeId'}); })()");
+        defer _.ctx.freeValue(res_val);
+
+        const str = _.ctx.toCString(res_val);
+        defer std.heap.page_allocator.free(str);
+        if (str.len > 0 && str.len <= out_buf.len) {
+            @memcpy(out_buf[0..str.len], str);
+            return out_buf[0..str.len];
+        }
+
+        const default_res = "{\"changed\":false,\"error\":\"bad nodeId\"}";
+        if (default_res.len > out_buf.len) return null;
+        @memcpy(out_buf[0..default_res.len], default_res);
+        return out_buf[0..default_res.len];
+    }
+
+    pub fn markPaintDamage(*_) {
+        _.doc.markPaintDamage();
+    }
+
+    pub fn getPaintDamageSinceJson(*_, params_json: []const u8, out_buf: []u8): ([]const u8)? {
+        let excl_id: i32 = 0;
+        if (std.mem.indexOf(u8, params_json, "\"excludeNodeId\"") != null) {
+            if (e_val := extractJsonInt(params_json, "excludeNodeId")) {
+                excl_id = @as(i32, @intCast(e_val));
+            } else {
+                excl_id = -1;
+            }
+        }
+        return _.getPaintDamageSince(excl_id, out_buf);
+    }
+
+    pub fn getPaintDamageSince(*_, exclude_id: i32, out_buf: []u8): ([]const u8)? {
+        if (exclude_id < 0) {
+            const err_json = "{\"nodeIds\":[],\"overflow\":false,\"error\":\"bad nodeId\"}";
+            if (err_json.len > out_buf.len) return null;
+            @memcpy(out_buf[0..err_json.len], err_json);
+            return out_buf[0..err_json.len];
+        }
+
+        const excl_node: NodeId = if (exclude_id > 0) @as(NodeId, @intCast(exclude_id)) else NULL_NODE;
+
+        let offset: usize = 0;
+        const header = "{\"nodeIds\":[";
+        if (offset + header.len > out_buf.len) return null;
+        @memcpy(out_buf[offset .. offset + header.len], header);
+        offset += header.len;
+
+        let first = true;
+        let i: usize = 0;
+        while (i < _.doc.damaged_nodes.items.len) : (i += 1) {
+            const nid = _.doc.damaged_nodes.items[i];
+            if (excl_node != NULL_NODE && _.doc.isLineageOrSubtree(nid, excl_node)) {
+                continue;
+            }
+            if (!first) {
+                if (offset + 1 > out_buf.len) return null;
+                out_buf[offset] = ',';
+                offset += 1;
+            }
+            first = false;
+            const num = std.fmt.bufPrint(out_buf[offset..], "{d}", .{nid}) catch break;
+            offset += num.len;
+        }
+
+        const footer = "],\"overflow\":false}";
+        if (offset + footer.len <= out_buf.len) {
+            @memcpy(out_buf[offset .. offset + footer.len], footer);
+            offset += footer.len;
+            return out_buf[0..offset];
+        }
+        return null;
     }
 }

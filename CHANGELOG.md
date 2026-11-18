@@ -1303,3 +1303,35 @@
     - `e2e/filereader-event-tasks.e2e.test.ts` (2/2 PASS in 414ms)
     - `e2e/trusted-events.e2e.test.ts` (1/1 PASS in 1090ms)
   - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。
+
+## Phase 55: Navigator UserAgentData & Client Hints, SendBeacon API, and Kitesurf CDP Page Ops (100% Closed)
+- **`src/js/shim/window.js`**：
+  - 将 `navigator.userAgent` 默认初始化为规范的 `"Kitesurf/0.0.1"`，默认不挂载 `userAgentData`（`"userAgentData" in navigator === false`）；
+  - 实装 `navigator.sendBeacon(url, data)`：基于当前 `document.URL` / `location.href` 解析目标地址，畸形 URL 抛出 `TypeError`，相对路径正常解析，返回 `true`；
+  - 实装 `global.__capsurf_set_user_agent(ua)`：
+    - `ua` 为空时重置为 `"Kitesurf/0.0.1"` 并安全删除 `navigator.userAgentData`；
+    - 动态解析 Chrome 主版本号，挂载规范的 `navigator.userAgentData`（包含 `brands`, `mobile`, `platform`, `toJSON`, `getHighEntropyValues`，支持 `uaFullVersion` 与 `architecture` 提取）；
+    - 非 Chromium（如 Firefox）自动移除 `userAgentData`，与真实的浏览器客户端提示模型 100% 对齐；
+  - `fetch` 默认 `user-agent` 请求头优先跟随 `navigator.userAgent`。
+- **`src/cdp/session.cp`、`src/cdp/emulation.cp`、`src/cdp/network.cp`**：
+  - 新增 `session.setUserAgentOverride` 与 `session.syncUserAgentToJs`，打通 CDP `Emulation.setUserAgentOverride` 与 `Network.setUserAgentOverride` 动态同步链路；
+  - 在 `session.navigate` 重建环境后自动同步当前 UA 至新建 JS 上下文；
+  - 实装 `Kitesurf.getPageState`：聚合 `{ seq, scrollX, scrollY, href, title }`，动态提取 DOM `<title>` 并联动 DOM 与 JS 变更序列计数器；
+  - 实装 `Kitesurf.setControlValue`：通过 `nodeId` 定位元素，严格执行只读、禁用、无效选项校验，成功后派发受信任的 `input` 与 `change` 冒泡事件；
+  - 实装 `Kitesurf.markPaintDamage` 与 `getPaintDamageSince`：基准快照点标记，重绘受损节点去重收集，并支持 `excludeNodeId` 祖先/子树层级排除过滤。
+- **`src/js/dom_binding.cp` 与 `src/js/shim/index.js`**：
+  - 导出 `@c fn js_capsurf_find_node_by_id` 与 JS 端 `findNodeById`，配合 `upgradeElement` 赋予表单控件完整原型；
+  - 实装 `setControlValueAsUser`，采用兼容 QuickJS 的健壮整数与控件判断（消除对缺失的 `Number.isInteger` 的依赖）。
+- **`src/net/mock_fixtures.cp`**：
+  - 支持 `/__fixtures/echo-headers.html` 动态按当前会话 UA 与网络头合成回显页面，支撑黑盒 Header 验证。
+- **`e2e/harness.ts` & `e2e/connect.ts`**：
+  - 新增 `Page.prototype.setUserAgent`、`Page.prototype.setExtraHTTPHeaders`、`Page.prototype.screenshot`（`base64` 与 `binary` 模式）；
+  - 新增 `test.for` 与 `test.each` 参数化测试运行器；增强 `targetIdForSession` 弹性发现。
+- **测试与门禁验证**：
+  - 4 道静态门禁：10 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 55 4 大测试套件 10 项用例全部 100% 绿灯（5.19s 极速通过）：
+    - `e2e/navigator-send-beacon.e2e.test.ts` (3/3 PASS in 744ms)
+    - `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS in 1108ms)
+    - `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS in 907ms)
+    - `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS in 2400ms)
+  - 独立单二进制：`bin/main`（11.2MB ReleaseFast）成功构建。

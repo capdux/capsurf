@@ -145,7 +145,7 @@ pub struct CdpDispatcher {
 
         if (std.mem.startsWith(u8, req.method, "Kitesurf.") ||
             std.mem.startsWith(u8, req.method, "CapSurf.")) {
-            if (res := session.facade.dispatchCommand(req.method, req.params_raw, session.target_id, out_buf)) {
+            if (res := session.facade.dispatchCommand(req.method, req.params_raw, session, out_buf)) {
                 return CdpResponse.ok(req.id, res);
             }
             return CdpResponse.ok(req.id, "{}");

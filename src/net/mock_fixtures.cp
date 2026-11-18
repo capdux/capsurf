@@ -253,6 +253,34 @@ pub struct MockFixtures {
         return dst[0..out_len];
     }
 
+    static fn escapeJson(src: []const u8, dst: []u8): []const u8 {
+        let out_idx: usize = 0;
+        let in_idx: usize = 0;
+        while (in_idx < src.len && out_idx + 2 < dst.len) : (in_idx += 1) {
+            const b = src[in_idx];
+            if (b == '"' || b == '\\') {
+                dst[out_idx] = '\\';
+                out_idx += 1;
+                dst[out_idx] = b;
+                out_idx += 1;
+            } else if (b == '\n') {
+                dst[out_idx] = '\\';
+                out_idx += 1;
+                dst[out_idx] = 'n';
+                out_idx += 1;
+            } else if (b == '\r') {
+                dst[out_idx] = '\\';
+                out_idx += 1;
+                dst[out_idx] = 'r';
+                out_idx += 1;
+            } else {
+                dst[out_idx] = b;
+                out_idx += 1;
+            }
+        }
+        return dst[0..out_idx];
+    }
+
     static fn extractQueryParam(url: []const u8, param: []const u8): ([]const u8)? {
         const q_pos = std.mem.indexOfScalar(u8, url, '?') ?? return null;
         let search = url[q_pos + 1..];
@@ -298,6 +326,20 @@ pub struct MockFixtures {
             return res;
         }
 
+        // 1.5. /echo-headers.html
+        if (std.mem.indexOf(u8, url, "/echo-headers.html") != null && std.mem.indexOf(u8, url, ".invalid") == null) {
+            const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
+            let esc_ua_buf: [1024]u8 = undefined;
+            const esc_ua = MockFixtures.escapeJson(ua, &esc_ua_buf);
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>echo-headers</title></head><body><script>globalThis.__ks_doc_headers = {{\"user-agent\":\"{s}\",\"accept\":\"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"}};globalThis.__ks_fetch_headers = null;globalThis.__ks_fetch_ready = fetch(\"/__fixtures/echo-headers.json\").then(function(r){{return r.json();}}).then(function(d){{globalThis.__ks_fetch_headers = d;return d;}});</script></body></html>",
+                .{ esc_ua },
+            ) catch return null;
+
+            return res;
+        }
+
         // 2. Dynamic endpoints
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
             let body_val: []const u8 = "";
@@ -305,10 +347,12 @@ pub struct MockFixtures {
             if (raw_body := MockFixtures.extractQueryParam(url, "body")) {
                 body_val = MockFixtures.decodeUri(raw_body, &decoded_buf);
             }
+            const title_val = if (body_val.len == 0) "policy" else "policy-doc";
+            const actual_body = if (body_val.len == 0) "policy doc" else body_val;
             const res = std.fmt.bufPrint(
                 out_buf,
-                "<!doctype html><html><head><meta charset=\"utf-8\"><title>policy-doc</title></head><body>{s}</body></html>",
-                .{ body_val },
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>{s}</title></head><body>{s}</body></html>",
+                .{ title_val, actual_body },
             ) catch return null;
             return res;
         }
@@ -321,7 +365,7 @@ pub struct MockFixtures {
             }
             const res = std.fmt.bufPrint(
                 out_buf,
-                "globalThis.__ksRan = (globalThis.__ksRan || []).concat([\"{s}\"]);\n",
+                "window.__policy_loaded = true;\nglobalThis.__ksRan = (globalThis.__ksRan || []).concat([\"{s}\"]);\n",
                 .{ tag },
             ) catch return null;
             return res;

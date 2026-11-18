@@ -79,6 +79,7 @@ pub @c {
     fn JS_PromiseResult(ctx: *JSContext, promise: JSValue): JSValue;
     fn JS_JSONStringify(ctx: *JSContext, obj: JSValue, replacer: JSValue, space0: JSValue): JSValue;
     fn JS_ToBool(ctx: *JSContext, val: JSValue): i32;
+    fn JS_ToInt32(ctx: *JSContext, pres: *i32, val: JSValue): i32;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;

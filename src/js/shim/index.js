@@ -517,6 +517,151 @@ function installShim(global) {
     if (global.document && global.document.getSelection) return global.document.getSelection();
     return new Selection();
   };
+
+  // 15. Kitesurf page operations support (getPageState, setControlValue)
+  if (typeof global.__treeSeq === "undefined") {
+    global.__treeSeq = 1;
+  }
+  if (typeof globalThis !== "undefined" && typeof globalThis.__treeSeq === "undefined") {
+    globalThis.__treeSeq = 1;
+  }
+
+  function setControlValueAsUser(control, value) {
+    const tag = String(control?.localName || control?.tagName || "").toLowerCase();
+    const type = String(control?.type || "").toLowerCase();
+    const toggle = tag === "input" && (type === "checkbox" || type === "radio");
+    const NO_USER_VALUE = new Set(["hidden", "file", "button", "submit", "reset", "image"]);
+    const entry = tag === "textarea" || (tag === "input" && !toggle && !NO_USER_VALUE.has(type));
+    if (tag !== "select" && !toggle && !entry) {
+      return { changed: false };
+    }
+    const isDisabled = Boolean(control.disabled || (control.hasAttribute && control.hasAttribute("disabled")));
+    if (isDisabled) {
+      return { changed: false, error: "control is disabled" };
+    }
+    const isReadOnly = Boolean(control.readOnly || (control.hasAttribute && control.hasAttribute("readonly")));
+    if (entry && isReadOnly) {
+      return { changed: false, error: "control is read-only" };
+    }
+    if (tag === "select") {
+      const wanted = control.multiple === true && Array.isArray(value)
+        ? value.map(String)
+        : [value == null ? "" : String(value)];
+      const options = Array.from(control.options || []);
+      const optionEnabled = (opt) => {
+        if (opt.disabled || (opt.hasAttribute && opt.hasAttribute("disabled"))) return false;
+        const group = opt.parentNode;
+        if (group && String(group.localName || group.tagName || "").toLowerCase() === "optgroup") {
+          if (group.disabled || (group.hasAttribute && group.hasAttribute("disabled"))) return false;
+        }
+        return true;
+      };
+      const offered = new Set(options.filter(optionEnabled).map((o) => String(o.value ?? "")));
+      if (!wanted.every((w) => offered.has(w))) {
+        return { changed: false, error: "no such option" };
+      }
+    }
+
+    let changed = false;
+    if (type === "checkbox") {
+      const want = value === true;
+      if (control.checked !== want) {
+        control.checked = want;
+        changed = true;
+      }
+    } else if (type === "radio") {
+      const want = String(control.value || "on") === String(value);
+      if (control.checked !== want) {
+        control.checked = want;
+        changed = true;
+      }
+    } else if (tag === "select" && control.multiple === true && Array.isArray(value)) {
+      const selected = new Set(value.map(String));
+      const options = control.options || [];
+      for (let j = 0; j < options.length; j++) {
+        const opt = options[j];
+        const want = selected.has(String(opt.value));
+        if (opt.selected !== want) {
+          opt.selected = want;
+          changed = true;
+        }
+      }
+    } else {
+      const want = value == null ? "" : String(value);
+      if (String(control.value || "") !== want) {
+        control.value = want;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      try {
+        const inputEvt = typeof InputEvent !== "undefined"
+          ? new InputEvent("input", { bubbles: true, cancelable: false })
+          : new Event("input", { bubbles: true, cancelable: false });
+        if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+          global.__capsurf_dispatchTrustedEvent(control, inputEvt);
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(control, inputEvt);
+        } else if (control.dispatchEvent) {
+          control.dispatchEvent(inputEvt);
+        }
+      } catch (e) {}
+      try {
+        const changeEvt = new Event("change", { bubbles: true, cancelable: false });
+        if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+          global.__capsurf_dispatchTrustedEvent(control, changeEvt);
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(control, changeEvt);
+        } else if (control.dispatchEvent) {
+          control.dispatchEvent(changeEvt);
+        }
+      } catch (e) {}
+    }
+    return { changed: changed, value: control.value !== undefined ? control.value : "" };
+  }
+
+  function findNodeById(nodeId) {
+    let el = null;
+    if (typeof global.__capsurf_native_find_node_by_id === "function") {
+      el = global.__capsurf_native_find_node_by_id(nodeId);
+    } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_find_node_by_id === "function") {
+      el = globalThis.__capsurf_native_find_node_by_id(nodeId);
+    }
+    if (el && typeof upgradeElement === "function") {
+      upgradeElement(el);
+    }
+    return el;
+  }
+
+  global.__capsurf_find_node_by_id = findNodeById;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_find_node_by_id = findNodeById;
+  }
+
+  function setControlValueJson(paramsJson) {
+    let params;
+    try {
+      params = JSON.parse(paramsJson);
+    } catch (e) {
+      return JSON.stringify({ changed: false, error: "bad nodeId" });
+    }
+    const inner = (params && typeof params.params === "object" && params.params !== null) ? params.params : params;
+    const nodeId = inner.nodeId;
+    if (typeof nodeId !== "number" || !(nodeId > 0)) {
+      return JSON.stringify({ changed: false, error: "bad nodeId" });
+    }
+    const el = findNodeById(nodeId);
+    if (!el) {
+      return JSON.stringify({ changed: false, error: "bad nodeId" });
+    }
+    return JSON.stringify(setControlValueAsUser(el, inner.value));
+  }
+
+  global.__capsurf_setControlValueJson = setControlValueJson;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_setControlValueJson = setControlValueJson;
+  }
 }
 
 // Auto-install on globalThis/window

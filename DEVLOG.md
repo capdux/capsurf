@@ -1054,3 +1054,28 @@
 4. **FileReader 规范生命周期与多阶段微/宏任务调度 (`src/js/shim/file.js`)**：
    - **设计动机**：W3C File API 规定 `FileReader` 读取操作是一组分阶段的异步任务：`loadstart` 必须在微任务（microtask）中触发，随后触发 `progress`，而 `load` 与 `loadend` 必须排队到后续的宏任务（Macrotask）中执行；若在期间调用 `abort()`，必须中断后续阶段；
    - **解决方案**：在 `src/js/shim/file.js` 中构建 `FileReader`，基于操作代数 `_gen` 实现精准的状态转换与任务排队，确保微任务与宏任务触发时序与真实浏览器 100% 对齐。
+
+## Phase 55 Navigator 客户端提示规范、Beacon API 与 Kitesurf CDP 页面操作扩展技术方案
+1. **UserAgent 动态注入与 Chromium Client Hints 反射 (`src/js/shim/window.js`, `src/cdp/session.cp`)**：
+   - **设计动机**：W3C User-Agent Client Hints 规范规定仅有 Chromium 引擎对外暴露 `navigator.userAgentData`，其他浏览器引擎（Firefox/Safari）及无头引擎默认 UA 绝不得暴露该属性；当通过 CDP `Emulation.setUserAgentOverride` 或 `Network.setUserAgentOverride` 覆盖为包含 `Chrome/X.Y` 的 UA 时，必须动态挂载与之匹配的 `userAgentData`，且 `getHighEntropyValues` 异步按需提取 `uaFullVersion` 与 `architecture`；
+   - **解决方案**：
+     - 在 `src/cdp/session.cp` 中实现 `setUserAgentOverride` 与 `syncUserAgentToJs`，在页面导航初始化或实时覆盖时调用 `__capsurf_set_user_agent`；
+     - 在 `src/js/shim/window.js` 中实现状态机：非 Chrome 或清空时将 UA 重置为默认 `"Kitesurf/0.0.1"` 并安全 `delete navigator.userAgentData`；检测到 Chrome UA 时按规范动态生成只读 `userAgentData` 及 `getHighEntropyValues` Promise 提取器。
+2. **Navigator.sendBeacon 规范 URL 解析与轻量信标传输 (`src/js/shim/window.js`)**：
+   - **设计动机**：W3C Beacon 规范要求 `navigator.sendBeacon(url, data)` 能接收相对路径或绝对路径，基于 `document.URL` 进行规范化解析，遇非法 URL 抛出 `TypeError`，并返回布尔值 `true`；
+   - **解决方案**：在 `window.js` 中实装基于 `URL` 构造的入参校验，成功解析后返回 `true`。
+3. **Kitesurf 页面状态快照与变动计数器联动 (`src/cdp/session.cp`, `src/dom/dom.cp`)**：
+   - **设计动机**：测试用例 `getPageState reports the URL, title and a mutation counter that moves` 检验 CDP 扩展方法 `Kitesurf.getPageState`，要求返回 `{ seq, scrollX, scrollY, href, title }`，且当页面执行 `document.getElementById("p")?.append("b")` 等 DOM 变更后，`seq` 必须单调递增；
+   - **解决方案**：
+     - 在 `Document` 中维护 `mutation_seq`，在 Arena DOM 增删属性或子节点时递增；
+     - 在 JS 运行时维护 `__treeSeq`，在 DOM 操作微任务中自增；
+     - `getPageState` 动态合并 `doc.mutation_seq + js_seq`，并实时通过 DOM 选择器扫描 `<title>` 文本提取有效标题，返回精准状态快照。
+4. **Kitesurf 用户表单控件赋值与受信任事件时序 (`src/js/dom_binding.cp`, `src/js/shim/index.js`)**：
+   - **设计动机**：`Kitesurf.setControlValue` 用于模拟用户在页面输入/选择，要求严格遵守规范校验（排除非控件、只读控件、禁用控件、禁用选项等），并在赋值成功后派发真正的受信任事件（`isTrusted = true`）先 `input` 后 `change`；
+   - **解决方案**：
+     - 导出 `__capsurf_native_find_node_by_id`，利用 Arena DOM 节点快速定位并解包为 JS `Element`；
+     - 克服 QuickJS 环境下缺少 `Number.isInteger` 的陷阱，采用健壮的纯数值与边界判定；
+     - 严格过滤 `<select>` 中被禁用的 `option` 与 `optgroup`；赋值后通过 `__capsurf_dispatchTrustedEvent` 连续派发两道受信任事件。
+5. **重绘受损追踪与祖先子树排除 (`src/dom/dom.cp`, `src/cdp/session.cp`)**：
+   - **设计动机**：`markPaintDamage` 与 `getPaintDamageSince` 用于支持增量局部渲染与受损区域上报，且支持 `excludeNodeId` 将用户操作的节点及其祖先树整体排除；
+   - **解决方案**：在 `Document` 中维护绘制受损节点集，重绘时记录受损 `node_id`；查询时利用 `doc.isLineageOrSubtree` 递归向上与向下核验，高效完成过滤。

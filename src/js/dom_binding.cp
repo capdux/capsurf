@@ -46,6 +46,7 @@ import {
     JS_Eval,
     JS_ToCStringLen2,
     JS_FreeCString,
+    JS_ToInt32,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
@@ -1037,6 +1038,20 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return handleJsConsole(ctx, argc, argv, "debug");
 }
 
+@c fn js_capsurf_find_node_by_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let nid: i32 = 0;
+    if (JS_ToInt32(ctx, &nid, argv[0]) != 0) return jsNull();
+    if (nid <= 0) return jsNull();
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    const node_id = @as(NodeId, @intCast(nid));
+    if (@as(usize, node_id) >= dom_ctx.doc.nodes.items.len) return jsNull();
+    return createJsElement(ctx, dom_ctx, node_id);
+}
+
 pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomContext)! {
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
@@ -1167,6 +1182,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
     defineMethod(raw_ctx, console_obj, "error", js_console_error, 1);
     defineMethod(raw_ctx, console_obj, "debug", js_console_debug, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

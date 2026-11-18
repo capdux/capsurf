@@ -462,6 +462,38 @@ export class Page {
     } catch {}
   }
 
+  async setUserAgent(userAgent: string): Promise<void> {
+    try {
+      await this.cdp.send("Emulation.setUserAgentOverride", { userAgent });
+    } catch {}
+  }
+
+  async setExtraHTTPHeaders(headers: Record<string, string>): Promise<void> {
+    try {
+      await this.cdp.send("Network.setExtraHTTPHeaders", { headers });
+    } catch {}
+  }
+
+  async screenshot(options?: {
+    encoding?: "base64" | "binary";
+    type?: "png" | "jpeg";
+    format?: "png" | "jpeg";
+    quality?: number;
+    clip?: any;
+  }): Promise<Buffer | string | Uint8Array> {
+    const fmt = options?.type || options?.format || "png";
+    const res = await this.cdp.send("Page.captureScreenshot", {
+      format: fmt,
+      quality: options?.quality,
+      clip: options?.clip,
+    });
+    const b64 = (res && res.data) ? res.data : "";
+    if (options && options.encoding === "base64") {
+      return b64;
+    }
+    return Buffer.from(b64, "base64");
+  }
+
   target() {
     return {
       createCDPSession: () => this.createCDPSession(),
@@ -740,6 +772,17 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
 test.concurrent = function (name: string, fn: TestFn, timeout = 120000) {
   test(name, fn, timeout);
 };
+
+test.for = function <T>(cases: readonly T[]) {
+  return function (name: string, fn: (item: T, fixtures: any) => Promise<any> | any, timeout = 120000) {
+    for (const item of cases) {
+      const formattedName = name.replace(/%s|%d/g, String(item));
+      test(formattedName, (fixtures) => fn(item, fixtures), timeout);
+    }
+  };
+};
+
+test.each = test.for;
 
 test.skip = bunTest.skip;
 test.only = bunTest.only;

@@ -581,12 +581,18 @@ pub struct HtmlSerializer {
 pub struct Document {
     allocator: std.mem.Allocator;
     nodes: std.ArrayListUnmanaged(NodeData) = std.ArrayListUnmanaged(NodeData).empty;
+    damaged_nodes: std.ArrayListUnmanaged(NodeId) = std.ArrayListUnmanaged(NodeId).empty;
+    paint_damage_marked: bool = false;
+    mutation_seq: u32 = 1;
     root_element: NodeId = NULL_NODE;
 
     static fn init(allocator: std.mem.Allocator): Document! {
         let doc = Document {
             allocator: allocator,
             nodes: std.ArrayListUnmanaged(NodeData).empty,
+            damaged_nodes: std.ArrayListUnmanaged(NodeId).empty,
+            paint_damage_marked: false,
+            mutation_seq: 1,
             root_element: NULL_NODE,
         };
         // Slot 0 is reserved for NULL_NODE sentinel
@@ -600,6 +606,7 @@ pub struct Document {
 
     fn deinit(*_) {
         _.nodes.deinit(_.allocator);
+        _.damaged_nodes.deinit(_.allocator);
     }
 
     fn nodeCount(): usize {
@@ -760,19 +767,59 @@ pub struct Document {
         }
     }
 
+    fn markPaintDamage(*_) {
+        _.damaged_nodes.clearRetainingCapacity();
+        _.paint_damage_marked = true;
+    }
+
+    fn recordDamage(*_, node_id: NodeId) {
+        if (!_.paint_damage_marked) return;
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return;
+        let i: usize = 0;
+        while (i < _.damaged_nodes.items.len) : (i += 1) {
+            if (_.damaged_nodes.items[i] == node_id) return;
+        }
+        _.damaged_nodes.append(_.allocator, node_id) catch {};
+    }
+
+    fn isLineageOrSubtree(node_id: NodeId, target_id: NodeId): bool {
+        if (target_id == NULL_NODE) return false;
+        if (node_id == target_id) return true;
+
+        let cur = target_id;
+        while (cur != NULL_NODE && @as(usize, cur) < _.nodes.items.len) {
+            if (cur == node_id) return true;
+            cur = _.nodes.items[@as(usize, cur)].parent;
+        }
+
+        cur = node_id;
+        while (cur != NULL_NODE && @as(usize, cur) < _.nodes.items.len) {
+            if (cur == target_id) return true;
+            cur = _.nodes.items[@as(usize, cur)].parent;
+        }
+
+        return false;
+    }
+
     fn setAttribute(*_, node_id: NodeId, name: []const u8, value: []const u8) {
+        _.mutation_seq += 1;
+        _.recordDamage(node_id);
         if (*n := _.getNodeMut(node_id)) {
             n.setAttribute(name, value);
         }
     }
 
     fn setAttributeNS(*_, node_id: NodeId, ns: []const u8, qualified_name: []const u8, value: []const u8) {
+        _.mutation_seq += 1;
+        _.recordDamage(node_id);
         if (*n := _.getNodeMut(node_id)) {
             n.setAttributeNS(ns, qualified_name, value);
         }
     }
 
     fn removeAttribute(*_, node_id: NodeId, name: []const u8): bool {
+        _.mutation_seq += 1;
+        _.recordDamage(node_id);
         if (*n := _.getNodeMut(node_id)) {
             return n.removeAttribute(name);
         }
@@ -780,6 +827,8 @@ pub struct Document {
     }
 
     fn removeAttributeNS(*_, node_id: NodeId, ns: []const u8, local_name: []const u8): bool {
+        _.mutation_seq += 1;
+        _.recordDamage(node_id);
         if (*n := _.getNodeMut(node_id)) {
             return n.removeAttributeNS(ns, local_name);
         }
@@ -800,6 +849,10 @@ pub struct Document {
         if (@as(usize, parent_id) >= _.nodes.items.len || @as(usize, child_id) >= _.nodes.items.len) {
             return;
         }
+
+        _.mutation_seq += 1;
+        _.recordDamage(parent_id);
+        _.recordDamage(child_id);
 
         const prev_last = _.nodes.items[@as(usize, parent_id)].last_child;
         _.nodes.items[@as(usize, child_id)].parent = parent_id;
@@ -828,6 +881,10 @@ pub struct Document {
         if (parent_id == NULL_NODE || @as(usize, parent_id) >= _.nodes.items.len) {
             return;
         }
+
+        _.mutation_seq += 1;
+        _.recordDamage(node_id);
+        _.recordDamage(parent_id);
 
         const prev_id = _.nodes.items[@as(usize, node_id)].prev_sibling;
         const next_id = _.nodes.items[@as(usize, node_id)].next_sibling;

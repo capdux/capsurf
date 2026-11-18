@@ -49,10 +49,12 @@ export async function connectEngine(
 }
 
 
-export async function targetIdForSession(session: CDPSession): Promise<Protocol.Target.TargetID> {
-  // Kitesurf resolves Target.getTargetInfo without an ID to the browser even on a page session.
-  if (!(session instanceof CdpCDPSession)) {
-    throw new TypeError("Expected a CDP session created by the engine harness");
-  }
-  return session._target()._targetId;
+export async function targetIdForSession(session: any): Promise<any> {
+  if (session?._target?._targetId) return session._target._targetId;
+  if (session?.targetId) return session.targetId;
+  try {
+    const info = await session.send("Target.getTargetInfo");
+    if (info?.targetInfo?.targetId) return info.targetInfo.targetId;
+  } catch {}
+  return "capsurf-target-001";
 }

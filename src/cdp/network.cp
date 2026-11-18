@@ -29,9 +29,7 @@ pub struct NetworkHandler {
         // 3. UserAgent & Extra HTTP Headers
         if (std.mem.eql(u8, req.method, "Network.setUserAgentOverride")) {
             const ua = extractJsonString(req.params_raw, "userAgent") ?? "";
-            if (ua.len > 0) {
-                session.user_agent = ua;
-            }
+            session.setUserAgentOverride(ua);
             return CdpResponse.ok(req.id, "{}");
         }
 

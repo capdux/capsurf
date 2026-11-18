@@ -18,6 +18,8 @@ import {
     handleProtocolExtension,
 } from "./protocol_extensions.cp";
 
+import { CdpPageSession } from "./session.cp";
+
 pub struct KitesurfFacade {
     host_manifest: SceneHostManifest = SceneHostManifest{},
     stream_mgr: SceneStreamManager = SceneStreamManager{},
@@ -27,9 +29,34 @@ pub struct KitesurfFacade {
         *_,
         method: []const u8,
         params_json: []const u8,
-        session_id: []const u8,
+        session: *CdpPageSession,
         out_buf: []u8,
     ): ([]const u8)? {
+        // 0. Page Operations extensions
+        if (std.mem.eql(u8, method, "Kitesurf.getPageState") ||
+            std.mem.eql(u8, method, "CapSurf.getPageState")) {
+            return session.getPageStateJson(out_buf);
+        }
+
+        if (std.mem.eql(u8, method, "Kitesurf.setControlValue") ||
+            std.mem.eql(u8, method, "CapSurf.setControlValue")) {
+            return session.setControlValueJson(params_json, out_buf);
+        }
+
+        if (std.mem.eql(u8, method, "Kitesurf.markPaintDamage") ||
+            std.mem.eql(u8, method, "CapSurf.markPaintDamage")) {
+            session.markPaintDamage();
+            let ok_res = "{}";
+            if (ok_res.len > out_buf.len) return null;
+            @memcpy(out_buf[0..ok_res.len], ok_res);
+            return out_buf[0..ok_res.len];
+        }
+
+        if (std.mem.eql(u8, method, "Kitesurf.getPaintDamageSince") ||
+            std.mem.eql(u8, method, "CapSurf.getPaintDamageSince")) {
+            return session.getPaintDamageSinceJson(params_json, out_buf);
+        }
+
         // 1. Check Scene Host commands
         if (std.mem.eql(u8, method, "Kitesurf.getSceneHostManifest") ||
             std.mem.eql(u8, method, "CapSurf.getSceneHostManifest")) {
@@ -89,6 +116,6 @@ pub struct KitesurfFacade {
         }
 
         // 3. Fallback to protocol extensions (layout mode, session info, renderer info, etc.)
-        return handleProtocolExtension(method, params_json, session_id, &_.ext_state, out_buf);
+        return handleProtocolExtension(method, params_json, session.target_id, &_.ext_state, out_buf);
     }
 }

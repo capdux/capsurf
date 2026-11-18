@@ -2224,6 +2224,36 @@
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
 
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 55：攻坚 Navigator UserAgentData 客户端提示规范、SendBeacon 规范实现、以及 Kitesurf 扩展 CDP 协议（getPageState, setControlValue, markPaintDamage, getPaintDamageSince）
+
+### **[Agent Execution & Phase 55 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - Navigator UserAgentData & Beacon API)**：
+     - 在 `src/js/shim/window.js` 中将默认 `navigator.userAgent` 设为规范的 `"Kitesurf/0.0.1"`（无 `userAgentData`）；
+     - 实装 `navigator.sendBeacon`：正确解析相对与绝对 URL，遇到非法语法如 `http://example.com:80:` 抛出 `TypeError`，成功派发返回 `true`；
+     - 实装 `__capsurf_set_user_agent(ua)` 与 Client Hints 规范：检测 Chrome UA 动态生成 `navigator.userAgentData`（`brands`、`mobile`、`platform`、`getHighEntropyValues`），非 Chromium（Firefox/Safari）删除 `userAgentData`；
+     - 在 `src/cdp/session.cp`、`src/cdp/emulation.cp`、`src/cdp/network.cp` 中打通 `Emulation.setUserAgentOverride` 与 `Network.setUserAgentOverride` 向 live JS 环境与导航生命周期的无缝动态同步；
+     - 验证通过 `e2e/navigator-send-beacon.e2e.test.ts` (3/3 PASS), `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS), `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Kitesurf CDP Page Ops & Control Values)**：
+     - 在 `src/cdp/session.cp` 中实装 `getPageState`：输出 `{ seq, scrollX, scrollY, href, title }`，实时扫描 DOM `<title>` 提取页面标题，并将 DOM `mutation_seq` 与 JS `__treeSeq` 双轨合并，实现变动单调自增；
+     - 在 `src/js/dom_binding.cp` 与 `src/js/shim/index.js` 中实装 `findNodeById` 与 `setControlValueAsUser`：克服 QuickJS 缺少 `Number.isInteger` 陷阱，严格检查 `readonly`、`disabled` 及 `<select>` 有效 `option`/`optgroup`，并在成功赋值后派发受信任的 `input` 与 `change` 冒泡事件；
+     - 在 `src/dom/dom.cp` 与 `src/cdp/session.cp` 中实装 `markPaintDamage` 与 `getPaintDamageSince`：以快照点去重记录重绘受损节点，并通过 `isLineageOrSubtree` 递归过滤排除 `excludeNodeId` 及其所有祖先和子树；
+     - 验证通过 `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS)。
+2. **Phase 55 全量黑盒测试验证（4 大测试套件 10 项用例全部 100% 绿灯，5.19s 极速通过）**：
+   - `e2e/navigator-send-beacon.e2e.test.ts` (3/3 PASS in 744ms)
+   - `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS in 1108ms)
+   - `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS in 907ms)
+   - `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS in 2400ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54 7 大回归套件 8 项用例全量 100% 绿灯（2.42s 通过）；
+   - 4 道静态门禁检验：所有 10 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
 ### **[cp agy Task Resolution Notice]**
 - **任务编号**：`task-capsurf-20261117-compiler-borrow-conflict`
 - **结单时间**：`2026-11-18T20:59:31` (Resolved by `cp_agy`)
@@ -2261,6 +2291,36 @@
 3. **全量回归验证与 4 道静态门禁**：
    - Phase 51, 52, 53 共 20 大回归套件全量 100% 绿灯；
    - 4 道静态门禁检验：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+   - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
+4. **四线文档同步与阶段性 Git 原子提交**：
+   - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
+
+---
+
+### **[User (Self-Driven Next Phase Milestone)]**
+> 自主推进 Phase 55：攻坚 Navigator UserAgentData 客户端提示规范、SendBeacon 规范实现、以及 Kitesurf 扩展 CDP 协议（getPageState, setControlValue, markPaintDamage, getPaintDamageSince）
+
+### **[Agent Execution & Phase 55 Completion Report]**
+1. **双智能体满负荷并行攻坚与精益 Prompt 调度**：
+   - **Subagent 1 (Track 1 - Navigator UserAgentData & Beacon API)**：
+     - 在 `src/js/shim/window.js` 中将默认 `navigator.userAgent` 设为规范的 `"Kitesurf/0.0.1"`（无 `userAgentData`）；
+     - 实装 `navigator.sendBeacon`：正确解析相对与绝对 URL，遇到非法语法如 `http://example.com:80:` 抛出 `TypeError`，成功派发返回 `true`；
+     - 实装 `__capsurf_set_user_agent(ua)` 与 Client Hints 规范：检测 Chrome UA 动态生成 `navigator.userAgentData`（`brands`、`mobile`、`platform`、`getHighEntropyValues`），非 Chromium（Firefox/Safari）删除 `userAgentData`；
+     - 在 `src/cdp/session.cp`、`src/cdp/emulation.cp`、`src/cdp/network.cp` 中打通 `Emulation.setUserAgentOverride` 与 `Network.setUserAgentOverride` 向 live JS 环境与导航生命周期的无缝动态同步；
+     - 验证通过 `e2e/navigator-send-beacon.e2e.test.ts` (3/3 PASS), `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS), `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS)。
+   - **Subagent 2 (Track 2 - Kitesurf CDP Page Ops & Control Values)**：
+     - 在 `src/cdp/session.cp` 中实装 `getPageState`：输出 `{ seq, scrollX, scrollY, href, title }`，实时扫描 DOM `<title>` 提取页面标题，并将 DOM `mutation_seq` 与 JS `__treeSeq` 双轨合并，实现变动单调自增；
+     - 在 `src/js/dom_binding.cp` 与 `src/js/shim/index.js` 中实装 `findNodeById` 与 `setControlValueAsUser`：克服 QuickJS 缺少 `Number.isInteger` 陷阱，严格检查 `readonly`、`disabled` 及 `<select>` 有效 `option`/`optgroup`，并在成功赋值后派发受信任的 `input` 与 `change` 冒泡事件；
+     - 在 `src/dom/dom.cp` 与 `src/cdp/session.cp` 中实装 `markPaintDamage` 与 `getPaintDamageSince`：以快照点去重记录重绘受损节点，并通过 `isLineageOrSubtree` 递归过滤排除 `excludeNodeId` 及其所有祖先和子树；
+     - 验证通过 `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS)。
+2. **Phase 55 全量黑盒测试验证（4 大测试套件 10 项用例全部 100% 绿灯，5.19s 极速通过）**：
+   - `e2e/navigator-send-beacon.e2e.test.ts` (3/3 PASS in 744ms)
+   - `e2e/navigator-user-agent-data.e2e.test.ts` (3/3 PASS in 1108ms)
+   - `e2e/demo/network-ua-override-demo.e2e.test.ts` (1/1 PASS in 907ms)
+   - `e2e/kitesurf-page-ops.e2e.test.ts` (3/3 PASS in 2400ms)
+3. **全量回归验证与 4 道静态门禁**：
+   - Phase 54 7 大回归套件 8 项用例全量 100% 绿灯（2.42s 通过）；
+   - 4 道静态门禁检验：所有 10 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
    - 独立单二进制构建：`bin/main`（11.2MB ReleaseFast）成功构建。
 4. **四线文档同步与阶段性 Git 原子提交**：
    - 更新 `CHANGELOG.md`、`DEVLOG.md` 与 `SESSION.md`。
