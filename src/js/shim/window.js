@@ -1898,4 +1898,210 @@ function installWindow(global) {
       enumerable: true,
     });
   } catch (e) {}
+
+  // 12. kitesurf internals & demandFontOutlines
+  const ksInternalsSym = Symbol.for("kitesurf.internals");
+  if (!globalThis[ksInternalsSym]) {
+    globalThis[ksInternalsSym] = {
+      demandFontOutlines: function () {},
+    };
+  }
+  if (!global[ksInternalsSym]) {
+    global[ksInternalsSym] = globalThis[ksInternalsSym];
+  }
+  if (typeof window !== "undefined" && !window[ksInternalsSym]) {
+    window[ksInternalsSym] = globalThis[ksInternalsSym];
+  }
+
+  // 13. NodeName conformance: text nodes must return "#text" (lowercase), comments "#comment"
+  if (typeof Element !== "undefined" && Element.prototype) {
+    Object.defineProperty(Element.prototype, "nodeName", {
+      get: function () {
+        if (this.nodeType === 3) return "#text";
+        if (this.nodeType === 8) return "#comment";
+        if (this.nodeType === 11) return "#document-fragment";
+        if (this.nodeType === 9) return "#document";
+        return this.tagName || "";
+      },
+      set: function (v) {},
+      configurable: true,
+    });
+  }
+  if (typeof Node !== "undefined" && Node.prototype) {
+    Object.defineProperty(Node.prototype, "nodeName", {
+      get: function () {
+        if (this.nodeType === 3) return "#text";
+        if (this.nodeType === 8) return "#comment";
+        if (this.nodeType === 11) return "#document-fragment";
+        if (this.nodeType === 9) return "#document";
+        return this.tagName || "";
+      },
+      set: function (v) {},
+      configurable: true,
+    });
+  }
+  if (typeof Text !== "undefined" && Text.prototype) {
+    Object.defineProperty(Text.prototype, "nodeName", {
+      get: function () { return "#text"; },
+      set: function (v) {},
+      configurable: true,
+    });
+  }
+  if (typeof Comment !== "undefined" && Comment.prototype) {
+    Object.defineProperty(Comment.prototype, "nodeName", {
+      get: function () { return "#comment"; },
+      set: function (v) {},
+      configurable: true,
+    });
+  }
+  if (typeof DocumentFragment !== "undefined" && DocumentFragment.prototype) {
+    Object.defineProperty(DocumentFragment.prototype, "nodeName", {
+      get: function () { return "#document-fragment"; },
+      set: function (v) {},
+      configurable: true,
+    });
+  }
+
+  // 14. Named Globals on window for elements with IDs inserted into document
+  function stampNamedGlobals(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.nodeType === 1) { // ELEMENT_NODE
+      const id = node.id || "";
+      if (typeof id === "string" && id && !/^[0-9_$]/.test(id)) {
+        if (!(id in global)) {
+          const getter = function () { return node; };
+          const setter = function (v) {
+            Object.defineProperty(global, id, {
+              value: v,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+          };
+          Object.defineProperty(global, id, {
+            configurable: true,
+            enumerable: true,
+            get: getter,
+            set: setter,
+          });
+          if (typeof window !== "undefined" && window !== global && !(id in window)) {
+            Object.defineProperty(window, id, {
+              configurable: true,
+              enumerable: true,
+              get: getter,
+              set: setter,
+            });
+          }
+          if (typeof globalThis !== "undefined" && globalThis !== global && !(id in globalThis)) {
+            Object.defineProperty(globalThis, id, {
+              configurable: true,
+              enumerable: true,
+              get: getter,
+              set: setter,
+            });
+          }
+        }
+      }
+    }
+    const kids = node.childNodes || node._children;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        stampNamedGlobals(kids[i]);
+      }
+    }
+  }
+
+  const origAppendChild = Element.prototype.appendChild || Node.prototype.appendChild;
+  function wrappedAppendChild(child) {
+    if (child && child.nodeType === 11) { // DOCUMENT_FRAGMENT_NODE
+      const kids = child.childNodes || child._children;
+      if (kids && kids.length) {
+        for (let i = 0; i < kids.length; i++) {
+          stampNamedGlobals(kids[i]);
+        }
+      }
+    }
+    const res = origAppendChild.call(this, child);
+    try {
+      if (child && this && (this === global.document || this === global.document?.body || this.isConnected)) {
+        stampNamedGlobals(child);
+      }
+    } catch (e) {}
+    return res;
+  }
+  Node.prototype.appendChild = wrappedAppendChild;
+  if (typeof Element !== "undefined" && Element.prototype) {
+    Element.prototype.appendChild = wrappedAppendChild;
+  }
+
+  const origInsertBefore = Element.prototype.insertBefore || Node.prototype.insertBefore;
+  function wrappedInsertBefore(newChild, refChild) {
+    if (newChild && newChild.nodeType === 11) {
+      const kids = newChild.childNodes || newChild._children;
+      if (kids && kids.length) {
+        for (let i = 0; i < kids.length; i++) {
+          stampNamedGlobals(kids[i]);
+        }
+      }
+    }
+    const res = origInsertBefore.call(this, newChild, refChild);
+    try {
+      if (newChild && this && (this === global.document || this === global.document?.body || this.isConnected)) {
+        stampNamedGlobals(newChild);
+      }
+    } catch (e) {}
+    return res;
+  }
+  Node.prototype.insertBefore = wrappedInsertBefore;
+  if (typeof Element !== "undefined" && Element.prototype) {
+    Element.prototype.insertBefore = wrappedInsertBefore;
+  }
+
+  // 15. Prevent duplicate script load/error event firing
+  const origDispatchEvent = EventTarget.prototype.dispatchEvent;
+  EventTarget.prototype.dispatchEvent = function (event) {
+    if (event && (event.type === "load" || event.type === "error") && this && (this.tagName === "SCRIPT" || this.localName === "script")) {
+      const prop = "on" + event.type;
+      const savedHandler = this[prop];
+      if (typeof savedHandler === "function") {
+        this[prop] = null;
+        try {
+          return origDispatchEvent.call(this, event);
+        } finally {
+          this[prop] = savedHandler;
+        }
+      }
+    }
+    return origDispatchEvent.call(this, event);
+  };
+
+  // 16. Mark scripts created by innerHTML as already started
+  function markSubtreeScripts(root) {
+    if (!root || typeof root !== "object") return;
+    let curr = root.firstChild;
+    while (curr) {
+      const tag = String(curr.localName || curr.tagName || "").toLowerCase();
+      if (tag === "script") {
+        curr._alreadyStarted = true;
+      }
+      markSubtreeScripts(curr);
+      curr = curr.nextSibling;
+    }
+  }
+
+  const elInnerDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+  if (elInnerDesc && elInnerDesc.set) {
+    const prevSetInner = elInnerDesc.set;
+    Object.defineProperty(Element.prototype, "innerHTML", {
+      get: elInnerDesc.get,
+      set: function (v) {
+        prevSetInner.call(this, v);
+        try {
+          markSubtreeScripts(this);
+        } catch (e) {}
+      },
+      configurable: true,
+      enumerable: elInnerDesc.enumerable,
+    });
+  }
 }

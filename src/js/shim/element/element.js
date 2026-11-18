@@ -90,6 +90,23 @@ function createStyleProxy(element) {
   });
 }
 
+function isHtmlElement(el) {
+  if (!el) return true;
+  if (el._namespaceURI !== undefined) {
+    return el._namespaceURI === null || el._namespaceURI === "http://www.w3.org/1999/xhtml";
+  }
+  let curr = el;
+  while (curr) {
+    if (curr._namespaceURI !== undefined) {
+      return curr._namespaceURI === null || curr._namespaceURI === "http://www.w3.org/1999/xhtml";
+    }
+    const tag = String(curr.localName || curr.tagName || "").toLowerCase();
+    if (tag === "svg" || tag === "math") return false;
+    curr = curr.parentElement || curr.parentNode;
+  }
+  return true;
+}
+
 function installElementExtensions(proto) {
   if (!proto) return;
 
@@ -291,6 +308,7 @@ function installElementExtensions(proto) {
     if (!this._attrs) {
       this._attrs = new Map();
       this._attrList = [];
+      const isHtml = isHtmlElement(this);
       if (typeof this._getRawAttrs === "function") {
         const raw = this._getRawAttrs();
         if (raw && Array.isArray(raw)) {
@@ -312,7 +330,8 @@ function installElementExtensions(proto) {
                 prefix: prefix,
               };
               this._attrList.push(entry);
-              this._attrs.set(item.name.toLowerCase(), entry);
+              const mapKey = isHtml ? item.name.toLowerCase() : item.name;
+              this._attrs.set(mapKey, entry);
             }
           }
         }
@@ -322,7 +341,7 @@ function installElementExtensions(proto) {
         this._attrList.push(entry);
         this._attrs.set("id", entry);
       }
-      if (this.className && !this._attrs.has("class")) {
+      if (this.className && typeof this.className === "string" && !this._attrs.has("class")) {
         const entry = { name: "class", value: this.className, namespaceURI: null, localName: "class", prefix: null };
         this._attrList.push(entry);
         this._attrs.set("class", entry);
@@ -351,19 +370,23 @@ function installElementExtensions(proto) {
   // setAttribute
   const origSetAttribute = proto.setAttribute;
   proto.setAttribute = function (name, value) {
-    const key = String(name);
+    const isHtml = isHtmlElement(this);
+    const key = isHtml ? String(name).toLowerCase() : String(name);
     const val = String(value);
     if (!this._attrs) this._syncAttrs();
     let existing = null;
     if (this._attrList) {
       for (let i = 0; i < this._attrList.length; i++) {
-        if (this._attrList[i].name.toLowerCase() === key.toLowerCase()) {
+        const match = isHtml
+          ? this._attrList[i].name.toLowerCase() === key
+          : this._attrList[i].name === key;
+        if (match) {
           existing = this._attrList[i];
           break;
         }
       }
     }
-    const oldVal = existing ? existing.value : (this._attrs.get(key.toLowerCase())?.value ?? null);
+    const oldVal = existing ? existing.value : (this._attrs.get(key)?.value ?? null);
     if (existing) {
       existing.value = val;
     } else {
@@ -384,7 +407,7 @@ function installElementExtensions(proto) {
       if (!this._attrList) this._attrList = [];
       this._attrList.push(entry);
     }
-    this._attrs.set(key.toLowerCase(), { name: key, value: val });
+    this._attrs.set(key, { name: key, value: val });
     if (key.toLowerCase() === "async") {
       if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
         globalThis.__capsurf_clearScriptForceAsync(this);
@@ -392,7 +415,7 @@ function installElementExtensions(proto) {
     }
     if (key.toLowerCase() === "id") {
       this.id = val;
-    } else if (key.toLowerCase() === "class") {
+    } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = val;
     } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
       this._selected = true;
@@ -425,18 +448,25 @@ function installElementExtensions(proto) {
       rec.oldValue = oldVal;
       notifyMutation(rec);
     }
+    if (typeof notifyCustomElementAttributeChanged === "function") {
+      notifyCustomElementAttributeChanged(this, key, oldVal, val, null);
+    }
   };
   markNative(proto.setAttribute, "setAttribute");
 
   // removeAttribute
   const origRemoveAttribute = proto.removeAttribute;
   proto.removeAttribute = function (name) {
-    const key = String(name).toLowerCase();
+    const isHtml = isHtmlElement(this);
+    const key = isHtml ? String(name).toLowerCase() : String(name);
     if (!this._attrs) this._syncAttrs();
     let oldVal = null;
     if (this._attrList) {
       for (let i = 0; i < this._attrList.length; i++) {
-        if (this._attrList[i].name.toLowerCase() === key) {
+        const match = isHtml
+          ? this._attrList[i].name.toLowerCase() === key
+          : this._attrList[i].name === key;
+        if (match) {
           oldVal = this._attrList[i].value;
           this._attrList.splice(i, 1);
           break;
@@ -446,16 +476,16 @@ function installElementExtensions(proto) {
     const oldEntry = this._attrs.get(key);
     if (!oldVal && oldEntry) oldVal = oldEntry.value;
     this._attrs.delete(key);
-    if (key === "async") {
+    if (key.toLowerCase() === "async") {
       if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
         globalThis.__capsurf_clearScriptForceAsync(this);
       }
     }
-    if (key === "id") {
+    if (key.toLowerCase() === "id") {
       this.id = "";
-    } else if (key === "class") {
+    } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = "";
-    } else if (key === "selected" && (this.tagName || "").toLowerCase() === "option") {
+    } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
       this._selected = false;
       let curr = this.parentElement || this.parentNode;
       while (curr) {
@@ -480,6 +510,9 @@ function installElementExtensions(proto) {
       rec.attributeName = name;
       rec.oldValue = oldVal;
       notifyMutation(rec);
+    }
+    if (typeof notifyCustomElementAttributeChanged === "function") {
+      notifyCustomElementAttributeChanged(this, key, oldVal, null, null);
     }
   };
   markNative(proto.removeAttribute, "removeAttribute");
@@ -521,11 +554,15 @@ function installElementExtensions(proto) {
   // getAttribute
   const origGetAttribute = proto.getAttribute;
   proto.getAttribute = function (name) {
-    const key = String(name).toLowerCase();
+    const isHtml = isHtmlElement(this);
+    const key = isHtml ? String(name).toLowerCase() : String(name);
     if (!this._attrs) this._syncAttrs();
     if (this._attrList) {
       for (let i = 0; i < this._attrList.length; i++) {
-        if (this._attrList[i].name.toLowerCase() === key) {
+        const match = isHtml
+          ? this._attrList[i].name.toLowerCase() === key
+          : this._attrList[i].name === key;
+        if (match) {
           return this._attrList[i].value;
         }
       }
@@ -533,13 +570,13 @@ function installElementExtensions(proto) {
     if (this._attrs) {
       const entry = this._attrs.get(key);
       if (entry) return entry.value;
-      if (origGetAttribute) {
+      if (isHtml && origGetAttribute) {
         const val = origGetAttribute.call(this, name);
         if (val !== null) return val;
       }
       return null;
     }
-    if (origGetAttribute) {
+    if (isHtml && origGetAttribute) {
       return origGetAttribute.call(this, name);
     }
     return null;
@@ -549,21 +586,25 @@ function installElementExtensions(proto) {
   // hasAttribute
   const origHasAttribute = proto.hasAttribute;
   proto.hasAttribute = function (name) {
-    const key = String(name).toLowerCase();
+    const isHtml = isHtmlElement(this);
+    const key = isHtml ? String(name).toLowerCase() : String(name);
     if (!this._attrs) this._syncAttrs();
     if (this._attrList) {
       for (let i = 0; i < this._attrList.length; i++) {
-        if (this._attrList[i].name.toLowerCase() === key) {
+        const match = isHtml
+          ? this._attrList[i].name.toLowerCase() === key
+          : this._attrList[i].name === key;
+        if (match) {
           return true;
         }
       }
     }
     if (this._attrs) {
       if (this._attrs.has(key)) return true;
-      if (origHasAttribute) return origHasAttribute.call(this, name);
+      if (isHtml && origHasAttribute) return origHasAttribute.call(this, name);
       return false;
     }
-    if (origHasAttribute) {
+    if (isHtml && origHasAttribute) {
       return origHasAttribute.call(this, name);
     }
     return false;
@@ -698,6 +739,9 @@ function installElementExtensions(proto) {
       rec.oldValue = oldVal;
       notifyMutation(rec);
     }
+    if (typeof notifyCustomElementAttributeChanged === "function") {
+      notifyCustomElementAttributeChanged(this, localName, oldVal, val, ns);
+    }
   };
   markNative(proto.setAttributeNS, "setAttributeNS");
 
@@ -764,6 +808,9 @@ function installElementExtensions(proto) {
       rec.oldValue = oldVal;
       notifyMutation(rec);
     }
+    if (typeof notifyCustomElementAttributeChanged === "function") {
+      notifyCustomElementAttributeChanged(this, loc, oldVal, null, ns);
+    }
   };
   markNative(proto.removeAttributeNS, "removeAttributeNS");
 
@@ -808,44 +855,59 @@ function installElementExtensions(proto) {
     });
   }
   const clsDesc = Object.getOwnPropertyDescriptor(proto, "className");
-  if (clsDesc && clsDesc.set) {
-    const origClsSet = clsDesc.set;
-    Object.defineProperty(proto, "className", {
-      get: clsDesc.get,
-      set: function (v) {
+  const origClsGet = clsDesc ? clsDesc.get : null;
+  const origClsSet = clsDesc ? clsDesc.set : null;
+  Object.defineProperty(proto, "className", {
+    get: function () {
+      if (!isHtmlElement(this)) {
+        if (!this._svgClassName) {
+          const animStr = Object.create(SVGAnimatedString.prototype);
+          animStr._element = this;
+          this._svgClassName = animStr;
+        }
+        return this._svgClassName;
+      }
+      if (origClsGet) return origClsGet.call(this);
+      return this.getAttribute("class") || "";
+    },
+    set: function (v) {
+      if (!isHtmlElement(this) && typeof v === "object" && v !== null && v.baseVal !== undefined) {
+        v = v.baseVal;
+      }
+      if (origClsSet) {
         origClsSet.call(this, v);
-        const str = String(v);
-        if (!this._attrs) this._syncAttrs();
-        if (str) {
-          const entry = { name: "class", value: str, namespaceURI: null, localName: "class", prefix: null };
-          this._attrs.set("class", entry);
-          if (this._attrList) {
-            let found = false;
-            for (let i = 0; i < this._attrList.length; i++) {
-              if (this._attrList[i].name.toLowerCase() === "class") {
-                this._attrList[i].value = str;
-                found = true;
-                break;
-              }
+      }
+      const str = String(v);
+      if (!this._attrs) this._syncAttrs();
+      if (str) {
+        const entry = { name: "class", value: str, namespaceURI: null, localName: "class", prefix: null };
+        this._attrs.set("class", entry);
+        if (this._attrList) {
+          let found = false;
+          for (let i = 0; i < this._attrList.length; i++) {
+            if (this._attrList[i].name.toLowerCase() === "class") {
+              this._attrList[i].value = str;
+              found = true;
+              break;
             }
-            if (!found) this._attrList.push(entry);
           }
-        } else {
-          this._attrs.delete("class");
-          if (this._attrList) {
-            for (let i = 0; i < this._attrList.length; i++) {
-              if (this._attrList[i].name.toLowerCase() === "class") {
-                this._attrList.splice(i, 1);
-                break;
-              }
+          if (!found) this._attrList.push(entry);
+        }
+      } else {
+        this._attrs.delete("class");
+        if (this._attrList) {
+          for (let i = 0; i < this._attrList.length; i++) {
+            if (this._attrList[i].name.toLowerCase() === "class") {
+              this._attrList.splice(i, 1);
+              break;
             }
           }
         }
-        if (this._attributesMap) this._attributesMap._sync();
-      },
-      configurable: true,
-    });
-  }
+      }
+      if (this._attributesMap) this._attributesMap._sync();
+    },
+    configurable: true,
+  });
 
   // toggleAttribute
   if (!proto.toggleAttribute) {

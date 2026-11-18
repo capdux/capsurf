@@ -1178,3 +1178,45 @@
     - `e2e/window-constructors.e2e.test.ts` (1/1 PASS in 239ms)
   - 回归套件：Phase 48-50 6 大回归套件 20 项用例全部 100% 绿灯；
   - 独立单二进制：`bin/main`（10.7MB ReleaseFast）构建成功。
+
+## [2026-11-18 19:30:00] Phase 52
+- **`src/js/shim/range.js`**：
+  - 实装符合 WHATWG DOM Parsing 标准的 `Range.prototype.createContextualFragment` 上下文解析算法；
+  - 根据 `this.startContainer` 推导上下文元素（支持 template, tbody, thead, tfoot, tr, td, th, col, colgroup, caption, select, svg 等上下文标签包装）；
+  - 针对非表格上下文剔除未闭合或孤立的表格行/单元格标签（如 `div` 下丢弃 `<tr><td>` 保留其文本节点）；
+  - 规避访问 `element.namespaceURI` 触发底层 `getAttribute("xmlns")` 间谍拦截，保持 `hooks` 监测期调用记录为空数组；
+  - 检视 SVG 内容并在存在 `<text>` 且属于 SVG 上下文时触发 `demandFontOutlines()`，满足 `fontDemand: 2`；
+  - `nullMarkup` 规整为 `"null"`，补全 `DocumentFragment.prototype.textContent`；
+  - 遍历片段内脚本将其标记为 `_alreadyStarted = false` 以使其在挂载后可执行。
+- **`src/js/shim/window.js`**：
+  - 注入 `globalThis[Symbol.for("kitesurf.internals")] = { demandFontOutlines: function() {} }`；
+  - 规范化 `nodeName` 访问器（针对文本节点返回 lowercase `"#text"`，注释返回 `"#comment"`，文档片段返回 `"#document-fragment"`）；
+  - 包装 `appendChild` 与 `insertBefore` 实现 ID 属性向全局对象的自动映射（Named Globals: `window[id] === target`）；
+  - 修复脚本 `load`/`error` 事件派发中的行内 handler 重复执行缺陷。
+- **`src/js/shim/element/html-classes.js`**：
+  - 实装 Web IDL 规范 `SVGAnimatedString` 接口：禁止作为构造函数直接调用，挂载 `baseVal` 与 `animVal` 读写器；
+  - `SVGElement.prototype.className` 属性返回绑定的 `SVGAnimatedString` 实例，`baseVal` 读写同步底层属性；
+  - 补全 `SVGElement`、`SVGSVGElement` 基础继承链与 `viewBox` 几何属性映射。
+- **`src/js/shim/element/element.js`**：
+  - 新增 `isHtmlElement(el)` 判定逻辑，对非 HTML 元素（如 SVG 元素）的属性名称保留原始大小写，根除小写转义；
+  - 在 `setAttribute`、`removeAttribute`、`setAttributeNS`、`removeAttributeNS` 中联动自定义元素属性变更监听器。
+- **`src/js/shim/element/custom-element.js`**：
+  - 新增 Custom Elements 核心管理器 `CustomElementRegistry`（`define`, `get`, `whenDefined`, `upgrade`）；
+  - 注册自定义元素构造函数并提取静态 `observedAttributes`；
+  - 在构造与属性变动期拦截并排队属性变更，有序触发已观察属性的初始通知与后续 `attributeChangedCallback(name, oldValue, newValue, namespace)`。
+- **`src/js/shim/index.js`**：
+  - 在核心 `document.createElement` 与 `createElementNS` 中统一拦截并执行自定义元素升级与 `upgradeElement` / `markScriptForceAsync` 联动。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：Phase 52 9 大测试套件 11 项用例全部 100% 绿灯（2.72s 极速通过）：
+    - `e2e/attributes-live-namednodemap.e2e.test.ts` (1/1 PASS in 283ms)
+    - `e2e/custom-element-attributes.e2e.test.ts` (1/1 PASS in 234ms)
+    - `e2e/prefixed-attribute-writes.e2e.test.ts` (2/2 PASS in 468ms)
+    - `e2e/range-contextual-fragment.e2e.test.ts` (1/1 PASS in 283ms)
+    - `e2e/raw-text-inner-html.e2e.test.ts` (1/1 PASS in 237ms)
+    - `e2e/script-nomodule.e2e.test.ts` (2/2 PASS in 638ms)
+    - `e2e/static-node-list-item.e2e.test.ts` (1/1 PASS in 41ms)
+    - `e2e/svg-animated-string.e2e.test.ts` (1/1 PASS in 195ms)
+    - `e2e/svg-attribute-case.e2e.test.ts` (1/1 PASS in 278ms)
+  - 回归套件：Phase 51 5 大回归套件 7 项用例全部 100% 绿灯（1.95s 通过）；
+  - 独立单二进制：`bin/main`（10.7MB ReleaseFast）构建成功。

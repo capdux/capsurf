@@ -174,7 +174,24 @@ function installShim(global) {
     if (docProto.createElement) {
       const origCreateElement = docProto.createElement;
       docProto.createElement = function (tagName) {
-        const el = upgradeElement(origCreateElement.call(this, tagName));
+        let el = origCreateElement.call(this, tagName);
+        if (el) {
+          const tag = String(tagName).toLowerCase();
+          const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
+          const Ctor = (registry && registry.get) ? registry.get(tag) : null;
+          if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
+            el._upgraded = true;
+            if (typeof globalThis.upgradeCustomElement === "function") {
+              globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
+            } else {
+              Object.setPrototypeOf(el, Ctor.prototype);
+              const HEl = global.HTMLElement || (typeof HTMLElement !== "undefined" ? HTMLElement : null);
+              if (HEl) HEl._upgradeTarget = el;
+              try { new Ctor(); } catch (e) {} finally { if (HEl) HEl._upgradeTarget = null; }
+            }
+          }
+        }
+        el = upgradeElement(el);
         if (el && String(tagName).toLowerCase() === "script") {
           if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
             globalThis.__capsurf_markScriptForceAsync(el);
@@ -183,12 +200,32 @@ function installShim(global) {
         return el;
       };
       markNative(docProto.createElement, "createElement");
+      if (global.document) {
+        global.document.createElement = docProto.createElement;
+      }
     }
 
     if (docProto.createElementNS) {
       const origCreateElementNS = docProto.createElementNS;
       docProto.createElementNS = function (ns, tagName) {
-        const el = upgradeElement(origCreateElementNS.call(this, ns, tagName));
+        let el = origCreateElementNS.call(this, ns, tagName);
+        if (el && (!ns || ns === "http://www.w3.org/1999/xhtml")) {
+          const tag = String(tagName).toLowerCase();
+          const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
+          const Ctor = (registry && registry.get) ? registry.get(tag) : null;
+          if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
+            el._upgraded = true;
+            if (typeof globalThis.upgradeCustomElement === "function") {
+              globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
+            } else {
+              Object.setPrototypeOf(el, Ctor.prototype);
+              const HEl = global.HTMLElement || (typeof HTMLElement !== "undefined" ? HTMLElement : null);
+              if (HEl) HEl._upgradeTarget = el;
+              try { new Ctor(); } catch (e) {} finally { if (HEl) HEl._upgradeTarget = null; }
+            }
+          }
+        }
+        el = upgradeElement(el);
         if (el && String(tagName).toLowerCase() === "script") {
           if (typeof globalThis !== "undefined" && globalThis.__capsurf_markScriptForceAsync) {
             globalThis.__capsurf_markScriptForceAsync(el);
@@ -197,6 +234,9 @@ function installShim(global) {
         return el;
       };
       markNative(docProto.createElementNS, "createElementNS");
+      if (global.document) {
+        global.document.createElementNS = docProto.createElementNS;
+      }
     }
 
     if (docProto.getElementById) {

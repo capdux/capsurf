@@ -37,6 +37,7 @@ MODULE_ORDER = [
     "canvas2d.js",
     "animations.js",
     "window.js",
+    "element/custom-element.js",
     "index.js",
 ]
 

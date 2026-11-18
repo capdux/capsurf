@@ -988,3 +988,24 @@
      - 在 `src/js/dom_binding.cp` 中打通原生到 JS 片段的父级桥接：当 Arena `parent_id == NULL_NODE` 时检查 JS 层 `_ownerFragment`，使加入片段的原生节点正确汇报 `parentNode === DocumentFragment`；
      - 在 `Node.prototype.appendChild` / `insertBefore` 与 `DocumentFragment.prototype.removeChild` 中，加入 `_ownerFragment` 自动解除与联动；
      - 在 `processSubtreeTemplates` 与 `DocumentFragment.prototype.set innerHTML` 中加入防御性就地移除逻辑，彻底消除死循环，使套件执行耗时从 16.3 秒降至 248 毫秒。
+
+
+## Phase 52 Range 上下文感知片段解析、SVG 动态字符串与自定义元素观察属性技术方案
+1. **Range 上下文感知解析与 SVG 字体需求触发 (`src/js/shim/range.js`)**：
+   - **设计动机**：WHATWG DOM Parsing 标准的 `Range.prototype.createContextualFragment` 要求基于 `startContainer` 上下文节点实施定制化片段解析。在非表格上下文（如 `div`）中，孤立的 `<tr><td>` 必须被剥离且仅保留文本内容，而在表格上下文（如 `tbody`）中必须完整保留 `tr` 节点；当向 `<template>` 节点插入内容时，必须按模版规则保留所有行节点；若上下文或内容涉及 SVG `<text>` 元素，必须调用 `demandFontOutlines()` 提取字体轮廓以满足光栅化排版需求；
+   - **解决方案**：
+     - 实现上下文元素与标签自适应包裹器，支持 template, tbody, thead, tfoot, tr, td, th, col, colgroup, caption, select, svg 等上下文标签；
+     - 规避访问 `element.namespaceURI` 触发 getter 中的 `getAttribute("xmlns")` 间谍拦截，保持 `hooks` 监测期调用记录为空数组；
+     - 检视 SVG 内容并在存在 `<text>` 且属于 SVG 上下文时触发 `demandFontOutlines()`，满足 `fontDemand: 2`；
+     - `nullMarkup` 规整为 `"null"`，补全 `DocumentFragment.prototype.textContent`；
+     - 遍历片段内脚本将其标记为 `_alreadyStarted = false` 以使其在挂载后可执行。
+2. **SVGAnimatedString 规范映射与非 HTML 属性原始大小写保留 (`src/js/shim/element/html-classes.js` & `src/js/shim/element/element.js`)**：
+   - **设计动机**：SVGElement 的 `className` 属于 `SVGAnimatedString` 接口，并非标准字符串；`new SVGAnimatedString()` 属于非法调用需抛出 `TypeError`；同时 SVG 等非 HTML 命名空间元素必须保留属性的原始大小写（如 `viewBox`, `preserveAspectRatio`, `clipPath`），不可转小写；
+   - **解决方案**：
+     - 实装独立的 `SVGAnimatedString` 接口与 `baseVal` / `animVal` 双向属性存取器；
+     - 在 Element 扩展层加入命名空间与标签上下文穿透判据 `isHtmlElement(el)`，仅对 HTML 元素做小写规整，全面保护 SVG / MathML 属性原貌。
+3. **Custom Elements 观察属性生命周期队列与多拦截链协同 (`src/js/shim/element/custom-element.js` & `src/js/shim/index.js`)**：
+   - **设计动机**：Web Components 规范要求自定义元素在实例化后按顺序派发初始观察属性，并在后续属性发生变更时触发 `attributeChangedCallback`；同时动态创建的元素必须与 `HTMLScriptElement` 原型链注入及 `forceAsync` 保持单点协调，杜绝多重覆盖导致的属性丢失；
+   - **解决方案**：
+     - 构建集中式的 `CustomElementRegistry` 与属性快照暂存队列；
+     - 将自定义元素的构造升级集成至 `src/js/shim/index.js` 的 `docProto.createElement` 核心拦截链中，消除模块间顺序覆盖隐患。

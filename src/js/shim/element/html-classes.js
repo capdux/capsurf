@@ -283,9 +283,27 @@ function installHtmlClasses(global) {
   global.HTMLIFrameElement = HTMLIFrameElement;
 
   // 6. Generic HTMLElement
-  function HTMLElement() {}
+  const upgradeTargets = [];
+  function HTMLElement() {
+    if (upgradeTargets.length > 0) {
+      return upgradeTargets.pop();
+    }
+  }
   HTMLElement.prototype = Object.create(ElementProto);
   HTMLElement.prototype.constructor = HTMLElement;
+  Object.defineProperty(HTMLElement, "_upgradeTarget", {
+    get: function () {
+      return upgradeTargets.length > 0 ? upgradeTargets[upgradeTargets.length - 1] : null;
+    },
+    set: function (val) {
+      if (val === null || val === undefined) {
+        if (upgradeTargets.length > 0) upgradeTargets.pop();
+      } else {
+        upgradeTargets.push(val);
+      }
+    },
+    configurable: true,
+  });
   markNative(HTMLElement, "HTMLElement");
   global.HTMLElement = HTMLElement;
 
@@ -334,6 +352,119 @@ function installHtmlClasses(global) {
   if (typeof globalThis !== "undefined") {
     globalThis.HTMLTemplateElement = HTMLTemplateElement;
   }
+
+  // 8. SVG Interfaces & AnimatedString
+  function SVGAnimatedString() {
+    throw new TypeError("Illegal constructor");
+  }
+  Object.defineProperty(SVGAnimatedString.prototype, "baseVal", {
+    get: function () {
+      if (this._element && typeof this._element.getAttribute === "function") {
+        return this._element.getAttribute("class") || "";
+      }
+      return this._baseVal || "";
+    },
+    set: function (v) {
+      const str = String(v);
+      if (this._element && typeof this._element.setAttribute === "function") {
+        this._element.setAttribute("class", str);
+      } else {
+        this._baseVal = str;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(SVGAnimatedString.prototype, "animVal", {
+    get: function () {
+      return this.baseVal;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  SVGAnimatedString.prototype.toString = function () {
+    return this.baseVal;
+  };
+  markNative(SVGAnimatedString, "SVGAnimatedString");
+  global.SVGAnimatedString = SVGAnimatedString;
+  if (typeof globalThis !== "undefined") {
+    globalThis.SVGAnimatedString = SVGAnimatedString;
+  }
+
+  function SVGElement() {}
+  SVGElement.prototype = Object.create(ElementProto);
+  SVGElement.prototype.constructor = SVGElement;
+  Object.defineProperty(SVGElement.prototype, "className", {
+    get: function () {
+      if (!this._svgClassName) {
+        const animStr = Object.create(SVGAnimatedString.prototype);
+        animStr._element = this;
+        this._svgClassName = animStr;
+      }
+      return this._svgClassName;
+    },
+    set: function (val) {
+      if (typeof val === "string") {
+        this.setAttribute("class", val);
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  markNative(SVGElement, "SVGElement");
+  global.SVGElement = SVGElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.SVGElement = SVGElement;
+  }
+
+  function SVGSVGElement() {
+    SVGElement.call(this);
+  }
+  SVGSVGElement.prototype = Object.create(SVGElement.prototype);
+  SVGSVGElement.prototype.constructor = SVGSVGElement;
+  markNative(SVGSVGElement, "SVGSVGElement");
+  global.SVGSVGElement = SVGSVGElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.SVGSVGElement = SVGSVGElement;
+  }
+
+  const SVG_VIEWBOX_LOCALS = new Set(["svg", "symbol", "marker", "pattern", "view"]);
+  Object.defineProperty(ElementProto, "viewBox", {
+    configurable: true,
+    get: function () {
+      const tag = String(this.localName || this.tagName || "").toLowerCase();
+      if (!SVG_VIEWBOX_LOCALS.has(tag)) {
+        return undefined;
+      }
+      const el = this;
+      const parse = function () {
+        const raw = String(el.getAttribute("viewBox") ?? "");
+        const n = raw
+          .split(/[\s,]+/)
+          .filter(Boolean)
+          .map(Number);
+        return n.length === 4 && n.every(Number.isFinite) ? n : [0, 0, 0, 0];
+      };
+      const write = function (i, v) {
+        const n = parse();
+        n[i] = Number(v) || 0;
+        el.setAttribute("viewBox", n.join(" "));
+      };
+      const mkRect = function () {
+        return {
+          get x() { return parse()[0]; },
+          set x(v) { write(0, v); },
+          get y() { return parse()[1]; },
+          set y(v) { write(1, v); },
+          get width() { return parse()[2]; },
+          set width(v) { write(2, v); },
+          get height() { return parse()[3]; },
+          set height(v) { write(3, v); },
+        };
+      };
+      return { baseVal: mkRect(), animVal: mkRect() };
+    },
+  });
 }
 
 function initTemplateContent(template) {
