@@ -160,7 +160,7 @@
     const opts = options || {};
     this.type = String(type);
     this.bubbles = Boolean(opts.bubbles);
-    this.cancelable = Boolean(opts.cancelable);
+    this.cancelable = opts.cancelable !== undefined ? Boolean(opts.cancelable) : (this.type === "click" || this.type === "submit");
     this.composed = Boolean(opts.composed);
     this.target = null;
     this.currentTarget = null;
@@ -288,6 +288,15 @@
   MessageEvent.prototype = Object.create(Event.prototype);
   MessageEvent.prototype.constructor = MessageEvent;
   markNative(MessageEvent, "MessageEvent");
+
+  function SubmitEvent(type, options) {
+    Event.call(this, type, options);
+    const opts = options || {};
+    this.submitter = opts.submitter !== undefined ? opts.submitter : null;
+  }
+  SubmitEvent.prototype = Object.create(Event.prototype);
+  SubmitEvent.prototype.constructor = SubmitEvent;
+  markNative(SubmitEvent, "SubmitEvent");
 
   // =============================================================
   // Module: events/dispatch.js
@@ -419,16 +428,38 @@
         }
       }
 
-      // Inline event handler (e.g. element.onclick)
+      // Inline event handler (e.g. element.onclick, element.onsubmit)
       if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
         const propName = "on" + eventType;
-        if (typeof entry[propName] === "function" && !event._immediateStopped) {
+        if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
+        if (!entry._hydratedHandlers[propName] && typeof entry.getAttribute === "function") {
+          entry._hydratedHandlers[propName] = true;
+          const attrVal = entry.getAttribute(propName);
+          if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+            try {
+              entry[propName] = new Function("event", attrVal);
+            } catch (e) {}
+          }
+        }
+        const fn = entry[propName];
+        if (typeof fn === "function" && !event._immediateStopped) {
           try {
-            entry[propName].call(entry, event);
+            const ret = fn.call(entry, event);
+            if (ret === false) {
+              event.preventDefault();
+            }
           } catch (e) {
             if (typeof console !== "undefined" && console.error) console.error(e);
           }
         }
+      }
+    }
+
+    let activatedButton = null;
+
+    function checkActivation(entry) {
+      if (!activatedButton && typeof isSubmitOrResetButton === "function" && isSubmitOrResetButton(entry)) {
+        activatedButton = entry;
       }
     }
 
@@ -441,6 +472,9 @@
     // Phase 2: At Target
     if (!event._stopped) {
       invoke(this, PHASE_AT_TARGET);
+      if (eventType === "click") {
+        checkActivation(this);
+      }
     }
 
     // Phase 3: Bubbling (from target's parent up to top, if bubbles is true)
@@ -448,11 +482,22 @@
       for (let i = 1; i < path.length; i++) {
         if (event._stopped) break;
         invoke(path[i], PHASE_BUBBLING);
+        if (eventType === "click") {
+          checkActivation(path[i]);
+        }
       }
     }
 
     event.eventPhase = PHASE_NONE;
     event.currentTarget = null;
+
+    // Activation behavior for click events
+    if (eventType === "click" && activatedButton && !event.defaultPrevented) {
+      if (typeof handleButtonActivation === "function") {
+        handleButtonActivation(activatedButton);
+      }
+    }
+
     return !event.defaultPrevented;
   };
 
@@ -2520,6 +2565,166 @@
       markNative(proto.getClientRects, "getClientRects");
     }
 
+    // Scroll and Box Geometry properties
+    Object.defineProperty(proto, "scrollTop", {
+      get: function () { return this._scrollTop || 0; },
+      set: function (v) { this._scrollTop = Math.max(0, Number(v) || 0); },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "scrollLeft", {
+      get: function () { return this._scrollLeft || 0; },
+      set: function (v) { this._scrollLeft = Math.max(0, Number(v) || 0); },
+      configurable: true,
+    });
+
+    const origGetBoundingClientRect = proto.getBoundingClientRect;
+    proto.getBoundingClientRect = function () {
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+      const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+      const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+      let scrollOffsetParentX = 0;
+      let scrollOffsetParentY = 0;
+      let cur = this.parentElement;
+      while (cur && cur !== document.body && cur !== document.documentElement) {
+        if (cur._scrollTop) scrollOffsetParentY += cur._scrollTop;
+        if (cur._scrollLeft) scrollOffsetParentX += cur._scrollLeft;
+        cur = cur.parentElement;
+      }
+      const x = r.x - winX - scrollOffsetParentX;
+      const y = r.y - winY - scrollOffsetParentY;
+      const w = r.width;
+      const h = r.height;
+      return {
+        x: x,
+        y: y,
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        right: x + w,
+        bottom: y + h,
+      };
+    };
+    markNative(proto.getBoundingClientRect, "getBoundingClientRect");
+
+    Object.defineProperty(proto, "clientHeight", {
+      get: function () {
+        if (this === document.documentElement || this === document.body) {
+          return (typeof window !== "undefined" && window.innerHeight) || 720;
+        }
+        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+        return Math.round(r.height);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "clientWidth", {
+      get: function () {
+        if (this === document.documentElement || this === document.body) {
+          return (typeof window !== "undefined" && window.innerWidth) || 1280;
+        }
+        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+        return Math.round(r.width);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "scrollHeight", {
+      get: function () {
+        let maxBottom = this.clientHeight;
+        const all = this.children || [];
+        for (let i = 0; i < all.length; i++) {
+          const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
+          if (cr && cr.bottom > maxBottom) maxBottom = cr.bottom;
+        }
+        return maxBottom;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "scrollWidth", {
+      get: function () {
+        let maxRight = this.clientWidth;
+        const all = this.children || [];
+        for (let i = 0; i < all.length; i++) {
+          const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
+          if (cr && cr.right > maxRight) maxRight = cr.right;
+        }
+        return maxRight;
+      },
+      configurable: true,
+    });
+
+    function scrollElementIntoView(el, centerIfNeeded) {
+      if (!el) return;
+      const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+      const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+      const r = el.getBoundingClientRect();
+      const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
+
+      let clipped = false;
+      let cur = el.parentElement;
+      while (cur && cur !== document.body && cur !== document.documentElement) {
+        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+        const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+        const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+        if (isScrollable) {
+          const cr = cur.getBoundingClientRect();
+          if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
+            clipped = true;
+            break;
+          }
+        }
+        cur = cur.parentElement;
+      }
+
+      if (centerIfNeeded && inWin && !clipped) {
+        return;
+      }
+
+      // Scroll container ancestors
+      cur = el.parentElement;
+      while (cur && cur !== document.body && cur !== document.documentElement) {
+        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+        const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+        const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+        if (isScrollable) {
+          const cr = cur.getBoundingClientRect();
+          const er = el.getBoundingClientRect();
+          const curScrollTop = cur.scrollTop || 0;
+          const elMidInContainer = (er.top - cr.top) + curScrollTop + (er.height / 2);
+          const targetScrollTop = elMidInContainer - (cur.clientHeight / 2);
+          cur.scrollTop = Math.max(0, targetScrollTop);
+        }
+        cur = cur.parentElement;
+      }
+
+      // Scroll window if needed
+      const afterR = el.getBoundingClientRect();
+      const afterInWin = (afterR.top >= 0 && afterR.bottom <= vh && afterR.left >= 0 && afterR.right <= vw);
+      if (!afterInWin || !centerIfNeeded) {
+        const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+        const elPageY = afterR.top + curWinY;
+        const targetWinY = (elPageY + afterR.height / 2) - (vh / 2);
+        if (typeof window !== "undefined" && window.scrollTo) {
+          window.scrollTo(window.scrollX || 0, Math.max(0, targetWinY));
+        }
+      }
+    }
+
+    proto.scrollIntoView = function (arg) {
+      const center = (typeof arg === "object" && arg !== null && (arg.block === "center" || arg.inline === "center"));
+      scrollElementIntoView(this, !center ? false : false);
+    };
+    markNative(proto.scrollIntoView, "scrollIntoView");
+
+    proto.scrollIntoViewIfNeeded = function (centerIfNeeded) {
+      scrollElementIntoView(this, centerIfNeeded !== false);
+    };
+    markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
+
     // Universal Form & Control Properties on Element
     Object.defineProperty(proto, "name", {
       get: function () { return this.getAttribute("name") || ""; },
@@ -2576,7 +2781,19 @@
           return;
         }
         this._value = String(v);
-        if (this.setAttribute) this.setAttribute("value", String(v));
+        if (this.setAttribute) {
+          this.setAttribute("value", String(v));
+        }
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "defaultValue", {
+      get: function () {
+        return this.getAttribute("value") || "";
+      },
+      set: function (v) {
+        this.setAttribute("value", String(v));
       },
       configurable: true,
     });
@@ -2825,6 +3042,9 @@
 
     if (!proto.focus) {
       proto.focus = function () {
+        if (typeof document !== "undefined") {
+          document.activeElement = this;
+        }
         const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
         this.dispatchEvent(evt);
       };
@@ -2833,6 +3053,9 @@
 
     if (!proto.blur) {
       proto.blur = function () {
+        if (typeof document !== "undefined" && document.activeElement === this) {
+          document.activeElement = document.body || null;
+        }
         const evt = new FocusEvent("blur", { bubbles: false, cancelable: false });
         this.dispatchEvent(evt);
       };
@@ -3205,15 +3428,16 @@
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/input.ts
 
   function findAssociatedForm(element) {
-    const formAttr = element.getAttribute("form");
+    if (!element) return null;
+    const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
     if (formAttr && typeof document !== "undefined" && document.getElementById) {
       const f = document.getElementById(formAttr);
-      if (f && f.tagName === "FORM") return f;
+      if (f && (f.tagName || "").toLowerCase() === "form") return f;
     }
-    let curr = element.parentElement;
+    let curr = element.parentElement || element.parentNode;
     while (curr) {
-      if (curr.tagName === "FORM") return curr;
-      curr = curr.parentElement;
+      if ((curr.tagName || "").toLowerCase() === "form") return curr;
+      curr = curr.parentElement || curr.parentNode;
     }
     return null;
   }
@@ -3248,6 +3472,9 @@
         return this.getAttribute("value") || "";
       },
       set: function (v) {
+        if (this._defaultValue === undefined) {
+          this._defaultValue = this.getAttribute("value") || "";
+        }
         this._value = String(v);
         if (this.setAttribute) this.setAttribute("value", String(v));
       },
@@ -3255,8 +3482,13 @@
     });
 
     Object.defineProperty(HTMLInputElement.prototype, "defaultValue", {
-      get: function () { return this.getAttribute("value") || ""; },
-      set: function (v) { this.setAttribute("value", String(v)); },
+      get: function () {
+        return this._defaultValue !== undefined ? this._defaultValue : (this.getAttribute("value") || "");
+      },
+      set: function (v) {
+        this._defaultValue = String(v);
+        this.setAttribute("value", String(v));
+      },
       configurable: true,
     });
 
@@ -3775,6 +4007,58 @@
   // src/js/shim/element/forms/button.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/button.ts
 
+  function getButtonType(button) {
+    let raw = "";
+    if (button && typeof button.getAttribute === "function") {
+      raw = button.getAttribute("type") || "";
+    }
+    if (!raw && button && button._type) {
+      raw = button._type;
+    }
+    const lower = String(raw).toLowerCase().trim();
+    if (lower === "button" || lower === "reset") return lower;
+    return "submit";
+  }
+
+  function isSubmitOrResetButton(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.disabled || (typeof el.hasAttribute === "function" && el.hasAttribute("disabled"))) {
+      return false;
+    }
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag === "button") {
+      const t = getButtonType(el);
+      return t === "submit" || t === "reset";
+    }
+    if (tag === "input") {
+      const t = (el.type || (typeof el.getAttribute === "function" ? el.getAttribute("type") : "") || "").toLowerCase();
+      return t === "submit" || t === "reset" || t === "image";
+    }
+    return false;
+  }
+
+  function handleButtonActivation(button) {
+    if (!button) return;
+    const tag = (button.tagName || "").toLowerCase();
+    let type = "submit";
+    if (tag === "button") {
+      type = getButtonType(button);
+    } else if (tag === "input") {
+      type = (button.type || (typeof button.getAttribute === "function" ? button.getAttribute("type") : "") || "submit").toLowerCase();
+    }
+
+    const form = findAssociatedForm(button);
+    if (!form) return;
+
+    if (type === "submit" || type === "image") {
+      submitForm(form, button);
+    } else if (type === "reset") {
+      if (typeof form.reset === "function") {
+        form.reset();
+      }
+    }
+  }
+
   function installButtonElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
 
@@ -3786,7 +4070,7 @@
 
     Object.defineProperty(HTMLButtonElement.prototype, "type", {
       get: function () {
-        return (this.getAttribute("type") || "submit").toLowerCase();
+        return getButtonType(this);
       },
       set: function (v) {
         this.setAttribute("type", String(v));
@@ -3817,6 +4101,31 @@
       configurable: true,
     });
 
+    if (ElementProto && !ElementProto.form) {
+      Object.defineProperty(ElementProto, "form", {
+        get: function () {
+          const tag = (this.tagName || "").toLowerCase();
+          if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
+            return findAssociatedForm(this);
+          }
+          return null;
+        },
+        configurable: true,
+      });
+    }
+
+    Object.defineProperty(HTMLButtonElement.prototype, "formAction", {
+      get: function () { return this.getAttribute("formaction") || ""; },
+      set: function (v) { this.setAttribute("formaction", String(v)); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLButtonElement.prototype, "formMethod", {
+      get: function () { return this.getAttribute("formmethod") || ""; },
+      set: function (v) { this.setAttribute("formmethod", String(v)); },
+      configurable: true,
+    });
+
     Object.defineProperty(HTMLButtonElement.prototype, "willValidate", {
       get: function () { return false; },
       configurable: true,
@@ -3841,32 +4150,137 @@
   // src/js/shim/element/forms/form.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/form.ts
 
+  function collectFormControls(form) {
+    const controls = [];
+    function walk(node) {
+      if (!node) return;
+      let child = node.firstChild;
+      while (child) {
+        const tag = (child.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
+          controls.push(child);
+        }
+        if (tag !== "select") {
+          walk(child);
+        }
+        child = child.nextSibling;
+      }
+    }
+    walk(form);
+    return controls;
+  }
+
+  function navigateTo(url) {
+    const loc = (typeof window !== "undefined" && window.location) ||
+                (typeof globalThis !== "undefined" && globalThis.location) ||
+                (typeof location !== "undefined" && location);
+    if (loc) {
+      loc.href = url;
+    }
+  }
+
+  function performFormSubmission(form, submitter) {
+    if (!form) return;
+
+    // Resolve method
+    let method = (form.getAttribute("method") || "get").toLowerCase().trim();
+    if (submitter && typeof submitter.getAttribute === "function") {
+      const formMethod = submitter.getAttribute("formmethod");
+      if (formMethod) {
+        method = formMethod.toLowerCase().trim();
+      }
+    }
+    if (method !== "post") {
+      method = "get";
+    }
+
+    // Resolve action URL
+    let action = form.getAttribute("action") || "";
+    if (submitter && typeof submitter.getAttribute === "function") {
+      const formAction = submitter.getAttribute("formaction");
+      if (formAction) {
+        action = formAction;
+      }
+    }
+
+    const base = (typeof window !== "undefined" && window.location && window.location.href) ||
+                 (typeof location !== "undefined" && location.href) || "about:blank";
+    let targetUrl = action;
+    if (!targetUrl) {
+      targetUrl = base;
+    } else {
+      try {
+        targetUrl = new URL(targetUrl, base).toString();
+      } catch (e) {
+        // Keep targetUrl as-is
+      }
+    }
+
+    if (method === "get") {
+      const controls = collectFormControls(form);
+      const queryParts = [];
+      for (let i = 0; i < controls.length; i++) {
+        const c = controls[i];
+        if (c.disabled || (typeof c.hasAttribute === "function" && c.hasAttribute("disabled"))) {
+          continue;
+        }
+        const name = c.name || (typeof c.getAttribute === "function" ? c.getAttribute("name") : "");
+        if (!name) continue;
+
+        const tag = (c.tagName || "").toLowerCase();
+        const type = (c.type || (typeof c.getAttribute === "function" ? c.getAttribute("type") : "") || "").toLowerCase();
+
+        // For buttons and submit inputs: only include if it is the submitter
+        if (tag === "button" || type === "submit" || type === "image") {
+          if (c !== submitter) continue;
+        }
+
+        // Skip non-submitting input types
+        if (type === "button" || type === "reset") {
+          continue;
+        }
+
+        // Checkable inputs: only include if checked
+        if (type === "checkbox" || type === "radio") {
+          if (!c.checked) continue;
+        }
+
+        let val = c.value !== undefined ? String(c.value) : "";
+        if ((type === "checkbox" || type === "radio") && !val && (typeof c.hasAttribute === "function" && !c.hasAttribute("value"))) {
+          val = "on";
+        }
+        queryParts.push(encodeURIComponent(name) + "=" + encodeURIComponent(val));
+      }
+
+      const queryString = queryParts.join("&");
+      const baseUrl = targetUrl.split("?")[0].split("#")[0];
+      const finalUrl = queryString ? (baseUrl + "?" + queryString) : baseUrl;
+      navigateTo(finalUrl);
+    } else if (method === "post") {
+      navigateTo(targetUrl.split("#")[0]);
+    }
+  }
+
+  function submitForm(form, submitter) {
+    if (!form) return;
+    const ev = new SubmitEvent("submit", {
+      bubbles: true,
+      cancelable: true,
+      submitter: submitter || null,
+    });
+    form.dispatchEvent(ev);
+    if (ev.defaultPrevented) {
+      return;
+    }
+    performFormSubmission(form, submitter);
+  }
+
   function installFormElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
 
     function HTMLFormElement() {}
     HTMLFormElement.prototype = Object.create(ElementProto);
     HTMLFormElement.prototype.constructor = HTMLFormElement;
-
-    function collectFormControls(form) {
-      const controls = [];
-      function walk(node) {
-        if (!node) return;
-        let child = node.firstChild;
-        while (child) {
-          const tag = (child.tagName || "").toLowerCase();
-          if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
-            controls.push(child);
-          }
-          if (tag !== "select") {
-            walk(child);
-          }
-          child = child.nextSibling;
-        }
-      }
-      walk(form);
-      return controls;
-    }
 
     Object.defineProperty(HTMLFormElement.prototype, "elements", {
       get: function () {
@@ -3919,8 +4333,22 @@
     });
 
     HTMLFormElement.prototype.submit = function () {
-      const evt = new Event("submit", { bubbles: true, cancelable: true });
-      this.dispatchEvent(evt);
+      performFormSubmission(this, null);
+    };
+
+    HTMLFormElement.prototype.requestSubmit = function (submitter) {
+      if (submitter !== undefined && submitter !== null) {
+        const tag = (submitter.tagName || "").toLowerCase();
+        const type = (submitter.type || (typeof submitter.getAttribute === "function" ? submitter.getAttribute("type") : "") || "").toLowerCase();
+        const isButton = (tag === "button") || (tag === "input" && (type === "submit" || type === "image"));
+        if (!isButton) {
+          throw new TypeError("requestSubmit: submitter must be a submit button");
+        }
+        if (findAssociatedForm(submitter) !== this) {
+          throw new DOMException("requestSubmit: submitter is not associated with this form", "NotFoundError");
+        }
+      }
+      submitForm(this, submitter || null);
     };
 
     HTMLFormElement.prototype.reset = function () {
@@ -3952,9 +4380,37 @@
 
     markNative(HTMLFormElement, "HTMLFormElement");
     markNative(HTMLFormElement.prototype.submit, "submit");
+    markNative(HTMLFormElement.prototype.requestSubmit, "requestSubmit");
     markNative(HTMLFormElement.prototype.reset, "reset");
     markNative(HTMLFormElement.prototype.checkValidity, "checkValidity");
     markNative(HTMLFormElement.prototype.reportValidity, "reportValidity");
+
+    if (ElementProto) {
+      if (!ElementProto.submit) {
+        ElementProto.submit = function () {
+          if ((this.tagName || "").toLowerCase() === "form") {
+            performFormSubmission(this, null);
+          }
+        };
+        markNative(ElementProto.submit, "submit");
+      }
+      if (!ElementProto.reset) {
+        ElementProto.reset = function () {
+          if ((this.tagName || "").toLowerCase() === "form") {
+            HTMLFormElement.prototype.reset.call(this);
+          }
+        };
+        markNative(ElementProto.reset, "reset");
+      }
+      if (!ElementProto.requestSubmit) {
+        ElementProto.requestSubmit = function (submitter) {
+          if ((this.tagName || "").toLowerCase() === "form") {
+            HTMLFormElement.prototype.requestSubmit.call(this, submitter);
+          }
+        };
+        markNative(ElementProto.requestSubmit, "requestSubmit");
+      }
+    }
 
     global.HTMLFormElement = HTMLFormElement;
   }
@@ -9772,6 +10228,25 @@
       globalThis.scrollBy = global.scrollBy;
     }
 
+    global.scrollX = 0;
+    global.scrollY = 0;
+    global.pageXOffset = 0;
+    global.pageYOffset = 0;
+    global.innerWidth = 1280;
+    global.innerHeight = 720;
+    global.outerWidth = 1280;
+    global.outerHeight = 720;
+    if (typeof globalThis !== "undefined") {
+      globalThis.scrollX = 0;
+      globalThis.scrollY = 0;
+      globalThis.pageXOffset = 0;
+      globalThis.pageYOffset = 0;
+      globalThis.innerWidth = 1280;
+      globalThis.innerHeight = 720;
+      globalThis.outerWidth = 1280;
+      globalThis.outerHeight = 720;
+    }
+
     // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
     if (global.document) {
       try {
@@ -9810,6 +10285,7 @@
     global.FocusEvent = FocusEvent;
     global.InputEvent = InputEvent;
     global.MessageEvent = MessageEvent;
+    global.SubmitEvent = SubmitEvent;
     global.EventTarget = EventTarget;
 
     // 2. Expose DOM Collections and Nodes
@@ -9880,8 +10356,6 @@
       global.Element.prototype.getAnimations = markNative(function () {
         return animationsFor(this);
       }, "getAnimations");
-
-      global.Element.prototype.scrollIntoView = markNative(function () {}, "scrollIntoView");
 
       global.Element.prototype.getContext = markNative(function (type) {
         const t = String(type).toLowerCase();

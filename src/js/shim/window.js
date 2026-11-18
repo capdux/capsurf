@@ -1590,6 +1590,25 @@ function installWindow(global) {
     globalThis.scrollBy = global.scrollBy;
   }
 
+  global.scrollX = 0;
+  global.scrollY = 0;
+  global.pageXOffset = 0;
+  global.pageYOffset = 0;
+  global.innerWidth = 1280;
+  global.innerHeight = 720;
+  global.outerWidth = 1280;
+  global.outerHeight = 720;
+  if (typeof globalThis !== "undefined") {
+    globalThis.scrollX = 0;
+    globalThis.scrollY = 0;
+    globalThis.pageXOffset = 0;
+    globalThis.pageYOffset = 0;
+    globalThis.innerWidth = 1280;
+    globalThis.innerHeight = 720;
+    globalThis.outerWidth = 1280;
+    globalThis.outerHeight = 720;
+  }
+
   // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
   if (global.document) {
     try {

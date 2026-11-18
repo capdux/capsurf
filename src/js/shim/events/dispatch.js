@@ -125,16 +125,38 @@ EventTarget.prototype.dispatchEvent = function (event) {
       }
     }
 
-    // Inline event handler (e.g. element.onclick)
+    // Inline event handler (e.g. element.onclick, element.onsubmit)
     if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
       const propName = "on" + eventType;
-      if (typeof entry[propName] === "function" && !event._immediateStopped) {
+      if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
+      if (!entry._hydratedHandlers[propName] && typeof entry.getAttribute === "function") {
+        entry._hydratedHandlers[propName] = true;
+        const attrVal = entry.getAttribute(propName);
+        if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+          try {
+            entry[propName] = new Function("event", attrVal);
+          } catch (e) {}
+        }
+      }
+      const fn = entry[propName];
+      if (typeof fn === "function" && !event._immediateStopped) {
         try {
-          entry[propName].call(entry, event);
+          const ret = fn.call(entry, event);
+          if (ret === false) {
+            event.preventDefault();
+          }
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
       }
+    }
+  }
+
+  let activatedButton = null;
+
+  function checkActivation(entry) {
+    if (!activatedButton && typeof isSubmitOrResetButton === "function" && isSubmitOrResetButton(entry)) {
+      activatedButton = entry;
     }
   }
 
@@ -147,6 +169,9 @@ EventTarget.prototype.dispatchEvent = function (event) {
   // Phase 2: At Target
   if (!event._stopped) {
     invoke(this, PHASE_AT_TARGET);
+    if (eventType === "click") {
+      checkActivation(this);
+    }
   }
 
   // Phase 3: Bubbling (from target's parent up to top, if bubbles is true)
@@ -154,11 +179,22 @@ EventTarget.prototype.dispatchEvent = function (event) {
     for (let i = 1; i < path.length; i++) {
       if (event._stopped) break;
       invoke(path[i], PHASE_BUBBLING);
+      if (eventType === "click") {
+        checkActivation(path[i]);
+      }
     }
   }
 
   event.eventPhase = PHASE_NONE;
   event.currentTarget = null;
+
+  // Activation behavior for click events
+  if (eventType === "click" && activatedButton && !event.defaultPrevented) {
+    if (typeof handleButtonActivation === "function") {
+      handleButtonActivation(activatedButton);
+    }
+  }
+
   return !event.defaultPrevented;
 };
 

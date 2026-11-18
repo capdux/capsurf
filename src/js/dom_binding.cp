@@ -1155,7 +1155,15 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?): (*JsDomC
         offset += chunk.len;
     }
 
+    const saved_limit = ctx.runtime.state.reduction_limit;
+    ctx.runtime.state.reduction_limit = 0;
+    ctx.runtime.resetReductions();
+
     const shim_val = ctx.eval(runtime_buf);
+
+    ctx.runtime.state.reduction_limit = saved_limit;
+    ctx.runtime.resetReductions();
+
     if (jsIsException(shim_val)) {
         const exc = ctx.getException();
         const exc_str = ctx.toCString(exc);

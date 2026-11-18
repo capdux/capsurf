@@ -2,52 +2,8 @@
 // CDP Runtime Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
-
-fn unescapeJsonString(src: []const u8, dst: []u8): []const u8 {
-    let out_idx: usize = 0;
-    let i: usize = 0;
-    while (i < src.len && out_idx < dst.len) {
-        if (src[i] == '\\' && i + 1 < src.len) {
-            const next = src[i + 1];
-            if (next == 'n') {
-                dst[out_idx] = '\n';
-                out_idx += 1;
-                i += 2;
-            } else if (next == 'r') {
-                dst[out_idx] = '\r';
-                out_idx += 1;
-                i += 2;
-            } else if (next == 't') {
-                dst[out_idx] = '\t';
-                out_idx += 1;
-                i += 2;
-            } else if (next == '"') {
-                dst[out_idx] = '"';
-                out_idx += 1;
-                i += 2;
-            } else if (next == '\\') {
-                dst[out_idx] = '\\';
-                out_idx += 1;
-                i += 2;
-            } else if (next == '/') {
-                dst[out_idx] = '/';
-                out_idx += 1;
-                i += 2;
-            } else {
-                dst[out_idx] = src[i];
-                out_idx += 1;
-                i += 1;
-            }
-        } else {
-            dst[out_idx] = src[i];
-            out_idx += 1;
-            i += 1;
-        }
-    }
-    return dst[0..out_idx];
-}
 
 pub struct RuntimeHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
@@ -96,7 +52,9 @@ pub struct RuntimeHandler {
 
         if (std.mem.eql(u8, req.method, "Runtime.callFunctionOn")) {
             const object_id = extractJsonString(req.params_raw, "objectId") ?? "";
-            const func_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
+            const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
+            let decl_buf: [4096]u8 = [0; 4096];
+            const func_decl = unescapeJsonString(raw_decl, &decl_buf);
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             

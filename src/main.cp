@@ -78,7 +78,7 @@ fn runDemo() {
         .{ btn_rect.x, btn_rect.y, btn_rect.width, btn_rect.height, btn_rect.visible },
     );
 
-    let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+    let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
     defer rt.deinit();
 
     let ctx = rt.createContext() catch unreachable;

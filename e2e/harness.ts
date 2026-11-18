@@ -457,18 +457,24 @@ export class Page {
   }
 
   async click(selector: string): Promise<void> {
-    await this.evaluate((sel: string) => {
-      const el: any = document.querySelector(sel);
-      if (el) {
-        try {
-          const EvCls = (globalThis as any).__NativeEvent || Event;
-          const ev = new EvCls("click", { bubbles: true });
-          el.dispatchEvent?.(ev);
-        } catch (e) {
-          el.click?.();
+    try {
+      await this.evaluate((sel: string) => {
+        const el: any = document.querySelector(sel);
+        if (el) {
+          try {
+            const EvCls = (globalThis as any).__NativeEvent || Event;
+            const ev = new EvCls("click", { bubbles: true });
+            el.dispatchEvent?.(ev);
+          } catch (e) {
+            el.click?.();
+          }
         }
+      }, selector);
+    } catch (err: any) {
+      if (!String(err?.message || err).includes("Execution context was destroyed")) {
+        throw err;
       }
-    }, selector);
+    }
   }
 
   async type(selector: string, text: string): Promise<void> {
@@ -504,7 +510,71 @@ export class Page {
     `);
   }
 
+  async $(selector: string): Promise<ElementHandle | null> {
+    const res: any = await this.cdp.send("Runtime.evaluate", {
+      expression: `document.querySelector(${JSON.stringify(selector)})`,
+    });
+    if (!res || !res.result || res.result.subtype === "null" || !res.result.objectId) {
+      return null;
+    }
+    return new ElementHandle(this, res.result, selector);
+  }
+
   async close(): Promise<void> {}
+}
+
+export class ElementHandle {
+  constructor(public page: Page, public remoteObject: any, public selector?: string) {}
+
+  async scrollIntoView(): Promise<void> {
+    const objectId = this.remoteObject?.objectId;
+    if (objectId) {
+      await this.page.cdp.send("DOM.scrollIntoViewIfNeeded", { objectId });
+    } else if (this.selector) {
+      await this.page.evaluate((sel: string) => {
+        const el = document.querySelector(sel);
+        if (el && (el as any).scrollIntoView) (el as any).scrollIntoView({ block: "center", inline: "center" });
+      }, this.selector);
+    }
+  }
+
+  async isIntersectingViewport(): Promise<boolean> {
+    const objectId = this.remoteObject?.objectId;
+    const selector = this.selector;
+    return this.page.evaluate(
+      (objId: string | undefined, sel: string | undefined) => {
+        let el: any = null;
+        if (objId && (globalThis as any).__capsurf_get_object) {
+          el = (globalThis as any).__capsurf_get_object(objId);
+        }
+        if (!el && sel) {
+          el = document.querySelector(sel);
+        }
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const vw = window.innerWidth || 1280;
+        const vh = window.innerHeight || 720;
+        const inWin = (r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw);
+        if (!inWin) return false;
+        let cur = el.parentElement;
+        while (cur && cur !== document.body && cur !== document.documentElement) {
+          const style = (window.getComputedStyle ? window.getComputedStyle(cur) : cur.style) || {};
+          const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+          const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+          if (isScrollable) {
+            const cr = cur.getBoundingClientRect();
+            if (r.bottom <= cr.top || r.top >= cr.top + cur.clientHeight || r.right <= cr.left || r.left >= cr.left + cur.clientWidth) {
+              return false;
+            }
+          }
+          cur = cur.parentElement;
+        }
+        return true;
+      },
+      objectId,
+      selector,
+    );
+  }
 }
 
 export class Browser {

@@ -2000,4 +2000,30 @@
     - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
   - 独立单二进制：`bin/main`（9.7MB）构建成功。
 
+## [2026-11-18 13:25:00] Turn 61
+### Phase 48 闭环：CDP Input/ScrollIntoView/BoxModel、表单按钮冒泡提交与 AXTree 动态属性反射
+- **攻坚与实现落地**：
+  - **`src/cdp/input.cp`**：实装 `Input.insertText`，准确解析当前激活的输入元素，追加输入文本并派发 WHATWG `input` 事件；
+  - **`src/cdp/dom.cp` & `src/layout/layout.cp`**：实装 `DOM.scrollIntoViewIfNeeded` 几何视口居中算法；扩展 `DOM.getBoxModel` 与 `DOM.getContentQuads`，支持基于 Runtime `objectId` 逆向解析至 `nodeId` 并计算模型盒；
+  - **`e2e/harness.ts`**：补充 `Page.prototype.$` 与 `ElementHandle.prototype.isIntersectingViewport` / `scrollIntoView` 驱动断言；
+  - **`src/js/shim/events/` & `src/js/shim/element/forms/`**：
+    - 实装 `SubmitEvent`（携带 `submitter` 按钮引用）与表单序列化（GET/POST 提交导航）；
+    - 实现按钮后代元素（如 `button > span`）点击事件向外冒泡至 `<button>` 触发默认提交动作；
+    - 支持内联 `onclick="return false"` / `onsubmit` 拦截与 `event.preventDefault()` 取消提交；
+  - **`src/js/shim/element/element.js` & `input.js`**：完善 `Element.prototype` 与 `HTMLInputElement.prototype` 上的 `.value` 与 `.checked` 动态存取器，双向联动底层 DOM 属性，确保 `Accessibility.getFullAXTree` 精确反射实时动态值（Live Value 与 Live Checked）。
+- **双轨测试与门禁验证 100% 闭环**：
+  - **白盒单元测试**：`test_js_dom.cp` (5/5 PASS)、`test_dom_api_extensions.cp` PASS、`test_document_collections.cp` PASS；
+  - **静态门禁验证**：`python3 scripts/cpc_brief.py -n 8` 对所有修改的 CP 核心源码检验 100% 全部通过（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - **端到端黑盒测试**：全部 8 个目标测试套件 29 项用例 100% 绿灯（164 项断言通过）：
+    - `e2e/cdp-input-and-box-model.e2e.test.ts` (4/4 PASS)
+    - `e2e/cdp-scroll-into-view.e2e.test.ts` (3/3 PASS)
+    - `e2e/button-descendant-submit.e2e.test.ts` (3/3 PASS)
+    - `e2e/accessibility.e2e.test.ts` (7/7 PASS, 111 项断言全部通过)
+    - `e2e/xpath.e2e.test.ts` (9/9 PASS)
+    - `e2e/dom-parser-dataset.e2e.test.ts` (1/1 PASS)
+    - `e2e/domparser-adoption-handle-privacy.e2e.test.ts` (1/1 PASS)
+    - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
+  - **独立单二进制**：`bin/main`（9.7MB）构建成功。
+
+
 

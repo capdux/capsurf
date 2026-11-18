@@ -97,6 +97,9 @@ function installHtmlElementExtensions(proto) {
 
   if (!proto.focus) {
     proto.focus = function () {
+      if (typeof document !== "undefined") {
+        document.activeElement = this;
+      }
       const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
       this.dispatchEvent(evt);
     };
@@ -105,6 +108,9 @@ function installHtmlElementExtensions(proto) {
 
   if (!proto.blur) {
     proto.blur = function () {
+      if (typeof document !== "undefined" && document.activeElement === this) {
+        document.activeElement = document.body || null;
+      }
       const evt = new FocusEvent("blur", { bubbles: false, cancelable: false });
       this.dispatchEvent(evt);
     };

@@ -6,7 +6,7 @@ function Event(type, options) {
   const opts = options || {};
   this.type = String(type);
   this.bubbles = Boolean(opts.bubbles);
-  this.cancelable = Boolean(opts.cancelable);
+  this.cancelable = opts.cancelable !== undefined ? Boolean(opts.cancelable) : (this.type === "click" || this.type === "submit");
   this.composed = Boolean(opts.composed);
   this.target = null;
   this.currentTarget = null;
@@ -134,3 +134,12 @@ function MessageEvent(type, options) {
 MessageEvent.prototype = Object.create(Event.prototype);
 MessageEvent.prototype.constructor = MessageEvent;
 markNative(MessageEvent, "MessageEvent");
+
+function SubmitEvent(type, options) {
+  Event.call(this, type, options);
+  const opts = options || {};
+  this.submitter = opts.submitter !== undefined ? opts.submitter : null;
+}
+SubmitEvent.prototype = Object.create(Event.prototype);
+SubmitEvent.prototype.constructor = SubmitEvent;
+markNative(SubmitEvent, "SubmitEvent");

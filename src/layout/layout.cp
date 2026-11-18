@@ -127,6 +127,21 @@ pub struct LayoutTree {
     viewport_height: f32 = 800.0;
     root_font_px: f32 = 16.0;
 
+    static fn getNodeTextLength(doc: *const Document, node_id: NodeId): usize {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0;
+        const n = &doc.nodes.items[@as(usize, node_id)];
+        if (n.node_type == NodeType.Text) {
+            return n.text_content.len;
+        }
+        let total: usize = 0;
+        let ch = n.first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            total += LayoutTree.getNodeTextLength(doc, ch);
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        return total;
+    }
+
     static fn init(allocator: std.mem.Allocator, vw: f32, vh: f32): LayoutTree! {
         let tree = LayoutTree {
             allocator: allocator,
@@ -268,14 +283,30 @@ pub struct LayoutTree {
             _.layoutBlockContainer(doc, styles, node_id, content_x, content_y);
         }
 
+        let box_after = &_.boxes.items[@as(usize, node_id)];
+        const text_len = LayoutTree.getNodeTextLength(doc, node_id);
+        if (text_len > 0) {
+            if (style.height.is_auto && box_after.content_height <= 0.0) {
+                const font_h = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+                box_after.content_height = font_h;
+            }
+            if (style.width.is_auto && box_after.content_width <= 0.0) {
+                const char_w: f32 = 8.0;
+                box_after.content_width = @as(f32, @floatFromInt(text_len)) * char_w;
+            }
+        }
+
         // Re-read box after child layout (as content_height may have been updated)
         const final_box = &_.boxes.items[@as(usize, node_id)];
         const final_w = final_box.borderBoxWidth();
         const final_h = final_box.borderBoxHeight();
 
-        // Apply relative positioning offsets (if any)
+        // Apply positioning offsets (if any)
         let pos_offset_x: f32 = 0.0;
         let pos_offset_y: f32 = 0.0;
+        let rect_x = border_box_x;
+        let rect_y = border_box_y;
+
         if (style.position == Position.Relative) {
             if (!style.left.is_auto && !style.left.is_none) {
                 pos_offset_x = style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
@@ -289,12 +320,27 @@ pub struct LayoutTree {
                 const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                 pos_offset_y = 0.0 - b_px;
             }
+            rect_x += pos_offset_x;
+            rect_y += pos_offset_y;
+        } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
+            if (!style.left.is_auto && !style.left.is_none) {
+                rect_x = style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            } else if (!style.right.is_auto && !style.right.is_none) {
+                const r_px = style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                rect_x = avail_w - r_px - final_w;
+            }
+            if (!style.top.is_auto && !style.top.is_none) {
+                rect_y = style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            } else if (!style.bottom.is_auto && !style.bottom.is_none) {
+                const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                rect_y = avail_h - b_px - final_h;
+            }
         }
 
         const is_visible = (style.visibility == Visibility.Visible);
         _.boxes.items[@as(usize, node_id)].rect = Rect {
-            x: border_box_x + pos_offset_x,
-            y: border_box_y + pos_offset_y,
+            x: rect_x,
+            y: rect_y,
             width: final_w,
             height: final_h,
             visible: is_visible,
@@ -321,7 +367,15 @@ pub struct LayoutTree {
             if (cnode.node_type == NodeType.Element) {
                 const cstyle = &styles[@as(usize, child)];
                 if (!cstyle.display.isNone()) {
-                    _.layoutNode(doc, styles, child, content_x, cursor_y, content_w, 0.0);
+                    let child_x = content_x;
+                    const prev_id = cnode.prev_sibling;
+                    if (prev_id != NULL_NODE && @as(usize, prev_id) < doc.nodes.items.len) {
+                        const prev_node = &doc.nodes.items[@as(usize, prev_id)];
+                        if (prev_node.node_type == .Text && prev_node.text_content.len > 0) {
+                            child_x += @as(f32, @floatFromInt(prev_node.text_content.len)) * 8.0;
+                        }
+                    }
+                    _.layoutNode(doc, styles, child, child_x, cursor_y, content_w, 0.0);
                     const cbox = &_.boxes.items[@as(usize, child)];
                     cursor_y += cbox.outerHeight();
                     const cr = cbox.rect.right();

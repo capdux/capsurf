@@ -121,6 +121,50 @@ pub fn extractJsonString(json: []const u8, key: []const u8): ([]const u8)? {
     return null;
 }
 
+pub fn unescapeJsonString(src: []const u8, dst: []u8): []const u8 {
+    let out_idx: usize = 0;
+    let i: usize = 0;
+    while (i < src.len && out_idx < dst.len) {
+        if (src[i] == '\\' && i + 1 < src.len) {
+            const next = src[i + 1];
+            if (next == 'n') {
+                dst[out_idx] = '\n';
+                out_idx += 1;
+                i += 2;
+            } else if (next == 'r') {
+                dst[out_idx] = '\r';
+                out_idx += 1;
+                i += 2;
+            } else if (next == 't') {
+                dst[out_idx] = '\t';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '"') {
+                dst[out_idx] = '"';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '\\') {
+                dst[out_idx] = '\\';
+                out_idx += 1;
+                i += 2;
+            } else if (next == '/') {
+                dst[out_idx] = '/';
+                out_idx += 1;
+                i += 2;
+            } else {
+                dst[out_idx] = src[i];
+                out_idx += 1;
+                i += 1;
+            }
+        } else {
+            dst[out_idx] = src[i];
+            out_idx += 1;
+            i += 1;
+        }
+    }
+    return dst[0..out_idx];
+}
+
 /// Zero-allocation JSON integer field extractor.
 pub fn extractJsonInt(json: []const u8, key: []const u8): (i64)? {
     let key_pat_buf: [64]u8 = [0; 64];

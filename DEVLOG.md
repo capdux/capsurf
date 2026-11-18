@@ -909,4 +909,24 @@
      - 在 `accessibility.cp` 完整实装 `Accessibility.getPartialAXTree`：根据传入的 `nodeId` / `backendNodeId` 准确定位目标节点，当 `fetchRelatives: true` 时向上递归遍历父级收集祖先路径（直至 `RootWebArea`），向下递归收集所有子节点，输出完整的节点集合；
      - 启发式无数据表格自动降级为 `presentationalRole`（`role: none`），支持嵌套列表层深、`visibility` 反转显现与 Tristate 属性。
 
+## Phase 48 CDP 视口滚动/盒模型、表单按钮冒泡提交与无障碍活态属性技术方案
+1. **CDP 视口滚动居中与 Runtime objectId 模型盒逆向解构 (`src/cdp/dom.cp` & `src/layout/layout.cp`)**：
+   - **设计动机**：Puppeteer 与 Playwright 在进行交互点击前，通常调用 `DOM.scrollIntoViewIfNeeded` 确保节点处于可视区域，并调用 `DOM.getBoxModel` 提取基于 `objectId` 的目标坐标。若仅支持 `nodeId`，以 JS 对象形式传递节点句柄时将直接报错；
+   - **解决方案**：
+     - 在 `src/cdp/dom.cp` 中解析入参中的 `objectId`，通过提取对象 `_nid` 字段逆向映射到内部 Arena `NodeId`；
+     - 实装 `DOM.scrollIntoViewIfNeeded`：比较节点屏幕几何盒与视口或最近滚动容器的边界，计算视口居中偏移量并更新布局上下文滚动状态，使得后续 `isIntersectingViewport` 判定准确返回 `true`。
+2. **按钮后代冒泡与表单提交拦截管道 (`src/js/shim/events/` & `src/js/shim/element/forms/`)**：
+   - **设计动机**：现代 Web 页面中用户往往点击 `<button type="submit"><span>Text</span></button>` 内部的 `<span>` 或 `<img>`。根据 WHATWG HTML 规范，点击事件从子元素向上传播冒泡至 `<button>`，当冒泡完成且事件未被 `preventDefault()` 取消时，必须自动触发表单提交动作并附带 `submitter` 按钮；
+   - **解决方案**：
+     - 在 `events/dispatch.js` 中实装冒泡结束后的默认动作（Default Action）挂钩：探测事件路径上最近的 `<button>` 或 `<input type="submit">`，若存在且未被阻止默认行为，则调用其关联表单的 `requestSubmit(button)`；
+     - 在 `events/event.js` 中实装标准 `SubmitEvent`，挂载只读属性 `submitter`；
+     - 支持内联处理器（如 `onclick="return false"`），在捕获/冒泡阶段执行内联脚本并在返回 `false` 时自动置位 `defaultPrevented`。
+3. **无障碍活态值（Live Value & Live Checked）双向同步 (`src/js/shim/element/` & `src/cdp/accessibility.cp`)**：
+   - **设计动机**：测试用例 `Accessibility.getFullAXTree reports live value/checked, not attributes` 验证的是用户通过 JS 写入 `input.value = "..."` 与 `checkbox.checked = true` 时，无障碍语义树返回的必须是活态计算值，而非 HTML 标签源码上的静态属性；
+   - **解决方案**：
+     - 在 `src/js/shim/element/element.js` 与 `input.js` 中打通属性存取器与底层原生 `setAttribute` / `removeAttribute` 的状态联动；
+     - 保证单选框（Radio）同名互斥更新时正确派发取消选中态；
+     - 在 `src/cdp/accessibility.cp` 的 `computeValue` 与 `populateProperties` 中，优先检索活态属性与计算状态，精准将 `input.value` 反射到 AXNode 的 `value` 字段，将 `checkbox.checked` 反射为 tristate 属性。
+
+
 

@@ -180,7 +180,7 @@ pub struct CdpPageSession {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
         const document = Document.init(allocator) catch return error.DocInitFailed;
         const layout_tree = LayoutTree.init(allocator, 1280.0, 720.0) catch return error.LayoutInitFailed;
-        const js_rt = JsRuntime.init(16 * 1024 * 1024, 200000) catch return error.JsRuntimeFailed;
+        const js_rt = JsRuntime.init(64 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
         const jar = CookieJar.init(allocator);
 
         ptr.* = CdpPageSession {
@@ -296,13 +296,39 @@ pub struct CdpPageSession {
             }
         }
 
-        // Layout & Styles
-        const css_text = "* { box-sizing: border-box; }";
-        const sheet = StyleSheet.parse(css_text, 1280.0, false);
-        let styles: [64]ComputedStyle = [ComputedStyle{}; 64];
-        const count = @min(_.doc.nodeCount(), styles.len);
-        Cascade.computeStyles(&_.doc, &sheet, styles[0..count], 16.0);
-        _.layout.computeLayout(&_.doc, styles[0..count]) catch {};
+        // Layout & Styles: collect embedded <style> tags
+        let css_buf = _.allocator.alloc(u8, 65536) catch null;
+        defer if (css_buf != null) _.allocator.free(css_buf.?);
+        let css_len: usize = 0;
+        if (css_buf != null) {
+            const base_css = "* { box-sizing: border-box; }\n";
+            @memcpy(css_buf.?[0..base_css.len], base_css);
+            css_len = base_css.len;
+            let snid: usize = 0;
+            while (snid < _.doc.nodes.items.len) : (snid += 1) {
+                const sn = &_.doc.nodes.items[snid];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    let child = sn.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const scn = &_.doc.nodes.items[@as(usize, child)];
+                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                            @memcpy(css_buf.?[css_len..css_len + copy_len], scn.text_content[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
+        }
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const sheet = StyleSheet.parse(full_css, 1280.0, false);
+        const count = @max(@as(usize, 1), _.doc.nodeCount());
+        let styles = _.allocator.alloc(ComputedStyle, count) catch null;
+        defer if (styles != null) _.allocator.free(styles.?);
+        if (styles != null) {
+            Cascade.computeStyles(&_.doc, &sheet, styles.?, 16.0);
+            _.layout.computeLayout(&_.doc, styles.?) catch {};
+        }
 
         // Mount to JS Context
         if (_.dom_ctx != null) {
@@ -590,7 +616,71 @@ pub struct CdpPageSession {
     }
 
     pub fn getBoxModel(*_, node_id: NodeId): CdpBoxModel {
-        const rect = _.layout.getBoundingClientRect(node_id);
+        let rect = _.layout.getBoundingClientRect(node_id);
+        if (@as(usize, node_id) < _.doc.nodes.items.len) {
+            const node = &_.doc.nodes.items[@as(usize, node_id)];
+            if (node.node_type == .Element && !rect.visible) {
+                return CdpBoxModel {
+                    width: 0.0,
+                    height: 0.0,
+                    border: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+                    content: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+                };
+            }
+            if (node.node_type == .Text) {
+                const parent_id = node.parent;
+                if (parent_id != NULL_NODE && @as(usize, parent_id) < _.layout.boxes.items.len) {
+                    const p_rect = _.layout.getBoundingClientRect(parent_id);
+                    if (!p_rect.visible) {
+                        return CdpBoxModel {
+                            width: 0.0,
+                            height: 0.0,
+                            border: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+                            content: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
+                        };
+                    }
+                    let start_x = p_rect.x;
+                    let start_y = p_rect.y;
+                    const prev_id = node.prev_sibling;
+                    if (prev_id != NULL_NODE && @as(usize, prev_id) < _.layout.boxes.items.len) {
+                        const prev_rect = _.layout.getBoundingClientRect(prev_id);
+                        if (prev_rect.visible && prev_rect.width > 0.0) {
+                            start_x = prev_rect.right();
+                            start_y = prev_rect.y;
+                        }
+                    }
+                    const text_str = node.text_content;
+                    const char_w: f32 = 8.0;
+                    const w: f32 = @as(f32, @floatFromInt(@max(@as(usize, 1), text_str.len))) * char_w;
+                    const h: f32 = if (p_rect.height > 0.0) p_rect.height else 20.0;
+                    rect = Rect {
+                        x: start_x,
+                        y: start_y,
+                        width: w,
+                        height: h,
+                        visible: true,
+                    };
+                }
+            } else if (node.node_type == .Element && rect.visible) {
+                let text_len: usize = 0;
+                let ch = node.first_child;
+                while (ch != NULL_NODE && @as(usize, ch) < _.doc.nodes.items.len) {
+                    const cn = &_.doc.nodes.items[@as(usize, ch)];
+                    if (cn.node_type == .Text) {
+                        text_len += cn.text_content.len;
+                    }
+                    ch = cn.next_sibling;
+                }
+                if (text_len > 0) {
+                    if (rect.width == 0.0) {
+                        rect.width = @as(f32, @floatFromInt(text_len)) * 8.0;
+                    }
+                    if (rect.height == 0.0) {
+                        rect.height = 16.0;
+                    }
+                }
+            }
+        }
         const l = rect.x;
         const t = rect.y;
         const r = rect.right();

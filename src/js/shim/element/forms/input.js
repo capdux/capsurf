@@ -2,15 +2,16 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/input.ts
 
 function findAssociatedForm(element) {
-  const formAttr = element.getAttribute("form");
+  if (!element) return null;
+  const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
   if (formAttr && typeof document !== "undefined" && document.getElementById) {
     const f = document.getElementById(formAttr);
-    if (f && f.tagName === "FORM") return f;
+    if (f && (f.tagName || "").toLowerCase() === "form") return f;
   }
-  let curr = element.parentElement;
+  let curr = element.parentElement || element.parentNode;
   while (curr) {
-    if (curr.tagName === "FORM") return curr;
-    curr = curr.parentElement;
+    if ((curr.tagName || "").toLowerCase() === "form") return curr;
+    curr = curr.parentElement || curr.parentNode;
   }
   return null;
 }
@@ -45,6 +46,9 @@ function installInputElement(global) {
       return this.getAttribute("value") || "";
     },
     set: function (v) {
+      if (this._defaultValue === undefined) {
+        this._defaultValue = this.getAttribute("value") || "";
+      }
       this._value = String(v);
       if (this.setAttribute) this.setAttribute("value", String(v));
     },
@@ -52,8 +56,13 @@ function installInputElement(global) {
   });
 
   Object.defineProperty(HTMLInputElement.prototype, "defaultValue", {
-    get: function () { return this.getAttribute("value") || ""; },
-    set: function (v) { this.setAttribute("value", String(v)); },
+    get: function () {
+      return this._defaultValue !== undefined ? this._defaultValue : (this.getAttribute("value") || "");
+    },
+    set: function (v) {
+      this._defaultValue = String(v);
+      this.setAttribute("value", String(v));
+    },
     configurable: true,
   });
 

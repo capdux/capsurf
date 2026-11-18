@@ -805,6 +805,166 @@ function installElementExtensions(proto) {
     markNative(proto.getClientRects, "getClientRects");
   }
 
+  // Scroll and Box Geometry properties
+  Object.defineProperty(proto, "scrollTop", {
+    get: function () { return this._scrollTop || 0; },
+    set: function (v) { this._scrollTop = Math.max(0, Number(v) || 0); },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "scrollLeft", {
+    get: function () { return this._scrollLeft || 0; },
+    set: function (v) { this._scrollLeft = Math.max(0, Number(v) || 0); },
+    configurable: true,
+  });
+
+  const origGetBoundingClientRect = proto.getBoundingClientRect;
+  proto.getBoundingClientRect = function () {
+    const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+    const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+    const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+    let scrollOffsetParentX = 0;
+    let scrollOffsetParentY = 0;
+    let cur = this.parentElement;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      if (cur._scrollTop) scrollOffsetParentY += cur._scrollTop;
+      if (cur._scrollLeft) scrollOffsetParentX += cur._scrollLeft;
+      cur = cur.parentElement;
+    }
+    const x = r.x - winX - scrollOffsetParentX;
+    const y = r.y - winY - scrollOffsetParentY;
+    const w = r.width;
+    const h = r.height;
+    return {
+      x: x,
+      y: y,
+      left: x,
+      top: y,
+      width: w,
+      height: h,
+      right: x + w,
+      bottom: y + h,
+    };
+  };
+  markNative(proto.getBoundingClientRect, "getBoundingClientRect");
+
+  Object.defineProperty(proto, "clientHeight", {
+    get: function () {
+      if (this === document.documentElement || this === document.body) {
+        return (typeof window !== "undefined" && window.innerHeight) || 720;
+      }
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+      return Math.round(r.height);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "clientWidth", {
+    get: function () {
+      if (this === document.documentElement || this === document.body) {
+        return (typeof window !== "undefined" && window.innerWidth) || 1280;
+      }
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+      return Math.round(r.width);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "scrollHeight", {
+    get: function () {
+      let maxBottom = this.clientHeight;
+      const all = this.children || [];
+      for (let i = 0; i < all.length; i++) {
+        const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
+        if (cr && cr.bottom > maxBottom) maxBottom = cr.bottom;
+      }
+      return maxBottom;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "scrollWidth", {
+    get: function () {
+      let maxRight = this.clientWidth;
+      const all = this.children || [];
+      for (let i = 0; i < all.length; i++) {
+        const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
+        if (cr && cr.right > maxRight) maxRight = cr.right;
+      }
+      return maxRight;
+    },
+    configurable: true,
+  });
+
+  function scrollElementIntoView(el, centerIfNeeded) {
+    if (!el) return;
+    const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+    const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+    const r = el.getBoundingClientRect();
+    const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
+
+    let clipped = false;
+    let cur = el.parentElement;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+      const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+      const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+      if (isScrollable) {
+        const cr = cur.getBoundingClientRect();
+        if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
+          clipped = true;
+          break;
+        }
+      }
+      cur = cur.parentElement;
+    }
+
+    if (centerIfNeeded && inWin && !clipped) {
+      return;
+    }
+
+    // Scroll container ancestors
+    cur = el.parentElement;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+      const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+      const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+      if (isScrollable) {
+        const cr = cur.getBoundingClientRect();
+        const er = el.getBoundingClientRect();
+        const curScrollTop = cur.scrollTop || 0;
+        const elMidInContainer = (er.top - cr.top) + curScrollTop + (er.height / 2);
+        const targetScrollTop = elMidInContainer - (cur.clientHeight / 2);
+        cur.scrollTop = Math.max(0, targetScrollTop);
+      }
+      cur = cur.parentElement;
+    }
+
+    // Scroll window if needed
+    const afterR = el.getBoundingClientRect();
+    const afterInWin = (afterR.top >= 0 && afterR.bottom <= vh && afterR.left >= 0 && afterR.right <= vw);
+    if (!afterInWin || !centerIfNeeded) {
+      const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+      const elPageY = afterR.top + curWinY;
+      const targetWinY = (elPageY + afterR.height / 2) - (vh / 2);
+      if (typeof window !== "undefined" && window.scrollTo) {
+        window.scrollTo(window.scrollX || 0, Math.max(0, targetWinY));
+      }
+    }
+  }
+
+  proto.scrollIntoView = function (arg) {
+    const center = (typeof arg === "object" && arg !== null && (arg.block === "center" || arg.inline === "center"));
+    scrollElementIntoView(this, !center ? false : false);
+  };
+  markNative(proto.scrollIntoView, "scrollIntoView");
+
+  proto.scrollIntoViewIfNeeded = function (centerIfNeeded) {
+    scrollElementIntoView(this, centerIfNeeded !== false);
+  };
+  markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
+
   // Universal Form & Control Properties on Element
   Object.defineProperty(proto, "name", {
     get: function () { return this.getAttribute("name") || ""; },
@@ -861,7 +1021,19 @@ function installElementExtensions(proto) {
         return;
       }
       this._value = String(v);
-      if (this.setAttribute) this.setAttribute("value", String(v));
+      if (this.setAttribute) {
+        this.setAttribute("value", String(v));
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "defaultValue", {
+    get: function () {
+      return this.getAttribute("value") || "";
+    },
+    set: function (v) {
+      this.setAttribute("value", String(v));
     },
     configurable: true,
   });

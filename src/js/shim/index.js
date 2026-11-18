@@ -12,6 +12,7 @@ function installShim(global) {
   global.FocusEvent = FocusEvent;
   global.InputEvent = InputEvent;
   global.MessageEvent = MessageEvent;
+  global.SubmitEvent = SubmitEvent;
   global.EventTarget = EventTarget;
 
   // 2. Expose DOM Collections and Nodes
@@ -82,8 +83,6 @@ function installShim(global) {
     global.Element.prototype.getAnimations = markNative(function () {
       return animationsFor(this);
     }, "getAnimations");
-
-    global.Element.prototype.scrollIntoView = markNative(function () {}, "scrollIntoView");
 
     global.Element.prototype.getContext = markNative(function (type) {
       const t = String(type).toLowerCase();

@@ -2,7 +2,7 @@
 // CDP Input Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/input.ts
 
-import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool } from "./types.cp";
+import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 
@@ -96,43 +96,50 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
 }
 
 pub fn applyInputText(session: *CdpPageSession, text: []const u8) {
-    if (session.focused_node == NULL_NODE || text.len == 0) return;
-    const nid = session.focused_node;
-    if (@as(usize, nid) >= session.doc.nodes.items.len) return;
+    if (text.len == 0) return;
 
-    // 1. Update "value" attribute
-    const old_val = session.doc.getAttribute(nid, "value") ?? "";
-    let val_buf: [1024]u8 = [0; 1024];
-    const new_val = std.fmt.bufPrint(&val_buf, "{s}{s}", .{ old_val, text }) catch text;
-    const val_dup = session.allocator.dupe(u8, new_val) catch new_val;
-    session.doc.setAttribute(nid, "value", val_dup);
-
-    // 2. Update text child / text_content
-    const old_text = session.doc.getTextContent(nid);
-    let text_buf: [1024]u8 = [0; 1024];
-    const new_text = std.fmt.bufPrint(&text_buf, "{s}{s}", .{ old_text, text }) catch text;
-    const text_dup = session.allocator.dupe(u8, new_text) catch new_text;
-
-    const first_c = session.doc.getFirstChild(nid);
-    if (first_c != NULL_NODE && session.doc.nodes.items[@as(usize, first_c)].node_type == .Text) {
-        session.doc.nodes.items[@as(usize, first_c)].text_content = text_dup;
-    } else {
-        const tid_res = session.doc.createTextNode(text_dup) catch null;
-        if (tid := tid_res) {
-            session.doc.appendChild(nid, tid);
+    // Filter control characters (< 32 or == 127)
+    let clean_buf: [1024]u8 = [0; 1024];
+    let clean_len: usize = 0;
+    let ci: usize = 0;
+    while (ci < text.len && clean_len < clean_buf.len) : (ci += 1) {
+        const c = text[ci];
+        if (c >= 32 && c != 127) {
+            clean_buf[clean_len] = c;
+            clean_len += 1;
         }
     }
+    if (clean_len == 0) return;
+    const clean_text = clean_buf[0..clean_len];
 
-    // 3. Update JS element if active
+    // Escape clean_text for JS string literal
+    let esc_buf: [2048]u8 = [0; 2048];
+    let ei: usize = 0;
+    let si: usize = 0;
+    while (si < clean_text.len && ei + 2 < esc_buf.len) : (si += 1) {
+        const c = clean_text[si];
+        if (c == '"' || c == '\\' || c == '\'') {
+            esc_buf[ei] = '\\';
+            ei += 1;
+        }
+        esc_buf[ei] = c;
+        ei += 1;
+    }
+    const escaped_text = esc_buf[0..ei];
+
     if (session.has_document) {
-        let js_buf: [512]u8 = [0; 512];
+        let js_buf: [2048]u8 = [0; 2048];
         const js_expr = std.fmt.bufPrint(
             &js_buf,
-            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ el.value = '{s}'; el.textContent = '{s}'; }} }})()",
-            .{ nid, val_dup, text_dup },
+            "(() => {{ let el = null; if ({d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (!el) {{ el = document.activeElement; }} if (!el || el === document.body || el === document.documentElement) return 0; const prev = el.value !== undefined ? String(el.value) : ''; const next = prev + \"{s}\"; el.value = next; if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{ try {{ const ev = typeof InputEvent !== 'undefined' ? new InputEvent('input', {{ bubbles: true, cancelable: false, data: \"{s}\" }}) : new Event('input', {{ bubbles: true }}); el.dispatchEvent(ev); }} catch (e) {{ try {{ el.dispatchEvent(new Event('input', {{ bubbles: true }})); }} catch (e2) {{}} }} }} return (typeof el._nid === 'number') ? el._nid : 0; }})()",
+            .{ session.focused_node, session.focused_node, escaped_text, escaped_text },
         ) catch null;
         if (e := js_expr) {
             const val = session.ctx.eval(e);
+            if (val.tag == 0 && val.u.uint64 > 0) {
+                const nid = @as(u32, @truncate(val.u.uint64));
+                session.focused_node = nid;
+            }
             session.ctx.freeValue(val);
         }
     }
@@ -236,7 +243,9 @@ pub struct InputHandler {
 
         // 3. Text Insertion: insertText
         if (std.mem.eql(u8, req.method, "Input.insertText")) {
-            const text = extractJsonString(req.params_raw, "text") ?? "";
+            const raw_text = extractJsonString(req.params_raw, "text") ?? "";
+            let unesc_buf: [1024]u8 = [0; 1024];
+            const text = unescapeJsonString(raw_text, &unesc_buf);
             applyInputText(session, text);
             return CdpResponse.ok(req.id, "{}");
         }
