@@ -220,15 +220,10 @@ fn getNodeText(doc: *Document, node_id: NodeId): []const u8 {
 
 fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return;
-    const node = &doc.nodes.items[@as(usize, node_id)];
-    let child = node.first_child;
-    while (child != NULL_NODE) {
-        if (doc.nodes.items[@as(usize, child)].node_type == NodeType.Text) {
-            doc.nodes.items[@as(usize, child)].text_content = text;
-            return;
-        }
-        child = doc.nodes.items[@as(usize, child)].next_sibling;
+    while (doc.nodes.items[@as(usize, node_id)].first_child != NULL_NODE) {
+        doc.removeChild(doc.nodes.items[@as(usize, node_id)].first_child);
     }
+    if (text.len == 0) return;
     const text_id = doc.createTextNode(text) catch return;
     doc.appendChild(node_id, text_id);
 }

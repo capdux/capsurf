@@ -52,12 +52,95 @@ Object.defineProperty(Node.prototype, "isConnected", {
     let curr = this;
     while (curr) {
       if (curr.nodeType === DOCUMENT_NODE) return true;
+      if (curr.host) {
+        curr = curr.host;
+        continue;
+      }
       curr = curr.parentNode || curr.parentElement;
     }
     return false;
   },
   configurable: true,
 });
+
+Node.prototype.getRootNode = function (options) {
+  let n = this;
+  let p;
+  while ((p = n.parentNode)) n = p;
+
+  if (options && options.composed) {
+    while (n && n.host) {
+      let hop = n.host;
+      let hp;
+      while ((hp = hop.parentNode)) hop = hp;
+      n = hop;
+    }
+  }
+  return n;
+};
+
+Node.prototype.normalize = function () {
+  const visit = (parent) => {
+    if (!parent) return;
+    let children = [];
+    if (parent._children && parent._children.length > 0) {
+      children = parent._children.slice();
+    } else if (parent.childNodes && parent.childNodes.length > 0) {
+      children = Array.from(parent.childNodes);
+    } else if (parent.nodeType === 9 && parent.documentElement) {
+      children = [parent.documentElement];
+    } else if (nativeElementFirstChild) {
+      let c = null;
+      try { c = nativeElementFirstChild.call(parent); } catch (e) {}
+      while (c) {
+        children.push(c);
+        try { c = nativeElementNextSibling.call(c); } catch (e) { c = null; }
+      }
+    }
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      if (!c) continue;
+      const t = c.nodeType;
+      if (t === TEXT_NODE) {
+        const cData = c.data !== undefined ? c.data : (c.textContent || "");
+        if (cData.length === 0) {
+          try {
+            parent.removeChild(c);
+          } catch (e) {}
+          children[i] = null;
+          continue;
+        }
+        let merged = cData;
+        let j = i + 1;
+        while (j < children.length) {
+          const nx = children[j];
+          if (!nx) break;
+          if (nx.nodeType !== TEXT_NODE) break;
+          const nxData = nx.data !== undefined ? nx.data : (nx.textContent || "");
+          merged += nxData;
+          try {
+            parent.removeChild(nx);
+          } catch (e) {}
+          children[j] = null;
+          j++;
+        }
+        if (c.data !== merged) {
+          c.data = merged;
+        }
+        if (c.textContent !== merged) {
+          c.textContent = merged;
+        }
+        if (c._data !== undefined) {
+          c._data = merged;
+        }
+        i = j - 1;
+      } else if (t === ELEMENT_NODE || t === DOCUMENT_NODE || t === DOCUMENT_FRAGMENT_NODE) {
+        visit(c);
+      }
+    }
+  };
+  visit(this);
+};
 
 Object.defineProperty(Node.prototype, "ownerDocument", {
   get: function () {
@@ -134,17 +217,36 @@ function isGenuineNode(obj) {
   return false;
 }
 
-function ensureChildren(node) {
-  if (!node._children) {
-    node._children = [];
-  }
-  return node._children;
-}
-
 const nativeElementAppendChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.appendChild : null;
 const nativeElementRemoveChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.removeChild : null;
 const nativeElementGetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.get : null;
 const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.set : null;
+const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
+const nativeElementNextSibling = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "nextSibling")?.get : null;
+
+function ensureChildren(node) {
+  if (!node || typeof node !== "object") return [];
+  if (!node._children) {
+    node._children = [];
+    try {
+      let child = null;
+      if (node.nodeType === 9) { // DOCUMENT_NODE
+        child = node.documentElement;
+      } else if (nativeElementFirstChild) {
+        child = nativeElementFirstChild.call(node);
+      }
+      while (child) {
+        node._children.push(child);
+        if (nativeElementNextSibling) {
+          child = nativeElementNextSibling.call(child);
+        } else {
+          break;
+        }
+      }
+    } catch (e) {}
+  }
+  return node._children;
+}
 
 Node.prototype.appendChild = function (child) {
   if (!this || typeof this !== "object") {
@@ -338,20 +440,18 @@ if (typeof Element !== "undefined" && Element.prototype) {
       return "";
     },
     set: function (v) {
-      if (this._children) {
-        this._children.length = 0;
-      }
       if (nativeElementSetTextContent) {
         try {
           nativeElementSetTextContent.call(this, v);
         } catch (e) {}
       }
+      this._children = [];
       const val = String(v);
       if (val.length > 0) {
         const t = new Text(val);
         t.parentNode = this;
         t.ownerDocument = this.ownerDocument || this;
-        ensureChildren(this).push(t);
+        this._children.push(t);
       }
     },
     configurable: true,
@@ -360,6 +460,22 @@ if (typeof Element !== "undefined" && Element.prototype) {
   Element.prototype.appendChild = Node.prototype.appendChild;
   Element.prototype.insertBefore = Node.prototype.insertBefore;
   Element.prototype.removeChild = Node.prototype.removeChild;
+
+  const nativeElementInnerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+  if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
+    const origSetInnerHtml = nativeElementInnerHtmlDesc.set;
+    Object.defineProperty(Element.prototype, "innerHTML", {
+      get: nativeElementInnerHtmlDesc.get,
+      set: function (v) {
+        if (this._children) {
+          this._children.length = 0;
+        }
+        origSetInnerHtml.call(this, v);
+      },
+      configurable: true,
+      enumerable: nativeElementInnerHtmlDesc.enumerable,
+    });
+  }
 }
 
 Node.prototype.lookupNamespaceURI = function (prefix) {
@@ -415,6 +531,8 @@ markNative(Node.prototype.insertBefore, "insertBefore");
 markNative(Node.prototype.removeChild, "removeChild");
 markNative(Node.prototype.hasChildNodes, "hasChildNodes");
 markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
+markNative(Node.prototype.getRootNode, "getRootNode");
+markNative(Node.prototype.normalize, "normalize");
 
 function Text(data) {
   Node.call(this);

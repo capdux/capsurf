@@ -120,12 +120,125 @@ pub struct FlexItem {
     shrink: f32 = 1.0;
 }
 
+pub struct ReplacedSize {
+    width: f32 = 300.0;
+    height: f32 = 150.0;
+    is_authored: bool = false;
+}
+
 pub struct LayoutTree {
     allocator: std.mem.Allocator;
     boxes: std.ArrayListUnmanaged(LayoutBox) = std.ArrayListUnmanaged(LayoutBox).empty;
     viewport_width: f32 = 1280.0;
     viewport_height: f32 = 800.0;
     root_font_px: f32 = 16.0;
+
+    static fn parseDimStr(s: []const u8): f32? {
+        let trimmed = std.mem.trim(u8, s, " \t\r\n");
+        if (trimmed.len > 2 && std.ascii.eqlIgnoreCase(trimmed[trimmed.len - 2 ..], "px")) {
+            trimmed = trimmed[0 .. trimmed.len - 2];
+        }
+        if (v := std.fmt.parseFloat(f32, trimmed) catch null) {
+            if (v > 0.0) return v;
+        }
+        return null;
+    }
+
+    static fn extractSvgDim(src: []const u8, name: []const u8): f32? {
+        let cur_start: usize = 0;
+        while (cur_start < src.len) {
+            const found_opt = std.mem.indexOf(u8, src[cur_start..], name);
+            if (found_opt == null) break;
+            const at = cur_start + found_opt.?;
+            let pos = at + name.len;
+            while (pos < src.len && (src[pos] == ' ' || src[pos] == '\t' || src[pos] == '\r' || src[pos] == '\n')) : (pos += 1) {}
+            let has_eq = false;
+            if (pos < src.len && src[pos] == '=') {
+                pos += 1;
+                has_eq = true;
+            } else if (pos + 3 <= src.len && std.ascii.eqlIgnoreCase(src[pos .. pos + 3], "%3D")) {
+                pos += 3;
+                has_eq = true;
+            }
+            if (has_eq) {
+                if (pos < src.len && (src[pos] == '"' || src[pos] == '\'')) {
+                    pos += 1;
+                } else if (pos + 3 <= src.len && (std.ascii.eqlIgnoreCase(src[pos .. pos + 3], "%22") || std.ascii.eqlIgnoreCase(src[pos .. pos + 3], "%27"))) {
+                    pos += 3;
+                }
+                const num_start = pos;
+                while (pos < src.len && (std.ascii.isDigit(src[pos]) || src[pos] == '.')) : (pos += 1) {}
+                if (pos > num_start) {
+                    if (v := std.fmt.parseFloat(f32, src[num_start..pos]) catch null) {
+                        if (v > 0.0) return v;
+                    }
+                }
+            }
+            cur_start = at + name.len;
+        }
+        return null;
+    }
+
+    static fn getReplacedSize(node: *const NodeData): ReplacedSize? {
+        if (node.hasTag("canvas")) {
+            let nat_w: f32 = 300.0;
+            let nat_h: f32 = 150.0;
+            if (w_attr := node.getAttribute("width")) {
+                if (w_val := LayoutTree.parseDimStr(w_attr)) {
+                    nat_w = w_val;
+                }
+            }
+            if (h_attr := node.getAttribute("height")) {
+                if (h_val := LayoutTree.parseDimStr(h_attr)) {
+                    nat_h = h_val;
+                }
+            }
+            return ReplacedSize{
+                width: nat_w,
+                height: nat_h,
+                is_authored: true,
+            };
+        } else if (node.hasTag("img")) {
+            let nat_w: f32 = 300.0;
+            let nat_h: f32 = 150.0;
+            let is_auth = false;
+            let has_w = false;
+            let has_h = false;
+            if (w_attr := node.getAttribute("width")) {
+                if (w_val := LayoutTree.parseDimStr(w_attr)) {
+                    nat_w = w_val;
+                    has_w = true;
+                    is_auth = true;
+                }
+            }
+            if (h_attr := node.getAttribute("height")) {
+                if (h_val := LayoutTree.parseDimStr(h_attr)) {
+                    nat_h = h_val;
+                    has_h = true;
+                }
+            }
+            if (!has_w || !has_h) {
+                if (src_attr := node.getAttribute("src")) {
+                    if (!has_w) {
+                        if (sw := LayoutTree.extractSvgDim(src_attr, "width")) {
+                            nat_w = sw;
+                        }
+                    }
+                    if (!has_h) {
+                        if (sh := LayoutTree.extractSvgDim(src_attr, "height")) {
+                            nat_h = sh;
+                        }
+                    }
+                }
+            }
+            return ReplacedSize{
+                width: nat_w,
+                height: nat_h,
+                is_authored: is_auth,
+            };
+        }
+        return null;
+    }
 
     static fn getNodeTextLength(doc: *const Document, node_id: NodeId): usize {
         if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0;
@@ -172,6 +285,7 @@ pub struct LayoutTree {
     /// Resolves box model metrics (margin, padding, border, content size) for `node_id`.
     fn resolveBoxMetrics(
         *_,
+        doc: *const Document,
         node_id: NodeId,
         style: *const ComputedStyle,
         parent_w: f32,
@@ -198,10 +312,29 @@ pub struct LayoutTree {
         box.border_bottom = style.border_bottom_width;
         box.border_left = style.border_left_width;
 
+        let replaced_opt: ReplacedSize? = null;
+        if (node_id != NULL_NODE && @as(usize, node_id) < doc.nodes.items.len) {
+            const node = &doc.nodes.items[@as(usize, node_id)];
+            if (node.isElement()) {
+                replaced_opt = LayoutTree.getReplacedSize(node);
+            }
+        }
+
         // Content width calculation
         let raw_w: f32 = 0.0;
         if (!style.width.is_auto && !style.width.is_none) {
             raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
+        } else if (rep := replaced_opt) {
+            if (rep.is_authored) {
+                raw_w = rep.width;
+            } else {
+                const avail = parent_w - box.marginHorizontal();
+                if (avail > 0.0 && rep.width > avail) {
+                    raw_w = avail;
+                } else {
+                    raw_w = rep.width;
+                }
+            }
         } else {
             // Default block width fills available parent content area minus horizontal margins
             const avail = parent_w - box.marginHorizontal();
@@ -239,8 +372,29 @@ pub struct LayoutTree {
             } else {
                 box.content_height = raw_h;
             }
+        } else if (rep := replaced_opt) {
+            if (rep.width > 0.0 && rep.height > 0.0) {
+                const ratio = rep.height / rep.width;
+                box.content_height = box.content_width * ratio;
+            } else {
+                box.content_height = rep.height;
+            }
         } else {
             box.content_height = 0.0; // Will be auto-expanded by children
+        }
+
+        // Min/max height constraints
+        if (!style.min_height.is_auto && !style.min_height.is_none) {
+            const min_h = style.min_height.resolvePx(parent_h, font_px, root_px, vw, vh);
+            if (box.content_height < min_h) {
+                box.content_height = min_h;
+            }
+        }
+        if (!style.max_height.is_auto && !style.max_height.is_none) {
+            const max_h = style.max_height.resolvePx(parent_h, font_px, root_px, vw, vh);
+            if (box.content_height > max_h) {
+                box.content_height = max_h;
+            }
         }
     }
 
@@ -266,7 +420,7 @@ pub struct LayoutTree {
             return;
         }
 
-        _.resolveBoxMetrics(node_id, style, avail_w, avail_h);
+        _.resolveBoxMetrics(doc, node_id, style, avail_w, avail_h);
         const box = &_.boxes.items[@as(usize, node_id)];
 
         // Compute screen coordinates for this element's border box
@@ -277,9 +431,17 @@ pub struct LayoutTree {
         const content_x = border_box_x + box.border_left + box.padding_left;
         const content_y = border_box_y + box.border_top + box.padding_top;
 
+        let is_replaced = false;
+        if (node_id != NULL_NODE && @as(usize, node_id) < doc.nodes.items.len) {
+            const node = &doc.nodes.items[@as(usize, node_id)];
+            if (node.isElement() && LayoutTree.getReplacedSize(node) != null) {
+                is_replaced = true;
+            }
+        }
+
         if (style.display.isFlex()) {
             _.layoutFlexContainer(doc, styles, node_id, content_x, content_y);
-        } else {
+        } else if (!is_replaced) {
             _.layoutBlockContainer(doc, styles, node_id, content_x, content_y);
         }
 
@@ -391,8 +553,17 @@ pub struct LayoutTree {
 
         // If parent has auto height, expand content_height to fit child stream
         if (styles[@as(usize, parent_id)].height.is_auto) {
-            const auto_h = cursor_y - content_y;
-            _.boxes.items[@as(usize, parent_id)].content_height = if (auto_h > 0.0) auto_h else 0.0;
+            let is_p_rep = false;
+            if (parent_id != NULL_NODE && @as(usize, parent_id) < doc.nodes.items.len) {
+                const pnode = &doc.nodes.items[@as(usize, parent_id)];
+                if (pnode.isElement() && LayoutTree.getReplacedSize(pnode) != null) {
+                    is_p_rep = true;
+                }
+            }
+            if (!is_p_rep) {
+                const auto_h = cursor_y - content_y;
+                _.boxes.items[@as(usize, parent_id)].content_height = if (auto_h > 0.0) auto_h else 0.0;
+            }
         }
     }
 
@@ -425,7 +596,7 @@ pub struct LayoutTree {
             if (cnode.node_type == NodeType.Element) {
                 const cstyle = &styles[@as(usize, child)];
                 if (!cstyle.display.isNone()) {
-                    _.resolveBoxMetrics(child, cstyle, container_w, container_h);
+                    _.resolveBoxMetrics(doc, child, cstyle, container_w, container_h);
                     const cbox = &_.boxes.items[@as(usize, child)];
 
                     let base_m: f32 = 0.0;

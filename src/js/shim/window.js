@@ -1601,6 +1601,232 @@ function installWindow(global) {
     globalThis.outerHeight = 720;
   }
 
+  // 10.5. DocumentType, Document constructor & WHATWG Document members
+  function DocumentType(name, publicId, systemId) {
+    if (global.Node) global.Node.call(this);
+    this.name = name || "html";
+    this.publicId = publicId || "";
+    this.systemId = systemId || "";
+    this.nodeName = this.name;
+    this.nodeType = (global.Node && global.Node.DOCUMENT_TYPE_NODE) || 10;
+  }
+  DocumentType.prototype = Object.create(global.Node ? global.Node.prototype : Object.prototype);
+  DocumentType.prototype.constructor = DocumentType;
+  global.DocumentType = DocumentType;
+  if (typeof globalThis !== "undefined") globalThis.DocumentType = DocumentType;
+  if (typeof window !== "undefined") window.DocumentType = DocumentType;
+  markNative(DocumentType, "DocumentType");
+
+  const docProto = (global.Document && global.Document.prototype)
+    ? global.Document.prototype
+    : Object.create(global.Node ? global.Node.prototype : Object.prototype);
+
+  let DocCtor = global.Document;
+  if (typeof DocCtor !== "function") {
+    DocCtor = function Document() {
+      if (global.Node) global.Node.call(this);
+      this._nid = 0;
+    };
+    DocCtor.prototype = docProto;
+    docProto.constructor = DocCtor;
+    global.Document = DocCtor;
+    if (typeof globalThis !== "undefined") globalThis.Document = DocCtor;
+    if (typeof window !== "undefined") window.Document = DocCtor;
+    markNative(DocCtor, "Document");
+  }
+
+  // doctype
+  if (!Object.getOwnPropertyDescriptor(docProto, "doctype")) {
+    Object.defineProperty(docProto, "doctype", {
+      get: function () {
+        if (this._doctype !== undefined) return this._doctype;
+        if (this === (global.document || (typeof document !== "undefined" ? document : null)) ||
+            (this.documentElement && String(this.documentElement.tagName).toUpperCase() === "HTML")) {
+          const dt = new DocumentType("html", "", "");
+          dt.parentNode = this;
+          dt.ownerDocument = this;
+          this._doctype = dt;
+          return dt;
+        }
+        return null;
+      },
+      configurable: true,
+    });
+  }
+
+  // compatMode
+  if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
+    Object.defineProperty(docProto, "compatMode", {
+      get: function () { return "CSS1Compat"; },
+      configurable: true,
+    });
+  }
+
+  // characterSet, charset, inputEncoding
+  if (!Object.getOwnPropertyDescriptor(docProto, "characterSet")) {
+    Object.defineProperty(docProto, "characterSet", {
+      get: function () { return "UTF-8"; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "charset")) {
+    Object.defineProperty(docProto, "charset", {
+      get: function () { return "UTF-8"; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "inputEncoding")) {
+    Object.defineProperty(docProto, "inputEncoding", {
+      get: function () { return "UTF-8"; },
+      configurable: true,
+    });
+  }
+
+  // contentType
+  if (!Object.getOwnPropertyDescriptor(docProto, "contentType")) {
+    Object.defineProperty(docProto, "contentType", {
+      get: function () { return "text/html"; },
+      configurable: true,
+    });
+  }
+
+  // designMode
+  if (!Object.getOwnPropertyDescriptor(docProto, "designMode")) {
+    Object.defineProperty(docProto, "designMode", {
+      get: function () { return "off"; },
+      set: function (_v) {},
+      configurable: true,
+    });
+  }
+
+  // lastModified
+  if (!Object.getOwnPropertyDescriptor(docProto, "lastModified")) {
+    function formatLastModified(date) {
+      const pad = function (n, width) {
+        width = width || 2;
+        let s = String(n);
+        while (s.length < width) s = "0" + s;
+        return s;
+      };
+      return (
+        pad(date.getMonth() + 1) + "/" + pad(date.getDate()) + "/" + pad(date.getFullYear(), 4) + " " +
+        pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds())
+      );
+    }
+    Object.defineProperty(docProto, "lastModified", {
+      get: function () { return formatLastModified(new Date()); },
+      configurable: true,
+    });
+  }
+
+  // fullscreenEnabled, fullscreenElement, exitFullscreen
+  if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenEnabled")) {
+    Object.defineProperty(docProto, "fullscreenEnabled", {
+      get: function () { return false; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenElement")) {
+    Object.defineProperty(docProto, "fullscreenElement", {
+      get: function () { return null; },
+      configurable: true,
+    });
+  }
+  if (!docProto.exitFullscreen) {
+    docProto.exitFullscreen = markNative(function () {
+      return Promise.resolve();
+    }, "exitFullscreen");
+  }
+
+  // legacy members: clear, captureEvents, releaseEvents
+  if (!docProto.clear) {
+    docProto.clear = markNative(function () {}, "clear");
+  }
+  if (!docProto.captureEvents) {
+    docProto.captureEvents = markNative(function () {}, "captureEvents");
+  }
+  if (!docProto.releaseEvents) {
+    docProto.releaseEvents = markNative(function () {}, "releaseEvents");
+  }
+
+  // scrollingElement, hidden, visibilityState
+  if (!Object.getOwnPropertyDescriptor(docProto, "scrollingElement")) {
+    Object.defineProperty(docProto, "scrollingElement", {
+      get: function () { return this.documentElement || null; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "hidden")) {
+    Object.defineProperty(docProto, "hidden", {
+      get: function () { return false; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "visibilityState")) {
+    Object.defineProperty(docProto, "visibilityState", {
+      get: function () { return "visible"; },
+      configurable: true,
+    });
+  }
+
+  // legacy body colors & dir
+  function bodyColor(doc, attr) {
+    return (doc.body && typeof doc.body.getAttribute === "function") ? (doc.body.getAttribute(attr) || "") : "";
+  }
+  function setBodyColor(doc, attr, val) {
+    if (doc.body && typeof doc.body.setAttribute === "function") {
+      doc.body.setAttribute(attr, val == null ? "" : String(val));
+    }
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "fgColor")) {
+    Object.defineProperty(docProto, "fgColor", {
+      get: function () { return bodyColor(this, "text"); },
+      set: function (v) { setBodyColor(this, "text", v); },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "linkColor")) {
+    Object.defineProperty(docProto, "linkColor", {
+      get: function () { return bodyColor(this, "link"); },
+      set: function (v) { setBodyColor(this, "link", v); },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "vlinkColor")) {
+    Object.defineProperty(docProto, "vlinkColor", {
+      get: function () { return bodyColor(this, "vlink"); },
+      set: function (v) { setBodyColor(this, "vlink", v); },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "alinkColor")) {
+    Object.defineProperty(docProto, "alinkColor", {
+      get: function () { return bodyColor(this, "alink"); },
+      set: function (v) { setBodyColor(this, "alink", v); },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "bgColor")) {
+    Object.defineProperty(docProto, "bgColor", {
+      get: function () { return bodyColor(this, "bgcolor"); },
+      set: function (v) { setBodyColor(this, "bgcolor", v); },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "dir")) {
+    Object.defineProperty(docProto, "dir", {
+      get: function () {
+        return (this.documentElement && typeof this.documentElement.getAttribute === "function") ? (this.documentElement.getAttribute("dir") || "") : "";
+      },
+      set: function (v) {
+        if (this.documentElement && typeof this.documentElement.setAttribute === "function") {
+          this.documentElement.setAttribute("dir", v == null ? "" : String(v));
+        }
+      },
+      configurable: true,
+    });
+  }
+
   // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
   if (global.document) {
     try {

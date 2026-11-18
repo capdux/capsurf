@@ -1131,3 +1131,22 @@
 
 
 
+
+## [2026-11-18 16:08:00] Phase 50
+- **`src/js/shim/collections.js`**：实装 `HTMLOptionsCollection` 原型链继承体系（继承自 `HTMLCollection`）与 `add`/`remove`；引入 WeakMap 规范化缓存实现 `[SameObject]` 引用一致性；支持 `length` 与索引赋值动态管理。
+- **`src/js/shim/window.js` & `src/js/shim/node-base.js`**：开放 `new Document()` 与 `DocumentType` 构造；支持 `doctype`、`characterSet` 等遗留成员；实装 `getRootNode`、`isConnected` 与子树递归 `normalize()`；根除 `textContent` 镜像子节点重复。
+- **`src/js/shim/canvas2d.js`**：引入 `_INTERNAL_CTX_SECRET` 品牌校验与 `checkCtx(this)` 防盗用；`createImageData` / `putImageData` 拦截 `BigInt` 与负数尺寸；实装十六进制/命名颜色解析与光栅内存缓冲。
+- **`src/layout/layout.cp`**：实装 `ReplacedSize` 推导，`<canvas>` 固有尺寸默认 300px × 150px 并在狭窄容器中保持宽高比。
+- **`src/js/dom_binding.cp`**：重构 `setNodeText` 保证全量子节点正确替换与同步。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试（Phase 50 全部 8 个测试套件 9 项用例全部 100% 绿灯，回归套件 32 项用例 100% 绿灯）：
+    - `e2e/options-collection-interface.e2e.test.ts` (1/1 PASS)
+    - `e2e/children-options-sameobject.e2e.test.ts` (1/1 PASS)
+    - `e2e/document-collections.e2e.test.ts` (2/2 PASS)
+    - `e2e/document-legacy-members.e2e.test.ts` (1/1 PASS)
+    - `e2e/document-node-members.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-context-interface.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-natural-size.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-image-data-bigint.e2e.test.ts` (1/1 PASS)
+  - 独立单二进制：`bin/main`（9.7MB）构建成功。

@@ -18,6 +18,7 @@ function installShim(global) {
   // 2. Expose DOM Collections and Nodes
   global.DOMTokenList = DOMTokenList;
   global.HTMLCollection = HTMLCollection;
+  global.HTMLOptionsCollection = HTMLOptionsCollection;
   global.NodeList = NodeList;
   global.NamedNodeMap = NamedNodeMap;
   global.Attr = Attr;
@@ -91,7 +92,7 @@ function installShim(global) {
       }
       if (t === "2d") {
         if (!this._ctx2d) {
-          this._ctx2d = new CanvasRenderingContext2D(this);
+          this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
         }
         return this._ctx2d;
       }
@@ -226,6 +227,42 @@ function installShim(global) {
     docProto.getAnimations = markNative(function () {
       return animationsFor(this);
     }, "getAnimations");
+
+    if (!docProto.children) {
+      Object.defineProperty(docProto, "children", {
+        get: function () {
+          return getElementChildrenCollection(this);
+        },
+        configurable: true,
+      });
+    }
+    if (!docProto.firstElementChild) {
+      Object.defineProperty(docProto, "firstElementChild", {
+        get: function () {
+          const kids = this.children;
+          return (kids && kids.length > 0) ? kids[0] : null;
+        },
+        configurable: true,
+      });
+    }
+    if (!docProto.lastElementChild) {
+      Object.defineProperty(docProto, "lastElementChild", {
+        get: function () {
+          const kids = this.children;
+          return (kids && kids.length > 0) ? kids[kids.length - 1] : null;
+        },
+        configurable: true,
+      });
+    }
+    if (!docProto.childElementCount) {
+      Object.defineProperty(docProto, "childElementCount", {
+        get: function () {
+          const kids = this.children;
+          return kids ? kids.length : 0;
+        },
+        configurable: true,
+      });
+    }
 
     function defineLiveCollection(name, pred) {
       Object.defineProperty(docProto, name, {

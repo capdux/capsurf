@@ -768,6 +768,7 @@
   markNative(DOMTokenList.prototype.item, "item");
 
   function findNamedItemInList(list, name) {
+    if (name == null || name === "") return null;
     const key = String(name);
     const len = list ? (list.length || 0) : 0;
     for (let i = 0; i < len; i++) {
@@ -787,8 +788,8 @@
     return null;
   }
 
-  function makeHtmlCollection(getList) {
-    const target = Object.create(HTMLCollection.prototype);
+  function makeHtmlCollection(getList, customTarget) {
+    const target = customTarget || Object.create(HTMLCollection.prototype);
     const proxy = new Proxy(target, {
       get: function (t, prop, receiver) {
         if (prop === "length") {
@@ -840,8 +841,19 @@
         return Reflect.get(t, prop, receiver);
       },
       set: function (t, prop, value, receiver) {
-        if (prop === "length") return false;
-        if (typeof prop === "string" && /^\d+$/.test(prop)) return false;
+        if (t._isOptionsCollection && t._owner) {
+          if (prop === "length") {
+            setSelectOptionsLength(t._owner, value);
+            return true;
+          }
+          if (typeof prop === "string" && /^\d+$/.test(prop)) {
+            setSelectOptionAt(t._owner, Number(prop), value);
+            return true;
+          }
+        } else {
+          if (prop === "length") return false;
+          if (typeof prop === "string" && /^\d+$/.test(prop)) return false;
+        }
         return Reflect.set(t, prop, value, receiver);
       },
       has: function (t, prop) {
@@ -873,13 +885,13 @@
       },
       getOwnPropertyDescriptor: function (t, prop) {
         if (prop === "length") {
-          return { value: getList().length, writable: false, enumerable: false, configurable: true };
+          return { value: getList().length, writable: !!t._isOptionsCollection, enumerable: false, configurable: true };
         }
         if (typeof prop === "string" && /^\d+$/.test(prop)) {
           const i = Number(prop);
           const list = getList();
           if (i >= 0 && i < list.length) {
-            return { value: list[i], writable: false, enumerable: true, configurable: true };
+            return { value: list[i], writable: !!t._isOptionsCollection, enumerable: true, configurable: true };
           }
         }
         if (typeof prop === "string") {
@@ -896,13 +908,37 @@
 
   function getAllDocumentElements(doc) {
     const elements = [];
+    const seen = (typeof Set !== "undefined") ? new Set() : null;
+
+    function addEl(el) {
+      if (!el || el.nodeType !== 1) return;
+      if (seen) {
+        if (seen.has(el)) return;
+        seen.add(el);
+      } else {
+        if (elements.indexOf(el) !== -1) return;
+      }
+      elements.push(el);
+    }
+
+    if (doc && typeof doc.querySelectorAll === "function") {
+      try {
+        const q = doc.querySelectorAll("*");
+        if (q && typeof q.length === "number") {
+          for (let i = 0; i < q.length; i++) {
+            addEl(q[i]);
+          }
+        }
+      } catch (e) {}
+    }
+
     function walk(node) {
       if (!node) return;
       if (node._children && node._children.length > 0) {
         for (let i = 0; i < node._children.length; i++) {
           const c = node._children[i];
           if (c && c.nodeType === 1) { // ELEMENT_NODE
-            elements.push(c);
+            addEl(c);
             walk(c);
           }
         }
@@ -910,7 +946,7 @@
         let child = node.firstChild;
         while (child) {
           if (child.nodeType === 1) {
-            elements.push(child);
+            addEl(child);
             walk(child);
           }
           child = child.nextSibling;
@@ -921,7 +957,7 @@
     const root = doc ? (doc.documentElement || doc.body || doc) : null;
     if (root) {
       if (root.nodeType === 1) {
-        elements.push(root);
+        addEl(root);
         walk(root);
       } else {
         walk(root);
@@ -954,6 +990,265 @@
     };
   };
   markNative(HTMLCollection, "HTMLCollection");
+
+  function HTMLOptionsCollection() {
+    throw new TypeError("Illegal constructor");
+  }
+  HTMLOptionsCollection.prototype = Object.create(HTMLCollection.prototype);
+  HTMLOptionsCollection.prototype.constructor = HTMLOptionsCollection;
+  Object.defineProperty(HTMLOptionsCollection.prototype, Symbol.toStringTag, {
+    value: "HTMLOptionsCollection",
+    configurable: true,
+  });
+  markNative(HTMLOptionsCollection, "HTMLOptionsCollection");
+
+  Object.defineProperty(HTMLOptionsCollection.prototype, "length", {
+    get: function () {
+      const select = this._owner;
+      if (!select) return 0;
+      return getSelectOptions(select).length;
+    },
+    set: function (v) {
+      const select = this._owner;
+      if (!select) return;
+      setSelectOptionsLength(select, v);
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLOptionsCollection.prototype, "selectedIndex", {
+    get: function () {
+      const select = this._owner;
+      return select ? select.selectedIndex : -1;
+    },
+    set: function (v) {
+      const select = this._owner;
+      if (select) select.selectedIndex = v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  HTMLOptionsCollection.prototype.add = function (element, before = null) {
+    const select = this._owner;
+    if (!select) {
+      throw new TypeError("HTMLOptionsCollection.add: missing owner select");
+    }
+    const tag = element && typeof element.tagName === "string" ? element.tagName.toLowerCase() : "";
+    if (tag !== "option" && tag !== "optgroup") {
+      throw new TypeError("HTMLOptionsCollection.add: argument must be HTMLOptionElement or HTMLOptGroupElement");
+    }
+    if (before === element) return;
+    let refNode = null;
+    if (before == null) {
+      refNode = null;
+    } else if (typeof before === "number") {
+      const idx = Number(before) | 0;
+      const list = getSelectOptions(select);
+      if (idx >= 0 && idx < list.length) {
+        refNode = list[idx];
+      }
+    } else if (typeof before === "object") {
+      refNode = before;
+    }
+    if (refNode) {
+      let p = refNode.parentNode;
+      let isDesc = false;
+      while (p) {
+        if (p === select) {
+          isDesc = true;
+          break;
+        }
+        p = p.parentNode;
+      }
+      if (!isDesc) {
+        const DEx = typeof DOMException !== "undefined" ? DOMException : Error;
+        throw new DEx("HTMLOptionsCollection.add: before is not a descendant of the select", "NotFoundError");
+      }
+      if (refNode.parentNode && typeof refNode.parentNode.insertBefore === "function") {
+        refNode.parentNode.insertBefore(element, refNode);
+      } else {
+        select.appendChild(element);
+      }
+    } else {
+      select.appendChild(element);
+    }
+  };
+  markNative(HTMLOptionsCollection.prototype.add, "add");
+
+  HTMLOptionsCollection.prototype.remove = function (index) {
+    const select = this._owner;
+    if (!select) return;
+    const i = Number(index) | 0;
+    const list = getSelectOptions(select);
+    if (i >= 0 && i < list.length) {
+      const o = list[i];
+      if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+        o.parentNode.removeChild(o);
+      }
+    }
+  };
+  markNative(HTMLOptionsCollection.prototype.remove, "remove");
+
+  function getSelectOptions(selectEl) {
+    const opts = [];
+    const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+    function collect(node) {
+      if (!node) return;
+      if (node.firstChild !== undefined) {
+        let child = node.firstChild;
+        while (child) {
+          const tag = (child.tagName || "").toLowerCase();
+          if (tag === "option") {
+            if (up) up(child);
+            opts.push(child);
+          } else if (tag === "optgroup") {
+            collect(child);
+          }
+          child = child.nextSibling;
+        }
+        return;
+      }
+      if (node._children) {
+        for (let i = 0; i < node._children.length; i++) {
+          const c = node._children[i];
+          if (!c) continue;
+          const tag = (c.tagName || "").toLowerCase();
+          if (tag === "option") {
+            if (up) up(c);
+            opts.push(c);
+          } else if (tag === "optgroup") {
+            collect(c);
+          }
+        }
+      }
+    }
+    collect(selectEl);
+    return opts;
+  }
+
+  function setSelectOptionsLength(select, v) {
+    const target = Math.max(0, Math.min(100000, Math.floor(Number(v) || 0)));
+    const list = getSelectOptions(select);
+    const cur = list.length;
+    if (target < cur) {
+      for (let i = cur - 1; i >= target; i--) {
+        const o = list[i];
+        if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+          o.parentNode.removeChild(o);
+        }
+      }
+    } else if (target > cur) {
+      const doc = select.ownerDocument || (typeof document !== "undefined" ? document : null);
+      for (let i = cur; i < target; i++) {
+        const opt = doc && typeof doc.createElement === "function" ? doc.createElement("option") : (typeof HTMLOptionElement === "function" ? new HTMLOptionElement() : null);
+        if (opt) select.appendChild(opt);
+      }
+    }
+  }
+
+  function setSelectOptionAt(select, idx, value) {
+    const list = getSelectOptions(select);
+    const doc = select.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (value === null || value === undefined) {
+      if (idx >= 0 && idx < list.length) {
+        const o = list[idx];
+        if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+          o.parentNode.removeChild(o);
+        }
+      }
+      return;
+    }
+    const tag = value && typeof value.tagName === "string" ? value.tagName.toLowerCase() : "";
+    if (tag !== "option") {
+      throw new TypeError("HTMLOptionsCollection: indexed value must be an HTMLOptionElement");
+    }
+    if (idx < list.length) {
+      const o = list[idx];
+      if (o && o.parentNode && typeof o.parentNode.replaceChild === "function") {
+        o.parentNode.replaceChild(value, o);
+      }
+    } else {
+      for (let i = list.length; i < idx; i++) {
+        const opt = doc && typeof doc.createElement === "function" ? doc.createElement("option") : (typeof HTMLOptionElement === "function" ? new HTMLOptionElement() : null);
+        if (opt) select.appendChild(opt);
+      }
+      select.appendChild(value);
+    }
+  }
+
+  function makeHtmlOptionsCollection(select) {
+    const getList = function () {
+      return getSelectOptions(select);
+    };
+    const target = Object.create(HTMLOptionsCollection.prototype);
+    Object.defineProperty(target, "_owner", {
+      value: select,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+    Object.defineProperty(target, "_isOptionsCollection", {
+      value: true,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+    return makeHtmlCollection(getList, target);
+  }
+
+  const selectOptionsCache = new WeakMap();
+
+  function getSelectOptionsCollection(select) {
+    if (!select || typeof select !== "object") return null;
+    let coll = selectOptionsCache.get(select);
+    if (!coll) {
+      coll = makeHtmlOptionsCollection(select);
+      selectOptionsCache.set(select, coll);
+    }
+    return coll;
+  }
+
+  const elementChildrenCache = new WeakMap();
+
+  function getElementChildren(parent) {
+    const kids = [];
+    const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+    if (parent && parent.firstChild !== undefined) {
+      let child = parent.firstChild;
+      while (child) {
+        if (child.nodeType === 1) { // ELEMENT_NODE
+          if (up) up(child);
+          kids.push(child);
+        }
+        child = child.nextSibling;
+      }
+      return kids;
+    }
+    if (parent && parent._children) {
+      for (let i = 0; i < parent._children.length; i++) {
+        const c = parent._children[i];
+        if (c && c.nodeType === 1) {
+          if (up) up(c);
+          kids.push(c);
+        }
+      }
+    }
+    return kids;
+  }
+
+  function getElementChildrenCollection(element) {
+    if (!element || typeof element !== "object") return null;
+    let coll = elementChildrenCache.get(element);
+    if (!coll) {
+      coll = makeHtmlCollection(function () {
+        return getElementChildren(element);
+      });
+      elementChildrenCache.set(element, coll);
+    }
+    return coll;
+  }
 
   function NodeList(items) {
     const list = items || [];
@@ -1227,10 +1522,14 @@
   if (typeof globalThis !== "undefined") {
     globalThis.NamedNodeMap = NamedNodeMap;
     globalThis.Attr = Attr;
+    globalThis.HTMLCollection = HTMLCollection;
+    globalThis.HTMLOptionsCollection = HTMLOptionsCollection;
   }
   if (typeof window !== "undefined") {
     window.NamedNodeMap = NamedNodeMap;
     window.Attr = Attr;
+    window.HTMLCollection = HTMLCollection;
+    window.HTMLOptionsCollection = HTMLOptionsCollection;
   }
 
   // =============================================================
@@ -1290,12 +1589,95 @@
       let curr = this;
       while (curr) {
         if (curr.nodeType === DOCUMENT_NODE) return true;
+        if (curr.host) {
+          curr = curr.host;
+          continue;
+        }
         curr = curr.parentNode || curr.parentElement;
       }
       return false;
     },
     configurable: true,
   });
+
+  Node.prototype.getRootNode = function (options) {
+    let n = this;
+    let p;
+    while ((p = n.parentNode)) n = p;
+
+    if (options && options.composed) {
+      while (n && n.host) {
+        let hop = n.host;
+        let hp;
+        while ((hp = hop.parentNode)) hop = hp;
+        n = hop;
+      }
+    }
+    return n;
+  };
+
+  Node.prototype.normalize = function () {
+    const visit = (parent) => {
+      if (!parent) return;
+      let children = [];
+      if (parent._children && parent._children.length > 0) {
+        children = parent._children.slice();
+      } else if (parent.childNodes && parent.childNodes.length > 0) {
+        children = Array.from(parent.childNodes);
+      } else if (parent.nodeType === 9 && parent.documentElement) {
+        children = [parent.documentElement];
+      } else if (nativeElementFirstChild) {
+        let c = null;
+        try { c = nativeElementFirstChild.call(parent); } catch (e) {}
+        while (c) {
+          children.push(c);
+          try { c = nativeElementNextSibling.call(c); } catch (e) { c = null; }
+        }
+      }
+      for (let i = 0; i < children.length; i++) {
+        const c = children[i];
+        if (!c) continue;
+        const t = c.nodeType;
+        if (t === TEXT_NODE) {
+          const cData = c.data !== undefined ? c.data : (c.textContent || "");
+          if (cData.length === 0) {
+            try {
+              parent.removeChild(c);
+            } catch (e) {}
+            children[i] = null;
+            continue;
+          }
+          let merged = cData;
+          let j = i + 1;
+          while (j < children.length) {
+            const nx = children[j];
+            if (!nx) break;
+            if (nx.nodeType !== TEXT_NODE) break;
+            const nxData = nx.data !== undefined ? nx.data : (nx.textContent || "");
+            merged += nxData;
+            try {
+              parent.removeChild(nx);
+            } catch (e) {}
+            children[j] = null;
+            j++;
+          }
+          if (c.data !== merged) {
+            c.data = merged;
+          }
+          if (c.textContent !== merged) {
+            c.textContent = merged;
+          }
+          if (c._data !== undefined) {
+            c._data = merged;
+          }
+          i = j - 1;
+        } else if (t === ELEMENT_NODE || t === DOCUMENT_NODE || t === DOCUMENT_FRAGMENT_NODE) {
+          visit(c);
+        }
+      }
+    };
+    visit(this);
+  };
 
   Object.defineProperty(Node.prototype, "ownerDocument", {
     get: function () {
@@ -1372,17 +1754,36 @@
     return false;
   }
 
-  function ensureChildren(node) {
-    if (!node._children) {
-      node._children = [];
-    }
-    return node._children;
-  }
-
   const nativeElementAppendChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.appendChild : null;
   const nativeElementRemoveChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.removeChild : null;
   const nativeElementGetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.get : null;
   const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.set : null;
+  const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
+  const nativeElementNextSibling = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "nextSibling")?.get : null;
+
+  function ensureChildren(node) {
+    if (!node || typeof node !== "object") return [];
+    if (!node._children) {
+      node._children = [];
+      try {
+        let child = null;
+        if (node.nodeType === 9) { // DOCUMENT_NODE
+          child = node.documentElement;
+        } else if (nativeElementFirstChild) {
+          child = nativeElementFirstChild.call(node);
+        }
+        while (child) {
+          node._children.push(child);
+          if (nativeElementNextSibling) {
+            child = nativeElementNextSibling.call(child);
+          } else {
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+    return node._children;
+  }
 
   Node.prototype.appendChild = function (child) {
     if (!this || typeof this !== "object") {
@@ -1576,20 +1977,18 @@
         return "";
       },
       set: function (v) {
-        if (this._children) {
-          this._children.length = 0;
-        }
         if (nativeElementSetTextContent) {
           try {
             nativeElementSetTextContent.call(this, v);
           } catch (e) {}
         }
+        this._children = [];
         const val = String(v);
         if (val.length > 0) {
           const t = new Text(val);
           t.parentNode = this;
           t.ownerDocument = this.ownerDocument || this;
-          ensureChildren(this).push(t);
+          this._children.push(t);
         }
       },
       configurable: true,
@@ -1598,6 +1997,22 @@
     Element.prototype.appendChild = Node.prototype.appendChild;
     Element.prototype.insertBefore = Node.prototype.insertBefore;
     Element.prototype.removeChild = Node.prototype.removeChild;
+
+    const nativeElementInnerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+    if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
+      const origSetInnerHtml = nativeElementInnerHtmlDesc.set;
+      Object.defineProperty(Element.prototype, "innerHTML", {
+        get: nativeElementInnerHtmlDesc.get,
+        set: function (v) {
+          if (this._children) {
+            this._children.length = 0;
+          }
+          origSetInnerHtml.call(this, v);
+        },
+        configurable: true,
+        enumerable: nativeElementInnerHtmlDesc.enumerable,
+      });
+    }
   }
 
   Node.prototype.lookupNamespaceURI = function (prefix) {
@@ -1653,6 +2068,8 @@
   markNative(Node.prototype.removeChild, "removeChild");
   markNative(Node.prototype.hasChildNodes, "hasChildNodes");
   markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
+  markNative(Node.prototype.getRootNode, "getRootNode");
+  markNative(Node.prototype.normalize, "normalize");
 
   function Text(data) {
     Node.call(this);
@@ -2042,6 +2459,62 @@
       };
       markNative(proto.remove, "remove");
     }
+
+    // Children and Element Traversal ([SameObject] semantics)
+    Object.defineProperty(proto, "children", {
+      get: function () {
+        return getElementChildrenCollection(this);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "firstElementChild", {
+      get: function () {
+        const kids = this.children;
+        return (kids && kids.length > 0) ? kids[0] : null;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "lastElementChild", {
+      get: function () {
+        const kids = this.children;
+        return (kids && kids.length > 0) ? kids[kids.length - 1] : null;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "childElementCount", {
+      get: function () {
+        const kids = this.children;
+        return kids ? kids.length : 0;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "previousElementSibling", {
+      get: function () {
+        let sib = this.previousSibling;
+        while (sib) {
+          if (sib.nodeType === 1) return sib;
+          sib = sib.previousSibling;
+        }
+        return null;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "nextElementSibling", {
+      get: function () {
+        let sib = this.nextSibling;
+        while (sib) {
+          if (sib.nodeType === 1) return sib;
+          sib = sib.nextSibling;
+        }
+        return null;
+      },
+      configurable: true,
+    });
 
     // classList getter
     Object.defineProperty(proto, "classList", {
@@ -2993,6 +3466,11 @@
 
     Object.defineProperty(proto, "options", {
       get: function () {
+        if ((this.tagName || "").toLowerCase() === "select") {
+          if (typeof getSelectOptionsCollection === "function") {
+            return getSelectOptionsCollection(this);
+          }
+        }
         const opts = [];
         const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
         let child = this.firstChild;
@@ -4049,25 +4527,7 @@
     return null;
   }
 
-  function getSelectOptions(selectEl) {
-    const opts = [];
-    const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
-    function collect(node) {
-      let child = node.firstChild;
-      while (child) {
-        const tag = (child.tagName || "").toLowerCase();
-        if (tag === "option") {
-          if (up) up(child);
-          opts.push(child);
-        } else if (tag === "optgroup") {
-          collect(child);
-        }
-        child = child.nextSibling;
-      }
-    }
-    collect(selectEl);
-    return opts;
-  }
+
 
   function computeSelectedIndex(selectEl) {
     const selState = getSelectState(selectEl);
@@ -4258,13 +4718,14 @@
 
     Object.defineProperty(HTMLSelectElement.prototype, "options", {
       get: function () {
-        return new HTMLCollection(getSelectOptions(this));
+        return getSelectOptionsCollection(this);
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "length", {
       get: function () { return this.options.length; },
+      set: function (v) { this.options.length = v; },
       configurable: true,
     });
 
@@ -4374,21 +4835,25 @@
 
     HTMLSelectElement.prototype.add = function (element, before) {
       getSelectState(this).selectedIndex = undefined;
-      if (this.appendChild) {
-        this.appendChild(element);
-      }
+      this.options.add(element, before);
     };
 
     HTMLSelectElement.prototype.remove = function (index) {
       getSelectState(this).selectedIndex = undefined;
-      const opts = this.options;
-      const i = Number(index);
-      if (i >= 0 && i < opts.length) {
-        const node = opts[i];
-        if (node.parentNode) {
-          node.parentNode.removeChild(node);
-        }
+      if (index === undefined) {
+        const p = this.parentElement || this.parentNode;
+        if (p && p.removeChild) p.removeChild(this);
+        return;
       }
+      this.options.remove(index);
+    };
+
+    HTMLSelectElement.prototype.item = function (index) {
+      return this.options.item(index);
+    };
+
+    HTMLSelectElement.prototype.namedItem = function (name) {
+      return this.options.namedItem(name);
     };
 
     markNative(HTMLSelectElement, "HTMLSelectElement");
@@ -4396,6 +4861,8 @@
     markNative(HTMLSelectElement.prototype.checkValidity, "checkValidity");
     markNative(HTMLSelectElement.prototype.add, "add");
     markNative(HTMLSelectElement.prototype.remove, "remove");
+    markNative(HTMLSelectElement.prototype.item, "item");
+    markNative(HTMLSelectElement.prototype.namedItem, "namedItem");
 
     global.HTMLSelectElement = HTMLSelectElement;
   }
@@ -8424,6 +8891,161 @@
 
   const VALID_PNG_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
+  const _INTERNAL_CTX_SECRET = Symbol("CanvasRenderingContext2D_internal");
+  const _ctxInstances = new WeakSet();
+
+  function checkCtx(self) {
+    if (!self || typeof self !== "object" || !_ctxInstances.has(self)) {
+      throw new TypeError("Illegal invocation");
+    }
+  }
+
+  const NAMED_COLORS = {
+    transparent: [0, 0, 0, 0],
+    black: [0, 0, 0, 1],
+    white: [255, 255, 255, 1],
+    red: [255, 0, 0, 1],
+    green: [0, 128, 0, 1],
+    blue: [0, 0, 255, 1],
+    yellow: [255, 255, 0, 1],
+    cyan: [0, 255, 255, 1],
+    aqua: [0, 255, 255, 1],
+    magenta: [255, 0, 255, 1],
+    fuchsia: [255, 0, 255, 1],
+    gray: [128, 128, 128, 1],
+    grey: [128, 128, 128, 1],
+    lightgray: [211, 211, 211, 1],
+    lightgrey: [211, 211, 211, 1],
+    darkgray: [169, 169, 169, 1],
+    darkgrey: [169, 169, 169, 1],
+    orange: [255, 165, 0, 1],
+    pink: [255, 192, 203, 1],
+    purple: [128, 0, 128, 1],
+    brown: [165, 42, 42, 1],
+    lime: [0, 255, 0, 1],
+    maroon: [128, 0, 0, 1],
+    navy: [0, 0, 128, 1],
+    olive: [128, 128, 0, 1],
+    silver: [192, 192, 192, 1],
+    teal: [0, 128, 128, 1],
+    coral: [255, 127, 80, 1],
+    gold: [255, 215, 0, 1],
+    indigo: [75, 0, 130, 1],
+    violet: [238, 130, 238, 1],
+  };
+
+  function parseColor(str) {
+    if (typeof str !== "string") return null;
+    const s = str.trim().toLowerCase();
+    if (!s) return null;
+
+    if (Object.prototype.hasOwnProperty.call(NAMED_COLORS, s)) {
+      return NAMED_COLORS[s].slice();
+    }
+
+    if (s.charCodeAt(0) === 35) { // '#'
+      const hex = s.slice(1);
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
+          return [r, g, b, 1.0];
+        }
+      } else if (hex.length === 4) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        const a = parseInt(hex[3] + hex[3], 16) / 255.0;
+        if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b) && !Number.isNaN(a)) {
+          return [r, g, b, a];
+        }
+      } else if (hex.length === 6) {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
+          return [r, g, b, 1.0];
+        }
+      } else if (hex.length === 8) {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const a = parseInt(hex.slice(6, 8), 16) / 255.0;
+        if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b) && !Number.isNaN(a)) {
+          return [r, g, b, a];
+        }
+      }
+      return null;
+    }
+
+    if (s.startsWith("rgb(") || s.startsWith("rgba(")) {
+      const start = s.indexOf("(") + 1;
+      const end = s.indexOf(")");
+      if (end > start) {
+        const parts = s.slice(start, end).split(/[, /]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+        if (parts.length >= 3) {
+          const parseComponent = function (p) {
+            if (p.endsWith("%")) return Math.round((parseFloat(p) / 100.0) * 255.0);
+            return Math.round(parseFloat(p));
+          };
+          const r = Math.min(255, Math.max(0, parseComponent(parts[0])));
+          const g = Math.min(255, Math.max(0, parseComponent(parts[1])));
+          const b = Math.min(255, Math.max(0, parseComponent(parts[2])));
+          let a = 1.0;
+          if (parts.length >= 4) {
+            const ap = parts[3];
+            if (ap.endsWith("%")) a = parseFloat(ap) / 100.0;
+            else a = parseFloat(ap);
+            a = Math.min(1.0, Math.max(0.0, a));
+          }
+          if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b) && !Number.isNaN(a)) {
+            return [r, g, b, a];
+          }
+        }
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  function formatColor(rgba) {
+    const r = Math.min(255, Math.max(0, Math.round(rgba[0])));
+    const g = Math.min(255, Math.max(0, Math.round(rgba[1])));
+    const b = Math.min(255, Math.max(0, Math.round(rgba[2])));
+    const a = rgba[3];
+    if (a >= 1.0) {
+      const hex = ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+      return "#" + hex;
+    }
+    const aFormatted = Number(a.toFixed(3)).toString();
+    return "rgba(" + r + ", " + g + ", " + b + ", " + aFormatted + ")";
+  }
+
+  function getCanvasWidth(canvas) {
+    if (!canvas) return 300;
+    const w = parseInt(canvas.width, 10);
+    return Number.isFinite(w) && w > 0 ? w : 300;
+  }
+
+  function getCanvasHeight(canvas) {
+    if (!canvas) return 150;
+    const h = parseInt(canvas.height, 10);
+    return Number.isFinite(h) && h > 0 ? h : 150;
+  }
+
+  function ensureBitmap(ctx) {
+    const w = getCanvasWidth(ctx._canvas);
+    const h = getCanvasHeight(ctx._canvas);
+    if (!ctx._bitmap || ctx._bitmapWidth !== w || ctx._bitmapHeight !== h) {
+      ctx._bitmapWidth = w;
+      ctx._bitmapHeight = h;
+      ctx._bitmap = new Uint8ClampedArray(w * h * 4);
+    }
+    return ctx._bitmap;
+  }
+
   function CanvasGradient(type, x0, y0, r0, x1, y1, r1) {
     this._type = type; // "linear" or "radial"
     this._stops = [];
@@ -8550,15 +9172,23 @@
     };
   }
 
-  function CanvasRenderingContext2D(canvas) {
-    this.canvas = canvas || null;
+  function CanvasRenderingContext2D(canvas, secret) {
+    if (secret !== _INTERNAL_CTX_SECRET) {
+      throw new TypeError("Illegal constructor");
+    }
+    _ctxInstances.add(this);
+    this._canvas = canvas || null;
     this._state = defaultCanvasState();
     this._stack = [];
     this._ops = []; // Recorded vector operations
+    this._bitmap = null;
+    this._bitmapWidth = 0;
+    this._bitmapHeight = 0;
   }
 
   // State stack methods
   CanvasRenderingContext2D.prototype.save = function () {
+    checkCtx(this);
     this._stack.push(cloneCanvasState(this._state));
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "save" });
@@ -8566,6 +9196,7 @@
   };
 
   CanvasRenderingContext2D.prototype.restore = function () {
+    checkCtx(this);
     if (this._stack.length > 0) {
       this._state = this._stack.pop();
       if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
@@ -8576,6 +9207,7 @@
 
   // Transform methods
   CanvasRenderingContext2D.prototype.scale = function (x, y) {
+    checkCtx(this);
     this._state.matrix[0] *= x;
     this._state.matrix[3] *= y;
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
@@ -8584,12 +9216,14 @@
   };
 
   CanvasRenderingContext2D.prototype.rotate = function (angle) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "rotate", angle: angle });
     }
   };
 
   CanvasRenderingContext2D.prototype.translate = function (x, y) {
+    checkCtx(this);
     this._state.matrix[4] += x;
     this._state.matrix[5] += y;
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
@@ -8598,12 +9232,14 @@
   };
 
   CanvasRenderingContext2D.prototype.transform = function (a, b, c, d, e, f) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "transform", args: [a, b, c, d, e, f] });
     }
   };
 
   CanvasRenderingContext2D.prototype.setTransform = function (a, b, c, d, e, f) {
+    checkCtx(this);
     if (typeof a === "object" && a !== null) {
       this._state.matrix = [a.a || 1, a.b || 0, a.c || 0, a.d || 1, a.e || 0, a.f || 0];
     } else {
@@ -8615,6 +9251,7 @@
   };
 
   CanvasRenderingContext2D.prototype.resetTransform = function () {
+    checkCtx(this);
     this._state.matrix = [1, 0, 0, 1, 0, 0];
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "resetTransform" });
@@ -8622,24 +9259,137 @@
   };
 
   CanvasRenderingContext2D.prototype.getTransform = function () {
+    checkCtx(this);
     const m = this._state.matrix;
     return { a: m[0], b: m[1], c: m[2], d: m[3], e: m[4], f: m[5] };
   };
 
   // Rectangle drawing
   CanvasRenderingContext2D.prototype.clearRect = function (x, y, w, h) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "clearRect", args: [x, y, w, h] });
+    }
+
+    const numX = Number(x);
+    const numY = Number(y);
+    let numW = Number(w);
+    let numH = Number(h);
+    if (!Number.isFinite(numX) || !Number.isFinite(numY) || !Number.isFinite(numW) || !Number.isFinite(numH)) return;
+    if (numW === 0 || numH === 0) return;
+
+    const bitmap = ensureBitmap(this);
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+
+    let startX = numX;
+    let startY = numY;
+    if (numW < 0) {
+      startX += numW;
+      numW = -numW;
+    }
+    if (numH < 0) {
+      startY += numH;
+      numH = -numH;
+    }
+
+    const x0 = Math.max(0, Math.floor(startX));
+    const y0 = Math.max(0, Math.floor(startY));
+    const x1 = Math.min(bw, Math.ceil(startX + numW));
+    const y1 = Math.min(bh, Math.ceil(startY + numH));
+
+    for (let py = y0; py < y1; py++) {
+      let idx = (py * bw + x0) * 4;
+      for (let px = x0; px < x1; px++) {
+        bitmap[idx] = 0;
+        bitmap[idx + 1] = 0;
+        bitmap[idx + 2] = 0;
+        bitmap[idx + 3] = 0;
+        idx += 4;
+      }
     }
   };
 
   CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fillRect", args: [x, y, w, h], fillStyle: this._state.fillStyle });
+    }
+
+    const numX = Number(x);
+    const numY = Number(y);
+    let numW = Number(w);
+    let numH = Number(h);
+    if (!Number.isFinite(numX) || !Number.isFinite(numY) || !Number.isFinite(numW) || !Number.isFinite(numH)) return;
+    if (numW === 0 || numH === 0) return;
+
+    const color = parseColor(this._state.fillStyle);
+    if (!color) return;
+
+    const bitmap = ensureBitmap(this);
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+
+    let startX = numX;
+    let startY = numY;
+    if (numW < 0) {
+      startX += numW;
+      numW = -numW;
+    }
+    if (numH < 0) {
+      startY += numH;
+      numH = -numH;
+    }
+
+    const x0 = Math.max(0, Math.floor(startX));
+    const y0 = Math.max(0, Math.floor(startY));
+    const x1 = Math.min(bw, Math.ceil(startX + numW));
+    const y1 = Math.min(bh, Math.ceil(startY + numH));
+
+    const alpha = color[3] * this._state.globalAlpha;
+    if (alpha <= 0) return;
+
+    const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+    const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+    const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+    const aByte = Math.min(255, Math.max(0, Math.round(alpha * 255)));
+
+    if (alpha >= 1.0) {
+      for (let py = y0; py < y1; py++) {
+        let idx = (py * bw + x0) * 4;
+        for (let px = x0; px < x1; px++) {
+          bitmap[idx] = rByte;
+          bitmap[idx + 1] = gByte;
+          bitmap[idx + 2] = bByte;
+          bitmap[idx + 3] = 255;
+          idx += 4;
+        }
+      }
+    } else {
+      const invA = 1.0 - alpha;
+      for (let py = y0; py < y1; py++) {
+        let idx = (py * bw + x0) * 4;
+        for (let px = x0; px < x1; px++) {
+          const dstR = bitmap[idx];
+          const dstG = bitmap[idx + 1];
+          const dstB = bitmap[idx + 2];
+          const dstA = bitmap[idx + 3] / 255.0;
+
+          const outA = alpha + dstA * invA;
+          if (outA > 0) {
+            bitmap[idx] = Math.round((color[0] * alpha + dstR * dstA * invA) / outA);
+            bitmap[idx + 1] = Math.round((color[1] * alpha + dstG * dstA * invA) / outA);
+            bitmap[idx + 2] = Math.round((color[2] * alpha + dstB * dstA * invA) / outA);
+            bitmap[idx + 3] = Math.round(outA * 255);
+          }
+          idx += 4;
+        }
+      }
     }
   };
 
   CanvasRenderingContext2D.prototype.strokeRect = function (x, y, w, h) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "strokeRect", args: [x, y, w, h], strokeStyle: this._state.strokeStyle, lineWidth: this._state.lineWidth });
     }
@@ -8647,105 +9397,122 @@
 
   // Path drawing methods
   CanvasRenderingContext2D.prototype.beginPath = function () {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "beginPath" });
     }
   };
 
   CanvasRenderingContext2D.prototype.closePath = function () {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "closePath" });
     }
   };
 
   CanvasRenderingContext2D.prototype.moveTo = function (x, y) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "moveTo", x: x, y: y });
     }
   };
 
   CanvasRenderingContext2D.prototype.lineTo = function (x, y) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "lineTo", x: x, y: y });
     }
   };
 
   CanvasRenderingContext2D.prototype.quadraticCurveTo = function (cpx, cpy, x, y) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "quadraticCurveTo", args: [cpx, cpy, x, y] });
     }
   };
 
   CanvasRenderingContext2D.prototype.bezierCurveTo = function (cp1x, cp1y, cp2x, cp2y, x, y) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "bezierCurveTo", args: [cp1x, cp1y, cp2x, cp2y, x, y] });
     }
   };
 
   CanvasRenderingContext2D.prototype.arcTo = function (x1, y1, x2, y2, radius) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "arcTo", args: [x1, y1, x2, y2, radius] });
     }
   };
 
   CanvasRenderingContext2D.prototype.arc = function (x, y, radius, startAngle, endAngle, counterclockwise) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "arc", args: [x, y, radius, startAngle, endAngle, Boolean(counterclockwise)] });
     }
   };
 
   CanvasRenderingContext2D.prototype.ellipse = function (x, y, radiusX, radiusY, rotation, startAngle, endAngle, counterclockwise) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "ellipse", args: [x, y, radiusX, radiusY, rotation, startAngle, endAngle, Boolean(counterclockwise)] });
     }
   };
 
   CanvasRenderingContext2D.prototype.rect = function (x, y, w, h) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "rect", args: [x, y, w, h] });
     }
   };
 
   CanvasRenderingContext2D.prototype.fill = function (pathOrRule, rule) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fill", fillStyle: this._state.fillStyle });
     }
   };
 
   CanvasRenderingContext2D.prototype.stroke = function (path) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "stroke", strokeStyle: this._state.strokeStyle, lineWidth: this._state.lineWidth });
     }
   };
 
   CanvasRenderingContext2D.prototype.clip = function (pathOrRule, rule) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "clip" });
     }
   };
 
-  CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) { return true; };
-  CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { return true; };
+  CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) { checkCtx(this); return true; };
+  CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return true; };
 
   // Text drawing
   CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fillText", text: String(text), x: x, y: y, maxWidth: maxWidth, font: this._state.font, fillStyle: this._state.fillStyle });
     }
   };
 
   CanvasRenderingContext2D.prototype.strokeText = function (text, x, y, maxWidth) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "strokeText", text: String(text), x: x, y: y, maxWidth: maxWidth, font: this._state.font, strokeStyle: this._state.strokeStyle });
     }
   };
 
   CanvasRenderingContext2D.prototype.measureText = function (text) {
+    checkCtx(this);
     return new TextMetrics(text, this._state.font);
   };
 
   // Image drawing
   CanvasRenderingContext2D.prototype.drawImage = function (image) {
+    checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "drawImage", args: Array.prototype.slice.call(arguments, 1) });
     }
@@ -8753,44 +9520,148 @@
 
   // Gradients and Patterns
   CanvasRenderingContext2D.prototype.createLinearGradient = function (x0, y0, x1, y1) {
+    checkCtx(this);
     return new CanvasGradient("linear", x0, y0, 0, x1, y1, 0);
   };
 
   CanvasRenderingContext2D.prototype.createRadialGradient = function (x0, y0, r0, x1, y1, r1) {
+    checkCtx(this);
     return new CanvasGradient("radial", x0, y0, r0, x1, y1, r1);
   };
 
   CanvasRenderingContext2D.prototype.createPattern = function (image, repetition) {
+    checkCtx(this);
     return new CanvasPattern(image, repetition);
   };
 
   // Pixel manipulation
   CanvasRenderingContext2D.prototype.createImageData = function (sw, sh) {
-    return new ImageData(sw, sh);
+    checkCtx(this);
+    if (typeof sw === "object" && sw !== null) {
+      const w = (sw.width | 0);
+      const h = (sw.height | 0);
+      return new ImageData(Math.abs(w) || 1, Math.abs(h) || 1);
+    }
+    const w = (sw | 0);
+    const h = (sh | 0);
+    return new ImageData(Math.abs(w) || 1, Math.abs(h) || 1);
   };
 
   CanvasRenderingContext2D.prototype.getImageData = function (sx, sy, sw, sh) {
-    return new ImageData(sw, sh);
+    checkCtx(this);
+    let intSx = (sx | 0);
+    let intSy = (sy | 0);
+    let intSw = (sw | 0);
+    let intSh = (sh | 0);
+
+    if (intSw === 0 || intSh === 0) {
+      const err = new Error("IndexSizeError");
+      err.name = "IndexSizeError";
+      throw err;
+    }
+
+    if (intSw < 0) {
+      intSx += intSw;
+      intSw = -intSw;
+    }
+    if (intSh < 0) {
+      intSy += intSh;
+      intSh = -intSh;
+    }
+
+    const imgData = new ImageData(intSw, intSh);
+    const outData = imgData.data;
+
+    const bitmap = ensureBitmap(this);
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+
+    for (let y = 0; y < intSh; y++) {
+      const srcY = intSy + y;
+      for (let x = 0; x < intSw; x++) {
+        const srcX = intSx + x;
+        const dstIdx = (y * intSw + x) * 4;
+        if (srcX >= 0 && srcX < bw && srcY >= 0 && srcY < bh) {
+          const srcIdx = (srcY * bw + srcX) * 4;
+          outData[dstIdx] = bitmap[srcIdx];
+          outData[dstIdx + 1] = bitmap[srcIdx + 1];
+          outData[dstIdx + 2] = bitmap[srcIdx + 2];
+          outData[dstIdx + 3] = bitmap[srcIdx + 3];
+        } else {
+          outData[dstIdx] = 0;
+          outData[dstIdx + 1] = 0;
+          outData[dstIdx + 2] = 0;
+          outData[dstIdx + 3] = 0;
+        }
+      }
+    }
+
+    return imgData;
   };
 
   CanvasRenderingContext2D.prototype.putImageData = function (imagedata, dx, dy) {
+    checkCtx(this);
+    if (!imagedata || !imagedata.data) {
+      throw new TypeError("Failed to execute 'putImageData' on 'CanvasRenderingContext2D': parameter 1 is not of type 'ImageData'.");
+    }
+    const intDx = (dx | 0);
+    const intDy = (dy | 0);
+    const intW = (imagedata.width | 0);
+    const intH = (imagedata.height | 0);
+    const inData = imagedata.data;
+
+    const bitmap = ensureBitmap(this);
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+
+    for (let y = 0; y < intH; y++) {
+      const dstY = intDy + y;
+      if (dstY < 0 || dstY >= bh) continue;
+      for (let x = 0; x < intW; x++) {
+        const dstX = intDx + x;
+        if (dstX < 0 || dstX >= bw) continue;
+        const srcIdx = (y * intW + x) * 4;
+        const dstIdx = (dstY * bw + dstX) * 4;
+        bitmap[dstIdx] = inData[srcIdx];
+        bitmap[dstIdx + 1] = inData[srcIdx + 1];
+        bitmap[dstIdx + 2] = inData[srcIdx + 2];
+        bitmap[dstIdx + 3] = inData[srcIdx + 3];
+      }
+    }
+
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
-      this._ops.push({ op: "putImageData", dx: dx, dy: dy, width: imagedata.width, height: imagedata.height });
+      this._ops.push({ op: "putImageData", dx: intDx, dy: intDy, width: intW, height: intH });
     }
   };
 
   // Dash styling
   CanvasRenderingContext2D.prototype.setLineDash = function (segments) {
+    checkCtx(this);
     this._state.lineDash = Array.isArray(segments) ? segments.slice() : [];
   };
 
   CanvasRenderingContext2D.prototype.getLineDash = function () {
+    checkCtx(this);
     return this._state.lineDash.slice();
+  };
+
+  CanvasRenderingContext2D.prototype._setPaintStyle = function (which, v) {
+    if (typeof v === "string") {
+      const parsed = parseColor(v);
+      if (!parsed) return;
+      const formatted = formatColor(parsed);
+      this._state[which] = formatted;
+      if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
+        this._ops.push({ op: which, color: formatted });
+      }
+    } else if (v instanceof CanvasGradient || v instanceof CanvasPattern) {
+      this._state[which] = v;
+    }
   };
 
   // Properties with getters and setters
   const stateProps = [
-    "strokeStyle", "fillStyle", "lineWidth", "lineCap", "lineJoin", "miterLimit",
+    "lineWidth", "lineCap", "lineJoin", "miterLimit",
     "lineDashOffset", "globalAlpha", "globalCompositeOperation", "shadowColor",
     "shadowBlur", "shadowOffsetX", "shadowOffsetY", "font", "textAlign",
     "textBaseline", "direction", "filter", "imageSmoothingEnabled"
@@ -8799,22 +9670,67 @@
   for (let i = 0; i < stateProps.length; i++) {
     const p = stateProps[i];
     Object.defineProperty(CanvasRenderingContext2D.prototype, p, {
-      get: function () { return this._state[p]; },
-      set: function (v) { this._state[p] = v; },
+      get: function () {
+        checkCtx(this);
+        return this._state[p];
+      },
+      set: function (v) {
+        checkCtx(this);
+        this._state[p] = v;
+      },
       configurable: true,
+      enumerable: true,
     });
   }
 
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "fillStyle", {
+    get: function () {
+      checkCtx(this);
+      return this._state.fillStyle;
+    },
+    set: function (v) {
+      checkCtx(this);
+      this._setPaintStyle("fillStyle", v);
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "strokeStyle", {
+    get: function () {
+      checkCtx(this);
+      return this._state.strokeStyle;
+    },
+    set: function (v) {
+      checkCtx(this);
+      this._setPaintStyle("strokeStyle", v);
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(CanvasRenderingContext2D.prototype, "canvas", {
+    get: function () {
+      checkCtx(this);
+      return this._canvas;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
   // Vector recording extraction and inspection API for CapSurf
   CanvasRenderingContext2D.prototype.__getRecordingOps = function () {
+    checkCtx(this);
     return this._ops.slice();
   };
 
   CanvasRenderingContext2D.prototype.__clearRecordingOps = function () {
+    checkCtx(this);
     this._ops = [];
   };
 
   CanvasRenderingContext2D.prototype.__opsCount = function () {
+    checkCtx(this);
     return this._ops.length;
   };
 
@@ -10647,6 +11563,232 @@
       globalThis.outerHeight = 720;
     }
 
+    // 10.5. DocumentType, Document constructor & WHATWG Document members
+    function DocumentType(name, publicId, systemId) {
+      if (global.Node) global.Node.call(this);
+      this.name = name || "html";
+      this.publicId = publicId || "";
+      this.systemId = systemId || "";
+      this.nodeName = this.name;
+      this.nodeType = (global.Node && global.Node.DOCUMENT_TYPE_NODE) || 10;
+    }
+    DocumentType.prototype = Object.create(global.Node ? global.Node.prototype : Object.prototype);
+    DocumentType.prototype.constructor = DocumentType;
+    global.DocumentType = DocumentType;
+    if (typeof globalThis !== "undefined") globalThis.DocumentType = DocumentType;
+    if (typeof window !== "undefined") window.DocumentType = DocumentType;
+    markNative(DocumentType, "DocumentType");
+
+    const docProto = (global.Document && global.Document.prototype)
+      ? global.Document.prototype
+      : Object.create(global.Node ? global.Node.prototype : Object.prototype);
+
+    let DocCtor = global.Document;
+    if (typeof DocCtor !== "function") {
+      DocCtor = function Document() {
+        if (global.Node) global.Node.call(this);
+        this._nid = 0;
+      };
+      DocCtor.prototype = docProto;
+      docProto.constructor = DocCtor;
+      global.Document = DocCtor;
+      if (typeof globalThis !== "undefined") globalThis.Document = DocCtor;
+      if (typeof window !== "undefined") window.Document = DocCtor;
+      markNative(DocCtor, "Document");
+    }
+
+    // doctype
+    if (!Object.getOwnPropertyDescriptor(docProto, "doctype")) {
+      Object.defineProperty(docProto, "doctype", {
+        get: function () {
+          if (this._doctype !== undefined) return this._doctype;
+          if (this === (global.document || (typeof document !== "undefined" ? document : null)) ||
+              (this.documentElement && String(this.documentElement.tagName).toUpperCase() === "HTML")) {
+            const dt = new DocumentType("html", "", "");
+            dt.parentNode = this;
+            dt.ownerDocument = this;
+            this._doctype = dt;
+            return dt;
+          }
+          return null;
+        },
+        configurable: true,
+      });
+    }
+
+    // compatMode
+    if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
+      Object.defineProperty(docProto, "compatMode", {
+        get: function () { return "CSS1Compat"; },
+        configurable: true,
+      });
+    }
+
+    // characterSet, charset, inputEncoding
+    if (!Object.getOwnPropertyDescriptor(docProto, "characterSet")) {
+      Object.defineProperty(docProto, "characterSet", {
+        get: function () { return "UTF-8"; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "charset")) {
+      Object.defineProperty(docProto, "charset", {
+        get: function () { return "UTF-8"; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "inputEncoding")) {
+      Object.defineProperty(docProto, "inputEncoding", {
+        get: function () { return "UTF-8"; },
+        configurable: true,
+      });
+    }
+
+    // contentType
+    if (!Object.getOwnPropertyDescriptor(docProto, "contentType")) {
+      Object.defineProperty(docProto, "contentType", {
+        get: function () { return "text/html"; },
+        configurable: true,
+      });
+    }
+
+    // designMode
+    if (!Object.getOwnPropertyDescriptor(docProto, "designMode")) {
+      Object.defineProperty(docProto, "designMode", {
+        get: function () { return "off"; },
+        set: function (_v) {},
+        configurable: true,
+      });
+    }
+
+    // lastModified
+    if (!Object.getOwnPropertyDescriptor(docProto, "lastModified")) {
+      function formatLastModified(date) {
+        const pad = function (n, width) {
+          width = width || 2;
+          let s = String(n);
+          while (s.length < width) s = "0" + s;
+          return s;
+        };
+        return (
+          pad(date.getMonth() + 1) + "/" + pad(date.getDate()) + "/" + pad(date.getFullYear(), 4) + " " +
+          pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds())
+        );
+      }
+      Object.defineProperty(docProto, "lastModified", {
+        get: function () { return formatLastModified(new Date()); },
+        configurable: true,
+      });
+    }
+
+    // fullscreenEnabled, fullscreenElement, exitFullscreen
+    if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenEnabled")) {
+      Object.defineProperty(docProto, "fullscreenEnabled", {
+        get: function () { return false; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenElement")) {
+      Object.defineProperty(docProto, "fullscreenElement", {
+        get: function () { return null; },
+        configurable: true,
+      });
+    }
+    if (!docProto.exitFullscreen) {
+      docProto.exitFullscreen = markNative(function () {
+        return Promise.resolve();
+      }, "exitFullscreen");
+    }
+
+    // legacy members: clear, captureEvents, releaseEvents
+    if (!docProto.clear) {
+      docProto.clear = markNative(function () {}, "clear");
+    }
+    if (!docProto.captureEvents) {
+      docProto.captureEvents = markNative(function () {}, "captureEvents");
+    }
+    if (!docProto.releaseEvents) {
+      docProto.releaseEvents = markNative(function () {}, "releaseEvents");
+    }
+
+    // scrollingElement, hidden, visibilityState
+    if (!Object.getOwnPropertyDescriptor(docProto, "scrollingElement")) {
+      Object.defineProperty(docProto, "scrollingElement", {
+        get: function () { return this.documentElement || null; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "hidden")) {
+      Object.defineProperty(docProto, "hidden", {
+        get: function () { return false; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "visibilityState")) {
+      Object.defineProperty(docProto, "visibilityState", {
+        get: function () { return "visible"; },
+        configurable: true,
+      });
+    }
+
+    // legacy body colors & dir
+    function bodyColor(doc, attr) {
+      return (doc.body && typeof doc.body.getAttribute === "function") ? (doc.body.getAttribute(attr) || "") : "";
+    }
+    function setBodyColor(doc, attr, val) {
+      if (doc.body && typeof doc.body.setAttribute === "function") {
+        doc.body.setAttribute(attr, val == null ? "" : String(val));
+      }
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "fgColor")) {
+      Object.defineProperty(docProto, "fgColor", {
+        get: function () { return bodyColor(this, "text"); },
+        set: function (v) { setBodyColor(this, "text", v); },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "linkColor")) {
+      Object.defineProperty(docProto, "linkColor", {
+        get: function () { return bodyColor(this, "link"); },
+        set: function (v) { setBodyColor(this, "link", v); },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "vlinkColor")) {
+      Object.defineProperty(docProto, "vlinkColor", {
+        get: function () { return bodyColor(this, "vlink"); },
+        set: function (v) { setBodyColor(this, "vlink", v); },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "alinkColor")) {
+      Object.defineProperty(docProto, "alinkColor", {
+        get: function () { return bodyColor(this, "alink"); },
+        set: function (v) { setBodyColor(this, "alink", v); },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "bgColor")) {
+      Object.defineProperty(docProto, "bgColor", {
+        get: function () { return bodyColor(this, "bgcolor"); },
+        set: function (v) { setBodyColor(this, "bgcolor", v); },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "dir")) {
+      Object.defineProperty(docProto, "dir", {
+        get: function () {
+          return (this.documentElement && typeof this.documentElement.getAttribute === "function") ? (this.documentElement.getAttribute("dir") || "") : "";
+        },
+        set: function (v) {
+          if (this.documentElement && typeof this.documentElement.setAttribute === "function") {
+            this.documentElement.setAttribute("dir", v == null ? "" : String(v));
+          }
+        },
+        configurable: true,
+      });
+    }
+
     // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
     if (global.document) {
       try {
@@ -10691,6 +11833,7 @@
     // 2. Expose DOM Collections and Nodes
     global.DOMTokenList = DOMTokenList;
     global.HTMLCollection = HTMLCollection;
+    global.HTMLOptionsCollection = HTMLOptionsCollection;
     global.NodeList = NodeList;
     global.NamedNodeMap = NamedNodeMap;
     global.Attr = Attr;
@@ -10764,7 +11907,7 @@
         }
         if (t === "2d") {
           if (!this._ctx2d) {
-            this._ctx2d = new CanvasRenderingContext2D(this);
+            this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
           }
           return this._ctx2d;
         }
@@ -10899,6 +12042,42 @@
       docProto.getAnimations = markNative(function () {
         return animationsFor(this);
       }, "getAnimations");
+
+      if (!docProto.children) {
+        Object.defineProperty(docProto, "children", {
+          get: function () {
+            return getElementChildrenCollection(this);
+          },
+          configurable: true,
+        });
+      }
+      if (!docProto.firstElementChild) {
+        Object.defineProperty(docProto, "firstElementChild", {
+          get: function () {
+            const kids = this.children;
+            return (kids && kids.length > 0) ? kids[0] : null;
+          },
+          configurable: true,
+        });
+      }
+      if (!docProto.lastElementChild) {
+        Object.defineProperty(docProto, "lastElementChild", {
+          get: function () {
+            const kids = this.children;
+            return (kids && kids.length > 0) ? kids[kids.length - 1] : null;
+          },
+          configurable: true,
+        });
+      }
+      if (!docProto.childElementCount) {
+        Object.defineProperty(docProto, "childElementCount", {
+          get: function () {
+            const kids = this.children;
+            return kids ? kids.length : 0;
+          },
+          configurable: true,
+        });
+      }
 
       function defineLiveCollection(name, pred) {
         Object.defineProperty(docProto, name, {

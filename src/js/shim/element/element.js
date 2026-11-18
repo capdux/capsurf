@@ -199,6 +199,62 @@ function installElementExtensions(proto) {
     markNative(proto.remove, "remove");
   }
 
+  // Children and Element Traversal ([SameObject] semantics)
+  Object.defineProperty(proto, "children", {
+    get: function () {
+      return getElementChildrenCollection(this);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "firstElementChild", {
+    get: function () {
+      const kids = this.children;
+      return (kids && kids.length > 0) ? kids[0] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "lastElementChild", {
+    get: function () {
+      const kids = this.children;
+      return (kids && kids.length > 0) ? kids[kids.length - 1] : null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "childElementCount", {
+    get: function () {
+      const kids = this.children;
+      return kids ? kids.length : 0;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "previousElementSibling", {
+    get: function () {
+      let sib = this.previousSibling;
+      while (sib) {
+        if (sib.nodeType === 1) return sib;
+        sib = sib.previousSibling;
+      }
+      return null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "nextElementSibling", {
+    get: function () {
+      let sib = this.nextSibling;
+      while (sib) {
+        if (sib.nodeType === 1) return sib;
+        sib = sib.nextSibling;
+      }
+      return null;
+    },
+    configurable: true,
+  });
+
   // classList getter
   Object.defineProperty(proto, "classList", {
     get: function () {
@@ -1149,6 +1205,11 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "options", {
     get: function () {
+      if ((this.tagName || "").toLowerCase() === "select") {
+        if (typeof getSelectOptionsCollection === "function") {
+          return getSelectOptionsCollection(this);
+        }
+      }
       const opts = [];
       const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
       let child = this.firstChild;

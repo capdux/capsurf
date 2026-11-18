@@ -945,3 +945,22 @@
 
 
 
+
+## Phase 50 HTMLOptionsCollection、SameObject 规范缓存、Document 遗留接口与 Canvas 2D 布局技术方案
+1. **HTMLOptionsCollection 原型继承与 [SameObject] 弱映射缓存 (`src/js/shim/collections.js`)**：
+   - **设计动机**：WHATWG DOM/HTML 标准规定 `select.options` 必须是 `HTMLOptionsCollection` 实例且其原型链必须继承自 `HTMLCollection.prototype`；同时 `select.options` 与 `element.children` 标注为 `[SameObject]`，意味着在元素生命周期内多次访问该属性必须返回恒等对象引用（`u.children === kids && s.options === opts`）；
+   - **解决方案**：
+     - 构建 `HTMLOptionsCollection.prototype` 继承关系（`Object.create(HTMLCollection.prototype)`），挂载 `add(element, before)` 与 `remove(index)` 原生标准方法；
+     - 基于 `WeakMap` 实现元素级活态集合单例缓存（`selectOptionsCache` 与 `elementChildrenCache`），并在元素底层结构发生变动时自适应动态解析，既满足引用恒等，又保证集合活态（Live Collection）；
+     - 实现 `options.length` 的 Set 存取器，在缩小长度时反向移除多余项，在增大长度时补齐占位元素。
+2. **Document/Node 根节点连通性与子树文本规范化 (`src/js/shim/window.js` & `src/js/shim/node-base.js`)**：
+   - **设计动机**：标准 Document 构造函数需支持无参调用（`new Document()`），并对外暴露 `doctype`、`characterSet` 等遗留属性；所有 Node 必须支持 `getRootNode(options)` 与 `isConnected`；同时 `doc.normalize()` 必须遍历子树合并连续文本节点并清除空文本节点；
+   - **解决方案**：
+     - 包装 `Document` 构造器支持 `new Document()` 实例生成并正确链接原型；挂载所有遗留文档属性存取器；
+     - 实装 `Node.prototype.getRootNode`，根据 `{ composed: true }` 决定是否穿透影子根；遍历父级链条检测文档连通状态（`isConnected`）；
+     - 递归遍历子树，合并相连文本节点，并修正 `textContent` 读写流程，避免底层与前端镜像冗余双写产生文本倍增 Bug。
+3. **Canvas 2D 上下文品牌校验与固有尺寸盒模型布局 (`src/js/shim/canvas2d.js` & `src/layout/layout.cp`)**：
+   - **设计动机**：浏览器规范要求 `CanvasRenderingContext2D` 不可被用户脚本直接以 `new CanvasRenderingContext2D()` 构造（必须通过 `canvas.getContext('2d')` 获取），非法构造需抛出 `TypeError`；所有绘图方法在接收者不合法时需触发非法调用异常；同时未经 CSS 指定尺寸的 `<canvas>` 在狭窄容器内必须遵循 300px × 150px 固有自然尺寸并维持宽高比；
+   - **解决方案**：
+     - 在 `CanvasRenderingContext2D` 构造器中引入内部私钥 `_INTERNAL_CTX_SECRET` 校验，在 `fillRect` 等全部方法体前置注入 `checkCtx(this)` 接收者校验；
+     - 在 `src/layout/layout.cp` 中实装可替换元素固有尺寸推导函数 `ReplacedSize`，为 `<canvas>` 设置默认 300px × 150px 并在盒模型计算中正确结合 CSS `max-width` 实施等比缩放。

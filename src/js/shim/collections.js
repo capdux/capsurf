@@ -131,6 +131,7 @@ markNative(DOMTokenList.prototype.contains, "contains");
 markNative(DOMTokenList.prototype.item, "item");
 
 function findNamedItemInList(list, name) {
+  if (name == null || name === "") return null;
   const key = String(name);
   const len = list ? (list.length || 0) : 0;
   for (let i = 0; i < len; i++) {
@@ -150,8 +151,8 @@ function findNamedItemInList(list, name) {
   return null;
 }
 
-function makeHtmlCollection(getList) {
-  const target = Object.create(HTMLCollection.prototype);
+function makeHtmlCollection(getList, customTarget) {
+  const target = customTarget || Object.create(HTMLCollection.prototype);
   const proxy = new Proxy(target, {
     get: function (t, prop, receiver) {
       if (prop === "length") {
@@ -203,8 +204,19 @@ function makeHtmlCollection(getList) {
       return Reflect.get(t, prop, receiver);
     },
     set: function (t, prop, value, receiver) {
-      if (prop === "length") return false;
-      if (typeof prop === "string" && /^\d+$/.test(prop)) return false;
+      if (t._isOptionsCollection && t._owner) {
+        if (prop === "length") {
+          setSelectOptionsLength(t._owner, value);
+          return true;
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          setSelectOptionAt(t._owner, Number(prop), value);
+          return true;
+        }
+      } else {
+        if (prop === "length") return false;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) return false;
+      }
       return Reflect.set(t, prop, value, receiver);
     },
     has: function (t, prop) {
@@ -236,13 +248,13 @@ function makeHtmlCollection(getList) {
     },
     getOwnPropertyDescriptor: function (t, prop) {
       if (prop === "length") {
-        return { value: getList().length, writable: false, enumerable: false, configurable: true };
+        return { value: getList().length, writable: !!t._isOptionsCollection, enumerable: false, configurable: true };
       }
       if (typeof prop === "string" && /^\d+$/.test(prop)) {
         const i = Number(prop);
         const list = getList();
         if (i >= 0 && i < list.length) {
-          return { value: list[i], writable: false, enumerable: true, configurable: true };
+          return { value: list[i], writable: !!t._isOptionsCollection, enumerable: true, configurable: true };
         }
       }
       if (typeof prop === "string") {
@@ -259,13 +271,37 @@ function makeHtmlCollection(getList) {
 
 function getAllDocumentElements(doc) {
   const elements = [];
+  const seen = (typeof Set !== "undefined") ? new Set() : null;
+
+  function addEl(el) {
+    if (!el || el.nodeType !== 1) return;
+    if (seen) {
+      if (seen.has(el)) return;
+      seen.add(el);
+    } else {
+      if (elements.indexOf(el) !== -1) return;
+    }
+    elements.push(el);
+  }
+
+  if (doc && typeof doc.querySelectorAll === "function") {
+    try {
+      const q = doc.querySelectorAll("*");
+      if (q && typeof q.length === "number") {
+        for (let i = 0; i < q.length; i++) {
+          addEl(q[i]);
+        }
+      }
+    } catch (e) {}
+  }
+
   function walk(node) {
     if (!node) return;
     if (node._children && node._children.length > 0) {
       for (let i = 0; i < node._children.length; i++) {
         const c = node._children[i];
         if (c && c.nodeType === 1) { // ELEMENT_NODE
-          elements.push(c);
+          addEl(c);
           walk(c);
         }
       }
@@ -273,7 +309,7 @@ function getAllDocumentElements(doc) {
       let child = node.firstChild;
       while (child) {
         if (child.nodeType === 1) {
-          elements.push(child);
+          addEl(child);
           walk(child);
         }
         child = child.nextSibling;
@@ -284,7 +320,7 @@ function getAllDocumentElements(doc) {
   const root = doc ? (doc.documentElement || doc.body || doc) : null;
   if (root) {
     if (root.nodeType === 1) {
-      elements.push(root);
+      addEl(root);
       walk(root);
     } else {
       walk(root);
@@ -317,6 +353,265 @@ HTMLCollection.prototype[Symbol.iterator] = function () {
   };
 };
 markNative(HTMLCollection, "HTMLCollection");
+
+function HTMLOptionsCollection() {
+  throw new TypeError("Illegal constructor");
+}
+HTMLOptionsCollection.prototype = Object.create(HTMLCollection.prototype);
+HTMLOptionsCollection.prototype.constructor = HTMLOptionsCollection;
+Object.defineProperty(HTMLOptionsCollection.prototype, Symbol.toStringTag, {
+  value: "HTMLOptionsCollection",
+  configurable: true,
+});
+markNative(HTMLOptionsCollection, "HTMLOptionsCollection");
+
+Object.defineProperty(HTMLOptionsCollection.prototype, "length", {
+  get: function () {
+    const select = this._owner;
+    if (!select) return 0;
+    return getSelectOptions(select).length;
+  },
+  set: function (v) {
+    const select = this._owner;
+    if (!select) return;
+    setSelectOptionsLength(select, v);
+  },
+  configurable: true,
+  enumerable: true,
+});
+
+Object.defineProperty(HTMLOptionsCollection.prototype, "selectedIndex", {
+  get: function () {
+    const select = this._owner;
+    return select ? select.selectedIndex : -1;
+  },
+  set: function (v) {
+    const select = this._owner;
+    if (select) select.selectedIndex = v;
+  },
+  configurable: true,
+  enumerable: true,
+});
+
+HTMLOptionsCollection.prototype.add = function (element, before = null) {
+  const select = this._owner;
+  if (!select) {
+    throw new TypeError("HTMLOptionsCollection.add: missing owner select");
+  }
+  const tag = element && typeof element.tagName === "string" ? element.tagName.toLowerCase() : "";
+  if (tag !== "option" && tag !== "optgroup") {
+    throw new TypeError("HTMLOptionsCollection.add: argument must be HTMLOptionElement or HTMLOptGroupElement");
+  }
+  if (before === element) return;
+  let refNode = null;
+  if (before == null) {
+    refNode = null;
+  } else if (typeof before === "number") {
+    const idx = Number(before) | 0;
+    const list = getSelectOptions(select);
+    if (idx >= 0 && idx < list.length) {
+      refNode = list[idx];
+    }
+  } else if (typeof before === "object") {
+    refNode = before;
+  }
+  if (refNode) {
+    let p = refNode.parentNode;
+    let isDesc = false;
+    while (p) {
+      if (p === select) {
+        isDesc = true;
+        break;
+      }
+      p = p.parentNode;
+    }
+    if (!isDesc) {
+      const DEx = typeof DOMException !== "undefined" ? DOMException : Error;
+      throw new DEx("HTMLOptionsCollection.add: before is not a descendant of the select", "NotFoundError");
+    }
+    if (refNode.parentNode && typeof refNode.parentNode.insertBefore === "function") {
+      refNode.parentNode.insertBefore(element, refNode);
+    } else {
+      select.appendChild(element);
+    }
+  } else {
+    select.appendChild(element);
+  }
+};
+markNative(HTMLOptionsCollection.prototype.add, "add");
+
+HTMLOptionsCollection.prototype.remove = function (index) {
+  const select = this._owner;
+  if (!select) return;
+  const i = Number(index) | 0;
+  const list = getSelectOptions(select);
+  if (i >= 0 && i < list.length) {
+    const o = list[i];
+    if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+      o.parentNode.removeChild(o);
+    }
+  }
+};
+markNative(HTMLOptionsCollection.prototype.remove, "remove");
+
+function getSelectOptions(selectEl) {
+  const opts = [];
+  const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+  function collect(node) {
+    if (!node) return;
+    if (node.firstChild !== undefined) {
+      let child = node.firstChild;
+      while (child) {
+        const tag = (child.tagName || "").toLowerCase();
+        if (tag === "option") {
+          if (up) up(child);
+          opts.push(child);
+        } else if (tag === "optgroup") {
+          collect(child);
+        }
+        child = child.nextSibling;
+      }
+      return;
+    }
+    if (node._children) {
+      for (let i = 0; i < node._children.length; i++) {
+        const c = node._children[i];
+        if (!c) continue;
+        const tag = (c.tagName || "").toLowerCase();
+        if (tag === "option") {
+          if (up) up(c);
+          opts.push(c);
+        } else if (tag === "optgroup") {
+          collect(c);
+        }
+      }
+    }
+  }
+  collect(selectEl);
+  return opts;
+}
+
+function setSelectOptionsLength(select, v) {
+  const target = Math.max(0, Math.min(100000, Math.floor(Number(v) || 0)));
+  const list = getSelectOptions(select);
+  const cur = list.length;
+  if (target < cur) {
+    for (let i = cur - 1; i >= target; i--) {
+      const o = list[i];
+      if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+        o.parentNode.removeChild(o);
+      }
+    }
+  } else if (target > cur) {
+    const doc = select.ownerDocument || (typeof document !== "undefined" ? document : null);
+    for (let i = cur; i < target; i++) {
+      const opt = doc && typeof doc.createElement === "function" ? doc.createElement("option") : (typeof HTMLOptionElement === "function" ? new HTMLOptionElement() : null);
+      if (opt) select.appendChild(opt);
+    }
+  }
+}
+
+function setSelectOptionAt(select, idx, value) {
+  const list = getSelectOptions(select);
+  const doc = select.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (value === null || value === undefined) {
+    if (idx >= 0 && idx < list.length) {
+      const o = list[idx];
+      if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+        o.parentNode.removeChild(o);
+      }
+    }
+    return;
+  }
+  const tag = value && typeof value.tagName === "string" ? value.tagName.toLowerCase() : "";
+  if (tag !== "option") {
+    throw new TypeError("HTMLOptionsCollection: indexed value must be an HTMLOptionElement");
+  }
+  if (idx < list.length) {
+    const o = list[idx];
+    if (o && o.parentNode && typeof o.parentNode.replaceChild === "function") {
+      o.parentNode.replaceChild(value, o);
+    }
+  } else {
+    for (let i = list.length; i < idx; i++) {
+      const opt = doc && typeof doc.createElement === "function" ? doc.createElement("option") : (typeof HTMLOptionElement === "function" ? new HTMLOptionElement() : null);
+      if (opt) select.appendChild(opt);
+    }
+    select.appendChild(value);
+  }
+}
+
+function makeHtmlOptionsCollection(select) {
+  const getList = function () {
+    return getSelectOptions(select);
+  };
+  const target = Object.create(HTMLOptionsCollection.prototype);
+  Object.defineProperty(target, "_owner", {
+    value: select,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  Object.defineProperty(target, "_isOptionsCollection", {
+    value: true,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+  return makeHtmlCollection(getList, target);
+}
+
+const selectOptionsCache = new WeakMap();
+
+function getSelectOptionsCollection(select) {
+  if (!select || typeof select !== "object") return null;
+  let coll = selectOptionsCache.get(select);
+  if (!coll) {
+    coll = makeHtmlOptionsCollection(select);
+    selectOptionsCache.set(select, coll);
+  }
+  return coll;
+}
+
+const elementChildrenCache = new WeakMap();
+
+function getElementChildren(parent) {
+  const kids = [];
+  const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+  if (parent && parent.firstChild !== undefined) {
+    let child = parent.firstChild;
+    while (child) {
+      if (child.nodeType === 1) { // ELEMENT_NODE
+        if (up) up(child);
+        kids.push(child);
+      }
+      child = child.nextSibling;
+    }
+    return kids;
+  }
+  if (parent && parent._children) {
+    for (let i = 0; i < parent._children.length; i++) {
+      const c = parent._children[i];
+      if (c && c.nodeType === 1) {
+        if (up) up(c);
+        kids.push(c);
+      }
+    }
+  }
+  return kids;
+}
+
+function getElementChildrenCollection(element) {
+  if (!element || typeof element !== "object") return null;
+  let coll = elementChildrenCache.get(element);
+  if (!coll) {
+    coll = makeHtmlCollection(function () {
+      return getElementChildren(element);
+    });
+    elementChildrenCache.set(element, coll);
+  }
+  return coll;
+}
 
 function NodeList(items) {
   const list = items || [];
@@ -590,8 +885,12 @@ markNative(NamedNodeMap.prototype.removeNamedItemNS, "removeNamedItemNS");
 if (typeof globalThis !== "undefined") {
   globalThis.NamedNodeMap = NamedNodeMap;
   globalThis.Attr = Attr;
+  globalThis.HTMLCollection = HTMLCollection;
+  globalThis.HTMLOptionsCollection = HTMLOptionsCollection;
 }
 if (typeof window !== "undefined") {
   window.NamedNodeMap = NamedNodeMap;
   window.Attr = Attr;
+  window.HTMLCollection = HTMLCollection;
+  window.HTMLOptionsCollection = HTMLOptionsCollection;
 }

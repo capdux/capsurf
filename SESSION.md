@@ -2025,7 +2025,42 @@
     - `e2e/domparser-fragment-remove-child.e2e.test.ts` (1/1 PASS)
   - **独立单二进制**：`bin/main`（9.7MB）构建成功。
 
-## [2026-11-18 15:28:00] Turn 62
+## [2026-11-18 16:08:00] Turn 63
+### Phase 50 闭环：HTMLOptionsCollection、SameObject 集合缓存、Document 遗留接口、Node 根节点连通与 Canvas 2D 自然尺寸布局
+- **攻坚与实现落地**：
+  - **`src/js/shim/collections.js`**：
+    - 实装 `HTMLOptionsCollection` 原型链（继承自 `HTMLCollection`），支持标准 `add(element, before)` 与 `remove(index)`；
+    - 针对 `select.options` 与 `element.children` 实装 `[SameObject]` 规范缓存（`selectOptionsCache` 与 `elementChildrenCache`），保证多次读取对象引用恒等（`s.options === opts` 且 `u.children === kids`）；
+    - 支持通过 `s.options.length = ...` 动态截断/增补选项，以及基于索引的属性赋值（`s.options[i] = opt`）；
+  - **`src/js/shim/window.js` & `src/js/shim/node-base.js`**：
+    - 导出标准 `Document` 构造函数（支持 `new Document()`）与 `DocumentType` 构造器；
+    - 实装标准遗留属性与文档元信息（`doctype`, `characterSet`, `charset`, `contentType`, `compatMode`, `designMode`, `lastModified`, `hidden`, `visibilityState`）；
+    - 实装 `Node.prototype.getRootNode(options)`（支持 `{ composed: true }` 穿透）、`isConnected` 状态检测与递归子树文本节点规范化（`normalize()`）；
+    - 根除 `textContent` 写入时原生 DOM 与 JS 镜像子节点双写导致的文本内容重复 Bug，精准联动原生底层与 JS 缓存；
+  - **`src/js/shim/canvas2d.js`**：
+    - 实装 `_INTERNAL_CTX_SECRET` 品牌校验，禁止直接调用 `new CanvasRenderingContext2D()`，非法调用严格抛出 `TypeError`；
+    - 为上下文方法注入接收者校验 `checkCtx(this)`，防范原型方法借用盗用；
+    - 在 `createImageData` 与 `putImageData` 对宽高参数实施数值与范围校验，严格拦截 `BigInt` 与负数尺寸；
+    - 实装标准化十六进制与标准颜色解析引擎，打通真实内存光栅缓冲；
+  - **`src/layout/layout.cp`**：
+    - 实装可替换元素固有尺寸推导（`ReplacedSize`），`<canvas>` 默认遵循 WHATWG 标准固有尺寸 300px × 150px；
+    - 在 Flexbox 与块级布局容器限制下准确保持固有宽高与屏幕几何盒模型；
+  - **`src/js/dom_binding.cp`**：
+    - 完善 `setNodeText` 底层逻辑，在赋予新文本时严格清空旧子节点，保证标准 DOM 行为一致。
+- **双轨测试与门禁验证 100% 闭环**：
+  - **静态门禁验证**：`python3 scripts/cpc_brief.py -n 8` 检验 `src/layout/layout.cp`、`src/js/dom_binding.cp`、`src/js/runtime_source.cp` 100% 通过（4 门禁 0 违规）；
+  - **Phase 50 目标测试套件**：8 个测试套件 9 项用例 100% 绿灯通过：
+    - `e2e/options-collection-interface.e2e.test.ts` (1/1 PASS)
+    - `e2e/children-options-sameobject.e2e.test.ts` (1/1 PASS)
+    - `e2e/document-collections.e2e.test.ts` (2/2 PASS)
+    - `e2e/document-legacy-members.e2e.test.ts` (1/1 PASS)
+    - `e2e/document-node-members.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-context-interface.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-natural-size.e2e.test.ts` (1/1 PASS)
+    - `e2e/canvas-image-data-bigint.e2e.test.ts` (1/1 PASS)
+  - **全量回归验证**：Phases 46-49 共 9 个回归套件 32 项用例 100% 绿灯（179 项断言通过）；
+  - **独立单二进制**：`bin/main`（9.7MB）编译成功。
+
 ### Phase 49 闭环：选择器语法校验、光标光栅化渲染、输入框架拦截绕过与无障碍表单活态联动
 - **攻坚与实现落地**：
   - **`src/js/shim/selector.js`**：实现选择器语法校验器与伪元素包装器，非法伪类语法严格抛出 `DOMException("...", "SyntaxError")`；合规伪元素选择器（如 `div::after`）的 `querySelectorAll` 规范返回空 `NodeList`；

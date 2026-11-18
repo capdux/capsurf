@@ -42,25 +42,7 @@ function findOwnerSelect(opt) {
   return null;
 }
 
-function getSelectOptions(selectEl) {
-  const opts = [];
-  const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
-  function collect(node) {
-    let child = node.firstChild;
-    while (child) {
-      const tag = (child.tagName || "").toLowerCase();
-      if (tag === "option") {
-        if (up) up(child);
-        opts.push(child);
-      } else if (tag === "optgroup") {
-        collect(child);
-      }
-      child = child.nextSibling;
-    }
-  }
-  collect(selectEl);
-  return opts;
-}
+
 
 function computeSelectedIndex(selectEl) {
   const selState = getSelectState(selectEl);
@@ -251,13 +233,14 @@ function installSelectElement(global) {
 
   Object.defineProperty(HTMLSelectElement.prototype, "options", {
     get: function () {
-      return new HTMLCollection(getSelectOptions(this));
+      return getSelectOptionsCollection(this);
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "length", {
     get: function () { return this.options.length; },
+    set: function (v) { this.options.length = v; },
     configurable: true,
   });
 
@@ -367,21 +350,25 @@ function installSelectElement(global) {
 
   HTMLSelectElement.prototype.add = function (element, before) {
     getSelectState(this).selectedIndex = undefined;
-    if (this.appendChild) {
-      this.appendChild(element);
-    }
+    this.options.add(element, before);
   };
 
   HTMLSelectElement.prototype.remove = function (index) {
     getSelectState(this).selectedIndex = undefined;
-    const opts = this.options;
-    const i = Number(index);
-    if (i >= 0 && i < opts.length) {
-      const node = opts[i];
-      if (node.parentNode) {
-        node.parentNode.removeChild(node);
-      }
+    if (index === undefined) {
+      const p = this.parentElement || this.parentNode;
+      if (p && p.removeChild) p.removeChild(this);
+      return;
     }
+    this.options.remove(index);
+  };
+
+  HTMLSelectElement.prototype.item = function (index) {
+    return this.options.item(index);
+  };
+
+  HTMLSelectElement.prototype.namedItem = function (name) {
+    return this.options.namedItem(name);
   };
 
   markNative(HTMLSelectElement, "HTMLSelectElement");
@@ -389,6 +376,8 @@ function installSelectElement(global) {
   markNative(HTMLSelectElement.prototype.checkValidity, "checkValidity");
   markNative(HTMLSelectElement.prototype.add, "add");
   markNative(HTMLSelectElement.prototype.remove, "remove");
+  markNative(HTMLSelectElement.prototype.item, "item");
+  markNative(HTMLSelectElement.prototype.namedItem, "namedItem");
 
   global.HTMLSelectElement = HTMLSelectElement;
 }
