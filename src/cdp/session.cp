@@ -6,24 +6,41 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
-import { CdpBoxModel, CdpEvent, extractJsonInt } from "./types.cp";
+import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage } from "./types.cp";
 import { FetchState } from "./fetch.cp";
-import { ScreenshotOptions, renderDocumentToPng } from "../render/painter.cp";
+import { ScreenshotOptions, CanvasBitmap, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
+import { Base64 } from "cap:encoding";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
 import { ScreencastHandler } from "./screencast.cp";
 import { ResourceStore } from "./resource_store.cp";
 import { KitesurfFacade } from "./kitesurf_facade.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
+import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
+
+@c {
+    fn usleep(usec: u32): i32;
+}
 
 pub struct NavigationEntry {
     id: i32 = 0,
     url: []const u8 = "",
     title: []const u8 = "",
+}
+
+pub fn hashStyleBytes(bytes: []const u8): u64 {
+    let h: u64 = 1125899906842597;
+    let i: usize = 0;
+    while (i < bytes.len) : (i += 1) {
+        h ^= @as(u64, bytes[i]);
+        h = (h *% 1099511628211);
+    }
+    return h;
 }
 
 pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
@@ -57,6 +74,113 @@ pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
         }
     }
     return dst[0..out_idx];
+}
+
+pub struct RegisteredFace {
+    weight: u32 = 400,
+    has_wght_axis: bool = false,
+}
+
+pub struct RegisteredFamily {
+    family: [64]u8 = [0; 64],
+    family_len: usize = 0,
+    faces: [8]RegisteredFace = [RegisteredFace{}; 8],
+    face_count: usize = 0,
+}
+
+pub fn nextUtf8Codepoint(bytes: []const u8, idx: *usize): u32? {
+    if (idx.* >= bytes.len) return null;
+    const b0 = bytes[idx.*];
+    if (b0 < 0x80) {
+        idx.* += 1;
+        return @as(u32, b0);
+    } else if ((b0 & 0xE0) == 0xC0) {
+        if (idx.* + 1 >= bytes.len) { idx.* = bytes.len; return null; }
+        const b1 = bytes[idx.* + 1];
+        idx.* += 2;
+        return ((@as(u32, b0 & 0x1F)) << 6) | (@as(u32, b1 & 0x3F));
+    } else if ((b0 & 0xF0) == 0xE0) {
+        if (idx.* + 2 >= bytes.len) { idx.* = bytes.len; return null; }
+        const b1 = bytes[idx.* + 1];
+        const b2 = bytes[idx.* + 2];
+        idx.* += 3;
+        return ((@as(u32, b0 & 0x0F)) << 12) | ((@as(u32, b1 & 0x3F)) << 6) | (@as(u32, b2 & 0x3F));
+    } else if ((b0 & 0xF8) == 0xF0) {
+        if (idx.* + 3 >= bytes.len) { idx.* = bytes.len; return null; }
+        const b1 = bytes[idx.* + 1];
+        const b2 = bytes[idx.* + 2];
+        const b3 = bytes[idx.* + 3];
+        idx.* += 4;
+        return ((@as(u32, b0 & 0x07)) << 18) | ((@as(u32, b1 & 0x3F)) << 12) | ((@as(u32, b2 & 0x3F)) << 6) | (@as(u32, b3 & 0x3F));
+    } else {
+        idx.* += 1;
+        return null;
+    }
+}
+
+pub fn parseHexCodepoint(slice: []const u8): u32? {
+    if (slice.len == 0) return null;
+    let val: u32 = 0;
+    let i: usize = 0;
+    while (i < slice.len) : (i += 1) {
+        const c = slice[i];
+        let digit: u32 = 0;
+        if (c >= '0' && c <= '9') {
+            digit = @as(u32, c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            digit = @as(u32, c - 'a' + 10);
+        } else if (c >= 'A' && c <= 'F') {
+            digit = @as(u32, c - 'A' + 10);
+        } else {
+            return null;
+        }
+        val = (val << 4) | digit;
+    }
+    return val;
+}
+
+pub fn parseUnicodeRange(str: []const u8, out_min: *u32, out_max: *u32): bool {
+    let s = std.mem.trim(u8, str, " \t\r\n");
+    if (s.len < 2) return false;
+    if ((s[0] == 'U' || s[0] == 'u') && s[1] == '+') {
+        s = s[2..];
+    }
+    if (dash_idx := std.mem.indexOfScalar(u8, s, '-')) {
+        const first = s[0..dash_idx];
+        const second = s[dash_idx + 1 ..];
+        if (min_v := parseHexCodepoint(first)) {
+            if (max_v := parseHexCodepoint(second)) {
+                out_min.* = min_v;
+                out_max.* = max_v;
+                return true;
+            }
+        }
+    } else {
+        if (single_v := parseHexCodepoint(s)) {
+            out_min.* = single_v;
+            out_max.* = single_v;
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn documentHasCodePointInRange(doc: *const Document, min_cp: u32, max_cp: u32): bool {
+    let nid: usize = 0;
+    while (nid < doc.nodes.items.len) : (nid += 1) {
+        const node = &doc.nodes.items[nid];
+        if (node.node_type == NodeType.Text && node.text_content.len > 0) {
+            let idx: usize = 0;
+            while (idx < node.text_content.len) {
+                if (cp := nextUtf8Codepoint(node.text_content, &idx)) {
+                    if (cp >= min_cp && cp <= max_cp) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
 }
 
 pub fn canRewriteDocumentUrl(doc_url: []const u8, target_url: []const u8): bool {
@@ -117,6 +241,82 @@ pub fn canRewriteDocumentUrl(doc_url: []const u8, target_url: []const u8): bool 
 
 pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
 
+@c fn sessionModuleLoader(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)? {
+    if (module_name == null) return null;
+    const raw_name: []const u8 = std.mem.sliceTo(module_name, 0);
+    if (raw_name.len == 0) return null;
+
+    let session_ptr: (*CdpPageSession)? = null;
+    if (opaque_ptr != null) {
+        session_ptr = @ptrCast(@alignCast(opaque_ptr.?));
+    }
+
+    let resolved_url_buf: [512]u8 = undefined;
+    let full_url: []const u8 = raw_name;
+
+    if (session_ptr != null && session_ptr.?.url.len > 0) {
+        if (std.mem.startsWith(u8, raw_name, "./")) {
+            const rel = raw_name[2..];
+            if (last_slash := std.mem.lastIndexOfScalar(u8, session_ptr.?.url, '/')) {
+                const base = session_ptr.?.url[0..last_slash];
+                full_url = std.fmt.bufPrint(&resolved_url_buf, "{s}/{s}", .{ base, rel }) catch raw_name;
+            }
+        } else if (!std.mem.containsAtLeast(u8, raw_name, 1, "://") && !std.mem.startsWith(u8, raw_name, "/")) {
+            if (last_slash := std.mem.lastIndexOfScalar(u8, session_ptr.?.url, '/')) {
+                const base = session_ptr.?.url[0..last_slash];
+                full_url = std.fmt.bufPrint(&resolved_url_buf, "{s}/{s}", .{ base, raw_name }) catch raw_name;
+            }
+        }
+    }
+
+    let static_buf: [262144]u8 = undefined;
+    let module_code: ([]const u8)? = null;
+
+    if (MockFixtures.isFixtureUrl(full_url) || MockFixtures.isFixtureUrl(raw_name)) {
+        if (fc := MockFixtures.handleFixtureRequest(full_url, "", "", &static_buf, null)) {
+            module_code = fc;
+        } else if (fc2 := MockFixtures.handleFixtureRequest(raw_name, "", "", &static_buf, null)) {
+            module_code = fc2;
+        }
+    }
+
+    if (module_code == null) {
+        let fn_to_try = MockFixtures.extractFilename(full_url);
+        if (fn_to_try.len == 0) fn_to_try = MockFixtures.extractFilename(raw_name);
+        if (fn_to_try.len == 0) {
+            if (last_slash := std.mem.lastIndexOfScalar(u8, raw_name, '/')) {
+                fn_to_try = raw_name[last_slash + 1..];
+            } else {
+                fn_to_try = raw_name;
+            }
+        }
+        if (fn_to_try.len > 0) {
+            if (fc3 := MockFixtures.readPageFile(fn_to_try, &static_buf)) {
+                module_code = fc3;
+            }
+        }
+    }
+
+    if (module_code == null) {
+        return null;
+    }
+
+    const code = module_code.?;
+    if (code.len < static_buf.len) {
+        static_buf[code.len] = 0;
+    }
+    const eval_val = JS_Eval(ctx, code.ptr, code.len, module_name, 33);
+    if (jsIsException(eval_val)) {
+        const exc = JS_GetException(ctx);
+        JS_FreeValue(ctx, exc);
+        return null;
+    }
+    const ptr_val = @as(usize, @intCast(eval_val.u.uint64));
+    const m: *JSModuleDef = @ptrFromInt(ptr_val);
+    JS_FreeValue(ctx, eval_val);
+    return m;
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -172,6 +372,19 @@ pub struct CdpPageSession {
     binding_event_buf: [1024]u8 = [0; 1024],
     same_doc_event_buf: [2048]u8 = [0; 2048],
     iframe_ctx_event_buf: [512]u8 = [0; 512],
+    css_event_buf: [8192]u8 = [0; 8192],
+
+    // CSS domain state & Dynamic StyleSheet Tracking
+    css_enabled: bool = false,
+    tracked_style_nodes: [32]NodeId = [NULL_NODE; 32],
+    tracked_style_hashes: [32]u64 = [0; 32],
+    tracked_style_lens: [32]usize = [0; 32],
+    tracked_style_count: usize = 0,
+
+    pending_css_events: [16]CdpEvent = [CdpEvent{}; 16],
+    pending_css_event_count: usize = 0,
+    css_event_storage: [8192]u8 = [0; 8192],
+    css_event_storage_used: usize = 0,
 
     // Execution context tracking
     next_context_id: i64 = 2,
@@ -248,6 +461,16 @@ pub struct CdpPageSession {
             binding_event_buf: [0; 1024],
             same_doc_event_buf: [0; 2048],
             iframe_ctx_event_buf: [0; 512],
+            css_event_buf: [0; 8192],
+            css_enabled: false,
+            tracked_style_nodes: [NULL_NODE; 32],
+            tracked_style_hashes: [0; 32],
+            tracked_style_lens: [0; 32],
+            tracked_style_count: 0,
+            pending_css_events: [CdpEvent{}; 16],
+            pending_css_event_count: 0,
+            css_event_storage: [0; 8192],
+            css_event_storage_used: 0,
             next_context_id: 2,
             iframe_ctx_created: false,
             iframe_ctx_id: 2,
@@ -268,6 +491,7 @@ pub struct CdpPageSession {
             scroll_y: 0.0,
         };
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
+        ptr.rt.setModuleLoader(sessionModuleLoader, @ptrCast(ptr));
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
     }
@@ -348,13 +572,32 @@ pub struct CdpPageSession {
     }
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
+        _.onBeforeNavigate();
         _.title = "";
         _.doc.deinit();
         if (_.raw_html.len > 0) {
             _.allocator.free(_.raw_html);
             _.raw_html = "";
         }
-        _.raw_html = _.allocator.dupe(u8, html) catch return error.AllocFailed;
+
+        let wrapped_html: []const u8 = html;
+        let svg_buf: ([]u8)? = null;
+        defer if (svg_buf != null) _.allocator.free(svg_buf.?);
+
+        if (isSvgDocument(nav_url, "", html)) {
+            const extra_sz = 2048 + html.len * 2;
+            svg_buf = _.allocator.alloc(u8, extra_sz) catch null;
+            if (svg_buf != null) {
+                const vw_u = @as(u32, @intFromFloat(_.viewport_width));
+                const vh_u = @as(u32, @intFromFloat(_.viewport_height));
+                const res = svgDocumentHtml(html, vw_u, vh_u, svg_buf.?);
+                if (res.len > 0) {
+                    wrapped_html = res;
+                }
+            }
+        }
+
+        _.raw_html = _.allocator.dupe(u8, wrapped_html) catch return error.AllocFailed;
         _.doc = Document.init(_.allocator) catch return error.DocReinitFailed;
         _.doc.parseHtml(_.raw_html) catch return error.HtmlParseFailed;
 
@@ -379,6 +622,11 @@ pub struct CdpPageSession {
             while (snid < _.doc.nodes.items.len) : (snid += 1) {
                 const sn = &_.doc.nodes.items[snid];
                 if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    if (sn.text_content.len > 0) {
+                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                        @memcpy(css_buf.?[css_len..css_len + copy_len], sn.text_content[0..copy_len]);
+                        css_len += copy_len;
+                    }
                     let child = sn.first_child;
                     while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
                         const scn = &_.doc.nodes.items[@as(usize, child)];
@@ -391,8 +639,10 @@ pub struct CdpPageSession {
                 }
             }
         }
+        _.layout.viewport_width = _.viewport_width;
+        _.layout.viewport_height = _.viewport_height;
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
-        const sheet = StyleSheet.parse(full_css, 1280.0, false);
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
         const count = @max(@as(usize, 1), _.doc.nodeCount());
         let styles = _.allocator.alloc(ComputedStyle, count) catch null;
         defer if (styles != null) _.allocator.free(styles.?);
@@ -408,11 +658,17 @@ pub struct CdpPageSession {
         }
         if (_.has_document) {
             _.ctx.deinit();
+            _.rt.runGC();
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
+            _.rt.setModuleLoader(sessionModuleLoader, @ptrCast(_));
+        } else {
+            _.rt.runGC();
+            _.rt.setModuleLoader(sessionModuleLoader, @ptrCast(_));
         }
         const active_jar = _.getActiveCookieJar();
-        const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar) catch return error.MountDomFailed;
+        const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;
         m.cookie_jar = active_jar;
+        m.extra_headers = _.extra_headers;
         if (_.current_browser_context_id_len > 0) {
             const f_slice = std.fmt.bufPrint(&m.frame_id_buf, "capsurf-frame-{s}", .{_.currentBrowserContextId()}) catch "capsurf-frame-001";
             m.frame_id_len = f_slice.len;
@@ -427,6 +683,62 @@ pub struct CdpPageSession {
             @memcpy(m.loader_id_buf[0..l_len], _.loader_id[0..l_len]);
             m.loader_id_len = l_len;
         }
+
+        // Extract any @font-face rules and record font fetches
+        if (full_css.len > 0) {
+            let search_idx: usize = 0;
+            while (search_idx < full_css.len) {
+                if (ff_pos := std.mem.indexOfPos(u8, full_css, search_idx, "@font-face")) {
+                    const open_brace = std.mem.indexOfPos(u8, full_css, ff_pos, "{");
+                    if (open_brace == null) break;
+                    const close_brace = std.mem.indexOfPos(u8, full_css, open_brace.?, "}");
+                    if (close_brace == null) break;
+                    const block = full_css[open_brace.? + 1 .. close_brace.?];
+                    search_idx = close_brace.? + 1;
+
+                    if (url_pos := std.mem.indexOf(u8, block, "url(")) {
+                        const start_val = url_pos + 4;
+                        let end_val = start_val;
+                        if (ep := std.mem.indexOfPos(u8, block, start_val, ")")) {
+                            end_val = ep;
+                        }
+                        const raw_url = std.mem.trim(u8, block[start_val..end_val], " \t\r\n\"'");
+                        if (raw_url.len > 0) {
+                            let full_font_url_buf: [1024]u8 = undefined;
+                            let full_font_url = raw_url;
+                            if (!std.mem.startsWith(u8, raw_url, "http://") && !std.mem.startsWith(u8, raw_url, "https://")) {
+                                if (std.mem.startsWith(u8, raw_url, "/")) {
+                                    let origin = nav_url;
+                                    if (scheme_idx := std.mem.indexOf(u8, nav_url, "://")) {
+                                        const after_scheme = nav_url[scheme_idx + 3..];
+                                        if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+                                            origin = nav_url[0 .. scheme_idx + 3 + slash_pos];
+                                        }
+                                    }
+                                    full_font_url = std.fmt.bufPrint(&full_font_url_buf, "{s}{s}", .{ origin, raw_url }) catch raw_url;
+                                } else {
+                                    if (last_slash := std.mem.lastIndexOfScalar(u8, nav_url, '/')) {
+                                        full_font_url = std.fmt.bufPrint(&full_font_url_buf, "{s}/{s}", .{ nav_url[0..last_slash], raw_url }) catch raw_url;
+                                    }
+                                }
+                            }
+                            let font_mime: []const u8 = "font/woff2";
+                            if (std.mem.endsWith(u8, raw_url, ".woff")) {
+                                font_mime = "font/woff";
+                            } else if (std.mem.endsWith(u8, raw_url, ".ttf")) {
+                                font_mime = "font/ttf";
+                            } else if (std.mem.endsWith(u8, raw_url, ".otf")) {
+                                font_mime = "font/otf";
+                            }
+                            m.addFetchRecord(full_font_url, font_mime);
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
         _.dom_ctx = m;
         _.url = nav_url;
         _.referrer = nav_referrer;
@@ -439,16 +751,43 @@ pub struct CdpPageSession {
         _.pending_iframe_ctx_event = false;
 
         // Set document url and referrer in JS environment
-        let set_url_buf: [1024]u8 = undefined;
-        let set_url_json_buf: [512]u8 = undefined;
-        const escaped_nav_url = escapeJsonString(nav_url, set_url_json_buf[0..]);
+        let set_url_alloc: ([]u8)? = null;
+        let set_url_json_alloc: ([]u8)? = null;
+        let set_url_stack_buf: [4096]u8 = undefined;
+        let set_url_json_stack_buf: [2048]u8 = undefined;
+
+        const needed_json_len = nav_url.len * 2 + 1;
+        let json_buf = if (needed_json_len <= set_url_json_stack_buf.len)
+            set_url_json_stack_buf[0..]
+        else
+            blk: {
+                set_url_json_alloc = _.allocator.alloc(u8, needed_json_len) catch null;
+                break :blk if (set_url_json_alloc != null) set_url_json_alloc.? else set_url_json_stack_buf[0..];
+            };
+        defer if (set_url_json_alloc != null) _.allocator.free(set_url_json_alloc.?);
+
+        const escaped_nav_url = escapeJsonString(nav_url, json_buf);
+        const needed_script_len = escaped_nav_url.len + 128;
+        let script_buf = if (needed_script_len <= set_url_stack_buf.len)
+            set_url_stack_buf[0..]
+        else
+            blk: {
+                set_url_alloc = _.allocator.alloc(u8, needed_script_len) catch null;
+                break :blk if (set_url_alloc != null) set_url_alloc.? else set_url_stack_buf[0..];
+            };
+        defer if (set_url_alloc != null) _.allocator.free(set_url_alloc.?);
+
         const set_url_script = std.fmt.bufPrint(
-            &set_url_buf,
+            script_buf,
             "(function(){{if(typeof __capsurf_set_document_url==='function')__capsurf_set_document_url(\"{s}\");}})()",
             .{escaped_nav_url},
         ) catch "";
         if (set_url_script.len > 0) {
             const v = _.ctx.eval(set_url_script);
+            if (jsIsException(v)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
             _.ctx.freeValue(v);
         }
 
@@ -462,11 +801,39 @@ pub struct CdpPageSession {
         ) catch "";
         if (set_ref_script.len > 0) {
             const vr = _.ctx.eval(set_ref_script);
+            if (jsIsException(vr)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
             _.ctx.freeValue(vr);
         }
 
         // Sync User-Agent override to JS environment
         _.syncUserAgentToJs();
+
+        // Sync viewport resolution into JS environment
+        let set_vp_buf: [256]u8 = undefined;
+        const set_vp_script = std.fmt.bufPrint(
+            &set_vp_buf,
+            "(function(){{const w={d};const h={d};if(typeof window!=='undefined'){{window.innerWidth=w;window.innerHeight=h;}}if(typeof global!=='undefined'){{global.innerWidth=w;global.innerHeight=h;}}if(typeof globalThis!=='undefined'){{globalThis.innerWidth=w;globalThis.innerHeight=h;}}}})()",
+            .{ @as(i64, @intFromFloat(_.viewport_width)), @as(i64, @intFromFloat(_.viewport_height)) },
+        ) catch "";
+        if (set_vp_script.len > 0) {
+            const v = _.ctx.eval(set_vp_script);
+            if (jsIsException(v)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
+            _.ctx.freeValue(v);
+        }
+
+        // Sync named elements with ID attribute before executing inline scripts
+        const sync_named_val = _.ctx.eval("(function(){if(typeof __capsurf_sync_named_elements==='function')__capsurf_sync_named_elements();if(typeof __capsurf_pump_timers==='function')__capsurf_pump_timers();})()");
+        if (jsIsException(sync_named_val)) {
+            const exc = _.ctx.getException();
+            _.ctx.freeValue(exc);
+        }
+        _.ctx.freeValue(sync_named_val);
 
         // Execute inline <script> tags in document order
         const initial_node_count = _.doc.nodes.items.len;
@@ -483,17 +850,66 @@ pub struct CdpPageSession {
                 let code_buf = _.allocator.alloc(u8, 65536) catch break;
                 defer _.allocator.free(code_buf);
                 let code_len: usize = 0;
-                let child = n.first_child;
-                while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
-                    const cn = &_.doc.nodes.items[@as(usize, child)];
-                    if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
-                        const copy_len = @min(cn.text_content.len, code_buf.len - code_len);
-                        @memcpy(code_buf[code_len..code_len + copy_len], cn.text_content[0..copy_len]);
-                        code_len += copy_len;
+
+                if (src_attr := n.getAttribute("src")) {
+                    if (src_attr.len > 0) {
+                        let full_src_buf: [1024]u8 = undefined;
+                        let full_src = src_attr;
+                        if (!std.mem.startsWith(u8, src_attr, "http://") && !std.mem.startsWith(u8, src_attr, "https://")) {
+                            if (std.mem.startsWith(u8, src_attr, "/")) {
+                                let origin = _.url;
+                                if (idx := std.mem.indexOf(u8, _.url, "://")) {
+                                    const after_scheme = _.url[idx + 3..];
+                                    if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+                                        origin = _.url[0 .. idx + 3 + slash_pos];
+                                    }
+                                }
+                                full_src = std.fmt.bufPrint(&full_src_buf, "{s}{s}", .{ origin, src_attr }) catch src_attr;
+                            } else {
+                                if (last_slash := std.mem.lastIndexOfScalar(u8, _.url, '/')) {
+                                    full_src = std.fmt.bufPrint(&full_src_buf, "{s}/{s}", .{ _.url[0..last_slash], src_attr }) catch src_attr;
+                                }
+                            }
+                        }
+                        if (MockFixtures.isFixtureUrl(src_attr) || MockFixtures.isFixtureUrl(full_src)) {
+                            if (fixture_code := MockFixtures.handleFixtureRequest(full_src, "", "", code_buf, null)) {
+                                code_len = fixture_code.len;
+                            } else if (fixture_code2 := MockFixtures.handleFixtureRequest(src_attr, "", "", code_buf, null)) {
+                                code_len = fixture_code2.len;
+                            }
+                        }
+                    }
+                }
+
+                if (code_len == 0) {
+                    let child = n.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const cn = &_.doc.nodes.items[@as(usize, child)];
+                        if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
+                            const copy_len = @min(cn.text_content.len, code_buf.len - code_len);
+                            @memcpy(code_buf[code_len..code_len + copy_len], cn.text_content[0..copy_len]);
+                            code_len += copy_len;
+                        }
                     }
                 }
                 if (code_len > 0) {
-                    const js_res = _.ctx.eval(code_buf[0..code_len]);
+                    let wrapped_code: []const u8 = code_buf[0..code_len];
+                    let mod_alloc: ([]u8)? = null;
+                    defer if (mod_alloc != null) _.allocator.free(mod_alloc.?);
+                    if (is_module) {
+                        const pre = "(async function(){\n";
+                        const post = "\n})()";
+                        const mb_opt = _.allocator.alloc(u8, pre.len + code_len + post.len) catch null;
+                        if (mb_opt != null) {
+                            const mb = mb_opt.?;
+                            @memcpy(mb[0..pre.len], pre);
+                            @memcpy(mb[pre.len..pre.len + code_len], code_buf[0..code_len]);
+                            @memcpy(mb[pre.len + code_len..], post);
+                            wrapped_code = mb;
+                            mod_alloc = mb;
+                        }
+                    }
+                    const js_res = _.ctx.eval(wrapped_code);
                     if (jsIsException(js_res)) {
                         const exc = _.ctx.getException();
                         let exc_str_buf: [256]u8 = undefined;
@@ -505,6 +921,7 @@ pub struct CdpPageSession {
                 }
             }
         }
+        _.ctx.drainJobs();
 
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
         const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
@@ -515,6 +932,260 @@ pub struct CdpPageSession {
         if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
             _.url = _.nav_entries[_.current_nav_index].url;
         }
+        _.onAfterNavigate();
+    }
+
+    pub fn resetSession(*_) {
+        _.css_enabled = false;
+        _.tracked_style_count = 0;
+        _.pending_css_event_count = 0;
+        _.css_event_storage_used = 0;
+        let ti: usize = 0;
+        while (ti < _.tracked_style_nodes.len) : (ti += 1) {
+            _.tracked_style_nodes[ti] = NULL_NODE;
+            _.tracked_style_hashes[ti] = 0;
+            _.tracked_style_lens[ti] = 0;
+        }
+        _.runtime_enabled = false;
+        _.log_enabled = false;
+        _.network_enabled = false;
+        _.fetch_enabled = false;
+    }
+
+    pub fn getStyleText(*_, node_id: NodeId, out_buf: []u8): []const u8 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.doc.nodes.items.len) return "";
+        const sn = &_.doc.nodes.items[@as(usize, node_id)];
+        let len: usize = 0;
+        if (sn.first_child != NULL_NODE) {
+            let child = sn.first_child;
+            while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                const scn = &_.doc.nodes.items[@as(usize, child)];
+                if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                    const copy_len = @min(scn.text_content.len, out_buf.len - len);
+                    @memcpy(out_buf[len .. len + copy_len], scn.text_content[0..copy_len]);
+                    len += copy_len;
+                }
+            }
+        }
+        if (len == 0 && sn.text_content.len > 0) {
+            const copy_len = @min(sn.text_content.len, out_buf.len);
+            @memcpy(out_buf[0..copy_len], sn.text_content[0..copy_len]);
+            len = copy_len;
+        }
+        return out_buf[0..len];
+    }
+
+    pub fn formatStyleSheetAddedPayload(*_, snid: usize, st_text: []const u8, out_chunk: []u8): []const u8 {
+        let end_line: usize = 0;
+        let last_line_start: usize = 0;
+        let ti: usize = 0;
+        while (ti < st_text.len) : (ti += 1) {
+            if (st_text[ti] == '\n') {
+                end_line += 1;
+                last_line_start = ti + 1;
+            }
+        }
+        const end_col = st_text.len - last_line_start;
+        return std.fmt.bufPrint(
+            out_chunk,
+            "{{\"header\":{{\"styleSheetId\":\"sheet_{d}\",\"frameId\":\"{s}\",\"sourceURL\":\"\",\"origin\":\"regular\",\"title\":\"\",\"disabled\":false,\"isInline\":true,\"isMutable\":false,\"isConstructed\":false,\"startLine\":0,\"startColumn\":0,\"length\":{d},\"endLine\":{d},\"endColumn\":{d},\"ownerNode\":{d}}}}}",
+            .{ snid, _.frame_id, st_text.len, end_line, end_col, snid },
+        ) catch "";
+    }
+
+    pub fn addPendingCssEvent(*_, method: []const u8, payload: []const u8): bool {
+        if (_.pending_css_event_count >= _.pending_css_events.len) return false;
+        if (_.css_event_storage_used + payload.len > _.css_event_storage.len) return false;
+
+        const start = _.css_event_storage_used;
+        @memcpy(_.css_event_storage[start .. start + payload.len], payload);
+        _.css_event_storage_used += payload.len;
+        const stored_payload = _.css_event_storage[start .. start + payload.len];
+
+        _.pending_css_events[_.pending_css_event_count] = CdpEvent.create(method, stored_payload);
+        _.pending_css_event_count += 1;
+        return true;
+    }
+
+    pub fn onBeforeNavigate(*_) {
+        if (!_.css_enabled) return;
+        let i: usize = 0;
+        while (i < _.tracked_style_count) : (i += 1) {
+            const nid = _.tracked_style_nodes[i];
+            let evt_chunk: [128]u8 = [0; 128];
+            const payload = std.fmt.bufPrint(&evt_chunk, "{{\"styleSheetId\":\"sheet_{d}\"}}", .{nid}) catch "";
+            if (payload.len > 0) {
+                * = _.addPendingCssEvent("CSS.styleSheetRemoved", payload);
+            }
+        }
+        _.tracked_style_count = 0;
+    }
+
+    pub fn onAfterNavigate(*_) {
+        if (!_.css_enabled) return;
+        let snid: usize = 0;
+        while (snid < _.doc.nodes.items.len && _.tracked_style_count < _.tracked_style_nodes.len) : (snid += 1) {
+            const sn = &_.doc.nodes.items[snid];
+            if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style") && _.doc.isConnectedNode(@intCast(snid))) {
+                const current_nid: NodeId = @intCast(snid);
+                let st_buf: [8192]u8 = [0; 8192];
+                const st_text = _.getStyleText(current_nid, &st_buf);
+                const thash = hashStyleBytes(st_text);
+                _.tracked_style_nodes[_.tracked_style_count] = current_nid;
+                _.tracked_style_hashes[_.tracked_style_count] = thash;
+                _.tracked_style_lens[_.tracked_style_count] = st_text.len;
+                _.tracked_style_count += 1;
+
+                let added_buf: [512]u8 = [0; 512];
+                const added_payload = _.formatStyleSheetAddedPayload(snid, st_text, &added_buf);
+                if (added_payload.len > 0) {
+                    * = _.addPendingCssEvent("CSS.styleSheetAdded", added_payload);
+                }
+            }
+        }
+    }
+
+    pub fn syncStyleSheets(*_) {
+        if (!_.css_enabled) return;
+
+        let remaining_nodes: [32]NodeId = [NULL_NODE; 32];
+        let remaining_hashes: [32]u64 = [0; 32];
+        let remaining_lens: [32]usize = [0; 32];
+        let remaining_count: usize = 0;
+
+        let ti: usize = 0;
+        while (ti < _.tracked_style_count) : (ti += 1) {
+            const nid = _.tracked_style_nodes[ti];
+            let is_valid = false;
+            if (nid != NULL_NODE && @as(usize, nid) < _.doc.nodes.items.len) {
+                const sn = &_.doc.nodes.items[@as(usize, nid)];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style") && _.doc.isConnectedNode(nid)) {
+                    is_valid = true;
+                }
+            }
+
+            if (is_valid) {
+                if (remaining_count < remaining_nodes.len) {
+                    remaining_nodes[remaining_count] = nid;
+                    remaining_hashes[remaining_count] = _.tracked_style_hashes[ti];
+                    remaining_lens[remaining_count] = _.tracked_style_lens[ti];
+                    remaining_count += 1;
+                }
+            } else {
+                let evt_chunk: [128]u8 = [0; 128];
+                const payload = std.fmt.bufPrint(&evt_chunk, "{{\"styleSheetId\":\"sheet_{d}\"}}", .{nid}) catch "";
+                if (payload.len > 0) {
+                    * = _.addPendingCssEvent("CSS.styleSheetRemoved", payload);
+                }
+            }
+        }
+
+        let new_tracked_nodes: [32]NodeId = [NULL_NODE; 32];
+        let new_tracked_hashes: [32]u64 = [0; 32];
+        let new_tracked_lens: [32]usize = [0; 32];
+        let new_tracked_count: usize = 0;
+
+        let snid: usize = 0;
+        while (snid < _.doc.nodes.items.len && new_tracked_count < new_tracked_nodes.len) : (snid += 1) {
+            const sn = &_.doc.nodes.items[snid];
+            if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style") && _.doc.isConnectedNode(@intCast(snid))) {
+                const current_nid: NodeId = @intCast(snid);
+                let st_buf: [8192]u8 = [0; 8192];
+                const st_text = _.getStyleText(current_nid, &st_buf);
+                const current_hash = hashStyleBytes(st_text);
+                const current_len = st_text.len;
+
+                let found = false;
+                let found_idx: usize = 0;
+                let ri: usize = 0;
+                while (ri < remaining_count) : (ri += 1) {
+                    if (remaining_nodes[ri] == current_nid) {
+                        found = true;
+                        found_idx = ri;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    let added_buf: [512]u8 = [0; 512];
+                    const added_payload = _.formatStyleSheetAddedPayload(snid, st_text, &added_buf);
+                    if (added_payload.len > 0) {
+                        * = _.addPendingCssEvent("CSS.styleSheetAdded", added_payload);
+                    }
+                } else {
+                    const old_hash = remaining_hashes[found_idx];
+                    const old_len = remaining_lens[found_idx];
+                    if (old_hash != current_hash || old_len != current_len) {
+                        let chg_chunk: [128]u8 = [0; 128];
+                        const chg_payload = std.fmt.bufPrint(&chg_chunk, "{{\"styleSheetId\":\"sheet_{d}\"}}", .{snid}) catch "";
+                        if (chg_payload.len > 0) {
+                            * = _.addPendingCssEvent("CSS.styleSheetChanged", chg_payload);
+                        }
+                    }
+                }
+
+                new_tracked_nodes[new_tracked_count] = current_nid;
+                new_tracked_hashes[new_tracked_count] = current_hash;
+                new_tracked_lens[new_tracked_count] = current_len;
+                new_tracked_count += 1;
+            }
+        }
+
+        @memcpy(_.tracked_style_nodes[0..new_tracked_count], new_tracked_nodes[0..new_tracked_count]);
+        @memcpy(_.tracked_style_hashes[0..new_tracked_count], new_tracked_hashes[0..new_tracked_count]);
+        @memcpy(_.tracked_style_lens[0..new_tracked_count], new_tracked_lens[0..new_tracked_count]);
+        _.tracked_style_count = new_tracked_count;
+    }
+
+    pub fn pollCssEvents(*_, out_events: []CdpEvent): usize {
+        if (!_.css_enabled) return 0;
+        _.syncStyleSheets();
+        const count = @min(_.pending_css_event_count, out_events.len);
+        let i: usize = 0;
+        while (i < count) : (i += 1) {
+            out_events[i] = _.pending_css_events[i];
+        }
+        if (count < _.pending_css_event_count) {
+            const remaining = _.pending_css_event_count - count;
+            let r: usize = 0;
+            while (r < remaining) : (r += 1) {
+                _.pending_css_events[r] = _.pending_css_events[count + r];
+            }
+            _.pending_css_event_count = remaining;
+        } else {
+            _.pending_css_event_count = 0;
+            _.css_event_storage_used = 0;
+        }
+        return count;
+    }
+
+    pub fn setStyleSheetText(*_, node_id: NodeId, text: []const u8): bool {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.doc.nodes.items.len) return false;
+        const sn = &_.doc.nodes.items[@as(usize, node_id)];
+        if (sn.node_type != NodeType.Element || !std.ascii.eqlIgnoreCase(sn.tag_name, "style")) return false;
+
+        while (_.doc.nodes.items[@as(usize, node_id)].first_child != NULL_NODE) {
+            _.doc.removeChild(_.doc.nodes.items[@as(usize, node_id)].first_child);
+        }
+        _.doc.nodes.items[@as(usize, node_id)].text_content = "";
+
+        if (text.len > 0) {
+            const text_dup = _.allocator.dupe(u8, text) catch return false;
+            const text_id = _.doc.createTextNode(text_dup) catch return false;
+            _.doc.appendChild(node_id, text_id);
+        }
+
+        const thash = hashStyleBytes(text);
+        let i: usize = 0;
+        while (i < _.tracked_style_count) : (i += 1) {
+            if (_.tracked_style_nodes[i] == node_id) {
+                _.tracked_style_hashes[i] = thash;
+                _.tracked_style_lens[i] = text.len;
+                break;
+            }
+        }
+
+        return true;
     }
 
     fn formatCdpException(*_, exc: JSValue, out_buf: []u8): usize {
@@ -539,8 +1210,11 @@ pub struct CdpPageSession {
             desc_slice = std.fmt.bufPrint(&desc_buf, "{s}\n", .{exc_str}) catch exc_str;
         }
 
+        let norm_desc_buf: [2048]u8 = [0; 2048];
+        const norm_desc = normalizeExceptionMessage(desc_slice, &norm_desc_buf);
+
         let esc_exc_buf: [2048]u8 = [0; 2048];
-        const esc_exc = escapeJsonString(desc_slice, &esc_exc_buf);
+        const esc_exc = escapeJsonString(norm_desc, &esc_exc_buf);
 
         const err_json = std.fmt.bufPrint(
             out_buf,
@@ -662,7 +1336,20 @@ pub struct CdpPageSession {
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
-                if (r <= 0) break;
+                if (r > 0) continue;
+
+                const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
+                const next_delay = _.ctx.toInt64(pump_res) catch -1;
+                _.ctx.freeValue(pump_res);
+
+                if (next_delay == 0) {
+                    continue;
+                } else if (next_delay > 0) {
+                    const sleep_ms = if (next_delay > 10) @as(u32, 10) else @as(u32, @truncate(@as(u64, @intCast(next_delay))));
+                    * = usleep(sleep_ms * 1000);
+                } else {
+                    break;
+                }
             }
 
             if (_.ctx.promiseState(val) == 1) {
@@ -699,6 +1386,9 @@ pub struct CdpPageSession {
         await_promise: bool,
         out_buf: []u8,
     ): usize {
+        const sync_named_val = _.ctx.eval("(function(){if(typeof __capsurf_sync_named_elements==='function')__capsurf_sync_named_elements();if(typeof __capsurf_pump_timers==='function')__capsurf_pump_timers();})()");
+        _.ctx.freeValue(sync_named_val);
+
         let val: JSValue = undefined;
         if (context_id != null && context_id.? > 1) {
             const expr_val = _.ctx.newString(expr);
@@ -714,7 +1404,20 @@ pub struct CdpPageSession {
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
-                if (r <= 0) break;
+                if (r > 0) continue;
+
+                const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
+                const next_delay = _.ctx.toInt64(pump_res) catch -1;
+                _.ctx.freeValue(pump_res);
+
+                if (next_delay == 0) {
+                    continue;
+                } else if (next_delay > 0) {
+                    const sleep_ms = if (next_delay > 10) @as(u32, 10) else @as(u32, @truncate(@as(u64, @intCast(next_delay))));
+                    * = usleep(sleep_ms * 1000);
+                } else {
+                    break;
+                }
             }
 
             if (_.ctx.promiseState(val) == 1) {
@@ -903,7 +1606,36 @@ pub struct CdpPageSession {
 
     pub fn captureScreenshot(*_, compress_level: u8): ([]const u8)! {
         const count = @max(@as(usize, 1), _.doc.nodeCount());
-        const sheet = StyleSheet{};
+        let css_buf = _.allocator.alloc(u8, 65536) catch null;
+        defer if (css_buf != null) _.allocator.free(css_buf.?);
+        let css_len: usize = 0;
+        if (css_buf != null) {
+            const base_css = "* { box-sizing: border-box; }\n";
+            @memcpy(css_buf.?[0..base_css.len], base_css);
+            css_len = base_css.len;
+            let snid: usize = 0;
+            while (snid < _.doc.nodes.items.len) : (snid += 1) {
+                const sn = &_.doc.nodes.items[snid];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    if (sn.text_content.len > 0) {
+                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                        @memcpy(css_buf.?[css_len..css_len + copy_len], sn.text_content[0..copy_len]);
+                        css_len += copy_len;
+                    }
+                    let child = sn.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const scn = &_.doc.nodes.items[@as(usize, child)];
+                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                            @memcpy(css_buf.?[css_len..css_len + copy_len], scn.text_content[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
+        }
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
         let styles = _.allocator.alloc(ComputedStyle, count)?;
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
@@ -942,13 +1674,81 @@ pub struct CdpPageSession {
         _.focused_node = focused_node;
         _.doc.focused_node = focused_node;
 
+        let canvas_bitmaps: [8]CanvasBitmap = [CanvasBitmap{} ; 8];
+        let canvas_count: usize = 0;
+        if (_.has_document) {
+            const js_cv = "(function() { return (typeof globalThis.__capsurf_get_canvas_bitmaps === 'function') ? globalThis.__capsurf_get_canvas_bitmaps() : ''; })();";
+            const val_cv = _.ctx.eval(js_cv);
+            const cstr_cv = _.ctx.toCString(val_cv);
+            if (cstr_cv.len > 0) {
+                let cv_entries = std.mem.splitAny(u8, cstr_cv, ";");
+                while (cv_entry := cv_entries.next()) {
+                    if (cv_entry.len == 0) continue;
+                    let fields = std.mem.splitAny(u8, cv_entry, ":");
+                    if (nid_str := fields.next()) {
+                        if (w_str := fields.next()) {
+                            if (h_str := fields.next()) {
+                                if (b64_str := fields.next()) {
+                                    const cv_nid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
+                                    const cw = std.fmt.parseInt(u32, w_str, 10) catch 0;
+                                    const ch = std.fmt.parseInt(u32, h_str, 10) catch 0;
+                                    if (cv_nid > 0 && cw > 0 && ch > 0 && canvas_count < 8) {
+                                        const req_len = std.base64.standard.Decoder.calcSizeForSlice(b64_str) catch 0;
+                                        if (req_len > 0) {
+                                            let px_buf = _.allocator.alloc(u8, req_len) catch null;
+                                            if (px_buf != null) {
+                                                * = std.base64.standard.Decoder.decode(px_buf.?, b64_str) catch {};
+                                                canvas_bitmaps[canvas_count] = CanvasBitmap{
+                                                    node_id: cv_nid,
+                                                    width: cw,
+                                                    height: ch,
+                                                    pixels: px_buf.?,
+                                                };
+                                                canvas_count += 1;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val_cv);
+        }
+        defer {
+            let i: usize = 0;
+            while (i < canvas_count) : (i += 1) {
+                if (canvas_bitmaps[i].pixels.len > 0) {
+                    _.allocator.free(canvas_bitmaps[i].pixels);
+                }
+            }
+        }
+
+        let bg_color = CssColor.rgb(255, 255, 255);
+        if (_.doc.root_element != NULL_NODE && @as(usize, _.doc.root_element) < count) {
+            const root_bg = styles[@as(usize, _.doc.root_element)].background_color;
+            if (root_bg.a > 0) {
+                bg_color = root_bg;
+            } else {
+                const body_id = Matcher.querySelector(&_.doc, "body");
+                if (body_id != NULL_NODE && @as(usize, body_id) < count) {
+                    const body_bg = styles[@as(usize, body_id)].background_color;
+                    if (body_bg.a > 0) {
+                        bg_color = body_bg;
+                    }
+                }
+            }
+        }
+
         const opts = ScreenshotOptions{
             viewport_w: vw,
             viewport_h: vh,
             compress_level: if (compress_level <= 9) compress_level else 6,
-            clear_color: CssColor.rgb(255, 255, 255),
+            clear_color: bg_color,
             focused_node: focused_node,
             caret_pos: caret_pos,
+            canvas_bitmaps: canvas_bitmaps[0..canvas_count],
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
@@ -1016,10 +1816,17 @@ pub struct CdpPageSession {
                 const fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
                 const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
 
+                const is_font = std.mem.indexOf(u8, fetch_url, ".woff") != null ||
+                                std.mem.indexOf(u8, fetch_url, ".ttf") != null ||
+                                std.mem.indexOf(u8, fetch_url, ".otf") != null ||
+                                std.mem.startsWith(u8, fetch_mime, "font/");
+                const res_type = if (is_font) "Font" else "Fetch";
+                const init_type = if (is_font) "parser" else "script";
+
                 const req_json = std.fmt.bufPrint(
                     &_.net_req_event_buf,
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"Fetch\",\"frameId\":\"{s}\"}}",
-                    .{ i + 1, lid, _.url, fetch_url, fid },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+                    .{ i + 1, lid, _.url, fetch_url, init_type, res_type, fid },
                 ) catch "";
                 if (req_json.len > 0) {
                     out_events[ev_idx] = CdpEvent.create("Network.requestWillBeSent", req_json);
@@ -1028,8 +1835,8 @@ pub struct CdpPageSession {
 
                 const resp_json = std.fmt.bufPrint(
                     &_.net_resp_event_buf,
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"Fetch\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
-                    .{ i + 1, lid, fetch_url, fetch_mime, fid },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                    .{ i + 1, lid, res_type, fetch_url, fetch_mime, fid },
                 ) catch "";
                 if (resp_json.len > 0) {
                     out_events[ev_idx] = CdpEvent.create("Network.responseReceived", resp_json);
@@ -1397,10 +2204,11 @@ pub struct CdpPageSession {
     }
 
     pub fn formatFrameNavigatedEvent(*_, url: []const u8): []const u8 {
+        const mime = if (std.mem.indexOf(u8, url, ".svg") != null) "image/svg+xml" else "text/html";
         return std.fmt.bufPrint(
             &_.page_frame_event_buf,
-            "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"text/html\"}}}}",
-            .{ _.frame_id, _.loader_id, url, url },
+            "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"{s}\"}}}}",
+            .{ _.frame_id, _.loader_id, url, url, mime },
         ) catch "{}";
     }
 
@@ -1448,6 +2256,334 @@ pub struct CdpPageSession {
             .{ total_seq, sx, sy, esc_url, esc_title },
         ) catch return null;
         return res;
+    }
+
+    pub fn getFontFacesJson(*_, out_buf: []u8): ([]const u8)? {
+        let families: [16]RegisteredFamily = [RegisteredFamily{}; 16];
+        let family_count: usize = 0;
+
+        let css_buf = _.allocator.alloc(u8, 65536) catch null;
+        defer if (css_buf != null) _.allocator.free(css_buf.?);
+        let css_len: usize = 0;
+        if (css_buf != null) {
+            let snid: usize = 0;
+            while (snid < _.doc.nodes.items.len) : (snid += 1) {
+                const sn = &_.doc.nodes.items[snid];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    if (sn.text_content.len > 0) {
+                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                        @memcpy(css_buf.?[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
+                        css_len += copy_len;
+                    }
+                    let child = sn.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const scn = &_.doc.nodes.items[@as(usize, child)];
+                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                            @memcpy(css_buf.?[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (css_len == 0 && _.raw_html.len > 0) {
+            let s_idx: usize = 0;
+            while (s_idx < _.raw_html.len) {
+                if (st_start := std.mem.indexOfPos(u8, _.raw_html, s_idx, "<style")) {
+                    if (tag_close := std.mem.indexOfPos(u8, _.raw_html, st_start, ">")) {
+                        if (st_end := std.mem.indexOfPos(u8, _.raw_html, tag_close + 1, "</style>")) {
+                            const st_text = _.raw_html[tag_close + 1 .. st_end];
+                            if (css_buf != null) {
+                                const copy_len = @min(st_text.len, css_buf.?.len - css_len);
+                                @memcpy(css_buf.?[css_len .. css_len + copy_len], st_text[0..copy_len]);
+                                css_len += copy_len;
+                            }
+                            s_idx = st_end + 8;
+                        } else break;
+                    } else break;
+                } else break;
+            }
+        }
+
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
+        if (full_css.len > 0) {
+            let search_idx: usize = 0;
+            while (search_idx < full_css.len) {
+                if (ff_pos := std.mem.indexOfPos(u8, full_css, search_idx, "@font-face")) {
+                    const open_brace = std.mem.indexOfPos(u8, full_css, ff_pos, "{");
+                    if (open_brace == null) break;
+                    const close_brace = std.mem.indexOfPos(u8, full_css, open_brace.?, "}");
+                    if (close_brace == null) break;
+                    const block = full_css[open_brace.? + 1 .. close_brace.?];
+                    search_idx = close_brace.? + 1;
+
+                    let fam_name: []const u8 = "";
+                    if (fam_pos := std.mem.indexOf(u8, block, "font-family")) {
+                        if (colon_pos := std.mem.indexOfPos(u8, block, fam_pos, ":")) {
+                            let end_pos = block.len;
+                            if (semi_pos := std.mem.indexOfPos(u8, block, colon_pos, ";")) {
+                                end_pos = semi_pos;
+                            }
+                            fam_name = std.mem.trim(u8, block[colon_pos + 1 .. end_pos], " \t\r\n\"'");
+                        }
+                    }
+                    if (fam_name.len == 0) continue;
+
+                    let src_str: []const u8 = "";
+                    if (src_pos := std.mem.indexOf(u8, block, "src")) {
+                        if (colon_pos := std.mem.indexOfPos(u8, block, src_pos, ":")) {
+                            let end_pos = block.len;
+                            if (semi_pos := std.mem.indexOfPos(u8, block, colon_pos, ";")) {
+                                end_pos = semi_pos;
+                            }
+                            src_str = std.mem.trim(u8, block[colon_pos + 1 .. end_pos], " \t\r\n");
+                        }
+                    }
+
+                    let weight_str: []const u8 = "";
+                    if (w_pos := std.mem.indexOf(u8, block, "font-weight")) {
+                        if (colon_pos := std.mem.indexOfPos(u8, block, w_pos, ":")) {
+                            let end_pos = block.len;
+                            if (semi_pos := std.mem.indexOfPos(u8, block, colon_pos, ";")) {
+                                end_pos = semi_pos;
+                            }
+                            weight_str = std.mem.trim(u8, block[colon_pos + 1 .. end_pos], " \t\r\n");
+                        }
+                    }
+
+                    let urange_str: []const u8 = "";
+                    if (ur_pos := std.mem.indexOf(u8, block, "unicode-range")) {
+                        if (colon_pos := std.mem.indexOfPos(u8, block, ur_pos, ":")) {
+                            let end_pos = block.len;
+                            if (semi_pos := std.mem.indexOfPos(u8, block, colon_pos, ";")) {
+                                end_pos = semi_pos;
+                            }
+                            urange_str = std.mem.trim(u8, block[colon_pos + 1 .. end_pos], " \t\r\n");
+                        }
+                    }
+
+                    let has_wght_axis = false;
+                    if (std.mem.indexOfScalar(u8, weight_str, ' ') != null) {
+                        has_wght_axis = true;
+                    }
+                    if (std.mem.indexOf(u8, src_str, "var") != null || std.mem.indexOf(u8, src_str, "Var") != null) {
+                        has_wght_axis = true;
+                    }
+
+                    let face_weight: u32 = 400;
+                    if (!has_wght_axis) {
+                        if (parsed_w := std.fmt.parseInt(u32, weight_str, 10) catch null) {
+                            face_weight = parsed_w;
+                        } else if (std.ascii.eqlIgnoreCase(weight_str, "bold")) {
+                            face_weight = 700;
+                        }
+                    }
+
+                    if (urange_str.len > 0) {
+                        let min_cp: u32 = 0;
+                        let max_cp: u32 = 0;
+                        if (parseUnicodeRange(urange_str, &min_cp, &max_cp)) {
+                            if (!documentHasCodePointInRange(&_.doc, min_cp, max_cp)) {
+                                continue;
+                            }
+                        }
+                    }
+
+                    let target_idx = family_count;
+                    let fi: usize = 0;
+                    while (fi < family_count) : (fi += 1) {
+                        const existing = families[fi].family[0..families[fi].family_len];
+                        if (std.mem.eql(u8, existing, fam_name)) {
+                            target_idx = fi;
+                            break;
+                        }
+                    }
+
+                    if (target_idx < families.len) {
+                        let fam_entry = &families[target_idx];
+                        if (target_idx == family_count) {
+                            const c_len = @min(fam_name.len, fam_entry.family.len);
+                            @memcpy(fam_entry.family[0..c_len], fam_name[0..c_len]);
+                            fam_entry.family_len = c_len;
+                            fam_entry.face_count = 0;
+                            family_count += 1;
+                        }
+                        if (fam_entry.face_count < fam_entry.faces.len) {
+                            fam_entry.faces[fam_entry.face_count] = RegisteredFace{
+                                weight: face_weight,
+                                has_wght_axis: has_wght_axis,
+                            };
+                            fam_entry.face_count += 1;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Script fallbacks for Arabic, Hebrew, CJK
+        if (documentHasCodePointInRange(&_.doc, 0x0600, 0x06FF)) {
+            let found_ar = false;
+            let fi: usize = 0;
+            while (fi < family_count) : (fi += 1) {
+                if (std.mem.eql(u8, families[fi].family[0..families[fi].family_len], "Noto Sans Arabic")) {
+                    found_ar = true;
+                    break;
+                }
+            }
+            if (!found_ar && family_count < families.len) {
+                const ar_name = "Noto Sans Arabic";
+                @memcpy(families[family_count].family[0..ar_name.len], ar_name);
+                families[family_count].family_len = ar_name.len;
+                families[family_count].faces[0] = RegisteredFace{ weight: 400, has_wght_axis: false };
+                families[family_count].face_count = 1;
+                family_count += 1;
+            }
+        }
+        if (documentHasCodePointInRange(&_.doc, 0x0590, 0x05FF)) {
+            let found_he = false;
+            let fi: usize = 0;
+            while (fi < family_count) : (fi += 1) {
+                if (std.mem.eql(u8, families[fi].family[0..families[fi].family_len], "Noto Sans Hebrew")) {
+                    found_he = true;
+                    break;
+                }
+            }
+            if (!found_he && family_count < families.len) {
+                const he_name = "Noto Sans Hebrew";
+                @memcpy(families[family_count].family[0..he_name.len], he_name);
+                families[family_count].family_len = he_name.len;
+                families[family_count].faces[0] = RegisteredFace{ weight: 400, has_wght_axis: false };
+                families[family_count].face_count = 1;
+                family_count += 1;
+            }
+        }
+        if (documentHasCodePointInRange(&_.doc, 0x4E00, 0x9FFF)) {
+            let found_cjk = false;
+            let fi: usize = 0;
+            while (fi < family_count) : (fi += 1) {
+                if (std.mem.eql(u8, families[fi].family[0..families[fi].family_len], "Noto Sans CJK SC")) {
+                    found_cjk = true;
+                    break;
+                }
+            }
+            if (!found_cjk && family_count < families.len) {
+                const cjk_name = "Noto Sans CJK SC";
+                @memcpy(families[family_count].family[0..cjk_name.len], cjk_name);
+                families[family_count].family_len = cjk_name.len;
+                families[family_count].faces[0] = RegisteredFace{ weight: 400, has_wght_axis: false };
+                families[family_count].face_count = 1;
+                family_count += 1;
+            }
+        }
+
+        let pos: usize = 0;
+        const prefix = "{\"byTarget\":{\"";
+        @memcpy(out_buf[pos .. pos + prefix.len], prefix);
+        pos += prefix.len;
+
+        const tid = _.target_id;
+        @memcpy(out_buf[pos .. pos + tid.len], tid);
+        pos += tid.len;
+
+        const mid = "\":{\"json\":\"[";
+        @memcpy(out_buf[pos .. pos + mid.len], mid);
+        pos += mid.len;
+
+        let fam_i: usize = 0;
+        while (fam_i < family_count) : (fam_i += 1) {
+            const fam = &families[fam_i];
+            if (fam_i > 0) {
+                out_buf[pos] = ',';
+                pos += 1;
+            }
+            const f_name = fam.family[0..fam.family_len];
+            const fam_header = std.fmt.bufPrint(
+                out_buf[pos..],
+                "{{\\\"family\\\":\\\"{s}\\\",\\\"faceCount\\\":{d},\\\"faces\\\":[",
+                .{ f_name, fam.face_count },
+            ) catch return null;
+            pos += fam_header.len;
+
+            let face_i: usize = 0;
+            while (face_i < fam.face_count) : (face_i += 1) {
+                const face = &fam.faces[face_i];
+                if (face_i > 0) {
+                    out_buf[pos] = ',';
+                    pos += 1;
+                }
+                const axis_count: u32 = if (face.has_wght_axis) 1 else 0;
+                const axis_str: []const u8 = if (face.has_wght_axis) "true" else "false";
+                const face_json = std.fmt.bufPrint(
+                    out_buf[pos..],
+                    "{{\\\"weight\\\":{d},\\\"style\\\":\\\"Normal\\\",\\\"width\\\":1.0,\\\"hasWghtAxis\\\":{s},\\\"axisCount\\\":{d}}}",
+                    .{ face.weight, axis_str, axis_count },
+                ) catch return null;
+                pos += face_json.len;
+            }
+
+            const fam_tail = "]}";
+            @memcpy(out_buf[pos .. pos + fam_tail.len], fam_tail);
+            pos += fam_tail.len;
+        }
+
+        const suffix = "]\"}}}";
+        @memcpy(out_buf[pos .. pos + suffix.len], suffix);
+        pos += suffix.len;
+
+        return out_buf[0..pos];
+    }
+
+    pub fn runGC(*_) {
+        _.rt.runGC();
+    }
+
+    pub fn updateLayoutMetrics(*_, out_sx: *f32, out_sy: *f32, out_cw: *f32, out_ch: *f32) {
+        if (!_.has_document) {
+            out_sx.* = 0.0;
+            out_sy.* = 0.0;
+            out_cw.* = _.viewport_width;
+            out_ch.* = _.viewport_height;
+            return;
+        }
+
+        let max_w: f32 = _.viewport_width;
+        let max_h: f32 = _.viewport_height;
+        let bi: usize = 0;
+        while (bi < _.layout.boxes.items.len) : (bi += 1) {
+            const b = &_.layout.boxes.items[bi];
+            const r = b.rect.x + b.rect.width;
+            if (r > max_w) max_w = r;
+            const bot = b.rect.y + b.rect.height;
+            if (bot > max_h) max_h = bot;
+        }
+
+        const v = _.ctx.eval("[window.scrollX || 0, window.scrollY || 0].join(',')");
+        defer _.ctx.freeValue(v);
+        if (!jsIsException(v)) {
+            const s = _.ctx.toCString(v);
+            if (s.len > 0) {
+                let it = std.mem.splitScalar(u8, s, ',');
+                if (sx_str := it.next()) {
+                    if (sx_val := std.fmt.parseFloat(f32, sx_str) catch null) {
+                        _.scroll_x = sx_val;
+                    }
+                }
+                if (sy_str := it.next()) {
+                    if (sy_val := std.fmt.parseFloat(f32, sy_str) catch null) {
+                        _.scroll_y = sy_val;
+                    }
+                }
+            }
+        }
+
+        out_sx.* = _.scroll_x;
+        out_sy.* = _.scroll_y;
+        out_cw.* = max_w;
+        out_ch.* = max_h;
     }
 
     pub fn setControlValueJson(*_, params_json: []const u8, out_buf: []u8): ([]const u8)? {

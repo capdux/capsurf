@@ -11,6 +11,13 @@ import { PngCodec } from "./png.cp";
 pub type Color = CssColor;
 pub type PaintStyle = ResolvedPaintStyle;
 
+pub struct CanvasBitmap {
+    node_id: NodeId = NULL_NODE,
+    width: u32 = 0,
+    height: u32 = 0,
+    pixels: []const u8 = [],
+}
+
 pub struct ScreenshotOptions {
     viewport_w: u32 = 1280;
     viewport_h: u32 = 720;
@@ -19,6 +26,7 @@ pub struct ScreenshotOptions {
     clear_color: CssColor = CssColor.rgb(255, 255, 255);
     focused_node: NodeId = NULL_NODE;
     caret_pos: usize = 0;
+    canvas_bitmaps: []const CanvasBitmap = [],
 }
 
 pub struct Canvas {
@@ -94,17 +102,25 @@ pub struct Canvas {
         const half_h = rect.height * 0.5;
         const r = @min(style.border_radius, @min(half_w, half_h));
 
+        const has_gradient = style.conic_gradient.has_gradient;
+
         let py = y0;
         while (py < y1) : (py += 1) {
             let px = x0;
             while (px < x1) : (px += 1) {
-                const dx = @abs((@as(f32, @floatFromInt(px)) + 0.5) - cx) - (half_w - r);
-                const dy = @abs((@as(f32, @floatFromInt(py)) + 0.5) - cy) - (half_h - r);
+                const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+                const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+                const dx = @abs(px_f - cx) - (half_w - r);
+                const dy = @abs(py_f - cy) - (half_h - r);
                 const out_dist = @sqrt(@max(dx, 0.0) * @max(dx, 0.0) + @max(dy, 0.0) * @max(dy, 0.0)) + @min(@max(dx, dy), 0.0) - r;
 
                 if (out_dist < 0.5) {
                     const edge_cov = std.math.clamp(0.5 - out_dist, 0.0, 1.0);
-                    let final_color = style.bg_color;
+                    let final_color = if (has_gradient)
+                        style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
+                    else
+                        style.bg_color;
+
                     const neg_bw = 0.0 - style.border_width;
                     if (style.border_width > 0.0 && out_dist >= neg_bw) {
                         final_color = style.border_color;
@@ -144,6 +160,67 @@ pub struct Canvas {
             cursor_x += 8;
         }
     }
+
+    fn blitRgba(*_, dst_x: i32, dst_y: i32, src_pixels: []const u8, src_w: u32, src_h: u32) {
+        let sy: u32 = 0;
+        while (sy < src_h) : (sy += 1) {
+            let py = dst_y + @as(i32, @intCast(sy));
+            if (py < 0 || py >= @as(i32, @intCast(_.height))) continue;
+            let sx: u32 = 0;
+            while (sx < src_w) : (sx += 1) {
+                let px = dst_x + @as(i32, @intCast(sx));
+                if (px < 0 || px >= @as(i32, @intCast(_.width))) continue;
+                let s_idx = (@as(usize, sy) * @as(usize, src_w) + @as(usize, sx)) * 4;
+                if (s_idx + 3 >= src_pixels.len) break;
+                let a = src_pixels[s_idx + 3];
+                if (a == 0) continue;
+                if (a == 255) {
+                    let d_idx = (@as(usize, @intCast(py)) * @as(usize, _.width) + @as(usize, @intCast(px))) * 4;
+                    _.pixels[d_idx] = src_pixels[s_idx];
+                    _.pixels[d_idx + 1] = src_pixels[s_idx + 1];
+                    _.pixels[d_idx + 2] = src_pixels[s_idx + 2];
+                    _.pixels[d_idx + 3] = 255;
+                } else {
+                    let c = CssColor.rgba(src_pixels[s_idx], src_pixels[s_idx + 1], src_pixels[s_idx + 2], a);
+                    _.blendPixel(px, py, c);
+                }
+            }
+        }
+    }
+
+    fn blitScaledRgba(*_, dst_x: i32, dst_y: i32, dst_w: u32, dst_h: u32, src_pixels: []const u8, src_w: u32, src_h: u32) {
+        if (dst_w == 0 || dst_h == 0 || src_w == 0 || src_h == 0) return;
+        if (dst_w == src_w && dst_h == src_h) {
+            _.blitRgba(dst_x, dst_y, src_pixels, src_w, src_h);
+            return;
+        }
+        let dy: u32 = 0;
+        while (dy < dst_h) : (dy += 1) {
+            let py = dst_y + @as(i32, @intCast(dy));
+            if (py < 0 || py >= @as(i32, @intCast(_.height))) continue;
+            let sy = (dy * src_h) / dst_h;
+            let dx: u32 = 0;
+            while (dx < dst_w) : (dx += 1) {
+                let px = dst_x + @as(i32, @intCast(dx));
+                if (px < 0 || px >= @as(i32, @intCast(_.width))) continue;
+                let sx = (dx * src_w) / dst_w;
+                let s_idx = (@as(usize, sy) * @as(usize, src_w) + @as(usize, sx)) * 4;
+                if (s_idx + 3 >= src_pixels.len) break;
+                let a = src_pixels[s_idx + 3];
+                if (a == 0) continue;
+                if (a == 255) {
+                    let d_idx = (@as(usize, @intCast(py)) * @as(usize, _.width) + @as(usize, @intCast(px))) * 4;
+                    _.pixels[d_idx] = src_pixels[s_idx];
+                    _.pixels[d_idx + 1] = src_pixels[s_idx + 1];
+                    _.pixels[d_idx + 2] = src_pixels[s_idx + 2];
+                    _.pixels[d_idx + 3] = 255;
+                } else {
+                    let c = CssColor.rgba(src_pixels[s_idx], src_pixels[s_idx + 1], src_pixels[s_idx + 2], a);
+                    _.blendPixel(px, py, c);
+                }
+            }
+        }
+    }
 }
 
 fn paintNodeRecursive(
@@ -168,8 +245,32 @@ fn paintNodeRecursive(
     const style = &styles[@as(usize, node_id)];
     const paint_style = style.extractPaintStyle(r.width, 16.0, vw, vh);
 
+    let effective_paint_style = paint_style;
+    if (effective_paint_style.bg_color.a == 0 && (node.hasTag("rect") || node.hasTag("circle") || node.hasTag("path") || node.hasTag("polygon"))) {
+        if (fa := node.getAttribute("fill")) {
+            if (std.ascii.eqlIgnoreCase(fa, "currentcolor")) {
+                effective_paint_style.bg_color = style.color;
+            } else if (c := CssColor.parse(fa)) {
+                effective_paint_style.bg_color = c;
+            }
+        }
+    }
+
     if (node.node_type == NodeType.Element) {
-        canvas.paintBox(r, paint_style);
+        canvas.paintBox(r, effective_paint_style);
+
+        let cbi: usize = 0;
+        while (cbi < opts.canvas_bitmaps.len) : (cbi += 1) {
+            const cb = &opts.canvas_bitmaps[cbi];
+            if (cb.node_id == node_id && cb.pixels.len >= @as(usize, cb.width) * @as(usize, cb.height) * 4) {
+                let dst_w = @as(u32, @intFromFloat(@max(0.0, r.width)));
+                let dst_h = @as(u32, @intFromFloat(@max(0.0, r.height)));
+                if (dst_w == 0) dst_w = cb.width;
+                if (dst_h == 0) dst_h = cb.height;
+                canvas.blitScaledRgba(@as(i32, @intFromFloat(r.x)), @as(i32, @intFromFloat(r.y)), dst_w, dst_h, cb.pixels, cb.width, cb.height);
+                break;
+            }
+        }
         
         let display_text = node.text_content;
         const tag = node.tag_name;
@@ -225,9 +326,10 @@ pub fn renderDocumentToPng(
     const vw: f32 = @floatFromInt(opts.viewport_w);
     const vh: f32 = @floatFromInt(opts.viewport_h);
 
-    // 从根节点 (NodeId = 1) 开始前序遍历绘制整棵 DOM 树
-    if (doc.nodes.items.len > 1) {
-        paintNodeRecursive(&canvas, doc, styles, rects, 1, vw, vh, &opts);
+    // 从文档根元素开始前序遍历绘制整棵 DOM 树
+    const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
+    if (root_id < doc.nodes.items.len) {
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts);
     }
 
     // 直接桥接到 png.cp 的编码函数并透传指定的 compress_level

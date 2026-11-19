@@ -6,7 +6,7 @@
 // Resolves !important, inline style, W3C Selectors Level 4 specificity, and source order
 // in a single register comparison: `if (new_weight >= existing_weight)`.
 
-import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
+import { Document, NodeData, NodeType, NodeId, NULL_NODE, StringSlice } from "../dom/dom.cp";
 import { SelectorList, Matcher } from "./matcher.cp";
 import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
@@ -137,6 +137,10 @@ pub struct Display {
 
     fn isInline(): bool {
         return !_.is_keyword && _.pair.outside == DisplayOutside.Inline && _.pair.inside == DisplayInside.Flow;
+    }
+
+    fn isInlineBlock(): bool {
+        return !_.is_keyword && _.pair.outside == DisplayOutside.Inline && _.pair.inside == DisplayInside.FlowRoot;
     }
 }
 
@@ -279,6 +283,101 @@ pub struct LengthPercentageOrAuto {
         };
     }
 
+    static fn extractAnchorFallback(raw: []const u8): StringSlice? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        let inner: []const u8 = "";
+        if (std.ascii.startsWithIgnoreCase(s, "anchor-size(") && s.len > 12 && s[s.len - 1] == ')') {
+            inner = s[12 .. s.len - 1];
+        } else if (std.ascii.startsWithIgnoreCase(s, "anchor(") && s.len > 7 && s[s.len - 1] == ')') {
+            inner = s[7 .. s.len - 1];
+        } else {
+            return null;
+        }
+
+        let depth: i32 = 0;
+        let last_comma: usize = 0;
+        let found_comma = false;
+        let i: usize = 0;
+        while (i < inner.len) : (i += 1) {
+            const c = inner[i];
+            if (c == '(') {
+                depth += 1;
+            } else if (c == ')') {
+                depth -= 1;
+            } else if (c == ',' && depth == 0) {
+                last_comma = i;
+                found_comma = true;
+            }
+        }
+
+        if (found_comma && last_comma + 1 < inner.len) {
+            const fallback = std.mem.trim(u8, inner[last_comma + 1 ..], " \t\r\n");
+            if (fallback.len > 0) {
+                return fallback;
+            }
+        }
+        return null;
+    }
+
+    static fn substituteAnchorFallbacks(expr: []const u8, out_buf: []u8): []const u8 {
+        let in_idx: usize = 0;
+        let out_idx: usize = 0;
+        while (in_idx < expr.len) {
+            let anchor_kind: usize = 0;
+            if (in_idx + 12 <= expr.len && std.ascii.eqlIgnoreCase(expr[in_idx .. in_idx + 12], "anchor-size(")) {
+                anchor_kind = 2;
+            } else if (in_idx + 7 <= expr.len && std.ascii.eqlIgnoreCase(expr[in_idx .. in_idx + 7], "anchor(")) {
+                anchor_kind = 1;
+            }
+
+            if (anchor_kind > 0) {
+                const open_paren = if (anchor_kind == 2) in_idx + 11 else in_idx + 6;
+                let depth: i32 = 1;
+                let close_paren = open_paren + 1;
+                let last_comma: usize = 0;
+                let found_comma = false;
+                while (close_paren < expr.len && depth > 0) : (close_paren += 1) {
+                    const ch = expr[close_paren];
+                    if (ch == '(') {
+                        depth += 1;
+                    } else if (ch == ')') {
+                        depth -= 1;
+                        if (depth == 0) break;
+                    } else if (ch == ',' && depth == 1) {
+                        last_comma = close_paren;
+                        found_comma = true;
+                    }
+                }
+
+                if (depth == 0) {
+                    let fallback: []const u8 = "0px";
+                    if (found_comma && last_comma + 1 < close_paren) {
+                        const trimmed_fb = std.mem.trim(u8, expr[last_comma + 1 .. close_paren], " \t\r\n");
+                        if (trimmed_fb.len > 0) {
+                            fallback = trimmed_fb;
+                        }
+                    }
+                    let fi: usize = 0;
+                    while (fi < fallback.len) : (fi += 1) {
+                        if (out_idx < out_buf.len) {
+                            out_buf[out_idx] = fallback[fi];
+                            out_idx += 1;
+                        }
+                    }
+                    in_idx = close_paren + 1;
+                    continue;
+                }
+            }
+
+            if (out_idx < out_buf.len) {
+                out_buf[out_idx] = expr[in_idx];
+                out_idx += 1;
+            }
+            in_idx += 1;
+        }
+        return out_buf[0..out_idx];
+    }
+
     static fn parse(raw: []const u8): LengthPercentageOrAuto? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (s.len == 0) return null;
@@ -293,6 +392,12 @@ pub struct LengthPercentageOrAuto {
                 is_calc: true,
                 calc_expr: s,
             };
+        }
+        if (std.ascii.startsWithIgnoreCase(s, "anchor(") || std.ascii.startsWithIgnoreCase(s, "anchor-size(")) {
+            if (fb := LengthPercentageOrAuto.extractAnchorFallback(s)) {
+                return LengthPercentageOrAuto.parse(fb);
+            }
+            return LengthPercentageOrAuto.zeroPx();
         }
         if (len_v := CssLength.parse(s)) {
             return LengthPercentageOrAuto {
@@ -314,7 +419,12 @@ pub struct LengthPercentageOrAuto {
             return 0.0;
         }
         if (_.is_calc) {
-            if (v := CssCalc.evalPx(_.calc_expr, @as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h))) {
+            let expr = _.calc_expr;
+            let buf: [512]u8 = std.mem.zeroes([512]u8);
+            if (std.mem.indexOf(u8, expr, "anchor") != null) {
+                expr = LengthPercentageOrAuto.substituteAnchorFallbacks(expr, &buf);
+            }
+            if (v := CssCalc.evalPx(expr, @as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h))) {
                 return @floatCast(v);
             }
             return 0.0;
@@ -375,13 +485,309 @@ pub const PROP_Z_INDEX: usize = 38;
 pub const PROP_GRID_COLS: usize = 39;
 pub const PROP_BORDER_COLOR: usize = 40;
 pub const PROP_BORDER_RADIUS: usize = 41;
-pub const TOTAL_PROP_SLOTS: usize = 42;
+pub const PROP_LINE_HEIGHT: usize = 42;
+pub const PROP_GRID_COL_SPAN: usize = 43;
+pub const PROP_BG_IMAGE: usize = 44;
+pub const PROP_FONT_FAMILY: usize = 45;
+pub const PROP_FONT_WEIGHT: usize = 46;
+pub const TOTAL_PROP_SLOTS: usize = 47;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     right: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     bottom: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     left: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+}
+
+pub struct ConicGradientStop {
+    color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    angle_deg: f32 = 0.0;
+}
+
+pub struct ConicGradient {
+    has_gradient: bool = false;
+    from_angle_deg: f32 = 0.0;
+    center_x_pct: f32 = 50.0;
+    center_y_pct: f32 = 50.0;
+    center_x_px: f32 = 0.0;
+    center_y_px: f32 = 0.0;
+    center_x_is_px: bool = false;
+    center_y_is_px: bool = false;
+    stops: [16]ConicGradientStop = [ConicGradientStop{}; 16];
+    stop_count: usize = 0;
+
+    fn sampleAt(
+        box_x: f32,
+        box_y: f32,
+        box_w: f32,
+        box_h: f32,
+        px: f32,
+        py: f32,
+    ): CssColor {
+        if (!_.has_gradient || _.stop_count == 0) {
+            return CssColor.rgba(0, 0, 0, 0);
+        }
+        if (_.stop_count == 1) {
+            return _.stops[0].color;
+        }
+
+        const cx = if (_.center_x_is_px) (box_x + _.center_x_px) else (box_x + (_.center_x_pct / 100.0) * box_w);
+        const cy = if (_.center_y_is_px) (box_y + _.center_y_px) else (box_y + (_.center_y_pct / 100.0) * box_h);
+
+        const dx = px - cx;
+        const dy = py - cy;
+
+        if (@abs(dx) < 0.00001 && @abs(dy) < 0.00001) {
+            return _.stops[0].color;
+        }
+
+        // CSS conic-gradient starts at 12 o'clock (0deg, up) and progresses clockwise.
+        // Screen coordinates: +X is right, +Y is down (so up is negative Y).
+        // sin(theta) = dx / r, cos(theta) = -dy / r.
+        // atan2(y, x) takes (sin, cos) -> (dx, -dy).
+        const rad = std.math.atan2(dx, 0.0 - dy);
+        let deg = rad * 180.0 / std.math.pi;
+        if (deg < 0.0) deg += 360.0;
+        if (deg >= 360.0) deg -= 360.0;
+
+        let rel_deg = deg - _.from_angle_deg;
+        while (rel_deg < 0.0) rel_deg += 360.0;
+        while (rel_deg >= 360.0) rel_deg -= 360.0;
+
+        if (rel_deg <= _.stops[0].angle_deg) {
+            return _.stops[0].color;
+        }
+        if (rel_deg >= _.stops[_.stop_count - 1].angle_deg) {
+            return _.stops[_.stop_count - 1].color;
+        }
+
+        let i: usize = 1;
+        while (i < _.stop_count) : (i += 1) {
+            if (rel_deg <= _.stops[i].angle_deg) {
+                const c0 = _.stops[i - 1].color;
+                const c1 = _.stops[i].color;
+                const span = _.stops[i].angle_deg - _.stops[i - 1].angle_deg;
+                if (span <= 0.0001) {
+                    return c1;
+                }
+                const t = (rel_deg - _.stops[i - 1].angle_deg) / span;
+                return c0.mix(c1, @as(f64, t));
+            }
+        }
+
+        return _.stops[_.stop_count - 1].color;
+    }
+
+    static fn parse(val_str: []const u8): ConicGradient? {
+        let cg_pos: usize = 0;
+        let found = false;
+        if (pos := std.mem.indexOf(u8, val_str, "conic-gradient")) {
+            cg_pos = pos;
+            found = true;
+        } else if (pos_upper := std.mem.indexOf(u8, val_str, "CONIC-GRADIENT")) {
+            cg_pos = pos_upper;
+            found = true;
+        }
+        if (!found) return null;
+
+        const paren_open = std.mem.indexOfScalarPos(u8, val_str, cg_pos + 14, '(') orelse return null;
+        const args_start = paren_open + 1;
+
+        let paren_depth: usize = 1;
+        let i = args_start;
+        let args_end: usize = 0;
+        while (i < val_str.len) : (i += 1) {
+            if (val_str[i] == '(') {
+                paren_depth += 1;
+            } else if (val_str[i] == ')') {
+                paren_depth -= 1;
+                if (paren_depth == 0) {
+                    args_end = i;
+                    break;
+                }
+            }
+        }
+        if (args_end <= args_start) {
+            return null;
+        }
+
+        const args_content = val_str[args_start..args_end];
+        let items: [16][]const u8 = [""; 16];
+        let item_count: usize = 0;
+
+        let item_start: usize = 0;
+        let pdepth: usize = 0;
+        let idx: usize = 0;
+        while (idx <= args_content.len) : (idx += 1) {
+            const is_end = (idx == args_content.len);
+            const c: u8 = if (is_end) 0 else args_content[idx];
+            if (!is_end && c == '(') {
+                pdepth += 1;
+            } else if (!is_end && c == ')') {
+                if (pdepth > 0) pdepth -= 1;
+            } else if (is_end || (c == ',' && pdepth == 0)) {
+                const item = std.mem.trim(u8, args_content[item_start..idx], " \t\r\n");
+                if (item.len > 0 && item_count < 16) {
+                    items[item_count] = item;
+                    item_count += 1;
+                }
+                item_start = idx + 1;
+            }
+        }
+
+        if (item_count == 0) {
+            return null;
+        }
+
+        let cg = ConicGradient{
+            has_gradient: true,
+        };
+
+        let first_is_header = false;
+        const it0 = items[0];
+        if (std.mem.startsWith(u8, it0, "from ") || std.mem.startsWith(u8, it0, "at ")) {
+            first_is_header = true;
+            let hit = std.mem.tokenizeAny(u8, it0, " \t\r\n");
+            let in_from = false;
+            let in_at = false;
+            let at_dim: usize = 0;
+            while (tok := hit.next()) {
+                if (std.mem.eql(u8, tok, "from")) {
+                    in_from = true;
+                    in_at = false;
+                    continue;
+                }
+                if (std.mem.eql(u8, tok, "at")) {
+                    in_at = true;
+                    in_from = false;
+                    at_dim = 0;
+                    continue;
+                }
+                if (in_from) {
+                    if (std.mem.endsWith(u8, tok, "deg")) {
+                        const deg_str = tok[0 .. tok.len - 3];
+                        cg.from_angle_deg = std.fmt.parseFloat(f32, deg_str) catch 0.0;
+                    } else if (std.mem.endsWith(u8, tok, "rad")) {
+                        const rad_str = tok[0 .. tok.len - 3];
+                        const rad_v = std.fmt.parseFloat(f32, rad_str) catch 0.0;
+                        cg.from_angle_deg = rad_v * 180.0 / std.math.pi;
+                    } else if (std.mem.endsWith(u8, tok, "turn")) {
+                        const turn_str = tok[0 .. tok.len - 4];
+                        const turn_v = std.fmt.parseFloat(f32, turn_str) catch 0.0;
+                        cg.from_angle_deg = turn_v * 360.0;
+                    } else {
+                        cg.from_angle_deg = std.fmt.parseFloat(f32, tok) catch 0.0;
+                    }
+                    in_from = false;
+                } else if (in_at) {
+                    if (at_dim == 0) {
+                        if (std.mem.eql(u8, tok, "left")) {
+                            cg.center_x_pct = 0.0;
+                            cg.center_x_is_px = false;
+                        } else if (std.mem.eql(u8, tok, "center")) {
+                            cg.center_x_pct = 50.0;
+                            cg.center_x_is_px = false;
+                        } else if (std.mem.eql(u8, tok, "right")) {
+                            cg.center_x_pct = 100.0;
+                            cg.center_x_is_px = false;
+                        } else if (std.mem.endsWith(u8, tok, "%")) {
+                            const pct_str = tok[0 .. tok.len - 1];
+                            cg.center_x_pct = std.fmt.parseFloat(f32, pct_str) catch 50.0;
+                            cg.center_x_is_px = false;
+                        } else if (std.mem.endsWith(u8, tok, "px")) {
+                            const px_str = tok[0 .. tok.len - 2];
+                            cg.center_x_px = std.fmt.parseFloat(f32, px_str) catch 0.0;
+                            cg.center_x_is_px = true;
+                        }
+                        at_dim = 1;
+                    } else if (at_dim == 1) {
+                        if (std.mem.eql(u8, tok, "top")) {
+                            cg.center_y_pct = 0.0;
+                            cg.center_y_is_px = false;
+                        } else if (std.mem.eql(u8, tok, "center")) {
+                            cg.center_y_pct = 50.0;
+                            cg.center_y_is_px = false;
+                        } else if (std.mem.eql(u8, tok, "bottom")) {
+                            cg.center_y_pct = 100.0;
+                            cg.center_y_is_px = false;
+                        } else if (std.mem.endsWith(u8, tok, "%")) {
+                            const pct_str = tok[0 .. tok.len - 1];
+                            cg.center_y_pct = std.fmt.parseFloat(f32, pct_str) catch 50.0;
+                            cg.center_y_is_px = false;
+                        } else if (std.mem.endsWith(u8, tok, "px")) {
+                            const px_str = tok[0 .. tok.len - 2];
+                            cg.center_y_px = std.fmt.parseFloat(f32, px_str) catch 0.0;
+                            cg.center_y_is_px = true;
+                        }
+                        at_dim = 2;
+                    }
+                }
+            }
+        }
+
+        const stop_start: usize = if (first_is_header) 1 else 0;
+        const total_stops = item_count - stop_start;
+        if (total_stops == 0) {
+            return null;
+        }
+
+        let stop_idx: usize = 0;
+        let item_i = stop_start;
+        while (item_i < item_count && stop_idx < 16) : (item_i += 1) {
+            const raw_stop = items[item_i];
+            let color_part: []const u8 = raw_stop;
+            let angle_part: []const u8 = "";
+
+            if (cp := std.mem.lastIndexOfScalar(u8, raw_stop, ')')) {
+                color_part = std.mem.trim(u8, raw_stop[0 .. cp + 1], " \t\r\n");
+                angle_part = std.mem.trim(u8, raw_stop[cp + 1 ..], " \t\r\n");
+            } else if (ls := std.mem.lastIndexOfScalar(u8, raw_stop, ' ')) {
+                const right_tok = std.mem.trim(u8, raw_stop[ls + 1 ..], " \t\r\n");
+                if (std.mem.endsWith(u8, right_tok, "deg") ||
+                    std.mem.endsWith(u8, right_tok, "turn") ||
+                    std.mem.endsWith(u8, right_tok, "rad") ||
+                    std.mem.endsWith(u8, right_tok, "%")) {
+                    color_part = std.mem.trim(u8, raw_stop[0..ls], " \t\r\n");
+                    angle_part = right_tok;
+                }
+            }
+
+            const parsed_c = CssColor.parse(color_part) orelse CssColor.rgba(0, 0, 0, 255);
+            let parsed_angle: f32 = 0.0;
+            if (angle_part.len > 0) {
+                if (std.mem.endsWith(u8, angle_part, "deg")) {
+                    const deg_str = angle_part[0 .. angle_part.len - 3];
+                    parsed_angle = std.fmt.parseFloat(f32, deg_str) catch 0.0;
+                } else if (std.mem.endsWith(u8, angle_part, "turn")) {
+                    const tv = std.fmt.parseFloat(f32, angle_part[0 .. angle_part.len - 4]) catch 0.0;
+                    parsed_angle = tv * 360.0;
+                } else if (std.mem.endsWith(u8, angle_part, "rad")) {
+                    const rv = std.fmt.parseFloat(f32, angle_part[0 .. angle_part.len - 3]) catch 0.0;
+                    parsed_angle = rv * 180.0 / std.math.pi;
+                } else if (std.mem.endsWith(u8, angle_part, "%")) {
+                    const pv = std.fmt.parseFloat(f32, angle_part[0 .. angle_part.len - 1]) catch 0.0;
+                    parsed_angle = pv * 3.6;
+                } else {
+                    parsed_angle = std.fmt.parseFloat(f32, angle_part) catch 0.0;
+                }
+            } else {
+                if (total_stops > 1) {
+                    parsed_angle = (360.0 * @as(f32, @floatFromInt(stop_idx))) / @as(f32, @floatFromInt(total_stops - 1));
+                } else {
+                    parsed_angle = 0.0;
+                }
+            }
+
+            cg.stops[stop_idx] = ConicGradientStop{
+                color: parsed_c,
+                angle_deg: parsed_angle,
+            };
+            stop_idx += 1;
+        }
+
+        cg.stop_count = stop_idx;
+        return cg;
+    }
 }
 
 /// Resolved visual style ready for the 2D software rasterizer (`src/render/painter.cp`)
@@ -392,6 +798,23 @@ pub struct ResolvedPaintStyle {
     border_width: f32 = 0.0;
     border_radius: f32 = 0.0;
     font_size_px: f32 = 16.0;
+    conic_gradient: ConicGradient = ConicGradient{};
+}
+
+fn canonicalizeCssPropertyName(name: []const u8): []const u8 {
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-box-sizing")) return "box-sizing";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-border-radius")) return "border-radius";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-align-items")) return "align-items";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-justify-content")) return "justify-content";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-flex-direction")) return "flex-direction";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-flex-grow")) return "flex-grow";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-flex-shrink")) return "flex-shrink";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-flex-basis")) return "flex-basis";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-flex")) return "flex";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-opacity")) return "opacity";
+    if (std.ascii.eqlIgnoreCase(name, "css-float") || std.ascii.eqlIgnoreCase(name, "cssfloat")) return "float";
+    if (std.ascii.eqlIgnoreCase(name, "-webkit-transform")) return "transform";
+    return name;
 }
 
 pub struct ComputedStyle {
@@ -440,15 +863,22 @@ pub struct ComputedStyle {
     row_gap: f32 = 0.0;
     column_gap: f32 = 0.0;
     grid_cols: u32 = 1;
+    grid_col_span: u32 = 1;
 
     font_size_px: f32 = 16.0;
+    line_height_px: f32 = 0.0;
+    font_family_buf: [64]u8 = [0; 64],
+    font_family_len: usize = 0,
+    font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_fill_current_color: bool = false,
     opacity: f32 = 1.0;
     z_index: i32 = 0;
+    conic_gradient: ConicGradient = ConicGradient{};
 
     // 64-bit packed cascade weight per property slot
-    weights: [42]u64 = [0; 42];
+    weights: [TOTAL_PROP_SLOTS]u64 = [0; TOTAL_PROP_SLOTS];
 
     /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
     fn initForNode(*_, node: *const NodeData, parent_style: (*const ComputedStyle)?) {
@@ -583,7 +1013,41 @@ pub struct ComputedStyle {
                 _.font_size_px = p.font_size_px;
             }
             _.color = p.color;
+            if (p.font_family_len > 0) {
+                const copy_len = @min(p.font_family_len, _.font_family_buf.len);
+                @memcpy(_.font_family_buf[0..copy_len], p.font_family_buf[0..copy_len]);
+                _.font_family_len = copy_len;
+            }
+            if (tag != .B && tag != .Strong) {
+                _.font_weight = p.font_weight;
+            }
         }
+        if (tag == .B || tag == .Strong) {
+            _.font_weight = 700.0;
+        }
+    }
+
+    fn getFontFamily(): []const u8 {
+        return _.font_family_buf[0.._.font_family_len];
+    }
+
+    fn hasFontFamily(name: []const u8): bool {
+        if (_.font_family_len == 0) return false;
+        const ff = _.font_family_buf[0.._.font_family_len];
+        if (std.mem.indexOf(u8, ff, name) != null) return true;
+        let lower_ff_buf: [64]u8 = undefined;
+        const copy_len = @min(ff.len, lower_ff_buf.len);
+        let i: usize = 0;
+        while (i < copy_len) : (i += 1) {
+            lower_ff_buf[i] = std.ascii.toLower(ff[i]);
+        }
+        let lower_name_buf: [32]u8 = undefined;
+        const name_len = @min(name.len, lower_name_buf.len);
+        let j: usize = 0;
+        while (j < name_len) : (j += 1) {
+            lower_name_buf[j] = std.ascii.toLower(name[j]);
+        }
+        return std.mem.indexOf(u8, lower_ff_buf[0..copy_len], lower_name_buf[0..name_len]) != null;
     }
 
     fn tryClaimSlot(*_, slot: usize, weight: u64): bool {
@@ -601,16 +1065,23 @@ pub struct ComputedStyle {
         viewport_w: f32,
         viewport_h: f32,
     ): ResolvedPaintStyle {
-        let bg = _.background_color;
+        let bg = if (_.has_fill_current_color) _.color else _.background_color;
         let txt = _.color;
         // Per CSS spec, if border-color is not explicitly set, it defaults to `currentColor` (`_.color`)
         let bdr = if (_.has_explicit_border_color) _.border_color else _.color;
 
         const op = std.math.clamp(_.opacity, 0.0, 1.0);
+        let cg = _.conic_gradient;
         if (op < 1.0) {
             bg.a = @intFromFloat(@as(f32, @floatFromInt(bg.a)) * op);
             txt.a = @intFromFloat(@as(f32, @floatFromInt(txt.a)) * op);
             bdr.a = @intFromFloat(@as(f32, @floatFromInt(bdr.a)) * op);
+            if (cg.has_gradient) {
+                let si: usize = 0;
+                while (si < cg.stop_count) : (si += 1) {
+                    cg.stops[si].color.a = @intFromFloat(@as(f32, @floatFromInt(cg.stops[si].color.a)) * op);
+                }
+            }
         }
 
         const radius_px = _.border_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
@@ -623,12 +1094,13 @@ pub struct ComputedStyle {
             border_width: bw_px,
             border_radius: radius_px,
             font_size_px: _.font_size_px,
+            conic_gradient: cg,
         };
     }
 
     /// Applies a single `CssProperty` with prepacked 64-bit `weight` onto this ComputedStyle.
     fn applyProperty(*_, prop: *const CssProperty, weight: u64, root_font_px: f32) {
-        const name = prop.name;
+        const name = canonicalizeCssPropertyName(prop.name);
         const val = prop.value;
 
         if (std.ascii.eqlIgnoreCase(name, "display")) {
@@ -1007,11 +1479,76 @@ pub struct ComputedStyle {
             return;
         }
 
+        // Grid column placement (e.g. `grid-column: span 6` or `grid-column: 1 / 7`)
+        if (std.ascii.eqlIgnoreCase(name, "grid-column") || std.ascii.eqlIgnoreCase(name, "grid-column-start") || std.ascii.eqlIgnoreCase(name, "grid-column-end")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (span_idx := std.mem.indexOf(u8, trimmed, "span")) {
+                let pos = span_idx + 4;
+                while (pos < trimmed.len && (trimmed[pos] == ' ' || trimmed[pos] == '\t')) : (pos += 1) {}
+                const num_start = pos;
+                while (pos < trimmed.len && std.ascii.isDigit(trimmed[pos])) : (pos += 1) {}
+                if (pos > num_start) {
+                    const span_cnt = std.fmt.parseInt(u32, trimmed[num_start..pos], 10) catch 1;
+                    if (_.tryClaimSlot(PROP_GRID_COL_SPAN, weight)) {
+                        _.grid_col_span = if (span_cnt > 0) span_cnt else 1;
+                    }
+                }
+            } else if (slash_idx := std.mem.indexOfScalar(u8, trimmed, '/')) {
+                const s1 = std.mem.trim(u8, trimmed[0..slash_idx], " \t");
+                const s2 = std.mem.trim(u8, trimmed[slash_idx + 1 ..], " \t");
+                const n1 = std.fmt.parseInt(u32, s1, 10) catch 0;
+                const n2 = std.fmt.parseInt(u32, s2, 10) catch 0;
+                if (n2 > n1 && n1 > 0) {
+                    if (_.tryClaimSlot(PROP_GRID_COL_SPAN, weight)) {
+                        _.grid_col_span = n2 - n1;
+                    }
+                }
+            }
+            return;
+        }
+
         // Typography & Visuals
+        if (std.ascii.eqlIgnoreCase(name, "font-family")) {
+            if (_.tryClaimSlot(PROP_FONT_FAMILY, weight)) {
+                const copy_len = @min(val.len, _.font_family_buf.len);
+                @memcpy(_.font_family_buf[0..copy_len], val[0..copy_len]);
+                _.font_family_len = copy_len;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "font-weight")) {
+            let fw: f32 = 400.0;
+            if (std.ascii.eqlIgnoreCase(val, "bold")) {
+                fw = 700.0;
+            } else if (std.ascii.eqlIgnoreCase(val, "normal")) {
+                fw = 400.0;
+            } else if (std.ascii.eqlIgnoreCase(val, "lighter")) {
+                fw = 300.0;
+            } else if (std.ascii.eqlIgnoreCase(val, "bolder")) {
+                fw = 700.0;
+            } else {
+                const trimmed = std.mem.trim(u8, val, " \t\r\n");
+                if (p_val := std.fmt.parseFloat(f32, trimmed) catch null) {
+                    fw = p_val;
+                }
+            }
+            if (_.tryClaimSlot(PROP_FONT_WEIGHT, weight)) {
+                _.font_weight = fw;
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "font-size")) {
             if (l := CssLength.parse(val)) {
                 const fs: f32 = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
                 if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "line-height")) {
+            if (lpa := LengthPercentageOrAuto.parse(val)) {
+                if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                    _.line_height_px = lpa.resolvePx(root_font_px, _.font_size_px, root_font_px, 1280.0, 800.0);
+                }
             }
             return;
         }
@@ -1021,7 +1558,34 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "background-image")) {
+            if (cg := ConicGradient.parse(val)) {
+                if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                    _.conic_gradient = cg;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "fill")) {
+            if (std.ascii.eqlIgnoreCase(val, "currentcolor")) {
+                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
+                    _.background_color = _.color;
+                    _.has_fill_current_color = true;
+                }
+            } else if (c_opt := CssColor.parse(val)) {
+                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
+                    _.background_color = c_opt;
+                    _.has_fill_current_color = false;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "background-color") || std.ascii.eqlIgnoreCase(name, "background")) {
+            if (cg := ConicGradient.parse(val)) {
+                if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                    _.conic_gradient = cg;
+                }
+            }
             if (c := Cascade.parseColorTokenFromShorthand(val)) {
                 if (_.tryClaimSlot(PROP_BG_COLOR, weight)) _.background_color = c;
             }
@@ -1118,14 +1682,31 @@ pub struct Cascade {
     static fn parseBoxQuad(val_str: []const u8): BoxQuad? {
         let items: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.zeroPx(); 4];
         let count: usize = 0;
-        let it = std.mem.tokenizeAny(u8, val_str, " \t\r\n");
-        while (tok := it.next()) {
-            if (count >= 4) break;
-            if (parsed := LengthPercentageOrAuto.parse(tok)) {
-                items[count] = parsed;
-                count += 1;
-            } else {
-                return null;
+        let i: usize = 0;
+        const s = std.mem.trim(u8, val_str, " \t\r\n");
+        while (i < s.len && count < 4) {
+            while (i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) : (i += 1) {}
+            if (i >= s.len) break;
+            const start = i;
+            let depth: i32 = 0;
+            while (i < s.len) : (i += 1) {
+                const c = s[i];
+                if (c == '(') {
+                    depth += 1;
+                } else if (c == ')') {
+                    if (depth > 0) depth -= 1;
+                } else if (depth == 0 && (c == ' ' || c == '\t' || c == '\r' || c == '\n')) {
+                    break;
+                }
+            }
+            const tok = s[start..i];
+            if (tok.len > 0) {
+                if (parsed := LengthPercentageOrAuto.parse(tok)) {
+                    items[count] = parsed;
+                    count += 1;
+                } else {
+                    return null;
+                }
             }
         }
         if (count == 0) return null;
@@ -1229,6 +1810,17 @@ pub struct Cascade {
 
             let source_order: u32 = 1;
             const node_id_u32: NodeId = @intCast(nid);
+
+            // 0. Presentation attributes for SVG (e.g. fill)
+            if (fill_attr := node.getAttribute("fill")) {
+                const prop = CssProperty{
+                    name: "fill",
+                    value: fill_attr,
+                    important: false,
+                };
+                const w = Cascade.packWeight(false, false, 0, 0);
+                style.applyProperty(&prop, w, root_font_px);
+            }
 
             // 1. Match stylesheet rules in source order
             let r_i: usize = 0;

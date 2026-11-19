@@ -44,6 +44,9 @@ pub struct MockFixtures {
         if (std.mem.indexOf(u8, url, "/__fixtures/") != null) {
             return true;
         }
+        if (std.mem.indexOf(u8, url, "ce-chunk") != null || std.mem.indexOf(u8, url, "ce-mixin") != null) {
+            return true;
+        }
         const host = MockFixtures.extractHost(url);
         if (host.len >= 8 && std.ascii.endsWithIgnoreCase(host, ".invalid")) {
             return true;
@@ -130,6 +133,8 @@ pub struct MockFixtures {
 
         if (std.ascii.endsWithIgnoreCase(clean, ".html") || std.ascii.eqlIgnoreCase(clean, "html")) {
             return "text/html";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".svg") || std.ascii.eqlIgnoreCase(clean, "svg")) {
+            return "image/svg+xml; charset=utf-8";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".js") || std.ascii.eqlIgnoreCase(clean, "js")) {
             return "application/javascript";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".css") || std.ascii.eqlIgnoreCase(clean, "css")) {
@@ -138,6 +143,18 @@ pub struct MockFixtures {
             return "image/png";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".json") || std.ascii.eqlIgnoreCase(clean, "json")) {
             return "application/json";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".txt") || std.ascii.eqlIgnoreCase(clean, "txt")) {
+            return "text/plain; charset=utf-8";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".wasm") || std.ascii.eqlIgnoreCase(clean, "wasm")) {
+            return "application/wasm";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".woff2") || std.ascii.eqlIgnoreCase(clean, "woff2")) {
+            return "font/woff2";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".woff") || std.ascii.eqlIgnoreCase(clean, "woff")) {
+            return "font/woff";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".ttf") || std.ascii.eqlIgnoreCase(clean, "ttf")) {
+            return "font/ttf";
+        } else if (std.ascii.endsWithIgnoreCase(clean, ".otf") || std.ascii.eqlIgnoreCase(clean, "otf")) {
+            return "font/otf";
         }
         return "application/octet-stream";
     }
@@ -183,23 +200,28 @@ pub struct MockFixtures {
     static fn readPageFile(filename: []const u8, out_buf: []u8): ([]const u8)? {
         if (filename.len == 0) return null;
 
+        let target_name = filename;
+        if (std.mem.eql(u8, filename, "ce-chunk.js") || std.mem.eql(u8, filename, "ce-chunk")) {
+            target_name = "ce-mixin-chunk.js";
+        }
+
         // 1. Try relative path: e2e/page/<filename>
         let path_buf: [512]u8 = [0; 512];
-        const rel_path = std.fmt.bufPrint(&path_buf, "e2e/page/{s}", .{ filename }) catch return null;
+        const rel_path = std.fmt.bufPrint(&path_buf, "e2e/page/{s}", .{ target_name }) catch return null;
         if (res1 := MockFixtures.readFileContent(rel_path, out_buf)) {
             return res1;
         }
 
         // 2. Try absolute path: /data/dev/capsurf/e2e/page/<filename>
         let abs_buf: [512]u8 = [0; 512];
-        const abs_path = std.fmt.bufPrint(&abs_buf, "/data/dev/capsurf/e2e/page/{s}", .{ filename }) catch return null;
+        const abs_path = std.fmt.bufPrint(&abs_buf, "/data/dev/capsurf/e2e/page/{s}", .{ target_name }) catch return null;
         if (res2 := MockFixtures.readFileContent(abs_path, out_buf)) {
             return res2;
         }
 
         // 3. Fallback to basename if filename contains '/'
-        if (last_slash := std.mem.lastIndexOfScalar(u8, filename, '/')) {
-            const base = filename[last_slash + 1..];
+        if (last_slash := std.mem.lastIndexOfScalar(u8, target_name, '/')) {
+            const base = target_name[last_slash + 1..];
             if (base.len > 0) {
                 let base_buf: [512]u8 = [0; 512];
                 const base_rel = std.fmt.bufPrint(&base_buf, "e2e/page/{s}", .{ base }) catch return null;
@@ -300,6 +322,81 @@ pub struct MockFixtures {
         return null;
     }
 
+    static fn appendExtraHeadersJson(extra_headers: []const u8, dst: []u8, dst_len: *usize) {
+        if (extra_headers.len == 0) return;
+        let start_pos: usize = 0;
+        if (h_key := std.mem.indexOf(u8, extra_headers, "\"headers\"")) {
+            let p = h_key + 9;
+            while (p < extra_headers.len && extra_headers[p] != '{') : (p += 1) {}
+            if (p < extra_headers.len) {
+                start_pos = p + 1;
+            } else {
+                start_pos = 0;
+            }
+        } else if (b_pos := std.mem.indexOfScalar(u8, extra_headers, '{')) {
+            start_pos = b_pos + 1;
+        } else {
+            return;
+        }
+
+        let cur = start_pos;
+        while (cur < extra_headers.len) {
+            while (cur < extra_headers.len && extra_headers[cur] != '"' && extra_headers[cur] != '}') : (cur += 1) {}
+            if (cur >= extra_headers.len || extra_headers[cur] == '}') break;
+            cur += 1;
+            const k_start = cur;
+            while (cur < extra_headers.len && extra_headers[cur] != '"') : (cur += 1) {}
+            if (cur >= extra_headers.len) break;
+            const raw_k = extra_headers[k_start..cur];
+            cur += 1;
+
+            while (cur < extra_headers.len && extra_headers[cur] != ':' && extra_headers[cur] != '}') : (cur += 1) {}
+            if (cur >= extra_headers.len || extra_headers[cur] == '}') break;
+            cur += 1;
+
+            while (cur < extra_headers.len && extra_headers[cur] != '"' && extra_headers[cur] != '}' && extra_headers[cur] != ',') : (cur += 1) {}
+            if (cur >= extra_headers.len || extra_headers[cur] == '}' || extra_headers[cur] == ',') continue;
+            cur += 1;
+            const v_start = cur;
+            let escaped = false;
+            while (cur < extra_headers.len) : (cur += 1) {
+                if (escaped) {
+                    escaped = false;
+                    continue;
+                }
+                if (extra_headers[cur] == '\\') {
+                    escaped = true;
+                    continue;
+                }
+                if (extra_headers[cur] == '"') break;
+            }
+            if (cur > extra_headers.len) break;
+            const raw_v = extra_headers[v_start..cur];
+            if (cur < extra_headers.len) cur += 1;
+
+            let lk_buf: [128]u8 = undefined;
+            if (raw_k.len >= lk_buf.len) continue;
+            let ki: usize = 0;
+            while (ki < raw_k.len) : (ki += 1) {
+                lk_buf[ki] = std.ascii.toLower(raw_k[ki]);
+            }
+            const lk = lk_buf[0..raw_k.len];
+
+            if (std.mem.startsWith(u8, lk, "x-kitesurf-")) continue;
+            if (std.mem.eql(u8, lk, "user-agent") || std.mem.eql(u8, lk, "accept") || std.mem.eql(u8, lk, "cookie")) continue;
+
+            let esc_val_buf: [1024]u8 = undefined;
+            const esc_val = MockFixtures.escapeJson(raw_v, &esc_val_buf);
+
+            const chunk = std.fmt.bufPrint(
+                dst[dst_len.*..],
+                ",\"{s}\":\"{s}\"",
+                .{ lk, esc_val },
+            ) catch break;
+            dst_len.* += chunk.len;
+        }
+    }
+
     /// Handle fixture requests.
     /// 1. /echo-headers.json: synthesizes JSON response with request headers.
     /// 2. Dynamic endpoints:
@@ -313,19 +410,52 @@ pub struct MockFixtures {
         user_agent: []const u8,
         out_buf: []u8,
         cookie_jar: (*CookieJar)? = null,
+        extra_headers: []const u8 = "",
     ): ([]const u8)? {
         // 1. /echo-headers.json
         if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
             const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
+            let esc_ua_buf: [1024]u8 = undefined;
+            const esc_ua = MockFixtures.escapeJson(ua, &esc_ua_buf);
             const orig = if (origin.len == 0) "null" else origin;
 
-            const res = std.fmt.bufPrint(
-                out_buf,
-                "{{\"accept\":\"*/*\",\"accept-encoding\":\"gzip, br\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"}}",
-                .{ orig, ua },
+            let h_buf: [4096]u8 = undefined;
+            let h_len: usize = 0;
+            const base_h = std.fmt.bufPrint(
+                h_buf[0..],
+                "{{\"accept\":\"*/*\",\"accept-encoding\":\"gzip, br\",\"origin\":\"{s}\",\"user-agent\":\"{s}\"",
+                .{ orig, esc_ua },
             ) catch return null;
+            h_len = base_h.len;
 
-            return res;
+            if (cookie_jar != null) {
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                if (maybe_ck != null) {
+                    defer std.heap.page_allocator.free(maybe_ck.?);
+                    if (maybe_ck.?.len > 0) {
+                        let esc_ck_buf: [2048]u8 = undefined;
+                        const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
+                        const ck_part = std.fmt.bufPrint(
+                            h_buf[h_len..],
+                            ",\"cookie\":\"{s}\"",
+                            .{ esc_ck },
+                        ) catch return null;
+                        h_len += ck_part.len;
+                    }
+                }
+            }
+
+            if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+            }
+
+            if (h_len < h_buf.len) {
+                h_buf[h_len] = '}';
+                h_len += 1;
+            }
+            const len = @min(h_len, out_buf.len);
+            @memcpy(out_buf[0..len], h_buf[0..len]);
+            return out_buf[0..len];
         }
 
         // 1.2. /gzip-only-doc.html
@@ -339,15 +469,103 @@ pub struct MockFixtures {
             return res;
         }
 
-        // 1.5. /echo-headers.html
-        if (std.mem.indexOf(u8, url, "/echo-headers.html") != null && std.mem.indexOf(u8, url, ".invalid") == null) {
+        // 1.4. /echo-headers-frame.html
+        if (std.mem.indexOf(u8, url, "/echo-headers-frame.html") != null) {
             const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
             let esc_ua_buf: [1024]u8 = undefined;
             const esc_ua = MockFixtures.escapeJson(ua, &esc_ua_buf);
+
+            let h_buf: [4096]u8 = undefined;
+            let h_len: usize = 0;
+            const base_h = std.fmt.bufPrint(
+                h_buf[0..],
+                "{{\"user-agent\":\"{s}\",\"accept\":\"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"",
+                .{ esc_ua },
+            ) catch return null;
+            h_len = base_h.len;
+
+            if (cookie_jar != null) {
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                if (maybe_ck != null) {
+                    defer std.heap.page_allocator.free(maybe_ck.?);
+                    if (maybe_ck.?.len > 0) {
+                        let esc_ck_buf: [2048]u8 = undefined;
+                        const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
+                        const ck_part = std.fmt.bufPrint(
+                            h_buf[h_len..],
+                            ",\"cookie\":\"{s}\"",
+                            .{ esc_ck },
+                        ) catch return null;
+                        h_len += ck_part.len;
+                    }
+                }
+            }
+
+            if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+            }
+
+            if (h_len < h_buf.len) {
+                h_buf[h_len] = '}';
+                h_len += 1;
+            }
+            const doc_headers_json = h_buf[0..h_len];
+
             const res = std.fmt.bufPrint(
                 out_buf,
-                "<!doctype html><html><head><meta charset=\"utf-8\"><title>echo-headers</title></head><body><script>globalThis.__ks_doc_headers = {{\"user-agent\":\"{s}\",\"accept\":\"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"}};globalThis.__ks_fetch_headers = null;globalThis.__ks_fetch_ready = fetch(\"/__fixtures/echo-headers.json\").then(function(r){{return r.json();}}).then(function(d){{globalThis.__ks_fetch_headers = d;return d;}});</script></body></html>",
+                "<!doctype html><html><body><pre id=\"h\">{s}</pre></body></html>",
+                .{ doc_headers_json },
+            ) catch return null;
+
+            return res;
+        }
+
+        // 1.5. /echo-headers.html
+        if (std.mem.indexOf(u8, url, "/echo-headers.html") != null) {
+            const ua = if (user_agent.len == 0) "CapSurf/1.0.0" else user_agent;
+            let esc_ua_buf: [1024]u8 = undefined;
+            const esc_ua = MockFixtures.escapeJson(ua, &esc_ua_buf);
+
+            let h_buf: [4096]u8 = undefined;
+            let h_len: usize = 0;
+            const base_h = std.fmt.bufPrint(
+                h_buf[0..],
+                "{{\"user-agent\":\"{s}\",\"accept\":\"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"",
                 .{ esc_ua },
+            ) catch return null;
+            h_len = base_h.len;
+
+            if (cookie_jar != null) {
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                if (maybe_ck != null) {
+                    defer std.heap.page_allocator.free(maybe_ck.?);
+                    if (maybe_ck.?.len > 0) {
+                        let esc_ck_buf: [2048]u8 = undefined;
+                        const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
+                        const ck_part = std.fmt.bufPrint(
+                            h_buf[h_len..],
+                            ",\"cookie\":\"{s}\"",
+                            .{ esc_ck },
+                        ) catch return null;
+                        h_len += ck_part.len;
+                    }
+                }
+            }
+
+            if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+            }
+
+            if (h_len < h_buf.len) {
+                h_buf[h_len] = '}';
+                h_len += 1;
+            }
+            const doc_headers_json = h_buf[0..h_len];
+
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>echo-headers</title></head><body><pre id=\"doc-headers\">{s}</pre><script>globalThis.__ks_doc_headers = {s};globalThis.__ks_fetch_headers = null;globalThis.__ks_fetch_ready = fetch(\"/__fixtures/echo-headers.json\").then(function(r){{return r.json();}}).then(function(d){{globalThis.__ks_fetch_headers = d;return d;}});</script></body></html>",
+                .{ doc_headers_json, doc_headers_json },
             ) catch return null;
 
             return res;
@@ -372,6 +590,28 @@ pub struct MockFixtures {
         }
 
         // 2. Dynamic endpoints
+        if (std.mem.indexOf(u8, url, "/svg-document.svg") != null || std.mem.indexOf(u8, url, "svg-document.svg") != null) {
+            let case_val: []const u8 = "sized";
+            if (c := MockFixtures.extractQueryParam(url, "case")) {
+                case_val = c;
+            }
+            let target_file: []const u8 = "svg-document-sized.svg";
+            if (std.mem.eql(u8, case_val, "prologue")) {
+                target_file = "svg-document-prologue.svg";
+            } else if (std.mem.eql(u8, case_val, "viewbox")) {
+                target_file = "svg-document-viewbox.svg";
+            } else if (std.mem.eql(u8, case_val, "metadata")) {
+                target_file = "svg-document-metadata.svg";
+            } else if (std.mem.eql(u8, case_val, "overflowing")) {
+                target_file = "svg-document-overflowing.svg";
+            } else if (std.mem.eql(u8, case_val, "styled")) {
+                target_file = "svg-document-styled.svg";
+            }
+            if (content := MockFixtures.readPageFile(target_file, out_buf)) {
+                return content;
+            }
+        }
+
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
             let body_val: []const u8 = "";
             let decoded_buf: [32768]u8 = undefined;
@@ -409,6 +649,12 @@ pub struct MockFixtures {
             return "";
         }
 
+        if (std.mem.indexOf(u8, url, "ce-chunk") != null) {
+            if (content := MockFixtures.readPageFile("ce-mixin-chunk.js", out_buf)) {
+                return content;
+            }
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {
@@ -439,6 +685,7 @@ pub fn handleFixtureRequest(
     user_agent: []const u8,
     out_buf: []u8,
     cookie_jar: (*CookieJar)? = null,
+    extra_headers: []const u8 = "",
 ): ([]const u8)? {
-    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar);
+    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar, extra_headers);
 }

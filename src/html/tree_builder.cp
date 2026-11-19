@@ -117,6 +117,21 @@ pub struct TreeBuilder {
         }
     }
 
+    fn popUntilName(*_, tag: HtmlTag, name: []const u8) {
+        while (_.open_elements_len > 0) {
+            const popped = _.popElement();
+            if (popped != NULL_NODE && @as(usize, popped) < _.doc.nodes.items.len) {
+                const node = &_.doc.nodes.items[@as(usize, popped)];
+                const t = HtmlTag.fromStr(node.tag_name);
+                if (tag != HtmlTag.Unknown) {
+                    if (t == tag) break;
+                } else {
+                    if (std.ascii.eqlIgnoreCase(node.tag_name, name)) break;
+                }
+            }
+        }
+    }
+
     fn isElementInStack(nid: NodeId): bool {
         let i: usize = 0;
         while (i < _.open_elements_len) : (i += 1) {
@@ -318,6 +333,25 @@ pub struct TreeBuilder {
             if (nid == NULL_NODE || @as(usize, nid) >= _.doc.nodes.items.len) continue;
             const t = HtmlTag.fromStr(_.doc.nodes.items[@as(usize, nid)].tag_name);
             if (t == tag) return true;
+            if (t.isDefaultScope()) return false;
+        }
+        return false;
+    }
+
+    fn inDefaultScopeName(tag: HtmlTag, name: []const u8): bool {
+        if (_.open_elements_len == 0) return false;
+        let i = _.open_elements_len;
+        while (i > 0) {
+            i -= 1;
+            const nid = _.open_elements[i];
+            if (nid == NULL_NODE || @as(usize, nid) >= _.doc.nodes.items.len) continue;
+            const node = &_.doc.nodes.items[@as(usize, nid)];
+            const t = HtmlTag.fromStr(node.tag_name);
+            if (tag != HtmlTag.Unknown) {
+                if (t == tag) return true;
+            } else {
+                if (std.ascii.eqlIgnoreCase(node.tag_name, name)) return true;
+            }
             if (t.isDefaultScope()) return false;
         }
         return false;
@@ -1072,7 +1106,11 @@ pub struct TreeBuilder {
                             _.popUntil(HtmlTag.P);
                         }
                         _.reconstructActiveFormattingElements();
-                        _.insertElement(tag_tok);
+                        const nid = _.insertElement(tag_tok);
+                        if (tag_tok.self_closing) {
+                            * = _.popElement();
+                        }
+                        * = nid;
                         return NextTokenizerState.Data;
                     }
                 } else {
@@ -1127,9 +1165,9 @@ pub struct TreeBuilder {
                         return NextTokenizerState.Data;
                     } else {
                         // General End Tag
-                        if (_.inDefaultScope(tag)) {
+                        if (_.inDefaultScopeName(tag, tag_tok.name)) {
                             _.generateImpliedEndTags(tag);
-                            _.popUntil(tag);
+                            _.popUntilName(tag, tag_tok.name);
                         }
                         return NextTokenizerState.Data;
                     }

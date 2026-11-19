@@ -1152,3 +1152,21 @@
    - **技术方案**：
      - 在 `window.fetch` 触发时调用 `__capsurf_native_record_fetch` 记录出站请求；
      - 在 `pollNetworkEvents` 中按需生成附带 `session.frame_id` 与 `session.loader_id` 的规范 CDP 事件并在执行评估时向订阅客户端广播。
+
+## Phase 59 顶级 SVG 独立文档合成、自闭合 TreeBuilder、ViewBox 几何缩放与 CurrentColor 级联技术方案
+1. **独立顶级 SVG 页面合成与 Mock 路由 (`src/cdp/svg_document.cp`, `src/net/mock_fixtures.cp`, `src/cdp/session.cp`)**：
+   - **设计动机**：测试用例 `svg-document-render.e2e.test.ts` 验证通过直接以 `.svg` 文件为顶级 URL 导航，包含 XML 序言、Doctype 声明、自定义 `<metadata>`、`viewBox` 与内联 CSS 样式的复杂矢量文档的光栅化截图；
+   - **技术方案**：
+     - 在 `svg_document.cp` 中实现轻量解析器，安全跳过 XML 声明与 Doctype，提取 `<meta>` 标签提升至 `<head>`；生成重置为 `margin: 0; padding: 0; overflow: hidden;` 的宿主 HTML 容器；
+     - 在 `mock_fixtures.cp` 中补充 `.svg` MIME 映射（`image/svg+xml; charset=utf-8`）及动态 case 参数路由分发；
+     - 在 `session.cp` 导航拦截中将顶级 SVG 封装并在 Frame 事件中输出标准 MIME。
+2. **HTML5 TreeBuilder 自闭合与作用域增强 (`src/html/tree_builder.cp`)**：
+   - **技术方案**：
+     - 在通用元素分支中检测 `if (tag_tok.self_closing) * = _.popElement();`，避免 `<rect ... />` 自闭合矢量标签堆积导致后续元数据与样式规则层级错乱；
+     - 增加 `inDefaultScopeName` 与 `popUntilName`，支持按标签字符串名称精准闭合未知标签（如 `</metadata>`）。
+3. **SVG viewBox 视口几何运算与 CurrentColor 级联 (`src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`)**：
+   - **技术方案**：
+     - 在 `cascade.cp` 中新增 `has_fill_current_color`，解析 `fill: currentColor` 并在级联计算中映射为当前节点级联文本色 `color`；支持 `fill="..."` 表现性属性作为低优先级权重注入；
+     - 在 `layout.cp` 中实装 `layoutSvgContainer` 与 `layoutSvgChildren`，依据 W3C SVG 规范实现 `xMidYMid meet` 保持纵横比的几何缩放（`scale = min(svg_w / vb_w, svg_h / vb_h)`）与偏置居中（`offset_x`, `offset_y`），并实施溢出截幅；
+     - 在 `painter.cp` 中为 `<rect>` 元素回退提取 `fill` 表现性属性并支持 `currentColor`。
+[2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

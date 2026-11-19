@@ -3,6 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/eval/outbound.ts and vendor/kitesurf/packages/engine/src/cdp/page.ts
 
 import { Base64 } from "cap:encoding";
+
 import { CdpPageSession } from "../cdp/session.cp";
 import { BlockableRequest, ResourceType, RequestBlocker } from "./request_blocker.cp";
 import { InterceptVerdict } from "../cdp/fetch.cp";
@@ -39,6 +40,7 @@ pub struct HttpLoaderResult {
     status_code: u32 = 200,
     final_url: []const u8 = "",
     html: []const u8 = "",
+    content_type: []const u8 = "",
 }
 
 pub struct HttpLoader {
@@ -261,11 +263,15 @@ pub struct HttpLoader {
 
         // 2.5. Check for test fixtures (e.g. echo-headers, static pages, dynamic endpoints)
         if (MockFixtures.isFixtureUrl(url)) {
-            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", session.user_agent, out_buf, &session.cookie_jar)) {
+            const ua = session.user_agent;
+            const extra = session.extra_headers;
+            const active_jar = session.getActiveCookieJar();
+            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", ua, out_buf, active_jar, extra)) {
                 return HttpLoaderResult{
                     status_code: 200,
                     final_url: url,
                     html: fixture_res,
+                    content_type: MockFixtures.getContentType(url),
                 };
             }
         }
@@ -356,8 +362,8 @@ pub struct HttpLoader {
             }
         }
 
-        // Append Cookies from session.cookie_jar
-        const cookie_hdr = session.cookie_jar.cookieHeaderForUrl(url, null, session.allocator);
+        // Append Cookies from session.getActiveCookieJar()
+        const cookie_hdr = session.getActiveCookieJar().cookieHeaderForUrl(url, null, session.allocator);
         if (cookie_hdr != null) {
             defer session.allocator.free(cookie_hdr.?);
             if (cookie_hdr.?.len > 0) {
@@ -406,7 +412,7 @@ pub struct HttpLoader {
                 const sc_val = std.mem.trim(u8, line[11..], " \t");
                 const sc_dupe = session.allocator.dupe(u8, sc_val) catch "";
                 if (sc_dupe.len > 0) {
-                    * = session.cookie_jar.setFromHeader(url, sc_dupe, null);
+                    * = session.getActiveCookieJar().setFromHeader(url, sc_dupe, null);
                 }
             }
         }

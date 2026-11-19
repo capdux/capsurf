@@ -1463,3 +1463,24 @@
     - `e2e/storage-cookies.e2e.test.ts` (1 pass, 4 expect calls in 668ms)
   - 全量回归：Phase 54 ~ Phase 57 全量 11 大测试套件（20 项测试用例，65 项断言）100% PASS（10.71s 通过）；
   - 独立单二进制：`bin/main` 编译成功。
+
+## Phase 59: Standalone SVG Document Rendering, XML TreeBuilder Self-Closing, ViewBox Layout, and currentColor Cascade (100% Closed)
+- **`src/cdp/svg_document.cp`**：
+  - 新建独立 SVG 文档合成器，提供 `svgDocumentHtml`，支持避开 XML 序言/Doctype、自动将 `<meta>` 提取至 `<head>` 并重置页面边距（避免 8px body margin 偏移）。
+- **`src/net/mock_fixtures.cp` & `src/net/http_loader.cp`**：
+  - 支持 `.svg` 的 MIME 映射为 `image/svg+xml; charset=utf-8`，并在 `handleFixtureRequest` 中支持 `/svg-document.svg` 路由（支持 `case=sized|prologue|viewbox|metadata|overflowing|styled` 动态加载）。
+- **`src/cdp/session.cp`**：
+  - 顶级导航自动识别 SVG 文档并使用标准容器封装，分发规范的 `image/svg+xml` MIME 类型。
+- **`src/html/tree_builder.cp`**：
+  - 在通用元素分支中检测 `if (tag_tok.self_closing) * = _.popElement();`，避免 `<rect ... />` 自闭合标签堆积导致后续元数据与样式规则层级错乱；增加 `inDefaultScopeName` 与 `popUntilName` 精准闭合未知标签。
+- **`src/css/cascade.cp`**：
+  - 新增 `has_fill_current_color: bool`，支持将 `fill: currentColor` 动态映射到节点级联文本颜色 `color`，并支持表现性属性 `fill="..."` 的低优先级级联注入。
+- **`src/layout/layout.cp`**：
+  - 放宽 `parseDimStr` 支持 `0.0` 坐标解析，在 `getReplacedSize` 补充 `svg` 替换元素；实现 `layoutSvgContainer` 与 `layoutSvgChildren`，依据 W3C SVG 规范完成 `xMidYMid meet` 几何缩放（`scale = min(svg_w / vb_w, svg_h / vb_h)`）与偏置居中（`offset_x`, `offset_y`），并实施溢出截幅。
+- **`src/render/painter.cp`**：
+  - 对 `<rect>` 元素补全 `effective_paint_style`，自动提取 `fill` 表现性属性并支持 `currentColor`。
+- **测试与门禁验证**：
+  - 4 道静态门禁：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
+  - E2E 测试：`e2e/demo/svg-document-render.e2e.test.ts` 100% PASS（1 pass, 0 fail, 16 expect calls in 4.38s）；
+  - 独立单二进制：`bin/main` 成功构建。
+[2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
