@@ -3,11 +3,12 @@
 // Discovers and executes all migrated E2E test files in e2e/,
 // collects test outcomes, calculates pass rate, and outputs a formatted report.
 
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const E2E_DIR = __dirname;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE_PORT = 19230;
 
 function findTestFiles(dir) {
@@ -78,10 +79,10 @@ async function main() {
   console.log('║       CapSurf Native Headless Browser: End-to-End Test Suite       ║');
   console.log('╚════════════════════════════════════════════════════════════════════╝\n');
 
-  const testFiles = findTestFiles(E2E_DIR);
+  const testFiles = findTestFiles(__dirname);
 
   if (testFiles.length === 0) {
-    console.warn('[!] No *.test.js files found in', E2E_DIR);
+    console.warn('[!] No *.test.js files found in', __dirname);
     process.exit(0);
   }
 
@@ -141,11 +142,12 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+// ESM equivalent of require.main === module
+if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   main().catch((err) => {
     console.error('Unexpected runner error:', err);
     process.exit(1);
   });
 }
 
-module.exports = { main, findTestFiles, runTestFile };
+export { main, findTestFiles, runTestFile };

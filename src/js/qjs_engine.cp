@@ -5,6 +5,7 @@
 pub @c {
     @opaque struct JSRuntime {}
     @opaque struct JSContext {}
+    @opaque struct JSModuleDef {}
 
     struct JSValueUnion {
         uint64: u64;
@@ -25,10 +26,17 @@ pub @c {
 
     fn JS_NewRuntime(): (*JSRuntime)?;
     fn JS_FreeRuntime(rt: *JSRuntime);
+    fn JS_RunGC(rt: *JSRuntime);
     fn JS_SetMemoryLimit(rt: *JSRuntime, limit: usize);
     fn JS_SetMaxStackSize(rt: *JSRuntime, stack_size: usize);
     fn JS_UpdateStackTop(rt: *JSRuntime);
     fn JS_SetInterruptHandler(rt: *JSRuntime, cb: (@c fn(rt: *JSRuntime, opaque_ptr: *!?): i32)?, opaque_ptr: *!?);
+    fn JS_SetModuleLoaderFunc(
+        rt: *JSRuntime,
+        module_normalize: *!?,
+        module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?)?,
+        opaque_ptr: *!?,
+    );
     fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;
@@ -80,6 +88,7 @@ pub @c {
     fn JS_JSONStringify(ctx: *JSContext, obj: JSValue, replacer: JSValue, space0: JSValue): JSValue;
     fn JS_ToBool(ctx: *JSContext, val: JSValue): i32;
     fn JS_ToInt32(ctx: *JSContext, pres: *i32, val: JSValue): i32;
+    fn JS_ToInt64(ctx: *JSContext, pres: *i64, val: JSValue): i32;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;
@@ -254,6 +263,10 @@ pub struct JsRuntime {
         std.heap.c_allocator.destroy(_.state);
     }
 
+    fn runGC() {
+        JS_RunGC(_.raw_rt);
+    }
+
     fn isInterrupted(): bool {
         return _.state.interrupted;
     }
@@ -262,6 +275,14 @@ pub struct JsRuntime {
         JS_UpdateStackTop(_.raw_rt);
         _.state.reduction_count = 0;
         _.state.interrupted = false;
+    }
+
+    fn setModuleLoader(
+        *_,
+        loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?),
+        opaque_ptr: *!?,
+    ) {
+        JS_SetModuleLoaderFunc(_.raw_rt, null, loader, opaque_ptr);
     }
 
     fn createContext(*_): JsContext! {
@@ -281,6 +302,10 @@ pub struct JsContext {
         JS_FreeContext(_.raw_ctx);
     }
 
+    fn runGC() {
+        JS_RunGC(_.runtime.raw_rt);
+    }
+
     fn getGlobal(): JSValue {
         return JS_GetGlobalObject(_.raw_ctx);
     }
@@ -296,12 +321,36 @@ pub struct JsContext {
         return JS_Eval(_.raw_ctx, code.ptr, code.len, "<eval>", 0);
     }
 
+    fn compileModule(*_, code: []const u8, module_name: [*c]const u8): (*JSModuleDef)? {
+        _.runtime.resetReductions();
+        const val = JS_Eval(_.raw_ctx, code.ptr, code.len, module_name, 33);
+        if (jsIsException(val)) {
+            return null;
+        }
+        const ptr_val = @as(usize, @intCast(val.u.uint64));
+        const m: *JSModuleDef = @ptrFromInt(ptr_val);
+        JS_FreeValue(_.raw_ctx, val);
+        return m;
+    }
+
     fn getException(): JSValue {
         return JS_GetException(_.raw_ctx);
     }
 
     fn toCString(val: JSValue): []const u8 {
         return jsToSlice(_.raw_ctx, val);
+    }
+
+    fn toInt32(val: JSValue): i32! {
+        let res: i32 = 0;
+        if (JS_ToInt32(_.raw_ctx, &res, val) < 0) return error.JsConversionError;
+        return res;
+    }
+
+    fn toInt64(val: JSValue): i64! {
+        let res: i64 = 0;
+        if (JS_ToInt64(_.raw_ctx, &res, val) < 0) return error.JsConversionError;
+        return res;
     }
 
     fn newString(s: []const u8): JSValue {
@@ -327,7 +376,8 @@ pub struct JsContext {
 
     fn drainJobs(*_) {
         let pctx: (*JSContext)? = null;
-        while (JS_ExecutePendingJob(_.runtime.raw_rt, &pctx) > 0) {}
+        let limit: u32 = 100000;
+        while (limit > 0 && JS_ExecutePendingJob(_.runtime.raw_rt, &pctx) > 0) : (limit -= 1) {}
     }
 
     fn isPromise(val: JSValue): bool {

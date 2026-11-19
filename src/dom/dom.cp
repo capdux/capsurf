@@ -27,6 +27,28 @@ pub struct Attr {
     namespace: []const u8 = "";
 }
 
+pub fn containsDisplayNone(style: []const u8): bool {
+    if (style.len < 12) return false;
+    let i: usize = 0;
+    while (i + 12 <= style.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(style[i .. i + 7], "display")) {
+            let j = i + 7;
+            while (j < style.len && (style[j] == ' ' || style[j] == '\t' || style[j] == '\r' || style[j] == '\n')) : (j += 1) {}
+            if (j < style.len && style[j] == ':') {
+                j += 1;
+                while (j < style.len && (style[j] == ' ' || style[j] == '\t' || style[j] == '\r' || style[j] == '\n')) : (j += 1) {}
+                if (j + 4 <= style.len && std.ascii.eqlIgnoreCase(style[j .. j + 4], "none")) {
+                    const after = j + 4;
+                    if (after == style.len || style[after] == ';' || style[after] == '!' || style[after] == ' ' || style[after] == '\t' || style[after] == '\r' || style[after] == '\n') {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 pub struct NodeData {
     id: NodeId = NULL_NODE;
     node_type: NodeType = NodeType.Element;
@@ -57,6 +79,10 @@ pub struct NodeData {
 
     attrs: [16]Attr = [Attr{}; 16];
     attr_count: usize = 0;
+
+    needs_restyle: bool = false;
+    needs_layout: bool = false;
+    is_display_none: bool = false;
 
     static fn hashLowerAscii(s: []const u8): u32 {
         let h: u32 = 2166136261;
@@ -196,6 +222,7 @@ pub struct NodeData {
             _.setClassName(value);
         } else if (std.ascii.eqlIgnoreCase(name, "style")) {
             _.inline_style = value;
+            _.is_display_none = containsDisplayNone(value);
         }
 
         let i: usize = 0;
@@ -251,6 +278,7 @@ pub struct NodeData {
                     _.setClassName(value);
                 } else if (std.ascii.eqlIgnoreCase(qualified_name, "style")) {
                     _.inline_style = value;
+                    _.is_display_none = containsDisplayNone(value);
                 }
                 return;
             }
@@ -266,6 +294,7 @@ pub struct NodeData {
             _.setClassName(value);
         } else if (std.ascii.eqlIgnoreCase(qualified_name, "style")) {
             _.inline_style = value;
+            _.is_display_none = containsDisplayNone(value);
         }
     }
 
@@ -281,6 +310,7 @@ pub struct NodeData {
         } else if (std.ascii.eqlIgnoreCase(name, "style")) {
             if (_.inline_style.len > 0) special_cleared = true;
             _.inline_style = "";
+            _.is_display_none = false;
         }
 
         let i: usize = 0;
@@ -330,6 +360,7 @@ pub struct NodeData {
                     _.class_count = 0;
                 } else if (std.ascii.eqlIgnoreCase(attr_name, "style")) {
                     _.inline_style = "";
+                    _.is_display_none = false;
                 }
                 let j = i;
                 while (j + 1 < _.attr_count) : (j += 1) {
@@ -421,6 +452,14 @@ pub struct ElementHandle {
 
     fn appendChild(*_, child_id: NodeId) {
         _.doc.appendChild(_.node_id, child_id);
+    }
+
+    fn insertBefore(*_, child_id: NodeId, ref_id: NodeId) {
+        _.doc.insertBefore(_.node_id, child_id, ref_id);
+    }
+
+    fn replaceChild(*_, new_child_id: NodeId, old_child_id: NodeId) {
+        _.doc.replaceChild(_.node_id, new_child_id, old_child_id);
     }
 
     fn cloneNode(*_, deep: bool): NodeId! {
@@ -706,6 +745,7 @@ pub struct Document {
             class_count: src.class_count,
             attrs: src.attrs,
             attr_count: src.attr_count,
+            is_display_none: src.is_display_none,
         };
         _.nodes.append(_.allocator, clone)?;
         return new_id;
@@ -803,11 +843,25 @@ pub struct Document {
         return false;
     }
 
+    fn isNodeDisplayNone(node_id: NodeId): bool {
+        let cur = node_id;
+        while (cur != NULL_NODE && @as(usize, cur) < _.nodes.items.len) {
+            const n = &_.nodes.items[@as(usize, cur)];
+            if (n.is_display_none) return true;
+            if (n.inline_style.len > 0 && containsDisplayNone(n.inline_style)) return true;
+            cur = n.parent;
+        }
+        return false;
+    }
+
     fn setAttribute(*_, node_id: NodeId, name: []const u8, value: []const u8) {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
         if (*n := _.getNodeMut(node_id)) {
             n.setAttribute(name, value);
+        }
+        if (std.ascii.eqlIgnoreCase(name, "dir") || std.ascii.eqlIgnoreCase(name, "lang")) {
+            _.markSubtreeNeedsRestyle(node_id);
         }
     }
 
@@ -817,22 +871,191 @@ pub struct Document {
         if (*n := _.getNodeMut(node_id)) {
             n.setAttributeNS(ns, qualified_name, value);
         }
+        let local_name = qualified_name;
+        if (idx := std.mem.indexOfScalar(u8, qualified_name, ':')) {
+            local_name = qualified_name[idx + 1 ..];
+        }
+        if (std.ascii.eqlIgnoreCase(local_name, "dir") || std.ascii.eqlIgnoreCase(local_name, "lang")) {
+            _.markSubtreeNeedsRestyle(node_id);
+        }
     }
 
     fn removeAttribute(*_, node_id: NodeId, name: []const u8): bool {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        let res = false;
         if (*n := _.getNodeMut(node_id)) {
-            return n.removeAttribute(name);
+            res = n.removeAttribute(name);
         }
-        return false;
+        if (std.ascii.eqlIgnoreCase(name, "dir") || std.ascii.eqlIgnoreCase(name, "lang")) {
+            _.markSubtreeNeedsRestyle(node_id);
+        }
+        return res;
     }
 
     fn removeAttributeNS(*_, node_id: NodeId, ns: []const u8, local_name: []const u8): bool {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        let res = false;
         if (*n := _.getNodeMut(node_id)) {
-            return n.removeAttributeNS(ns, local_name);
+            res = n.removeAttributeNS(ns, local_name);
+        }
+        if (std.ascii.eqlIgnoreCase(local_name, "dir") || std.ascii.eqlIgnoreCase(local_name, "lang")) {
+            _.markSubtreeNeedsRestyle(node_id);
+        }
+        return res;
+    }
+
+    pub fn markSubtreeNeedsRestyle(*_, node_id: NodeId) {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return;
+        const parent_id = _.nodes.items[@as(usize, node_id)].parent;
+        let scope_id = node_id;
+        if (parent_id != NULL_NODE && @as(usize, parent_id) < _.nodes.items.len) {
+            if (_.nodes.items[@as(usize, parent_id)].isElement()) {
+                scope_id = parent_id;
+            }
+        }
+        _.markNodeAndDescendantsRestyle(scope_id);
+    }
+
+    fn markNodeAndDescendantsRestyle(*_, root_id: NodeId) {
+        if (root_id == NULL_NODE || @as(usize, root_id) >= _.nodes.items.len) return;
+        let stack: [128]NodeId = [NULL_NODE; 128];
+        let stack_len: usize = 0;
+        stack[stack_len] = root_id;
+        stack_len += 1;
+
+        while (stack_len > 0) {
+            stack_len -= 1;
+            const cur_id = stack[stack_len];
+            if (cur_id == NULL_NODE || @as(usize, cur_id) >= _.nodes.items.len) continue;
+            _.nodes.items[@as(usize, cur_id)].needs_restyle = true;
+            _.nodes.items[@as(usize, cur_id)].needs_layout = true;
+            _.recordDamage(cur_id);
+
+            let child = _.nodes.items[@as(usize, cur_id)].first_child;
+            while (child != NULL_NODE && @as(usize, child) < _.nodes.items.len) : (child = _.nodes.items[@as(usize, child)].next_sibling) {
+                if (stack_len < stack.len) {
+                    stack[stack_len] = child;
+                    stack_len += 1;
+                }
+            }
+        }
+    }
+
+    pub fn matchesDir(node_id: NodeId, raw_want: []const u8): bool {
+        const want = std.mem.trim(u8, raw_want, " \t\r\n'\"");
+        if (want.len == 0) return false;
+        const want_rtl = std.ascii.eqlIgnoreCase(want, "rtl");
+        const want_ltr = std.ascii.eqlIgnoreCase(want, "ltr");
+        if (!want_rtl && !want_ltr) return false;
+
+        let cur = node_id;
+        while (cur != NULL_NODE && @as(usize, cur) < _.nodes.items.len) {
+            const node = &_.nodes.items[@as(usize, cur)];
+            if (node.isElement()) {
+                if (dir_attr := node.getAttribute("dir")) {
+                    const d = std.mem.trim(u8, dir_attr, " \t\r\n'\"");
+                    if (std.ascii.eqlIgnoreCase(d, "rtl")) {
+                        return want_rtl;
+                    } else if (std.ascii.eqlIgnoreCase(d, "ltr")) {
+                        return want_ltr;
+                    } else if (std.ascii.eqlIgnoreCase(d, "auto")) {
+                        const auto_dir = _.getAutoDirection(cur);
+                        if (std.ascii.eqlIgnoreCase(auto_dir, "rtl")) {
+                            return want_rtl;
+                        } else {
+                            return want_ltr;
+                        }
+                    }
+                }
+            }
+            cur = node.parent;
+        }
+
+        // HTML default directionality is LTR
+        return want_ltr;
+    }
+
+    pub fn getAutoDirection(node_id: NodeId): []const u8 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return "ltr";
+        let stack: [64]NodeId = [NULL_NODE; 64];
+        let stack_len: usize = 0;
+
+        let child = _.nodes.items[@as(usize, node_id)].first_child;
+        let children: [32]NodeId = [NULL_NODE; 32];
+        let ch_count: usize = 0;
+        while (child != NULL_NODE && @as(usize, child) < _.nodes.items.len && ch_count < 32) : (child = _.nodes.items[@as(usize, child)].next_sibling) {
+            children[ch_count] = child;
+            ch_count += 1;
+        }
+        let ci = ch_count;
+        while (ci > 0) {
+            ci -= 1;
+            stack[stack_len] = children[ci];
+            stack_len += 1;
+        }
+
+        while (stack_len > 0) {
+            stack_len -= 1;
+            const cur_id = stack[stack_len];
+            if (cur_id == NULL_NODE || @as(usize, cur_id) >= _.nodes.items.len) continue;
+            const cur_node = &_.nodes.items[@as(usize, cur_id)];
+            if (cur_node.node_type == NodeType.Text && cur_node.text_content.len > 0) {
+                let ti: usize = 0;
+                while (ti < cur_node.text_content.len) : (ti += 1) {
+                    const b = cur_node.text_content[ti];
+                    if ((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')) {
+                        return "ltr";
+                    }
+                    if (b >= 0xD6 && b <= 0xDB) {
+                        return "rtl";
+                    }
+                }
+            } else if (cur_node.isElement()) {
+                if (cur_node.getAttribute("dir") != null) continue;
+                let sub_child = cur_node.first_child;
+                let sub_children: [32]NodeId = [NULL_NODE; 32];
+                let sub_count: usize = 0;
+                while (sub_child != NULL_NODE && @as(usize, sub_child) < _.nodes.items.len && sub_count < 32) : (sub_child = _.nodes.items[@as(usize, sub_child)].next_sibling) {
+                    sub_children[sub_count] = sub_child;
+                    sub_count += 1;
+                }
+                let sci = sub_count;
+                while (sci > 0) {
+                    sci -= 1;
+                    if (stack_len < stack.len) {
+                        stack[stack_len] = sub_children[sci];
+                        stack_len += 1;
+                    }
+                }
+            }
+        }
+        return "ltr";
+    }
+
+    pub fn matchesLang(node_id: NodeId, raw_want: []const u8): bool {
+        const want = std.mem.trim(u8, raw_want, " \t\r\n'\"");
+        if (want.len == 0) return false;
+
+        let cur = node_id;
+        while (cur != NULL_NODE && @as(usize, cur) < _.nodes.items.len) {
+            const node = &_.nodes.items[@as(usize, cur)];
+            if (node.isElement()) {
+                let raw_lang = node.getAttribute("lang");
+                if (raw_lang == null) raw_lang = node.getAttribute("xml:lang");
+                if (lang_attr := raw_lang) {
+                    const l = std.mem.trim(u8, lang_attr, " \t\r\n'\"");
+                    if (l.len > 0) {
+                        if (std.ascii.eqlIgnoreCase(l, want)) return true;
+                        if (l.len > want.len && l[want.len] == '-') {
+                            if (std.ascii.eqlIgnoreCase(l[0..want.len], want)) return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+            cur = node.parent;
         }
         return false;
     }
@@ -904,9 +1127,7 @@ pub struct Document {
         }
 
         if (_.nodes.items[@as(usize, node_id)].node_type == NodeType.Element) {
-            if (_.nodes.items[@as(usize, parent_id)].child_element_count > 0) {
-                _.nodes.items[@as(usize, parent_id)].child_element_count -= 1;
-            }
+            _.reindexElementChildren(parent_id);
         }
 
         _.nodes.items[@as(usize, node_id)].parent = NULL_NODE;
@@ -914,8 +1135,26 @@ pub struct Document {
         _.nodes.items[@as(usize, node_id)].next_sibling = NULL_NODE;
     }
 
+    fn reindexElementChildren(*_, parent_id: NodeId) {
+        if (parent_id == NULL_NODE || @as(usize, parent_id) >= _.nodes.items.len) {
+            return;
+        }
+        let count: u32 = 0;
+        let curr = _.nodes.items[@as(usize, parent_id)].first_child;
+        while (curr != NULL_NODE && @as(usize, curr) < _.nodes.items.len) {
+            if (_.nodes.items[@as(usize, curr)].node_type == NodeType.Element) {
+                count += 1;
+                _.nodes.items[@as(usize, curr)].element_index_in_parent = count;
+            } else {
+                _.nodes.items[@as(usize, curr)].element_index_in_parent = 0;
+            }
+            curr = _.nodes.items[@as(usize, curr)].next_sibling;
+        }
+        _.nodes.items[@as(usize, parent_id)].child_element_count = count;
+    }
+
     fn insertBefore(*_, parent_id: NodeId, child_id: NodeId, ref_id: NodeId) {
-        if (parent_id == NULL_NODE || child_id == NULL_NODE || parent_id == child_id) {
+        if (parent_id == NULL_NODE || child_id == NULL_NODE || parent_id == child_id || child_id == ref_id) {
             return;
         }
         if (ref_id == NULL_NODE) {
@@ -927,11 +1166,23 @@ pub struct Document {
             @as(usize, ref_id) >= _.nodes.items.len) {
             return;
         }
+        if (_.nodes.items[@as(usize, ref_id)].parent != parent_id) {
+            return;
+        }
+        if (_.nodes.items[@as(usize, child_id)].parent == parent_id &&
+            _.nodes.items[@as(usize, child_id)].next_sibling == ref_id) {
+            return;
+        }
 
         // Detach if already attached
         if (_.nodes.items[@as(usize, child_id)].parent != NULL_NODE) {
             _.removeChild(child_id);
         }
+
+        _.mutation_seq += 1;
+        _.recordDamage(parent_id);
+        _.recordDamage(child_id);
+        _.recordDamage(ref_id);
 
         const prev_id = _.nodes.items[@as(usize, ref_id)].prev_sibling;
 
@@ -941,15 +1192,38 @@ pub struct Document {
 
         _.nodes.items[@as(usize, ref_id)].prev_sibling = child_id;
 
-        if (prev_id != NULL_NODE) {
+        if (prev_id != NULL_NODE && ref_id != _.nodes.items[@as(usize, parent_id)].first_child) {
             _.nodes.items[@as(usize, prev_id)].next_sibling = child_id;
         } else {
+            _.nodes.items[@as(usize, child_id)].prev_sibling = NULL_NODE;
             _.nodes.items[@as(usize, parent_id)].first_child = child_id;
         }
 
-        if (_.nodes.items[@as(usize, child_id)].node_type == NodeType.Element) {
-            _.nodes.items[@as(usize, parent_id)].child_element_count += 1;
+        if (_.nodes.items[@as(usize, parent_id)].last_child == NULL_NODE) {
+            _.nodes.items[@as(usize, parent_id)].last_child = ref_id;
         }
+
+        _.reindexElementChildren(parent_id);
+    }
+
+    fn replaceChild(*_, parent_id: NodeId, new_child_id: NodeId, old_child_id: NodeId) {
+        if (parent_id == NULL_NODE || new_child_id == NULL_NODE || old_child_id == NULL_NODE) {
+            return;
+        }
+        if (new_child_id == old_child_id) {
+            return;
+        }
+        if (@as(usize, parent_id) >= _.nodes.items.len ||
+            @as(usize, new_child_id) >= _.nodes.items.len ||
+            @as(usize, old_child_id) >= _.nodes.items.len) {
+            return;
+        }
+        if (_.nodes.items[@as(usize, old_child_id)].parent != parent_id) {
+            return;
+        }
+
+        _.insertBefore(parent_id, new_child_id, old_child_id);
+        _.removeChild(old_child_id);
     }
 
     fn reparentChildren(*_, from_id: NodeId, to_id: NodeId) {
@@ -1082,6 +1356,28 @@ pub struct Document {
     fn getTagName(node_id: NodeId): []const u8 {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return "";
         return _.nodes.items[@as(usize, node_id)].tag_name;
+    }
+
+    fn isScriptElement(node_id: NodeId): bool {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return false;
+        const n = &_.nodes.items[@as(usize, node_id)];
+        return n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script");
+    }
+
+    fn getScriptText(node_id: NodeId, allocator: std.mem.Allocator): []const u8 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) return "";
+        const n = &_.nodes.items[@as(usize, node_id)];
+        if (n.text_content.len > 0) return n.text_content;
+        let buf = std.ArrayListUnmanaged(u8).empty;
+        let child = n.first_child;
+        while (child != NULL_NODE && @as(usize, child) < _.nodes.items.len) {
+            const cn = &_.nodes.items[@as(usize, child)];
+            if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
+                buf.appendSlice(allocator, cn.text_content) catch break;
+            }
+            child = cn.next_sibling;
+        }
+        return buf.toOwnedSlice(allocator) catch "";
     }
 
     fn getAttribute(node_id: NodeId, name: []const u8): ([]const u8)? {

@@ -219,4 +219,169 @@ fn main() {
         expect_eq(jsIsException(loop_val), true);
         expect_eq(rt.isInterrupted(), true);
     });
+
+    test("6. Dynamic <script> injection execution via appendChild and insertBefore", () => {
+        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        const html = "<!DOCTYPE html><html><head><title>Script Inject</title></head><body><div id=\"main\"></div></body></html>";
+        doc.parseHtml(html) catch unreachable;
+
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        // Test 1: appendChild inline script
+        const code1 =
+            "const s1 = document.createElement('script');\n" ++
+            "s1.textContent = 'window.s1Ran = 100;';\n" ++
+            "document.head.appendChild(s1);\n" ++
+            "window.s1Ran;";
+        const v1 = ctx.eval(code1);
+        defer ctx.freeValue(v1);
+        const s1_str = ctx.toCString(v1);
+        defer std.heap.page_allocator.free(s1_str);
+        expect_eq(std.mem.eql(u8, s1_str, "100"), true);
+
+        // Test 2: insertBefore script with .text setter
+        const code2 =
+            "const s2 = document.createElement('script');\n" ++
+            "s2.text = 'window.s2Ran = 200;';\n" ++
+            "document.head.insertBefore(s2, null);\n" ++
+            "window.s2Ran;";
+        const v2 = ctx.eval(code2);
+        defer ctx.freeValue(v2);
+        const s2_str = ctx.toCString(v2);
+        defer std.heap.page_allocator.free(s2_str);
+        expect_eq(std.mem.eql(u8, s2_str, "200"), true);
+    });
+
+    test("7. window.OffscreenCanvas Constructor, Dimensions and Context", () => {
+        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        doc.parseHtml("<html><body></body></html>") catch unreachable;
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const code =
+            "let probe = {};\n" ++
+            "const oc = new OffscreenCanvas(300, 150);\n" ++
+            "probe.w = oc.width;\n" ++
+            "probe.h = oc.height;\n" ++
+            "const c2d = oc.getContext('2d');\n" ++
+            "probe.has2d = Boolean(c2d);\n" ++
+            "probe.webgl = oc.getContext('webgl');\n" ++
+            "try { OffscreenCanvas(10, 10); probe.noNew = 'ok'; } catch(e) { probe.noNew = e.name; }\n" ++
+            "try { new OffscreenCanvas(10); probe.oneArg = 'ok'; } catch(e) { probe.oneArg = e.name; }\n" ++
+            "JSON.stringify(probe);";
+
+        const val = ctx.eval(code);
+        defer ctx.freeValue(val);
+        const res_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(res_str);
+
+        expect_eq(std.mem.indexOf(u8, res_str, "\"w\":300") != null, true);
+        expect_eq(std.mem.indexOf(u8, res_str, "\"h\":150") != null, true);
+        expect_eq(std.mem.indexOf(u8, res_str, "\"has2d\":true") != null, true);
+        expect_eq(std.mem.indexOf(u8, res_str, "\"webgl\":null") != null, true);
+        expect_eq(std.mem.indexOf(u8, res_str, "\"noNew\":\"TypeError\"") != null, true);
+        expect_eq(std.mem.indexOf(u8, res_str, "\"oneArg\":\"TypeError\"") != null, true);
+    });
+
+    test("8. window.scheduler.postTask execution", () => {
+        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        doc.parseHtml("<html><body></body></html>") catch unreachable;
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const code =
+            "window.schedulerResult = 'initial';\n" ++
+            "window.scheduler.postTask(() => {\n" ++
+            "  window.schedulerResult = 'postTask-completed';\n" ++
+            "  return 77;\n" ++
+            "});\n" ++
+            "window.schedulerResult;";
+
+        const val = ctx.eval(code);
+        defer ctx.freeValue(val);
+
+        // Before task queue drains: initial
+        const init_str = ctx.toCString(val);
+        defer std.heap.page_allocator.free(init_str);
+        expect_eq(std.mem.eql(u8, init_str, "initial"), true);
+
+        // Drain task/microtask queue
+        ctx.drainJobs();
+
+        const after_val = ctx.eval("window.schedulerResult");
+        defer ctx.freeValue(after_val);
+        const after_str = ctx.toCString(after_val);
+        defer std.heap.page_allocator.free(after_str);
+        expect_eq(std.mem.eql(u8, after_str, "postTask-completed"), true);
+    });
+
+    test("9. document.modelContext / WebMCP registration stub", () => {
+        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        defer rt.deinit();
+
+        let ctx = rt.createContext() catch unreachable;
+        defer ctx.deinit();
+
+        let doc = Document.init(std.heap.page_allocator) catch unreachable;
+        defer doc.deinit();
+
+        doc.parseHtml("<html><body></body></html>") catch unreachable;
+        * = mountDom(&ctx, &doc, null) catch unreachable;
+
+        const code =
+            "window.toolChanged = false;\n" ++
+            "document.modelContext.addEventListener('toolchange', () => {\n" ++
+            "  window.toolChanged = true;\n" ++
+            "});\n" ++
+            "document.modelContext.registerTool({\n" ++
+            "  name: 'calc',\n" ++
+            "  description: 'Add numbers',\n" ++
+            "  execute: (args) => { return args.a + args.b; }\n" ++
+            "});\n" ++
+            "window.toolChanged;";
+
+        const val = ctx.eval(code);
+        defer ctx.freeValue(val);
+
+        ctx.drainJobs();
+
+        const check_tc = ctx.eval("window.toolChanged");
+        defer ctx.freeValue(check_tc);
+        const tc_str = ctx.toCString(check_tc);
+        defer std.heap.page_allocator.free(tc_str);
+        expect_eq(std.mem.eql(u8, tc_str, "true"), true);
+
+        // Execute tool directly
+        const exec_val = ctx.eval("document.modelContext.executeTool('calc', { a: 15, b: 27 })");
+        defer ctx.freeValue(exec_val);
+        ctx.drainJobs();
+
+        const win_calc = ctx.eval("window.calc({ a: 15, b: 27 })");
+        defer ctx.freeValue(win_calc);
+        const win_str = ctx.toCString(win_calc);
+        defer std.heap.page_allocator.free(win_str);
+        expect_eq(std.mem.eql(u8, win_str, "42"), true);
+    });
 }

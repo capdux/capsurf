@@ -51,6 +51,25 @@ function createStyleProxy(element) {
     Object.prototype
   );
 
+  function propToKebab(p) {
+    if (typeof p !== "string") return "";
+    if (p.startsWith("--")) return p;
+    if (p === "cssFloat") return "float";
+    let body = p;
+    let prefix = "";
+    if (p.startsWith("webkit")) {
+      prefix = "-webkit-";
+      body = p.slice(6);
+    } else if (p.startsWith("Moz")) {
+      prefix = "-moz-";
+      body = p.slice(3);
+    }
+    if (body.length > 0) {
+      body = body[0].toLowerCase() + body.slice(1);
+    }
+    return prefix + body.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+  }
+
   return new Proxy(declTarget, {
     get: function (target, prop, receiver) {
       if (typeof prop === "symbol") {
@@ -84,7 +103,27 @@ function createStyleProxy(element) {
           const str = String(p);
           const key = str.startsWith("--") ? str : str.toLowerCase();
           const entry = map.get(key);
-          return entry ? entry.value : "";
+          if (entry) return entry.value;
+          if (key === "css-float" || key === "cssfloat") {
+            const e = map.get("float");
+            if (e) return e.value;
+          } else if (key === "float") {
+            const e = map.get("css-float");
+            if (e) return e.value;
+          } else if (key === "-webkit-transform") {
+            const e = map.get("transform");
+            if (e) return e.value;
+          } else if (key === "transform") {
+            const e = map.get("-webkit-transform");
+            if (e) return e.value;
+          } else if (key === "-webkit-align-content") {
+            const e = map.get("align-content");
+            if (e) return e.value;
+          } else if (key === "align-content") {
+            const e = map.get("-webkit-align-content");
+            if (e) return e.value;
+          }
+          return "";
         };
       }
       if (prop === "getPropertyPriority") {
@@ -103,34 +142,61 @@ function createStyleProxy(element) {
           }
           const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
           const map = parseStyleMap();
-          const str = String(p);
+          let str = String(p);
+          if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
+            str = "float";
+          }
           const key = str.startsWith("--") ? str : str.toLowerCase();
           map.set(key, { name: str, value: String(val), priority: pPriority });
+          if (key === "display") {
+            element._displayNone = (String(val).trim().toLowerCase() === "none");
+          }
           serializeStyleMap(map);
         };
       }
       if (prop === "removeProperty") {
         return function (p) {
           const map = parseStyleMap();
-          const str = String(p);
+          let str = String(p);
+          if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
+            str = "float";
+          }
           const key = str.startsWith("--") ? str : str.toLowerCase();
           const old = map.get(key);
           map.delete(key);
+          if (key === "float") map.delete("css-float");
+          if (key === "transform") map.delete("-webkit-transform");
+          if (key === "-webkit-transform") map.delete("transform");
+          if (key === "display") {
+            element._displayNone = false;
+          }
           serializeStyleMap(map);
           return old ? old.value : "";
         };
       }
       if (prop in target) return target[prop];
 
+      if (prop === "cssFloat" || prop === "float") {
+        const map = parseStyleMap();
+        const e = map.get("float") || map.get("css-float");
+        return e ? e.value : "";
+      }
+      if (prop === "webkitTransform") {
+        const map = parseStyleMap();
+        const e = map.get("-webkit-transform") || map.get("transform");
+        return e ? e.value : "";
+      }
+      if (prop === "transform") {
+        const map = parseStyleMap();
+        const e = map.get("transform") || map.get("-webkit-transform");
+        return e ? e.value : "";
+      }
+
       // CamelCase or kebab-case lookup
       const map = parseStyleMap();
       if (map.has(prop)) return map.get(prop).value;
-      const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      const kebab = propToKebab(prop);
       if (map.has(kebab)) return map.get(kebab).value;
-      let vendorKebab = kebab;
-      if (prop.startsWith("webkit")) vendorKebab = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-      else if (prop.startsWith("Moz")) vendorKebab = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-      if (map.has(vendorKebab)) return map.get(vendorKebab).value;
       return "";
     },
     set: function (target, prop, value) {
@@ -140,20 +206,33 @@ function createStyleProxy(element) {
       }
       if (typeof prop !== "string") return true;
       if (prop === "cssText") {
-        element.setAttribute("style", String(value));
+        const valStr = String(value);
+        element.setAttribute("style", valStr);
+        element._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(valStr);
         return true;
       }
-      let key = prop;
-      if (!prop.startsWith("--")) {
-        if (prop.startsWith("webkit")) key = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-        else if (prop.startsWith("Moz")) key = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-        else key = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      if (prop === "cssFloat" || prop === "float") {
+        const map = parseStyleMap();
+        map.delete("css-float");
+        if (value === null || value === undefined || value === "") {
+          map.delete("float");
+        } else {
+          map.set("float", { name: "float", value: String(value), priority: "" });
+        }
+        serializeStyleMap(map);
+        return true;
       }
+      let key = propToKebab(prop);
+      if (key === "css-float") key = "float";
       const map = parseStyleMap();
+      const normKey = key.startsWith("--") ? key : key.toLowerCase();
       if (value === null || value === undefined || value === "") {
-        map.delete(key.startsWith("--") ? key : key.toLowerCase());
+        map.delete(normKey);
       } else {
-        map.set(key.startsWith("--") ? key : key.toLowerCase(), { name: key, value: String(value), priority: "" });
+        map.set(normKey, { name: key, value: String(value), priority: "" });
+      }
+      if (normKey === "display") {
+        element._displayNone = (value !== null && value !== undefined && String(value).trim().toLowerCase() === "none");
       }
       serializeStyleMap(map);
       return true;
@@ -161,6 +240,7 @@ function createStyleProxy(element) {
     has: function (target, prop) {
       if (typeof prop === "symbol") return prop === Symbol.iterator || prop in target;
       const pStr = String(prop);
+      if (pStr === "cssFloat" || pStr === "float") return true;
       if (STYLE_DECL_MEMBERS.has(pStr)) return true;
       if (prop in target) return true;
       if (pStr.startsWith("--")) return false;
@@ -502,6 +582,44 @@ function installElementExtensions(proto) {
     }
     if (key.toLowerCase() === "id") {
       this.id = val;
+      if (typeof val === "string" && val.length > 0 && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(val)) {
+        try {
+          const idVal = val;
+          const desc = typeof globalThis !== "undefined" ? Object.getOwnPropertyDescriptor(globalThis, idVal) : null;
+          if (!desc || desc.configurable) {
+            Object.defineProperty(globalThis, idVal, {
+              get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
+              set: function (v) {
+                Object.defineProperty(globalThis, idVal, {
+                  value: v,
+                  writable: true,
+                  enumerable: true,
+                  configurable: true,
+                });
+              },
+              configurable: true,
+              enumerable: true,
+            });
+            if (typeof window !== "undefined" && window !== globalThis) {
+              Object.defineProperty(window, idVal, {
+                get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
+                set: function (v) {
+                  Object.defineProperty(window, idVal, {
+                    value: v,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                  });
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            }
+          }
+        } catch (e) {}
+      }
+    } else if (key.toLowerCase() === "style") {
+      this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
     } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = val;
     } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
@@ -570,6 +688,8 @@ function installElementExtensions(proto) {
     }
     if (key.toLowerCase() === "id") {
       this.id = "";
+    } else if (key.toLowerCase() === "style") {
+      this._displayNone = false;
     } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = "";
     } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
@@ -1072,30 +1192,190 @@ function installElementExtensions(proto) {
   }
 
   // Scroll and Box Geometry properties
+  function triggerScrollEvents(el) {
+    if (!el) return;
+    const Ev = (typeof Event !== "undefined")
+      ? Event
+      : ((typeof global !== "undefined" && global.Event) || (typeof globalThis !== "undefined" && globalThis.Event) || null);
+    if (!Ev) return;
+
+    const scrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+    scrollEv._isTrusted = true;
+    if (typeof dispatchTrustedEvent === "function") {
+      dispatchTrustedEvent(el, scrollEv);
+    } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+      global.__capsurf_dispatchTrustedEvent(el, scrollEv);
+    } else if (typeof el.dispatchEvent === "function") {
+      scrollEv._isTrusted = true;
+      el.dispatchEvent(scrollEv);
+    }
+
+    if (el._scrollendTimer) {
+      clearTimeout(el._scrollendTimer);
+    }
+    el._scrollendTimer = setTimeout(function () {
+      el._scrollendTimer = null;
+      const endEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+      endEv._isTrusted = true;
+      if (typeof dispatchTrustedEvent === "function") {
+        dispatchTrustedEvent(el, endEv);
+      } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+        global.__capsurf_dispatchTrustedEvent(el, endEv);
+      } else if (typeof el.dispatchEvent === "function") {
+        endEv._isTrusted = true;
+        el.dispatchEvent(endEv);
+      }
+    }, 20);
+  }
+
   Object.defineProperty(proto, "scrollTop", {
     get: function () { return this._scrollTop || 0; },
-    set: function (v) { this._scrollTop = Math.max(0, Number(v) || 0); },
+    set: function (v) {
+      const num = Number(v) || 0;
+      let target = Math.max(0, num);
+      const sh = this.scrollHeight;
+      const ch = this.clientHeight;
+      if (sh > ch && ch > 0) {
+        target = Math.min(target, sh - ch);
+      }
+      const prev = this._scrollTop || 0;
+      this._scrollTop = target;
+      if (prev !== target) {
+        triggerScrollEvents(this);
+      }
+    },
     configurable: true,
   });
 
   Object.defineProperty(proto, "scrollLeft", {
     get: function () { return this._scrollLeft || 0; },
-    set: function (v) { this._scrollLeft = Math.max(0, Number(v) || 0); },
+    set: function (v) {
+      const num = Number(v) || 0;
+      let target = Math.max(0, num);
+      const sw = this.scrollWidth;
+      const cw = this.clientWidth;
+      if (sw > cw && cw > 0) {
+        target = Math.min(target, sw - cw);
+      }
+      const prev = this._scrollLeft || 0;
+      this._scrollLeft = target;
+      if (prev !== target) {
+        triggerScrollEvents(this);
+      }
+    },
     configurable: true,
   });
 
+  function getScrollParent(node) {
+    if (!node) return null;
+    if (node.parentElement) return node.parentElement;
+    if (node.parentNode) {
+      if (node.parentNode.nodeType === 11 && node.parentNode.host) { // ShadowRoot
+        return node.parentNode.host;
+      }
+      if (node.parentNode.nodeType === 1) {
+        return node.parentNode;
+      }
+      if (node.parentNode.host) {
+        return node.parentNode.host;
+      }
+    }
+    if (node.host) return node.host;
+    return null;
+  }
+
+  function isElementDisplayNone(el) {
+    if (!el || el.nodeType !== 1) return false;
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      if (cur._displayNone === true) return true;
+      if (cur.style) {
+        const d = (typeof cur.style.getPropertyValue === "function")
+          ? cur.style.getPropertyValue("display")
+          : cur.style.display;
+        if (d === "none") return true;
+      }
+      const rawStyle = (typeof cur.getAttribute === "function") ? cur.getAttribute("style") : "";
+      if (rawStyle && /(?:^|;)\s*display\s*:\s*none\b/i.test(rawStyle)) {
+        return true;
+      }
+      if (cur._computedStyle && cur._computedStyle.display === "none") {
+        return true;
+      }
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(cur);
+          if (cs) {
+            const cd = (typeof cs.getPropertyValue === "function") ? cs.getPropertyValue("display") : cs.display;
+            if (cd === "none") return true;
+          }
+        } catch (e) {}
+      }
+      cur = getScrollParent(cur);
+    }
+    return false;
+  }
+
   const origGetBoundingClientRect = proto.getBoundingClientRect;
   proto.getBoundingClientRect = function () {
+    if (isElementDisplayNone(this)) {
+      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+    }
     const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+    if (r.width === 0 && r.height === 0 && r.x === 0 && r.y === 0) {
+      const tag = String(this.tagName || this.localName || "").toUpperCase();
+      if (tag === "IMG") {
+        const nw = Number(this.naturalWidth || 0);
+        const nh = Number(this.naturalHeight || 0);
+        if (nw > 0 || nh > 0) {
+          return { x: 0, y: 0, width: nw, height: nh, left: 0, top: 0, right: nw, bottom: nh };
+        }
+      }
+      let childW = 0, childH = 0;
+      if (this.style) {
+        if (this.style.width) childW = parseFloat(this.style.width) || 0;
+        if (this.style.height) childH = parseFloat(this.style.height) || 0;
+      }
+      const parent = getScrollParent(this);
+      if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
+        const pr = parent.getBoundingClientRect();
+        if (!childW) childW = pr.width;
+        let offsetTop = 0;
+        const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
+                         (parent.children || parent._children || []);
+        for (let i = 0; i < siblings.length; i++) {
+          const sib = siblings[i];
+          if (sib === this) break;
+          if (sib && sib.nodeType === 1) {
+            let sh = (sib.getBoundingClientRect ? sib.getBoundingClientRect().height : 0) || 0;
+            if (!sh && sib.style && sib.style.height) sh = parseFloat(sib.style.height) || 0;
+            offsetTop += sh;
+          }
+        }
+        const relX = pr.left;
+        const relY = pr.top + offsetTop - (parent._scrollTop || 0);
+        return {
+          x: relX,
+          y: relY,
+          left: relX,
+          top: relY,
+          width: childW,
+          height: childH,
+          right: relX + childW,
+          bottom: relY + childH,
+        };
+      }
+      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+    }
     const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
     const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
     let scrollOffsetParentX = 0;
     let scrollOffsetParentY = 0;
-    let cur = this.parentElement;
-    while (cur && cur !== document.body && cur !== document.documentElement) {
+    let cur = getScrollParent(this);
+    while (cur && cur !== document.body && cur !== document.documentElement && cur !== document) {
       if (cur._scrollTop) scrollOffsetParentY += cur._scrollTop;
       if (cur._scrollLeft) scrollOffsetParentX += cur._scrollLeft;
-      cur = cur.parentElement;
+      cur = getScrollParent(cur);
     }
     const x = r.x - winX - scrollOffsetParentX;
     const y = r.y - winY - scrollOffsetParentY;
@@ -1138,31 +1418,109 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "scrollHeight", {
     get: function () {
-      let maxBottom = this.clientHeight;
-      const all = this.children || [];
-      for (let i = 0; i < all.length; i++) {
-        const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
-        if (cr && cr.bottom > maxBottom) maxBottom = cr.bottom;
+      if (this === document.documentElement || this === document.body) {
+        let maxH = (typeof window !== "undefined" && window.innerHeight) || 720;
+        if (this.style && this.style.height) {
+          const ph = parseFloat(this.style.height);
+          if (!isNaN(ph) && ph > maxH) maxH = ph;
+        }
+        const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+        const all = this.children || [];
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+          if (cr && cr.bottom + winY > maxH) maxH = cr.bottom + winY;
+        }
+        return Math.round(maxH);
       }
-      return maxBottom;
+
+      let maxBottom = this.clientHeight;
+      const parentR = this.getBoundingClientRect();
+      const shadow = this._shadowRoot || this.shadowRoot;
+      const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
+      const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
+      let accumY = 0;
+      for (let i = 0; i < all.length; i++) {
+        const child = all[i];
+        if (!child || child.nodeType !== 1) continue;
+        const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+        let childH = (cr && cr.height) || 0;
+        if (!childH && child.style && child.style.height) {
+          childH = parseFloat(child.style.height) || 0;
+        }
+        let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y + (this._scrollTop || 0)) : accumY;
+        accumY += childH;
+        const b = Math.max(relY + childH, childH);
+        if (b > maxBottom) maxBottom = b;
+      }
+      return Math.round(maxBottom);
     },
     configurable: true,
   });
 
   Object.defineProperty(proto, "scrollWidth", {
     get: function () {
-      let maxRight = this.clientWidth;
-      const all = this.children || [];
-      for (let i = 0; i < all.length; i++) {
-        const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
-        if (cr && cr.right > maxRight) maxRight = cr.right;
+      if (this === document.documentElement || this === document.body) {
+        let maxW = (typeof window !== "undefined" && window.innerWidth) || 1280;
+        if (this.style && this.style.width) {
+          const pw = parseFloat(this.style.width);
+          if (!isNaN(pw) && pw > maxW) maxW = pw;
+        }
+        const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+        const all = this.children || [];
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+          if (cr && cr.right + winX > maxW) maxW = cr.right + winX;
+        }
+        return Math.round(maxW);
       }
-      return maxRight;
+
+      let maxRight = this.clientWidth;
+      const parentR = this.getBoundingClientRect();
+      const shadow = this._shadowRoot || this.shadowRoot;
+      const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
+      const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
+      let accumX = 0;
+      for (let i = 0; i < all.length; i++) {
+        const child = all[i];
+        if (!child || child.nodeType !== 1) continue;
+        const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+        let childW = (cr && cr.width) || 0;
+        if (!childW && child.style && child.style.width) {
+          childW = parseFloat(child.style.width) || 0;
+        }
+        let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x + (this._scrollLeft || 0)) : accumX;
+        accumX += childW;
+        const r = Math.max(relX + childW, childW);
+        if (r > maxRight) maxRight = r;
+      }
+      return Math.round(maxRight);
     },
     configurable: true,
   });
 
-  function scrollElementIntoView(el, centerIfNeeded) {
+  function computeAxis(elPos, elSize, viewSize, curScroll, mode) {
+    switch (mode) {
+      case "start":
+        return elPos;
+      case "end":
+        return elPos + elSize - viewSize;
+      case "center":
+        return elPos + elSize / 2 - viewSize / 2;
+      case "nearest": {
+        if (elPos >= curScroll && elPos + elSize <= curScroll + viewSize) {
+          return curScroll;
+        }
+        if (elPos < curScroll) return elPos;
+        return elPos + elSize - viewSize;
+      }
+      default:
+        return elPos;
+    }
+  }
+
+  function scrollElementIntoView(el, block, inline, onlyIfNeeded) {
     if (!el) return;
     const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
     const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
@@ -1171,63 +1529,112 @@ function installElementExtensions(proto) {
     const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
 
     let clipped = false;
-    let cur = el.parentElement;
-    while (cur && cur !== document.body && cur !== document.documentElement) {
-      const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
-      const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
-      const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
-      if (isScrollable) {
-        const cr = cur.getBoundingClientRect();
-        if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
-          clipped = true;
-          break;
+    let cur = getScrollParent(el);
+    while (cur && cur !== document.body && cur !== document.documentElement && cur !== document) {
+      if (cur.nodeType === 1) {
+        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+        const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+        const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+        if (isScrollable) {
+          const cr = cur.getBoundingClientRect();
+          if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
+            clipped = true;
+            break;
+          }
         }
       }
-      cur = cur.parentElement;
+      cur = getScrollParent(cur);
     }
 
-    if (centerIfNeeded && inWin && !clipped) {
+    if (onlyIfNeeded && inWin && !clipped) {
       return;
     }
 
-    // Scroll container ancestors
-    cur = el.parentElement;
-    while (cur && cur !== document.body && cur !== document.documentElement) {
-      const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
-      const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
-      const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
-      if (isScrollable) {
-        const cr = cur.getBoundingClientRect();
-        const er = el.getBoundingClientRect();
-        const curScrollTop = cur.scrollTop || 0;
-        const elMidInContainer = (er.top - cr.top) + curScrollTop + (er.height / 2);
-        const targetScrollTop = elMidInContainer - (cur.clientHeight / 2);
-        cur.scrollTop = Math.max(0, targetScrollTop);
+    // 1. Scroll container ancestors
+    cur = getScrollParent(el);
+    let safety = 0;
+    while (cur && cur !== document.body && cur !== document.documentElement && cur !== document && safety < 50) {
+      safety++;
+      if (cur.nodeType === 1) {
+        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+        const ox = (style && (style.overflowX || style.overflow)) || "";
+        const oy = (style && (style.overflowY || style.overflow)) || "";
+        const styleAttr = (cur.getAttribute && cur.getAttribute("style")) || "";
+        const isScrollable = ox === "auto" || ox === "scroll" || ox === "hidden" ||
+                             oy === "auto" || oy === "scroll" || oy === "hidden" ||
+                             styleAttr.includes("overflow");
+        const sh = cur.scrollHeight || 0;
+        const ch = cur.clientHeight || 0;
+        const sw = cur.scrollWidth || 0;
+        const cw = cur.clientWidth || 0;
+        const overflowsY = isScrollable || (sh > ch && ch > 0);
+        const overflowsX = isScrollable || (sw > cw && cw > 0);
+
+        if (overflowsY || overflowsX) {
+          const cr = cur.getBoundingClientRect();
+          const er = el.getBoundingClientRect();
+          const curScrollTop = cur.scrollTop || 0;
+          const curScrollLeft = cur.scrollLeft || 0;
+          const elInContentY = (er.top - cr.top) + curScrollTop;
+          const elInContentX = (er.left - cr.left) + curScrollLeft;
+
+          if (overflowsY) {
+            const rawY = computeAxis(elInContentY, er.height, ch, curScrollTop, block);
+            const maxY = Math.max(0, sh - ch);
+            const targetY = Math.max(0, Math.min(rawY, maxY > 0 ? maxY : rawY));
+            if (targetY !== curScrollTop) {
+              cur.scrollTop = targetY;
+            }
+          }
+
+          if (overflowsX) {
+            const rawX = computeAxis(elInContentX, er.width, cw, curScrollLeft, inline);
+            const maxX = Math.max(0, sw - cw);
+            const targetX = Math.max(0, Math.min(rawX, maxX > 0 ? maxX : rawX));
+            if (targetX !== curScrollLeft) {
+              cur.scrollLeft = targetX;
+            }
+          }
+        }
       }
-      cur = cur.parentElement;
+      cur = getScrollParent(cur);
     }
 
-    // Scroll window if needed
+    // 2. Scroll window if needed
     const afterR = el.getBoundingClientRect();
-    const afterInWin = (afterR.top >= 0 && afterR.bottom <= vh && afterR.left >= 0 && afterR.right <= vw);
-    if (!afterInWin || !centerIfNeeded) {
-      const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
-      const elPageY = afterR.top + curWinY;
-      const targetWinY = (elPageY + afterR.height / 2) - (vh / 2);
-      if (typeof window !== "undefined" && window.scrollTo) {
-        window.scrollTo(window.scrollX || 0, Math.max(0, targetWinY));
-      }
+    const curWinX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+    const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+    const targetDocY = afterR.top + curWinY;
+    const targetDocX = afterR.left + curWinX;
+
+    const newWinY = computeAxis(targetDocY, afterR.height, vh, curWinY, block);
+    const newWinX = computeAxis(targetDocX, afterR.width, vw, curWinX, inline);
+
+    if (typeof window !== "undefined" && window.scrollTo) {
+      window.scrollTo(Math.max(0, Math.round(newWinX)), Math.max(0, Math.round(newWinY)));
     }
   }
 
   proto.scrollIntoView = function (arg) {
-    const center = (typeof arg === "object" && arg !== null && (arg.block === "center" || arg.inline === "center"));
-    scrollElementIntoView(this, !center ? false : false);
+    let block = "start";
+    let inline = "nearest";
+    if (arg === false) {
+      block = "end";
+      inline = "nearest";
+    } else if (arg === true || arg == null) {
+      block = "start";
+      inline = "nearest";
+    } else if (typeof arg === "object") {
+      block = String(arg.block || "start");
+      inline = String(arg.inline || "nearest");
+    }
+    scrollElementIntoView(this, block, inline, false);
   };
   markNative(proto.scrollIntoView, "scrollIntoView");
 
   proto.scrollIntoViewIfNeeded = function (centerIfNeeded) {
-    scrollElementIntoView(this, centerIfNeeded !== false);
+    const center = centerIfNeeded !== false;
+    scrollElementIntoView(this, center ? "center" : "nearest", center ? "center" : "nearest", true);
   };
   markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
 

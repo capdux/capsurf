@@ -88,14 +88,20 @@ pub fn parseUrlParts(url_str: []const u8): UrlParts? {
     const host = rest[0..host_end];
     if (host.len == 0) return null;
 
+    let cursor = host_end;
+    if (cursor < rest.len && rest[cursor] == ':') {
+        cursor += 1;
+        while (cursor < rest.len && rest[cursor] >= '0' && rest[cursor] <= '9') : (cursor += 1) {}
+    }
+
     let path: []const u8 = "/";
-    if (host_end < rest.len && rest[host_end] == '/') {
-        let path_end = host_end;
+    if (cursor < rest.len && rest[cursor] == '/') {
+        let path_end = cursor;
         while (path_end < rest.len) : (path_end += 1) {
             const ch = rest[path_end];
             if (ch == '?' || ch == '#') break;
         }
-        path = rest[host_end..path_end];
+        path = rest[cursor..path_end];
     }
 
     return UrlParts {
@@ -258,6 +264,12 @@ pub struct CookieJar {
     }
 
     fn deinit(*_) {
+        for (ck of _.entries.items) {
+            if (ck.name.len > 0) _.allocator.free(ck.name);
+            if (ck.value.len > 0) _.allocator.free(ck.value);
+            if (ck.host.len > 0) _.allocator.free(ck.host);
+            if (ck.path.len > 0) _.allocator.free(ck.path);
+        }
         _.entries.deinit(_.allocator);
     }
 
@@ -272,6 +284,10 @@ pub struct CookieJar {
         while (i < _.entries.items.len) {
             const ck = &_.entries.items[i];
             if (ck.expires_at != null && ck.expires_at.? <= cur_now) {
+                if (ck.name.len > 0) _.allocator.free(ck.name);
+                if (ck.value.len > 0) _.allocator.free(ck.value);
+                if (ck.host.len > 0) _.allocator.free(ck.host);
+                if (ck.path.len > 0) _.allocator.free(ck.path);
                 * = _.entries.swapRemove(i);
             } else {
                 i += 1;
@@ -382,12 +398,34 @@ pub struct CookieJar {
             }
         }
 
+        // Check entry size
+        if (parsed.name.len + parsed.value.len + parsed.path.len > MAX_COOKIE_BYTES) {
+            return null;
+        }
+
+        const d_name = _.allocator.dupe(u8, parsed.name) catch return null;
+        const d_val = _.allocator.dupe(u8, parsed.value) catch {
+            _.allocator.free(d_name);
+            return null;
+        };
+        const d_host = _.allocator.dupe(u8, host) catch {
+            _.allocator.free(d_name);
+            _.allocator.free(d_val);
+            return null;
+        };
+        const d_path = _.allocator.dupe(u8, parsed.path) catch {
+            _.allocator.free(d_name);
+            _.allocator.free(d_val);
+            _.allocator.free(d_host);
+            return null;
+        };
+
         _.seq += 1;
         const entry = CookieEntry {
-            name: parsed.name,
-            value: parsed.value,
-            host: host,
-            path: parsed.path,
+            name: d_name,
+            value: d_val,
+            host: d_host,
+            path: d_path,
             secure: parsed.secure,
             http_only: is_http_only,
             same_site: parsed.same_site,
@@ -395,11 +433,6 @@ pub struct CookieJar {
             expires_at: expires_at,
             created_at: _.seq,
         };
-
-        // Check entry size
-        if (entry.name.len + entry.value.len + entry.path.len > MAX_COOKIE_BYTES) {
-            return null;
-        }
 
         // Update or insert
         let found = false;
@@ -411,8 +444,18 @@ pub struct CookieJar {
                 std.mem.eql(u8, ex.host, entry.host) &&
                 ex.host_only == entry.host_only)
             {
-                if (from_script && ex.http_only) return null;
+                if (from_script && ex.http_only) {
+                    _.allocator.free(d_name);
+                    _.allocator.free(d_val);
+                    _.allocator.free(d_host);
+                    _.allocator.free(d_path);
+                    return null;
+                }
                 const old_created = ex.created_at;
+                if (ex.name.len > 0) _.allocator.free(ex.name);
+                if (ex.value.len > 0) _.allocator.free(ex.value);
+                if (ex.host.len > 0) _.allocator.free(ex.host);
+                if (ex.path.len > 0) _.allocator.free(ex.path);
                 _.entries.items[i] = entry;
                 _.entries.items[i].created_at = old_created;
                 found = true;
@@ -425,9 +468,19 @@ pub struct CookieJar {
                 _.purgeExpired();
             }
             if (_.entries.items.len >= MAX_COOKIES_TOTAL) {
+                _.allocator.free(d_name);
+                _.allocator.free(d_val);
+                _.allocator.free(d_host);
+                _.allocator.free(d_path);
                 return null;
             }
-            _.entries.append(_.allocator, entry) catch return null;
+            _.entries.append(_.allocator, entry) catch {
+                _.allocator.free(d_name);
+                _.allocator.free(d_val);
+                _.allocator.free(d_host);
+                _.allocator.free(d_path);
+                return null;
+            };
         }
 
         return entry;
@@ -552,6 +605,10 @@ pub struct CookieJar {
                 is_match = std.mem.eql(u8, ck.path, path);
             }
             if (is_match) {
+                if (ck.name.len > 0) _.allocator.free(ck.name);
+                if (ck.value.len > 0) _.allocator.free(ck.value);
+                if (ck.host.len > 0) _.allocator.free(ck.host);
+                if (ck.path.len > 0) _.allocator.free(ck.path);
                 * = _.entries.swapRemove(i);
                 removed += 1;
             } else {
@@ -562,6 +619,12 @@ pub struct CookieJar {
     }
 
     fn clear(*_) {
+        for (ck of _.entries.items) {
+            if (ck.name.len > 0) _.allocator.free(ck.name);
+            if (ck.value.len > 0) _.allocator.free(ck.value);
+            if (ck.host.len > 0) _.allocator.free(ck.host);
+            if (ck.path.len > 0) _.allocator.free(ck.path);
+        }
         _.entries.clearRetainingCapacity();
     }
 }

@@ -80,7 +80,7 @@ fn testConsoleAndLogMultiplexing()! {
     expect_eq(session.log_enabled, true);
 
     // 2. Load page and evaluate console logs
-    session.navigate("<html><body><script>console.log('Agent bootstrap ok');</script></body></html>", "http://agent.local/index.html") catch unreachable;
+    session.navigate("<html><body><script>console.log('Agent bootstrap ok');</script></body></html>", "http://agent.local/index.html", "") catch unreachable;
 
     // 3. Runtime.evaluate triggering console.warn
     const req_eval = CdpRequest{

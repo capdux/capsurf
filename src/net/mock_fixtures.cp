@@ -612,6 +612,18 @@ pub struct MockFixtures {
             }
         }
 
+        if (std.mem.indexOf(u8, url, "/svg-overflow-clip.html") != null || std.mem.indexOf(u8, url, "svg-overflow-clip.html") != null) {
+            if (content := MockFixtures.readPageFile("svg-overflow-clip.html", out_buf)) {
+                return content;
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/svg-sprite-sidebar.html") != null || std.mem.indexOf(u8, url, "svg-sprite-sidebar.html") != null) {
+            if (content := MockFixtures.readPageFile("svg-sprite-sidebar.html", out_buf)) {
+                return content;
+            }
+        }
+
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
             let body_val: []const u8 = "";
             let decoded_buf: [32768]u8 = undefined;

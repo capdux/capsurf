@@ -2,11 +2,11 @@
 // CDP Log Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/log.ts
 
-import { CdpRequest, CdpResponse, CdpEvent } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 
 pub struct LogHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
+    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         * = out_buf;
         event_count.* = 0;
 

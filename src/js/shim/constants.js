@@ -150,3 +150,37 @@ markNative(DOMException, "DOMException");
 if (typeof globalThis !== "undefined") {
   globalThis.DOMException = DOMException;
 }
+
+// Global kitesurf & capsurf internals stubs
+(function () {
+  const ksSym = Symbol.for("kitesurf.internals");
+  const csSym = Symbol.for("capsurf.internals");
+  const rec = (typeof globalThis !== "undefined" && globalThis[ksSym]) || {
+    canvasPushMs: 0,
+    demandFontOutlines: function () {},
+    fontsInflightCount: function () { return 0; },
+    fontsReady: function () { return Promise.resolve(); },
+  };
+  if (typeof globalThis !== "undefined") {
+    if (!globalThis[ksSym]) {
+      globalThis[ksSym] = rec;
+    } else {
+      if (globalThis[ksSym].canvasPushMs === undefined) globalThis[ksSym].canvasPushMs = 0;
+      if (typeof globalThis[ksSym].fontsInflightCount !== "function") globalThis[ksSym].fontsInflightCount = function () { return 0; };
+      if (typeof globalThis[ksSym].fontsReady !== "function") globalThis[ksSym].fontsReady = function () { return Promise.resolve(); };
+      if (typeof globalThis[ksSym].demandFontOutlines !== "function") globalThis[ksSym].demandFontOutlines = function () {};
+    }
+    if (!globalThis[csSym]) globalThis[csSym] = globalThis[ksSym];
+  }
+  if (typeof window !== "undefined") {
+    if (!window[ksSym]) {
+      window[ksSym] = rec;
+    } else {
+      if (window[ksSym].canvasPushMs === undefined) window[ksSym].canvasPushMs = 0;
+      if (typeof window[ksSym].fontsInflightCount !== "function") window[ksSym].fontsInflightCount = function () { return 0; };
+      if (typeof window[ksSym].fontsReady !== "function") window[ksSym].fontsReady = function () { return Promise.resolve(); };
+      if (typeof window[ksSym].demandFontOutlines !== "function") window[ksSym].demandFontOutlines = function () {};
+    }
+    if (!window[csSym]) window[csSym] = window[ksSym];
+  }
+})();

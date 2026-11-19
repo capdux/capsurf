@@ -14,6 +14,7 @@
     - `std.*`：直接使用 `std.*`（**严禁写 `const std = @import("std");`，严禁为调 `std` 使用 `zig {}`**）。
     - `JSON` 与 `RegExp`：直接使用 `JSON.stringify(val)`、`JSON.parse<T>(str)`、`JSON.parse(str)` 以及 `/pattern/flags` 或 `new RegExp(pattern, flags)`（废除旧版 `@json_parse`）。
   - **`cap:css`（已全面实装，路径 `/data/dev/cp/lib/css`）**：源自 Bun/LightningCSS 与 Mozilla Servo，包含完整的 CSS Parser、Selectors、Rules、Properties、Values。
+  - **`cap:encoding`（已实装，路径 `/data/dev/cp/lib/encoding`）**：支持 Base64 等标准编码算法。
   - **其他已实装标准库**：`cap:http`、`cap:ws`、`cap:url`、`cap:conf`、`cap:event`（含 `event_loop`）、`cap:io`、`cap:sync`、`cap:net`、`cap:pack`（压缩/归档）、`cap:crypto`。
 - **参考文档策略**：
   - 仓库根目录必须维护精简版 **`CP_PITFALLS.md`**（约 3KB，与本文件第 2 节同源维护）。

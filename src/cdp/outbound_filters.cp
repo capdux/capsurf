@@ -380,7 +380,7 @@ pub struct RegistryEntry {
     filters: OutboundFilters = OutboundFilters{},
     active: bool = false,
 
-    fn connectionId(): []const u8 {
+    fn connectionId(*_): []const u8 {
         return _.connection_id_buf[0.._.connection_id_len];
     }
 }

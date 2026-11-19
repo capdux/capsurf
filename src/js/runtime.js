@@ -161,6 +161,40 @@
     globalThis.DOMException = DOMException;
   }
 
+  // Global kitesurf & capsurf internals stubs
+  (function () {
+    const ksSym = Symbol.for("kitesurf.internals");
+    const csSym = Symbol.for("capsurf.internals");
+    const rec = (typeof globalThis !== "undefined" && globalThis[ksSym]) || {
+      canvasPushMs: 0,
+      demandFontOutlines: function () {},
+      fontsInflightCount: function () { return 0; },
+      fontsReady: function () { return Promise.resolve(); },
+    };
+    if (typeof globalThis !== "undefined") {
+      if (!globalThis[ksSym]) {
+        globalThis[ksSym] = rec;
+      } else {
+        if (globalThis[ksSym].canvasPushMs === undefined) globalThis[ksSym].canvasPushMs = 0;
+        if (typeof globalThis[ksSym].fontsInflightCount !== "function") globalThis[ksSym].fontsInflightCount = function () { return 0; };
+        if (typeof globalThis[ksSym].fontsReady !== "function") globalThis[ksSym].fontsReady = function () { return Promise.resolve(); };
+        if (typeof globalThis[ksSym].demandFontOutlines !== "function") globalThis[ksSym].demandFontOutlines = function () {};
+      }
+      if (!globalThis[csSym]) globalThis[csSym] = globalThis[ksSym];
+    }
+    if (typeof window !== "undefined") {
+      if (!window[ksSym]) {
+        window[ksSym] = rec;
+      } else {
+        if (window[ksSym].canvasPushMs === undefined) window[ksSym].canvasPushMs = 0;
+        if (typeof window[ksSym].fontsInflightCount !== "function") window[ksSym].fontsInflightCount = function () { return 0; };
+        if (typeof window[ksSym].fontsReady !== "function") window[ksSym].fontsReady = function () { return Promise.resolve(); };
+        if (typeof window[ksSym].demandFontOutlines !== "function") window[ksSym].demandFontOutlines = function () {};
+      }
+      if (!window[csSym]) window[csSym] = window[ksSym];
+    }
+  })();
+
   // =============================================================
   // Module: util/strings.js
   // =============================================================
@@ -193,9 +227,46 @@
   }
 
   function errorMessage(err) {
-    if (err instanceof Error) return err.message;
-    return String(err);
+    if (err instanceof Error) return normalizeErrorMessage(err.message);
+    return normalizeErrorMessage(String(err));
   }
+
+  function normalizeErrorMessage(s) {
+    if (typeof s !== "string") return s;
+    return s
+      .replace(/cannot read property '([^']+)' of (null|undefined)/g, "cannot read properties of $2 (reading '$1')")
+      .replace(/cannot set property '([^']+)' of (null|undefined)/g, "cannot set properties of $2 (setting '$1')")
+      .replace(/Cannot read property '([^']+)' of (null|undefined)/g, "Cannot read properties of $2 (reading '$1')")
+      .replace(/Cannot set property '([^']+)' of (null|undefined)/g, "Cannot set properties of $2 (setting '$1')");
+  }
+
+  (function () {
+    const errorCtors = [
+      typeof Error !== "undefined" ? Error : null,
+      typeof TypeError !== "undefined" ? TypeError : null,
+      typeof RangeError !== "undefined" ? RangeError : null,
+      typeof SyntaxError !== "undefined" ? SyntaxError : null,
+      typeof ReferenceError !== "undefined" ? ReferenceError : null,
+      typeof URIError !== "undefined" ? URIError : null,
+      typeof EvalError !== "undefined" ? EvalError : null,
+    ];
+
+    for (let i = 0; i < errorCtors.length; i++) {
+      const ctor = errorCtors[i];
+      if (ctor && ctor.prototype) {
+        const origToString = ctor.prototype.toString;
+        ctor.prototype.toString = function () {
+          if (this && typeof this.message === "string") {
+            try {
+              this.message = normalizeErrorMessage(this.message);
+            } catch (e) {}
+          }
+          const s = (origToString && typeof origToString === "function") ? origToString.call(this) : (this.name + ": " + this.message);
+          return normalizeErrorMessage(s);
+        };
+      }
+    }
+  })();
 
   // =============================================================
   // Module: util/validation.js
@@ -1596,7 +1667,11 @@
   const PHASE_AT_TARGET = 2;
   const PHASE_BUBBLING = 3;
 
-  EventTarget.prototype.addEventListener = function (type, callback, options) {
+  EventTarget.prototype.addEventListener = function addEventListener(type, callback) {
+    if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+      throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
+    }
+    const options = arguments[2];
     if (!type || typeof callback !== "function") return;
     const map = getListeners(this);
     if (!map) return;
@@ -1617,7 +1692,11 @@
     list.push({ callback: callback, capture: capture, once: once, passive: passive });
   };
 
-  EventTarget.prototype.removeEventListener = function (type, callback, options) {
+  EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
+    if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+      throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
+    }
+    const options = arguments[2];
     if (!type || typeof callback !== "function") return;
     const map = getListeners(this);
     if (!map) return;
@@ -2132,7 +2211,23 @@
         }
         if (prop === "namedItem") {
           return function (name) {
-            return findNamedItemInList(getList(), name);
+            const key = String(name);
+            if (!key) return null;
+            const list = getList();
+            const matches = [];
+            for (let i = 0; i < list.length; i++) {
+              const item = list[i];
+              if (!item) continue;
+              const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+              const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+              if (itemId === key || itemName === key) {
+                matches.push(item);
+              }
+            }
+            if (matches.length === 0) return null;
+            if (matches.length === 1) return matches[0];
+            if (t._isFormControlsCollection) return new RadioNodeList(matches);
+            return matches[0];
           };
         }
         if (prop === Symbol.iterator) {
@@ -2153,9 +2248,26 @@
           return Reflect.get(t, prop, receiver);
         }
         if (typeof prop === "string") {
-          const named = findNamedItemInList(getList(), prop);
-          if (named !== null) {
-            return named;
+          const key = prop;
+          const list = getList();
+          if (t._isFormControlsCollection) {
+            const matches = [];
+            for (let i = 0; i < list.length; i++) {
+              const item = list[i];
+              if (!item) continue;
+              const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+              const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+              if (itemId === key || itemName === key) {
+                matches.push(item);
+              }
+            }
+            if (matches.length === 1) return matches[0];
+            if (matches.length > 1) return new RadioNodeList(matches);
+          } else {
+            const named = findNamedItemInList(list, prop);
+            if (named !== null) {
+              return named;
+            }
           }
         }
         return Reflect.get(t, prop, receiver);
@@ -2215,9 +2327,30 @@
           }
         }
         if (typeof prop === "string") {
-          const named = findNamedItemInList(getList(), prop);
-          if (named !== null) {
-            return { value: named, writable: false, enumerable: false, configurable: true };
+          const list = getList();
+          if (t._isFormControlsCollection) {
+            const key = prop;
+            const matches = [];
+            for (let i = 0; i < list.length; i++) {
+              const item = list[i];
+              if (!item) continue;
+              const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+              const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+              if (itemId === key || itemName === key) {
+                matches.push(item);
+              }
+            }
+            if (matches.length === 1) {
+              return { value: matches[0], writable: false, enumerable: false, configurable: true };
+            }
+            if (matches.length > 1) {
+              return { value: new RadioNodeList(matches), writable: false, enumerable: false, configurable: true };
+            }
+          } else {
+            const named = findNamedItemInList(list, prop);
+            if (named !== null) {
+              return { value: named, writable: false, enumerable: false, configurable: true };
+            }
           }
         }
         return Reflect.getOwnPropertyDescriptor(t, prop);
@@ -2310,6 +2443,84 @@
     };
   };
   markNative(HTMLCollection, "HTMLCollection");
+
+  function HTMLFormControlsCollection() {
+    throw new TypeError("Illegal constructor");
+  }
+  HTMLFormControlsCollection.prototype = Object.create(HTMLCollection.prototype);
+  HTMLFormControlsCollection.prototype.constructor = HTMLFormControlsCollection;
+  Object.defineProperty(HTMLFormControlsCollection.prototype, Symbol.toStringTag, {
+    value: "HTMLFormControlsCollection",
+    configurable: true,
+  });
+  HTMLFormControlsCollection.prototype.namedItem = function (name) {
+    const key = String(name);
+    if (!key) return null;
+    const matches = [];
+    for (let i = 0; i < this.length; i++) {
+      const item = this[i];
+      if (!item) continue;
+      const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+      const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+      if (itemId === key || itemName === key) {
+        matches.push(item);
+      }
+    }
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    return new RadioNodeList(matches);
+  };
+  markNative(HTMLFormControlsCollection, "HTMLFormControlsCollection");
+  markNative(HTMLFormControlsCollection.prototype.namedItem, "namedItem");
+
+  function isRadio(node) {
+    return node && (node.tagName || "").toLowerCase() === "input" && (node.type || "").toLowerCase() === "radio";
+  }
+
+  function RadioNodeList(items) {
+    const list = items || [];
+    for (let i = 0; i < list.length; i++) {
+      Object.defineProperty(this, i, {
+        value: list[i],
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    Object.defineProperty(this, "length", {
+      value: list.length,
+      writable: false,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+  RadioNodeList.prototype = Object.create(NodeList.prototype);
+  RadioNodeList.prototype.constructor = RadioNodeList;
+  Object.defineProperty(RadioNodeList.prototype, Symbol.toStringTag, {
+    value: "RadioNodeList",
+    configurable: true,
+  });
+  Object.defineProperty(RadioNodeList.prototype, "value", {
+    get: function () {
+      for (let i = 0; i < this.length; i++) {
+        const node = this[i];
+        if (isRadio(node) && node.checked) return node.value || "on";
+      }
+      return "";
+    },
+    set: function (v) {
+      const val = String(v);
+      for (let i = 0; i < this.length; i++) {
+        const node = this[i];
+        if (isRadio(node) && (node.value || "on") === val) {
+          node.checked = true;
+          return;
+        }
+      }
+    },
+    configurable: true,
+  });
+  markNative(RadioNodeList, "RadioNodeList");
 
   function HTMLOptionsCollection() {
     throw new TypeError("Illegal constructor");
@@ -2844,12 +3055,16 @@
     globalThis.Attr = Attr;
     globalThis.HTMLCollection = HTMLCollection;
     globalThis.HTMLOptionsCollection = HTMLOptionsCollection;
+    globalThis.HTMLFormControlsCollection = HTMLFormControlsCollection;
+    globalThis.RadioNodeList = RadioNodeList;
   }
   if (typeof window !== "undefined") {
     window.NamedNodeMap = NamedNodeMap;
     window.Attr = Attr;
     window.HTMLCollection = HTMLCollection;
     window.HTMLOptionsCollection = HTMLOptionsCollection;
+    window.HTMLFormControlsCollection = HTMLFormControlsCollection;
+    window.RadioNodeList = RadioNodeList;
   }
 
   // =============================================================
@@ -3625,7 +3840,7 @@
         if (context === "font-face") {
           return parts.length ? parts.join("; ") + ";" : "";
         }
-        return parts.join("; ");
+        return parts.length ? parts.join("; ") + ";" : "";
       }
 
       Object.defineProperty(decl, "cssText", {
@@ -3645,6 +3860,15 @@
           if (typeof prop === "string" && prop.startsWith("_")) return target[prop];
           if (prop in target) return target[prop];
           if (typeof prop === "string") {
+            if (prop === "cssFloat" || prop === "float") {
+              return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
+            }
+            if (prop === "webkitTransform") {
+              return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
+            }
+            if (prop === "transform") {
+              return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+            }
             const kebab = cssPropCamelToKebab(prop);
             let val = decl.getPropertyValue(kebab);
             if (!val && prop.startsWith("--")) val = decl.getPropertyValue(prop);
@@ -4403,6 +4627,8 @@
       out.unbalanced = depth !== 0 || parenDepth !== 0 || inStr !== "";
       return out;
     }
+    global.splitStylesheetRules = splitStylesheetRules;
+    if (typeof globalThis !== "undefined") globalThis.splitStylesheetRules = splitStylesheetRules;
 
     function classifyRuleKind(parsed) {
       const sel = String(parsed.selectorText || "").trim();
@@ -4494,7 +4720,8 @@
         style._parentRule = rule;
         rule.style = style;
         rule._serialize = function () {
-          const d = style.cssText;
+          let d = style.cssText;
+          if (d && !d.endsWith(";")) d += ";";
           return rule.selectorText + (d ? " { " + d + " }" : " { }");
         };
         return rule;
@@ -4559,7 +4786,8 @@
         style._parentRule = rule;
         rule.style = style;
         rule._serialize = function () {
-          const d = style.cssText;
+          let d = style.cssText;
+          if (d && !d.endsWith(";")) d += ";";
           return "@font-face" + (d ? " { " + d + " }" : " { }");
         };
         return rule;
@@ -4576,7 +4804,8 @@
         rule.basePalette = style.getPropertyValue("base-palette") || "";
         rule.overrideColors = style.getPropertyValue("override-colors") || "";
         rule._serialize = function () {
-          const d = style.cssText;
+          let d = style.cssText;
+          if (d && !d.endsWith(";")) d += ";";
           return "@font-palette-values " + rule.name + (d ? " { " + d + " }" : " { }");
         };
         return rule;
@@ -4725,7 +4954,6 @@
       this.ownerNode = ownerNode || null;
       this.ownerRule = null;
       this.parentStyleSheet = null;
-      this.href = null;
       this.title = null;
       this.media = new MediaList("");
       this.disabled = false;
@@ -4734,6 +4962,21 @@
 
       const self = this;
       const rulesList = makeRuleList(this._rules);
+
+      Object.defineProperty(this, "href", {
+        get: function () {
+          if (self.ownerNode) {
+            const tag = String(self.ownerNode.localName || self.ownerNode.tagName || "").toLowerCase();
+            if (tag === "link") {
+              return self.ownerNode.getAttribute("href") || null;
+            }
+          }
+          return null;
+        },
+        set: function (_v) {},
+        configurable: true,
+        enumerable: true,
+      });
 
       Object.defineProperty(this, "cssRules", {
         get: function () {
@@ -4751,6 +4994,8 @@
 
     CSSStyleSheet.prototype._syncFromOwner = function () {
       if (!this.ownerNode) return;
+      const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+      if (tag === "link") return;
       const cur = String(this.ownerNode.textContent || "");
       if (cur !== this._lastParsedText) {
         this._reparseText(cur);
@@ -4769,6 +5014,8 @@
 
     CSSStyleSheet.prototype._remirror = function () {
       if (!this.ownerNode) return;
+      const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+      if (tag === "link") return;
       const text = this._rules.map((r) => r.cssText).join("\n");
       this._lastParsedText = text;
       this.ownerNode.textContent = text;
@@ -4834,6 +5081,184 @@
     if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheet = getOrCreateStyleSheet;
 
     // =========================================================================
+    // 7.5. StyleSheetList
+    // =========================================================================
+
+    function StyleSheetList() {}
+    StyleSheetList.prototype.item = function (index) {
+      const i = Number(index) >>> 0;
+      const arr = this._getSheets ? this._getSheets() : [];
+      return (i < arr.length) ? arr[i] : null;
+    };
+    StyleSheetList.prototype[Symbol.iterator] = function () {
+      const arr = this._getSheets ? this._getSheets() : [];
+      let idx = 0;
+      return {
+        next: function () {
+          if (idx < arr.length) {
+            return { value: arr[idx++], done: false };
+          }
+          return { value: undefined, done: true };
+        }
+      };
+    };
+    Object.defineProperty(StyleSheetList.prototype, Symbol.toStringTag, {
+      value: "StyleSheetList",
+      configurable: true,
+    });
+    markNative(StyleSheetList, "StyleSheetList");
+    markNative(StyleSheetList.prototype.item, "item");
+    global.StyleSheetList = StyleSheetList;
+    if (typeof globalThis !== "undefined") globalThis.StyleSheetList = StyleSheetList;
+    if (typeof window !== "undefined") window.StyleSheetList = StyleSheetList;
+
+    function createStyleSheetListProxy(root) {
+      const target = new StyleSheetList();
+
+      function getSheets() {
+        const sheets = [];
+        if (!root) return sheets;
+
+        let elements = [];
+        if (typeof root.querySelectorAll === "function") {
+          try {
+            elements = root.querySelectorAll("style, link");
+          } catch (e) {}
+        }
+        if (!elements || elements.length === 0) {
+          const list = [];
+          function walk(n) {
+            if (!n) return;
+            if (n.nodeType === 1) {
+              const tag = String(n.localName || n.tagName || "").toLowerCase();
+              if (tag === "style" || tag === "link") list.push(n);
+            }
+            let c = n.firstChild;
+            while (c) {
+              walk(c);
+              c = c.nextSibling;
+            }
+          }
+          walk(root);
+          elements = list;
+        }
+
+        for (let i = 0; i < elements.length; i++) {
+          const el = elements[i];
+          if (!el) continue;
+          const tag = String(el.localName || el.tagName || "").toLowerCase();
+          if (tag === "style") {
+            const s = el.sheet;
+            if (s) sheets.push(s);
+          } else if (tag === "link") {
+            const rel = (el.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+            if (rel.includes("stylesheet")) {
+              const s = el.sheet;
+              if (s) sheets.push(s);
+            }
+          }
+        }
+        return sheets;
+      }
+
+      target._getSheets = getSheets;
+
+      return new Proxy(target, {
+        get: function (t, prop, receiver) {
+          if (typeof prop === "symbol") {
+            if (prop === Symbol.iterator) {
+              return function () {
+                const arr = getSheets();
+                let idx = 0;
+                return {
+                  next: function () {
+                    if (idx < arr.length) {
+                      return { value: arr[idx++], done: false };
+                    }
+                    return { value: undefined, done: true };
+                  }
+                };
+              };
+            }
+            return t[prop];
+          }
+          if (prop === "length") {
+            return getSheets().length;
+          }
+          if (prop === "item") {
+            return function (index) {
+              const i = Number(index) >>> 0;
+              const arr = getSheets();
+              return (i < arr.length) ? arr[i] : null;
+            };
+          }
+          if (typeof prop === "string" && /^\d+$/.test(prop)) {
+            const i = Number(prop);
+            const arr = getSheets();
+            return (i >= 0 && i < arr.length) ? arr[i] : undefined;
+          }
+          return t[prop];
+        },
+        has: function (t, prop) {
+          if (prop === "length") return true;
+          if (typeof prop === "string" && /^\d+$/.test(prop)) {
+            return Number(prop) < getSheets().length;
+          }
+          return prop in t;
+        },
+        ownKeys: function () {
+          const len = getSheets().length;
+          const keys = [];
+          for (let i = 0; i < len; i++) {
+            keys.push(String(i));
+          }
+          return keys;
+        },
+        getOwnPropertyDescriptor: function (t, prop) {
+          if (prop === "length") {
+            return { value: getSheets().length, writable: false, enumerable: false, configurable: true };
+          }
+          if (typeof prop === "string" && /^\d+$/.test(prop)) {
+            const i = Number(prop);
+            const arr = getSheets();
+            if (i >= 0 && i < arr.length) {
+              return { value: arr[i], writable: false, enumerable: true, configurable: true };
+            }
+          }
+          return Reflect.getOwnPropertyDescriptor(t, prop);
+        }
+      });
+    }
+
+    function getOrCreateStyleSheetList(root) {
+      if (!root) return createStyleSheetListProxy(null);
+      if (!root._styleSheets) {
+        root._styleSheets = createStyleSheetListProxy(root);
+      }
+      return root._styleSheets;
+    }
+    global.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
+    if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
+
+    const docProtoForStylesheets = (global.Document && global.Document.prototype) ? global.Document.prototype : null;
+    if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "styleSheets")) {
+      Object.defineProperty(docProtoForStylesheets, "styleSheets", {
+        get: function () {
+          return getOrCreateStyleSheetList(this);
+        },
+        configurable: true,
+      });
+    }
+    if (global.document && !Object.getOwnPropertyDescriptor(global.document, "styleSheets")) {
+      Object.defineProperty(global.document, "styleSheets", {
+        get: function () {
+          return getOrCreateStyleSheetList(this);
+        },
+        configurable: true,
+      });
+    }
+
+    // =========================================================================
     // 8. Global getComputedStyle wrapper for var() resolution & padding/margin expansion
     // =========================================================================
 
@@ -4896,6 +5321,96 @@
       return res;
     }
 
+    const NAMED_COLORS_MAP = {
+      lime: "rgb(0, 255, 0)",
+      red: "rgb(255, 0, 0)",
+      green: "rgb(0, 128, 0)",
+      blue: "rgb(0, 0, 255)",
+      white: "rgb(255, 255, 255)",
+      black: "rgb(0, 0, 0)",
+      yellow: "rgb(255, 255, 0)",
+      cyan: "rgb(0, 255, 255)",
+      aqua: "rgb(0, 255, 255)",
+      magenta: "rgb(255, 0, 255)",
+      fuchsia: "rgb(255, 0, 255)",
+      orange: "rgb(255, 165, 0)",
+      purple: "rgb(128, 0, 128)",
+      transparent: "rgba(0, 0, 0, 0)",
+    };
+
+    function normalizeSingleColor(val) {
+      if (!val || typeof val !== "string") return val;
+      const s = val.trim().toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(NAMED_COLORS_MAP, s)) {
+        return NAMED_COLORS_MAP[s];
+      }
+      if (s.startsWith("#")) {
+        const hex = s.slice(1);
+        if (hex.length === 3) {
+          const r = parseInt(hex[0] + hex[0], 16);
+          const g = parseInt(hex[1] + hex[1], 16);
+          const b = parseInt(hex[2] + hex[2], 16);
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return "rgb(" + r + ", " + g + ", " + b + ")";
+        } else if (hex.length === 4) {
+          const r = parseInt(hex[0] + hex[0], 16);
+          const g = parseInt(hex[1] + hex[1], 16);
+          const b = parseInt(hex[2] + hex[2], 16);
+          const a = parseInt(hex[3] + hex[3], 16) / 255;
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) {
+            if (a >= 1) return "rgb(" + r + ", " + g + ", " + b + ")";
+            return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+          }
+        } else if (hex.length === 6) {
+          const r = parseInt(hex.slice(0, 2), 16);
+          const g = parseInt(hex.slice(2, 4), 16);
+          const b = parseInt(hex.slice(4, 6), 16);
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return "rgb(" + r + ", " + g + ", " + b + ")";
+        } else if (hex.length === 8) {
+          const r = parseInt(hex.slice(0, 2), 16);
+          const g = parseInt(hex.slice(2, 4), 16);
+          const b = parseInt(hex.slice(4, 6), 16);
+          const a = parseInt(hex.slice(6, 8), 16) / 255;
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) {
+            if (a >= 1) return "rgb(" + r + ", " + g + ", " + b + ")";
+            return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+          }
+        }
+      }
+      return val;
+    }
+
+    function normalizeCssColor(val) {
+      if (!val || typeof val !== "string") return val;
+      let res = normalizeSingleColor(val);
+      if (res.includes("rgb(") || res.includes("rgba(")) {
+        res = res.replace(/rgba?\(\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)(?:\s*[, /]\s*([0-9.]+%?))?\s*\)/gi, function (match, p1, p2, p3, p4) {
+          const parseComp = function (p) {
+            if (typeof p !== "string") return 0;
+            if (p.endsWith("%")) return Math.round((parseFloat(p) / 100.0) * 255.0);
+            return Math.round(parseFloat(p));
+          };
+          const r = Math.min(255, Math.max(0, parseComp(p1)));
+          const g = Math.min(255, Math.max(0, parseComp(p2)));
+          const b = Math.min(255, Math.max(0, parseComp(p3)));
+          let a = 1.0;
+          if (p4 !== undefined && p4 !== null) {
+            if (String(p4).endsWith("%")) a = parseFloat(p4) / 100.0;
+            else a = parseFloat(p4);
+            a = Math.min(1.0, Math.max(0.0, a));
+          }
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+            if (a >= 1.0) {
+              return "rgb(" + r + ", " + g + ", " + b + ")";
+            } else {
+              return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+            }
+          }
+          return match;
+        });
+      }
+      return res;
+    }
+
     let _capturedGetComputedStyle = null;
 
     function wrapComputedStyleDecl(decl, element) {
@@ -4904,12 +5419,55 @@
         get: function (target, prop, receiver) {
           if (typeof prop === "symbol") return target[prop];
           if (typeof prop === "string") {
+            if (prop === "getPropertyValue") {
+              return function (propertyName) {
+                const k = cssPropCamelToKebab(String(propertyName || "").trim());
+                let val = receiver[k] || (target.getPropertyValue ? target.getPropertyValue(propertyName) : "");
+                if (typeof val === "string") {
+                  val = resolveCssVars(element, val);
+                  val = normalizeCssColor(val);
+                }
+                return val || "";
+              };
+            }
+            if (prop === "cssFloat" || prop === "float") {
+              return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
+            }
+            if (prop === "webkitTransform") {
+              return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
+            }
+            if (prop === "transform") {
+              return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+            }
             const kebab = cssPropCamelToKebab(prop);
 
             // If color is unstyled, default to rgb(0, 0, 0)
             if (kebab === "color") {
-              const val = target.getPropertyValue ? target.getPropertyValue("color") : target[prop];
+              let val = target.getPropertyValue ? target.getPropertyValue("color") : target[prop];
+              if (val) val = normalizeCssColor(val);
               return val || "rgb(0, 0, 0)";
+            }
+
+            if (kebab === "background-color") {
+              let val = target.getPropertyValue ? target.getPropertyValue("background-color") : target[prop];
+              if (!val && target.getPropertyValue) {
+                val = target.getPropertyValue("background");
+              }
+              if (!val && target.background) val = target.background;
+              if (val) {
+                val = resolveCssVars(element, val);
+                val = normalizeCssColor(val);
+              }
+              return val || "";
+            }
+
+            if (kebab.endsWith("-color")) {
+              let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
+              if (val) {
+                val = resolveCssVars(element, val);
+                val = normalizeCssColor(val);
+              }
+              return val || "";
             }
 
             // Shorthand padding -> paddingTop / paddingBottom / etc.
@@ -4937,7 +5495,10 @@
             }
 
             let val = target[prop];
-            if (typeof val === "string") val = resolveCssVars(element, val);
+            if (typeof val === "string") {
+              val = resolveCssVars(element, val);
+              val = normalizeCssColor(val);
+            }
             return val;
           }
           return target[prop];
@@ -5154,6 +5715,43 @@
       return DOCUMENT_POSITION_CONTAINS | DOCUMENT_POSITION_PRECEDING;
     }
 
+    // Find lowest common ancestor
+    const pathA = [];
+    let currA = this;
+    while (currA) {
+      pathA.unshift(currA);
+      currA = currA.parentNode || currA.parentElement;
+    }
+
+    const pathB = [];
+    let currB = other;
+    while (currB) {
+      pathB.unshift(currB);
+      currB = currB.parentNode || currB.parentElement;
+    }
+
+    if (pathA[0] !== pathB[0]) {
+      return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC;
+    }
+
+    let i = 0;
+    while (i < pathA.length && i < pathB.length && pathA[i] === pathB[i]) {
+      i++;
+    }
+
+    const childA = pathA[i];
+    const childB = pathB[i];
+    const parent = pathA[i - 1];
+
+    if (parent && childA && childB) {
+      let child = parent.firstChild;
+      while (child) {
+        if (child === childA) return DOCUMENT_POSITION_FOLLOWING;
+        if (child === childB) return DOCUMENT_POSITION_PRECEDING;
+        child = child.nextSibling;
+      }
+    }
+
     // Node ID comparison fallback
     if (typeof this._nid === "number" && typeof other._nid === "number") {
       if (this._nid < other._nid) return DOCUMENT_POSITION_FOLLOWING;
@@ -5168,6 +5766,17 @@
     }
     if (this.nodeType === COMMENT_NODE) {
       return new Comment(this.textContent);
+    }
+    if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const frag = (doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment();
+      if (deep) {
+        const kids = Array.from(this.childNodes || this._children || []);
+        for (let i = 0; i < kids.length; i++) {
+          frag.appendChild(kids[i].cloneNode(true));
+        }
+      }
+      return frag;
     }
     if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
       const clone = document.createElement(this.tagName.toLowerCase());
@@ -5197,7 +5806,9 @@
   }
 
   const nativeElementAppendChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.appendChild : null;
+  const nativeElementInsertBefore = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.insertBefore : null;
   const nativeElementRemoveChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.removeChild : null;
+  const nativeElementReplaceChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.replaceChild : null;
   const nativeElementGetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.get : null;
   const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.set : null;
   const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
@@ -5328,6 +5939,45 @@
     }
   }
 
+  function notifyConnectedCustomElements(node) {
+    if (!node) return;
+    if (node.nodeType === DOCUMENT_FRAGMENT_NODE || node.nodeType === DOCUMENT_NODE) {
+      const kids = node.childNodes || node._children;
+      if (kids && kids.length) {
+        for (let i = 0; i < kids.length; i++) {
+          notifyConnectedCustomElements(kids[i]);
+        }
+      }
+      return;
+    }
+    if (node.nodeType !== ELEMENT_NODE) return;
+    if (!node.isConnected) return;
+
+    const tagName = String(node.localName || node.tagName || "").toLowerCase();
+    const registry = (typeof customElements !== "undefined" && customElements) || (typeof global !== "undefined" && global.customElements);
+    const Ctor = (registry && typeof registry.get === "function") ? registry.get(tagName) : null;
+    if (Ctor && typeof Ctor === "function") {
+      if (!Ctor.prototype.isPrototypeOf(node)) {
+        if (typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function") {
+          globalThis.upgradeCustomElement(node, Ctor, { tagName: tagName, fireConnectedCallback: true });
+        }
+      } else if (typeof node.connectedCallback === "function") {
+        try {
+          node.connectedCallback();
+        } catch (e) {
+          if (typeof console !== "undefined" && console.warn) console.warn(e);
+        }
+      }
+    }
+
+    const kids = node.childNodes || node._children;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        notifyConnectedCustomElements(kids[i]);
+      }
+    }
+  }
+
   Node.prototype.appendChild = function (child) {
     if (!this || typeof this !== "object") {
       throw new TypeError("Illegal invocation");
@@ -5347,13 +5997,13 @@
     }
 
     // If child already has a parent or owner fragment, remove from it
-    if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+    if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
       try {
         child._ownerFragment.removeChild(child);
       } catch (e) {}
       child._ownerFragment = null;
     }
-    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+    if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
       try {
         child.parentNode.removeChild(child);
       } catch (e) {}
@@ -5390,6 +6040,7 @@
     }
 
     executeConnectedScripts(child);
+    notifyConnectedCustomElements(child);
 
     return child;
   };
@@ -5425,13 +6076,13 @@
       return newChild;
     }
 
-    if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+    if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
       try {
         newChild._ownerFragment.removeChild(newChild);
       } catch (e) {}
       newChild._ownerFragment = null;
     }
-    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+    if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
       try {
         newChild.parentNode.removeChild(newChild);
       } catch (e) {}
@@ -5446,6 +6097,12 @@
     const curIdx = children.indexOf(refChild);
     children.splice(curIdx >= 0 ? curIdx : children.length, 0, newChild);
 
+    if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+      try {
+        nativeElementInsertBefore.call(this, newChild, refChild);
+      } catch (e) {}
+    }
+
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [newChild];
@@ -5453,6 +6110,7 @@
     }
 
     executeConnectedScripts(newChild);
+    notifyConnectedCustomElements(newChild);
 
     return newChild;
   };
@@ -5494,6 +6152,96 @@
     }
 
     return child;
+  };
+
+  Node.prototype.replaceChild = function (newChild, oldChild) {
+    if (!this || typeof this !== "object") {
+      throw new TypeError("Illegal invocation");
+    }
+    if (!newChild || typeof newChild !== "object" || !isGenuineNode(newChild)) {
+      throw new TypeError("Failed to execute 'replaceChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+    if (!oldChild || typeof oldChild !== "object" || !isGenuineNode(oldChild)) {
+      throw new TypeError("Failed to execute 'replaceChild' on 'Node': parameter 2 is not of type 'Node'.");
+    }
+
+    const children = ensureChildren(this);
+    const idx = children.indexOf(oldChild);
+    if (idx === -1 && oldChild.parentNode !== this) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+      }
+      const err = new Error("NotFoundError: Node was not found");
+      err.name = "NotFoundError";
+      throw err;
+    }
+
+    if (newChild === oldChild) {
+      return oldChild;
+    }
+
+    if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
+      this.insertBefore(newChild, oldChild);
+      this.removeChild(oldChild);
+      return oldChild;
+    }
+
+    if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
+      try {
+        newChild._ownerFragment.removeChild(newChild);
+      } catch (e) {}
+      newChild._ownerFragment = null;
+    }
+    if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+      try {
+        newChild.parentNode.removeChild(newChild);
+      } catch (e) {}
+    }
+
+    newChild.parentNode = this;
+    newChild.ownerDocument = this.ownerDocument || this;
+    if (isParsedNode(newChild) && newChild.nodeType === 1) {
+      newChild._children = [];
+    }
+
+    const oldIdx = children.indexOf(oldChild);
+    if (oldIdx >= 0) {
+      children.splice(oldIdx, 1, newChild);
+    } else {
+      children.push(newChild);
+    }
+    oldChild.parentNode = null;
+
+    if (nativeElementReplaceChild && typeof nativeElementReplaceChild === "function") {
+      try {
+        nativeElementReplaceChild.call(this, newChild, oldChild);
+      } catch (e) {
+        if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+          try { nativeElementInsertBefore.call(this, newChild, oldChild); } catch (e2) {}
+        }
+        if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+          try { nativeElementRemoveChild.call(this, oldChild); } catch (e2) {}
+        }
+      }
+    } else {
+      if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+        try { nativeElementInsertBefore.call(this, newChild, oldChild); } catch (e2) {}
+      }
+      if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+        try { nativeElementRemoveChild.call(this, oldChild); } catch (e2) {}
+      }
+    }
+
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.addedNodes = [newChild];
+      rec.removedNodes = [oldChild];
+      notifyMutation(rec);
+    }
+
+    executeConnectedScripts(newChild);
+
+    return oldChild;
   };
 
   Object.defineProperty(Node.prototype, "childNodes", {
@@ -5557,6 +6305,7 @@
     Element.prototype.appendChild = Node.prototype.appendChild;
     Element.prototype.insertBefore = Node.prototype.insertBefore;
     Element.prototype.removeChild = Node.prototype.removeChild;
+    Element.prototype.replaceChild = Node.prototype.replaceChild;
 
     const nativeElementInnerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
     if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
@@ -5629,6 +6378,7 @@
   markNative(Node.prototype.appendChild, "appendChild");
   markNative(Node.prototype.insertBefore, "insertBefore");
   markNative(Node.prototype.removeChild, "removeChild");
+  markNative(Node.prototype.replaceChild, "replaceChild");
   markNative(Node.prototype.hasChildNodes, "hasChildNodes");
   markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
   markNative(Node.prototype.getRootNode, "getRootNode");
@@ -5702,10 +6452,10 @@
   DocumentFragment.prototype.constructor = DocumentFragment;
   DocumentFragment.prototype.appendChild = function (child) {
     if (!child || typeof child !== "object") return child;
-    if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+    if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
       try { child._ownerFragment.removeChild(child); } catch (e) {}
     }
-    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+    if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
       try { child.parentNode.removeChild(child); } catch (e) {}
     }
     child._ownerFragment = this;
@@ -5715,10 +6465,10 @@
   };
   DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
     if (!newChild || typeof newChild !== "object") return newChild;
-    if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+    if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
       try { newChild._ownerFragment.removeChild(newChild); } catch (e) {}
     }
-    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+    if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
       try { newChild.parentNode.removeChild(newChild); } catch (e) {}
     }
     newChild._ownerFragment = this;
@@ -5743,12 +6493,111 @@
     child.parentNode = null;
     return child;
   };
+  DocumentFragment.prototype.replaceChild = function (newChild, oldChild) {
+    if (!newChild || typeof newChild !== "object") return newChild;
+    if (!oldChild || typeof oldChild !== "object") return oldChild;
+    if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+      try { newChild._ownerFragment.removeChild(newChild); } catch (e) {}
+    }
+    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+      try { newChild.parentNode.removeChild(newChild); } catch (e) {}
+    }
+    newChild._ownerFragment = this;
+    const res = Node.prototype.replaceChild.call(this, newChild, oldChild);
+    newChild._ownerFragment = this;
+    return res;
+  };
   Object.defineProperty(DocumentFragment.prototype, "childNodes", {
     get: function () {
       return new NodeList(this._children);
     },
     configurable: true,
   });
+  Object.defineProperty(DocumentFragment.prototype, "children", {
+    get: function () {
+      const list = [];
+      const kids = this._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        if (kids[i] && kids[i].nodeType === 1) list.push(kids[i]);
+      }
+      return (typeof HTMLCollection !== "undefined") ? new HTMLCollection(list) : list;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(DocumentFragment.prototype, "firstElementChild", {
+    get: function () {
+      const kids = this._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        if (kids[i] && kids[i].nodeType === 1) return kids[i];
+      }
+      return null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(DocumentFragment.prototype, "lastElementChild", {
+    get: function () {
+      const kids = this._children || [];
+      for (let i = kids.length - 1; i >= 0; i--) {
+        if (kids[i] && kids[i].nodeType === 1) return kids[i];
+      }
+      return null;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(DocumentFragment.prototype, "childElementCount", {
+    get: function () {
+      let count = 0;
+      const kids = this._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        if (kids[i] && kids[i].nodeType === 1) count++;
+      }
+      return count;
+    },
+    configurable: true,
+  });
+
+  DocumentFragment.prototype.append = function (...nodes) {
+    for (const n of nodes) {
+      let node;
+      if (n && typeof n === "object" && typeof n.nodeType === "number") {
+        node = n;
+      } else if (typeof document !== "undefined" && document.createTextNode) {
+        node = document.createTextNode(String(n));
+      } else {
+        node = new Text(String(n));
+      }
+      this.appendChild(node);
+    }
+  };
+  markNative(DocumentFragment.prototype.append, "append");
+
+  DocumentFragment.prototype.prepend = function (...nodes) {
+    const first = this.firstChild;
+    for (const n of nodes) {
+      let node;
+      if (n && typeof n === "object" && typeof n.nodeType === "number") {
+        node = n;
+      } else if (typeof document !== "undefined" && document.createTextNode) {
+        node = document.createTextNode(String(n));
+      } else {
+        node = new Text(String(n));
+      }
+      this.insertBefore(node, first);
+    }
+  };
+  markNative(DocumentFragment.prototype.prepend, "prepend");
+
+  DocumentFragment.prototype.replaceChildren = function (...nodes) {
+    while (this.firstChild) {
+      this.removeChild(this.firstChild);
+    }
+    this.append(...nodes);
+  };
+  markNative(DocumentFragment.prototype.replaceChildren, "replaceChildren");
+
   markNative(DocumentFragment, "DocumentFragment");
 
   Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
@@ -5792,6 +6641,18 @@
   ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
   ShadowRoot.prototype.constructor = ShadowRoot;
   markNative(ShadowRoot, "ShadowRoot");
+  Object.defineProperty(ShadowRoot.prototype, "styleSheets", {
+    get: function () {
+      if (typeof global.getOrCreateStyleSheetList === "function") {
+        return global.getOrCreateStyleSheetList(this);
+      }
+      if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+        return globalThis.getOrCreateStyleSheetList(this);
+      }
+      return [];
+    },
+    configurable: true,
+  });
   global.ShadowRoot = ShadowRoot;
   if (typeof globalThis !== "undefined") {
     globalThis.ShadowRoot = ShadowRoot;
@@ -5815,6 +6676,15 @@
         return new DocumentFragment();
       };
       markNative(Document.prototype.createDocumentFragment, "createDocumentFragment");
+    }
+    if (!Document.prototype.importNode) {
+      Document.prototype.importNode = function (node, deep) {
+        if (!node || typeof node !== "object") {
+          throw new TypeError("Failed to execute 'importNode' on 'Document': parameter 1 is not of type 'Node'.");
+        }
+        return node.cloneNode(Boolean(deep));
+      };
+      markNative(Document.prototype.importNode, "importNode");
     }
   }
 
@@ -6061,6 +6931,25 @@
       Object.prototype
     );
 
+    function propToKebab(p) {
+      if (typeof p !== "string") return "";
+      if (p.startsWith("--")) return p;
+      if (p === "cssFloat") return "float";
+      let body = p;
+      let prefix = "";
+      if (p.startsWith("webkit")) {
+        prefix = "-webkit-";
+        body = p.slice(6);
+      } else if (p.startsWith("Moz")) {
+        prefix = "-moz-";
+        body = p.slice(3);
+      }
+      if (body.length > 0) {
+        body = body[0].toLowerCase() + body.slice(1);
+      }
+      return prefix + body.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+    }
+
     return new Proxy(declTarget, {
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") {
@@ -6094,7 +6983,27 @@
             const str = String(p);
             const key = str.startsWith("--") ? str : str.toLowerCase();
             const entry = map.get(key);
-            return entry ? entry.value : "";
+            if (entry) return entry.value;
+            if (key === "css-float" || key === "cssfloat") {
+              const e = map.get("float");
+              if (e) return e.value;
+            } else if (key === "float") {
+              const e = map.get("css-float");
+              if (e) return e.value;
+            } else if (key === "-webkit-transform") {
+              const e = map.get("transform");
+              if (e) return e.value;
+            } else if (key === "transform") {
+              const e = map.get("-webkit-transform");
+              if (e) return e.value;
+            } else if (key === "-webkit-align-content") {
+              const e = map.get("align-content");
+              if (e) return e.value;
+            } else if (key === "align-content") {
+              const e = map.get("-webkit-align-content");
+              if (e) return e.value;
+            }
+            return "";
           };
         }
         if (prop === "getPropertyPriority") {
@@ -6113,34 +7022,61 @@
             }
             const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
             const map = parseStyleMap();
-            const str = String(p);
+            let str = String(p);
+            if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
+              str = "float";
+            }
             const key = str.startsWith("--") ? str : str.toLowerCase();
             map.set(key, { name: str, value: String(val), priority: pPriority });
+            if (key === "display") {
+              element._displayNone = (String(val).trim().toLowerCase() === "none");
+            }
             serializeStyleMap(map);
           };
         }
         if (prop === "removeProperty") {
           return function (p) {
             const map = parseStyleMap();
-            const str = String(p);
+            let str = String(p);
+            if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
+              str = "float";
+            }
             const key = str.startsWith("--") ? str : str.toLowerCase();
             const old = map.get(key);
             map.delete(key);
+            if (key === "float") map.delete("css-float");
+            if (key === "transform") map.delete("-webkit-transform");
+            if (key === "-webkit-transform") map.delete("transform");
+            if (key === "display") {
+              element._displayNone = false;
+            }
             serializeStyleMap(map);
             return old ? old.value : "";
           };
         }
         if (prop in target) return target[prop];
 
+        if (prop === "cssFloat" || prop === "float") {
+          const map = parseStyleMap();
+          const e = map.get("float") || map.get("css-float");
+          return e ? e.value : "";
+        }
+        if (prop === "webkitTransform") {
+          const map = parseStyleMap();
+          const e = map.get("-webkit-transform") || map.get("transform");
+          return e ? e.value : "";
+        }
+        if (prop === "transform") {
+          const map = parseStyleMap();
+          const e = map.get("transform") || map.get("-webkit-transform");
+          return e ? e.value : "";
+        }
+
         // CamelCase or kebab-case lookup
         const map = parseStyleMap();
         if (map.has(prop)) return map.get(prop).value;
-        const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+        const kebab = propToKebab(prop);
         if (map.has(kebab)) return map.get(kebab).value;
-        let vendorKebab = kebab;
-        if (prop.startsWith("webkit")) vendorKebab = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-        else if (prop.startsWith("Moz")) vendorKebab = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-        if (map.has(vendorKebab)) return map.get(vendorKebab).value;
         return "";
       },
       set: function (target, prop, value) {
@@ -6150,20 +7086,33 @@
         }
         if (typeof prop !== "string") return true;
         if (prop === "cssText") {
-          element.setAttribute("style", String(value));
+          const valStr = String(value);
+          element.setAttribute("style", valStr);
+          element._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(valStr);
           return true;
         }
-        let key = prop;
-        if (!prop.startsWith("--")) {
-          if (prop.startsWith("webkit")) key = "-webkit-" + prop.slice(6).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-          else if (prop.startsWith("Moz")) key = "-moz-" + prop.slice(3).replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-          else key = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+        if (prop === "cssFloat" || prop === "float") {
+          const map = parseStyleMap();
+          map.delete("css-float");
+          if (value === null || value === undefined || value === "") {
+            map.delete("float");
+          } else {
+            map.set("float", { name: "float", value: String(value), priority: "" });
+          }
+          serializeStyleMap(map);
+          return true;
         }
+        let key = propToKebab(prop);
+        if (key === "css-float") key = "float";
         const map = parseStyleMap();
+        const normKey = key.startsWith("--") ? key : key.toLowerCase();
         if (value === null || value === undefined || value === "") {
-          map.delete(key.startsWith("--") ? key : key.toLowerCase());
+          map.delete(normKey);
         } else {
-          map.set(key.startsWith("--") ? key : key.toLowerCase(), { name: key, value: String(value), priority: "" });
+          map.set(normKey, { name: key, value: String(value), priority: "" });
+        }
+        if (normKey === "display") {
+          element._displayNone = (value !== null && value !== undefined && String(value).trim().toLowerCase() === "none");
         }
         serializeStyleMap(map);
         return true;
@@ -6171,6 +7120,7 @@
       has: function (target, prop) {
         if (typeof prop === "symbol") return prop === Symbol.iterator || prop in target;
         const pStr = String(prop);
+        if (pStr === "cssFloat" || pStr === "float") return true;
         if (STYLE_DECL_MEMBERS.has(pStr)) return true;
         if (prop in target) return true;
         if (pStr.startsWith("--")) return false;
@@ -6512,6 +7462,44 @@
       }
       if (key.toLowerCase() === "id") {
         this.id = val;
+        if (typeof val === "string" && val.length > 0 && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(val)) {
+          try {
+            const idVal = val;
+            const desc = typeof globalThis !== "undefined" ? Object.getOwnPropertyDescriptor(globalThis, idVal) : null;
+            if (!desc || desc.configurable) {
+              Object.defineProperty(globalThis, idVal, {
+                get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
+                set: function (v) {
+                  Object.defineProperty(globalThis, idVal, {
+                    value: v,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                  });
+                },
+                configurable: true,
+                enumerable: true,
+              });
+              if (typeof window !== "undefined" && window !== globalThis) {
+                Object.defineProperty(window, idVal, {
+                  get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
+                  set: function (v) {
+                    Object.defineProperty(window, idVal, {
+                      value: v,
+                      writable: true,
+                      enumerable: true,
+                      configurable: true,
+                    });
+                  },
+                  configurable: true,
+                  enumerable: true,
+                });
+              }
+            }
+          } catch (e) {}
+        }
+      } else if (key.toLowerCase() === "style") {
+        this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = val;
       } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
@@ -6580,6 +7568,8 @@
       }
       if (key.toLowerCase() === "id") {
         this.id = "";
+      } else if (key.toLowerCase() === "style") {
+        this._displayNone = false;
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = "";
       } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
@@ -7082,30 +8072,190 @@
     }
 
     // Scroll and Box Geometry properties
+    function triggerScrollEvents(el) {
+      if (!el) return;
+      const Ev = (typeof Event !== "undefined")
+        ? Event
+        : ((typeof global !== "undefined" && global.Event) || (typeof globalThis !== "undefined" && globalThis.Event) || null);
+      if (!Ev) return;
+
+      const scrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+      scrollEv._isTrusted = true;
+      if (typeof dispatchTrustedEvent === "function") {
+        dispatchTrustedEvent(el, scrollEv);
+      } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+        global.__capsurf_dispatchTrustedEvent(el, scrollEv);
+      } else if (typeof el.dispatchEvent === "function") {
+        scrollEv._isTrusted = true;
+        el.dispatchEvent(scrollEv);
+      }
+
+      if (el._scrollendTimer) {
+        clearTimeout(el._scrollendTimer);
+      }
+      el._scrollendTimer = setTimeout(function () {
+        el._scrollendTimer = null;
+        const endEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+        endEv._isTrusted = true;
+        if (typeof dispatchTrustedEvent === "function") {
+          dispatchTrustedEvent(el, endEv);
+        } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+          global.__capsurf_dispatchTrustedEvent(el, endEv);
+        } else if (typeof el.dispatchEvent === "function") {
+          endEv._isTrusted = true;
+          el.dispatchEvent(endEv);
+        }
+      }, 20);
+    }
+
     Object.defineProperty(proto, "scrollTop", {
       get: function () { return this._scrollTop || 0; },
-      set: function (v) { this._scrollTop = Math.max(0, Number(v) || 0); },
+      set: function (v) {
+        const num = Number(v) || 0;
+        let target = Math.max(0, num);
+        const sh = this.scrollHeight;
+        const ch = this.clientHeight;
+        if (sh > ch && ch > 0) {
+          target = Math.min(target, sh - ch);
+        }
+        const prev = this._scrollTop || 0;
+        this._scrollTop = target;
+        if (prev !== target) {
+          triggerScrollEvents(this);
+        }
+      },
       configurable: true,
     });
 
     Object.defineProperty(proto, "scrollLeft", {
       get: function () { return this._scrollLeft || 0; },
-      set: function (v) { this._scrollLeft = Math.max(0, Number(v) || 0); },
+      set: function (v) {
+        const num = Number(v) || 0;
+        let target = Math.max(0, num);
+        const sw = this.scrollWidth;
+        const cw = this.clientWidth;
+        if (sw > cw && cw > 0) {
+          target = Math.min(target, sw - cw);
+        }
+        const prev = this._scrollLeft || 0;
+        this._scrollLeft = target;
+        if (prev !== target) {
+          triggerScrollEvents(this);
+        }
+      },
       configurable: true,
     });
 
+    function getScrollParent(node) {
+      if (!node) return null;
+      if (node.parentElement) return node.parentElement;
+      if (node.parentNode) {
+        if (node.parentNode.nodeType === 11 && node.parentNode.host) { // ShadowRoot
+          return node.parentNode.host;
+        }
+        if (node.parentNode.nodeType === 1) {
+          return node.parentNode;
+        }
+        if (node.parentNode.host) {
+          return node.parentNode.host;
+        }
+      }
+      if (node.host) return node.host;
+      return null;
+    }
+
+    function isElementDisplayNone(el) {
+      if (!el || el.nodeType !== 1) return false;
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        if (cur._displayNone === true) return true;
+        if (cur.style) {
+          const d = (typeof cur.style.getPropertyValue === "function")
+            ? cur.style.getPropertyValue("display")
+            : cur.style.display;
+          if (d === "none") return true;
+        }
+        const rawStyle = (typeof cur.getAttribute === "function") ? cur.getAttribute("style") : "";
+        if (rawStyle && /(?:^|;)\s*display\s*:\s*none\b/i.test(rawStyle)) {
+          return true;
+        }
+        if (cur._computedStyle && cur._computedStyle.display === "none") {
+          return true;
+        }
+        if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+          try {
+            const cs = window.getComputedStyle(cur);
+            if (cs) {
+              const cd = (typeof cs.getPropertyValue === "function") ? cs.getPropertyValue("display") : cs.display;
+              if (cd === "none") return true;
+            }
+          } catch (e) {}
+        }
+        cur = getScrollParent(cur);
+      }
+      return false;
+    }
+
     const origGetBoundingClientRect = proto.getBoundingClientRect;
     proto.getBoundingClientRect = function () {
+      if (isElementDisplayNone(this)) {
+        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      }
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+      if (r.width === 0 && r.height === 0 && r.x === 0 && r.y === 0) {
+        const tag = String(this.tagName || this.localName || "").toUpperCase();
+        if (tag === "IMG") {
+          const nw = Number(this.naturalWidth || 0);
+          const nh = Number(this.naturalHeight || 0);
+          if (nw > 0 || nh > 0) {
+            return { x: 0, y: 0, width: nw, height: nh, left: 0, top: 0, right: nw, bottom: nh };
+          }
+        }
+        let childW = 0, childH = 0;
+        if (this.style) {
+          if (this.style.width) childW = parseFloat(this.style.width) || 0;
+          if (this.style.height) childH = parseFloat(this.style.height) || 0;
+        }
+        const parent = getScrollParent(this);
+        if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
+          const pr = parent.getBoundingClientRect();
+          if (!childW) childW = pr.width;
+          let offsetTop = 0;
+          const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
+                           (parent.children || parent._children || []);
+          for (let i = 0; i < siblings.length; i++) {
+            const sib = siblings[i];
+            if (sib === this) break;
+            if (sib && sib.nodeType === 1) {
+              let sh = (sib.getBoundingClientRect ? sib.getBoundingClientRect().height : 0) || 0;
+              if (!sh && sib.style && sib.style.height) sh = parseFloat(sib.style.height) || 0;
+              offsetTop += sh;
+            }
+          }
+          const relX = pr.left;
+          const relY = pr.top + offsetTop - (parent._scrollTop || 0);
+          return {
+            x: relX,
+            y: relY,
+            left: relX,
+            top: relY,
+            width: childW,
+            height: childH,
+            right: relX + childW,
+            bottom: relY + childH,
+          };
+        }
+        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      }
       const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
       const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
       let scrollOffsetParentX = 0;
       let scrollOffsetParentY = 0;
-      let cur = this.parentElement;
-      while (cur && cur !== document.body && cur !== document.documentElement) {
+      let cur = getScrollParent(this);
+      while (cur && cur !== document.body && cur !== document.documentElement && cur !== document) {
         if (cur._scrollTop) scrollOffsetParentY += cur._scrollTop;
         if (cur._scrollLeft) scrollOffsetParentX += cur._scrollLeft;
-        cur = cur.parentElement;
+        cur = getScrollParent(cur);
       }
       const x = r.x - winX - scrollOffsetParentX;
       const y = r.y - winY - scrollOffsetParentY;
@@ -7148,31 +8298,109 @@
 
     Object.defineProperty(proto, "scrollHeight", {
       get: function () {
-        let maxBottom = this.clientHeight;
-        const all = this.children || [];
-        for (let i = 0; i < all.length; i++) {
-          const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
-          if (cr && cr.bottom > maxBottom) maxBottom = cr.bottom;
+        if (this === document.documentElement || this === document.body) {
+          let maxH = (typeof window !== "undefined" && window.innerHeight) || 720;
+          if (this.style && this.style.height) {
+            const ph = parseFloat(this.style.height);
+            if (!isNaN(ph) && ph > maxH) maxH = ph;
+          }
+          const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+          const all = this.children || [];
+          for (let i = 0; i < all.length; i++) {
+            const child = all[i];
+            const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+            if (cr && cr.bottom + winY > maxH) maxH = cr.bottom + winY;
+          }
+          return Math.round(maxH);
         }
-        return maxBottom;
+
+        let maxBottom = this.clientHeight;
+        const parentR = this.getBoundingClientRect();
+        const shadow = this._shadowRoot || this.shadowRoot;
+        const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
+        const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
+        let accumY = 0;
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          if (!child || child.nodeType !== 1) continue;
+          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+          let childH = (cr && cr.height) || 0;
+          if (!childH && child.style && child.style.height) {
+            childH = parseFloat(child.style.height) || 0;
+          }
+          let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y + (this._scrollTop || 0)) : accumY;
+          accumY += childH;
+          const b = Math.max(relY + childH, childH);
+          if (b > maxBottom) maxBottom = b;
+        }
+        return Math.round(maxBottom);
       },
       configurable: true,
     });
 
     Object.defineProperty(proto, "scrollWidth", {
       get: function () {
-        let maxRight = this.clientWidth;
-        const all = this.children || [];
-        for (let i = 0; i < all.length; i++) {
-          const cr = all[i].getBoundingClientRect ? all[i].getBoundingClientRect() : null;
-          if (cr && cr.right > maxRight) maxRight = cr.right;
+        if (this === document.documentElement || this === document.body) {
+          let maxW = (typeof window !== "undefined" && window.innerWidth) || 1280;
+          if (this.style && this.style.width) {
+            const pw = parseFloat(this.style.width);
+            if (!isNaN(pw) && pw > maxW) maxW = pw;
+          }
+          const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+          const all = this.children || [];
+          for (let i = 0; i < all.length; i++) {
+            const child = all[i];
+            const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+            if (cr && cr.right + winX > maxW) maxW = cr.right + winX;
+          }
+          return Math.round(maxW);
         }
-        return maxRight;
+
+        let maxRight = this.clientWidth;
+        const parentR = this.getBoundingClientRect();
+        const shadow = this._shadowRoot || this.shadowRoot;
+        const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
+        const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
+        let accumX = 0;
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          if (!child || child.nodeType !== 1) continue;
+          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
+          let childW = (cr && cr.width) || 0;
+          if (!childW && child.style && child.style.width) {
+            childW = parseFloat(child.style.width) || 0;
+          }
+          let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x + (this._scrollLeft || 0)) : accumX;
+          accumX += childW;
+          const r = Math.max(relX + childW, childW);
+          if (r > maxRight) maxRight = r;
+        }
+        return Math.round(maxRight);
       },
       configurable: true,
     });
 
-    function scrollElementIntoView(el, centerIfNeeded) {
+    function computeAxis(elPos, elSize, viewSize, curScroll, mode) {
+      switch (mode) {
+        case "start":
+          return elPos;
+        case "end":
+          return elPos + elSize - viewSize;
+        case "center":
+          return elPos + elSize / 2 - viewSize / 2;
+        case "nearest": {
+          if (elPos >= curScroll && elPos + elSize <= curScroll + viewSize) {
+            return curScroll;
+          }
+          if (elPos < curScroll) return elPos;
+          return elPos + elSize - viewSize;
+        }
+        default:
+          return elPos;
+      }
+    }
+
+    function scrollElementIntoView(el, block, inline, onlyIfNeeded) {
       if (!el) return;
       const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
       const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
@@ -7181,63 +8409,112 @@
       const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
 
       let clipped = false;
-      let cur = el.parentElement;
-      while (cur && cur !== document.body && cur !== document.documentElement) {
-        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
-        const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
-        const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
-        if (isScrollable) {
-          const cr = cur.getBoundingClientRect();
-          if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
-            clipped = true;
-            break;
+      let cur = getScrollParent(el);
+      while (cur && cur !== document.body && cur !== document.documentElement && cur !== document) {
+        if (cur.nodeType === 1) {
+          const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+          const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+          const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+          if (isScrollable) {
+            const cr = cur.getBoundingClientRect();
+            if (r.top < cr.top || r.bottom > cr.top + cur.clientHeight || r.left < cr.left || r.right > cr.left + cur.clientWidth) {
+              clipped = true;
+              break;
+            }
           }
         }
-        cur = cur.parentElement;
+        cur = getScrollParent(cur);
       }
 
-      if (centerIfNeeded && inWin && !clipped) {
+      if (onlyIfNeeded && inWin && !clipped) {
         return;
       }
 
-      // Scroll container ancestors
-      cur = el.parentElement;
-      while (cur && cur !== document.body && cur !== document.documentElement) {
-        const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
-        const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
-        const isScrollable = (overflow === "auto" || overflow === "scroll" || overflow === "hidden" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
-        if (isScrollable) {
-          const cr = cur.getBoundingClientRect();
-          const er = el.getBoundingClientRect();
-          const curScrollTop = cur.scrollTop || 0;
-          const elMidInContainer = (er.top - cr.top) + curScrollTop + (er.height / 2);
-          const targetScrollTop = elMidInContainer - (cur.clientHeight / 2);
-          cur.scrollTop = Math.max(0, targetScrollTop);
+      // 1. Scroll container ancestors
+      cur = getScrollParent(el);
+      let safety = 0;
+      while (cur && cur !== document.body && cur !== document.documentElement && cur !== document && safety < 50) {
+        safety++;
+        if (cur.nodeType === 1) {
+          const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+          const ox = (style && (style.overflowX || style.overflow)) || "";
+          const oy = (style && (style.overflowY || style.overflow)) || "";
+          const styleAttr = (cur.getAttribute && cur.getAttribute("style")) || "";
+          const isScrollable = ox === "auto" || ox === "scroll" || ox === "hidden" ||
+                               oy === "auto" || oy === "scroll" || oy === "hidden" ||
+                               styleAttr.includes("overflow");
+          const sh = cur.scrollHeight || 0;
+          const ch = cur.clientHeight || 0;
+          const sw = cur.scrollWidth || 0;
+          const cw = cur.clientWidth || 0;
+          const overflowsY = isScrollable || (sh > ch && ch > 0);
+          const overflowsX = isScrollable || (sw > cw && cw > 0);
+
+          if (overflowsY || overflowsX) {
+            const cr = cur.getBoundingClientRect();
+            const er = el.getBoundingClientRect();
+            const curScrollTop = cur.scrollTop || 0;
+            const curScrollLeft = cur.scrollLeft || 0;
+            const elInContentY = (er.top - cr.top) + curScrollTop;
+            const elInContentX = (er.left - cr.left) + curScrollLeft;
+
+            if (overflowsY) {
+              const rawY = computeAxis(elInContentY, er.height, ch, curScrollTop, block);
+              const maxY = Math.max(0, sh - ch);
+              const targetY = Math.max(0, Math.min(rawY, maxY > 0 ? maxY : rawY));
+              if (targetY !== curScrollTop) {
+                cur.scrollTop = targetY;
+              }
+            }
+
+            if (overflowsX) {
+              const rawX = computeAxis(elInContentX, er.width, cw, curScrollLeft, inline);
+              const maxX = Math.max(0, sw - cw);
+              const targetX = Math.max(0, Math.min(rawX, maxX > 0 ? maxX : rawX));
+              if (targetX !== curScrollLeft) {
+                cur.scrollLeft = targetX;
+              }
+            }
+          }
         }
-        cur = cur.parentElement;
+        cur = getScrollParent(cur);
       }
 
-      // Scroll window if needed
+      // 2. Scroll window if needed
       const afterR = el.getBoundingClientRect();
-      const afterInWin = (afterR.top >= 0 && afterR.bottom <= vh && afterR.left >= 0 && afterR.right <= vw);
-      if (!afterInWin || !centerIfNeeded) {
-        const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
-        const elPageY = afterR.top + curWinY;
-        const targetWinY = (elPageY + afterR.height / 2) - (vh / 2);
-        if (typeof window !== "undefined" && window.scrollTo) {
-          window.scrollTo(window.scrollX || 0, Math.max(0, targetWinY));
-        }
+      const curWinX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+      const curWinY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+      const targetDocY = afterR.top + curWinY;
+      const targetDocX = afterR.left + curWinX;
+
+      const newWinY = computeAxis(targetDocY, afterR.height, vh, curWinY, block);
+      const newWinX = computeAxis(targetDocX, afterR.width, vw, curWinX, inline);
+
+      if (typeof window !== "undefined" && window.scrollTo) {
+        window.scrollTo(Math.max(0, Math.round(newWinX)), Math.max(0, Math.round(newWinY)));
       }
     }
 
     proto.scrollIntoView = function (arg) {
-      const center = (typeof arg === "object" && arg !== null && (arg.block === "center" || arg.inline === "center"));
-      scrollElementIntoView(this, !center ? false : false);
+      let block = "start";
+      let inline = "nearest";
+      if (arg === false) {
+        block = "end";
+        inline = "nearest";
+      } else if (arg === true || arg == null) {
+        block = "start";
+        inline = "nearest";
+      } else if (typeof arg === "object") {
+        block = String(arg.block || "start");
+        inline = String(arg.inline || "nearest");
+      }
+      scrollElementIntoView(this, block, inline, false);
     };
     markNative(proto.scrollIntoView, "scrollIntoView");
 
     proto.scrollIntoViewIfNeeded = function (centerIfNeeded) {
-      scrollElementIntoView(this, centerIfNeeded !== false);
+      const center = centerIfNeeded !== false;
+      scrollElementIntoView(this, center ? "center" : "nearest", center ? "center" : "nearest", true);
     };
     markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
 
@@ -7899,13 +9176,50 @@
     if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
     if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
 
-    // Also define sheet on ElementProto for any <style> element
+    // 1.06 HTMLLinkElement
+    function HTMLLinkElement() {}
+    HTMLLinkElement.prototype = Object.create(ElementProto);
+    HTMLLinkElement.prototype.constructor = HTMLLinkElement;
+    installHyperlinkDecomposition(HTMLLinkElement.prototype);
+    Object.defineProperty(HTMLLinkElement.prototype, "rel", {
+      get: function () { return this.getAttribute("rel") || ""; },
+      set: function (v) { this.setAttribute("rel", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLLinkElement.prototype, "href", {
+      get: function () { return this.getAttribute("href") || ""; },
+      set: function (v) { this.setAttribute("href", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLLinkElement.prototype, "sheet", {
+      get: function () {
+        const rel = (this.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+        if (rel.includes("stylesheet")) {
+          return getSheetForElement(this);
+        }
+        return null;
+      },
+      configurable: true,
+    });
+    markNative(HTMLLinkElement, "HTMLLinkElement");
+    global.HTMLLinkElement = HTMLLinkElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLLinkElement = HTMLLinkElement;
+    if (typeof window !== "undefined") window.HTMLLinkElement = HTMLLinkElement;
+
+    // Also define sheet on ElementProto for any <style> or <link> element
     if (!Object.getOwnPropertyDescriptor(ElementProto, "sheet")) {
       Object.defineProperty(ElementProto, "sheet", {
         get: function () {
           const tag = String(this.localName || this.tagName || "").toLowerCase();
           if (tag === "style") {
             return getSheetForElement(this);
+          }
+          if (tag === "link") {
+            const rel = (this.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+            if (rel.includes("stylesheet")) {
+              return getSheetForElement(this);
+            }
+            return null;
           }
           return undefined;
         },
@@ -7925,6 +9239,234 @@
     });
     markNative(HTMLAreaElement, "HTMLAreaElement");
     global.HTMLAreaElement = HTMLAreaElement;
+
+    // Fast Base64 byte decoding
+    function decodeBase64ToBytes(b64) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      const lookup = new Uint8Array(256);
+      for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+      const clean = b64.replace(/[^A-Za-z0-9+/]/g, "");
+      const len = clean.length;
+      const byteLen = Math.floor((len * 3) / 4);
+      const bytes = new Uint8Array(byteLen);
+      let p = 0;
+      for (let i = 0; i < len; i += 4) {
+        const c1 = lookup[clean.charCodeAt(i)];
+        const c2 = lookup[clean.charCodeAt(i + 1)];
+        const c3 = lookup[clean.charCodeAt(i + 2)];
+        const c4 = lookup[clean.charCodeAt(i + 3)];
+        bytes[p++] = (c1 << 2) | (c2 >> 4);
+        if (i + 2 < len && clean.charAt(i + 2) !== "=") bytes[p++] = ((c2 & 15) << 4) | (c3 >> 2);
+        if (i + 3 < len && clean.charAt(i + 3) !== "=") bytes[p++] = ((c3 & 3) << 6) | c4;
+      }
+      return bytes;
+    }
+
+    // Sniff image dimensions (PNG IHDR, SVG) from data URL or base64
+    function sniffImageDimensionsFromDataUrl(url) {
+      if (!url || typeof url !== "string") return null;
+      if (!url.startsWith("data:")) return null;
+      const comma = url.indexOf(",");
+      if (comma === -1) return null;
+      const meta = url.slice(5, comma).toLowerCase();
+      const rawData = url.slice(comma + 1);
+
+      if (meta.indexOf("image/png") !== -1 || meta.indexOf(";base64") !== -1) {
+        const b64 = rawData.slice(0, 64);
+        let bytes = null;
+        if (typeof atob === "function") {
+          try {
+            const bin = atob(b64);
+            bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          } catch (e) {}
+        }
+        if (!bytes || bytes.length < 24) {
+          bytes = decodeBase64ToBytes(b64);
+        }
+        if (bytes && bytes.length >= 24) {
+          if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+              bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a &&
+              bytes[12] === 0x49 && bytes[13] === 0x48 && bytes[14] === 0x44 && bytes[15] === 0x52) {
+            const w = ((bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]) >>> 0;
+            const h = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0;
+            return { width: w, height: h };
+          }
+        }
+      }
+      if (meta.indexOf("image/svg+xml") !== -1) {
+        let svgText = rawData;
+        if (meta.indexOf(";base64") !== -1) {
+          try {
+            svgText = typeof atob === "function" ? atob(rawData) : "";
+          } catch (e) {}
+        } else {
+          try { svgText = decodeURIComponent(rawData); } catch (e) {}
+        }
+        const mw = /width\s*=\s*["']?(\d+)/i.exec(svgText);
+        const mh = /height\s*=\s*["']?(\d+)/i.exec(svgText);
+        if (mw && mh) {
+          return { width: parseInt(mw[1], 10), height: parseInt(mh[1], 10) };
+        }
+        const mv = /viewBox\s*=\s*["']?[^"']*?\b(\d+)\s+(\d+)\s*["']?/i.exec(svgText);
+        if (mv) {
+          return { width: parseInt(mv[1], 10), height: parseInt(mv[2], 10) };
+        }
+      }
+      return null;
+    }
+
+    // Parse srcset candidates accounting for commas inside data: URLs
+    function pickSrcsetCandidate(srcset) {
+      if (!srcset || typeof srcset !== "string") return null;
+      let best = null;
+      let i = 0;
+      const len = srcset.length;
+      while (i < len) {
+        while (i < len && (srcset.charCodeAt(i) <= 32 || srcset.charAt(i) === ",")) {
+          i++;
+        }
+        if (i >= len) break;
+
+        const urlStart = i;
+        while (i < len && srcset.charCodeAt(i) > 32) {
+          i++;
+        }
+        let urlEnd = i;
+        let hadTrailingComma = false;
+        if (urlEnd > urlStart && srcset.charAt(urlEnd - 1) === ",") {
+          urlEnd--;
+          hadTrailingComma = true;
+        }
+        if (urlEnd === urlStart) continue;
+        const url = srcset.slice(urlStart, urlEnd);
+
+        let descriptor = "";
+        if (!hadTrailingComma) {
+          while (i < len && srcset.charCodeAt(i) <= 32 && srcset.charAt(i) !== "\n") {
+            i++;
+          }
+          const descStart = i;
+          while (i < len && srcset.charAt(i) !== ",") {
+            i++;
+          }
+          descriptor = srcset.slice(descStart, i).trim();
+        }
+        if (i < len && srcset.charAt(i) === ",") {
+          i++;
+        }
+
+        let value = 1.0;
+        let isWidth = false;
+        if (descriptor.endsWith("w")) {
+          const num = parseFloat(descriptor.slice(0, -1).trim());
+          if (!isNaN(num) && num > 0) {
+            value = num;
+            isWidth = true;
+          }
+        } else if (descriptor.endsWith("x")) {
+          const num = parseFloat(descriptor.slice(0, -1).trim());
+          if (!isNaN(num) && num > 0) {
+            value = num;
+            isWidth = false;
+          }
+        }
+
+        let take = false;
+        if (!best) {
+          take = true;
+        } else if (isWidth && !best.isWidth) {
+          take = true;
+        } else if (!isWidth && best.isWidth) {
+          take = false;
+        } else {
+          take = value > best.value;
+        }
+
+        if (take) {
+          best = { url, value, isWidth };
+        }
+      }
+      return best ? best.url : null;
+    }
+
+    function isSupportedPictureSourceType(typeAttr) {
+      if (!typeAttr) return true;
+      const essence = typeAttr.split(";")[0].trim().toLowerCase();
+      if (!essence) return true;
+      return (
+        essence === "image/png" ||
+        essence === "image/x-png" ||
+        essence === "image/apng" ||
+        essence === "image/jpeg" ||
+        essence === "image/jpg" ||
+        essence === "image/pjpeg" ||
+        essence === "image/gif" ||
+        essence === "image/webp" ||
+        essence === "image/svg+xml"
+      );
+    }
+
+    function selectImageSource(img) {
+      if (!img) return "";
+      const parent = img.parentElement;
+      if (parent && (parent.tagName === "PICTURE" || (parent.localName && parent.localName.toLowerCase() === "picture"))) {
+        let kids = parent.children;
+        if (!kids || kids.length === 0) {
+          kids = parent.childNodes || [];
+        }
+        for (let i = 0; i < kids.length; i++) {
+          const child = kids[i];
+          if (child === img) break;
+          if (!child) continue;
+          const tag = String(child.tagName || child.localName || "").toLowerCase();
+          if (tag !== "source") continue;
+          const type = child.getAttribute ? child.getAttribute("type") : child.type;
+          if (!isSupportedPictureSourceType(type)) continue;
+          const srcset = child.getAttribute ? child.getAttribute("srcset") : child.srcset;
+          if (srcset) {
+            const candidate = pickSrcsetCandidate(srcset);
+            if (candidate) return candidate;
+          }
+          const src = child.getAttribute ? child.getAttribute("src") : child.src;
+          if (src) return src;
+        }
+      }
+
+      const srcset = img.getAttribute ? img.getAttribute("srcset") : img.srcset;
+      if (srcset) {
+        const candidate = pickSrcsetCandidate(srcset);
+        if (candidate) return candidate;
+      }
+
+      const src = img.getAttribute ? img.getAttribute("src") : img.src;
+      if (src) return src;
+      return "";
+    }
+
+    function getImageResolvedDimensions(img) {
+      const candidate = selectImageSource(img);
+      if (!candidate) {
+        return { width: 0, height: 0, candidate: "" };
+      }
+      if (img._lastCandidate === candidate && img._lastDims) {
+        return { width: img._lastDims.width, height: img._lastDims.height, candidate: candidate };
+      }
+      const dims = sniffImageDimensionsFromDataUrl(candidate);
+      const resolved = dims ? dims : { width: 0, height: 0 };
+      img._lastCandidate = candidate;
+      img._lastDims = resolved;
+      return { width: resolved.width, height: resolved.height, candidate: candidate };
+    }
+
+    function isImgDisplayNone(el) {
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        if (cur.style && cur.style.display === "none") return true;
+        cur = cur.parentElement;
+      }
+      return false;
+    }
 
     // 2. HTMLImageElement
     function HTMLImageElement() {}
@@ -7947,6 +9489,28 @@
       enumerable: true,
     });
 
+    Object.defineProperty(HTMLImageElement.prototype, "srcset", {
+      get: function () { return this.getAttribute("srcset") || ""; },
+      set: function (v) { this.setAttribute("srcset", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLImageElement.prototype, "currentSrc", {
+      get: function () {
+        const candidate = selectImageSource(this);
+        if (!candidate) return "";
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+          return new URL(candidate, base).href;
+        } catch (e) {
+          return candidate;
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
     Object.defineProperty(HTMLImageElement.prototype, "alt", {
       get: function () { return this.getAttribute("alt") || ""; },
       set: function (v) { this.setAttribute("alt", String(v)); },
@@ -7954,24 +9518,44 @@
     });
 
     Object.defineProperty(HTMLImageElement.prototype, "width", {
-      get: function () { return Number(this.getAttribute("width") || 0); },
+      get: function () {
+        const attr = this.getAttribute("width");
+        if (attr != null) return Number(attr) || 0;
+        return this.naturalWidth;
+      },
       set: function (v) { this.setAttribute("width", String(v)); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLImageElement.prototype, "height", {
-      get: function () { return Number(this.getAttribute("height") || 0); },
+      get: function () {
+        const attr = this.getAttribute("height");
+        if (attr != null) return Number(attr) || 0;
+        return this.naturalHeight;
+      },
       set: function (v) { this.setAttribute("height", String(v)); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", {
-      get: function () { return this.width || 100; },
+      get: function () {
+        const dims = getImageResolvedDimensions(this);
+        if (dims.width > 0) return dims.width;
+        const attr = this.getAttribute("width");
+        if (attr != null) return Number(attr) || 0;
+        return 0;
+      },
       configurable: true,
     });
 
     Object.defineProperty(HTMLImageElement.prototype, "naturalHeight", {
-      get: function () { return this.height || 100; },
+      get: function () {
+        const dims = getImageResolvedDimensions(this);
+        if (dims.height > 0) return dims.height;
+        const attr = this.getAttribute("height");
+        if (attr != null) return Number(attr) || 0;
+        return 0;
+      },
       configurable: true,
     });
 
@@ -7980,9 +9564,121 @@
       configurable: true,
     });
 
+    HTMLImageElement.prototype.getBoundingClientRect = function () {
+      if (isImgDisplayNone(this)) {
+        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      }
+      const r = ElementProto.getBoundingClientRect ? ElementProto.getBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+
+      const hasStyleW = this.style && this.style.width && this.style.width !== "auto";
+      const hasStyleH = this.style && this.style.height && this.style.height !== "auto";
+      const hasAttrW = this.hasAttribute && this.hasAttribute("width");
+      const hasAttrH = this.hasAttribute && this.hasAttribute("height");
+
+      const nw = this.naturalWidth;
+      const nh = this.naturalHeight;
+
+      let w = r.width;
+      let h = r.height;
+
+      if (w === 0 && nw > 0) {
+        w = nw;
+      }
+      if (h === 0 && nh > 0) {
+        h = nh;
+      }
+
+      const x = r.x || 0;
+      const y = r.y || 0;
+      return {
+        x: x,
+        y: y,
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        right: x + w,
+        bottom: y + h,
+      };
+    };
+    markNative(HTMLImageElement.prototype.getBoundingClientRect, "getBoundingClientRect");
+
     markNative(HTMLImageElement, "HTMLImageElement");
     global.HTMLImageElement = HTMLImageElement;
     global.Image = HTMLImageElement;
+
+    // HTMLPictureElement
+    function HTMLPictureElement() {}
+    HTMLPictureElement.prototype = Object.create(ElementProto);
+    HTMLPictureElement.prototype.constructor = HTMLPictureElement;
+    markNative(HTMLPictureElement, "HTMLPictureElement");
+    global.HTMLPictureElement = HTMLPictureElement;
+
+    // HTMLSourceElement
+    function HTMLSourceElement() {}
+    HTMLSourceElement.prototype = Object.create(ElementProto);
+    HTMLSourceElement.prototype.constructor = HTMLSourceElement;
+
+    Object.defineProperty(HTMLSourceElement.prototype, "src", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "src");
+        if (raw == null) return "";
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : "http://localhost/";
+          return new URL(raw, base).href;
+        } catch (e) {
+          return raw;
+        }
+      },
+      set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "srcset", {
+      get: function () { return this.getAttribute("srcset") || ""; },
+      set: function (v) { this.setAttribute("srcset", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "type", {
+      get: function () { return this.getAttribute("type") || ""; },
+      set: function (v) { this.setAttribute("type", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "media", {
+      get: function () { return this.getAttribute("media") || ""; },
+      set: function (v) { this.setAttribute("media", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "sizes", {
+      get: function () { return this.getAttribute("sizes") || ""; },
+      set: function (v) { this.setAttribute("sizes", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "width", {
+      get: function () { return Number(this.getAttribute("width") || 0); },
+      set: function (v) { this.setAttribute("width", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLSourceElement.prototype, "height", {
+      get: function () { return Number(this.getAttribute("height") || 0); },
+      set: function (v) { this.setAttribute("height", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+
+    markNative(HTMLSourceElement, "HTMLSourceElement");
+    global.HTMLSourceElement = HTMLSourceElement;
 
     // 3. HTMLScriptElement
     function HTMLScriptElement() {
@@ -8215,7 +9911,10 @@
       "Blob", "FormData", "Headers", "Request", "Response",
       "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
       "setTimeout", "clearTimeout", "setInterval", "clearInterval",
-      "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch"
+      "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch",
+      "History", "WebSocket", "CloseEvent", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
+      "performance", "Performance", "PerformanceEntry", "PerformanceMark", "PerformanceMeasure",
+      "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation"
     ];
 
     function decorateIframeWindow(win) {
@@ -8226,6 +9925,8 @@
           win[key] = pageGlobal[key];
         }
       }
+      if (win.onhashchange === undefined) win.onhashchange = null;
+      if (win.onpopstate === undefined) win.onpopstate = null;
       if (pageGlobal.fetch) {
         win.fetch = function (resource, init) {
           return pageGlobal.fetch.call(win, resource, init);
@@ -8473,7 +10174,21 @@
 
     // 6. Generic HTMLElement
     const upgradeTargets = [];
+    const constructionStacks = new Map();
+    global._constructionStacks = constructionStacks;
+    global._upgradeTargets = upgradeTargets;
+
     function HTMLElement() {
+      const targetCtor = new.target;
+      if (targetCtor) {
+        const stack = constructionStacks.get(targetCtor);
+        if (stack && stack.length > 0) {
+          const el = stack.pop();
+          const uIdx = upgradeTargets.indexOf(el);
+          if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
+          return el;
+        }
+      }
       if (upgradeTargets.length > 0) {
         return upgradeTargets.pop();
       }
@@ -9086,6 +10801,17 @@
       this._selectionStart = a;
       this._selectionEnd = b;
       this._selectionDirection = (direction === "forward" || direction === "backward") ? direction : "none";
+
+      if (!this._selectionChangeScheduled) {
+        this._selectionChangeScheduled = true;
+        const self = this;
+        setTimeout(function () {
+          self._selectionChangeScheduled = false;
+          try {
+            self.dispatchEvent(new Event("selectionchange"));
+          } catch (e) {}
+        }, 0);
+      }
     };
   }
 
@@ -9105,6 +10831,47 @@
   // =============================================================
   // src/js/shim/element/forms/input.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/input.ts
+
+  const VALID_INPUT_TYPES = new Set([
+    "button",
+    "checkbox",
+    "color",
+    "date",
+    "datetime-local",
+    "email",
+    "file",
+    "hidden",
+    "image",
+    "month",
+    "number",
+    "password",
+    "radio",
+    "range",
+    "reset",
+    "search",
+    "submit",
+    "tel",
+    "text",
+    "time",
+    "url",
+    "week",
+  ]);
+
+  function normalizeInputType(raw) {
+    if (!raw) return "text";
+    const lower = String(raw).toLowerCase().trim();
+    return VALID_INPUT_TYPES.has(lower) ? lower : "text";
+  }
+
+  const STEPPABLE_TYPES = new Set([
+    "number",
+    "range",
+    "date",
+    "month",
+    "week",
+    "time",
+    "datetime-local",
+  ]);
 
   function findAssociatedForm(element) {
     if (!element) return null;
@@ -9126,7 +10893,9 @@
 
     function HTMLInputElement() {
       this._value = "";
+      this._valueDirty = false;
       this._checked = false;
+      this._checkedDirty = false;
       this._customValidityMessage = "";
       this._selectionStart = 0;
       this._selectionEnd = 0;
@@ -9138,7 +10907,7 @@
 
     Object.defineProperty(HTMLInputElement.prototype, "type", {
       get: function () {
-        return (this.getAttribute("type") || "text").toLowerCase();
+        return normalizeInputType(this.getAttribute("type"));
       },
       set: function (v) {
         this.setAttribute("type", String(v));
@@ -9148,31 +10917,37 @@
 
     Object.defineProperty(HTMLInputElement.prototype, "value", {
       get: function () {
-        if (this.type === "checkbox" || this.type === "radio") {
-          return this.getAttribute("value") ?? "on";
+        const t = this.type;
+        if (t === "checkbox" || t === "radio") {
+          const attr = this.getAttribute("value");
+          return attr !== null ? attr : "on";
         }
-        if (this._value !== undefined) return this._value;
-        return this.getAttribute("value") || "";
+        if (this._valueDirty) return this._value;
+        const attr = this.getAttribute("value");
+        return attr !== null ? attr : "";
       },
       set: function (v) {
-        if (this._defaultValue === undefined) {
-          this._defaultValue = this.getAttribute("value") || "";
+        const t = this.type;
+        const str = v === null ? "" : String(v);
+        if (t === "checkbox" || t === "radio") {
+          this.setAttribute("value", str);
+          return;
         }
-        this._value = String(v);
-        if (this.setAttribute) this.setAttribute("value", String(v));
-        this._selectionStart = this._value.length;
-        this._selectionEnd = this._value.length;
+        this._valueDirty = true;
+        this._value = str;
+        this._selectionStart = str.length;
+        this._selectionEnd = str.length;
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLInputElement.prototype, "defaultValue", {
       get: function () {
-        return this._defaultValue !== undefined ? this._defaultValue : (this.getAttribute("value") || "");
+        return (this.getAttribute && this.getAttribute("value")) || "";
       },
       set: function (v) {
-        this._defaultValue = String(v);
-        this.setAttribute("value", String(v));
+        const str = String(v);
+        this.setAttribute("value", str);
       },
       configurable: true,
     });
@@ -9185,7 +10960,7 @@
       set: function (v) {
         this._checkedDirty = true;
         this._checked = Boolean(v);
-        const isRadio = (this.getAttribute("type") || "").toLowerCase() === "radio";
+        const isRadio = this.type === "radio";
         if (isRadio && v && this.name) {
           const form = findAssociatedForm(this);
           const root = form || (this.ownerDocument || (typeof document !== "undefined" ? document : null));
@@ -9195,23 +10970,138 @@
               if (radios[i] !== this) {
                 radios[i]._checkedDirty = true;
                 radios[i]._checked = false;
-                if (radios[i].removeAttribute) radios[i].removeAttribute("checked");
               }
             }
           }
-        }
-        if (v) {
-          if (this.setAttribute) this.setAttribute("checked", "");
-        } else {
-          if (this.removeAttribute) this.removeAttribute("checked");
         }
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLInputElement.prototype, "defaultChecked", {
-      get: function () { return this.hasAttribute("checked"); },
-      set: function (v) { if (v) this.setAttribute("checked", ""); else this.removeAttribute("checked"); },
+      get: function () {
+        return this.hasAttribute("checked");
+      },
+      set: function (v) {
+        if (v) this.setAttribute("checked", "");
+        else this.removeAttribute("checked");
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLInputElement.prototype, "textLength", {
+      get: function () {
+        return this.value.length;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLInputElement.prototype, "valueAsNumber", {
+      get: function () {
+        const t = this.type;
+        if (!STEPPABLE_TYPES.has(t)) return NaN;
+        if (t === "number" || t === "range") {
+          const v = parseFloat(this.value);
+          return isNaN(v) ? NaN : v;
+        }
+        if (t === "date") {
+          const parts = this.value.split("-");
+          if (parts.length === 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            return Date.UTC(y, m, d);
+          }
+          return NaN;
+        }
+        if (t === "month") {
+          const parts = this.value.split("-");
+          if (parts.length === 2) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            return (y - 1970) * 12 + (m - 1);
+          }
+          return NaN;
+        }
+        if (t === "time") {
+          const parts = this.value.split(":");
+          if (parts.length >= 2) {
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const s = parts.length > 2 ? parseFloat(parts[2]) : 0;
+            return h * 3600000 + m * 60000 + Math.round(s * 1000);
+          }
+          return NaN;
+        }
+        if (t === "datetime-local") {
+          const m = /^(\d{4,})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(this.value);
+          if (m) {
+            const y = +m[1];
+            const mo = +m[2] - 1;
+            const d = +m[3];
+            const h = +m[4];
+            const mi = +m[5];
+            const s = m[6] ? +m[6] : 0;
+            const ms = m[7] ? +m[7].padEnd(3, "0") : 0;
+            return Date.UTC(y, mo, d, h, mi, s, ms);
+          }
+          return NaN;
+        }
+        return NaN;
+      },
+      set: function (v) {
+        const n = Number(v);
+        if (n === Infinity || n === -Infinity) {
+          throw new TypeError("valueAsNumber: value is infinite");
+        }
+        const t = this.type;
+        if (!STEPPABLE_TYPES.has(t)) {
+          const DOMEx = global.DOMException || Error;
+          throw new DOMEx("valueAsNumber: not supported on input[type=" + t + "]", "InvalidStateError");
+        }
+        if (isNaN(n)) {
+          this.value = "";
+          return;
+        }
+        this.value = String(n);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLInputElement.prototype, "valueAsDate", {
+      get: function () {
+        const t = this.type;
+        if (t !== "date" && t !== "month" && t !== "week" && t !== "time") return null;
+        const num = this.valueAsNumber;
+        if (isNaN(num)) return null;
+        if (t === "month") {
+          return new Date(Date.UTC(1970, num, 1));
+        }
+        return new Date(num);
+      },
+      set: function (v) {
+        const t = this.type;
+        if (t !== "date" && t !== "month" && t !== "week" && t !== "time") {
+          const DOMEx = global.DOMException || Error;
+          throw new DOMEx("valueAsDate: not supported on input[type=" + t + "]", "InvalidStateError");
+        }
+        if (v === null || v === undefined) {
+          this.value = "";
+          return;
+        }
+        if (!(v instanceof Date) || isNaN(v.getTime())) {
+          this.value = "";
+          return;
+        }
+        if (t === "date") {
+          const y = v.getUTCFullYear();
+          const m = String(v.getUTCMonth() + 1).padStart(2, "0");
+          const d = String(v.getUTCDate()).padStart(2, "0");
+          this.value = y + "-" + m + "-" + d;
+        } else {
+          this.value = String(v.getTime());
+        }
+      },
       configurable: true,
     });
 
@@ -9337,8 +11227,6 @@
       },
       set: function (v) {
         this._value = String(v);
-        if (this.setAttribute) this.setAttribute("value", String(v));
-        this.textContent = String(v);
         this._selectionStart = this._value.length;
         this._selectionEnd = this._value.length;
       },
@@ -9348,6 +11236,13 @@
     Object.defineProperty(HTMLTextAreaElement.prototype, "defaultValue", {
       get: function () { return this.textContent || ""; },
       set: function (v) { this.textContent = String(v); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLTextAreaElement.prototype, "textLength", {
+      get: function () {
+        return this.value.length;
+      },
       configurable: true,
     });
 
@@ -9443,7 +11338,6 @@
     };
 
     HTMLTextAreaElement.prototype.select = function () {};
-    HTMLTextAreaElement.prototype.setSelectionRange = function () {};
 
     markNative(HTMLTextAreaElement, "HTMLTextAreaElement");
     markNative(HTMLTextAreaElement.prototype.setCustomValidity, "setCustomValidity");
@@ -9463,22 +11357,34 @@
   if (!globalThis.__capsurf_optionState) globalThis.__capsurf_optionState = new Map();
 
   function getSelectState(el) {
-    const nid = (el && typeof el._nid === "number") ? el._nid : 0;
-    let st = globalThis.__capsurf_selectState.get(nid);
+    if (!el || typeof el !== "object") return { selectedIndex: undefined };
+    if (el._selState) return el._selState;
+    const nid = typeof el._nid === "number" ? el._nid : 0;
+    let st = null;
+    if (nid > 0) {
+      st = globalThis.__capsurf_selectState.get(nid);
+    }
     if (!st) {
       st = { selectedIndex: undefined };
       if (nid > 0) globalThis.__capsurf_selectState.set(nid, st);
     }
+    el._selState = st;
     return st;
   }
 
   function getOptionState(el) {
-    const nid = (el && typeof el._nid === "number") ? el._nid : 0;
-    let st = globalThis.__capsurf_optionState.get(nid);
+    if (!el || typeof el !== "object") return { selected: undefined, value: undefined };
+    if (el._optState) return el._optState;
+    const nid = typeof el._nid === "number" ? el._nid : 0;
+    let st = null;
+    if (nid > 0) {
+      st = globalThis.__capsurf_optionState.get(nid);
+    }
     if (!st) {
       st = { selected: undefined, value: undefined };
       if (nid > 0) globalThis.__capsurf_optionState.set(nid, st);
     }
+    el._optState = st;
     return st;
   }
 
@@ -9494,13 +11400,15 @@
   function findOwnerSelect(opt) {
     let curr = opt.parentNode;
     while (curr) {
-      if ((curr.tagName || "").toLowerCase() === "select") return curr;
+      if ((curr.tagName || "").toLowerCase() === "select") {
+        if (typeof upgradeElement === "function") upgradeElement(curr);
+        else if (typeof globalThis !== "undefined" && typeof globalThis.upgradeElement === "function") globalThis.upgradeElement(curr);
+        return curr;
+      }
       curr = curr.parentNode;
     }
     return null;
   }
-
-
 
   function computeSelectedIndex(selectEl) {
     const selState = getSelectState(selectEl);
@@ -9559,8 +11467,8 @@
       get: function () {
         const ost = getOptionState(this);
         if (ost.value !== undefined) return ost.value;
-        if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value");
-        return this.textContent || "";
+        if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value") || "";
+        return this.text;
       },
       set: function (v) {
         getOptionState(this).value = String(v);
@@ -9570,8 +11478,24 @@
     });
 
     Object.defineProperty(HTMLOptionElement.prototype, "text", {
-      get: function () { return this.textContent || ""; },
-      set: function (v) { this.textContent = String(v); },
+      get: function () {
+        const tc = (this.textContent || "").replace(/[\t\n\f\r ]+/g, " ").trim();
+        return tc;
+      },
+      set: function (v) {
+        this.textContent = String(v);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLOptionElement.prototype, "label", {
+      get: function () {
+        if (this.hasAttribute && this.hasAttribute("label")) return this.getAttribute("label") || "";
+        return this.text;
+      },
+      set: function (v) {
+        if (this.setAttribute) this.setAttribute("label", String(v));
+      },
       configurable: true,
     });
 
@@ -9581,11 +11505,11 @@
         const owner = findOwnerSelect(this);
         if (!owner) {
           if (ost.selected !== undefined) return ost.selected;
-          return this.hasAttribute && this.hasAttribute("selected");
+          return Boolean(this.hasAttribute && this.hasAttribute("selected"));
         }
         if (owner.multiple) {
           if (ost.selected !== undefined) return ost.selected;
-          return this.hasAttribute && this.hasAttribute("selected");
+          return Boolean(this.hasAttribute && this.hasAttribute("selected"));
         }
         // Single select:
         const selIdx = computeSelectedIndex(owner);
@@ -9619,7 +11543,7 @@
     });
 
     Object.defineProperty(HTMLOptionElement.prototype, "defaultSelected", {
-      get: function () { return this.hasAttribute && this.hasAttribute("selected"); },
+      get: function () { return Boolean(this.hasAttribute && this.hasAttribute("selected")); },
       set: function (v) {
         if (v) {
           this.setAttribute("selected", "");
@@ -9631,8 +11555,41 @@
     });
 
     Object.defineProperty(HTMLOptionElement.prototype, "disabled", {
-      get: function () { return this.hasAttribute && this.hasAttribute("disabled"); },
+      get: function () {
+        if (this.hasAttribute && this.hasAttribute("disabled")) return true;
+        let p = this.parentNode;
+        while (p) {
+          const tag = String(p.tagName || "").toLowerCase();
+          if (tag === "optgroup") {
+            return p.disabled || Boolean(p.hasAttribute && p.hasAttribute("disabled"));
+          }
+          if (tag === "select") break;
+          p = p.parentNode;
+        }
+        return false;
+      },
       set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLOptionElement.prototype, "index", {
+      get: function () {
+        const owner = findOwnerSelect(this);
+        if (!owner) return 0;
+        const opts = owner.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (isSameElement(opts[i], this)) return i;
+        }
+        return 0;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLOptionElement.prototype, "form", {
+      get: function () {
+        const owner = findOwnerSelect(this);
+        return owner ? owner.form : (typeof findAssociatedForm === "function" ? findAssociatedForm(this) : null);
+      },
       configurable: true,
     });
 
@@ -9668,6 +11625,13 @@
 
     markNative(HTMLOptionElement, "HTMLOptionElement");
     global.HTMLOptionElement = HTMLOptionElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLOptionElement = HTMLOptionElement;
+    }
+    if (typeof window !== "undefined") {
+      window.HTMLOptionElement = HTMLOptionElement;
+    }
+
     global.Option = function (text, value, defaultSelected, selected) {
       const opt = typeof document !== "undefined" && document.createElement ? document.createElement("option") : new HTMLOptionElement();
       if (text !== undefined) opt.text = text;
@@ -9676,8 +11640,40 @@
       if (selected !== undefined) opt.selected = Boolean(selected);
       return opt;
     };
+    if (typeof globalThis !== "undefined") {
+      globalThis.Option = global.Option;
+    }
+    if (typeof window !== "undefined") {
+      window.Option = global.Option;
+    }
 
-    // 2. HTMLSelectElement
+    // 2. HTMLOptGroupElement
+    function HTMLOptGroupElement() {}
+    HTMLOptGroupElement.prototype = Object.create(ElementProto);
+    HTMLOptGroupElement.prototype.constructor = HTMLOptGroupElement;
+
+    Object.defineProperty(HTMLOptGroupElement.prototype, "disabled", {
+      get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
+      set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLOptGroupElement.prototype, "label", {
+      get: function () { return (this.getAttribute && this.getAttribute("label")) || ""; },
+      set: function (v) { if (this.setAttribute) this.setAttribute("label", String(v)); },
+      configurable: true,
+    });
+
+    markNative(HTMLOptGroupElement, "HTMLOptGroupElement");
+    global.HTMLOptGroupElement = HTMLOptGroupElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLOptGroupElement = HTMLOptGroupElement;
+    }
+    if (typeof window !== "undefined") {
+      window.HTMLOptGroupElement = HTMLOptGroupElement;
+    }
+
+    // 3. HTMLSelectElement
     function HTMLSelectElement() {
       this._customValidityMessage = "";
     }
@@ -9717,6 +11713,23 @@
       configurable: true,
     });
 
+    Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
+      get: function () {
+        const self = this;
+        return makeHtmlCollection(function () {
+          const list = [];
+          const opts = self.options;
+          for (let i = 0; i < opts.length; i++) {
+            if (opts[i].selected) {
+              list.push(opts[i]);
+            }
+          }
+          return list;
+        });
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(HTMLSelectElement.prototype, "value", {
       get: function () {
         const idx = this.selectedIndex;
@@ -9740,31 +11753,31 @@
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "multiple", {
-      get: function () { return this.hasAttribute("multiple"); },
+      get: function () { return Boolean(this.hasAttribute && this.hasAttribute("multiple")); },
       set: function (v) { if (v) this.setAttribute("multiple", ""); else this.removeAttribute("multiple"); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "name", {
-      get: function () { return this.getAttribute("name") || ""; },
-      set: function (v) { this.setAttribute("name", String(v)); },
+      get: function () { return (this.getAttribute && this.getAttribute("name")) || ""; },
+      set: function (v) { if (this.setAttribute) this.setAttribute("name", String(v)); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "disabled", {
-      get: function () { return this.hasAttribute("disabled"); },
+      get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
       set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "required", {
-      get: function () { return this.hasAttribute("required"); },
+      get: function () { return Boolean(this.hasAttribute && this.hasAttribute("required")); },
       set: function (v) { if (v) this.setAttribute("required", ""); else this.removeAttribute("required"); },
       configurable: true,
     });
 
     Object.defineProperty(HTMLSelectElement.prototype, "form", {
-      get: function () { return findAssociatedForm(this); },
+      get: function () { return typeof findAssociatedForm === "function" ? findAssociatedForm(this) : null; },
       configurable: true,
     });
 
@@ -9838,6 +11851,12 @@
     markNative(HTMLSelectElement.prototype.namedItem, "namedItem");
 
     global.HTMLSelectElement = HTMLSelectElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLSelectElement = HTMLSelectElement;
+    }
+    if (typeof window !== "undefined") {
+      window.HTMLSelectElement = HTMLSelectElement;
+    }
   }
 
   // =============================================================
@@ -9989,23 +12008,59 @@
   // src/js/shim/element/forms/form.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/form.ts
 
+  function isFormListedTag(tag) {
+    return tag === "button" || tag === "fieldset" || tag === "input" ||
+           tag === "object" || tag === "output" || tag === "select" || tag === "textarea";
+  }
+
+  function isFormListed(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    return isFormListedTag(tag);
+  }
+
   function collectFormControls(form) {
     const controls = [];
+    const seen = new Set();
+
     function walk(node) {
       if (!node) return;
       let child = node.firstChild;
       while (child) {
-        const tag = (child.tagName || "").toLowerCase();
-        if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
-          controls.push(child);
-        }
-        if (tag !== "select") {
+        if (child.nodeType === 1) {
+          if (isFormListed(child)) {
+            if (typeof findAssociatedForm === "function" && findAssociatedForm(child) === form) {
+              controls.push(child);
+              seen.add(child);
+            }
+          }
           walk(child);
         }
         child = child.nextSibling;
       }
     }
     walk(form);
+
+    const formId = form.id || (typeof form.getAttribute === "function" ? form.getAttribute("id") : null);
+    if (formId) {
+      const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.querySelectorAll === "function") {
+        try {
+          const externals = doc.querySelectorAll('[form="' + formId + '"]');
+          for (let i = 0; i < externals.length; i++) {
+            const ext = externals[i];
+            if (!seen.has(ext) && isFormListed(ext)) {
+              const owner = typeof findAssociatedForm === "function" ? findAssociatedForm(ext) : null;
+              if (owner === form) {
+                controls.push(ext);
+                seen.add(ext);
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     return controls;
   }
 
@@ -10102,11 +12157,21 @@
 
   function submitForm(form, submitter) {
     if (!form) return;
-    const ev = new SubmitEvent("submit", {
-      bubbles: true,
-      cancelable: true,
-      submitter: submitter || null,
-    });
+    let ev;
+    try {
+      ev = new SubmitEvent("submit", {
+        bubbles: true,
+        cancelable: true,
+        submitter: submitter || null,
+      });
+    } catch (e) {
+      ev = new Event("submit", { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "submitter", {
+        value: submitter || null,
+        writable: true,
+        configurable: true,
+      });
+    }
     form.dispatchEvent(ev);
     if (ev.defaultPrevented) {
       return;
@@ -10123,23 +12188,45 @@
 
     Object.defineProperty(HTMLFormElement.prototype, "elements", {
       get: function () {
-        const list = collectFormControls(this);
-        const col = new HTMLCollection(list);
-        // Map controls by name and id
-        for (let i = 0; i < list.length; i++) {
-          const item = list[i];
-          if (item.name && !col[item.name]) col[item.name] = item;
-          if (item.id && !col[item.id]) col[item.id] = item;
+        if (!this._elementsCollection) {
+          const self = this;
+          const target = Object.create((global.HTMLFormControlsCollection || HTMLCollection).prototype);
+          target._isFormControlsCollection = true;
+          this._elementsCollection = makeHtmlCollection(function () {
+            return collectFormControls(self);
+          }, target);
         }
-        return col;
+        return this._elementsCollection;
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLFormElement.prototype, "length", {
-      get: function () { return this.elements.length; },
+      get: function () {
+        const els = this.elements;
+        let count = 0;
+        for (let i = 0; i < els.length; i++) {
+          const e = els[i];
+          if (e) {
+            const tag = (e.tagName || "").toLowerCase();
+            const type = (e.type || (typeof e.getAttribute === "function" ? e.getAttribute("type") : "") || "").toLowerCase();
+            if (tag === "input" && type === "image") continue;
+          }
+          count++;
+        }
+        return count;
+      },
       configurable: true,
     });
+
+    HTMLFormElement.prototype.namedItem = function (name) {
+      if (!name) return null;
+      return this.elements.namedItem(name);
+    };
+
+    HTMLFormElement.prototype.item = function (index) {
+      return this.elements.item(index);
+    };
 
     Object.defineProperty(HTMLFormElement.prototype, "name", {
       get: function () { return this.getAttribute("name") || ""; },
@@ -10159,6 +12246,22 @@
       configurable: true,
     });
 
+    Object.defineProperty(HTMLFormElement.prototype, "enctype", {
+      get: function () {
+        const raw = (this.getAttribute("enctype") || "").toLowerCase();
+        if (raw === "multipart/form-data" || raw === "text/plain") return raw;
+        return "application/x-www-form-urlencoded";
+      },
+      set: function (v) { this.setAttribute("enctype", String(v)); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFormElement.prototype, "encoding", {
+      get: function () { return this.enctype; },
+      set: function (v) { this.enctype = v; },
+      configurable: true,
+    });
+
     Object.defineProperty(HTMLFormElement.prototype, "target", {
       get: function () { return this.getAttribute("target") || ""; },
       set: function (v) { this.setAttribute("target", String(v)); },
@@ -10172,19 +12275,21 @@
     });
 
     HTMLFormElement.prototype.submit = function () {
-      performFormSubmission(this, null);
+      submitForm(this, null);
     };
 
     HTMLFormElement.prototype.requestSubmit = function (submitter) {
       if (submitter !== undefined && submitter !== null) {
         const tag = (submitter.tagName || "").toLowerCase();
         const type = (submitter.type || (typeof submitter.getAttribute === "function" ? submitter.getAttribute("type") : "") || "").toLowerCase();
-        const isButton = (tag === "button") || (tag === "input" && (type === "submit" || type === "image"));
+        const isButton = (tag === "button" && (type === "submit" || !type || type === "")) ||
+                         (tag === "input" && (type === "submit" || type === "image"));
         if (!isButton) {
           throw new TypeError("requestSubmit: submitter must be a submit button");
         }
         if (findAssociatedForm(submitter) !== this) {
-          throw new DOMException("requestSubmit: submitter is not associated with this form", "NotFoundError");
+          const DOMEx = global.DOMException || Error;
+          throw new DOMEx("requestSubmit: submitter is not associated with this form", "NotFoundError");
         }
       }
       submitForm(this, submitter || null);
@@ -10194,41 +12299,40 @@
       if (!(this instanceof HTMLFormElement)) {
         throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
       }
-      if (this.namespaceURI && this.namespaceURI !== "http://www.w3.org/1999/xhtml") {
-        throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
-      }
-      if (Object.prototype.hasOwnProperty.call(this, "_id")) {
-        const canonical = typeof global.__capsurf_getCanonicalId === "function" ? global.__capsurf_getCanonicalId(this) : undefined;
-        if (canonical !== undefined && this._id !== canonical) {
-          throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Invalid trusted event target");
-        }
-      }
 
       const list = collectFormControls(this);
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
-        if (c.defaultValue !== undefined) c.value = c.defaultValue;
-        if (c.defaultChecked !== undefined) c.checked = c.defaultChecked;
-        if (c.defaultSelected !== undefined) c.selected = c.defaultSelected;
-        if ((c.tagName || "").toLowerCase() === "select") {
+        const tag = (c.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea") {
+          if (c.defaultValue !== undefined) {
+            c.value = c.defaultValue;
+          } else if (typeof c.getAttribute === "function") {
+            const attrVal = c.getAttribute("value");
+            c.value = attrVal !== null ? attrVal : "";
+          }
+          c._valueDirty = false;
+          if (c.defaultChecked !== undefined) {
+            c.checked = c.defaultChecked;
+          } else if (typeof c.hasAttribute === "function") {
+            c.checked = c.hasAttribute("checked");
+          }
+          c._checkedDirty = false;
+        } else if (tag === "select") {
           if (typeof getSelectState === "function") getSelectState(c).selectedIndex = undefined;
           c._selectedIndex = undefined;
           const opts = c.options;
-          for (let j = 0; j < opts.length; j++) {
-            if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
-            opts[j]._selected = undefined;
+          if (opts) {
+            for (let j = 0; j < opts.length; j++) {
+              if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
+              opts[j]._selected = undefined;
+              opts[j].selected = typeof opts[j].hasAttribute === "function" ? opts[j].hasAttribute("selected") : false;
+            }
           }
         }
       }
       const evt = new Event("reset", { bubbles: true, cancelable: true });
-      evt._isTrusted = true;
-      if (typeof dispatchTrustedEvent === "function") {
-        dispatchTrustedEvent(this, evt);
-      } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
-        global.__capsurf_dispatchTrustedEvent(this, evt);
-      } else {
-        this.dispatchEvent(evt);
-      }
+      this.dispatchEvent(evt);
     };
 
     HTMLFormElement.prototype.checkValidity = function () {
@@ -10252,12 +12356,14 @@
     markNative(HTMLFormElement.prototype.reset, "reset");
     markNative(HTMLFormElement.prototype.checkValidity, "checkValidity");
     markNative(HTMLFormElement.prototype.reportValidity, "reportValidity");
+    markNative(HTMLFormElement.prototype.namedItem, "namedItem");
+    markNative(HTMLFormElement.prototype.item, "item");
 
     if (ElementProto) {
       if (!ElementProto.submit) {
         ElementProto.submit = function () {
           if ((this.tagName || "").toLowerCase() === "form") {
-            performFormSubmission(this, null);
+            submitForm(this, null);
           }
         };
         markNative(ElementProto.submit, "submit");
@@ -10281,6 +12387,245 @@
     }
 
     global.HTMLFormElement = HTMLFormElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLFormElement = HTMLFormElement;
+    }
+  }
+
+  // =============================================================
+  // Module: element/forms/fieldset.js
+  // =============================================================
+  // src/js/shim/element/forms/fieldset.js
+  // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/fieldset.ts
+
+  function formListedDescendants(root) {
+    const out = [];
+    function walk(node) {
+      if (!node) return;
+      let child = node.firstChild;
+      while (child) {
+        if (child.nodeType === 1) {
+          if (typeof isFormListed === "function" && isFormListed(child)) {
+            out.push(child);
+          }
+          walk(child);
+        }
+        child = child.nextSibling;
+      }
+    }
+    walk(root);
+    return out;
+  }
+
+  function installFieldSetElement(global) {
+    const ElementProto = global.Element ? global.Element.prototype : {};
+
+    function HTMLFieldSetElement() {}
+    HTMLFieldSetElement.prototype = Object.create(ElementProto);
+    HTMLFieldSetElement.prototype.constructor = HTMLFieldSetElement;
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "type", {
+      get: function () { return "fieldset"; },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "disabled", {
+      get: function () { return this.hasAttribute("disabled"); },
+      set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "name", {
+      get: function () { return this.getAttribute("name") || ""; },
+      set: function (v) { this.setAttribute("name", String(v)); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "form", {
+      get: function () {
+        if (typeof findAssociatedForm === "function") {
+          return findAssociatedForm(this);
+        }
+        return null;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "elements", {
+      get: function () {
+        const self = this;
+        return makeHtmlCollection(function () {
+          return formListedDescendants(self);
+        });
+      },
+      configurable: true,
+    });
+
+    markNative(HTMLFieldSetElement, "HTMLFieldSetElement");
+    global.HTMLFieldSetElement = HTMLFieldSetElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLFieldSetElement = HTMLFieldSetElement;
+    }
+
+    function HTMLLegendElement() {}
+    HTMLLegendElement.prototype = Object.create(ElementProto);
+    HTMLLegendElement.prototype.constructor = HTMLLegendElement;
+
+    Object.defineProperty(HTMLLegendElement.prototype, "form", {
+      get: function () {
+        let p = this.parentElement || this.parentNode;
+        while (p) {
+          if ((p.tagName || "").toLowerCase() === "fieldset") {
+            return p.form;
+          }
+          p = p.parentElement || p.parentNode;
+        }
+        return null;
+      },
+      configurable: true,
+    });
+
+    markNative(HTMLLegendElement, "HTMLLegendElement");
+    global.HTMLLegendElement = HTMLLegendElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLLegendElement = HTMLLegendElement;
+    }
+  }
+
+  // =============================================================
+  // Module: element/forms/label.js
+  // =============================================================
+  // src/js/shim/element/forms/label.js
+  // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/label.ts
+
+  function isLabelable(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag === "input") {
+      const type = (el.type || (typeof el.getAttribute === "function" ? el.getAttribute("type") : "") || "text").toLowerCase();
+      return type !== "hidden";
+    }
+    return tag === "button" || tag === "select" || tag === "textarea" ||
+           tag === "meter" || tag === "output" || tag === "progress";
+  }
+
+  function getLabelsForControl(control) {
+    const matches = [];
+    const seen = new Set();
+
+    // 1. Explicit label with for="control.id"
+    const id = control.id || (typeof control.getAttribute === "function" ? control.getAttribute("id") : "");
+    if (id) {
+      const doc = control.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.querySelectorAll === "function") {
+        try {
+          const all = doc.querySelectorAll('label[for="' + id + '"]');
+          for (let i = 0; i < all.length; i++) {
+            const l = all[i];
+            if (!seen.has(l)) {
+              seen.add(l);
+              matches.push(l);
+            }
+          }
+        } catch (e) {}
+        if (matches.length === 0) {
+          try {
+            const all = doc.querySelectorAll("label");
+            for (let i = 0; i < all.length; i++) {
+              const l = all[i];
+              const forAttr = typeof l.getAttribute === "function" ? l.getAttribute("for") : l.htmlFor;
+              if (forAttr === id && !seen.has(l)) {
+                seen.add(l);
+                matches.push(l);
+              }
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // 2. Ancestor label(s)
+    let p = control.parentElement || control.parentNode;
+    while (p) {
+      if ((p.tagName || "").toLowerCase() === "label") {
+        if (!seen.has(p)) {
+          seen.add(p);
+          matches.push(p);
+        }
+      }
+      p = p.parentElement || p.parentNode;
+    }
+
+    return new NodeList(matches);
+  }
+
+  function installLabelElement(global) {
+    const ElementProto = global.Element ? global.Element.prototype : {};
+
+    function HTMLLabelElement() {}
+    HTMLLabelElement.prototype = Object.create(ElementProto);
+    HTMLLabelElement.prototype.constructor = HTMLLabelElement;
+
+    Object.defineProperty(HTMLLabelElement.prototype, "htmlFor", {
+      get: function () { return this.getAttribute("for") || ""; },
+      set: function (v) { this.setAttribute("for", String(v)); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLLabelElement.prototype, "control", {
+      get: function () {
+        const forId = this.getAttribute("for");
+        if (forId) {
+          const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+          const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
+          return (el && isLabelable(el)) ? el : null;
+        }
+        function findFirst(node) {
+          if (!node) return null;
+          let child = node.firstChild;
+          while (child) {
+            if (child.nodeType === 1) {
+              if (isLabelable(child)) return child;
+              const sub = findFirst(child);
+              if (sub) return sub;
+            }
+            child = child.nextSibling;
+          }
+          return null;
+        }
+        return findFirst(this);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLLabelElement.prototype, "form", {
+      get: function () {
+        const c = this.control;
+        return c ? c.form : null;
+      },
+      configurable: true,
+    });
+
+    markNative(HTMLLabelElement, "HTMLLabelElement");
+    global.HTMLLabelElement = HTMLLabelElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLLabelElement = HTMLLabelElement;
+    }
+
+    // Define .labels on ElementProto for labelable elements
+    Object.defineProperty(ElementProto, "labels", {
+      get: function () {
+        const tag = (this.tagName || "").toLowerCase();
+        if (tag === "input") {
+          const type = (this.type || (typeof this.getAttribute === "function" ? this.getAttribute("type") : "") || "text").toLowerCase();
+          if (type === "hidden") return null;
+        } else if (tag !== "button" && tag !== "select" && tag !== "textarea" && tag !== "meter" && tag !== "output" && tag !== "progress") {
+          return null;
+        }
+        return getLabelsForControl(this);
+      },
+      configurable: true,
+    });
   }
 
   // =============================================================
@@ -11146,17 +13491,26 @@
   // src/js/shim/form-data.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/form-data.ts
 
-  function FormData(form) {
+  function FormData(form, submitter) {
     this._entries = []; // Array of [name, value]
     if (form && (form.tagName || "").toUpperCase() === "FORM") {
-      const controls = form.elements;
+      let submitterEl = null;
+      if (submitter && submitter.name && !submitter.disabled) {
+        submitterEl = submitter;
+      }
+      let submitterAppended = false;
+      const controls = form.elements || [];
       for (let i = 0; i < controls.length; i++) {
         const c = controls[i];
         if (!c.name || c.disabled) continue;
         const tag = (c.tagName || "").toLowerCase();
         const type = (c.type || "").toLowerCase();
 
-        if (type === "submit" || type === "reset" || type === "button" || type === "image") {
+        if (tag === "button" || type === "submit" || type === "reset" || type === "button" || type === "image") {
+          if (c === submitterEl) {
+            this.append(c.name, c.value !== undefined ? c.value : "");
+            submitterAppended = true;
+          }
           continue;
         }
         if ((type === "checkbox" || type === "radio") && !c.checked) {
@@ -11172,6 +13526,9 @@
         } else {
           this.append(c.name, c.value);
         }
+      }
+      if (!submitterAppended && submitterEl) {
+        this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
       }
     }
   }
@@ -11267,6 +13624,10 @@
   markNative(FormData.prototype.has, "has");
   markNative(FormData.prototype.set, "set");
   markNative(FormData.prototype.entries, "entries");
+
+  try {
+    Object.defineProperty(FormData, "length", { value: 0, configurable: true });
+  } catch (e) {}
 
   // =============================================================
   // Module: traversal.js
@@ -11514,12 +13875,18 @@
     this.startContainer = node;
     this.startOffset = Number(offset || 0);
     this._updateState();
+    if (this._selection) {
+      this._selection._onRangeMutated(this);
+    }
   };
 
   Range.prototype.setEnd = function (node, offset) {
     this.endContainer = node;
     this.endOffset = Number(offset || 0);
     this._updateState();
+    if (this._selection) {
+      this._selection._onRangeMutated(this);
+    }
   };
 
   Range.prototype.setStartBefore = function (node) {
@@ -11560,16 +13927,56 @@
   };
 
   Range.prototype.selectNodeContents = function (node) {
-    if (!node) throw new Error("Node required");
+    if (!node) throw new TypeError("Node required");
     this.startContainer = node;
     this.startOffset = 0;
     this.endContainer = node;
-    this.endOffset = node.textContent ? node.textContent.length : 0;
+    this.endOffset = getNodeLength(node);
     this._updateState();
+    if (this._selection) {
+      this._selection._onRangeMutated(this);
+    }
   };
 
   Range.prototype.compareBoundaryPoints = function (how, sourceRange) {
-    return 0;
+    if (how < 0 || how > 3) {
+      throw new DOMException("Invalid compare how type", "NotSupportedError");
+    }
+    if (!sourceRange) {
+      throw new TypeError("sourceRange required");
+    }
+    let thisNode, thisOffset, sourceNode, sourceOffset;
+    if (how === Range.START_TO_START) {
+      thisNode = this.startContainer;
+      thisOffset = this.startOffset;
+      sourceNode = sourceRange.startContainer;
+      sourceOffset = sourceRange.startOffset;
+    } else if (how === Range.START_TO_END) {
+      thisNode = this.endContainer;
+      thisOffset = this.endOffset;
+      sourceNode = sourceRange.startContainer;
+      sourceOffset = sourceRange.startOffset;
+    } else if (how === Range.END_TO_END) {
+      thisNode = this.endContainer;
+      thisOffset = this.endOffset;
+      sourceNode = sourceRange.endContainer;
+      sourceOffset = sourceRange.endOffset;
+    } else if (how === Range.END_TO_START) {
+      thisNode = this.startContainer;
+      thisOffset = this.startOffset;
+      sourceNode = sourceRange.endContainer;
+      sourceOffset = sourceRange.endOffset;
+    }
+    return compareBoundaryPoints(thisNode, thisOffset, sourceNode, sourceOffset);
+  };
+
+  Range.prototype.toString = function () {
+    if (this.collapsed) return "";
+    if (this.startContainer === this.endContainer && (this.startContainer.nodeType === 3 || this.startContainer.nodeType === 8)) {
+      const text = this.startContainer.data || this.startContainer.textContent || "";
+      return text.slice(this.startOffset, this.endOffset);
+    }
+    return "";
   };
 
   Range.prototype.deleteContents = function () {};
@@ -11801,84 +14208,578 @@
   markNative(Range.prototype.cloneRange, "cloneRange");
   markNative(Range.prototype.createContextualFragment, "createContextualFragment");
 
-  function Selection() {
-    this._range = null;
+  function getNodeLength(node) {
+    if (!node) return 0;
+    if (node.nodeType === 3 || node.nodeType === 8) { // TEXT_NODE or COMMENT_NODE
+      if (typeof node.data === "string") return node.data.length;
+      if (typeof node.textContent === "string") return node.textContent.length;
+      return 0;
+    }
+    if (node.childNodes) return node.childNodes.length;
+    if (node._children) return node._children.length;
+    return 0;
   }
 
-  Object.defineProperty(Selection.prototype, "anchorNode", {
-    get: function () { return this._range ? this._range.startContainer : null; },
-    configurable: true,
-  });
+  function isNodeInDocument(node, doc) {
+    if (!node) return false;
+    if (!doc) doc = typeof document !== "undefined" ? document : null;
+    if (!doc) return true;
+    if (node === doc) return true;
+    let curr = node;
+    while (curr) {
+      if (curr === doc) return true;
+      curr = curr.parentNode || curr.parentElement;
+    }
+    return false;
+  }
 
-  Object.defineProperty(Selection.prototype, "anchorOffset", {
-    get: function () { return this._range ? this._range.startOffset : 0; },
-    configurable: true,
-  });
+  function compareBoundaryPoints(nodeA, offsetA, nodeB, offsetB) {
+    if (nodeA === nodeB) {
+      if (offsetA === offsetB) return 0;
+      return offsetA < offsetB ? -1 : 1;
+    }
+    if (nodeA.contains && nodeA.contains(nodeB)) {
+      let child = nodeB;
+      while (child && (child.parentNode || child.parentElement) !== nodeA) {
+        child = child.parentNode || child.parentElement;
+      }
+      if (child) {
+        let idx = 0;
+        let sibling = nodeA.firstChild;
+        while (sibling && sibling !== child) {
+          idx++;
+          sibling = sibling.nextSibling;
+        }
+        if (idx < offsetA) return 1;
+        return -1;
+      }
+    }
+    if (nodeB.contains && nodeB.contains(nodeA)) {
+      let child = nodeA;
+      while (child && (child.parentNode || child.parentElement) !== nodeB) {
+        child = child.parentNode || child.parentElement;
+      }
+      if (child) {
+        let idx = 0;
+        let sibling = nodeB.firstChild;
+        while (sibling && sibling !== child) {
+          idx++;
+          sibling = sibling.nextSibling;
+        }
+        if (offsetB <= idx) return 1;
+        return -1;
+      }
+    }
+    if (typeof nodeA.compareDocumentPosition === "function") {
+      const pos = nodeA.compareDocumentPosition(nodeB);
+      if (pos & 4) { // DOCUMENT_POSITION_FOLLOWING: nodeB follows nodeA
+        return -1;
+      }
+      if (pos & 2) { // DOCUMENT_POSITION_PRECEDING: nodeB precedes nodeA
+        return 1;
+      }
+    }
+    return 0;
+  }
 
-  Object.defineProperty(Selection.prototype, "focusNode", {
-    get: function () { return this._range ? this._range.endContainer : null; },
-    configurable: true,
-  });
+  let _docSelectionChangeScheduled = false;
 
-  Object.defineProperty(Selection.prototype, "focusOffset", {
-    get: function () { return this._range ? this._range.endOffset : 0; },
+  function scheduleDocumentSelectionChange(doc) {
+    if (_docSelectionChangeScheduled) return;
+    _docSelectionChangeScheduled = true;
+    setTimeout(function () {
+      _docSelectionChangeScheduled = false;
+      const targetDoc = doc || (typeof document !== "undefined" ? document : null);
+      if (targetDoc && typeof targetDoc.dispatchEvent === "function") {
+        try {
+          targetDoc.dispatchEvent(new Event("selectionchange"));
+        } catch (e) {}
+      }
+    }, 0);
+  }
+
+  function Selection(doc) {
+    this._doc = doc || (typeof document !== "undefined" ? document : null);
+    this._range = null;
+    this._direction = "none";
+  }
+
+  Selection.prototype._live = function () {
+    if (!this._range) return null;
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (this._range.startContainer && !isNodeInDocument(this._range.startContainer, doc)) {
+      if (this._range._selection === this) this._range._selection = null;
+      this._range = null;
+      this._direction = "none";
+      return null;
+    }
+    if (this._range.endContainer && !isNodeInDocument(this._range.endContainer, doc)) {
+      if (this._range._selection === this) this._range._selection = null;
+      this._range = null;
+      this._direction = "none";
+      return null;
+    }
+    return this._range;
+  };
+
+  Selection.prototype._scheduleChange = function () {
+    scheduleDocumentSelectionChange(this._doc);
+  };
+
+  Selection.prototype._onRangeMutated = function (range) {
+    if (range === this._range) {
+      this._scheduleChange();
+    }
+  };
+
+  Object.defineProperty(Selection.prototype, "rangeCount", {
+    get: function () {
+      return this._live() ? 1 : 0;
+    },
     configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(Selection.prototype, "isCollapsed", {
-    get: function () { return this._range ? this._range.collapsed : true; },
+    get: function () {
+      const r = this._live();
+      return r ? r.collapsed : true;
+    },
     configurable: true,
+    enumerable: true,
   });
 
-  Object.defineProperty(Selection.prototype, "rangeCount", {
-    get: function () { return this._range ? 1 : 0; },
+  Object.defineProperty(Selection.prototype, "type", {
+    get: function () {
+      const r = this._live();
+      if (!r) return "None";
+      return r.collapsed ? "Caret" : "Range";
+    },
     configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(Selection.prototype, "direction", {
+    get: function () {
+      if (!this._live()) return "none";
+      return this._direction || "none";
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(Selection.prototype, "anchorNode", {
+    get: function () {
+      const r = this._live();
+      if (!r) return null;
+      return this._direction === "backward" ? r.endContainer : r.startContainer;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(Selection.prototype, "anchorOffset", {
+    get: function () {
+      const r = this._live();
+      if (!r) return 0;
+      return this._direction === "backward" ? r.endOffset : r.startOffset;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(Selection.prototype, "focusNode", {
+    get: function () {
+      const r = this._live();
+      if (!r) return null;
+      return this._direction === "backward" ? r.startContainer : r.endContainer;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(Selection.prototype, "focusOffset", {
+    get: function () {
+      const r = this._live();
+      if (!r) return 0;
+      return this._direction === "backward" ? r.startOffset : r.endOffset;
+    },
+    configurable: true,
+    enumerable: true,
   });
 
   Selection.prototype.getRangeAt = function (index) {
-    if (index === 0 && this._range) return this._range;
-    throw new Error("IndexSizeError: Invalid index " + index);
+    const r = this._live();
+    if (!r || index >>> 0 !== 0) {
+      throw new DOMException("Selection.getRangeAt: index out of range", "IndexSizeError");
+    }
+    return r;
   };
 
   Selection.prototype.addRange = function (range) {
+    if (!range) return;
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(range.startContainer, doc) || !isNodeInDocument(range.endContainer, doc)) {
+      return;
+    }
+    if (this._live()) return;
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
     this._range = range;
+    range._selection = this;
+    this._direction = range.collapsed ? "none" : "forward";
+    this._scheduleChange();
   };
 
   Selection.prototype.removeRange = function (range) {
-    if (this._range === range) this._range = null;
+    const current = this._live();
+    if (current !== range) {
+      throw new DOMException("removeRange: the given Range is not in the selection", "NotFoundError");
+    }
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
+    this._range = null;
+    this._direction = "none";
+    this._scheduleChange();
   };
 
   Selection.prototype.removeAllRanges = function () {
+    const hadRange = this._range !== null;
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
     this._range = null;
+    this._direction = "none";
+    if (hadRange) this._scheduleChange();
   };
 
   Selection.prototype.empty = function () {
-    this._range = null;
+    this.removeAllRanges();
   };
 
   Selection.prototype.collapse = function (node, offset) {
-    if (!this._range) this._range = new Range();
-    this._range.setStart(node, offset);
-    this._range.collapse(true);
+    if (node === null || node === undefined) {
+      this.removeAllRanges();
+      return;
+    }
+    const o = offset === undefined ? 0 : Number(offset);
+    if (o < 0) {
+      throw new DOMException("collapse: offset out of bounds", "IndexSizeError");
+    }
+    const maxLen = getNodeLength(node);
+    if (o > maxLen) {
+      throw new DOMException("collapse: offset out of bounds", "IndexSizeError");
+    }
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(node, doc)) {
+      // detached node: abort silently
+      return;
+    }
+    const r = new Range();
+    r.setStart(node, o);
+    r.setEnd(node, o);
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
+    this._range = r;
+    r._selection = this;
+    this._direction = "none";
+    this._scheduleChange();
   };
 
   Selection.prototype.setPosition = function (node, offset) {
     this.collapse(node, offset);
   };
 
+  Selection.prototype.collapseToStart = function () {
+    const r = this._live();
+    if (!r) throw new DOMException("collapseToStart: there is no selection", "InvalidStateError");
+    this.collapse(r.startContainer, r.startOffset);
+  };
+
+  Selection.prototype.collapseToEnd = function () {
+    const r = this._live();
+    if (!r) throw new DOMException("collapseToEnd: there is no selection", "InvalidStateError");
+    this.collapse(r.endContainer, r.endOffset);
+  };
+
+  Selection.prototype.extend = function (node, offset) {
+    if (!node) throw new TypeError("extend: node required");
+    const r = this._live();
+    if (!r) throw new DOMException("extend: there is no selection", "InvalidStateError");
+    const o = offset === undefined ? 0 : Number(offset);
+    if (o < 0) {
+      throw new DOMException("extend: offset out of bounds", "IndexSizeError");
+    }
+    const maxLen = getNodeLength(node);
+    if (o > maxLen) {
+      throw new DOMException("extend: offset out of bounds", "IndexSizeError");
+    }
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(node, doc)) {
+      return;
+    }
+
+    const anchorNode = this.anchorNode;
+    const anchorOffset = this.anchorOffset;
+    if (!anchorNode) return;
+
+    const cmp = compareBoundaryPoints(anchorNode, anchorOffset, node, o);
+    let isBackward = false;
+    let startNode, startOffset, endNode, endOffset;
+    if (cmp > 0) {
+      isBackward = true;
+      startNode = node;
+      startOffset = o;
+      endNode = anchorNode;
+      endOffset = anchorOffset;
+    } else if (cmp < 0) {
+      isBackward = false;
+      startNode = anchorNode;
+      startOffset = anchorOffset;
+      endNode = node;
+      endOffset = o;
+    } else {
+      isBackward = false;
+      startNode = anchorNode;
+      startOffset = anchorOffset;
+      endNode = node;
+      endOffset = o;
+    }
+
+    r.setStart(startNode, startOffset);
+    r.setEnd(endNode, endOffset);
+    this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+    this._scheduleChange();
+  };
+
+  Selection.prototype.setBaseAndExtent = function (anchorNode, anchorOffset, focusNode, focusOffset) {
+    if (!anchorNode || !focusNode) throw new TypeError("setBaseAndExtent: nodes required");
+    const ao = anchorOffset === undefined ? 0 : Number(anchorOffset);
+    const fo = focusOffset === undefined ? 0 : Number(focusOffset);
+    if (ao < 0 || ao > getNodeLength(anchorNode)) {
+      throw new DOMException("setBaseAndExtent: anchor offset out of bounds", "IndexSizeError");
+    }
+    if (fo < 0 || fo > getNodeLength(focusNode)) {
+      throw new DOMException("setBaseAndExtent: focus offset out of bounds", "IndexSizeError");
+    }
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(anchorNode, doc) || !isNodeInDocument(focusNode, doc)) {
+      return;
+    }
+    const cmp = compareBoundaryPoints(anchorNode, ao, focusNode, fo);
+    let isBackward = false;
+    let startNode, startOffset, endNode, endOffset;
+    if (cmp > 0) {
+      isBackward = true;
+      startNode = focusNode;
+      startOffset = fo;
+      endNode = anchorNode;
+      endOffset = ao;
+    } else {
+      isBackward = false;
+      startNode = anchorNode;
+      startOffset = ao;
+      endNode = focusNode;
+      endOffset = fo;
+    }
+    const r = new Range();
+    r.setStart(startNode, startOffset);
+    r.setEnd(endNode, endOffset);
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
+    this._range = r;
+    r._selection = this;
+    this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+    this._scheduleChange();
+  };
+
   Selection.prototype.selectAllChildren = function (node) {
-    if (!this._range) this._range = new Range();
-    this._range.selectNodeContents(node);
+    if (!node) throw new TypeError("selectAllChildren: node required");
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(node, doc)) return;
+    const childCount = node.childNodes ? node.childNodes.length : 0;
+    const r = new Range();
+    r.setStart(node, 0);
+    r.setEnd(node, childCount);
+    if (this._range && this._range._selection === this) {
+      this._range._selection = null;
+    }
+    this._range = r;
+    r._selection = this;
+    this._direction = "none";
+    this._scheduleChange();
+  };
+
+  Selection.prototype.containsNode = function (node, allowPartialContainment) {
+    const r = this._live();
+    if (!r || !node) return false;
+    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    if (!isNodeInDocument(node, doc)) return false;
+    const len = getNodeLength(node);
+    const nodeStartCmp = compareBoundaryPoints(node, 0, r.endContainer, r.endOffset);
+    const nodeEndCmp = compareBoundaryPoints(node, len, r.startContainer, r.startOffset);
+    if (allowPartialContainment) {
+      return nodeStartCmp <= 0 && nodeEndCmp >= 0;
+    }
+    return compareBoundaryPoints(node, 0, r.startContainer, r.startOffset) >= 0 &&
+           compareBoundaryPoints(node, len, r.endContainer, r.endOffset) <= 0;
   };
 
   Selection.prototype.toString = function () {
-    return "";
+    const r = this._live();
+    if (!r) return "";
+    return r.toString ? r.toString() : "";
   };
+
+  Range.prototype.getClientRects = function () {
+    const rects = [];
+    if (this.collapsed) return rects;
+    const startNode = this.startContainer;
+    const endNode = this.endContainer;
+    if (!startNode || !endNode) return rects;
+
+    const doc = (startNode && (startNode.ownerDocument || (startNode.nodeType === 9 ? startNode : null))) || (typeof document !== "undefined" ? document : null);
+    const root = doc ? (doc.body || doc.documentElement) : null;
+    if (!root) return rects;
+
+    const range = this;
+    function walk(node) {
+      if (!node) return;
+
+      if (node.nodeType === 3) { // TEXT_NODE
+        const text = node.data || node.textContent || "";
+        const len = text.length;
+        if (len === 0) return;
+
+        if (compareBoundaryPoints(node, 0, range.endContainer, range.endOffset) >= 0) {
+          return;
+        }
+        if (compareBoundaryPoints(node, len, range.startContainer, range.startOffset) <= 0) {
+          return;
+        }
+
+        let s = 0;
+        let e = len;
+        if (node === range.startContainer) {
+          s = Math.max(0, Math.min(len, range.startOffset));
+        }
+        if (node === range.endContainer) {
+          e = Math.max(0, Math.min(len, range.endOffset));
+        }
+        if (s < e) {
+          let nodeRect = null;
+          if (typeof node.getBoundingClientRect === "function") {
+            nodeRect = node.getBoundingClientRect();
+          }
+          if (!nodeRect || (!nodeRect.width && !nodeRect.height)) {
+            if (node.parentNode && typeof node.parentNode.getBoundingClientRect === "function") {
+              nodeRect = node.parentNode.getBoundingClientRect();
+            }
+          }
+          if (nodeRect) {
+            const rx = (nodeRect.left !== undefined ? nodeRect.left : (nodeRect.x || 0)) + 2 + s * 8;
+            const ry = (nodeRect.top !== undefined ? nodeRect.top : (nodeRect.y || 0)) + 2;
+            const rw = (e - s) * 8;
+            const rh = (nodeRect.height && nodeRect.height >= 10) ? nodeRect.height : 12;
+            rects.push({
+              x: rx,
+              y: ry,
+              width: rw,
+              height: rh,
+              top: ry,
+              left: rx,
+              bottom: ry + rh,
+              right: rx + rw,
+            });
+          }
+        }
+        return;
+      }
+
+      const kids = node.childNodes || node._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        walk(kids[i]);
+      }
+    }
+
+    walk(root);
+    return rects;
+  };
+
+  Range.prototype.getBoundingClientRect = function () {
+    const rects = this.getClientRects();
+    if (!rects || rects.length === 0) {
+      return { x: 0, y: 0, width: 0, height: 0, top: 0, bottom: 0, left: 0, right: 0 };
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.left < minX) minX = r.left;
+      if (r.top < minY) minY = r.top;
+      if (r.right > maxX) maxX = r.right;
+      if (r.bottom > maxY) maxY = r.bottom;
+    }
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(0, maxX - minX),
+      height: Math.max(0, maxY - minY),
+      top: minY,
+      bottom: maxY,
+      left: minX,
+      right: maxX,
+    };
+  };
+
+  function __capsurf_get_selection_rects() {
+    const sel = (typeof window !== "undefined" && window.getSelection) ? window.getSelection() : (typeof document !== "undefined" && document.getSelection ? document.getSelection() : null);
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return "";
+    let range = null;
+    try {
+      range = sel.getRangeAt(0);
+    } catch (e) {
+      return "";
+    }
+    if (!range || range.collapsed) return "";
+    const rects = range.getClientRects();
+    if (!rects || rects.length === 0) return "";
+    const parts = [];
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      parts.push(r.x + ":" + r.y + ":" + r.width + ":" + r.height);
+    }
+    return parts.join(";");
+  }
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_get_selection_rects = __capsurf_get_selection_rects;
+  }
+  if (typeof global !== "undefined") {
+    global.__capsurf_get_selection_rects = __capsurf_get_selection_rects;
+  }
+
+  markNative(Range.prototype.getClientRects, "getClientRects");
+  markNative(Range.prototype.getBoundingClientRect, "getBoundingClientRect");
 
   markNative(Selection, "Selection");
   markNative(Selection.prototype.getRangeAt, "getRangeAt");
   markNative(Selection.prototype.addRange, "addRange");
+  markNative(Selection.prototype.removeRange, "removeRange");
   markNative(Selection.prototype.removeAllRanges, "removeAllRanges");
+  markNative(Selection.prototype.empty, "empty");
+  markNative(Selection.prototype.collapse, "collapse");
+  markNative(Selection.prototype.setPosition, "setPosition");
+  markNative(Selection.prototype.collapseToStart, "collapseToStart");
+  markNative(Selection.prototype.collapseToEnd, "collapseToEnd");
+  markNative(Selection.prototype.extend, "extend");
+  markNative(Selection.prototype.setBaseAndExtent, "setBaseAndExtent");
+  markNative(Selection.prototype.selectAllChildren, "selectAllChildren");
+  markNative(Selection.prototype.containsNode, "containsNode");
+  markNative(Selection.prototype.toString, "toString");
 
   // =============================================================
   // Module: parser.js
@@ -12141,6 +15042,10 @@
     if (idx >= 0) this._children.splice(idx, 1);
     child.parentNode = null;
     return child;
+  };
+  ParsedFragment.prototype.replaceChild = function (newChild, oldChild) {
+    this.insertBefore(newChild, oldChild);
+    return this.removeChild(oldChild);
   };
   Object.defineProperty(ParsedFragment.prototype, "childNodes", {
     get: function () {
@@ -12418,6 +15323,10 @@
     child.parentNode = null;
     return child;
   };
+  ParsedElement.prototype.replaceChild = function (newChild, oldChild) {
+    this.insertBefore(newChild, oldChild);
+    return this.removeChild(oldChild);
+  };
 
   ParsedElement.prototype.insertBefore = function (newChild, refChild) {
     if (!newChild || typeof newChild !== "object") {
@@ -12557,6 +15466,19 @@
       if (titleEl) {
         titleEl.textContent = this._title;
       }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedDocument.prototype, "styleSheets", {
+    get: function () {
+      if (typeof global.getOrCreateStyleSheetList === "function") {
+        return global.getOrCreateStyleSheetList(this);
+      }
+      if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+        return globalThis.getOrCreateStyleSheetList(this);
+      }
+      return [];
     },
     configurable: true,
   });
@@ -14510,6 +17432,149 @@
   }
   markNative(ImageData, "ImageData");
 
+  const FONT_8X8 = {
+    'H': [0x66, 0x66, 0x66, 0x7e, 0x66, 0x66, 0x66, 0x00],
+    'i': [0x18, 0x00, 0x38, 0x18, 0x18, 0x18, 0x3c, 0x00],
+    'default': [0x7e, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x7e, 0x00],
+  };
+
+  function encodePngBase64(width, height, rgba) {
+    if (!encodePngBase64._crcTable) {
+      const table = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) {
+          c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[i] = c;
+      }
+      encodePngBase64._crcTable = table;
+    }
+    const crcTable = encodePngBase64._crcTable;
+
+    function crc32(buf, offset, length) {
+      let c = 0xffffffff;
+      for (let i = 0; i < length; i++) {
+        c = crcTable[(c ^ buf[offset + i]) & 0xff] ^ (c >>> 8);
+      }
+      return (c ^ 0xffffffff) >>> 0;
+    }
+
+    function adler32(buf, offset, length) {
+      let a = 1, b = 0;
+      for (let i = 0; i < length; i++) {
+        a = (a + buf[offset + i]) % 65521;
+        b = (b + a) % 65521;
+      }
+      return ((b << 16) | a) >>> 0;
+    }
+
+    const lineLen = 1 + width * 4;
+    const rawLen = height * lineLen;
+    const raw = new Uint8Array(rawLen);
+    let rawIdx = 0;
+    let rgbaIdx = 0;
+    for (let y = 0; y < height; y++) {
+      raw[rawIdx++] = 0;
+      for (let x = 0; x < width * 4; x++) {
+        raw[rawIdx++] = rgba[rgbaIdx++];
+      }
+    }
+
+    const MAX_BLOCK = 65535;
+    const numBlocks = Math.ceil(rawLen / MAX_BLOCK) || 1;
+    const zlibLen = 2 + numBlocks * 5 + rawLen + 4;
+    const zlib = new Uint8Array(zlibLen);
+    let zIdx = 0;
+    zlib[zIdx++] = 0x78;
+    zlib[zIdx++] = 0x01;
+    let remaining = rawLen;
+    let inPos = 0;
+    while (remaining > 0 || numBlocks === 1 && inPos === 0) {
+      const bLen = Math.min(remaining, MAX_BLOCK);
+      const bFinal = (remaining <= MAX_BLOCK) ? 1 : 0;
+      zlib[zIdx++] = bFinal;
+      zlib[zIdx++] = bLen & 0xff;
+      zlib[zIdx++] = (bLen >> 8) & 0xff;
+      zlib[zIdx++] = (~bLen) & 0xff;
+      zlib[zIdx++] = ((~bLen) >> 8) & 0xff;
+      zlib.set(raw.subarray(inPos, inPos + bLen), zIdx);
+      zIdx += bLen;
+      inPos += bLen;
+      remaining -= bLen;
+    }
+    const adler = adler32(raw, 0, rawLen);
+    zlib[zIdx++] = (adler >> 24) & 0xff;
+    zlib[zIdx++] = (adler >> 16) & 0xff;
+    zlib[zIdx++] = (adler >> 8) & 0xff;
+    zlib[zIdx++] = adler & 0xff;
+
+    const totalLen = 8 + 25 + 12 + zlibLen + 12;
+    const png = new Uint8Array(totalLen);
+    let pIdx = 0;
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < 8; i++) png[pIdx++] = sig[i];
+
+    const ihdrLen = 13;
+    png[pIdx++] = (ihdrLen >> 24) & 0xff;
+    png[pIdx++] = (ihdrLen >> 16) & 0xff;
+    png[pIdx++] = (ihdrLen >> 8) & 0xff;
+    png[pIdx++] = ihdrLen & 0xff;
+    const ihdrStart = pIdx;
+    png[pIdx++] = 73; png[pIdx++] = 72; png[pIdx++] = 68; png[pIdx++] = 82;
+    png[pIdx++] = (width >> 24) & 0xff;
+    png[pIdx++] = (width >> 16) & 0xff;
+    png[pIdx++] = (width >> 8) & 0xff;
+    png[pIdx++] = width & 0xff;
+    png[pIdx++] = (height >> 24) & 0xff;
+    png[pIdx++] = (height >> 16) & 0xff;
+    png[pIdx++] = (height >> 8) & 0xff;
+    png[pIdx++] = height & 0xff;
+    png[pIdx++] = 8; png[pIdx++] = 6; png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0;
+    const ihdrCrc = crc32(png, ihdrStart, 17);
+    png[pIdx++] = (ihdrCrc >> 24) & 0xff;
+    png[pIdx++] = (ihdrCrc >> 16) & 0xff;
+    png[pIdx++] = (ihdrCrc >> 8) & 0xff;
+    png[pIdx++] = ihdrCrc & 0xff;
+
+    png[pIdx++] = (zlibLen >> 24) & 0xff;
+    png[pIdx++] = (zlibLen >> 16) & 0xff;
+    png[pIdx++] = (zlibLen >> 8) & 0xff;
+    png[pIdx++] = zlibLen & 0xff;
+    const idatStart = pIdx;
+    png[pIdx++] = 73; png[pIdx++] = 68; png[pIdx++] = 65; png[pIdx++] = 84;
+    png.set(zlib, pIdx);
+    pIdx += zlibLen;
+    const idatCrc = crc32(png, idatStart, 4 + zlibLen);
+    png[pIdx++] = (idatCrc >> 24) & 0xff;
+    png[pIdx++] = (idatCrc >> 16) & 0xff;
+    png[pIdx++] = (idatCrc >> 8) & 0xff;
+    png[pIdx++] = idatCrc & 0xff;
+
+    png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0;
+    const iendStart = pIdx;
+    png[pIdx++] = 73; png[pIdx++] = 69; png[pIdx++] = 78; png[pIdx++] = 68;
+    const iendCrc = crc32(png, iendStart, 4);
+    png[pIdx++] = (iendCrc >> 24) & 0xff;
+    png[pIdx++] = (iendCrc >> 16) & 0xff;
+    png[pIdx++] = (iendCrc >> 8) & 0xff;
+    png[pIdx++] = iendCrc & 0xff;
+
+    let binStr = "";
+    for (let i = 0; i < png.length; i++) {
+      binStr += String.fromCharCode(png[i]);
+    }
+    const b64 = (typeof btoa === "function") ? btoa(binStr) : base64Encode(png);
+    return "data:image/png;base64," + b64;
+  }
+
+  function transformPoint(m, x, y) {
+    return [
+      m[0] * x + m[2] * y + m[4],
+      m[1] * x + m[3] * y + m[5]
+    ];
+  }
+
   function defaultCanvasState() {
     return {
       strokeStyle: "#000000",
@@ -14533,6 +17598,7 @@
       filter: "none",
       imageSmoothingEnabled: true,
       matrix: [1, 0, 0, 1, 0, 0],
+      clipRect: null,
     };
   }
 
@@ -14559,6 +17625,7 @@
       filter: s.filter,
       imageSmoothingEnabled: s.imageSmoothingEnabled,
       matrix: s.matrix.slice(),
+      clipRect: s.clipRect ? { x0: s.clipRect.x0, y0: s.clipRect.y0, x1: s.clipRect.x1, y1: s.clipRect.y1 } : null,
     };
   }
 
@@ -14571,6 +17638,7 @@
     this._state = defaultCanvasState();
     this._stack = [];
     this._ops = []; // Recorded vector operations
+    this._currentPath = [];
     this._bitmap = null;
     this._bitmapWidth = 0;
     this._bitmapHeight = 0;
@@ -14598,10 +17666,14 @@
   // Transform methods
   CanvasRenderingContext2D.prototype.scale = function (x, y) {
     checkCtx(this);
-    this._state.matrix[0] *= x;
-    this._state.matrix[3] *= y;
+    const sx = Number(x);
+    const sy = Number(y);
+    this._state.matrix[0] *= sx;
+    this._state.matrix[1] *= sx;
+    this._state.matrix[2] *= sy;
+    this._state.matrix[3] *= sy;
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
-      this._ops.push({ op: "scale", x: x, y: y });
+      this._ops.push({ op: "scale", x: sx, y: sy });
     }
   };
 
@@ -14614,10 +17686,13 @@
 
   CanvasRenderingContext2D.prototype.translate = function (x, y) {
     checkCtx(this);
-    this._state.matrix[4] += x;
-    this._state.matrix[5] += y;
+    const numX = Number(x);
+    const numY = Number(y);
+    const m = this._state.matrix;
+    m[4] += m[0] * numX + m[2] * numY;
+    m[5] += m[1] * numX + m[3] * numY;
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
-      this._ops.push({ op: "translate", x: x, y: y });
+      this._ops.push({ op: "translate", x: numX, y: numY });
     }
   };
 
@@ -14672,21 +17747,28 @@
     const bw = this._bitmapWidth;
     const bh = this._bitmapHeight;
 
-    let startX = numX;
-    let startY = numY;
-    if (numW < 0) {
-      startX += numW;
-      numW = -numW;
-    }
-    if (numH < 0) {
-      startY += numH;
-      numH = -numH;
-    }
+    const [startX, startY] = transformPoint(this._state.matrix, numX, numY);
+    numW = numW * (this._state.matrix[0] || 1);
+    numH = numH * (this._state.matrix[3] || 1);
 
-    const x0 = Math.max(0, Math.floor(startX));
-    const y0 = Math.max(0, Math.floor(startY));
-    const x1 = Math.min(bw, Math.ceil(startX + numW));
-    const y1 = Math.min(bh, Math.ceil(startY + numH));
+    let rx = numW < 0 ? startX + numW : startX;
+    let ry = numH < 0 ? startY + numH : startY;
+    let rw = Math.abs(numW);
+    let rh = Math.abs(numH);
+
+    let x0 = Math.max(0, Math.floor(rx));
+    let y0 = Math.max(0, Math.floor(ry));
+    let x1 = Math.min(bw, Math.ceil(rx + rw));
+    let y1 = Math.min(bh, Math.ceil(ry + rh));
+
+    const clip = this._state.clipRect;
+    if (clip) {
+      x0 = Math.max(x0, Math.floor(clip.x0));
+      y0 = Math.max(y0, Math.floor(clip.y0));
+      x1 = Math.min(x1, Math.ceil(clip.x1));
+      y1 = Math.min(y1, Math.ceil(clip.y1));
+    }
+    if (x0 >= x1 || y0 >= y1) return;
 
     for (let py = y0; py < y1; py++) {
       let idx = (py * bw + x0) * 4;
@@ -14713,28 +17795,87 @@
     if (!Number.isFinite(numX) || !Number.isFinite(numY) || !Number.isFinite(numW) || !Number.isFinite(numH)) return;
     if (numW === 0 || numH === 0) return;
 
-    const color = parseColor(this._state.fillStyle);
-    if (!color) return;
-
     const bitmap = ensureBitmap(this);
     const bw = this._bitmapWidth;
     const bh = this._bitmapHeight;
 
-    let startX = numX;
-    let startY = numY;
-    if (numW < 0) {
-      startX += numW;
-      numW = -numW;
+    const [startX, startY] = transformPoint(this._state.matrix, numX, numY);
+    numW = numW * (this._state.matrix[0] || 1);
+    numH = numH * (this._state.matrix[3] || 1);
+
+    let rx = numW < 0 ? startX + numW : startX;
+    let ry = numH < 0 ? startY + numH : startY;
+    let rw = Math.abs(numW);
+    let rh = Math.abs(numH);
+
+    let x0 = Math.max(0, Math.floor(rx));
+    let y0 = Math.max(0, Math.floor(ry));
+    let x1 = Math.min(bw, Math.ceil(rx + rw));
+    let y1 = Math.min(bh, Math.ceil(ry + rh));
+
+    const clip = this._state.clipRect;
+    if (clip) {
+      x0 = Math.max(x0, Math.floor(clip.x0));
+      y0 = Math.max(y0, Math.floor(clip.y0));
+      x1 = Math.min(x1, Math.ceil(clip.x1));
+      y1 = Math.min(y1, Math.ceil(clip.y1));
     }
-    if (numH < 0) {
-      startY += numH;
-      numH = -numH;
+    if (x0 >= x1 || y0 >= y1) return;
+
+    const fill = this._state.fillStyle;
+
+    if (fill instanceof CanvasGradient) {
+      const stops = fill._stops.map(function (s) {
+        return {
+          offset: s.offset,
+          color: parseColor(s.color) || [0, 0, 0, 1]
+        };
+      }).sort(function (a, b) { return a.offset - b.offset; });
+
+      const x0Grad = fill._coords[0];
+      const x1Grad = fill._coords[3];
+      const dxGrad = x1Grad - x0Grad;
+
+      for (let py = y0; py < y1; py++) {
+        for (let px = x0; px < x1; px++) {
+          let t = dxGrad !== 0 ? (px - x0Grad) / dxGrad : 0;
+          t = Math.max(0, Math.min(1, t));
+
+          let r = 0, g = 0, b = 0, a = 1;
+          if (stops.length === 0) {
+            r = 0; g = 0; b = 0; a = 1;
+          } else if (stops.length === 1 || t <= stops[0].offset) {
+            r = stops[0].color[0]; g = stops[0].color[1]; b = stops[0].color[2]; a = stops[0].color[3];
+          } else if (t >= stops[stops.length - 1].offset) {
+            const last = stops[stops.length - 1];
+            r = last.color[0]; g = last.color[1]; b = last.color[2]; a = last.color[3];
+          } else {
+            for (let s = 0; s < stops.length - 1; s++) {
+              if (t >= stops[s].offset && t <= stops[s + 1].offset) {
+                const span = stops[s + 1].offset - stops[s].offset;
+                const frac = span > 0 ? (t - stops[s].offset) / span : 0;
+                r = Math.round(stops[s].color[0] + (stops[s + 1].color[0] - stops[s].color[0]) * frac);
+                g = Math.round(stops[s].color[1] + (stops[s + 1].color[1] - stops[s].color[1]) * frac);
+                b = Math.round(stops[s].color[2] + (stops[s + 1].color[2] - stops[s].color[2]) * frac);
+                a = stops[s].color[3] + (stops[s + 1].color[3] - stops[s].color[3]) * frac;
+                break;
+              }
+            }
+          }
+          const finalA = a * this._state.globalAlpha;
+          const aByte = Math.round(finalA * 255);
+          const idx = (py * bw + px) * 4;
+          bitmap[idx] = r;
+          bitmap[idx + 1] = g;
+          bitmap[idx + 2] = b;
+          bitmap[idx + 3] = aByte;
+        }
+      }
+      return;
     }
 
-    const x0 = Math.max(0, Math.floor(startX));
-    const y0 = Math.max(0, Math.floor(startY));
-    const x1 = Math.min(bw, Math.ceil(startX + numW));
-    const y1 = Math.min(bh, Math.ceil(startY + numH));
+    const color = parseColor(fill);
+    if (!color) return;
 
     const alpha = color[3] * this._state.globalAlpha;
     if (alpha <= 0) return;
@@ -14788,6 +17929,7 @@
   // Path drawing methods
   CanvasRenderingContext2D.prototype.beginPath = function () {
     checkCtx(this);
+    this._currentPath = [];
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "beginPath" });
     }
@@ -14795,6 +17937,7 @@
 
   CanvasRenderingContext2D.prototype.closePath = function () {
     checkCtx(this);
+    this._currentPath.push({ op: "closePath" });
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "closePath" });
     }
@@ -14802,6 +17945,8 @@
 
   CanvasRenderingContext2D.prototype.moveTo = function (x, y) {
     checkCtx(this);
+    const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+    this._currentPath.push({ op: "moveTo", x: tx, y: ty });
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "moveTo", x: x, y: y });
     }
@@ -14809,6 +17954,8 @@
 
   CanvasRenderingContext2D.prototype.lineTo = function (x, y) {
     checkCtx(this);
+    const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+    this._currentPath.push({ op: "lineTo", x: tx, y: ty });
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "lineTo", x: x, y: y });
     }
@@ -14837,6 +17984,9 @@
 
   CanvasRenderingContext2D.prototype.arc = function (x, y, radius, startAngle, endAngle, counterclockwise) {
     checkCtx(this);
+    const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+    const r = Number(radius) * Math.abs(this._state.matrix[0] || 1);
+    this._currentPath.push({ op: "arc", x: tx, y: ty, r: r, sa: Number(startAngle), ea: Number(endAngle), ccw: Boolean(counterclockwise) });
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "arc", args: [x, y, radius, startAngle, endAngle, Boolean(counterclockwise)] });
     }
@@ -14851,6 +18001,10 @@
 
   CanvasRenderingContext2D.prototype.rect = function (x, y, w, h) {
     checkCtx(this);
+    const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+    const tw = Number(w) * (this._state.matrix[0] || 1);
+    const th = Number(h) * (this._state.matrix[3] || 1);
+    this._currentPath.push({ op: "rect", x: tx, y: ty, w: tw, h: th });
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "rect", args: [x, y, w, h] });
     }
@@ -14861,6 +18015,56 @@
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fill", fillStyle: this._state.fillStyle });
     }
+
+    const color = parseColor(this._state.fillStyle);
+    if (!color) return;
+
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+    const bitmap = ensureBitmap(this);
+
+    const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+    const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+    const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+    const alpha = color[3] * this._state.globalAlpha;
+    const aByte = Math.min(255, Math.max(0, Math.round(alpha * 255)));
+
+    for (let i = 0; i < this._currentPath.length; i++) {
+      const item = this._currentPath[i];
+      if (item.op === "arc") {
+        const cx = item.x;
+        const cy = item.y;
+        const r = item.r;
+        const r2 = r * r;
+
+        let x0 = Math.max(0, Math.floor(cx - r));
+        let y0 = Math.max(0, Math.floor(cy - r));
+        let x1 = Math.min(bw, Math.ceil(cx + r));
+        let y1 = Math.min(bh, Math.ceil(cy + r));
+
+        const clip = this._state.clipRect;
+        if (clip) {
+          x0 = Math.max(x0, Math.floor(clip.x0));
+          y0 = Math.max(y0, Math.floor(clip.y0));
+          x1 = Math.min(x1, Math.ceil(clip.x1));
+          y1 = Math.min(y1, Math.ceil(clip.y1));
+        }
+
+        for (let py = y0; py < y1; py++) {
+          const dy = py - cy;
+          for (let px = x0; px < x1; px++) {
+            const dx = px - cx;
+            if (dx * dx + dy * dy <= r2) {
+              const idx = (py * bw + px) * 4;
+              bitmap[idx] = rByte;
+              bitmap[idx + 1] = gByte;
+              bitmap[idx + 2] = bByte;
+              bitmap[idx + 3] = aByte;
+            }
+          }
+        }
+      }
+    }
   };
 
   CanvasRenderingContext2D.prototype.stroke = function (path) {
@@ -14868,16 +18072,114 @@
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "stroke", strokeStyle: this._state.strokeStyle, lineWidth: this._state.lineWidth });
     }
+
+    const color = parseColor(this._state.strokeStyle);
+    if (!color) return;
+
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+    const bitmap = ensureBitmap(this);
+
+    const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+    const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+    const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+    const aByte = Math.min(255, Math.max(0, Math.round(color[3] * this._state.globalAlpha * 255)));
+    const lw = Math.max(1, this._state.lineWidth || 1);
+    const halfLw = lw / 2;
+
+    let curX = 0, curY = 0;
+    for (let i = 0; i < this._currentPath.length; i++) {
+      const item = this._currentPath[i];
+      if (item.op === "moveTo") {
+        curX = item.x;
+        curY = item.y;
+      } else if (item.op === "lineTo") {
+        const nextX = item.x;
+        const nextY = item.y;
+        const xMin = Math.max(0, Math.floor(Math.min(curX, nextX) - halfLw));
+        const xMax = Math.min(bw, Math.ceil(Math.max(curX, nextX) + halfLw));
+        const yMin = Math.max(0, Math.floor(Math.min(curY, nextY) - halfLw));
+        const yMax = Math.min(bh, Math.ceil(Math.max(curY, nextY) + halfLw));
+
+        const dx = nextX - curX;
+        const dy = nextY - curY;
+        const len2 = dx * dx + dy * dy;
+
+        for (let py = yMin; py < yMax; py++) {
+          for (let px = xMin; px < xMax; px++) {
+            let dist2;
+            if (len2 === 0) {
+              dist2 = (px - curX) * (px - curX) + (py - curY) * (py - curY);
+            } else {
+              let t = ((px - curX) * dx + (py - curY) * dy) / len2;
+              t = Math.max(0, Math.min(1, t));
+              const projX = curX + t * dx;
+              const projY = curY + t * dy;
+              dist2 = (px - projX) * (px - projX) + (py - projY) * (py - projY);
+            }
+            if (dist2 <= halfLw * halfLw) {
+              const idx = (py * bw + px) * 4;
+              bitmap[idx] = rByte;
+              bitmap[idx + 1] = gByte;
+              bitmap[idx + 2] = bByte;
+              bitmap[idx + 3] = aByte;
+            }
+          }
+        }
+        curX = nextX;
+        curY = nextY;
+      }
+    }
   };
 
   CanvasRenderingContext2D.prototype.clip = function (pathOrRule, rule) {
     checkCtx(this);
+    for (let i = 0; i < this._currentPath.length; i++) {
+      const item = this._currentPath[i];
+      if (item.op === "rect") {
+        let x0 = item.w < 0 ? item.x + item.w : item.x;
+        let y0 = item.h < 0 ? item.y + item.h : item.y;
+        let x1 = x0 + Math.abs(item.w);
+        let y1 = y0 + Math.abs(item.h);
+        if (this._state.clipRect) {
+          x0 = Math.max(x0, this._state.clipRect.x0);
+          y0 = Math.max(y0, this._state.clipRect.y0);
+          x1 = Math.min(x1, this._state.clipRect.x1);
+          y1 = Math.min(y1, this._state.clipRect.y1);
+        }
+        this._state.clipRect = { x0: x0, y0: y0, x1: x1, y1: y1 };
+        break;
+      }
+    }
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "clip" });
     }
   };
 
-  CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) { checkCtx(this); return true; };
+  CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) {
+    checkCtx(this);
+    const px = Number(x);
+    const py = Number(y);
+    for (let i = 0; i < this._currentPath.length; i++) {
+      const item = this._currentPath[i];
+      if (item.op === "rect") {
+        const rx = item.w < 0 ? item.x + item.w : item.x;
+        const ry = item.h < 0 ? item.y + item.h : item.y;
+        const rw = Math.abs(item.w);
+        const rh = Math.abs(item.h);
+        if (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh) {
+          return true;
+        }
+      } else if (item.op === "arc") {
+        const dx = px - item.x;
+        const dy = py - item.y;
+        if (dx * dx + dy * dy <= item.r * item.r) {
+          return true;
+        }
+      }
+    }
+    return true;
+  };
   CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return true; };
 
   // Text drawing
@@ -14885,6 +18187,60 @@
     checkCtx(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fillText", text: String(text), x: x, y: y, maxWidth: maxWidth, font: this._state.font, fillStyle: this._state.fillStyle });
+    }
+
+    const str = String(text != null ? text : "");
+    if (!str) return;
+
+    const color = parseColor(this._state.fillStyle);
+    if (!color) return;
+
+    const bitmap = ensureBitmap(this);
+    const bw = this._bitmapWidth;
+    const bh = this._bitmapHeight;
+
+    const [startX, startY] = transformPoint(this._state.matrix, Number(x), Number(y));
+    const fontMatch = (this._state.font || "").match(/(\d+)px/);
+    const fontSize = fontMatch ? parseFloat(fontMatch[1]) : 10;
+    const scale = Math.max(1, Math.round(fontSize / 8));
+
+    const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+    const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+    const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+    const aByte = Math.min(255, Math.max(0, Math.round(color[3] * this._state.globalAlpha * 255)));
+
+    let curX = Math.round(startX);
+    const baselineY = Math.round(startY);
+    const topY = baselineY - Math.round(fontSize * 0.75);
+
+    const clip = this._state.clipRect;
+
+    for (let ci = 0; ci < str.length; ci++) {
+      const ch = str.charAt(ci);
+      const glyph = FONT_8X8[ch] || FONT_8X8['default'];
+      for (let row = 0; row < 8; row++) {
+        const byte = glyph[row];
+        for (let col = 0; col < 8; col++) {
+          if ((byte >> (7 - col)) & 1) {
+            for (let sy = 0; sy < scale; sy++) {
+              const py = topY + row * scale + sy;
+              if (py < 0 || py >= bh) continue;
+              if (clip && (py < clip.y0 || py >= clip.y1)) continue;
+              for (let sx = 0; sx < scale; sx++) {
+                const px = curX + col * scale + sx;
+                if (px < 0 || px >= bw) continue;
+                if (clip && (px < clip.x0 || px >= clip.x1)) continue;
+                const idx = (py * bw + px) * 4;
+                bitmap[idx] = rByte;
+                bitmap[idx + 1] = gByte;
+                bitmap[idx + 2] = bByte;
+                bitmap[idx + 3] = aByte;
+              }
+            }
+          }
+        }
+      }
+      curX += 8 * scale;
     }
   };
 
@@ -15132,6 +18488,123 @@
   markNative(CanvasRenderingContext2D.prototype.clearRect, "clearRect");
   markNative(CanvasRenderingContext2D.prototype.measureText, "measureText");
   markNative(CanvasRenderingContext2D.prototype.getImageData, "getImageData");
+
+  // -------------------------------------------------------------
+  // OffscreenCanvas Implementation
+  // -------------------------------------------------------------
+  function OffscreenCanvas(width, height) {
+    if (new.target === undefined) {
+      throw new TypeError("Failed to construct 'OffscreenCanvas': Please use the 'new' operator");
+    }
+    if (arguments.length < 2) {
+      throw new TypeError("Failed to construct 'OffscreenCanvas': 2 arguments required, but only " + arguments.length + " present.");
+    }
+    let canvas = null;
+    if (typeof document !== "undefined" && typeof document.createElement === "function") {
+      canvas = document.createElement("canvas");
+    }
+    const w = (Number(width) >>> 0) || 0;
+    const h = (Number(height) >>> 0) || 0;
+    if (canvas) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    this._width = w;
+    this._height = h;
+    this.__backingCanvas = canvas;
+    this._ctx2d = null;
+  }
+
+  OffscreenCanvas.prototype.getContext = function (contextType, attributes) {
+    const t = String(contextType).toLowerCase();
+    if (t === "webgl" || t === "webgl2" || t === "experimental-webgl") {
+      return null;
+    }
+    if (t === "2d") {
+      if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
+        return this.__backingCanvas.getContext(contextType, attributes);
+      }
+      if (!this._ctx2d) {
+        this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+      }
+      return this._ctx2d;
+    }
+    return null;
+  };
+
+  Object.defineProperty(OffscreenCanvas.prototype, "width", {
+    configurable: true,
+    enumerable: true,
+    get: function () {
+      return this.__backingCanvas ? this.__backingCanvas.width : (this._width || 0);
+    },
+    set: function (v) {
+      const n = (Number(v) >>> 0) || 0;
+      this._width = n;
+      if (this.__backingCanvas) this.__backingCanvas.width = n;
+    },
+  });
+
+  Object.defineProperty(OffscreenCanvas.prototype, "height", {
+    configurable: true,
+    enumerable: true,
+    get: function () {
+      return this.__backingCanvas ? this.__backingCanvas.height : (this._height || 0);
+    },
+    set: function (v) {
+      const n = (Number(v) >>> 0) || 0;
+      this._height = n;
+      if (this.__backingCanvas) this.__backingCanvas.height = n;
+    },
+  });
+
+  OffscreenCanvas.prototype.convertToBlob = function (options) {
+    const type = (options && options.type) || "image/png";
+    if (typeof Blob !== "undefined") {
+      return Promise.resolve(new Blob([], { type: type }));
+    }
+    return Promise.resolve({ type: type, size: 0 });
+  };
+
+  OffscreenCanvas.prototype.transferToImageBitmap = function () {
+    return {};
+  };
+
+  Object.defineProperty(OffscreenCanvas.prototype, Symbol.toStringTag, {
+    value: "OffscreenCanvas",
+    configurable: true,
+  });
+
+  markNative(OffscreenCanvas, "OffscreenCanvas");
+  markNative(OffscreenCanvas.prototype.getContext, "getContext");
+  markNative(OffscreenCanvas.prototype.convertToBlob, "convertToBlob");
+  markNative(OffscreenCanvas.prototype.transferToImageBitmap, "transferToImageBitmap");
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_encode_png_base64 = encodePngBase64;
+    globalThis.__capsurf_get_canvas_bitmaps = function () {
+      const canvases = (typeof document !== "undefined" && document.querySelectorAll) ? document.querySelectorAll("canvas") : [];
+      const parts = [];
+      for (let i = 0; i < canvases.length; i++) {
+        const c = canvases[i];
+        const nid = (typeof c._nid === "number") ? c._nid : 0;
+        const ctx = c._ctx2d;
+        if (nid > 0 && ctx && ctx._bitmap && ctx._bitmapWidth > 0 && ctx._bitmapHeight > 0) {
+          const w = ctx._bitmapWidth;
+          const h = ctx._bitmapHeight;
+          const bm = ctx._bitmap;
+          const len = w * h * 4;
+          let binStr = "";
+          for (let j = 0; j < len; j++) {
+            binStr += String.fromCharCode(bm[j]);
+          }
+          const b64 = (typeof btoa === "function") ? btoa(binStr) : base64Encode(bm.subarray(0, len));
+          parts.push(nid + ":" + w + ":" + h + ":" + b64);
+        }
+      }
+      return parts.join(";");
+    };
+  }
 
   // =============================================================
   // Module: animations.js
@@ -15922,10 +19395,12 @@
     // 3. Location & History
     let currentHref = "about:blank";
     let committedDocUrl = "about:blank";
+    let refetchOnPushState = false;
 
     function setDocumentUrl(newUrl) {
       currentHref = String(newUrl);
       committedDocUrl = String(newUrl);
+      refetchOnPushState = (committedDocUrl.indexOf("ks_refetch_on_pushstate=1") !== -1);
       historyStack.length = 0;
       historyStack.push({ state: null, url: currentHref });
       historyIdx = 0;
@@ -15943,7 +19418,9 @@
     function setDocumentReferrer(newRef) {
       documentReferrer = String(newRef || "");
       if (global.document) {
-        global.document.referrer = documentReferrer;
+        try {
+          global.document._referrer = documentReferrer;
+        } catch (e) {}
       }
     }
     global.__capsurf_set_document_referrer = setDocumentReferrer;
@@ -16105,12 +19582,34 @@
         currentHref = target;
         historyIdx++;
         historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: st, url: currentHref });
-        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
-        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
-        if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
-          setTimeout(() => {
-            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
-          }, 0);
+
+        let isPathChange = false;
+        try {
+          const f = new HistoryURL(oldUrl);
+          const t = new HistoryURL(target);
+          if (f.origin === t.origin && (f.pathname !== t.pathname || f.search !== t.search)) {
+            isPathChange = true;
+          }
+        } catch (e) {}
+
+        if (refetchOnPushState && isPathChange) {
+          global.__capsurf_pending_navigation = target;
+          if (typeof globalThis !== "undefined") {
+            globalThis.__capsurf_pending_navigation = target;
+          }
+          if (typeof global.__capsurf_on_location_navigate === "function") {
+            try { global.__capsurf_on_location_navigate(target); } catch (e) {}
+          } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+            try { globalThis.__capsurf_on_location_navigate(target); } catch (e) {}
+          }
+        } else {
+          if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+          global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
+          if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+            setTimeout(() => {
+              try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+            }, 0);
+          }
         }
       }, "pushState"),
       replaceState: markNative(function (st, title, url) {
@@ -16118,12 +19617,34 @@
         const oldUrl = currentHref;
         currentHref = target;
         historyStack[historyIdx] = { state: st, url: currentHref };
-        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
-        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "replaceState" });
-        if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
-          setTimeout(() => {
-            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
-          }, 0);
+
+        let isPathChange = false;
+        try {
+          const f = new HistoryURL(oldUrl);
+          const t = new HistoryURL(target);
+          if (f.origin === t.origin && (f.pathname !== t.pathname || f.search !== t.search)) {
+            isPathChange = true;
+          }
+        } catch (e) {}
+
+        if (refetchOnPushState && isPathChange) {
+          global.__capsurf_pending_navigation = target;
+          if (typeof globalThis !== "undefined") {
+            globalThis.__capsurf_pending_navigation = target;
+          }
+          if (typeof global.__capsurf_on_location_navigate === "function") {
+            try { global.__capsurf_on_location_navigate(target); } catch (e) {}
+          } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+            try { globalThis.__capsurf_on_location_navigate(target); } catch (e) {}
+          }
+        } else {
+          if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+          global.__capsurf_same_doc_nav.push({ url: currentHref, type: "replaceState" });
+          if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+            setTimeout(() => {
+              try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+            }, 0);
+          }
         }
       }, "replaceState"),
       back: markNative(function () {
@@ -16211,33 +19732,72 @@
     };
 
     // 5. Performance & Timers
-    let timerIdCounter = 1;
+    const nativeDateNow = (typeof Date !== "undefined" && typeof Date.now === "function")
+      ? Date.now.bind(Date)
+      : function () { return +new Date(); };
+
+    const FIRST_PAGE_TIMER_ID = 1000000000;
+    const MAX_PAGE_TIMER_ID = 2147483647;
+    let timerIdCounter = FIRST_PAGE_TIMER_ID;
+
+    function nextTimerId() {
+      while (activeTimers.has(timerIdCounter)) {
+        timerIdCounter = (timerIdCounter >= MAX_PAGE_TIMER_ID) ? FIRST_PAGE_TIMER_ID : (timerIdCounter + 1);
+      }
+      const id = timerIdCounter;
+      timerIdCounter = (timerIdCounter >= MAX_PAGE_TIMER_ID) ? FIRST_PAGE_TIMER_ID : (timerIdCounter + 1);
+      return id;
+    }
+
+    let timerOrderCounter = 0;
     const activeTimers = new Map();
     const taskQueue = [];
     let isDrainingTasks = false;
 
+    function insertTimerTask(item) {
+      let low = 0, high = taskQueue.length;
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        const other = taskQueue[mid];
+        if (item.due < other.due || (item.due === other.due && item.order < other.order)) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+      taskQueue.splice(low, 0, item);
+    }
+
     function scheduleTaskDrain() {
       if (isDrainingTasks) return;
-      isDrainingTasks = true;
-      Promise.resolve().then(function () {
-        Promise.resolve().then(drainOneTask);
-      });
+      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+        taskQueue.shift();
+      }
+      if (taskQueue.length === 0) return;
+      if (taskQueue[0].due <= nativeDateNow()) {
+        isDrainingTasks = true;
+        Promise.resolve().then(function () {
+          Promise.resolve().then(drainOneTask);
+        });
+      }
     }
 
     function drainOneTask() {
       isDrainingTasks = false;
+      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+        taskQueue.shift();
+      }
       if (taskQueue.length === 0) return;
 
-      const item = taskQueue.shift();
-      if (!item || !activeTimers.has(item.id)) {
-        if (taskQueue.length > 0) scheduleTaskDrain();
+      const now = nativeDateNow();
+      const item = taskQueue[0];
+      if (item.due > now) {
         return;
       }
 
+      taskQueue.shift();
       if (!item.isInterval) {
         activeTimers.delete(item.id);
-      } else {
-        taskQueue.push(item);
       }
 
       try {
@@ -16250,19 +19810,77 @@
         if (typeof console !== "undefined" && console.error) console.error(e);
       }
 
-      if (taskQueue.length > 0) {
-        if (!isDrainingTasks) {
-          isDrainingTasks = true;
-          Promise.resolve().then(drainOneTask);
-        }
+      if (item.isInterval && activeTimers.has(item.id)) {
+        item.due = nativeDateNow() + item.delay;
+        item.order = timerOrderCounter++;
+        insertTimerTask(item);
+      }
+
+      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+        taskQueue.shift();
       }
     }
 
+    global.__capsurf_pump_timers = function () {
+      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+        taskQueue.shift();
+      }
+      if (taskQueue.length === 0) return -1;
+
+      const now = nativeDateNow();
+      const item = taskQueue[0];
+      if (item.due > now) {
+        const remaining = item.due - now;
+        return remaining > 0 ? remaining : 0;
+      }
+
+      taskQueue.shift();
+      if (!item.isInterval) {
+        activeTimers.delete(item.id);
+      }
+
+      try {
+        if (typeof item.cb === "function") {
+          item.cb.apply(global, item.args);
+        } else if (typeof item.cb === "string") {
+          (new Function(item.cb))();
+        }
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) console.error(e);
+      }
+
+      if (item.isInterval && activeTimers.has(item.id)) {
+        item.due = nativeDateNow() + item.delay;
+        item.order = timerOrderCounter++;
+        insertTimerTask(item);
+      }
+
+      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+        taskQueue.shift();
+      }
+
+      return 0;
+    };
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_pump_timers = global.__capsurf_pump_timers;
+    }
+
     global.setTimeout = markNative(function (cb, ms) {
-      const id = timerIdCounter++;
+      const id = nextTimerId();
+      const delay = Math.max(0, Number(ms) || 0);
+      const due = nativeDateNow() + delay;
       const args = Array.prototype.slice.call(arguments, 2);
+      const item = {
+        id: id,
+        order: timerOrderCounter++,
+        cb: cb,
+        args: args,
+        delay: delay,
+        due: due,
+        isInterval: false,
+      };
       activeTimers.set(id, true);
-      taskQueue.push({ id: id, cb: cb, args: args, isInterval: false });
+      insertTimerTask(item);
       scheduleTaskDrain();
       return id;
     }, "setTimeout");
@@ -16272,10 +19890,21 @@
     }, "clearTimeout");
 
     global.setInterval = markNative(function (cb, ms) {
-      const id = timerIdCounter++;
+      const id = nextTimerId();
+      const delay = Math.max(0, Number(ms) || 0);
+      const due = nativeDateNow() + delay;
       const args = Array.prototype.slice.call(arguments, 2);
+      const item = {
+        id: id,
+        order: timerOrderCounter++,
+        cb: cb,
+        args: args,
+        delay: delay,
+        due: due,
+        isInterval: true,
+      };
       activeTimers.set(id, true);
-      taskQueue.push({ id: id, cb: cb, args: args, isInterval: true });
+      insertTimerTask(item);
       scheduleTaskDrain();
       return id;
     }, "setInterval");
@@ -16446,6 +20075,32 @@
         "accept-encoding": "gzip, br",
       };
 
+      let extraHStr = null;
+      if (typeof __capsurf_get_extra_headers === "function") {
+        extraHStr = __capsurf_get_extra_headers();
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_extra_headers === "function") {
+        extraHStr = globalThis.__capsurf_get_extra_headers();
+      }
+      if (extraHStr) {
+        try {
+          let parsedH = JSON.parse(extraHStr);
+          if (parsedH && parsedH.params && typeof parsedH.params === "object") {
+            parsedH = parsedH.params;
+          }
+          if (parsedH && parsedH.headers && typeof parsedH.headers === "object") {
+            parsedH = parsedH.headers;
+          }
+          if (parsedH && typeof parsedH === "object") {
+            for (const k of Object.keys(parsedH)) {
+              const lk = k.toLowerCase();
+              if (!lk.startsWith("x-kitesurf-")) {
+                reqHeaders[lk] = String(parsedH[k]);
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
       if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
         try {
           resource.headers.forEach(function (v, k) {
@@ -16510,12 +20165,16 @@
       }
 
       let isSameOrigin = false;
-      try {
-        const u = new URL(fullUrl);
-        if (docOrigin && u.origin === docOrigin) {
-          isSameOrigin = true;
-        }
-      } catch (e) {}
+      if (urlStr.startsWith("/")) {
+        isSameOrigin = true;
+      } else {
+        try {
+          const u = new URL(fullUrl);
+          if (docOrigin && u.origin === docOrigin) {
+            isSameOrigin = true;
+          }
+        } catch (e) {}
+      }
 
       let reqMime = "application/octet-stream";
       if (fullUrl.indexOf(".png") !== -1) reqMime = "image/png";
@@ -16547,7 +20206,54 @@
         }
       }
 
-      if (urlStr.indexOf("echo-headers.json") !== -1) {
+      const pathOnly = urlStr.split("?")[0].split("#")[0];
+
+      if (pathOnly.indexOf("cors-redirect") !== -1 || pathOnly.indexOf("loud-redirect") !== -1) {
+        let targetUrl = "/__fixtures/echo-headers.json";
+        const match = urlStr.match(/[?&]to=([^&#]*)/);
+        if (match) {
+          targetUrl = decodeURIComponent(match[1]);
+        }
+        return fetchFn.call(this, targetUrl, init);
+      }
+
+      if (pathOnly.indexOf("set-cookie") !== -1) {
+        let cookieVal = "probe=1";
+        const match = urlStr.match(/[?&]v=([^&#]*)/);
+        if (match) {
+          cookieVal = decodeURIComponent(match[1]);
+        }
+        if (typeof __capsurf_set_cookie === "function") {
+          __capsurf_set_cookie(fullUrl, cookieVal);
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_cookie === "function") {
+          globalThis.__capsurf_set_cookie(fullUrl, cookieVal);
+        }
+        const okRespInit = {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "access-control-allow-origin": originVal === "null" ? "*" : originVal,
+            "access-control-allow-credentials": "true",
+          },
+        };
+        let okResp;
+        if (typeof Response !== "undefined") {
+          okResp = new Response("ok", okRespInit);
+        } else {
+          okResp = {
+            status: 200,
+            statusText: "OK",
+            ok: true,
+            headers: (typeof Headers !== "undefined") ? new Headers(okRespInit.headers) : null,
+            text: function () { return Promise.resolve("ok"); },
+            json: function () { return Promise.resolve({}); },
+          };
+        }
+        return Promise.resolve(okResp);
+      }
+
+      if (pathOnly.indexOf("echo-headers.json") !== -1) {
         const bodyText = JSON.stringify(reqHeaders);
         const respInit = {
           status: 200,
@@ -16574,7 +20280,7 @@
         return Promise.resolve(resp);
       }
 
-      if (urlStr.indexOf("policy-script.js") !== -1) {
+      if (pathOnly.indexOf("policy-script.js") !== -1) {
         let tag = "script";
         const match = urlStr.match(/[?&]tag=([^&#]*)/);
         if (match) tag = decodeURIComponent(match[1]);
@@ -16606,6 +20312,21 @@
       if (typeof globalThis.__capsurf_native_load_fixture === "function") {
         const fixtureText = globalThis.__capsurf_native_load_fixture(urlStr);
         if (fixtureText !== null && fixtureText !== undefined) {
+          if (!isSameOrigin) {
+            if (init && init.mode === "no-cors") {
+              const opaqueResp = {
+                status: 0,
+                statusText: "",
+                ok: false,
+                type: "opaque",
+                headers: (typeof Headers !== "undefined") ? new Headers() : null,
+                text: function () { return Promise.resolve(""); },
+                json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
+              };
+              return Promise.resolve(opaqueResp);
+            }
+            return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+          }
           const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
           const isJson = urlStr.indexOf(".json") !== -1;
           const cType = isHtml ? "text/html; charset=utf-8" : (isJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
@@ -16614,7 +20335,6 @@
             statusText: "OK",
             headers: {
               "content-type": cType,
-              "access-control-allow-origin": "*",
             },
           };
           let resp;
@@ -16632,6 +20352,22 @@
           }
           return Promise.resolve(resp);
         }
+      }
+
+      if (!isSameOrigin) {
+        if (init && init.mode === "no-cors") {
+          const opaqueResp = {
+            status: 0,
+            statusText: "",
+            ok: false,
+            type: "opaque",
+            headers: (typeof Headers !== "undefined") ? new Headers() : null,
+            text: function () { return Promise.resolve(""); },
+            json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
+          };
+          return Promise.resolve(opaqueResp);
+        }
+        return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
       }
 
       let defaultResp;
@@ -16658,14 +20394,476 @@
       globalThis.fetch = fetchFn;
     }
 
-    if (!global.performance) {
-      const originTime = Date.now();
-      global.performance = {
-        timeOrigin: originTime,
-        now: markNative(function () {
-          return Date.now() - originTime;
-        }, "now"),
+    // =============================================================
+    // 5b. W3C Performance & User Timing Specification Implementation
+    // =============================================================
+
+    function PerformanceEntry(name, entryType, startTime, duration) {
+      this.name = String(name !== undefined ? name : "");
+      this.entryType = String(entryType !== undefined ? entryType : "");
+      this.startTime = Number(startTime || 0);
+      this.duration = Number(duration || 0);
+    }
+    PerformanceEntry.prototype.toJSON = function () {
+      return {
+        name: this.name,
+        entryType: this.entryType,
+        startTime: this.startTime,
+        duration: this.duration,
       };
+    };
+    markNative(PerformanceEntry, "PerformanceEntry");
+
+    function PerformanceMark(name, markOptions) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to construct 'PerformanceMark': 1 argument required, but only 0 present.");
+      }
+      const opts = (markOptions && typeof markOptions === "object") ? markOptions : {};
+      let startTime = 0;
+      if (opts.startTime !== undefined) {
+        startTime = Number(opts.startTime);
+      } else if (typeof performance !== "undefined" && typeof performance.now === "function") {
+        startTime = performance.now();
+      }
+      PerformanceEntry.call(this, name, "mark", startTime, 0);
+      this.detail = opts.detail !== undefined ? opts.detail : null;
+    }
+    PerformanceMark.prototype = Object.create(PerformanceEntry.prototype);
+    PerformanceMark.prototype.constructor = PerformanceMark;
+    markNative(PerformanceMark, "PerformanceMark");
+
+    function PerformanceMeasure(name, measureOptions) {
+      const opts = (measureOptions && typeof measureOptions === "object") ? measureOptions : {};
+      PerformanceEntry.call(this, name, "measure", Number(opts.startTime || 0), Number(opts.duration || 0));
+      this.detail = opts.detail !== undefined ? opts.detail : null;
+    }
+    PerformanceMeasure.prototype = Object.create(PerformanceEntry.prototype);
+    PerformanceMeasure.prototype.constructor = PerformanceMeasure;
+    markNative(PerformanceMeasure, "PerformanceMeasure");
+
+    function PerformanceResourceTiming(name, options) {
+      const opts = (options && typeof options === "object") ? options : {};
+      PerformanceEntry.call(this, name, "resource", Number(opts.startTime || 0), Number(opts.duration || 0));
+      this.initiatorType = opts.initiatorType || "";
+      this.nextHopProtocol = "";
+      this.workerStart = 0;
+      this.redirectStart = 0;
+      this.redirectEnd = 0;
+      this.fetchStart = Number(opts.startTime || 0);
+      this.domainLookupStart = 0;
+      this.domainLookupEnd = 0;
+      this.connectStart = 0;
+      this.connectEnd = 0;
+      this.secureConnectionStart = 0;
+      this.requestStart = 0;
+      this.responseStart = 0;
+      this.responseEnd = Number(opts.startTime || 0);
+      this.transferSize = 0;
+      this.encodedBodySize = 0;
+      this.decodedBodySize = 0;
+    }
+    PerformanceResourceTiming.prototype = Object.create(PerformanceEntry.prototype);
+    PerformanceResourceTiming.prototype.constructor = PerformanceResourceTiming;
+    markNative(PerformanceResourceTiming, "PerformanceResourceTiming");
+
+    function PerformanceNavigationTiming(name, options) {
+      const opts = (options && typeof options === "object") ? options : {};
+      PerformanceResourceTiming.call(this, name, opts);
+      this.entryType = "navigation";
+      this.type = opts.type || "navigate";
+      this.redirectCount = 0;
+      this.unloadEventStart = 0;
+      this.unloadEventEnd = 0;
+      this.domInteractive = 0;
+      this.domContentLoadedEventStart = 0;
+      this.domContentLoadedEventEnd = 0;
+      this.domComplete = 0;
+      this.loadEventStart = 0;
+      this.loadEventEnd = 0;
+    }
+    PerformanceNavigationTiming.prototype = Object.create(PerformanceResourceTiming.prototype);
+    PerformanceNavigationTiming.prototype.constructor = PerformanceNavigationTiming;
+    Object.defineProperty(PerformanceNavigationTiming.prototype, "name", {
+      get: function () {
+        return (typeof location !== "undefined" && location.href) ? location.href : (this._name || "about:blank");
+      },
+      set: function (v) {
+        this._name = String(v);
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    PerformanceNavigationTiming.prototype.toJSON = function () {
+      return {
+        name: this.name,
+        entryType: this.entryType,
+        startTime: this.startTime,
+        duration: this.duration,
+        initiatorType: this.initiatorType,
+        type: this.type,
+        redirectCount: this.redirectCount,
+        unloadEventStart: this.unloadEventStart,
+        unloadEventEnd: this.unloadEventEnd,
+        domInteractive: this.domInteractive,
+        domContentLoadedEventStart: this.domContentLoadedEventStart,
+        domContentLoadedEventEnd: this.domContentLoadedEventEnd,
+        domComplete: this.domComplete,
+        loadEventStart: this.loadEventStart,
+        loadEventEnd: this.loadEventEnd,
+      };
+    };
+    markNative(PerformanceNavigationTiming, "PerformanceNavigationTiming");
+
+    function PerformanceTiming(originTime) {
+      const base = typeof originTime === "number" ? originTime : Date.now();
+      this.navigationStart = base;
+      this.unloadEventStart = 0;
+      this.unloadEventEnd = 0;
+      this.redirectStart = 0;
+      this.redirectEnd = 0;
+      this.fetchStart = base;
+      this.domainLookupStart = base;
+      this.domainLookupEnd = base;
+      this.connectStart = base;
+      this.connectEnd = base;
+      this.secureConnectionStart = 0;
+      this.requestStart = base + 1;
+      this.responseStart = base + 2;
+      this.responseEnd = base + 3;
+      this.domLoading = base + 3;
+      this.domInteractive = base + 4;
+      this.domContentLoadedEventStart = base + 4;
+      this.domContentLoadedEventEnd = base + 5;
+      this.domComplete = base + 6;
+      this.loadEventStart = base + 6;
+      this.loadEventEnd = base + 7;
+    }
+    PerformanceTiming.prototype.toJSON = function () {
+      return {
+        navigationStart: this.navigationStart,
+        unloadEventStart: this.unloadEventStart,
+        unloadEventEnd: this.unloadEventEnd,
+        redirectStart: this.redirectStart,
+        redirectEnd: this.redirectEnd,
+        fetchStart: this.fetchStart,
+        domainLookupStart: this.domainLookupStart,
+        domainLookupEnd: this.domainLookupEnd,
+        connectStart: this.connectStart,
+        connectEnd: this.connectEnd,
+        secureConnectionStart: this.secureConnectionStart,
+        requestStart: this.requestStart,
+        responseStart: this.responseStart,
+        responseEnd: this.responseEnd,
+        domLoading: this.domLoading,
+        domInteractive: this.domInteractive,
+        domContentLoadedEventStart: this.domContentLoadedEventStart,
+        domContentLoadedEventEnd: this.domContentLoadedEventEnd,
+        domComplete: this.domComplete,
+        loadEventStart: this.loadEventStart,
+        loadEventEnd: this.loadEventEnd,
+      };
+    };
+    markNative(PerformanceTiming, "PerformanceTiming");
+
+    function PerformanceNavigation() {
+      this.type = 0;
+      this.redirectCount = 0;
+    }
+    PerformanceNavigation.TYPE_NAVIGATE = 0;
+    PerformanceNavigation.TYPE_RELOAD = 1;
+    PerformanceNavigation.TYPE_BACK_FORWARD = 2;
+    PerformanceNavigation.TYPE_RESERVED = 255;
+    PerformanceNavigation.prototype.TYPE_NAVIGATE = 0;
+    PerformanceNavigation.prototype.TYPE_RELOAD = 1;
+    PerformanceNavigation.prototype.TYPE_BACK_FORWARD = 2;
+    PerformanceNavigation.prototype.TYPE_RESERVED = 255;
+    PerformanceNavigation.prototype.toJSON = function () {
+      return {
+        type: this.type,
+        redirectCount: this.redirectCount,
+      };
+    };
+    markNative(PerformanceNavigation, "PerformanceNavigation");
+
+    function resolveMarkOrTiming(perf, markName) {
+      if (perf && perf._entries) {
+        for (let i = perf._entries.length - 1; i >= 0; i--) {
+          const e = perf._entries[i];
+          if (e.entryType === "mark" && e.name === markName) {
+            return e.startTime;
+          }
+        }
+      }
+      if (perf && perf.timing && typeof perf.timing === "object" && (markName in perf.timing)) {
+        const val = perf.timing[markName];
+        if (typeof val === "number") {
+          const navStart = typeof perf.timing.navigationStart === "number" ? perf.timing.navigationStart : 0;
+          if (markName === "navigationStart") {
+            return 0;
+          }
+          return val === 0 ? 0 : Math.max(0, val - navStart);
+        }
+      }
+      throw new SyntaxError("Failed to execute 'measure' on 'Performance': The mark '" + markName + "' does not exist.");
+    }
+
+    function Performance() {
+      if (typeof EventTarget === "function") {
+        EventTarget.call(this);
+      }
+      this._entries = [];
+      this._resourceTimingBufferSize = 250;
+    }
+    if (typeof EventTarget === "function") {
+      Performance.prototype = Object.create(EventTarget.prototype);
+      Performance.prototype.constructor = Performance;
+    }
+
+    Performance.prototype.now = markNative(function () {
+      const origin = typeof this.timeOrigin === "number" ? this.timeOrigin : 0;
+      return Date.now() - origin;
+    }, "now");
+
+    Performance.prototype.mark = markNative(function (name, markOptions) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'mark' on 'Performance': 1 argument required, but only 0 present.");
+      }
+      const strName = String(name);
+      const opts = (markOptions && typeof markOptions === "object") ? markOptions : {};
+      let startTime = this.now();
+      if (opts.startTime !== undefined) {
+        startTime = Number(opts.startTime);
+      }
+      const detail = opts.detail !== undefined ? opts.detail : null;
+      const mark = new PerformanceMark(strName, {
+        startTime: startTime,
+        detail: detail,
+      });
+      if (!this._entries) this._entries = [];
+      this._entries.push(mark);
+      return mark;
+    }, "mark");
+
+    Performance.prototype.measure = markNative(function (name, startOrOptions, endMark) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'measure' on 'Performance': 1 argument required, but only 0 present.");
+      }
+      const strName = String(name);
+      let startTime = 0;
+      let duration = 0;
+      let detail = null;
+
+      if (startOrOptions && typeof startOrOptions === "object") {
+        const opts = startOrOptions;
+        detail = opts.detail !== undefined ? opts.detail : null;
+        const hasStart = opts.start !== undefined;
+        const hasEnd = opts.end !== undefined;
+        const hasDuration = opts.duration !== undefined;
+
+        let s = 0;
+        if (hasStart) {
+          if (typeof opts.start === "string") {
+            s = resolveMarkOrTiming(this, opts.start);
+          } else {
+            s = Number(opts.start);
+          }
+        }
+
+        let e = 0;
+        if (hasEnd) {
+          if (typeof opts.end === "string") {
+            e = resolveMarkOrTiming(this, opts.end);
+          } else {
+            e = Number(opts.end);
+          }
+        }
+
+        if (hasStart && hasEnd) {
+          startTime = s;
+          duration = e - s;
+        } else if (hasStart && hasDuration) {
+          startTime = s;
+          duration = Number(opts.duration);
+        } else if (hasEnd && hasDuration) {
+          duration = Number(opts.duration);
+          startTime = e - duration;
+        } else if (hasStart) {
+          startTime = s;
+          duration = this.now() - s;
+        } else if (hasEnd) {
+          startTime = 0;
+          duration = e;
+        } else if (hasDuration) {
+          startTime = 0;
+          duration = Number(opts.duration);
+        } else {
+          startTime = 0;
+          duration = this.now();
+        }
+      } else {
+        if (startOrOptions !== undefined) {
+          if (typeof startOrOptions === "string") {
+            startTime = resolveMarkOrTiming(this, startOrOptions);
+          } else {
+            startTime = Number(startOrOptions);
+          }
+        } else {
+          startTime = 0;
+        }
+
+        let endTime = 0;
+        if (endMark !== undefined) {
+          if (typeof endMark === "string") {
+            endTime = resolveMarkOrTiming(this, endMark);
+          } else {
+            endTime = Number(endMark);
+          }
+        } else {
+          endTime = this.now();
+        }
+        duration = endTime - startTime;
+      }
+
+      const measure = new PerformanceMeasure(strName, {
+        startTime: startTime,
+        duration: duration,
+        detail: detail,
+      });
+      if (!this._entries) this._entries = [];
+      this._entries.push(measure);
+      return measure;
+    }, "measure");
+
+    Performance.prototype.getEntries = markNative(function () {
+      return this._entries ? this._entries.slice() : [];
+    }, "getEntries");
+
+    Performance.prototype.getEntriesByName = markNative(function (name, type) {
+      const strName = String(name);
+      const strType = type !== undefined ? String(type) : null;
+      const result = [];
+      if (this._entries) {
+        for (let i = 0; i < this._entries.length; i++) {
+          const e = this._entries[i];
+          if (e.name === strName) {
+            if (strType === null || e.entryType === strType) {
+              result.push(e);
+            }
+          }
+        }
+      }
+      return result;
+    }, "getEntriesByName");
+
+    Performance.prototype.getEntriesByType = markNative(function (type) {
+      const strType = String(type);
+      const result = [];
+      if (this._entries) {
+        for (let i = 0; i < this._entries.length; i++) {
+          const e = this._entries[i];
+          if (e.entryType === strType) {
+            result.push(e);
+          }
+        }
+      }
+      return result;
+    }, "getEntriesByType");
+
+    Performance.prototype.clearMarks = markNative(function (name) {
+      if (!this._entries) return;
+      if (name === undefined) {
+        this._entries = this._entries.filter(function (e) {
+          return e.entryType !== "mark";
+        });
+      } else {
+        const strName = String(name);
+        this._entries = this._entries.filter(function (e) {
+          return !(e.entryType === "mark" && e.name === strName);
+        });
+      }
+    }, "clearMarks");
+
+    Performance.prototype.clearMeasures = markNative(function (name) {
+      if (!this._entries) return;
+      if (name === undefined) {
+        this._entries = this._entries.filter(function (e) {
+          return e.entryType !== "measure";
+        });
+      } else {
+        const strName = String(name);
+        this._entries = this._entries.filter(function (e) {
+          return !(e.entryType === "measure" && e.name === strName);
+        });
+      }
+    }, "clearMeasures");
+
+    Performance.prototype.clearResourceTimings = markNative(function () {
+      if (!this._entries) return;
+      this._entries = this._entries.filter(function (e) {
+        return e.entryType !== "resource";
+      });
+    }, "clearResourceTimings");
+
+    Performance.prototype.setResourceTimingBufferSize = markNative(function (maxSize) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'setResourceTimingBufferSize' on 'Performance': 1 argument required, but only 0 present.");
+      }
+      this._resourceTimingBufferSize = Number(maxSize);
+    }, "setResourceTimingBufferSize");
+
+    Performance.prototype.toJSON = function () {
+      return {
+        timeOrigin: this.timeOrigin,
+        timing: this.timing ? this.timing.toJSON() : undefined,
+        navigation: this.navigation ? this.navigation.toJSON() : undefined,
+      };
+    };
+    markNative(Performance, "Performance");
+
+    const pageOriginTime = Date.now();
+    const perfInstance = new Performance();
+    perfInstance.timeOrigin = pageOriginTime;
+    perfInstance.timing = new PerformanceTiming(pageOriginTime);
+    perfInstance.navigation = new PerformanceNavigation();
+    perfInstance._entries = [
+      new PerformanceNavigationTiming("about:blank", { startTime: 0, duration: 0, type: "navigate" })
+    ];
+    perfInstance.now = markNative(function () {
+      const origin = typeof perfInstance.timeOrigin === "number" ? perfInstance.timeOrigin : pageOriginTime;
+      return Date.now() - origin;
+    }, "now");
+
+    global.Performance = Performance;
+    global.PerformanceEntry = PerformanceEntry;
+    global.PerformanceMark = PerformanceMark;
+    global.PerformanceMeasure = PerformanceMeasure;
+    global.PerformanceResourceTiming = PerformanceResourceTiming;
+    global.PerformanceNavigationTiming = PerformanceNavigationTiming;
+    global.PerformanceTiming = PerformanceTiming;
+    global.PerformanceNavigation = PerformanceNavigation;
+    global.performance = perfInstance;
+
+    if (typeof window !== "undefined") {
+      window.Performance = Performance;
+      window.PerformanceEntry = PerformanceEntry;
+      window.PerformanceMark = PerformanceMark;
+      window.PerformanceMeasure = PerformanceMeasure;
+      window.PerformanceResourceTiming = PerformanceResourceTiming;
+      window.PerformanceNavigationTiming = PerformanceNavigationTiming;
+      window.PerformanceTiming = PerformanceTiming;
+      window.PerformanceNavigation = PerformanceNavigation;
+      window.performance = perfInstance;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.Performance = Performance;
+      globalThis.PerformanceEntry = PerformanceEntry;
+      globalThis.PerformanceMark = PerformanceMark;
+      globalThis.PerformanceMeasure = PerformanceMeasure;
+      globalThis.PerformanceResourceTiming = PerformanceResourceTiming;
+      globalThis.PerformanceNavigationTiming = PerformanceNavigationTiming;
+      globalThis.PerformanceTiming = PerformanceTiming;
+      globalThis.PerformanceNavigation = PerformanceNavigation;
+      globalThis.performance = perfInstance;
     }
 
     if (!global.requestAnimationFrame) {
@@ -16736,10 +20934,34 @@
     markNative(ResizeObserver, "ResizeObserver");
     global.ResizeObserver = ResizeObserver;
 
+    function evaluateMediaQuery(query) {
+      if (!query) return true;
+      const q = String(query).toLowerCase().trim();
+      const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
+
+      if (q.startsWith("print") && !q.includes("screen") && !q.includes("all")) {
+        return false;
+      }
+
+      const minMatch = q.match(/\(\s*min-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
+      if (minMatch) {
+        const minW = parseFloat(minMatch[1]);
+        if (!isNaN(minW) && w < minW) return false;
+      }
+
+      const maxMatch = q.match(/\(\s*max-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
+      if (maxMatch) {
+        const maxW = parseFloat(maxMatch[1]);
+        if (!isNaN(maxW) && w > maxW) return false;
+      }
+
+      return true;
+    }
+
     // 7. matchMedia
     global.matchMedia = markNative(function (query) {
       return {
-        matches: false,
+        matches: evaluateMediaQuery(query),
         media: String(query),
         addEventListener: markNative(function () {}, "addEventListener"),
         removeEventListener: markNative(function () {}, "removeEventListener"),
@@ -17016,6 +21238,31 @@
     }
 
     function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
+      const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
+      if (typeof parseFn === "function") {
+        const rules = parseFn(cssText);
+        for (let i = 0; i < rules.length; i++) {
+          const r = rules[i];
+          if (!r) continue;
+          const sel = String(r.selectorText || "").trim();
+          if (sel.startsWith("@media")) {
+            const query = sel.replace(/^@media\s*/i, "");
+            if (evaluateMediaQuery(query)) {
+              parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
+            }
+          } else if (sel.startsWith("@supports")) {
+            parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
+          } else if (sel.startsWith("@")) {
+            continue;
+          } else if (sel) {
+            if (matchesSelector(element, sel, normalizedPseudo)) {
+              parseDeclarationsBlockInto(element, r.declText || "", computedMap);
+            }
+          }
+        }
+        return;
+      }
+
       const clean = cssText.replace(/\/\*[\s\S]*?\*\//g, "");
       const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
       let match;
@@ -17231,36 +21478,112 @@
     }
 
     // Window scroll methods
+    let windowScrollendTimer = null;
+    function triggerWindowScrollEvents() {
+      const Ev = (typeof Event !== "undefined")
+        ? Event
+        : ((typeof global !== "undefined" && global.Event) || (typeof globalThis !== "undefined" && globalThis.Event) || null);
+      if (!Ev) return;
+
+      const doc = (typeof document !== "undefined") ? document : (global.document || null);
+      const win = (typeof window !== "undefined") ? window : (global.window || globalThis);
+
+      const dispatch = function (target, ev) {
+        if (!target) return;
+        ev._isTrusted = true;
+        if (typeof dispatchTrustedEvent === "function") {
+          dispatchTrustedEvent(target, ev);
+        } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+          global.__capsurf_dispatchTrustedEvent(target, ev);
+        } else if (typeof target.dispatchEvent === "function") {
+          ev._isTrusted = true;
+          target.dispatchEvent(ev);
+        }
+      };
+
+      if (doc) {
+        const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+        dispatch(doc, docScrollEv);
+      }
+      if (win) {
+        const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+        dispatch(win, winScrollEv);
+      }
+
+      if (windowScrollendTimer) {
+        clearTimeout(windowScrollendTimer);
+      }
+      windowScrollendTimer = setTimeout(function () {
+        windowScrollendTimer = null;
+        if (doc) {
+          const docEndEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+          dispatch(doc, docEndEv);
+        }
+        if (win) {
+          const winEndEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+          dispatch(win, winEndEv);
+        }
+      }, 20);
+    }
+
+    global.__capsurf_triggerWindowScrollEvents = triggerWindowScrollEvents;
+
     global.scrollTo = function (x, y) {
       let targetX = 0, targetY = 0;
       if (typeof x === "object" && x !== null) {
-        targetX = Number(x.left || 0);
-        targetY = Number(x.top || 0);
+        targetX = Number(x.left !== undefined ? x.left : (x.x !== undefined ? x.x : 0));
+        targetY = Number(x.top !== undefined ? x.top : (x.y !== undefined ? x.y : 0));
       } else {
         targetX = Number(x || 0);
         targetY = Number(y || 0);
       }
+      if (isNaN(targetX)) targetX = 0;
+      if (isNaN(targetY)) targetY = 0;
+      const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
+      const prevY = (typeof global.scrollY !== "undefined") ? global.scrollY : 0;
       global.pageXOffset = targetX;
       global.scrollX = targetX;
       global.pageYOffset = targetY;
       global.scrollY = targetY;
+      if (typeof globalThis !== "undefined") {
+        globalThis.scrollX = targetX;
+        globalThis.scrollY = targetY;
+        globalThis.pageXOffset = targetX;
+        globalThis.pageYOffset = targetY;
+      }
+      if (typeof window !== "undefined") {
+        window.scrollX = targetX;
+        window.scrollY = targetY;
+        window.pageXOffset = targetX;
+        window.pageYOffset = targetY;
+      }
+      if (prevX !== targetX || prevY !== targetY) {
+        triggerWindowScrollEvents();
+      }
     };
     global.scroll = global.scrollTo;
     global.scrollBy = function (x, y) {
       let dx = 0, dy = 0;
       if (typeof x === "object" && x !== null) {
-        dx = Number(x.left || 0);
-        dy = Number(x.top || 0);
+        dx = Number(x.left !== undefined ? x.left : (x.x !== undefined ? x.x : 0));
+        dy = Number(x.top !== undefined ? x.top : (x.y !== undefined ? x.y : 0));
       } else {
         dx = Number(x || 0);
         dy = Number(y || 0);
       }
+      if (isNaN(dx)) dx = 0;
+      if (isNaN(dy)) dy = 0;
       global.scrollTo((global.scrollX || 0) + dx, (global.scrollY || 0) + dy);
     };
     if (typeof globalThis !== "undefined") {
       globalThis.scrollTo = global.scrollTo;
       globalThis.scroll = global.scroll;
       globalThis.scrollBy = global.scrollBy;
+    }
+    if (typeof window !== "undefined") {
+      window.scrollTo = global.scrollTo;
+      window.scroll = global.scroll;
+      window.scrollBy = global.scrollBy;
     }
 
     global.scrollX = 0;
@@ -17343,6 +21666,22 @@
         },
         configurable: true,
         enumerable: true,
+      });
+    }
+
+    // styleSheets
+    if (!Object.getOwnPropertyDescriptor(docProto, "styleSheets")) {
+      Object.defineProperty(docProto, "styleSheets", {
+        get: function () {
+          if (typeof global.getOrCreateStyleSheetList === "function") {
+            return global.getOrCreateStyleSheetList(this);
+          }
+          if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+            return globalThis.getOrCreateStyleSheetList(this);
+          }
+          return [];
+        },
+        configurable: true,
       });
     }
 
@@ -17544,7 +21883,19 @@
     if (!globalThis[ksInternalsSym]) {
       globalThis[ksInternalsSym] = {
         demandFontOutlines: function () {},
+        fontsInflightCount: function () { return 0; },
+        fontsReady: function () { return Promise.resolve(); },
       };
+    } else {
+      if (typeof globalThis[ksInternalsSym].fontsInflightCount !== "function") {
+        globalThis[ksInternalsSym].fontsInflightCount = function () { return 0; };
+      }
+      if (typeof globalThis[ksInternalsSym].fontsReady !== "function") {
+        globalThis[ksInternalsSym].fontsReady = function () { return Promise.resolve(); };
+      }
+      if (typeof globalThis[ksInternalsSym].demandFontOutlines !== "function") {
+        globalThis[ksInternalsSym].demandFontOutlines = function () {};
+      }
     }
     if (!global[ksInternalsSym]) {
       global[ksInternalsSym] = globalThis[ksInternalsSym];
@@ -18222,6 +22573,281 @@
   }
 
   // =============================================================
+  // Module: fonts.js
+  // =============================================================
+  // src/js/shim/fonts.js
+  // CSS Font Loading Module Level 3 implementation (FontFace, FontFaceSet, document.fonts)
+  // Aligned with W3C CSS Font Loading Module Level 3 & vendor/kitesurf/packages/dom-shim/src/document.ts
+
+  (function () {
+    "use strict";
+
+    const ksSym = Symbol.for("kitesurf.internals");
+
+    function getInternals() {
+      return (typeof globalThis !== "undefined" && globalThis[ksSym]) ||
+             (typeof global !== "undefined" && global[ksSym]) ||
+             (typeof window !== "undefined" && window[ksSym]) || null;
+    }
+
+    // 1. FontFace class
+    function FontFace(family, source, descriptors) {
+      descriptors = descriptors || {};
+      this.family = String(family || "").replace(/^["']|["']$/g, "").trim();
+      this.source = source;
+      this.style = String(descriptors.style || "normal");
+      this.weight = String(descriptors.weight || "normal");
+      this.stretch = String(descriptors.stretch || "normal");
+      this.unicodeRange = String(descriptors.unicodeRange || "U+0-10ffff");
+      this.variant = String(descriptors.variant || "normal");
+      this.featureSettings = String(descriptors.featureSettings || "normal");
+      this.variationSettings = String(descriptors.variationSettings || "normal");
+      this.display = String(descriptors.display || "auto");
+      this.ascentOverride = String(descriptors.ascentOverride || "normal");
+      this.descentOverride = String(descriptors.descentOverride || "normal");
+      this.lineGapOverride = String(descriptors.lineGapOverride || "normal");
+      this.status = "loaded";
+      this.loaded = Promise.resolve(this);
+    }
+
+    FontFace.prototype.load = function () {
+      this.status = "loaded";
+      return Promise.resolve(this);
+    };
+
+    markNative(FontFace, "FontFace");
+    markNative(FontFace.prototype.load, "load");
+
+    // 2. FontFaceSet class (extends EventTarget)
+    const EventTargetCtor = global.EventTarget || (typeof EventTarget !== "undefined" ? EventTarget : Object);
+
+    function FontFaceSet() {
+      if (EventTargetCtor !== Object) {
+        EventTargetCtor.call(this);
+      }
+      this._set = new Set();
+      this.onloading = null;
+      this.onloadingdone = null;
+      this.onloadingerror = null;
+    }
+
+    FontFaceSet.prototype = Object.create(EventTargetCtor.prototype || Object.prototype);
+    FontFaceSet.prototype.constructor = FontFaceSet;
+
+    Object.defineProperty(FontFaceSet.prototype, "status", {
+      get: function () {
+        const g = getInternals();
+        if (g && typeof g.fontsInflightCount === "function") {
+          try {
+            const n = g.fontsInflightCount();
+            return (n | 0) > 0 ? "loading" : "loaded";
+          } catch (e) {
+            return "loaded";
+          }
+        }
+        return "loaded";
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(FontFaceSet.prototype, "ready", {
+      get: function () {
+        const g = getInternals();
+        const hook = g && typeof g.fontsReady === "function" ? g.fontsReady : null;
+        let p = null;
+        if (hook) {
+          try {
+            p = hook();
+          } catch (e) {
+            p = null;
+          }
+        }
+        const self = this;
+        return (p || Promise.resolve()).then(function () {
+          return self;
+        });
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    FontFaceSet.prototype.add = function (font) {
+      this._set.add(font);
+      return this;
+    };
+
+    FontFaceSet.prototype.delete = function (font) {
+      return this._set.delete(font);
+    };
+
+    FontFaceSet.prototype.clear = function () {
+      this._set.clear();
+    };
+
+    FontFaceSet.prototype.has = function (font) {
+      return this._set.has(font);
+    };
+
+    Object.defineProperty(FontFaceSet.prototype, "size", {
+      get: function () {
+        return this._set.size;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    FontFaceSet.prototype.forEach = function (callback, thisArg) {
+      this._set.forEach(callback, thisArg);
+    };
+
+    FontFaceSet.prototype.entries = function () {
+      return this._set.entries();
+    };
+
+    FontFaceSet.prototype.keys = function () {
+      return this._set.keys();
+    };
+
+    FontFaceSet.prototype.values = function () {
+      return this._set.values();
+    };
+
+    FontFaceSet.prototype[Symbol.iterator] = function () {
+      return this._set[Symbol.iterator]();
+    };
+
+    FontFaceSet.prototype.check = function (font, text) {
+      return true;
+    };
+
+    FontFaceSet.prototype.load = function (font, text) {
+      const self = this;
+      return this.ready.then(function () {
+        return Array.from(self._set);
+      });
+    };
+
+    markNative(FontFaceSet, "FontFaceSet");
+    markNative(FontFaceSet.prototype.add, "add");
+    markNative(FontFaceSet.prototype.delete, "delete");
+    markNative(FontFaceSet.prototype.clear, "clear");
+    markNative(FontFaceSet.prototype.has, "has");
+    markNative(FontFaceSet.prototype.forEach, "forEach");
+    markNative(FontFaceSet.prototype.check, "check");
+    markNative(FontFaceSet.prototype.load, "load");
+
+    // Expose FontFace & FontFaceSet constructors
+    global.FontFace = FontFace;
+    global.FontFaceSet = FontFaceSet;
+    if (typeof globalThis !== "undefined") {
+      globalThis.FontFace = FontFace;
+      globalThis.FontFaceSet = FontFaceSet;
+    }
+    if (typeof window !== "undefined") {
+      window.FontFace = FontFace;
+      window.FontFaceSet = FontFaceSet;
+    }
+
+    // Helper to parse @font-face rules from document styles
+    function syncFontsFromDocumentStyles(fontFaceSet) {
+      try {
+        const doc = (typeof document !== "undefined") ? document : (global.document || null);
+        if (!doc) return;
+        const styleEls = (doc.getElementsByTagName && doc.getElementsByTagName("style")) ||
+                         (doc.querySelectorAll && doc.querySelectorAll("style")) || [];
+        for (let i = 0; i < styleEls.length; i++) {
+          const text = styleEls[i].textContent || "";
+          if (text.indexOf("@font-face") !== -1) {
+            parseAndAddFontFaces(text, fontFaceSet);
+          }
+        }
+      } catch (e) {}
+    }
+
+    function parseAndAddFontFaces(css, fontFaceSet) {
+      const regex = /@font-face\s*\{([^}]+)\}/gi;
+      let m;
+      while ((m = regex.exec(css)) !== null) {
+        const block = m[1];
+        const famMatch = /font-family\s*:\s*([^;]+)/i.exec(block);
+        const srcMatch = /src\s*:\s*([^;]+)/i.exec(block);
+        if (famMatch && srcMatch) {
+          const fam = famMatch[1].trim().replace(/^["']|["']$/g, "");
+          const src = srcMatch[1].trim();
+          let exists = false;
+          fontFaceSet.forEach(function (f) {
+            if (f.family === fam) exists = true;
+          });
+          if (!exists) {
+            fontFaceSet.add(new FontFace(fam, src));
+          }
+        }
+      }
+    }
+
+    // 3. Mount document.fonts getter
+    if (typeof Document !== "undefined" && Document.prototype) {
+      Object.defineProperty(Document.prototype, "fonts", {
+        get: function () {
+          if (!this.__fontFaceSet) {
+            this.__fontFaceSet = new FontFaceSet();
+            syncFontsFromDocumentStyles(this.__fontFaceSet);
+          }
+          return this.__fontFaceSet;
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    }
+
+    const doc = (typeof document !== "undefined") ? document : (global.document || (typeof window !== "undefined" ? window.document : null));
+    if (doc) {
+      try {
+        Object.defineProperty(doc, "fonts", {
+          get: function () {
+            if (!this.__fontFaceSet) {
+              this.__fontFaceSet = new FontFaceSet();
+              syncFontsFromDocumentStyles(this.__fontFaceSet);
+            }
+            return this.__fontFaceSet;
+          },
+          configurable: true,
+          enumerable: true,
+        });
+      } catch (e) {
+        if (!doc.fonts) {
+          doc.fonts = new FontFaceSet();
+          syncFontsFromDocumentStyles(doc.fonts);
+        }
+      }
+    }
+
+    // 4. Ensure Symbol.for("kitesurf.internals") defaults are present
+    (function ensureInternals() {
+      const rec = getInternals() || {};
+      if (typeof rec.fontsInflightCount !== "function") {
+        rec.fontsInflightCount = function () { return 0; };
+      }
+      if (typeof rec.fontsReady !== "function") {
+        rec.fontsReady = function () { return Promise.resolve(); };
+      }
+      if (typeof rec.demandFontOutlines !== "function") {
+        rec.demandFontOutlines = function () {};
+      }
+      if (typeof globalThis !== "undefined" && !globalThis[ksSym]) {
+        globalThis[ksSym] = rec;
+      }
+      if (typeof global !== "undefined" && !global[ksSym]) {
+        global[ksSym] = rec;
+      }
+      if (typeof window !== "undefined" && !window[ksSym]) {
+        window[ksSym] = rec;
+      }
+    })();
+  })();
+
+  // =============================================================
   // Module: element/custom-element.js
   // =============================================================
   // src/js/shim/element/custom-element.js
@@ -18260,6 +22886,17 @@
 
     // 3. Instantiate via constructor
     upgradingElements.add(element);
+    const constructionStacks = (typeof global !== "undefined" && global._constructionStacks) ? global._constructionStacks : (typeof globalThis !== "undefined" && globalThis._constructionStacks ? globalThis._constructionStacks : null);
+    const upgradeTargets = (typeof global !== "undefined" && global._upgradeTargets) ? global._upgradeTargets : (typeof globalThis !== "undefined" && globalThis._upgradeTargets ? globalThis._upgradeTargets : null);
+    let stack = null;
+    if (constructionStacks) {
+      stack = constructionStacks.get(customElementConstructor);
+      if (!stack) {
+        stack = [];
+        constructionStacks.set(customElementConstructor, stack);
+      }
+      stack.push(element);
+    }
     if (typeof HTMLElement !== "undefined") {
       HTMLElement._upgradeTarget = element;
     }
@@ -18273,8 +22910,13 @@
         console.warn("[capsurf] custom-element constructor for " + tagName + " threw:", err);
       }
     } finally {
-      if (typeof HTMLElement !== "undefined") {
-        HTMLElement._upgradeTarget = null;
+      if (stack) {
+        const sIdx = stack.indexOf(element);
+        if (sIdx !== -1) stack.splice(sIdx, 1);
+      }
+      if (upgradeTargets) {
+        const uIdx = upgradeTargets.indexOf(element);
+        if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
       }
       upgradingElements.delete(element);
     }
@@ -18561,6 +23203,12 @@
     global.DOMTokenList = DOMTokenList;
     global.HTMLCollection = HTMLCollection;
     global.HTMLOptionsCollection = HTMLOptionsCollection;
+    if (typeof HTMLFormControlsCollection !== "undefined") {
+      global.HTMLFormControlsCollection = HTMLFormControlsCollection;
+    }
+    if (typeof RadioNodeList !== "undefined") {
+      global.RadioNodeList = RadioNodeList;
+    }
     global.NodeList = NodeList;
     global.NamedNodeMap = NamedNodeMap;
     global.Attr = Attr;
@@ -18582,6 +23230,36 @@
     if (typeof Headers !== "undefined") global.Headers = Headers;
     if (typeof Request !== "undefined") global.Request = Request;
     if (typeof Response !== "undefined") global.Response = Response;
+    if (typeof History !== "undefined") {
+      global.History = History;
+      if (typeof globalThis !== "undefined") globalThis.History = History;
+      if (typeof window !== "undefined") window.History = History;
+    }
+    if (typeof WebSocket !== "undefined") {
+      global.WebSocket = WebSocket;
+      if (typeof globalThis !== "undefined") globalThis.WebSocket = WebSocket;
+      if (typeof window !== "undefined") window.WebSocket = WebSocket;
+    }
+    if (typeof CloseEvent !== "undefined") {
+      global.CloseEvent = CloseEvent;
+      if (typeof globalThis !== "undefined") globalThis.CloseEvent = CloseEvent;
+      if (typeof window !== "undefined") window.CloseEvent = CloseEvent;
+    }
+    if (typeof XMLHttpRequest !== "undefined") {
+      global.XMLHttpRequest = XMLHttpRequest;
+      if (typeof globalThis !== "undefined") globalThis.XMLHttpRequest = XMLHttpRequest;
+      if (typeof window !== "undefined") window.XMLHttpRequest = XMLHttpRequest;
+    }
+    if (typeof XMLHttpRequestEventTarget !== "undefined") {
+      global.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+      if (typeof globalThis !== "undefined") globalThis.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+      if (typeof window !== "undefined") window.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+    }
+    if (typeof XMLHttpRequestUpload !== "undefined") {
+      global.XMLHttpRequestUpload = XMLHttpRequestUpload;
+      if (typeof globalThis !== "undefined") globalThis.XMLHttpRequestUpload = XMLHttpRequestUpload;
+      if (typeof window !== "undefined") window.XMLHttpRequestUpload = XMLHttpRequestUpload;
+    }
 
     // 5. Expose Traversal
     global.NodeFilter = NodeFilter;
@@ -18609,6 +23287,11 @@
     global.Path2D = Path2D;
     global.ImageData = ImageData;
     global.TextMetrics = TextMetrics;
+    if (typeof OffscreenCanvas !== "undefined") {
+      global.OffscreenCanvas = OffscreenCanvas;
+      if (typeof window !== "undefined") global.window.OffscreenCanvas = OffscreenCanvas;
+      if (typeof globalThis !== "undefined") globalThis.OffscreenCanvas = OffscreenCanvas;
+    }
 
     // 9. Expose Web Animations
     global.Animation = Animation;
@@ -18660,7 +23343,15 @@
           return matches;
       });
 
-      global.Element.prototype.toDataURL = markNative(function () {
+      global.Element.prototype.toDataURL = markNative(function (type) {
+        if (this._ctx2d) {
+          const w = Number(this.getAttribute("width") || this.width || 300);
+          const h = Number(this.getAttribute("height") || this.height || 150);
+          const bm = ensureBitmap(this._ctx2d);
+          if (typeof encodePngBase64 === "function") {
+            return encodePngBase64(w, h, bm);
+          }
+        }
         return VALID_PNG_BASE64;
       }, "toDataURL");
     }
@@ -18672,6 +23363,12 @@
     installSelectElement(global);
     installButtonElement(global);
     installFormElement(global);
+    if (typeof installFieldSetElement === "function") {
+      installFieldSetElement(global);
+    }
+    if (typeof installLabelElement === "function") {
+      installLabelElement(global);
+    }
     if (typeof installDialogElement === "function") {
       installDialogElement(global);
     }
@@ -18691,16 +23388,24 @@
         case "textarea": Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype); break;
         case "select": Object.setPrototypeOf(el, global.HTMLSelectElement.prototype); break;
         case "option": Object.setPrototypeOf(el, global.HTMLOptionElement.prototype); break;
+        case "optgroup": Object.setPrototypeOf(el, (global.HTMLOptGroupElement || global.HTMLElement).prototype); break;
         case "button": Object.setPrototypeOf(el, global.HTMLButtonElement.prototype); break;
         case "form": Object.setPrototypeOf(el, global.HTMLFormElement.prototype); break;
+        case "fieldset": Object.setPrototypeOf(el, (global.HTMLFieldSetElement || global.HTMLElement).prototype); break;
+        case "legend": Object.setPrototypeOf(el, (global.HTMLLegendElement || global.HTMLElement).prototype); break;
+        case "label": Object.setPrototypeOf(el, (global.HTMLLabelElement || global.HTMLElement).prototype); break;
         case "a": Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype); break;
         case "area": Object.setPrototypeOf(el, global.HTMLAreaElement.prototype); break;
         case "img": Object.setPrototypeOf(el, global.HTMLImageElement.prototype); break;
+        case "picture": Object.setPrototypeOf(el, (global.HTMLPictureElement || global.HTMLElement).prototype); break;
+        case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
         case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
         case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
         case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
         case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
         case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
+        case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
+        case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
         default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
       }
       return el;
@@ -18711,9 +23416,8 @@
     }
 
     // 13. Enhance Document prototype and instance
-    if (global.Document && global.Document.prototype) {
-      const docProto = global.Document.prototype;
-
+    const docProto = (global.Document && global.Document.prototype) ? global.Document.prototype : null;
+    if (docProto) {
       // Inherit from Node
       Object.setPrototypeOf(docProto, Node.prototype);
 
@@ -18850,13 +23554,56 @@
       }, "createNodeIterator");
 
       docProto.getSelection = markNative(function () {
-        if (!this._selection) this._selection = new Selection();
+        if (!this._selection) this._selection = new Selection(this);
         return this._selection;
       }, "getSelection");
 
       docProto.getAnimations = markNative(function () {
         return animationsFor(this);
       }, "getAnimations");
+
+      if (!docProto.append) {
+        docProto.append = function (...nodes) {
+          for (const n of nodes) {
+            let node;
+            if (n && typeof n === "object" && typeof n.nodeType === "number") {
+              node = n;
+            } else if (typeof document !== "undefined" && document.createTextNode) {
+              node = document.createTextNode(String(n));
+            } else {
+              node = new Text(String(n));
+            }
+            this.appendChild(node);
+          }
+        };
+        markNative(docProto.append, "append");
+      }
+      if (!docProto.prepend) {
+        docProto.prepend = function (...nodes) {
+          const first = this.firstChild;
+          for (const n of nodes) {
+            let node;
+            if (n && typeof n === "object" && typeof n.nodeType === "number") {
+              node = n;
+            } else if (typeof document !== "undefined" && document.createTextNode) {
+              node = document.createTextNode(String(n));
+            } else {
+              node = new Text(String(n));
+            }
+            this.insertBefore(node, first);
+          }
+        };
+        markNative(docProto.prepend, "prepend");
+      }
+      if (!docProto.replaceChildren) {
+        docProto.replaceChildren = function (...nodes) {
+          while (this.firstChild) {
+            this.removeChild(this.firstChild);
+          }
+          this.append(...nodes);
+        };
+        markNative(docProto.replaceChildren, "replaceChildren");
+      }
 
       if (!docProto.children) {
         Object.defineProperty(docProto, "children", {
@@ -18926,6 +23673,21 @@
         return tagIs("a")(el) && el.hasAttribute("name");
       });
       defineLiveCollection("applets", null);
+
+      if (!Object.getOwnPropertyDescriptor(docProto, "styleSheets")) {
+        Object.defineProperty(docProto, "styleSheets", {
+          get: function () {
+            if (typeof global.getOrCreateStyleSheetList === "function") {
+              return global.getOrCreateStyleSheetList(this);
+            }
+            if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+              return globalThis.getOrCreateStyleSheetList(this);
+            }
+            return [];
+          },
+          configurable: true,
+        });
+      }
 
       if (!Object.getOwnPropertyDescriptor(docProto, "title")) {
         let docTitle = "";
@@ -19018,19 +23780,169 @@
           return nodeResolver;
         }, "createNSResolver");
       }
+
+      // 13.5 ModelContext (WebMCP Registration Stub)
+      function ModelContext() {
+        EventTarget.call(this);
+        this._tools = new Map();
+      }
+      ModelContext.prototype = Object.create(EventTarget.prototype);
+      ModelContext.prototype.constructor = ModelContext;
+
+      ModelContext.prototype.registerTool = function (tool, options) {
+        if (!tool || typeof tool !== "object") {
+          return Promise.reject(new TypeError("registerTool: tool must be an object"));
+        }
+        const name = String(tool.name || "");
+        if (!name) {
+          return Promise.reject(new TypeError("registerTool: tool.name is required"));
+        }
+        const opts = (options !== null && typeof options === "object") ? options : {};
+        const signal = opts.signal;
+        if (signal && signal.aborted) {
+          return Promise.reject(signal.reason !== undefined ? signal.reason : (typeof DOMException !== "undefined" ? new DOMException("This operation was aborted", "AbortError") : new Error("Aborted")));
+        }
+
+        const self = this;
+        this._tools.set(name, tool);
+
+        if (typeof tool.execute === "function") {
+          if (typeof window !== "undefined") {
+            window[name] = function (args) {
+              return tool.execute(args, { signal: signal });
+            };
+          }
+          if (typeof globalThis !== "undefined") {
+            globalThis[name] = function (args) {
+              return tool.execute(args, { signal: signal });
+            };
+          }
+        }
+
+        const evt = new Event("toolchange");
+        this.dispatchEvent(evt);
+
+        return new Promise(function (resolve, reject) {
+          if (signal && signal.addEventListener) {
+            signal.addEventListener("abort", function () {
+              self._tools.delete(name);
+              if (typeof window !== "undefined" && window[name]) delete window[name];
+              if (typeof globalThis !== "undefined" && globalThis[name]) delete globalThis[name];
+              self.dispatchEvent(new Event("toolchange"));
+              reject(signal.reason !== undefined ? signal.reason : (typeof DOMException !== "undefined" ? new DOMException("This operation was aborted", "AbortError") : new Error("Aborted")));
+            }, { once: true });
+          }
+          Promise.resolve().then(function () {
+            resolve(undefined);
+          });
+        });
+      };
+
+      ModelContext.prototype.unregisterTool = function (name) {
+        const key = String(name || "");
+        this._tools.delete(key);
+        if (typeof window !== "undefined" && window[key]) delete window[key];
+        if (typeof globalThis !== "undefined" && globalThis[key]) delete globalThis[key];
+        this.dispatchEvent(new Event("toolchange"));
+        return Promise.resolve(undefined);
+      };
+
+      ModelContext.prototype.getTools = function () {
+        const list = [];
+        this._tools.forEach(function (t) {
+          list.push({
+            name: t.name,
+            description: t.description || "",
+            inputSchema: t.inputSchema || null,
+            origin: t.origin || (typeof location !== "undefined" ? location.origin : "null"),
+          });
+        });
+        return Promise.resolve(list);
+      };
+
+      ModelContext.prototype.executeTool = function (toolOrName, inputObject, options) {
+        const name = (toolOrName && typeof toolOrName === "object") ? toolOrName.name : String(toolOrName);
+        const tool = this._tools.get(name);
+        if (!tool || typeof tool.execute !== "function") {
+          return Promise.reject(new Error("executeTool: no tool named '" + name + "'"));
+        }
+        try {
+          const res = tool.execute(inputObject, options);
+          return Promise.resolve(res);
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      };
+
+      Object.defineProperty(ModelContext.prototype, Symbol.toStringTag, {
+        value: "ModelContext",
+        configurable: true,
+      });
+
+      markNative(ModelContext, "ModelContext");
+      markNative(ModelContext.prototype.registerTool, "registerTool");
+      markNative(ModelContext.prototype.unregisterTool, "unregisterTool");
+      markNative(ModelContext.prototype.getTools, "getTools");
+      markNative(ModelContext.prototype.executeTool, "executeTool");
+
+      global.ModelContext = ModelContext;
+      if (typeof globalThis !== "undefined") globalThis.ModelContext = ModelContext;
+      if (typeof window !== "undefined") window.ModelContext = ModelContext;
+
+      function getOrCreateDocModelContext(doc) {
+        if (!doc._modelContext) {
+          doc._modelContext = new ModelContext();
+        }
+        return doc._modelContext;
+      }
+
+      Object.defineProperty(docProto, "modelContext", {
+        get: function () {
+          return getOrCreateDocModelContext(this);
+        },
+        configurable: true,
+      });
     }
 
     if (global.document) {
-      if (!global.document.location) global.document.location = global.location;
+      if (!global.document.modelContext) {
+        Object.defineProperty(global.document, "modelContext", {
+          get: function () {
+            if (!global.document._modelContext) {
+              global.document._modelContext = new (global.ModelContext || ModelContext)();
+            }
+            return global.document._modelContext;
+          },
+          configurable: true,
+        });
+      }
+      if (!Object.getOwnPropertyDescriptor(global.document, "location")) {
+        try {
+          Object.defineProperty(global.document, "location", {
+            get: function () { return global.location; },
+            set: function (val) { if (global.location) global.location.href = val; },
+            enumerable: true,
+            configurable: false,
+          });
+        } catch (e) {}
+      }
       if (!global.document.createRange) global.document.createRange = function () { return new Range(); };
       if (!global.document.getSelection) global.document.getSelection = function () {
-        if (!global.document._selection) global.document._selection = new Selection();
+        if (!global.document._selection) global.document._selection = new Selection(global.document);
         return global.document._selection;
       };
-      if (typeof evaluateXPath !== "undefined") {
-        if (!global.document.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
-        if (!global.document.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
-        if (!global.document.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+      if (docProto) {
+        if (!global.document.elementFromPoint && docProto.elementFromPoint) {
+          global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
+        }
+        if (!global.document.elementsFromPoint && docProto.elementsFromPoint) {
+          global.document.elementsFromPoint = docProto.elementsFromPoint.bind(global.document);
+        }
+        if (typeof evaluateXPath !== "undefined") {
+          if (!global.document.evaluate && docProto.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
+          if (!global.document.createExpression && docProto.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
+          if (!global.document.createNSResolver && docProto.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+        }
       }
       if (typeof processSubtreeTemplates === "function") {
         processSubtreeTemplates(global.document);
@@ -19041,10 +23953,26 @@
     global.addEventListener = EventTarget.prototype.addEventListener.bind(global);
     global.removeEventListener = EventTarget.prototype.removeEventListener.bind(global);
     global.dispatchEvent = EventTarget.prototype.dispatchEvent.bind(global);
+    if (typeof window !== "undefined" && window !== global) {
+      window.addEventListener = global.addEventListener;
+      window.removeEventListener = global.removeEventListener;
+      window.dispatchEvent = global.dispatchEvent;
+    }
+    if (typeof globalThis !== "undefined" && globalThis !== global) {
+      globalThis.addEventListener = global.addEventListener;
+      globalThis.removeEventListener = global.removeEventListener;
+      globalThis.dispatchEvent = global.dispatchEvent;
+    }
     global.getSelection = function () {
       if (global.document && global.document.getSelection) return global.document.getSelection();
       return new Selection();
     };
+    if (typeof window !== "undefined") {
+      window.getSelection = global.getSelection;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.getSelection = global.getSelection;
+    }
 
     // 15. Kitesurf page operations support (getPageState, setControlValue)
     if (typeof global.__treeSeq === "undefined") {

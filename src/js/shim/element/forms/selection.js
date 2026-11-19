@@ -77,6 +77,17 @@ function installSelectionMixin(Cls) {
     this._selectionStart = a;
     this._selectionEnd = b;
     this._selectionDirection = (direction === "forward" || direction === "backward") ? direction : "none";
+
+    if (!this._selectionChangeScheduled) {
+      this._selectionChangeScheduled = true;
+      const self = this;
+      setTimeout(function () {
+        self._selectionChangeScheduled = false;
+        try {
+          self.dispatchEvent(new Event("selectionchange"));
+        } catch (e) {}
+      }, 0);
+    }
   };
 }
 

@@ -4,7 +4,7 @@
 
 import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
-import { CookieEntry, entryToCdp } from "../net/cookies.cp";
+import { CookieEntry, entryToCdp, parseUrlParts } from "../net/cookies.cp";
 
 fn sanitizeAcceptEncoding(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
     const search_key = "accept-encoding";
@@ -104,6 +104,9 @@ pub struct NetworkHandler {
                 raw_to_save = headers_str;
             }
             session.extra_headers = sanitizeAcceptEncoding(session.allocator, raw_to_save);
+            if (session.dom_ctx != null) {
+                session.dom_ctx.?.extra_headers = session.extra_headers;
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -174,19 +177,67 @@ pub struct NetworkHandler {
             const val = extractJsonString(req.params_raw, "value") ?? "";
             const domain = extractJsonString(req.params_raw, "domain") ?? "";
             const path = extractJsonString(req.params_raw, "path") ?? "";
+            const url_param = extractJsonString(req.params_raw, "url") ?? "";
+            const is_secure_opt = extractJsonBool(req.params_raw, "secure");
+            const same_site = extractJsonString(req.params_raw, "sameSite") ?? "";
+            const is_http_only = extractJsonBool(req.params_raw, "httpOnly") ?? false;
 
             if (name.len > 0) {
-                const d = if (domain.len > 0) domain else "localhost";
-                const p = if (path.len > 0) path else "/";
+                let url_str: []const u8 = "";
+                if (url_param.len > 0) {
+                    url_str = url_param;
+                } else {
+                    let d = if (domain.len > 0) domain else "localhost";
+                    if (d.len > 0 && d[0] == '.') d = d[1..];
+                    const p = if (path.len > 0) path else "/";
+                    const is_sec = is_secure_opt ?? false;
+                    const scheme = if (is_sec) "https" else "http";
+                    url_str = std.fmt.allocPrint(
+                        session.allocator,
+                        "{s}://{s}{s}",
+                        .{ scheme, d, p },
+                    ) catch "";
+                }
+
+                let d_buf: [256]u8 = [0; 256];
+                let d_str: []const u8 = "";
+                if (domain.len > 0) {
+                    let d = domain;
+                    if (d.len > 0 && d[0] == '.') d = d[1..];
+                    d_str = std.fmt.bufPrint(&d_buf, "; Domain={s}", .{d}) catch "";
+                }
+
+                let p_buf: [256]u8 = [0; 256];
+                let p = path;
+                if (p.len == 0 && url_param.len > 0) {
+                    if (up := parseUrlParts(url_param)) {
+                        p = up.path;
+                    }
+                }
+                if (p.len == 0) p = "/";
+                const p_str = std.fmt.bufPrint(&p_buf, "; Path={s}", .{p}) catch "; Path=/";
+
+                let ss_buf: [32]u8 = [0; 32];
+                let ss_str: []const u8 = "";
+                if (same_site.len > 0) {
+                    ss_str = std.fmt.bufPrint(&ss_buf, "; SameSite={s}", .{same_site}) catch "";
+                }
+
+                let is_sec = is_secure_opt ?? false;
+                if (is_secure_opt == null && url_param.len > 0 && std.mem.startsWith(u8, url_param, "https://")) {
+                    is_sec = true;
+                }
+                const sec_str = if (is_sec) "; Secure" else "";
+                const ho_str = if (is_http_only) "; HttpOnly" else "";
+
                 const set_cookie_str = std.fmt.allocPrint(
                     session.allocator,
-                    "{s}={s}; Domain={s}; Path={s}",
-                    .{ name, val, d, p },
+                    "{s}={s}{s}{s}{s}{s}{s}",
+                    .{ name, val, d_str, p_str, sec_str, ho_str, ss_str },
                 ) catch "";
+                defer if (set_cookie_str.len > 0) session.allocator.free(set_cookie_str);
 
-                if (set_cookie_str.len > 0) {
-                    let url_buf: [128]u8 = undefined;
-                    const url_str = std.fmt.bufPrint(url_buf[0..], "http://{s}{s}", .{ d, p }) catch "http://localhost/";
+                if (url_str.len > 0 && set_cookie_str.len > 0) {
                     * = jar.setFromHeader(url_str, set_cookie_str, null);
                 }
             }
@@ -245,34 +296,65 @@ pub struct NetworkHandler {
                             const val = extractJsonString(obj_str, "value") ?? "";
                             const domain = extractJsonString(obj_str, "domain") ?? "";
                             const path = extractJsonString(obj_str, "path") ?? "";
-                            const is_secure = extractJsonBool(obj_str, "secure") ?? false;
+                            const url_param = extractJsonString(obj_str, "url") ?? "";
+                            const is_secure_opt = extractJsonBool(obj_str, "secure");
                             const same_site = extractJsonString(obj_str, "sameSite") ?? "";
                             const is_http_only = extractJsonBool(obj_str, "httpOnly") ?? false;
 
                             if (name.len > 0) {
-                                let d = if (domain.len > 0) domain else "localhost";
-                                if (d.len > 0 && d[0] == '.') d = d[1..];
-                                const p = if (path.len > 0) path else "/";
-                                const scheme = if (is_secure) "https" else "http";
-                                const url_str = std.fmt.allocPrint(
-                                    session.allocator,
-                                    "{s}://{s}{s}",
-                                    .{ scheme, d, p },
-                                ) catch "";
+                                let url_str: []const u8 = "";
+                                if (url_param.len > 0) {
+                                    url_str = url_param;
+                                } else {
+                                    let d = if (domain.len > 0) domain else "localhost";
+                                    if (d.len > 0 && d[0] == '.') d = d[1..];
+                                    const p = if (path.len > 0) path else "/";
+                                    const is_sec = is_secure_opt ?? false;
+                                    const scheme = if (is_sec) "https" else "http";
+                                    url_str = std.fmt.allocPrint(
+                                        session.allocator,
+                                        "{s}://{s}{s}",
+                                        .{ scheme, d, p },
+                                    ) catch "";
+                                }
+
+                                let d_buf: [256]u8 = [0; 256];
+                                let d_str: []const u8 = "";
+                                if (domain.len > 0) {
+                                    let d = domain;
+                                    if (d.len > 0 && d[0] == '.') d = d[1..];
+                                    d_str = std.fmt.bufPrint(&d_buf, "; Domain={s}", .{d}) catch "";
+                                }
+
+                                let p_buf: [256]u8 = [0; 256];
+                                let p = path;
+                                if (p.len == 0 && url_param.len > 0) {
+                                    if (up := parseUrlParts(url_param)) {
+                                        p = up.path;
+                                    }
+                                }
+                                if (p.len == 0) p = "/";
+                                const p_str = std.fmt.bufPrint(&p_buf, "; Path={s}", .{p}) catch "; Path=/";
 
                                 let ss_buf: [32]u8 = [0; 32];
                                 let ss_str: []const u8 = "";
                                 if (same_site.len > 0) {
-                                    ss_str = std.fmt.bufPrint(&ss_buf, "; SameSite={s}", .{ same_site }) catch "";
+                                    ss_str = std.fmt.bufPrint(&ss_buf, "; SameSite={s}", .{same_site}) catch "";
                                 }
-                                const sec_str = if (is_secure) "; Secure" else "";
+
+                                let is_sec = is_secure_opt ?? false;
+                                if (is_secure_opt == null && url_param.len > 0 && std.mem.startsWith(u8, url_param, "https://")) {
+                                    is_sec = true;
+                                }
+                                const sec_str = if (is_sec) "; Secure" else "";
                                 const ho_str = if (is_http_only) "; HttpOnly" else "";
 
                                 const set_cookie_str = std.fmt.allocPrint(
                                     session.allocator,
-                                    "{s}={s}; Domain={s}; Path={s}{s}{s}{s}",
-                                    .{ name, val, d, p, sec_str, ho_str, ss_str },
+                                    "{s}={s}{s}{s}{s}{s}{s}",
+                                    .{ name, val, d_str, p_str, sec_str, ho_str, ss_str },
                                 ) catch "";
+                                defer if (set_cookie_str.len > 0) session.allocator.free(set_cookie_str);
 
                                 if (url_str.len > 0 && set_cookie_str.len > 0) {
                                     * = jar.setFromHeader(url_str, set_cookie_str, null);

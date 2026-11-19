@@ -3,7 +3,7 @@
 // CDP Accessibility Domain Handler for CapSurf
 // Builds AXTree (Accessibility Tree) and handles CDP Accessibility protocol commands.
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { NodeId, NULL_NODE, NodeData, NodeType, Document } from "../dom/dom.cp";
 import { resolveUrl } from "../eval/script_gate.cp";
@@ -1404,7 +1404,7 @@ pub struct AccessibilityHandler {
         session: *CdpPageSession,
         req: CdpRequest,
         out_buf: []u8,
-        out_events: *[4]CdpEvent,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
         event_count.* = 0;

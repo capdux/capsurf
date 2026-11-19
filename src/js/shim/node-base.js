@@ -175,6 +175,43 @@ Node.prototype.compareDocumentPosition = function (other) {
     return DOCUMENT_POSITION_CONTAINS | DOCUMENT_POSITION_PRECEDING;
   }
 
+  // Find lowest common ancestor
+  const pathA = [];
+  let currA = this;
+  while (currA) {
+    pathA.unshift(currA);
+    currA = currA.parentNode || currA.parentElement;
+  }
+
+  const pathB = [];
+  let currB = other;
+  while (currB) {
+    pathB.unshift(currB);
+    currB = currB.parentNode || currB.parentElement;
+  }
+
+  if (pathA[0] !== pathB[0]) {
+    return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC;
+  }
+
+  let i = 0;
+  while (i < pathA.length && i < pathB.length && pathA[i] === pathB[i]) {
+    i++;
+  }
+
+  const childA = pathA[i];
+  const childB = pathB[i];
+  const parent = pathA[i - 1];
+
+  if (parent && childA && childB) {
+    let child = parent.firstChild;
+    while (child) {
+      if (child === childA) return DOCUMENT_POSITION_FOLLOWING;
+      if (child === childB) return DOCUMENT_POSITION_PRECEDING;
+      child = child.nextSibling;
+    }
+  }
+
   // Node ID comparison fallback
   if (typeof this._nid === "number" && typeof other._nid === "number") {
     if (this._nid < other._nid) return DOCUMENT_POSITION_FOLLOWING;
@@ -189,6 +226,17 @@ Node.prototype.cloneNode = function (deep) {
   }
   if (this.nodeType === COMMENT_NODE) {
     return new Comment(this.textContent);
+  }
+  if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const frag = (doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment();
+    if (deep) {
+      const kids = Array.from(this.childNodes || this._children || []);
+      for (let i = 0; i < kids.length; i++) {
+        frag.appendChild(kids[i].cloneNode(true));
+      }
+    }
+    return frag;
   }
   if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
     const clone = document.createElement(this.tagName.toLowerCase());
@@ -218,7 +266,9 @@ function isGenuineNode(obj) {
 }
 
 const nativeElementAppendChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.appendChild : null;
+const nativeElementInsertBefore = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.insertBefore : null;
 const nativeElementRemoveChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.removeChild : null;
+const nativeElementReplaceChild = (typeof Element !== "undefined" && Element.prototype) ? Element.prototype.replaceChild : null;
 const nativeElementGetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.get : null;
 const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "textContent")?.set : null;
 const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
@@ -349,6 +399,45 @@ function executeConnectedScripts(node) {
   }
 }
 
+function notifyConnectedCustomElements(node) {
+  if (!node) return;
+  if (node.nodeType === DOCUMENT_FRAGMENT_NODE || node.nodeType === DOCUMENT_NODE) {
+    const kids = node.childNodes || node._children;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        notifyConnectedCustomElements(kids[i]);
+      }
+    }
+    return;
+  }
+  if (node.nodeType !== ELEMENT_NODE) return;
+  if (!node.isConnected) return;
+
+  const tagName = String(node.localName || node.tagName || "").toLowerCase();
+  const registry = (typeof customElements !== "undefined" && customElements) || (typeof global !== "undefined" && global.customElements);
+  const Ctor = (registry && typeof registry.get === "function") ? registry.get(tagName) : null;
+  if (Ctor && typeof Ctor === "function") {
+    if (!Ctor.prototype.isPrototypeOf(node)) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function") {
+        globalThis.upgradeCustomElement(node, Ctor, { tagName: tagName, fireConnectedCallback: true });
+      }
+    } else if (typeof node.connectedCallback === "function") {
+      try {
+        node.connectedCallback();
+      } catch (e) {
+        if (typeof console !== "undefined" && console.warn) console.warn(e);
+      }
+    }
+  }
+
+  const kids = node.childNodes || node._children;
+  if (kids && kids.length) {
+    for (let i = 0; i < kids.length; i++) {
+      notifyConnectedCustomElements(kids[i]);
+    }
+  }
+}
+
 Node.prototype.appendChild = function (child) {
   if (!this || typeof this !== "object") {
     throw new TypeError("Illegal invocation");
@@ -368,13 +457,13 @@ Node.prototype.appendChild = function (child) {
   }
 
   // If child already has a parent or owner fragment, remove from it
-  if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+  if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
     try {
       child._ownerFragment.removeChild(child);
     } catch (e) {}
     child._ownerFragment = null;
   }
-  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+  if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
     try {
       child.parentNode.removeChild(child);
     } catch (e) {}
@@ -411,6 +500,7 @@ Node.prototype.appendChild = function (child) {
   }
 
   executeConnectedScripts(child);
+  notifyConnectedCustomElements(child);
 
   return child;
 };
@@ -446,13 +536,13 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     return newChild;
   }
 
-  if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+  if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
     try {
       newChild._ownerFragment.removeChild(newChild);
     } catch (e) {}
     newChild._ownerFragment = null;
   }
-  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
     try {
       newChild.parentNode.removeChild(newChild);
     } catch (e) {}
@@ -467,6 +557,12 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   const curIdx = children.indexOf(refChild);
   children.splice(curIdx >= 0 ? curIdx : children.length, 0, newChild);
 
+  if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+    try {
+      nativeElementInsertBefore.call(this, newChild, refChild);
+    } catch (e) {}
+  }
+
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [newChild];
@@ -474,6 +570,7 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   }
 
   executeConnectedScripts(newChild);
+  notifyConnectedCustomElements(newChild);
 
   return newChild;
 };
@@ -515,6 +612,96 @@ Node.prototype.removeChild = function (child) {
   }
 
   return child;
+};
+
+Node.prototype.replaceChild = function (newChild, oldChild) {
+  if (!this || typeof this !== "object") {
+    throw new TypeError("Illegal invocation");
+  }
+  if (!newChild || typeof newChild !== "object" || !isGenuineNode(newChild)) {
+    throw new TypeError("Failed to execute 'replaceChild' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  if (!oldChild || typeof oldChild !== "object" || !isGenuineNode(oldChild)) {
+    throw new TypeError("Failed to execute 'replaceChild' on 'Node': parameter 2 is not of type 'Node'.");
+  }
+
+  const children = ensureChildren(this);
+  const idx = children.indexOf(oldChild);
+  if (idx === -1 && oldChild.parentNode !== this) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("NotFoundError: Node was not found", "NotFoundError");
+    }
+    const err = new Error("NotFoundError: Node was not found");
+    err.name = "NotFoundError";
+    throw err;
+  }
+
+  if (newChild === oldChild) {
+    return oldChild;
+  }
+
+  if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    this.insertBefore(newChild, oldChild);
+    this.removeChild(oldChild);
+    return oldChild;
+  }
+
+  if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
+    try {
+      newChild._ownerFragment.removeChild(newChild);
+    } catch (e) {}
+    newChild._ownerFragment = null;
+  }
+  if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+    try {
+      newChild.parentNode.removeChild(newChild);
+    } catch (e) {}
+  }
+
+  newChild.parentNode = this;
+  newChild.ownerDocument = this.ownerDocument || this;
+  if (isParsedNode(newChild) && newChild.nodeType === 1) {
+    newChild._children = [];
+  }
+
+  const oldIdx = children.indexOf(oldChild);
+  if (oldIdx >= 0) {
+    children.splice(oldIdx, 1, newChild);
+  } else {
+    children.push(newChild);
+  }
+  oldChild.parentNode = null;
+
+  if (nativeElementReplaceChild && typeof nativeElementReplaceChild === "function") {
+    try {
+      nativeElementReplaceChild.call(this, newChild, oldChild);
+    } catch (e) {
+      if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+        try { nativeElementInsertBefore.call(this, newChild, oldChild); } catch (e2) {}
+      }
+      if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+        try { nativeElementRemoveChild.call(this, oldChild); } catch (e2) {}
+      }
+    }
+  } else {
+    if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+      try { nativeElementInsertBefore.call(this, newChild, oldChild); } catch (e2) {}
+    }
+    if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+      try { nativeElementRemoveChild.call(this, oldChild); } catch (e2) {}
+    }
+  }
+
+  if (typeof notifyMutation === "function") {
+    const rec = new MutationRecord("childList", this);
+    rec.addedNodes = [newChild];
+    rec.removedNodes = [oldChild];
+    notifyMutation(rec);
+  }
+
+  executeConnectedScripts(newChild);
+
+  return oldChild;
 };
 
 Object.defineProperty(Node.prototype, "childNodes", {
@@ -578,6 +765,7 @@ if (typeof Element !== "undefined" && Element.prototype) {
   Element.prototype.appendChild = Node.prototype.appendChild;
   Element.prototype.insertBefore = Node.prototype.insertBefore;
   Element.prototype.removeChild = Node.prototype.removeChild;
+  Element.prototype.replaceChild = Node.prototype.replaceChild;
 
   const nativeElementInnerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
   if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
@@ -650,6 +838,7 @@ markNative(Node.prototype.cloneNode, "cloneNode");
 markNative(Node.prototype.appendChild, "appendChild");
 markNative(Node.prototype.insertBefore, "insertBefore");
 markNative(Node.prototype.removeChild, "removeChild");
+markNative(Node.prototype.replaceChild, "replaceChild");
 markNative(Node.prototype.hasChildNodes, "hasChildNodes");
 markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
 markNative(Node.prototype.getRootNode, "getRootNode");
@@ -723,10 +912,10 @@ DocumentFragment.prototype = Object.create(Node.prototype);
 DocumentFragment.prototype.constructor = DocumentFragment;
 DocumentFragment.prototype.appendChild = function (child) {
   if (!child || typeof child !== "object") return child;
-  if (child._ownerFragment && typeof child._ownerFragment.removeChild === "function") {
+  if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
     try { child._ownerFragment.removeChild(child); } catch (e) {}
   }
-  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+  if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
     try { child.parentNode.removeChild(child); } catch (e) {}
   }
   child._ownerFragment = this;
@@ -736,10 +925,10 @@ DocumentFragment.prototype.appendChild = function (child) {
 };
 DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
   if (!newChild || typeof newChild !== "object") return newChild;
-  if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+  if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
     try { newChild._ownerFragment.removeChild(newChild); } catch (e) {}
   }
-  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
     try { newChild.parentNode.removeChild(newChild); } catch (e) {}
   }
   newChild._ownerFragment = this;
@@ -764,12 +953,111 @@ DocumentFragment.prototype.removeChild = function (child) {
   child.parentNode = null;
   return child;
 };
+DocumentFragment.prototype.replaceChild = function (newChild, oldChild) {
+  if (!newChild || typeof newChild !== "object") return newChild;
+  if (!oldChild || typeof oldChild !== "object") return oldChild;
+  if (newChild._ownerFragment && typeof newChild._ownerFragment.removeChild === "function") {
+    try { newChild._ownerFragment.removeChild(newChild); } catch (e) {}
+  }
+  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+    try { newChild.parentNode.removeChild(newChild); } catch (e) {}
+  }
+  newChild._ownerFragment = this;
+  const res = Node.prototype.replaceChild.call(this, newChild, oldChild);
+  newChild._ownerFragment = this;
+  return res;
+};
 Object.defineProperty(DocumentFragment.prototype, "childNodes", {
   get: function () {
     return new NodeList(this._children);
   },
   configurable: true,
 });
+Object.defineProperty(DocumentFragment.prototype, "children", {
+  get: function () {
+    const list = [];
+    const kids = this._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] && kids[i].nodeType === 1) list.push(kids[i]);
+    }
+    return (typeof HTMLCollection !== "undefined") ? new HTMLCollection(list) : list;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(DocumentFragment.prototype, "firstElementChild", {
+  get: function () {
+    const kids = this._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] && kids[i].nodeType === 1) return kids[i];
+    }
+    return null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(DocumentFragment.prototype, "lastElementChild", {
+  get: function () {
+    const kids = this._children || [];
+    for (let i = kids.length - 1; i >= 0; i--) {
+      if (kids[i] && kids[i].nodeType === 1) return kids[i];
+    }
+    return null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(DocumentFragment.prototype, "childElementCount", {
+  get: function () {
+    let count = 0;
+    const kids = this._children || [];
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] && kids[i].nodeType === 1) count++;
+    }
+    return count;
+  },
+  configurable: true,
+});
+
+DocumentFragment.prototype.append = function (...nodes) {
+  for (const n of nodes) {
+    let node;
+    if (n && typeof n === "object" && typeof n.nodeType === "number") {
+      node = n;
+    } else if (typeof document !== "undefined" && document.createTextNode) {
+      node = document.createTextNode(String(n));
+    } else {
+      node = new Text(String(n));
+    }
+    this.appendChild(node);
+  }
+};
+markNative(DocumentFragment.prototype.append, "append");
+
+DocumentFragment.prototype.prepend = function (...nodes) {
+  const first = this.firstChild;
+  for (const n of nodes) {
+    let node;
+    if (n && typeof n === "object" && typeof n.nodeType === "number") {
+      node = n;
+    } else if (typeof document !== "undefined" && document.createTextNode) {
+      node = document.createTextNode(String(n));
+    } else {
+      node = new Text(String(n));
+    }
+    this.insertBefore(node, first);
+  }
+};
+markNative(DocumentFragment.prototype.prepend, "prepend");
+
+DocumentFragment.prototype.replaceChildren = function (...nodes) {
+  while (this.firstChild) {
+    this.removeChild(this.firstChild);
+  }
+  this.append(...nodes);
+};
+markNative(DocumentFragment.prototype.replaceChildren, "replaceChildren");
+
 markNative(DocumentFragment, "DocumentFragment");
 
 Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
@@ -813,6 +1101,18 @@ function ShadowRoot(host, mode) {
 ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
 ShadowRoot.prototype.constructor = ShadowRoot;
 markNative(ShadowRoot, "ShadowRoot");
+Object.defineProperty(ShadowRoot.prototype, "styleSheets", {
+  get: function () {
+    if (typeof global.getOrCreateStyleSheetList === "function") {
+      return global.getOrCreateStyleSheetList(this);
+    }
+    if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+      return globalThis.getOrCreateStyleSheetList(this);
+    }
+    return [];
+  },
+  configurable: true,
+});
 global.ShadowRoot = ShadowRoot;
 if (typeof globalThis !== "undefined") {
   globalThis.ShadowRoot = ShadowRoot;
@@ -836,5 +1136,14 @@ if (typeof Document !== "undefined" && Document.prototype) {
       return new DocumentFragment();
     };
     markNative(Document.prototype.createDocumentFragment, "createDocumentFragment");
+  }
+  if (!Document.prototype.importNode) {
+    Document.prototype.importNode = function (node, deep) {
+      if (!node || typeof node !== "object") {
+        throw new TypeError("Failed to execute 'importNode' on 'Document': parameter 1 is not of type 'Node'.");
+      }
+      return node.cloneNode(Boolean(deep));
+    };
+    markNative(Document.prototype.importNode, "importNode");
   }
 }

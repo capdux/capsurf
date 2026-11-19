@@ -46,6 +46,8 @@ pub enum PseudoKind {
     Not,
     Has,
     Focus,
+    Dir,
+    Lang,
 }
 
 pub enum ComponentKind {
@@ -550,6 +552,12 @@ pub struct SelectorParser {
                 } else if (std.ascii.eqlIgnoreCase(p_name, "focus")) {
                     p_comp.pseudo_kind = PseudoKind.Focus;
                     spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "dir")) {
+                    p_comp.pseudo_kind = PseudoKind.Dir;
+                    spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "lang")) {
+                    p_comp.pseudo_kind = PseudoKind.Lang;
+                    spec.class_like_selectors += 1;
                 } else {
                     spec.class_like_selectors += 1;
                 }
@@ -797,6 +805,8 @@ pub struct Matcher {
                 };
             },
             .Focus => node_id != NULL_NODE && node_id == doc.focused_node,
+            .Dir => doc.matchesDir(node_id, comp.sub_selector_raw),
+            .Lang => doc.matchesLang(node_id, comp.sub_selector_raw),
         };
     }
 

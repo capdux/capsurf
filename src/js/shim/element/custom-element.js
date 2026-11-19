@@ -34,6 +34,17 @@ function upgradeCustomElement(element, customElementConstructor, options) {
 
   // 3. Instantiate via constructor
   upgradingElements.add(element);
+  const constructionStacks = (typeof global !== "undefined" && global._constructionStacks) ? global._constructionStacks : (typeof globalThis !== "undefined" && globalThis._constructionStacks ? globalThis._constructionStacks : null);
+  const upgradeTargets = (typeof global !== "undefined" && global._upgradeTargets) ? global._upgradeTargets : (typeof globalThis !== "undefined" && globalThis._upgradeTargets ? globalThis._upgradeTargets : null);
+  let stack = null;
+  if (constructionStacks) {
+    stack = constructionStacks.get(customElementConstructor);
+    if (!stack) {
+      stack = [];
+      constructionStacks.set(customElementConstructor, stack);
+    }
+    stack.push(element);
+  }
   if (typeof HTMLElement !== "undefined") {
     HTMLElement._upgradeTarget = element;
   }
@@ -47,8 +58,13 @@ function upgradeCustomElement(element, customElementConstructor, options) {
       console.warn("[capsurf] custom-element constructor for " + tagName + " threw:", err);
     }
   } finally {
-    if (typeof HTMLElement !== "undefined") {
-      HTMLElement._upgradeTarget = null;
+    if (stack) {
+      const sIdx = stack.indexOf(element);
+      if (sIdx !== -1) stack.splice(sIdx, 1);
+    }
+    if (upgradeTargets) {
+      const uIdx = upgradeTargets.indexOf(element);
+      if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
     }
     upgradingElements.delete(element);
   }

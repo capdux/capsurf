@@ -5,22 +5,34 @@ if (!globalThis.__capsurf_selectState) globalThis.__capsurf_selectState = new Ma
 if (!globalThis.__capsurf_optionState) globalThis.__capsurf_optionState = new Map();
 
 function getSelectState(el) {
-  const nid = (el && typeof el._nid === "number") ? el._nid : 0;
-  let st = globalThis.__capsurf_selectState.get(nid);
+  if (!el || typeof el !== "object") return { selectedIndex: undefined };
+  if (el._selState) return el._selState;
+  const nid = typeof el._nid === "number" ? el._nid : 0;
+  let st = null;
+  if (nid > 0) {
+    st = globalThis.__capsurf_selectState.get(nid);
+  }
   if (!st) {
     st = { selectedIndex: undefined };
     if (nid > 0) globalThis.__capsurf_selectState.set(nid, st);
   }
+  el._selState = st;
   return st;
 }
 
 function getOptionState(el) {
-  const nid = (el && typeof el._nid === "number") ? el._nid : 0;
-  let st = globalThis.__capsurf_optionState.get(nid);
+  if (!el || typeof el !== "object") return { selected: undefined, value: undefined };
+  if (el._optState) return el._optState;
+  const nid = typeof el._nid === "number" ? el._nid : 0;
+  let st = null;
+  if (nid > 0) {
+    st = globalThis.__capsurf_optionState.get(nid);
+  }
   if (!st) {
     st = { selected: undefined, value: undefined };
     if (nid > 0) globalThis.__capsurf_optionState.set(nid, st);
   }
+  el._optState = st;
   return st;
 }
 
@@ -36,13 +48,15 @@ function isSameElement(a, b) {
 function findOwnerSelect(opt) {
   let curr = opt.parentNode;
   while (curr) {
-    if ((curr.tagName || "").toLowerCase() === "select") return curr;
+    if ((curr.tagName || "").toLowerCase() === "select") {
+      if (typeof upgradeElement === "function") upgradeElement(curr);
+      else if (typeof globalThis !== "undefined" && typeof globalThis.upgradeElement === "function") globalThis.upgradeElement(curr);
+      return curr;
+    }
     curr = curr.parentNode;
   }
   return null;
 }
-
-
 
 function computeSelectedIndex(selectEl) {
   const selState = getSelectState(selectEl);
@@ -101,8 +115,8 @@ function installSelectElement(global) {
     get: function () {
       const ost = getOptionState(this);
       if (ost.value !== undefined) return ost.value;
-      if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value");
-      return this.textContent || "";
+      if (this.hasAttribute && this.hasAttribute("value")) return this.getAttribute("value") || "";
+      return this.text;
     },
     set: function (v) {
       getOptionState(this).value = String(v);
@@ -112,8 +126,24 @@ function installSelectElement(global) {
   });
 
   Object.defineProperty(HTMLOptionElement.prototype, "text", {
-    get: function () { return this.textContent || ""; },
-    set: function (v) { this.textContent = String(v); },
+    get: function () {
+      const tc = (this.textContent || "").replace(/[\t\n\f\r ]+/g, " ").trim();
+      return tc;
+    },
+    set: function (v) {
+      this.textContent = String(v);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLOptionElement.prototype, "label", {
+    get: function () {
+      if (this.hasAttribute && this.hasAttribute("label")) return this.getAttribute("label") || "";
+      return this.text;
+    },
+    set: function (v) {
+      if (this.setAttribute) this.setAttribute("label", String(v));
+    },
     configurable: true,
   });
 
@@ -123,11 +153,11 @@ function installSelectElement(global) {
       const owner = findOwnerSelect(this);
       if (!owner) {
         if (ost.selected !== undefined) return ost.selected;
-        return this.hasAttribute && this.hasAttribute("selected");
+        return Boolean(this.hasAttribute && this.hasAttribute("selected"));
       }
       if (owner.multiple) {
         if (ost.selected !== undefined) return ost.selected;
-        return this.hasAttribute && this.hasAttribute("selected");
+        return Boolean(this.hasAttribute && this.hasAttribute("selected"));
       }
       // Single select:
       const selIdx = computeSelectedIndex(owner);
@@ -161,7 +191,7 @@ function installSelectElement(global) {
   });
 
   Object.defineProperty(HTMLOptionElement.prototype, "defaultSelected", {
-    get: function () { return this.hasAttribute && this.hasAttribute("selected"); },
+    get: function () { return Boolean(this.hasAttribute && this.hasAttribute("selected")); },
     set: function (v) {
       if (v) {
         this.setAttribute("selected", "");
@@ -173,8 +203,41 @@ function installSelectElement(global) {
   });
 
   Object.defineProperty(HTMLOptionElement.prototype, "disabled", {
-    get: function () { return this.hasAttribute && this.hasAttribute("disabled"); },
+    get: function () {
+      if (this.hasAttribute && this.hasAttribute("disabled")) return true;
+      let p = this.parentNode;
+      while (p) {
+        const tag = String(p.tagName || "").toLowerCase();
+        if (tag === "optgroup") {
+          return p.disabled || Boolean(p.hasAttribute && p.hasAttribute("disabled"));
+        }
+        if (tag === "select") break;
+        p = p.parentNode;
+      }
+      return false;
+    },
     set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLOptionElement.prototype, "index", {
+    get: function () {
+      const owner = findOwnerSelect(this);
+      if (!owner) return 0;
+      const opts = owner.options;
+      for (let i = 0; i < opts.length; i++) {
+        if (isSameElement(opts[i], this)) return i;
+      }
+      return 0;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLOptionElement.prototype, "form", {
+    get: function () {
+      const owner = findOwnerSelect(this);
+      return owner ? owner.form : (typeof findAssociatedForm === "function" ? findAssociatedForm(this) : null);
+    },
     configurable: true,
   });
 
@@ -210,6 +273,13 @@ function installSelectElement(global) {
 
   markNative(HTMLOptionElement, "HTMLOptionElement");
   global.HTMLOptionElement = HTMLOptionElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLOptionElement = HTMLOptionElement;
+  }
+  if (typeof window !== "undefined") {
+    window.HTMLOptionElement = HTMLOptionElement;
+  }
+
   global.Option = function (text, value, defaultSelected, selected) {
     const opt = typeof document !== "undefined" && document.createElement ? document.createElement("option") : new HTMLOptionElement();
     if (text !== undefined) opt.text = text;
@@ -218,8 +288,40 @@ function installSelectElement(global) {
     if (selected !== undefined) opt.selected = Boolean(selected);
     return opt;
   };
+  if (typeof globalThis !== "undefined") {
+    globalThis.Option = global.Option;
+  }
+  if (typeof window !== "undefined") {
+    window.Option = global.Option;
+  }
 
-  // 2. HTMLSelectElement
+  // 2. HTMLOptGroupElement
+  function HTMLOptGroupElement() {}
+  HTMLOptGroupElement.prototype = Object.create(ElementProto);
+  HTMLOptGroupElement.prototype.constructor = HTMLOptGroupElement;
+
+  Object.defineProperty(HTMLOptGroupElement.prototype, "disabled", {
+    get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
+    set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLOptGroupElement.prototype, "label", {
+    get: function () { return (this.getAttribute && this.getAttribute("label")) || ""; },
+    set: function (v) { if (this.setAttribute) this.setAttribute("label", String(v)); },
+    configurable: true,
+  });
+
+  markNative(HTMLOptGroupElement, "HTMLOptGroupElement");
+  global.HTMLOptGroupElement = HTMLOptGroupElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLOptGroupElement = HTMLOptGroupElement;
+  }
+  if (typeof window !== "undefined") {
+    window.HTMLOptGroupElement = HTMLOptGroupElement;
+  }
+
+  // 3. HTMLSelectElement
   function HTMLSelectElement() {
     this._customValidityMessage = "";
   }
@@ -259,6 +361,23 @@ function installSelectElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
+    get: function () {
+      const self = this;
+      return makeHtmlCollection(function () {
+        const list = [];
+        const opts = self.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (opts[i].selected) {
+            list.push(opts[i]);
+          }
+        }
+        return list;
+      });
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLSelectElement.prototype, "value", {
     get: function () {
       const idx = this.selectedIndex;
@@ -282,31 +401,31 @@ function installSelectElement(global) {
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "multiple", {
-    get: function () { return this.hasAttribute("multiple"); },
+    get: function () { return Boolean(this.hasAttribute && this.hasAttribute("multiple")); },
     set: function (v) { if (v) this.setAttribute("multiple", ""); else this.removeAttribute("multiple"); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "name", {
-    get: function () { return this.getAttribute("name") || ""; },
-    set: function (v) { this.setAttribute("name", String(v)); },
+    get: function () { return (this.getAttribute && this.getAttribute("name")) || ""; },
+    set: function (v) { if (this.setAttribute) this.setAttribute("name", String(v)); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "disabled", {
-    get: function () { return this.hasAttribute("disabled"); },
+    get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
     set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "required", {
-    get: function () { return this.hasAttribute("required"); },
+    get: function () { return Boolean(this.hasAttribute && this.hasAttribute("required")); },
     set: function (v) { if (v) this.setAttribute("required", ""); else this.removeAttribute("required"); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "form", {
-    get: function () { return findAssociatedForm(this); },
+    get: function () { return typeof findAssociatedForm === "function" ? findAssociatedForm(this) : null; },
     configurable: true,
   });
 
@@ -380,4 +499,10 @@ function installSelectElement(global) {
   markNative(HTMLSelectElement.prototype.namedItem, "namedItem");
 
   global.HTMLSelectElement = HTMLSelectElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLSelectElement = HTMLSelectElement;
+  }
+  if (typeof window !== "undefined") {
+    window.HTMLSelectElement = HTMLSelectElement;
+  }
 }

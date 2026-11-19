@@ -338,7 +338,7 @@ fn isAsciiWord(b: u8): bool {
     return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_';
 }
 
-fn svgRootStart(source: []const u8): isize {
+pub fn svgRootStart(source: []const u8): isize {
     let at: usize = 0;
     while (at < source.len) {
         const lt_rel = std.mem.indexOfScalar(u8, source[at..], '<');
@@ -547,6 +547,18 @@ pub fn svgDocumentHtml(
 
     w.write("</body></html>");
     return w.getWritten();
+}
+
+pub fn isSvgDocument(url: []const u8, content_type: []const u8, source: []const u8): bool {
+    if (std.mem.indexOf(u8, content_type, "image/svg+xml") != null) return true;
+    if (std.mem.indexOf(u8, url, ".svg") != null) return true;
+    const root_s = svgRootStart(source);
+    if (root_s >= 0) {
+        if (std.mem.indexOf(u8, source, "<html") == null && std.mem.indexOf(u8, source, "<body") == null) {
+            return true;
+        }
+    }
+    return false;
 }
 
 pub fn textDocumentHtml(text: []const u8, url: []const u8, out_buf: []u8): []const u8 {

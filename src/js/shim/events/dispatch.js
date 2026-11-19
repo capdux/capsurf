@@ -21,7 +21,11 @@ const PHASE_CAPTURING = 1;
 const PHASE_AT_TARGET = 2;
 const PHASE_BUBBLING = 3;
 
-EventTarget.prototype.addEventListener = function (type, callback, options) {
+EventTarget.prototype.addEventListener = function addEventListener(type, callback) {
+  if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+    throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
+  }
+  const options = arguments[2];
   if (!type || typeof callback !== "function") return;
   const map = getListeners(this);
   if (!map) return;
@@ -42,7 +46,11 @@ EventTarget.prototype.addEventListener = function (type, callback, options) {
   list.push({ callback: callback, capture: capture, once: once, passive: passive });
 };
 
-EventTarget.prototype.removeEventListener = function (type, callback, options) {
+EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
+  if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+    throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
+  }
+  const options = arguments[2];
   if (!type || typeof callback !== "function") return;
   const map = getListeners(this);
   if (!map) return;

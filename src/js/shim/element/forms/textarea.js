@@ -27,8 +27,6 @@ function installTextAreaElement(global) {
     },
     set: function (v) {
       this._value = String(v);
-      if (this.setAttribute) this.setAttribute("value", String(v));
-      this.textContent = String(v);
       this._selectionStart = this._value.length;
       this._selectionEnd = this._value.length;
     },
@@ -38,6 +36,13 @@ function installTextAreaElement(global) {
   Object.defineProperty(HTMLTextAreaElement.prototype, "defaultValue", {
     get: function () { return this.textContent || ""; },
     set: function (v) { this.textContent = String(v); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLTextAreaElement.prototype, "textLength", {
+    get: function () {
+      return this.value.length;
+    },
     configurable: true,
   });
 
@@ -133,7 +138,6 @@ function installTextAreaElement(global) {
   };
 
   HTMLTextAreaElement.prototype.select = function () {};
-  HTMLTextAreaElement.prototype.setSelectionRange = function () {};
 
   markNative(HTMLTextAreaElement, "HTMLTextAreaElement");
   markNative(HTMLTextAreaElement.prototype.setCustomValidity, "setCustomValidity");

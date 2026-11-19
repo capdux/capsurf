@@ -129,6 +129,7 @@ pub struct JsDomContext {
     doc: *Document,
     layout: (*LayoutTree)? = null,
     cookie_jar: (*CookieJar)? = null,
+    extra_headers: []const u8 = "",
     element_class_id: u32 = 0,
     document_class_id: u32 = 0,
     console_records: [MAX_CONSOLE_RECORDS]ConsoleRecord = [ConsoleRecord{}; MAX_CONSOLE_RECORDS],
@@ -287,6 +288,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     while (doc.nodes.items[@as(usize, node_id)].first_child != NULL_NODE) {
         doc.removeChild(doc.nodes.items[@as(usize, node_id)].first_child);
     }
+    doc.nodes.items[@as(usize, node_id)].text_content = "";
     if (text.len == 0) return;
     const text_id = doc.createTextNode(text) catch return;
     doc.appendChild(node_id, text_id);
@@ -328,6 +330,15 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const attr_name_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_name) catch attr_name;
     const attr_val_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_val) catch attr_val;
     el.dom_ctx.doc.setAttribute(el.node_id, attr_name_dup, attr_val_dup);
+    if (std.ascii.eqlIgnoreCase(attr_name, "style")) {
+        if (lt := el.dom_ctx.layout) {
+            if (@as(usize, el.node_id) < lt.boxes.items.len) {
+                if (el.dom_ctx.doc.isNodeDisplayNone(el.node_id)) {
+                    lt.boxes.items[@as(usize, el.node_id)].rect = Rect.zero();
+                }
+            }
+        }
+    }
     return jsUndefined();
 }
 
@@ -384,6 +395,27 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return JS_DupValue(ctx, argv[0]);
 }
 
+@c fn js_element_insert_before(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const child_ptr = JS_GetOpaque(argv[0], g_element_class_id);
+    if (child_ptr == null) return jsUndefined();
+    const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
+
+    let ref_node_id: NodeId = NULL_NODE;
+    if (argc >= 2) {
+        const ref_ptr = JS_GetOpaque(argv[1], g_element_class_id);
+        if (ref_ptr != null) {
+            const ref_el: *JsElement = @ptrCast(@alignCast(ref_ptr.?));
+            ref_node_id = ref_el.node_id;
+        }
+    }
+    el.dom_ctx.doc.insertBefore(el.node_id, child_el.node_id, ref_node_id);
+    return JS_DupValue(ctx, argv[0]);
+}
+
 @c fn js_element_remove_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     if (argc < 1) return jsUndefined();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
@@ -396,12 +428,39 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return JS_DupValue(ctx, argv[0]);
 }
 
+@c fn js_element_replace_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 2) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const new_ptr = JS_GetOpaque(argv[0], g_element_class_id);
+    if (new_ptr == null) return jsUndefined();
+    const new_el: *JsElement = @ptrCast(@alignCast(new_ptr.?));
+    const old_ptr = JS_GetOpaque(argv[1], g_element_class_id);
+    if (old_ptr == null) return jsUndefined();
+    const old_el: *JsElement = @ptrCast(@alignCast(old_ptr.?));
+    el.dom_ctx.doc.replaceChild(el.node_id, new_el.node_id, old_el.node_id);
+    return JS_DupValue(ctx, argv[1]);
+}
+
 @c fn js_element_get_bounding_client_rect(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
     if (ptr == null) return jsNull();
     const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    if (el.dom_ctx.doc.isNodeDisplayNone(el.node_id)) {
+        const obj = JS_NewObject(ctx);
+        * = JS_SetPropertyStr(ctx, obj, "x", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "y", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "width", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "height", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "left", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "top", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "right", jsFloat(0.0));
+        * = JS_SetPropertyStr(ctx, obj, "bottom", jsFloat(0.0));
+        return obj;
+    }
     let rect = Rect.zero();
     if (lt := el.dom_ctx.layout) {
         rect = lt.getBoundingClientRect(el.node_id);
@@ -693,6 +752,11 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
             defer JS_FreeValue(ctx, global_obj);
             return JS_GetPropertyStr(ctx, global_obj, "document");
         }
+        const custom_parent = JS_GetPropertyStr(ctx, this_val, "_parentNode");
+        if (jsIsObject(custom_parent)) {
+            return custom_parent;
+        }
+        JS_FreeValue(ctx, custom_parent);
         const frag = JS_GetPropertyStr(ctx, this_val, "_ownerFragment");
         if (jsIsObject(frag)) {
             return frag;
@@ -710,10 +774,9 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
 }
 
 @c fn js_element_set_parent_node(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
-    * = ctx;
-    * = this_val;
-    * = argc;
-    * = argv;
+    if (argc >= 1) {
+        * = JS_SetPropertyStr(ctx, this_val, "_parentNode", JS_DupValue(ctx, argv[0]));
+    }
     return jsUndefined();
 }
 
@@ -1197,9 +1260,7 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     const val_slice = val_buf[0..actual_val_len];
 
     const jar = dom_ctx.cookie_jar.?;
-    const u_dupe = jar.allocator.dupe(u8, url_slice) catch url_slice;
-    const v_dupe = jar.allocator.dupe(u8, val_slice) catch val_slice;
-    * = jar.setFromDocumentCookie(u_dupe, v_dupe);
+    * = jar.setFromDocumentCookie(url_slice, val_slice);
     return jsNull();
 }
 
@@ -1229,7 +1290,26 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsNull();
 }
 
-pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?, cookie_jar: (*CookieJar)? = null): (*JsDomContext)! {
+@c fn js_capsurf_get_extra_headers(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    * = argc;
+    * = argv;
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
+    if (dom_ctx.extra_headers.len == 0 || std.mem.eql(u8, dom_ctx.extra_headers, "{}")) {
+        return jsNull();
+    }
+    return jsNewString(ctx, dom_ctx.extra_headers);
+}
+
+pub fn mountDom(
+    ctx: *JsContext,
+    doc: *Document,
+    layout: *LayoutTree?,
+    cookie_jar: (*CookieJar)? = null,
+    extra_headers: []const u8 = "",
+): (*JsDomContext)! {
     const raw_ctx = ctx.raw_ctx;
     const raw_rt = ctx.runtime.raw_rt;
 
@@ -1270,7 +1350,9 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?, cookie_ja
     defineMethod(raw_ctx, el_proto, "cloneNode", js_element_clone_node, 1);
     defineMethod(raw_ctx, el_proto, "_getRawAttrs", js_element_get_raw_attrs, 0);
     defineMethod(raw_ctx, el_proto, "appendChild", js_element_append_child, 1);
+    defineMethod(raw_ctx, el_proto, "insertBefore", js_element_insert_before, 2);
     defineMethod(raw_ctx, el_proto, "removeChild", js_element_remove_child, 1);
+    defineMethod(raw_ctx, el_proto, "replaceChild", js_element_replace_child, 2);
     defineMethod(raw_ctx, el_proto, "getBoundingClientRect", js_element_get_bounding_client_rect, 0);
 
     defineGetterSetter(raw_ctx, el_proto, "id", js_element_get_id, js_element_set_id);
@@ -1314,6 +1396,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?, cookie_ja
         doc: doc,
         layout: layout,
         cookie_jar: cookie_jar,
+        extra_headers: extra_headers,
         element_class_id: g_element_class_id,
         document_class_id: g_document_class_id,
     };
@@ -1363,6 +1446,7 @@ pub fn mountDom(ctx: *JsContext, doc: *Document, layout: *LayoutTree?, cookie_ja
     defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_load_fixture", js_capsurf_load_fixture, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_get_cookie_header", js_capsurf_get_cookie_header, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_record_fetch, 2);
 

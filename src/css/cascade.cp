@@ -399,6 +399,13 @@ pub struct LengthPercentageOrAuto {
             }
             return LengthPercentageOrAuto.zeroPx();
         }
+        if (s.len > 1 && s[0] == '-') {
+            if (p := LengthPercentageOrAuto.parse(s[1..])) {
+                let neg_p = p;
+                neg_p.length.value = 0.0 - neg_p.length.value;
+                return neg_p;
+            }
+        }
         if (len_v := CssLength.parse(s)) {
             return LengthPercentageOrAuto {
                 is_auto: false,
@@ -490,7 +497,9 @@ pub const PROP_GRID_COL_SPAN: usize = 43;
 pub const PROP_BG_IMAGE: usize = 44;
 pub const PROP_FONT_FAMILY: usize = 45;
 pub const PROP_FONT_WEIGHT: usize = 46;
-pub const TOTAL_PROP_SLOTS: usize = 47;
+pub const PROP_OVERFLOW: usize = 47;
+pub const PROP_TRANSFORM: usize = 48;
+pub const TOTAL_PROP_SLOTS: usize = 49;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -876,6 +885,9 @@ pub struct ComputedStyle {
     opacity: f32 = 1.0;
     z_index: i32 = 0;
     conic_gradient: ConicGradient = ConicGradient{};
+    overflow_visible: bool = true;
+    transform_tx: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 
     // 64-bit packed cascade weight per property slot
     weights: [TOTAL_PROP_SLOTS]u64 = [0; TOTAL_PROP_SLOTS];
@@ -1007,12 +1019,22 @@ pub struct ComputedStyle {
             * => {},
         }
 
+        if (tag == .Svg || node.hasTag("svg")) {
+            _.overflow_visible = false;
+        }
+
         if (p := parent_style) {
             _.visibility = p.visibility;
             if (tag != .H1 && tag != .H2 && tag != .H3 && tag != .H4 && tag != .H5 && tag != .H6) {
                 _.font_size_px = p.font_size_px;
             }
             _.color = p.color;
+            if (p.has_fill_current_color) {
+                _.has_fill_current_color = true;
+                _.background_color = p.color;
+            } else if (p.background_color.a > 0 && (tag == .Svg || node.hasTag("use") || node.hasTag("path") || node.hasTag("rect") || node.hasTag("circle") || node.hasTag("g") || node.hasTag("polygon"))) {
+                _.background_color = p.background_color;
+            }
             if (p.font_family_len > 0) {
                 const copy_len = @min(p.font_family_len, _.font_family_buf.len);
                 @memcpy(_.font_family_buf[0..copy_len], p.font_family_buf[0..copy_len]);
@@ -1600,6 +1622,56 @@ pub struct ComputedStyle {
             const z = std.fmt.parseInt(i32, std.mem.trim(u8, val, " \t"), 10) catch 0;
             if (_.tryClaimSlot(PROP_Z_INDEX, weight)) _.z_index = z;
             return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "overflow") || std.ascii.eqlIgnoreCase(name, "overflow-x") || std.ascii.eqlIgnoreCase(name, "overflow-y")) {
+            if (_.tryClaimSlot(PROP_OVERFLOW, weight)) {
+                if (std.ascii.eqlIgnoreCase(val, "visible")) {
+                    _.overflow_visible = true;
+                } else if (std.ascii.eqlIgnoreCase(val, "hidden") || std.ascii.eqlIgnoreCase(val, "clip")) {
+                    _.overflow_visible = false;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "transform") || std.ascii.eqlIgnoreCase(name, "-webkit-transform")) {
+            if (_.tryClaimSlot(PROP_TRANSFORM, weight)) {
+                _.parseTransform(val);
+            }
+            return;
+        }
+    }
+
+    fn parseTransform(*_, val: []const u8) {
+        const s = std.mem.trim(u8, val, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "none") || s.len == 0) {
+            _.transform_tx = LengthPercentageOrAuto.zeroPx();
+            _.transform_ty = LengthPercentageOrAuto.zeroPx();
+            return;
+        }
+        if (open_idx := std.mem.indexOfScalar(u8, s, '(')) {
+            if (close_idx := std.mem.lastIndexOfScalar(u8, s, ')')) {
+                if (close_idx > open_idx) {
+                    const fn_name = std.mem.trim(u8, s[0..open_idx], " \t\r\n");
+                    const args = s[open_idx + 1 .. close_idx];
+                    let it = std.mem.splitScalar(u8, args, ',');
+                    if (std.ascii.eqlIgnoreCase(fn_name, "translate3d") || std.ascii.eqlIgnoreCase(fn_name, "translate")) {
+                        if (x_str := it.next()) {
+                            if (p1 := LengthPercentageOrAuto.parse(x_str)) _.transform_tx = p1;
+                        }
+                        if (y_str := it.next()) {
+                            if (p2 := LengthPercentageOrAuto.parse(y_str)) _.transform_ty = p2;
+                        }
+                    } else if (std.ascii.eqlIgnoreCase(fn_name, "translateX")) {
+                        if (x_str := it.next()) {
+                            if (p1 := LengthPercentageOrAuto.parse(x_str)) _.transform_tx = p1;
+                        }
+                    } else if (std.ascii.eqlIgnoreCase(fn_name, "translateY")) {
+                        if (y_str := it.next()) {
+                            if (p2 := LengthPercentageOrAuto.parse(y_str)) _.transform_ty = p2;
+                        }
+                    }
+                }
+            }
         }
     }
 }

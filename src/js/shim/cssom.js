@@ -768,7 +768,7 @@
       if (context === "font-face") {
         return parts.length ? parts.join("; ") + ";" : "";
       }
-      return parts.join("; ");
+      return parts.length ? parts.join("; ") + ";" : "";
     }
 
     Object.defineProperty(decl, "cssText", {
@@ -788,6 +788,15 @@
         if (typeof prop === "string" && prop.startsWith("_")) return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
+          if (prop === "cssFloat" || prop === "float") {
+            return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
+          }
+          if (prop === "webkitTransform") {
+            return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
+          }
+          if (prop === "transform") {
+            return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+          }
           const kebab = cssPropCamelToKebab(prop);
           let val = decl.getPropertyValue(kebab);
           if (!val && prop.startsWith("--")) val = decl.getPropertyValue(prop);
@@ -1546,6 +1555,8 @@
     out.unbalanced = depth !== 0 || parenDepth !== 0 || inStr !== "";
     return out;
   }
+  global.splitStylesheetRules = splitStylesheetRules;
+  if (typeof globalThis !== "undefined") globalThis.splitStylesheetRules = splitStylesheetRules;
 
   function classifyRuleKind(parsed) {
     const sel = String(parsed.selectorText || "").trim();
@@ -1637,7 +1648,8 @@
       style._parentRule = rule;
       rule.style = style;
       rule._serialize = function () {
-        const d = style.cssText;
+        let d = style.cssText;
+        if (d && !d.endsWith(";")) d += ";";
         return rule.selectorText + (d ? " { " + d + " }" : " { }");
       };
       return rule;
@@ -1702,7 +1714,8 @@
       style._parentRule = rule;
       rule.style = style;
       rule._serialize = function () {
-        const d = style.cssText;
+        let d = style.cssText;
+        if (d && !d.endsWith(";")) d += ";";
         return "@font-face" + (d ? " { " + d + " }" : " { }");
       };
       return rule;
@@ -1719,7 +1732,8 @@
       rule.basePalette = style.getPropertyValue("base-palette") || "";
       rule.overrideColors = style.getPropertyValue("override-colors") || "";
       rule._serialize = function () {
-        const d = style.cssText;
+        let d = style.cssText;
+        if (d && !d.endsWith(";")) d += ";";
         return "@font-palette-values " + rule.name + (d ? " { " + d + " }" : " { }");
       };
       return rule;
@@ -1868,7 +1882,6 @@
     this.ownerNode = ownerNode || null;
     this.ownerRule = null;
     this.parentStyleSheet = null;
-    this.href = null;
     this.title = null;
     this.media = new MediaList("");
     this.disabled = false;
@@ -1877,6 +1890,21 @@
 
     const self = this;
     const rulesList = makeRuleList(this._rules);
+
+    Object.defineProperty(this, "href", {
+      get: function () {
+        if (self.ownerNode) {
+          const tag = String(self.ownerNode.localName || self.ownerNode.tagName || "").toLowerCase();
+          if (tag === "link") {
+            return self.ownerNode.getAttribute("href") || null;
+          }
+        }
+        return null;
+      },
+      set: function (_v) {},
+      configurable: true,
+      enumerable: true,
+    });
 
     Object.defineProperty(this, "cssRules", {
       get: function () {
@@ -1894,6 +1922,8 @@
 
   CSSStyleSheet.prototype._syncFromOwner = function () {
     if (!this.ownerNode) return;
+    const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+    if (tag === "link") return;
     const cur = String(this.ownerNode.textContent || "");
     if (cur !== this._lastParsedText) {
       this._reparseText(cur);
@@ -1912,6 +1942,8 @@
 
   CSSStyleSheet.prototype._remirror = function () {
     if (!this.ownerNode) return;
+    const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+    if (tag === "link") return;
     const text = this._rules.map((r) => r.cssText).join("\n");
     this._lastParsedText = text;
     this.ownerNode.textContent = text;
@@ -1977,6 +2009,184 @@
   if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheet = getOrCreateStyleSheet;
 
   // =========================================================================
+  // 7.5. StyleSheetList
+  // =========================================================================
+
+  function StyleSheetList() {}
+  StyleSheetList.prototype.item = function (index) {
+    const i = Number(index) >>> 0;
+    const arr = this._getSheets ? this._getSheets() : [];
+    return (i < arr.length) ? arr[i] : null;
+  };
+  StyleSheetList.prototype[Symbol.iterator] = function () {
+    const arr = this._getSheets ? this._getSheets() : [];
+    let idx = 0;
+    return {
+      next: function () {
+        if (idx < arr.length) {
+          return { value: arr[idx++], done: false };
+        }
+        return { value: undefined, done: true };
+      }
+    };
+  };
+  Object.defineProperty(StyleSheetList.prototype, Symbol.toStringTag, {
+    value: "StyleSheetList",
+    configurable: true,
+  });
+  markNative(StyleSheetList, "StyleSheetList");
+  markNative(StyleSheetList.prototype.item, "item");
+  global.StyleSheetList = StyleSheetList;
+  if (typeof globalThis !== "undefined") globalThis.StyleSheetList = StyleSheetList;
+  if (typeof window !== "undefined") window.StyleSheetList = StyleSheetList;
+
+  function createStyleSheetListProxy(root) {
+    const target = new StyleSheetList();
+
+    function getSheets() {
+      const sheets = [];
+      if (!root) return sheets;
+
+      let elements = [];
+      if (typeof root.querySelectorAll === "function") {
+        try {
+          elements = root.querySelectorAll("style, link");
+        } catch (e) {}
+      }
+      if (!elements || elements.length === 0) {
+        const list = [];
+        function walk(n) {
+          if (!n) return;
+          if (n.nodeType === 1) {
+            const tag = String(n.localName || n.tagName || "").toLowerCase();
+            if (tag === "style" || tag === "link") list.push(n);
+          }
+          let c = n.firstChild;
+          while (c) {
+            walk(c);
+            c = c.nextSibling;
+          }
+        }
+        walk(root);
+        elements = list;
+      }
+
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (!el) continue;
+        const tag = String(el.localName || el.tagName || "").toLowerCase();
+        if (tag === "style") {
+          const s = el.sheet;
+          if (s) sheets.push(s);
+        } else if (tag === "link") {
+          const rel = (el.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+          if (rel.includes("stylesheet")) {
+            const s = el.sheet;
+            if (s) sheets.push(s);
+          }
+        }
+      }
+      return sheets;
+    }
+
+    target._getSheets = getSheets;
+
+    return new Proxy(target, {
+      get: function (t, prop, receiver) {
+        if (typeof prop === "symbol") {
+          if (prop === Symbol.iterator) {
+            return function () {
+              const arr = getSheets();
+              let idx = 0;
+              return {
+                next: function () {
+                  if (idx < arr.length) {
+                    return { value: arr[idx++], done: false };
+                  }
+                  return { value: undefined, done: true };
+                }
+              };
+            };
+          }
+          return t[prop];
+        }
+        if (prop === "length") {
+          return getSheets().length;
+        }
+        if (prop === "item") {
+          return function (index) {
+            const i = Number(index) >>> 0;
+            const arr = getSheets();
+            return (i < arr.length) ? arr[i] : null;
+          };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const i = Number(prop);
+          const arr = getSheets();
+          return (i >= 0 && i < arr.length) ? arr[i] : undefined;
+        }
+        return t[prop];
+      },
+      has: function (t, prop) {
+        if (prop === "length") return true;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          return Number(prop) < getSheets().length;
+        }
+        return prop in t;
+      },
+      ownKeys: function () {
+        const len = getSheets().length;
+        const keys = [];
+        for (let i = 0; i < len; i++) {
+          keys.push(String(i));
+        }
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (t, prop) {
+        if (prop === "length") {
+          return { value: getSheets().length, writable: false, enumerable: false, configurable: true };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const i = Number(prop);
+          const arr = getSheets();
+          if (i >= 0 && i < arr.length) {
+            return { value: arr[i], writable: false, enumerable: true, configurable: true };
+          }
+        }
+        return Reflect.getOwnPropertyDescriptor(t, prop);
+      }
+    });
+  }
+
+  function getOrCreateStyleSheetList(root) {
+    if (!root) return createStyleSheetListProxy(null);
+    if (!root._styleSheets) {
+      root._styleSheets = createStyleSheetListProxy(root);
+    }
+    return root._styleSheets;
+  }
+  global.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
+  if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
+
+  const docProtoForStylesheets = (global.Document && global.Document.prototype) ? global.Document.prototype : null;
+  if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "styleSheets")) {
+    Object.defineProperty(docProtoForStylesheets, "styleSheets", {
+      get: function () {
+        return getOrCreateStyleSheetList(this);
+      },
+      configurable: true,
+    });
+  }
+  if (global.document && !Object.getOwnPropertyDescriptor(global.document, "styleSheets")) {
+    Object.defineProperty(global.document, "styleSheets", {
+      get: function () {
+        return getOrCreateStyleSheetList(this);
+      },
+      configurable: true,
+    });
+  }
+
+  // =========================================================================
   // 8. Global getComputedStyle wrapper for var() resolution & padding/margin expansion
   // =========================================================================
 
@@ -2039,6 +2249,96 @@
     return res;
   }
 
+  const NAMED_COLORS_MAP = {
+    lime: "rgb(0, 255, 0)",
+    red: "rgb(255, 0, 0)",
+    green: "rgb(0, 128, 0)",
+    blue: "rgb(0, 0, 255)",
+    white: "rgb(255, 255, 255)",
+    black: "rgb(0, 0, 0)",
+    yellow: "rgb(255, 255, 0)",
+    cyan: "rgb(0, 255, 255)",
+    aqua: "rgb(0, 255, 255)",
+    magenta: "rgb(255, 0, 255)",
+    fuchsia: "rgb(255, 0, 255)",
+    orange: "rgb(255, 165, 0)",
+    purple: "rgb(128, 0, 128)",
+    transparent: "rgba(0, 0, 0, 0)",
+  };
+
+  function normalizeSingleColor(val) {
+    if (!val || typeof val !== "string") return val;
+    const s = val.trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(NAMED_COLORS_MAP, s)) {
+      return NAMED_COLORS_MAP[s];
+    }
+    if (s.startsWith("#")) {
+      const hex = s.slice(1);
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return "rgb(" + r + ", " + g + ", " + b + ")";
+      } else if (hex.length === 4) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        const a = parseInt(hex[3] + hex[3], 16) / 255;
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) {
+          if (a >= 1) return "rgb(" + r + ", " + g + ", " + b + ")";
+          return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+        }
+      } else if (hex.length === 6) {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return "rgb(" + r + ", " + g + ", " + b + ")";
+      } else if (hex.length === 8) {
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const a = parseInt(hex.slice(6, 8), 16) / 255;
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) {
+          if (a >= 1) return "rgb(" + r + ", " + g + ", " + b + ")";
+          return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+        }
+      }
+    }
+    return val;
+  }
+
+  function normalizeCssColor(val) {
+    if (!val || typeof val !== "string") return val;
+    let res = normalizeSingleColor(val);
+    if (res.includes("rgb(") || res.includes("rgba(")) {
+      res = res.replace(/rgba?\(\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)(?:\s*[, /]\s*([0-9.]+%?))?\s*\)/gi, function (match, p1, p2, p3, p4) {
+        const parseComp = function (p) {
+          if (typeof p !== "string") return 0;
+          if (p.endsWith("%")) return Math.round((parseFloat(p) / 100.0) * 255.0);
+          return Math.round(parseFloat(p));
+        };
+        const r = Math.min(255, Math.max(0, parseComp(p1)));
+        const g = Math.min(255, Math.max(0, parseComp(p2)));
+        const b = Math.min(255, Math.max(0, parseComp(p3)));
+        let a = 1.0;
+        if (p4 !== undefined && p4 !== null) {
+          if (String(p4).endsWith("%")) a = parseFloat(p4) / 100.0;
+          else a = parseFloat(p4);
+          a = Math.min(1.0, Math.max(0.0, a));
+        }
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+          if (a >= 1.0) {
+            return "rgb(" + r + ", " + g + ", " + b + ")";
+          } else {
+            return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+          }
+        }
+        return match;
+      });
+    }
+    return res;
+  }
+
   let _capturedGetComputedStyle = null;
 
   function wrapComputedStyleDecl(decl, element) {
@@ -2047,12 +2347,55 @@
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") return target[prop];
         if (typeof prop === "string") {
+          if (prop === "getPropertyValue") {
+            return function (propertyName) {
+              const k = cssPropCamelToKebab(String(propertyName || "").trim());
+              let val = receiver[k] || (target.getPropertyValue ? target.getPropertyValue(propertyName) : "");
+              if (typeof val === "string") {
+                val = resolveCssVars(element, val);
+                val = normalizeCssColor(val);
+              }
+              return val || "";
+            };
+          }
+          if (prop === "cssFloat" || prop === "float") {
+            return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
+          }
+          if (prop === "webkitTransform") {
+            return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
+          }
+          if (prop === "transform") {
+            return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+          }
           const kebab = cssPropCamelToKebab(prop);
 
           // If color is unstyled, default to rgb(0, 0, 0)
           if (kebab === "color") {
-            const val = target.getPropertyValue ? target.getPropertyValue("color") : target[prop];
+            let val = target.getPropertyValue ? target.getPropertyValue("color") : target[prop];
+            if (val) val = normalizeCssColor(val);
             return val || "rgb(0, 0, 0)";
+          }
+
+          if (kebab === "background-color") {
+            let val = target.getPropertyValue ? target.getPropertyValue("background-color") : target[prop];
+            if (!val && target.getPropertyValue) {
+              val = target.getPropertyValue("background");
+            }
+            if (!val && target.background) val = target.background;
+            if (val) {
+              val = resolveCssVars(element, val);
+              val = normalizeCssColor(val);
+            }
+            return val || "";
+          }
+
+          if (kebab.endsWith("-color")) {
+            let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
+            if (val) {
+              val = resolveCssVars(element, val);
+              val = normalizeCssColor(val);
+            }
+            return val || "";
           }
 
           // Shorthand padding -> paddingTop / paddingBottom / etc.
@@ -2080,7 +2423,10 @@
           }
 
           let val = target[prop];
-          if (typeof val === "string") val = resolveCssVars(element, val);
+          if (typeof val === "string") {
+            val = resolveCssVars(element, val);
+            val = normalizeCssColor(val);
+          }
           return val;
         }
         return target[prop];

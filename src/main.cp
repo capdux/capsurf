@@ -100,7 +100,7 @@ fn runDemo() {
     std.debug.print("Status: Self-Check Complete (100% Native Evaluated).\n", .{});
 }
 
-fn main() {
+pub fn main()! {
     const opts = CliOptions.parseFromProcess();
 
     if (opts.show_help) {

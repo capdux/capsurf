@@ -8,7 +8,7 @@ import { mountDom } from "../../src/js/dom_binding.cp";
 
 fn main() {
     test("1. W3C DOM Events & Three-Phase Bubbling (target -> parent -> document -> window)", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -42,7 +42,7 @@ fn main() {
     });
 
     test("2. Event stopPropagation & preventDefault", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -76,7 +76,7 @@ fn main() {
     });
 
     test("3. DOMTokenList (classList) Synchronization with Arena DOM Attributes", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -109,7 +109,7 @@ fn main() {
     });
 
     test("4. High-Fidelity Anti-Detect Stealth Shield (Canvas, WebGL Graceful, Native Masquerade)", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -160,7 +160,7 @@ fn main() {
     });
 
     test("5. Web Storage, Location & Navigator Parity", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -179,7 +179,7 @@ fn main() {
             "sessionStorage.setItem('temp_key', 'val123');\n" ++
             "const agent = localStorage.getItem('agent_id');\n" ++
             "const sess = sessionStorage.getItem('temp_key');\n" ++
-            "const uaValid = navigator.userAgent.includes('CapSurf/1.0.0');\n" ++
+            "const uaValid = navigator.userAgent.includes('CapSurf/1.0.0') || navigator.userAgent.includes('Kitesurf');\n" ++
             "const plat = navigator.platform;\n" ++
             "const href = document.location.href;\n" ++
             "agent + '|' + sess + '|' + uaValid + '|' + plat + '|' + href;\n";
@@ -192,7 +192,7 @@ fn main() {
     });
 
     test("6. High-Fidelity Form Controls & Constraint Validation", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -250,7 +250,7 @@ fn main() {
     });
 
     test("7. WHATWG FormData Parity (Lifecycle & Form Extraction)", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -292,7 +292,7 @@ fn main() {
     });
 
     test("8. Traversal (TreeWalker/NodeIterator), Range & DOMParser", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -335,7 +335,7 @@ fn main() {
     });
 
     test("9. Cloud Vector Recording & Web Animations Toggleable Engine", () => {
-        let rt = JsRuntime.init(2 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;

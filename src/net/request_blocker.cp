@@ -40,8 +40,8 @@ pub struct RequestBlockVerdict {
 }
 
 pub struct RequestBlocker {
-    ctx: *void? = null,
-    classify_fn: (*const fn(ctx: *void?, req: *const BlockableRequest): RequestBlockVerdict?)? = null,
+    ctx: (*void)? = null,
+    classify_fn: (*const fn(ctx: (*void)?, req: *const BlockableRequest): RequestBlockVerdict?)? = null,
 
     fn classify(req: *const BlockableRequest): RequestBlockVerdict? {
         if (f := _.classify_fn) {

@@ -2,11 +2,11 @@
 // CDP Runtime Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 
 pub struct RuntimeHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
+    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
 
         if (std.mem.eql(u8, req.method, "Runtime.enable")) {
@@ -50,8 +50,30 @@ pub struct RuntimeHandler {
             std.mem.eql(u8, req.method, "Runtime.discardConsoleEntries") ||
             std.mem.eql(u8, req.method, "Runtime.runIfWaitingForDebugger") ||
             std.mem.eql(u8, req.method, "Runtime.setAsyncCallStackDepth") ||
-            std.mem.eql(u8, req.method, "Runtime.setCustomObjectFormatterEnabled")) {
+            std.mem.eql(u8, req.method, "Runtime.setCustomObjectFormatterEnabled") ||
+            std.mem.eql(u8, req.method, "Runtime.removeBinding") ||
+            std.mem.eql(u8, req.method, "Runtime.awaitPromise")) {
             return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Runtime.getHeapUsage")) {
+            return CdpResponse.ok(req.id, "{\"usedSize\":1048576,\"totalSize\":4194304}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Runtime.compileScript")) {
+            const persist = extractJsonBool(req.params_raw, "persistScript") ?? true;
+            if (!persist) {
+                return CdpResponse.ok(req.id, "{}");
+            }
+            return CdpResponse.ok(req.id, "{\"scriptId\":\"capsurf-script-001\"}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Runtime.runScript")) {
+            return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Runtime.queryObjects")) {
+            return CdpResponse.ok(req.id, "{\"objects\":{\"type\":\"object\",\"objectId\":\"capsurf-query-obj\"}}");
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.getProperties")) {
@@ -68,8 +90,20 @@ pub struct RuntimeHandler {
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             
-            const res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, out_buf);
-            const res_slice = out_buf[0..res_len];
+            let res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, out_buf);
+
+            if (std.mem.indexOf(u8, out_buf[0..res_len], "cannot read property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..res_len], "cannot set property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..res_len], "Cannot read property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..res_len], "Cannot set property '") != null)
+            {
+                let norm_buf: [8192]u8 = [0; 8192];
+                const norm_slice = normalizeExceptionMessage(out_buf[0..res_len], &norm_buf);
+                if (norm_slice.len <= out_buf.len) {
+                    @memcpy(out_buf[0..norm_slice.len], norm_slice);
+                    res_len = norm_slice.len;
+                }
+            }
             
             // Poll any console events produced during callFunctionOn
             let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];
@@ -79,8 +113,19 @@ pub struct RuntimeHandler {
                 out_events[event_count.*] = polled_evts[p_i];
                 event_count.* += 1;
             }
+
+            // Poll any CSS events produced during callFunctionOn
+            if (session.css_enabled) {
+                let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_css_count = session.pollCssEvents(&polled_css_evts);
+                let css_i: usize = 0;
+                while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
+                    out_events[event_count.*] = polled_css_evts[css_i];
+                    event_count.* += 1;
+                }
+            }
             
-            return CdpResponse.ok(req.id, res_slice);
+            return CdpResponse.ok(req.id, out_buf[0..res_len]);
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.addBinding")) {
@@ -108,8 +153,20 @@ pub struct RuntimeHandler {
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
             const context_id = extractJsonInt(req.params_raw, "contextId");
 
-            const eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
-            const eval_slice = out_buf[0..eval_len];
+            let eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
+
+            if (std.mem.indexOf(u8, out_buf[0..eval_len], "cannot read property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..eval_len], "cannot set property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..eval_len], "Cannot read property '") != null ||
+                std.mem.indexOf(u8, out_buf[0..eval_len], "Cannot set property '") != null)
+            {
+                let norm_buf: [8192]u8 = [0; 8192];
+                const norm_slice = normalizeExceptionMessage(out_buf[0..eval_len], &norm_buf);
+                if (norm_slice.len <= out_buf.len) {
+                    @memcpy(out_buf[0..norm_slice.len], norm_slice);
+                    eval_len = norm_slice.len;
+                }
+            }
 
             // Poll any network events produced during evaluation
             let polled_net_evts: [4]CdpEvent = [CdpEvent{}; 4];
@@ -156,7 +213,18 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
-            return CdpResponse.ok(req.id, eval_slice);
+            // Poll any CSS events produced during evaluation
+            if (session.css_enabled) {
+                let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_css_count = session.pollCssEvents(&polled_css_evts);
+                let css_i: usize = 0;
+                while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
+                    out_events[event_count.*] = polled_css_evts[css_i];
+                    event_count.* += 1;
+                }
+            }
+
+            return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }
 
         return CdpResponse.err(req.id, -32601, "'Runtime' domain method not implemented");

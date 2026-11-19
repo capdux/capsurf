@@ -30,6 +30,8 @@ MODULE_ORDER = [
     "element/forms/select.js",
     "element/forms/button.js",
     "element/forms/form.js",
+    "element/forms/fieldset.js",
+    "element/forms/label.js",
     "file.js",
     "form-data.js",
     "traversal.js",
@@ -39,6 +41,7 @@ MODULE_ORDER = [
     "canvas2d.js",
     "animations.js",
     "window.js",
+    "fonts.js",
     "element/custom-element.js",
     "index.js",
 ]

@@ -257,6 +257,10 @@ ParsedFragment.prototype.removeChild = function (child) {
   child.parentNode = null;
   return child;
 };
+ParsedFragment.prototype.replaceChild = function (newChild, oldChild) {
+  this.insertBefore(newChild, oldChild);
+  return this.removeChild(oldChild);
+};
 Object.defineProperty(ParsedFragment.prototype, "childNodes", {
   get: function () {
     return new NodeList(this._children);
@@ -533,6 +537,10 @@ ParsedElement.prototype.removeChild = function (child) {
   child.parentNode = null;
   return child;
 };
+ParsedElement.prototype.replaceChild = function (newChild, oldChild) {
+  this.insertBefore(newChild, oldChild);
+  return this.removeChild(oldChild);
+};
 
 ParsedElement.prototype.insertBefore = function (newChild, refChild) {
   if (!newChild || typeof newChild !== "object") {
@@ -672,6 +680,19 @@ Object.defineProperty(ParsedDocument.prototype, "title", {
     if (titleEl) {
       titleEl.textContent = this._title;
     }
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedDocument.prototype, "styleSheets", {
+  get: function () {
+    if (typeof global.getOrCreateStyleSheetList === "function") {
+      return global.getOrCreateStyleSheetList(this);
+    }
+    if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+      return globalThis.getOrCreateStyleSheetList(this);
+    }
+    return [];
   },
   configurable: true,
 });

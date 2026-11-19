@@ -162,7 +162,15 @@ pub struct DomHandler {
         if (std.mem.eql(u8, req.method, "DOM.enable") ||
             std.mem.eql(u8, req.method, "DOM.disable") ||
             std.mem.eql(u8, req.method, "DOM.hideHighlight") ||
-            std.mem.eql(u8, req.method, "DOM.highlightNode")) {
+            std.mem.eql(u8, req.method, "DOM.highlightNode") ||
+            std.mem.eql(u8, req.method, "DOM.focus") ||
+            std.mem.eql(u8, req.method, "DOM.setInspectedNode") ||
+            std.mem.eql(u8, req.method, "DOM.discardSearchResults") ||
+            std.mem.eql(u8, req.method, "DOM.markUndoableState") ||
+            std.mem.eql(u8, req.method, "DOM.undo") ||
+            std.mem.eql(u8, req.method, "DOM.redo") ||
+            std.mem.eql(u8, req.method, "DOM.setNodeStackTracesEnabled") ||
+            std.mem.eql(u8, req.method, "DOM.requestChildNodes")) {
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -352,6 +360,106 @@ pub struct DomHandler {
             }
 
             return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.getFlattenedDocument")) {
+            const root_node = session.doc.root_element;
+            const depth = extractJsonInt(req.params_raw, "depth") ?? -1;
+            let list = std.ArrayListUnmanaged(u8).empty;
+            defer list.deinit(session.allocator);
+            const cnt: u32 = if (root_node != NULL_NODE) 1 else 0;
+            let root_buf: [256]u8 = undefined;
+            const root_s = std.fmt.bufPrint(
+                &root_buf,
+                "{{\"nodes\":[{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",\"childNodeCount\":{d}",
+                .{ root_node, root_node, cnt },
+            ) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            list.appendSlice(session.allocator, root_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            if (depth != 0 && root_node != NULL_NODE) {
+                list.appendSlice(session.allocator, ",\"children\":[") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                serializeCdpNode(session.allocator, &session.doc, root_node, depth, &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                list.appendSlice(session.allocator, "]") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            }
+            list.appendSlice(session.allocator, "}]}") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            const res = std.fmt.bufPrint(out_buf, "{s}", .{list.items}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
+            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"Element\",\"description\":\"Node#{d}\",\"objectId\":\"node:{d}\"}}}}",
+                .{ nid_val, nid_val },
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.requestNode")) {
+            const obj_id = extractJsonString(req.params_raw, "objectId") ?? "";
+            const nid = resolveNodeIdFromObjectId(session, obj_id);
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"nodeId\":{d}}}",
+                .{nid},
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.getOuterHTML")) {
+            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            const nid = @as(NodeId, @intCast(nid_val));
+            let str_buf: [2048]u8 = [0; 2048];
+            let out_str: []const u8 = "";
+            if (nid > 0 && nid < session.doc.nodeCount()) {
+                const tag = session.doc.getTagName(nid);
+                out_str = std.fmt.bufPrint(&str_buf, "<{s}></{s}>", .{ tag, tag }) catch "";
+            }
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"outerHTML\":\"{s}\"}}",
+                .{out_str},
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.getAttributes")) {
+            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            const nid = @as(NodeId, @intCast(nid_val));
+            let attr_buf: [1024]u8 = [0; 1024];
+            let cur: usize = 0;
+            const prefix = "{\"attributes\":[";
+            @memcpy(attr_buf[0..prefix.len], prefix);
+            cur += prefix.len;
+
+            if (nid > 0 && nid < session.doc.nodeCount()) {
+                const node = &session.doc.nodes.items[@as(usize, nid)];
+                let first = true;
+                if (node.id_attr.len > 0) {
+                    const chunk = std.fmt.bufPrint(attr_buf[cur..], "\"id\",\"{s}\"", .{node.id_attr}) catch "";
+                    cur += chunk.len;
+                    first = false;
+                }
+                if (node.class_attr.len > 0) {
+                    const sep = if (!first) "," else "";
+                    const chunk = std.fmt.bufPrint(attr_buf[cur..], "{s}\"class\",\"{s}\"", .{ sep, node.class_attr }) catch "";
+                    cur += chunk.len;
+                    first = false;
+                }
+                if (node.inline_style.len > 0) {
+                    const sep = if (!first) "," else "";
+                    const chunk = std.fmt.bufPrint(attr_buf[cur..], "{s}\"style\",\"{s}\"", .{ sep, node.inline_style }) catch "";
+                    cur += chunk.len;
+                    first = false;
+                }
+            }
+            if (cur + 2 <= attr_buf.len) {
+                attr_buf[cur] = ']';
+                attr_buf[cur + 1] = '}';
+                cur += 2;
+            }
+            const res = std.fmt.bufPrint(out_buf, "{s}", .{attr_buf[0..cur]}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
         }
 
         if (std.mem.eql(u8, req.method, "DOM.describeNode")) {

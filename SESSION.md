@@ -3129,4 +3129,13 @@
   - `src/render/painter.cp`: 对 `<rect>` 元素补全 `effective_paint_style`，自动提取 `fill` 表现性属性并支持 `currentColor`。
 - **断言验证**:
   - `bun test e2e/demo/svg-document-render.e2e.test.ts`: **1 pass, 0 fail (16 项断言 100% 全绿通过，4.38s)**！
+- **全新双智能体流水线调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `ee7da514-eb64-4882-9a7e-ac14f9725d89`；
+  - **Subagent 22 (`70955724-3117-4f1b-87c6-147889e3a360`)**: Selection Highlight Specialist
+    - 攻坚目标：`e2e/demo/selection-paint-bridge.e2e.test.ts`。
+    - 任务：打通 Selection 活跃选区与 CDP Page.captureScreenshot 光栅化高亮渲染，在折叠时不绘制覆盖，在非折叠时生成蓝覆盖层。
+  - **Subagent 23 (`5cc94afc-e606-44a2-90ab-f5f1bb2002ab`)**: SVG Overflow Sprite Specialist
+    - 攻坚目标：`e2e/demo/svg-overflow-clip.e2e.test.ts` 与 `e2e/demo/svg-sprite-sidebar.e2e.test.ts`。
+    - 任务：在 mock_fixtures 注册对应 fixture，实装 SVG overflow 裁剪规则与 `<use xlink:href="#...">` 引用 `<symbol>` 精灵图渲染。
+
 

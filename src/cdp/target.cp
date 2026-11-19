@@ -2,7 +2,7 @@
 // CDP Target Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/target.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonBool, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonBool, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CookieJar } from "../net/cookies.cp";
 
@@ -413,7 +413,7 @@ pub struct TargetHandler {
         session: *CdpPageSession,
         req: CdpRequest,
         out_buf: []u8,
-        out_events: *[4]CdpEvent,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
         event_count.* = 0;
@@ -611,7 +611,9 @@ pub struct TargetHandler {
         }
 
         // Stubs for Puppeteer / Playwright compatibility
-        if (std.mem.eql(u8, req.method, "Target.setRemoteLocations")) {
+        if (std.mem.eql(u8, req.method, "Target.setRemoteLocations") ||
+            std.mem.eql(u8, req.method, "Target.exposeDevToolsProtocol") ||
+            std.mem.eql(u8, req.method, "Target.sendMessageToTarget")) {
             return CdpResponse.ok(req.id, "{}");
         }
 

@@ -1,0 +1,52 @@
+// Copyright (c) 2026 Cloudflare, Inc.
+// Licensed under the Apache 2.0 license found in the LICENSE file or at:
+// https://opensource.org/licenses/Apache-2.0
+import { expect, test } from "./harness/index.cjs";
+test("querySelector throws SyntaxError on invalid pseudo constructs", async ({ cdpSession: cdp, }) => {
+    const r = (await cdp.send("Runtime.evaluate", {
+        expression: `(() => {
+      const t = (sel) => { try { document.querySelector(sel); return "ok"; } catch (e) { return e.name; } };
+      return JSON.stringify({
+        descendantAfterPseudo: t("::before *"),
+        pseudoAfterPseudo: t("::before::selection"),
+        classAfterPseudo: t("::selection.a"),
+        combinatorAfterPseudo: t("::marker + div"),
+        garbage: t("!!"),
+        validPseudo: t("::before"),
+        validSelection: t("::selection"),
+        plain: t("div > a"),
+      });
+    })()`,
+        returnByValue: true,
+    }));
+    expect(r.exceptionDetails).toBeFalsy();
+    expect(JSON.parse(String(r.result?.value))).toEqual({
+        descendantAfterPseudo: "SyntaxError",
+        pseudoAfterPseudo: "SyntaxError",
+        classAfterPseudo: "SyntaxError",
+        combinatorAfterPseudo: "SyntaxError",
+        garbage: "SyntaxError",
+        validPseudo: "ok",
+        validSelection: "ok",
+        plain: "ok",
+    });
+}, 120_000);
+test("querySelectorAll returns an empty NodeList for a valid pseudo-element", async ({ cdpSession: cdp, }) => {
+    const r = (await cdp.send("Runtime.evaluate", {
+        expression: `(() => {
+      const shape = (list) => ({
+        isNodeList: list instanceof NodeList,
+        isArray: Array.isArray(list),
+        length: list.length,
+      });
+      return JSON.stringify({
+        document: shape(document.querySelectorAll("::before")),
+        element: shape(document.documentElement.querySelectorAll("div::after")),
+      });
+    })()`,
+        returnByValue: true,
+    }));
+    expect(r.exceptionDetails).toBeFalsy();
+    const empty = { isNodeList: true, isArray: false, length: 0 };
+    expect(JSON.parse(String(r.result?.value))).toEqual({ document: empty, element: empty });
+}, 120_000);

@@ -46,9 +46,7 @@ test("top-level-await-fetch-probe", async ({ page }) => {
   });
 
   const dataUrl = "data:text/html;base64," + Buffer.from(HTML).toString("base64");
-  await page
-    .goto(dataUrl, { timeout: 10_000 })
-    .catch((e) => console.error(`[tla-probe] goto threw: ${e.message}`));
+  await page.goto(dataUrl, { timeout: 10_000 });
 
   await page
     .waitForFunction(() => window.__offending_completed === true, {

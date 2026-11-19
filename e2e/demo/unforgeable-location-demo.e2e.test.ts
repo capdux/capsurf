@@ -24,7 +24,7 @@ const LOCATION_MEMBERS = [
   "reload",
 ];
 
-test.fails("window and document.location are own non-configurable accessors", async ({ page }) => {
+test("window and document.location are own non-configurable accessors", async ({ page }) => {
   // Gap: the engine does not define these as [LegacyUnforgeable] accessors.
   await setContent(page, PAGE);
   const desc = await page.evaluate(() => {
@@ -70,7 +70,7 @@ test.fails("window and document.location are own non-configurable accessors", as
   ).toBe(true);
 });
 
-test.fails("window and document.location resist redefinition", async ({ page }) => {
+test("window and document.location resist redefinition", async ({ page }) => {
   // Gap: page script can redefine these properties, so it can replace the URL object.
   await setContent(page, PAGE);
   const forgery = await page.evaluate(() => {
@@ -99,7 +99,7 @@ test.fails("window and document.location resist redefinition", async ({ page }) 
   expect(forgery.docLoc, 'defineProperty(document, "location") throws').toBe(true);
 });
 
-test.fails("location.toString and location.valueOf are own non-configurable properties", async ({
+test("location.toString and location.valueOf are own non-configurable properties", async ({
   page,
 }) => {
   // Gap: the engine does not define these two as own, non-configurable properties of location.
@@ -117,7 +117,7 @@ test.fails("location.toString and location.valueOf are own non-configurable prop
   expect(shape.valueOfLocked, "location.valueOf is a non-configurable own property").toBe(true);
 });
 
-test.fails("location.toString and location.valueOf resist redefinition", async ({ page }) => {
+test("location.toString and location.valueOf resist redefinition", async ({ page }) => {
   // Gap: page script can redefine location.toString and location.valueOf.
   await setContent(page, PAGE);
   const redefined = await page.evaluate(() => {
@@ -179,7 +179,7 @@ test("window is a Window with own unforgeable members", async ({ page }) => {
   ).toBe(true);
 });
 
-test.fails("window.constructor is Window", async ({ page }) => {
+test("window.constructor is Window", async ({ page }) => {
   // Gap: the engine's window.constructor does not resolve to Window.
   await setContent(page, PAGE);
   const ctor = await page.evaluate(() => ({
@@ -192,7 +192,7 @@ test.fails("window.constructor is Window", async ({ page }) => {
   expect(ctor.prototypeConstructor, "Window.prototype.constructor === Window").toBe(true);
 });
 
-test.fails("every location member is own, non-configurable, and resists redefinition", async ({
+test("every location member is own, non-configurable, and resists redefinition", async ({
   page,
 }) => {
   // Gap: the engine's Location members are configurable and redefinable.
@@ -217,7 +217,7 @@ test.fails("every location member is own, non-configurable, and resists redefini
   }
 });
 
-test.fails("location.valueOf is Object.prototype.valueOf", async ({ page }) => {
+test("location.valueOf is Object.prototype.valueOf", async ({ page }) => {
   // Gap: Chrome's location.valueOf is the Object.prototype.valueOf function; the engine's is not.
   await setContent(page, PAGE);
   const sameAsObjectProto = await page.evaluate(
@@ -226,7 +226,7 @@ test.fails("location.valueOf is Object.prototype.valueOf", async ({ page }) => {
   expect(sameAsObjectProto, "location.valueOf === Object.prototype.valueOf").toBe(true);
 });
 
-test.fails("location[Symbol.toPrimitive] is non-enumerable, non-writable, and non-configurable", async ({
+test("location[Symbol.toPrimitive] is non-enumerable, non-writable, and non-configurable", async ({
   page,
 }) => {
   // Gap: the engine's own Symbol.toPrimitive on location is writable or configurable.

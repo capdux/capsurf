@@ -17,7 +17,7 @@ fn testSessionCaptureScreenshot()! {
     session.viewport_height = 600.0;
 
     const html = "<!DOCTYPE html><html><body><div style=\"width: 300px; height: 150px; background-color: #3b82f6;\"><h1>Native CapSurf</h1></div></body></html>";
-    session.navigate(html, "http://example.com/test.html") catch unreachable;
+    session.navigate(html, "http://example.com/test.html", "") catch unreachable;
 
     // Test captureScreenshot directly
     const png_bytes = session.captureScreenshot(1) catch unreachable;
@@ -46,7 +46,7 @@ fn testPageCaptureScreenshotCdp()! {
     session.viewport_height = 480.0;
 
     const html = "<html><body><button style=\"width: 100px; height: 40px; background-color: #10b981;\">Click</button></body></html>";
-    session.navigate(html, "about:blank") catch unreachable;
+    session.navigate(html, "about:blank", "") catch unreachable;
 
     let out_buf: [131072]u8 = undefined;
     let events: [4]CdpEvent = [CdpEvent{}; 4];

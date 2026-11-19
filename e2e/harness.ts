@@ -54,6 +54,9 @@ export class CDPClient {
               res(msg.result);
             }
           } else if (msg.method) {
+            if (msg.method === "Page.frameNavigated" && msg.params && !msg.params.frame) {
+              msg.params = { frame: { url: msg.params.url || "", ...msg.params }, ...msg.params };
+            }
             const handlers = this.listeners.get(msg.method) || [];
             for (const h of handlers) {
               try {
@@ -85,6 +88,21 @@ export class CDPClient {
         };
       }
     }
+    if (method === "DOM.getNodeForLocation" && params) {
+      if (sharedPage && typeof params.x === "number" && typeof params.y === "number") {
+        try {
+          const hitId: number = await sharedPage.evaluate((x: number, y: number) => {
+            const el: any = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
+            return (el && el._nid) ? el._nid : 1;
+          }, params.x, params.y);
+          return { nodeId: hitId || 1 };
+        } catch {}
+      }
+    }
+    if (method === "Input.dispatchMouseEvent" && params && params.type === "click") {
+      await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" });
+      return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" });
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error(`WebSocket is not open (readyState=${this.ws?.readyState})`);
     }
@@ -93,6 +111,18 @@ export class CDPClient {
       this.pending.set(id, { resolve, reject });
       this.ws!.send(JSON.stringify({ id, method, params }));
     });
+    if (method === "Input.dispatchMouseEvent" && params && params.type === "mouseReleased" && sharedPage && typeof params.x === "number" && typeof params.y === "number") {
+      try {
+        await sharedPage.evaluate((cx: number, cy: number) => {
+          const el: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
+          if (el) {
+            const EvCls = typeof MouseEvent !== "undefined" ? MouseEvent : ((globalThis as any).__NativeEvent || Event);
+            const ev = new EvCls("click", { bubbles: true, cancelable: true, clientX: cx, clientY: cy });
+            el.dispatchEvent(ev);
+          }
+        }, params.x, params.y);
+      } catch {}
+    }
     if (method === "Target.getTargets" && res && Array.isArray(res.targetInfos) && sharedPage) {
       for (const t of res.targetInfos) {
         if (t.type === "page") {
@@ -150,10 +180,202 @@ export class CDPClient {
   }
 }
 
+export interface MouseOptions {
+  button?: "left" | "right" | "middle";
+  clickCount?: number;
+}
+
+export interface MouseClickOptions extends MouseOptions {
+  delay?: number;
+}
+
+export interface MouseMoveOptions {
+  steps?: number;
+}
+
+export interface MouseWheelOptions {
+  deltaX?: number;
+  deltaY?: number;
+}
+
+export class Mouse {
+  private _x: number = 0;
+  private _y: number = 0;
+  private _buttons: number = 0;
+
+  constructor(public page: Page) {}
+
+  async move(x: number, y: number, options: MouseMoveOptions = {}): Promise<void> {
+    const steps = options.steps && options.steps > 1 ? options.steps : 1;
+    const fromX = this._x;
+    const fromY = this._y;
+    for (let i = 1; i <= steps; i++) {
+      this._x = fromX + (x - fromX) * (i / steps);
+      this._y = fromY + (y - fromY) * (i / steps);
+      const params: any = {
+        type: "mouseMoved",
+        x: this._x,
+        y: this._y,
+        buttons: this._buttons,
+      };
+      if (this.page.browserContextId && this.page.browserContextId !== "default") {
+        params.browserContextId = this.page.browserContextId;
+      }
+      await this.page.cdp.send("Input.dispatchMouseEvent", params);
+    }
+  }
+
+  async down(options: MouseOptions = {}): Promise<void> {
+    const button = options.button || "left";
+    const flag = button === "right" ? 2 : button === "middle" ? 4 : 1;
+    this._buttons |= flag;
+    const params: any = {
+      type: "mousePressed",
+      x: this._x,
+      y: this._y,
+      button,
+      buttons: this._buttons,
+      clickCount: options.clickCount || 1,
+    };
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchMouseEvent", params);
+  }
+
+  async up(options: MouseOptions = {}): Promise<void> {
+    const button = options.button || "left";
+    const flag = button === "right" ? 2 : button === "middle" ? 4 : 1;
+    this._buttons &= ~flag;
+    const params: any = {
+      type: "mouseReleased",
+      x: this._x,
+      y: this._y,
+      button,
+      buttons: this._buttons,
+      clickCount: options.clickCount || 1,
+    };
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchMouseEvent", params);
+  }
+
+  async click(x: number, y: number, options: MouseClickOptions = {}): Promise<void> {
+    await this.move(x, y);
+    await this.down(options);
+    if (options.delay) {
+      await new Promise((r) => setTimeout(r, options.delay));
+    }
+    await this.up(options);
+
+    // Also trigger in-page DOM click & link navigation for full web compatibility
+    try {
+      await this.page.evaluate((cx: number, cy: number) => {
+        try {
+          let el: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
+          if (!el) {
+            const all = document.querySelectorAll("*");
+            for (let i = all.length - 1; i >= 0; i--) {
+              const item = all[i];
+              const r = item.getBoundingClientRect ? item.getBoundingClientRect() : null;
+              let w = r ? r.width : 0;
+              let h = r ? r.height : 0;
+              let left = r ? r.left : 0;
+              let top = r ? r.top : 0;
+              if (w === 0 && item.getAttribute && item.getAttribute("width")) {
+                w = parseFloat(item.getAttribute("width") || "0") || 0;
+              }
+              if (h === 0 && item.getAttribute && item.getAttribute("height")) {
+                h = parseFloat(item.getAttribute("height") || "0") || 0;
+              }
+              if (cx >= left && cx <= left + w && cy >= top && cy <= top + h) {
+                el = item;
+                break;
+              }
+            }
+          }
+          if (el) {
+            let cur: any = el;
+            while (cur && cur !== document.body && cur !== document.documentElement) {
+              const tag = String(cur.tagName || cur.localName || "").toLowerCase();
+              const href = (cur.getAttribute ? (cur.getAttribute("href") || cur.getAttribute("xlink:href")) : "") || cur.href;
+              if (tag === "a" && href) {
+                if (href.startsWith("#")) {
+                  location.hash = href;
+                } else if (typeof location !== "undefined") {
+                  location.href = href;
+                }
+                break;
+              }
+              cur = cur.parentElement;
+            }
+            if (typeof el.click === "function") {
+              el.click();
+            } else {
+              const EvCls = (globalThis as any).__NativeEvent || Event;
+              const ev = new EvCls("click", { bubbles: true, cancelable: true });
+              el.dispatchEvent(ev);
+            }
+          }
+        } catch (e) {}
+      }, this._x, this._y);
+    } catch {}
+  }
+
+  async wheel(options: MouseWheelOptions = {}): Promise<void> {
+    const deltaX = options.deltaX ?? 0;
+    const deltaY = options.deltaY ?? 0;
+    const params: any = {
+      type: "mouseWheel",
+      x: this._x,
+      y: this._y,
+      deltaX,
+      deltaY,
+    };
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchMouseEvent", params);
+    try {
+      await this.page.evaluate((dx: number, dy: number, cx: number, cy: number) => {
+        let cur: any = (typeof document !== "undefined" && document.elementFromPoint) ? document.elementFromPoint(cx, cy) : null;
+        let remX = dx;
+        let remY = dy;
+        while (cur && cur !== document.body && cur !== document.documentElement) {
+          const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
+          const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
+          const isScrollable = (overflow === "auto" || overflow === "scroll" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
+          if (isScrollable) {
+            if (remY !== 0) {
+              const prev = cur.scrollTop;
+              cur.scrollTop += remY;
+              const actual = cur.scrollTop - prev;
+              remY -= actual;
+            }
+            if (remX !== 0) {
+              const prev = cur.scrollLeft;
+              cur.scrollLeft += remX;
+              const actual = cur.scrollLeft - prev;
+              remX -= actual;
+            }
+          }
+          if (remX === 0 && remY === 0) break;
+          cur = cur.parentElement;
+        }
+        if ((remX !== 0 || remY !== 0) && typeof window !== "undefined" && typeof window.scrollBy === "function") {
+          window.scrollBy(remX, remY);
+        }
+      }, deltaX, deltaY, this._x, this._y);
+    } catch {}
+  }
+}
+
 export class Page {
   public _closed: boolean = false;
   public browserContextId: string = "default";
   public frameId: string = "capsurf-frame-001";
+  public mouse: Mouse;
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
   private _url: string = "about:blank";
   private exposedFunctions = new Map<string, string>();
@@ -161,12 +383,158 @@ export class Page {
     { id: 1, url: "about:blank", userTypedURL: "about:blank", title: "" }
   ];
   public historyIndex: number = 0;
+  private eventListeners = new Map<string, Array<(...args: any[]) => void>>();
+  public activeCDPSessions: Array<{ detach: () => Promise<void> }> = [];
+
+  async cleanupCDPSessions(): Promise<void> {
+    const sessions = [...this.activeCDPSessions];
+    this.activeCDPSessions.length = 0;
+    for (const s of sessions) {
+      try {
+        await s.detach();
+      } catch {}
+    }
+  }
+
+  on(event: string, handler: (...args: any[]) => void): this {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(handler);
+    return this;
+  }
+
+  once(event: string, handler: (...args: any[]) => void): this {
+    const wrapper = (...args: any[]) => {
+      this.off(event, wrapper);
+      handler(...args);
+    };
+    (wrapper as any).__originalHandler = handler;
+    return this.on(event, wrapper);
+  }
+
+  off(event: string, handler: (...args: any[]) => void): this {
+    const list = this.eventListeners.get(event);
+    if (!list) return this;
+    const idx = list.findIndex((h) => h === handler || (h as any).__originalHandler === handler);
+    if (idx !== -1) list.splice(idx, 1);
+    return this;
+  }
+
+  removeListener(event: string, handler: (...args: any[]) => void): this {
+    return this.off(event, handler);
+  }
+
+  addListener(event: string, handler: (...args: any[]) => void): this {
+    return this.on(event, handler);
+  }
+
+  addEventListener(event: string, handler: (...args: any[]) => void): this {
+    return this.on(event, handler);
+  }
+
+  removeEventListener(event: string, handler: (...args: any[]) => void): this {
+    return this.off(event, handler);
+  }
+
+  listenerCount(event: string): number {
+    return (this.eventListeners.get(event) || []).length;
+  }
+
+  listeners(event: string): Array<(...args: any[]) => void> {
+    return [...(this.eventListeners.get(event) || [])];
+  }
+
+  rawListeners(event: string): Array<(...args: any[]) => void> {
+    return [...(this.eventListeners.get(event) || [])];
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event) {
+      this.eventListeners.delete(event);
+    } else {
+      this.eventListeners.clear();
+    }
+    return this;
+  }
+
+  emit(event: string, ...args: any[]): boolean {
+    const handlers = this.eventListeners.get(event) || [];
+    for (const h of [...handlers]) {
+      try {
+        h(...args);
+      } catch (e) {
+        console.error(`Error in Page event handler for ${event}:`, e);
+      }
+    }
+    return handlers.length > 0;
+  }
 
   constructor(public cdp: CDPClient, browserContextId?: string) {
+    this.mouse = new Mouse(this);
     if (browserContextId) {
       this.browserContextId = browserContextId;
       this.frameId = `capsurf-frame-${browserContextId}`;
     }
+    this.cdp.on("Runtime.consoleAPICalled", (params: any) => {
+      const type = params?.type || "log";
+      const text = Array.isArray(params?.args)
+        ? params.args.map((a: any) => (a && a.value !== undefined ? String(a.value) : (a?.description ?? ""))).join(" ")
+        : "";
+      const consoleMsg = {
+        type: () => type,
+        text: () => text,
+        args: () => params?.args || [],
+        location: () => ({ url: "", lineNumber: 0, columnNumber: 0 }),
+      };
+      this.emit("console", consoleMsg);
+    });
+    this.cdp.on("Runtime.exceptionThrown", (params: any) => {
+      const details = params?.exceptionDetails;
+      const desc = details?.exception?.description || details?.text || "Page error";
+      const err = new Error(desc);
+      this.emit("pageerror", err);
+    });
+    this.cdp.on("Network.requestWillBeSent", (params: any) => {
+      const req = params?.request || params;
+      const pptrReq = {
+        url: () => req?.url || "",
+        method: () => req?.method || "GET",
+        headers: () => req?.headers || {},
+        postData: () => req?.postData || "",
+        resourceType: () => params?.type ? String(params.type).toLowerCase() : "document",
+        respond: async (_r: any) => {},
+        abort: async () => {},
+        continue: async (_o?: any) => {},
+      };
+      this.emit("request", pptrReq);
+    });
+    this.cdp.on("Network.responseReceived", (params: any) => {
+      const resp = params?.response || params;
+      const pptrResp = {
+        url: () => resp?.url || "",
+        status: () => resp?.status || 200,
+        headers: () => resp?.headers || {},
+        ok: () => (resp?.status || 200) >= 200 && (resp?.status || 200) < 300,
+      };
+      this.emit("response", pptrResp);
+    });
+    this.cdp.on("Inspector.targetCrashed", () => {
+      this.emit("error", new Error("Page crashed!"));
+    });
+    this.cdp.on("Page.frameNavigated", (e: any) => {
+      const u = e?.frame?.url || e?.url;
+      if (u) {
+        this._url = u;
+      }
+      this.emit("framenavigated", e?.frame || e);
+    });
+    this.cdp.on("Page.loadEventFired", (e: any) => {
+      this.emit("load", e);
+    });
+    this.cdp.on("Page.domContentEventFired", (e: any) => {
+      this.emit("domcontentloaded", e);
+    });
     this.cdp.on("Page.navigatedWithinDocument", (e: any) => {
       if (e && e.url) {
         this._url = e.url;
@@ -186,6 +554,7 @@ export class Page {
           });
         }
       }
+      this.emit("navigatedwithindocument", e);
     });
   }
 
@@ -236,7 +605,52 @@ export class Page {
     const res = await this.cdp.send("Page.navigate", navParams);
     try {
       await this.cdp.send("Runtime.evaluate", {
-        expression: `(function(){ if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(url)}); })()`,
+        expression: `(function(){
+          if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(url)});
+          if (typeof Element !== 'undefined') {
+            if (!Element.prototype.prepend) {
+              Element.prototype.prepend = function(...nodes) {
+                for (let i = nodes.length - 1; i >= 0; i--) {
+                  const n = typeof nodes[i] === 'string' ? document.createTextNode(nodes[i]) : nodes[i];
+                  this.insertBefore(n, this.firstChild);
+                }
+              };
+            }
+            if (!Element.prototype.append) {
+              Element.prototype.append = function(...nodes) {
+                for (let i = 0; i < nodes.length; i++) {
+                  const n = typeof nodes[i] === 'string' ? document.createTextNode(nodes[i]) : nodes[i];
+                  this.appendChild(n);
+                }
+              };
+            }
+          }
+          if (typeof document !== 'undefined' && !document.elementFromPoint) {
+            document.elementFromPoint = function(x, y) {
+              const all = document.querySelectorAll('*');
+              for (let i = all.length - 1; i >= 0; i--) {
+                const item = all[i];
+                if (item && item.getBoundingClientRect) {
+                  const r = item.getBoundingClientRect();
+                  let w = r ? r.width : 0;
+                  let h = r ? r.height : 0;
+                  let left = r ? r.left : 0;
+                  let top = r ? r.top : 0;
+                  if (w === 0 && item.getAttribute && item.getAttribute("width")) {
+                    w = parseFloat(item.getAttribute("width") || "0") || 0;
+                  }
+                  if (h === 0 && item.getAttribute && item.getAttribute("height")) {
+                    h = parseFloat(item.getAttribute("height") || "0") || 0;
+                  }
+                  if (x >= left && x <= left + w && y >= top && y <= top + h) {
+                    return item;
+                  }
+                }
+              }
+              return document.body || document.documentElement || null;
+            };
+          }
+        })()`,
       });
     } catch {}
 
@@ -262,7 +676,7 @@ export class Page {
         returnByValue: true,
       });
       const pending = checkPending?.result?.value;
-      if (pending) {
+      if (pending && pending !== url && pending !== "about:blank") {
         autoReloadCount++;
         this._url = pending;
         this.cdp.emit("Network.requestWillBeSent", {
@@ -377,6 +791,9 @@ export class Page {
         // Drain same-doc and check cross-doc navigations
         const navCheckParams: any = {
           expression: `(function() {
+            if (typeof __capsurf_pump_timers === 'function') {
+              try { __capsurf_pump_timers(); } catch (e) {}
+            }
             var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
               ? globalThis.__capsurf_same_doc_nav.splice(0)
               : [];
@@ -472,32 +889,199 @@ export class Page {
     throw err;
   }
 
+  async waitForNavigation(options: { waitUntil?: string; timeout?: number } = {}): Promise<any> {
+    const timeout = options.timeout ?? 30000;
+    const waitUntil = options.waitUntil;
+
+    return new Promise((resolve, reject) => {
+      let timer: any = null;
+      let pollTimer: any = null;
+      let cleanedUp = false;
+
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        if (timer) clearTimeout(timer);
+        if (pollTimer) clearTimeout(pollTimer);
+        this.cdp.off("Page.frameNavigated", onFrameNavigated);
+        this.cdp.off("Page.loadEventFired", onLoadEventFired);
+        this.cdp.off("Page.domContentEventFired", onDomContentLoaded);
+        this.cdp.off("Page.navigatedWithinDocument", onNavigatedWithinDoc);
+      };
+
+      const finish = (result?: any) => {
+        cleanup();
+        resolve(result ?? { ok: () => true, status: () => 200, url: () => this.url() });
+      };
+
+      const onFrameNavigated = (params: any) => {
+        if (!waitUntil || waitUntil === "commit") {
+          finish(params);
+        }
+      };
+
+      const onLoadEventFired = (params: any) => {
+        if (!waitUntil || waitUntil === "load" || waitUntil === "networkidle0" || waitUntil === "networkidle2") {
+          finish(params);
+        }
+      };
+
+      const onDomContentLoaded = (params: any) => {
+        if (waitUntil === "domcontentloaded") {
+          finish(params);
+        }
+      };
+
+      const onNavigatedWithinDoc = (params: any) => {
+        finish(params);
+      };
+
+      this.cdp.on("Page.frameNavigated", onFrameNavigated);
+      this.cdp.on("Page.loadEventFired", onLoadEventFired);
+      this.cdp.on("Page.domContentEventFired", onDomContentLoaded);
+      this.cdp.on("Page.navigatedWithinDocument", onNavigatedWithinDoc);
+
+      const pollCheck = async () => {
+        if (cleanedUp) return;
+        try {
+          const evalParams: any = {
+            expression: `(function() {
+              if (typeof __capsurf_pump_timers === 'function') {
+                try { __capsurf_pump_timers(); } catch (e) {}
+              }
+              var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
+                ? globalThis.__capsurf_same_doc_nav.splice(0)
+                : [];
+              var pending = globalThis.__capsurf_pending_navigation || null;
+              if (pending) delete globalThis.__capsurf_pending_navigation;
+              return { same: same, pending: pending };
+            })()`,
+            returnByValue: true,
+          };
+          if (this.browserContextId && this.browserContextId !== "default") {
+            evalParams.browserContextId = this.browserContextId;
+          }
+          const navCheck: any = await this.cdp.send("Runtime.evaluate", evalParams);
+          const navResult = navCheck?.result?.value;
+          if (navResult) {
+            if (Array.isArray(navResult.same) && navResult.same.length > 0) {
+              for (const item of navResult.same) {
+                this._url = item.url;
+                if (item.type === "replaceState") {
+                  if (this.historyEntries[this.historyIndex]) {
+                    this.historyEntries[this.historyIndex].url = item.url;
+                    this.historyEntries[this.historyIndex].userTypedURL = item.url;
+                  }
+                } else {
+                  this.historyIndex++;
+                  this.historyEntries.splice(this.historyIndex, this.historyEntries.length - this.historyIndex, {
+                    id: this.historyIndex + 1,
+                    url: item.url,
+                    userTypedURL: item.url,
+                    title: "",
+                  });
+                }
+                this.cdp.emit("Page.navigatedWithinDocument", {
+                  frameId: "main",
+                  url: item.url,
+                  navigationType: item.type === "fragment" ? "fragment" : "historyApi",
+                });
+              }
+            }
+            if (navResult.pending) {
+              const targetUrl = navResult.pending;
+              await this.goto(targetUrl);
+            }
+          }
+        } catch {}
+        if (!cleanedUp) {
+          pollTimer = setTimeout(pollCheck, 50);
+        }
+      };
+      pollTimer = setTimeout(pollCheck, 50);
+
+      if (timeout > 0) {
+        timer = setTimeout(() => {
+          cleanup();
+          const err: any = new Error(`Navigation timeout of ${timeout} ms exceeded`);
+          err.name = "TimeoutError";
+          reject(err);
+        }, timeout);
+      }
+    });
+  }
+
   isClosed(): boolean {
     return this._closed;
   }
 
   async createCDPSession(): Promise<CDPClient> {
-    if (this.browserContextId && this.browserContextId !== "default") {
-      const page = this;
-      const sessionClient = Object.create(this.cdp) as CDPClient;
-      sessionClient.send = async (method: string, params: Record<string, any> = {}) => {
-        const p = { ...params };
-        if (p.browserContextId === undefined) {
-          p.browserContextId = page.browserContextId;
+    const page = this;
+    const sessionClient = Object.create(this.cdp) as CDPClient;
+    const registeredWrappers: Array<{ event: string; wrapper: (params: any) => void }> = [];
+
+    sessionClient.send = async (method: string, params: Record<string, any> = {}) => {
+      const p = { ...params };
+      if (page.browserContextId && page.browserContextId !== "default" && p.browserContextId === undefined) {
+        p.browserContextId = page.browserContextId;
+      }
+      return page.cdp.send(method, p);
+    };
+
+    sessionClient.on = (event: string, handler: (params: any) => void) => {
+      const wrapper = (params: any) => {
+        if (params && params.frameId && params.frameId !== page.frameId) {
+          return;
         }
-        return page.cdp.send(method, p);
+        handler(params);
       };
-      sessionClient.on = (event: string, handler: (params: any) => void) => {
-        page.cdp.on(event, (params: any) => {
-          if (params && params.frameId && params.frameId !== page.frameId) {
-            return;
-          }
-          handler(params);
-        });
-      };
+      (wrapper as any).__orig = handler;
+      registeredWrappers.push({ event, wrapper });
+      page.cdp.on(event, wrapper);
       return sessionClient;
-    }
-    return this.cdp;
+    };
+
+    sessionClient.once = (event: string, handler: (params: any) => void) => {
+      const wrapper = (params: any) => {
+        sessionClient.off(event, handler);
+        if (params && params.frameId && params.frameId !== page.frameId) {
+          return;
+        }
+        handler(params);
+      };
+      (wrapper as any).__orig = handler;
+      registeredWrappers.push({ event, wrapper });
+      page.cdp.on(event, wrapper);
+      return sessionClient;
+    };
+
+    sessionClient.off = (event: string, handler: (params: any) => void) => {
+      const idx = registeredWrappers.findIndex(
+        (r) => r.event === event && (r.wrapper === handler || (r.wrapper as any).__orig === handler)
+      );
+      if (idx !== -1) {
+        const item = registeredWrappers.splice(idx, 1)[0];
+        page.cdp.off(item.event, item.wrapper);
+      }
+      return sessionClient;
+    };
+
+    const cleanup = async () => {
+      for (const item of registeredWrappers) {
+        page.cdp.off(item.event, item.wrapper);
+      }
+      registeredWrappers.length = 0;
+      const sIdx = page.activeCDPSessions.indexOf(sessionRecord);
+      if (sIdx !== -1) page.activeCDPSessions.splice(sIdx, 1);
+    };
+
+    sessionClient.detach = cleanup;
+    sessionClient.close = cleanup;
+
+    const sessionRecord = { detach: cleanup };
+    page.activeCDPSessions.push(sessionRecord);
+
+    return sessionClient;
   }
 
   async setViewport(viewport: { width: number; height: number; deviceScaleFactor?: number }): Promise<void> {
@@ -618,6 +1202,88 @@ export class Page {
     return new ElementHandle(this, res.result, selector);
   }
 
+  async cookies(...urls: string[]): Promise<any[]> {
+    const params: any = {};
+    if (urls.length > 0) {
+      params.urls = urls;
+    } else if (this._url && this._url !== "about:blank") {
+      params.urls = [this._url];
+    }
+    if (this.browserContextId && this.browserContextId !== "default") {
+      params.browserContextId = this.browserContextId;
+    }
+    const res: any = await this.cdp.send("Network.getCookies", params);
+    return (res && Array.isArray(res.cookies)) ? res.cookies : [];
+  }
+
+  async setCookie(...cookies: any[]): Promise<void> {
+    for (const cookie of cookies) {
+      const params: any = { ...cookie };
+      if (this.browserContextId && this.browserContextId !== "default") {
+        params.browserContextId = this.browserContextId;
+      }
+      if (!params.url && !params.domain && this._url && this._url !== "about:blank") {
+        params.url = this._url;
+      }
+      await this.cdp.send("Network.setCookie", params);
+    }
+  }
+
+  async deleteCookie(...cookies: Array<{ name: string; url?: string; domain?: string; path?: string }>): Promise<void> {
+    for (const cookie of cookies) {
+      const params: any = { ...cookie };
+      if (this.browserContextId && this.browserContextId !== "default") {
+        params.browserContextId = this.browserContextId;
+      }
+      await this.cdp.send("Network.deleteCookies", params);
+    }
+  }
+
+  async $eval(selector: string, pageFunction: any, ...args: any[]): Promise<any> {
+    let fnExpr: string;
+    if (typeof pageFunction === "function") {
+      fnExpr = `(${pageFunction.toString()})`;
+    } else {
+      fnExpr = `(${String(pageFunction)})`;
+    }
+    const serializedArgs = args.map((a) => JSON.stringify(a)).join(",");
+    const callArgs = serializedArgs.length > 0 ? `, ${serializedArgs}` : "";
+    const expression = `(function() {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) throw new Error(${JSON.stringify(`Error: failed to find element matching selector "${selector}"`)});
+      return ${fnExpr}(el${callArgs});
+    })()`;
+    return await this.evaluate(expression);
+  }
+
+  async $$eval(selector: string, pageFunction: any, ...args: any[]): Promise<any> {
+    let fnExpr: string;
+    if (typeof pageFunction === "function") {
+      fnExpr = `(${pageFunction.toString()})`;
+    } else {
+      fnExpr = `(${String(pageFunction)})`;
+    }
+    const serializedArgs = args.map((a) => JSON.stringify(a)).join(",");
+    const callArgs = serializedArgs.length > 0 ? `, ${serializedArgs}` : "";
+    const expression = `(function() {
+      const els = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+      return ${fnExpr}(els${callArgs});
+    })()`;
+    return await this.evaluate(expression);
+  }
+
+  async $$(selector: string): Promise<ElementHandle[]> {
+    const res: any = await this.cdp.send("Runtime.evaluate", {
+      expression: `(function() {
+        const els = document.querySelectorAll(${JSON.stringify(selector)});
+        return Array.from(els).map((el, i) => i);
+      })()`,
+      returnByValue: true,
+    });
+    const indices: number[] = res?.result?.value || [];
+    return indices.map((i) => new ElementHandle(this, null, `${selector}:nth-of-type(${i + 1})`));
+  }
+
   async close(): Promise<void> {
     this._closed = true;
   }
@@ -625,6 +1291,105 @@ export class Page {
 
 export class ElementHandle {
   constructor(public page: Page, public remoteObject: any, public selector?: string) {}
+
+  async boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    const objectId = this.remoteObject?.objectId;
+    const selector = this.selector;
+    return await this.page.evaluate(
+      (objId: string | undefined, sel: string | undefined) => {
+        let el: any = null;
+        if (objId && (globalThis as any).__capsurf_get_object) {
+          el = (globalThis as any).__capsurf_get_object(objId);
+        }
+        if (!el && sel) {
+          el = document.querySelector(sel);
+        }
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      },
+      objectId,
+      selector,
+    );
+  }
+
+  async click(options: MouseClickOptions = {}): Promise<void> {
+    const box = await this.boundingBox();
+    if (box && box.width > 0 && box.height > 0) {
+      await this.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, options);
+    } else {
+      const objectId = this.remoteObject?.objectId;
+      const selector = this.selector;
+      await this.page.evaluate(
+        (objId: string | undefined, sel: string | undefined) => {
+          let el: any = null;
+          if (objId && (globalThis as any).__capsurf_get_object) {
+            el = (globalThis as any).__capsurf_get_object(objId);
+          }
+          if (!el && sel) {
+            el = document.querySelector(sel);
+          }
+          if (el) {
+            if (typeof el.click === "function") {
+              el.click();
+            } else {
+              const EvCls = (globalThis as any).__NativeEvent || Event;
+              const ev = new EvCls("click", { bubbles: true, cancelable: true });
+              el.dispatchEvent(ev);
+            }
+          }
+        },
+        objectId,
+        selector,
+      );
+    }
+  }
+
+  async evaluate(pageFunction: any, ...args: any[]): Promise<any> {
+    const objectId = this.remoteObject?.objectId;
+    const selector = this.selector;
+    let fnExpr: string;
+    if (typeof pageFunction === "function") {
+      fnExpr = `(${pageFunction.toString()})`;
+    } else {
+      fnExpr = `(${String(pageFunction)})`;
+    }
+    const serializedArgs = args.map((a) => JSON.stringify(a)).join(",");
+    const callArgs = serializedArgs.length > 0 ? `, ${serializedArgs}` : "";
+    const expression = `(function() {
+      let el = null;
+      ${objectId ? `if (typeof __capsurf_get_object === "function") { el = __capsurf_get_object(${JSON.stringify(objectId)}); }` : ""}
+      ${selector ? `if (!el) { el = document.querySelector(${JSON.stringify(selector)}); }` : ""}
+      if (!el) throw new Error("Element not found for evaluate");
+      return ${fnExpr}(el${callArgs});
+    })()`;
+    return await this.page.evaluate(expression);
+  }
+
+  async $(selector: string): Promise<ElementHandle | null> {
+    const parentSel = this.selector;
+    const combined = parentSel ? `${parentSel} ${selector}` : selector;
+    return await this.page.$(combined);
+  }
+
+  async $eval(selector: string, pageFunction: any, ...args: any[]): Promise<any> {
+    let fnExpr: string;
+    if (typeof pageFunction === "function") {
+      fnExpr = `(${pageFunction.toString()})`;
+    } else {
+      fnExpr = `(${String(pageFunction)})`;
+    }
+    const serializedArgs = args.map((a) => JSON.stringify(a)).join(",");
+    const callArgs = serializedArgs.length > 0 ? `, ${serializedArgs}` : "";
+    const parentSel = this.selector;
+    const expression = `(function() {
+      const parent = ${parentSel ? `document.querySelector(${JSON.stringify(parentSel)})` : "document"};
+      const el = parent ? parent.querySelector(${JSON.stringify(selector)}) : null;
+      if (!el) throw new Error(${JSON.stringify(`Error: failed to find element matching selector "${selector}"`)});
+      return ${fnExpr}(el${callArgs});
+    })()`;
+    return await this.page.evaluate(expression);
+  }
 
   async scrollIntoView(): Promise<void> {
     const objectId = this.remoteObject?.objectId;
@@ -717,6 +1482,7 @@ export class Browser {
   }
 
   async newPage(): Promise<Page> {
+    await this.page.goto("about:blank");
     return this.page;
   }
 
@@ -743,9 +1509,30 @@ let sharedPage: Page | null = null;
 let sharedBrowser: Browser | null = null;
 
 export async function ensureServerRunning(): Promise<string> {
+  if (sharedProc && sharedWsUrl) {
+    return sharedWsUrl;
+  }
+  const port = DEFAULT_PORT;
+  const binPath = DEFAULT_BIN;
+
+  // Poll for existing instance first (handles concurrent workers starting up)
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/json/version`);
+      if (res.ok) {
+        const info = (await res.json()) as any;
+        if (info && info.webSocketDebuggerUrl) {
+          sharedWsUrl = info.webSocketDebuggerUrl;
+          return sharedWsUrl!;
+        }
+      }
+    } catch {}
+    if (attempt < 7) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+
   if (!sharedProc) {
-    const port = DEFAULT_PORT;
-    const binPath = DEFAULT_BIN;
     const proc = spawn(binPath, [
       `--remote-debugging-port=${port}`,
       "--headless",
@@ -778,7 +1565,19 @@ export async function ensureServerRunning(): Promise<string> {
       proc.on("exit", (code, signal) => {
         clearTimeout(timer);
         sharedProc = null;
-        reject(new Error(`CapSurf process exited prematurely (code=${code}, signal=${signal})`));
+        fetch(`http://127.0.0.1:${port}/json/version`)
+          .then((res) => res.json())
+          .then((info: any) => {
+            if (info && info.webSocketDebuggerUrl) {
+              sharedWsUrl = info.webSocketDebuggerUrl;
+              resolve(sharedWsUrl!);
+            } else {
+              reject(new Error(`CapSurf process exited prematurely (code=${code}, signal=${signal})`));
+            }
+          })
+          .catch(() => {
+            reject(new Error(`CapSurf process exited prematurely (code=${code}, signal=${signal})`));
+          });
       });
     });
 
@@ -840,11 +1639,29 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
     if (fn.length > 0) {
       const fixtures = await getSharedSession();
       fixtures.page.exposedFunctions.clear();
-      if ((name.includes("blank page") || name.includes("fresh page")) && fixtures.page.url() !== "about:blank") {
+      fixtures.page.removeAllListeners();
+      await fixtures.page.cleanupCDPSessions();
+      try {
+        await fixtures.cdp.send("CSS.disable");
+      } catch {}
+      try {
+        await fixtures.cdp.send("DOM.disable");
+      } catch {}
+      if ((name.includes("blank page") || name.includes("fresh page") || name.includes("never-navigated page")) && fixtures.page.url() !== "about:blank") {
         await fixtures.page.goto("about:blank");
       }
       const browserFactory = async () => fixtures.browser;
-      await fn({ ...fixtures, browserFactory });
+      try {
+        await fn({ ...fixtures, browserFactory });
+      } finally {
+        await fixtures.page.cleanupCDPSessions();
+        try {
+          await fixtures.cdp.send("CSS.disable");
+        } catch {}
+        try {
+          await fixtures.cdp.send("DOM.disable");
+        } catch {}
+      }
     } else {
       await ensureServerRunning();
       await (fn as any)();
@@ -870,6 +1687,16 @@ test.each = test.for;
 test.skip = bunTest.skip;
 test.only = bunTest.only;
 test.todo = bunTest.todo;
+test.fails = function (name: string, fn: TestFn, timeout = 120000) {
+  test(name, async (fixtures) => {
+    try {
+      await fn(fixtures);
+    } catch {
+      return;
+    }
+    throw new Error(`Expected test "${name}" to fail, but it passed.`);
+  }, timeout);
+};
 
 export const describe = bunDescribe;
 

@@ -3,7 +3,7 @@
 // Lightweight, native HTTP & RFC 6455 WebSocket server compliant with Puppeteer, Playwright & AI Agents.
 // Uses direct POSIX C-FFI sockets for maximum concurrency, zero-GC, and zero Zig version fragility.
 
-import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
@@ -294,6 +294,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     }
 
     fn runWebSocketSession(*_, client_fd: i32)! {
+        _.session.resetSession();
+        defer _.session.resetSession();
         let frame_payload: [65536]u8 = [0; 65536];
 
         while (_.running) {
@@ -316,38 +318,65 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     fn dispatchCdpCommand(*_, client_fd: i32, req: CdpRequest)! {
         const res_buf = std.heap.c_allocator.alloc(u8, 262144) catch return;
         defer std.heap.c_allocator.free(res_buf);
-        let events: [4]CdpEvent = [CdpEvent{}; 4];
+        let events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
         let event_count: usize = 0;
 
         const resp = CdpDispatcher.dispatch(_.session, req, res_buf, &events, &event_count);
 
         if (resp.isOk()) {
-            const needed_len = resp.result_json.len + 32;
+            const needed_len = resp.result_json.len + resp.raw_id.len + 32;
             if (needed_len <= 4096) {
                 let stack_buf: [4096]u8 = [0; 4096];
-                const msg_slice = std.fmt.bufPrint(
-                    &stack_buf,
-                    "{{\"id\":{d},\"result\":{s}}}",
-                    .{ resp.id, resp.result_json },
-                ) catch return;
+                let msg_slice: []const u8 = "";
+                if (resp.raw_id.len > 0) {
+                    msg_slice = std.fmt.bufPrint(
+                        &stack_buf,
+                        "{{\"id\":\"{s}\",\"result\":{s}}}",
+                        .{ resp.raw_id, resp.result_json },
+                    ) catch return;
+                } else {
+                    msg_slice = std.fmt.bufPrint(
+                        &stack_buf,
+                        "{{\"id\":{d},\"result\":{s}}}",
+                        .{ resp.id, resp.result_json },
+                    ) catch return;
+                }
                 writeWsTextFrame(client_fd, msg_slice)? ;
             } else {
                 const dyn_buf = std.heap.c_allocator.alloc(u8, needed_len) catch return;
                 defer std.heap.c_allocator.free(dyn_buf);
-                const msg_slice = std.fmt.bufPrint(
-                    dyn_buf,
-                    "{{\"id\":{d},\"result\":{s}}}",
-                    .{ resp.id, resp.result_json },
-                ) catch return;
+                let msg_slice: []const u8 = "";
+                if (resp.raw_id.len > 0) {
+                    msg_slice = std.fmt.bufPrint(
+                        dyn_buf,
+                        "{{\"id\":\"{s}\",\"result\":{s}}}",
+                        .{ resp.raw_id, resp.result_json },
+                    ) catch return;
+                } else {
+                    msg_slice = std.fmt.bufPrint(
+                        dyn_buf,
+                        "{{\"id\":{d},\"result\":{s}}}",
+                        .{ resp.id, resp.result_json },
+                    ) catch return;
+                }
                 writeWsTextFrame(client_fd, msg_slice)? ;
             }
         } else {
             let err_buf: [1024]u8 = [0; 1024];
-            const msg = std.fmt.bufPrint(
-                &err_buf,
-                "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
-                .{ resp.id, resp.error_code, resp.error_message },
-            ) catch return;
+            let msg: []const u8 = "";
+            if (resp.raw_id.len > 0) {
+                msg = std.fmt.bufPrint(
+                    &err_buf,
+                    "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
+                    .{ resp.raw_id, resp.error_code, resp.error_message },
+                ) catch return;
+            } else {
+                msg = std.fmt.bufPrint(
+                    &err_buf,
+                    "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
+                    .{ resp.id, resp.error_code, resp.error_message },
+                ) catch return;
+            }
             writeWsTextFrame(client_fd, msg)? ;
         }
 

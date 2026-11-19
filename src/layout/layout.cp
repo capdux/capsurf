@@ -145,6 +145,108 @@ pub struct LayoutTree {
         return null;
     }
 
+    static fn parsePathBounds(d: []const u8): ?[4]f32 {
+        if (d.len == 0) return null;
+        let cur_x: f32 = 0.0;
+        let cur_y: f32 = 0.0;
+        let min_x: f32 = 0.0;
+        let min_y: f32 = 0.0;
+        let max_x: f32 = 0.0;
+        let max_y: f32 = 0.0;
+        let has_points = false;
+
+        let i: usize = 0;
+        let cur_cmd: u8 = 'M';
+
+        while (i < d.len) {
+            while (i < d.len && (d[i] == ' ' || d[i] == '\t' || d[i] == '\r' || d[i] == '\n' || d[i] == ',')) : (i += 1) {}
+            if (i >= d.len) break;
+
+            const ch = d[i];
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+                cur_cmd = ch;
+                i += 1;
+                while (i < d.len && (d[i] == ' ' || d[i] == '\t' || d[i] == '\r' || d[i] == '\n' || d[i] == ',')) : (i += 1) {}
+                if (i >= d.len) break;
+            }
+
+            if (cur_cmd == 'z' || cur_cmd == 'Z') {
+                continue;
+            }
+
+            if (cur_cmd == 'h' || cur_cmd == 'H') {
+                const num_start = i;
+                if (i < d.len && (d[i] == '-' || d[i] == '+')) i += 1;
+                while (i < d.len && ((d[i] >= '0' && d[i] <= '9') || d[i] == '.')) : (i += 1) {}
+                if (i > num_start) {
+                    if (val := std.fmt.parseFloat(f32, d[num_start..i]) catch null) {
+                        cur_x = if (cur_cmd == 'h') (cur_x + val) else val;
+                        if (!has_points) {
+                            min_x = cur_x; max_x = cur_x; min_y = cur_y; max_y = cur_y; has_points = true;
+                        } else {
+                            min_x = @min(min_x, cur_x); max_x = @max(max_x, cur_x);
+                        }
+                    }
+                }
+            } else if (cur_cmd == 'v' || cur_cmd == 'V') {
+                const num_start = i;
+                if (i < d.len && (d[i] == '-' || d[i] == '+')) i += 1;
+                while (i < d.len && ((d[i] >= '0' && d[i] <= '9') || d[i] == '.')) : (i += 1) {}
+                if (i > num_start) {
+                    if (val := std.fmt.parseFloat(f32, d[num_start..i]) catch null) {
+                        cur_y = if (cur_cmd == 'v') (cur_y + val) else val;
+                        if (!has_points) {
+                            min_x = cur_x; max_x = cur_x; min_y = cur_y; max_y = cur_y; has_points = true;
+                        } else {
+                            min_y = @min(min_y, cur_y); max_y = @max(max_y, cur_y);
+                        }
+                    }
+                }
+            } else {
+                let x_val: f32 = 0.0;
+                let y_val: f32 = 0.0;
+                let got_x = false;
+                let got_y = false;
+
+                const n1_start = i;
+                if (i < d.len && (d[i] == '-' || d[i] == '+')) i += 1;
+                while (i < d.len && ((d[i] >= '0' && d[i] <= '9') || d[i] == '.')) : (i += 1) {}
+                if (i > n1_start) {
+                    if (v1 := std.fmt.parseFloat(f32, d[n1_start..i]) catch null) {
+                        x_val = v1; got_x = true;
+                    }
+                }
+                while (i < d.len && (d[i] == ' ' || d[i] == '\t' || d[i] == '\r' || d[i] == '\n' || d[i] == ',')) : (i += 1) {}
+                const n2_start = i;
+                if (i < d.len && (d[i] == '-' || d[i] == '+')) i += 1;
+                while (i < d.len && ((d[i] >= '0' && d[i] <= '9') || d[i] == '.')) : (i += 1) {}
+                if (i > n2_start) {
+                    if (v2 := std.fmt.parseFloat(f32, d[n2_start..i]) catch null) {
+                        y_val = v2; got_y = true;
+                    }
+                }
+                if (got_x && got_y) {
+                    if (cur_cmd >= 'a' && cur_cmd <= 'z') {
+                        cur_x += x_val;
+                        cur_y += y_val;
+                    } else {
+                        cur_x = x_val;
+                        cur_y = y_val;
+                    }
+                    if (!has_points) {
+                        min_x = cur_x; max_x = cur_x; min_y = cur_y; max_y = cur_y; has_points = true;
+                    } else {
+                        min_x = @min(min_x, cur_x); max_x = @max(max_x, cur_x);
+                        min_y = @min(min_y, cur_y); max_y = @max(max_y, cur_y);
+                    }
+                }
+            }
+        }
+
+        if (!has_points) return null;
+        return [4]f32{ min_x, min_y, max_x - min_x, max_y - min_y };
+    }
+
     static fn extractSvgDim(src: []const u8, name: []const u8): f32? {
         let cur_start: usize = 0;
         while (cur_start < src.len) {
@@ -539,9 +641,7 @@ pub struct LayoutTree {
             _.layoutFlexContainer(doc, styles, node_id, content_x, content_y);
         } else if (style.display.isGrid()) {
             _.layoutGridContainer(doc, styles, node_id, content_x, content_y);
-        } else if (node_id < doc.nodes.items.len && doc.nodes.items[@as(usize, node_id)].hasTag("svg")) {
-            _.layoutSvgContainer(doc, styles, node_id, content_x, content_y);
-        } else if (!is_replaced) {
+        } else if (!is_replaced && !(node_id < doc.nodes.items.len && doc.nodes.items[@as(usize, node_id)].hasTag("svg"))) {
             _.layoutBlockContainer(doc, styles, node_id, content_x, content_y);
         }
 
@@ -629,17 +729,27 @@ pub struct LayoutTree {
             rect_y += pos_offset_y;
         } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
             if (!style.left.is_auto && !style.left.is_none) {
-                rect_x = style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_left;
+                rect_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_left;
             } else if (!style.right.is_auto && !style.right.is_none) {
                 const r_px = style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                rect_x = avail_w - r_px - final_w - final_box.margin_right;
+                rect_x = origin_x + avail_w - r_px - final_w - final_box.margin_right;
             }
             if (!style.top.is_auto && !style.top.is_none) {
-                rect_y = style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_top;
+                rect_y = origin_y + style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_top;
             } else if (!style.bottom.is_auto && !style.bottom.is_none) {
                 const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                rect_y = avail_h - b_px - final_h - final_box.margin_bottom;
+                rect_y = origin_y + avail_h - b_px - final_h - final_box.margin_bottom;
             }
+        }
+
+        // Apply transform translation offsets
+        if (!style.transform_tx.is_auto && !style.transform_tx.is_none) {
+            const tx_px = style.transform_tx.resolvePx(final_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            rect_x += tx_px;
+        }
+        if (!style.transform_ty.is_auto && !style.transform_ty.is_none) {
+            const ty_px = style.transform_ty.resolvePx(final_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            rect_y += ty_px;
         }
 
         const is_visible = (style.visibility == Visibility.Visible);
@@ -650,6 +760,12 @@ pub struct LayoutTree {
             height: final_h,
             visible: is_visible,
         };
+
+        if (node_id < doc.nodes.items.len && doc.nodes.items[@as(usize, node_id)].hasTag("svg")) {
+            const final_content_x = rect_x + final_box.border_left + final_box.padding_left;
+            const final_content_y = rect_y + final_box.border_top + final_box.padding_top;
+            _.layoutSvgContainer(doc, styles, node_id, final_content_x, final_content_y);
+        }
     }
 
     fn layoutSvgContainer(

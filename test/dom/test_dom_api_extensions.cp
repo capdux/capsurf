@@ -52,6 +52,54 @@ fn testInnerHtml(doc: *Document)! {
     }
 }
 
+fn testInsertBeforeFirstChild(doc: *Document)! {
+    let ul = doc.createElement("ul")?;
+    let li1 = doc.createElement("li")?;
+    doc.appendChild(ul, li1);
+
+    if (doc.nodes.items[@as(usize, ul)].first_child != li1) {
+        @panic("initial first_child != li1");
+    }
+    if (doc.nodes.items[@as(usize, ul)].last_child != li1) {
+        @panic("initial last_child != li1");
+    }
+    if (doc.nodes.items[@as(usize, li1)].element_index_in_parent != 1) {
+        @panic("initial li1 element_index_in_parent != 1");
+    }
+
+    // Insert li0 before first_child
+    let li0 = doc.createElement("li")?;
+    doc.insertBefore(ul, li0, li1);
+
+    if (doc.nodes.items[@as(usize, ul)].first_child != li0) {
+        @panic("after insertBefore, ul.first_child != li0");
+    }
+    if (doc.nodes.items[@as(usize, ul)].last_child != li1) {
+        @panic("after insertBefore, ul.last_child != li1");
+    }
+    if (doc.nodes.items[@as(usize, li0)].prev_sibling != NULL_NODE) {
+        @panic("li0 prev_sibling != NULL_NODE");
+    }
+    if (doc.nodes.items[@as(usize, li0)].next_sibling != li1) {
+        @panic("li0 next_sibling != li1");
+    }
+    if (doc.nodes.items[@as(usize, li1)].prev_sibling != li0) {
+        @panic("li1 prev_sibling != li0");
+    }
+    if (doc.nodes.items[@as(usize, li1)].next_sibling != NULL_NODE) {
+        @panic("li1 next_sibling != NULL_NODE");
+    }
+    if (doc.nodes.items[@as(usize, ul)].child_element_count != 2) {
+        @panic("ul child_element_count != 2");
+    }
+    if (doc.nodes.items[@as(usize, li0)].element_index_in_parent != 1) {
+        @panic("li0 element_index_in_parent != 1");
+    }
+    if (doc.nodes.items[@as(usize, li1)].element_index_in_parent != 2) {
+        @panic("li1 element_index_in_parent != 2");
+    }
+}
+
 fn testNamespaceAttributes(doc: *Document)! {
     let el = doc.createElement("use")?;
     const XLINK = "http://www.w3.org/1999/xlink";
@@ -80,7 +128,7 @@ fn testNamespaceAttributes(doc: *Document)! {
 }
 
 fn testJsDomBindings()! {
-    let rt = JsRuntime.init(2 * 1024 * 1024, 100000)?;
+    let rt = JsRuntime.init(16 * 1024 * 1024, 100000)?;
     defer rt.deinit();
 
     let ctx = rt.createContext()?;
@@ -138,6 +186,74 @@ fn testJsDomBindings()! {
         std.debug.print("JS NS attrs got: {s}\n", .{ns_str});
         @panic("JS setAttributeNS / getAttributeNS / removeAttributeNS failed");
     }
+
+    // 5. Test JS insertBefore first child
+    const ib_res = ctx.eval(
+        "(() => {\n" ++
+        "  let ul = document.createElement('ul');\n" ++
+        "  let li1 = document.createElement('li');\n" ++
+        "  ul.appendChild(li1);\n" ++
+        "  let li0 = document.createElement('li');\n" ++
+        "  ul.insertBefore(li0, li1);\n" ++
+        "  const ok1 = (ul.firstChild === li0);\n" ++
+        "  const ok2 = (li0.nextSibling === li1);\n" ++
+        "  const ok3 = (li1.previousSibling === li0);\n" ++
+        "  const ok4 = (li0.previousSibling === null);\n" ++
+        "  return ok1 && ok2 && ok3 && ok4 ? 'PASS' : 'FAIL';\n" ++
+        "})()"
+    );
+    defer ctx.freeValue(ib_res);
+    const ib_str = ctx.toCString(ib_res);
+    defer std.heap.page_allocator.free(ib_str);
+    if (!std.mem.eql(u8, ib_str, "PASS")) {
+        std.debug.print("JS insertBefore got: {s}\n", .{ib_str});
+        @panic("JS insertBefore first child failed");
+    }
+
+    // 6. Test cssFloat alias mapping
+    const cf_res = ctx.eval(
+        "(() => {\n" ++
+        "  let box = document.createElement('div');\n" ++
+        "  box.style.cssText = 'float: left; width: 40px; height: 40px';\n" ++
+        "  const r1 = box.style.cssFloat;\n" ++
+        "  const r2 = box.style.float;\n" ++
+        "  box.style.cssFloat = 'right';\n" ++
+        "  const r3 = box.style.float;\n" ++
+        "  const r4 = box.style.cssFloat;\n" ++
+        "  const hasBogus = box.style.cssText.indexOf('css-float') >= 0;\n" ++
+        "  const cs = getComputedStyle(box).float;\n" ++
+        "  return r1 + ',' + r2 + ',' + r3 + ',' + r4 + ',' + (hasBogus ? '1' : '0') + ',' + cs;\n" ++
+        "})()"
+    );
+    defer ctx.freeValue(cf_res);
+    const cf_str = ctx.toCString(cf_res);
+    defer std.heap.page_allocator.free(cf_str);
+    if (!std.mem.eql(u8, cf_str, "left,left,right,right,0,right")) {
+        std.debug.print("JS cssFloat got: {s}\n", .{cf_str});
+        @panic("JS cssFloat alias test failed");
+    }
+
+    // 7. Test vendor prefix transform & align-content aliases
+    const tr_res = ctx.eval(
+        "(() => {\n" ++
+        "  let el = document.createElement('div');\n" ++
+        "  el.style.webkitTransform = 'scale(4)';\n" ++
+        "  const r1 = el.style.getPropertyValue('-webkit-transform');\n" ++
+        "  const r2 = el.style.getPropertyValue('transform');\n" ++
+        "  el.style.setProperty('-webkit-align-content', 'center');\n" ++
+        "  const r3 = el.style.getPropertyValue('align-content');\n" ++
+        "  el.style.cssText = 'transform: scale(5)';\n" ++
+        "  const cs = getComputedStyle(el).getPropertyValue('-webkit-transform');\n" ++
+        "  return r1 + ',' + r2 + ',' + r3 + ',' + cs;\n" ++
+        "})()"
+    );
+    defer ctx.freeValue(tr_res);
+    const tr_str = ctx.toCString(tr_res);
+    defer std.heap.page_allocator.free(tr_str);
+    if (!std.mem.eql(u8, tr_str, "scale(4),scale(4),center,matrix(5, 0, 0, 5, 0, 0)")) {
+        std.debug.print("JS vendor prefix transform got: {s}\n", .{tr_str});
+        @panic("JS vendor prefix transform failed");
+    }
 }
 
 pub fn main()! {
@@ -169,6 +285,9 @@ pub fn main()! {
 
     // Test namespace attributes
     testNamespaceAttributes(&doc)?;
+
+    // Test insertBefore first child boundary
+    testInsertBeforeFirstChild(&doc)?;
 
     // Test QuickJS bindings (innerHTML, cloneNode, getAttributeNames, getAttributeNS/setAttributeNS/removeAttributeNS)
     testJsDomBindings()?;

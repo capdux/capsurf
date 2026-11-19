@@ -175,7 +175,23 @@ function makeHtmlCollection(getList, customTarget) {
       }
       if (prop === "namedItem") {
         return function (name) {
-          return findNamedItemInList(getList(), name);
+          const key = String(name);
+          if (!key) return null;
+          const list = getList();
+          const matches = [];
+          for (let i = 0; i < list.length; i++) {
+            const item = list[i];
+            if (!item) continue;
+            const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+            const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+            if (itemId === key || itemName === key) {
+              matches.push(item);
+            }
+          }
+          if (matches.length === 0) return null;
+          if (matches.length === 1) return matches[0];
+          if (t._isFormControlsCollection) return new RadioNodeList(matches);
+          return matches[0];
         };
       }
       if (prop === Symbol.iterator) {
@@ -196,9 +212,26 @@ function makeHtmlCollection(getList, customTarget) {
         return Reflect.get(t, prop, receiver);
       }
       if (typeof prop === "string") {
-        const named = findNamedItemInList(getList(), prop);
-        if (named !== null) {
-          return named;
+        const key = prop;
+        const list = getList();
+        if (t._isFormControlsCollection) {
+          const matches = [];
+          for (let i = 0; i < list.length; i++) {
+            const item = list[i];
+            if (!item) continue;
+            const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+            const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+            if (itemId === key || itemName === key) {
+              matches.push(item);
+            }
+          }
+          if (matches.length === 1) return matches[0];
+          if (matches.length > 1) return new RadioNodeList(matches);
+        } else {
+          const named = findNamedItemInList(list, prop);
+          if (named !== null) {
+            return named;
+          }
         }
       }
       return Reflect.get(t, prop, receiver);
@@ -258,9 +291,30 @@ function makeHtmlCollection(getList, customTarget) {
         }
       }
       if (typeof prop === "string") {
-        const named = findNamedItemInList(getList(), prop);
-        if (named !== null) {
-          return { value: named, writable: false, enumerable: false, configurable: true };
+        const list = getList();
+        if (t._isFormControlsCollection) {
+          const key = prop;
+          const matches = [];
+          for (let i = 0; i < list.length; i++) {
+            const item = list[i];
+            if (!item) continue;
+            const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+            const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+            if (itemId === key || itemName === key) {
+              matches.push(item);
+            }
+          }
+          if (matches.length === 1) {
+            return { value: matches[0], writable: false, enumerable: false, configurable: true };
+          }
+          if (matches.length > 1) {
+            return { value: new RadioNodeList(matches), writable: false, enumerable: false, configurable: true };
+          }
+        } else {
+          const named = findNamedItemInList(list, prop);
+          if (named !== null) {
+            return { value: named, writable: false, enumerable: false, configurable: true };
+          }
         }
       }
       return Reflect.getOwnPropertyDescriptor(t, prop);
@@ -353,6 +407,84 @@ HTMLCollection.prototype[Symbol.iterator] = function () {
   };
 };
 markNative(HTMLCollection, "HTMLCollection");
+
+function HTMLFormControlsCollection() {
+  throw new TypeError("Illegal constructor");
+}
+HTMLFormControlsCollection.prototype = Object.create(HTMLCollection.prototype);
+HTMLFormControlsCollection.prototype.constructor = HTMLFormControlsCollection;
+Object.defineProperty(HTMLFormControlsCollection.prototype, Symbol.toStringTag, {
+  value: "HTMLFormControlsCollection",
+  configurable: true,
+});
+HTMLFormControlsCollection.prototype.namedItem = function (name) {
+  const key = String(name);
+  if (!key) return null;
+  const matches = [];
+  for (let i = 0; i < this.length; i++) {
+    const item = this[i];
+    if (!item) continue;
+    const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
+    const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+    if (itemId === key || itemName === key) {
+      matches.push(item);
+    }
+  }
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0];
+  return new RadioNodeList(matches);
+};
+markNative(HTMLFormControlsCollection, "HTMLFormControlsCollection");
+markNative(HTMLFormControlsCollection.prototype.namedItem, "namedItem");
+
+function isRadio(node) {
+  return node && (node.tagName || "").toLowerCase() === "input" && (node.type || "").toLowerCase() === "radio";
+}
+
+function RadioNodeList(items) {
+  const list = items || [];
+  for (let i = 0; i < list.length; i++) {
+    Object.defineProperty(this, i, {
+      value: list[i],
+      writable: false,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  Object.defineProperty(this, "length", {
+    value: list.length,
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+}
+RadioNodeList.prototype = Object.create(NodeList.prototype);
+RadioNodeList.prototype.constructor = RadioNodeList;
+Object.defineProperty(RadioNodeList.prototype, Symbol.toStringTag, {
+  value: "RadioNodeList",
+  configurable: true,
+});
+Object.defineProperty(RadioNodeList.prototype, "value", {
+  get: function () {
+    for (let i = 0; i < this.length; i++) {
+      const node = this[i];
+      if (isRadio(node) && node.checked) return node.value || "on";
+    }
+    return "";
+  },
+  set: function (v) {
+    const val = String(v);
+    for (let i = 0; i < this.length; i++) {
+      const node = this[i];
+      if (isRadio(node) && (node.value || "on") === val) {
+        node.checked = true;
+        return;
+      }
+    }
+  },
+  configurable: true,
+});
+markNative(RadioNodeList, "RadioNodeList");
 
 function HTMLOptionsCollection() {
   throw new TypeError("Illegal constructor");
@@ -887,10 +1019,14 @@ if (typeof globalThis !== "undefined") {
   globalThis.Attr = Attr;
   globalThis.HTMLCollection = HTMLCollection;
   globalThis.HTMLOptionsCollection = HTMLOptionsCollection;
+  globalThis.HTMLFormControlsCollection = HTMLFormControlsCollection;
+  globalThis.RadioNodeList = RadioNodeList;
 }
 if (typeof window !== "undefined") {
   window.NamedNodeMap = NamedNodeMap;
   window.Attr = Attr;
   window.HTMLCollection = HTMLCollection;
   window.HTMLOptionsCollection = HTMLOptionsCollection;
+  window.HTMLFormControlsCollection = HTMLFormControlsCollection;
+  window.RadioNodeList = RadioNodeList;
 }

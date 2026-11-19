@@ -1,17 +1,26 @@
 // src/js/shim/form-data.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/form-data.ts
 
-function FormData(form) {
+function FormData(form, submitter) {
   this._entries = []; // Array of [name, value]
   if (form && (form.tagName || "").toUpperCase() === "FORM") {
-    const controls = form.elements;
+    let submitterEl = null;
+    if (submitter && submitter.name && !submitter.disabled) {
+      submitterEl = submitter;
+    }
+    let submitterAppended = false;
+    const controls = form.elements || [];
     for (let i = 0; i < controls.length; i++) {
       const c = controls[i];
       if (!c.name || c.disabled) continue;
       const tag = (c.tagName || "").toLowerCase();
       const type = (c.type || "").toLowerCase();
 
-      if (type === "submit" || type === "reset" || type === "button" || type === "image") {
+      if (tag === "button" || type === "submit" || type === "reset" || type === "button" || type === "image") {
+        if (c === submitterEl) {
+          this.append(c.name, c.value !== undefined ? c.value : "");
+          submitterAppended = true;
+        }
         continue;
       }
       if ((type === "checkbox" || type === "radio") && !c.checked) {
@@ -27,6 +36,9 @@ function FormData(form) {
       } else {
         this.append(c.name, c.value);
       }
+    }
+    if (!submitterAppended && submitterEl) {
+      this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
     }
   }
 }
@@ -122,3 +134,7 @@ markNative(FormData.prototype.getAll, "getAll");
 markNative(FormData.prototype.has, "has");
 markNative(FormData.prototype.set, "set");
 markNative(FormData.prototype.entries, "entries");
+
+try {
+  Object.defineProperty(FormData, "length", { value: 0, configurable: true });
+} catch (e) {}

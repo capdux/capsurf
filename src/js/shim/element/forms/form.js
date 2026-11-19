@@ -1,23 +1,59 @@
 // src/js/shim/element/forms/form.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/forms/form.ts
 
+function isFormListedTag(tag) {
+  return tag === "button" || tag === "fieldset" || tag === "input" ||
+         tag === "object" || tag === "output" || tag === "select" || tag === "textarea";
+}
+
+function isFormListed(el) {
+  if (!el || el.nodeType !== 1) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  return isFormListedTag(tag);
+}
+
 function collectFormControls(form) {
   const controls = [];
+  const seen = new Set();
+
   function walk(node) {
     if (!node) return;
     let child = node.firstChild;
     while (child) {
-      const tag = (child.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
-        controls.push(child);
-      }
-      if (tag !== "select") {
+      if (child.nodeType === 1) {
+        if (isFormListed(child)) {
+          if (typeof findAssociatedForm === "function" && findAssociatedForm(child) === form) {
+            controls.push(child);
+            seen.add(child);
+          }
+        }
         walk(child);
       }
       child = child.nextSibling;
     }
   }
   walk(form);
+
+  const formId = form.id || (typeof form.getAttribute === "function" ? form.getAttribute("id") : null);
+  if (formId) {
+    const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (doc && typeof doc.querySelectorAll === "function") {
+      try {
+        const externals = doc.querySelectorAll('[form="' + formId + '"]');
+        for (let i = 0; i < externals.length; i++) {
+          const ext = externals[i];
+          if (!seen.has(ext) && isFormListed(ext)) {
+            const owner = typeof findAssociatedForm === "function" ? findAssociatedForm(ext) : null;
+            if (owner === form) {
+              controls.push(ext);
+              seen.add(ext);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
   return controls;
 }
 
@@ -114,11 +150,21 @@ function performFormSubmission(form, submitter) {
 
 function submitForm(form, submitter) {
   if (!form) return;
-  const ev = new SubmitEvent("submit", {
-    bubbles: true,
-    cancelable: true,
-    submitter: submitter || null,
-  });
+  let ev;
+  try {
+    ev = new SubmitEvent("submit", {
+      bubbles: true,
+      cancelable: true,
+      submitter: submitter || null,
+    });
+  } catch (e) {
+    ev = new Event("submit", { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, "submitter", {
+      value: submitter || null,
+      writable: true,
+      configurable: true,
+    });
+  }
   form.dispatchEvent(ev);
   if (ev.defaultPrevented) {
     return;
@@ -135,23 +181,45 @@ function installFormElement(global) {
 
   Object.defineProperty(HTMLFormElement.prototype, "elements", {
     get: function () {
-      const list = collectFormControls(this);
-      const col = new HTMLCollection(list);
-      // Map controls by name and id
-      for (let i = 0; i < list.length; i++) {
-        const item = list[i];
-        if (item.name && !col[item.name]) col[item.name] = item;
-        if (item.id && !col[item.id]) col[item.id] = item;
+      if (!this._elementsCollection) {
+        const self = this;
+        const target = Object.create((global.HTMLFormControlsCollection || HTMLCollection).prototype);
+        target._isFormControlsCollection = true;
+        this._elementsCollection = makeHtmlCollection(function () {
+          return collectFormControls(self);
+        }, target);
       }
-      return col;
+      return this._elementsCollection;
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLFormElement.prototype, "length", {
-    get: function () { return this.elements.length; },
+    get: function () {
+      const els = this.elements;
+      let count = 0;
+      for (let i = 0; i < els.length; i++) {
+        const e = els[i];
+        if (e) {
+          const tag = (e.tagName || "").toLowerCase();
+          const type = (e.type || (typeof e.getAttribute === "function" ? e.getAttribute("type") : "") || "").toLowerCase();
+          if (tag === "input" && type === "image") continue;
+        }
+        count++;
+      }
+      return count;
+    },
     configurable: true,
   });
+
+  HTMLFormElement.prototype.namedItem = function (name) {
+    if (!name) return null;
+    return this.elements.namedItem(name);
+  };
+
+  HTMLFormElement.prototype.item = function (index) {
+    return this.elements.item(index);
+  };
 
   Object.defineProperty(HTMLFormElement.prototype, "name", {
     get: function () { return this.getAttribute("name") || ""; },
@@ -171,6 +239,22 @@ function installFormElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLFormElement.prototype, "enctype", {
+    get: function () {
+      const raw = (this.getAttribute("enctype") || "").toLowerCase();
+      if (raw === "multipart/form-data" || raw === "text/plain") return raw;
+      return "application/x-www-form-urlencoded";
+    },
+    set: function (v) { this.setAttribute("enctype", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLFormElement.prototype, "encoding", {
+    get: function () { return this.enctype; },
+    set: function (v) { this.enctype = v; },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLFormElement.prototype, "target", {
     get: function () { return this.getAttribute("target") || ""; },
     set: function (v) { this.setAttribute("target", String(v)); },
@@ -184,19 +268,21 @@ function installFormElement(global) {
   });
 
   HTMLFormElement.prototype.submit = function () {
-    performFormSubmission(this, null);
+    submitForm(this, null);
   };
 
   HTMLFormElement.prototype.requestSubmit = function (submitter) {
     if (submitter !== undefined && submitter !== null) {
       const tag = (submitter.tagName || "").toLowerCase();
       const type = (submitter.type || (typeof submitter.getAttribute === "function" ? submitter.getAttribute("type") : "") || "").toLowerCase();
-      const isButton = (tag === "button") || (tag === "input" && (type === "submit" || type === "image"));
+      const isButton = (tag === "button" && (type === "submit" || !type || type === "")) ||
+                       (tag === "input" && (type === "submit" || type === "image"));
       if (!isButton) {
         throw new TypeError("requestSubmit: submitter must be a submit button");
       }
       if (findAssociatedForm(submitter) !== this) {
-        throw new DOMException("requestSubmit: submitter is not associated with this form", "NotFoundError");
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("requestSubmit: submitter is not associated with this form", "NotFoundError");
       }
     }
     submitForm(this, submitter || null);
@@ -206,41 +292,40 @@ function installFormElement(global) {
     if (!(this instanceof HTMLFormElement)) {
       throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
     }
-    if (this.namespaceURI && this.namespaceURI !== "http://www.w3.org/1999/xhtml") {
-      throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
-    }
-    if (Object.prototype.hasOwnProperty.call(this, "_id")) {
-      const canonical = typeof global.__capsurf_getCanonicalId === "function" ? global.__capsurf_getCanonicalId(this) : undefined;
-      if (canonical !== undefined && this._id !== canonical) {
-        throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Invalid trusted event target");
-      }
-    }
 
     const list = collectFormControls(this);
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
-      if (c.defaultValue !== undefined) c.value = c.defaultValue;
-      if (c.defaultChecked !== undefined) c.checked = c.defaultChecked;
-      if (c.defaultSelected !== undefined) c.selected = c.defaultSelected;
-      if ((c.tagName || "").toLowerCase() === "select") {
+      const tag = (c.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea") {
+        if (c.defaultValue !== undefined) {
+          c.value = c.defaultValue;
+        } else if (typeof c.getAttribute === "function") {
+          const attrVal = c.getAttribute("value");
+          c.value = attrVal !== null ? attrVal : "";
+        }
+        c._valueDirty = false;
+        if (c.defaultChecked !== undefined) {
+          c.checked = c.defaultChecked;
+        } else if (typeof c.hasAttribute === "function") {
+          c.checked = c.hasAttribute("checked");
+        }
+        c._checkedDirty = false;
+      } else if (tag === "select") {
         if (typeof getSelectState === "function") getSelectState(c).selectedIndex = undefined;
         c._selectedIndex = undefined;
         const opts = c.options;
-        for (let j = 0; j < opts.length; j++) {
-          if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
-          opts[j]._selected = undefined;
+        if (opts) {
+          for (let j = 0; j < opts.length; j++) {
+            if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
+            opts[j]._selected = undefined;
+            opts[j].selected = typeof opts[j].hasAttribute === "function" ? opts[j].hasAttribute("selected") : false;
+          }
         }
       }
     }
     const evt = new Event("reset", { bubbles: true, cancelable: true });
-    evt._isTrusted = true;
-    if (typeof dispatchTrustedEvent === "function") {
-      dispatchTrustedEvent(this, evt);
-    } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
-      global.__capsurf_dispatchTrustedEvent(this, evt);
-    } else {
-      this.dispatchEvent(evt);
-    }
+    this.dispatchEvent(evt);
   };
 
   HTMLFormElement.prototype.checkValidity = function () {
@@ -264,12 +349,14 @@ function installFormElement(global) {
   markNative(HTMLFormElement.prototype.reset, "reset");
   markNative(HTMLFormElement.prototype.checkValidity, "checkValidity");
   markNative(HTMLFormElement.prototype.reportValidity, "reportValidity");
+  markNative(HTMLFormElement.prototype.namedItem, "namedItem");
+  markNative(HTMLFormElement.prototype.item, "item");
 
   if (ElementProto) {
     if (!ElementProto.submit) {
       ElementProto.submit = function () {
         if ((this.tagName || "").toLowerCase() === "form") {
-          performFormSubmission(this, null);
+          submitForm(this, null);
         }
       };
       markNative(ElementProto.submit, "submit");
@@ -293,4 +380,7 @@ function installFormElement(global) {
   }
 
   global.HTMLFormElement = HTMLFormElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLFormElement = HTMLFormElement;
+  }
 }

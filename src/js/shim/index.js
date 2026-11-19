@@ -68,6 +68,12 @@ function installShim(global) {
   global.DOMTokenList = DOMTokenList;
   global.HTMLCollection = HTMLCollection;
   global.HTMLOptionsCollection = HTMLOptionsCollection;
+  if (typeof HTMLFormControlsCollection !== "undefined") {
+    global.HTMLFormControlsCollection = HTMLFormControlsCollection;
+  }
+  if (typeof RadioNodeList !== "undefined") {
+    global.RadioNodeList = RadioNodeList;
+  }
   global.NodeList = NodeList;
   global.NamedNodeMap = NamedNodeMap;
   global.Attr = Attr;
@@ -89,6 +95,36 @@ function installShim(global) {
   if (typeof Headers !== "undefined") global.Headers = Headers;
   if (typeof Request !== "undefined") global.Request = Request;
   if (typeof Response !== "undefined") global.Response = Response;
+  if (typeof History !== "undefined") {
+    global.History = History;
+    if (typeof globalThis !== "undefined") globalThis.History = History;
+    if (typeof window !== "undefined") window.History = History;
+  }
+  if (typeof WebSocket !== "undefined") {
+    global.WebSocket = WebSocket;
+    if (typeof globalThis !== "undefined") globalThis.WebSocket = WebSocket;
+    if (typeof window !== "undefined") window.WebSocket = WebSocket;
+  }
+  if (typeof CloseEvent !== "undefined") {
+    global.CloseEvent = CloseEvent;
+    if (typeof globalThis !== "undefined") globalThis.CloseEvent = CloseEvent;
+    if (typeof window !== "undefined") window.CloseEvent = CloseEvent;
+  }
+  if (typeof XMLHttpRequest !== "undefined") {
+    global.XMLHttpRequest = XMLHttpRequest;
+    if (typeof globalThis !== "undefined") globalThis.XMLHttpRequest = XMLHttpRequest;
+    if (typeof window !== "undefined") window.XMLHttpRequest = XMLHttpRequest;
+  }
+  if (typeof XMLHttpRequestEventTarget !== "undefined") {
+    global.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+    if (typeof globalThis !== "undefined") globalThis.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+    if (typeof window !== "undefined") window.XMLHttpRequestEventTarget = XMLHttpRequestEventTarget;
+  }
+  if (typeof XMLHttpRequestUpload !== "undefined") {
+    global.XMLHttpRequestUpload = XMLHttpRequestUpload;
+    if (typeof globalThis !== "undefined") globalThis.XMLHttpRequestUpload = XMLHttpRequestUpload;
+    if (typeof window !== "undefined") window.XMLHttpRequestUpload = XMLHttpRequestUpload;
+  }
 
   // 5. Expose Traversal
   global.NodeFilter = NodeFilter;
@@ -116,6 +152,11 @@ function installShim(global) {
   global.Path2D = Path2D;
   global.ImageData = ImageData;
   global.TextMetrics = TextMetrics;
+  if (typeof OffscreenCanvas !== "undefined") {
+    global.OffscreenCanvas = OffscreenCanvas;
+    if (typeof window !== "undefined") global.window.OffscreenCanvas = OffscreenCanvas;
+    if (typeof globalThis !== "undefined") globalThis.OffscreenCanvas = OffscreenCanvas;
+  }
 
   // 9. Expose Web Animations
   global.Animation = Animation;
@@ -167,7 +208,15 @@ function installShim(global) {
         return matches;
     });
 
-    global.Element.prototype.toDataURL = markNative(function () {
+    global.Element.prototype.toDataURL = markNative(function (type) {
+      if (this._ctx2d) {
+        const w = Number(this.getAttribute("width") || this.width || 300);
+        const h = Number(this.getAttribute("height") || this.height || 150);
+        const bm = ensureBitmap(this._ctx2d);
+        if (typeof encodePngBase64 === "function") {
+          return encodePngBase64(w, h, bm);
+        }
+      }
       return VALID_PNG_BASE64;
     }, "toDataURL");
   }
@@ -179,6 +228,12 @@ function installShim(global) {
   installSelectElement(global);
   installButtonElement(global);
   installFormElement(global);
+  if (typeof installFieldSetElement === "function") {
+    installFieldSetElement(global);
+  }
+  if (typeof installLabelElement === "function") {
+    installLabelElement(global);
+  }
   if (typeof installDialogElement === "function") {
     installDialogElement(global);
   }
@@ -198,16 +253,24 @@ function installShim(global) {
       case "textarea": Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype); break;
       case "select": Object.setPrototypeOf(el, global.HTMLSelectElement.prototype); break;
       case "option": Object.setPrototypeOf(el, global.HTMLOptionElement.prototype); break;
+      case "optgroup": Object.setPrototypeOf(el, (global.HTMLOptGroupElement || global.HTMLElement).prototype); break;
       case "button": Object.setPrototypeOf(el, global.HTMLButtonElement.prototype); break;
       case "form": Object.setPrototypeOf(el, global.HTMLFormElement.prototype); break;
+      case "fieldset": Object.setPrototypeOf(el, (global.HTMLFieldSetElement || global.HTMLElement).prototype); break;
+      case "legend": Object.setPrototypeOf(el, (global.HTMLLegendElement || global.HTMLElement).prototype); break;
+      case "label": Object.setPrototypeOf(el, (global.HTMLLabelElement || global.HTMLElement).prototype); break;
       case "a": Object.setPrototypeOf(el, global.HTMLAnchorElement.prototype); break;
       case "area": Object.setPrototypeOf(el, global.HTMLAreaElement.prototype); break;
       case "img": Object.setPrototypeOf(el, global.HTMLImageElement.prototype); break;
+      case "picture": Object.setPrototypeOf(el, (global.HTMLPictureElement || global.HTMLElement).prototype); break;
+      case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
       case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
       case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
+      case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
+      case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
       default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
     }
     return el;
@@ -218,9 +281,8 @@ function installShim(global) {
   }
 
   // 13. Enhance Document prototype and instance
-  if (global.Document && global.Document.prototype) {
-    const docProto = global.Document.prototype;
-
+  const docProto = (global.Document && global.Document.prototype) ? global.Document.prototype : null;
+  if (docProto) {
     // Inherit from Node
     Object.setPrototypeOf(docProto, Node.prototype);
 
@@ -357,13 +419,56 @@ function installShim(global) {
     }, "createNodeIterator");
 
     docProto.getSelection = markNative(function () {
-      if (!this._selection) this._selection = new Selection();
+      if (!this._selection) this._selection = new Selection(this);
       return this._selection;
     }, "getSelection");
 
     docProto.getAnimations = markNative(function () {
       return animationsFor(this);
     }, "getAnimations");
+
+    if (!docProto.append) {
+      docProto.append = function (...nodes) {
+        for (const n of nodes) {
+          let node;
+          if (n && typeof n === "object" && typeof n.nodeType === "number") {
+            node = n;
+          } else if (typeof document !== "undefined" && document.createTextNode) {
+            node = document.createTextNode(String(n));
+          } else {
+            node = new Text(String(n));
+          }
+          this.appendChild(node);
+        }
+      };
+      markNative(docProto.append, "append");
+    }
+    if (!docProto.prepend) {
+      docProto.prepend = function (...nodes) {
+        const first = this.firstChild;
+        for (const n of nodes) {
+          let node;
+          if (n && typeof n === "object" && typeof n.nodeType === "number") {
+            node = n;
+          } else if (typeof document !== "undefined" && document.createTextNode) {
+            node = document.createTextNode(String(n));
+          } else {
+            node = new Text(String(n));
+          }
+          this.insertBefore(node, first);
+        }
+      };
+      markNative(docProto.prepend, "prepend");
+    }
+    if (!docProto.replaceChildren) {
+      docProto.replaceChildren = function (...nodes) {
+        while (this.firstChild) {
+          this.removeChild(this.firstChild);
+        }
+        this.append(...nodes);
+      };
+      markNative(docProto.replaceChildren, "replaceChildren");
+    }
 
     if (!docProto.children) {
       Object.defineProperty(docProto, "children", {
@@ -433,6 +538,21 @@ function installShim(global) {
       return tagIs("a")(el) && el.hasAttribute("name");
     });
     defineLiveCollection("applets", null);
+
+    if (!Object.getOwnPropertyDescriptor(docProto, "styleSheets")) {
+      Object.defineProperty(docProto, "styleSheets", {
+        get: function () {
+          if (typeof global.getOrCreateStyleSheetList === "function") {
+            return global.getOrCreateStyleSheetList(this);
+          }
+          if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+            return globalThis.getOrCreateStyleSheetList(this);
+          }
+          return [];
+        },
+        configurable: true,
+      });
+    }
 
     if (!Object.getOwnPropertyDescriptor(docProto, "title")) {
       let docTitle = "";
@@ -525,19 +645,169 @@ function installShim(global) {
         return nodeResolver;
       }, "createNSResolver");
     }
+
+    // 13.5 ModelContext (WebMCP Registration Stub)
+    function ModelContext() {
+      EventTarget.call(this);
+      this._tools = new Map();
+    }
+    ModelContext.prototype = Object.create(EventTarget.prototype);
+    ModelContext.prototype.constructor = ModelContext;
+
+    ModelContext.prototype.registerTool = function (tool, options) {
+      if (!tool || typeof tool !== "object") {
+        return Promise.reject(new TypeError("registerTool: tool must be an object"));
+      }
+      const name = String(tool.name || "");
+      if (!name) {
+        return Promise.reject(new TypeError("registerTool: tool.name is required"));
+      }
+      const opts = (options !== null && typeof options === "object") ? options : {};
+      const signal = opts.signal;
+      if (signal && signal.aborted) {
+        return Promise.reject(signal.reason !== undefined ? signal.reason : (typeof DOMException !== "undefined" ? new DOMException("This operation was aborted", "AbortError") : new Error("Aborted")));
+      }
+
+      const self = this;
+      this._tools.set(name, tool);
+
+      if (typeof tool.execute === "function") {
+        if (typeof window !== "undefined") {
+          window[name] = function (args) {
+            return tool.execute(args, { signal: signal });
+          };
+        }
+        if (typeof globalThis !== "undefined") {
+          globalThis[name] = function (args) {
+            return tool.execute(args, { signal: signal });
+          };
+        }
+      }
+
+      const evt = new Event("toolchange");
+      this.dispatchEvent(evt);
+
+      return new Promise(function (resolve, reject) {
+        if (signal && signal.addEventListener) {
+          signal.addEventListener("abort", function () {
+            self._tools.delete(name);
+            if (typeof window !== "undefined" && window[name]) delete window[name];
+            if (typeof globalThis !== "undefined" && globalThis[name]) delete globalThis[name];
+            self.dispatchEvent(new Event("toolchange"));
+            reject(signal.reason !== undefined ? signal.reason : (typeof DOMException !== "undefined" ? new DOMException("This operation was aborted", "AbortError") : new Error("Aborted")));
+          }, { once: true });
+        }
+        Promise.resolve().then(function () {
+          resolve(undefined);
+        });
+      });
+    };
+
+    ModelContext.prototype.unregisterTool = function (name) {
+      const key = String(name || "");
+      this._tools.delete(key);
+      if (typeof window !== "undefined" && window[key]) delete window[key];
+      if (typeof globalThis !== "undefined" && globalThis[key]) delete globalThis[key];
+      this.dispatchEvent(new Event("toolchange"));
+      return Promise.resolve(undefined);
+    };
+
+    ModelContext.prototype.getTools = function () {
+      const list = [];
+      this._tools.forEach(function (t) {
+        list.push({
+          name: t.name,
+          description: t.description || "",
+          inputSchema: t.inputSchema || null,
+          origin: t.origin || (typeof location !== "undefined" ? location.origin : "null"),
+        });
+      });
+      return Promise.resolve(list);
+    };
+
+    ModelContext.prototype.executeTool = function (toolOrName, inputObject, options) {
+      const name = (toolOrName && typeof toolOrName === "object") ? toolOrName.name : String(toolOrName);
+      const tool = this._tools.get(name);
+      if (!tool || typeof tool.execute !== "function") {
+        return Promise.reject(new Error("executeTool: no tool named '" + name + "'"));
+      }
+      try {
+        const res = tool.execute(inputObject, options);
+        return Promise.resolve(res);
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    };
+
+    Object.defineProperty(ModelContext.prototype, Symbol.toStringTag, {
+      value: "ModelContext",
+      configurable: true,
+    });
+
+    markNative(ModelContext, "ModelContext");
+    markNative(ModelContext.prototype.registerTool, "registerTool");
+    markNative(ModelContext.prototype.unregisterTool, "unregisterTool");
+    markNative(ModelContext.prototype.getTools, "getTools");
+    markNative(ModelContext.prototype.executeTool, "executeTool");
+
+    global.ModelContext = ModelContext;
+    if (typeof globalThis !== "undefined") globalThis.ModelContext = ModelContext;
+    if (typeof window !== "undefined") window.ModelContext = ModelContext;
+
+    function getOrCreateDocModelContext(doc) {
+      if (!doc._modelContext) {
+        doc._modelContext = new ModelContext();
+      }
+      return doc._modelContext;
+    }
+
+    Object.defineProperty(docProto, "modelContext", {
+      get: function () {
+        return getOrCreateDocModelContext(this);
+      },
+      configurable: true,
+    });
   }
 
   if (global.document) {
-    if (!global.document.location) global.document.location = global.location;
+    if (!global.document.modelContext) {
+      Object.defineProperty(global.document, "modelContext", {
+        get: function () {
+          if (!global.document._modelContext) {
+            global.document._modelContext = new (global.ModelContext || ModelContext)();
+          }
+          return global.document._modelContext;
+        },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(global.document, "location")) {
+      try {
+        Object.defineProperty(global.document, "location", {
+          get: function () { return global.location; },
+          set: function (val) { if (global.location) global.location.href = val; },
+          enumerable: true,
+          configurable: false,
+        });
+      } catch (e) {}
+    }
     if (!global.document.createRange) global.document.createRange = function () { return new Range(); };
     if (!global.document.getSelection) global.document.getSelection = function () {
-      if (!global.document._selection) global.document._selection = new Selection();
+      if (!global.document._selection) global.document._selection = new Selection(global.document);
       return global.document._selection;
     };
-    if (typeof evaluateXPath !== "undefined") {
-      if (!global.document.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
-      if (!global.document.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
-      if (!global.document.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+    if (docProto) {
+      if (!global.document.elementFromPoint && docProto.elementFromPoint) {
+        global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
+      }
+      if (!global.document.elementsFromPoint && docProto.elementsFromPoint) {
+        global.document.elementsFromPoint = docProto.elementsFromPoint.bind(global.document);
+      }
+      if (typeof evaluateXPath !== "undefined") {
+        if (!global.document.evaluate && docProto.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
+        if (!global.document.createExpression && docProto.createExpression) global.document.createExpression = docProto.createExpression.bind(global.document);
+        if (!global.document.createNSResolver && docProto.createNSResolver) global.document.createNSResolver = docProto.createNSResolver.bind(global.document);
+      }
     }
     if (typeof processSubtreeTemplates === "function") {
       processSubtreeTemplates(global.document);
@@ -548,10 +818,26 @@ function installShim(global) {
   global.addEventListener = EventTarget.prototype.addEventListener.bind(global);
   global.removeEventListener = EventTarget.prototype.removeEventListener.bind(global);
   global.dispatchEvent = EventTarget.prototype.dispatchEvent.bind(global);
+  if (typeof window !== "undefined" && window !== global) {
+    window.addEventListener = global.addEventListener;
+    window.removeEventListener = global.removeEventListener;
+    window.dispatchEvent = global.dispatchEvent;
+  }
+  if (typeof globalThis !== "undefined" && globalThis !== global) {
+    globalThis.addEventListener = global.addEventListener;
+    globalThis.removeEventListener = global.removeEventListener;
+    globalThis.dispatchEvent = global.dispatchEvent;
+  }
   global.getSelection = function () {
     if (global.document && global.document.getSelection) return global.document.getSelection();
     return new Selection();
   };
+  if (typeof window !== "undefined") {
+    window.getSelection = global.getSelection;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.getSelection = global.getSelection;
+  }
 
   // 15. Kitesurf page operations support (getPageState, setControlValue)
   if (typeof global.__treeSeq === "undefined") {

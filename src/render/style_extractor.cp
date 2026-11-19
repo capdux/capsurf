@@ -1,15 +1,15 @@
 // src/render/style_extractor.cp
 import css from "cap:css";
-import cascade from "../css/cascade.cp";
+import { ComputedStyle } from "../css/cascade.cp";
 import painter from "./painter.cp";
 
-const CssColor = css.css_values.color.CssColor;
+const CapCssColor = css.css_values.color.CssColor;
 const RGBA = css.css_values.color.RGBA;
 const BorderSideWidth = css.css_properties.border.BorderSideWidth;
 const LengthPercentage = css.css_values.length.LengthPercentage;
 
 /// 将 cap:css 的 CssColor 联合体精确转换为 8-bit RGBA 像素颜色
-pub fn resolveCssColor(color: CssColor, current_color: painter.Color): painter.Color {
+pub fn resolveCssColor(color: CapCssColor, current_color: painter.Color): painter.Color {
     return switch (color) {
         // 1. currentColor 关键字：继承元素当前的文本 color 属性
         .current_color => current_color,
@@ -60,7 +60,7 @@ pub fn resolveBorderRadius(lp: LengthPercentage, box_size: f32): f32 {
 
 /// 从节点的级联计算结果 ComputedStyle 提取完整光栅化绘制样式 PaintStyle
 pub fn extractPaintStyle(
-    computed: cascade.ComputedStyle,
+    computed: ComputedStyle,
     parent_text_color: painter.Color,
     box_width: f32
 ): painter.PaintStyle {
@@ -101,12 +101,19 @@ pub fn extractPaintStyle(
     }
 
     // 6. 若存在 opacity (< 1.0)，对整节点通道 Alpha 进行衰减合成
+    let cg = computed.conic_gradient;
     if (opacity_val := computed.opacity) {
         const op = std.math.clamp(opacity_val, 0.0, 1.0);
         if (op < 1.0) {
             bg_color = painter.Color.rgba(bg_color.r, bg_color.g, bg_color.b, @intFromFloat(@as(f32, @floatFromInt(bg_color.a)) * op));
             border_color = painter.Color.rgba(border_color.r, border_color.g, border_color.b, @intFromFloat(@as(f32, @floatFromInt(border_color.a)) * op));
             text_color = painter.Color.rgba(text_color.r, text_color.g, text_color.b, @intFromFloat(@as(f32, @floatFromInt(text_color.a)) * op));
+            if (cg.has_gradient) {
+                let si: usize = 0;
+                while (si < cg.stop_count) : (si += 1) {
+                    cg.stops[si].color.a = @intFromFloat(@as(f32, @floatFromInt(cg.stops[si].color.a)) * op);
+                }
+            }
         }
     }
 
@@ -116,5 +123,6 @@ pub fn extractPaintStyle(
         text_color: text_color,
         border_width: border_width,
         border_radius: border_radius,
+        conic_gradient: cg,
     };
 }

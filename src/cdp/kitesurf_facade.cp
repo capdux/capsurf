@@ -33,6 +33,11 @@ pub struct KitesurfFacade {
         out_buf: []u8,
     ): ([]const u8)? {
         // 0. Page Operations extensions
+        if (std.mem.eql(u8, method, "Kitesurf.getFontFaces") ||
+            std.mem.eql(u8, method, "CapSurf.getFontFaces")) {
+            return session.getFontFacesJson(out_buf);
+        }
+
         if (std.mem.eql(u8, method, "Kitesurf.getPageState") ||
             std.mem.eql(u8, method, "CapSurf.getPageState")) {
             return session.getPageStateJson(out_buf);
@@ -55,6 +60,17 @@ pub struct KitesurfFacade {
         if (std.mem.eql(u8, method, "Kitesurf.getPaintDamageSince") ||
             std.mem.eql(u8, method, "CapSurf.getPaintDamageSince")) {
             return session.getPaintDamageSinceJson(params_json, out_buf);
+        }
+
+        if (std.mem.eql(u8, method, "Kitesurf.setOutboundFilters") ||
+            std.mem.eql(u8, method, "CapSurf.setOutboundFilters")) {
+            if (std.mem.indexOf(u8, params_json, "rejectResourceTypes") != null &&
+                (std.mem.indexOf(u8, params_json, "websocket") != null ||
+                 std.mem.indexOf(u8, params_json, "WebSocket") != null)) {
+                * = session.ctx.eval("globalThis.__capsurf_outbound_reject_websocket = true;");
+            } else {
+                * = session.ctx.eval("globalThis.__capsurf_outbound_reject_websocket = false;");
+            }
         }
 
         // 1. Check Scene Host commands

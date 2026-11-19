@@ -121,13 +121,50 @@ function installHtmlClasses(global) {
   if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
   if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
 
-  // Also define sheet on ElementProto for any <style> element
+  // 1.06 HTMLLinkElement
+  function HTMLLinkElement() {}
+  HTMLLinkElement.prototype = Object.create(ElementProto);
+  HTMLLinkElement.prototype.constructor = HTMLLinkElement;
+  installHyperlinkDecomposition(HTMLLinkElement.prototype);
+  Object.defineProperty(HTMLLinkElement.prototype, "rel", {
+    get: function () { return this.getAttribute("rel") || ""; },
+    set: function (v) { this.setAttribute("rel", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLLinkElement.prototype, "href", {
+    get: function () { return this.getAttribute("href") || ""; },
+    set: function (v) { this.setAttribute("href", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLLinkElement.prototype, "sheet", {
+    get: function () {
+      const rel = (this.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+      if (rel.includes("stylesheet")) {
+        return getSheetForElement(this);
+      }
+      return null;
+    },
+    configurable: true,
+  });
+  markNative(HTMLLinkElement, "HTMLLinkElement");
+  global.HTMLLinkElement = HTMLLinkElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLLinkElement = HTMLLinkElement;
+  if (typeof window !== "undefined") window.HTMLLinkElement = HTMLLinkElement;
+
+  // Also define sheet on ElementProto for any <style> or <link> element
   if (!Object.getOwnPropertyDescriptor(ElementProto, "sheet")) {
     Object.defineProperty(ElementProto, "sheet", {
       get: function () {
         const tag = String(this.localName || this.tagName || "").toLowerCase();
         if (tag === "style") {
           return getSheetForElement(this);
+        }
+        if (tag === "link") {
+          const rel = (this.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+          if (rel.includes("stylesheet")) {
+            return getSheetForElement(this);
+          }
+          return null;
         }
         return undefined;
       },
@@ -147,6 +184,234 @@ function installHtmlClasses(global) {
   });
   markNative(HTMLAreaElement, "HTMLAreaElement");
   global.HTMLAreaElement = HTMLAreaElement;
+
+  // Fast Base64 byte decoding
+  function decodeBase64ToBytes(b64) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const lookup = new Uint8Array(256);
+    for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+    const clean = b64.replace(/[^A-Za-z0-9+/]/g, "");
+    const len = clean.length;
+    const byteLen = Math.floor((len * 3) / 4);
+    const bytes = new Uint8Array(byteLen);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const c1 = lookup[clean.charCodeAt(i)];
+      const c2 = lookup[clean.charCodeAt(i + 1)];
+      const c3 = lookup[clean.charCodeAt(i + 2)];
+      const c4 = lookup[clean.charCodeAt(i + 3)];
+      bytes[p++] = (c1 << 2) | (c2 >> 4);
+      if (i + 2 < len && clean.charAt(i + 2) !== "=") bytes[p++] = ((c2 & 15) << 4) | (c3 >> 2);
+      if (i + 3 < len && clean.charAt(i + 3) !== "=") bytes[p++] = ((c3 & 3) << 6) | c4;
+    }
+    return bytes;
+  }
+
+  // Sniff image dimensions (PNG IHDR, SVG) from data URL or base64
+  function sniffImageDimensionsFromDataUrl(url) {
+    if (!url || typeof url !== "string") return null;
+    if (!url.startsWith("data:")) return null;
+    const comma = url.indexOf(",");
+    if (comma === -1) return null;
+    const meta = url.slice(5, comma).toLowerCase();
+    const rawData = url.slice(comma + 1);
+
+    if (meta.indexOf("image/png") !== -1 || meta.indexOf(";base64") !== -1) {
+      const b64 = rawData.slice(0, 64);
+      let bytes = null;
+      if (typeof atob === "function") {
+        try {
+          const bin = atob(b64);
+          bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        } catch (e) {}
+      }
+      if (!bytes || bytes.length < 24) {
+        bytes = decodeBase64ToBytes(b64);
+      }
+      if (bytes && bytes.length >= 24) {
+        if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+            bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a &&
+            bytes[12] === 0x49 && bytes[13] === 0x48 && bytes[14] === 0x44 && bytes[15] === 0x52) {
+          const w = ((bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]) >>> 0;
+          const h = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0;
+          return { width: w, height: h };
+        }
+      }
+    }
+    if (meta.indexOf("image/svg+xml") !== -1) {
+      let svgText = rawData;
+      if (meta.indexOf(";base64") !== -1) {
+        try {
+          svgText = typeof atob === "function" ? atob(rawData) : "";
+        } catch (e) {}
+      } else {
+        try { svgText = decodeURIComponent(rawData); } catch (e) {}
+      }
+      const mw = /width\s*=\s*["']?(\d+)/i.exec(svgText);
+      const mh = /height\s*=\s*["']?(\d+)/i.exec(svgText);
+      if (mw && mh) {
+        return { width: parseInt(mw[1], 10), height: parseInt(mh[1], 10) };
+      }
+      const mv = /viewBox\s*=\s*["']?[^"']*?\b(\d+)\s+(\d+)\s*["']?/i.exec(svgText);
+      if (mv) {
+        return { width: parseInt(mv[1], 10), height: parseInt(mv[2], 10) };
+      }
+    }
+    return null;
+  }
+
+  // Parse srcset candidates accounting for commas inside data: URLs
+  function pickSrcsetCandidate(srcset) {
+    if (!srcset || typeof srcset !== "string") return null;
+    let best = null;
+    let i = 0;
+    const len = srcset.length;
+    while (i < len) {
+      while (i < len && (srcset.charCodeAt(i) <= 32 || srcset.charAt(i) === ",")) {
+        i++;
+      }
+      if (i >= len) break;
+
+      const urlStart = i;
+      while (i < len && srcset.charCodeAt(i) > 32) {
+        i++;
+      }
+      let urlEnd = i;
+      let hadTrailingComma = false;
+      if (urlEnd > urlStart && srcset.charAt(urlEnd - 1) === ",") {
+        urlEnd--;
+        hadTrailingComma = true;
+      }
+      if (urlEnd === urlStart) continue;
+      const url = srcset.slice(urlStart, urlEnd);
+
+      let descriptor = "";
+      if (!hadTrailingComma) {
+        while (i < len && srcset.charCodeAt(i) <= 32 && srcset.charAt(i) !== "\n") {
+          i++;
+        }
+        const descStart = i;
+        while (i < len && srcset.charAt(i) !== ",") {
+          i++;
+        }
+        descriptor = srcset.slice(descStart, i).trim();
+      }
+      if (i < len && srcset.charAt(i) === ",") {
+        i++;
+      }
+
+      let value = 1.0;
+      let isWidth = false;
+      if (descriptor.endsWith("w")) {
+        const num = parseFloat(descriptor.slice(0, -1).trim());
+        if (!isNaN(num) && num > 0) {
+          value = num;
+          isWidth = true;
+        }
+      } else if (descriptor.endsWith("x")) {
+        const num = parseFloat(descriptor.slice(0, -1).trim());
+        if (!isNaN(num) && num > 0) {
+          value = num;
+          isWidth = false;
+        }
+      }
+
+      let take = false;
+      if (!best) {
+        take = true;
+      } else if (isWidth && !best.isWidth) {
+        take = true;
+      } else if (!isWidth && best.isWidth) {
+        take = false;
+      } else {
+        take = value > best.value;
+      }
+
+      if (take) {
+        best = { url, value, isWidth };
+      }
+    }
+    return best ? best.url : null;
+  }
+
+  function isSupportedPictureSourceType(typeAttr) {
+    if (!typeAttr) return true;
+    const essence = typeAttr.split(";")[0].trim().toLowerCase();
+    if (!essence) return true;
+    return (
+      essence === "image/png" ||
+      essence === "image/x-png" ||
+      essence === "image/apng" ||
+      essence === "image/jpeg" ||
+      essence === "image/jpg" ||
+      essence === "image/pjpeg" ||
+      essence === "image/gif" ||
+      essence === "image/webp" ||
+      essence === "image/svg+xml"
+    );
+  }
+
+  function selectImageSource(img) {
+    if (!img) return "";
+    const parent = img.parentElement;
+    if (parent && (parent.tagName === "PICTURE" || (parent.localName && parent.localName.toLowerCase() === "picture"))) {
+      let kids = parent.children;
+      if (!kids || kids.length === 0) {
+        kids = parent.childNodes || [];
+      }
+      for (let i = 0; i < kids.length; i++) {
+        const child = kids[i];
+        if (child === img) break;
+        if (!child) continue;
+        const tag = String(child.tagName || child.localName || "").toLowerCase();
+        if (tag !== "source") continue;
+        const type = child.getAttribute ? child.getAttribute("type") : child.type;
+        if (!isSupportedPictureSourceType(type)) continue;
+        const srcset = child.getAttribute ? child.getAttribute("srcset") : child.srcset;
+        if (srcset) {
+          const candidate = pickSrcsetCandidate(srcset);
+          if (candidate) return candidate;
+        }
+        const src = child.getAttribute ? child.getAttribute("src") : child.src;
+        if (src) return src;
+      }
+    }
+
+    const srcset = img.getAttribute ? img.getAttribute("srcset") : img.srcset;
+    if (srcset) {
+      const candidate = pickSrcsetCandidate(srcset);
+      if (candidate) return candidate;
+    }
+
+    const src = img.getAttribute ? img.getAttribute("src") : img.src;
+    if (src) return src;
+    return "";
+  }
+
+  function getImageResolvedDimensions(img) {
+    const candidate = selectImageSource(img);
+    if (!candidate) {
+      return { width: 0, height: 0, candidate: "" };
+    }
+    if (img._lastCandidate === candidate && img._lastDims) {
+      return { width: img._lastDims.width, height: img._lastDims.height, candidate: candidate };
+    }
+    const dims = sniffImageDimensionsFromDataUrl(candidate);
+    const resolved = dims ? dims : { width: 0, height: 0 };
+    img._lastCandidate = candidate;
+    img._lastDims = resolved;
+    return { width: resolved.width, height: resolved.height, candidate: candidate };
+  }
+
+  function isImgDisplayNone(el) {
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      if (cur.style && cur.style.display === "none") return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  }
 
   // 2. HTMLImageElement
   function HTMLImageElement() {}
@@ -169,6 +434,28 @@ function installHtmlClasses(global) {
     enumerable: true,
   });
 
+  Object.defineProperty(HTMLImageElement.prototype, "srcset", {
+    get: function () { return this.getAttribute("srcset") || ""; },
+    set: function (v) { this.setAttribute("srcset", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLImageElement.prototype, "currentSrc", {
+    get: function () {
+      const candidate = selectImageSource(this);
+      if (!candidate) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(candidate, base).href;
+      } catch (e) {
+        return candidate;
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
   Object.defineProperty(HTMLImageElement.prototype, "alt", {
     get: function () { return this.getAttribute("alt") || ""; },
     set: function (v) { this.setAttribute("alt", String(v)); },
@@ -176,24 +463,44 @@ function installHtmlClasses(global) {
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "width", {
-    get: function () { return Number(this.getAttribute("width") || 0); },
+    get: function () {
+      const attr = this.getAttribute("width");
+      if (attr != null) return Number(attr) || 0;
+      return this.naturalWidth;
+    },
     set: function (v) { this.setAttribute("width", String(v)); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "height", {
-    get: function () { return Number(this.getAttribute("height") || 0); },
+    get: function () {
+      const attr = this.getAttribute("height");
+      if (attr != null) return Number(attr) || 0;
+      return this.naturalHeight;
+    },
     set: function (v) { this.setAttribute("height", String(v)); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", {
-    get: function () { return this.width || 100; },
+    get: function () {
+      const dims = getImageResolvedDimensions(this);
+      if (dims.width > 0) return dims.width;
+      const attr = this.getAttribute("width");
+      if (attr != null) return Number(attr) || 0;
+      return 0;
+    },
     configurable: true,
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "naturalHeight", {
-    get: function () { return this.height || 100; },
+    get: function () {
+      const dims = getImageResolvedDimensions(this);
+      if (dims.height > 0) return dims.height;
+      const attr = this.getAttribute("height");
+      if (attr != null) return Number(attr) || 0;
+      return 0;
+    },
     configurable: true,
   });
 
@@ -202,9 +509,121 @@ function installHtmlClasses(global) {
     configurable: true,
   });
 
+  HTMLImageElement.prototype.getBoundingClientRect = function () {
+    if (isImgDisplayNone(this)) {
+      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+    }
+    const r = ElementProto.getBoundingClientRect ? ElementProto.getBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+
+    const hasStyleW = this.style && this.style.width && this.style.width !== "auto";
+    const hasStyleH = this.style && this.style.height && this.style.height !== "auto";
+    const hasAttrW = this.hasAttribute && this.hasAttribute("width");
+    const hasAttrH = this.hasAttribute && this.hasAttribute("height");
+
+    const nw = this.naturalWidth;
+    const nh = this.naturalHeight;
+
+    let w = r.width;
+    let h = r.height;
+
+    if (w === 0 && nw > 0) {
+      w = nw;
+    }
+    if (h === 0 && nh > 0) {
+      h = nh;
+    }
+
+    const x = r.x || 0;
+    const y = r.y || 0;
+    return {
+      x: x,
+      y: y,
+      left: x,
+      top: y,
+      width: w,
+      height: h,
+      right: x + w,
+      bottom: y + h,
+    };
+  };
+  markNative(HTMLImageElement.prototype.getBoundingClientRect, "getBoundingClientRect");
+
   markNative(HTMLImageElement, "HTMLImageElement");
   global.HTMLImageElement = HTMLImageElement;
   global.Image = HTMLImageElement;
+
+  // HTMLPictureElement
+  function HTMLPictureElement() {}
+  HTMLPictureElement.prototype = Object.create(ElementProto);
+  HTMLPictureElement.prototype.constructor = HTMLPictureElement;
+  markNative(HTMLPictureElement, "HTMLPictureElement");
+  global.HTMLPictureElement = HTMLPictureElement;
+
+  // HTMLSourceElement
+  function HTMLSourceElement() {}
+  HTMLSourceElement.prototype = Object.create(ElementProto);
+  HTMLSourceElement.prototype.constructor = HTMLSourceElement;
+
+  Object.defineProperty(HTMLSourceElement.prototype, "src", {
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : "http://localhost/";
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "srcset", {
+    get: function () { return this.getAttribute("srcset") || ""; },
+    set: function (v) { this.setAttribute("srcset", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "type", {
+    get: function () { return this.getAttribute("type") || ""; },
+    set: function (v) { this.setAttribute("type", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "media", {
+    get: function () { return this.getAttribute("media") || ""; },
+    set: function (v) { this.setAttribute("media", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "sizes", {
+    get: function () { return this.getAttribute("sizes") || ""; },
+    set: function (v) { this.setAttribute("sizes", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "width", {
+    get: function () { return Number(this.getAttribute("width") || 0); },
+    set: function (v) { this.setAttribute("width", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLSourceElement.prototype, "height", {
+    get: function () { return Number(this.getAttribute("height") || 0); },
+    set: function (v) { this.setAttribute("height", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  markNative(HTMLSourceElement, "HTMLSourceElement");
+  global.HTMLSourceElement = HTMLSourceElement;
 
   // 3. HTMLScriptElement
   function HTMLScriptElement() {
@@ -437,7 +856,10 @@ function installHtmlClasses(global) {
     "Blob", "FormData", "Headers", "Request", "Response",
     "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
     "setTimeout", "clearTimeout", "setInterval", "clearInterval",
-    "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch"
+    "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch",
+    "History", "WebSocket", "CloseEvent", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
+    "performance", "Performance", "PerformanceEntry", "PerformanceMark", "PerformanceMeasure",
+    "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation"
   ];
 
   function decorateIframeWindow(win) {
@@ -448,6 +870,8 @@ function installHtmlClasses(global) {
         win[key] = pageGlobal[key];
       }
     }
+    if (win.onhashchange === undefined) win.onhashchange = null;
+    if (win.onpopstate === undefined) win.onpopstate = null;
     if (pageGlobal.fetch) {
       win.fetch = function (resource, init) {
         return pageGlobal.fetch.call(win, resource, init);
@@ -695,7 +1119,21 @@ function installHtmlClasses(global) {
 
   // 6. Generic HTMLElement
   const upgradeTargets = [];
+  const constructionStacks = new Map();
+  global._constructionStacks = constructionStacks;
+  global._upgradeTargets = upgradeTargets;
+
   function HTMLElement() {
+    const targetCtor = new.target;
+    if (targetCtor) {
+      const stack = constructionStacks.get(targetCtor);
+      if (stack && stack.length > 0) {
+        const el = stack.pop();
+        const uIdx = upgradeTargets.indexOf(el);
+        if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
+        return el;
+      }
+    }
     if (upgradeTargets.length > 0) {
       return upgradeTargets.pop();
     }

@@ -12,11 +12,16 @@
     "build": "cap build -r -f",
     "build:nest": "cap build -b"
   },
+  "bin_dependencies": {
+    "quickjs": "0.1.0",
+    "zlib": "1.3.1"
+  },
   "build": {
+    "entry": "src/main.cp",
+    "targets": ["native"],
     "opt": "fast",
     "out_dir": "bin",
-    "c_flags": ["-D_GNU_SOURCE", "-Lvendor/quickjs/build"],
-    "link_libs": ["c", "m", "pthread", "qjs", "z"]
+    "c_flags": ["-D_GNU_SOURCE"]
   },
   "nest": {
     "mailbox_capacity": 65536,

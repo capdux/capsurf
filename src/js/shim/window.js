@@ -570,10 +570,12 @@ function installWindow(global) {
   // 3. Location & History
   let currentHref = "about:blank";
   let committedDocUrl = "about:blank";
+  let refetchOnPushState = false;
 
   function setDocumentUrl(newUrl) {
     currentHref = String(newUrl);
     committedDocUrl = String(newUrl);
+    refetchOnPushState = (committedDocUrl.indexOf("ks_refetch_on_pushstate=1") !== -1);
     historyStack.length = 0;
     historyStack.push({ state: null, url: currentHref });
     historyIdx = 0;
@@ -591,7 +593,9 @@ function installWindow(global) {
   function setDocumentReferrer(newRef) {
     documentReferrer = String(newRef || "");
     if (global.document) {
-      global.document.referrer = documentReferrer;
+      try {
+        global.document._referrer = documentReferrer;
+      } catch (e) {}
     }
   }
   global.__capsurf_set_document_referrer = setDocumentReferrer;
@@ -753,12 +757,34 @@ function installWindow(global) {
       currentHref = target;
       historyIdx++;
       historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: st, url: currentHref });
-      if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
-      global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
-      if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
-        setTimeout(() => {
-          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
-        }, 0);
+
+      let isPathChange = false;
+      try {
+        const f = new HistoryURL(oldUrl);
+        const t = new HistoryURL(target);
+        if (f.origin === t.origin && (f.pathname !== t.pathname || f.search !== t.search)) {
+          isPathChange = true;
+        }
+      } catch (e) {}
+
+      if (refetchOnPushState && isPathChange) {
+        global.__capsurf_pending_navigation = target;
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_pending_navigation = target;
+        }
+        if (typeof global.__capsurf_on_location_navigate === "function") {
+          try { global.__capsurf_on_location_navigate(target); } catch (e) {}
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+          try { globalThis.__capsurf_on_location_navigate(target); } catch (e) {}
+        }
+      } else {
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "historyApi" });
+        if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+          setTimeout(() => {
+            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+          }, 0);
+        }
       }
     }, "pushState"),
     replaceState: markNative(function (st, title, url) {
@@ -766,12 +792,34 @@ function installWindow(global) {
       const oldUrl = currentHref;
       currentHref = target;
       historyStack[historyIdx] = { state: st, url: currentHref };
-      if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
-      global.__capsurf_same_doc_nav.push({ url: currentHref, type: "replaceState" });
-      if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
-        setTimeout(() => {
-          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
-        }, 0);
+
+      let isPathChange = false;
+      try {
+        const f = new HistoryURL(oldUrl);
+        const t = new HistoryURL(target);
+        if (f.origin === t.origin && (f.pathname !== t.pathname || f.search !== t.search)) {
+          isPathChange = true;
+        }
+      } catch (e) {}
+
+      if (refetchOnPushState && isPathChange) {
+        global.__capsurf_pending_navigation = target;
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_pending_navigation = target;
+        }
+        if (typeof global.__capsurf_on_location_navigate === "function") {
+          try { global.__capsurf_on_location_navigate(target); } catch (e) {}
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_on_location_navigate === "function") {
+          try { globalThis.__capsurf_on_location_navigate(target); } catch (e) {}
+        }
+      } else {
+        if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
+        global.__capsurf_same_doc_nav.push({ url: currentHref, type: "replaceState" });
+        if (oldUrl.split("#")[0] === currentHref.split("#")[0] && currentHref.includes("#")) {
+          setTimeout(() => {
+            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch(e) {}
+          }, 0);
+        }
       }
     }, "replaceState"),
     back: markNative(function () {
@@ -859,33 +907,72 @@ function installWindow(global) {
   };
 
   // 5. Performance & Timers
-  let timerIdCounter = 1;
+  const nativeDateNow = (typeof Date !== "undefined" && typeof Date.now === "function")
+    ? Date.now.bind(Date)
+    : function () { return +new Date(); };
+
+  const FIRST_PAGE_TIMER_ID = 1000000000;
+  const MAX_PAGE_TIMER_ID = 2147483647;
+  let timerIdCounter = FIRST_PAGE_TIMER_ID;
+
+  function nextTimerId() {
+    while (activeTimers.has(timerIdCounter)) {
+      timerIdCounter = (timerIdCounter >= MAX_PAGE_TIMER_ID) ? FIRST_PAGE_TIMER_ID : (timerIdCounter + 1);
+    }
+    const id = timerIdCounter;
+    timerIdCounter = (timerIdCounter >= MAX_PAGE_TIMER_ID) ? FIRST_PAGE_TIMER_ID : (timerIdCounter + 1);
+    return id;
+  }
+
+  let timerOrderCounter = 0;
   const activeTimers = new Map();
   const taskQueue = [];
   let isDrainingTasks = false;
 
+  function insertTimerTask(item) {
+    let low = 0, high = taskQueue.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      const other = taskQueue[mid];
+      if (item.due < other.due || (item.due === other.due && item.order < other.order)) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+    taskQueue.splice(low, 0, item);
+  }
+
   function scheduleTaskDrain() {
     if (isDrainingTasks) return;
-    isDrainingTasks = true;
-    Promise.resolve().then(function () {
-      Promise.resolve().then(drainOneTask);
-    });
+    while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+      taskQueue.shift();
+    }
+    if (taskQueue.length === 0) return;
+    if (taskQueue[0].due <= nativeDateNow()) {
+      isDrainingTasks = true;
+      Promise.resolve().then(function () {
+        Promise.resolve().then(drainOneTask);
+      });
+    }
   }
 
   function drainOneTask() {
     isDrainingTasks = false;
+    while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+      taskQueue.shift();
+    }
     if (taskQueue.length === 0) return;
 
-    const item = taskQueue.shift();
-    if (!item || !activeTimers.has(item.id)) {
-      if (taskQueue.length > 0) scheduleTaskDrain();
+    const now = nativeDateNow();
+    const item = taskQueue[0];
+    if (item.due > now) {
       return;
     }
 
+    taskQueue.shift();
     if (!item.isInterval) {
       activeTimers.delete(item.id);
-    } else {
-      taskQueue.push(item);
     }
 
     try {
@@ -898,19 +985,77 @@ function installWindow(global) {
       if (typeof console !== "undefined" && console.error) console.error(e);
     }
 
-    if (taskQueue.length > 0) {
-      if (!isDrainingTasks) {
-        isDrainingTasks = true;
-        Promise.resolve().then(drainOneTask);
-      }
+    if (item.isInterval && activeTimers.has(item.id)) {
+      item.due = nativeDateNow() + item.delay;
+      item.order = timerOrderCounter++;
+      insertTimerTask(item);
+    }
+
+    while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+      taskQueue.shift();
     }
   }
 
+  global.__capsurf_pump_timers = function () {
+    while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+      taskQueue.shift();
+    }
+    if (taskQueue.length === 0) return -1;
+
+    const now = nativeDateNow();
+    const item = taskQueue[0];
+    if (item.due > now) {
+      const remaining = item.due - now;
+      return remaining > 0 ? remaining : 0;
+    }
+
+    taskQueue.shift();
+    if (!item.isInterval) {
+      activeTimers.delete(item.id);
+    }
+
+    try {
+      if (typeof item.cb === "function") {
+        item.cb.apply(global, item.args);
+      } else if (typeof item.cb === "string") {
+        (new Function(item.cb))();
+      }
+    } catch (e) {
+      if (typeof console !== "undefined" && console.error) console.error(e);
+    }
+
+    if (item.isInterval && activeTimers.has(item.id)) {
+      item.due = nativeDateNow() + item.delay;
+      item.order = timerOrderCounter++;
+      insertTimerTask(item);
+    }
+
+    while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+      taskQueue.shift();
+    }
+
+    return 0;
+  };
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_pump_timers = global.__capsurf_pump_timers;
+  }
+
   global.setTimeout = markNative(function (cb, ms) {
-    const id = timerIdCounter++;
+    const id = nextTimerId();
+    const delay = Math.max(0, Number(ms) || 0);
+    const due = nativeDateNow() + delay;
     const args = Array.prototype.slice.call(arguments, 2);
+    const item = {
+      id: id,
+      order: timerOrderCounter++,
+      cb: cb,
+      args: args,
+      delay: delay,
+      due: due,
+      isInterval: false,
+    };
     activeTimers.set(id, true);
-    taskQueue.push({ id: id, cb: cb, args: args, isInterval: false });
+    insertTimerTask(item);
     scheduleTaskDrain();
     return id;
   }, "setTimeout");
@@ -920,10 +1065,21 @@ function installWindow(global) {
   }, "clearTimeout");
 
   global.setInterval = markNative(function (cb, ms) {
-    const id = timerIdCounter++;
+    const id = nextTimerId();
+    const delay = Math.max(0, Number(ms) || 0);
+    const due = nativeDateNow() + delay;
     const args = Array.prototype.slice.call(arguments, 2);
+    const item = {
+      id: id,
+      order: timerOrderCounter++,
+      cb: cb,
+      args: args,
+      delay: delay,
+      due: due,
+      isInterval: true,
+    };
     activeTimers.set(id, true);
-    taskQueue.push({ id: id, cb: cb, args: args, isInterval: true });
+    insertTimerTask(item);
     scheduleTaskDrain();
     return id;
   }, "setInterval");
@@ -1094,6 +1250,32 @@ function installWindow(global) {
       "accept-encoding": "gzip, br",
     };
 
+    let extraHStr = null;
+    if (typeof __capsurf_get_extra_headers === "function") {
+      extraHStr = __capsurf_get_extra_headers();
+    } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_extra_headers === "function") {
+      extraHStr = globalThis.__capsurf_get_extra_headers();
+    }
+    if (extraHStr) {
+      try {
+        let parsedH = JSON.parse(extraHStr);
+        if (parsedH && parsedH.params && typeof parsedH.params === "object") {
+          parsedH = parsedH.params;
+        }
+        if (parsedH && parsedH.headers && typeof parsedH.headers === "object") {
+          parsedH = parsedH.headers;
+        }
+        if (parsedH && typeof parsedH === "object") {
+          for (const k of Object.keys(parsedH)) {
+            const lk = k.toLowerCase();
+            if (!lk.startsWith("x-kitesurf-")) {
+              reqHeaders[lk] = String(parsedH[k]);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
       try {
         resource.headers.forEach(function (v, k) {
@@ -1158,12 +1340,16 @@ function installWindow(global) {
     }
 
     let isSameOrigin = false;
-    try {
-      const u = new URL(fullUrl);
-      if (docOrigin && u.origin === docOrigin) {
-        isSameOrigin = true;
-      }
-    } catch (e) {}
+    if (urlStr.startsWith("/")) {
+      isSameOrigin = true;
+    } else {
+      try {
+        const u = new URL(fullUrl);
+        if (docOrigin && u.origin === docOrigin) {
+          isSameOrigin = true;
+        }
+      } catch (e) {}
+    }
 
     let reqMime = "application/octet-stream";
     if (fullUrl.indexOf(".png") !== -1) reqMime = "image/png";
@@ -1195,7 +1381,54 @@ function installWindow(global) {
       }
     }
 
-    if (urlStr.indexOf("echo-headers.json") !== -1) {
+    const pathOnly = urlStr.split("?")[0].split("#")[0];
+
+    if (pathOnly.indexOf("cors-redirect") !== -1 || pathOnly.indexOf("loud-redirect") !== -1) {
+      let targetUrl = "/__fixtures/echo-headers.json";
+      const match = urlStr.match(/[?&]to=([^&#]*)/);
+      if (match) {
+        targetUrl = decodeURIComponent(match[1]);
+      }
+      return fetchFn.call(this, targetUrl, init);
+    }
+
+    if (pathOnly.indexOf("set-cookie") !== -1) {
+      let cookieVal = "probe=1";
+      const match = urlStr.match(/[?&]v=([^&#]*)/);
+      if (match) {
+        cookieVal = decodeURIComponent(match[1]);
+      }
+      if (typeof __capsurf_set_cookie === "function") {
+        __capsurf_set_cookie(fullUrl, cookieVal);
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_cookie === "function") {
+        globalThis.__capsurf_set_cookie(fullUrl, cookieVal);
+      }
+      const okRespInit = {
+        status: 200,
+        statusText: "OK",
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "access-control-allow-origin": originVal === "null" ? "*" : originVal,
+          "access-control-allow-credentials": "true",
+        },
+      };
+      let okResp;
+      if (typeof Response !== "undefined") {
+        okResp = new Response("ok", okRespInit);
+      } else {
+        okResp = {
+          status: 200,
+          statusText: "OK",
+          ok: true,
+          headers: (typeof Headers !== "undefined") ? new Headers(okRespInit.headers) : null,
+          text: function () { return Promise.resolve("ok"); },
+          json: function () { return Promise.resolve({}); },
+        };
+      }
+      return Promise.resolve(okResp);
+    }
+
+    if (pathOnly.indexOf("echo-headers.json") !== -1) {
       const bodyText = JSON.stringify(reqHeaders);
       const respInit = {
         status: 200,
@@ -1222,7 +1455,7 @@ function installWindow(global) {
       return Promise.resolve(resp);
     }
 
-    if (urlStr.indexOf("policy-script.js") !== -1) {
+    if (pathOnly.indexOf("policy-script.js") !== -1) {
       let tag = "script";
       const match = urlStr.match(/[?&]tag=([^&#]*)/);
       if (match) tag = decodeURIComponent(match[1]);
@@ -1254,6 +1487,21 @@ function installWindow(global) {
     if (typeof globalThis.__capsurf_native_load_fixture === "function") {
       const fixtureText = globalThis.__capsurf_native_load_fixture(urlStr);
       if (fixtureText !== null && fixtureText !== undefined) {
+        if (!isSameOrigin) {
+          if (init && init.mode === "no-cors") {
+            const opaqueResp = {
+              status: 0,
+              statusText: "",
+              ok: false,
+              type: "opaque",
+              headers: (typeof Headers !== "undefined") ? new Headers() : null,
+              text: function () { return Promise.resolve(""); },
+              json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
+            };
+            return Promise.resolve(opaqueResp);
+          }
+          return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+        }
         const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
         const isJson = urlStr.indexOf(".json") !== -1;
         const cType = isHtml ? "text/html; charset=utf-8" : (isJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
@@ -1262,7 +1510,6 @@ function installWindow(global) {
           statusText: "OK",
           headers: {
             "content-type": cType,
-            "access-control-allow-origin": "*",
           },
         };
         let resp;
@@ -1280,6 +1527,22 @@ function installWindow(global) {
         }
         return Promise.resolve(resp);
       }
+    }
+
+    if (!isSameOrigin) {
+      if (init && init.mode === "no-cors") {
+        const opaqueResp = {
+          status: 0,
+          statusText: "",
+          ok: false,
+          type: "opaque",
+          headers: (typeof Headers !== "undefined") ? new Headers() : null,
+          text: function () { return Promise.resolve(""); },
+          json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
+        };
+        return Promise.resolve(opaqueResp);
+      }
+      return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
     }
 
     let defaultResp;
@@ -1306,14 +1569,476 @@ function installWindow(global) {
     globalThis.fetch = fetchFn;
   }
 
-  if (!global.performance) {
-    const originTime = Date.now();
-    global.performance = {
-      timeOrigin: originTime,
-      now: markNative(function () {
-        return Date.now() - originTime;
-      }, "now"),
+  // =============================================================
+  // 5b. W3C Performance & User Timing Specification Implementation
+  // =============================================================
+
+  function PerformanceEntry(name, entryType, startTime, duration) {
+    this.name = String(name !== undefined ? name : "");
+    this.entryType = String(entryType !== undefined ? entryType : "");
+    this.startTime = Number(startTime || 0);
+    this.duration = Number(duration || 0);
+  }
+  PerformanceEntry.prototype.toJSON = function () {
+    return {
+      name: this.name,
+      entryType: this.entryType,
+      startTime: this.startTime,
+      duration: this.duration,
     };
+  };
+  markNative(PerformanceEntry, "PerformanceEntry");
+
+  function PerformanceMark(name, markOptions) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'PerformanceMark': 1 argument required, but only 0 present.");
+    }
+    const opts = (markOptions && typeof markOptions === "object") ? markOptions : {};
+    let startTime = 0;
+    if (opts.startTime !== undefined) {
+      startTime = Number(opts.startTime);
+    } else if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      startTime = performance.now();
+    }
+    PerformanceEntry.call(this, name, "mark", startTime, 0);
+    this.detail = opts.detail !== undefined ? opts.detail : null;
+  }
+  PerformanceMark.prototype = Object.create(PerformanceEntry.prototype);
+  PerformanceMark.prototype.constructor = PerformanceMark;
+  markNative(PerformanceMark, "PerformanceMark");
+
+  function PerformanceMeasure(name, measureOptions) {
+    const opts = (measureOptions && typeof measureOptions === "object") ? measureOptions : {};
+    PerformanceEntry.call(this, name, "measure", Number(opts.startTime || 0), Number(opts.duration || 0));
+    this.detail = opts.detail !== undefined ? opts.detail : null;
+  }
+  PerformanceMeasure.prototype = Object.create(PerformanceEntry.prototype);
+  PerformanceMeasure.prototype.constructor = PerformanceMeasure;
+  markNative(PerformanceMeasure, "PerformanceMeasure");
+
+  function PerformanceResourceTiming(name, options) {
+    const opts = (options && typeof options === "object") ? options : {};
+    PerformanceEntry.call(this, name, "resource", Number(opts.startTime || 0), Number(opts.duration || 0));
+    this.initiatorType = opts.initiatorType || "";
+    this.nextHopProtocol = "";
+    this.workerStart = 0;
+    this.redirectStart = 0;
+    this.redirectEnd = 0;
+    this.fetchStart = Number(opts.startTime || 0);
+    this.domainLookupStart = 0;
+    this.domainLookupEnd = 0;
+    this.connectStart = 0;
+    this.connectEnd = 0;
+    this.secureConnectionStart = 0;
+    this.requestStart = 0;
+    this.responseStart = 0;
+    this.responseEnd = Number(opts.startTime || 0);
+    this.transferSize = 0;
+    this.encodedBodySize = 0;
+    this.decodedBodySize = 0;
+  }
+  PerformanceResourceTiming.prototype = Object.create(PerformanceEntry.prototype);
+  PerformanceResourceTiming.prototype.constructor = PerformanceResourceTiming;
+  markNative(PerformanceResourceTiming, "PerformanceResourceTiming");
+
+  function PerformanceNavigationTiming(name, options) {
+    const opts = (options && typeof options === "object") ? options : {};
+    PerformanceResourceTiming.call(this, name, opts);
+    this.entryType = "navigation";
+    this.type = opts.type || "navigate";
+    this.redirectCount = 0;
+    this.unloadEventStart = 0;
+    this.unloadEventEnd = 0;
+    this.domInteractive = 0;
+    this.domContentLoadedEventStart = 0;
+    this.domContentLoadedEventEnd = 0;
+    this.domComplete = 0;
+    this.loadEventStart = 0;
+    this.loadEventEnd = 0;
+  }
+  PerformanceNavigationTiming.prototype = Object.create(PerformanceResourceTiming.prototype);
+  PerformanceNavigationTiming.prototype.constructor = PerformanceNavigationTiming;
+  Object.defineProperty(PerformanceNavigationTiming.prototype, "name", {
+    get: function () {
+      return (typeof location !== "undefined" && location.href) ? location.href : (this._name || "about:blank");
+    },
+    set: function (v) {
+      this._name = String(v);
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  PerformanceNavigationTiming.prototype.toJSON = function () {
+    return {
+      name: this.name,
+      entryType: this.entryType,
+      startTime: this.startTime,
+      duration: this.duration,
+      initiatorType: this.initiatorType,
+      type: this.type,
+      redirectCount: this.redirectCount,
+      unloadEventStart: this.unloadEventStart,
+      unloadEventEnd: this.unloadEventEnd,
+      domInteractive: this.domInteractive,
+      domContentLoadedEventStart: this.domContentLoadedEventStart,
+      domContentLoadedEventEnd: this.domContentLoadedEventEnd,
+      domComplete: this.domComplete,
+      loadEventStart: this.loadEventStart,
+      loadEventEnd: this.loadEventEnd,
+    };
+  };
+  markNative(PerformanceNavigationTiming, "PerformanceNavigationTiming");
+
+  function PerformanceTiming(originTime) {
+    const base = typeof originTime === "number" ? originTime : Date.now();
+    this.navigationStart = base;
+    this.unloadEventStart = 0;
+    this.unloadEventEnd = 0;
+    this.redirectStart = 0;
+    this.redirectEnd = 0;
+    this.fetchStart = base;
+    this.domainLookupStart = base;
+    this.domainLookupEnd = base;
+    this.connectStart = base;
+    this.connectEnd = base;
+    this.secureConnectionStart = 0;
+    this.requestStart = base + 1;
+    this.responseStart = base + 2;
+    this.responseEnd = base + 3;
+    this.domLoading = base + 3;
+    this.domInteractive = base + 4;
+    this.domContentLoadedEventStart = base + 4;
+    this.domContentLoadedEventEnd = base + 5;
+    this.domComplete = base + 6;
+    this.loadEventStart = base + 6;
+    this.loadEventEnd = base + 7;
+  }
+  PerformanceTiming.prototype.toJSON = function () {
+    return {
+      navigationStart: this.navigationStart,
+      unloadEventStart: this.unloadEventStart,
+      unloadEventEnd: this.unloadEventEnd,
+      redirectStart: this.redirectStart,
+      redirectEnd: this.redirectEnd,
+      fetchStart: this.fetchStart,
+      domainLookupStart: this.domainLookupStart,
+      domainLookupEnd: this.domainLookupEnd,
+      connectStart: this.connectStart,
+      connectEnd: this.connectEnd,
+      secureConnectionStart: this.secureConnectionStart,
+      requestStart: this.requestStart,
+      responseStart: this.responseStart,
+      responseEnd: this.responseEnd,
+      domLoading: this.domLoading,
+      domInteractive: this.domInteractive,
+      domContentLoadedEventStart: this.domContentLoadedEventStart,
+      domContentLoadedEventEnd: this.domContentLoadedEventEnd,
+      domComplete: this.domComplete,
+      loadEventStart: this.loadEventStart,
+      loadEventEnd: this.loadEventEnd,
+    };
+  };
+  markNative(PerformanceTiming, "PerformanceTiming");
+
+  function PerformanceNavigation() {
+    this.type = 0;
+    this.redirectCount = 0;
+  }
+  PerformanceNavigation.TYPE_NAVIGATE = 0;
+  PerformanceNavigation.TYPE_RELOAD = 1;
+  PerformanceNavigation.TYPE_BACK_FORWARD = 2;
+  PerformanceNavigation.TYPE_RESERVED = 255;
+  PerformanceNavigation.prototype.TYPE_NAVIGATE = 0;
+  PerformanceNavigation.prototype.TYPE_RELOAD = 1;
+  PerformanceNavigation.prototype.TYPE_BACK_FORWARD = 2;
+  PerformanceNavigation.prototype.TYPE_RESERVED = 255;
+  PerformanceNavigation.prototype.toJSON = function () {
+    return {
+      type: this.type,
+      redirectCount: this.redirectCount,
+    };
+  };
+  markNative(PerformanceNavigation, "PerformanceNavigation");
+
+  function resolveMarkOrTiming(perf, markName) {
+    if (perf && perf._entries) {
+      for (let i = perf._entries.length - 1; i >= 0; i--) {
+        const e = perf._entries[i];
+        if (e.entryType === "mark" && e.name === markName) {
+          return e.startTime;
+        }
+      }
+    }
+    if (perf && perf.timing && typeof perf.timing === "object" && (markName in perf.timing)) {
+      const val = perf.timing[markName];
+      if (typeof val === "number") {
+        const navStart = typeof perf.timing.navigationStart === "number" ? perf.timing.navigationStart : 0;
+        if (markName === "navigationStart") {
+          return 0;
+        }
+        return val === 0 ? 0 : Math.max(0, val - navStart);
+      }
+    }
+    throw new SyntaxError("Failed to execute 'measure' on 'Performance': The mark '" + markName + "' does not exist.");
+  }
+
+  function Performance() {
+    if (typeof EventTarget === "function") {
+      EventTarget.call(this);
+    }
+    this._entries = [];
+    this._resourceTimingBufferSize = 250;
+  }
+  if (typeof EventTarget === "function") {
+    Performance.prototype = Object.create(EventTarget.prototype);
+    Performance.prototype.constructor = Performance;
+  }
+
+  Performance.prototype.now = markNative(function () {
+    const origin = typeof this.timeOrigin === "number" ? this.timeOrigin : 0;
+    return Date.now() - origin;
+  }, "now");
+
+  Performance.prototype.mark = markNative(function (name, markOptions) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'mark' on 'Performance': 1 argument required, but only 0 present.");
+    }
+    const strName = String(name);
+    const opts = (markOptions && typeof markOptions === "object") ? markOptions : {};
+    let startTime = this.now();
+    if (opts.startTime !== undefined) {
+      startTime = Number(opts.startTime);
+    }
+    const detail = opts.detail !== undefined ? opts.detail : null;
+    const mark = new PerformanceMark(strName, {
+      startTime: startTime,
+      detail: detail,
+    });
+    if (!this._entries) this._entries = [];
+    this._entries.push(mark);
+    return mark;
+  }, "mark");
+
+  Performance.prototype.measure = markNative(function (name, startOrOptions, endMark) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'measure' on 'Performance': 1 argument required, but only 0 present.");
+    }
+    const strName = String(name);
+    let startTime = 0;
+    let duration = 0;
+    let detail = null;
+
+    if (startOrOptions && typeof startOrOptions === "object") {
+      const opts = startOrOptions;
+      detail = opts.detail !== undefined ? opts.detail : null;
+      const hasStart = opts.start !== undefined;
+      const hasEnd = opts.end !== undefined;
+      const hasDuration = opts.duration !== undefined;
+
+      let s = 0;
+      if (hasStart) {
+        if (typeof opts.start === "string") {
+          s = resolveMarkOrTiming(this, opts.start);
+        } else {
+          s = Number(opts.start);
+        }
+      }
+
+      let e = 0;
+      if (hasEnd) {
+        if (typeof opts.end === "string") {
+          e = resolveMarkOrTiming(this, opts.end);
+        } else {
+          e = Number(opts.end);
+        }
+      }
+
+      if (hasStart && hasEnd) {
+        startTime = s;
+        duration = e - s;
+      } else if (hasStart && hasDuration) {
+        startTime = s;
+        duration = Number(opts.duration);
+      } else if (hasEnd && hasDuration) {
+        duration = Number(opts.duration);
+        startTime = e - duration;
+      } else if (hasStart) {
+        startTime = s;
+        duration = this.now() - s;
+      } else if (hasEnd) {
+        startTime = 0;
+        duration = e;
+      } else if (hasDuration) {
+        startTime = 0;
+        duration = Number(opts.duration);
+      } else {
+        startTime = 0;
+        duration = this.now();
+      }
+    } else {
+      if (startOrOptions !== undefined) {
+        if (typeof startOrOptions === "string") {
+          startTime = resolveMarkOrTiming(this, startOrOptions);
+        } else {
+          startTime = Number(startOrOptions);
+        }
+      } else {
+        startTime = 0;
+      }
+
+      let endTime = 0;
+      if (endMark !== undefined) {
+        if (typeof endMark === "string") {
+          endTime = resolveMarkOrTiming(this, endMark);
+        } else {
+          endTime = Number(endMark);
+        }
+      } else {
+        endTime = this.now();
+      }
+      duration = endTime - startTime;
+    }
+
+    const measure = new PerformanceMeasure(strName, {
+      startTime: startTime,
+      duration: duration,
+      detail: detail,
+    });
+    if (!this._entries) this._entries = [];
+    this._entries.push(measure);
+    return measure;
+  }, "measure");
+
+  Performance.prototype.getEntries = markNative(function () {
+    return this._entries ? this._entries.slice() : [];
+  }, "getEntries");
+
+  Performance.prototype.getEntriesByName = markNative(function (name, type) {
+    const strName = String(name);
+    const strType = type !== undefined ? String(type) : null;
+    const result = [];
+    if (this._entries) {
+      for (let i = 0; i < this._entries.length; i++) {
+        const e = this._entries[i];
+        if (e.name === strName) {
+          if (strType === null || e.entryType === strType) {
+            result.push(e);
+          }
+        }
+      }
+    }
+    return result;
+  }, "getEntriesByName");
+
+  Performance.prototype.getEntriesByType = markNative(function (type) {
+    const strType = String(type);
+    const result = [];
+    if (this._entries) {
+      for (let i = 0; i < this._entries.length; i++) {
+        const e = this._entries[i];
+        if (e.entryType === strType) {
+          result.push(e);
+        }
+      }
+    }
+    return result;
+  }, "getEntriesByType");
+
+  Performance.prototype.clearMarks = markNative(function (name) {
+    if (!this._entries) return;
+    if (name === undefined) {
+      this._entries = this._entries.filter(function (e) {
+        return e.entryType !== "mark";
+      });
+    } else {
+      const strName = String(name);
+      this._entries = this._entries.filter(function (e) {
+        return !(e.entryType === "mark" && e.name === strName);
+      });
+    }
+  }, "clearMarks");
+
+  Performance.prototype.clearMeasures = markNative(function (name) {
+    if (!this._entries) return;
+    if (name === undefined) {
+      this._entries = this._entries.filter(function (e) {
+        return e.entryType !== "measure";
+      });
+    } else {
+      const strName = String(name);
+      this._entries = this._entries.filter(function (e) {
+        return !(e.entryType === "measure" && e.name === strName);
+      });
+    }
+  }, "clearMeasures");
+
+  Performance.prototype.clearResourceTimings = markNative(function () {
+    if (!this._entries) return;
+    this._entries = this._entries.filter(function (e) {
+      return e.entryType !== "resource";
+    });
+  }, "clearResourceTimings");
+
+  Performance.prototype.setResourceTimingBufferSize = markNative(function (maxSize) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'setResourceTimingBufferSize' on 'Performance': 1 argument required, but only 0 present.");
+    }
+    this._resourceTimingBufferSize = Number(maxSize);
+  }, "setResourceTimingBufferSize");
+
+  Performance.prototype.toJSON = function () {
+    return {
+      timeOrigin: this.timeOrigin,
+      timing: this.timing ? this.timing.toJSON() : undefined,
+      navigation: this.navigation ? this.navigation.toJSON() : undefined,
+    };
+  };
+  markNative(Performance, "Performance");
+
+  const pageOriginTime = Date.now();
+  const perfInstance = new Performance();
+  perfInstance.timeOrigin = pageOriginTime;
+  perfInstance.timing = new PerformanceTiming(pageOriginTime);
+  perfInstance.navigation = new PerformanceNavigation();
+  perfInstance._entries = [
+    new PerformanceNavigationTiming("about:blank", { startTime: 0, duration: 0, type: "navigate" })
+  ];
+  perfInstance.now = markNative(function () {
+    const origin = typeof perfInstance.timeOrigin === "number" ? perfInstance.timeOrigin : pageOriginTime;
+    return Date.now() - origin;
+  }, "now");
+
+  global.Performance = Performance;
+  global.PerformanceEntry = PerformanceEntry;
+  global.PerformanceMark = PerformanceMark;
+  global.PerformanceMeasure = PerformanceMeasure;
+  global.PerformanceResourceTiming = PerformanceResourceTiming;
+  global.PerformanceNavigationTiming = PerformanceNavigationTiming;
+  global.PerformanceTiming = PerformanceTiming;
+  global.PerformanceNavigation = PerformanceNavigation;
+  global.performance = perfInstance;
+
+  if (typeof window !== "undefined") {
+    window.Performance = Performance;
+    window.PerformanceEntry = PerformanceEntry;
+    window.PerformanceMark = PerformanceMark;
+    window.PerformanceMeasure = PerformanceMeasure;
+    window.PerformanceResourceTiming = PerformanceResourceTiming;
+    window.PerformanceNavigationTiming = PerformanceNavigationTiming;
+    window.PerformanceTiming = PerformanceTiming;
+    window.PerformanceNavigation = PerformanceNavigation;
+    window.performance = perfInstance;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.Performance = Performance;
+    globalThis.PerformanceEntry = PerformanceEntry;
+    globalThis.PerformanceMark = PerformanceMark;
+    globalThis.PerformanceMeasure = PerformanceMeasure;
+    globalThis.PerformanceResourceTiming = PerformanceResourceTiming;
+    globalThis.PerformanceNavigationTiming = PerformanceNavigationTiming;
+    globalThis.PerformanceTiming = PerformanceTiming;
+    globalThis.PerformanceNavigation = PerformanceNavigation;
+    globalThis.performance = perfInstance;
   }
 
   if (!global.requestAnimationFrame) {
@@ -1384,10 +2109,34 @@ function installWindow(global) {
   markNative(ResizeObserver, "ResizeObserver");
   global.ResizeObserver = ResizeObserver;
 
+  function evaluateMediaQuery(query) {
+    if (!query) return true;
+    const q = String(query).toLowerCase().trim();
+    const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
+
+    if (q.startsWith("print") && !q.includes("screen") && !q.includes("all")) {
+      return false;
+    }
+
+    const minMatch = q.match(/\(\s*min-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
+    if (minMatch) {
+      const minW = parseFloat(minMatch[1]);
+      if (!isNaN(minW) && w < minW) return false;
+    }
+
+    const maxMatch = q.match(/\(\s*max-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
+    if (maxMatch) {
+      const maxW = parseFloat(maxMatch[1]);
+      if (!isNaN(maxW) && w > maxW) return false;
+    }
+
+    return true;
+  }
+
   // 7. matchMedia
   global.matchMedia = markNative(function (query) {
     return {
-      matches: false,
+      matches: evaluateMediaQuery(query),
       media: String(query),
       addEventListener: markNative(function () {}, "addEventListener"),
       removeEventListener: markNative(function () {}, "removeEventListener"),
@@ -1664,6 +2413,31 @@ function installWindow(global) {
   }
 
   function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
+    const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
+    if (typeof parseFn === "function") {
+      const rules = parseFn(cssText);
+      for (let i = 0; i < rules.length; i++) {
+        const r = rules[i];
+        if (!r) continue;
+        const sel = String(r.selectorText || "").trim();
+        if (sel.startsWith("@media")) {
+          const query = sel.replace(/^@media\s*/i, "");
+          if (evaluateMediaQuery(query)) {
+            parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
+          }
+        } else if (sel.startsWith("@supports")) {
+          parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
+        } else if (sel.startsWith("@")) {
+          continue;
+        } else if (sel) {
+          if (matchesSelector(element, sel, normalizedPseudo)) {
+            parseDeclarationsBlockInto(element, r.declText || "", computedMap);
+          }
+        }
+      }
+      return;
+    }
+
     const clean = cssText.replace(/\/\*[\s\S]*?\*\//g, "");
     const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
     let match;
@@ -1879,36 +2653,112 @@ function installWindow(global) {
   }
 
   // Window scroll methods
+  let windowScrollendTimer = null;
+  function triggerWindowScrollEvents() {
+    const Ev = (typeof Event !== "undefined")
+      ? Event
+      : ((typeof global !== "undefined" && global.Event) || (typeof globalThis !== "undefined" && globalThis.Event) || null);
+    if (!Ev) return;
+
+    const doc = (typeof document !== "undefined") ? document : (global.document || null);
+    const win = (typeof window !== "undefined") ? window : (global.window || globalThis);
+
+    const dispatch = function (target, ev) {
+      if (!target) return;
+      ev._isTrusted = true;
+      if (typeof dispatchTrustedEvent === "function") {
+        dispatchTrustedEvent(target, ev);
+      } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+        global.__capsurf_dispatchTrustedEvent(target, ev);
+      } else if (typeof target.dispatchEvent === "function") {
+        ev._isTrusted = true;
+        target.dispatchEvent(ev);
+      }
+    };
+
+    if (doc) {
+      const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+      dispatch(doc, docScrollEv);
+    }
+    if (win) {
+      const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+      dispatch(win, winScrollEv);
+    }
+
+    if (windowScrollendTimer) {
+      clearTimeout(windowScrollendTimer);
+    }
+    windowScrollendTimer = setTimeout(function () {
+      windowScrollendTimer = null;
+      if (doc) {
+        const docEndEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+        dispatch(doc, docEndEv);
+      }
+      if (win) {
+        const winEndEv = new Ev("scrollend", { bubbles: false, cancelable: false });
+        dispatch(win, winEndEv);
+      }
+    }, 20);
+  }
+
+  global.__capsurf_triggerWindowScrollEvents = triggerWindowScrollEvents;
+
   global.scrollTo = function (x, y) {
     let targetX = 0, targetY = 0;
     if (typeof x === "object" && x !== null) {
-      targetX = Number(x.left || 0);
-      targetY = Number(x.top || 0);
+      targetX = Number(x.left !== undefined ? x.left : (x.x !== undefined ? x.x : 0));
+      targetY = Number(x.top !== undefined ? x.top : (x.y !== undefined ? x.y : 0));
     } else {
       targetX = Number(x || 0);
       targetY = Number(y || 0);
     }
+    if (isNaN(targetX)) targetX = 0;
+    if (isNaN(targetY)) targetY = 0;
+    const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
+    const prevY = (typeof global.scrollY !== "undefined") ? global.scrollY : 0;
     global.pageXOffset = targetX;
     global.scrollX = targetX;
     global.pageYOffset = targetY;
     global.scrollY = targetY;
+    if (typeof globalThis !== "undefined") {
+      globalThis.scrollX = targetX;
+      globalThis.scrollY = targetY;
+      globalThis.pageXOffset = targetX;
+      globalThis.pageYOffset = targetY;
+    }
+    if (typeof window !== "undefined") {
+      window.scrollX = targetX;
+      window.scrollY = targetY;
+      window.pageXOffset = targetX;
+      window.pageYOffset = targetY;
+    }
+    if (prevX !== targetX || prevY !== targetY) {
+      triggerWindowScrollEvents();
+    }
   };
   global.scroll = global.scrollTo;
   global.scrollBy = function (x, y) {
     let dx = 0, dy = 0;
     if (typeof x === "object" && x !== null) {
-      dx = Number(x.left || 0);
-      dy = Number(x.top || 0);
+      dx = Number(x.left !== undefined ? x.left : (x.x !== undefined ? x.x : 0));
+      dy = Number(x.top !== undefined ? x.top : (x.y !== undefined ? x.y : 0));
     } else {
       dx = Number(x || 0);
       dy = Number(y || 0);
     }
+    if (isNaN(dx)) dx = 0;
+    if (isNaN(dy)) dy = 0;
     global.scrollTo((global.scrollX || 0) + dx, (global.scrollY || 0) + dy);
   };
   if (typeof globalThis !== "undefined") {
     globalThis.scrollTo = global.scrollTo;
     globalThis.scroll = global.scroll;
     globalThis.scrollBy = global.scrollBy;
+  }
+  if (typeof window !== "undefined") {
+    window.scrollTo = global.scrollTo;
+    window.scroll = global.scroll;
+    window.scrollBy = global.scrollBy;
   }
 
   global.scrollX = 0;
@@ -1991,6 +2841,22 @@ function installWindow(global) {
       },
       configurable: true,
       enumerable: true,
+    });
+  }
+
+  // styleSheets
+  if (!Object.getOwnPropertyDescriptor(docProto, "styleSheets")) {
+    Object.defineProperty(docProto, "styleSheets", {
+      get: function () {
+        if (typeof global.getOrCreateStyleSheetList === "function") {
+          return global.getOrCreateStyleSheetList(this);
+        }
+        if (typeof globalThis.getOrCreateStyleSheetList === "function") {
+          return globalThis.getOrCreateStyleSheetList(this);
+        }
+        return [];
+      },
+      configurable: true,
     });
   }
 
@@ -2192,7 +3058,19 @@ function installWindow(global) {
   if (!globalThis[ksInternalsSym]) {
     globalThis[ksInternalsSym] = {
       demandFontOutlines: function () {},
+      fontsInflightCount: function () { return 0; },
+      fontsReady: function () { return Promise.resolve(); },
     };
+  } else {
+    if (typeof globalThis[ksInternalsSym].fontsInflightCount !== "function") {
+      globalThis[ksInternalsSym].fontsInflightCount = function () { return 0; };
+    }
+    if (typeof globalThis[ksInternalsSym].fontsReady !== "function") {
+      globalThis[ksInternalsSym].fontsReady = function () { return Promise.resolve(); };
+    }
+    if (typeof globalThis[ksInternalsSym].demandFontOutlines !== "function") {
+      globalThis[ksInternalsSym].demandFontOutlines = function () {};
+    }
   }
   if (!global[ksInternalsSym]) {
     global[ksInternalsSym] = globalThis[ksInternalsSym];

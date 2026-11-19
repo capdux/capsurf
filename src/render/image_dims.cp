@@ -216,11 +216,11 @@ pub fn looksLikeSvg(bytes: []const u8): bool {
                 continue;
             }
             let at = i + 2;
-            const open = indexOfAscii(bytes, "[", at, limit);
-            if (open >= 0) {
-                const close = indexOfAscii(bytes, "]", @as(usize, @intCast(open)) + 1, limit);
-                if (close < 0) return false;
-                at = @as(usize, @intCast(close)) + 1;
+            const open_idx = indexOfAscii(bytes, "[", at, limit);
+            if (open_idx >= 0) {
+                const close_idx = indexOfAscii(bytes, "]", @as(usize, @intCast(open_idx)) + 1, limit);
+                if (close_idx < 0) return false;
+                at = @as(usize, @intCast(close_idx)) + 1;
             }
             const end = indexOfByte(bytes, '>', at, limit);
             if (end < 0) return false;

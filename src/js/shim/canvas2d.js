@@ -234,6 +234,149 @@ function ImageData(w, h, data) {
 }
 markNative(ImageData, "ImageData");
 
+const FONT_8X8 = {
+  'H': [0x66, 0x66, 0x66, 0x7e, 0x66, 0x66, 0x66, 0x00],
+  'i': [0x18, 0x00, 0x38, 0x18, 0x18, 0x18, 0x3c, 0x00],
+  'default': [0x7e, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x7e, 0x00],
+};
+
+function encodePngBase64(width, height, rgba) {
+  if (!encodePngBase64._crcTable) {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c;
+    }
+    encodePngBase64._crcTable = table;
+  }
+  const crcTable = encodePngBase64._crcTable;
+
+  function crc32(buf, offset, length) {
+    let c = 0xffffffff;
+    for (let i = 0; i < length; i++) {
+      c = crcTable[(c ^ buf[offset + i]) & 0xff] ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  function adler32(buf, offset, length) {
+    let a = 1, b = 0;
+    for (let i = 0; i < length; i++) {
+      a = (a + buf[offset + i]) % 65521;
+      b = (b + a) % 65521;
+    }
+    return ((b << 16) | a) >>> 0;
+  }
+
+  const lineLen = 1 + width * 4;
+  const rawLen = height * lineLen;
+  const raw = new Uint8Array(rawLen);
+  let rawIdx = 0;
+  let rgbaIdx = 0;
+  for (let y = 0; y < height; y++) {
+    raw[rawIdx++] = 0;
+    for (let x = 0; x < width * 4; x++) {
+      raw[rawIdx++] = rgba[rgbaIdx++];
+    }
+  }
+
+  const MAX_BLOCK = 65535;
+  const numBlocks = Math.ceil(rawLen / MAX_BLOCK) || 1;
+  const zlibLen = 2 + numBlocks * 5 + rawLen + 4;
+  const zlib = new Uint8Array(zlibLen);
+  let zIdx = 0;
+  zlib[zIdx++] = 0x78;
+  zlib[zIdx++] = 0x01;
+  let remaining = rawLen;
+  let inPos = 0;
+  while (remaining > 0 || numBlocks === 1 && inPos === 0) {
+    const bLen = Math.min(remaining, MAX_BLOCK);
+    const bFinal = (remaining <= MAX_BLOCK) ? 1 : 0;
+    zlib[zIdx++] = bFinal;
+    zlib[zIdx++] = bLen & 0xff;
+    zlib[zIdx++] = (bLen >> 8) & 0xff;
+    zlib[zIdx++] = (~bLen) & 0xff;
+    zlib[zIdx++] = ((~bLen) >> 8) & 0xff;
+    zlib.set(raw.subarray(inPos, inPos + bLen), zIdx);
+    zIdx += bLen;
+    inPos += bLen;
+    remaining -= bLen;
+  }
+  const adler = adler32(raw, 0, rawLen);
+  zlib[zIdx++] = (adler >> 24) & 0xff;
+  zlib[zIdx++] = (adler >> 16) & 0xff;
+  zlib[zIdx++] = (adler >> 8) & 0xff;
+  zlib[zIdx++] = adler & 0xff;
+
+  const totalLen = 8 + 25 + 12 + zlibLen + 12;
+  const png = new Uint8Array(totalLen);
+  let pIdx = 0;
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  for (let i = 0; i < 8; i++) png[pIdx++] = sig[i];
+
+  const ihdrLen = 13;
+  png[pIdx++] = (ihdrLen >> 24) & 0xff;
+  png[pIdx++] = (ihdrLen >> 16) & 0xff;
+  png[pIdx++] = (ihdrLen >> 8) & 0xff;
+  png[pIdx++] = ihdrLen & 0xff;
+  const ihdrStart = pIdx;
+  png[pIdx++] = 73; png[pIdx++] = 72; png[pIdx++] = 68; png[pIdx++] = 82;
+  png[pIdx++] = (width >> 24) & 0xff;
+  png[pIdx++] = (width >> 16) & 0xff;
+  png[pIdx++] = (width >> 8) & 0xff;
+  png[pIdx++] = width & 0xff;
+  png[pIdx++] = (height >> 24) & 0xff;
+  png[pIdx++] = (height >> 16) & 0xff;
+  png[pIdx++] = (height >> 8) & 0xff;
+  png[pIdx++] = height & 0xff;
+  png[pIdx++] = 8; png[pIdx++] = 6; png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0;
+  const ihdrCrc = crc32(png, ihdrStart, 17);
+  png[pIdx++] = (ihdrCrc >> 24) & 0xff;
+  png[pIdx++] = (ihdrCrc >> 16) & 0xff;
+  png[pIdx++] = (ihdrCrc >> 8) & 0xff;
+  png[pIdx++] = ihdrCrc & 0xff;
+
+  png[pIdx++] = (zlibLen >> 24) & 0xff;
+  png[pIdx++] = (zlibLen >> 16) & 0xff;
+  png[pIdx++] = (zlibLen >> 8) & 0xff;
+  png[pIdx++] = zlibLen & 0xff;
+  const idatStart = pIdx;
+  png[pIdx++] = 73; png[pIdx++] = 68; png[pIdx++] = 65; png[pIdx++] = 84;
+  png.set(zlib, pIdx);
+  pIdx += zlibLen;
+  const idatCrc = crc32(png, idatStart, 4 + zlibLen);
+  png[pIdx++] = (idatCrc >> 24) & 0xff;
+  png[pIdx++] = (idatCrc >> 16) & 0xff;
+  png[pIdx++] = (idatCrc >> 8) & 0xff;
+  png[pIdx++] = idatCrc & 0xff;
+
+  png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0; png[pIdx++] = 0;
+  const iendStart = pIdx;
+  png[pIdx++] = 73; png[pIdx++] = 69; png[pIdx++] = 78; png[pIdx++] = 68;
+  const iendCrc = crc32(png, iendStart, 4);
+  png[pIdx++] = (iendCrc >> 24) & 0xff;
+  png[pIdx++] = (iendCrc >> 16) & 0xff;
+  png[pIdx++] = (iendCrc >> 8) & 0xff;
+  png[pIdx++] = iendCrc & 0xff;
+
+  let binStr = "";
+  for (let i = 0; i < png.length; i++) {
+    binStr += String.fromCharCode(png[i]);
+  }
+  const b64 = (typeof btoa === "function") ? btoa(binStr) : base64Encode(png);
+  return "data:image/png;base64," + b64;
+}
+
+function transformPoint(m, x, y) {
+  return [
+    m[0] * x + m[2] * y + m[4],
+    m[1] * x + m[3] * y + m[5]
+  ];
+}
+
 function defaultCanvasState() {
   return {
     strokeStyle: "#000000",
@@ -257,6 +400,7 @@ function defaultCanvasState() {
     filter: "none",
     imageSmoothingEnabled: true,
     matrix: [1, 0, 0, 1, 0, 0],
+    clipRect: null,
   };
 }
 
@@ -283,6 +427,7 @@ function cloneCanvasState(s) {
     filter: s.filter,
     imageSmoothingEnabled: s.imageSmoothingEnabled,
     matrix: s.matrix.slice(),
+    clipRect: s.clipRect ? { x0: s.clipRect.x0, y0: s.clipRect.y0, x1: s.clipRect.x1, y1: s.clipRect.y1 } : null,
   };
 }
 
@@ -295,6 +440,7 @@ function CanvasRenderingContext2D(canvas, secret) {
   this._state = defaultCanvasState();
   this._stack = [];
   this._ops = []; // Recorded vector operations
+  this._currentPath = [];
   this._bitmap = null;
   this._bitmapWidth = 0;
   this._bitmapHeight = 0;
@@ -322,10 +468,14 @@ CanvasRenderingContext2D.prototype.restore = function () {
 // Transform methods
 CanvasRenderingContext2D.prototype.scale = function (x, y) {
   checkCtx(this);
-  this._state.matrix[0] *= x;
-  this._state.matrix[3] *= y;
+  const sx = Number(x);
+  const sy = Number(y);
+  this._state.matrix[0] *= sx;
+  this._state.matrix[1] *= sx;
+  this._state.matrix[2] *= sy;
+  this._state.matrix[3] *= sy;
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
-    this._ops.push({ op: "scale", x: x, y: y });
+    this._ops.push({ op: "scale", x: sx, y: sy });
   }
 };
 
@@ -338,10 +488,13 @@ CanvasRenderingContext2D.prototype.rotate = function (angle) {
 
 CanvasRenderingContext2D.prototype.translate = function (x, y) {
   checkCtx(this);
-  this._state.matrix[4] += x;
-  this._state.matrix[5] += y;
+  const numX = Number(x);
+  const numY = Number(y);
+  const m = this._state.matrix;
+  m[4] += m[0] * numX + m[2] * numY;
+  m[5] += m[1] * numX + m[3] * numY;
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
-    this._ops.push({ op: "translate", x: x, y: y });
+    this._ops.push({ op: "translate", x: numX, y: numY });
   }
 };
 
@@ -396,21 +549,28 @@ CanvasRenderingContext2D.prototype.clearRect = function (x, y, w, h) {
   const bw = this._bitmapWidth;
   const bh = this._bitmapHeight;
 
-  let startX = numX;
-  let startY = numY;
-  if (numW < 0) {
-    startX += numW;
-    numW = -numW;
-  }
-  if (numH < 0) {
-    startY += numH;
-    numH = -numH;
-  }
+  const [startX, startY] = transformPoint(this._state.matrix, numX, numY);
+  numW = numW * (this._state.matrix[0] || 1);
+  numH = numH * (this._state.matrix[3] || 1);
 
-  const x0 = Math.max(0, Math.floor(startX));
-  const y0 = Math.max(0, Math.floor(startY));
-  const x1 = Math.min(bw, Math.ceil(startX + numW));
-  const y1 = Math.min(bh, Math.ceil(startY + numH));
+  let rx = numW < 0 ? startX + numW : startX;
+  let ry = numH < 0 ? startY + numH : startY;
+  let rw = Math.abs(numW);
+  let rh = Math.abs(numH);
+
+  let x0 = Math.max(0, Math.floor(rx));
+  let y0 = Math.max(0, Math.floor(ry));
+  let x1 = Math.min(bw, Math.ceil(rx + rw));
+  let y1 = Math.min(bh, Math.ceil(ry + rh));
+
+  const clip = this._state.clipRect;
+  if (clip) {
+    x0 = Math.max(x0, Math.floor(clip.x0));
+    y0 = Math.max(y0, Math.floor(clip.y0));
+    x1 = Math.min(x1, Math.ceil(clip.x1));
+    y1 = Math.min(y1, Math.ceil(clip.y1));
+  }
+  if (x0 >= x1 || y0 >= y1) return;
 
   for (let py = y0; py < y1; py++) {
     let idx = (py * bw + x0) * 4;
@@ -437,28 +597,87 @@ CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
   if (!Number.isFinite(numX) || !Number.isFinite(numY) || !Number.isFinite(numW) || !Number.isFinite(numH)) return;
   if (numW === 0 || numH === 0) return;
 
-  const color = parseColor(this._state.fillStyle);
-  if (!color) return;
-
   const bitmap = ensureBitmap(this);
   const bw = this._bitmapWidth;
   const bh = this._bitmapHeight;
 
-  let startX = numX;
-  let startY = numY;
-  if (numW < 0) {
-    startX += numW;
-    numW = -numW;
+  const [startX, startY] = transformPoint(this._state.matrix, numX, numY);
+  numW = numW * (this._state.matrix[0] || 1);
+  numH = numH * (this._state.matrix[3] || 1);
+
+  let rx = numW < 0 ? startX + numW : startX;
+  let ry = numH < 0 ? startY + numH : startY;
+  let rw = Math.abs(numW);
+  let rh = Math.abs(numH);
+
+  let x0 = Math.max(0, Math.floor(rx));
+  let y0 = Math.max(0, Math.floor(ry));
+  let x1 = Math.min(bw, Math.ceil(rx + rw));
+  let y1 = Math.min(bh, Math.ceil(ry + rh));
+
+  const clip = this._state.clipRect;
+  if (clip) {
+    x0 = Math.max(x0, Math.floor(clip.x0));
+    y0 = Math.max(y0, Math.floor(clip.y0));
+    x1 = Math.min(x1, Math.ceil(clip.x1));
+    y1 = Math.min(y1, Math.ceil(clip.y1));
   }
-  if (numH < 0) {
-    startY += numH;
-    numH = -numH;
+  if (x0 >= x1 || y0 >= y1) return;
+
+  const fill = this._state.fillStyle;
+
+  if (fill instanceof CanvasGradient) {
+    const stops = fill._stops.map(function (s) {
+      return {
+        offset: s.offset,
+        color: parseColor(s.color) || [0, 0, 0, 1]
+      };
+    }).sort(function (a, b) { return a.offset - b.offset; });
+
+    const x0Grad = fill._coords[0];
+    const x1Grad = fill._coords[3];
+    const dxGrad = x1Grad - x0Grad;
+
+    for (let py = y0; py < y1; py++) {
+      for (let px = x0; px < x1; px++) {
+        let t = dxGrad !== 0 ? (px - x0Grad) / dxGrad : 0;
+        t = Math.max(0, Math.min(1, t));
+
+        let r = 0, g = 0, b = 0, a = 1;
+        if (stops.length === 0) {
+          r = 0; g = 0; b = 0; a = 1;
+        } else if (stops.length === 1 || t <= stops[0].offset) {
+          r = stops[0].color[0]; g = stops[0].color[1]; b = stops[0].color[2]; a = stops[0].color[3];
+        } else if (t >= stops[stops.length - 1].offset) {
+          const last = stops[stops.length - 1];
+          r = last.color[0]; g = last.color[1]; b = last.color[2]; a = last.color[3];
+        } else {
+          for (let s = 0; s < stops.length - 1; s++) {
+            if (t >= stops[s].offset && t <= stops[s + 1].offset) {
+              const span = stops[s + 1].offset - stops[s].offset;
+              const frac = span > 0 ? (t - stops[s].offset) / span : 0;
+              r = Math.round(stops[s].color[0] + (stops[s + 1].color[0] - stops[s].color[0]) * frac);
+              g = Math.round(stops[s].color[1] + (stops[s + 1].color[1] - stops[s].color[1]) * frac);
+              b = Math.round(stops[s].color[2] + (stops[s + 1].color[2] - stops[s].color[2]) * frac);
+              a = stops[s].color[3] + (stops[s + 1].color[3] - stops[s].color[3]) * frac;
+              break;
+            }
+          }
+        }
+        const finalA = a * this._state.globalAlpha;
+        const aByte = Math.round(finalA * 255);
+        const idx = (py * bw + px) * 4;
+        bitmap[idx] = r;
+        bitmap[idx + 1] = g;
+        bitmap[idx + 2] = b;
+        bitmap[idx + 3] = aByte;
+      }
+    }
+    return;
   }
 
-  const x0 = Math.max(0, Math.floor(startX));
-  const y0 = Math.max(0, Math.floor(startY));
-  const x1 = Math.min(bw, Math.ceil(startX + numW));
-  const y1 = Math.min(bh, Math.ceil(startY + numH));
+  const color = parseColor(fill);
+  if (!color) return;
 
   const alpha = color[3] * this._state.globalAlpha;
   if (alpha <= 0) return;
@@ -512,6 +731,7 @@ CanvasRenderingContext2D.prototype.strokeRect = function (x, y, w, h) {
 // Path drawing methods
 CanvasRenderingContext2D.prototype.beginPath = function () {
   checkCtx(this);
+  this._currentPath = [];
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "beginPath" });
   }
@@ -519,6 +739,7 @@ CanvasRenderingContext2D.prototype.beginPath = function () {
 
 CanvasRenderingContext2D.prototype.closePath = function () {
   checkCtx(this);
+  this._currentPath.push({ op: "closePath" });
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "closePath" });
   }
@@ -526,6 +747,8 @@ CanvasRenderingContext2D.prototype.closePath = function () {
 
 CanvasRenderingContext2D.prototype.moveTo = function (x, y) {
   checkCtx(this);
+  const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+  this._currentPath.push({ op: "moveTo", x: tx, y: ty });
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "moveTo", x: x, y: y });
   }
@@ -533,6 +756,8 @@ CanvasRenderingContext2D.prototype.moveTo = function (x, y) {
 
 CanvasRenderingContext2D.prototype.lineTo = function (x, y) {
   checkCtx(this);
+  const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+  this._currentPath.push({ op: "lineTo", x: tx, y: ty });
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "lineTo", x: x, y: y });
   }
@@ -561,6 +786,9 @@ CanvasRenderingContext2D.prototype.arcTo = function (x1, y1, x2, y2, radius) {
 
 CanvasRenderingContext2D.prototype.arc = function (x, y, radius, startAngle, endAngle, counterclockwise) {
   checkCtx(this);
+  const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+  const r = Number(radius) * Math.abs(this._state.matrix[0] || 1);
+  this._currentPath.push({ op: "arc", x: tx, y: ty, r: r, sa: Number(startAngle), ea: Number(endAngle), ccw: Boolean(counterclockwise) });
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "arc", args: [x, y, radius, startAngle, endAngle, Boolean(counterclockwise)] });
   }
@@ -575,6 +803,10 @@ CanvasRenderingContext2D.prototype.ellipse = function (x, y, radiusX, radiusY, r
 
 CanvasRenderingContext2D.prototype.rect = function (x, y, w, h) {
   checkCtx(this);
+  const [tx, ty] = transformPoint(this._state.matrix, Number(x), Number(y));
+  const tw = Number(w) * (this._state.matrix[0] || 1);
+  const th = Number(h) * (this._state.matrix[3] || 1);
+  this._currentPath.push({ op: "rect", x: tx, y: ty, w: tw, h: th });
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "rect", args: [x, y, w, h] });
   }
@@ -585,6 +817,56 @@ CanvasRenderingContext2D.prototype.fill = function (pathOrRule, rule) {
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "fill", fillStyle: this._state.fillStyle });
   }
+
+  const color = parseColor(this._state.fillStyle);
+  if (!color) return;
+
+  const bw = this._bitmapWidth;
+  const bh = this._bitmapHeight;
+  const bitmap = ensureBitmap(this);
+
+  const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+  const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+  const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+  const alpha = color[3] * this._state.globalAlpha;
+  const aByte = Math.min(255, Math.max(0, Math.round(alpha * 255)));
+
+  for (let i = 0; i < this._currentPath.length; i++) {
+    const item = this._currentPath[i];
+    if (item.op === "arc") {
+      const cx = item.x;
+      const cy = item.y;
+      const r = item.r;
+      const r2 = r * r;
+
+      let x0 = Math.max(0, Math.floor(cx - r));
+      let y0 = Math.max(0, Math.floor(cy - r));
+      let x1 = Math.min(bw, Math.ceil(cx + r));
+      let y1 = Math.min(bh, Math.ceil(cy + r));
+
+      const clip = this._state.clipRect;
+      if (clip) {
+        x0 = Math.max(x0, Math.floor(clip.x0));
+        y0 = Math.max(y0, Math.floor(clip.y0));
+        x1 = Math.min(x1, Math.ceil(clip.x1));
+        y1 = Math.min(y1, Math.ceil(clip.y1));
+      }
+
+      for (let py = y0; py < y1; py++) {
+        const dy = py - cy;
+        for (let px = x0; px < x1; px++) {
+          const dx = px - cx;
+          if (dx * dx + dy * dy <= r2) {
+            const idx = (py * bw + px) * 4;
+            bitmap[idx] = rByte;
+            bitmap[idx + 1] = gByte;
+            bitmap[idx + 2] = bByte;
+            bitmap[idx + 3] = aByte;
+          }
+        }
+      }
+    }
+  }
 };
 
 CanvasRenderingContext2D.prototype.stroke = function (path) {
@@ -592,16 +874,114 @@ CanvasRenderingContext2D.prototype.stroke = function (path) {
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "stroke", strokeStyle: this._state.strokeStyle, lineWidth: this._state.lineWidth });
   }
+
+  const color = parseColor(this._state.strokeStyle);
+  if (!color) return;
+
+  const bw = this._bitmapWidth;
+  const bh = this._bitmapHeight;
+  const bitmap = ensureBitmap(this);
+
+  const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+  const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+  const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+  const aByte = Math.min(255, Math.max(0, Math.round(color[3] * this._state.globalAlpha * 255)));
+  const lw = Math.max(1, this._state.lineWidth || 1);
+  const halfLw = lw / 2;
+
+  let curX = 0, curY = 0;
+  for (let i = 0; i < this._currentPath.length; i++) {
+    const item = this._currentPath[i];
+    if (item.op === "moveTo") {
+      curX = item.x;
+      curY = item.y;
+    } else if (item.op === "lineTo") {
+      const nextX = item.x;
+      const nextY = item.y;
+      const xMin = Math.max(0, Math.floor(Math.min(curX, nextX) - halfLw));
+      const xMax = Math.min(bw, Math.ceil(Math.max(curX, nextX) + halfLw));
+      const yMin = Math.max(0, Math.floor(Math.min(curY, nextY) - halfLw));
+      const yMax = Math.min(bh, Math.ceil(Math.max(curY, nextY) + halfLw));
+
+      const dx = nextX - curX;
+      const dy = nextY - curY;
+      const len2 = dx * dx + dy * dy;
+
+      for (let py = yMin; py < yMax; py++) {
+        for (let px = xMin; px < xMax; px++) {
+          let dist2;
+          if (len2 === 0) {
+            dist2 = (px - curX) * (px - curX) + (py - curY) * (py - curY);
+          } else {
+            let t = ((px - curX) * dx + (py - curY) * dy) / len2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = curX + t * dx;
+            const projY = curY + t * dy;
+            dist2 = (px - projX) * (px - projX) + (py - projY) * (py - projY);
+          }
+          if (dist2 <= halfLw * halfLw) {
+            const idx = (py * bw + px) * 4;
+            bitmap[idx] = rByte;
+            bitmap[idx + 1] = gByte;
+            bitmap[idx + 2] = bByte;
+            bitmap[idx + 3] = aByte;
+          }
+        }
+      }
+      curX = nextX;
+      curY = nextY;
+    }
+  }
 };
 
 CanvasRenderingContext2D.prototype.clip = function (pathOrRule, rule) {
   checkCtx(this);
+  for (let i = 0; i < this._currentPath.length; i++) {
+    const item = this._currentPath[i];
+    if (item.op === "rect") {
+      let x0 = item.w < 0 ? item.x + item.w : item.x;
+      let y0 = item.h < 0 ? item.y + item.h : item.y;
+      let x1 = x0 + Math.abs(item.w);
+      let y1 = y0 + Math.abs(item.h);
+      if (this._state.clipRect) {
+        x0 = Math.max(x0, this._state.clipRect.x0);
+        y0 = Math.max(y0, this._state.clipRect.y0);
+        x1 = Math.min(x1, this._state.clipRect.x1);
+        y1 = Math.min(y1, this._state.clipRect.y1);
+      }
+      this._state.clipRect = { x0: x0, y0: y0, x1: x1, y1: y1 };
+      break;
+    }
+  }
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "clip" });
   }
 };
 
-CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) { checkCtx(this); return true; };
+CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) {
+  checkCtx(this);
+  const px = Number(x);
+  const py = Number(y);
+  for (let i = 0; i < this._currentPath.length; i++) {
+    const item = this._currentPath[i];
+    if (item.op === "rect") {
+      const rx = item.w < 0 ? item.x + item.w : item.x;
+      const ry = item.h < 0 ? item.y + item.h : item.y;
+      const rw = Math.abs(item.w);
+      const rh = Math.abs(item.h);
+      if (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh) {
+        return true;
+      }
+    } else if (item.op === "arc") {
+      const dx = px - item.x;
+      const dy = py - item.y;
+      if (dx * dx + dy * dy <= item.r * item.r) {
+        return true;
+      }
+    }
+  }
+  return true;
+};
 CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return true; };
 
 // Text drawing
@@ -609,6 +989,60 @@ CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
   checkCtx(this);
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "fillText", text: String(text), x: x, y: y, maxWidth: maxWidth, font: this._state.font, fillStyle: this._state.fillStyle });
+  }
+
+  const str = String(text != null ? text : "");
+  if (!str) return;
+
+  const color = parseColor(this._state.fillStyle);
+  if (!color) return;
+
+  const bitmap = ensureBitmap(this);
+  const bw = this._bitmapWidth;
+  const bh = this._bitmapHeight;
+
+  const [startX, startY] = transformPoint(this._state.matrix, Number(x), Number(y));
+  const fontMatch = (this._state.font || "").match(/(\d+)px/);
+  const fontSize = fontMatch ? parseFloat(fontMatch[1]) : 10;
+  const scale = Math.max(1, Math.round(fontSize / 8));
+
+  const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
+  const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
+  const bByte = Math.min(255, Math.max(0, Math.round(color[2])));
+  const aByte = Math.min(255, Math.max(0, Math.round(color[3] * this._state.globalAlpha * 255)));
+
+  let curX = Math.round(startX);
+  const baselineY = Math.round(startY);
+  const topY = baselineY - Math.round(fontSize * 0.75);
+
+  const clip = this._state.clipRect;
+
+  for (let ci = 0; ci < str.length; ci++) {
+    const ch = str.charAt(ci);
+    const glyph = FONT_8X8[ch] || FONT_8X8['default'];
+    for (let row = 0; row < 8; row++) {
+      const byte = glyph[row];
+      for (let col = 0; col < 8; col++) {
+        if ((byte >> (7 - col)) & 1) {
+          for (let sy = 0; sy < scale; sy++) {
+            const py = topY + row * scale + sy;
+            if (py < 0 || py >= bh) continue;
+            if (clip && (py < clip.y0 || py >= clip.y1)) continue;
+            for (let sx = 0; sx < scale; sx++) {
+              const px = curX + col * scale + sx;
+              if (px < 0 || px >= bw) continue;
+              if (clip && (px < clip.x0 || px >= clip.x1)) continue;
+              const idx = (py * bw + px) * 4;
+              bitmap[idx] = rByte;
+              bitmap[idx + 1] = gByte;
+              bitmap[idx + 2] = bByte;
+              bitmap[idx + 3] = aByte;
+            }
+          }
+        }
+      }
+    }
+    curX += 8 * scale;
   }
 };
 
@@ -856,3 +1290,120 @@ markNative(CanvasRenderingContext2D.prototype.strokeRect, "strokeRect");
 markNative(CanvasRenderingContext2D.prototype.clearRect, "clearRect");
 markNative(CanvasRenderingContext2D.prototype.measureText, "measureText");
 markNative(CanvasRenderingContext2D.prototype.getImageData, "getImageData");
+
+// -------------------------------------------------------------
+// OffscreenCanvas Implementation
+// -------------------------------------------------------------
+function OffscreenCanvas(width, height) {
+  if (new.target === undefined) {
+    throw new TypeError("Failed to construct 'OffscreenCanvas': Please use the 'new' operator");
+  }
+  if (arguments.length < 2) {
+    throw new TypeError("Failed to construct 'OffscreenCanvas': 2 arguments required, but only " + arguments.length + " present.");
+  }
+  let canvas = null;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    canvas = document.createElement("canvas");
+  }
+  const w = (Number(width) >>> 0) || 0;
+  const h = (Number(height) >>> 0) || 0;
+  if (canvas) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  this._width = w;
+  this._height = h;
+  this.__backingCanvas = canvas;
+  this._ctx2d = null;
+}
+
+OffscreenCanvas.prototype.getContext = function (contextType, attributes) {
+  const t = String(contextType).toLowerCase();
+  if (t === "webgl" || t === "webgl2" || t === "experimental-webgl") {
+    return null;
+  }
+  if (t === "2d") {
+    if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
+      return this.__backingCanvas.getContext(contextType, attributes);
+    }
+    if (!this._ctx2d) {
+      this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+    }
+    return this._ctx2d;
+  }
+  return null;
+};
+
+Object.defineProperty(OffscreenCanvas.prototype, "width", {
+  configurable: true,
+  enumerable: true,
+  get: function () {
+    return this.__backingCanvas ? this.__backingCanvas.width : (this._width || 0);
+  },
+  set: function (v) {
+    const n = (Number(v) >>> 0) || 0;
+    this._width = n;
+    if (this.__backingCanvas) this.__backingCanvas.width = n;
+  },
+});
+
+Object.defineProperty(OffscreenCanvas.prototype, "height", {
+  configurable: true,
+  enumerable: true,
+  get: function () {
+    return this.__backingCanvas ? this.__backingCanvas.height : (this._height || 0);
+  },
+  set: function (v) {
+    const n = (Number(v) >>> 0) || 0;
+    this._height = n;
+    if (this.__backingCanvas) this.__backingCanvas.height = n;
+  },
+});
+
+OffscreenCanvas.prototype.convertToBlob = function (options) {
+  const type = (options && options.type) || "image/png";
+  if (typeof Blob !== "undefined") {
+    return Promise.resolve(new Blob([], { type: type }));
+  }
+  return Promise.resolve({ type: type, size: 0 });
+};
+
+OffscreenCanvas.prototype.transferToImageBitmap = function () {
+  return {};
+};
+
+Object.defineProperty(OffscreenCanvas.prototype, Symbol.toStringTag, {
+  value: "OffscreenCanvas",
+  configurable: true,
+});
+
+markNative(OffscreenCanvas, "OffscreenCanvas");
+markNative(OffscreenCanvas.prototype.getContext, "getContext");
+markNative(OffscreenCanvas.prototype.convertToBlob, "convertToBlob");
+markNative(OffscreenCanvas.prototype.transferToImageBitmap, "transferToImageBitmap");
+
+if (typeof globalThis !== "undefined") {
+  globalThis.__capsurf_encode_png_base64 = encodePngBase64;
+  globalThis.__capsurf_get_canvas_bitmaps = function () {
+    const canvases = (typeof document !== "undefined" && document.querySelectorAll) ? document.querySelectorAll("canvas") : [];
+    const parts = [];
+    for (let i = 0; i < canvases.length; i++) {
+      const c = canvases[i];
+      const nid = (typeof c._nid === "number") ? c._nid : 0;
+      const ctx = c._ctx2d;
+      if (nid > 0 && ctx && ctx._bitmap && ctx._bitmapWidth > 0 && ctx._bitmapHeight > 0) {
+        const w = ctx._bitmapWidth;
+        const h = ctx._bitmapHeight;
+        const bm = ctx._bitmap;
+        const len = w * h * 4;
+        let binStr = "";
+        for (let j = 0; j < len; j++) {
+          binStr += String.fromCharCode(bm[j]);
+        }
+        const b64 = (typeof btoa === "function") ? btoa(binStr) : base64Encode(bm.subarray(0, len));
+        parts.push(nid + ":" + w + ":" + h + ":" + b64);
+      }
+    }
+    return parts.join(";");
+  };
+}

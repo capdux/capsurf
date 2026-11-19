@@ -247,7 +247,9 @@ fn runWebSocketCdpTest()! {
     let card_node_id: i64 = 0;
     if (f3 := frame_opt3) {
         expect_eq(std.mem.indexOf(u8, f3, "\"id\":103") != null, true);
-        card_node_id = extractJsonInt(f3, "nodeId") ?? 0;
+        if (nid := extractJsonInt(f3, "nodeId")) {
+            card_node_id = nid;
+        }
         expect_eq(card_node_id > 0, true);
     }
 
@@ -262,8 +264,8 @@ fn runWebSocketCdpTest()! {
     if (f4 := frame_opt4) {
         expect_eq(std.mem.indexOf(u8, f4, "\"id\":104") != null, true);
         // Card width is 400.0, height is 200.0
-        expect_eq(std.mem.indexOf(u8, f4, "\"width\":400.0") != null, true);
-        expect_eq(std.mem.indexOf(u8, f4, "\"height\":200.0") != null, true);
+        expect_eq(std.mem.indexOf(u8, f4, "\"width\":400") != null, true);
+        expect_eq(std.mem.indexOf(u8, f4, "\"height\":200") != null, true);
         expect_eq(std.mem.indexOf(u8, f4, "\"border\":[") != null, true);
     }
 

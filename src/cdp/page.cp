@@ -2,7 +2,7 @@
 // CDP Page Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/page.ts and vendor/kitesurf/packages/engine/src/eval/outbound.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { Base64 } from "cap:encoding";
@@ -16,20 +16,66 @@ import {
 import { extractAckSessionId } from "./screencast.cp";
 
 pub struct PageHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[4]CdpEvent, event_count: *usize): CdpResponse {
+    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
 
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload")) {
+            std.mem.eql(u8, req.method, "Page.reload") ||
+            std.mem.eql(u8, req.method, "Page.setLifecycleEventsEnabled") ||
+            std.mem.eql(u8, req.method, "Page.setInterceptFileChooserDialog") ||
+            std.mem.eql(u8, req.method, "Page.setBypassCSP") ||
+            std.mem.eql(u8, req.method, "Page.bringToFront") ||
+            std.mem.eql(u8, req.method, "Page.handleJavaScriptDialog") ||
+            std.mem.eql(u8, req.method, "Page.close")) {
             return CdpResponse.ok(req.id, "{}");
         }
 
+        if (std.mem.eql(u8, req.method, "Page.addScriptToEvaluateOnNewDocument")) {
+            return CdpResponse.ok(req.id, "{\"identifier\":\"capsurf-script-001\"}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.removeScriptToEvaluateOnNewDocument")) {
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.createIsolatedWorld")) {
+            return CdpResponse.ok(req.id, "{\"executionContextId\":1}");
+        }
+
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
-            if (html := extractJsonString(req.params_raw, "html")) {
-                session.navigate(html, session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+            if (raw_html := extractJsonString(req.params_raw, "html")) {
+                if (raw_html.len == 0) {
+                    session.navigate("", session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+                } else {
+                    let unesc_buf = session.allocator.alloc(u8, raw_html.len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                    defer session.allocator.free(unesc_buf);
+                    const html = unescapeJsonString(raw_html, unesc_buf);
+                    session.navigate(html, session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+                }
             }
+
+            if (session.css_enabled) {
+                let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_css_count = session.pollCssEvents(&polled_css_evts);
+                let css_i: usize = 0;
+                while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
+                    out_events[event_count.*] = polled_css_evts[css_i];
+                    event_count.* += 1;
+                }
+            }
+
+            if (session.network_enabled) {
+                let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
+                let net_i: usize = 0;
+                while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
+                    out_events[event_count.*] = polled_net_evts[net_i];
+                    event_count.* += 1;
+                }
+            }
+
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -124,6 +170,26 @@ pub struct PageHandler {
             out_events[2] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
             event_count.* = 3;
 
+            if (session.css_enabled) {
+                let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_css_count = session.pollCssEvents(&polled_css_evts);
+                let css_i: usize = 0;
+                while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
+                    out_events[event_count.*] = polled_css_evts[css_i];
+                    event_count.* += 1;
+                }
+            }
+
+            if (session.network_enabled) {
+                let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
+                let net_i: usize = 0;
+                while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
+                    out_events[event_count.*] = polled_net_evts[net_i];
+                    event_count.* += 1;
+                }
+            }
+
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\"}}",
@@ -133,13 +199,23 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.getLayoutMetrics")) {
+            const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (bctx.len > 0) {
+                session.setContextId(bctx);
+            }
+            let sx: f32 = 0.0;
+            let sy: f32 = 0.0;
+            let cw: f32 = 0.0;
+            let ch: f32 = 0.0;
+            session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
+
             const w = session.viewport_width;
             const h = session.viewport_height;
-            const dsf = session.device_scale_factor;
+
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"layoutViewport\":{{\"pageX\":0,\"pageY\":0,\"clientWidth\":{d},\"clientHeight\":{d}}},\"visualViewport\":{{\"pageX\":0,\"pageY\":0,\"clientWidth\":{d},\"clientHeight\":{d},\"scale\":{d},\"zoom\":1}},\"contentSize\":{{\"x\":0,\"y\":0,\"width\":{d},\"height\":{d}}}}}",
-                .{ w, h, w, h, dsf, w, h },
+                "{{\"layoutViewport\":{{\"pageX\":{d},\"pageY\":{d},\"clientWidth\":{d},\"clientHeight\":{d}}},\"visualViewport\":{{\"offsetX\":0,\"offsetY\":0,\"pageX\":{d},\"pageY\":{d},\"clientWidth\":{d},\"clientHeight\":{d},\"scale\":1,\"zoom\":1}},\"contentSize\":{{\"x\":0,\"y\":0,\"width\":{d},\"height\":{d}}},\"cssLayoutViewport\":{{\"pageX\":{d},\"pageY\":{d},\"clientWidth\":{d},\"clientHeight\":{d}}},\"cssVisualViewport\":{{\"offsetX\":0,\"offsetY\":0,\"pageX\":{d},\"pageY\":{d},\"clientWidth\":{d},\"clientHeight\":{d},\"scale\":1,\"zoom\":1}},\"cssContentSize\":{{\"x\":0,\"y\":0,\"width\":{d},\"height\":{d}}}}}",
+                .{ sx, sy, w, h, sx, sy, w, h, cw, ch, sx, sy, w, h, sx, sy, w, h, cw, ch },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }
@@ -161,7 +237,8 @@ pub struct PageHandler {
             return CdpResponse.ok(req.id, res);
         }
 
-        if (std.mem.eql(u8, req.method, "Page.getFrameResourceTree")) {
+        if (std.mem.eql(u8, req.method, "Page.getFrameResourceTree") ||
+            std.mem.eql(u8, req.method, "Page.getResourceTree")) {
             let main_f = makeMainFrameState(MainFrameArgs{
                 frame_id: session.frame_id,
                 loader_id: session.loader_id,

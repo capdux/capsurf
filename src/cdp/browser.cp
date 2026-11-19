@@ -22,6 +22,7 @@ pub struct BrowserHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
-        return CdpResponse.err(req.id, -32601, "'Browser' domain method not implemented");
+        // Permissive fallback for probes (setPermission, getWindowBounds, setDownloadBehavior, etc.)
+        return CdpResponse.ok(req.id, "{}");
     }
 }

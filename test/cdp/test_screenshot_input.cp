@@ -126,7 +126,7 @@ fn testDispatchMouseEvent()! {
     let eval_buf: [256]u8 = undefined;
     const eval_len = session.evaluate("globalThis.btnClicked === true && globalThis.clickCount === 1", eval_buf[0..]);
     expect_eq(eval_len > 0, true);
-    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len], "\"value\":\"true\"") != null, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len], "\"value\":true") != null, true);
 
     // Dispatch mouseReleased
     const rel_params = std.fmt.bufPrint(&params_buf, "{{\"type\":\"mouseReleased\",\"x\":{d},\"y\":{d},\"button\":\"left\",\"clickCount\":1}}", .{ click_x, click_y }) catch unreachable;
@@ -141,7 +141,7 @@ fn testDispatchMouseEvent()! {
     // Verify clickCount incremented on release
     const eval_len2 = session.evaluate("globalThis.clickCount", eval_buf[0..]);
     expect_eq(eval_len2 > 0, true);
-    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len2], "\"value\":\"2\"") != null, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len2], "\"value\":2") != null, true);
 
     // Test mouseWheel updates scroll_x / scroll_y
     const wheel_params = "{\"type\":\"mouseWheel\",\"x\":100,\"y\":100,\"deltaX\":15.5,\"deltaY\":42.0}";
@@ -277,6 +277,89 @@ fn testScreencastProtocol()! {
     expect_eq(stop_resp.isOk(), true);
 }
 
+fn testDispatchKeyPressEvent()! {
+    let session = CdpPageSession.init(std.heap.page_allocator) catch unreachable;
+    defer session.deinit();
+
+    session.viewport_width = 800.0;
+    session.viewport_height = 600.0;
+
+    let out_buf: [4096]u8 = undefined;
+    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let evt_cnt: usize = 0;
+
+    const html_data = "data:text/html,<html><body><script>" ++
+        "globalThis.__events = [];" ++
+        "window.addEventListener('keydown', (e) => globalThis.__events.push('down:' + e.key + ':' + e.charCode));" ++
+        "window.addEventListener('keypress', (e) => globalThis.__events.push('press:' + e.key + ':' + e.charCode));" ++
+        "window.addEventListener('keyup', (e) => globalThis.__events.push('up:' + e.key + ':' + e.charCode));" ++
+        "</script></body></html>";
+
+    const nav_req = CdpRequest{
+        id: 1,
+        method: "Page.navigate",
+        params_raw: "{\"url\":\"" ++ html_data ++ "\"}",
+    };
+    const nav_resp = CdpDispatcher.dispatch(session, nav_req, out_buf[0..], &out_evts, &evt_cnt);
+    expect_eq(nav_resp.isOk(), true);
+
+    // 1. Dispatch printable keydown with text -> should fire keydown AND keypress
+    const kd_req = CdpRequest{
+        id: 2,
+        method: "Input.dispatchKeyEvent",
+        params_raw: "{\"type\":\"keyDown\",\"key\":\"a\",\"code\":\"KeyA\",\"text\":\"a\"}",
+    };
+    * = CdpDispatcher.dispatch(session, kd_req, out_buf[0..], &out_evts, &evt_cnt);
+
+    const ku_req = CdpRequest{
+        id: 3,
+        method: "Input.dispatchKeyEvent",
+        params_raw: "{\"type\":\"keyUp\",\"key\":\"a\",\"code\":\"KeyA\"}",
+    };
+    * = CdpDispatcher.dispatch(session, ku_req, out_buf[0..], &out_evts, &evt_cnt);
+
+    let eval_buf: [256]u8 = undefined;
+    const len1 = session.evaluate("globalThis.__events.join(',')", eval_buf[0..]);
+    expect_eq(len1 > 0, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..len1], "down:a:0,press:a:97,up:a:0") != null, true);
+
+    // 2. Dispatch char event directly -> should fire keypress
+    const char_req = CdpRequest{
+        id: 4,
+        method: "Input.dispatchKeyEvent",
+        params_raw: "{\"type\":\"char\",\"key\":\"b\",\"text\":\"b\"}",
+    };
+    * = CdpDispatcher.dispatch(session, char_req, out_buf[0..], &out_evts, &evt_cnt);
+
+    const len2 = session.evaluate("globalThis.__events.slice(3).join(',')", eval_buf[0..]);
+    expect_eq(len2 > 0, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..len2], "press:b:98") != null, true);
+
+    // 3. Dispatch Enter -> should fire keydown, keypress (charCode 13)
+    const enter_req = CdpRequest{
+        id: 5,
+        method: "Input.dispatchKeyEvent",
+        params_raw: "{\"type\":\"keyDown\",\"key\":\"Enter\",\"code\":\"Enter\"}",
+    };
+    * = CdpDispatcher.dispatch(session, enter_req, out_buf[0..], &out_evts, &evt_cnt);
+
+    const len3 = session.evaluate("globalThis.__events.slice(4).join(',')", eval_buf[0..]);
+    expect_eq(len3 > 0, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..len3], "down:Enter:0,press:Enter:13") != null, true);
+
+    // 4. Dispatch Backspace -> should NOT fire keypress
+    const bs_req = CdpRequest{
+        id: 6,
+        method: "Input.dispatchKeyEvent",
+        params_raw: "{\"type\":\"keyDown\",\"key\":\"Backspace\",\"code\":\"Backspace\"}",
+    };
+    * = CdpDispatcher.dispatch(session, bs_req, out_buf[0..], &out_evts, &evt_cnt);
+
+    const len4 = session.evaluate("globalThis.__events.slice(6).join(',')", eval_buf[0..]);
+    expect_eq(len4 > 0, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..len4], "down:Backspace:0") != null, true);
+}
+
 fn main() {
     test("1. CDP Page.navigate and Page.captureScreenshot PNG Base64 Validation", () => {
         testCaptureScreenshot() catch unreachable;
@@ -292,5 +375,9 @@ fn main() {
 
     test("4. CDP Page.startScreencast & Page.screencastFrameAck Protocol Handshake", () => {
         testScreencastProtocol() catch unreachable;
+    });
+
+    test("5. CDP Input.dispatchKeyEvent keypress Event Dispatch for Printable Characters", () => {
+        testDispatchKeyPressEvent() catch unreachable;
     });
 }

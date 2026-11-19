@@ -137,13 +137,18 @@ pub struct UaStylesheet {
             * => {},
         }
 
-        // 4. CSS Inheritance from parent style (visibility, font_size_px, color)
+        // 4. CSS Inheritance from parent style (visibility, font_size_px, color, font_family)
         if (p := parent_style) {
             style.visibility = p.visibility;
             if (tag != .H1 && tag != .H2 && tag != .H3 && tag != .H4 && tag != .H5 && tag != .H6) {
                 style.font_size_px = p.font_size_px;
             }
             style.color = p.color;
+            if (p.font_family_len > 0) {
+                const copy_len = @min(p.font_family_len, style.font_family_buf.len);
+                @memcpy(style.font_family_buf[0..copy_len], p.font_family_buf[0..copy_len]);
+                style.font_family_len = copy_len;
+            }
         }
     }
 }

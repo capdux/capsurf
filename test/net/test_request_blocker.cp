@@ -19,7 +19,7 @@ pub struct TestTrackerContext {
     seen_count: usize = 0,
 }
 
-fn trackerClassify(ctx: *void?, req: *const BlockableRequest): RequestBlockVerdict? {
+fn trackerClassify(ctx: (*void)?, req: *const BlockableRequest): RequestBlockVerdict? {
     if (ctx_ptr := ctx) {
         let t: *TestTrackerContext = @ptrCast(@alignCast(ctx_ptr));
         if (t.seen_count < t.seen_reqs.len) {

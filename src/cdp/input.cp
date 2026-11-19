@@ -110,6 +110,39 @@ fn escapeJsString(input_str: []const u8, out: []u8): usize {
     return ei;
 }
 
+fn isPrintableKey(key: []const u8, text: []const u8): bool {
+    if (text.len > 0) {
+        const b = text[0];
+        if (b >= 32 && b != 127) return true;
+        if (b == '\r' || b == '\n' || b == '\t') return true;
+    }
+    if (key.len > 0) {
+        if (std.mem.eql(u8, key, "Enter")) return true;
+        const b = key[0];
+        if (b >= 32 && b != 127) {
+            if (key.len == 1 || b >= 0x80) return true;
+        }
+    }
+    return false;
+}
+
+fn dispatchKeyJs(session: *CdpPageSession, type_str_js: []const u8, escaped_key: []const u8, escaped_code: []const u8, modifiers: i64) {
+    let js_buf: [1024]u8 = [0; 1024];
+    const js_expr = std.fmt.bufPrint(
+        &js_buf,
+        "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
+        .{ type_str_js, escaped_key, escaped_code, modifiers },
+    ) catch null;
+    if (e := js_expr) {
+        const val = session.ctx.eval(e);
+        if (val.tag == 0 && val.u.uint64 > 0) {
+            session.focused_node = @as(u32, @truncate(val.u.uint64));
+            session.doc.focused_node = session.focused_node;
+        }
+        session.ctx.freeValue(val);
+    }
+}
+
 pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u8) {
     if (text.len == 0 && key.len == 0) return;
 
@@ -240,7 +273,7 @@ pub struct InputHandler {
             * = key_ev;
 
             if (session.has_document) {
-                if (ev_type == .KeyDown || ev_type == .KeyUp) {
+                if (ev_type == .KeyDown || ev_type == .KeyUp || ev_type == .RawKeyDown || ev_type == .Char) {
                     let k_esc_buf: [256]u8 = [0; 256];
                     let c_esc_buf: [256]u8 = [0; 256];
 
@@ -250,21 +283,21 @@ pub struct InputHandler {
                     const escaped_code_len = escapeJsString(code, &c_esc_buf);
                     const escaped_code = c_esc_buf[0..escaped_code_len];
 
-                    const type_str_js = if (ev_type == .KeyDown) "keydown" else "keyup";
-
-                    let js_buf: [1024]u8 = [0; 1024];
-                    const js_expr = std.fmt.bufPrint(
-                        &js_buf,
-                        "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
-                        .{ type_str_js, escaped_key, escaped_code, modifiers },
-                    ) catch null;
-                    if (e := js_expr) {
-                        const val = session.ctx.eval(e);
-                        if (val.tag == 0 && val.u.uint64 > 0) {
-                            session.focused_node = @as(u32, @truncate(val.u.uint64));
-                            session.doc.focused_node = session.focused_node;
+                    if (ev_type == .KeyDown || ev_type == .RawKeyDown) {
+                        dispatchKeyJs(session, "keydown", escaped_key, escaped_code, modifiers);
+                        if (ev_type == .KeyDown && (text.len > 0 || std.mem.eql(u8, key, "Enter")) && isPrintableKey(key, text)) {
+                            const kp_key = if (text.len > 0) text else key;
+                            let kp_esc_buf: [256]u8 = [0; 256];
+                            const kp_esc_len = escapeJsString(kp_key, &kp_esc_buf);
+                            dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers);
                         }
-                        session.ctx.freeValue(val);
+                    } else if (ev_type == .Char) {
+                        const kp_key = if (text.len > 0) text else key;
+                        let kp_esc_buf: [256]u8 = [0; 256];
+                        const kp_esc_len = escapeJsString(kp_key, &kp_esc_buf);
+                        dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers);
+                    } else if (ev_type == .KeyUp) {
+                        dispatchKeyJs(session, "keyup", escaped_key, escaped_code, modifiers);
                     }
                 }
             }
