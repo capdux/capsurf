@@ -649,6 +649,11 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
     if (code.len < static_buf.len) {
         static_buf[code.len] = 0;
     }
+    if (session_ptr != null) {
+        if (dom := session_ptr.?.dom_ctx) {
+            dom.addFetchRecord(full_url, "application/javascript");
+        }
+    }
     const eval_val = JS_Eval(ctx, code.ptr, code.len, module_name, 33);
     if (jsIsException(eval_val)) {
         return null;
@@ -3796,7 +3801,10 @@ pub struct CdpPageSession {
                                std.mem.indexOf(u8, fetch_url, ".gif") != null ||
                                std.mem.indexOf(u8, fetch_url, ".webp") != null ||
                                std.mem.startsWith(u8, fetch_mime, "image/");
-                const res_type = if (is_font) "Font" else if (is_css) "Stylesheet" else if (is_img) "Image" else "Fetch";
+                const is_script = std.mem.indexOf(u8, fetch_url, ".js") != null ||
+                                  std.mem.indexOf(u8, fetch_url, ".mjs") != null ||
+                                  std.mem.indexOf(u8, fetch_mime, "javascript") != null;
+                const res_type = if (is_font) "Font" else if (is_css) "Stylesheet" else if (is_img) "Image" else if (is_script) "Script" else "Fetch";
                 const init_type = if (is_font || is_css || is_img) "parser" else "script";
 
                 const req_json = std.fmt.bufPrint(

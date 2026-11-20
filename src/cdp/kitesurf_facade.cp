@@ -147,6 +147,14 @@ pub struct KitesurfFacade {
             return session.formatMemoryStatsJson(out_buf);
         }
 
+        if (std.mem.eql(u8, method, "Kitesurf.disposeRenderer") ||
+            std.mem.eql(u8, method, "CapSurf.disposeRenderer")) {
+            session.renderer_active = false;
+            let ok_res = "{\"disposed\":true}";
+            @memcpy(out_buf[0..ok_res.len], ok_res);
+            return out_buf[0..ok_res.len];
+        }
+
         if (std.mem.eql(u8, method, "Kitesurf.getRendererInfo") ||
             std.mem.eql(u8, method, "CapSurf.getRendererInfo")) {
             const renderer_bytes = session.computeRendererBytes();

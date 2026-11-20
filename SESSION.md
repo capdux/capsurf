@@ -4233,6 +4233,15 @@
   - `style-media-attr-demo` (**1/1**)、`window-computed-style-probe` (**1/1**)、`transition-settles-demo` (**1/1**)：**3/3 PASS (23 expect() calls)**！
 - **清理旧子智能体**: 销毁 `124e8a3a-5ce9-4529-b3f8-0fb6dc65f24f`。
 
+## [2026-11-20 23:41:00] 2 分 20 秒全绿闭环 `absolute-path-transitive-demo`、`classic-computed-import` & `page-renderer-relaunch` (Subagent abf4fde7 结单，Phase 151)
+- **模块加载网络事件、并发去重与 `Kitesurf.disposeRenderer` (`src/cdp/{session,session_hooks,kitesurf_facade,protocol_extensions}.cp`)**:
+  - `session.cp:652,3799-3803` & `session_hooks.cp:111-120,1140-1197`：`sessionModuleLoader` 与 `js_capsurf_fixture_fetch` 对 `.js`/`.mjs` 补充 `addFetchRecord(..., "application/javascript")`，`pollNetworkEvents` 归类 `"Script"`，并在 `loadModuleGraph` 新增 `__inflight` 并发去重；
+  - `kitesurf_facade.cp:150-156` & `protocol_extensions.cp:79-85`：新增 `Kitesurf.disposeRenderer` / `CapSurf.disposeRenderer` 重置 `renderer_active = false` 返回 `{"disposed":true}`。
+- **门禁与 E2E 验证（`-m -d -o` 7.33s，port `19233`）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `absolute-path-transitive-demo` (**1/1**)、`classic-computed-import` (**4/4**)、`page-renderer-relaunch` (**1/1**)：**6/6 PASS (40 expect() calls)**！
+- **清理旧子智能体**: 销毁 `abf4fde7-c470-4350-bdc2-65ee86a86136`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

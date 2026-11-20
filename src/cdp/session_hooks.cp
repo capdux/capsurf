@@ -108,6 +108,16 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
 
     let out_buf: [32768]u8 = undefined;
     if (body := MockFixtures.handleFixtureRequest(url, "", "", &out_buf, null, extra_headers)) {
+        if (opaq := JS_GetContextOpaque(ctx)) {
+            const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+            let base_url = url;
+            if (q_idx := std.mem.indexOfScalar(u8, base_url, '?')) {
+                base_url = base_url[0..q_idx];
+            }
+            if (std.mem.endsWith(u8, base_url, ".js") || std.mem.endsWith(u8, base_url, ".mjs")) {
+                dom_ctx.addFetchRecord(url, "application/javascript");
+            }
+        }
         return JS_NewStringLen(ctx, body.ptr, body.len);
     }
     return jsNull();
@@ -1137,6 +1147,8 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "  }\n" ++
     "  function loadModuleGraph(absUrl, visited) {\n" ++
     "    if (visited[absUrl]) return Promise.resolve({ ok: true, exports: visited[absUrl] });\n" ++
+    "    if (!visited.__inflight) visited.__inflight = Object.create(null);\n" ++
+    "    if (visited.__inflight[absUrl]) return visited.__inflight[absUrl];\n" ++
     "    if (typeof g.__capsurf_fixture_fetch !== 'function') return Promise.resolve({ ok: false, reason: 'no-bridge' });\n" ++
     "    var raw = g.__capsurf_fixture_fetch(absUrl, getSessionExtraHeadersJson());\n" ++
     "    if (raw === null || raw === undefined) return Promise.resolve({ ok: false, reason: '404' });\n" ++
@@ -1161,7 +1173,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "        });\n" ++
     "      })(staticImports[i]);\n" ++
     "    }\n" ++
-    "    return depChain.then(function(depState) {\n" ++
+    "    var p = depChain.then(function(depState) {\n" ++
     "      if (!depState.ok) return { ok: false, reason: depState.reason };\n" ++
     "      var transformed = code; var preamble = 'var __exports = {};\\n';\n" ++
     "      transformed = transformed.replace(/^\\s*import\\s*\\{([^}]*)\\}\\s*from\\s*['\"]([^'\"]+)['\"]\\s*;?/gm, function(_, names, spec) {\n" ++
@@ -1180,6 +1192,8 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "      var dynImp = function(sp) { return g.__capsurf_dyn_import(sp, absUrl); };\n" ++
     "      return Promise.resolve().then(function() { return fn(depState.depExports, dynImp); }).then(function(exps) { visited[absUrl] = exps || {}; return { ok: true, exports: visited[absUrl] }; }, function(runErr) { visited[absUrl] = {}; return { ok: true, runtimeError: runErr, exports: {} }; });\n" ++
     "    });\n" ++
+    "    visited.__inflight[absUrl] = p;\n" ++
+    "    return p;\n" ++
     "  }\n" ++
     "  function handleInsertedScript(node) {\n" ++
     "    if (!node || node.nodeType !== 1) return;\n" ++

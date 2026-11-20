@@ -76,6 +76,14 @@ pub fn handleProtocolExtension(
         return out_buf[0..pos];
     }
 
+    if (std.mem.eql(u8, cap_method, "disposeRenderer")) {
+        state.renderer_active = false;
+        let json = "{\"disposed\":true}";
+        if (json.len > out_buf.len) return null;
+        @memcpy(out_buf[0..json.len], json);
+        return out_buf[0..json.len];
+    }
+
     if (std.mem.eql(u8, cap_method, "getRendererInfo")) {
         const is_active = state.renderer_active || state.frames_rendered > 0;
         const active_str = if (is_active) "true" else "false";

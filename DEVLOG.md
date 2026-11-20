@@ -1621,6 +1621,10 @@
 1. **标准 Longhand 枚举与只读拦截 (`window.js`)**：填充 160+ 标准 CSS 属性名至 `propList` 确保 `length > 100`，并对计算样式的写操作抛出 `DOMException("NoModificationAllowedError")`。
 2. **`getPropertyValue` 严格大小写与 `<style media>` (`cssom.js`, `window.js`)**：停止将 camelCase 隐式转为 kebab-case，同时在 `collectElementOwnDeclarations` 统一对 `<style>` 与 `<link>` 校验 `evaluateMediaQuery`。
 
+## Phase 151 模块网络事件去重与 `Kitesurf.disposeRenderer` 方案 (`src/cdp/`)
+1. **模块网络事件与并发去重 (`session.cp`, `session_hooks.cp`)**：`sessionModuleLoader` 与 `js_capsurf_fixture_fetch` 为 `.js`/`.mjs` 记录 `addFetchRecord` 并在 `pollNetworkEvents` 归类 `"Script"`，同时在 `loadModuleGraph` 增加 `__inflight` 避免并发 `import()` 重复请求。
+2. **渲染器释放 (`kitesurf_facade.cp`, `protocol_extensions.cp`)**：`Kitesurf.disposeRenderer` 复位 `renderer_active = false` 保留单调 `frames_rendered` 计数。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。
