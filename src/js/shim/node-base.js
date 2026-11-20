@@ -158,11 +158,33 @@ Node.prototype.contains = function (other) {
   if (!other) return false;
   let curr = other;
   while (curr) {
-    if (curr === this || (this._nid !== undefined && curr._nid !== undefined && curr._nid === this._nid)) return true;
+    if (
+      curr === this ||
+      (this.nodeType !== 9 &&
+        curr.nodeType !== 9 &&
+        this._nid !== undefined &&
+        curr._nid !== undefined &&
+        curr._nid === this._nid &&
+        this.ownerDocument === curr.ownerDocument)
+    ) {
+      return true;
+    }
     curr = curr.parentNode || curr.parentElement;
   }
   return false;
 };
+
+const _rootOrderMap = new WeakMap();
+let _rootOrderSeq = 0;
+function getRootOrder(root) {
+  if (!root || (typeof root !== "object" && typeof root !== "function")) return 0;
+  let ord = _rootOrderMap.get(root);
+  if (ord === undefined) {
+    ord = ++_rootOrderSeq;
+    _rootOrderMap.set(root, ord);
+  }
+  return ord;
+}
 
 Node.prototype.compareDocumentPosition = function (other) {
   if (this === other) return 0;
@@ -191,7 +213,10 @@ Node.prototype.compareDocumentPosition = function (other) {
   }
 
   if (pathA[0] !== pathB[0]) {
-    return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC;
+    const ordA = getRootOrder(pathA[0]);
+    const ordB = getRootOrder(pathB[0]);
+    const dir = ordA < ordB ? DOCUMENT_POSITION_FOLLOWING : DOCUMENT_POSITION_PRECEDING;
+    return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC | dir;
   }
 
   let i = 0;
@@ -1329,11 +1354,43 @@ DocumentFragment.prototype.prepend = function (...nodes) {
 };
 markNative(DocumentFragment.prototype.prepend, "prepend");
 
-DocumentFragment.prototype.replaceChildren = function (...nodes) {
-  while (this.firstChild) {
-    this.removeChild(this.firstChild);
+function replaceChildrenImpl(parent, nodes) {
+  const existing = Array.from(parent.childNodes || []);
+  const converted = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n && typeof n === "object" && typeof n.nodeType === "number") {
+      converted.push(n);
+    } else if (typeof document !== "undefined" && document.createTextNode) {
+      converted.push(document.createTextNode(String(n)));
+    } else {
+      converted.push(new Text(String(n)));
+    }
   }
-  this.append(...nodes);
+  const run = function () {
+    while (parent.firstChild) {
+      parent.removeChild(parent.firstChild);
+    }
+    for (let i = 0; i < converted.length; i++) {
+      parent.appendChild(converted[i]);
+    }
+  };
+  if (typeof suppressChildListMutations === "function") {
+    suppressChildListMutations(parent, run);
+  } else {
+    run();
+  }
+  const added = Array.from(parent.childNodes || []);
+  if ((added.length > 0 || existing.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
+    const rec = new MutationRecord("childList", parent);
+    rec.removedNodes = existing;
+    rec.addedNodes = added;
+    notifyMutation(rec);
+  }
+}
+
+DocumentFragment.prototype.replaceChildren = function (...nodes) {
+  replaceChildrenImpl(this, nodes);
 };
 markNative(DocumentFragment.prototype.replaceChildren, "replaceChildren");
 

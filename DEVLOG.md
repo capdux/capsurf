@@ -1645,3 +1645,7 @@
 
 ## Phase 155 原生 `fetch`/`setTimeout` 隔离与 `evaluateOnNewDocument` 方案 (`src/js/shim/`, `e2e/harness.ts`)
 1. **防篡改原生句柄**：在全局初始化阶段保存 `__capsurf_native_fetch` 与 `__capsurf_native_setTimeout`，内部图片/iframe/脚本加载及过渡快照调度统一走原生通道，不触发页面覆写钩子也不增加页面定时器计数。
+
+## Phase 156 `replaceChildren` 单条变更聚合与跨文档 DOM 节点隔离方案
+1. **变更抑制聚合 (`observer.js`, `node-base.js`)**：通过 `suppressChildListMutations(parent, fn)` 在批量移除与插入期间抑制子操作入队，结束后一次性派发单条 `childList` `MutationRecord`。
+2. **跨文档 `_nid` 隔离与断开节点序 (`node-base.js`)**：`contains` 校验双方 `ownerDocument` 一致防止跨文档 `_nid` 碰撞；`compareDocumentPosition` 使用 `_rootOrderMap` 为断开节点返回稳定的 `35`/`37` 位掩码。

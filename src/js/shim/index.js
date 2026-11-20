@@ -956,6 +956,10 @@ function installShim(global) {
     }
     if (!docProto.replaceChildren) {
       docProto.replaceChildren = function (...nodes) {
+        if (typeof replaceChildrenImpl === "function") {
+          replaceChildrenImpl(this, nodes);
+          return;
+        }
         while (this.firstChild) {
           this.removeChild(this.firstChild);
         }

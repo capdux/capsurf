@@ -3,6 +3,18 @@
 
 const _mrState = new WeakMap();
 const _moState = new WeakMap();
+const _suppressedMutationTargets = new WeakMap();
+
+function suppressChildListMutations(target, fn) {
+  const prev = _suppressedMutationTargets.get(target) || 0;
+  _suppressedMutationTargets.set(target, prev + 1);
+  try {
+    return fn();
+  } finally {
+    if (prev === 0) _suppressedMutationTargets.delete(target);
+    else _suppressedMutationTargets.set(target, prev);
+  }
+}
 
 function MutationRecord(type, target) {
   if (arguments.length === 0) {
@@ -73,6 +85,9 @@ function notifyMutation(record) {
     for (let ri = 0; ri < record.removedNodes.length; ri++) {
       global.__capsurf_onNodeRemovedForIterators(record.target, record.removedNodes[ri], record.previousSibling);
     }
+  }
+  if (record && record.type === "childList" && record.target && _suppressedMutationTargets.has(record.target)) {
+    return;
   }
   for (const obs of activeObservers) {
     const st = _moState.get(obs);

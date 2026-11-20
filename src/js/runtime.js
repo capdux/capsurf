@@ -2308,6 +2308,18 @@
 
   const _mrState = new WeakMap();
   const _moState = new WeakMap();
+  const _suppressedMutationTargets = new WeakMap();
+
+  function suppressChildListMutations(target, fn) {
+    const prev = _suppressedMutationTargets.get(target) || 0;
+    _suppressedMutationTargets.set(target, prev + 1);
+    try {
+      return fn();
+    } finally {
+      if (prev === 0) _suppressedMutationTargets.delete(target);
+      else _suppressedMutationTargets.set(target, prev);
+    }
+  }
 
   function MutationRecord(type, target) {
     if (arguments.length === 0) {
@@ -2378,6 +2390,9 @@
       for (let ri = 0; ri < record.removedNodes.length; ri++) {
         global.__capsurf_onNodeRemovedForIterators(record.target, record.removedNodes[ri], record.previousSibling);
       }
+    }
+    if (record && record.type === "childList" && record.target && _suppressedMutationTargets.has(record.target)) {
+      return;
     }
     for (const obs of activeObservers) {
       const st = _moState.get(obs);
@@ -6842,11 +6857,33 @@
     if (!other) return false;
     let curr = other;
     while (curr) {
-      if (curr === this || (this._nid !== undefined && curr._nid !== undefined && curr._nid === this._nid)) return true;
+      if (
+        curr === this ||
+        (this.nodeType !== 9 &&
+          curr.nodeType !== 9 &&
+          this._nid !== undefined &&
+          curr._nid !== undefined &&
+          curr._nid === this._nid &&
+          this.ownerDocument === curr.ownerDocument)
+      ) {
+        return true;
+      }
       curr = curr.parentNode || curr.parentElement;
     }
     return false;
   };
+
+  const _rootOrderMap = new WeakMap();
+  let _rootOrderSeq = 0;
+  function getRootOrder(root) {
+    if (!root || (typeof root !== "object" && typeof root !== "function")) return 0;
+    let ord = _rootOrderMap.get(root);
+    if (ord === undefined) {
+      ord = ++_rootOrderSeq;
+      _rootOrderMap.set(root, ord);
+    }
+    return ord;
+  }
 
   Node.prototype.compareDocumentPosition = function (other) {
     if (this === other) return 0;
@@ -6875,7 +6912,10 @@
     }
 
     if (pathA[0] !== pathB[0]) {
-      return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC;
+      const ordA = getRootOrder(pathA[0]);
+      const ordB = getRootOrder(pathB[0]);
+      const dir = ordA < ordB ? DOCUMENT_POSITION_FOLLOWING : DOCUMENT_POSITION_PRECEDING;
+      return DOCUMENT_POSITION_DISCONNECTED | DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC | dir;
     }
 
     let i = 0;
@@ -8013,11 +8053,43 @@
   };
   markNative(DocumentFragment.prototype.prepend, "prepend");
 
-  DocumentFragment.prototype.replaceChildren = function (...nodes) {
-    while (this.firstChild) {
-      this.removeChild(this.firstChild);
+  function replaceChildrenImpl(parent, nodes) {
+    const existing = Array.from(parent.childNodes || []);
+    const converted = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n && typeof n === "object" && typeof n.nodeType === "number") {
+        converted.push(n);
+      } else if (typeof document !== "undefined" && document.createTextNode) {
+        converted.push(document.createTextNode(String(n)));
+      } else {
+        converted.push(new Text(String(n)));
+      }
     }
-    this.append(...nodes);
+    const run = function () {
+      while (parent.firstChild) {
+        parent.removeChild(parent.firstChild);
+      }
+      for (let i = 0; i < converted.length; i++) {
+        parent.appendChild(converted[i]);
+      }
+    };
+    if (typeof suppressChildListMutations === "function") {
+      suppressChildListMutations(parent, run);
+    } else {
+      run();
+    }
+    const added = Array.from(parent.childNodes || []);
+    if ((added.length > 0 || existing.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
+      const rec = new MutationRecord("childList", parent);
+      rec.removedNodes = existing;
+      rec.addedNodes = added;
+      notifyMutation(rec);
+    }
+  }
+
+  DocumentFragment.prototype.replaceChildren = function (...nodes) {
+    replaceChildrenImpl(this, nodes);
   };
   markNative(DocumentFragment.prototype.replaceChildren, "replaceChildren");
 
@@ -9192,6 +9264,13 @@
       markNative(proto.append, "append");
     }
 
+    if (!proto.replaceChildren) {
+      proto.replaceChildren = function (...nodes) {
+        replaceChildrenImpl(this, nodes);
+      };
+      markNative(proto.replaceChildren, "replaceChildren");
+    }
+
     if (!proto.remove) {
       proto.remove = function () {
         const parent = this.parentElement || this.parentNode;
@@ -9283,6 +9362,35 @@
           );
         }
         return this._classList;
+      },
+      configurable: true,
+    });
+
+    // relList getter/setter (HTML a/area/link, SVG a, MathML a)
+    Object.defineProperty(proto, "relList", {
+      get: function () {
+        const ns = this.namespaceURI || "http://www.w3.org/1999/xhtml";
+        const local = String(this.localName || this.tagName || "").toLowerCase();
+        const ok =
+          (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
+          ((ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") && local === "a");
+        if (!ok) return undefined;
+        if (!this._relList) {
+          const self = this;
+          this._relList = new DOMTokenList(
+            function () {
+              return (self.getAttribute && self.getAttribute("rel")) || "";
+            },
+            function (val) {
+              if (self.setAttribute) self.setAttribute("rel", String(val));
+            }
+          );
+        }
+        return this._relList;
+      },
+      set: function (v) {
+        if (this.relList === undefined) return;
+        if (this.setAttribute) this.setAttribute("rel", String(v));
       },
       configurable: true,
     });
@@ -40101,6 +40209,10 @@
       }
       if (!docProto.replaceChildren) {
         docProto.replaceChildren = function (...nodes) {
+          if (typeof replaceChildrenImpl === "function") {
+            replaceChildrenImpl(this, nodes);
+            return;
+          }
           while (this.firstChild) {
             this.removeChild(this.firstChild);
           }

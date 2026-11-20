@@ -4289,3 +4289,12 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - `trusted-fetch-intrinsic` (**2/2 PASS**)、`post-load-settle` (**5/7 PASS**，定位余 2 项在 `session.cp` 原生定时器泵)、`trusted-fetch-metadata`（定位相对路径至 `vendor/kitesurf/packages/page-script/src/trusted-fetch.ts`）。
 - **清理旧子智能体**: 销毁 `6375600b-4e84-43df-afa1-a20421d6eff5`。
+
+## [2026-11-20 23:59:00] `wpt-regression-debt` 2/2 & `trusted-fetch-metadata` 1/1 全绿闭环 (Subagent 4e1fe19d 结单，Phase 156)
+- **WPT DOM 回归与单条 MutationRecord 聚合 (`src/js/shim/{mutations/observer,node-base,element/element,index}.js`, `e2e/trusted-fetch-metadata.e2e.test.ts`)**:
+  - `observer.js` & `node-base.js` & `element.js` & `index.js`：实装 `suppressChildListMutations` 与 `replaceChildrenImpl`（`Element`/`DocumentFragment`/`Document.prototype.replaceChildren` 单条聚合记录）、`Element.prototype.relList`、`Node.prototype.contains` 跨文档 `_nid` 隔离及 `compareDocumentPosition` 断开节点稳定 `37`/`35`；
+  - `e2e/trusted-fetch-metadata.e2e.test.ts`：修正导入路径至 `../vendor/kitesurf/packages/page-script/src/trusted-fetch.ts`。
+- **门禁与 E2E 验证（`-m -d -o` 6.98s，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `wpt-regression-debt` (**2/2**)、`trusted-fetch-metadata` (**1/1**)：**3/3 PASS**！
+- **清理旧子智能体**: 销毁 `4e1fe19d-d288-4a42-b58c-b07f092b45d0`。

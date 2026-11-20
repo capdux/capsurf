@@ -666,6 +666,13 @@ function installElementExtensions(proto) {
     markNative(proto.append, "append");
   }
 
+  if (!proto.replaceChildren) {
+    proto.replaceChildren = function (...nodes) {
+      replaceChildrenImpl(this, nodes);
+    };
+    markNative(proto.replaceChildren, "replaceChildren");
+  }
+
   if (!proto.remove) {
     proto.remove = function () {
       const parent = this.parentElement || this.parentNode;
@@ -757,6 +764,35 @@ function installElementExtensions(proto) {
         );
       }
       return this._classList;
+    },
+    configurable: true,
+  });
+
+  // relList getter/setter (HTML a/area/link, SVG a, MathML a)
+  Object.defineProperty(proto, "relList", {
+    get: function () {
+      const ns = this.namespaceURI || "http://www.w3.org/1999/xhtml";
+      const local = String(this.localName || this.tagName || "").toLowerCase();
+      const ok =
+        (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
+        ((ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") && local === "a");
+      if (!ok) return undefined;
+      if (!this._relList) {
+        const self = this;
+        this._relList = new DOMTokenList(
+          function () {
+            return (self.getAttribute && self.getAttribute("rel")) || "";
+          },
+          function (val) {
+            if (self.setAttribute) self.setAttribute("rel", String(val));
+          }
+        );
+      }
+      return this._relList;
+    },
+    set: function (v) {
+      if (this.relList === undefined) return;
+      if (this.setAttribute) this.setAttribute("rel", String(v));
     },
     configurable: true,
   });
