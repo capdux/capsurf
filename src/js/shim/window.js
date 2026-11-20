@@ -930,6 +930,360 @@ function installWindow(global) {
   global.localStorage = new Storage();
   global.sessionStorage = new Storage();
 
+  // 1b. In-memory IndexedDB shim
+  (function installIndexedDB() {
+    const _databases = new Map();
+
+    function cloneIDBValue(val) {
+      if (val === undefined || val === null || typeof val !== "object") return val;
+      if (typeof structuredClone === "function") {
+        try { return structuredClone(val); } catch (e) {}
+      }
+      try { return JSON.parse(JSON.stringify(val)); } catch (e) { return val; }
+    }
+
+    function createIDBEventTarget() {
+      const listeners = new Map();
+      return {
+        addEventListener: function (type, fn) {
+          if (typeof fn !== "function") return;
+          let arr = listeners.get(type);
+          if (!arr) { arr = []; listeners.set(type, arr); }
+          if (arr.indexOf(fn) === -1) arr.push(fn);
+        },
+        removeEventListener: function (type, fn) {
+          const arr = listeners.get(type);
+          if (!arr) return;
+          const idx = arr.indexOf(fn);
+          if (idx !== -1) arr.splice(idx, 1);
+        },
+        dispatchEvent: function (ev) {
+          if (!ev || !ev.type) return true;
+          const onProp = this["on" + ev.type];
+          if (typeof onProp === "function") {
+            try { onProp.call(this, ev); } catch (e) {}
+          }
+          const arr = listeners.get(ev.type);
+          if (arr) {
+            const copy = arr.slice();
+            for (let i = 0; i < copy.length; i++) {
+              try { copy[i].call(this, ev); } catch (e) {}
+            }
+          }
+          return true;
+        },
+      };
+    }
+
+    function makeIDBEvent(type, target, extra) {
+      const ev = typeof Event === "function" ? new Event(type) : { type: type, target: target, currentTarget: target };
+      try {
+        Object.defineProperty(ev, "target", { value: target, configurable: true });
+        Object.defineProperty(ev, "currentTarget", { value: target, configurable: true });
+      } catch (e) {}
+      if (extra) {
+        for (const k in extra) {
+          if (Object.prototype.hasOwnProperty.call(extra, k)) ev[k] = extra[k];
+        }
+      }
+      return ev;
+    }
+
+    function makeIDBRequest(source, transaction) {
+      return Object.assign(createIDBEventTarget(), {
+        result: undefined,
+        error: null,
+        source: source || null,
+        transaction: transaction || null,
+        readyState: "pending",
+        onsuccess: null,
+        onerror: null,
+      });
+    }
+
+    function scheduleIDBMicrotask(fn) {
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(fn);
+      } else {
+        Promise.resolve().then(fn);
+      }
+    }
+
+    function IDBObjectStoreImpl(name, options) {
+      this.name = name;
+      this.keyPath = options && options.keyPath !== undefined ? options.keyPath : null;
+      this.autoIncrement = Boolean(options && options.autoIncrement);
+      this._autoKey = 1;
+      this._data = new Map();
+      this._indexes = new Map();
+      this.indexNames = {
+        length: 0,
+        contains: function () { return false; },
+      };
+    }
+
+    function _storeWrite(store, tx, value, key, failIfExists) {
+      const req = makeIDBRequest(store, tx);
+      tx._pending++;
+      scheduleIDBMicrotask(function () {
+        let effectiveKey = key;
+        if (effectiveKey === undefined) {
+          if (typeof store.keyPath === "string" && value && typeof value === "object") {
+            effectiveKey = value[store.keyPath];
+          } else if (store.autoIncrement) {
+            effectiveKey = store._autoKey++;
+          }
+        }
+        if (failIfExists && store._data.has(effectiveKey)) {
+          req.readyState = "done";
+          req.error = typeof DOMException === "function" ? new DOMException("Key already exists", "ConstraintError") : new Error("Key already exists");
+          req.dispatchEvent(makeIDBEvent("error", req));
+          tx._stepDone();
+          return;
+        }
+        store._data.set(effectiveKey, cloneIDBValue(value));
+        req.readyState = "done";
+        req.result = effectiveKey;
+        req.dispatchEvent(makeIDBEvent("success", req));
+        tx._stepDone();
+      });
+      return req;
+    }
+
+    function _storeBindTx(store, tx) {
+      return {
+        name: store.name,
+        keyPath: store.keyPath,
+        autoIncrement: store.autoIncrement,
+        transaction: tx,
+        indexNames: store.indexNames,
+        put: function (value, key) {
+          return _storeWrite(store, tx, value, key, false);
+        },
+        add: function (value, key) {
+          return _storeWrite(store, tx, value, key, true);
+        },
+        get: function (key) {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            req.readyState = "done";
+            const raw = store._data.get(key);
+            req.result = raw !== undefined ? cloneIDBValue(raw) : undefined;
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        getAll: function () {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            req.readyState = "done";
+            const out = [];
+            store._data.forEach(function (v) { out.push(cloneIDBValue(v)); });
+            req.result = out;
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        getAllKeys: function () {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            req.readyState = "done";
+            req.result = Array.from(store._data.keys());
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        delete: function (key) {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            store._data.delete(key);
+            req.readyState = "done";
+            req.result = undefined;
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        clear: function () {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            store._data.clear();
+            req.readyState = "done";
+            req.result = undefined;
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        count: function (key) {
+          const req = makeIDBRequest(this, tx);
+          tx._pending++;
+          scheduleIDBMicrotask(function () {
+            req.readyState = "done";
+            req.result = key !== undefined ? (store._data.has(key) ? 1 : 0) : store._data.size;
+            req.dispatchEvent(makeIDBEvent("success", req));
+            tx._stepDone();
+          });
+          return req;
+        },
+        createIndex: function (name, keyPath, options) {
+          const idx = { name: name, keyPath: keyPath, unique: Boolean(options && options.unique), multiEntry: Boolean(options && options.multiEntry) };
+          store._indexes.set(name, idx);
+          return idx;
+        },
+        index: function (name) {
+          return store._indexes.get(name) || { name: name, get: function () { return makeIDBRequest(this, tx); } };
+        },
+      };
+    }
+
+    function makeIDBTransaction(db, storeNames, mode) {
+      const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+      const tx = Object.assign(createIDBEventTarget(), {
+        db: db,
+        mode: mode || "readonly",
+        error: null,
+        objectStoreNames: names,
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
+        _pending: 0,
+        _finished: false,
+        _stepDone: function () {
+          tx._pending--;
+          if (tx._pending <= 0 && !tx._finished) {
+            scheduleIDBMicrotask(function () {
+              if (tx._pending <= 0 && !tx._finished) {
+                tx._finished = true;
+                tx.dispatchEvent(makeIDBEvent("complete", tx));
+              }
+            });
+          }
+        },
+        objectStore: function (name) {
+          const s = db._stores.get(name);
+          if (!s) {
+            throw (typeof DOMException === "function"
+              ? new DOMException("Object store '" + name + "' not found", "NotFoundError")
+              : new Error("Object store '" + name + "' not found"));
+          }
+          return _storeBindTx(s, tx);
+        },
+        abort: function () {
+          if (tx._finished) return;
+          tx._finished = true;
+          tx.dispatchEvent(makeIDBEvent("abort", tx));
+        },
+        commit: function () {},
+      });
+      scheduleIDBMicrotask(function () {
+        if (tx._pending <= 0 && !tx._finished) {
+          tx._finished = true;
+          tx.dispatchEvent(makeIDBEvent("complete", tx));
+        }
+      });
+      return tx;
+    }
+
+    function makeIDBDatabase(name, version) {
+      const db = Object.assign(createIDBEventTarget(), {
+        name: String(name),
+        version: Number(version) || 1,
+        _stores: new Map(),
+        onabort: null,
+        onclose: null,
+        onerror: null,
+        onversionchange: null,
+        get objectStoreNames() {
+          const arr = Array.from(db._stores.keys());
+          arr.contains = function (n) { return db._stores.has(n); };
+          arr.item = function (i) { return arr[i] || null; };
+          return arr;
+        },
+        createObjectStore: function (storeName, options) {
+          const s = new IDBObjectStoreImpl(String(storeName), options || {});
+          db._stores.set(String(storeName), s);
+          return _storeBindTx(s, makeIDBTransaction(db, [String(storeName)], "versionchange"));
+        },
+        deleteObjectStore: function (storeName) {
+          db._stores.delete(String(storeName));
+        },
+        transaction: function (storeNames, mode) {
+          return makeIDBTransaction(db, storeNames, mode);
+        },
+        close: function () {},
+      });
+      return db;
+    }
+
+    const indexedDBImpl = {
+      open: function (name, version) {
+        const dbName = String(name);
+        const req = Object.assign(makeIDBRequest(null, null), {
+          onupgradeneeded: null,
+          onblocked: null,
+        });
+        scheduleIDBMicrotask(function () {
+          let db = _databases.get(dbName);
+          const requestedVersion = version !== undefined ? Number(version) : (db ? db.version : 1);
+          const isNew = !db;
+          const isUpgrade = isNew || requestedVersion > db.version;
+          const oldVersion = isNew ? 0 : db.version;
+          if (!db) {
+            db = makeIDBDatabase(dbName, requestedVersion || 1);
+            _databases.set(dbName, db);
+          } else if (requestedVersion > db.version) {
+            db.version = requestedVersion;
+          }
+          req.readyState = "done";
+          req.result = db;
+          if (isUpgrade) {
+            req.transaction = makeIDBTransaction(db, Array.from(db._stores.keys()), "versionchange");
+            req.dispatchEvent(makeIDBEvent("upgradeneeded", req, { oldVersion: oldVersion, newVersion: db.version }));
+            req.transaction = null;
+          }
+          req.dispatchEvent(makeIDBEvent("success", req));
+        });
+        return req;
+      },
+      deleteDatabase: function (name) {
+        const dbName = String(name);
+        const req = makeIDBRequest(null, null);
+        scheduleIDBMicrotask(function () {
+          _databases.delete(dbName);
+          req.readyState = "done";
+          req.result = undefined;
+          req.dispatchEvent(makeIDBEvent("success", req));
+        });
+        return req;
+      },
+      databases: function () {
+        const list = [];
+        _databases.forEach(function (db) {
+          list.push({ name: db.name, version: db.version });
+        });
+        return Promise.resolve(list);
+      },
+      cmp: function (a, b) {
+        if (a < b) return -1;
+        if (a > b) return 1;
+        return 0;
+      },
+    };
+
+    global.indexedDB = indexedDBImpl;
+    if (typeof window !== "undefined") window.indexedDB = indexedDBImpl;
+    if (typeof globalThis !== "undefined") globalThis.indexedDB = indexedDBImpl;
+  })();
+
   // WebIDL interface objects with proper name & Symbol.toStringTag shape
   function TimeRanges() {}
   Object.defineProperty(TimeRanges.prototype, Symbol.toStringTag, {
@@ -11141,7 +11495,7 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof window !== "undefined") window.__capsurf_activate_clicked_element = activateClickedElement;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_activate_clicked_element = activateClickedElement;
 
-  function dispatchMouseEvent(type, x, y, button, buttons, clickCount) {
+  function dispatchMouseEvent(type, x, y, button, buttons, clickCount, skipSyntheticClick) {
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
     const target = _hitTestElement(x, y);
     if (!target) return { handled: false };
@@ -11311,7 +11665,7 @@ const CSS_TYPED_OM_GLOBALS = {
         (typeof globalThis !== "undefined" && globalThis.__capsurf_pending_navigation) ||
         global.__capsurf_pending_navigation
       );
-      if (!hasPendingNav && btnNum === 0) {
+      if (!skipSyntheticClick && !hasPendingNav && btnNum === 0) {
         const clickEv = new MouseCtor("click", {
           bubbles: true,
           cancelable: true,

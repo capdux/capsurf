@@ -315,7 +315,7 @@ export class CDPClient {
       }
       try {
         const jsHandled: boolean = await sharedPage.evaluate(
-          (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
+          (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any, skipClick: boolean) => {
             const fn = (globalThis as any).__capsurf_dispatch_mouse_event;
             if (typeof fn !== "function") return false;
             const hit = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
@@ -324,7 +324,7 @@ export class CDPClient {
               return false;
             }
             if ((globalThis as any).__capsurf_range_drag_active) return false;
-            const r = fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks);
+            const r = fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks, skipClick);
             return Boolean(r && r.handled);
           },
           params.type,
@@ -333,6 +333,7 @@ export class CDPClient {
           params.button !== undefined ? params.button : "none",
           params.buttons !== undefined ? params.buttons : null,
           params.clickCount ?? 1,
+          Boolean(params._skipSyntheticClick),
         );
         if (jsHandled) {
           return {};

@@ -2183,3 +2183,6 @@
 
 ## Phase 174: Pure-CP PagedMedia & Legacy Charset Whitebox Suite `test/css/test_paged_media.cp` (4/4 PASS)
 - 新增 `test/css/test_paged_media.cp`，覆盖 `@page`、`break-*` 级联与 ISO-8859-15 UTF-8 转码（`cap test -m` **4/4 PASS**, 1174ms）。
+
+## Phase 175: In-Memory `indexedDB`, `Path2D` Scanline Fill & `Mouse.click` `_skipSyntheticClick`
+- **`e2e/harness.ts` & `src/js/shim/{window,canvas2d}.js` & `src/js/runtime{,_source.cp}`**：实装内存 `indexedDB`、`Path2D` SVG 路径解析与 `ctx.fill(Path2D)`、以及 `Mouse.click()` 重复点击去重（4 门禁全 0）。

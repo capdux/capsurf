@@ -1668,3 +1668,7 @@
 
 ## Phase 172 Pointer 边界事件顺序与 `getCoalescedEvents()` 方案 (`src/js/shim/`)
 1. **最近公共祖先边界派发 (`window.js`)**：在 `mouseMoved` 切换命中节点时，按由内向外 `pointerout`/`pointerleave`、由外向内 `pointerover`/`pointerenter` 顺序先于对应 `mouse*` 事件派发，避免遗漏或乱序。
+
+## Phase 175 内存 `indexedDB`、`Path2D` 扫描线填充与重复点击去重方案
+1. **内存 `indexedDB` (`window.js`)**：在微任务队列异步调度 `onupgradeneeded` -> `onsuccess` 与 `tx.oncomplete`，支持标准 store 增删改查。
+2. **`Path2D` 与扫描线填充 (`canvas2d.js`)**：通过 `_flattenPathOps` 将 `M/L/C/Q/A/Z` 与 `rect`/`arc` 扁平化为多边形边表并按 `nonzero`/`evenodd` 填充，不覆盖上下文 `_currentPath`。

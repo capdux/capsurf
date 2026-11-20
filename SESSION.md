@@ -4406,3 +4406,11 @@
 ## [2026-11-21 00:46:00] 1 分 45 秒新增并全绿通过纯 CP PagedMedia 白盒单测 `test/css/test_paged_media.cp` (Subagent ef8f1269 结单，Phase 174)
 - **新增白盒测试 (`test/css/test_paged_media.cp`)**: 覆盖 `BreakValue`/`BreakInsideValue`、`PageMarginRule` 单位换算与简写/长写、`@page` + `break-*` 级联、`isValidUtf8` 与 ISO-8859-15/Latin-1 转码（**4/4 PASS**, 1174ms, 4 门禁全 0；`test/css/` 达 **4/4 PASS**）。
 - **清理旧子智能体**: 销毁 `ef8f1269-ccb5-4189-aef7-1b739afc13fc`。
+
+## [2026-11-21 00:47:00] 3 分钟实装内存 `indexedDB`、`Path2D` 扫描线填充与 `_skipSyntheticClick` 去重 (Subagent 961d0e7f 结单，Phase 175)
+- **Web 平台 API 补全 (`e2e/harness.ts`, `src/js/shim/{window,canvas2d}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `e2e/harness.ts:317-337` & `window.js:11498-11675`：透传 `_skipSyntheticClick` 消除 `Mouse.click()` 双重点击；
+  - `window.js:933-1286`：实装内存 `indexedDB`（`open`/`onupgradeneeded`/`createObjectStore`/`transaction`/`put`/`get`/`getAll`/`delete`/`clear`/`count` 微任务异步）；
+  - `canvas2d.js:187-386,1140-1320`：实装 SVG Path 解析 `Path2D` 与 `nonzero`/`evenodd` 扫描线填充，保留默认 `_currentPath`。
+- **门禁校验**: `node --check` + `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 验收 `tldraw-app-shell` 6/6）。
+- **清理旧子智能体**: 销毁 `961d0e7f-484b-4cae-9fd1-6e9a0ef85166`。

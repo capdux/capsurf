@@ -24558,23 +24558,217 @@
   markNative(CanvasPattern, "CanvasPattern");
   markNative(CanvasPattern.prototype.setTransform, "setTransform");
 
+  function _mulMatrix2D(m1, m2) {
+    return [
+      m1[0] * m2[0] + m1[2] * m2[1],
+      m1[1] * m2[0] + m1[3] * m2[1],
+      m1[0] * m2[2] + m1[2] * m2[3],
+      m1[1] * m2[2] + m1[3] * m2[3],
+      m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+      m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+    ];
+  }
+
+  function _parseSvgPathData(d) {
+    const ops = [];
+    const str = String(d || "");
+    const tokens = str.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g);
+    if (!tokens) return ops;
+
+    let i = 0;
+    let cmd = "";
+    let cx = 0;
+    let cy = 0;
+    let sx = 0;
+    let sy = 0;
+    let lastCpX = 0;
+    let lastCpY = 0;
+    let lastCmd = "";
+
+    function isNum(tok) {
+      return tok !== undefined && !/^[a-zA-Z]$/.test(tok);
+    }
+    function nextNum() {
+      return Number(tokens[i++]);
+    }
+
+    while (i < tokens.length) {
+      if (!isNum(tokens[i])) {
+        cmd = tokens[i++];
+        if (cmd === "Z" || cmd === "z") {
+          ops.push({ op: "closePath" });
+          cx = sx;
+          cy = sy;
+          lastCmd = cmd;
+          continue;
+        }
+      } else if (!cmd) {
+        break;
+      }
+
+      const rel = cmd === cmd.toLowerCase();
+      const upper = cmd.toUpperCase();
+
+      if (upper === "M") {
+        if (!isNum(tokens[i])) break;
+        let first = true;
+        while (isNum(tokens[i])) {
+          const nx = nextNum();
+          if (!isNum(tokens[i])) break;
+          const ny = nextNum();
+          cx = rel ? cx + nx : nx;
+          cy = rel ? cy + ny : ny;
+          if (first) {
+            ops.push({ op: "moveTo", args: [cx, cy] });
+            sx = cx;
+            sy = cy;
+            first = false;
+            cmd = rel ? "l" : "L";
+          } else {
+            ops.push({ op: "lineTo", args: [cx, cy] });
+          }
+        }
+        lastCmd = upper;
+      } else if (upper === "L") {
+        while (isNum(tokens[i])) {
+          const nx = nextNum();
+          if (!isNum(tokens[i])) break;
+          const ny = nextNum();
+          cx = rel ? cx + nx : nx;
+          cy = rel ? cy + ny : ny;
+          ops.push({ op: "lineTo", args: [cx, cy] });
+        }
+        lastCmd = upper;
+      } else if (upper === "H") {
+        while (isNum(tokens[i])) {
+          const nx = nextNum();
+          cx = rel ? cx + nx : nx;
+          ops.push({ op: "lineTo", args: [cx, cy] });
+        }
+        lastCmd = upper;
+      } else if (upper === "V") {
+        while (isNum(tokens[i])) {
+          const ny = nextNum();
+          cy = rel ? cy + ny : ny;
+          ops.push({ op: "lineTo", args: [cx, cy] });
+        }
+        lastCmd = upper;
+      } else if (upper === "C") {
+        while (isNum(tokens[i])) {
+          const x1 = nextNum(), y1 = nextNum(), x2 = nextNum(), y2 = nextNum(), x = nextNum(), y = nextNum();
+          if (Number.isNaN(y)) break;
+          const ax1 = rel ? cx + x1 : x1, ay1 = rel ? cy + y1 : y1;
+          const ax2 = rel ? cx + x2 : x2, ay2 = rel ? cy + y2 : y2;
+          cx = rel ? cx + x : x;
+          cy = rel ? cy + y : y;
+          lastCpX = ax2;
+          lastCpY = ay2;
+          ops.push({ op: "bezierCurveTo", args: [ax1, ay1, ax2, ay2, cx, cy] });
+        }
+        lastCmd = "C";
+      } else if (upper === "S") {
+        while (isNum(tokens[i])) {
+          const x2 = nextNum(), y2 = nextNum(), x = nextNum(), y = nextNum();
+          if (Number.isNaN(y)) break;
+          const ax1 = (lastCmd === "C" || lastCmd === "S") ? (2 * cx - lastCpX) : cx;
+          const ay1 = (lastCmd === "C" || lastCmd === "S") ? (2 * cy - lastCpY) : cy;
+          const ax2 = rel ? cx + x2 : x2, ay2 = rel ? cy + y2 : y2;
+          cx = rel ? cx + x : x;
+          cy = rel ? cy + y : y;
+          lastCpX = ax2;
+          lastCpY = ay2;
+          ops.push({ op: "bezierCurveTo", args: [ax1, ay1, ax2, ay2, cx, cy] });
+        }
+        lastCmd = "S";
+      } else if (upper === "Q") {
+        while (isNum(tokens[i])) {
+          const x1 = nextNum(), y1 = nextNum(), x = nextNum(), y = nextNum();
+          if (Number.isNaN(y)) break;
+          const ax1 = rel ? cx + x1 : x1, ay1 = rel ? cy + y1 : y1;
+          cx = rel ? cx + x : x;
+          cy = rel ? cy + y : y;
+          lastCpX = ax1;
+          lastCpY = ay1;
+          ops.push({ op: "quadraticCurveTo", args: [ax1, ay1, cx, cy] });
+        }
+        lastCmd = "Q";
+      } else if (upper === "T") {
+        while (isNum(tokens[i])) {
+          const x = nextNum(), y = nextNum();
+          if (Number.isNaN(y)) break;
+          const ax1 = (lastCmd === "Q" || lastCmd === "T") ? (2 * cx - lastCpX) : cx;
+          const ay1 = (lastCmd === "Q" || lastCmd === "T") ? (2 * cy - lastCpY) : cy;
+          cx = rel ? cx + x : x;
+          cy = rel ? cy + y : y;
+          lastCpX = ax1;
+          lastCpY = ay1;
+          ops.push({ op: "quadraticCurveTo", args: [ax1, ay1, cx, cy] });
+        }
+        lastCmd = "T";
+      } else if (upper === "A") {
+        while (isNum(tokens[i])) {
+          nextNum(); nextNum(); nextNum(); nextNum(); nextNum();
+          const x = nextNum(), y = nextNum();
+          if (Number.isNaN(y)) break;
+          cx = rel ? cx + x : x;
+          cy = rel ? cy + y : y;
+          ops.push({ op: "lineTo", args: [cx, cy] });
+        }
+        lastCmd = "A";
+      } else {
+        break;
+      }
+    }
+    return ops;
+  }
+
+  function checkPath2D(self) {
+    if (!(self instanceof Path2D) || !Array.isArray(self._ops)) {
+      throw new TypeError("Illegal invocation");
+    }
+  }
+
   function Path2D(path) {
     this._ops = [];
     if (path instanceof Path2D) {
       this._ops = path._ops.slice();
+    } else if (typeof path === "string") {
+      this._ops = _parseSvgPathData(path);
     }
   }
   const pathMethods = ["moveTo", "lineTo", "quadraticCurveTo", "bezierCurveTo", "arcTo", "arc", "ellipse", "rect", "closePath"];
   for (let i = 0; i < pathMethods.length; i++) {
     const m = pathMethods[i];
     Path2D.prototype[m] = function () {
+      checkPath2D(this);
       this._ops.push({ op: m, args: Array.prototype.slice.call(arguments) });
     };
   }
   Path2D.prototype.addPath = function (path, transform) {
-    if (path instanceof Path2D) {
-      this._ops.push({ op: "addPath", pathOps: path._ops.slice(), transform: transform });
+    checkPath2D(this);
+    if (!(path instanceof Path2D)) {
+      throw new TypeError("Failed to execute 'addPath' on 'Path2D': parameter 1 is not of type 'Path2D'.");
     }
+    let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
+    if (transform && typeof transform === "object") {
+      if (transform.a !== undefined) a = Number(transform.a);
+      else if (transform.m11 !== undefined) a = Number(transform.m11);
+      if (transform.b !== undefined) b = Number(transform.b);
+      else if (transform.m12 !== undefined) b = Number(transform.m12);
+      if (transform.c !== undefined) c = Number(transform.c);
+      else if (transform.m21 !== undefined) c = Number(transform.m21);
+      if (transform.d !== undefined) d = Number(transform.d);
+      else if (transform.m22 !== undefined) d = Number(transform.m22);
+      if (transform.e !== undefined) e = Number(transform.e);
+      else if (transform.m41 !== undefined) e = Number(transform.m41);
+      if (transform.f !== undefined) f = Number(transform.f);
+      else if (transform.m42 !== undefined) f = Number(transform.m42);
+    }
+    if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c) ||
+        !Number.isFinite(d) || !Number.isFinite(e) || !Number.isFinite(f)) {
+      return;
+    }
+    this._ops.push({ op: "addPath", pathOps: path._ops.slice(), matrix: [a, b, c, d, e, f] });
   };
   markNative(Path2D, "Path2D");
 
@@ -25317,14 +25511,120 @@
     }
   };
 
+  function _flattenPathOps(ops, matrix, outPolygons, outArcs) {
+    let curSubpath = null;
+    let cx = 0;
+    let cy = 0;
+    function pushPt(x, y) {
+      const [tx, ty] = transformPoint(matrix, x, y);
+      if (!curSubpath) {
+        curSubpath = [];
+        outPolygons.push(curSubpath);
+      }
+      curSubpath.push([tx, ty]);
+    }
+    for (let i = 0; i < ops.length; i++) {
+      const item = ops[i];
+      if (!item) continue;
+      const op = item.op;
+      const args = item.args;
+      if (op === "moveTo") {
+        const x = args ? Number(args[0]) : Number(item.x);
+        const y = args ? Number(args[1]) : Number(item.y);
+        curSubpath = [];
+        outPolygons.push(curSubpath);
+        pushPt(x, y);
+        cx = x;
+        cy = y;
+      } else if (op === "lineTo") {
+        const x = args ? Number(args[0]) : Number(item.x);
+        const y = args ? Number(args[1]) : Number(item.y);
+        pushPt(x, y);
+        cx = x;
+        cy = y;
+      } else if (op === "closePath") {
+        if (curSubpath && curSubpath.length > 0) {
+          const first = curSubpath[0];
+          const last = curSubpath[curSubpath.length - 1];
+          if (last[0] !== first[0] || last[1] !== first[1]) {
+            curSubpath.push([first[0], first[1]]);
+          }
+        }
+        curSubpath = null;
+      } else if (op === "rect") {
+        const x = args ? Number(args[0]) : Number(item.x);
+        const y = args ? Number(args[1]) : Number(item.y);
+        const w = args ? Number(args[2]) : Number(item.w);
+        const h = args ? Number(args[3]) : Number(item.h);
+        const p0 = transformPoint(matrix, x, y);
+        const p1 = transformPoint(matrix, x + w, y);
+        const p2 = transformPoint(matrix, x + w, y + h);
+        const p3 = transformPoint(matrix, x, y + h);
+        outPolygons.push([p0, p1, p2, p3, p0]);
+        curSubpath = null;
+        cx = x;
+        cy = y;
+      } else if (op === "quadraticCurveTo" && args) {
+        const cpx = Number(args[0]), cpy = Number(args[1]), x = Number(args[2]), y = Number(args[3]);
+        const steps = 12;
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps;
+          const mt = 1 - t;
+          const px = mt * mt * cx + 2 * mt * t * cpx + t * t * x;
+          const py = mt * mt * cy + 2 * mt * t * cpy + t * t * y;
+          pushPt(px, py);
+        }
+        cx = x;
+        cy = y;
+      } else if (op === "bezierCurveTo" && args) {
+        const cp1x = Number(args[0]), cp1y = Number(args[1]);
+        const cp2x = Number(args[2]), cp2y = Number(args[3]);
+        const x = Number(args[4]), y = Number(args[5]);
+        const steps = 16;
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps;
+          const mt = 1 - t;
+          const px = mt * mt * mt * cx + 3 * mt * mt * t * cp1x + 3 * mt * t * t * cp2x + t * t * t * x;
+          const py = mt * mt * mt * cy + 3 * mt * mt * t * cp1y + 3 * mt * t * t * cp2y + t * t * t * y;
+          pushPt(px, py);
+        }
+        cx = x;
+        cy = y;
+      } else if (op === "arc") {
+        const x = args ? Number(args[0]) : Number(item.x);
+        const y = args ? Number(args[1]) : Number(item.y);
+        const r = args ? Number(args[2]) : Number(item.r);
+        const [tx, ty] = transformPoint(matrix, x, y);
+        const scale = Math.hypot(matrix[0], matrix[1]) || 1;
+        outArcs.push({ x: tx, y: ty, r: r * scale });
+        curSubpath = null;
+      } else if (op === "addPath" && item.pathOps) {
+        const subMatrix = item.matrix ? _mulMatrix2D(matrix, item.matrix) : matrix;
+        _flattenPathOps(item.pathOps, subMatrix, outPolygons, outArcs);
+        curSubpath = null;
+      }
+    }
+  }
+
   CanvasRenderingContext2D.prototype.fill = function (pathOrRule, rule) {
     checkCtx(this);
+    recordCanvasDrawOp(this);
     if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
       this._ops.push({ op: "fill", fillStyle: this._state.fillStyle });
     }
 
     const color = parseColor(this._state.fillStyle);
     if (!color) return;
+
+    const isPath2D = pathOrRule instanceof Path2D;
+    const ops = isPath2D ? pathOrRule._ops : this._currentPath;
+    const fillRule = (isPath2D ? rule : pathOrRule) === "evenodd" ? "evenodd" : "nonzero";
+    const matrix = isPath2D ? this._state.matrix : [1, 0, 0, 1, 0, 0];
+
+    const polygons = [];
+    const arcs = [];
+    _flattenPathOps(ops, matrix, polygons, arcs);
+    if (polygons.length === 0 && arcs.length === 0) return;
 
     const bw = this._bitmapWidth;
     const bh = this._bitmapHeight;
@@ -25336,37 +25636,112 @@
     const alpha = color[3] * this._state.globalAlpha;
     const aByte = Math.min(255, Math.max(0, Math.round(alpha * 255)));
 
-    for (let i = 0; i < this._currentPath.length; i++) {
-      const item = this._currentPath[i];
-      if (item.op === "arc") {
-        const cx = item.x;
-        const cy = item.y;
-        const r = item.r;
-        const r2 = r * r;
+    const clip = this._state.clipRect;
 
-        let x0 = Math.max(0, Math.floor(cx - r));
-        let y0 = Math.max(0, Math.floor(cy - r));
-        let x1 = Math.min(bw, Math.ceil(cx + r));
-        let y1 = Math.min(bh, Math.ceil(cy + r));
+    for (let i = 0; i < arcs.length; i++) {
+      const item = arcs[i];
+      const cx = item.x;
+      const cy = item.y;
+      const r = item.r;
+      const r2 = r * r;
 
-        const clip = this._state.clipRect;
+      let x0 = Math.max(0, Math.floor(cx - r));
+      let y0 = Math.max(0, Math.floor(cy - r));
+      let x1 = Math.min(bw, Math.ceil(cx + r));
+      let y1 = Math.min(bh, Math.ceil(cy + r));
+
+      if (clip) {
+        x0 = Math.max(x0, Math.floor(clip.x0));
+        y0 = Math.max(y0, Math.floor(clip.y0));
+        x1 = Math.min(x1, Math.ceil(clip.x1));
+        y1 = Math.min(y1, Math.ceil(clip.y1));
+      }
+
+      for (let py = y0; py < y1; py++) {
+        const dy = py - cy;
+        for (let px = x0; px < x1; px++) {
+          const dx = px - cx;
+          if (dx * dx + dy * dy <= r2) {
+            const idx = (py * bw + px) * 4;
+            bitmap[idx] = rByte;
+            bitmap[idx + 1] = gByte;
+            bitmap[idx + 2] = bByte;
+            bitmap[idx + 3] = aByte;
+          }
+        }
+      }
+    }
+
+    if (polygons.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let p = 0; p < polygons.length; p++) {
+        const poly = polygons[p];
+        for (let v = 0; v < poly.length; v++) {
+          const vx = poly[v][0], vy = poly[v][1];
+          if (vx < minX) minX = vx;
+          if (vy < minY) minY = vy;
+          if (vx > maxX) maxX = vx;
+          if (vy > maxY) maxY = vy;
+        }
+      }
+      if (Number.isFinite(minX) && Number.isFinite(minY)) {
+        let x0 = Math.max(0, Math.floor(minX));
+        let y0 = Math.max(0, Math.floor(minY));
+        let x1 = Math.min(bw, Math.ceil(maxX));
+        let y1 = Math.min(bh, Math.ceil(maxY));
         if (clip) {
           x0 = Math.max(x0, Math.floor(clip.x0));
           y0 = Math.max(y0, Math.floor(clip.y0));
           x1 = Math.min(x1, Math.ceil(clip.x1));
           y1 = Math.min(y1, Math.ceil(clip.y1));
         }
-
         for (let py = y0; py < y1; py++) {
-          const dy = py - cy;
-          for (let px = x0; px < x1; px++) {
-            const dx = px - cx;
-            if (dx * dx + dy * dy <= r2) {
-              const idx = (py * bw + px) * 4;
-              bitmap[idx] = rByte;
-              bitmap[idx + 1] = gByte;
-              bitmap[idx + 2] = bByte;
-              bitmap[idx + 3] = aByte;
+          const sy = py + 0.5;
+          const hits = [];
+          for (let p = 0; p < polygons.length; p++) {
+            const poly = polygons[p];
+            const n = poly.length;
+            if (n < 2) continue;
+            for (let v = 0; v < n; v++) {
+              const p0 = poly[v];
+              const p1 = poly[(v + 1) % n];
+              const yA = p0[1], yB = p1[1];
+              if ((yA <= sy && yB > sy) || (yB <= sy && yA > sy)) {
+                const t = (sy - yA) / (yB - yA);
+                const ix = p0[0] + t * (p1[0] - p0[0]);
+                hits.push({ x: ix, dir: yB > yA ? 1 : -1 });
+              }
+            }
+          }
+          if (hits.length < 2) continue;
+          hits.sort(function (a, b) { return a.x - b.x; });
+          if (fillRule === "evenodd") {
+            for (let h = 0; h + 1 < hits.length; h += 2) {
+              const sx0 = Math.max(x0, Math.ceil(hits[h].x - 0.5));
+              const sx1 = Math.min(x1, Math.ceil(hits[h + 1].x - 0.5));
+              for (let px = sx0; px < sx1; px++) {
+                const idx = (py * bw + px) * 4;
+                bitmap[idx] = rByte;
+                bitmap[idx + 1] = gByte;
+                bitmap[idx + 2] = bByte;
+                bitmap[idx + 3] = aByte;
+              }
+            }
+          } else {
+            let winding = 0;
+            for (let h = 0; h + 1 < hits.length; h++) {
+              winding += hits[h].dir;
+              if (winding !== 0) {
+                const sx0 = Math.max(x0, Math.ceil(hits[h].x - 0.5));
+                const sx1 = Math.min(x1, Math.ceil(hits[h + 1].x - 0.5));
+                for (let px = sx0; px < sx1; px++) {
+                  const idx = (py * bw + px) * 4;
+                  bitmap[idx] = rByte;
+                  bitmap[idx + 1] = gByte;
+                  bitmap[idx + 2] = bByte;
+                  bitmap[idx + 3] = aByte;
+                }
+              }
             }
           }
         }
@@ -28355,6 +28730,360 @@
     if (typeof globalThis !== "undefined") globalThis.Storage = Storage;
     global.localStorage = new Storage();
     global.sessionStorage = new Storage();
+
+    // 1b. In-memory IndexedDB shim
+    (function installIndexedDB() {
+      const _databases = new Map();
+
+      function cloneIDBValue(val) {
+        if (val === undefined || val === null || typeof val !== "object") return val;
+        if (typeof structuredClone === "function") {
+          try { return structuredClone(val); } catch (e) {}
+        }
+        try { return JSON.parse(JSON.stringify(val)); } catch (e) { return val; }
+      }
+
+      function createIDBEventTarget() {
+        const listeners = new Map();
+        return {
+          addEventListener: function (type, fn) {
+            if (typeof fn !== "function") return;
+            let arr = listeners.get(type);
+            if (!arr) { arr = []; listeners.set(type, arr); }
+            if (arr.indexOf(fn) === -1) arr.push(fn);
+          },
+          removeEventListener: function (type, fn) {
+            const arr = listeners.get(type);
+            if (!arr) return;
+            const idx = arr.indexOf(fn);
+            if (idx !== -1) arr.splice(idx, 1);
+          },
+          dispatchEvent: function (ev) {
+            if (!ev || !ev.type) return true;
+            const onProp = this["on" + ev.type];
+            if (typeof onProp === "function") {
+              try { onProp.call(this, ev); } catch (e) {}
+            }
+            const arr = listeners.get(ev.type);
+            if (arr) {
+              const copy = arr.slice();
+              for (let i = 0; i < copy.length; i++) {
+                try { copy[i].call(this, ev); } catch (e) {}
+              }
+            }
+            return true;
+          },
+        };
+      }
+
+      function makeIDBEvent(type, target, extra) {
+        const ev = typeof Event === "function" ? new Event(type) : { type: type, target: target, currentTarget: target };
+        try {
+          Object.defineProperty(ev, "target", { value: target, configurable: true });
+          Object.defineProperty(ev, "currentTarget", { value: target, configurable: true });
+        } catch (e) {}
+        if (extra) {
+          for (const k in extra) {
+            if (Object.prototype.hasOwnProperty.call(extra, k)) ev[k] = extra[k];
+          }
+        }
+        return ev;
+      }
+
+      function makeIDBRequest(source, transaction) {
+        return Object.assign(createIDBEventTarget(), {
+          result: undefined,
+          error: null,
+          source: source || null,
+          transaction: transaction || null,
+          readyState: "pending",
+          onsuccess: null,
+          onerror: null,
+        });
+      }
+
+      function scheduleIDBMicrotask(fn) {
+        if (typeof queueMicrotask === "function") {
+          queueMicrotask(fn);
+        } else {
+          Promise.resolve().then(fn);
+        }
+      }
+
+      function IDBObjectStoreImpl(name, options) {
+        this.name = name;
+        this.keyPath = options && options.keyPath !== undefined ? options.keyPath : null;
+        this.autoIncrement = Boolean(options && options.autoIncrement);
+        this._autoKey = 1;
+        this._data = new Map();
+        this._indexes = new Map();
+        this.indexNames = {
+          length: 0,
+          contains: function () { return false; },
+        };
+      }
+
+      function _storeWrite(store, tx, value, key, failIfExists) {
+        const req = makeIDBRequest(store, tx);
+        tx._pending++;
+        scheduleIDBMicrotask(function () {
+          let effectiveKey = key;
+          if (effectiveKey === undefined) {
+            if (typeof store.keyPath === "string" && value && typeof value === "object") {
+              effectiveKey = value[store.keyPath];
+            } else if (store.autoIncrement) {
+              effectiveKey = store._autoKey++;
+            }
+          }
+          if (failIfExists && store._data.has(effectiveKey)) {
+            req.readyState = "done";
+            req.error = typeof DOMException === "function" ? new DOMException("Key already exists", "ConstraintError") : new Error("Key already exists");
+            req.dispatchEvent(makeIDBEvent("error", req));
+            tx._stepDone();
+            return;
+          }
+          store._data.set(effectiveKey, cloneIDBValue(value));
+          req.readyState = "done";
+          req.result = effectiveKey;
+          req.dispatchEvent(makeIDBEvent("success", req));
+          tx._stepDone();
+        });
+        return req;
+      }
+
+      function _storeBindTx(store, tx) {
+        return {
+          name: store.name,
+          keyPath: store.keyPath,
+          autoIncrement: store.autoIncrement,
+          transaction: tx,
+          indexNames: store.indexNames,
+          put: function (value, key) {
+            return _storeWrite(store, tx, value, key, false);
+          },
+          add: function (value, key) {
+            return _storeWrite(store, tx, value, key, true);
+          },
+          get: function (key) {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              req.readyState = "done";
+              const raw = store._data.get(key);
+              req.result = raw !== undefined ? cloneIDBValue(raw) : undefined;
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          getAll: function () {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              req.readyState = "done";
+              const out = [];
+              store._data.forEach(function (v) { out.push(cloneIDBValue(v)); });
+              req.result = out;
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          getAllKeys: function () {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              req.readyState = "done";
+              req.result = Array.from(store._data.keys());
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          delete: function (key) {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              store._data.delete(key);
+              req.readyState = "done";
+              req.result = undefined;
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          clear: function () {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              store._data.clear();
+              req.readyState = "done";
+              req.result = undefined;
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          count: function (key) {
+            const req = makeIDBRequest(this, tx);
+            tx._pending++;
+            scheduleIDBMicrotask(function () {
+              req.readyState = "done";
+              req.result = key !== undefined ? (store._data.has(key) ? 1 : 0) : store._data.size;
+              req.dispatchEvent(makeIDBEvent("success", req));
+              tx._stepDone();
+            });
+            return req;
+          },
+          createIndex: function (name, keyPath, options) {
+            const idx = { name: name, keyPath: keyPath, unique: Boolean(options && options.unique), multiEntry: Boolean(options && options.multiEntry) };
+            store._indexes.set(name, idx);
+            return idx;
+          },
+          index: function (name) {
+            return store._indexes.get(name) || { name: name, get: function () { return makeIDBRequest(this, tx); } };
+          },
+        };
+      }
+
+      function makeIDBTransaction(db, storeNames, mode) {
+        const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+        const tx = Object.assign(createIDBEventTarget(), {
+          db: db,
+          mode: mode || "readonly",
+          error: null,
+          objectStoreNames: names,
+          oncomplete: null,
+          onerror: null,
+          onabort: null,
+          _pending: 0,
+          _finished: false,
+          _stepDone: function () {
+            tx._pending--;
+            if (tx._pending <= 0 && !tx._finished) {
+              scheduleIDBMicrotask(function () {
+                if (tx._pending <= 0 && !tx._finished) {
+                  tx._finished = true;
+                  tx.dispatchEvent(makeIDBEvent("complete", tx));
+                }
+              });
+            }
+          },
+          objectStore: function (name) {
+            const s = db._stores.get(name);
+            if (!s) {
+              throw (typeof DOMException === "function"
+                ? new DOMException("Object store '" + name + "' not found", "NotFoundError")
+                : new Error("Object store '" + name + "' not found"));
+            }
+            return _storeBindTx(s, tx);
+          },
+          abort: function () {
+            if (tx._finished) return;
+            tx._finished = true;
+            tx.dispatchEvent(makeIDBEvent("abort", tx));
+          },
+          commit: function () {},
+        });
+        scheduleIDBMicrotask(function () {
+          if (tx._pending <= 0 && !tx._finished) {
+            tx._finished = true;
+            tx.dispatchEvent(makeIDBEvent("complete", tx));
+          }
+        });
+        return tx;
+      }
+
+      function makeIDBDatabase(name, version) {
+        const db = Object.assign(createIDBEventTarget(), {
+          name: String(name),
+          version: Number(version) || 1,
+          _stores: new Map(),
+          onabort: null,
+          onclose: null,
+          onerror: null,
+          onversionchange: null,
+          get objectStoreNames() {
+            const arr = Array.from(db._stores.keys());
+            arr.contains = function (n) { return db._stores.has(n); };
+            arr.item = function (i) { return arr[i] || null; };
+            return arr;
+          },
+          createObjectStore: function (storeName, options) {
+            const s = new IDBObjectStoreImpl(String(storeName), options || {});
+            db._stores.set(String(storeName), s);
+            return _storeBindTx(s, makeIDBTransaction(db, [String(storeName)], "versionchange"));
+          },
+          deleteObjectStore: function (storeName) {
+            db._stores.delete(String(storeName));
+          },
+          transaction: function (storeNames, mode) {
+            return makeIDBTransaction(db, storeNames, mode);
+          },
+          close: function () {},
+        });
+        return db;
+      }
+
+      const indexedDBImpl = {
+        open: function (name, version) {
+          const dbName = String(name);
+          const req = Object.assign(makeIDBRequest(null, null), {
+            onupgradeneeded: null,
+            onblocked: null,
+          });
+          scheduleIDBMicrotask(function () {
+            let db = _databases.get(dbName);
+            const requestedVersion = version !== undefined ? Number(version) : (db ? db.version : 1);
+            const isNew = !db;
+            const isUpgrade = isNew || requestedVersion > db.version;
+            const oldVersion = isNew ? 0 : db.version;
+            if (!db) {
+              db = makeIDBDatabase(dbName, requestedVersion || 1);
+              _databases.set(dbName, db);
+            } else if (requestedVersion > db.version) {
+              db.version = requestedVersion;
+            }
+            req.readyState = "done";
+            req.result = db;
+            if (isUpgrade) {
+              req.transaction = makeIDBTransaction(db, Array.from(db._stores.keys()), "versionchange");
+              req.dispatchEvent(makeIDBEvent("upgradeneeded", req, { oldVersion: oldVersion, newVersion: db.version }));
+              req.transaction = null;
+            }
+            req.dispatchEvent(makeIDBEvent("success", req));
+          });
+          return req;
+        },
+        deleteDatabase: function (name) {
+          const dbName = String(name);
+          const req = makeIDBRequest(null, null);
+          scheduleIDBMicrotask(function () {
+            _databases.delete(dbName);
+            req.readyState = "done";
+            req.result = undefined;
+            req.dispatchEvent(makeIDBEvent("success", req));
+          });
+          return req;
+        },
+        databases: function () {
+          const list = [];
+          _databases.forEach(function (db) {
+            list.push({ name: db.name, version: db.version });
+          });
+          return Promise.resolve(list);
+        },
+        cmp: function (a, b) {
+          if (a < b) return -1;
+          if (a > b) return 1;
+          return 0;
+        },
+      };
+
+      global.indexedDB = indexedDBImpl;
+      if (typeof window !== "undefined") window.indexedDB = indexedDBImpl;
+      if (typeof globalThis !== "undefined") globalThis.indexedDB = indexedDBImpl;
+    })();
 
     // WebIDL interface objects with proper name & Symbol.toStringTag shape
     function TimeRanges() {}
@@ -38567,7 +39296,7 @@
     if (typeof window !== "undefined") window.__capsurf_activate_clicked_element = activateClickedElement;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_activate_clicked_element = activateClickedElement;
 
-    function dispatchMouseEvent(type, x, y, button, buttons, clickCount) {
+    function dispatchMouseEvent(type, x, y, button, buttons, clickCount, skipSyntheticClick) {
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
       const target = _hitTestElement(x, y);
       if (!target) return { handled: false };
@@ -38737,7 +39466,7 @@
           (typeof globalThis !== "undefined" && globalThis.__capsurf_pending_navigation) ||
           global.__capsurf_pending_navigation
         );
-        if (!hasPendingNav && btnNum === 0) {
+        if (!skipSyntheticClick && !hasPendingNav && btnNum === 0) {
           const clickEv = new MouseCtor("click", {
             bubbles: true,
             cancelable: true,
