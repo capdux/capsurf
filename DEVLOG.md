@@ -1786,3 +1786,7 @@
 
 ### Phase 237-238: Multi-Tab `CdpPageSession` Isolation (`script-navigation-tab` 2/2)
 - `CdpServer` now tracks up to 16 `TabSessionEntry` slots keyed by `target_id`/`session_id` and routes `req.session_id`, `flushAllPendingNavigations`, `pollAllNetworkEvents`, and `pumpAllTimers` per tab.
+
+### Phase 237-238: Multi-Tab `CdpPageSession` Isolation (`script-navigation-tab` 2/2)
+- `CdpServer` now maintains up to 16 `TabSessionSlot` entries keyed by top-level `session_id` / non-default `browserContextId`, routing CDP commands and flushing DOM/pending-navigation events per tab without cross-tab pollution.
+- Freeing `pending_raw` `JSValue` before `session.navigate(...)` in `performPendingNavigation` prevents freeing a stale `JSValue` against the newly created `JSContext`.

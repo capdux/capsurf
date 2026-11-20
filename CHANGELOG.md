@@ -2402,3 +2402,8 @@
 ### Phase 237-238
 - Added `test/render/test_image_and_font_key_edge.cp` and `test/dom/test_dom_events_and_propagation_edge.cp`; exposed `pub fn loadBgPngBytes` in `src/render/painter.cp`.
 - Implemented multi-tab `CdpPageSession` isolation (`tab_sessions`) across `src/cdp/{server,session,page}.cp` and `e2e/harness.ts`.
+
+### Phase 237-238
+- Added `test/render/test_image_and_font_key_edge.cp` and `test/dom/test_dom_events_and_propagation_edge.cp`; exposed `pub fn loadBgPngBytes` in `src/render/painter.cp`.
+- Implemented multi-tab `CdpPageSession` isolation (`TabSessionSlot`) in `src/cdp/server.cp`, fixed `performPendingNavigation` `JSValue` free order in `src/cdp/page.cp`, and propagated `browserContextId` in `e2e/harness.ts`.
+- Added `ulimit -s 65536` whitebox rule to `GEMINI.md` section `11.7`.

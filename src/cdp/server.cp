@@ -337,7 +337,7 @@ pub struct CdpServer {
         if (sid.len == 0) return;
         let i: usize = 0;
         while (i < MAX_TAB_SESSIONS) : (i += 1) {
-            if (_.tab_sessions[i].active && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].sessionId(), sid)) {
+            if (_.tab_sessions[i].active && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].key_buf[0.._.tab_sessions[i].key_len], sid)) {
                 if (_.tab_sessions[i].page_session != null) {
                     _.tab_sessions[i].page_session.?.deinit();
                 }
@@ -350,7 +350,7 @@ pub struct CdpServer {
         if (bctx.len == 0) return;
         let i: usize = 0;
         while (i < MAX_TAB_SESSIONS) : (i += 1) {
-            if (_.tab_sessions[i].active && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx)) {
+            if (_.tab_sessions[i].active && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].bctx_buf[0.._.tab_sessions[i].bctx_len], bctx)) {
                 if (_.tab_sessions[i].page_session != null) {
                     _.tab_sessions[i].page_session.?.deinit();
                 }
@@ -363,10 +363,10 @@ pub struct CdpServer {
         let i: usize = 0;
         while (i < MAX_TAB_SESSIONS) : (i += 1) {
             if (!_.tab_sessions[i].active) continue;
-            if (sid.len > 0 && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].sessionId(), sid)) {
+            if (sid.len > 0 && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].key_buf[0.._.tab_sessions[i].key_len], sid)) {
                 if (_.tab_sessions[i].page_session != null) return _.tab_sessions[i].page_session.?;
             }
-            if (sid.len == 0 && bctx.len > 0 && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx)) {
+            if (sid.len == 0 && bctx.len > 0 && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].bctx_buf[0.._.tab_sessions[i].bctx_len], bctx)) {
                 if (_.tab_sessions[i].page_session != null) return _.tab_sessions[i].page_session.?;
             }
         }
@@ -398,7 +398,7 @@ pub struct CdpServer {
             _.tab_sessions[slot_idx].bctx_len = blen;
         }
         _.tab_sessions[slot_idx].page_session = new_sess;
-        return new_sess;
+        return _.tab_sessions[slot_idx].page_session.?;
     }
 
     fn resolveSessionForRequest(*_, req: CdpRequest): *CdpPageSession {
@@ -1184,7 +1184,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
                     if (_.tab_sessions[ti].active && _.tab_sessions[ti].page_session != null) {
                         const tab_sess = _.tab_sessions[ti].page_session.?;
-                        const tab_sid = _.tab_sessions[ti].sessionId();
+                        const tab_sid = _.tab_sessions[ti].key_buf[0.._.tab_sessions[ti].key_len];
                         if (tab_sess.has_document) {
                             tab_sess.pumpTimers();
                             flushReopenLoadEventsForSession(client_fd, tab_sess, tab_sid) catch break;

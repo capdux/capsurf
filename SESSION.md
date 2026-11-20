@@ -4760,3 +4760,10 @@
 ### Phase 237-238: Image/DOM-Events Whitebox (129/129) + `flex-svg-intrinsic` 3/3 + Multi-Tab `script-navigation-tab` 2/2 PASS
 - **Slot A (`a1c1fb72`, `bce4e287`)**: Verified `test/render/` 8/8 & `test/net/test_mock_fixtures_edge.cp` 4/4 (`ulimit -s 65536`); added `test/render/test_image_and_font_key_edge.cp` (**3/3 PASS**, 1960ms) & `test/dom/test_dom_events_and_propagation_edge.cp` (**1/1 PASS**, 869ms). Total whitebox **129/129 (100% PASS)**.
 - **Slot B (`bd21e154`, `dbbbc428`)**: Verified `e2e/flex-svg-intrinsic.e2e.test.ts` **3/3 PASS** (5.73s) & `test/layout/` **5/5 PASS**. Implemented multi-tab `CdpPageSession` isolation (`tab_sessions` in `src/cdp/server.cp`, `navigate_session_id` in `src/cdp/{session,page}.cp`, `Browser.newPage` in `e2e/harness.ts`); built `bin_19233/main` (8.39s); `e2e/script-navigation-tab.e2e.test.ts` **2/2 PASS** (5.83s) + `oopif-elements-panel`/`context-lifecycle` **4/4 PASS** (9.61s).
+
+### Phase 237-238: Image/DOM-Events Whitebox (129/129) + `flex-svg-intrinsic` 3/3 + Multi-Tab `script-navigation-tab` 2/2 PASS
+- **Slot A (`a1c1fb72`, `bce4e287`) & Main Agent**: Verified `test/render/` 8/8 & `test/net/test_mock_fixtures_edge.cp` 4/4 (`ulimit -s 65536`); added `test/render/test_image_and_font_key_edge.cp` (**3/3 PASS**, 1960ms) & `test/dom/test_dom_events_and_propagation_edge.cp` (**1/1 PASS**, 869ms). Full-repo pure-CP whitebox now **129/129 (100% PASS)**.
+- **Slot B (`bd21e154`, `dbbbc428`)**:
+  - Verified `e2e/flex-svg-intrinsic.e2e.test.ts` **3/3 PASS** (5.73s) & `test/layout/` **5/5 PASS**.
+  - Implemented multi-tab `CdpPageSession` isolation (`TabSessionSlot`, `MAX_TAB_SESSIONS = 16`, `resolveSessionForRequest`) in `src/cdp/server.cp`, fixed `performPendingNavigation` `freeValue` order in `src/cdp/page.cp`, and propagated `this.browserContextId` in `e2e/harness.ts`. Built `bin_19233/main` (6.12s); `e2e/script-navigation-tab.e2e.test.ts` **2/2 PASS** (6.26s) + `oopif-elements-panel` & `context-lifecycle` **4/4 PASS** (7.74s).
+- **GEMINI.md**: Added `ulimit -s 65536` requirement for whitebox tests transitively importing `src/cdp/` or `mock_fixtures.cp`.

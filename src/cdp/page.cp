@@ -1572,15 +1572,19 @@ pub fn performPendingNavigation(
     const val = session.ctx.eval(
         "(function(){var u=globalThis.__capsurf_pending_navigation||'';if(u){globalThis.__capsurf_pending_navigation='';}return String(u);})()",
     );
-    defer session.ctx.freeValue(val);
-    if (jsIsException(val)) return false;
+    if (jsIsException(val)) {
+        session.ctx.freeValue(val);
+        return false;
+    }
 
     const pending_raw = session.ctx.toCString(val);
-    if (pending_raw.len == 0) return false;
-
     let raw_buf: [2048]u8 = [0; 2048];
     const copy_len = @min(pending_raw.len, raw_buf.len);
-    @memcpy(raw_buf[0..copy_len], pending_raw[0..copy_len]);
+    if (copy_len > 0) {
+        @memcpy(raw_buf[0..copy_len], pending_raw[0..copy_len]);
+    }
+    session.ctx.freeValue(val);
+    if (copy_len == 0) return false;
     const pending_url = raw_buf[0..copy_len];
 
     let resolved_buf: [2048]u8 = [0; 2048];

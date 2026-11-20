@@ -1356,8 +1356,13 @@ export class Page {
       this.cdp.emit("Page.lifecycleEvent", { frameId, loaderId, name: "DOMContentLoaded", timestamp: ts });
       this.cdp.emit("Page.lifecycleEvent", { frameId, loaderId, name: "load", timestamp: ts });
     }
+    const ctxParams: Record<string, unknown> = {};
+    if (this.browserContextId && this.browserContextId !== "default") {
+      ctxParams.browserContextId = this.browserContextId;
+    }
     try {
       await this.cdp.send("Runtime.evaluate", {
+        ...ctxParams,
         expression: `(function(){
           if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(url)});
           if (typeof Element !== 'undefined') {
@@ -1434,7 +1439,7 @@ export class Page {
     }
     for (const script of this.newDocumentScripts) {
       try {
-        await this.cdp.send("Runtime.evaluate", { expression: script });
+        await this.cdp.send("Runtime.evaluate", { ...ctxParams, expression: script });
       } catch {}
     }
 
@@ -1448,6 +1453,7 @@ export class Page {
     let autoReloadCount = 0;
     while (autoReloadCount < 3) {
       const checkPending: any = await this.cdp.send("Runtime.evaluate", {
+        ...ctxParams,
         expression: "(function() { var p = globalThis.__capsurf_pending_navigation; if (p) { delete globalThis.__capsurf_pending_navigation; return p; } return null; })()",
         returnByValue: true,
       });
@@ -1471,9 +1477,10 @@ export class Page {
           initiator: { type: "other" },
           type: "Document",
         });
-        await this.cdp.send("Page.navigate", { url: pending });
+        await this.cdp.send("Page.navigate", { ...ctxParams, url: pending });
         try {
           await this.cdp.send("Runtime.evaluate", {
+            ...ctxParams,
             expression: `(function(){ if (typeof __capsurf_set_document_url === 'function') __capsurf_set_document_url(${JSON.stringify(pending)}); })()`,
           });
         } catch {}
@@ -1485,6 +1492,7 @@ export class Page {
     if (autoReloadCount >= 3) {
       try {
         await this.cdp.send("Runtime.evaluate", {
+          ...ctxParams,
           expression: "delete globalThis.__capsurf_pending_navigation;",
         });
       } catch {}
@@ -1500,6 +1508,7 @@ export class Page {
     (this.cdp as any)._activePage = this;
     try {
       const titleRes: any = await this.cdp.send("Runtime.evaluate", {
+        ...ctxParams,
         expression: "typeof document !== 'undefined' ? String(document.title || '') : ''",
         returnByValue: true,
       });
