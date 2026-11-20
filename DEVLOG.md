@@ -1672,3 +1672,6 @@
 ## Phase 175 内存 `indexedDB`、`Path2D` 扫描线填充与重复点击去重方案
 1. **内存 `indexedDB` (`window.js`)**：在微任务队列异步调度 `onupgradeneeded` -> `onsuccess` 与 `tx.oncomplete`，支持标准 store 增删改查。
 2. **`Path2D` 与扫描线填充 (`canvas2d.js`)**：通过 `_flattenPathOps` 将 `M/L/C/Q/A/Z` 与 `rect`/`arc` 扁平化为多边形边表并按 `nonzero`/`evenodd` 填充，不覆盖上下文 `_currentPath`。
+
+## Phase 177 `textContent` Setter 变更记录与瞬态目标清理方案
+1. **标准 `childList` 派发与引用隔离 (`node-base.js`, `observer.js`)**：`textContent` 赋值时将旧子节点 `parentNode` 置 `null` 并通知观测者；对 `subtree: true` 的瞬态移除节点仅在当前微任务周期保留并于投递前/断开时清空。

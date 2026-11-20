@@ -2371,12 +2371,15 @@
       mutationScheduled = false;
       for (const obs of activeObservers) {
         const st = _moState.get(obs);
-        if (st && st.records.length > 0) {
-          const batch = st.records.splice(0, st.records.length);
-          try {
-            st.callback.call(obs, batch, obs);
-          } catch (e) {
-            if (typeof console !== "undefined" && console.error) console.error(e);
+        if (st) {
+          st.transientTargets = [];
+          if (st.records.length > 0) {
+            const batch = st.records.splice(0, st.records.length);
+            try {
+              st.callback.call(obs, batch, obs);
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) console.error(e);
+            }
           }
         }
       }
@@ -2386,6 +2389,19 @@
   function isSameTarget(a, b) {
     if (a === b) return true;
     if (a && b && a._nid !== undefined && b._nid !== undefined && a._nid === b._nid) return true;
+    return false;
+  }
+
+  function matchesObserverRecord(sub, record) {
+    if (record.type === "attributes" && sub.options.attributes) {
+      return !sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1;
+    }
+    if (record.type === "childList" && sub.options.childList) {
+      return true;
+    }
+    if (record.type === "characterData" && sub.options.characterData) {
+      return true;
+    }
     return false;
   }
 
@@ -2404,22 +2420,31 @@
     for (const obs of activeObservers) {
       const st = _moState.get(obs);
       if (!st) continue;
+      let matched = false;
       for (const sub of st.targets) {
         if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
-          if (record.type === "attributes" && sub.options.attributes) {
-            if (!sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1) {
+          if (record.type === "childList" && sub.options.subtree && record.removedNodes && record.removedNodes.length > 0) {
+            if (!st.transientTargets) st.transientTargets = [];
+            for (let ri = 0; ri < record.removedNodes.length; ri++) {
+              const rn = record.removedNodes[ri];
+              if (rn) st.transientTargets.push({ target: rn, options: sub.options });
+            }
+          }
+          if (!matched && matchesObserverRecord(sub, record)) {
+            st.records.push(record);
+            scheduleMutationDelivery();
+            matched = true;
+          }
+        }
+      }
+      if (!matched && st.transientTargets && st.transientTargets.length > 0) {
+        for (const tsub of st.transientTargets) {
+          if (isSameTarget(tsub.target, record.target) || (tsub.options.subtree && tsub.target.contains && tsub.target.contains(record.target))) {
+            if (matchesObserverRecord(tsub, record)) {
               st.records.push(record);
               scheduleMutationDelivery();
               break;
             }
-          } else if (record.type === "childList" && sub.options.childList) {
-            st.records.push(record);
-            scheduleMutationDelivery();
-            break;
-          } else if (record.type === "characterData" && sub.options.characterData) {
-            st.records.push(record);
-            scheduleMutationDelivery();
-            break;
           }
         }
       }
@@ -2432,6 +2457,7 @@
       callback: callback,
       records: [],
       targets: [],
+      transientTargets: [],
     });
   }
 
@@ -2457,6 +2483,7 @@
     if (!st) throw new TypeError("Illegal invocation");
     st.records = [];
     st.targets = [];
+    st.transientTargets = [];
     activeObservers.delete(this);
   };
 
@@ -7601,18 +7628,35 @@
         return "";
       },
       set: function (v) {
+        let oldKids = [];
+        try {
+          oldKids = this._children ? this._children.slice() : Array.from(this.childNodes || []);
+        } catch (e) {}
+        for (let i = 0; i < oldKids.length; i++) {
+          if (oldKids[i]) {
+            try { oldKids[i].parentNode = null; } catch (e) {}
+          }
+        }
         if (nativeElementSetTextContent) {
           try {
             nativeElementSetTextContent.call(this, v);
           } catch (e) {}
         }
         this._children = [];
-        const val = String(v);
+        const val = (v === null || v === undefined) ? "" : String(v);
+        const newKids = [];
         if (val.length > 0) {
           const t = new Text(val);
           t.parentNode = this;
           t.ownerDocument = this.ownerDocument || this;
           this._children.push(t);
+          newKids.push(t);
+        }
+        if ((oldKids.length > 0 || newKids.length > 0) && typeof notifyMutation === "function") {
+          const rec = new MutationRecord("childList", this);
+          rec.removedNodes = oldKids;
+          rec.addedNodes = newKids;
+          notifyMutation(rec);
         }
       },
       configurable: true,

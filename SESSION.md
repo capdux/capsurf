@@ -4418,3 +4418,10 @@
 ## [2026-11-21 00:49:30] 2 分 20 秒新增并全绿通过纯 CP Color/Calc/LightDark 白盒单测 `test/css/test_color_and_units.cp` (Subagent ca1c2174 结单，Phase 176)
 - **新增白盒测试 (`test/css/test_color_and_units.cp`)**: 覆盖 `CssColor.parse` (hex/rgba/hsl/hwb/oklab/oklch/rebeccapurple/withAlpha/mix)、`CssCalc.evalPx` (`calc`/`min`/`max`/`clamp`)、`var()` 继承回退与 `color-scheme`/`light-dark()`（**4/4 PASS**, 1437ms, 4 门禁全 0；`test/css/` 达 **5/5 PASS**）。
 - **清理旧子智能体**: 销毁 `ca1c2174-0864-4dae-8b59-fc9f0deeb62a`。
+
+## [2026-11-21 00:52:00] 修复 `textContent` setter `MutationRecord` 派发与 `transientTargets` 释放 (Subagent 89f2e756 结单，Phase 177)
+- **`textContent` setter & `MutationObserver` (`src/js/shim/{node-base,mutations/observer}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `node-base.js:897-928`：`Element.prototype.textContent` setter 收集旧子节点置 `parentNode = null` 并派发 `MutationRecord("childList")`（含 `removedNodes`/`addedNodes`）；
+  - `observer.js:55-176`：补齐 `subtree: true` 瞬态观测目标 `transientTargets` 并在微任务投递前与 `disconnect()` 时清空避免强引用泄漏。
+- **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 复测 `style-churn-memory` & `text-content-memory`）。
+- **清理旧子智能体**: 销毁 `89f2e756-107a-46b6-9587-095312e59b1f`。

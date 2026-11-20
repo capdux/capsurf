@@ -895,18 +895,35 @@ if (typeof Element !== "undefined" && Element.prototype) {
       return "";
     },
     set: function (v) {
+      let oldKids = [];
+      try {
+        oldKids = this._children ? this._children.slice() : Array.from(this.childNodes || []);
+      } catch (e) {}
+      for (let i = 0; i < oldKids.length; i++) {
+        if (oldKids[i]) {
+          try { oldKids[i].parentNode = null; } catch (e) {}
+        }
+      }
       if (nativeElementSetTextContent) {
         try {
           nativeElementSetTextContent.call(this, v);
         } catch (e) {}
       }
       this._children = [];
-      const val = String(v);
+      const val = (v === null || v === undefined) ? "" : String(v);
+      const newKids = [];
       if (val.length > 0) {
         const t = new Text(val);
         t.parentNode = this;
         t.ownerDocument = this.ownerDocument || this;
         this._children.push(t);
+        newKids.push(t);
+      }
+      if ((oldKids.length > 0 || newKids.length > 0) && typeof notifyMutation === "function") {
+        const rec = new MutationRecord("childList", this);
+        rec.removedNodes = oldKids;
+        rec.addedNodes = newKids;
+        notifyMutation(rec);
       }
     },
     configurable: true,

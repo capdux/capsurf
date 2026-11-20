@@ -2189,3 +2189,6 @@
 
 ## Phase 176: Pure-CP Color4, Calc & `light-dark()` Whitebox Suite `test/css/test_color_and_units.cp` (4/4 PASS)
 - 新增 `test/css/test_color_and_units.cp`，覆盖 CSS Color 4 (`oklab`/`oklch`/`hwb`)、`calc`/`min`/`max`/`clamp`、`var()` 与 `light-dark()`（`cap test -m` **4/4 PASS**, 1437ms）。
+
+## Phase 177: `Element.textContent` Setter `MutationRecord` Dispatch & `transientTargets` Cleanup
+- **`src/js/shim/{node-base,mutations/observer}.js` & `src/js/runtime{,_source.cp}`**：修复 `textContent` setter 缺失旧子节点断开与 `MutationRecord` 派发，并清理 `transientTargets` 强引用（4 门禁全 0）。
