@@ -343,6 +343,9 @@ function installShim(global) {
   function upgradeElement(el) {
     if (!el || typeof el !== "object" || el._upgraded) return el;
     el._upgraded = true;
+    if (typeof el._nid === "number" && el._id === undefined) {
+      el._id = el._nid;
+    }
     if (typeof global.__capsurf_recordCanonicalId === "function") {
       global.__capsurf_recordCanonicalId(el);
     }
@@ -482,7 +485,24 @@ function installShim(global) {
     docProto.createElementNS = function (ns, tagName) {
       let el = origCreateElementNS.call(this, ns, tagName);
       if (el) {
-        el.namespaceURI = ns !== undefined && ns !== null ? String(ns) : null;
+        const nsVal = ns !== undefined && ns !== null ? String(ns) : null;
+        el._namespaceURI = nsVal;
+        try {
+          Object.defineProperty(el, "namespaceURI", {
+            value: nsVal,
+            writable: true,
+            configurable: true,
+            enumerable: true,
+          });
+        } catch (e) {
+          try { el.namespaceURI = nsVal; } catch (e2) {}
+        }
+        if (nsVal !== "http://www.w3.org/1999/xhtml") {
+          el._upgraded = false;
+          if (global.Element && global.Element.prototype) {
+            Object.setPrototypeOf(el, global.Element.prototype);
+          }
+        }
       }
       if (el && (!ns || ns === "http://www.w3.org/1999/xhtml")) {
         const tag = String(tagName).toLowerCase();

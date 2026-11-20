@@ -294,9 +294,20 @@ function installFormElement(global) {
   };
 
   HTMLFormElement.prototype.reset = function () {
-    if (!(this instanceof HTMLFormElement)) {
+    if (!(this instanceof HTMLFormElement) || (this.namespaceURI && this.namespaceURI !== HTML_NS)) {
       throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
     }
+
+    const evt = new Event("reset", { bubbles: true, cancelable: true });
+    let allowed = true;
+    if (typeof dispatchTrustedEvent === "function") {
+      allowed = dispatchTrustedEvent(this, evt);
+    } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+      allowed = global.__capsurf_dispatchTrustedEvent(this, evt);
+    } else {
+      allowed = this.dispatchEvent(evt);
+    }
+    if (!allowed) return;
 
     const list = collectFormControls(this);
     for (let i = 0; i < list.length; i++) {
@@ -329,8 +340,6 @@ function installFormElement(global) {
         }
       }
     }
-    const evt = new Event("reset", { bubbles: true, cancelable: true });
-    this.dispatchEvent(evt);
   };
 
   HTMLFormElement.prototype.checkValidity = function () {

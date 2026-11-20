@@ -338,6 +338,11 @@
 
   const _eventState = new WeakMap();
   const _trustedFlags = new WeakMap();
+  function _setEventTrusted(ev, val) {
+    if (ev && typeof ev === "object") {
+      _trustedFlags.set(ev, Boolean(val));
+    }
+  }
   const _customEventState = new WeakMap();
   const _uiEventState = new WeakMap();
   const _mouseEventState = new WeakMap();
@@ -1895,42 +1900,62 @@
   }
   global.__capsurf_filterComposedPath = filterComposedPath;
 
+  const _eventsInFlight = new WeakSet();
+
   function internalDispatch(target, event, trusted) {
     if (!event || typeof event !== "object") {
       throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
     }
-    if (event._isDispatching) {
+    const eventState = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
+    if (_eventsInFlight.has(event)) {
       throw new DOMException("The event is already being dispatched.", "InvalidStateError");
     }
-    if (trusted) {
-      event._isTrusted = true;
-    }
-    event._isDispatching = true;
-
-    try {
-      let targetId;
-      if (target) {
-        targetId = target._id;
-      }
-      let origRelated = event.relatedTarget;
-    } catch (e) {
-      event._isDispatching = false;
-      throw e;
+    _eventsInFlight.add(event);
+    if (eventState) {
+      eventState.isDispatching = true;
+      eventState.dispatched = true;
     }
 
     const prevWindowEvent = typeof window !== "undefined" ? window.event : undefined;
-    const eventState = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
     try {
-      if (typeof window !== "undefined") {
-        try { window.event = event; } catch (e) {}
+      if (target && typeof target === "object") {
+        const targetId = target._id;
+        if (trusted) {
+          const canonical = canonicalNodeIds.get(target);
+          if (canonical !== undefined && targetId !== undefined && targetId !== canonical) {
+            throw new TypeError("Invalid trusted event target");
+          }
+        }
       }
-      event.target = target;
-      const rawType = event._type !== undefined ? event._type : event.type;
+
+      // Freeze dispatch metadata from internal state before touching page-owned accessors
+      const rawType = eventState ? eventState.type : (event._type !== undefined ? event._type : event.type);
       if (typeof rawType !== "string") {
         throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
       }
       const eventType = rawType.toLowerCase();
-      const isComposed = Boolean(event.composed);
+      const isBubbles = eventState ? Boolean(eventState.bubbles) : Boolean(event.bubbles);
+      const isComposed = eventState ? Boolean(eventState.composed) : Boolean(event.composed);
+
+      if (typeof _setEventTrusted === "function") {
+        _setEventTrusted(event, Boolean(trusted));
+      } else {
+        event._isTrusted = Boolean(trusted);
+      }
+
+      // Access relatedTarget while event is locked so re-entrant getters throw InvalidStateError
+      // and thrown getters cleanly unlock in finally
+      const origRelated = event.relatedTarget;
+      void origRelated;
+
+      if (typeof window !== "undefined") {
+        try { window.event = event; } catch (e) {}
+      }
+      if (eventState) {
+        eventState.target = target;
+      } else {
+        event.target = target;
+      }
       const targetRoot = getNodeRoot(target);
 
       // 1. Build propagation path from target up to window (supporting ShadowRoot & <slot>)
@@ -1991,10 +2016,24 @@
         eventState.path = path;
       }
 
+      function isStopped() {
+        return eventState ? eventState.stopPropagation : Boolean(event._stopped);
+      }
+      function isImmediateStopped() {
+        return eventState ? eventState.stopImmediatePropagation : Boolean(event._immediateStopped);
+      }
+
       function invoke(entry, phase) {
-        event.target = retargetEventTarget(target, entry);
-        event.currentTarget = entry;
-        event.eventPhase = phase;
+        const retargeted = retargetEventTarget(target, entry);
+        if (eventState) {
+          eventState.target = retargeted;
+          eventState.currentTarget = entry;
+          eventState.eventPhase = phase;
+        } else {
+          event.target = retargeted;
+          event.currentTarget = entry;
+          event.eventPhase = phase;
+        }
 
         const map = getListeners(entry);
         if (map) {
@@ -2002,7 +2041,7 @@
           if (list && list.length > 0) {
             const copy = list.slice();
             for (let i = 0; i < copy.length; i++) {
-              if (event._immediateStopped) return;
+              if (isImmediateStopped()) return;
               const item = copy[i];
               if (phase === PHASE_CAPTURING && !item.capture) continue;
               if (phase === PHASE_BUBBLING && item.capture) continue;
@@ -2067,7 +2106,7 @@
             }
           }
           const fn = entry[propName];
-          if (typeof fn === "function" && !event._immediateStopped) {
+          if (typeof fn === "function" && !isImmediateStopped()) {
             try {
               const ret = fn.call(entry, event);
               if (ret === false) {
@@ -2090,12 +2129,12 @@
 
       // Phase 1: Capturing (from top down to target's parent)
       for (let i = path.length - 1; i >= 1; i--) {
-        if (event._stopped) break;
+        if (isStopped()) break;
         invoke(path[i], PHASE_CAPTURING);
       }
 
       // Phase 2: At Target
-      if (!event._stopped) {
+      if (!isStopped()) {
         invoke(target, PHASE_AT_TARGET);
         if (eventType === "click") {
           checkActivation(target);
@@ -2103,9 +2142,9 @@
       }
 
       // Phase 3: Bubbling (from target's parent up to top, if bubbles is true)
-      if (event.bubbles && !event._stopped) {
+      if (isBubbles && !isStopped()) {
         for (let i = 1; i < path.length; i++) {
-          if (event._stopped) break;
+          if (isStopped()) break;
           invoke(path[i], PHASE_BUBBLING);
           if (eventType === "click") {
             checkActivation(path[i]);
@@ -2114,34 +2153,41 @@
       }
 
       // Activation behavior for click events
-      if (eventType === "click" && activatedButton && !event._canceled) {
+      const wasCanceled = eventState ? eventState.canceled : Boolean(event._canceled);
+      if (eventType === "click" && activatedButton && !wasCanceled) {
         if (typeof handleButtonActivation === "function") {
           handleButtonActivation(activatedButton);
         }
       }
     } finally {
-      event._isDispatching = false;
-      event.eventPhase = PHASE_NONE;
-      event.currentTarget = null;
+      _eventsInFlight.delete(event);
       if (eventState) {
+        eventState.isDispatching = false;
+        eventState.eventPhase = PHASE_NONE;
+        eventState.currentTarget = null;
+        eventState.stopPropagation = false;
+        eventState.stopImmediatePropagation = false;
         eventState.path = null;
+      } else {
+        event._isDispatching = false;
+        event.eventPhase = PHASE_NONE;
+        event.currentTarget = null;
       }
       if (typeof window !== "undefined") {
         try { window.event = prevWindowEvent; } catch (e) {}
       }
     }
 
-    return !event._canceled;
+    return eventState ? !eventState.canceled : !event._canceled;
   }
 
   EventTarget.prototype.dispatchEvent = function (event) {
     if (!event || typeof event !== "object") {
       throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
     }
-    if (event._isDispatching) {
+    if (_eventsInFlight.has(event)) {
       throw new DOMException("The event is already being dispatched.", "InvalidStateError");
     }
-    event._isTrusted = false;
     return internalDispatch(this, event, false);
   };
 
@@ -2150,6 +2196,9 @@
     return internalDispatch(target, event, true);
   }
   global.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;
+  }
 
   markNative(EventTarget, "EventTarget");
   markNative(EventTarget.prototype.addEventListener, "addEventListener");
@@ -10041,9 +10090,27 @@
         this.dispatchEvent(evt);
         if (!evt.defaultPrevented) {
           const tag = String(this.tagName || this.localName || "").toLowerCase();
-          const hasHref = (this.hasAttribute ? this.hasAttribute("href") : false) || Boolean(this.href);
-          if (tag === "a" && hasHref) {
-            const href = (this.getAttribute ? this.getAttribute("href") : this.href) || "";
+          // Walk up ancestors to find an <a> (HTML or SVG with href / xlink:href)
+          let anchor = null;
+          let cur = this;
+          for (let depth = 0; cur && depth < 32; depth++) {
+            const curTag = String(cur.tagName || cur.localName || "").toLowerCase();
+            if (curTag === "a") {
+              const curHref = cur.getAttribute
+                ? (cur.getAttribute("href") ?? (cur.namespaceURI === SVG_NS ? cur.getAttribute("xlink:href") : null))
+                : null;
+              if (curHref !== null && curHref !== "") {
+                anchor = cur;
+                break;
+              }
+            }
+            cur = cur.parentElement || cur.parentNode;
+          }
+          if (anchor) {
+            const rawHref = anchor.getAttribute
+              ? (anchor.getAttribute("href") ?? (anchor.namespaceURI === SVG_NS ? anchor.getAttribute("xlink:href") : null))
+              : anchor.href;
+            const href = typeof rawHref === "string" ? rawHref : (rawHref && typeof rawHref.baseVal === "string" ? rawHref.baseVal : "");
             if (href) {
               const loc = (typeof location !== "undefined") ? location : ((typeof window !== "undefined") ? window.location : null);
               if (loc) {
@@ -12032,6 +12099,80 @@
     if (typeof globalThis !== "undefined") {
       globalThis.SVGSVGElement = SVGSVGElement;
     }
+
+    const SVG_GEOMETRY_LOCALS = new Set([
+      "circle",
+      "ellipse",
+      "line",
+      "path",
+      "polygon",
+      "polyline",
+      "rect",
+    ]);
+    ElementProto.getTotalLength = function getTotalLength() {
+      const ns = String((this && this.namespaceURI) || "");
+      const local = String((this && (this.localName || this.tagName)) || "").toLowerCase();
+      if (ns !== SVG_NS || !SVG_GEOMETRY_LOCALS.has(local)) {
+        throw new TypeError("getTotalLength is only defined on SVG geometry elements");
+      }
+      const self = this;
+      const num = function (name, fallback) {
+        if (fallback === undefined) fallback = 0;
+        const raw = self.getAttribute(name);
+        if (raw === null) return fallback;
+        const value = parseFloat(raw);
+        return Number.isFinite(value) ? value : fallback;
+      };
+      const points = function () {
+        const raw = String(self.getAttribute("points") || "").trim();
+        if (raw === "") return [];
+        const parts = raw.split(/[\s,]+/).map(function (v) { return parseFloat(v); });
+        const out = [];
+        for (let i = 0; i + 1 < parts.length; i += 2) {
+          const x = parts[i];
+          const y = parts[i + 1];
+          if (Number.isFinite(x) && Number.isFinite(y)) out.push([x, y]);
+        }
+        return out;
+      };
+      const polylineLength = function (pts, close) {
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) {
+          total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        }
+        if (close && pts.length > 2) {
+          total += Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
+        }
+        return total;
+      };
+      switch (local) {
+        case "circle": {
+          const radius = num("r", 0);
+          return radius > 0 ? 2 * Math.PI * radius : 0;
+        }
+        case "ellipse": {
+          const rx = num("rx", 0);
+          const ry = num("ry", 0);
+          if (rx <= 0 || ry <= 0) return 0;
+          const h = ((rx - ry) * (rx - ry)) / ((rx + ry) * (rx + ry));
+          return Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
+        }
+        case "line":
+          return Math.hypot(num("x2", 0) - num("x1", 0), num("y2", 0) - num("y1", 0));
+        case "rect": {
+          const width = num("width", 0);
+          const height = num("height", 0);
+          return width > 0 && height > 0 ? 2 * (width + height) : 0;
+        }
+        case "polyline":
+          return polylineLength(points(), false);
+        case "polygon":
+          return polylineLength(points(), true);
+        default:
+          return 0;
+      }
+    };
+    markNative(ElementProto.getTotalLength, "getTotalLength");
 
     const SVG_VIEWBOX_LOCALS = new Set(["svg", "symbol", "marker", "pattern", "view"]);
     Object.defineProperty(ElementProto, "viewBox", {
@@ -14985,9 +15126,20 @@
     };
 
     HTMLFormElement.prototype.reset = function () {
-      if (!(this instanceof HTMLFormElement)) {
+      if (!(this instanceof HTMLFormElement) || (this.namespaceURI && this.namespaceURI !== HTML_NS)) {
         throw new TypeError("Failed to execute 'reset' on 'HTMLFormElement': Illegal invocation");
       }
+
+      const evt = new Event("reset", { bubbles: true, cancelable: true });
+      let allowed = true;
+      if (typeof dispatchTrustedEvent === "function") {
+        allowed = dispatchTrustedEvent(this, evt);
+      } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+        allowed = global.__capsurf_dispatchTrustedEvent(this, evt);
+      } else {
+        allowed = this.dispatchEvent(evt);
+      }
+      if (!allowed) return;
 
       const list = collectFormControls(this);
       for (let i = 0; i < list.length; i++) {
@@ -15020,8 +15172,6 @@
           }
         }
       }
-      const evt = new Event("reset", { bubbles: true, cancelable: true });
-      this.dispatchEvent(evt);
     };
 
     HTMLFormElement.prototype.checkValidity = function () {
@@ -27487,6 +27637,9 @@
     function upgradeElement(el) {
       if (!el || typeof el !== "object" || el._upgraded) return el;
       el._upgraded = true;
+      if (typeof el._nid === "number" && el._id === undefined) {
+        el._id = el._nid;
+      }
       if (typeof global.__capsurf_recordCanonicalId === "function") {
         global.__capsurf_recordCanonicalId(el);
       }
@@ -27626,7 +27779,24 @@
       docProto.createElementNS = function (ns, tagName) {
         let el = origCreateElementNS.call(this, ns, tagName);
         if (el) {
-          el.namespaceURI = ns !== undefined && ns !== null ? String(ns) : null;
+          const nsVal = ns !== undefined && ns !== null ? String(ns) : null;
+          el._namespaceURI = nsVal;
+          try {
+            Object.defineProperty(el, "namespaceURI", {
+              value: nsVal,
+              writable: true,
+              configurable: true,
+              enumerable: true,
+            });
+          } catch (e) {
+            try { el.namespaceURI = nsVal; } catch (e2) {}
+          }
+          if (nsVal !== "http://www.w3.org/1999/xhtml") {
+            el._upgraded = false;
+            if (global.Element && global.Element.prototype) {
+              Object.setPrototypeOf(el, global.Element.prototype);
+            }
+          }
         }
         if (el && (!ns || ns === "http://www.w3.org/1999/xhtml")) {
           const tag = String(tagName).toLowerCase();

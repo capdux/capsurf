@@ -117,9 +117,27 @@ function installHtmlElementExtensions(proto) {
       this.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         const tag = String(this.tagName || this.localName || "").toLowerCase();
-        const hasHref = (this.hasAttribute ? this.hasAttribute("href") : false) || Boolean(this.href);
-        if (tag === "a" && hasHref) {
-          const href = (this.getAttribute ? this.getAttribute("href") : this.href) || "";
+        // Walk up ancestors to find an <a> (HTML or SVG with href / xlink:href)
+        let anchor = null;
+        let cur = this;
+        for (let depth = 0; cur && depth < 32; depth++) {
+          const curTag = String(cur.tagName || cur.localName || "").toLowerCase();
+          if (curTag === "a") {
+            const curHref = cur.getAttribute
+              ? (cur.getAttribute("href") ?? (cur.namespaceURI === SVG_NS ? cur.getAttribute("xlink:href") : null))
+              : null;
+            if (curHref !== null && curHref !== "") {
+              anchor = cur;
+              break;
+            }
+          }
+          cur = cur.parentElement || cur.parentNode;
+        }
+        if (anchor) {
+          const rawHref = anchor.getAttribute
+            ? (anchor.getAttribute("href") ?? (anchor.namespaceURI === SVG_NS ? anchor.getAttribute("xlink:href") : null))
+            : anchor.href;
+          const href = typeof rawHref === "string" ? rawHref : (rawHref && typeof rawHref.baseVal === "string" ? rawHref.baseVal : "");
           if (href) {
             const loc = (typeof location !== "undefined") ? location : ((typeof window !== "undefined") ? window.location : null);
             if (loc) {

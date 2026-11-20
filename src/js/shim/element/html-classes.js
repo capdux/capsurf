@@ -1916,6 +1916,80 @@ function installHtmlClasses(global) {
     globalThis.SVGSVGElement = SVGSVGElement;
   }
 
+  const SVG_GEOMETRY_LOCALS = new Set([
+    "circle",
+    "ellipse",
+    "line",
+    "path",
+    "polygon",
+    "polyline",
+    "rect",
+  ]);
+  ElementProto.getTotalLength = function getTotalLength() {
+    const ns = String((this && this.namespaceURI) || "");
+    const local = String((this && (this.localName || this.tagName)) || "").toLowerCase();
+    if (ns !== SVG_NS || !SVG_GEOMETRY_LOCALS.has(local)) {
+      throw new TypeError("getTotalLength is only defined on SVG geometry elements");
+    }
+    const self = this;
+    const num = function (name, fallback) {
+      if (fallback === undefined) fallback = 0;
+      const raw = self.getAttribute(name);
+      if (raw === null) return fallback;
+      const value = parseFloat(raw);
+      return Number.isFinite(value) ? value : fallback;
+    };
+    const points = function () {
+      const raw = String(self.getAttribute("points") || "").trim();
+      if (raw === "") return [];
+      const parts = raw.split(/[\s,]+/).map(function (v) { return parseFloat(v); });
+      const out = [];
+      for (let i = 0; i + 1 < parts.length; i += 2) {
+        const x = parts[i];
+        const y = parts[i + 1];
+        if (Number.isFinite(x) && Number.isFinite(y)) out.push([x, y]);
+      }
+      return out;
+    };
+    const polylineLength = function (pts, close) {
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      }
+      if (close && pts.length > 2) {
+        total += Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
+      }
+      return total;
+    };
+    switch (local) {
+      case "circle": {
+        const radius = num("r", 0);
+        return radius > 0 ? 2 * Math.PI * radius : 0;
+      }
+      case "ellipse": {
+        const rx = num("rx", 0);
+        const ry = num("ry", 0);
+        if (rx <= 0 || ry <= 0) return 0;
+        const h = ((rx - ry) * (rx - ry)) / ((rx + ry) * (rx + ry));
+        return Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
+      }
+      case "line":
+        return Math.hypot(num("x2", 0) - num("x1", 0), num("y2", 0) - num("y1", 0));
+      case "rect": {
+        const width = num("width", 0);
+        const height = num("height", 0);
+        return width > 0 && height > 0 ? 2 * (width + height) : 0;
+      }
+      case "polyline":
+        return polylineLength(points(), false);
+      case "polygon":
+        return polylineLength(points(), true);
+      default:
+        return 0;
+    }
+  };
+  markNative(ElementProto.getTotalLength, "getTotalLength");
+
   const SVG_VIEWBOX_LOCALS = new Set(["svg", "symbol", "marker", "pattern", "view"]);
   Object.defineProperty(ElementProto, "viewBox", {
     configurable: true,

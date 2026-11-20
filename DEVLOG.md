@@ -1261,4 +1261,10 @@
    - 在 `createStyleProxy` 与 `makeRuleStyleDeclaration` 实装 `ownKeys`/`getOwnPropertyDescriptor`/`preventExtensions` 满足 WebIDL `Object.freeze` 契约；新增 2D transform `matrix()` 序列化与 `-webkit-`/`-moz-` 属性回退，并将覆写槽从 `_capturedGetComputedStyle` 分离根除二次包装栈溢出。
 2. **多窗口 `postMessage` 与 `writingSuggestions` (`window.js`, `html-classes.js`, `parser.js`)**：
    - 维护 `__capsurf_active_window_stack` 追踪发起窗口与 origin，在 `contentWindow` 隔离事件监听与嵌套 iframe 创建，实现 WHATWG 标准跨窗口 `MessageEvent` 投递。
+
+## Phase 75 SVG 几何长度/锚点导航与防篡改 Trusted Events 技术方案
+1. **防篡改事件状态机 (`events/event.js`, `events/dispatch.js`)**：
+   - 将在途重入锁、可信标志与事件类型/取消状态全部收归闭包私有 `WeakSet`/`WeakMap`，并在 `dispatchTrustedEvent` 校验 `canonicalNodeIds`，彻底免疫页面覆写 `Event.prototype` 或篡改 `target._id` 的干扰。
+2. **SVG 几何长度与 `<a xlink:href>` (`html-classes.js`, `html-element.js`, `harness.ts`)**：
+   - 校验 `SVG_NS` 并在 `getTotalLength()` 实现 7 类基础 SVG 图元长度公式；增强点击链路支持 SVG `<a>` `xlink:href` 导航。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

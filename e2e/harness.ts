@@ -274,8 +274,11 @@ export class Mouse {
       await this.page.evaluate((cx: number, cy: number) => {
         try {
           let el: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
-          if (!el) {
-            const all = document.querySelectorAll("*");
+          const elTag = el ? String(el.tagName || el.localName || "").toLowerCase() : "";
+          if (!el || el === document.body || el === document.documentElement || elTag === "svg") {
+            const scope: any = (elTag === "svg") ? el : document;
+            const svgRect = (elTag === "svg" && el.getBoundingClientRect) ? el.getBoundingClientRect() : null;
+            const all = scope.querySelectorAll ? scope.querySelectorAll("*") : [];
             for (let i = all.length - 1; i >= 0; i--) {
               const item = all[i];
               const r = item.getBoundingClientRect ? item.getBoundingClientRect() : null;
@@ -285,11 +288,13 @@ export class Mouse {
               let top = r ? r.top : 0;
               if (w === 0 && item.getAttribute && item.getAttribute("width")) {
                 w = parseFloat(item.getAttribute("width") || "0") || 0;
+                if (svgRect && left === 0) left = svgRect.left + (parseFloat(item.getAttribute("x") || "0") || 0);
               }
               if (h === 0 && item.getAttribute && item.getAttribute("height")) {
                 h = parseFloat(item.getAttribute("height") || "0") || 0;
+                if (svgRect && top === 0) top = svgRect.top + (parseFloat(item.getAttribute("y") || "0") || 0);
               }
-              if (cx >= left && cx <= left + w && cy >= top && cy <= top + h) {
+              if (w > 0 && h > 0 && cx >= left && cx <= left + w && cy >= top && cy <= top + h) {
                 el = item;
                 break;
               }
@@ -299,7 +304,12 @@ export class Mouse {
             let cur: any = el;
             while (cur && cur !== document.body && cur !== document.documentElement) {
               const tag = String(cur.tagName || cur.localName || "").toLowerCase();
-              const href = (cur.getAttribute ? (cur.getAttribute("href") || cur.getAttribute("xlink:href")) : "") || cur.href;
+              const rawHref = cur.getAttribute
+                ? (cur.getAttribute("href") ?? (cur.namespaceURI === "http://www.w3.org/2000/svg" ? cur.getAttribute("xlink:href") : null))
+                : cur.href;
+              const href = typeof rawHref === "string"
+                ? rawHref
+                : (rawHref && typeof rawHref.baseVal === "string" ? rawHref.baseVal : "");
               if (tag === "a" && href) {
                 if (href.startsWith("#")) {
                   location.hash = href;
@@ -308,7 +318,7 @@ export class Mouse {
                 }
                 break;
               }
-              cur = cur.parentElement;
+              cur = cur.parentElement || cur.parentNode;
             }
             if (typeof el.click === "function") {
               el.click();

@@ -3,6 +3,11 @@
 
 const _eventState = new WeakMap();
 const _trustedFlags = new WeakMap();
+function _setEventTrusted(ev, val) {
+  if (ev && typeof ev === "object") {
+    _trustedFlags.set(ev, Boolean(val));
+  }
+}
 const _customEventState = new WeakMap();
 const _uiEventState = new WeakMap();
 const _mouseEventState = new WeakMap();

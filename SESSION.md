@@ -3351,6 +3351,19 @@
   - 派发全新子智能体 **Subagent 40**: SVG IDL & Script Core Specialist（JS 垫片隔离，端口 `19232`）
     - 攻坚目标：10 项 Core E2E（`svg-anchor-xlink-href`、`svg-animated-string`、`svg-attribute-case`、`svg-css-attribute-values`、`svg-dynamic-text-upgrade`、`svg-geometry-length`、`select-default-submit`、`script-nomodule`、`script-text`、`trusted-events`）。
 
+## [2026-11-20 15:40:00] SVG 几何长度/锚点导航与防篡改 Trusted Events 全绿闭环 (Subagent 9768dcdf 结单，Phase 75)
+- **SVG 几何长度与 `<a xlink:href>` 导航 (`html-classes.js`, `html-element.js`, `e2e/harness.ts`)**:
+  - 实装 `Element.prototype.getTotalLength()`（校验 `SVG_NS` 与 7 类几何标签周长/长度计算，非几何元素抛 `TypeError`）；
+  - 增强 `HTMLElement.prototype.click()` 与 `Mouse.click` 支持 SVG `<a>` `href`/`xlink:href` 导航及 SVG 子图元命中。
+- **防篡改 Trusted Events 与命名空间严格校验 (`events/event.js`, `events/dispatch.js`, `index.js`, `element/forms/form.js`)**:
+  - 引入私有 `_eventsInFlight` WeakSet、`_trustedFlags` WeakMap 与 `canonicalNodeIds` 校验，抵御原型/属性覆写伪造派发与重入绕过；
+  - 修复 `createElementNS` 非 XHTML 命名空间误升级；`HTMLFormElement.prototype.reset()` 校验 `HTML_NS` 并使用 `dispatchTrustedEvent`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 9/10 Core 套件（`script-nomodule`、`script-text`、`select-default-submit`、`svg-anchor-xlink-href`、`svg-animated-string`、`svg-attribute-case`、`svg-dynamic-text-upgrade`、`svg-geometry-length`、`trusted-events`）：**12/12 PASS（35 项断言）**；`svg-css-attribute-values` 定位需原生 CP SVG `var()`/`linearGradient` 渲染。
+- **清理旧子智能体**: 销毁 `9768dcdf-32b9-486e-9a61-1e908f82eb8f`。
+
+
 
 
 

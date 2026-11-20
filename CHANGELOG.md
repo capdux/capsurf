@@ -1620,4 +1620,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：10 项 Window/CSSOM Core E2E 套件共 **20/20 PASS**。
+
+## Phase 75: SVG Geometry/Anchor IDL & Tamper-Proof Trusted Events — 9 Suites (100% Closed)
+- **`src/js/shim/element/{html-classes,html-element,forms/form}.js` & `events/{event,dispatch}.js` & `index.js` & `e2e/harness.ts`**：
+  - 实装 `Element.prototype.getTotalLength()`（7 类 SVG 几何图元长度计算）与 SVG `<a xlink:href>` 点击导航；
+  - 引入私有 `_eventsInFlight` WeakSet、`_trustedFlags` 与 `canonicalNodeIds` 防篡改可信事件派发，修复 `createElementNS` 命名空间与 `form.reset()` 校验。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：9 大 Core 套件共 **12/12 PASS (35 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

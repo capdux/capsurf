@@ -186,42 +186,62 @@ function filterComposedPath(fullPath, currentTarget) {
 }
 global.__capsurf_filterComposedPath = filterComposedPath;
 
+const _eventsInFlight = new WeakSet();
+
 function internalDispatch(target, event, trusted) {
   if (!event || typeof event !== "object") {
     throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
   }
-  if (event._isDispatching) {
+  const eventState = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
+  if (_eventsInFlight.has(event)) {
     throw new DOMException("The event is already being dispatched.", "InvalidStateError");
   }
-  if (trusted) {
-    event._isTrusted = true;
-  }
-  event._isDispatching = true;
-
-  try {
-    let targetId;
-    if (target) {
-      targetId = target._id;
-    }
-    let origRelated = event.relatedTarget;
-  } catch (e) {
-    event._isDispatching = false;
-    throw e;
+  _eventsInFlight.add(event);
+  if (eventState) {
+    eventState.isDispatching = true;
+    eventState.dispatched = true;
   }
 
   const prevWindowEvent = typeof window !== "undefined" ? window.event : undefined;
-  const eventState = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
   try {
-    if (typeof window !== "undefined") {
-      try { window.event = event; } catch (e) {}
+    if (target && typeof target === "object") {
+      const targetId = target._id;
+      if (trusted) {
+        const canonical = canonicalNodeIds.get(target);
+        if (canonical !== undefined && targetId !== undefined && targetId !== canonical) {
+          throw new TypeError("Invalid trusted event target");
+        }
+      }
     }
-    event.target = target;
-    const rawType = event._type !== undefined ? event._type : event.type;
+
+    // Freeze dispatch metadata from internal state before touching page-owned accessors
+    const rawType = eventState ? eventState.type : (event._type !== undefined ? event._type : event.type);
     if (typeof rawType !== "string") {
       throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
     }
     const eventType = rawType.toLowerCase();
-    const isComposed = Boolean(event.composed);
+    const isBubbles = eventState ? Boolean(eventState.bubbles) : Boolean(event.bubbles);
+    const isComposed = eventState ? Boolean(eventState.composed) : Boolean(event.composed);
+
+    if (typeof _setEventTrusted === "function") {
+      _setEventTrusted(event, Boolean(trusted));
+    } else {
+      event._isTrusted = Boolean(trusted);
+    }
+
+    // Access relatedTarget while event is locked so re-entrant getters throw InvalidStateError
+    // and thrown getters cleanly unlock in finally
+    const origRelated = event.relatedTarget;
+    void origRelated;
+
+    if (typeof window !== "undefined") {
+      try { window.event = event; } catch (e) {}
+    }
+    if (eventState) {
+      eventState.target = target;
+    } else {
+      event.target = target;
+    }
     const targetRoot = getNodeRoot(target);
 
     // 1. Build propagation path from target up to window (supporting ShadowRoot & <slot>)
@@ -282,10 +302,24 @@ function internalDispatch(target, event, trusted) {
       eventState.path = path;
     }
 
+    function isStopped() {
+      return eventState ? eventState.stopPropagation : Boolean(event._stopped);
+    }
+    function isImmediateStopped() {
+      return eventState ? eventState.stopImmediatePropagation : Boolean(event._immediateStopped);
+    }
+
     function invoke(entry, phase) {
-      event.target = retargetEventTarget(target, entry);
-      event.currentTarget = entry;
-      event.eventPhase = phase;
+      const retargeted = retargetEventTarget(target, entry);
+      if (eventState) {
+        eventState.target = retargeted;
+        eventState.currentTarget = entry;
+        eventState.eventPhase = phase;
+      } else {
+        event.target = retargeted;
+        event.currentTarget = entry;
+        event.eventPhase = phase;
+      }
 
       const map = getListeners(entry);
       if (map) {
@@ -293,7 +327,7 @@ function internalDispatch(target, event, trusted) {
         if (list && list.length > 0) {
           const copy = list.slice();
           for (let i = 0; i < copy.length; i++) {
-            if (event._immediateStopped) return;
+            if (isImmediateStopped()) return;
             const item = copy[i];
             if (phase === PHASE_CAPTURING && !item.capture) continue;
             if (phase === PHASE_BUBBLING && item.capture) continue;
@@ -358,7 +392,7 @@ function internalDispatch(target, event, trusted) {
           }
         }
         const fn = entry[propName];
-        if (typeof fn === "function" && !event._immediateStopped) {
+        if (typeof fn === "function" && !isImmediateStopped()) {
           try {
             const ret = fn.call(entry, event);
             if (ret === false) {
@@ -381,12 +415,12 @@ function internalDispatch(target, event, trusted) {
 
     // Phase 1: Capturing (from top down to target's parent)
     for (let i = path.length - 1; i >= 1; i--) {
-      if (event._stopped) break;
+      if (isStopped()) break;
       invoke(path[i], PHASE_CAPTURING);
     }
 
     // Phase 2: At Target
-    if (!event._stopped) {
+    if (!isStopped()) {
       invoke(target, PHASE_AT_TARGET);
       if (eventType === "click") {
         checkActivation(target);
@@ -394,9 +428,9 @@ function internalDispatch(target, event, trusted) {
     }
 
     // Phase 3: Bubbling (from target's parent up to top, if bubbles is true)
-    if (event.bubbles && !event._stopped) {
+    if (isBubbles && !isStopped()) {
       for (let i = 1; i < path.length; i++) {
-        if (event._stopped) break;
+        if (isStopped()) break;
         invoke(path[i], PHASE_BUBBLING);
         if (eventType === "click") {
           checkActivation(path[i]);
@@ -405,34 +439,41 @@ function internalDispatch(target, event, trusted) {
     }
 
     // Activation behavior for click events
-    if (eventType === "click" && activatedButton && !event._canceled) {
+    const wasCanceled = eventState ? eventState.canceled : Boolean(event._canceled);
+    if (eventType === "click" && activatedButton && !wasCanceled) {
       if (typeof handleButtonActivation === "function") {
         handleButtonActivation(activatedButton);
       }
     }
   } finally {
-    event._isDispatching = false;
-    event.eventPhase = PHASE_NONE;
-    event.currentTarget = null;
+    _eventsInFlight.delete(event);
     if (eventState) {
+      eventState.isDispatching = false;
+      eventState.eventPhase = PHASE_NONE;
+      eventState.currentTarget = null;
+      eventState.stopPropagation = false;
+      eventState.stopImmediatePropagation = false;
       eventState.path = null;
+    } else {
+      event._isDispatching = false;
+      event.eventPhase = PHASE_NONE;
+      event.currentTarget = null;
     }
     if (typeof window !== "undefined") {
       try { window.event = prevWindowEvent; } catch (e) {}
     }
   }
 
-  return !event._canceled;
+  return eventState ? !eventState.canceled : !event._canceled;
 }
 
 EventTarget.prototype.dispatchEvent = function (event) {
   if (!event || typeof event !== "object") {
     throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
   }
-  if (event._isDispatching) {
+  if (_eventsInFlight.has(event)) {
     throw new DOMException("The event is already being dispatched.", "InvalidStateError");
   }
-  event._isTrusted = false;
   return internalDispatch(this, event, false);
 };
 
@@ -441,6 +482,9 @@ function dispatchTrustedEvent(target, event) {
   return internalDispatch(target, event, true);
 }
 global.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;
+if (typeof globalThis !== "undefined") {
+  globalThis.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;
+}
 
 markNative(EventTarget, "EventTarget");
 markNative(EventTarget.prototype.addEventListener, "addEventListener");
