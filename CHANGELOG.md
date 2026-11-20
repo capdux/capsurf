@@ -2195,3 +2195,6 @@
 
 ## Phase 178: Pure-CP Transitions & `@keyframes` Whitebox Suite `test/css/test_transitions_keyframes.cp` (3/3 PASS)
 - 新增 `test/css/test_transitions_keyframes.cp`，覆盖 `cubic-bezier`/`steps` 缓动、`TransitionItem`、`AnimationItem` 与 `@keyframes`（`cap test -m` **3/3 PASS**, 847ms）。
+
+## Phase 179: Pure-CP Selectors (`:nth-child`/`:has`/`:is`/`:where`) Whitebox Suite `test/css/test_selectors_nth_has.cp` (4/4 PASS)
+- 新增 `test/css/test_selectors_nth_has.cp`，覆盖结构伪类、`:has`/`:is`/`:where` 逻辑伪类、属性选择器与组合子（`cap test -m` **4/4 PASS**, 956ms）。

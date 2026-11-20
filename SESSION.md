@@ -4429,3 +4429,7 @@
 ## [2026-11-21 00:53:30] 2 分钟新增并全绿通过纯 CP Transitions/@keyframes 白盒单测 `test/css/test_transitions_keyframes.cp` (Subagent c4b2a39f 结单，Phase 178)
 - **新增白盒测试 (`test/css/test_transitions_keyframes.cp`)**: 覆盖 `EasingFunction` (`linear`/`ease`/`cubic-bezier`/`steps`)、`TransitionItem`/`Time` 解析格式化、`AnimationItem` 与 `@keyframes` 解析（**3/3 PASS**, 847ms, 4 门禁全 0；`test/css/` 达 **6/6 PASS**）。
 - **清理旧子智能体**: 销毁 `c4b2a39f-ddba-4bae-8d0a-92b23ac7d848`。
+
+## [2026-11-21 00:56:00] 2 分 20 秒新增并全绿通过纯 CP Selectors 白盒单测 `test/css/test_selectors_nth_has.cp` (Subagent eb24d97d 结单，Phase 179)
+- **新增白盒测试 (`test/css/test_selectors_nth_has.cp`)**: 覆盖结构伪类 (`:root`/`:first-child`/`:last-child`/`:only-child`/`:nth-child`/`:nth-last-child`/`:empty`)、逻辑伪类 (`:has`/`:is`/`:where`/`:not` 特异性)、属性选择器 (`=`/`~=`/`|=`/`^=`/`*=`/`$=`/`i`) 及组合子（`>`/`+`/`~`/空格）（**4/4 PASS**, 956ms, 4 门禁全 0；`test/css/` 达 **7/7 PASS**）。
+- **清理旧子智能体**: 销毁 `eb24d97d-cc20-4234-a547-f59bfb33e910`。
