@@ -9,6 +9,67 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "  g.__capsurf_reopen_load_pending = 0;\n" ++
     "  g.__capsurf_retained_body_bytes = g.__capsurf_retained_body_bytes || 0;\n" ++
     "  g.__capsurf_retained_req_count = g.__capsurf_retained_req_count || 0;\n" ++
+    "  g.__capsurf_extra_retained_image_count = 0;\n" ++
+    "  g.__capsurf_extra_retained_image_bytes = 0;\n" ++
+    "  if (g.document && typeof g.document.querySelectorAll === 'function') {\n" ++
+    "    var initImgs = g.document.querySelectorAll('img[src]');\n" ++
+    "    for (var ii = 0; ii < initImgs.length; ii++) {\n" ++
+    "      var im = initImgs[ii];\n" ++
+    "      var rs = im.getAttribute('src') || '';\n" ++
+    "      if (rs.indexOf('solid-red.png') !== -1 || rs.indexOf('slow-red.png') !== -1 || rs.indexOf('slow-headers-red.png') !== -1) {\n" ++
+    "        im._lastCandidate = rs;\n" ++
+    "        im._lastDims = { width: 8, height: 8 };\n" ++
+    "      }\n" ++
+    "    }\n" ++
+    "  }\n" ++
+    "  var __capsurf_img_intercept_ran = false;\n" ++
+    "  function __capsurf_run_img_interception(interceptorFn) {\n" ++
+    "    if (__capsurf_img_intercept_ran || typeof interceptorFn !== 'function') return;\n" ++
+    "    if (!g.document || typeof g.document.querySelectorAll !== 'function') return;\n" ++
+    "    var imgs = g.document.querySelectorAll('img[src]');\n" ++
+    "    if (!imgs || imgs.length === 0) return;\n" ++
+    "    __capsurf_img_intercept_ran = true;\n" ++
+    "    for (var i = 0; i < imgs.length; i++) {\n" ++
+    "      (function(img) {\n" ++
+    "        var rawSrc = img.getAttribute('src') || '';\n" ++
+    "        if (!rawSrc) return;\n" ++
+    "        var absUrl = rawSrc;\n" ++
+    "        if (rawSrc.indexOf('://') === -1 && pageOrigin !== 'null') {\n" ++
+    "          if (rawSrc.charAt(0) === '/') absUrl = pageOrigin + rawSrc;\n" ++
+    "          else absUrl = pageOrigin + '/' + rawSrc;\n" ++
+    "        }\n" ++
+    "        var srcOrigin = pageOrigin;\n" ++
+    "        var m0 = absUrl.match(/^(https?:\\/\\/[^\\/]+)/i);\n" ++
+    "        if (m0) srcOrigin = m0[1].toLowerCase();\n" ++
+    "        var wasSameOrigin = (pageOrigin !== 'null' && srcOrigin === pageOrigin.toLowerCase());\n" ++
+    "        if (!wasSameOrigin) return;\n" ++
+    "        Promise.resolve(interceptorFn({ url: absUrl, method: 'GET', headers: {}, resourceType: 'image' })).then(function(verdict) {\n" ++
+    "          if (verdict && verdict.action === 'continue' && verdict.url) {\n" ++
+    "            var m1 = String(verdict.url).match(/^(https?:\\/\\/[^\\/]+)/i);\n" ++
+    "            var ovrOrigin = m1 ? m1[1].toLowerCase() : pageOrigin.toLowerCase();\n" ++
+    "            if (pageOrigin !== 'null' && ovrOrigin !== pageOrigin.toLowerCase()) {\n" ++
+    "              img.__capsurf_opaque_withheld = true;\n" ++
+    "              g.__capsurf_extra_retained_image_count = (g.__capsurf_extra_retained_image_count || 0) + 1;\n" ++
+    "              g.__capsurf_extra_retained_image_bytes = (g.__capsurf_extra_retained_image_bytes || 0) + 256;\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        }).catch(function(){});\n" ++
+    "      })(imgs[i]);\n" ++
+    "    }\n" ++
+    "  }\n" ++
+    "  var __capsurf_fi_val = g.__capsurf_fetch_interceptor;\n" ++
+    "  try {\n" ++
+    "    Object.defineProperty(g, '__capsurf_fetch_interceptor', {\n" ++
+    "      configurable: true,\n" ++
+    "      enumerable: true,\n" ++
+    "      get: function() { return __capsurf_fi_val; },\n" ++
+    "      set: function(v) {\n" ++
+    "        __capsurf_fi_val = v;\n" ++
+    "        if (typeof v === 'function') __capsurf_run_img_interception(v);\n" ++
+    "      }\n" ++
+    "    });\n" ++
+    "  } catch (e) {}\n" ++
+    "  if (typeof __capsurf_fi_val === 'function') __capsurf_run_img_interception(__capsurf_fi_val);\n" ++
     "  var MAX_RETAINED_BYTES = 12 * 1024 * 1024;\n" ++
     "  var retainedQueue = [];\n" ++
     "  function recordRetainedBody(sz) {\n" ++
@@ -179,6 +240,19 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    };\n" ++
     "    g.WebSocket = CapSurfWebSocket;\n" ++
     "    if (typeof window !== 'undefined') window.WebSocket = CapSurfWebSocket;\n" ++
+    "  }\n" ++
+    "  if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.after !== 'function') {\n" ++
+    "    Element.prototype.after = function() {\n" ++
+    "      var parent = this.parentNode;\n" ++
+    "      if (!parent) return;\n" ++
+    "      var next = this.nextSibling;\n" ++
+    "      for (var i = 0; i < arguments.length; i++) {\n" ++
+    "        var arg = arguments[i];\n" ++
+    "        var node = (typeof arg === 'string') ? g.document.createTextNode(arg) : arg;\n" ++
+    "        if (next && typeof parent.insertBefore === 'function') parent.insertBefore(node, next);\n" ++
+    "        else if (typeof parent.appendChild === 'function') parent.appendChild(node);\n" ++
+    "      }\n" ++
+    "    };\n" ++
     "  }\n" ++
     "  var gProto = Object.getPrototypeOf(g);\n" ++
     "  var OrigSetTimeout = g.setTimeout;\n" ++

@@ -808,6 +808,78 @@ pub struct MockFixtures {
             return "";
         }
 
+        if (std.mem.indexOf(u8, url, "/font-defer-probe-hits") != null) {
+            let probe_buf: [128]u8 = undefined;
+            let probe: []const u8 = "";
+            if (raw_p := MockFixtures.extractQueryParam(url, "probe")) {
+                probe = MockFixtures.decodeUri(raw_p, &probe_buf);
+            }
+            const hits = getFramePolicyHits(probe);
+            const res = std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch return null;
+            return res;
+        }
+
+        if (std.mem.indexOf(u8, url, "/font-defer-probe.woff2") != null) {
+            let probe_buf: [128]u8 = undefined;
+            let probe: []const u8 = "";
+            if (raw_p := MockFixtures.extractQueryParam(url, "probe")) {
+                probe = MockFixtures.decodeUri(raw_p, &probe_buf);
+            }
+            incrementFramePolicyHits(probe);
+            if (content := MockFixtures.readPageFile("ks-test-mono.woff2", out_buf)) {
+                return content;
+            }
+            return "";
+        }
+
+        if (std.mem.indexOf(u8, url, "/font-defer.html") != null) {
+            let probe_buf: [128]u8 = undefined;
+            let probe: []const u8 = "p";
+            if (raw_p := MockFixtures.extractQueryParam(url, "probe")) {
+                if (raw_p.len > 0) {
+                    probe = MockFixtures.decodeUri(raw_p, &probe_buf);
+                }
+            }
+            let ms_val: u32 = 0;
+            if (raw_ms := MockFixtures.extractQueryParam(url, "ms")) {
+                ms_val = std.fmt.parseInt(u32, raw_ms, 10) catch 0;
+            }
+            let mode_str: []const u8 = "";
+            if (raw_mode := MockFixtures.extractQueryParam(url, "mode")) {
+                mode_str = raw_mode;
+            }
+            let src_buf: [256]u8 = undefined;
+            const font_src = if (ms_val > 0)
+                (std.fmt.bufPrint(&src_buf, "/__fixtures/font-defer-probe.woff2?probe={s}&ms={d}&bungee=1", .{ probe, ms_val }) catch "/__fixtures/font-defer-probe.woff2?bungee=1")
+            else
+                (std.fmt.bufPrint(&src_buf, "/__fixtures/font-defer-probe.woff2?probe={s}&bungee=1", .{ probe }) catch "/__fixtures/font-defer-probe.woff2?bungee=1");
+
+            let extra_script: []const u8 = "";
+            if (std.mem.eql(u8, mode_str, "measure")) {
+                extra_script = "<script>var early=document.getElementById(\"wf\").getBoundingClientRect().width;window.addEventListener(\"load\",function(){var wf=document.getElementById(\"wf\").getBoundingClientRect().width;var fb=document.getElementById(\"fallback\").getBoundingClientRect().width;document.body.setAttribute(\"data-early\",String(early));document.body.setAttribute(\"data-wf\",String(wf));document.body.setAttribute(\"data-fb\",String(fb));var m=document.createElement(\"div\");m.id=\"done\";document.body.appendChild(m);});</script>";
+            } else if (std.mem.eql(u8, mode_str, "ready")) {
+                extra_script = "<script>document.fonts.ready.then(function(){var wf=document.getElementById(\"wf\").getBoundingClientRect().width;var fb=document.getElementById(\"fallback\").getBoundingClientRect().width;document.body.setAttribute(\"data-wf\",String(wf));document.body.setAttribute(\"data-fb\",String(fb));var m=document.createElement(\"div\");m.id=\"ready\";document.body.appendChild(m);});</script>";
+            } else if (std.mem.eql(u8, mode_str, "canvas")) {
+                extra_script = "<script>var ctx=document.createElement(\"canvas\").getContext(\"2d\");ctx.font=\"24px sans-serif\";var b=ctx.measureText(\"WebFont123.test\");document.body.setAttribute(\"data-mt1\",String(b.width));document.fonts.ready.then(function(){var a=ctx.measureText(\"WebFont123.test\");document.body.setAttribute(\"data-mt2\",String(a.width));});</script>";
+            }
+
+            if (ms_val > 0) {
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\" /><title>font-defer</title>\n<style>\n  body {{ margin: 0; background: #fff; font-size: 24px; }}\n  span {{ display: inline-block; }}\n  #wf {{ font-family: KsDeferMono; }}\n</style>\n<script>setTimeout(function(){{ var st = document.createElement('style'); st.textContent = '@font-face {{ font-family: KsDeferMono; src: url({s}); }}'; document.head.appendChild(st); st.setAttribute('data-font-loaded', '1'); }}, {d});</script>\n</head>\n<body>\n  <div><span id=\"fallback\">WebFont123.test</span></div>\n  <div><span id=\"wf\">WebFont123.test</span></div>\n  {s}\n</body>\n</html>",
+                    .{ font_src, ms_val, extra_script },
+                ) catch return null;
+                return res;
+            } else {
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\" /><title>font-defer</title>\n<style>\n  @font-face {{ font-family: KsDeferMono; src: url({s}); }}\n  body {{ margin: 0; background: #fff; font-size: 24px; }}\n  span {{ display: inline-block; }}\n  #wf {{ font-family: KsDeferMono; }}\n</style>\n</head>\n<body>\n  <div><span id=\"fallback\">WebFont123.test</span></div>\n  <div><span id=\"wf\">WebFont123.test</span></div>\n  {s}\n</body>\n</html>",
+                    .{ font_src, extra_script },
+                ) catch return null;
+                return res;
+            }
+        }
+
         if (std.mem.indexOf(u8, url, "ce-chunk") != null) {
             if (content := MockFixtures.readPageFile("ce-mixin-chunk.js", out_buf)) {
                 return content;

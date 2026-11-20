@@ -422,10 +422,22 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 let loc_buf: [2048]u8 = [0; 2048];
                 let loc: []const u8 = "";
                 if (url_param != null && url_param.?.len > 0) {
+                    let dec_buf: [1024]u8 = undefined;
+                    const decoded_url = MockFixtures.decodeUri(url_param.?, &dec_buf);
+                    let enc_inner_buf: [1536]u8 = undefined;
+                    const inner_encoded = encodeUriComponent(decoded_url, &enc_inner_buf);
+                    let ws_target_buf: [1800]u8 = undefined;
+                    const ws_target = std.fmt.bufPrint(
+                        &ws_target_buf,
+                        "{s}/devtools/page/kitesurf?initialUrl={s}",
+                        .{ req_host, inner_encoded },
+                    ) catch "";
+                    let enc_outer_buf: [2048]u8 = undefined;
+                    const outer_encoded = encodeUriComponent(ws_target, &enc_outer_buf);
                     loc = std.fmt.bufPrint(
                         &loc_buf,
-                        "{s}?{s}={s}%2Fdevtools%2Fpage%2Fkitesurf%3FinitialUrl%3D{s}",
-                        .{ resolved_base, ws_scheme, req_host, url_param.? },
+                        "{s}?{s}={s}",
+                        .{ resolved_base, ws_scheme, outer_encoded },
                     ) catch "";
                 } else {
                     loc = std.fmt.bufPrint(
@@ -856,6 +868,33 @@ fn sendHttpResponse(client_fd: i32, status: []const u8, content_type: []const u8
     if (body.len > 0) {
         socketWriteAll(client_fd, body)?;
     }
+}
+
+fn encodeUriComponent(src: []const u8, dst: []u8): []const u8 {
+    const hex = "0123456789ABCDEF";
+    let out_len: usize = 0;
+    let i: usize = 0;
+    while (i < src.len) : (i += 1) {
+        const c = src[i];
+        const is_unreserved = (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            c == '-' || c == '_' || c == '.' || c == '!' || c == '~' || c == '*' || c == '\'' || c == '(' || c == ')';
+        if (is_unreserved) {
+            if (out_len < dst.len) {
+                dst[out_len] = c;
+                out_len += 1;
+            }
+        } else {
+            if (out_len + 3 <= dst.len) {
+                dst[out_len] = '%';
+                dst[out_len + 1] = hex[@as(usize, (c >> 4) & 0x0F)];
+                dst[out_len + 2] = hex[@as(usize, c & 0x0F)];
+                out_len += 3;
+            }
+        }
+    }
+    return dst[0..out_len];
 }
 
 fn sendHttpRedirect(client_fd: i32, location: []const u8)! {

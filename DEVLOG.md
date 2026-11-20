@@ -1433,4 +1433,10 @@
 ## Phase 104 `caret-color` 级联与同源字体度量光标/表单选区光栅化技术方案
 1. **光标与选区像素对齐 (`cascade.cp`, `painter.cp`)**：
    - 在 `painter.cp` 直接复用 `LayoutTree.measureTextSegmentWithTabs` 计算 `<input>`/`<textarea>` 光标横坐标与选区高亮区间，确保光标位置与 `#measure` 布局测量误差 `<= 0.2px`；新增 `PROP_CARET_COLOR` 独立控制光标颜色（解决 `color: transparent` 场景光标消失问题）。
+
+## Phase 105 `engine-routes` 全绿、按需字体码点门控与 `DOM.getOuterHTML` 技术方案
+1. **按需 `unicode-range` 字体门控与图片扣留会计 (`session.cp`, `session_hooks.cp`)**：
+   - 将未命中初始文档码点的 `@font-face` 暂存至 `deferred_fonts`，在 `pollNetworkEvents` 中随 DOM/文本变更按需触发 `addFetchRecord`；对跨源覆写 `<img>` 统计真实 `retainedImageCount`/`Bytes` 并并入 `accountedBytes`。
+2. **双层 URL 编码与 `DOM.getOuterHTML` (`server.cp`, `dom.cp`)**：
+   - `/?url=` 重定向先内层编码 `initialUrl=` 再外层编码 `wss=` 参数；`DOM.getOuterHTML` 支持 `nodeId == 0` 与 `includeDoctype: true` 恢复前置注释与标准 DOCTYPE。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

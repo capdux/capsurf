@@ -1836,4 +1836,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`painter.cp` 4 门禁全 0（`-m -d -o` 3.10s 增量构建）；
   - E2E 测试：`images-demo` + `layout-cheap-demo` PASS，`text-input-caret-font` / `forms-selection-paint-demo` 纯 CP 渲染就绪。
+
+## Phase 105: `engine-routes` 17/17, `fetch-interception` 8/8, Deferred `unicode-range` Font Gating & `DOM.getOuterHTML` (100% Closed)
+- **`src/cdp/{server,session,session_hooks,dom}.cp` & `src/net/mock_fixtures.cp`**：
+  - 新增 RFC 3986 `encodeUriComponent`、按需 `DeferredFontFace` 码点门控拉取、真实 `retainedImageCount`/`Bytes` 统计、`Runtime.bindingCalled` JSON 转义、`/font-defer.html` 路由及 `DOM.getOuterHTML` `includeDoctype` 支持。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 增量构建）；
+  - E2E 测试：`engine-routes` (17/17) + `fetch-interception` (8/8) + `font-face-unicode-range-gating` (3/3) + `pseudo-text-font-arrival` (1/1) 共 **29/29 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

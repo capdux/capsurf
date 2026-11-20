@@ -684,19 +684,85 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.getOuterHTML")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
-            const nid = @as(NodeId, @intCast(nid_val));
-            let str_buf: [2048]u8 = [0; 2048];
-            let out_str: []const u8 = "";
-            if (nid > 0 && nid < session.doc.nodeCount()) {
-                const tag = session.doc.getTagName(nid);
-                out_str = std.fmt.bufPrint(&str_buf, "<{s}></{s}>", .{ tag, tag }) catch "";
+            const nid = @as(NodeId, @intCast(if (nid_val < 0) 0 else nid_val));
+            const include_doctype = std.mem.indexOf(u8, req.params_raw, "\"includeDoctype\":true") != null ||
+                std.mem.indexOf(u8, req.params_raw, "\"includeDoctype\": true") != null;
+
+            let html_list = std.ArrayListUnmanaged(u8).empty;
+            defer html_list.deinit(session.allocator);
+
+            if (nid == 0) {
+                if (include_doctype && session.raw_html.len > 0) {
+                    const raw = session.raw_html;
+                    // Scan prolog comments/whitespace and <!doctype ...> before first element tag
+                    let p: usize = 0;
+                    let doctype_end: usize = 0;
+                    let found_doctype = false;
+                    while (p < raw.len) {
+                        while (p < raw.len && (raw[p] == ' ' || raw[p] == '\t' || raw[p] == '\r' || raw[p] == '\n')) : (p += 1) {}
+                        if (p >= raw.len) break;
+                        if (p + 4 <= raw.len && std.mem.eql(u8, raw[p .. p + 4], "<!--")) {
+                            if (end_c := std.mem.indexOfPos(u8, raw, p + 4, "-->")) {
+                                p = end_c + 3;
+                                continue;
+                            }
+                            break;
+                        }
+                        if (p + 9 <= raw.len && std.ascii.eqlIgnoreCase(raw[p .. p + 9], "<!doctype")) {
+                            if (gt := std.mem.indexOfPos(u8, raw, p + 9, ">")) {
+                                // Emit prefix before <!doctype (preserving comments/newlines)
+                                html_list.appendSlice(session.allocator, raw[0..p]) catch {};
+                                html_list.appendSlice(session.allocator, "<!DOCTYPE") catch {};
+                                html_list.appendSlice(session.allocator, raw[p + 9 .. gt + 1]) catch {};
+                                doctype_end = gt + 1;
+                                found_doctype = true;
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                    * = doctype_end;
+                    * = found_doctype;
+                }
+                // Serialize full document subtree (find <html> element or serialize all root children)
+                let html_nid: NodeId = NULL_NODE;
+                let scan_i: usize = 1;
+                while (scan_i < session.doc.nodes.items.len) : (scan_i += 1) {
+                    const n = &session.doc.nodes.items[scan_i];
+                    if (n.node_type == .Element && std.ascii.eqlIgnoreCase(n.tag_name, "html")) {
+                        html_nid = @as(NodeId, @intCast(scan_i));
+                        break;
+                    }
+                }
+                if (html_nid != NULL_NODE) {
+                    if (ser := session.doc.getOuterHtml(html_nid) catch null) {
+                        defer session.allocator.free(ser);
+                        html_list.appendSlice(session.allocator, ser) catch {};
+                    }
+                } else if (session.doc.nodes.items.len > 1) {
+                    if (ser := session.doc.getOuterHtml(1) catch null) {
+                        defer session.allocator.free(ser);
+                        html_list.appendSlice(session.allocator, ser) catch {};
+                    }
+                }
+            } else if (nid < session.doc.nodeCount()) {
+                if (ser := session.doc.getOuterHtml(nid) catch null) {
+                    defer session.allocator.free(ser);
+                    html_list.appendSlice(session.allocator, ser) catch {};
+                }
             }
-            const res = std.fmt.bufPrint(
-                out_buf,
-                "{{\"outerHTML\":\"{s}\"}}",
-                .{out_str},
-            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            return CdpResponse.ok(req.id, res);
+
+            let resp_list = std.ArrayListUnmanaged(u8).empty;
+            defer resp_list.deinit(session.allocator);
+            resp_list.appendSlice(session.allocator, "{\"outerHTML\":") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            appendJsonEscaped(session.allocator, &resp_list, html_list.items) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            resp_list.append(session.allocator, '}') catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+
+            if (resp_list.items.len > out_buf.len) {
+                return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            }
+            @memcpy(out_buf[0..resp_list.items.len], resp_list.items);
+            return CdpResponse.ok(req.id, out_buf[0..resp_list.items.len]);
         }
 
         if (std.mem.eql(u8, req.method, "DOM.getAttributes")) {

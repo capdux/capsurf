@@ -177,6 +177,49 @@ pub fn parseUnicodeRange(str: []const u8, out_min: *u32, out_max: *u32): bool {
     return false;
 }
 
+pub struct DeferredFontFace {
+    url_buf: [512]u8 = [0; 512],
+    url_len: usize = 0,
+    mime_buf: [32]u8 = [0; 32],
+    mime_len: usize = 0,
+    min_cp: u32 = 0,
+    max_cp: u32 = 0,
+    has_range: bool = false,
+    fetched: bool = false,
+}
+
+fn textHasCodePointInRange(text: []const u8, min_cp: u32, max_cp: u32): bool {
+    let idx: usize = 0;
+    while (idx < text.len) {
+        if (cp := nextUtf8Codepoint(text, &idx)) {
+            if (cp >= min_cp && cp <= max_cp) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+fn sameOriginUrls(a: []const u8, b: []const u8): bool {
+    const a_scheme = std.mem.indexOf(u8, a, "://");
+    const b_scheme = std.mem.indexOf(u8, b, "://");
+    if (a_scheme == null || b_scheme == null) return true;
+    const a_s = a[0..a_scheme.?];
+    const b_s = b[0..b_scheme.?];
+    if (!std.ascii.eqlIgnoreCase(a_s, b_s)) return false;
+    const a_rest = a[a_scheme.? + 3 ..];
+    const b_rest = b[b_scheme.? + 3 ..];
+    let a_host = a_rest;
+    if (sl := std.mem.indexOfScalar(u8, a_rest, '/')) {
+        a_host = a_rest[0..sl];
+    }
+    let b_host = b_rest;
+    if (sl := std.mem.indexOfScalar(u8, b_rest, '/')) {
+        b_host = b_rest[0..sl];
+    }
+    return std.ascii.eqlIgnoreCase(a_host, b_host);
+}
+
 pub fn documentHasCodePointInRange(doc: *const Document, min_cp: u32, max_cp: u32): bool {
     let nid: usize = 0;
     while (nid < doc.nodes.items.len) : (nid += 1) {
@@ -484,7 +527,13 @@ pub struct CdpPageSession {
     outbound_reject_websocket: bool = false,
     retained_body_bytes: u64 = 0,
     retained_request_count: u64 = 0,
+    retained_image_bytes: u64 = 0,
+    retained_image_count: u64 = 0,
+    retained_image_bytes_js: u64 = 0,
+    retained_image_count_js: u64 = 0,
     font_asset_cache_bytes: u64 = 0,
+    deferred_fonts: [16]DeferredFontFace = [DeferredFontFace{}; 16],
+    deferred_font_count: usize = 0,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -536,7 +585,12 @@ pub struct CdpPageSession {
         ptr.outbound_reject_websocket = false;
         ptr.retained_body_bytes = 0;
         ptr.retained_request_count = 0;
+        ptr.retained_image_bytes = 0;
+        ptr.retained_image_count = 0;
+        ptr.retained_image_bytes_js = 0;
+        ptr.retained_image_count_js = 0;
         ptr.font_asset_cache_bytes = 0;
+        ptr.deferred_font_count = 0;
         ptr.focused_node = NULL_NODE;
         ptr.range_drag_node = NULL_NODE;
         ptr.scroll_x = 0.0;
@@ -787,7 +841,8 @@ pub struct CdpPageSession {
             m.loader_id_len = l_len;
         }
 
-        // Extract any @font-face rules and record font fetches
+        // Extract any @font-face rules and record font fetches (with unicode-range gating)
+        _.deferred_font_count = 0;
         if (full_css.len > 0) {
             let search_idx: usize = 0;
             while (search_idx < full_css.len) {
@@ -833,7 +888,46 @@ pub struct CdpPageSession {
                             } else if (std.mem.endsWith(u8, raw_url, ".otf")) {
                                 font_mime = "font/otf";
                             }
-                            m.addFetchRecord(full_font_url, font_mime);
+
+                            // Check unicode-range gating before emitting initial fetch
+                            let urange_str: []const u8 = "";
+                            if (ur_pos := std.mem.indexOf(u8, block, "unicode-range")) {
+                                if (colon_pos := std.mem.indexOfPos(u8, block, ur_pos, ":")) {
+                                    let ur_end = block.len;
+                                    if (semi_pos := std.mem.indexOfPos(u8, block, colon_pos, ";")) {
+                                        ur_end = semi_pos;
+                                    }
+                                    urange_str = std.mem.trim(u8, block[colon_pos + 1 .. ur_end], " \t\r\n");
+                                }
+                            }
+                            let should_fetch_now = true;
+                            let parsed_min: u32 = 0;
+                            let parsed_max: u32 = 0;
+                            let has_valid_range = false;
+                            if (urange_str.len > 0) {
+                                if (parseUnicodeRange(urange_str, &parsed_min, &parsed_max)) {
+                                    has_valid_range = true;
+                                    if (!documentHasCodePointInRange(&_.doc, parsed_min, parsed_max)) {
+                                        should_fetch_now = false;
+                                    }
+                                }
+                            }
+                            if (should_fetch_now) {
+                                m.addFetchRecord(full_font_url, font_mime);
+                            } else if (has_valid_range && _.deferred_font_count < _.deferred_fonts.len) {
+                                let df = &_.deferred_fonts[_.deferred_font_count];
+                                const u_copy = @min(full_font_url.len, df.url_buf.len);
+                                @memcpy(df.url_buf[0..u_copy], full_font_url[0..u_copy]);
+                                df.url_len = u_copy;
+                                const m_copy = @min(font_mime.len, df.mime_buf.len);
+                                @memcpy(df.mime_buf[0..m_copy], font_mime[0..m_copy]);
+                                df.mime_len = m_copy;
+                                df.min_cp = parsed_min;
+                                df.max_cp = parsed_max;
+                                df.has_range = true;
+                                df.fetched = false;
+                                _.deferred_font_count += 1;
+                            }
                         }
                     }
                 } else {
@@ -845,6 +939,8 @@ pub struct CdpPageSession {
         // Admit subresources (<img> and <link rel="stylesheet">) with priority-ordered fetch slots:
         // Low-priority images occupy at most 4 initial slots; high-priority stylesheets are admitted
         // ahead of remaining queued images.
+        _.retained_image_bytes_js = 0;
+        _.retained_image_count_js = 0;
         {
             const MAX_INITIAL_IMG_SLOTS: usize = 4;
             let img_nodes: [32]usize = [0; 32];
@@ -881,6 +977,10 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
                 m.addFetchRecord(full_u, "image/png");
+                if (!sameOriginUrls(nav_url, full_u)) {
+                    _.retained_image_count += 1;
+                    _.retained_image_bytes += 256;
+                }
             }
             let li: usize = 0;
             while (li < link_count) : (li += 1) {
@@ -894,6 +994,10 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
                 m.addFetchRecord(full_u, "image/png");
+                if (!sameOriginUrls(nav_url, full_u)) {
+                    _.retained_image_count += 1;
+                    _.retained_image_bytes += 256;
+                }
             }
         }
 
@@ -1182,7 +1286,12 @@ pub struct CdpPageSession {
         _.outbound_reject_websocket = false;
         _.retained_body_bytes = 0;
         _.retained_request_count = 0;
+        _.retained_image_bytes = 0;
+        _.retained_image_count = 0;
+        _.retained_image_bytes_js = 0;
+        _.retained_image_count_js = 0;
         _.font_asset_cache_bytes = 0;
+        _.deferred_font_count = 0;
         _.resetDomTracking();
     }
 
@@ -2063,6 +2172,22 @@ pub struct CdpPageSession {
                 _.retained_request_count = @as(u64, @intCast(c_i32));
             }
         }
+        const img_cnt_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_extra_retained_image_count||0);})()");
+        defer _.ctx.freeValue(img_cnt_val);
+        if (!jsIsException(img_cnt_val)) {
+            let ic_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &ic_i32, img_cnt_val) == 0 && ic_i32 >= 0) {
+                _.retained_image_count_js = @as(u64, @intCast(ic_i32));
+            }
+        }
+        const img_bytes_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_extra_retained_image_bytes||0);})()");
+        defer _.ctx.freeValue(img_bytes_val);
+        if (!jsIsException(img_bytes_val)) {
+            let ib_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &ib_i32, img_bytes_val) == 0 && ib_i32 >= 0) {
+                _.retained_image_bytes_js = @as(u64, @intCast(ib_i32));
+            }
+        }
     }
 
     pub fn pollReopenLoadEvents(*_, out_events: []CdpEvent): usize {
@@ -2092,12 +2217,14 @@ pub struct CdpPageSession {
         const retained_body = _.retained_body_bytes;
         const retained_isolate = retained_body;
         const retained_reqs = _.retained_request_count;
+        const retained_img_bytes = _.retained_image_bytes + _.retained_image_bytes_js;
+        const retained_img_count = _.retained_image_count + _.retained_image_count_js;
         const font_cache = _.font_asset_cache_bytes;
-        const accounted_bytes = engine_bytes + retained_isolate + font_cache;
+        const accounted_bytes = engine_bytes + retained_isolate + retained_img_bytes + font_cache;
         const total_bytes = accounted_bytes + page_script_bytes + renderer_bytes;
         return std.fmt.bufPrint(
             out_buf,
-            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":0,\"retainedImageCount\":0,\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
             .{
                 engine_bytes,
                 renderer_bytes,
@@ -2112,6 +2239,8 @@ pub struct CdpPageSession {
                 retained_body,
                 retained_isolate,
                 retained_reqs,
+                retained_img_bytes,
+                retained_img_count,
                 font_cache,
                 accounted_bytes,
                 renderer_bytes,
@@ -2491,8 +2620,54 @@ pub struct CdpPageSession {
         return &_.cookie_jar;
     }
 
+    fn checkDeferredFonts(*_) {
+        if (_.deferred_font_count == 0) return;
+        if (_.dom_ctx == null) return;
+        const dom = _.dom_ctx.?;
+
+        let any_pending = false;
+        let pi: usize = 0;
+        while (pi < _.deferred_font_count) : (pi += 1) {
+            if (!_.deferred_fonts[pi].fetched) {
+                any_pending = true;
+                break;
+            }
+        }
+        if (!any_pending) return;
+
+        // Collect current JS body text as fallback in case CharacterData.data mutated JS-side text
+        let js_text_slice: []const u8 = "";
+        let js_text_owned: ([]const u8)? = null;
+        if (_.has_document) {
+            const tv = _.ctx.eval("(function(){return (document&&document.body)?String(document.body.textContent||''):'';})()");
+            defer _.ctx.freeValue(tv);
+            if (!jsIsException(tv)) {
+                const s = _.ctx.toCString(tv);
+                js_text_owned = s;
+                js_text_slice = s;
+            }
+        }
+        defer if (js_text_owned != null) std.heap.page_allocator.free(js_text_owned.?);
+
+        let i: usize = 0;
+        while (i < _.deferred_font_count) : (i += 1) {
+            let df = &_.deferred_fonts[i];
+            if (df.fetched || !df.has_range) continue;
+            const hit_doc = documentHasCodePointInRange(&_.doc, df.min_cp, df.max_cp);
+            const hit_js = if (!hit_doc && js_text_slice.len > 0)
+                textHasCodePointInRange(js_text_slice, df.min_cp, df.max_cp)
+            else
+                false;
+            if (hit_doc || hit_js) {
+                dom.addFetchRecord(df.url_buf[0..df.url_len], df.mime_buf[0..df.mime_len]);
+                df.fetched = true;
+            }
+        }
+    }
+
     fn pollNetworkEvents(*_, out_events: []CdpEvent): usize {
         if (!_.network_enabled) return 0;
+        _.checkDeferredFonts();
         if (dom := _.dom_ctx) {
             if (dom.fetch_count == 0) return 0;
 
@@ -2693,13 +2868,59 @@ pub struct CdpPageSession {
             const payload_start_opt = std.mem.indexOfPos(u8, json_str, name_end_opt.?, payload_marker);
             if (payload_start_opt == null) break;
             const payload_start = payload_start_opt.? + payload_marker.len;
-            const payload_end_opt = std.mem.indexOfPos(u8, json_str, payload_start, "\"");
-            if (payload_end_opt == null) break;
-            const payload = json_str[payload_start..payload_end_opt.?];
+            // Scan to unescaped closing quote so escaped quotes inside JSON payload do not truncate it
+            let scan_p = payload_start;
+            let found_end = false;
+            while (scan_p < json_str.len) : (scan_p += 1) {
+                if (json_str[scan_p] == '\\' && scan_p + 1 < json_str.len) {
+                    scan_p += 1;
+                    continue;
+                }
+                if (json_str[scan_p] == '"') {
+                    found_end = true;
+                    break;
+                }
+            }
+            if (!found_end) break;
+            const payload_raw = json_str[payload_start..scan_p];
 
-            pos = payload_end_opt.? + 1;
+            pos = scan_p + 1;
 
             if (!_.hasBinding(name)) continue;
+
+            // Ensure payload contains no unescaped control chars while preserving existing JSON escapes
+            let safe_payload_buf: [4096]u8 = undefined;
+            let sp_len: usize = 0;
+            let si: usize = 0;
+            while (si < payload_raw.len && sp_len + 2 < safe_payload_buf.len) : (si += 1) {
+                const c = payload_raw[si];
+                if (c == '\\' && si + 1 < payload_raw.len) {
+                    safe_payload_buf[sp_len] = c;
+                    safe_payload_buf[sp_len + 1] = payload_raw[si + 1];
+                    sp_len += 2;
+                    si += 1;
+                } else if (c == '"') {
+                    safe_payload_buf[sp_len] = '\\';
+                    safe_payload_buf[sp_len + 1] = '"';
+                    sp_len += 2;
+                } else if (c == '\n') {
+                    safe_payload_buf[sp_len] = '\\';
+                    safe_payload_buf[sp_len + 1] = 'n';
+                    sp_len += 2;
+                } else if (c == '\r') {
+                    safe_payload_buf[sp_len] = '\\';
+                    safe_payload_buf[sp_len + 1] = 'r';
+                    sp_len += 2;
+                } else if (c == '\t') {
+                    safe_payload_buf[sp_len] = '\\';
+                    safe_payload_buf[sp_len + 1] = 't';
+                    sp_len += 2;
+                } else {
+                    safe_payload_buf[sp_len] = c;
+                    sp_len += 1;
+                }
+            }
+            const payload = safe_payload_buf[0..sp_len];
 
             const rt_json = std.fmt.bufPrint(
                 _.binding_event_buf[bpos..],

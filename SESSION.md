@@ -3785,3 +3785,17 @@
   - `cascade.cp` / `painter.cp` 4 门禁全 0；
   - `images-demo` (PASS)、`layout-cheap-demo` (PASS)；`text-input-caret-font` 与 `forms-selection-paint-demo` 纯 CP 渲染 100% 就绪（已精准定位 `e2e/harness.ts` `page.click` 聚焦与 `session.cp` 表单选区采集）。
 - **清理旧子智能体**: 销毁 `056820cb-ae60-40fd-9072-dfbb02bc29f9`。
+
+## [2026-11-20 19:22:00] 5 大 CDP/Net 精准收尾 29/29 全绿闭环（engine-routes 17/17 + fetch-interception 8/8 + unicode-range 3/3）(Subagent 166a7c33 结单，Phase 105)
+- **URL 编码、Unicode-Range 按需字体拉取与跨源图片扣留 (`src/cdp/{server,session,session_hooks,dom}.cp`, `src/net/mock_fixtures.cp`)**:
+  - `server.cp`: 新增 RFC 3986 `encodeUriComponent` 修复 `/?url=...` 内层 `initialUrl=` 编码，`engine-routes` 达 **17/17 PASS**；
+  - `session.cp` & `session_hooks.cp`: 实装 `DeferredFontFace` 按页面码点动态门控拉取、真实 `retainedImageCount`/`retainedImageBytes` 统计与 `Runtime.bindingCalled` JSON 字符串转义；
+  - `mock_fixtures.cp`: 新增 `/font-defer.html`、`/font-defer-probe.woff2` 延迟字体路由；
+  - `dom.cp`: 完善 `DOM.getOuterHTML` 对 `nodeId == 0` 与 `includeDoctype: true` 的完整文档子树序列化。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `engine-routes` (17/17)、`fetch-interception` (8/8)、`font-face-unicode-range-gating` (3/3)、`pseudo-text-font-arrival` (1/1) 共 **29/29 PASS**！
+- **全新子智能体调度（路 3 无缝补位，`-m -d -o` 增量构建）**:
+  - 销毁 `166a7c33-2359-4bce-9b2e-ac8b2e70a229`；
+  - 派发 **Subagent 74**: CDP Inserted Script & Selection Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
+    - 攻坚目标：`session.cp` 表单选区采集（配合 `forms-selection-paint-demo`）+ 6 项 `inserted-script-*` Core E2E 套件。
