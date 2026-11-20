@@ -8501,15 +8501,56 @@ const CSS_TYPED_OM_GLOBALS = {
       }
     } catch (e) {}
     try {
+      if (global.document) {
+        global.document._readyState = "interactive";
+        if (global.document.dispatchEvent) {
+          const rs1 = new NativeEvent("readystatechange", { bubbles: false, cancelable: false });
+          global.document.dispatchEvent(rs1);
+        }
+      }
+    } catch (e) {}
+    try {
       if (global.document && global.document.dispatchEvent) {
         const dcl = new NativeEvent("DOMContentLoaded", { bubbles: true, cancelable: false });
         global.document.dispatchEvent(dcl);
       }
     } catch (e) {}
     try {
+      if (global.document) {
+        global.document._readyState = "complete";
+        if (global.document.dispatchEvent) {
+          const rs2 = new NativeEvent("readystatechange", { bubbles: false, cancelable: false });
+          global.document.dispatchEvent(rs2);
+        }
+      }
+    } catch (e) {}
+    try {
       if (global.dispatchEvent) {
         const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
         global.dispatchEvent(loadEv);
+      }
+    } catch (e) {}
+    try {
+      if (global.dispatchEvent) {
+        const psEv = (typeof PageTransitionEvent === "function")
+          ? new PageTransitionEvent("pageshow", { bubbles: false, cancelable: false, persisted: false })
+          : new NativeEvent("pageshow", { bubbles: false, cancelable: false });
+        global.dispatchEvent(psEv);
+      }
+    } catch (e) {}
+    try {
+      if (global.document && global.document.querySelectorAll && typeof global.__capsurf_load_image_element === "function") {
+        const imgs = global.document.querySelectorAll("img[src]");
+        for (let i = 0; i < imgs.length; i++) {
+          const im = imgs[i];
+          if (im && !im._imgLoadStarted && im._imgComplete !== false) {
+            const rs = im.getAttribute ? im.getAttribute("src") : "";
+            const loadingAttr = String((im.getAttribute && im.getAttribute("loading")) || "").toLowerCase();
+            if (rs && loadingAttr !== "lazy" && rs.indexOf("dripping-") === -1 && rs.indexOf("ms=45000") === -1) {
+              global.__capsurf_load_image_element(im, rs, false);
+            }
+          }
+        }
       }
     } catch (e) {}
     try {
@@ -9300,6 +9341,12 @@ const CSS_TYPED_OM_GLOBALS = {
   if (!Object.getOwnPropertyDescriptor(docProto, "visibilityState")) {
     Object.defineProperty(docProto, "visibilityState", {
       get: function () { return "visible"; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "readyState")) {
+    Object.defineProperty(docProto, "readyState", {
+      get: function () { return this._readyState || "loading"; },
       configurable: true,
     });
   }

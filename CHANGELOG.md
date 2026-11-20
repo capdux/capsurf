@@ -2027,4 +2027,11 @@
 
 ## Phase 133: `css-isolate-replies` 2/2 PASS & CDP `getRendererInfo`/`recordScene` Localization
 - 摸底直接验收 `e2e/css-isolate-replies.e2e.test.ts` (**2/2 PASS**)，并精准定位 `renderer-laziness` 与 `canvas-raw-renderer` 在 `src/cdp/kitesurf_facade.cp` 的最后缺口。
+
+## Phase 134: `clock-floor-stamp-demo`, `img-load-events-demo` (2/2 PASS), `readyState` Lifecycle & `img.decode()`
+- **`src/js/shim/{constants,window,element/html-classes}.js` & `src/js/runtime{,_source.cp}`**：
+  - 实装单调 `clockFloorMs`、`Document.readyState` 完整流转与 `HTMLImageElement.prototype.decode()` / `error` 事件派发。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`clock-floor-stamp-demo` (1/1)、`img-load-events-demo` (1/1) — **2/2 PASS (13 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -4088,6 +4088,15 @@
 - **精准跨模块定位（留交 Slot B）**：`renderer-laziness` (`kitesurf_facade.cp:142-152`, `protocol_extensions.cp:78-83` 硬编码 `active:true`/`framesRendered:1`)、`canvas-raw-renderer` (Canvas2D 像素已 PASS，缺 `Kitesurf.recordScene` 返回 `sceneB64` & `resourceBatchB64`)。
 - **清理旧子智能体**: 销毁 `82332e72-66a6-4ced-8e0f-d850e70d3bc2`。
 
+## [2026-11-20 23:11:00] 3 分钟极速闭环 `clock-floor-stamp-demo` 与 `img-load-events-demo` (Subagent 93bb2715 结单，Phase 134)
+- **单调 `clockFloorMs`、`readyState` 流转与图片 `load`/`error`/`decode()` (`src/js/shim/{constants,window,element/html-classes}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `constants.js` & `window.js`：实装单调 `clockFloorMs`、`Document.readyState` 流转与生命周期事件，并在 `dispatchLifecycleNow()` 触发非懒加载 `img[src]` 加载；
+  - `html-classes.js:1225-1395`：提取 `triggerImageLoad` / `__capsurf_load_image_element`，对 404/空字节非 fixture 图片派发 `error` 并置零尺寸，补充 `HTMLImageElement.prototype.decode()` 与 `_decodeWaiters`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `clock-floor-stamp-demo` (**1/1**)、`img-load-events-demo` (**1/1**)：**2/2 PASS (13 expect() calls)**；`mjs-import-demo` 定位至 `session.cp:1550` 与 `session_hooks.cp:1138`（Slot B 同步处理中）。
+- **清理旧子智能体**: 销毁 `93bb2715-46e9-405b-8889-772c2296cd6f`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

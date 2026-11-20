@@ -232,6 +232,25 @@ if (typeof globalThis !== "undefined") {
     fontsInflightCount: function () { return 0; },
     fontsReady: function () { return Promise.resolve(); },
   };
+  let _clockFloorMs = (typeof rec.clockFloorMs === "number" && Number.isFinite(rec.clockFloorMs))
+    ? rec.clockFloorMs
+    : Date.now();
+  if (!Object.getOwnPropertyDescriptor(rec, "clockFloorMs")) {
+    Object.defineProperty(rec, "clockFloorMs", {
+      get: function () {
+        const now = Date.now();
+        if (now > _clockFloorMs) _clockFloorMs = now;
+        return _clockFloorMs;
+      },
+      set: function (v) {
+        if (typeof v === "number" && Number.isFinite(v) && v > _clockFloorMs) {
+          _clockFloorMs = v;
+        }
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
   if (typeof globalThis !== "undefined") {
     if (!globalThis[ksSym]) {
       globalThis[ksSym] = rec;

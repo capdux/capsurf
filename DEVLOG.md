@@ -1583,4 +1583,10 @@
    - 当对 `<input type="radio">` 显式调用 `setAttribute("checked", ...)` 且未标记 `_checkedDirty` 时，清除同所属表单/根范围内同 `name` 兄弟单选框的选中态。
 2. **大载荷 CDP 诊断 (`text-content-memory`, `style-churn-memory`)**：
    - 定位到 ~50KB `page.evaluate`/`setContent` 触发 `SyntaxError: invalid UTF-8 sequence` 与 WS 断连，将在 CDP 帧/Eval 缓冲区阶段统一修复。
+
+## Phase 134 `clockFloorMs`、生命周期 `readyState` 与 `img.decode()` 方案
+1. **图片 `load`/`error` 与 `decode()` (`src/js/shim/element/html-classes.js`, `window.js`)**：
+   - 在 `dispatchLifecycleNow` 启动非懒加载 `img[src]` 加载，对空字节非 fixture 响应归零尺寸并派发 `error`，同时通过 `_decodeWaiters` 队列支撑 `img.decode()`。
+2. **单调时钟与 `readyState` (`src/js/shim/constants.js`, `window.js`)**：
+   - 在 `kitesurf.internals` 暴露单调递增 `clockFloorMs`，并在 `dispatchLifecycleNow` 按序推进 `loading -> interactive -> complete`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
