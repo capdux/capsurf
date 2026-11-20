@@ -3577,3 +3577,21 @@
 - **跨 AGY 协同提单 (`task-capsurf-20261120-lib-css-color-tuple`)**:
   - 发现上游 `/data/dev/cp/lib/css/color.cp` 外部修改引入 `NAMED_COLORS` 无类型数组字面量触发 Zig 元组索引编译错，已按规范向 `cp_agy` 提单等待修复后即可对剩余 5 项测试重编验收。
 - **清理旧子智能体**: 销毁 `6f58ae63-4cbc-48f2-bf1b-834dbec935ee`。
+
+## [2026-11-20 18:11:15] 收到并验收上游 `cp_agy` 结单 (`task-capsurf-20261120-lib-css-color-tuple`)
+- **修复结论**: `cp_agy` 已修复 `/data/dev/cp/lib/css/color.cp`，将命名颜色表拆分为显式定长数组 `NAMED_COLOR_NAMES: [149][]const u8` 与 `NAMED_COLOR_RGBA: [149]u32`，彻底消除 Zig 元组动态下标编译错。
+- **验收状态**: 已执行 `ack`，`cap build -d -o bin_verify src/main.cp` 4.39s 一次构建通过（`-fno-llvm` 2.06s），正在自动复测 5 项待验 E2E 套件（`task-19944`）。
+
+## [2026-11-20 18:13:00] PNG 全格式解码、@container 3-Pass 布局与 6 大渲染/布局套件 10/10 全绿闭环 (Subagent fddba3bb 结单，Phase 90)
+- **PNG 5 滤波全格式解码与背景/图片光栅化 (`src/render/painter.cp`)**:
+  - `<img>` 复用 `paintBackgroundImage` 支持 Data URI / 本地 PNG 与 SVG；新增 `decodePngAnyToRgba`（`cap:pack` `uncompress`）支持 RGB/RGBA/Grayscale/GA 与 5 种 PNG 滤波；消除 `bg_image_url_buf` 悬垂切片。
+- **CSS `@container` 3-Pass 匹配、栈帧瘦身与 `dom_binding` 段错误根治 (`src/css/cascade.cp`, `src/js/dom_binding.cp`)**:
+  - 精简 `ContainerRuleEntry` 内嵌规则改为 `nested_body` 堆解析，消除 `container_name_buf` 悬垂切片；
+  - 修复 `js_get_computed_prop` 对 `page_allocator.dupe` 切片误调 `JS_FreeCString` 引发的 Debug 段错误，并在含 `@container` 文档首次查询时触发 3-pass 级联与重排。
+- **门禁与 E2E 验证**:
+  - 全部 3 个修改 `.cp` 文件 4 门禁全 0（4.93s Debug 构建）；
+  - `bg-image-capture` (1/1) + `container-queries` (2/2) + `css-counters` (1/1) + `document-types` (4/4) + `hoisted-inline-rebreak` (1/1) + `hoisted-overflow-clip` (1/1)：**10/10 PASS (29 expect() calls, 8.01s)**！
+- **全新子智能体调度（路 1 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `fddba3bb-c777-43ae-bd66-8d9be0233e89`；
+  - 派发 **Subagent 58**: Gradient Text & Repaint Specialist（纯 CP `src/css/`、`src/layout/`、`src/render/`，端口 `19231`，无锁 `-d -o`）
+    - 攻坚目标：`e2e/gradient-tile-count.e2e.test.ts`、`e2e/scrollable-overflow-origin.e2e.test.ts`、`e2e/text-fill-color.e2e.test.ts`、`e2e/theme-flip-repaint.e2e.test.ts`、`e2e/tabs-tab-stops.e2e.test.ts`。

@@ -1349,4 +1349,10 @@
    - 基于 `node:net` 转发本地 HTTP 与 WebSocket 握手请求并保留原始 `Host`/`Origin` 头，内建帧编解码器完整支持 `cdp-envelope`、`cdp-upgrade-origin` 与 `response-body-unknown-id`。
 2. **`computeElementUsedWidthPx` 线性化与 `fetchFn` 规范补全 (`window.js`, `file.js`)**：
    - 引入 `visited` Set 打断 `min-content/max-content` 父子互调指数递归；补齐 `Headers` immutable guard、`AbortSignal`、`data:` URL 解码、POST `content-length` 与公网 loopback 阻断。
+
+## Phase 90 PNG 5 滤波全格式解码、`@container` 3-Pass 与 `dom_binding` 段错误根治技术方案
+1. **PNG 解码器与悬垂切片根治 (`painter.cp`, `cascade.cp`)**：
+   - 基于 `cap:pack` `uncompress` 实现完整 PNG 行滤波还原（None/Sub/Up/Average/Paeth）支持 RGB/RGBA/Grayscale；直接对结构体字段切片 `buf[0..len]` 替代按值接收者 `_` 辅助方法，彻底根除悬垂切片。
+2. **`@container` 3-Pass 与 `JS_FreeCString` 误释放修复 (`cascade.cp`, `dom_binding.cp`)**：
+   - 将 `ContainerRuleEntry` 内部规则改为 `nested_body` 堆解析降低栈帧；修复 `js_get_computed_prop` 对 `page_allocator.dupe` 切片误调 `JS_FreeCString` 导致的 Debug 段错误，并在含 `@container` 文档首次查询时执行 3-pass 重排。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

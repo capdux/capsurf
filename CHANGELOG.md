@@ -1730,4 +1730,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`cdp-envelope` (2/2) + `cdp-upgrade-origin` (2/2) + `response-body-unknown-id` (2/2) 共 **6/6 PASS (2.09s)**（另 5 项待上游 `task-capsurf-20261120-lib-css-color-tuple` 结单后重编复测）。
+
+## Phase 90: Full PNG Decoder (5 Filters), 3-Pass `@container` Queries & `dom_binding` Segfault Fix — 6 Suites (100% Closed)
+- **`src/render/painter.cp` & `src/css/cascade.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `decodePngAnyToRgba`（RGB/RGBA/Gray/GA + 5 滤波）并打通 `<img>` 与 `background-image` PNG 绘制；精简 `ContainerRuleEntry` 栈占用并实装 3-pass `@container` 匹配；根治 `js_get_computed_prop` 误调 `JS_FreeCString` 段错误与按值接收者悬垂切片。
+- **测试与门禁验证**：
+  - 静态门禁：全部 3 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`bg-image-capture` + `container-queries` (2) + `css-counters` + `document-types` (4) + `hoisted-inline-rebreak` + `hoisted-overflow-clip` 共 **10/10 PASS (29 expect calls, 8.01s)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -612,8 +612,24 @@ struct ViewportRectInfo {
     anc_scroll_y: f32 = 0.0,
 }
 
+fn docHasContainerQuery(doc: *const Document): bool {
+    let snid: usize = 0;
+    while (snid < doc.nodes.items.len) : (snid += 1) {
+        const sn = &doc.nodes.items[snid];
+        if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+            if (std.mem.indexOf(u8, sn.text_content, "@container") != null) return true;
+            let child = sn.first_child;
+            while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
+                const scn = &doc.nodes.items[@as(usize, child)];
+                if (scn.node_type == NodeType.Text && std.mem.indexOf(u8, scn.text_content, "@container") != null) return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
-    if (!dom_ctx.layout_dirty) return;
+    if (!dom_ctx.layout_dirty && (dom_ctx.paint_prepares > 0 || !docHasContainerQuery(dom_ctx.doc))) return;
     dom_ctx.layout_dirty = false;
     if (lt := dom_ctx.layout) {
         const doc = dom_ctx.doc;
@@ -652,8 +668,147 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         defer std.heap.page_allocator.free(styles);
         Cascade.computeStyles(doc, &sheet, styles, 16.0);
         lt.computeLayout(doc, styles) catch {};
+        if (sheet.container_rule_count > 0) {
+            let box_w = std.heap.page_allocator.alloc(f32, count) catch null;
+            let box_h = std.heap.page_allocator.alloc(f32, count) catch null;
+            defer if (box_w != null) std.heap.page_allocator.free(box_w.?);
+            defer if (box_h != null) std.heap.page_allocator.free(box_h.?);
+            if (box_w != null && box_h != null) {
+                let cq_pass: usize = 0;
+                while (cq_pass < 3) : (cq_pass += 1) {
+                    let bi: usize = 0;
+                    while (bi < count) : (bi += 1) {
+                        const br = lt.getBoundingClientRect(@as(u32, @intCast(bi)));
+                        box_w.?[bi] = br.width;
+                        box_h.?[bi] = br.height;
+                    }
+                    Cascade.computeStylesWithContainers(doc, &sheet, styles, box_w.?, box_h.?, 16.0);
+                    lt.computeLayout(doc, styles) catch {};
+                }
+            }
+        }
         dom_ctx.paint_prepares += 1;
     }
+}
+
+@c fn js_get_computed_prop(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsNewString(ctx, "");
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsNewString(ctx, "");
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaque_ptr.?));
+
+    let nid_i32: i32 = 0;
+    if (JS_ToInt32(ctx, &nid_i32, argv[0]) != 0 || nid_i32 <= 0) return jsNewString(ctx, "");
+    const prop_slice = jsToSlice(ctx, argv[1]);
+    defer if (prop_slice.len > 0) std.heap.page_allocator.free(prop_slice);
+    if (prop_slice.len == 0) return jsNewString(ctx, "");
+
+    const doc = dom_ctx.doc;
+    const nid_u = @as(usize, @intCast(nid_i32));
+    if (nid_u >= doc.nodes.items.len) return jsNewString(ctx, "");
+
+    const count = @max(@as(usize, 1), doc.nodeCount());
+    const css_buf = std.heap.page_allocator.alloc(u8, 65536) catch return jsNewString(ctx, "");
+    defer std.heap.page_allocator.free(css_buf);
+    let css_len: usize = 0;
+    let snid: usize = 0;
+    while (snid < doc.nodes.items.len) : (snid += 1) {
+        const sn = &doc.nodes.items[snid];
+        if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+            if (sn.text_content.len > 0) {
+                const copy_len = @min(sn.text_content.len, css_buf.len - css_len);
+                @memcpy(css_buf[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
+                css_len += copy_len;
+            }
+            let child = sn.first_child;
+            while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
+                const scn = &doc.nodes.items[@as(usize, child)];
+                if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                    const copy_len = @min(scn.text_content.len, css_buf.len - css_len);
+                    @memcpy(css_buf[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
+                    css_len += copy_len;
+                }
+            }
+        }
+    }
+    const full_css = css_buf[0..css_len];
+    let vw: f32 = 1280.0;
+    let vh: f32 = 720.0;
+    if (lt := dom_ctx.layout) {
+        vw = lt.viewport_width;
+        vh = lt.viewport_height;
+    }
+    const sheet = StyleSheet.parse(full_css, vw, false);
+    const styles = std.heap.page_allocator.alloc(ComputedStyle, count) catch return jsNewString(ctx, "");
+    defer std.heap.page_allocator.free(styles);
+    Cascade.computeStyles(doc, &sheet, styles, 16.0);
+    if (lt := dom_ctx.layout) {
+        lt.computeLayout(doc, styles) catch {};
+        if (sheet.container_rule_count > 0) {
+            let box_w = std.heap.page_allocator.alloc(f32, count) catch null;
+            let box_h = std.heap.page_allocator.alloc(f32, count) catch null;
+            defer if (box_w != null) std.heap.page_allocator.free(box_w.?);
+            defer if (box_h != null) std.heap.page_allocator.free(box_h.?);
+            if (box_w != null && box_h != null) {
+                let cq_pass: usize = 0;
+                while (cq_pass < 3) : (cq_pass += 1) {
+                    let bi: usize = 0;
+                    while (bi < count) : (bi += 1) {
+                        const br = lt.getBoundingClientRect(@as(u32, @intCast(bi)));
+                        box_w.?[bi] = br.width;
+                        box_h.?[bi] = br.height;
+                    }
+                    Cascade.computeStylesWithContainers(doc, &sheet, styles, box_w.?, box_h.?, 16.0);
+                    lt.computeLayout(doc, styles) catch {};
+                }
+            }
+        }
+    }
+
+    const st = &styles[nid_u];
+    let out_buf: [128]u8 = undefined;
+    if (std.ascii.eqlIgnoreCase(prop_slice, "container-type") || std.ascii.eqlIgnoreCase(prop_slice, "containerType")) {
+        return jsNewString(ctx, st.containerTypeStr());
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "container-name") || std.ascii.eqlIgnoreCase(prop_slice, "containerName")) {
+        const cn = st.container_name_buf[0..st.container_name_len];
+        return jsNewString(ctx, if (cn.len > 0) cn else "none");
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "padding-left") || std.ascii.eqlIgnoreCase(prop_slice, "paddingLeft")) {
+        const px = st.padding_left.resolvePx(vw, st.font_size_px, 16.0, vw, vh);
+        const s = std.fmt.bufPrint(&out_buf, "{d}px", .{@as(i32, @intFromFloat(@round(px)))}) catch return jsNewString(ctx, "");
+        return jsNewString(ctx, s);
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "padding-right") || std.ascii.eqlIgnoreCase(prop_slice, "paddingRight")) {
+        const px = st.padding_right.resolvePx(vw, st.font_size_px, 16.0, vw, vh);
+        const s = std.fmt.bufPrint(&out_buf, "{d}px", .{@as(i32, @intFromFloat(@round(px)))}) catch return jsNewString(ctx, "");
+        return jsNewString(ctx, s);
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "padding-top") || std.ascii.eqlIgnoreCase(prop_slice, "paddingTop")) {
+        const px = st.padding_top.resolvePx(vh, st.font_size_px, 16.0, vw, vh);
+        const s = std.fmt.bufPrint(&out_buf, "{d}px", .{@as(i32, @intFromFloat(@round(px)))}) catch return jsNewString(ctx, "");
+        return jsNewString(ctx, s);
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "padding-bottom") || std.ascii.eqlIgnoreCase(prop_slice, "paddingBottom")) {
+        const px = st.padding_bottom.resolvePx(vh, st.font_size_px, 16.0, vw, vh);
+        const s = std.fmt.bufPrint(&out_buf, "{d}px", .{@as(i32, @intFromFloat(@round(px)))}) catch return jsNewString(ctx, "");
+        return jsNewString(ctx, s);
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "color")) {
+        const c = st.color;
+        const s = std.fmt.bufPrint(&out_buf, "rgb({d}, {d}, {d})", .{ c.r, c.g, c.b }) catch return jsNewString(ctx, "");
+        return jsNewString(ctx, s);
+    }
+    if (std.ascii.eqlIgnoreCase(prop_slice, "background-color") || std.ascii.eqlIgnoreCase(prop_slice, "backgroundColor")) {
+        const c = st.background_color;
+        const s = if (c.a == 255)
+            (std.fmt.bufPrint(&out_buf, "rgb({d}, {d}, {d})", .{ c.r, c.g, c.b }) catch return jsNewString(ctx, ""))
+        else
+            (std.fmt.bufPrint(&out_buf, "rgba({d}, {d}, {d}, {d})", .{ c.r, c.g, c.b, c.a }) catch return jsNewString(ctx, ""));
+        return jsNewString(ctx, s);
+    }
+    return jsNewString(ctx, "");
 }
 
 fn getJsNumberProp(ctx: *JSContext, obj: JSValue, prop: [*c]const u8): f32 {
@@ -2009,6 +2164,7 @@ pub fn mountDom(
     defer ctx.freeValue(global_obj);
 
     * = JS_SetPropertyStr(raw_ctx, global_obj, "_nid", jsInt(-1));
+    defineMethod(raw_ctx, global_obj, "__capsurf_get_computed_prop", js_get_computed_prop, 2);
 
     // Expose Element and Document constructors
     const el_ctor = JS_NewObject(raw_ctx);
@@ -2176,7 +2332,9 @@ pub fn mountDom(
         " const _namedColors = { crimson:'rgb(220, 20, 60)', navy:'rgb(0, 0, 128)', red:'rgb(255, 0, 0)', green:'rgb(0, 128, 0)', blue:'rgb(0, 0, 255)', black:'rgb(0, 0, 0)', white:'rgb(255, 255, 255)', gray:'rgb(128, 128, 128)', grey:'rgb(128, 128, 128)', orange:'rgb(255, 165, 0)', purple:'rgb(128, 0, 128)', pink:'rgb(255, 192, 203)', yellow:'rgb(255, 255, 0)', cyan:'rgb(0, 255, 255)', aqua:'rgb(0, 255, 255)', magenta:'rgb(255, 0, 255)', fuchsia:'rgb(255, 0, 255)', teal:'rgb(0, 128, 128)', indigo:'rgb(75, 0, 130)', violet:'rgb(238, 130, 238)', tomato:'rgb(255, 99, 71)', coral:'rgb(255, 127, 80)', gold:'rgb(255, 215, 0)', lime:'rgb(0, 255, 0)', olive:'rgb(128, 128, 0)', maroon:'rgb(128, 0, 0)', silver:'rgb(192, 192, 192)', rebeccapurple:'rgb(102, 51, 153)', dodgerblue:'rgb(30, 144, 255)', steelblue:'rgb(70, 130, 180)' };" +
         " function _normColor(raw) { if (!raw) return ''; const s = String(raw).trim().toLowerCase(); if (!s || s === 'auto') return 'auto'; if (_namedColors[s]) return _namedColors[s]; if (s.startsWith('#')) { let h = s.slice(1); if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; if (h.length === 6) { const r = parseInt(h.slice(0,2), 16), g = parseInt(h.slice(2,4), 16), b = parseInt(h.slice(4,6), 16); if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return 'rgb(' + r + ', ' + g + ', ' + b + ')'; } } return raw.trim(); }" +
         " function _resolveAccent(el, cs) { const direct = cs.getPropertyValue('accent-color'); if (direct && direct.trim()) return _normColor(direct); let p = el && el.parentElement; while (p) { try { const pcs = _origGcs(p); const pv = pcs.getPropertyValue('accent-color'); if (pv && pv.trim()) return _normColor(pv); } catch (e) {} p = p.parentElement; } if (el && el.tagName && el.tagName.toLowerCase() === 'input' && String(el.getAttribute && el.getAttribute('type') || '').toLowerCase() === 'range') { try { const styles = document.querySelectorAll('style'); let found = ''; for (let i = 0; i < styles.length; i++) { const txt = styles[i].textContent || ''; const re = /([^{}]+)\\{([^{}]*)\\}/g; let m; while ((m = re.exec(txt)) !== null) { const sels = m[1].split(','); let matched = false; for (let j = 0; j < sels.length; j++) { const s = sels[j].trim(); const idx = s.indexOf('::-webkit-slider-thumb') !== -1 ? s.indexOf('::-webkit-slider-thumb') : s.indexOf('::-moz-range-thumb'); if (idx !== -1) { const baseSel = s.slice(0, idx).trim() || '*'; if (typeof el.matches === 'function' && el.matches(baseSel)) { matched = true; break; } } } if (matched) { const decls = m[2].split(';'); for (let k = 0; k < decls.length; k++) { const col = decls[k].indexOf(':'); if (col === -1) continue; const pn = decls[k].slice(0, col).trim().toLowerCase(); const pv = decls[k].slice(col + 1).replace(/!important/i, '').trim(); if (pn === 'background-color' || pn === 'background') { const nc = _normColor(pv); if (nc && nc !== 'auto') found = nc; } } } } } if (found) return found; } catch (e) {} } return 'auto'; }" +
-        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { if (String(name).trim().toLowerCase() === 'accent-color') return _resolveAccent(el, target); return target.getPropertyValue(name); }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); const v = target[prop]; return typeof v === 'function' ? v.bind(target) : v; } }); };" +
+        " function _hasContainerRules() { try { const st = document.querySelectorAll('style'); for (let i = 0; i < st.length; i++) { if ((st[i].textContent || '').indexOf('@container') !== -1) return true; } } catch (e) {} return false; }" +
+        " function _cpProp(el, name) { if (!el || typeof el._nid !== 'number' || el._nid <= 0 || typeof globalThis.__capsurf_get_computed_prop !== 'function') return ''; return globalThis.__capsurf_get_computed_prop(el._nid, name) || ''; }" +
+        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } return target.getPropertyValue(name); }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } const v = target[prop]; return typeof v === 'function' ? v.bind(target) : v; } }); };" +
         " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs; })();";
     const accent_val = ctx.eval(accent_script);
     ctx.freeValue(accent_val);

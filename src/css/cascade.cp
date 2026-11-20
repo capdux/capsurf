@@ -1026,7 +1026,31 @@ pub const PROP_VERTICAL_ALIGN: usize = 79;
 pub const PROP_WHITE_SPACE: usize = 80;
 pub const PROP_BOX_ORIENT: usize = 81;
 pub const PROP_LINE_CLAMP: usize = 82;
-pub const TOTAL_PROP_SLOTS: usize = 83;
+pub const PROP_CONTAINER_TYPE: usize = 83;
+pub const PROP_CONTAINER_NAME: usize = 84;
+pub const TOTAL_PROP_SLOTS: usize = 85;
+
+pub enum ContainerType {
+    Normal,
+    Size,
+    InlineSize,
+
+    static fn parse(raw: []const u8): ContainerType? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "normal")) return ContainerType.Normal;
+        if (std.ascii.eqlIgnoreCase(s, "size")) return ContainerType.Size;
+        if (std.ascii.eqlIgnoreCase(s, "inline-size")) return ContainerType.InlineSize;
+        return null;
+    }
+
+    fn asStr(): []const u8 {
+        return switch (_) {
+            .Normal => "normal",
+            .Size => "size",
+            .InlineSize => "inline-size",
+        };
+    }
+}
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1511,6 +1535,11 @@ pub struct ComputedStyle {
     opacity: f32 = 1.0;
     z_index: i32 = 0;
     conic_gradient: ConicGradient = ConicGradient{};
+    bg_image_url_buf: [256]u8 = [0; 256];
+    bg_image_url_len: usize = 0;
+    container_type: ContainerType = ContainerType.Normal;
+    container_name_buf: [64]u8 = [0; 64];
+    container_name_len: usize = 0;
     overflow_visible: bool = true;
     overflow_x: OverflowMode = OverflowMode.Visible;
     overflow_y: OverflowMode = OverflowMode.Visible;
@@ -1537,6 +1566,18 @@ pub struct ComputedStyle {
         if (_.overflow_x != OverflowMode.Visible) return true;
         if (_.overflow_y != OverflowMode.Visible && _.overflow_y != OverflowMode.Clip) return true;
         return false;
+    }
+
+    fn bgImageUrl(): []const u8 {
+        return _.bg_image_url_buf[0.._.bg_image_url_len];
+    }
+
+    fn containerName(): []const u8 {
+        return _.container_name_buf[0.._.container_name_len];
+    }
+
+    fn containerTypeStr(): []const u8 {
+        return _.container_type.asStr();
     }
 
     fn clipsOverflowY(): bool {
@@ -3250,9 +3291,82 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "background-image")) {
-            if (cg := ConicGradient.parse(val)) {
+            const trimmed_bg = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed_bg, "none")) {
+                if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                    _.bg_image_url_len = 0;
+                    _.conic_gradient = ConicGradient{};
+                }
+            } else if (cg := ConicGradient.parse(val)) {
                 if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
                     _.conic_gradient = cg;
+                    _.bg_image_url_len = 0;
+                }
+            } else if (u_pos := std.mem.indexOf(u8, trimmed_bg, "url(")) {
+                if (end_p := std.mem.indexOfScalarPos(u8, trimmed_bg, u_pos + 4, ')')) {
+                    const raw_u = std.mem.trim(u8, trimmed_bg[u_pos + 4 .. end_p], " \t\r\n\"'");
+                    if (raw_u.len > 0 && _.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                        const clen = @min(raw_u.len, _.bg_image_url_buf.len);
+                        @memcpy(_.bg_image_url_buf[0..clen], raw_u[0..clen]);
+                        _.bg_image_url_len = clen;
+                        _.conic_gradient = ConicGradient{};
+                    }
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "container-type")) {
+            if (ct := ContainerType.parse(val)) {
+                if (_.tryClaimSlot(PROP_CONTAINER_TYPE, weight)) {
+                    _.container_type = ct;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "container-name")) {
+            const cn = std.mem.trim(u8, val, " \t\r\n");
+            if (_.tryClaimSlot(PROP_CONTAINER_NAME, weight)) {
+                if (cn.len == 0 || std.ascii.eqlIgnoreCase(cn, "none")) {
+                    _.container_name_len = 0;
+                } else {
+                    const clen = @min(cn.len, _.container_name_buf.len);
+                    @memcpy(_.container_name_buf[0..clen], cn[0..clen]);
+                    _.container_name_len = clen;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "container")) {
+            const cv = std.mem.trim(u8, val, " \t\r\n");
+            if (slash := std.mem.indexOfScalar(u8, cv, '/')) {
+                const name_part = std.mem.trim(u8, cv[0..slash], " \t\r\n");
+                const type_part = std.mem.trim(u8, cv[slash + 1 ..], " \t\r\n");
+                if (_.tryClaimSlot(PROP_CONTAINER_NAME, weight)) {
+                    if (name_part.len == 0 || std.ascii.eqlIgnoreCase(name_part, "none")) {
+                        _.container_name_len = 0;
+                    } else {
+                        const clen = @min(name_part.len, _.container_name_buf.len);
+                        @memcpy(_.container_name_buf[0..clen], name_part[0..clen]);
+                        _.container_name_len = clen;
+                    }
+                }
+                if (ct := ContainerType.parse(type_part)) {
+                    if (_.tryClaimSlot(PROP_CONTAINER_TYPE, weight)) {
+                        _.container_type = ct;
+                    }
+                }
+            } else {
+                if (_.tryClaimSlot(PROP_CONTAINER_NAME, weight)) {
+                    if (cv.len == 0 || std.ascii.eqlIgnoreCase(cv, "none")) {
+                        _.container_name_len = 0;
+                    } else {
+                        const clen = @min(cv.len, _.container_name_buf.len);
+                        @memcpy(_.container_name_buf[0..clen], cv[0..clen]);
+                        _.container_name_len = clen;
+                    }
+                }
+                if (_.tryClaimSlot(PROP_CONTAINER_TYPE, weight)) {
+                    _.container_type = ContainerType.Normal;
                 }
             }
             return;
@@ -3457,14 +3571,29 @@ pub struct StyleRuleEntry {
     important_count: usize = 0;
 }
 
+pub struct ContainerRuleEntry {
+    name: []const u8 = "";
+    condition: []const u8 = "";
+    nested_body: []const u8 = "";
+}
+
 pub struct StyleSheet {
     rules: [64]StyleRuleEntry = [StyleRuleEntry{}; 64];
     rule_count: usize = 0;
+    container_rules: [8]ContainerRuleEntry = [ContainerRuleEntry{}; 8];
+    container_rule_count: usize = 0;
 
     static fn parse(css_text: []const u8, viewport_w: f32, is_dark: bool): StyleSheet {
         let sheet = StyleSheet{};
-        let raw_rules: [64]CssRule = [CssRule{}; 64];
-        const parsed_count = CssStylesheetParser.parseStylesheet(css_text, raw_rules[0..64]);
+        let raw_rules_opt = std.heap.page_allocator.alloc(CssRule, 64) catch null;
+        if (raw_rules_opt == null) return sheet;
+        let raw_rules = raw_rules_opt.?;
+        defer std.heap.page_allocator.free(raw_rules);
+        let ri_init: usize = 0;
+        while (ri_init < 64) : (ri_init += 1) {
+            raw_rules[ri_init] = CssRule{};
+        }
+        const parsed_count = CssStylesheetParser.parseStylesheet(css_text, raw_rules);
 
         let i: usize = 0;
         while (i < parsed_count && sheet.rule_count < 64) : (i += 1) {
@@ -3473,25 +3602,34 @@ pub struct StyleSheet {
                 StyleSheet.appendStyleRule(&sheet, r);
             } else if (r.kind == CssRuleKind.Media) {
                 if (r.media.matches(@as(f64, viewport_w), is_dark)) {
-                    let nested_rules: [32]CssRule = [CssRule{}; 32];
-                    const n_cnt = CssStylesheetParser.parseStylesheet(r.nested_body, nested_rules[0..32]);
-                    let j: usize = 0;
-                    while (j < n_cnt && sheet.rule_count < 64) : (j += 1) {
-                        if (nested_rules[j].kind == CssRuleKind.Style) {
-                            StyleSheet.appendStyleRule(&sheet, &nested_rules[j]);
+                    const nested_opt = std.heap.page_allocator.alloc(CssRule, 32) catch null;
+                    if (nested_opt != null) {
+                        let nested_rules = nested_opt.?;
+                        defer std.heap.page_allocator.free(nested_rules);
+                        let ni_init: usize = 0;
+                        while (ni_init < 32) : (ni_init += 1) {
+                            nested_rules[ni_init] = CssRule{};
+                        }
+                        const n_cnt = CssStylesheetParser.parseStylesheet(r.nested_body, nested_rules);
+                        let j: usize = 0;
+                        while (j < n_cnt && sheet.rule_count < 64) : (j += 1) {
+                            if (nested_rules[j].kind == CssRuleKind.Style) {
+                                StyleSheet.appendStyleRule(&sheet, &nested_rules[j]);
+                            }
                         }
                     }
                 }
+            } else if (r.kind == CssRuleKind.Container && sheet.container_rule_count < 8) {
+                StyleSheet.appendContainerRule(&sheet, r);
             }
         }
         return sheet;
     }
 
-    static fn appendStyleRule(sheet: *StyleSheet, r: *const CssRule) {
-        if (sheet.rule_count >= 64) return;
-        let entry = StyleRuleEntry {
-            selectors: SelectorList.parse(r.prelude),
-        };
+    static fn fillStyleRuleEntry(entry: *StyleRuleEntry, r: *const CssRule) {
+        entry.selectors = SelectorList.parse(r.prelude);
+        entry.decl_count = 0;
+        entry.important_count = 0;
         let p_i: usize = 0;
         while (p_i < r.prop_count) : (p_i += 1) {
             const prop = r.properties[p_i];
@@ -3507,8 +3645,35 @@ pub struct StyleSheet {
                 }
             }
         }
-        sheet.rules[sheet.rule_count] = entry;
+    }
+
+    static fn appendStyleRule(sheet: *StyleSheet, r: *const CssRule) {
+        if (sheet.rule_count >= 64) return;
+        StyleSheet.fillStyleRuleEntry(&sheet.rules[sheet.rule_count], r);
         sheet.rule_count += 1;
+    }
+
+    static fn appendContainerRule(sheet: *StyleSheet, r: *const CssRule) {
+        if (sheet.container_rule_count >= 8) return;
+        let prel = std.mem.trim(u8, r.prelude, " \t\r\n");
+        if (prel.len >= 10 && std.ascii.startsWithIgnoreCase(prel, "@container")) {
+            prel = std.mem.trim(u8, prel[10..], " \t\r\n");
+        }
+        let cname: []const u8 = "";
+        let cond: []const u8 = prel;
+        if (lp := std.mem.indexOfScalar(u8, prel, '(')) {
+            const before = std.mem.trim(u8, prel[0..lp], " \t\r\n");
+            if (before.len > 0 && !std.ascii.eqlIgnoreCase(before, "not")) {
+                cname = before;
+                cond = std.mem.trim(u8, prel[lp..], " \t\r\n");
+            }
+        }
+        sheet.container_rules[sheet.container_rule_count] = ContainerRuleEntry {
+            name: cname,
+            condition: cond,
+            nested_body: r.nested_body,
+        };
+        sheet.container_rule_count += 1;
     }
 }
 
@@ -3728,6 +3893,9 @@ pub struct Cascade {
                     }
                     continue;
                 }
+                if (!has_non_pseudo_sel && rule.selectors.count > 0) {
+                    continue;
+                }
                 if (best_spec := Matcher.matchBestSpecificity(doc, node_id_u32, &rule.selectors)) {
                     // Normal declarations
                     let d_i: usize = 0;
@@ -3768,6 +3936,251 @@ pub struct Cascade {
             }
 
             out_styles[nid] = style;
+        }
+    }
+
+    static fn parseContainerLengthPx(raw: []const u8, root_font_px: f32): f32? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (s.len == 0) return null;
+        if (l := CssLength.parse(s)) {
+            return @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+        }
+        return std.fmt.parseFloat(f32, s) catch null;
+    }
+
+    static fn evalSingleContainerClause(clause_raw: []const u8, cw: f32, ch: f32, has_block: bool, root_font_px: f32): bool {
+        let s = std.mem.trim(u8, clause_raw, " \t\r\n");
+        while (s.len >= 2 && s[0] == '(' && s[s.len - 1] == ')') {
+            s = std.mem.trim(u8, s[1 .. s.len - 1], " \t\r\n");
+        }
+        if (s.len == 0) return false;
+
+        // Colon syntax: min-width: 500px, max-width: 800px, width: 500px, min-inline-size: ...
+        if (colon := std.mem.indexOfScalar(u8, s, ':')) {
+            const prop = std.mem.trim(u8, s[0..colon], " \t\r\n");
+            const val_s = std.mem.trim(u8, s[colon + 1 ..], " \t\r\n");
+            const rhs_opt = Cascade.parseContainerLengthPx(val_s, root_font_px);
+            if (rhs_opt == null) return false;
+            const rhs = rhs_opt.?;
+            if (std.ascii.eqlIgnoreCase(prop, "min-width") || std.ascii.eqlIgnoreCase(prop, "min-inline-size")) {
+                return cw >= rhs;
+            }
+            if (std.ascii.eqlIgnoreCase(prop, "max-width") || std.ascii.eqlIgnoreCase(prop, "max-inline-size")) {
+                return cw <= rhs;
+            }
+            if (std.ascii.eqlIgnoreCase(prop, "width") || std.ascii.eqlIgnoreCase(prop, "inline-size")) {
+                return @abs(cw - rhs) < 0.01;
+            }
+            if (std.ascii.eqlIgnoreCase(prop, "min-height") || std.ascii.eqlIgnoreCase(prop, "min-block-size")) {
+                return has_block && ch >= rhs;
+            }
+            if (std.ascii.eqlIgnoreCase(prop, "max-height") || std.ascii.eqlIgnoreCase(prop, "max-block-size")) {
+                return has_block && ch <= rhs;
+            }
+            if (std.ascii.eqlIgnoreCase(prop, "height") || std.ascii.eqlIgnoreCase(prop, "block-size")) {
+                return has_block && @abs(ch - rhs) < 0.01;
+            }
+            return false;
+        }
+
+        // Range syntax: width > 730px, width < 300px, width >= 400px, width <= 400px, width = 400px
+        let op_pos: usize = 0;
+        let op_len: usize = 0;
+        let op_kind: u8 = 0; // 1=>, 2=<, 3=>=, 4=<=, 5==
+        let i: usize = 0;
+        while (i < s.len) : (i += 1) {
+            if (s[i] == '>') {
+                op_pos = i;
+                if (i + 1 < s.len && s[i + 1] == '=') { op_len = 2; op_kind = 3; } else { op_len = 1; op_kind = 1; }
+                break;
+            }
+            if (s[i] == '<') {
+                op_pos = i;
+                if (i + 1 < s.len && s[i + 1] == '=') { op_len = 2; op_kind = 4; } else { op_len = 1; op_kind = 2; }
+                break;
+            }
+            if (s[i] == '=') {
+                op_pos = i;
+                op_len = 1;
+                op_kind = 5;
+                break;
+            }
+        }
+        if (op_kind == 0) return false;
+        const lhs_s = std.mem.trim(u8, s[0..op_pos], " \t\r\n");
+        const rhs_s = std.mem.trim(u8, s[op_pos + op_len ..], " \t\r\n");
+
+        let lhs_is_prop = false;
+        let prop_val: f32 = 0.0;
+        if (std.ascii.eqlIgnoreCase(lhs_s, "width") || std.ascii.eqlIgnoreCase(lhs_s, "inline-size")) {
+            lhs_is_prop = true;
+            prop_val = cw;
+        } else if (std.ascii.eqlIgnoreCase(lhs_s, "height") || std.ascii.eqlIgnoreCase(lhs_s, "block-size")) {
+            if (!has_block) return false;
+            lhs_is_prop = true;
+            prop_val = ch;
+        }
+
+        if (lhs_is_prop) {
+            const cmp_opt = Cascade.parseContainerLengthPx(rhs_s, root_font_px);
+            if (cmp_opt == null) return false;
+            const cmp_v = cmp_opt.?;
+            return switch (op_kind) {
+                1 => prop_val > cmp_v,
+                2 => prop_val < cmp_v,
+                3 => prop_val >= cmp_v,
+                4 => prop_val <= cmp_v,
+                5 => @abs(prop_val - cmp_v) < 0.01,
+                * => false,
+            };
+        } else {
+            const cmp_opt = Cascade.parseContainerLengthPx(lhs_s, root_font_px);
+            if (cmp_opt == null) return false;
+            const cmp_v = cmp_opt.?;
+            if (std.ascii.eqlIgnoreCase(rhs_s, "width") || std.ascii.eqlIgnoreCase(rhs_s, "inline-size")) {
+                prop_val = cw;
+            } else if (std.ascii.eqlIgnoreCase(rhs_s, "height") || std.ascii.eqlIgnoreCase(rhs_s, "block-size")) {
+                if (!has_block) return false;
+                prop_val = ch;
+            } else {
+                return false;
+            }
+            return switch (op_kind) {
+                1 => cmp_v > prop_val,
+                2 => cmp_v < prop_val,
+                3 => cmp_v >= prop_val,
+                4 => cmp_v <= prop_val,
+                5 => @abs(cmp_v - prop_val) < 0.01,
+                * => false,
+            };
+        }
+    }
+
+    static fn evalContainerCondition(cond_raw: []const u8, cw: f32, ch: f32, has_block: bool, root_font_px: f32): bool {
+        const s = std.mem.trim(u8, cond_raw, " \t\r\n");
+        if (s.len == 0) return false;
+        let pos: usize = 0;
+        let seg_start: usize = 0;
+        let depth: i32 = 0;
+        let any_clause = false;
+        while (pos < s.len) : (pos += 1) {
+            if (s[pos] == '(') {
+                depth += 1;
+            } else if (s[pos] == ')') {
+                if (depth > 0) depth -= 1;
+            } else if (depth == 0 && pos + 5 <= s.len &&
+                (s[pos] == ' ' || s[pos] == '\t') &&
+                std.ascii.eqlIgnoreCase(s[pos + 1 .. pos + 4], "and") &&
+                (s[pos + 4] == ' ' || s[pos + 4] == '\t' || s[pos + 4] == '(')) {
+                const seg = std.mem.trim(u8, s[seg_start..pos], " \t\r\n");
+                if (seg.len > 0) {
+                    any_clause = true;
+                    if (!Cascade.evalSingleContainerClause(seg, cw, ch, has_block, root_font_px)) return false;
+                }
+                seg_start = pos + 4;
+                pos += 3;
+            }
+        }
+        const tail = std.mem.trim(u8, s[seg_start..], " \t\r\n");
+        if (tail.len > 0) {
+            any_clause = true;
+            if (!Cascade.evalSingleContainerClause(tail, cw, ch, has_block, root_font_px)) return false;
+        }
+        return any_clause;
+    }
+
+    /// Recomputes styles including `@container` queries resolved against the laid-out ancestor container boxes.
+    static fn computeStylesWithContainers(
+        doc: *const Document,
+        sheet: *const StyleSheet,
+        out_styles: []ComputedStyle,
+        box_widths: []const f32,
+        box_heights: []const f32,
+        root_font_px: f32,
+    ) {
+        Cascade.computeStyles(doc, sheet, out_styles, root_font_px);
+        if (sheet.container_rule_count == 0) return;
+
+        const total = doc.nodes.items.len;
+        let nid: usize = 1;
+        while (nid < total && nid < out_styles.len) : (nid += 1) {
+            const node = &doc.nodes.items[nid];
+            if (node.node_type != NodeType.Element) continue;
+            const node_id_u32: NodeId = @intCast(nid);
+            let source_order: u32 = 100000;
+            let matched_any = false;
+
+            let ci: usize = 0;
+            while (ci < sheet.container_rule_count) : (ci += 1) {
+                const cr = &sheet.container_rules[ci];
+                let anc = node.parent;
+                let found_anc: NodeId = NULL_NODE;
+                while (anc != NULL_NODE && @as(usize, anc) < out_styles.len) {
+                    const anc_st = &out_styles[@as(usize, anc)];
+                    if (anc_st.container_type != ContainerType.Normal) {
+                        const anc_cname = anc_st.container_name_buf[0..anc_st.container_name_len];
+                        if (cr.name.len == 0 || std.mem.eql(u8, anc_cname, cr.name)) {
+                            found_anc = anc;
+                            break;
+                        }
+                    }
+                    anc = doc.nodes.items[@as(usize, anc)].parent;
+                }
+                if (found_anc == NULL_NODE) continue;
+                const anc_idx = @as(usize, found_anc);
+                const cw = if (anc_idx < box_widths.len) box_widths[anc_idx] else 0.0;
+                const ch = if (anc_idx < box_heights.len) box_heights[anc_idx] else 0.0;
+                const has_block = (out_styles[anc_idx].container_type == ContainerType.Size);
+                if (!Cascade.evalContainerCondition(cr.condition, cw, ch, has_block, root_font_px)) continue;
+
+                const nested_opt = std.heap.page_allocator.alloc(CssRule, 8) catch null;
+                if (nested_opt == null) continue;
+                let nested_rules = nested_opt.?;
+                defer std.heap.page_allocator.free(nested_rules);
+                let ni_init: usize = 0;
+                while (ni_init < 8) : (ni_init += 1) {
+                    nested_rules[ni_init] = CssRule{};
+                }
+                const n_cnt = CssStylesheetParser.parseStylesheet(cr.nested_body, nested_rules);
+                const tmp_entry_opt = std.heap.page_allocator.alloc(StyleRuleEntry, 1) catch null;
+                if (tmp_entry_opt == null) continue;
+                let tmp_entry_slice = tmp_entry_opt.?;
+                defer std.heap.page_allocator.free(tmp_entry_slice);
+
+                let ri: usize = 0;
+                while (ri < n_cnt) : (ri += 1) {
+                    if (nested_rules[ri].kind != CssRuleKind.Style) continue;
+                    tmp_entry_slice[0] = StyleRuleEntry{};
+                    StyleSheet.fillStyleRuleEntry(&tmp_entry_slice[0], &nested_rules[ri]);
+                    const rule = &tmp_entry_slice[0];
+                    if (best_spec := Matcher.matchBestSpecificity(doc, node_id_u32, &rule.selectors)) {
+                        matched_any = true;
+                        let di: usize = 0;
+                        while (di < rule.decl_count) : (di += 1) {
+                            const w = Cascade.packWeight(false, false, best_spec, source_order);
+                            source_order += 1;
+                            out_styles[nid].applyProperty(&rule.declarations[di], w, root_font_px);
+                        }
+                        let ii: usize = 0;
+                        while (ii < rule.important_count) : (ii += 1) {
+                            const w = Cascade.packWeight(true, false, best_spec, source_order);
+                            source_order += 1;
+                            out_styles[nid].applyProperty(&rule.important_declarations[ii], w, root_font_px);
+                        }
+                    }
+                }
+            }
+
+            if (matched_any && node.inline_style.len > 0) {
+                let it = std.mem.splitScalar(u8, node.inline_style, ';');
+                while (raw_decl := it.next()) {
+                    if (prop := CssProperty.parse(raw_decl)) {
+                        const w = Cascade.packWeight(prop.important, true, 0, source_order);
+                        source_order += 1;
+                        out_styles[nid].applyProperty(&prop, w, root_font_px);
+                    }
+                }
+            }
         }
     }
 }

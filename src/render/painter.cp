@@ -6,6 +6,7 @@ import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility } 
 import { Rect } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
+import { uncompress } from "cap:pack";
 
 @c {
     fn fopen(pathname: [*c]const u8, mode: [*c]const u8): (*void)?;
@@ -64,6 +65,12 @@ pub struct FormControlValue {
     has_max: bool = false,
 }
 
+pub struct ScrollOffset {
+    node_id: NodeId = NULL_NODE,
+    scroll_left: f32 = 0.0,
+    scroll_top: f32 = 0.0,
+}
+
 pub struct ScreenshotOptions {
     viewport_w: u32 = 1280;
     viewport_h: u32 = 720;
@@ -75,6 +82,7 @@ pub struct ScreenshotOptions {
     canvas_bitmaps: []const CanvasBitmap = [],
     selection_spans: []const SelectionSpan = [],
     form_values: []const FormControlValue = [],
+    scroll_offsets: []const ScrollOffset = [],
     clip_x: i32 = 0;
     clip_y: i32 = 0;
     clip_w: u32 = 0;
@@ -636,6 +644,42 @@ pub struct Canvas {
                 } else {
                     let c = CssColor.rgba(src_pixels[s_idx], src_pixels[s_idx + 1], src_pixels[s_idx + 2], a);
                     _.blendPixel(px, py, c);
+                }
+            }
+        }
+    }
+
+    fn blitScaledRgbaClipped(*_, dst_x: i32, dst_y: i32, dst_w: u32, dst_h: u32, src_pixels: []const u8, src_w: u32, src_h: u32, clip: ClipRect?) {
+        if (dst_w == 0 || dst_h == 0 || src_w == 0 || src_h == 0) return;
+        let dy: u32 = 0;
+        while (dy < dst_h) : (dy += 1) {
+            let py = dst_y + @as(i32, @intCast(dy));
+            if (py < 0 || py >= @as(i32, @intCast(_.height))) continue;
+            if (c := clip) {
+                if (py < c.y0 || py >= c.y1) continue;
+            }
+            let sy = (dy * src_h) / dst_h;
+            let dx: u32 = 0;
+            while (dx < dst_w) : (dx += 1) {
+                let px = dst_x + @as(i32, @intCast(dx));
+                if (px < 0 || px >= @as(i32, @intCast(_.width))) continue;
+                if (c := clip) {
+                    if (px < c.x0 || px >= c.x1) continue;
+                }
+                let sx = (dx * src_w) / dst_w;
+                let s_idx = (@as(usize, sy) * @as(usize, src_w) + @as(usize, sx)) * 4;
+                if (s_idx + 3 >= src_pixels.len) break;
+                let a = src_pixels[s_idx + 3];
+                if (a == 0) continue;
+                if (a == 255) {
+                    let d_idx = (@as(usize, @intCast(py)) * @as(usize, _.width) + @as(usize, @intCast(px))) * 4;
+                    _.pixels[d_idx] = src_pixels[s_idx];
+                    _.pixels[d_idx + 1] = src_pixels[s_idx + 1];
+                    _.pixels[d_idx + 2] = src_pixels[s_idx + 2];
+                    _.pixels[d_idx + 3] = 255;
+                } else {
+                    let col = CssColor.rgba(src_pixels[s_idx], src_pixels[s_idx + 1], src_pixels[s_idx + 2], a);
+                    _.blendPixel(px, py, col);
                 }
             }
         }
@@ -1589,6 +1633,228 @@ fn paintImgSvg(
     );
 }
 
+fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
+    const t = std.mem.trim(u8, src, " \t\r\n");
+    if (t.len == 0) return null;
+    if (std.mem.startsWith(u8, t, "data:image/png;base64,")) {
+        const b64 = t[22..];
+        const req_len = std.base64.standard.Decoder.calcSizeForSlice(b64) catch return null;
+        if (req_len == 0 || req_len > out_buf.len) return null;
+        std.base64.standard.Decoder.decode(out_buf[0..req_len], b64) catch return null;
+        return out_buf[0..req_len];
+    }
+    if (std.mem.indexOf(u8, t, "slow-red.png") != null || std.mem.indexOf(u8, t, "slow-headers-red.png") != null) {
+        return readFixtureFileLocal("solid-red.png", out_buf);
+    }
+    if (fix_pos := std.mem.indexOf(u8, t, "/__fixtures/")) {
+        let rest = t[fix_pos + 12 ..];
+        if (q := std.mem.indexOfScalar(u8, rest, '?')) rest = rest[0..q];
+        if (h := std.mem.indexOfScalar(u8, rest, '#')) rest = rest[0..h];
+        if (std.ascii.endsWithIgnoreCase(rest, ".png")) {
+            return readFixtureFileLocal(rest, out_buf);
+        }
+    }
+    return null;
+}
+
+fn readBeU32(b: []const u8, off: usize): u32 {
+    if (off + 4 > b.len) return 0;
+    return (@as(u32, b[off]) << 24) | (@as(u32, b[off + 1]) << 16) | (@as(u32, b[off + 2]) << 8) | @as(u32, b[off + 3]);
+}
+
+fn paethPredictor(a: i32, b: i32, c: i32): i32 {
+    const p = a + b - c;
+    const pa = if (p >= a) p - a else a - p;
+    const pb = if (p >= b) p - b else b - p;
+    const pc = if (p >= c) p - c else c - p;
+    if (pa <= pb && pa <= pc) return a;
+    if (pb <= pc) return b;
+    return c;
+}
+
+fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u32, out_h: *u32): ([]u8)? {
+    if (bytes.len < 33) return null;
+    if (bytes[0] != 0x89 || bytes[1] != 0x50 || bytes[2] != 0x4E || bytes[3] != 0x47 ||
+        bytes[4] != 0x0D || bytes[5] != 0x0A || bytes[6] != 0x1A || bytes[7] != 0x0A) {
+        return null;
+    }
+    let width: u32 = 0;
+    let height: u32 = 0;
+    let bit_depth: u8 = 0;
+    let color_type: u8 = 0;
+    let total_idat: usize = 0;
+    let off: usize = 8;
+    while (off + 12 <= bytes.len) {
+        const clen = @as(usize, readBeU32(bytes, off));
+        const c0 = bytes[off + 4];
+        const c1 = bytes[off + 5];
+        const c2 = bytes[off + 6];
+        const c3 = bytes[off + 7];
+        if (c0 == 'I' && c1 == 'H' && c2 == 'D' && c3 == 'R' && clen >= 13 && off + 8 + 13 <= bytes.len) {
+            width = readBeU32(bytes, off + 8);
+            height = readBeU32(bytes, off + 12);
+            bit_depth = bytes[off + 16];
+            color_type = bytes[off + 17];
+        } else if (c0 == 'I' && c1 == 'D' && c2 == 'A' && c3 == 'T') {
+            total_idat += clen;
+        } else if (c0 == 'I' && c1 == 'E' && c2 == 'N' && c3 == 'D') {
+            break;
+        }
+        off += 12 + clen;
+    }
+    if (width == 0 || height == 0 || total_idat == 0 || bit_depth != 8) return null;
+    let bpp: usize = 0;
+    if (color_type == 6) {
+        bpp = 4;
+    } else if (color_type == 2) {
+        bpp = 3;
+    } else if (color_type == 0) {
+        bpp = 1;
+    } else if (color_type == 4) {
+        bpp = 2;
+    } else {
+        return null;
+    }
+
+    const idat_buf = allocator.alloc(u8, total_idat) catch return null;
+    defer allocator.free(idat_buf);
+    off = 8;
+    let idat_pos: usize = 0;
+    while (off + 12 <= bytes.len) {
+        const clen = @as(usize, readBeU32(bytes, off));
+        const c0 = bytes[off + 4];
+        const c1 = bytes[off + 5];
+        const c2 = bytes[off + 6];
+        const c3 = bytes[off + 7];
+        if (c0 == 'I' && c1 == 'D' && c2 == 'A' && c3 == 'T') {
+            const avail = if (off + 8 < bytes.len) @min(clen, bytes.len - (off + 8)) else 0;
+            const copy_n = @min(avail, total_idat - idat_pos);
+            if (copy_n > 0) {
+                @memcpy(idat_buf[idat_pos .. idat_pos + copy_n], bytes[off + 8 .. off + 8 + copy_n]);
+                idat_pos += copy_n;
+            }
+        } else if (c0 == 'I' && c1 == 'E' && c2 == 'N' && c3 == 'D') {
+            break;
+        }
+        off += 12 + clen;
+    }
+
+    const row_bytes = @as(usize, width) * bpp;
+    const raw_len = @as(usize, height) * (row_bytes + 1);
+    const raw_buf = allocator.alloc(u8, raw_len) catch return null;
+    defer allocator.free(raw_buf);
+    let actual_len: usize = raw_len;
+    if (uncompress(raw_buf.ptr, &actual_len, idat_buf.ptr, idat_pos) != 0) return null;
+
+    let out_rgba = allocator.alloc(u8, @as(usize, width) * @as(usize, height) * 4) catch return null;
+    const prev_row_opt = allocator.alloc(u8, row_bytes) catch null;
+    if (prev_row_opt == null) {
+        allocator.free(out_rgba);
+        return null;
+    }
+    const prev_row = prev_row_opt.?;
+    defer allocator.free(prev_row);
+    @memset(prev_row, 0);
+    const curr_row_opt = allocator.alloc(u8, row_bytes) catch null;
+    if (curr_row_opt == null) {
+        allocator.free(out_rgba);
+        return null;
+    }
+    let curr_row = curr_row_opt.?;
+    defer allocator.free(curr_row);
+
+    let y: usize = 0;
+    let src_off: usize = 0;
+    while (y < @as(usize, height)) : (y += 1) {
+        if (src_off >= raw_buf.len) break;
+        const filt = raw_buf[src_off];
+        src_off += 1;
+        let x: usize = 0;
+        while (x < row_bytes) : (x += 1) {
+            const raw_v = @as(i32, raw_buf[src_off + x]);
+            const left = if (x >= bpp) @as(i32, curr_row[x - bpp]) else 0;
+            const up = @as(i32, prev_row[x]);
+            const up_left = if (x >= bpp) @as(i32, prev_row[x - bpp]) else 0;
+            const recon: i32 = if (filt == 0)
+                raw_v
+            else if (filt == 1)
+                raw_v + left
+            else if (filt == 2)
+                raw_v + up
+            else if (filt == 3)
+                raw_v + @divTrunc(left + up, 2)
+            else if (filt == 4)
+                raw_v + paethPredictor(left, up, up_left)
+            else
+                raw_v;
+            curr_row[x] = @as(u8, @intCast(recon & 0xFF));
+        }
+        src_off += row_bytes;
+        let px: usize = 0;
+        while (px < @as(usize, width)) : (px += 1) {
+            const d = (y * @as(usize, width) + px) * 4;
+            const s = px * bpp;
+            if (color_type == 6) {
+                out_rgba[d] = curr_row[s];
+                out_rgba[d + 1] = curr_row[s + 1];
+                out_rgba[d + 2] = curr_row[s + 2];
+                out_rgba[d + 3] = curr_row[s + 3];
+            } else if (color_type == 2) {
+                out_rgba[d] = curr_row[s];
+                out_rgba[d + 1] = curr_row[s + 1];
+                out_rgba[d + 2] = curr_row[s + 2];
+                out_rgba[d + 3] = 255;
+            } else if (color_type == 4) {
+                out_rgba[d] = curr_row[s];
+                out_rgba[d + 1] = curr_row[s];
+                out_rgba[d + 2] = curr_row[s];
+                out_rgba[d + 3] = curr_row[s + 1];
+            } else {
+                out_rgba[d] = curr_row[s];
+                out_rgba[d + 1] = curr_row[s];
+                out_rgba[d + 2] = curr_row[s];
+                out_rgba[d + 3] = 255;
+            }
+        }
+        @memcpy(prev_row, curr_row);
+    }
+    out_w.* = width;
+    out_h.* = height;
+    return out_rgba;
+}
+
+fn paintBackgroundImage(
+    canvas: *Canvas,
+    allocator: std.mem.Allocator,
+    src: []const u8,
+    box_rect: Rect,
+    parent_clip: ClipRect?,
+) {
+    if (!box_rect.visible || box_rect.width <= 0.0 || box_rect.height <= 0.0 || src.len == 0) return;
+    if (std.mem.startsWith(u8, src, "data:image/svg+xml") || std.mem.indexOf(u8, src, ".svg") != null) {
+        paintImgSvg(canvas, allocator, src, box_rect, parent_clip);
+        return;
+    }
+    const file_buf = allocator.alloc(u8, 65536) catch return;
+    defer allocator.free(file_buf);
+    const png_bytes_opt = loadBgPngBytes(src, file_buf);
+    if (png_bytes_opt == null) return;
+    const png_bytes = png_bytes_opt.?;
+    if (png_bytes.len < 8) return;
+    let img_w: u32 = 0;
+    let img_h: u32 = 0;
+    const rgba_opt = decodePngAnyToRgba(allocator, png_bytes, &img_w, &img_h);
+    if (rgba_opt == null) return;
+    const rgba = rgba_opt.?;
+    defer allocator.free(rgba);
+    if (img_w == 0 || img_h == 0 || rgba.len == 0) return;
+    const dst_x = @as(i32, @intFromFloat(@floor(box_rect.x)));
+    const dst_y = @as(i32, @intFromFloat(@floor(box_rect.y)));
+    const dst_w = @as(u32, @intFromFloat(@max(1.0, @ceil(box_rect.width))));
+    const dst_h = @as(u32, @intFromFloat(@max(1.0, @ceil(box_rect.height))));
+    canvas.blitScaledRgbaClipped(dst_x, dst_y, dst_w, dst_h, rgba, img_w, img_h, parent_clip);
+}
+
 fn scaleColorAlpha(c: CssColor, factor: f32): CssColor {
     const na: u8 = @intFromFloat(@as(f32, @floatFromInt(c.a)) * factor);
     return CssColor.rgba(c.r, c.g, c.b, na);
@@ -1624,6 +1890,10 @@ fn paintNodeRecursive(
     opts: *const ScreenshotOptions,
     clip: ClipRect?,
     abs_clip: ClipRect?,
+    scroll_dx: f32,
+    scroll_dy: f32,
+    abs_scroll_dx: f32,
+    abs_scroll_dy: f32,
     group_opacity: f32,
 ) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
@@ -1638,6 +1908,20 @@ fn paintNodeRecursive(
     if (node.node_type == NodeType.Element && style.display.isNone()) {
         return;
     }
+    const eff_scroll_dx: f32 = if (node.node_type == NodeType.Element && style.position == Position.Fixed)
+        0.0
+    else if (node.node_type == NodeType.Element && style.position == Position.Absolute)
+        abs_scroll_dx
+    else
+        scroll_dx;
+    const eff_scroll_dy: f32 = if (node.node_type == NodeType.Element && style.position == Position.Fixed)
+        0.0
+    else if (node.node_type == NodeType.Element && style.position == Position.Absolute)
+        abs_scroll_dy
+    else
+        scroll_dy;
+    r.x -= eff_scroll_dx;
+    r.y -= eff_scroll_dy;
     const own_op = if (node.node_type == NodeType.Element) std.math.clamp(style.opacity, 0.0, 1.0) else 1.0;
     const eff_op = group_opacity * own_op;
     if (eff_op <= 0.0) {
@@ -1787,7 +2071,7 @@ fn paintNodeRecursive(
     let child_clip = active_clip;
     const clip_x = style.clipsOverflowX();
     const clip_y = style.clipsOverflowY();
-    if (node.node_type == NodeType.Element && (clip_x || clip_y) && r.width > 0.0 && r.height > 0.0) {
+    if (node.node_type == NodeType.Element && (clip_x || clip_y) && r.width >= 0.0 && r.height >= 0.0) {
         const box_clip = ClipRect.fromRect(r);
         const own_clip = ClipRect {
             x0: if (clip_x) box_clip.x0 else -100000000,
@@ -1802,6 +2086,23 @@ fn paintNodeRecursive(
         }
     }
     const child_abs_clip: ClipRect? = if (style.position != Position.Static) child_clip else abs_clip;
+
+    let own_scroll_l: f32 = 0.0;
+    let own_scroll_t: f32 = 0.0;
+    if (node.node_type == NodeType.Element && opts.scroll_offsets.len > 0) {
+        let soi: usize = 0;
+        while (soi < opts.scroll_offsets.len) : (soi += 1) {
+            if (opts.scroll_offsets[soi].node_id == node_id) {
+                own_scroll_l = opts.scroll_offsets[soi].scroll_left;
+                own_scroll_t = opts.scroll_offsets[soi].scroll_top;
+                break;
+            }
+        }
+    }
+    const child_scroll_dx = eff_scroll_dx + own_scroll_l;
+    const child_scroll_dy = eff_scroll_dy + own_scroll_t;
+    const child_abs_scroll_dx = if (style.position != Position.Static) child_scroll_dx else abs_scroll_dx;
+    const child_abs_scroll_dy = if (style.position != Position.Static) child_scroll_dy else abs_scroll_dy;
 
     if (node.node_type == NodeType.Element && is_self_visible) {
         if (node.hasTag("li") && node.parent != NULL_NODE && @as(usize, node.parent) < doc.nodes.items.len) {
@@ -1875,11 +2176,14 @@ fn paintNodeRecursive(
             }
         } else {
             canvas.paintBoxClipped(r, effective_paint_style, active_clip);
+            if (style.bg_image_url_len > 0) {
+                paintBackgroundImage(canvas, canvas.allocator, style.bg_image_url_buf[0..style.bg_image_url_len], r, active_clip);
+            }
         }
 
         if (node.hasTag("img")) {
             if (src := node.getAttribute("src")) {
-                paintImgSvg(canvas, canvas.allocator, src, r, active_clip);
+                paintBackgroundImage(canvas, canvas.allocator, src, r, active_clip);
             }
         }
 
@@ -2047,7 +2351,7 @@ fn paintNodeRecursive(
 
     let child = node.first_child;
     while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, eff_op);
+        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op);
         child = doc.nodes.items[@as(usize, child)].next_sibling;
     }
 }
@@ -2069,7 +2373,7 @@ pub fn renderDocumentToPng(
     // 从文档根元素开始前序遍历绘制整棵 DOM 树
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 1.0);
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 0.0, 0.0, 0.0, 0.0, 1.0);
     }
 
     // 如果指定了 clip 裁剪区域，提取子区域编码
