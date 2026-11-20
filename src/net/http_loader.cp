@@ -45,6 +45,8 @@ pub struct HttpLoaderResult {
     content_disposition: ([]const u8)? = null,
     raw_body: []const u8 = "",
     raw_body_base64: bool = false,
+    redirect_urls: [6][]const u8 = ["", "", "", "", "", ""],
+    redirect_count: usize = 0,
 }
 
 let g_fresh_extra_headers: bool = false;
@@ -326,14 +328,31 @@ pub struct HttpLoader {
         }
         return std.mem.endsWith(u8, path_only, "/loud-redirect") ||
             std.mem.endsWith(u8, path_only, "/cors-redirect") ||
+            std.mem.endsWith(u8, path_only, "/redirect-hop") ||
             std.mem.endsWith(u8, path_only, "/invalid-location-redirect");
     }
 
     pub static fn resolveMockRedirectTarget(url: []const u8, out_buf: []u8): ([]const u8)? {
         if (!HttpLoader.isMockRedirectUrl(url)) return null;
+        let path_only = url;
+        if (q_idx := std.mem.indexOfScalar(u8, path_only, '?')) {
+            path_only = path_only[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, path_only, '#')) {
+            path_only = path_only[0..h_idx];
+        }
+        let hop_buf: [128]u8 = undefined;
         let target_raw: []const u8 = "/__fixtures/echo-headers.json";
         let decoded_buf: [1024]u8 = undefined;
-        if (raw_to := MockFixtures.extractQueryParam(url, "to")) {
+        if (std.mem.endsWith(u8, path_only, "/redirect-hop")) {
+            const raw_n = MockFixtures.extractQueryParam(url, "n") ?? "1";
+            const hop = std.fmt.parseInt(u32, raw_n, 10) catch 1;
+            if (hop >= 3) {
+                target_raw = "/__fixtures/lifecycle.html";
+            } else {
+                target_raw = std.fmt.bufPrint(&hop_buf, "/__fixtures/redirect-hop?n={d}", .{ hop + 1 }) catch "/__fixtures/lifecycle.html";
+            }
+        } else if (raw_to := MockFixtures.extractQueryParam(url, "to")) {
             target_raw = MockFixtures.decodeUri(raw_to, &decoded_buf);
         }
         return HttpLoader.resolveRelativeUrl(url, target_raw, out_buf);
@@ -423,7 +442,27 @@ pub struct HttpLoader {
                 const next_url = session.allocator.dupe(u8, next_slice) catch return error.OutOfMemory;
                 const cross_origin = !HttpLoader.isSameOrigin(url, next_url);
                 const next_strip = strip_credentials || cross_origin;
-                return HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip);
+                let res = HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip)?;
+                if (redirect_depth < 6) {
+                    res.redirect_urls[redirect_depth] = session.allocator.dupe(u8, url) catch url;
+                }
+                res.redirect_count = @max(res.redirect_count, redirect_depth + 1);
+                return res;
+            }
+        }
+
+        // 2.45. Enforce document size cap for oversize-doc fixture
+        if (std.mem.indexOf(u8, url, "/oversize-doc.html") != null) {
+            if (endless := MockFixtures.extractQueryParam(url, "endless")) {
+                if (std.mem.eql(u8, endless, "1")) {
+                    return error.FileTooBig;
+                }
+            }
+            if (declared := MockFixtures.extractQueryParam(url, "declared")) {
+                const decl_bytes = std.fmt.parseInt(usize, declared, 10) catch 0;
+                if (decl_bytes > 16 * 1024 * 1024) {
+                    return error.FileTooBig;
+                }
             }
         }
 
@@ -439,8 +478,9 @@ pub struct HttpLoader {
             };
             const ctx_ptr: (*const RequestContext)? = if (initiator_url.len > 0) &req_ctx else null;
             if (fixture_res := MockFixtures.handleFixtureRequest(url, "", ua, out_buf, active_jar, extra, ctx_ptr, strip_credentials)) {
+                const st_code: u32 = if (std.mem.indexOf(u8, url, "/status-204") != null) 204 else 200;
                 return HttpLoaderResult{
-                    status_code: 200,
+                    status_code: st_code,
                     final_url: url,
                     html: fixture_res,
                     content_type: MockFixtures.getContentType(url),
@@ -608,7 +648,12 @@ pub struct HttpLoader {
                     const resolved = HttpLoader.resolveRelativeUrl(url, loc_val, &next_buf);
                     const next_url = session.allocator.dupe(u8, resolved) catch loc_val;
                     const next_strip = strip_credentials || !HttpLoader.isSameOrigin(url, next_url);
-                    return HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip);
+                    let res = HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip)?;
+                    if (redirect_depth < 6) {
+                        res.redirect_urls[redirect_depth] = session.allocator.dupe(u8, url) catch url;
+                    }
+                    res.redirect_count = @max(res.redirect_count, redirect_depth + 1);
+                    return res;
                 }
             }
         }

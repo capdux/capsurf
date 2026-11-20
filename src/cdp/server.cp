@@ -540,7 +540,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 return;
             };
             defer std.heap.c_allocator.free(fix_buf);
-            if (body := MockFixtures.handleFixtureRequest(target, "", _.session.user_agent, fix_buf, null)) {
+            let hdr_json_buf: [8192]u8 = undefined;
+            const extra_json = CdpServer.buildExtraHeadersJson(req, &hdr_json_buf);
+            if (body := MockFixtures.handleFixtureRequest(target, "", _.session.user_agent, fix_buf, null, extra_json)) {
                 const ct = MockFixtures.getContentType(path);
                 sendHttpResponse(client_fd, "200 OK", ct, body)?;
                 return;
@@ -565,6 +567,71 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
         }
         return null;
+    }
+
+    static fn appendEscapedJsonStr(src: []const u8, out_buf: []u8, pos: *usize) {
+        let i: usize = 0;
+        while (i < src.len && pos.* + 2 < out_buf.len) : (i += 1) {
+            const b = src[i];
+            if (b == '"' || b == '\\') {
+                out_buf[pos.*] = '\\';
+                pos.* += 1;
+                out_buf[pos.*] = b;
+                pos.* += 1;
+            } else if (b == '\n') {
+                out_buf[pos.*] = '\\';
+                pos.* += 1;
+                out_buf[pos.*] = 'n';
+                pos.* += 1;
+            } else if (b == '\r') {
+                out_buf[pos.*] = '\\';
+                pos.* += 1;
+                out_buf[pos.*] = 'r';
+                pos.* += 1;
+            } else {
+                out_buf[pos.*] = b;
+                pos.* += 1;
+            }
+        }
+    }
+
+    static fn buildExtraHeadersJson(req: []const u8, out_buf: []u8): []const u8 {
+        if (out_buf.len < 4) return "{}";
+        let pos: usize = 0;
+        out_buf[pos] = '{';
+        pos += 1;
+        let first = true;
+        let it = std.mem.splitSequence(u8, req, "\r\n");
+        * = it.next();
+        while (line := it.next()) {
+            if (line.len == 0) break;
+            if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+                const hdr_name = std.mem.trim(u8, line[0..colon], " \t");
+                const hdr_val = std.mem.trim(u8, line[colon + 1..], " \t");
+                if (hdr_name.len == 0) continue;
+                if (pos + hdr_name.len + hdr_val.len + 16 >= out_buf.len) break;
+                if (!first) {
+                    out_buf[pos] = ',';
+                    pos += 1;
+                }
+                first = false;
+                out_buf[pos] = '"';
+                pos += 1;
+                CdpServer.appendEscapedJsonStr(hdr_name, out_buf, &pos);
+                out_buf[pos] = '"';
+                pos += 1;
+                out_buf[pos] = ':';
+                pos += 1;
+                out_buf[pos] = '"';
+                pos += 1;
+                CdpServer.appendEscapedJsonStr(hdr_val, out_buf, &pos);
+                out_buf[pos] = '"';
+                pos += 1;
+            }
+        }
+        out_buf[pos] = '}';
+        pos += 1;
+        return out_buf[0..pos];
     }
 
     static fn isAllowedWsOrigin(req: []const u8): bool {

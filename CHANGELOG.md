@@ -2148,3 +2148,10 @@
 
 ## Phase 162: Full-Repo `cap test -m` Explicit Imports (`dom` 12/12, `eval` 8/8, `net` 10/11)
 - 为 10 个 `test/**/*.cp` 补齐 `-m` 显式导入（`NodeData`/`ParsedAttr`/`ImportMapScopeGroup`/`HttpLoaderResult`/`JSValue`/`FrameContext` 等），`dom`/`eval`/`html`/`render`/`css`/`layout`/`tty` 全目录 100% PASS。
+
+## Phase 163-164: `fixture-script-escaping` 1/1, `oversize-document` 3/3, `navigation-fidelity` 4/4, `script-text` 1/1 & `page-module-registry` 5/5 (14/14 PASS)
+- **`src/cdp/{server,page,session}.cp` & `src/net/{mock_fixtures,http_loader}.cp`**：
+  - 实装 HTTP echo 请求头透传与 `\u003c` 转义、`net::ERR_FILE_TOO_BIG` (`@errorName`)、跳转链 `redirectResponse`/`computeNextReferrer` 与 `#fragment` 剥离，连同 `script-text` & `page-module-registry` 共 **14/14 PASS**。
+
+## Phase 165: Whitebox Unit Test Batch Recovery (`test/net` 11/11, `test/cdp` 22/27)
+- 更新 12 个 `test/cdp/*.cp` 至 `[64]CdpEvent`、修复 `test_document_kind.cp` 与 `test_mock_fixtures.cp`，`test/net/` 达 **11/11 (100%)**、`test/cdp/` 达 **22/27 PASS**。

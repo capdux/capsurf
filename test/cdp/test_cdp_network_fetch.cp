@@ -18,7 +18,7 @@ fn testEmulationMetrics()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Mobile iPhone viewport override (375x667, dsf 2, mobile true)
@@ -60,7 +60,7 @@ fn testFetchInterception()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Enable interception with wildcard pattern
@@ -119,7 +119,7 @@ fn testNetworkCookiesAndHeaders()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Initial cookie state must be empty

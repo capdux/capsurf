@@ -292,13 +292,16 @@ pub struct MockFixtures {
     static fn escapeJson(src: []const u8, dst: []u8): []const u8 {
         let out_idx: usize = 0;
         let in_idx: usize = 0;
-        while (in_idx < src.len && out_idx + 2 < dst.len) : (in_idx += 1) {
+        while (in_idx < src.len && out_idx + 6 < dst.len) : (in_idx += 1) {
             const b = src[in_idx];
             if (b == '"' || b == '\\') {
                 dst[out_idx] = '\\';
                 out_idx += 1;
                 dst[out_idx] = b;
                 out_idx += 1;
+            } else if (b == '<') {
+                @memcpy(dst[out_idx .. out_idx + 6], "\\u003c");
+                out_idx += 6;
             } else if (b == '\n') {
                 dst[out_idx] = '\\';
                 out_idx += 1;
@@ -406,8 +409,14 @@ pub struct MockFixtures {
             if (strip_credentials && (std.mem.eql(u8, lk, "authorization") || std.mem.eql(u8, lk, "cookie"))) continue;
             if (has_jar_cookie && std.mem.eql(u8, lk, "cookie")) continue;
 
+            let val_to_esc = raw_v;
+            if (std.mem.eql(u8, lk, "referer")) {
+                if (hash_pos := std.mem.indexOfScalar(u8, raw_v, '#')) {
+                    val_to_esc = raw_v[0..hash_pos];
+                }
+            }
             let esc_val_buf: [1024]u8 = undefined;
-            const esc_val = MockFixtures.escapeJson(raw_v, &esc_val_buf);
+            const esc_val = MockFixtures.escapeJson(val_to_esc, &esc_val_buf);
 
             const chunk = std.fmt.bufPrint(
                 dst[dst_len.*..],
@@ -840,6 +849,13 @@ pub struct MockFixtures {
 
         if (std.mem.indexOf(u8, url, "/status-204") != null) {
             return "";
+        }
+
+        if (std.mem.indexOf(u8, url, "/oversize-doc.html") != null) {
+            const small_doc = "<html><body>small</body></html>";
+            const len = @min(small_doc.len, out_buf.len);
+            @memcpy(out_buf[0..len], small_doc[0..len]);
+            return out_buf[0..len];
         }
 
         // 2.1. /corp-script-page.html (Fetch CORP classic script fixture)

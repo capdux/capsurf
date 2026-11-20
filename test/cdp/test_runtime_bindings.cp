@@ -19,7 +19,7 @@ pub fn main() {
         session.runtime_enabled = true;
 
         let out_buf: [4096]u8 = [0; 4096];
-        let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+        let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
         let evt_cnt: usize = 0;
 
         const req_binding = CdpRequest{
@@ -38,7 +38,7 @@ pub fn main() {
         // 2. Test binding call and event emission
         const call_expr = "window.ksTestBinding('payload-xyz'); null";
         let call_res_buf: [4096]u8 = [0; 4096];
-        let call_evts: [4]CdpEvent = [CdpEvent{}; 4];
+        let call_evts: [64]CdpEvent = [CdpEvent{}; 64];
         let call_evt_cnt: usize = 0;
 
         const req_eval = CdpRequest{

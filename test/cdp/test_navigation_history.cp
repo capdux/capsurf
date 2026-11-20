@@ -17,7 +17,7 @@ fn testInitialState() {
     defer session.deinit();
 
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const req = CdpRequest{
@@ -45,7 +45,7 @@ fn testMultipleNavigations() {
     defer session.deinit();
 
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // Navigate to Page 1
@@ -92,7 +92,7 @@ fn testReload() {
     defer session.deinit();
 
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const html_v1 = "<!DOCTYPE html><html><head><title>Version 1</title></head><body><h1>V1</h1></body></html>";
@@ -120,7 +120,7 @@ fn testBackwardAndTruncation() {
     defer session.deinit();
 
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     session.navigate("<!DOCTYPE html><html><head><title>Page A</title></head><body><h1>A</h1></body></html>", "https://example.com/a", "") catch unreachable;
@@ -156,7 +156,7 @@ fn testSameDocPoll() {
     // Test manual pushNavigatedWithinDocEvent
     session.pushNavigatedWithinDocEvent("https://example.com/spa#section-intro");
 
-    let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let polled_evts: [64]CdpEvent = [CdpEvent{}; 64];
     const polled_cnt = session.pollNavigatedWithinDocEvents(&polled_evts);
     check(polled_cnt == 1, "polled 1 event");
     check(std.mem.eql(u8, polled_evts[0].method, "Page.navigatedWithinDocument"), "event method is Page.navigatedWithinDocument");
@@ -165,7 +165,7 @@ fn testSameDocPoll() {
 
     // Verify history recorded the same-doc push
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const req_hist = CdpRequest{ id: 30, method: "Page.getNavigationHistory", params_raw: "{}" };
@@ -184,7 +184,7 @@ fn testJsPushStateSecurity() {
 
     // Valid same-origin pushState
     let out_buf: [4096]u8 = [0; 4096];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const req_eval1 = CdpRequest{
@@ -200,7 +200,7 @@ fn testJsPushStateSecurity() {
     check(std.mem.indexOf(u8, out_evts[0].params_json, "https://ks.invalid/app#details") != null, "event has url");
 
     // Invalid cross-origin pushState: should be rejected by canRewriteDocumentUrl
-    let out_evts2: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts2: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt2: usize = 0;
 
     const req_eval2 = CdpRequest{

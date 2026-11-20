@@ -23,7 +23,7 @@ fn testCaptureScreenshot()! {
     session.viewport_height = 300.0;
 
     let out_buf: [131072]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // Navigate to page
@@ -87,7 +87,7 @@ fn testDispatchMouseEvent()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><button id='action-btn' onclick='globalThis.clickCount = (globalThis.clickCount || 0) + 1; globalThis.btnClicked = true;' style='width: 120px; height: 50px;'>Click Me</button></body></html>";
@@ -164,7 +164,7 @@ fn testInsertText()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><input id='search-box' value='' style='width: 200px; height: 30px;' /><div id='target-div' style='width: 150px; height: 40px;'>Init</div></body></html>";
@@ -246,7 +246,7 @@ fn testScreencastProtocol()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Page.startScreencast
@@ -285,7 +285,7 @@ fn testDispatchKeyPressEvent()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><script>" ++

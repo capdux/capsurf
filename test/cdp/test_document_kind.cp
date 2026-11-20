@@ -121,7 +121,7 @@ pub fn main() {
 
         let out_buf_svg2: [2048]u8 = [0; 2048];
         const svg_meta = "<svg><meta charset=\"utf-8\"><circle/></svg>";
-        const html2 = svgDocumentHtml(svg_meta, 800, 600, &out_buf_svg2);
+        const html2: []const u8 = svgDocumentHtml(svg_meta, 800, 600, &out_buf_svg2);
         check("svg meta lift", std.mem.indexOf(u8, html2, "<meta charset=\"utf-8\">") != null);
         check("svg auto viewBox", std.mem.indexOf(u8, html2, "viewBox=\"0 0 800 600\"") != null);
         check("svg 100vw/vh", std.mem.indexOf(u8, html2, "width:100vw;height:100vh;") != null);

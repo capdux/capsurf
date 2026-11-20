@@ -1655,3 +1655,7 @@
 
 ## Phase 159 模块 SRI 拒绝表与 `modulepreload` Pin 校验方案 (`src/cdp/`)
 1. **静态/动态统一 Pin 与拒绝表 (`session.cp`, `session_hooks.cp`)**：`<script type="module">` SRI 失败即写入 `rejected_modules` 阻止后续同 URL 重载；`<link rel="modulepreload" integrity>` 同步至 `__capsurf_modulepreload_pins`，供 `sessionModuleLoader` 与 `__capsurf_dyn_import`/`loadModuleGraph` 统一调用 `verifySriIntegrity` 校验。
+
+## Phase 163 `@errorName` 错误匹配与重定向 Referrer 链方案 (`src/cdp/`, `src/net/`)
+1. **错误联合匹配规避 (`page.cp`)**：`cp_eq(anyerror, error{...})` 在编译器期可能求值为 `false`，统一使用 `@errorName(e)` 匹配 `"FileTooBig"` / `"InvalidUrl"` 确保稳定输出 `net::ERR_FILE_TOO_BIG` 与 `Cannot navigate to invalid URL`。
+2. **重定向链与片段剥离 (`http_loader.cp`, `page.cp`, `session.cp`)**：记录 `redirect_urls` 补发每跳 `redirectResponse` 事件，以 `computeNextReferrer` 计算 `document.referrer` 并为子资源 `referer` 剥离 `#fragment`。

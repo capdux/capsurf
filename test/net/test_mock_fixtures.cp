@@ -139,7 +139,7 @@ pub fn main() {
         );
         check(pscript != null, "pscript not null");
         if (scr := pscript) {
-            check(std.mem.indexOf(u8, scr, "window.__policy_loaded = true;") != null, "policy script content");
+            check(std.mem.indexOf(u8, scr, "globalThis.__ksRan = (globalThis.__ksRan || []).concat([\"script\"]);") != null, "policy script content");
         }
 
         // 4.4 Static files from e2e/page/<filename>
@@ -178,14 +178,17 @@ pub fn main() {
             check(g1.len > 0, "g1 content not empty");
         }
 
-        // Non-matching / non-existent fixture returns null
+        // Dynamic endpoint: /echo-headers.html
         const res3 = MockFixtures.handleFixtureRequest(
             "https://ks.invalid/__fixtures/echo-headers.html",
             "",
             "",
             &buf,
         );
-        check(res3 == null, "res3 is null");
+        check(res3 != null, "res3 echo-headers.html not null");
+        if (eh_html := res3) {
+            check(std.mem.indexOf(u8, eh_html, "<title>echo-headers</title>") != null, "echo-headers.html title");
+        }
 
         const res_nonexistent = MockFixtures.handleFixtureRequest(
             "https://ks.invalid/__fixtures/does-not-exist.html",

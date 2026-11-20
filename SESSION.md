@@ -4333,3 +4333,22 @@
   - 补齐 `NodeData`、`ParsedAttr`、`ImportMapScopeGroup`、`CookieEntry`/`CdpCookie`、`HttpLoaderResult`、`JSValue`、`FrameContext`、`InterceptVerdict`、`NodeId`。
 - **全仓 `cap test -m` 目录巡检**: `dom/` (**12/12**)、`eval/` (**8/8**)、`html/` (**3/3**)、`render/` (**3/3**)、`css/` (**2/2**)、`layout/` (**1/1**)、`tty/` (**1/1**)、`net/` (**10/11**)、`cdp/` (**12/27**，精准定位余 12 个文件仅差 `[4]CdpEvent` -> `[64]CdpEvent`)。
 - **清理旧子智能体**: 销毁 `2afdef63-fdae-483d-aa75-ba7a135744bf`。
+
+## [2026-11-21 00:12:00] Slot A (`44eab7c6`) 3 分钟精准定位 `Page.navigate` `isDownload` & `<template>` 脚本跳过
+- 精准定位 `navigate-reply-shape` (`page.cp:595,650,668,698,1003` 补充 `"isDownload":false`)、`tty-todomvc-controls` (`nav_params.cp:74`, `page.cp:253`)、`source-script-pipeline` (`session.cp:2081-2083` 跳过 `<template>` 祖先、`:325,330` 合成源 `https://kitesurf.local/`)。
+- **清理旧子智能体**: 销毁 `44eab7c6-06ca-4228-8a97-9eba98d904e7`。
+
+## [2026-11-21 00:15:00] `fixture-script-escaping`、`oversize-document`、`navigation-fidelity` 8/8 & `script-text`/`page-module-registry` 6/6 全绿 (Subagent 382fb650 & 152cd96e 结单，Phase 163-164)
+- **Phase 163 (`src/cdp/{server,page,session}.cp`, `src/net/{mock_fixtures,http_loader}.cp`)**:
+  - `server.cp` & `mock_fixtures.cp`：新增 `buildExtraHeadersJson` 透传请求头给 `MockFixtures`，`escapeJson` 转义 `<` 为 `\u003c` 阻断 `</script>` 注入；
+  - `http_loader.cp` & `page.cp`：`/oversize-doc.html` 触发 `error.FileTooBig` 并以 `@errorName(e)` 精准返回 `net::ERR_FILE_TOO_BIG`；支持 `/redirect-hop` 跳转链 `Network.requestWillBeSent(redirectResponse)`、无效 URL 返回 `Cannot navigate to invalid URL`、`/status-204` 返回 `net::ERR_ABORTED`，以及按 `computeNextReferrer` 计算 `document.referrer` 并剥离 `#fragment`；
+  - 验证：`fixture-script-escaping` (**1/1**)、`oversize-document` (**3/3**)、`navigation-fidelity` (**4/4**)：**8/8 PASS (17 expect() calls)**！
+- **Phase 164 (零修改直接验收)**:
+  - `e2e/script-text.e2e.test.ts` (**1/1 PASS**)、`e2e/page-module-registry.e2e.test.ts` (**5/5 PASS**)；精准定位 `parser-script-lifecycle` 至 `session.cp:1151,2081,2175,2225,2291`。
+- **清理旧子智能体**: 销毁 `382fb650-34e0-4c81-bed7-5e5c53632b8d` 与 `152cd96e-471f-4af0-a247-41755ac7e33b`。
+
+## [2026-11-21 00:16:00] 批量修绿 11 个白盒单测 (`test/net` 11/11, `test/cdp` 22/27) (Subagent 52b522f5 结单，Phase 165)
+- **白盒单测批量同步 (`test/cdp/*.cp`, `test/net/test_mock_fixtures.cp`)**:
+  - 12 个 `test/cdp/*.cp` `[4]CdpEvent` 同步扩容至 `[64]CdpEvent`、`test_document_kind.cp` 补显式 `[]const u8` 标注、`test_mock_fixtures.cp` 对齐最新 `/policy-script.js` 与动态 `/echo-headers.html`；
+  - `test/net/` 达到 **11/11 (100%)**，`test/cdp/` 达到 **22/27 PASS**（9 个 `[64]CdpEvent` 文件与 `test_document_kind` 全绿；余 3 个属事件数/断言待对齐）。
+- **清理旧子智能体**: 销毁 `52b522f5-3430-472d-8002-fecb2b9bb323`。

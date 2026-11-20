@@ -33,7 +33,7 @@ fn testDataUrlNavigation()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Plaintext data: URL navigation
@@ -82,7 +82,7 @@ fn testLayoutMetricsIntegration()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // Override viewport metrics via Emulation
@@ -133,7 +133,7 @@ fn testInterceptedNavigation()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Enable Fetch interception for pattern *mocked*
@@ -227,7 +227,7 @@ fn testRealHttpLoadingWithServer()! {
 
     // 4. Navigate via CDP Page.navigate
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     const req_nav = CdpRequest{

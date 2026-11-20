@@ -17,7 +17,7 @@ fn testBrowserContextLifecycle()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Create a new BrowserContext
@@ -73,7 +73,7 @@ fn testMultiTargetLifecycle()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Create a dedicated browser context
@@ -164,7 +164,7 @@ fn testSessionAttachDetach()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Create a new target to attach
@@ -230,7 +230,7 @@ fn testAutoAttachMechanism()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Configure setAutoAttach with autoAttach: true and flatten: true

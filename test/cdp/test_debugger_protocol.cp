@@ -17,7 +17,7 @@ fn testDebuggerLifecycleAndScriptParsed()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Pre-register a compiled script in DebuggerState
@@ -65,7 +65,7 @@ fn testDebuggerDriverCompatibilityStubs()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. setSkipAllPauses

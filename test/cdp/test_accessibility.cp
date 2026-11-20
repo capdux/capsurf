@@ -81,7 +81,7 @@ fn testAccessibilityProtocol() {
     session.has_document = true;
 
     let out_buf: [16384]u8 = [0; 16384];
-    let out_evts: [4]CdpEvent = [CdpEvent{}; 4];
+    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
     // 1. Accessibility.enable
