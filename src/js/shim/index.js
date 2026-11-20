@@ -619,19 +619,137 @@ function installShim(global) {
       docProto.close = markNative(function () {}, "close");
     }
     if (!docProto.write) {
+      const writtenQueue = [];
+      let writtenRunning = false;
+      let writtenInWriter = false;
+
+      function flushWrittenQueue() {
+        if (writtenRunning) return;
+        if (writtenQueue.length === 0) {
+          global.__capsurf_written_script_queue_pending = false;
+          if (typeof global.__capsurf_flush_deferred_lifecycle === "function") {
+            global.__capsurf_flush_deferred_lifecycle();
+          }
+          return;
+        }
+        const head = writtenQueue[0];
+        if (head.kind === "external") {
+          if (!head.ready) {
+            return;
+          }
+          writtenQueue.shift();
+          writtenRunning = true;
+          const prevInWriter = writtenInWriter;
+          writtenInWriter = true;
+          const savedQueue = writtenQueue.splice(0, writtenQueue.length);
+          try {
+            if (head.code) {
+              (1, eval)(head.code);
+            }
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) console.error(e);
+          } finally {
+            for (let si = 0; si < savedQueue.length; si++) {
+              writtenQueue.push(savedQueue[si]);
+            }
+            writtenInWriter = prevInWriter;
+            writtenRunning = false;
+          }
+          flushWrittenQueue();
+          return;
+        }
+        if (head.kind === "inline") {
+          writtenQueue.shift();
+          writtenRunning = true;
+          const prevInWriter = writtenInWriter;
+          writtenInWriter = true;
+          const savedQueue = writtenQueue.splice(0, writtenQueue.length);
+          try {
+            if (head.code) {
+              (1, eval)(head.code);
+            }
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) console.error(e);
+          } finally {
+            for (let si = 0; si < savedQueue.length; si++) {
+              writtenQueue.push(savedQueue[si]);
+            }
+            writtenInWriter = prevInWriter;
+            writtenRunning = false;
+          }
+          flushWrittenQueue();
+        }
+      }
+
+      function enqueueWrittenScripts(markup, doc) {
+        const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+        const items = [];
+        let m;
+        while ((m = scriptRe.exec(markup)) !== null) {
+          const attrs = m[1] || "";
+          const body = m[2] || "";
+          const srcMatch = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+          const src = srcMatch ? (srcMatch[1] !== undefined ? srcMatch[1] : (srcMatch[2] !== undefined ? srcMatch[2] : srcMatch[3])) : null;
+          if (src) {
+            items.push({ kind: "external", src: src, ready: false, code: "" });
+          } else {
+            items.push({ kind: "inline", code: body });
+          }
+        }
+        if (items.length === 0) return false;
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.kind === "inline" && writtenQueue.length === 0) {
+            try {
+              if (item.code) (1, eval)(item.code);
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) console.error(e);
+            }
+          } else {
+            writtenQueue.push(item);
+            global.__capsurf_written_script_queue_pending = true;
+            if (item.kind === "external" && typeof fetch === "function") {
+              (function (entry) {
+                fetch(entry.src)
+                  .then(function (res) { return res.text(); })
+                  .then(function (txt) {
+                    entry.code = txt;
+                    entry.ready = true;
+                    flushWrittenQueue();
+                  })
+                  .catch(function () {
+                    entry.code = "";
+                    entry.ready = true;
+                    flushWrittenQueue();
+                  });
+              })(item);
+            }
+          }
+        }
+        if (!writtenInWriter) {
+          flushWrittenQueue();
+        }
+        return true;
+      }
+
       docProto.write = markNative(function () {
         let markup = "";
         for (let i = 0; i < arguments.length; i++) {
           markup += String(arguments[i]);
         }
-        const target = this.body || this.documentElement;
-        if (target && typeof this.createElement === "function") {
-          const temp = this.createElement("div");
-          temp.innerHTML = markup;
-          while (temp.firstChild) {
-            const ch = temp.firstChild;
-            try { temp.removeChild(ch); } catch (e) {}
-            target.appendChild(ch);
+        const hadScripts = enqueueWrittenScripts(markup, this);
+        const nonScriptMarkup = hadScripts ? markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "") : markup;
+        if (nonScriptMarkup) {
+          const target = this.body || this.documentElement;
+          if (target && typeof this.createElement === "function") {
+            const temp = this.createElement("div");
+            temp.innerHTML = nonScriptMarkup;
+            while (temp.firstChild) {
+              const ch = temp.firstChild;
+              try { temp.removeChild(ch); } catch (e) {}
+              target.appendChild(ch);
+            }
           }
         }
       }, "write");

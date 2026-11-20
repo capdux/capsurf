@@ -355,12 +355,19 @@ function executeConnectedScripts(node) {
               return res.text();
             })
             .then(function (code) {
+              const doc = node.ownerDocument || (typeof document !== "undefined" ? document : null);
+              const prevScript = doc ? doc._currentScript : null;
+              if (doc) doc._currentScript = node;
               try {
                 (1, eval)(code);
               } catch (evalErr) {
                 if (typeof console !== "undefined" && console.error) {
                   console.error("Error executing script " + src, evalErr);
                 }
+              } finally {
+                Promise.resolve().then(function () {
+                  if (doc && doc._currentScript === node) doc._currentScript = prevScript;
+                });
               }
               const evt = new Event("load", { bubbles: false, cancelable: false });
               if (typeof node.onload === "function") {
@@ -387,6 +394,9 @@ function executeConnectedScripts(node) {
       } else {
         const code = node.text || node.textContent || "";
         if (code) {
+          const doc = node.ownerDocument || (typeof document !== "undefined" ? document : null);
+          const prevScript = doc ? doc._currentScript : null;
+          if (doc) doc._currentScript = node;
           try {
             (1, eval)(code);
           } catch (e) {
@@ -395,6 +405,8 @@ function executeConnectedScripts(node) {
             } else if (typeof console !== "undefined" && console.error) {
               console.error(e);
             }
+          } finally {
+            if (doc && doc._currentScript === node) doc._currentScript = prevScript;
           }
         }
       }
@@ -524,6 +536,12 @@ Node.prototype.appendChild = function (child) {
 
   executeConnectedScripts(child);
   notifyConnectedCustomElements(child);
+  if (child && child.nodeType === 1 && child.isConnected) {
+    const ctag = String(child.localName || child.tagName || "").toLowerCase();
+    if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+      global.__capsurf_on_iframe_connected(child);
+    }
+  }
 
   return child;
 };
@@ -603,6 +621,12 @@ Node.prototype.insertBefore = function (newChild, refChild) {
 
   executeConnectedScripts(newChild);
   notifyConnectedCustomElements(newChild);
+  if (newChild && newChild.nodeType === 1 && newChild.isConnected) {
+    const ctag = String(newChild.localName || newChild.tagName || "").toLowerCase();
+    if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+      global.__capsurf_on_iframe_connected(newChild);
+    }
+  }
 
   return newChild;
 };

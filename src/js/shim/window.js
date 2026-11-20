@@ -853,6 +853,30 @@ function installWindow(global) {
     globalThis.HighlightRegistry = HighlightRegistry;
   }
 
+  const blobUrlRegistry = new Map();
+  let blobUrlCounter = 1;
+  global.__capsurf_blob_registry = blobUrlRegistry;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_blob_registry = blobUrlRegistry;
+
+  URL.createObjectURL = markNative(function (obj) {
+    if (!obj || typeof obj !== "object") {
+      throw new TypeError("Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.");
+    }
+    const loc = global.location || (typeof location !== "undefined" ? location : null);
+    let orig = "null";
+    if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
+      orig = String(loc.origin);
+    }
+    const id = "00000000-0000-4000-8000-" + String(blobUrlCounter++).padStart(12, "0");
+    const url = "blob:" + orig + "/" + id;
+    blobUrlRegistry.set(url, obj);
+    return url;
+  }, "createObjectURL");
+
+  URL.revokeObjectURL = markNative(function (url) {
+    blobUrlRegistry.delete(String(url));
+  }, "revokeObjectURL");
+
   markNative(URL, "URL");
   global.URL = URL;
   if (typeof window !== "undefined") window.URL = URL;
@@ -2403,6 +2427,34 @@ function installWindow(global) {
       reqHeaders["accept-encoding"] = decodableAcceptEncoding(reqHeaders["accept-encoding"]);
     }
 
+    if (urlStr.startsWith("blob:")) {
+      const blobObj = blobUrlRegistry.get(urlStr);
+      if (!blobObj) {
+        return Promise.reject(new TypeError("Failed to fetch blob URL: " + urlStr));
+      }
+      const pText = typeof blobObj.text === "function" ? blobObj.text() : Promise.resolve("");
+      return pText.then(function (txt) {
+        return makeFetchedResponse(txt, {
+          status: 200,
+          statusText: "OK",
+          url: urlStr,
+          redirected: false,
+          headers: {
+            "content-type": blobObj.type || "application/octet-stream",
+          },
+        });
+      });
+    }
+
+    const reqReferrer = (init && init.referrer !== undefined)
+      ? String(init.referrer)
+      : (typeof Request !== "undefined" && resource instanceof Request ? resource.referrer : undefined);
+    if (reqReferrer === "" || reqReferrer === "no-referrer") {
+      delete reqHeaders["referer"];
+    } else if (reqReferrer && reqReferrer !== "about:client") {
+      reqHeaders["referer"] = reqReferrer;
+    }
+
     let docOrigin = (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") ? String(loc.origin) : "";
 
     let fullUrl = urlStr;
@@ -2566,6 +2618,71 @@ function installWindow(global) {
           "access-control-allow-credentials": "true",
         },
       }));
+    }
+
+    if (pathOnly.indexOf("slow-iframe-child") !== -1) {
+      let delayMs = 0;
+      const msMatch = urlStr.match(/[?&]ms=(\d+)/);
+      if (msMatch) delayMs = parseInt(msMatch[1], 10) || 0;
+      const htmlBody = "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>slow iframe child</p></body></html>";
+      const makeResp = function () {
+        return makeFetchedResponse(htmlBody, {
+          status: 200,
+          statusText: "OK",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      };
+      if (delayMs > 0) {
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(makeResp()); }, delayMs);
+        });
+      }
+      return Promise.resolve(makeResp());
+    }
+
+    if (pathOnly.indexOf("written-script.js") !== -1) {
+      let delayMs = 0;
+      const msMatch = urlStr.match(/[?&]ms=(\d+)/);
+      if (msMatch) delayMs = Math.min(3000, parseInt(msMatch[1], 10) || 0);
+      const getWord = function (name) {
+        const re = new RegExp("[?&]" + name + "=([^&#]*)");
+        const mm = urlStr.match(re);
+        return mm ? decodeURIComponent(mm[1]).replace(/[^a-z0-9-]/gi, "") : "";
+      };
+      const tag = getWord("tag");
+      const next = getWord("next");
+      const inline = getWord("inline");
+      const pushCode = function (v) {
+        return "globalThis.__written = (globalThis.__written || []).concat([" + JSON.stringify(v) + "]);";
+      };
+      let bodyText = pushCode(tag) + "\n";
+      if (next) {
+        bodyText += "document.write('<script src=\"/__fixtures/written-script.js?tag=" + next + "\"><\\/script>');\n";
+      }
+      if (inline) {
+        bodyText += "document.write('<script>" + pushCode(inline) + "<\\/script>');\n";
+        bodyText += pushCode(tag + "-after") + "\n";
+      }
+      const makeWsResp = function () {
+        return makeFetchedResponse(bodyText, {
+          status: 200,
+          statusText: "OK",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+          headers: {
+            "content-type": "application/javascript",
+            "access-control-allow-origin": "*",
+          },
+        });
+      };
+      if (delayMs > 0) {
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(makeWsResp()); }, delayMs);
+        });
+      }
+      return Promise.resolve(makeWsResp());
     }
 
     if (pathOnly.indexOf("policy-script.js") !== -1) {
@@ -7505,7 +7622,8 @@ const CSS_TYPED_OM_GLOBALS = {
   }
 
   // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
-  global.__capsurf_dispatch_lifecycle = function () {
+  let deferredLifecyclePending = false;
+  function dispatchLifecycleNow() {
     try {
       if (global.document && global.document.querySelectorAll) {
         const scripts = global.document.querySelectorAll("script");
@@ -7524,9 +7642,38 @@ const CSS_TYPED_OM_GLOBALS = {
         global.dispatchEvent(loadEv);
       }
     } catch (e) {}
+    try {
+      if (global.document && global.document.querySelectorAll && typeof global.__capsurf_on_iframe_connected === "function") {
+        const iframes = global.document.querySelectorAll("iframe");
+        for (let i = 0; i < iframes.length; i++) {
+          const f = iframes[i];
+          const loadingAttr = f.getAttribute ? String(f.getAttribute("loading") || "").toLowerCase() : "";
+          if (loadingAttr === "lazy" && !f._lazyLoadTriggered) {
+            f._lazyLoadTriggered = true;
+            global.__capsurf_on_iframe_connected(f, { forceLazy: true });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  global.__capsurf_flush_deferred_lifecycle = function () {
+    if (deferredLifecyclePending && !global.__capsurf_written_script_queue_pending) {
+      deferredLifecyclePending = false;
+      dispatchLifecycleNow();
+    }
+  };
+
+  global.__capsurf_dispatch_lifecycle = function () {
+    if (global.__capsurf_written_script_queue_pending) {
+      deferredLifecyclePending = true;
+      return;
+    }
+    dispatchLifecycleNow();
   };
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_dispatch_lifecycle = global.__capsurf_dispatch_lifecycle;
+    globalThis.__capsurf_flush_deferred_lifecycle = global.__capsurf_flush_deferred_lifecycle;
   }
 
   // Window scroll methods
@@ -7705,6 +7852,16 @@ const CSS_TYPED_OM_GLOBALS = {
           return dt;
         }
         return null;
+      },
+      configurable: true,
+    });
+  }
+
+  // currentScript
+  if (!Object.getOwnPropertyDescriptor(docProto, "currentScript")) {
+    Object.defineProperty(docProto, "currentScript", {
+      get: function () {
+        return this._currentScript || null;
       },
       configurable: true,
     });

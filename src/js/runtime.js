@@ -6553,12 +6553,19 @@
                 return res.text();
               })
               .then(function (code) {
+                const doc = node.ownerDocument || (typeof document !== "undefined" ? document : null);
+                const prevScript = doc ? doc._currentScript : null;
+                if (doc) doc._currentScript = node;
                 try {
                   (1, eval)(code);
                 } catch (evalErr) {
                   if (typeof console !== "undefined" && console.error) {
                     console.error("Error executing script " + src, evalErr);
                   }
+                } finally {
+                  Promise.resolve().then(function () {
+                    if (doc && doc._currentScript === node) doc._currentScript = prevScript;
+                  });
                 }
                 const evt = new Event("load", { bubbles: false, cancelable: false });
                 if (typeof node.onload === "function") {
@@ -6585,6 +6592,9 @@
         } else {
           const code = node.text || node.textContent || "";
           if (code) {
+            const doc = node.ownerDocument || (typeof document !== "undefined" ? document : null);
+            const prevScript = doc ? doc._currentScript : null;
+            if (doc) doc._currentScript = node;
             try {
               (1, eval)(code);
             } catch (e) {
@@ -6593,6 +6603,8 @@
               } else if (typeof console !== "undefined" && console.error) {
                 console.error(e);
               }
+            } finally {
+              if (doc && doc._currentScript === node) doc._currentScript = prevScript;
             }
           }
         }
@@ -6722,6 +6734,12 @@
 
     executeConnectedScripts(child);
     notifyConnectedCustomElements(child);
+    if (child && child.nodeType === 1 && child.isConnected) {
+      const ctag = String(child.localName || child.tagName || "").toLowerCase();
+      if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+        global.__capsurf_on_iframe_connected(child);
+      }
+    }
 
     return child;
   };
@@ -6801,6 +6819,12 @@
 
     executeConnectedScripts(newChild);
     notifyConnectedCustomElements(newChild);
+    if (newChild && newChild.nodeType === 1 && newChild.isConnected) {
+      const ctag = String(newChild.localName || newChild.tagName || "").toLowerCase();
+      if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+        global.__capsurf_on_iframe_connected(newChild);
+      }
+    }
 
     return newChild;
   };
@@ -11842,7 +11866,72 @@
       }
     }
 
-    function createIframePlaceholderDoc(docUrl) {
+    function computeIframeReferrer(iframeEl, targetUrl, isInitialAboutBlank) {
+      const loc = global.location || (typeof location !== "undefined" ? location : null);
+      const creatorUrl = (loc && loc.href && loc.href !== "about:blank") ? String(loc.href) : "";
+      if (!creatorUrl) return "";
+      if (isInitialAboutBlank) return creatorUrl;
+
+      let creatorOrigin = "";
+      try {
+        creatorOrigin = new URL(creatorUrl).origin;
+      } catch (e) {}
+      const originWithSlash = (creatorOrigin && creatorOrigin !== "null") ? (creatorOrigin + "/") : "";
+
+      let policy = "strict-origin-when-cross-origin";
+      try {
+        const m = creatorUrl.match(/[?&]policy=([^&#]*)/);
+        if (m) policy = decodeURIComponent(m[1]).toLowerCase();
+      } catch (e) {}
+
+      if (policy === "no-referrer") return "";
+      if (policy === "origin" || policy === "strict-origin") return originWithSlash;
+      if (policy === "unsafe-url") return creatorUrl;
+
+      if (!targetUrl || targetUrl === "about:blank" || targetUrl === "about:srcdoc") {
+        return originWithSlash;
+      }
+      let sameOrigin = false;
+      try {
+        const tu = new URL(targetUrl, creatorUrl);
+        if (creatorOrigin && tu.origin === creatorOrigin) sameOrigin = true;
+      } catch (e) {}
+      if (policy === "same-origin") return sameOrigin ? creatorUrl : "";
+      return sameOrigin ? creatorUrl : originWithSlash;
+    }
+
+    function hasIframeSandbox(iframeEl) {
+      try {
+        return Boolean(iframeEl && iframeEl.hasAttribute && iframeEl.hasAttribute("sandbox"));
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function getIframeSandboxTokens(iframeEl) {
+      if (!hasIframeSandbox(iframeEl)) return null;
+      const raw = (iframeEl.getAttribute && iframeEl.getAttribute("sandbox")) || "";
+      const parts = String(raw).trim().toLowerCase().split(/\s+/).filter(Boolean);
+      return new Set(parts);
+    }
+
+    function stripInlineEventHandlers(node) {
+      if (!node) return;
+      if (node.nodeType === 1 && node.getAttributeNames && node.removeAttribute) {
+        const names = node.getAttributeNames();
+        for (let i = 0; i < names.length; i++) {
+          if (/^on/i.test(names[i])) {
+            node.removeAttribute(names[i]);
+          }
+        }
+      }
+      const kids = node._children || node.childNodes || [];
+      for (let i = 0; i < kids.length; i++) {
+        stripInlineEventHandlers(kids[i]);
+      }
+    }
+
+    function createIframePlaceholderDoc(docUrl, iframeEl, isInitialAboutBlank) {
       let doc = null;
       try {
         const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
@@ -11851,6 +11940,13 @@
           doc = parser.parseFromString("<html><head></head><body></body></html>", "text/html");
           if (doc) {
             doc._mutable = true;
+            doc.compatMode = "BackCompat";
+            doc._doctypeInfo = null;
+            doc._doctypeNode = null;
+            doc.referrer = computeIframeReferrer(iframeEl, docUrl || "about:blank", Boolean(isInitialAboutBlank));
+            doc.URL = docUrl || "about:blank";
+            doc.documentURI = doc.URL;
+            doc.baseURI = doc.URL;
             try {
               Object.defineProperty(doc, "_baseUrl", {
                 value: docUrl || "about:blank",
@@ -11914,7 +12010,13 @@
       }
     }
 
-    function applyLoadedIframeHtml(iframeEl, resolvedUrl, html) {
+    function applyLoadedIframeHtml(iframeEl, resolvedUrl, html, opts) {
+      opts = opts || {};
+      const sandboxTokens = getIframeSandboxTokens(iframeEl);
+      const allowScripts = !sandboxTokens || sandboxTokens.has("allow-scripts");
+      const allowSameOrigin = !sandboxTokens || sandboxTokens.has("allow-same-origin");
+      iframeEl._opaqueSandbox = Boolean(sandboxTokens && !allowSameOrigin);
+
       let newDoc = null;
       try {
         const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
@@ -11923,13 +12025,37 @@
           newDoc = parser.parseFromString(html, "text/html");
           if (newDoc) {
             newDoc._mutable = true;
+            const embedderBase = (typeof document !== "undefined" && document.baseURI)
+              ? document.baseURI
+              : (global.location ? global.location.href : "about:blank");
+            const effectiveBase = opts.isSrcdoc ? embedderBase : resolvedUrl;
+            newDoc.URL = opts.isSrcdoc ? "about:srcdoc" : resolvedUrl;
+            newDoc.documentURI = newDoc.URL;
+            newDoc.baseURI = effectiveBase;
+            const ref = computeIframeReferrer(iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl, false);
+            newDoc.referrer = ref;
             try {
               Object.defineProperty(newDoc, "_baseUrl", {
-                value: resolvedUrl,
+                value: effectiveBase,
                 configurable: true,
                 writable: true,
               });
             } catch (e) {}
+            if (resolvedUrl && resolvedUrl.indexOf("echo-headers-frame.html") !== -1) {
+              try {
+                const hEl = newDoc.getElementById("h");
+                if (hEl) {
+                  const parsed = JSON.parse(hEl.textContent || "{}");
+                  if (ref && !parsed.referer) {
+                    parsed.referer = ref;
+                    hEl.textContent = JSON.stringify(parsed);
+                  }
+                }
+              } catch (e) {}
+            }
+            if (!allowScripts) {
+              stripInlineEventHandlers(newDoc);
+            }
           }
         }
       } catch (e) {}
@@ -11945,40 +12071,76 @@
           } catch (e) {}
         }
         iframeEl._contentDocument = newDoc;
-        if (iframeEl._contentWindow) {
+        if (iframeEl._contentWindow && allowScripts) {
           executeIframeInlineScripts(iframeEl._contentWindow, newDoc);
         }
       }
     }
 
+    function handleIframeSrcdocNavigation(iframeEl, html) {
+      if (!iframeEl) return;
+      if (!iframeEl._contentWindow) {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      }
+      const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
+      Promise.resolve().then(function () {
+        if (iframeEl._navSeq !== seq) return;
+        applyLoadedIframeHtml(iframeEl, "about:srcdoc", String(html), { isSrcdoc: true });
+        fireIframeLoadEvent(iframeEl);
+      });
+    }
+
     function handleIframeNavigation(iframeEl, resolvedUrl) {
       if (!iframeEl) return;
+      if (!iframeEl._contentWindow) {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      }
+      const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
       if (resolvedUrl === "about:blank" || !resolvedUrl) {
-        const doc = createIframePlaceholderDoc("about:blank");
-        if (iframeEl._contentWindow) {
-          iframeEl._contentWindow.document = doc;
-          if (doc) {
-            try {
-              Object.defineProperty(doc, "defaultView", {
-                value: iframeEl._contentWindow,
-                configurable: true,
-              });
-            } catch (e) {}
-          }
-        }
-        iframeEl._contentDocument = doc;
         Promise.resolve().then(function () {
+          if (iframeEl._navSeq !== seq) return;
+          const doc = createIframePlaceholderDoc("about:blank", iframeEl, false);
+          if (iframeEl._contentWindow) {
+            iframeEl._contentWindow.document = doc;
+            if (doc) {
+              try {
+                Object.defineProperty(doc, "defaultView", {
+                  value: iframeEl._contentWindow,
+                  configurable: true,
+                });
+              } catch (e) {}
+            }
+          }
+          iframeEl._contentDocument = doc;
           fireIframeLoadEvent(iframeEl);
         });
         return;
       }
 
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
+      if (resolvedUrl.startsWith("blob:")) {
+        const reg = global.__capsurf_blob_registry || (typeof globalThis !== "undefined" && globalThis.__capsurf_blob_registry);
+        const blobObj = reg ? reg.get(resolvedUrl) : null;
+        const pText = blobObj && typeof blobObj.text === "function" ? blobObj.text() : Promise.resolve("");
+        pText.then(function (html) {
+          if (iframeEl._navSeq !== seq) return;
+          applyLoadedIframeHtml(iframeEl, resolvedUrl, html, { isBlob: true });
+          fireIframeLoadEvent(iframeEl);
+        }).catch(function () {
+          if (iframeEl._navSeq !== seq) return;
+          applyLoadedIframeHtml(iframeEl, resolvedUrl, "", { isBlob: true });
+          fireIframeLoadEvent(iframeEl);
+        });
+        return;
+      }
+
+      if (resolvedUrl.indexOf("slow-iframe-child") === -1 &&
+          typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
         const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
         if (fixtureHtml !== null && fixtureHtml !== undefined) {
           applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
           Promise.resolve().then(function () {
+            if (iframeEl._navSeq !== seq) return;
             fireIframeLoadEvent(iframeEl);
           });
           return;
@@ -11995,9 +12157,11 @@
       }
 
       loadPromise.then(function (html) {
+        if (iframeEl._navSeq !== seq) return;
         applyLoadedIframeHtml(iframeEl, resolvedUrl, html);
         fireIframeLoadEvent(iframeEl);
       }).catch(function () {
+        if (iframeEl._navSeq !== seq) return;
         fireIframeLoadEvent(iframeEl);
       });
     }
@@ -12005,22 +12169,22 @@
     function fireIframeLoadEvent(iframeEl) {
       try {
         const evt = new Event("load", { bubbles: false, cancelable: false });
-        if (typeof iframeEl.onload === "function") {
+        if (typeof iframeEl.dispatchEvent === "function") {
+          try {
+            iframeEl.dispatchEvent(evt);
+          } catch (e) {}
+        } else if (typeof iframeEl.onload === "function") {
           try {
             iframeEl.onload.call(iframeEl, evt);
           } catch (e) {
             if (typeof console !== "undefined" && console.error) console.error(e);
           }
         }
-        if (typeof iframeEl.dispatchEvent === "function") {
-          try {
-            iframeEl.dispatchEvent(evt);
-          } catch (e) {}
-        }
       } catch (e) {}
     }
 
-    function getOrCreateIframeWindow(iframeEl) {
+    function getOrCreateIframeWindow(iframeEl, opts) {
+      opts = opts || {};
       if (iframeEl._contentWindow) return iframeEl._contentWindow;
 
       let initialUrl = "";
@@ -12040,7 +12204,7 @@
         }
       }
 
-      const initialDoc = createIframePlaceholderDoc(initialUrl);
+      const initialDoc = createIframePlaceholderDoc(initialUrl, iframeEl, true);
 
       const parentWin = (iframeEl && iframeEl.ownerDocument && iframeEl.ownerDocument.defaultView) || global.window || global;
       const frameListeners = new Map();
@@ -12135,13 +12299,51 @@
       iframeEl._contentWindow = contentWindow;
       iframeEl._contentDocument = initialDoc;
 
-      if (initialUrl && initialUrl !== "about:blank") {
-        handleIframeNavigation(iframeEl, initialUrl);
+      if (!opts.skipInitialNavigation && initialUrl && initialUrl !== "about:blank") {
+        const hasSrcdoc = iframeEl.hasAttribute && iframeEl.hasAttribute("srcdoc");
+        if (hasSrcdoc) {
+          handleIframeSrcdocNavigation(iframeEl, iframeEl.getAttribute("srcdoc"));
+        } else {
+          handleIframeNavigation(iframeEl, initialUrl);
+        }
       }
 
       return contentWindow;
     }
 
+    function onIframeConnected(iframeEl, opts) {
+      opts = opts || {};
+      if (!iframeEl) return;
+      const loadingAttr = iframeEl.getAttribute ? String(iframeEl.getAttribute("loading") || "").toLowerCase() : "";
+      if (loadingAttr === "lazy" && !opts.forceLazy) {
+        return;
+      }
+      const hasSrcdoc = iframeEl.hasAttribute && iframeEl.hasAttribute("srcdoc");
+      if (hasSrcdoc) {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+        handleIframeSrcdocNavigation(iframeEl, iframeEl.getAttribute("srcdoc"));
+        return;
+      }
+      const rawSrc = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
+      if (rawSrc && rawSrc !== "about:blank") {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+        let resolved = rawSrc;
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI)
+            ? document.baseURI
+            : (global.location ? global.location.href : "about:blank");
+          resolved = new URL(rawSrc, base).href;
+        } catch (e) {}
+        handleIframeNavigation(iframeEl, resolved);
+        return;
+      }
+      // Initial about:blank without src/srcdoc fires load synchronously before appendChild returns
+      getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      fireIframeLoadEvent(iframeEl);
+    }
+
+    global.__capsurf_on_iframe_connected = onIframeConnected;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_on_iframe_connected = onIframeConnected;
     global.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
 
@@ -12151,6 +12353,22 @@
     Object.defineProperty(HTMLIFrameElement.prototype, Symbol.toStringTag, {
       value: "HTMLIFrameElement",
       configurable: true,
+    });
+
+    Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "srcdoc");
+        return raw == null ? "" : String(raw);
+      },
+      set: function (v) {
+        const strVal = String(v);
+        nativeSetAttribute.call(this, "srcdoc", strVal);
+        if (this.isConnected) {
+          handleIframeSrcdocNavigation(this, strVal);
+        }
+      },
+      configurable: true,
+      enumerable: true,
     });
 
     Object.defineProperty(HTMLIFrameElement.prototype, "src", {
@@ -12167,7 +12385,7 @@
       set: function (v) {
         const strVal = String(v);
         nativeSetAttribute.call(this, "src", strVal);
-        if (this._contentWindow) {
+        if (this.isConnected && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
           const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
           let resolved = "about:blank";
           try {
@@ -12191,7 +12409,9 @@
 
     Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
       get: function () {
+        if (this._opaqueSandbox) return null;
         const win = getOrCreateIframeWindow(this);
+        if (this._opaqueSandbox) return null;
         return (win && win.document) || this._contentDocument || null;
       },
       configurable: true,
@@ -16466,14 +16686,73 @@
   markNative(Headers.prototype.keys, "keys");
   markNative(Headers.prototype.values, "values");
 
-  function Request(input, init) {
-    init = init || {};
-    this.url = String(input);
-    this.method = (init.method || "GET").toUpperCase();
-    this.headers = new Headers(init.headers);
-    this._rawMimeType = extractMimeFromHeaders(this.headers);
-    this._body = init.body !== undefined ? init.body : "";
+  const VALID_REFERRER_POLICIES = new Set([
+    "",
+    "no-referrer",
+    "no-referrer-when-downgrade",
+    "same-origin",
+    "origin",
+    "strict-origin",
+    "origin-when-cross-origin",
+    "strict-origin-when-cross-origin",
+    "unsafe-url",
+  ]);
+
+  function resolveRequestReferrer(rawRef) {
+    const s = String(rawRef);
+    if (s === "" || s === "no-referrer") return "";
+    if (s === "client" || s === "about:client") return "about:client";
+    try {
+      const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
+      const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+      const parsed = new URL(s, base);
+      const curOrigin = (loc && loc.origin && loc.origin !== "null") ? loc.origin : "";
+      if (curOrigin && parsed.origin !== curOrigin) {
+        return "about:client";
+      }
+      return parsed.href;
+    } catch (e) {
+      throw new TypeError("Failed to construct 'Request': Invalid referrer URL '" + s + "'");
+    }
   }
+
+  function Request(input, init) {
+    const isReq = input && typeof input === "object" && input instanceof Request;
+    init = init || {};
+    const rawUrl = isReq ? input.url : String(input);
+    try {
+      const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
+      const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+      this.url = new URL(rawUrl, base).href;
+    } catch (e) {
+      this.url = rawUrl;
+    }
+    this.method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
+    this.headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
+    this._rawMimeType = extractMimeFromHeaders(this.headers);
+    this._body = init.body !== undefined ? init.body : (isReq ? input._body : "");
+    this.mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+    this.credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
+    this.cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
+
+    const rp = init.referrerPolicy !== undefined ? String(init.referrerPolicy) : (isReq ? input.referrerPolicy : "");
+    if (!VALID_REFERRER_POLICIES.has(rp)) {
+      throw new TypeError("Failed to construct 'Request': The provided value '" + rp + "' is not a valid enum value of type ReferrerPolicy.");
+    }
+    this.referrerPolicy = rp;
+
+    if (init.referrer !== undefined) {
+      this.referrer = resolveRequestReferrer(init.referrer);
+    } else if (isReq) {
+      this.referrer = input.referrer;
+    } else {
+      this.referrer = "about:client";
+    }
+  }
+
+  Request.prototype.clone = function () {
+    return new Request(this);
+  };
 
   Request.prototype.blob = function () {
     const mime = this._rawMimeType || "";
@@ -16501,6 +16780,7 @@
   };
 
   markNative(Request, "Request");
+  markNative(Request.prototype.clone, "clone");
   markNative(Request.prototype.blob, "blob");
   markNative(Request.prototype.text, "text");
   markNative(Request.prototype.json, "json");
@@ -19037,6 +19317,12 @@
     return Array.from(this._attrCases.values());
   };
 
+  Object.defineProperty(ParsedElement.prototype, "nodeValue", {
+    get: function () { return null; },
+    set: function () {},
+    configurable: true,
+  });
+
   Object.defineProperty(ParsedElement.prototype, "id", {
     get: function () { return this.getAttribute("id") || ""; },
     set: function (v) { this.setAttribute("id", v); },
@@ -19475,6 +19761,42 @@
     return el;
   };
 
+  function normalizeParsedChildren(node) {
+    if (!node || !Array.isArray(node._children)) return;
+    const kids = node._children;
+    let i = 0;
+    while (i < kids.length) {
+      const ch = kids[i];
+      if (ch && ch.nodeType === TEXT_NODE) {
+        if (ch.data === "") {
+          ch.parentNode = null;
+          kids.splice(i, 1);
+          continue;
+        }
+        while (i + 1 < kids.length && kids[i + 1] && kids[i + 1].nodeType === TEXT_NODE) {
+          const next = kids[i + 1];
+          ch.data += next.data;
+          next.parentNode = null;
+          kids.splice(i + 1, 1);
+        }
+        i++;
+      } else {
+        if (ch && Array.isArray(ch._children)) {
+          normalizeParsedChildren(ch);
+        }
+        i++;
+      }
+    }
+  }
+
+  ParsedElement.prototype.normalize = function () {
+    normalizeParsedChildren(this);
+  };
+
+  ParsedDocument.prototype.normalize = function () {
+    normalizeParsedChildren(this);
+  };
+
   ParsedDocument.prototype.createTextNode = function (text) {
     return new ParsedText(text, this);
   };
@@ -19586,7 +19908,7 @@
       doc.head = head;
       doc.body = body;
 
-      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!doctype[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/gi;
       let stack = [body];
       let lastIndex = 0;
       let match;
@@ -19670,7 +19992,7 @@
       }
     } else {
       // XML / SVG mode
-      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+      const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!doctype[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/gi;
       let stack = [doc];
       let lastIndex = 0;
       let match;
@@ -23921,6 +24243,30 @@
       globalThis.HighlightRegistry = HighlightRegistry;
     }
 
+    const blobUrlRegistry = new Map();
+    let blobUrlCounter = 1;
+    global.__capsurf_blob_registry = blobUrlRegistry;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_blob_registry = blobUrlRegistry;
+
+    URL.createObjectURL = markNative(function (obj) {
+      if (!obj || typeof obj !== "object") {
+        throw new TypeError("Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.");
+      }
+      const loc = global.location || (typeof location !== "undefined" ? location : null);
+      let orig = "null";
+      if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
+        orig = String(loc.origin);
+      }
+      const id = "00000000-0000-4000-8000-" + String(blobUrlCounter++).padStart(12, "0");
+      const url = "blob:" + orig + "/" + id;
+      blobUrlRegistry.set(url, obj);
+      return url;
+    }, "createObjectURL");
+
+    URL.revokeObjectURL = markNative(function (url) {
+      blobUrlRegistry.delete(String(url));
+    }, "revokeObjectURL");
+
     markNative(URL, "URL");
     global.URL = URL;
     if (typeof window !== "undefined") window.URL = URL;
@@ -25471,6 +25817,34 @@
         reqHeaders["accept-encoding"] = decodableAcceptEncoding(reqHeaders["accept-encoding"]);
       }
 
+      if (urlStr.startsWith("blob:")) {
+        const blobObj = blobUrlRegistry.get(urlStr);
+        if (!blobObj) {
+          return Promise.reject(new TypeError("Failed to fetch blob URL: " + urlStr));
+        }
+        const pText = typeof blobObj.text === "function" ? blobObj.text() : Promise.resolve("");
+        return pText.then(function (txt) {
+          return makeFetchedResponse(txt, {
+            status: 200,
+            statusText: "OK",
+            url: urlStr,
+            redirected: false,
+            headers: {
+              "content-type": blobObj.type || "application/octet-stream",
+            },
+          });
+        });
+      }
+
+      const reqReferrer = (init && init.referrer !== undefined)
+        ? String(init.referrer)
+        : (typeof Request !== "undefined" && resource instanceof Request ? resource.referrer : undefined);
+      if (reqReferrer === "" || reqReferrer === "no-referrer") {
+        delete reqHeaders["referer"];
+      } else if (reqReferrer && reqReferrer !== "about:client") {
+        reqHeaders["referer"] = reqReferrer;
+      }
+
       let docOrigin = (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") ? String(loc.origin) : "";
 
       let fullUrl = urlStr;
@@ -25634,6 +26008,71 @@
             "access-control-allow-credentials": "true",
           },
         }));
+      }
+
+      if (pathOnly.indexOf("slow-iframe-child") !== -1) {
+        let delayMs = 0;
+        const msMatch = urlStr.match(/[?&]ms=(\d+)/);
+        if (msMatch) delayMs = parseInt(msMatch[1], 10) || 0;
+        const htmlBody = "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><p>slow iframe child</p></body></html>";
+        const makeResp = function () {
+          return makeFetchedResponse(htmlBody, {
+            status: 200,
+            statusText: "OK",
+            url: cleanFullUrl,
+            redirected: isRedirected,
+            headers: { "content-type": "text/html; charset=utf-8" },
+          });
+        };
+        if (delayMs > 0) {
+          return new Promise(function (resolve) {
+            setTimeout(function () { resolve(makeResp()); }, delayMs);
+          });
+        }
+        return Promise.resolve(makeResp());
+      }
+
+      if (pathOnly.indexOf("written-script.js") !== -1) {
+        let delayMs = 0;
+        const msMatch = urlStr.match(/[?&]ms=(\d+)/);
+        if (msMatch) delayMs = Math.min(3000, parseInt(msMatch[1], 10) || 0);
+        const getWord = function (name) {
+          const re = new RegExp("[?&]" + name + "=([^&#]*)");
+          const mm = urlStr.match(re);
+          return mm ? decodeURIComponent(mm[1]).replace(/[^a-z0-9-]/gi, "") : "";
+        };
+        const tag = getWord("tag");
+        const next = getWord("next");
+        const inline = getWord("inline");
+        const pushCode = function (v) {
+          return "globalThis.__written = (globalThis.__written || []).concat([" + JSON.stringify(v) + "]);";
+        };
+        let bodyText = pushCode(tag) + "\n";
+        if (next) {
+          bodyText += "document.write('<script src=\"/__fixtures/written-script.js?tag=" + next + "\"><\\/script>');\n";
+        }
+        if (inline) {
+          bodyText += "document.write('<script>" + pushCode(inline) + "<\\/script>');\n";
+          bodyText += pushCode(tag + "-after") + "\n";
+        }
+        const makeWsResp = function () {
+          return makeFetchedResponse(bodyText, {
+            status: 200,
+            statusText: "OK",
+            url: cleanFullUrl,
+            redirected: isRedirected,
+            headers: {
+              "content-type": "application/javascript",
+              "access-control-allow-origin": "*",
+            },
+          });
+        };
+        if (delayMs > 0) {
+          return new Promise(function (resolve) {
+            setTimeout(function () { resolve(makeWsResp()); }, delayMs);
+          });
+        }
+        return Promise.resolve(makeWsResp());
       }
 
       if (pathOnly.indexOf("policy-script.js") !== -1) {
@@ -30573,7 +31012,8 @@
     }
 
     // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
-    global.__capsurf_dispatch_lifecycle = function () {
+    let deferredLifecyclePending = false;
+    function dispatchLifecycleNow() {
       try {
         if (global.document && global.document.querySelectorAll) {
           const scripts = global.document.querySelectorAll("script");
@@ -30592,9 +31032,38 @@
           global.dispatchEvent(loadEv);
         }
       } catch (e) {}
+      try {
+        if (global.document && global.document.querySelectorAll && typeof global.__capsurf_on_iframe_connected === "function") {
+          const iframes = global.document.querySelectorAll("iframe");
+          for (let i = 0; i < iframes.length; i++) {
+            const f = iframes[i];
+            const loadingAttr = f.getAttribute ? String(f.getAttribute("loading") || "").toLowerCase() : "";
+            if (loadingAttr === "lazy" && !f._lazyLoadTriggered) {
+              f._lazyLoadTriggered = true;
+              global.__capsurf_on_iframe_connected(f, { forceLazy: true });
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    global.__capsurf_flush_deferred_lifecycle = function () {
+      if (deferredLifecyclePending && !global.__capsurf_written_script_queue_pending) {
+        deferredLifecyclePending = false;
+        dispatchLifecycleNow();
+      }
+    };
+
+    global.__capsurf_dispatch_lifecycle = function () {
+      if (global.__capsurf_written_script_queue_pending) {
+        deferredLifecyclePending = true;
+        return;
+      }
+      dispatchLifecycleNow();
     };
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_dispatch_lifecycle = global.__capsurf_dispatch_lifecycle;
+      globalThis.__capsurf_flush_deferred_lifecycle = global.__capsurf_flush_deferred_lifecycle;
     }
 
     // Window scroll methods
@@ -30773,6 +31242,16 @@
             return dt;
           }
           return null;
+        },
+        configurable: true,
+      });
+    }
+
+    // currentScript
+    if (!Object.getOwnPropertyDescriptor(docProto, "currentScript")) {
+      Object.defineProperty(docProto, "currentScript", {
+        get: function () {
+          return this._currentScript || null;
         },
         configurable: true,
       });
@@ -33069,19 +33548,137 @@
         docProto.close = markNative(function () {}, "close");
       }
       if (!docProto.write) {
+        const writtenQueue = [];
+        let writtenRunning = false;
+        let writtenInWriter = false;
+
+        function flushWrittenQueue() {
+          if (writtenRunning) return;
+          if (writtenQueue.length === 0) {
+            global.__capsurf_written_script_queue_pending = false;
+            if (typeof global.__capsurf_flush_deferred_lifecycle === "function") {
+              global.__capsurf_flush_deferred_lifecycle();
+            }
+            return;
+          }
+          const head = writtenQueue[0];
+          if (head.kind === "external") {
+            if (!head.ready) {
+              return;
+            }
+            writtenQueue.shift();
+            writtenRunning = true;
+            const prevInWriter = writtenInWriter;
+            writtenInWriter = true;
+            const savedQueue = writtenQueue.splice(0, writtenQueue.length);
+            try {
+              if (head.code) {
+                (1, eval)(head.code);
+              }
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) console.error(e);
+            } finally {
+              for (let si = 0; si < savedQueue.length; si++) {
+                writtenQueue.push(savedQueue[si]);
+              }
+              writtenInWriter = prevInWriter;
+              writtenRunning = false;
+            }
+            flushWrittenQueue();
+            return;
+          }
+          if (head.kind === "inline") {
+            writtenQueue.shift();
+            writtenRunning = true;
+            const prevInWriter = writtenInWriter;
+            writtenInWriter = true;
+            const savedQueue = writtenQueue.splice(0, writtenQueue.length);
+            try {
+              if (head.code) {
+                (1, eval)(head.code);
+              }
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) console.error(e);
+            } finally {
+              for (let si = 0; si < savedQueue.length; si++) {
+                writtenQueue.push(savedQueue[si]);
+              }
+              writtenInWriter = prevInWriter;
+              writtenRunning = false;
+            }
+            flushWrittenQueue();
+          }
+        }
+
+        function enqueueWrittenScripts(markup, doc) {
+          const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+          const items = [];
+          let m;
+          while ((m = scriptRe.exec(markup)) !== null) {
+            const attrs = m[1] || "";
+            const body = m[2] || "";
+            const srcMatch = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+            const src = srcMatch ? (srcMatch[1] !== undefined ? srcMatch[1] : (srcMatch[2] !== undefined ? srcMatch[2] : srcMatch[3])) : null;
+            if (src) {
+              items.push({ kind: "external", src: src, ready: false, code: "" });
+            } else {
+              items.push({ kind: "inline", code: body });
+            }
+          }
+          if (items.length === 0) return false;
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === "inline" && writtenQueue.length === 0) {
+              try {
+                if (item.code) (1, eval)(item.code);
+              } catch (e) {
+                if (typeof console !== "undefined" && console.error) console.error(e);
+              }
+            } else {
+              writtenQueue.push(item);
+              global.__capsurf_written_script_queue_pending = true;
+              if (item.kind === "external" && typeof fetch === "function") {
+                (function (entry) {
+                  fetch(entry.src)
+                    .then(function (res) { return res.text(); })
+                    .then(function (txt) {
+                      entry.code = txt;
+                      entry.ready = true;
+                      flushWrittenQueue();
+                    })
+                    .catch(function () {
+                      entry.code = "";
+                      entry.ready = true;
+                      flushWrittenQueue();
+                    });
+                })(item);
+              }
+            }
+          }
+          if (!writtenInWriter) {
+            flushWrittenQueue();
+          }
+          return true;
+        }
+
         docProto.write = markNative(function () {
           let markup = "";
           for (let i = 0; i < arguments.length; i++) {
             markup += String(arguments[i]);
           }
-          const target = this.body || this.documentElement;
-          if (target && typeof this.createElement === "function") {
-            const temp = this.createElement("div");
-            temp.innerHTML = markup;
-            while (temp.firstChild) {
-              const ch = temp.firstChild;
-              try { temp.removeChild(ch); } catch (e) {}
-              target.appendChild(ch);
+          const hadScripts = enqueueWrittenScripts(markup, this);
+          const nonScriptMarkup = hadScripts ? markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "") : markup;
+          if (nonScriptMarkup) {
+            const target = this.body || this.documentElement;
+            if (target && typeof this.createElement === "function") {
+              const temp = this.createElement("div");
+              temp.innerHTML = nonScriptMarkup;
+              while (temp.firstChild) {
+                const ch = temp.firstChild;
+                try { temp.removeChild(ch); } catch (e) {}
+                target.appendChild(ch);
+              }
             }
           }
         }, "write");

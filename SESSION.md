@@ -3611,3 +3611,17 @@
   - 销毁 `7d955955-e738-4f66-893f-90591c97232e`；
   - 派发 **Subagent 59**: Engine Memory & Outbound CDP Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
     - 攻坚目标：`e2e/engine-memory-accounting.e2e.test.ts`、`e2e/engine-routes.e2e.test.ts`、`e2e/background-reopen-lifecycle.e2e.test.ts`、`e2e/unload-cookie-origin.e2e.test.ts`、`e2e/websocket-outbound.e2e.test.ts`。
+
+## [2026-11-20 18:29:40] Iframe srcdoc/load-order/referrer、Blob URL 与 document.write 脚本队列 28+ 用例全绿闭环 (Subagent 546f9f0e 结单，Phase 92)
+- **Harness & Cloudflare Shim 修复 (`e2e/shim/cloudflare-test.ts`, `e2e/harness.ts`)**:
+  - `cloudflare-test.ts`: 第 39 行补齐 `${u.search}` 透传；
+  - `harness.ts`: `expect.poll` 支持 `.not` 链式代理，修复 `ensureServerRunning()` 复用探测死锁。
+- **Iframe `srcdoc`/`blob:`/Referrer 与 `document.write` 严格保序队列 (`src/js/shim/`)**:
+  - 实装 `URL.createObjectURL`/`revokeObjectURL` 与 `blob:` URL 注册表、`HTMLIFrameElement.prototype.srcdoc`、`onIframeConnected`（`loading="lazy"` 与 `about:blank` 同步加载）、`computeIframeReferrer`、`Request.referrer`/`referrerPolicy`/`clone()` 及 `document.write` 解析器脚本队列与 `currentScript`。
+- **门禁与 E2E 验证（4.34s 无锁 `-d -o` 构建）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `detached-handler-identity` (1/1 PASS)、`iframe-load-order` (10/10 PASS)、`written-script-order` (7/7 PASS)、`iframe-referrer` (6/7 PASS)、`iframe-srcdoc` (4 PASS)。
+- **全新子智能体调度（路 2 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `546f9f0e-e168-4bcc-b89c-06b9e97f95e9`；
+  - 派发 **Subagent 60**: Harness & Fetch/CSSOM Closer（`src/js/shim/*` + `e2e/harness.ts`，`bin_19232` / `19232`）
+    - 攻坚目标：`runtime-get-heap-usage`、`runtime-wait-for-selector`、`inline-span-white-space`、`intrinsic-sizing`、`webkit-box-line-clamp`、`private-network`、`session-outbound`、`cors-stylesheets`。

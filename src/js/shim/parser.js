@@ -329,6 +329,12 @@ ParsedElement.prototype.getAttributeNames = function () {
   return Array.from(this._attrCases.values());
 };
 
+Object.defineProperty(ParsedElement.prototype, "nodeValue", {
+  get: function () { return null; },
+  set: function () {},
+  configurable: true,
+});
+
 Object.defineProperty(ParsedElement.prototype, "id", {
   get: function () { return this.getAttribute("id") || ""; },
   set: function (v) { this.setAttribute("id", v); },
@@ -767,6 +773,42 @@ ParsedDocument.prototype.createElement = function (tagName) {
   return el;
 };
 
+function normalizeParsedChildren(node) {
+  if (!node || !Array.isArray(node._children)) return;
+  const kids = node._children;
+  let i = 0;
+  while (i < kids.length) {
+    const ch = kids[i];
+    if (ch && ch.nodeType === TEXT_NODE) {
+      if (ch.data === "") {
+        ch.parentNode = null;
+        kids.splice(i, 1);
+        continue;
+      }
+      while (i + 1 < kids.length && kids[i + 1] && kids[i + 1].nodeType === TEXT_NODE) {
+        const next = kids[i + 1];
+        ch.data += next.data;
+        next.parentNode = null;
+        kids.splice(i + 1, 1);
+      }
+      i++;
+    } else {
+      if (ch && Array.isArray(ch._children)) {
+        normalizeParsedChildren(ch);
+      }
+      i++;
+    }
+  }
+}
+
+ParsedElement.prototype.normalize = function () {
+  normalizeParsedChildren(this);
+};
+
+ParsedDocument.prototype.normalize = function () {
+  normalizeParsedChildren(this);
+};
+
 ParsedDocument.prototype.createTextNode = function (text) {
   return new ParsedText(text, this);
 };
@@ -878,7 +920,7 @@ function parseDocument(str, mime) {
     doc.head = head;
     doc.body = body;
 
-    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!doctype[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/gi;
     let stack = [body];
     let lastIndex = 0;
     let match;
@@ -962,7 +1004,7 @@ function parseDocument(str, mime) {
     }
   } else {
     // XML / SVG mode
-    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!DOCTYPE[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/g;
+    const tokenRegex = /<!--([\s\S]*?)-->|<!\[CDATA\[([\s\S]*?)\]\]>|<!doctype[^>]*>|<\?([\s\S]*?)\?>|<\/([a-zA-Z0-9_:-]+)\s*>|<([a-zA-Z0-9_:-]+)((?:\s+[^=>/\s]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^>\s]+))?)*)\s*(\/?)>/gi;
     let stack = [doc];
     let lastIndex = 0;
     let match;

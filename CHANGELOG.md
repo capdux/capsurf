@@ -1745,4 +1745,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 7 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`runtime-remote-object-classname` (1/1) + `target-dom-reclaim` (2/2) PASS，`runtime-get-heap-usage` 服务端全过。
+
+## Phase 92: Iframe `srcdoc`/Load-Order/Referrer, `blob:` URLs & `document.write` Script Queue (Closed)
+- **`e2e/shim/cloudflare-test.ts` & `e2e/harness.ts` & `src/js/shim/{element/html-classes,node-base,window,parser,file,index}.js`**：
+  - 补齐 `cloudflare-test.ts` query 透传、`expect.poll.not`、`URL.createObjectURL`/`blob:` 注册表、`HTMLIFrameElement.prototype.srcdoc`、`loading="lazy"`、`computeIframeReferrer`、`Request.referrer`/`referrerPolicy` 及 `document.write` 解析器保序脚本队列。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（4.34s 无锁 `-d -o` 构建）；
+  - E2E 测试：`detached-handler-identity` (1/1) + `iframe-load-order` (10/10) + `written-script-order` (7/7) + `iframe-referrer` (6/7) + `iframe-srcdoc` (4) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

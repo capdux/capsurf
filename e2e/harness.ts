@@ -1676,7 +1676,7 @@ let sharedPage: Page | null = null;
 let sharedBrowser: Browser | null = null;
 
 export async function ensureServerRunning(): Promise<string> {
-  if (sharedProc && sharedWsUrl) {
+  if (sharedWsUrl && (sharedProc || (sharedCdp && sharedCdp.ws && (sharedCdp.ws as any).readyState === 1))) {
     return sharedWsUrl;
   }
   const port = DEFAULT_PORT;
@@ -1955,20 +1955,26 @@ expect.poll = function (fn: () => any, { timeout = 10000, interval = 50 } = {}) 
     throw lastError || new Error(`expect.poll timed out after ${timeout}ms`);
   }
 
-  return new Proxy({} as any, {
-    get(_target, prop: string) {
-      return async function (...args: any[]) {
-        await pollUntil((val) => {
-          const exp: any = expect(val);
-          if (typeof exp[prop] === "function") {
-            exp[prop](...args);
-          } else {
-            throw new Error(`Matcher ${prop} is not a function on expect`);
-          }
-        });
-      };
-    },
-  });
+  function makePollProxy(negated: boolean): any {
+    return new Proxy({} as any, {
+      get(_target, prop: string) {
+        if (prop === "not") {
+          return makePollProxy(!negated);
+        }
+        return async function (...args: any[]) {
+          await pollUntil((val) => {
+            const exp: any = negated ? expect(val).not : expect(val);
+            if (typeof exp[prop] === "function") {
+              exp[prop](...args);
+            } else {
+              throw new Error(`Matcher ${prop} is not a function on expect`);
+            }
+          });
+        };
+      },
+    });
+  }
+  return makePollProxy(false);
 };
 
 function createCfWebSocketFromSocket(socket: any, head: Buffer) {

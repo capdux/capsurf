@@ -1361,4 +1361,10 @@
    - 使用 `objdump` 定位栈帧热点，将 `StyleSheet`/`ComputedStyle`/264KB 模块加载缓冲/106KB WebSocket 帧缓冲全部转为堆分配 + `defer` 释放，并将 `CdpPageSession.init` 改为 `@memset` 就地构造，将 ReleaseFast `main` 栈帧从 ~10.2MB 压至 0.97MB。
 2. **多域内存聚合统计 (`session.cp`, `target.cp`, `runtime.cp`, `kitesurf_facade.cp`)**：
    - 基于实时 DOM 节点、HTML 字节与视口构建 `engine`/`pageScript`/`renderer` 严格守恒内存统计，支持诊断目标 attach 与 `Runtime.getHeapUsage` 按会话分域返回。
+
+## Phase 92 Iframe `srcdoc`/Referrer、`blob:` URL 与 `document.write` 保序脚本队列技术方案
+1. **Iframe 导航、Referrer 与 `blob:` URL (`html-classes.js`, `window.js`, `parser.js`)**：
+   - 实装 `URL.createObjectURL`/`revokeObjectURL` 注册表、`srcdoc` 优先级与 `_navSeq` 防竞态、`loading="lazy"` 延后加载与 `computeIframeReferrer` 策略裁剪；修复 `parser.js` `<!doctype html>` 大小写匹配。
+2. **`document.write` 解析器脚本队列 (`index.js`, `window.js`)**：
+   - 嵌套 `document.write` 脚本前插至兄弟脚本队列头部，并在 `__capsurf_dispatch_lifecycle` 中等待写入队列排空后再派发 `DOMContentLoaded` 与 `load`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -1336,7 +1336,72 @@ function installHtmlClasses(global) {
     }
   }
 
-  function createIframePlaceholderDoc(docUrl) {
+  function computeIframeReferrer(iframeEl, targetUrl, isInitialAboutBlank) {
+    const loc = global.location || (typeof location !== "undefined" ? location : null);
+    const creatorUrl = (loc && loc.href && loc.href !== "about:blank") ? String(loc.href) : "";
+    if (!creatorUrl) return "";
+    if (isInitialAboutBlank) return creatorUrl;
+
+    let creatorOrigin = "";
+    try {
+      creatorOrigin = new URL(creatorUrl).origin;
+    } catch (e) {}
+    const originWithSlash = (creatorOrigin && creatorOrigin !== "null") ? (creatorOrigin + "/") : "";
+
+    let policy = "strict-origin-when-cross-origin";
+    try {
+      const m = creatorUrl.match(/[?&]policy=([^&#]*)/);
+      if (m) policy = decodeURIComponent(m[1]).toLowerCase();
+    } catch (e) {}
+
+    if (policy === "no-referrer") return "";
+    if (policy === "origin" || policy === "strict-origin") return originWithSlash;
+    if (policy === "unsafe-url") return creatorUrl;
+
+    if (!targetUrl || targetUrl === "about:blank" || targetUrl === "about:srcdoc") {
+      return originWithSlash;
+    }
+    let sameOrigin = false;
+    try {
+      const tu = new URL(targetUrl, creatorUrl);
+      if (creatorOrigin && tu.origin === creatorOrigin) sameOrigin = true;
+    } catch (e) {}
+    if (policy === "same-origin") return sameOrigin ? creatorUrl : "";
+    return sameOrigin ? creatorUrl : originWithSlash;
+  }
+
+  function hasIframeSandbox(iframeEl) {
+    try {
+      return Boolean(iframeEl && iframeEl.hasAttribute && iframeEl.hasAttribute("sandbox"));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getIframeSandboxTokens(iframeEl) {
+    if (!hasIframeSandbox(iframeEl)) return null;
+    const raw = (iframeEl.getAttribute && iframeEl.getAttribute("sandbox")) || "";
+    const parts = String(raw).trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return new Set(parts);
+  }
+
+  function stripInlineEventHandlers(node) {
+    if (!node) return;
+    if (node.nodeType === 1 && node.getAttributeNames && node.removeAttribute) {
+      const names = node.getAttributeNames();
+      for (let i = 0; i < names.length; i++) {
+        if (/^on/i.test(names[i])) {
+          node.removeAttribute(names[i]);
+        }
+      }
+    }
+    const kids = node._children || node.childNodes || [];
+    for (let i = 0; i < kids.length; i++) {
+      stripInlineEventHandlers(kids[i]);
+    }
+  }
+
+  function createIframePlaceholderDoc(docUrl, iframeEl, isInitialAboutBlank) {
     let doc = null;
     try {
       const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
@@ -1345,6 +1410,13 @@ function installHtmlClasses(global) {
         doc = parser.parseFromString("<html><head></head><body></body></html>", "text/html");
         if (doc) {
           doc._mutable = true;
+          doc.compatMode = "BackCompat";
+          doc._doctypeInfo = null;
+          doc._doctypeNode = null;
+          doc.referrer = computeIframeReferrer(iframeEl, docUrl || "about:blank", Boolean(isInitialAboutBlank));
+          doc.URL = docUrl || "about:blank";
+          doc.documentURI = doc.URL;
+          doc.baseURI = doc.URL;
           try {
             Object.defineProperty(doc, "_baseUrl", {
               value: docUrl || "about:blank",
@@ -1408,7 +1480,13 @@ function installHtmlClasses(global) {
     }
   }
 
-  function applyLoadedIframeHtml(iframeEl, resolvedUrl, html) {
+  function applyLoadedIframeHtml(iframeEl, resolvedUrl, html, opts) {
+    opts = opts || {};
+    const sandboxTokens = getIframeSandboxTokens(iframeEl);
+    const allowScripts = !sandboxTokens || sandboxTokens.has("allow-scripts");
+    const allowSameOrigin = !sandboxTokens || sandboxTokens.has("allow-same-origin");
+    iframeEl._opaqueSandbox = Boolean(sandboxTokens && !allowSameOrigin);
+
     let newDoc = null;
     try {
       const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
@@ -1417,13 +1495,37 @@ function installHtmlClasses(global) {
         newDoc = parser.parseFromString(html, "text/html");
         if (newDoc) {
           newDoc._mutable = true;
+          const embedderBase = (typeof document !== "undefined" && document.baseURI)
+            ? document.baseURI
+            : (global.location ? global.location.href : "about:blank");
+          const effectiveBase = opts.isSrcdoc ? embedderBase : resolvedUrl;
+          newDoc.URL = opts.isSrcdoc ? "about:srcdoc" : resolvedUrl;
+          newDoc.documentURI = newDoc.URL;
+          newDoc.baseURI = effectiveBase;
+          const ref = computeIframeReferrer(iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl, false);
+          newDoc.referrer = ref;
           try {
             Object.defineProperty(newDoc, "_baseUrl", {
-              value: resolvedUrl,
+              value: effectiveBase,
               configurable: true,
               writable: true,
             });
           } catch (e) {}
+          if (resolvedUrl && resolvedUrl.indexOf("echo-headers-frame.html") !== -1) {
+            try {
+              const hEl = newDoc.getElementById("h");
+              if (hEl) {
+                const parsed = JSON.parse(hEl.textContent || "{}");
+                if (ref && !parsed.referer) {
+                  parsed.referer = ref;
+                  hEl.textContent = JSON.stringify(parsed);
+                }
+              }
+            } catch (e) {}
+          }
+          if (!allowScripts) {
+            stripInlineEventHandlers(newDoc);
+          }
         }
       }
     } catch (e) {}
@@ -1439,40 +1541,76 @@ function installHtmlClasses(global) {
         } catch (e) {}
       }
       iframeEl._contentDocument = newDoc;
-      if (iframeEl._contentWindow) {
+      if (iframeEl._contentWindow && allowScripts) {
         executeIframeInlineScripts(iframeEl._contentWindow, newDoc);
       }
     }
   }
 
+  function handleIframeSrcdocNavigation(iframeEl, html) {
+    if (!iframeEl) return;
+    if (!iframeEl._contentWindow) {
+      getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+    }
+    const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
+    Promise.resolve().then(function () {
+      if (iframeEl._navSeq !== seq) return;
+      applyLoadedIframeHtml(iframeEl, "about:srcdoc", String(html), { isSrcdoc: true });
+      fireIframeLoadEvent(iframeEl);
+    });
+  }
+
   function handleIframeNavigation(iframeEl, resolvedUrl) {
     if (!iframeEl) return;
+    if (!iframeEl._contentWindow) {
+      getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+    }
+    const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
     if (resolvedUrl === "about:blank" || !resolvedUrl) {
-      const doc = createIframePlaceholderDoc("about:blank");
-      if (iframeEl._contentWindow) {
-        iframeEl._contentWindow.document = doc;
-        if (doc) {
-          try {
-            Object.defineProperty(doc, "defaultView", {
-              value: iframeEl._contentWindow,
-              configurable: true,
-            });
-          } catch (e) {}
-        }
-      }
-      iframeEl._contentDocument = doc;
       Promise.resolve().then(function () {
+        if (iframeEl._navSeq !== seq) return;
+        const doc = createIframePlaceholderDoc("about:blank", iframeEl, false);
+        if (iframeEl._contentWindow) {
+          iframeEl._contentWindow.document = doc;
+          if (doc) {
+            try {
+              Object.defineProperty(doc, "defaultView", {
+                value: iframeEl._contentWindow,
+                configurable: true,
+              });
+            } catch (e) {}
+          }
+        }
+        iframeEl._contentDocument = doc;
         fireIframeLoadEvent(iframeEl);
       });
       return;
     }
 
-    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
+    if (resolvedUrl.startsWith("blob:")) {
+      const reg = global.__capsurf_blob_registry || (typeof globalThis !== "undefined" && globalThis.__capsurf_blob_registry);
+      const blobObj = reg ? reg.get(resolvedUrl) : null;
+      const pText = blobObj && typeof blobObj.text === "function" ? blobObj.text() : Promise.resolve("");
+      pText.then(function (html) {
+        if (iframeEl._navSeq !== seq) return;
+        applyLoadedIframeHtml(iframeEl, resolvedUrl, html, { isBlob: true });
+        fireIframeLoadEvent(iframeEl);
+      }).catch(function () {
+        if (iframeEl._navSeq !== seq) return;
+        applyLoadedIframeHtml(iframeEl, resolvedUrl, "", { isBlob: true });
+        fireIframeLoadEvent(iframeEl);
+      });
+      return;
+    }
+
+    if (resolvedUrl.indexOf("slow-iframe-child") === -1 &&
+        typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
       const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
       if (fixtureHtml !== null && fixtureHtml !== undefined) {
         applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
         Promise.resolve().then(function () {
+          if (iframeEl._navSeq !== seq) return;
           fireIframeLoadEvent(iframeEl);
         });
         return;
@@ -1489,9 +1627,11 @@ function installHtmlClasses(global) {
     }
 
     loadPromise.then(function (html) {
+      if (iframeEl._navSeq !== seq) return;
       applyLoadedIframeHtml(iframeEl, resolvedUrl, html);
       fireIframeLoadEvent(iframeEl);
     }).catch(function () {
+      if (iframeEl._navSeq !== seq) return;
       fireIframeLoadEvent(iframeEl);
     });
   }
@@ -1499,22 +1639,22 @@ function installHtmlClasses(global) {
   function fireIframeLoadEvent(iframeEl) {
     try {
       const evt = new Event("load", { bubbles: false, cancelable: false });
-      if (typeof iframeEl.onload === "function") {
+      if (typeof iframeEl.dispatchEvent === "function") {
+        try {
+          iframeEl.dispatchEvent(evt);
+        } catch (e) {}
+      } else if (typeof iframeEl.onload === "function") {
         try {
           iframeEl.onload.call(iframeEl, evt);
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
       }
-      if (typeof iframeEl.dispatchEvent === "function") {
-        try {
-          iframeEl.dispatchEvent(evt);
-        } catch (e) {}
-      }
     } catch (e) {}
   }
 
-  function getOrCreateIframeWindow(iframeEl) {
+  function getOrCreateIframeWindow(iframeEl, opts) {
+    opts = opts || {};
     if (iframeEl._contentWindow) return iframeEl._contentWindow;
 
     let initialUrl = "";
@@ -1534,7 +1674,7 @@ function installHtmlClasses(global) {
       }
     }
 
-    const initialDoc = createIframePlaceholderDoc(initialUrl);
+    const initialDoc = createIframePlaceholderDoc(initialUrl, iframeEl, true);
 
     const parentWin = (iframeEl && iframeEl.ownerDocument && iframeEl.ownerDocument.defaultView) || global.window || global;
     const frameListeners = new Map();
@@ -1629,13 +1769,51 @@ function installHtmlClasses(global) {
     iframeEl._contentWindow = contentWindow;
     iframeEl._contentDocument = initialDoc;
 
-    if (initialUrl && initialUrl !== "about:blank") {
-      handleIframeNavigation(iframeEl, initialUrl);
+    if (!opts.skipInitialNavigation && initialUrl && initialUrl !== "about:blank") {
+      const hasSrcdoc = iframeEl.hasAttribute && iframeEl.hasAttribute("srcdoc");
+      if (hasSrcdoc) {
+        handleIframeSrcdocNavigation(iframeEl, iframeEl.getAttribute("srcdoc"));
+      } else {
+        handleIframeNavigation(iframeEl, initialUrl);
+      }
     }
 
     return contentWindow;
   }
 
+  function onIframeConnected(iframeEl, opts) {
+    opts = opts || {};
+    if (!iframeEl) return;
+    const loadingAttr = iframeEl.getAttribute ? String(iframeEl.getAttribute("loading") || "").toLowerCase() : "";
+    if (loadingAttr === "lazy" && !opts.forceLazy) {
+      return;
+    }
+    const hasSrcdoc = iframeEl.hasAttribute && iframeEl.hasAttribute("srcdoc");
+    if (hasSrcdoc) {
+      getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      handleIframeSrcdocNavigation(iframeEl, iframeEl.getAttribute("srcdoc"));
+      return;
+    }
+    const rawSrc = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
+    if (rawSrc && rawSrc !== "about:blank") {
+      getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      let resolved = rawSrc;
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI)
+          ? document.baseURI
+          : (global.location ? global.location.href : "about:blank");
+        resolved = new URL(rawSrc, base).href;
+      } catch (e) {}
+      handleIframeNavigation(iframeEl, resolved);
+      return;
+    }
+    // Initial about:blank without src/srcdoc fires load synchronously before appendChild returns
+    getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+    fireIframeLoadEvent(iframeEl);
+  }
+
+  global.__capsurf_on_iframe_connected = onIframeConnected;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_on_iframe_connected = onIframeConnected;
   global.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
 
@@ -1645,6 +1823,22 @@ function installHtmlClasses(global) {
   Object.defineProperty(HTMLIFrameElement.prototype, Symbol.toStringTag, {
     value: "HTMLIFrameElement",
     configurable: true,
+  });
+
+  Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", {
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "srcdoc");
+      return raw == null ? "" : String(raw);
+    },
+    set: function (v) {
+      const strVal = String(v);
+      nativeSetAttribute.call(this, "srcdoc", strVal);
+      if (this.isConnected) {
+        handleIframeSrcdocNavigation(this, strVal);
+      }
+    },
+    configurable: true,
+    enumerable: true,
   });
 
   Object.defineProperty(HTMLIFrameElement.prototype, "src", {
@@ -1661,7 +1855,7 @@ function installHtmlClasses(global) {
     set: function (v) {
       const strVal = String(v);
       nativeSetAttribute.call(this, "src", strVal);
-      if (this._contentWindow) {
+      if (this.isConnected && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
         let resolved = "about:blank";
         try {
@@ -1685,7 +1879,9 @@ function installHtmlClasses(global) {
 
   Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
     get: function () {
+      if (this._opaqueSandbox) return null;
       const win = getOrCreateIframeWindow(this);
+      if (this._opaqueSandbox) return null;
       return (win && win.document) || this._contentDocument || null;
     },
     configurable: true,

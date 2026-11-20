@@ -449,14 +449,73 @@ markNative(Headers.prototype.entries, "entries");
 markNative(Headers.prototype.keys, "keys");
 markNative(Headers.prototype.values, "values");
 
-function Request(input, init) {
-  init = init || {};
-  this.url = String(input);
-  this.method = (init.method || "GET").toUpperCase();
-  this.headers = new Headers(init.headers);
-  this._rawMimeType = extractMimeFromHeaders(this.headers);
-  this._body = init.body !== undefined ? init.body : "";
+const VALID_REFERRER_POLICIES = new Set([
+  "",
+  "no-referrer",
+  "no-referrer-when-downgrade",
+  "same-origin",
+  "origin",
+  "strict-origin",
+  "origin-when-cross-origin",
+  "strict-origin-when-cross-origin",
+  "unsafe-url",
+]);
+
+function resolveRequestReferrer(rawRef) {
+  const s = String(rawRef);
+  if (s === "" || s === "no-referrer") return "";
+  if (s === "client" || s === "about:client") return "about:client";
+  try {
+    const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
+    const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+    const parsed = new URL(s, base);
+    const curOrigin = (loc && loc.origin && loc.origin !== "null") ? loc.origin : "";
+    if (curOrigin && parsed.origin !== curOrigin) {
+      return "about:client";
+    }
+    return parsed.href;
+  } catch (e) {
+    throw new TypeError("Failed to construct 'Request': Invalid referrer URL '" + s + "'");
+  }
 }
+
+function Request(input, init) {
+  const isReq = input && typeof input === "object" && input instanceof Request;
+  init = init || {};
+  const rawUrl = isReq ? input.url : String(input);
+  try {
+    const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
+    const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+    this.url = new URL(rawUrl, base).href;
+  } catch (e) {
+    this.url = rawUrl;
+  }
+  this.method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
+  this.headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
+  this._rawMimeType = extractMimeFromHeaders(this.headers);
+  this._body = init.body !== undefined ? init.body : (isReq ? input._body : "");
+  this.mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+  this.credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
+  this.cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
+
+  const rp = init.referrerPolicy !== undefined ? String(init.referrerPolicy) : (isReq ? input.referrerPolicy : "");
+  if (!VALID_REFERRER_POLICIES.has(rp)) {
+    throw new TypeError("Failed to construct 'Request': The provided value '" + rp + "' is not a valid enum value of type ReferrerPolicy.");
+  }
+  this.referrerPolicy = rp;
+
+  if (init.referrer !== undefined) {
+    this.referrer = resolveRequestReferrer(init.referrer);
+  } else if (isReq) {
+    this.referrer = input.referrer;
+  } else {
+    this.referrer = "about:client";
+  }
+}
+
+Request.prototype.clone = function () {
+  return new Request(this);
+};
 
 Request.prototype.blob = function () {
   const mime = this._rawMimeType || "";
@@ -484,6 +543,7 @@ Request.prototype.arrayBuffer = function () {
 };
 
 markNative(Request, "Request");
+markNative(Request.prototype.clone, "clone");
 markNative(Request.prototype.blob, "blob");
 markNative(Request.prototype.text, "text");
 markNative(Request.prototype.json, "json");

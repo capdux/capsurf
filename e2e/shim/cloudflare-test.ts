@@ -36,7 +36,7 @@ export const env = {
       if (upgrade && String(upgrade).toLowerCase() === "websocket") {
         await releaseSharedCdp();
         await new Promise((r) => setTimeout(r, 20));
-        const wsUrl = `ws://127.0.0.1:${DEFAULT_PORT}${u.pathname}`;
+        const wsUrl = `ws://127.0.0.1:${DEFAULT_PORT}${u.pathname}${u.search}`;
         const ws = new WebSocket(wsUrl);
         await new Promise((resolve, reject) => {
           ws.onopen = () => resolve(true);
