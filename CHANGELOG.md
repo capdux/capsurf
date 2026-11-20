@@ -1533,4 +1533,14 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`forms-selection-demo` 100% PASS、`forms-file-input-idl` PASS。
+
+## Phase 65: AbortSignal/MessageChannel Conformance, Event Handler Hydration & Harness Keyboard (100% Closed)
+- **`e2e/harness.ts` & `e2e/harness.js`**：
+  - 补齐 `page.focus(selector)` 与 Puppeteer 兼容 `Keyboard` 类（`down`/`up`/`press`/`type`/`sendCharacter`）。
+- **`src/js/shim/events/dispatch.js` & `src/js/shim/window.js`**：
+  - 修复内联 `on*` 属性水合与 `<body>` 22 项 `WindowEventHandlers` 转发；
+  - 实装 WHATWG `AbortSignal`/`AbortController`（含 `timeout`/`any`/`abort`）与 `MessageChannel`/`MessagePort`/`structuredClone`（含 `DataCloneError` 与 `ArrayBuffer` transfer）。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`defer-shim-abort-timeout` + `event-handler-hydration` + `forms-activation-demo` + `mc-conformance` 共 **4 pass, 0 fail (29 expect calls, 5.17s)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

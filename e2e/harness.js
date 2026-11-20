@@ -396,12 +396,93 @@ class Mouse {
   }
 }
 
+class Keyboard {
+  constructor(page) {
+    this.page = page;
+  }
+  _keyCodeInfo(key) {
+    const map = {
+      Enter: { key: "Enter", code: "Enter", text: "\r" },
+      Tab: { key: "Tab", code: "Tab" },
+      Escape: { key: "Escape", code: "Escape" },
+      Backspace: { key: "Backspace", code: "Backspace" },
+      Delete: { key: "Delete", code: "Delete" },
+      ArrowUp: { key: "ArrowUp", code: "ArrowUp" },
+      ArrowDown: { key: "ArrowDown", code: "ArrowDown" },
+      ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft" },
+      ArrowRight: { key: "ArrowRight", code: "ArrowRight" },
+      Home: { key: "Home", code: "Home" },
+      End: { key: "End", code: "End" },
+      PageUp: { key: "PageUp", code: "PageUp" },
+      PageDown: { key: "PageDown", code: "PageDown" },
+      Space: { key: " ", code: "Space", text: " " },
+      " ": { key: " ", code: "Space", text: " " },
+      Shift: { key: "Shift", code: "ShiftLeft" },
+      Control: { key: "Control", code: "ControlLeft" },
+      Alt: { key: "Alt", code: "AltLeft" },
+      Meta: { key: "Meta", code: "MetaLeft" },
+    };
+    if (map[key]) return map[key];
+    if (key.length === 1) {
+      const upper = key.toUpperCase();
+      const code = /^[A-Z]$/.test(upper) ? `Key${upper}` : (/^[0-9]$/.test(key) ? `Digit${key}` : key);
+      return { key, code, text: key };
+    }
+    return { key, code: key };
+  }
+  async down(key, options = {}) {
+    const info = this._keyCodeInfo(key);
+    const params = {
+      type: "keyDown",
+      key: info.key,
+      code: info.code,
+      modifiers: options.modifiers ?? 0,
+    };
+    if (options.text ?? info.text) {
+      params.text = options.text ?? info.text;
+    }
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchKeyEvent", params);
+  }
+  async up(key, options = {}) {
+    const info = this._keyCodeInfo(key);
+    const params = {
+      type: "keyUp",
+      key: info.key,
+      code: info.code,
+      modifiers: options.modifiers ?? 0,
+    };
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchKeyEvent", params);
+  }
+  async press(key, options = {}) {
+    await this.down(key, options);
+    if (options.delay && options.delay > 0) {
+      await new Promise((r) => setTimeout(r, options.delay));
+    }
+    await this.up(key, options);
+  }
+  async type(text, options = {}) {
+    for (const ch of text) {
+      await this.press(ch, options);
+    }
+  }
+  async sendCharacter(char) {
+    await this.press(char, { text: char });
+  }
+}
+
 class Page {
   cdp;
   _closed = false;
   browserContextId = "default";
   frameId = "capsurf-frame-001";
   mouse;
+  keyboard;
   inFlightEvaluates = new Set;
   _url = "about:blank";
   exposedFunctions = new Map;
@@ -462,6 +543,7 @@ class Page {
   constructor(cdp, browserContextId) {
     this.cdp = cdp;
     this.mouse = new Mouse(this);
+    this.keyboard = new Keyboard(this);
     if (browserContextId) {
       this.browserContextId = browserContextId;
       this.frameId = `capsurf-frame-${browserContextId}`;
@@ -1057,6 +1139,17 @@ class Page {
         throw err;
       }
     }
+  }
+  async focus(selector) {
+    await this.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) {
+        throw new Error(`No element found for selector: ${sel}`);
+      }
+      if (typeof el.focus === "function") {
+        el.focus();
+      }
+    }, selector);
   }
   async type(selector, text) {
     await this.evaluate((sel, txt) => {

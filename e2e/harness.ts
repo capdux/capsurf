@@ -371,11 +371,96 @@ export class Mouse {
   }
 }
 
+export class Keyboard {
+  constructor(private page: Page) {}
+
+  private _keyCodeInfo(key: string): { key: string; code: string; text?: string } {
+    const map: Record<string, { key: string; code: string; text?: string }> = {
+      Enter: { key: "Enter", code: "Enter", text: "\r" },
+      Tab: { key: "Tab", code: "Tab" },
+      Escape: { key: "Escape", code: "Escape" },
+      Backspace: { key: "Backspace", code: "Backspace" },
+      Delete: { key: "Delete", code: "Delete" },
+      ArrowUp: { key: "ArrowUp", code: "ArrowUp" },
+      ArrowDown: { key: "ArrowDown", code: "ArrowDown" },
+      ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft" },
+      ArrowRight: { key: "ArrowRight", code: "ArrowRight" },
+      Home: { key: "Home", code: "Home" },
+      End: { key: "End", code: "End" },
+      PageUp: { key: "PageUp", code: "PageUp" },
+      PageDown: { key: "PageDown", code: "PageDown" },
+      Space: { key: " ", code: "Space", text: " " },
+      " ": { key: " ", code: "Space", text: " " },
+      Shift: { key: "Shift", code: "ShiftLeft" },
+      Control: { key: "Control", code: "ControlLeft" },
+      Alt: { key: "Alt", code: "AltLeft" },
+      Meta: { key: "Meta", code: "MetaLeft" },
+    };
+    if (map[key]) return map[key];
+    if (key.length === 1) {
+      const upper = key.toUpperCase();
+      const code = /^[A-Z]$/.test(upper) ? `Key${upper}` : (/^[0-9]$/.test(key) ? `Digit${key}` : key);
+      return { key, code, text: key };
+    }
+    return { key, code: key };
+  }
+
+  async down(key: string, options: { text?: string; modifiers?: number } = {}): Promise<void> {
+    const info = this._keyCodeInfo(key);
+    const params: any = {
+      type: "keyDown",
+      key: info.key,
+      code: info.code,
+      modifiers: options.modifiers ?? 0,
+    };
+    if (options.text ?? info.text) {
+      params.text = options.text ?? info.text;
+    }
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchKeyEvent", params);
+  }
+
+  async up(key: string, options: { modifiers?: number } = {}): Promise<void> {
+    const info = this._keyCodeInfo(key);
+    const params: any = {
+      type: "keyUp",
+      key: info.key,
+      code: info.code,
+      modifiers: options.modifiers ?? 0,
+    };
+    if (this.page.browserContextId && this.page.browserContextId !== "default") {
+      params.browserContextId = this.page.browserContextId;
+    }
+    await this.page.cdp.send("Input.dispatchKeyEvent", params);
+  }
+
+  async press(key: string, options: { delay?: number; text?: string; modifiers?: number } = {}): Promise<void> {
+    await this.down(key, options);
+    if (options.delay && options.delay > 0) {
+      await new Promise((r) => setTimeout(r, options.delay));
+    }
+    await this.up(key, options);
+  }
+
+  async type(text: string, options: { delay?: number } = {}): Promise<void> {
+    for (const ch of text) {
+      await this.press(ch, options);
+    }
+  }
+
+  async sendCharacter(char: string): Promise<void> {
+    await this.press(char, { text: char });
+  }
+}
+
 export class Page {
   public _closed: boolean = false;
   public browserContextId: string = "default";
   public frameId: string = "capsurf-frame-001";
   public mouse: Mouse;
+  public keyboard: Keyboard;
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
   private _url: string = "about:blank";
   private exposedFunctions = new Map<string, string>();
@@ -472,6 +557,7 @@ export class Page {
 
   constructor(public cdp: CDPClient, browserContextId?: string) {
     this.mouse = new Mouse(this);
+    this.keyboard = new Keyboard(this);
     if (browserContextId) {
       this.browserContextId = browserContextId;
       this.frameId = `capsurf-frame-${browserContextId}`;
@@ -1157,6 +1243,18 @@ export class Page {
         throw err;
       }
     }
+  }
+
+  async focus(selector: string): Promise<void> {
+    await this.evaluate((sel: string) => {
+      const el: any = document.querySelector(sel);
+      if (!el) {
+        throw new Error(`No element found for selector: ${sel}`);
+      }
+      if (typeof el.focus === "function") {
+        el.focus();
+      }
+    }, selector);
   }
 
   async type(selector: string, text: string): Promise<void> {

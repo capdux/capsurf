@@ -212,13 +212,40 @@ function internalDispatch(target, event, trusted) {
       if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
         const propName = "on" + eventType;
         if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
-        if (!entry._hydratedHandlers[propName] && typeof entry.getAttribute === "function") {
+        const hasOwnProp = Object.prototype.hasOwnProperty.call(entry, propName);
+        if (!entry._hydratedHandlers[propName]) {
           entry._hydratedHandlers[propName] = true;
-          const attrVal = entry.getAttribute(propName);
-          if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
-            try {
-              entry[propName] = new Function("event", attrVal);
-            } catch (e) {}
+          if (!hasOwnProp && typeof entry.getAttribute === "function") {
+            const attrVal = entry.getAttribute(propName);
+            if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+              try {
+                entry[propName] = new Function("event", attrVal);
+              } catch (e) {}
+            }
+          } else if (
+            !hasOwnProp &&
+            (entry === global || (typeof window !== "undefined" && entry === window)) &&
+            typeof document !== "undefined" &&
+            document &&
+            document.body &&
+            typeof document.body.getAttribute === "function"
+          ) {
+            const WINDOW_BODY_HANDLERS = {
+              onafterprint: 1, onbeforeprint: 1, onbeforeunload: 1, onblur: 1,
+              onerror: 1, onfocus: 1, onhashchange: 1, onlanguagechange: 1,
+              onload: 1, onmessage: 1, onmessageerror: 1, onoffline: 1,
+              ononline: 1, onpagehide: 1, onpageshow: 1, onpopstate: 1,
+              onrejectionhandled: 1, onresize: 1, onscroll: 1, onstorage: 1,
+              onunhandledrejection: 1, onunload: 1,
+            };
+            if (WINDOW_BODY_HANDLERS[propName] && !Object.prototype.hasOwnProperty.call(document.body, propName)) {
+              const bodyAttr = document.body.getAttribute(propName);
+              if (typeof bodyAttr === "string" && bodyAttr && typeof entry[propName] !== "function") {
+                try {
+                  entry[propName] = new Function("event", bodyAttr);
+                } catch (e) {}
+              }
+            }
           }
         }
         const fn = entry[propName];

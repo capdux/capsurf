@@ -1888,13 +1888,40 @@
         if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
           const propName = "on" + eventType;
           if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
-          if (!entry._hydratedHandlers[propName] && typeof entry.getAttribute === "function") {
+          const hasOwnProp = Object.prototype.hasOwnProperty.call(entry, propName);
+          if (!entry._hydratedHandlers[propName]) {
             entry._hydratedHandlers[propName] = true;
-            const attrVal = entry.getAttribute(propName);
-            if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
-              try {
-                entry[propName] = new Function("event", attrVal);
-              } catch (e) {}
+            if (!hasOwnProp && typeof entry.getAttribute === "function") {
+              const attrVal = entry.getAttribute(propName);
+              if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+                try {
+                  entry[propName] = new Function("event", attrVal);
+                } catch (e) {}
+              }
+            } else if (
+              !hasOwnProp &&
+              (entry === global || (typeof window !== "undefined" && entry === window)) &&
+              typeof document !== "undefined" &&
+              document &&
+              document.body &&
+              typeof document.body.getAttribute === "function"
+            ) {
+              const WINDOW_BODY_HANDLERS = {
+                onafterprint: 1, onbeforeprint: 1, onbeforeunload: 1, onblur: 1,
+                onerror: 1, onfocus: 1, onhashchange: 1, onlanguagechange: 1,
+                onload: 1, onmessage: 1, onmessageerror: 1, onoffline: 1,
+                ononline: 1, onpagehide: 1, onpageshow: 1, onpopstate: 1,
+                onrejectionhandled: 1, onresize: 1, onscroll: 1, onstorage: 1,
+                onunhandledrejection: 1, onunload: 1,
+              };
+              if (WINDOW_BODY_HANDLERS[propName] && !Object.prototype.hasOwnProperty.call(document.body, propName)) {
+                const bodyAttr = document.body.getAttribute(propName);
+                if (typeof bodyAttr === "string" && bodyAttr && typeof entry[propName] !== "function") {
+                  try {
+                    entry[propName] = new Function("event", bodyAttr);
+                  } catch (e) {}
+                }
+              }
             }
           }
           const fn = entry[propName];
@@ -21509,13 +21536,341 @@
       globalThis.queueMicrotask = queueMicrotaskFn;
     }
 
-    // 5.2 MessagePort & MessageChannel
+    // 5.1b AbortSignal & AbortController (WHATWG DOM)
+    const _abortSignalToken = {};
+    function AbortSignal(token) {
+      if (token !== _abortSignalToken) {
+        throw new TypeError("Illegal constructor");
+      }
+      EventTarget.call(this);
+      this._aborted = false;
+      this._reason = undefined;
+      this._onabort = null;
+      this._dependents = [];
+    }
+    AbortSignal.prototype = Object.create(EventTarget.prototype);
+    AbortSignal.prototype.constructor = AbortSignal;
+
+    Object.defineProperty(AbortSignal.prototype, "aborted", {
+      get: function () {
+        return Boolean(this._aborted);
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(AbortSignal.prototype, "reason", {
+      get: function () {
+        return this._reason;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(AbortSignal.prototype, "onabort", {
+      get: function () {
+        return this._onabort;
+      },
+      set: function (handler) {
+        this._onabort = typeof handler === "function" ? handler : null;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    AbortSignal.prototype.throwIfAborted = function () {
+      if (this._aborted) {
+        throw this._reason;
+      }
+    };
+
+    AbortSignal.prototype._abort = function (reason) {
+      if (this._aborted) return;
+      this._aborted = true;
+      this._reason = reason !== undefined
+        ? reason
+        : new DOMException("This operation was aborted", "AbortError");
+      const evt = new Event("abort");
+      evt.target = this;
+      evt.currentTarget = this;
+      this.dispatchEvent(evt);
+      const deps = this._dependents.slice();
+      this._dependents.length = 0;
+      for (let i = 0; i < deps.length; i++) {
+        deps[i]._abort(this._reason);
+      }
+    };
+
+    AbortSignal.abort = function (reason) {
+      const signal = new AbortSignal(_abortSignalToken);
+      signal._aborted = true;
+      signal._reason = reason !== undefined
+        ? reason
+        : new DOMException("This operation was aborted", "AbortError");
+      return signal;
+    };
+
+    AbortSignal.timeout = function (milliseconds) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': 1 argument required, but only 0 present.");
+      }
+      const ms = Number(milliseconds);
+      if (!Number.isFinite(ms) || ms < 0) {
+        throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': Value is outside the 'unsigned long long' value range.");
+      }
+      const signal = new AbortSignal(_abortSignalToken);
+      global.setTimeout(function () {
+        signal._abort(new DOMException("The operation timed out.", "TimeoutError"));
+      }, Math.floor(ms));
+      return signal;
+    };
+
+    AbortSignal.any = function (signals) {
+      if (signals == null || typeof signals[Symbol.iterator] !== "function") {
+        throw new TypeError("Failed to execute 'any' on 'AbortSignal': The provided value cannot be converted to a sequence.");
+      }
+      const list = Array.from(signals);
+      for (let i = 0; i < list.length; i++) {
+        if (!(list[i] instanceof AbortSignal)) {
+          throw new TypeError("Failed to execute 'any' on 'AbortSignal': Failed to convert value to 'AbortSignal'.");
+        }
+      }
+      const composite = new AbortSignal(_abortSignalToken);
+      for (let i = 0; i < list.length; i++) {
+        if (list[i]._aborted) {
+          composite._aborted = true;
+          composite._reason = list[i]._reason;
+          return composite;
+        }
+      }
+      for (let i = 0; i < list.length; i++) {
+        list[i]._dependents.push(composite);
+      }
+      return composite;
+    };
+
+    markNative(AbortSignal, "AbortSignal");
+    markNative(AbortSignal.abort, "abort");
+    markNative(AbortSignal.timeout, "timeout");
+    markNative(AbortSignal.any, "any");
+    markNative(AbortSignal.prototype.throwIfAborted, "throwIfAborted");
+
+    function AbortController() {
+      this.signal = new AbortSignal(_abortSignalToken);
+    }
+    AbortController.prototype.abort = function (reason) {
+      this.signal._abort(reason);
+    };
+    markNative(AbortController, "AbortController");
+    markNative(AbortController.prototype.abort, "abort");
+
+    global.AbortSignal = AbortSignal;
+    global.AbortController = AbortController;
+    if (typeof window !== "undefined") {
+      window.AbortSignal = AbortSignal;
+      window.AbortController = AbortController;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.AbortSignal = AbortSignal;
+      globalThis.AbortController = AbortController;
+    }
+
+    // 5.2 Structured Clone & MessagePort & MessageChannel
+    const _detachedBuffers = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+
+    function _detachArrayBuffer(ab) {
+      if (typeof ab.transfer === "function") {
+        return ab.transfer();
+      }
+      const copy = new ArrayBuffer(ab.byteLength);
+      new Uint8Array(copy).set(new Uint8Array(ab));
+      if (_detachedBuffers) _detachedBuffers.add(ab);
+      try {
+        Object.defineProperty(ab, "byteLength", {
+          get: function () { return 0; },
+          configurable: true,
+        });
+      } catch (e) {}
+      return copy;
+    }
+
+    function _isDetachedBuffer(ab) {
+      if (_detachedBuffers && _detachedBuffers.has(ab)) return true;
+      if (typeof ab.detached === "boolean" && ab.detached) return true;
+      return false;
+    }
+
+    function _structuredClone(value, transferList, sourcePort) {
+      const transferSet = new Set();
+      const transferMap = new Map();
+      const transferredPorts = [];
+
+      if (transferList !== undefined) {
+        if (transferList === null || typeof transferList[Symbol.iterator] !== "function") {
+          throw new TypeError("Transfer list must be iterable");
+        }
+        const items = Array.from(transferList);
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item === null || typeof item !== "object") {
+            throw new DOMException("Value in transfer list is not transferable.", "DataCloneError");
+          }
+          if (transferSet.has(item)) {
+            throw new DOMException("Transfer list contains duplicate object.", "DataCloneError");
+          }
+          transferSet.add(item);
+
+          if (item instanceof MessagePort) {
+            if (item === sourcePort) {
+              throw new DOMException("Port at index " + i + " is the source port.", "DataCloneError");
+            }
+            if (item._closed) {
+              throw new DOMException("Port at index " + i + " is already closed.", "DataCloneError");
+            }
+            transferredPorts.push(item);
+            transferMap.set(item, item);
+          } else if (item instanceof ArrayBuffer) {
+            if (_isDetachedBuffer(item)) {
+              throw new DOMException("ArrayBuffer at index " + i + " is already detached.", "DataCloneError");
+            }
+            transferMap.set(item, null);
+          } else {
+            throw new DOMException("Value at index " + i + " cannot be transferred.", "DataCloneError");
+          }
+        }
+      }
+
+      const memo = new Map();
+
+      function cloneVal(v) {
+        if (v === null || v === undefined) return v;
+        const t = typeof v;
+        if (t === "boolean" || t === "number" || t === "string" || t === "bigint") {
+          return v;
+        }
+        if (t === "function" || t === "symbol") {
+          throw new DOMException("Failed to clone value of type " + t + ".", "DataCloneError");
+        }
+        if (transferMap.has(v)) {
+          const existing = transferMap.get(v);
+          if (existing !== null) return existing;
+          const transferred = _detachArrayBuffer(v);
+          transferMap.set(v, transferred);
+          return transferred;
+        }
+        if (memo.has(v)) {
+          return memo.get(v);
+        }
+        if (v instanceof MessagePort) {
+          throw new DOMException("MessagePort must be in transfer list to be cloned.", "DataCloneError");
+        }
+        if (v instanceof ArrayBuffer) {
+          if (_isDetachedBuffer(v)) {
+            throw new DOMException("Cannot clone a detached ArrayBuffer.", "DataCloneError");
+          }
+          const copy = new ArrayBuffer(v.byteLength);
+          new Uint8Array(copy).set(new Uint8Array(v));
+          memo.set(v, copy);
+          return copy;
+        }
+        if (ArrayBuffer.isView(v)) {
+          const buf = cloneVal(v.buffer);
+          if (v instanceof DataView) {
+            const dv = new DataView(buf, v.byteOffset, v.byteLength);
+            memo.set(v, dv);
+            return dv;
+          }
+          const Ctor = v.constructor;
+          const ta = new Ctor(buf, v.byteOffset, v.length);
+          memo.set(v, ta);
+          return ta;
+        }
+        if (v instanceof Date) {
+          const d = new Date(v.getTime());
+          memo.set(v, d);
+          return d;
+        }
+        if (v instanceof RegExp) {
+          const re = new RegExp(v.source, v.flags);
+          re.lastIndex = v.lastIndex;
+          memo.set(v, re);
+          return re;
+        }
+        if (v instanceof Map) {
+          const m = new Map();
+          memo.set(v, m);
+          v.forEach(function (val, key) {
+            m.set(cloneVal(key), cloneVal(val));
+          });
+          return m;
+        }
+        if (v instanceof Set) {
+          const s = new Set();
+          memo.set(v, s);
+          v.forEach(function (val) {
+            s.add(cloneVal(val));
+          });
+          return s;
+        }
+        if (Array.isArray(v)) {
+          const arr = new Array(v.length);
+          memo.set(v, arr);
+          for (let i = 0; i < v.length; i++) {
+            if (i in v) {
+              arr[i] = cloneVal(v[i]);
+            }
+          }
+          return arr;
+        }
+        if (v instanceof DOMException) {
+          const de = new DOMException(v.message, v.name);
+          memo.set(v, de);
+          return de;
+        }
+        if (v instanceof Error) {
+          const ErrCtor = (typeof global[v.name] === "function") ? global[v.name] : Error;
+          const err = new ErrCtor(v.message);
+          memo.set(v, err);
+          return err;
+        }
+        const out = {};
+        memo.set(v, out);
+        const keys = Object.keys(v);
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          out[k] = cloneVal(v[k]);
+        }
+        return out;
+      }
+
+      const cloned = cloneVal(value);
+      // Detach any transferred ArrayBuffers that were not referenced inside value
+      transferMap.forEach(function (val, key) {
+        if (val === null && key instanceof ArrayBuffer) {
+          transferMap.set(key, _detachArrayBuffer(key));
+        }
+      });
+
+      return { data: cloned, ports: transferredPorts };
+    }
+
+    if (typeof global.structuredClone !== "function") {
+      const structuredCloneFn = markNative(function structuredClone(value, options) {
+        const transfer = options && typeof options === "object" ? options.transfer : undefined;
+        return _structuredClone(value, transfer, null).data;
+      }, "structuredClone");
+      global.structuredClone = structuredCloneFn;
+      if (typeof window !== "undefined") window.structuredClone = structuredCloneFn;
+      if (typeof globalThis !== "undefined") globalThis.structuredClone = structuredCloneFn;
+    }
+
     function MessagePort() {
       EventTarget.call(this);
       this._entangled = null;
       this._started = false;
       this._closed = false;
       this._queue = [];
+      this._flushScheduled = false;
       this._onmessage = null;
     }
     MessagePort.prototype = Object.create(EventTarget.prototype);
@@ -21533,64 +21888,74 @@
       enumerable: true,
     });
 
+    MessagePort.prototype._scheduleFlush = function () {
+      if (this._flushScheduled || !this._started || this._closed || this._queue.length === 0) return;
+      this._flushScheduled = true;
+      const port = this;
+      global.setTimeout(function () {
+        port._flushScheduled = false;
+        while (port._started && !port._closed && port._queue.length > 0) {
+          const item = port._queue.shift();
+          let evt;
+          if (typeof MessageEvent !== "undefined") {
+            evt = new MessageEvent("message", {
+              data: item.data,
+              ports: item.ports,
+            });
+          } else {
+            evt = new Event("message");
+            evt.data = item.data;
+            evt.ports = Object.freeze(item.ports.slice());
+          }
+          evt.target = port;
+          evt.currentTarget = port;
+          port.dispatchEvent(evt);
+        }
+      }, 0);
+    };
+
+    MessagePort.prototype._enqueue = function (data, ports) {
+      if (this._closed) return;
+      this._queue.push({ data: data, ports: ports || [] });
+      if (this._started) {
+        this._scheduleFlush();
+      }
+    };
+
     MessagePort.prototype.start = function () {
       if (this._started) return;
       this._started = true;
-      while (this._queue.length > 0) {
-        const task = this._queue.shift();
-        task();
+      if (this._queue.length > 0) {
+        this._scheduleFlush();
       }
     };
 
     MessagePort.prototype.close = function () {
       this._closed = true;
-      this._queue = [];
+      this._queue.length = 0;
     };
 
-    MessagePort.prototype.postMessage = function (message, transfer) {
+    MessagePort.prototype.postMessage = function (message, optionsOrTransfer) {
       if (arguments.length === 0) {
         throw new TypeError("Failed to execute 'postMessage' on 'MessagePort': 1 argument required, but only 0 present.");
       }
+      let transferList;
+      if (optionsOrTransfer !== undefined) {
+        if (Array.isArray(optionsOrTransfer)) {
+          transferList = optionsOrTransfer;
+        } else if (optionsOrTransfer && typeof optionsOrTransfer === "object" && "transfer" in optionsOrTransfer) {
+          transferList = optionsOrTransfer.transfer;
+        } else {
+          transferList = optionsOrTransfer;
+        }
+      }
+
+      const result = _structuredClone(message, transferList, this);
       if (this._closed) return;
       const peer = this._entangled;
       if (!peer || peer._closed) return;
 
-      const data = message;
-      const ports = [];
-      if (Array.isArray(transfer)) {
-        for (let i = 0; i < transfer.length; i++) {
-          if (transfer[i] instanceof MessagePort) {
-            ports.push(transfer[i]);
-          }
-        }
-      }
-
-      global.setTimeout(function () {
-        if (peer._closed) return;
-        const deliver = function () {
-          if (peer._closed) return;
-          let evt;
-          if (typeof MessageEvent !== "undefined") {
-            evt = new MessageEvent("message", {
-              data: data,
-              ports: ports,
-            });
-          } else {
-            evt = new Event("message");
-            evt.data = data;
-            evt.ports = Object.freeze(ports.slice());
-          }
-          evt.target = peer;
-          evt.currentTarget = peer;
-          peer.dispatchEvent(evt);
-        };
-
-        if (peer._started) {
-          deliver();
-        } else {
-          peer._queue.push(deliver);
-        }
-      }, 0);
+      peer._enqueue(result.data, result.ports);
     };
 
     markNative(MessagePort, "MessagePort");

@@ -3217,6 +3217,18 @@
   - 派发全新子智能体 **Subagent 30**: Harness & WebAPI Specialist（`e2e/harness.ts` + JS 垫片隔离，端口 `19232`）
     - 攻坚目标：`e2e/demo/forms-activation-demo.e2e.test.ts`、`e2e/demo/event-handler-hydration.e2e.test.ts`、`e2e/demo/defer-shim-abort-timeout.e2e.test.ts`、`e2e/demo/mc-conformance.e2e.test.ts`。
 
+## [2026-11-20 14:38:00] AbortSignal/MessageChannel WHATWG 规范、事件处理器水合与 Harness Keyboard 闭环 (Subagent 1ad54a66 结单，Phase 65)
+- **Harness 键盘与焦点驱动 (`e2e/harness.ts`, `e2e/harness.js`)**:
+  - 补齐 `page.focus(selector)` 与 Puppeteer 兼容 `Keyboard` 类（`down`/`up`/`press`/`type`/`sendCharacter`），打通 `forms-activation-demo` 键盘隐式提交。
+- **事件处理器水合与 WHATWG `AbortSignal`/`MessageChannel` (`src/js/shim/events/dispatch.js`, `src/js/shim/window.js`)**:
+  - `dispatch.js`: 修复内联 `on*` 属性水合覆盖显式 `el.onclick = null` 问题，并支持 `<body>` 22 项 HTML5 `WindowEventHandlers` 转发至 `window`。
+  - `window.js`: 实装 WHATWG `AbortSignal`（`abort`/`timeout`/`any`/`throwIfAborted`）与 `AbortController`；重构 `MessagePort`/`MessageChannel` 及 `_structuredClone`，支持异步 FIFO 队列、`DataCloneError` 与 `ArrayBuffer` 转移分离。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `defer-shim-abort-timeout` + `event-handler-hydration` + `forms-activation-demo` + `mc-conformance`：**4 pass, 0 fail (29 expect() calls, 5.17s)**！
+- **清理旧子智能体**: 销毁 `1ad54a66-d843-44bc-9f85-555d0514e641`。
+
+
 
 
 

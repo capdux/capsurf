@@ -1203,4 +1203,10 @@
    - `setSelectionRange` 按 WebIDL `unsigned long` (`>>> 0`) 规范化负值参数并限制至文本长度，通过同范围去重避免冗余 `select` 事件；实装 `setRangeText` 四种 `selectionMode`（`select`/`start`/`end`/`preserve`）与越界 `IndexSizeError`。
 2. **`FileList`、`DataTransfer` 与 `FormData` 文件条目 (`file.js`, `input.js`, `form-data.js`)**：
    - 基于 `Proxy` 实装带索引访问与迭代器的 `FileList` 与 `DataTransfer`；`HTMLInputElement.prototype.files` 遵循 SameObject 并在 `type="file"` 时返回 `C:\fakepath\<name>`，`FormData` 直接保留 `File`/`Blob` 引用。
+
+## Phase 65 AbortSignal/MessageChannel 规范、事件处理器水合与 Harness Keyboard 技术方案
+1. **`AbortSignal` 与 `MessageChannel` (`src/js/shim/window.js`)**：
+   - 完整实装 `AbortSignal.abort()`/`timeout()`/`any()` 与 `AbortController`；重构 `MessagePort` 异步 FIFO 队列与 `_structuredClone`，在 `postMessage` 阶段同步校验 `DataCloneError`（函数/Symbol、重复或自身 port、已分离 buffer）并执行 `ArrayBuffer` 转移分离。
+2. **内联事件水合与 Harness Keyboard (`dispatch.js`, `e2e/harness.ts`)**：
+   - 水合阶段尊重已显式设置的自有属性（避免覆盖 `el.onclick = null`），并按 HTML5 规范将 `<body>` 上的 22 项 `WindowEventHandlers` 转发至 `window`；在 `e2e/harness.ts` 补齐 `page.focus` 与 `page.keyboard`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
