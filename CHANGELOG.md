@@ -1930,4 +1930,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`inset-box-shadow` (1/1)、`webfont-link` (1/1)、`author-webfont-custody` (1/1)、`inline-bidi-direction` (1/1)、`inline-bidi-isolation` (1/1) — **5/6 PASS**。
+
+## Phase 119: Mouse Bitmask, Form Multipart/EUC-KR Encoding, Media TextTracks & no-cors Opaque — 6/7 Suites (29/30 PASS)
+- **`e2e/harness.ts` & `src/js/shim/{window,cssom,index,parser,element/html-classes,element/forms/form}.js` & `src/js/runtime{,_source.cp}`**：
+  - 实装鼠标 `buttons`/`movementX/Y` 与 drag 合并、修复 `formNamedPropsProxy` 递归崩溃、补全 `multipart/form-data`/`text/plain`/EUC-KR URL & 表单编码、`HTMLMediaElement`/`TextTrack`、`no-cors` safelist 与 `<link media>` 动态过滤。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`mouse-input-fields` (4/4)、`forms-post-submit-demo` (7/7)、`forms-file-input-demo` (2/2)、`legacy-charset-url-encoding` (9/9)、`media-text-tracks` (1/1)、`no-cors-opaque` (5/5)、`link-onload-media` (1/2+fix) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

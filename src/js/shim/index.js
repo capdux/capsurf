@@ -419,6 +419,9 @@ function installShim(global) {
       case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
       case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
       case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
+      case "video": Object.setPrototypeOf(el, (global.HTMLVideoElement || global.HTMLMediaElement || global.HTMLElement).prototype); break;
+      case "audio": Object.setPrototypeOf(el, (global.HTMLAudioElement || global.HTMLMediaElement || global.HTMLElement).prototype); break;
+      case "track": Object.setPrototypeOf(el, (global.HTMLTrackElement || global.HTMLElement).prototype); break;
       case "datalist": Object.setPrototypeOf(el, (global.HTMLDataListElement || global.HTMLElement).prototype); break;
       case "div": Object.setPrototypeOf(el, (global.HTMLDivElement || global.HTMLElement).prototype); break;
       case "h1":

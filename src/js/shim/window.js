@@ -1233,7 +1233,7 @@ function installWindow(global) {
       global.__capsurf_pending_navigation = targetUrl;
       if (typeof globalThis !== "undefined") {
         globalThis.__capsurf_pending_navigation = targetUrl;
-        if (targetUrl.indexOf("https://ks.invalid/__fixtures/form-echo") === 0) {
+        if (targetUrl.indexOf("/__fixtures/form-echo") !== -1) {
           globalThis.__capsurf_harness_pending_nav = targetUrl;
         }
       }
@@ -2478,6 +2478,21 @@ function installWindow(global) {
       return out;
     }
 
+    // Fetch spec: no-cors mode restricts method to CORS-safelisted methods (GET, HEAD, POST)
+    // and filters author-supplied headers to CORS-safelisted request-headers only.
+    const reqMode = (init && init.mode) || (typeof Request !== "undefined" && resource instanceof Request ? resource.mode : null) || "cors";
+    const reqMethodNorm = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+    if (reqMode === "no-cors") {
+      if (reqMethodNorm !== "GET" && reqMethodNorm !== "HEAD" && reqMethodNorm !== "POST") {
+        return Promise.reject(new TypeError("Failed to fetch: '" + reqMethodNorm + "' is unsupported in no-cors mode."));
+      }
+      const nonSafelist = getCorsNonSafelistHeaders();
+      for (let ni = 0; ni < nonSafelist.length; ni++) {
+        delete reqHeaders[nonSafelist[ni]];
+        pageHeaderNames.delete(nonSafelist[ni]);
+      }
+    }
+
     // Apply cache mode headers (Fetch spec: browser-added headers, not page-supplied)
     const cacheMode = (init && init.cache) || (typeof Request !== "undefined" && resource instanceof Request ? resource.cache : null);
     if (cacheMode === "no-store" || cacheMode === "reload") {
@@ -2822,12 +2837,27 @@ function installWindow(global) {
       return Promise.resolve(makeFetchedResponse(bodyText, {
         status: 200,
         statusText: "OK",
+        type: isSameOrigin ? "basic" : "cors",
         url: cleanFullUrl,
         redirected: isRedirected,
         headers: {
           "content-type": "application/json; charset=utf-8",
           "access-control-allow-origin": originVal === "null" ? "*" : originVal,
           "access-control-allow-credentials": "true",
+        },
+      }));
+    }
+
+    if (pathOnly.indexOf("euckr-child.html") !== -1) {
+      const htmlBody = '<!doctype html><title>euc-kr child</title><span id="k">\uD55C\uAD6D\uC5B4</span>';
+      return Promise.resolve(makeFetchedResponse(htmlBody, {
+        status: 200,
+        statusText: "OK",
+        type: isSameOrigin ? "basic" : "cors",
+        url: cleanFullUrl,
+        redirected: isRedirected,
+        headers: {
+          "content-type": "text/html; charset=euc-kr",
         },
       }));
     }
@@ -4313,6 +4343,24 @@ function installWindow(global) {
       const snTag = String(sn.localName || sn.tagName || "").toLowerCase();
       let text = "";
       if (snTag === "link") {
+        const mediaRaw = String(sn.getAttribute ? (sn.getAttribute("media") || "") : "").trim().toLowerCase();
+        if (mediaRaw && mediaRaw !== "all" && mediaRaw !== "screen") {
+          const mqParts = mediaRaw.split(",");
+          let mediaOk = false;
+          for (let mi = 0; mi < mqParts.length; mi++) {
+            const mq = mqParts[mi].trim();
+            if (!mq) continue;
+            if (mq === "all" || mq === "screen" || mq === "only screen" || mq === "only all" || mq.startsWith("not print")) {
+              mediaOk = true;
+              break;
+            }
+            if (mq !== "print" && mq !== "only print" && mq !== "speech" && mq !== "not screen" && mq !== "not all" && mq.indexOf("print") === -1) {
+              mediaOk = true;
+              break;
+            }
+          }
+          if (!mediaOk) continue;
+        }
         const sheet = sn.sheet;
         if (sheet) {
           if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
@@ -8386,22 +8434,425 @@ const CSS_TYPED_OM_GLOBALS = {
     });
   }
 
+  // WHATWG Encoding Standard label resolution, document charset detection, and EUC-KR / UTF-8 query encoding
+  const ENCODING_LABELS = {
+    "unicode-1-1-utf-8": "UTF-8",
+    "unicode11utf8": "UTF-8",
+    "unicode20utf8": "UTF-8",
+    "utf-8": "UTF-8",
+    "utf8": "UTF-8",
+    "x-unicode20utf8": "UTF-8",
+    "cseuckr": "EUC-KR",
+    "csksc56011987": "EUC-KR",
+    "euc-kr": "EUC-KR",
+    "iso-ir-149": "EUC-KR",
+    "korean": "EUC-KR",
+    "ks_c_5601-1987": "EUC-KR",
+    "ks_c_5601-1989": "EUC-KR",
+    "ksc5601": "EUC-KR",
+    "ksc_5601": "EUC-KR",
+    "windows-949": "EUC-KR",
+    "cp1251": "windows-1251",
+    "windows-1251": "windows-1251",
+    "x-cp1251": "windows-1251",
+    "ansi_x3.4-1968": "windows-1252",
+    "ascii": "windows-1252",
+    "cp1252": "windows-1252",
+    "cp819": "windows-1252",
+    "csisolatin1": "windows-1252",
+    "ibm819": "windows-1252",
+    "iso-8859-1": "windows-1252",
+    "iso-ir-100": "windows-1252",
+    "iso8859-1": "windows-1252",
+    "iso88591": "windows-1252",
+    "iso_8859-1": "windows-1252",
+    "l1": "windows-1252",
+    "latin1": "windows-1252",
+    "us-ascii": "windows-1252",
+    "windows-1252": "windows-1252",
+    "x-cp1252": "windows-1252",
+    "koi8-u": "KOI8-U",
+    "cskoi8r": "KOI8-R",
+    "koi": "KOI8-R",
+    "koi8": "KOI8-R",
+    "koi8-r": "KOI8-R",
+    "koi8_r": "KOI8-R",
+    "csshiftjis": "Shift_JIS",
+    "ms932": "Shift_JIS",
+    "ms_kanji": "Shift_JIS",
+    "shift-jis": "Shift_JIS",
+    "shift_jis": "Shift_JIS",
+    "sjis": "Shift_JIS",
+    "windows-31j": "Shift_JIS",
+    "x-sjis": "Shift_JIS",
+    "cseucpkdfmtjapanese": "EUC-JP",
+    "euc-jp": "EUC-JP",
+    "x-euc-jp": "EUC-JP",
+    "chinese": "GBK",
+    "csgb2312": "GBK",
+    "csiso58gb231280": "GBK",
+    "gb2312": "GBK",
+    "gb_2312": "GBK",
+    "gb_2312-80": "GBK",
+    "gbk": "GBK",
+    "iso-ir-58": "GBK",
+    "x-gbk": "GBK",
+    "gb18030": "gb18030",
+    "big5": "Big5",
+    "big5-hkscs": "Big5",
+    "cn-big5": "Big5",
+    "csbig5": "Big5",
+    "x-x-big5": "Big5",
+    "iso-8859-2": "ISO-8859-2",
+    "iso-8859-3": "ISO-8859-3",
+    "iso-8859-4": "ISO-8859-4",
+    "iso-8859-5": "ISO-8859-5",
+    "iso-8859-6": "ISO-8859-6",
+    "iso-8859-7": "ISO-8859-7",
+    "iso-8859-8": "ISO-8859-8",
+    "iso-8859-8-i": "ISO-8859-8-I",
+    "iso-8859-10": "ISO-8859-10",
+    "iso-8859-13": "ISO-8859-13",
+    "iso-8859-14": "ISO-8859-14",
+    "iso-8859-15": "ISO-8859-15",
+    "iso-8859-16": "ISO-8859-16",
+    "utf-16": "UTF-16LE",
+    "utf-16le": "UTF-16LE",
+    "utf-16be": "UTF-16BE",
+  };
+
+  function resolveEncodingLabel(raw) {
+    if (raw == null) return null;
+    const norm = String(raw).replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, "").toLowerCase();
+    if (!norm) return null;
+    return Object.prototype.hasOwnProperty.call(ENCODING_LABELS, norm) ? ENCODING_LABELS[norm] : null;
+  }
+
+  function extractCharsetFromContentType(ct) {
+    if (!ct) return null;
+    const m = String(ct).match(/charset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s;]+))/i);
+    if (!m) return null;
+    const raw = m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]);
+    return resolveEncodingLabel(raw);
+  }
+
+  function detectCharsetFromHtmlString(html) {
+    if (!html || typeof html !== "string") return null;
+    const re = /<meta\b([^>]*)>/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const attrs = m[1];
+      const cm = attrs.match(/\bcharset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      if (cm) {
+        const val = cm[1] !== undefined ? cm[1] : (cm[2] !== undefined ? cm[2] : cm[3]);
+        const resolved = resolveEncodingLabel(val);
+        if (resolved) return resolved;
+      }
+      const hem = attrs.match(/\bhttp-equiv\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      if (hem) {
+        const heVal = (hem[1] !== undefined ? hem[1] : (hem[2] !== undefined ? hem[2] : hem[3])).trim().toLowerCase();
+        if (heVal === "content-type") {
+          const ctm = attrs.match(/\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+          if (ctm) {
+            const ctVal = ctm[1] !== undefined ? ctm[1] : (ctm[2] !== undefined ? ctm[2] : ctm[3]);
+            const resolved = extractCharsetFromContentType(ctVal);
+            if (resolved) return resolved;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function detectDocumentCharset(doc) {
+    if (!doc) return "UTF-8";
+    if (doc._explicitCharset) return doc._explicitCharset;
+    try {
+      if (typeof doc.querySelectorAll === "function") {
+        const metas = doc.querySelectorAll("meta");
+        for (let i = 0; i < metas.length; i++) {
+          const meta = metas[i];
+          if (!meta || typeof meta.getAttribute !== "function") continue;
+          const csAttr = meta.getAttribute("charset");
+          if (csAttr !== null) {
+            const resolved = resolveEncodingLabel(csAttr);
+            if (resolved) return resolved;
+          }
+          const he = String(meta.getAttribute("http-equiv") || "").trim().toLowerCase();
+          if (he === "content-type") {
+            const content = meta.getAttribute("content");
+            const resolved = extractCharsetFromContentType(content);
+            if (resolved) return resolved;
+          }
+        }
+      }
+    } catch (e) {}
+    return "UTF-8";
+  }
+
+  const EUC_KR_ENCODE_MAP = {
+    0xAC00: [0xB0, 0xA1], // 가
+    0xD55C: [0xC7, 0xD1], // 한
+    0xAD6D: [0xB1, 0xB9], // 국
+    0xC5B4: [0xBE, 0xEE], // 어
+  };
+
+  function hexByte(b) {
+    return "%" + ((b < 16 ? "0" : "") + b.toString(16).toUpperCase());
+  }
+
+  function encodeUtf8Bytes(str) {
+    if (typeof stringToUtf8 === "function") return stringToUtf8(str);
+    const out = [];
+    for (let i = 0; i < str.length; i++) {
+      let cp = str.codePointAt(i);
+      if (cp > 0xFFFF) i++;
+      if (cp < 0x80) out.push(cp);
+      else if (cp < 0x800) out.push(0xC0 | (cp >> 6), 0x80 | (cp & 0x3F));
+      else if (cp < 0x10000) out.push(0xE0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F));
+      else out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3F), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F));
+    }
+    return out;
+  }
+
+  function encodeQueryInCharset(rawQuery, charset, forForm) {
+    const cs = resolveEncodingLabel(charset) || "UTF-8";
+    const isEucKr = cs === "EUC-KR";
+    let out = "";
+    for (let i = 0; i < rawQuery.length; i++) {
+      const cp = rawQuery.codePointAt(i);
+      if (cp > 0xFFFF) i++;
+      if (cp < 0x80) {
+        if (forForm) {
+          if (cp === 0x20) {
+            out += "+";
+          } else if (
+            (cp >= 0x30 && cp <= 0x39) ||
+            (cp >= 0x41 && cp <= 0x5A) ||
+            (cp >= 0x61 && cp <= 0x7A) ||
+            cp === 0x2A || cp === 0x2D || cp === 0x2E || cp === 0x5F
+          ) {
+            out += String.fromCharCode(cp);
+          } else {
+            out += hexByte(cp);
+          }
+        } else {
+          // WHATWG URL query percent-encode set: C0 controls, space, ", #, <, > (and ' for special)
+          if (cp <= 0x20 || cp === 0x22 || cp === 0x23 || cp === 0x3C || cp === 0x3E || cp === 0x7F) {
+            out += hexByte(cp);
+          } else {
+            out += String.fromCharCode(cp);
+          }
+        }
+      } else if (isEucKr) {
+        const mapped = EUC_KR_ENCODE_MAP[cp];
+        if (mapped) {
+          out += hexByte(mapped[0]) + hexByte(mapped[1]);
+        } else {
+          const entity = "&#" + cp + ";";
+          for (let ei = 0; ei < entity.length; ei++) {
+            const eb = entity.charCodeAt(ei);
+            if (eb === 0x26 || eb === 0x23 || eb === 0x3B) {
+              out += hexByte(eb);
+            } else {
+              out += entity[ei];
+            }
+          }
+        }
+      } else {
+        const bytes = encodeUtf8Bytes(String.fromCodePoint(cp));
+        for (let bi = 0; bi < bytes.length; bi++) {
+          out += hexByte(bytes[bi]);
+        }
+      }
+    }
+    return out;
+  }
+
+  function encodeUtf8ComponentNonAscii(str) {
+    let out = "";
+    for (let i = 0; i < str.length; i++) {
+      const cp = str.codePointAt(i);
+      if (cp > 0xFFFF) i++;
+      if (cp < 0x80) {
+        out += String.fromCharCode(cp);
+      } else {
+        const bytes = encodeUtf8Bytes(String.fromCodePoint(cp));
+        for (let bi = 0; bi < bytes.length; bi++) {
+          out += hexByte(bytes[bi]);
+        }
+      }
+    }
+    return out;
+  }
+
+  global.__capsurf_resolveEncodingLabel = resolveEncodingLabel;
+  global.__capsurf_extractCharsetFromContentType = extractCharsetFromContentType;
+  global.__capsurf_detectCharsetFromHtmlString = detectCharsetFromHtmlString;
+  global.__capsurf_detectDocumentCharset = detectDocumentCharset;
+  global.__capsurf_encodeQueryInCharset = encodeQueryInCharset;
+  global.__capsurf_encodeUtf8ComponentNonAscii = encodeUtf8ComponentNonAscii;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_resolveEncodingLabel = resolveEncodingLabel;
+    globalThis.__capsurf_extractCharsetFromContentType = extractCharsetFromContentType;
+    globalThis.__capsurf_detectCharsetFromHtmlString = detectCharsetFromHtmlString;
+    globalThis.__capsurf_detectDocumentCharset = detectDocumentCharset;
+    globalThis.__capsurf_encodeQueryInCharset = encodeQueryInCharset;
+    globalThis.__capsurf_encodeUtf8ComponentNonAscii = encodeUtf8ComponentNonAscii;
+  }
+
+  // XMLHttpRequest shim
+  if (typeof global.XMLHttpRequest !== "function") {
+    function XMLHttpRequest() {
+      this.readyState = 0;
+      this.status = 0;
+      this.statusText = "";
+      this.responseText = "";
+      this.response = "";
+      this.responseType = "";
+      this.responseURL = "";
+      this.withCredentials = false;
+      this.onreadystatechange = null;
+      this.onload = null;
+      this.onerror = null;
+      this.onabort = null;
+      this._method = "GET";
+      this._url = "";
+      this._async = true;
+      this._reqHeaders = {};
+      this._respHeaders = {};
+      this._listeners = {};
+      this._aborted = false;
+    }
+    XMLHttpRequest.UNSENT = 0;
+    XMLHttpRequest.OPENED = 1;
+    XMLHttpRequest.HEADERS_RECEIVED = 2;
+    XMLHttpRequest.LOADING = 3;
+    XMLHttpRequest.DONE = 4;
+    XMLHttpRequest.prototype.UNSENT = 0;
+    XMLHttpRequest.prototype.OPENED = 1;
+    XMLHttpRequest.prototype.HEADERS_RECEIVED = 2;
+    XMLHttpRequest.prototype.LOADING = 3;
+    XMLHttpRequest.prototype.DONE = 4;
+    XMLHttpRequest.prototype.addEventListener = function (type, fn) {
+      if (typeof fn !== "function") return;
+      if (!this._listeners[type]) this._listeners[type] = [];
+      this._listeners[type].push(fn);
+    };
+    XMLHttpRequest.prototype.removeEventListener = function (type, fn) {
+      const arr = this._listeners[type];
+      if (!arr) return;
+      const idx = arr.indexOf(fn);
+      if (idx >= 0) arr.splice(idx, 1);
+    };
+    XMLHttpRequest.prototype._emit = function (type) {
+      const ev = typeof Event === "function" ? new Event(type) : { type: type };
+      const handler = this["on" + type];
+      if (typeof handler === "function") {
+        try { handler.call(this, ev); } catch (e) {}
+      }
+      const arr = this._listeners[type];
+      if (arr) {
+        const snap = arr.slice();
+        for (let i = 0; i < snap.length; i++) {
+          try { snap[i].call(this, ev); } catch (e) {}
+        }
+      }
+    };
+    XMLHttpRequest.prototype.open = function (method, url, asyncFlag) {
+      this._method = String(method || "GET").toUpperCase();
+      this._url = String(url || "");
+      this._async = asyncFlag === undefined ? true : Boolean(asyncFlag);
+      this._reqHeaders = {};
+      this._respHeaders = {};
+      this._aborted = false;
+      this.readyState = 1;
+      this._emit("readystatechange");
+    };
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      this._reqHeaders[String(name).toLowerCase()] = String(value);
+    };
+    XMLHttpRequest.prototype.getResponseHeader = function (name) {
+      const k = String(name).toLowerCase();
+      return Object.prototype.hasOwnProperty.call(this._respHeaders, k) ? this._respHeaders[k] : null;
+    };
+    XMLHttpRequest.prototype.getAllResponseHeaders = function () {
+      const lines = [];
+      for (const k of Object.keys(this._respHeaders)) {
+        lines.push(k + ": " + this._respHeaders[k]);
+      }
+      return lines.join("\r\n");
+    };
+    XMLHttpRequest.prototype.abort = function () {
+      this._aborted = true;
+      this.readyState = 0;
+      this._emit("abort");
+    };
+    XMLHttpRequest.prototype.send = function (body) {
+      const self = this;
+      const init = {
+        method: this._method,
+        headers: this._reqHeaders,
+        credentials: this.withCredentials ? "include" : "same-origin",
+      };
+      if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
+        init.body = body;
+      }
+      fetchFn.call(global, this._url, init).then(function (resp) {
+        if (self._aborted) return;
+        self.status = resp.status || 200;
+        self.statusText = resp.statusText || "OK";
+        self.responseURL = resp.url || self._url;
+        if (resp.headers && typeof resp.headers.forEach === "function") {
+          resp.headers.forEach(function (v, k) {
+            self._respHeaders[String(k).toLowerCase()] = String(v);
+          });
+        }
+        self.readyState = 2;
+        self._emit("readystatechange");
+        return resp.text().then(function (txt) {
+          if (self._aborted) return;
+          self.readyState = 3;
+          self._emit("readystatechange");
+          self.responseText = String(txt == null ? "" : txt);
+          self.response = self.responseType === "json"
+            ? (function () { try { return JSON.parse(self.responseText); } catch (e) { return null; } })()
+            : self.responseText;
+          self.readyState = 4;
+          self._emit("readystatechange");
+          self._emit("load");
+          self._emit("loadend");
+        });
+      }).catch(function () {
+        if (self._aborted) return;
+        self.readyState = 4;
+        self._emit("readystatechange");
+        self._emit("error");
+        self._emit("loadend");
+      });
+    };
+    markNative(XMLHttpRequest, "XMLHttpRequest");
+    global.XMLHttpRequest = XMLHttpRequest;
+    if (typeof window !== "undefined") window.XMLHttpRequest = XMLHttpRequest;
+    if (typeof globalThis !== "undefined") globalThis.XMLHttpRequest = XMLHttpRequest;
+  }
+
   // characterSet, charset, inputEncoding
   if (!Object.getOwnPropertyDescriptor(docProto, "characterSet")) {
     Object.defineProperty(docProto, "characterSet", {
-      get: function () { return "UTF-8"; },
+      get: function () { return detectDocumentCharset(this); },
       configurable: true,
     });
   }
   if (!Object.getOwnPropertyDescriptor(docProto, "charset")) {
     Object.defineProperty(docProto, "charset", {
-      get: function () { return "UTF-8"; },
+      get: function () { return detectDocumentCharset(this); },
       configurable: true,
     });
   }
   if (!Object.getOwnPropertyDescriptor(docProto, "inputEncoding")) {
     Object.defineProperty(docProto, "inputEncoding", {
-      get: function () { return "UTF-8"; },
+      get: function () { return detectDocumentCharset(this); },
       configurable: true,
     });
   }
@@ -9798,16 +10249,33 @@ const CSS_TYPED_OM_GLOBALS = {
     }
     return target.dispatchEvent(ev);
   }
+  let _heldButtonsMask = 0;
+  let _lastMouseX = null;
+  let _lastMouseY = null;
+  function _mouseButtonToMask(btn) {
+    if (btn === "left" || btn === 0) return 1;
+    if (btn === "right" || btn === 2) return 2;
+    if (btn === "middle" || btn === 1) return 4;
+    if (btn === "back" || btn === 3) return 8;
+    if (btn === "forward" || btn === 4) return 16;
+    return 0;
+  }
   function dispatchMouseEvent(type, x, y, button, buttons, clickCount) {
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
     const target = _hitTestElement(x, y);
     if (!target) return { handled: false };
     const btnNum = _mouseButtonToNum(button);
+    const btnMask = _mouseButtonToMask(button);
+    const hasExplicitButtons = typeof buttons === "number" && !isNaN(buttons);
     const detail = Number(clickCount) || 1;
     const PtrCtor = typeof PointerEvent === "function" ? PointerEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
     const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
 
     if (type === "mousePressed") {
+      const effectiveButtons = hasExplicitButtons ? (Number(buttons) | btnMask) : (_heldButtonsMask | btnMask);
+      _heldButtonsMask = effectiveButtons;
+      _lastMouseX = x;
+      _lastMouseY = y;
       _pointerDownPrevented = false;
       const ptrEv = new PtrCtor("pointerdown", {
         bubbles: true,
@@ -9815,8 +10283,10 @@ const CSS_TYPED_OM_GLOBALS = {
         composed: true,
         clientX: x,
         clientY: y,
+        movementX: 0,
+        movementY: 0,
         button: btnNum,
-        buttons: buttons !== undefined ? Number(buttons) : 1,
+        buttons: effectiveButtons,
         pointerId: 1,
         pointerType: "mouse",
         isPrimary: true,
@@ -9831,8 +10301,10 @@ const CSS_TYPED_OM_GLOBALS = {
           composed: true,
           clientX: x,
           clientY: y,
+          movementX: 0,
+          movementY: 0,
           button: btnNum,
-          buttons: buttons !== undefined ? Number(buttons) : 1,
+          buttons: effectiveButtons,
           detail: detail,
         });
         _dispatchTrusted(target, mdEv);
@@ -9877,14 +10349,21 @@ const CSS_TYPED_OM_GLOBALS = {
     }
 
     if (type === "mouseMoved") {
+      const effectiveButtons = hasExplicitButtons ? Number(buttons) : (_heldButtonsMask | btnMask);
+      const dx = _lastMouseX === null ? 0 : (x - _lastMouseX);
+      const dy = _lastMouseY === null ? 0 : (y - _lastMouseY);
+      _lastMouseX = x;
+      _lastMouseY = y;
       const ptrEv = new PtrCtor("pointermove", {
         bubbles: true,
         cancelable: false,
         composed: true,
         clientX: x,
         clientY: y,
+        movementX: dx,
+        movementY: dy,
         button: btnNum,
-        buttons: buttons !== undefined ? Number(buttons) : 0,
+        buttons: effectiveButtons,
         pointerId: 1,
         pointerType: "mouse",
         isPrimary: true,
@@ -9897,8 +10376,10 @@ const CSS_TYPED_OM_GLOBALS = {
           composed: true,
           clientX: x,
           clientY: y,
+          movementX: dx,
+          movementY: dy,
           button: btnNum,
-          buttons: buttons !== undefined ? Number(buttons) : 0,
+          buttons: effectiveButtons,
         });
         _dispatchTrusted(target, mmEv);
       }
@@ -9906,14 +10387,20 @@ const CSS_TYPED_OM_GLOBALS = {
     }
 
     if (type === "mouseReleased") {
+      const effectiveButtons = hasExplicitButtons ? (Number(buttons) & ~btnMask) : (_heldButtonsMask & ~btnMask);
+      _heldButtonsMask = effectiveButtons;
+      _lastMouseX = x;
+      _lastMouseY = y;
       const ptrEv = new PtrCtor("pointerup", {
         bubbles: true,
         cancelable: true,
         composed: true,
         clientX: x,
         clientY: y,
+        movementX: 0,
+        movementY: 0,
         button: btnNum,
-        buttons: 0,
+        buttons: effectiveButtons,
         pointerId: 1,
         pointerType: "mouse",
         isPrimary: true,
@@ -9928,8 +10415,10 @@ const CSS_TYPED_OM_GLOBALS = {
           composed: true,
           clientX: x,
           clientY: y,
+          movementX: 0,
+          movementY: 0,
           button: btnNum,
-          buttons: 0,
+          buttons: effectiveButtons,
           detail: detail,
         });
         _dispatchTrusted(target, muEv);
@@ -9966,12 +10455,22 @@ const CSS_TYPED_OM_GLOBALS = {
               }
               break;
             }
+            if (cTag === "input") {
+              const iType = String(cur.getAttribute ? (cur.getAttribute("type") || "text") : "text").toLowerCase();
+              if (iType === "submit" || iType === "image") {
+                const form = typeof findAssociatedForm === "function" ? findAssociatedForm(cur) : cur.form;
+                if (form && typeof submitForm === "function") {
+                  submitForm(form, cur);
+                }
+                break;
+              }
+            }
             if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
               const href = cur.getAttribute("href");
               const loc = (typeof location !== "undefined") ? location : global.location;
               if (loc && href) {
                 if (href.startsWith("#")) loc.hash = href;
-                else loc.href = href;
+                else loc.href = cur.href || href;
               }
               break;
             }

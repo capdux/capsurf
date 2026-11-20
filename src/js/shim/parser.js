@@ -658,6 +658,7 @@ function ParsedDocument(contentType, compatMode) {
   this.compatMode = compatMode || "CSS1Compat";
   this.characterSet = "UTF-8";
   this.charset = "UTF-8";
+  this.inputEncoding = "UTF-8";
   this.referrer = "";
   this.URL = "";
   this.documentURI = "";

@@ -34,7 +34,7 @@ function collectFormControls(form) {
   }
   walk(form);
 
-  const formId = (typeof form.getAttribute === "function" ? form.getAttribute("id") : null) || (typeof form.id === "string" ? form.id : null);
+  const formId = (typeof form.getAttribute === "function" ? form.getAttribute("id") : null);
   if (formId) {
     const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
     let foundExternals = false;
@@ -128,8 +128,35 @@ function performFormSubmission(form, submitter) {
     }
   }
 
+  // Resolve enctype
+  let enctype = (form.getAttribute("enctype") || "").toLowerCase().trim();
+  if (submitter && typeof submitter.getAttribute === "function") {
+    const formEnctype = submitter.getAttribute("formenctype");
+    if (formEnctype) {
+      enctype = formEnctype.toLowerCase().trim();
+    }
+  }
+  if (enctype !== "multipart/form-data" && enctype !== "text/plain") {
+    enctype = "application/x-www-form-urlencoded";
+  }
+
+  // Pick submission encoding from accept-charset or document.characterSet
+  const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
+  let submitCharset = (doc && doc.characterSet) ? doc.characterSet : "UTF-8";
+  const acceptCharsetAttr = form.getAttribute("accept-charset");
+  if (acceptCharsetAttr && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_resolveEncodingLabel === "function") {
+    const tokens = String(acceptCharsetAttr).split(/[\s,]+/);
+    for (let ti = 0; ti < tokens.length; ti++) {
+      const resolved = globalThis.__capsurf_resolveEncodingLabel(tokens[ti]);
+      if (resolved) {
+        submitCharset = resolved;
+        break;
+      }
+    }
+  }
+
   const controls = collectFormControls(form);
-  const queryParts = [];
+  const entries = [];
   for (let i = 0; i < controls.length; i++) {
     const c = controls[i];
     if (c.disabled || (typeof c.hasAttribute === "function" && c.hasAttribute("disabled"))) {
@@ -156,29 +183,154 @@ function performFormSubmission(form, submitter) {
       if (!c.checked) continue;
     }
 
+    if (tag === "input" && type === "file") {
+      const files = c.files;
+      if (files && files.length > 0) {
+        for (let fi = 0; fi < files.length; fi++) {
+          const f = files[fi];
+          if (f) entries.push({ name: name, file: f, value: f.name || "" });
+        }
+      } else {
+        entries.push({ name: name, file: null, value: "" });
+      }
+      continue;
+    }
+
     let val = c.value !== undefined ? String(c.value) : "";
+    if (tag === "input" && type === "hidden" && name === "_charset_") {
+      val = submitCharset;
+    }
     if ((type === "checkbox" || type === "radio") && !val && (typeof c.hasAttribute === "function" && !c.hasAttribute("value"))) {
       val = "on";
     }
-    queryParts.push(encodeURIComponent(name) + "=" + encodeURIComponent(val));
+    entries.push({ name: name, file: null, value: val });
   }
 
+  function decodeFileBytesSync(fileObj) {
+    if (!fileObj) return "";
+    const bytes = fileObj._bytes;
+    if (bytes && typeof bytes.length === "number") {
+      if (typeof utf8ToString === "function") return utf8ToString(bytes);
+      let s = "";
+      for (let bi = 0; bi < bytes.length; bi++) s += String.fromCharCode(bytes[bi]);
+      return s;
+    }
+    return "";
+  }
+
+  const encFormFn = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_encodeQueryInCharset === "function")
+    ? globalThis.__capsurf_encodeQueryInCharset
+    : null;
+  const queryParts = [];
+  for (let ei = 0; ei < entries.length; ei++) {
+    const kEnc = encFormFn ? encFormFn(entries[ei].name, submitCharset, true) : encodeURIComponent(entries[ei].name);
+    const vEnc = encFormFn ? encFormFn(entries[ei].value, submitCharset, true) : encodeURIComponent(entries[ei].value);
+    queryParts.push(kEnc + "=" + vEnc);
+  }
   const encodedParams = queryParts.join("&");
+
+  // Check if form targets a named iframe in the document
+  let formTarget = (form.getAttribute("target") || "").trim();
+  if (submitter && typeof submitter.getAttribute === "function") {
+    const ft = submitter.getAttribute("formtarget");
+    if (ft) formTarget = ft.trim();
+  }
+  let targetIframe = null;
+  if (formTarget && formTarget !== "_self" && formTarget !== "_top" && formTarget !== "_parent" && formTarget !== "_blank") {
+    if (doc && typeof doc.querySelectorAll === "function") {
+      const frames = doc.querySelectorAll("iframe");
+      for (let fi = 0; fi < frames.length; fi++) {
+        const fn = frames[fi] && typeof frames[fi].getAttribute === "function" ? frames[fi].getAttribute("name") : "";
+        if (fn === formTarget) {
+          targetIframe = frames[fi];
+          break;
+        }
+      }
+    }
+  }
+
   if (method === "get") {
     const baseUrl = targetUrl.split("?")[0].split("#")[0];
     const finalUrl = encodedParams ? (baseUrl + "?" + encodedParams) : baseUrl;
+    if (targetIframe && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
+      globalThis.__capsurf_navigate_iframe(targetIframe, finalUrl);
+      return;
+    }
     if (typeof globalThis !== "undefined") {
       delete globalThis.__capsurf_pending_navigation_post;
     }
     navigateTo(finalUrl);
   } else if (method === "post") {
     const postUrl = targetUrl.split("#")[0];
+    let bodyStr = encodedParams;
+    let contentType = "application/x-www-form-urlencoded";
+    if (enctype === "text/plain") {
+      const lines = [];
+      for (let ei = 0; ei < entries.length; ei++) {
+        lines.push(entries[ei].name + "=" + entries[ei].value + "\n");
+      }
+      bodyStr = lines.join("");
+      contentType = "text/plain";
+    } else if (enctype === "multipart/form-data") {
+      const boundary = "----CapSurfFormBoundary7MA4YWxkTrZu0gW";
+      const parts = [];
+      for (let ei = 0; ei < entries.length; ei++) {
+        const ent = entries[ei];
+        if (ent.file) {
+          const fname = String(ent.file.name || "").replace(/"/g, "%22");
+          const ftype = ent.file.type || "application/octet-stream";
+          const fbody = decodeFileBytesSync(ent.file);
+          parts.push(
+            "--" + boundary + "\r\n" +
+            'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"; filename="' + fname + '"\r\n' +
+            "Content-Type: " + ftype + "\r\n\r\n" +
+            fbody + "\r\n"
+          );
+        } else {
+          parts.push(
+            "--" + boundary + "\r\n" +
+            'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"\r\n\r\n' +
+            ent.value + "\r\n"
+          );
+        }
+      }
+      parts.push("--" + boundary + "--\r\n");
+      bodyStr = parts.join("");
+      contentType = "multipart/form-data; boundary=" + boundary;
+    }
+    if (targetIframe && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_apply_iframe_html === "function") {
+      const escHtml = function (s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      };
+      let reqQuery = "";
+      try {
+        const qIdx = postUrl.indexOf("?");
+        reqQuery = qIdx !== -1 ? postUrl.slice(qIdx) : "";
+      } catch (e) {}
+      const echoHtml = '<!doctype html><html><body>' +
+        '<div id="method">POST</div>' +
+        '<div id="ctype">' + escHtml(contentType) + '</div>' +
+        '<div id="body">' + escHtml(bodyStr) + '</div>' +
+        '<div id="query">' + escHtml(reqQuery) + '</div>' +
+        '</body></html>';
+      const frame = targetIframe;
+      Promise.resolve().then(function () {
+        if (!frame._contentWindow) {
+          void frame.contentWindow;
+        }
+        globalThis.__capsurf_apply_iframe_html(frame, postUrl, echoHtml, { charset: "UTF-8" });
+        if (typeof globalThis.__capsurf_fire_iframe_load === "function") {
+          globalThis.__capsurf_fire_iframe_load(frame);
+        }
+      });
+      return;
+    }
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_pending_navigation_post = {
         url: postUrl,
         method: "POST",
-        body: encodedParams,
-        contentType: "application/x-www-form-urlencoded",
+        body: bodyStr,
+        contentType: contentType,
       };
     }
     navigateTo(postUrl);
@@ -304,6 +456,12 @@ function installFormElement(global) {
   Object.defineProperty(HTMLFormElement.prototype, "target", {
     get: function () { return this.getAttribute("target") || ""; },
     set: function (v) { this.setAttribute("target", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLFormElement.prototype, "acceptCharset", {
+    get: function () { return this.getAttribute("accept-charset") || ""; },
+    set: function (v) { this.setAttribute("accept-charset", String(v)); },
     configurable: true,
   });
 
@@ -458,25 +616,32 @@ function installFormElement(global) {
     "style", "classList", "className", "innerHTML", "outerHTML", "textContent", "innerText",
     "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
     "propertyIsEnumerable", "toLocaleString", "__proto__", "shadowRoot", "attachShadow",
-    "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot",
+    "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot", "id",
   ]);
   const RX_ARRAY_INDEX = /^(0|[1-9]\d*)$/;
+  let _inFormNamedLookup = false;
 
   function lookupFormNamedProperty(form, prop) {
-    const controls = collectFormControls(form);
-    const matches = [];
-    for (let i = 0; i < controls.length; i++) {
-      const c = controls[i];
-      if (!c || c.nodeType !== 1) continue;
-      const n = typeof c.getAttribute === "function" ? c.getAttribute("name") : null;
-      const id = typeof c.getAttribute === "function" ? c.getAttribute("id") : null;
-      if (n === prop || id === prop) {
-        matches.push(typeof upgradeElement === "function" ? upgradeElement(c) : c);
+    if (_inFormNamedLookup) return undefined;
+    _inFormNamedLookup = true;
+    try {
+      const controls = collectFormControls(form);
+      const matches = [];
+      for (let i = 0; i < controls.length; i++) {
+        const c = controls[i];
+        if (!c || c.nodeType !== 1) continue;
+        const n = typeof c.getAttribute === "function" ? c.getAttribute("name") : null;
+        const id = typeof c.getAttribute === "function" ? c.getAttribute("id") : null;
+        if (n === prop || id === prop) {
+          matches.push(typeof upgradeElement === "function" ? upgradeElement(c) : c);
+        }
       }
+      if (matches.length === 0) return undefined;
+      if (matches.length === 1) return matches[0];
+      return makeHtmlCollection(function () { return matches; });
+    } finally {
+      _inFormNamedLookup = false;
     }
-    if (matches.length === 0) return undefined;
-    if (matches.length === 1) return matches[0];
-    return makeHtmlCollection(function () { return matches; });
   }
 
   const formNamedPropsProxy = new Proxy(HTMLFormElement.prototype, {

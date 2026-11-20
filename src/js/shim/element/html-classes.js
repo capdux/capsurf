@@ -669,17 +669,67 @@ function installHtmlClasses(global) {
     });
   }
 
+  function resolveHyperlinkHrefWithCharset(el, raw) {
+    const doc = (el && el.ownerDocument) || (typeof document !== "undefined" ? document : null);
+    const base = (doc && doc.baseURI) ? doc.baseURI : (global.location ? global.location.href : "http://localhost/");
+    let parsed;
+    try {
+      parsed = new URL(raw, base);
+    } catch (e) {
+      return raw;
+    }
+    const proto = String(parsed.protocol || "").toLowerCase();
+    const isWs = proto === "ws:" || proto === "wss:";
+    const isSpecial = proto === "http:" || proto === "https:" || proto === "ftp:" || proto === "file:" || isWs;
+    const docCharset = (doc && doc.characterSet) ? doc.characterSet : "UTF-8";
+    const queryCharset = (isSpecial && !isWs) ? docCharset : "UTF-8";
+
+    const encNonAscii = global.__capsurf_encodeUtf8ComponentNonAscii;
+    const encQuery = global.__capsurf_encodeQueryInCharset;
+    if (typeof encNonAscii !== "function" || typeof encQuery !== "function") {
+      return parsed.href;
+    }
+
+    // Extract raw query & hash from raw input so non-ASCII characters are not lost before charset encoding
+    let rawNoHash = String(raw);
+    let rawHash = "";
+    const hashIdx = rawNoHash.indexOf("#");
+    if (hashIdx !== -1) {
+      rawHash = rawNoHash.slice(hashIdx);
+      rawNoHash = rawNoHash.slice(0, hashIdx);
+    }
+    let rawQuery = null;
+    const qIdx = rawNoHash.indexOf("?");
+    if (qIdx !== -1) {
+      rawQuery = rawNoHash.slice(qIdx + 1);
+    }
+
+    // Build origin + pathname (UTF-8 encoded)
+    let hrefStr = parsed.href;
+    const hPos = hrefStr.indexOf("#");
+    const hrefHash = hPos !== -1 ? hrefStr.slice(hPos) : "";
+    const hrefNoHash = hPos !== -1 ? hrefStr.slice(0, hPos) : hrefStr;
+    const qPos = hrefNoHash.indexOf("?");
+    const basePart = qPos !== -1 ? hrefNoHash.slice(0, qPos) : hrefNoHash;
+    const encodedBase = encNonAscii(basePart);
+
+    let encodedSearch = "";
+    if (rawQuery !== null) {
+      encodedSearch = "?" + encQuery(rawQuery, queryCharset, false);
+    } else if (qPos !== -1) {
+      encodedSearch = "?" + encQuery(hrefNoHash.slice(qPos + 1), queryCharset, false);
+    }
+
+    const finalHash = rawHash ? encNonAscii(rawHash) : (hrefHash ? encNonAscii(hrefHash) : "");
+    return encodedBase + encodedSearch + finalHash;
+  }
+
   function installHyperlinkDecomposition(proto) {
     Object.defineProperty(proto, "href", {
       get: function () {
         const raw = this.getAttribute("href");
         if (raw == null) return "";
-        try {
-          const base = typeof document !== "undefined" && document.baseURI ? document.baseURI : "http://localhost/";
-          return new URL(raw, base).href;
-        } catch (e) {
-          return raw;
-        }
+        return resolveHyperlinkHrefWithCharset(this, raw);
       },
       set: function (v) { this.setAttribute("href", String(v)); },
       configurable: true,
@@ -695,7 +745,17 @@ function installHtmlClasses(global) {
             return prop === "protocol" ? ":" : "";
           }
           try {
-            const u = new URL(this.href);
+            const resolved = this.href;
+            if (prop === "search") {
+              const noHash = resolved.split("#")[0];
+              const qIdx = noHash.indexOf("?");
+              return qIdx !== -1 && qIdx < noHash.length - 1 ? noHash.slice(qIdx) : "";
+            }
+            if (prop === "hash") {
+              const hIdx = resolved.indexOf("#");
+              return hIdx !== -1 && hIdx < resolved.length - 1 ? resolved.slice(hIdx) : "";
+            }
+            const u = new URL(resolved);
             return u[prop];
           } catch (e) {
             if (prop === "protocol") return ":";
@@ -793,6 +853,11 @@ function installHtmlClasses(global) {
   Object.defineProperty(HTMLLinkElement.prototype, "href", {
     get: function () { return this.getAttribute("href") || ""; },
     set: function (v) { this.setAttribute("href", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLLinkElement.prototype, "media", {
+    get: function () { return this.getAttribute("media") || ""; },
+    set: function (v) { this.setAttribute("media", String(v)); },
     configurable: true,
   });
   Object.defineProperty(HTMLLinkElement.prototype, "sheet", {
@@ -1749,6 +1814,9 @@ function installHtmlClasses(global) {
           }
         },
       });
+    } else if (url) {
+      loc = makeIframeLocationFacade(iframeEl, url, contentWindow);
+      iframeLocationMap.set(contentWindow, loc);
     }
     return loc;
   }
@@ -1953,6 +2021,15 @@ function installHtmlClasses(global) {
           newDoc.URL = opts.isSrcdoc ? "about:srcdoc" : resolvedUrl;
           newDoc.documentURI = newDoc.URL;
           newDoc.baseURI = effectiveBase;
+          let resolvedCharset = opts.charset || null;
+          if (!resolvedCharset && typeof global.__capsurf_detectCharsetFromHtmlString === "function") {
+            resolvedCharset = global.__capsurf_detectCharsetFromHtmlString(html);
+          }
+          if (!resolvedCharset) resolvedCharset = "UTF-8";
+          newDoc.characterSet = resolvedCharset;
+          newDoc.charset = resolvedCharset;
+          newDoc.inputEncoding = resolvedCharset;
+          newDoc._explicitCharset = resolvedCharset;
           const ref = computeIframeReferrer(iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl, false);
           newDoc.referrer = ref;
           try {
@@ -1984,6 +2061,7 @@ function installHtmlClasses(global) {
     if (newDoc) {
       if (iframeEl._contentWindow) {
         iframeEl._contentWindow.document = newDoc;
+        ensureIframeLocationFacade(iframeEl._contentWindow, iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl);
         try {
           Object.defineProperty(newDoc, "defaultView", {
             value: iframeEl._contentWindow,
@@ -2018,12 +2096,14 @@ function installHtmlClasses(global) {
     }
     const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
-    if (resolvedUrl === "about:blank" || !resolvedUrl) {
+    if (!resolvedUrl || resolvedUrl === "about:blank" || resolvedUrl.startsWith("about:blank?") || resolvedUrl.startsWith("about:blank#")) {
+      const blankUrl = resolvedUrl || "about:blank";
       Promise.resolve().then(function () {
         if (iframeEl._navSeq !== seq) return;
-        const doc = createIframePlaceholderDoc("about:blank", iframeEl, false);
+        const doc = createIframePlaceholderDoc(blankUrl, iframeEl, false);
         if (iframeEl._contentWindow) {
           iframeEl._contentWindow.document = doc;
+          ensureIframeLocationFacade(iframeEl._contentWindow, iframeEl, blankUrl);
           if (doc) {
             try {
               Object.defineProperty(doc, "defaultView", {
@@ -2056,6 +2136,7 @@ function installHtmlClasses(global) {
     }
 
     if (resolvedUrl.indexOf("slow-iframe-child") === -1 &&
+        resolvedUrl.indexOf("euckr-child.html") === -1 &&
         typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
       const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
       if (fixtureHtml !== null && fixtureHtml !== undefined) {
@@ -2071,20 +2152,35 @@ function installHtmlClasses(global) {
     let loadPromise = null;
     if (typeof fetch === "function") {
       loadPromise = fetch(resolvedUrl).then(function (res) {
-        return res.text();
+        const ct = (res && res.headers && typeof res.headers.get === "function") ? res.headers.get("content-type") : null;
+        const headerCharset = (ct && typeof global.__capsurf_extractCharsetFromContentType === "function")
+          ? global.__capsurf_extractCharsetFromContentType(ct)
+          : null;
+        return res.text().then(function (txt) {
+          return { html: txt, charset: headerCharset };
+        });
       });
     } else {
-      loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
+      loadPromise = Promise.resolve({ html: "<!doctype html><html><head></head><body></body></html>", charset: null });
     }
 
-    loadPromise.then(function (html) {
+    loadPromise.then(function (result) {
       if (iframeEl._navSeq !== seq) return;
-      applyLoadedIframeHtml(iframeEl, resolvedUrl, html);
+      applyLoadedIframeHtml(iframeEl, resolvedUrl, result.html, { charset: result.charset });
       fireIframeLoadEvent(iframeEl);
     }).catch(function () {
       if (iframeEl._navSeq !== seq) return;
       fireIframeLoadEvent(iframeEl);
     });
+  }
+
+  global.__capsurf_navigate_iframe = handleIframeNavigation;
+  global.__capsurf_apply_iframe_html = applyLoadedIframeHtml;
+  global.__capsurf_fire_iframe_load = fireIframeLoadEvent;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_navigate_iframe = handleIframeNavigation;
+    globalThis.__capsurf_apply_iframe_html = applyLoadedIframeHtml;
+    globalThis.__capsurf_fire_iframe_load = fireIframeLoadEvent;
   }
 
   function fireIframeLoadEvent(iframeEl) {
@@ -2328,11 +2424,32 @@ function installHtmlClasses(global) {
     configurable: true,
   });
 
+  function isCrossOriginIframe(iframeEl) {
+    if (!iframeEl) return false;
+    try {
+      const rawSrc = iframeEl.getAttribute ? iframeEl.getAttribute("src") : "";
+      if (!rawSrc || rawSrc === "about:blank" || rawSrc === "about:srcdoc") return false;
+      if (rawSrc.startsWith("blob:") || rawSrc.startsWith("javascript:")) return false;
+      const base = (typeof document !== "undefined" && document.baseURI)
+        ? document.baseURI
+        : (global.location ? global.location.href : "about:blank");
+      const targetUrl = new URL(rawSrc, base);
+      if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") return false;
+      const baseUrl = new URL(base);
+      if (baseUrl.origin && baseUrl.origin !== "null" && targetUrl.origin !== baseUrl.origin) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
     get: function () {
       if (this._opaqueSandbox) return null;
+      if (isCrossOriginIframe(this)) return null;
       const win = getOrCreateIframeWindow(this);
       if (this._opaqueSandbox) return null;
+      if (isCrossOriginIframe(this)) return null;
       return (win && win.document) || this._contentDocument || null;
     },
     configurable: true,
@@ -2378,6 +2495,250 @@ function installHtmlClasses(global) {
   global.HTMLDataListElement = HTMLDataListElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLDataListElement = HTMLDataListElement;
   if (typeof window !== "undefined") window.HTMLDataListElement = HTMLDataListElement;
+
+  // 6.5 TextTrack, TextTrackList, HTMLTrackElement, HTMLMediaElement, HTMLVideoElement, HTMLAudioElement
+  const VALID_TRACK_KINDS = {
+    subtitles: true,
+    captions: true,
+    descriptions: true,
+    chapters: true,
+    metadata: true,
+  };
+  const VALID_TRACK_MODES = {
+    disabled: true,
+    hidden: true,
+    showing: true,
+  };
+
+  function TextTrack(trackEl) {
+    this._trackEl = trackEl || null;
+    this._mode = (trackEl && typeof trackEl.hasAttribute === "function" && trackEl.hasAttribute("default"))
+      ? "showing"
+      : "disabled";
+    this._cues = [];
+    this._activeCues = [];
+  }
+  Object.defineProperty(TextTrack.prototype, Symbol.toStringTag, {
+    value: "TextTrack",
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "kind", {
+    get: function () {
+      const raw = this._trackEl && typeof this._trackEl.getAttribute === "function"
+        ? String(this._trackEl.getAttribute("kind") || "").toLowerCase()
+        : "";
+      return VALID_TRACK_KINDS[raw] ? raw : "subtitles";
+    },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "label", {
+    get: function () {
+      return (this._trackEl && typeof this._trackEl.getAttribute === "function")
+        ? (this._trackEl.getAttribute("label") || "")
+        : "";
+    },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "language", {
+    get: function () {
+      return (this._trackEl && typeof this._trackEl.getAttribute === "function")
+        ? (this._trackEl.getAttribute("srclang") || "")
+        : "";
+    },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "id", {
+    get: function () {
+      return (this._trackEl && typeof this._trackEl.getAttribute === "function")
+        ? (this._trackEl.getAttribute("id") || "")
+        : "";
+    },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "mode", {
+    get: function () {
+      return this._mode;
+    },
+    set: function (v) {
+      const s = String(v);
+      if (VALID_TRACK_MODES[s]) {
+        this._mode = s;
+      }
+    },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "cues", {
+    get: function () { return this._mode === "disabled" ? null : this._cues; },
+    configurable: true,
+  });
+  Object.defineProperty(TextTrack.prototype, "activeCues", {
+    get: function () { return this._mode === "disabled" ? null : this._activeCues; },
+    configurable: true,
+  });
+  markNative(TextTrack, "TextTrack");
+  global.TextTrack = TextTrack;
+  if (typeof globalThis !== "undefined") globalThis.TextTrack = TextTrack;
+  if (typeof window !== "undefined") window.TextTrack = TextTrack;
+
+  function getOrCreateTrackObject(trackEl) {
+    if (!trackEl) return null;
+    if (!trackEl._textTrack) {
+      trackEl._textTrack = new TextTrack(trackEl);
+    }
+    return trackEl._textTrack;
+  }
+
+  function TextTrackList() {}
+  Object.defineProperty(TextTrackList.prototype, Symbol.toStringTag, {
+    value: "TextTrackList",
+    configurable: true,
+  });
+  markNative(TextTrackList, "TextTrackList");
+  global.TextTrackList = TextTrackList;
+  if (typeof globalThis !== "undefined") globalThis.TextTrackList = TextTrackList;
+  if (typeof window !== "undefined") window.TextTrackList = TextTrackList;
+
+  function createTextTrackList(mediaEl) {
+    function collectTracks() {
+      const out = [];
+      let child = mediaEl ? mediaEl.firstChild : null;
+      while (child) {
+        if (child.nodeType === 1) {
+          const tag = String(child.localName || child.tagName || "").toLowerCase();
+          if (tag === "track") {
+            const upgraded = typeof upgradeElement === "function" ? upgradeElement(child) : child;
+            out.push(getOrCreateTrackObject(upgraded));
+          }
+        }
+        child = child.nextSibling;
+      }
+      return out;
+    }
+    const target = Object.create(TextTrackList.prototype);
+    target.getTrackById = function (id) {
+      const list = collectTracks();
+      const needle = String(id);
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === needle) return list[i];
+      }
+      return null;
+    };
+    return new Proxy(target, {
+      get: function (t, prop) {
+        if (prop === Symbol.iterator) {
+          return function () {
+            const arr = collectTracks();
+            let idx = 0;
+            return {
+              next: function () {
+                return idx < arr.length ? { value: arr[idx++], done: false } : { value: undefined, done: true };
+              },
+            };
+          };
+        }
+        if (prop === "length") return collectTracks().length;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const arr = collectTracks();
+          const idx = Number(prop);
+          return idx >= 0 && idx < arr.length ? arr[idx] : undefined;
+        }
+        return t[prop];
+      },
+      has: function (t, prop) {
+        if (prop === "length") return true;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          return Number(prop) < collectTracks().length;
+        }
+        return prop in t;
+      },
+    });
+  }
+
+  function HTMLTrackElement() {}
+  HTMLTrackElement.prototype = Object.create(HTMLElementProto);
+  HTMLTrackElement.prototype.constructor = HTMLTrackElement;
+  Object.defineProperty(HTMLTrackElement.prototype, Symbol.toStringTag, {
+    value: "HTMLTrackElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "kind", {
+    get: function () { return getOrCreateTrackObject(this).kind; },
+    set: function (v) { this.setAttribute("kind", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "src", {
+    get: function () { return this.getAttribute("src") || ""; },
+    set: function (v) { this.setAttribute("src", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "srclang", {
+    get: function () { return this.getAttribute("srclang") || ""; },
+    set: function (v) { this.setAttribute("srclang", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "label", {
+    get: function () { return this.getAttribute("label") || ""; },
+    set: function (v) { this.setAttribute("label", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "default", {
+    get: function () { return this.hasAttribute("default"); },
+    set: function (v) { if (v) this.setAttribute("default", ""); else this.removeAttribute("default"); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLTrackElement.prototype, "track", {
+    get: function () { return getOrCreateTrackObject(this); },
+    configurable: true,
+  });
+  markNative(HTMLTrackElement, "HTMLTrackElement");
+  global.HTMLTrackElement = HTMLTrackElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLTrackElement = HTMLTrackElement;
+  if (typeof window !== "undefined") window.HTMLTrackElement = HTMLTrackElement;
+
+  function HTMLMediaElement() {}
+  HTMLMediaElement.prototype = Object.create(HTMLElementProto);
+  HTMLMediaElement.prototype.constructor = HTMLMediaElement;
+  Object.defineProperty(HTMLMediaElement.prototype, Symbol.toStringTag, {
+    value: "HTMLMediaElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLMediaElement.prototype, "textTracks", {
+    get: function () {
+      if (!this._textTracks) {
+        this._textTracks = createTextTrackList(this);
+      }
+      return this._textTracks;
+    },
+    configurable: true,
+  });
+  markNative(HTMLMediaElement, "HTMLMediaElement");
+  global.HTMLMediaElement = HTMLMediaElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLMediaElement = HTMLMediaElement;
+  if (typeof window !== "undefined") window.HTMLMediaElement = HTMLMediaElement;
+
+  function HTMLVideoElement() {}
+  HTMLVideoElement.prototype = Object.create(HTMLMediaElement.prototype);
+  HTMLVideoElement.prototype.constructor = HTMLVideoElement;
+  Object.defineProperty(HTMLVideoElement.prototype, Symbol.toStringTag, {
+    value: "HTMLVideoElement",
+    configurable: true,
+  });
+  markNative(HTMLVideoElement, "HTMLVideoElement");
+  global.HTMLVideoElement = HTMLVideoElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLVideoElement = HTMLVideoElement;
+  if (typeof window !== "undefined") window.HTMLVideoElement = HTMLVideoElement;
+
+  function HTMLAudioElement() {}
+  HTMLAudioElement.prototype = Object.create(HTMLMediaElement.prototype);
+  HTMLAudioElement.prototype.constructor = HTMLAudioElement;
+  Object.defineProperty(HTMLAudioElement.prototype, Symbol.toStringTag, {
+    value: "HTMLAudioElement",
+    configurable: true,
+  });
+  markNative(HTMLAudioElement, "HTMLAudioElement");
+  global.HTMLAudioElement = HTMLAudioElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLAudioElement = HTMLAudioElement;
+  if (typeof window !== "undefined") window.HTMLAudioElement = HTMLAudioElement;
 
   const SIMPLE_HTML_CLASSES = [
     "HTMLDivElement",

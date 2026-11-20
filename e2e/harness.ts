@@ -200,6 +200,29 @@ export class CDPClient {
       await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" }, sessionId);
       return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" }, sessionId);
     }
+    const flushPendingDragMove = async () => {
+      const pending = (this as any)._pendingDragMove;
+      if (!pending || !sharedPage) return;
+      (this as any)._pendingDragMove = null;
+      try {
+        await sharedPage.evaluate(
+          (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
+            const fn = (globalThis as any).__capsurf_dispatch_mouse_event;
+            if (typeof fn !== "function") return;
+            fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks);
+          },
+          "mouseMoved",
+          pending.x,
+          pending.y,
+          pending.button,
+          pending.buttons,
+          pending.clickCount,
+        );
+      } catch {}
+    };
+    if (method === "Runtime.evaluate" && (this as any)._pendingDragMove) {
+      await flushPendingDragMove();
+    }
     if (
       method === "Input.dispatchMouseEvent" &&
       params &&
@@ -208,6 +231,25 @@ export class CDPClient {
       typeof params.x === "number" &&
       typeof params.y === "number"
     ) {
+      const isNamedButtonDragMove =
+        params.type === "mouseMoved" &&
+        params.buttons === undefined &&
+        typeof params.button === "string" &&
+        params.button !== "" &&
+        params.button !== "none";
+      if (isNamedButtonDragMove) {
+        (this as any)._pendingDragMove = {
+          x: params.x,
+          y: params.y,
+          button: params.button,
+          buttons: null,
+          clickCount: params.clickCount ?? 1,
+        };
+        return {};
+      }
+      if ((this as any)._pendingDragMove) {
+        await flushPendingDragMove();
+      }
       try {
         const jsHandled: boolean = await sharedPage.evaluate(
           (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
@@ -219,14 +261,14 @@ export class CDPClient {
               return false;
             }
             if ((globalThis as any).__capsurf_range_drag_active) return false;
-            const r = fn(evType, cx, cy, btn, btns, clicks);
+            const r = fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks);
             return Boolean(r && r.handled);
           },
           params.type,
           params.x,
           params.y,
-          params.button ?? "left",
-          params.buttons ?? (params.type === "mousePressed" ? 1 : 0),
+          params.button !== undefined ? params.button : "none",
+          params.buttons !== undefined ? params.buttons : null,
           params.clickCount ?? 1,
         );
         if (jsHandled) {
@@ -659,6 +701,7 @@ export class Keyboard {
 
 export class Page {
   public _closed: boolean = false;
+  private _lastTitle: string = "";
   public browserContextId: string = "default";
   public frameId: string = "capsurf-frame-001";
   public mouse: Mouse;
@@ -1089,7 +1132,13 @@ export class Page {
       navParams.browserContextId = this.browserContextId;
     }
     let res: any;
-    if (targetNavUrl.startsWith("https://ks.invalid/__fixtures/form-echo")) {
+    const isFormEchoUrl =
+      targetNavUrl.startsWith("https://ks.invalid/__fixtures/form-echo") ||
+      targetNavUrl.startsWith("http://127.0.0.1:8787/__fixtures/form-echo");
+    const isPolicyDocUrl =
+      targetNavUrl.startsWith("https://ks.invalid/__fixtures/policy-doc.html") ||
+      targetNavUrl.startsWith("http://127.0.0.1:8787/__fixtures/policy-doc.html");
+    if (isFormEchoUrl) {
       const postInfo = (options as any)?.__formPost;
       const reqMethod = postInfo && postInfo.method ? String(postInfo.method).toUpperCase() : "GET";
       const reqBody = postInfo && typeof postInfo.body === "string" ? postInfo.body : "";
@@ -1101,6 +1150,20 @@ export class Page {
       const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const echoHtml = `<!doctype html><html><body><div id="method">${escHtml(reqMethod)}</div><div id="ctype">${escHtml(reqCtype)}</div><div id="body">${escHtml(reqBody)}</div><div id="query">${escHtml(reqQuery)}</div></body></html>`;
       const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(echoHtml)}`;
+      res = await this.cdp.send("Page.navigate", { ...navParams, url: dataUrl });
+      this._url = targetNavUrl;
+      this.cdp.emit("Page.frameNavigated", {
+        frame: { id: (res as any)?.frameId || "main", url: targetNavUrl },
+      });
+      this.cdp.emit("Page.domContentEventFired", { timestamp: Date.now() / 1000 });
+      this.cdp.emit("Page.loadEventFired", { timestamp: Date.now() / 1000 });
+    } else if (isPolicyDocUrl) {
+      let bodyParam = "";
+      try {
+        bodyParam = new URL(targetNavUrl).searchParams.get("body") || "";
+      } catch {}
+      const docHtml = `<!doctype html><html><body>${bodyParam}</body></html>`;
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(docHtml)}`;
       res = await this.cdp.send("Page.navigate", { ...navParams, url: dataUrl });
       this._url = targetNavUrl;
       this.cdp.emit("Page.frameNavigated", {
@@ -1175,6 +1238,26 @@ export class Page {
               return document.body || document.documentElement || null;
             };
           }
+          if (typeof document !== 'undefined' && document.querySelectorAll) {
+            try {
+              const links = document.querySelectorAll("link[rel~='stylesheet']");
+              for (let i = 0; i < links.length; i++) {
+                const lnk = links[i];
+                if (!lnk || lnk._capsurfLinkLoaded) continue;
+                lnk._capsurfLinkLoaded = true;
+                const onloadAttr = lnk.getAttribute && lnk.getAttribute("onload");
+                if (onloadAttr) {
+                  try {
+                    const fn = new Function("event", onloadAttr);
+                    fn.call(lnk, new Event("load"));
+                  } catch (e) {}
+                }
+                if (typeof lnk.dispatchEvent === "function") {
+                  try { lnk.dispatchEvent(new Event("load")); } catch (e) {}
+                }
+              }
+            } catch (e) {}
+          }
         })()`,
       });
     } catch {}
@@ -1244,11 +1327,26 @@ export class Page {
       url: () => this._url,
     };
 
+    (this.cdp as any)._activePage = this;
+    try {
+      const titleRes: any = await this.cdp.send("Runtime.evaluate", {
+        expression: "typeof document !== 'undefined' ? String(document.title || '') : ''",
+        returnByValue: true,
+      });
+      if (titleRes?.result?.value !== undefined) {
+        this._lastTitle = String(titleRes.result.value);
+      }
+    } catch {}
     return navResponse;
   }
 
   async title(): Promise<string> {
-    return await this.evaluate(() => document.title);
+    if ((this.cdp as any)._activePage && (this.cdp as any)._activePage !== this && this._lastTitle) {
+      return this._lastTitle;
+    }
+    const t = await this.evaluate(() => document.title);
+    if (typeof t === "string") this._lastTitle = t;
+    return t;
   }
 
   async evaluate(fnOrExpr: any, ...args: any[]): Promise<any> {
@@ -1834,17 +1932,37 @@ export class Page {
               el.focus();
             } catch (e) {}
           }
+          let clickPrevented = false;
           try {
             const EvCls = (globalThis as any).__NativeEvent || Event;
-            const ev = new EvCls("click", { bubbles: true });
+            const ev = new EvCls("click", { bubbles: true, cancelable: true });
             el.dispatchEvent?.(ev);
+            if (ev.defaultPrevented) clickPrevented = true;
           } catch (e) {
             el.click?.();
           }
           if (typeof (globalThis as any).__capsurf_dispatchTrustedEvent === "function") {
             const EvCls = (globalThis as any).__NativeEvent || Event;
-            const trustedEv = new EvCls("click", { bubbles: true });
+            const trustedEv = new EvCls("click", { bubbles: true, cancelable: true });
             (globalThis as any).__capsurf_dispatchTrustedEvent(el, trustedEv);
+            if (trustedEv.defaultPrevented) clickPrevented = true;
+          }
+          if (!clickPrevented) {
+            let cur: any = el;
+            for (let d = 0; cur && d < 32; d++) {
+              const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
+              if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
+                const rawHref = cur.getAttribute("href");
+                const targetHref = cur.href || rawHref;
+                if (rawHref.startsWith("#")) {
+                  location.hash = rawHref;
+                } else if (targetHref) {
+                  location.href = targetHref;
+                }
+                break;
+              }
+              cur = cur.parentElement || cur.parentNode;
+            }
           }
         }
       }, selector);
@@ -2252,8 +2370,14 @@ export class Browser {
   }
 
   async newPage(): Promise<Page> {
-    await this.page.goto("about:blank");
-    return this.page;
+    const ctx = await this.createBrowserContext();
+    const page = await ctx.newPage();
+    const origClose = page.close.bind(page);
+    page.close = async () => {
+      await origClose();
+      await ctx.close();
+    };
+    return page;
   }
 
   async close(): Promise<void> {

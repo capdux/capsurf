@@ -1509,4 +1509,10 @@
    - 使用栈上定长状态机实现 UAX #9 显式隔离/嵌入/覆盖（X1–X8）、BD13 隔离运行序列及 W/N/I/L 视觉重排，并按 HTML 规范跳过含显式 `dir` 后代与 `<bdi>`/`<script>`/`<style>`/`<textarea>` 解析 `dir="auto"` 首强字符。
 2. **零宽控制符与跨行内段落 BiDi 重排 (`layout.cp`, `painter.cp`)**：
    - 在排版度量与光栅化时对 `U+200E/200F/202A..202E/2066..2069` 按 0 宽跳过；对含 BiDi 需求的块级容器收集跨 `<span>`/`<bdi>`/`<bdo>` 内联段落，注入隔离/覆盖控制码后按视觉序绘制。
+
+## Phase 119 表单 Proxy 防递归、旧字符集 URL 编码与 `no-cors` 安全门禁技术方案
+1. **`formNamedPropsProxy` 递归溢出根除 (`element/forms/form.js`)**：
+   - 移除 `collectFormControls` 中的 `form.id` 属性回退并增加 `_inFormNamedLookup` 重入锁，同时将 `"id"` 列入 `FORM_OWN_KEEP`，根除 `js_proxy_get -> js_reflect_get` 无限递归 SIGSEGV（同步解锁 `forms-file-input-demo` 与声明式 `webmcp` 表单）。
+2. **WHATWG 旧字符集编码与 `no-cors` 过滤 (`window.js`, `html-classes.js`)**：
+   - 基于 `document.characterSet` 对 `http:`/`https:` 超链接 query、表单提交（`acceptCharset`/`_charset_`）及 `XHR.responseText` 进行 EUC-KR/UTF-8 编解码；在 `fetchFn` 中严格执行 `no-cors` 方法白名单与 CORS-safelisted 请求头过滤。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

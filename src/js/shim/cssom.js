@@ -1984,7 +1984,7 @@
       ? ownerNode.hasAttribute("crossorigin")
       : (ownerNode.getAttribute && ownerNode.getAttribute("crossorigin") !== null);
     const cacheKey = resolvedHref + "|co=" + (hasCrossOriginAttr ? "1" : "0");
-    if (this._loadedHref === cacheKey) return;
+    if (this._loadedHref === cacheKey && this._cascadeCssText) return;
     this._loadedHref = cacheKey;
 
     let docOrigin = "";
@@ -2801,8 +2801,90 @@
     return "matrix3d(" + M.map(formatCssMatrixNumber).join(", ") + ")";
   }
 
+  function evalLinkMediaMatchesScreen(mediaAttr) {
+    const raw = String(mediaAttr == null ? "" : mediaAttr).trim().toLowerCase();
+    if (!raw || raw === "all" || raw === "screen") return true;
+    const queries = raw.split(",");
+    for (let i = 0; i < queries.length; i++) {
+      const q = queries[i].trim();
+      if (!q) continue;
+      if (q === "all" || q === "screen" || q === "only screen" || q === "only all") return true;
+      if (q.startsWith("not print")) return true;
+      if (q === "print" || q === "only print" || q === "speech" || q === "not screen" || q === "not all") continue;
+      if (q.indexOf("print") === -1) return true;
+    }
+    return false;
+  }
+
+  function getDynamicLinkOverrides(element) {
+    if (!element || element.nodeType !== 1) return null;
+    const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+    if (!doc || typeof doc.querySelectorAll !== "function") return null;
+    const links = doc.querySelectorAll("link");
+    if (!links || links.length === 0) return null;
+    let overrides = null;
+    for (let i = 0; i < links.length; i++) {
+      const link = links[i];
+      if (!link || typeof link.getAttribute !== "function") continue;
+      const rel = String(link.getAttribute("rel") || "").trim().toLowerCase().split(/\s+/);
+      if (!rel.includes("stylesheet")) continue;
+      const mediaAttr = link.getAttribute("media");
+      if (!evalLinkMediaMatchesScreen(mediaAttr)) continue;
+      const sheet = link.sheet;
+      if (!sheet) continue;
+      if (typeof sheet._loadLinkSheet === "function") {
+        sheet._loadLinkSheet();
+      }
+      const rawCssText = sheet._cascadeCssText || "";
+      if (!rawCssText) continue;
+      const cssText = rawCssText.replace(/\/\*[\s\S]*?\*\//g, "");
+      const chunks = splitStylesheetRules(cssText);
+      for (let j = 0; j < chunks.length; j++) {
+        const item = chunks[j];
+        if (!item) continue;
+        let selText = "";
+        let bodyText = "";
+        if (typeof item === "string") {
+          const chunk = item.trim();
+          if (!chunk || chunk.startsWith("@")) continue;
+          const brace = chunk.indexOf("{");
+          const close = chunk.lastIndexOf("}");
+          if (brace <= 0 || close <= brace) continue;
+          selText = chunk.slice(0, brace).trim();
+          bodyText = chunk.slice(brace + 1, close).trim();
+        } else if ((item.selectorText || item.selector) && item.declText) {
+          selText = String(item.selectorText || item.selector).trim();
+          bodyText = String(item.declText).trim();
+        } else {
+          continue;
+        }
+        let matched = false;
+        try {
+          if (typeof element.matches === "function") {
+            matched = element.matches(selText);
+          }
+        } catch (e) {}
+        if (!matched) continue;
+        if (!overrides) overrides = Object.create(null);
+        const decls = bodyText.split(";");
+        for (let k = 0; k < decls.length; k++) {
+          const colon = decls[k].indexOf(":");
+          if (colon <= 0) continue;
+          const propName = decls[k].slice(0, colon).trim().toLowerCase();
+          let propVal = decls[k].slice(colon + 1).trim();
+          propVal = propVal.replace(/\s*!important\s*$/i, "").trim();
+          if (propName && propVal) {
+            overrides[propName] = propVal;
+          }
+        }
+      }
+    }
+    return overrides;
+  }
+
   function wrapComputedStyleDecl(decl, element) {
     if (!decl || typeof decl !== "object") return decl;
+    const linkOverrides = getDynamicLinkOverrides(element);
     return new Proxy(decl, {
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") return target[prop];
@@ -2811,6 +2893,11 @@
             return function (propertyName) {
               const rawName = String(propertyName || "").trim();
               const k = cssPropCamelToKebab(rawName);
+              if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, k)) {
+                let ov = resolveCssVars(element, linkOverrides[k]);
+                if (k === "color" || k.endsWith("-color")) ov = normalizeCssColor(ov);
+                return ov;
+              }
               if (k === "-webkit-transform" || k === "transform") {
                 let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
                 if (tv) {
@@ -2852,6 +2939,12 @@
             return tv || "";
           }
           const kebab = cssPropCamelToKebab(prop);
+
+          if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, kebab)) {
+            let ov = resolveCssVars(element, linkOverrides[kebab]);
+            if (kebab === "color" || kebab.endsWith("-color")) ov = normalizeCssColor(ov);
+            return ov;
+          }
 
           // If color is unstyled, default to rgb(0, 0, 0)
           if (kebab === "color") {

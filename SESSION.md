@@ -3936,3 +3936,14 @@
   - 全部 4 个 `.cp` 文件 4 门禁全 0；
   - `inset-box-shadow` (1/1)、`webfont-link` (1/1)、`author-webfont-custody` (1/1)、`inline-bidi-direction` (1/1)、`inline-bidi-isolation` (1/1)：**5/6 PASS**（`css-external-sheets-demo` 缺口已定位至测试文件相对路径与 `src/cdp/css.cp`）。
 - **并发收缩**: 销毁 `2856cab6-5581-4f8a-a07d-5f7daf96df5c`，按用户指令不再补发第 3 路，当前稳定运行 **2 路并发子智能体**（`5b93a933` + `c06f54c4`）。
+
+## [2026-11-20 21:08:30] 表单提交/文件上传、鼠标位掩码、旧字符集 URL 编码、Media TextTrack 与 no-cors Opaque 闭环 (Subagent 5b93a933 结单，Phase 119)
+- **JS 运行时垫片与 Harness 升级 (`e2e/harness.ts`, `src/js/shim/{window,cssom,index,parser,element/html-classes,element/forms/form}.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`)**:
+  - `harness.ts` & `window.js`：实装 `Input.dispatchMouseEvent` 原始 `button`/`buttons` 透传、named-button drag 合并与自动 flush、`_heldButtonsMask`/`movementX/Y`、独立 `BrowserContext` 多页隔离、`<a href>` 可取消默认导航及 `<link onload>` 触发；
+  - `form.js`：修复 `formNamedPropsProxy` 递归栈溢出崩溃（加 `_inFormNamedLookup` 重入保护、移除 `form.id` 回退），并补全 `text/plain` 与 `multipart/form-data`（含 `<input type="file">`）、`acceptCharset`/`_charset_`/命名 `iframe` 目标提交；
+  - `window.js` & `html-classes.js` & `parser.js`：实装 WHATWG Encoding Standard（EUC-KR/UTF-8 query 与表单编码、`document.characterSet`/`inputEncoding`、`XMLHttpRequest.responseText` 解码）、`HTMLMediaElement`/`Video`/`Audio`/`Track`/`TextTrack`/`TextTrackList`、`no-cors` safelist 方法/头门禁与跨源 `iframe.contentDocument === null`；
+  - `cssom.js`：`<link rel="stylesheet">` 按 `media` 属性动态过滤且不永久缓存空 `_cascadeCssText`。
+- **门禁与 E2E 验证（port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `mouse-input-fields` (**4/4**)、`forms-post-submit-demo` (**7/7**)、`forms-file-input-demo` (**2/2**)、`legacy-charset-url-encoding` (**9/9**)、`media-text-tracks` (**1/1**)、`no-cors-opaque` (**5/5**)、`link-onload-media`（1/2，第 2 项补丁已打包，待复测）：**29/30 PASS**！
+- **清理旧子智能体**: 销毁 `5b93a933-4f4c-4bfb-b1fe-d57d3b03cfa5`。
