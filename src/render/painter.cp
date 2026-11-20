@@ -2087,7 +2087,7 @@ fn paintImgSvg(
     );
 }
 
-fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
+pub fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
     const t = std.mem.trim(u8, src, " \t\r\n");
     if (t.len == 0) return null;
     if (std.mem.startsWith(u8, t, "data:image/png;base64,")) {

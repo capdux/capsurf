@@ -308,3 +308,4 @@
 - **前置精确投喂（Pre-Seeded Prompts）**：派发修复子智能体前，主智能体或诊断槽位必须先用 `rg -n` / 单跑提取出「精确报错行号 + `Expected`/`Received` diff + 目标 `src/` 函数/行号」直接写入 Prompt，实测可将修复型子智能体从 10–15 分钟压缩至 **3–5 分钟**、节省 60%+ 探索 Token。
 - **自适应超时预算（Subtest-Scaled Timeout）**：批量扫盘前先用 `rg -c "test\(" <file>` 统计子测数 `N`，按 `max(20, N * 4)` 秒设置超时（如 33 子测的 `inline-metrics-regressions` 需 `120s`），避免把「慢但全绿」误判为挂起而重复浪费轮次。
 - **双端口镜像同步（Binary Sync on Commit）**：每次 Slot B 完成 `bin_19233/main` 构建并提交后，主智能体立即执行 `cp -f bin_19233/main bin_19232/main`，防止 `e2e/harness.ts` 与旧版 `bin_19232` 协议错配产生假失败。
+- **大栈白盒运行规范**：凡传递导入 `src/cdp/` 或 `mock_fixtures.cp`（~98 模块）的白盒测试，执行 `cap test -m` 前必须加 `ulimit -s 65536` 防止编译期栈溢出。

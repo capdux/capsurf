@@ -4756,3 +4756,7 @@
   - Fixed `DOM.documentUpdated` `ev.session_id = req.session_id` in `src/cdp/dom.cp:476`.
   - Wired `domDebug.renderRbiResources` override into `__capsurf_get_canvas_bitmaps` in `src/js/dom_binding.cp:2615-2681`, added `/font-key-images.html`, `/font-key-red.png`, `/font-key-orange.png` in `src/net/mock_fixtures.cp:1563-1578`, and PNG mappings in `src/render/painter.cp:2100-2105`.
   - Built `bin_19233/main` (13.28s); `e2e/render-resource-scope.e2e.test.ts` (**2/2**) + `e2e/demo/oopif-elements-panel.e2e.test.ts` (**1/1**) = **3/3 PASS** (16 assertions, 6.25s, exit 0).
+
+### Phase 237-238: Image/DOM-Events Whitebox (129/129) + `flex-svg-intrinsic` 3/3 + Multi-Tab `script-navigation-tab` 2/2 PASS
+- **Slot A (`a1c1fb72`, `bce4e287`)**: Verified `test/render/` 8/8 & `test/net/test_mock_fixtures_edge.cp` 4/4 (`ulimit -s 65536`); added `test/render/test_image_and_font_key_edge.cp` (**3/3 PASS**, 1960ms) & `test/dom/test_dom_events_and_propagation_edge.cp` (**1/1 PASS**, 869ms). Total whitebox **129/129 (100% PASS)**.
+- **Slot B (`bd21e154`, `dbbbc428`)**: Verified `e2e/flex-svg-intrinsic.e2e.test.ts` **3/3 PASS** (5.73s) & `test/layout/` **5/5 PASS**. Implemented multi-tab `CdpPageSession` isolation (`tab_sessions` in `src/cdp/server.cp`, `navigate_session_id` in `src/cdp/{session,page}.cp`, `Browser.newPage` in `e2e/harness.ts`); built `bin_19233/main` (8.39s); `e2e/script-navigation-tab.e2e.test.ts` **2/2 PASS** (5.83s) + `oopif-elements-panel`/`context-lifecycle` **4/4 PASS** (9.61s).

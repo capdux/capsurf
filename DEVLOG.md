@@ -1783,3 +1783,6 @@
 ### Phase 236: `DOM.documentUpdated` Session Routing & `renderRbiResources` Scope Isolation
 - `DOM.enable` now tags `DOM.documentUpdated` with `req.session_id` so `_createFlatSession` (`parent.onSession`) delivers it to the child session.
 - `__capsurf_get_canvas_bitmaps` invokes `domDebug.renderRbiResources` when present and isolates per-document overrides via per-navigation JS context rebuild.
+
+### Phase 237-238: Multi-Tab `CdpPageSession` Isolation (`script-navigation-tab` 2/2)
+- `CdpServer` now tracks up to 16 `TabSessionEntry` slots keyed by `target_id`/`session_id` and routes `req.session_id`, `flushAllPendingNavigations`, `pollAllNetworkEvents`, and `pumpAllTimers` per tab.

@@ -2398,3 +2398,7 @@
 ### Phase 236
 - Added `test/tty/test_tty_todomvc_ua_css.cp` and updated `test/tty/test_nav_params.cp` for `ks_tty_css=0` reset semantics.
 - Fixed child-frame `DOM.documentUpdated` session routing (`src/cdp/dom.cp:476`), wired `domDebug.renderRbiResources` (`src/js/dom_binding.cp`), and added `/font-key-images.html` fixtures (`src/net/mock_fixtures.cp`, `src/render/painter.cp`).
+
+### Phase 237-238
+- Added `test/render/test_image_and_font_key_edge.cp` and `test/dom/test_dom_events_and_propagation_edge.cp`; exposed `pub fn loadBgPngBytes` in `src/render/painter.cp`.
+- Implemented multi-tab `CdpPageSession` isolation (`tab_sessions`) across `src/cdp/{server,session,page}.cp` and `e2e/harness.ts`.

@@ -273,11 +273,31 @@ fn wakeServer(port: u16) {
     * = close(sock_fd);
 }
 
+const MAX_TAB_SESSIONS: usize = 16;
+
+struct TabSessionSlot {
+    active: bool = false,
+    key_buf: [64]u8 = [0; 64],
+    key_len: usize = 0,
+    bctx_buf: [64]u8 = [0; 64],
+    bctx_len: usize = 0,
+    page_session: (*CdpPageSession)? = null,
+
+    fn sessionId(): []const u8 {
+        return _.key_buf[0.._.key_len];
+    }
+
+    fn browserContextId(): []const u8 {
+        return _.bctx_buf[0.._.bctx_len];
+    }
+}
+
 pub struct CdpServer {
     allocator: std.mem.Allocator,
     port: u16,
     listen_fd: i32 = -1,
     session: *CdpPageSession,
+    tab_sessions: [MAX_TAB_SESSIONS]TabSessionSlot = [TabSessionSlot{}; MAX_TAB_SESSIONS],
     running: bool = false,
 
     pub static fn init(allocator: std.mem.Allocator, port: u16): (*CdpServer)! {
@@ -288,6 +308,7 @@ pub struct CdpServer {
             port: port,
             listen_fd: -1,
             session: page_session,
+            tab_sessions: [TabSessionSlot{}; MAX_TAB_SESSIONS],
             running: false,
         };
         return ptr;
@@ -295,8 +316,128 @@ pub struct CdpServer {
 
     pub fn deinit(*_) {
         _.stop();
+        _.deinitTabSessions();
         _.session.deinit();
         std.heap.c_allocator.destroy(_);
+    }
+
+    fn deinitTabSessions(*_) {
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (_.tab_sessions[i].active) {
+                if (_.tab_sessions[i].page_session != null) {
+                    _.tab_sessions[i].page_session.?.deinit();
+                }
+                _.tab_sessions[i] = TabSessionSlot{};
+            }
+        }
+    }
+
+    fn deinitTabSessionByKey(*_, sid: []const u8) {
+        if (sid.len == 0) return;
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (_.tab_sessions[i].active && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].sessionId(), sid)) {
+                if (_.tab_sessions[i].page_session != null) {
+                    _.tab_sessions[i].page_session.?.deinit();
+                }
+                _.tab_sessions[i] = TabSessionSlot{};
+            }
+        }
+    }
+
+    fn deinitTabSessionByContext(*_, bctx: []const u8) {
+        if (bctx.len == 0) return;
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (_.tab_sessions[i].active && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx)) {
+                if (_.tab_sessions[i].page_session != null) {
+                    _.tab_sessions[i].page_session.?.deinit();
+                }
+                _.tab_sessions[i] = TabSessionSlot{};
+            }
+        }
+    }
+
+    fn getOrCreateTabSession(*_, sid: []const u8, bctx: []const u8): *CdpPageSession {
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (!_.tab_sessions[i].active) continue;
+            if (sid.len > 0 && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].sessionId(), sid)) {
+                if (_.tab_sessions[i].page_session != null) return _.tab_sessions[i].page_session.?;
+            }
+            if (sid.len == 0 && bctx.len > 0 && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx)) {
+                if (_.tab_sessions[i].page_session != null) return _.tab_sessions[i].page_session.?;
+            }
+        }
+        let slot_idx: usize = 0;
+        let found_slot = false;
+        while (slot_idx < MAX_TAB_SESSIONS) : (slot_idx += 1) {
+            if (!_.tab_sessions[slot_idx].active) {
+                found_slot = true;
+                break;
+            }
+        }
+        if (!found_slot) return _.session;
+
+        const new_sess = CdpPageSession.init(_.allocator) catch return _.session;
+        new_sess.skip_raster = _.session.skip_raster;
+        if (bctx.len > 0) {
+            new_sess.setContextId(bctx);
+        }
+        _.tab_sessions[slot_idx] = TabSessionSlot{};
+        _.tab_sessions[slot_idx].active = true;
+        if (sid.len > 0) {
+            const slen = @min(sid.len, _.tab_sessions[slot_idx].key_buf.len);
+            @memcpy(_.tab_sessions[slot_idx].key_buf[0..slen], sid[0..slen]);
+            _.tab_sessions[slot_idx].key_len = slen;
+        }
+        if (bctx.len > 0) {
+            const blen = @min(bctx.len, _.tab_sessions[slot_idx].bctx_buf.len);
+            @memcpy(_.tab_sessions[slot_idx].bctx_buf[0..blen], bctx[0..blen]);
+            _.tab_sessions[slot_idx].bctx_len = blen;
+        }
+        _.tab_sessions[slot_idx].page_session = new_sess;
+        return new_sess;
+    }
+
+    fn resolveSessionForRequest(*_, req: CdpRequest): *CdpPageSession {
+        if (std.mem.startsWith(u8, req.method, "Target.") || std.mem.startsWith(u8, req.method, "Browser.")) {
+            return _.session;
+        }
+        const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
+        if (req.session_id.len > 0) {
+            if (std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) {
+                if (bctx.len > 0 && !std.mem.eql(u8, bctx, "default")) {
+                    return _.getOrCreateTabSession("", bctx);
+                }
+                return _.session;
+            }
+            if (std.mem.eql(u8, req.session_id, "capsurf-session-renderer") ||
+                std.mem.eql(u8, req.session_id, "capsurf-session-engine") ||
+                std.mem.eql(u8, req.session_id, "capsurf-session-001")) {
+                return _.session;
+            }
+            if (_.session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                return _.session;
+            }
+            let resolved_bctx: []const u8 = bctx;
+            if (resolved_bctx.len == 0) {
+                if (tid := _.session.target_registry.findTargetIdBySessionId(req.session_id)) {
+                    if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
+                        const tbctx = _.session.target_registry.targets[t_idx].browserContextId();
+                        if (!std.mem.eql(u8, tbctx, "default")) {
+                            resolved_bctx = tbctx;
+                        }
+                    }
+                }
+            }
+            return _.getOrCreateTabSession(req.session_id, resolved_bctx);
+        }
+        if (bctx.len > 0 && !std.mem.eql(u8, bctx, "default")) {
+            return _.getOrCreateTabSession("", bctx);
+        }
+        return _.session;
     }
 
     pub fn start(*_)! {
@@ -750,7 +891,19 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     }
 
     fn flushDomEvents(*_, client_fd: i32)! {
-        if (!_.session.dom_document_sent) return;
+        flushDomEventsForSession(client_fd, _.session)?;
+    }
+
+    fn flushPendingNavigation(*_, client_fd: i32)! {
+        flushPendingNavigationForSession(client_fd, _.session, "")?;
+    }
+
+    fn flushReopenLoadEvents(*_, client_fd: i32)! {
+        flushReopenLoadEventsForSession(client_fd, _.session, "")?;
+    }
+
+    static fn flushDomEventsForSession(client_fd: i32, sess: *CdpPageSession)! {
+        if (!sess.dom_document_sent) return;
         let msgs = std.ArrayListUnmanaged(ByteSlice).empty;
         defer {
             let mi: usize = 0;
@@ -759,14 +912,14 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
             msgs.deinit(std.heap.c_allocator);
         }
-        drainDomMutationEvents(_.session, &msgs);
+        drainDomMutationEvents(sess, &msgs);
         let mi: usize = 0;
         while (mi < msgs.items.len) : (mi += 1) {
             writeWsTextFrame(client_fd, msgs.items[mi])?;
         }
     }
 
-    fn emitCdpEvents(*_, client_fd: i32, events: *[MAX_CDP_EVENTS]CdpEvent, event_count: usize)! {
+    static fn emitCdpEventsToFd(client_fd: i32, events: *[MAX_CDP_EVENTS]CdpEvent, event_count: usize)! {
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
             const has_sid = events[i].session_id.len > 0;
@@ -806,31 +959,63 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
-    fn flushPendingNavigation(*_, client_fd: i32)! {
-        if (!_.session.has_document) return;
+    static fn flushPendingNavigationForSession(client_fd: i32, sess: *CdpPageSession, sid: []const u8)! {
+        if (!sess.has_document) return;
         let nav_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
         let nav_event_count: usize = 0;
-        if (performPendingNavigation(_.session, &nav_events, &nav_event_count)) {
-            _.emitCdpEvents(client_fd, &nav_events, nav_event_count)?;
+        if (performPendingNavigation(sess, &nav_events, &nav_event_count)) {
+            if (sid.len > 0) {
+                let ei: usize = 0;
+                while (ei < nav_event_count) : (ei += 1) {
+                    if (nav_events[ei].session_id.len == 0) {
+                        nav_events[ei].session_id = sid;
+                    }
+                }
+            }
+            emitCdpEventsToFd(client_fd, &nav_events, nav_event_count)?;
         }
     }
 
-    fn flushReopenLoadEvents(*_, client_fd: i32)! {
-        if (!_.session.has_document) return;
+    static fn flushReopenLoadEventsForSession(client_fd: i32, sess: *CdpPageSession, sid: []const u8)! {
+        if (!sess.has_document) return;
         let reopen_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-        const reopen_count = _.session.pollReopenLoadEvents(&reopen_events);
+        const reopen_count = sess.pollReopenLoadEvents(&reopen_events);
         if (reopen_count > 0) {
-            _.emitCdpEvents(client_fd, &reopen_events, reopen_count)?;
+            if (sid.len > 0) {
+                let ei: usize = 0;
+                while (ei < reopen_count) : (ei += 1) {
+                    if (reopen_events[ei].session_id.len == 0) {
+                        reopen_events[ei].session_id = sid;
+                    }
+                }
+            }
+            emitCdpEventsToFd(client_fd, &reopen_events, reopen_count)?;
         }
         let console_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-        const console_count = _.session.pollConsoleEvents(&console_events);
+        const console_count = sess.pollConsoleEvents(&console_events);
         if (console_count > 0) {
-            _.emitCdpEvents(client_fd, &console_events, console_count)?;
+            if (sid.len > 0) {
+                let ei: usize = 0;
+                while (ei < console_count) : (ei += 1) {
+                    if (console_events[ei].session_id.len == 0) {
+                        console_events[ei].session_id = sid;
+                    }
+                }
+            }
+            emitCdpEventsToFd(client_fd, &console_events, console_count)?;
         }
         let webmcp_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-        const webmcp_count = _.session.pollWebMcpEvents(&webmcp_events);
+        const webmcp_count = sess.pollWebMcpEvents(&webmcp_events);
         if (webmcp_count > 0) {
-            _.emitCdpEvents(client_fd, &webmcp_events, webmcp_count)?;
+            if (sid.len > 0) {
+                let ei: usize = 0;
+                while (ei < webmcp_count) : (ei += 1) {
+                    if (webmcp_events[ei].session_id.len == 0) {
+                        webmcp_events[ei].session_id = sid;
+                    }
+                }
+            }
+            emitCdpEventsToFd(client_fd, &webmcp_events, webmcp_count)?;
         }
     }
 
@@ -887,7 +1072,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             if (owner.len > 0 && !std.mem.eql(u8, owner, _.session.target_id)) {
                 evts[0].session_id = owner;
             }
-            _.emitCdpEvents(client_fd, &evts, 1)?;
+            emitCdpEventsToFd(client_fd, &evts, 1)?;
             _.session.screencast_handler.recordSentFrame(frame_hash, vw, vh, sx_i, sy_i, now_ms);
             return true;
         }
@@ -895,6 +1080,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     }
 
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64, initial_url: []const u8)! {
+        _.deinitTabSessions();
+        defer _.deinitTabSessions();
         _.session.resetSession();
         defer _.session.resetSession();
         let pending_initial_url = initial_url;
@@ -968,7 +1155,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                             params_raw: nav_params,
                         };
                         * = CdpDispatcher.dispatch(_.session, init_req, init_res_buf.?, &init_events, &init_event_count);
-                        _.emitCdpEvents(client_fd, &init_events, init_event_count) catch break;
+                        emitCdpEventsToFd(client_fd, &init_events, init_event_count) catch break;
                     }
                 }
             }
@@ -991,6 +1178,21 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     _.flushPendingNavigation(client_fd) catch break;
                     if (_.session.dom_document_sent) {
                         _.flushDomEvents(client_fd) catch break;
+                    }
+                }
+                let ti: usize = 0;
+                while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+                    if (_.tab_sessions[ti].active && _.tab_sessions[ti].page_session != null) {
+                        const tab_sess = _.tab_sessions[ti].page_session.?;
+                        const tab_sid = _.tab_sessions[ti].sessionId();
+                        if (tab_sess.has_document) {
+                            tab_sess.pumpTimers();
+                            flushReopenLoadEventsForSession(client_fd, tab_sess, tab_sid) catch break;
+                            flushPendingNavigationForSession(client_fd, tab_sess, tab_sid) catch break;
+                            if (tab_sess.dom_document_sent) {
+                                flushDomEventsForSession(client_fd, tab_sess) catch break;
+                            }
+                        }
                     }
                 }
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
@@ -1160,7 +1362,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 events[ei].session_id = sid;
             }
         }
-        _.emitCdpEvents(client_fd, &events, event_count)?;
+        emitCdpEventsToFd(client_fd, &events, event_count)?;
 
         let ri: usize = 0;
         while (ri < reply_count) : (ri += 1) {
@@ -1183,7 +1385,23 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         let events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
         let event_count: usize = 0;
 
-        const resp = CdpDispatcher.dispatch(_.session, req, res_buf, &events, &event_count);
+        if (std.mem.eql(u8, req.method, "Target.disposeBrowserContext")) {
+            const dc_id = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            if (dc_id.len > 0) {
+                _.deinitTabSessionByContext(dc_id);
+            }
+        } else if (std.mem.eql(u8, req.method, "Target.closeTarget")) {
+            const ct_id = extractJsonString(req.params_raw, "targetId") ?? "";
+            if (t_idx := _.session.target_registry.findTargetIndex(ct_id)) {
+                const c_sid = _.session.target_registry.targets[t_idx].sessionId();
+                if (c_sid.len > 0) {
+                    _.deinitTabSessionByKey(c_sid);
+                }
+            }
+        }
+
+        const target_sess = _.resolveSessionForRequest(req);
+        const resp = CdpDispatcher.dispatch(target_sess, req, res_buf, &events, &event_count);
 
         // Emit triggered events before the command response (matches Chrome CDP ordering)
         let i: usize = 0;
@@ -1193,7 +1411,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 events[i].session_id = req.session_id;
             }
         }
-        _.emitCdpEvents(client_fd, &events, event_count)? ;
+        emitCdpEventsToFd(client_fd, &events, event_count)? ;
 
         if (resp.isOk()) {
             const needed_len = resp.result_json.len + resp.raw_id.len + 32;
@@ -1253,9 +1471,10 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
 
         // Flush any queued native DOM mutation events
-        _.flushDomEvents(client_fd)?;
+        flushDomEventsForSession(client_fd, target_sess)?;
         // Check if JS evaluation triggered a location.href navigation
-        _.flushPendingNavigation(client_fd)?;
+        const nav_sid = if (req.session_id.len > 0 && !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) req.session_id else "";
+        flushPendingNavigationForSession(client_fd, target_sess, nav_sid)?;
     }
 }
 
