@@ -414,51 +414,60 @@
   // 3. MediaList
   // =========================================================================
 
+  const _mediaListState = new WeakMap();
+
   function MediaList(initialText, onMutate) {
-    this._media = [];
-    this._onMutate = onMutate || null;
+    _mediaListState.set(this, { media: [], onMutate: onMutate || null });
     if (initialText) this._setText(initialText);
   }
   MediaList.prototype._setText = function (text) {
-    const old = this._media.length;
-    this._media = String(text == null ? "" : text)
+    const st = _mediaListState.get(this);
+    if (!st) return;
+    const old = st.media.length;
+    st.media = String(text == null ? "" : text)
       .split(",")
       .map((m) => m.trim())
       .filter(Boolean);
-    for (let i = this._media.length; i < old; i++) delete this[i];
-    for (let i = 0; i < this._media.length; i++) this[i] = this._media[i];
+    for (let i = st.media.length; i < old; i++) delete this[i];
+    for (let i = 0; i < st.media.length; i++) this[i] = st.media[i];
   };
   MediaList.prototype._notify = function () {
-    if (this._onMutate) this._onMutate();
+    const st = _mediaListState.get(this);
+    if (st && st.onMutate) st.onMutate();
   };
   Object.defineProperty(MediaList.prototype, "length", {
-    get: function () { return this._media.length; },
+    get: function () { const st = _mediaListState.get(this); return st ? st.media.length : 0; },
     configurable: true,
   });
   Object.defineProperty(MediaList.prototype, "mediaText", {
-    get: function () { return this._media.join(", "); },
+    get: function () { const st = _mediaListState.get(this); return st ? st.media.join(", ") : ""; },
     set: function (v) { this._setText(v); this._notify(); },
     configurable: true,
   });
   MediaList.prototype.item = function (index) {
-    const m = this._media[Number(index) | 0];
+    const st = _mediaListState.get(this);
+    const m = st ? st.media[Number(index) | 0] : undefined;
     return m != null ? m : null;
   };
   MediaList.prototype.appendMedium = function (medium) {
+    const st = _mediaListState.get(this);
+    if (!st) return;
     const m = String(medium).trim();
-    if (m && !this._media.includes(m)) {
-      this._media.push(m);
-      this[this._media.length - 1] = m;
+    if (m && !st.media.includes(m)) {
+      st.media.push(m);
+      this[st.media.length - 1] = m;
       this._notify();
     }
   };
   MediaList.prototype.deleteMedium = function (medium) {
-    const idx = this._media.indexOf(String(medium).trim());
+    const st = _mediaListState.get(this);
+    if (!st) return;
+    const idx = st.media.indexOf(String(medium).trim());
     if (idx >= 0) {
-      const old = this._media.length;
-      this._media.splice(idx, 1);
-      for (let i = this._media.length; i < old; i++) delete this[i];
-      for (let i = 0; i < this._media.length; i++) this[i] = this._media[i];
+      const old = st.media.length;
+      st.media.splice(idx, 1);
+      for (let i = st.media.length; i < old; i++) delete this[i];
+      for (let i = 0; i < st.media.length; i++) this[i] = st.media[i];
       this._notify();
     }
   };
@@ -471,9 +480,15 @@
   // 4. CSSStyleDeclaration
   // =========================================================================
 
+  const _inlineStyleLookup = new WeakMap();
+  global.__capsurf_inlineStyleLookup = _inlineStyleLookup;
+
   function CSSStyleDeclaration() {}
   CSSStyleDeclaration.prototype.item = function (index) { return ""; };
-  CSSStyleDeclaration.prototype.getPropertyValue = function (property) { return ""; };
+  CSSStyleDeclaration.prototype.getPropertyValue = function (property) {
+    const fn = _inlineStyleLookup.get(this);
+    return typeof fn === "function" ? fn(property) : "";
+  };
   CSSStyleDeclaration.prototype.getPropertyPriority = function (property) { return ""; };
   CSSStyleDeclaration.prototype.setProperty = function (property, value, priority) {};
   CSSStyleDeclaration.prototype.removeProperty = function (property) { return ""; };
@@ -1921,53 +1936,92 @@
     }
   }
 
+  function StyleSheet() {
+    throw new TypeError("Illegal constructor");
+  }
+  StyleSheet.prototype = {};
+  Object.defineProperty(StyleSheet.prototype, "constructor", { value: StyleSheet, configurable: true, writable: true });
+  markNative(StyleSheet, "StyleSheet");
+  global.StyleSheet = StyleSheet;
+
+  const _sheetState = new WeakMap();
+  function getSheetSt(s) {
+    let st = _sheetState.get(s);
+    if (!st) {
+      st = {
+        ownerNode: null, ownerRule: null, parentStyleSheet: null, title: null,
+        media: null, disabled: false, _rules: [], _lastParsedText: null,
+        _loadedHref: null, _originClean: true, _cascadeCssText: "", _rulesList: null,
+      };
+      _sheetState.set(s, st);
+    }
+    return st;
+  }
+
   function CSSStyleSheet(ownerNode) {
-    this.ownerNode = ownerNode || null;
-    this.ownerRule = null;
-    this.parentStyleSheet = null;
-    this.title = null;
-    this.media = new MediaList("");
-    this.disabled = false;
-    this._rules = [];
-    this._lastParsedText = null;
-    this._loadedHref = null;
-    this._originClean = true;
-    this._cascadeCssText = "";
-
-    const self = this;
-    const rulesList = makeRuleList(this._rules);
-
-    Object.defineProperty(this, "href", {
-      get: function () {
-        if (self.ownerNode) {
-          const tag = String(self.ownerNode.localName || self.ownerNode.tagName || "").toLowerCase();
-          if (tag === "link") {
-            return resolveLinkHref(self.ownerNode);
-          }
-        }
-        return null;
-      },
-      set: function (_v) {},
-      configurable: true,
-      enumerable: true,
-    });
-
-    Object.defineProperty(this, "cssRules", {
-      get: function () {
-        self._syncFromOwner();
-        if (self._isCrossOriginOpaque()) {
-          throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
-        }
-        return rulesList;
-      },
-      configurable: true,
-    });
-
-    Object.defineProperty(this, "rules", {
-      get: function () { return this.cssRules; },
-      configurable: true,
+    let actualOwner = ownerNode || null;
+    let initDisabled = false;
+    if (ownerNode && typeof ownerNode === "object" && !ownerNode.nodeType) {
+      initDisabled = Boolean(ownerNode.disabled);
+      actualOwner = null;
+    }
+    const rules = [];
+    _sheetState.set(this, {
+      ownerNode: actualOwner,
+      ownerRule: null,
+      parentStyleSheet: null,
+      title: null,
+      media: new MediaList(""),
+      disabled: initDisabled,
+      _rules: rules,
+      _lastParsedText: null,
+      _loadedHref: null,
+      _originClean: true,
+      _cascadeCssText: "",
+      _rulesList: makeRuleList(rules),
     });
   }
+  CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
+  CSSStyleSheet.prototype.constructor = CSSStyleSheet;
+
+  ["ownerNode", "ownerRule", "parentStyleSheet", "title", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+    Object.defineProperty(CSSStyleSheet.prototype, prop, {
+      get: function () { return getSheetSt(this)[prop]; },
+      set: function (v) { getSheetSt(this)[prop] = v; },
+      configurable: true,
+    });
+  });
+
+  Object.defineProperty(CSSStyleSheet.prototype, "href", {
+    get: function () {
+      const ownerNode = getSheetSt(this).ownerNode;
+      if (ownerNode) {
+        const tag = String(ownerNode.localName || ownerNode.tagName || "").toLowerCase();
+        if (tag === "link") {
+          return resolveLinkHref(ownerNode);
+        }
+      }
+      return null;
+    },
+    set: function (_v) {},
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSStyleSheet.prototype, "cssRules", {
+    get: function () {
+      this._syncFromOwner();
+      if (this._isCrossOriginOpaque()) {
+        throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
+      }
+      return getSheetSt(this)._rulesList;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(CSSStyleSheet.prototype, "rules", {
+    get: function () { return this.cssRules; },
+    configurable: true,
+  });
 
   CSSStyleSheet.prototype._loadLinkSheet = function () {
     const ownerNode = this.ownerNode;

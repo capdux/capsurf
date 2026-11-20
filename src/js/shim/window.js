@@ -3578,32 +3578,397 @@ function installWindow(global) {
   }
 
   // 6. Modern Observers (IntersectionObserver & ResizeObserver)
-  function IntersectionObserver(callback) {
-    if (typeof callback !== "function") throw new TypeError("Callback required");
-    this.callback = callback;
-  }
-  IntersectionObserver.prototype.observe = function (el) {
-    if (!el) return;
-    const cb = this.callback;
-    const obs = this;
-    const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : { x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 };
-    Promise.resolve().then(function () {
+  const ioEntryState = new WeakMap();
+  function makeDOMRectReadOnly(x, y, w, h) {
+    const r = { x: x, y: y, width: w, height: h, top: y, left: x, right: x + w, bottom: y + h };
+    if (typeof DOMRectReadOnly === "function") {
       try {
-        cb([
-          {
-            target: el,
-            isIntersecting: true,
-            intersectionRatio: 1.0,
-            boundingClientRect: rect,
-            intersectionRect: rect,
-            rootBounds: { x: 0, y: 0, width: 1920, height: 1080, top: 0, left: 0, right: 1920, bottom: 1080 },
-          }
-        ], obs);
+        return new DOMRectReadOnly(x, y, w, h);
       } catch (e) {}
+    }
+    return r;
+  }
+  const ZERO_IO_RECT = makeDOMRectReadOnly(0, 0, 0, 0);
+
+  function IntersectionObserverEntry(init) {
+    if (!init || typeof init !== "object") {
+      throw new TypeError("Failed to construct 'IntersectionObserverEntry': 1 argument required.");
+    }
+    const toRect = function (r) {
+      if (!r || typeof r !== "object") return makeDOMRectReadOnly(0, 0, 0, 0);
+      const x = Number(r.x !== undefined ? r.x : (r.left || 0)) || 0;
+      const y = Number(r.y !== undefined ? r.y : (r.top || 0)) || 0;
+      const w = Number(r.width !== undefined ? r.width : ((Number(r.right || 0) - x))) || 0;
+      const h = Number(r.height !== undefined ? r.height : ((Number(r.bottom || 0) - y))) || 0;
+      return makeDOMRectReadOnly(x, y, w, h);
+    };
+    ioEntryState.set(this, {
+      time: Number(init.time || 0),
+      rootBounds: init.rootBounds ? toRect(init.rootBounds) : null,
+      boundingClientRect: toRect(init.boundingClientRect),
+      intersectionRect: toRect(init.intersectionRect),
+      isIntersecting: Boolean(init.isIntersecting),
+      isVisible: Boolean(init.isVisible),
+      intersectionRatio: Number(init.intersectionRatio || 0),
+      target: init.target || null,
     });
-  };
-  IntersectionObserver.prototype.unobserve = markNative(function () {}, "unobserve");
-  IntersectionObserver.prototype.disconnect = markNative(function () {}, "disconnect");
+  }
+  ["time", "rootBounds", "boundingClientRect", "intersectionRect", "isIntersecting", "isVisible", "intersectionRatio", "target"].forEach(function (prop) {
+    Object.defineProperty(IntersectionObserverEntry.prototype, prop, {
+      get: function () {
+        const st = ioEntryState.get(this);
+        if (!st) throw new TypeError("Illegal invocation");
+        return st[prop];
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  Object.defineProperty(IntersectionObserverEntry.prototype, Symbol.toStringTag, {
+    value: "IntersectionObserverEntry",
+    configurable: true,
+  });
+  markNative(IntersectionObserverEntry, "IntersectionObserverEntry");
+  global.IntersectionObserverEntry = IntersectionObserverEntry;
+
+  function parseIoMarginTokens(raw) {
+    const str = String(raw === undefined || raw === null ? "" : raw).trim();
+    const parts = str ? str.split(/\s+/) : ["0px"];
+    if (parts.length > 4) throw new DOMException("Failed to construct 'IntersectionObserver': Extra pixels in margin.", "SyntaxError");
+    const expand = function (arr) {
+      if (arr.length === 1) return [arr[0], arr[0], arr[0], arr[0]];
+      if (arr.length === 2) return [arr[0], arr[1], arr[0], arr[1]];
+      if (arr.length === 3) return [arr[0], arr[1], arr[2], arr[1]];
+      return [arr[0], arr[1], arr[2], arr[3]];
+    };
+    const tokens = expand(parts).map(function (tok) {
+      const m = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(px|%|in|cm|mm|q|pc|pt)?$/i.exec(tok);
+      if (!m) throw new DOMException("Failed to construct 'IntersectionObserver': Invalid margin token: " + tok, "SyntaxError");
+      const val = parseFloat(m[1]);
+      const unit = (m[2] || "px").toLowerCase();
+      if (unit === "%") return { value: val, unit: "%", text: val + "%" };
+      let px = val;
+      if (unit === "in") px = val * 96;
+      else if (unit === "cm") px = val * 96 / 2.54;
+      else if (unit === "mm") px = val * 96 / 25.4;
+      else if (unit === "q") px = val * 96 / 101.6;
+      else if (unit === "pc") px = val * 16;
+      else if (unit === "pt") px = val * 96 / 72;
+      const truncated = Math.trunc(px);
+      return { value: truncated, unit: "px", text: truncated + "px" };
+    });
+    return {
+      tokens: tokens,
+      text: tokens.map(function (t) { return t.text; }).join(" "),
+    };
+  }
+
+  function evalIoMarginPx(token, refSize) {
+    if (token.unit === "%") return (token.value / 100) * refSize;
+    return token.value;
+  }
+
+  function clipIoRect(a, b) {
+    const left = Math.max(a.left, b.left);
+    const top = Math.max(a.top, b.top);
+    const right = Math.min(a.right, b.right);
+    const bottom = Math.min(a.bottom, b.bottom);
+    if (right < left || bottom < top) return null;
+    return { left: left, top: top, right: right, bottom: bottom, width: right - left, height: bottom - top };
+  }
+
+  function isIoNodeBoxless(el) {
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      try {
+        const cs = typeof getComputedStyle === "function" ? getComputedStyle(cur) : null;
+        if (cs && String(cs.display || "").trim().toLowerCase() === "none") return true;
+      } catch (e) {}
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return false;
+  }
+
+  const ioStateMap = new WeakMap();
+  const activeIntersectionObservers = new Set();
+  let ioPollTimer = null;
+
+  function evaluateIntersectionObserver(obs) {
+    const st = ioStateMap.get(obs);
+    if (!st || st.targets.size === 0) return;
+    const doc = global.document || (typeof document !== "undefined" ? document : null);
+    const vw = typeof global.innerWidth === "number" ? global.innerWidth : 1920;
+    const vh = typeof global.innerHeight === "number" ? global.innerHeight : 1080;
+
+    let baseRootRect;
+    if (!st.root || st.root === doc) {
+      baseRootRect = { left: 0, top: 0, right: vw, bottom: vh, width: vw, height: vh };
+    } else if (st.root.getBoundingClientRect) {
+      const rr = st.root.getBoundingClientRect();
+      baseRootRect = { left: rr.left, top: rr.top, right: rr.right, bottom: rr.bottom, width: rr.width, height: rr.height };
+    } else {
+      baseRootRect = { left: 0, top: 0, right: vw, bottom: vh, width: vw, height: vh };
+    }
+
+    const mTop = evalIoMarginPx(st.rootMarginParsed.tokens[0], baseRootRect.height);
+    const mRight = evalIoMarginPx(st.rootMarginParsed.tokens[1], baseRootRect.width);
+    const mBottom = evalIoMarginPx(st.rootMarginParsed.tokens[2], baseRootRect.height);
+    const mLeft = evalIoMarginPx(st.rootMarginParsed.tokens[3], baseRootRect.width);
+    const expandedRoot = {
+      left: baseRootRect.left - mLeft,
+      top: baseRootRect.top - mTop,
+      right: baseRootRect.right + mRight,
+      bottom: baseRootRect.bottom + mBottom,
+    };
+    expandedRoot.width = Math.max(0, expandedRoot.right - expandedRoot.left);
+    expandedRoot.height = Math.max(0, expandedRoot.bottom - expandedRoot.top);
+
+    const newEntries = [];
+    for (const [target, tInfo] of st.targets.entries()) {
+      if (!target || !target.isConnected || (doc && target.ownerDocument && target.ownerDocument !== doc)) {
+        continue;
+      }
+      if (isIoNodeBoxless(target)) {
+        const key = "boxless";
+        if (tInfo.lastKey !== key) {
+          tInfo.lastKey = key;
+          newEntries.push(new IntersectionObserverEntry({
+            time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+            rootBounds: ZERO_IO_RECT,
+            boundingClientRect: ZERO_IO_RECT,
+            intersectionRect: ZERO_IO_RECT,
+            isIntersecting: false,
+            isVisible: false,
+            intersectionRatio: 0,
+            target: target,
+          }));
+        }
+        continue;
+      }
+
+      const rawRect = target.getBoundingClientRect ? target.getBoundingClientRect() : { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+      const targetRect = {
+        left: Number(rawRect.left || 0),
+        top: Number(rawRect.top || 0),
+        right: Number(rawRect.right !== undefined ? rawRect.right : (Number(rawRect.left || 0) + Number(rawRect.width || 0))),
+        bottom: Number(rawRect.bottom !== undefined ? rawRect.bottom : (Number(rawRect.top || 0) + Number(rawRect.height || 0))),
+        width: Number(rawRect.width || 0),
+        height: Number(rawRect.height || 0),
+      };
+
+      let inRootTree = true;
+      if (st.root && st.root !== doc && st.root.nodeType === 1) {
+        inRootTree = typeof st.root.contains === "function" ? st.root.contains(target) : false;
+      }
+
+      let clipped = inRootTree ? { left: targetRect.left, top: targetRect.top, right: targetRect.right, bottom: targetRect.bottom, width: targetRect.width, height: targetRect.height } : null;
+      if (clipped) {
+        // Clip against ancestor scroll containers and clip-path insets, grown by scrollMargin
+        let anc = target.parentElement;
+        while (anc && anc.nodeType === 1 && anc !== st.root) {
+          let ancCs = null;
+          try { ancCs = typeof getComputedStyle === "function" ? getComputedStyle(anc) : null; } catch (e) {}
+          if (ancCs) {
+            const ov = String(ancCs.overflow || "").toLowerCase();
+            const ovX = String(ancCs.overflowX || "").toLowerCase();
+            const ovY = String(ancCs.overflowY || "").toLowerCase();
+            const isClipped = ov === "hidden" || ov === "scroll" || ov === "auto" || ov === "clip" ||
+              ovX === "hidden" || ovX === "scroll" || ovX === "auto" || ovX === "clip" ||
+              ovY === "hidden" || ovY === "scroll" || ovY === "auto" || ovY === "clip";
+            if (isClipped && anc.getBoundingClientRect) {
+              const ar = anc.getBoundingClientRect();
+              const smT = evalIoMarginPx(st.scrollMarginParsed.tokens[0], ar.height);
+              const smR = evalIoMarginPx(st.scrollMarginParsed.tokens[1], ar.width);
+              const smB = evalIoMarginPx(st.scrollMarginParsed.tokens[2], ar.height);
+              const smL = evalIoMarginPx(st.scrollMarginParsed.tokens[3], ar.width);
+              clipped = clipIoRect(clipped, {
+                left: ar.left - smL,
+                top: ar.top - smT,
+                right: ar.right + smR,
+                bottom: ar.bottom + smB,
+              });
+              if (!clipped) break;
+            }
+            const cp = String(ancCs.clipPath || ancCs["clip-path"] || "").trim();
+            const insetMatch = /^inset\(([^)]+)\)/i.exec(cp);
+            if (insetMatch && anc.getBoundingClientRect) {
+              const ar = anc.getBoundingClientRect();
+              const insParts = insetMatch[1].trim().split(/\s+/).map(function (v) { return parseFloat(v) || 0; });
+              const iT = insParts[0] || 0;
+              const iR = insParts.length > 1 ? insParts[1] : iT;
+              const iB = insParts.length > 2 ? insParts[2] : iT;
+              const iL = insParts.length > 3 ? insParts[3] : iR;
+              const smT = evalIoMarginPx(st.scrollMarginParsed.tokens[0], ar.height);
+              const smR = evalIoMarginPx(st.scrollMarginParsed.tokens[1], ar.width);
+              const smB = evalIoMarginPx(st.scrollMarginParsed.tokens[2], ar.height);
+              const smL = evalIoMarginPx(st.scrollMarginParsed.tokens[3], ar.width);
+              clipped = clipIoRect(clipped, {
+                left: ar.left + iL - smL,
+                top: ar.top + iT - smT,
+                right: ar.right - iR + smR,
+                bottom: ar.bottom - iB + smB,
+              });
+              if (!clipped) break;
+            }
+          }
+          anc = anc.parentElement;
+        }
+      }
+      if (clipped) {
+        clipped = clipIoRect(clipped, expandedRoot);
+      }
+
+      const isIntersecting = Boolean(clipped);
+      const iRect = clipped
+        ? makeDOMRectReadOnly(clipped.left, clipped.top, clipped.width, clipped.height)
+        : ZERO_IO_RECT;
+      const targetArea = targetRect.width * targetRect.height;
+      let ratio = 0;
+      if (isIntersecting) {
+        if (targetArea > 0) {
+          ratio = Math.min(1, Math.max(0, (clipped.width * clipped.height) / targetArea));
+        } else {
+          ratio = 1;
+        }
+      }
+
+      let threshIdx = -1;
+      for (let ti = 0; ti < st.thresholds.length; ti++) {
+        const th = st.thresholds[ti];
+        if (th === 0 ? isIntersecting : ratio >= th) threshIdx = ti;
+      }
+      const key = isIntersecting + "|" + threshIdx + "|" + targetRect.top + "," + targetRect.left + "," + targetRect.width + "," + targetRect.height;
+      if (tInfo.lastKey !== key) {
+        tInfo.lastKey = key;
+        newEntries.push(new IntersectionObserverEntry({
+          time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+          rootBounds: makeDOMRectReadOnly(expandedRoot.left, expandedRoot.top, expandedRoot.width, expandedRoot.height),
+          boundingClientRect: makeDOMRectReadOnly(targetRect.left, targetRect.top, targetRect.width, targetRect.height),
+          intersectionRect: iRect,
+          isIntersecting: isIntersecting,
+          isVisible: false,
+          intersectionRatio: ratio,
+          target: target,
+        }));
+      }
+    }
+
+    if (newEntries.length > 0) {
+      try {
+        st.callback.call(obs, newEntries, obs);
+      } catch (e) {
+        if (typeof global.onerror === "function") {
+          try { global.onerror(e && e.message ? e.message : String(e), "", 0, 0, e); } catch (e2) {}
+        }
+      }
+    }
+  }
+
+  function scheduleIoTick() {
+    if (ioPollTimer !== null) return;
+    if (activeIntersectionObservers.size === 0) return;
+    ioPollTimer = setTimeout(function () {
+      ioPollTimer = null;
+      for (const obs of Array.from(activeIntersectionObservers)) {
+        evaluateIntersectionObserver(obs);
+      }
+      if (activeIntersectionObservers.size > 0) {
+        scheduleIoTick();
+      }
+    }, 50);
+  }
+
+  function IntersectionObserver(callback, options) {
+    if (typeof callback !== "function") {
+      throw new TypeError("Failed to construct 'IntersectionObserver': parameter 1 is not of type 'Function'.");
+    }
+    const opts = options && typeof options === "object" ? options : {};
+    const root = opts.root !== undefined ? opts.root : null;
+    const rootMarginParsed = parseIoMarginTokens(opts.rootMargin);
+    const scrollMarginParsed = parseIoMarginTokens(opts.scrollMargin);
+    let threshArr;
+    if (opts.threshold === undefined) {
+      threshArr = [0];
+    } else if (Array.isArray(opts.threshold)) {
+      threshArr = opts.threshold.length === 0 ? [0] : opts.threshold.map(Number);
+    } else {
+      threshArr = [Number(opts.threshold)];
+    }
+    for (let i = 0; i < threshArr.length; i++) {
+      if (isNaN(threshArr[i]) || threshArr[i] < 0 || threshArr[i] > 1) {
+        throw new RangeError("Failed to construct 'IntersectionObserver': Thresholds must be in the range [0, 1].");
+      }
+    }
+    threshArr = Array.from(new Set(threshArr)).sort(function (a, b) { return a - b; });
+    ioStateMap.set(this, {
+      callback: callback,
+      root: root,
+      rootMarginParsed: rootMarginParsed,
+      scrollMarginParsed: scrollMarginParsed,
+      thresholds: Object.freeze(threshArr),
+      targets: new Map(),
+      records: [],
+      pendingMicrotask: false,
+    });
+  }
+  Object.defineProperty(IntersectionObserver.prototype, "root", {
+    get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.root; },
+    configurable: true, enumerable: true,
+  });
+  Object.defineProperty(IntersectionObserver.prototype, "rootMargin", {
+    get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.rootMarginParsed.text; },
+    configurable: true, enumerable: true,
+  });
+  Object.defineProperty(IntersectionObserver.prototype, "scrollMargin", {
+    get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.scrollMarginParsed.text; },
+    configurable: true, enumerable: true,
+  });
+  Object.defineProperty(IntersectionObserver.prototype, "thresholds", {
+    get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.thresholds; },
+    configurable: true, enumerable: true,
+  });
+  IntersectionObserver.prototype.observe = markNative(function (el) {
+    const st = ioStateMap.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (!el || typeof el !== "object") return;
+    if (!st.targets.has(el)) {
+      st.targets.set(el, { lastKey: null });
+    }
+    activeIntersectionObservers.add(this);
+    const obs = this;
+    if (!st.pendingMicrotask) {
+      st.pendingMicrotask = true;
+      setTimeout(function () {
+        st.pendingMicrotask = false;
+        evaluateIntersectionObserver(obs);
+      }, 0);
+    }
+    scheduleIoTick();
+  }, "observe");
+  IntersectionObserver.prototype.unobserve = markNative(function (el) {
+    const st = ioStateMap.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    st.targets.delete(el);
+    if (st.targets.size === 0) activeIntersectionObservers.delete(this);
+  }, "unobserve");
+  IntersectionObserver.prototype.disconnect = markNative(function () {
+    const st = ioStateMap.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    st.targets.clear();
+    st.records.length = 0;
+    activeIntersectionObservers.delete(this);
+  }, "disconnect");
+  IntersectionObserver.prototype.takeRecords = markNative(function () {
+    const st = ioStateMap.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    const out = st.records.slice();
+    st.records.length = 0;
+    return out;
+  }, "takeRecords");
+  Object.defineProperty(IntersectionObserver.prototype, Symbol.toStringTag, {
+    value: "IntersectionObserver",
+    configurable: true,
+  });
   markNative(IntersectionObserver, "IntersectionObserver");
   global.IntersectionObserver = IntersectionObserver;
 
@@ -3808,13 +4173,7 @@ function installWindow(global) {
     globalThis.prompt = promptFn;
   }
 
-  // 10. CSSOM getComputedStyle & CSSStyleDeclaration
-  function CSSStyleDeclaration() {}
-  Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
-    value: "CSSStyleDeclaration",
-    configurable: true,
-  });
-  markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
+  // 10. CSSOM getComputedStyle & CSSStyleDeclaration (uses global.CSSStyleDeclaration from cssom.js)
 
   function splitCssDeclarations(block) {
     const parts = [];
@@ -4171,9 +4530,10 @@ function installWindow(global) {
   }
 
   function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
+    const cleanCss = String(cssText || "").replace(/\/\*[\s\S]*?\*\//g, "");
     const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
     if (typeof parseFn === "function") {
-      const rules = parseFn(cssText);
+      const rules = parseFn(cleanCss);
       for (let i = 0; i < rules.length; i++) {
         const r = rules[i];
         if (!r) continue;

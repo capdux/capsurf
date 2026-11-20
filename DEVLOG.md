@@ -1527,4 +1527,10 @@
    - 新增 `js_capsurf_iframe_load_fixture` 构造带 `initiator_origin` 与 `top_level: false` 的子资源上下文，使跨站 `/echo-headers-frame.html` 严格按 RFC 6265bis 过滤非 `SameSite=None` Cookie。
 2. **着陆页响应头与导航前定时/图片排空 (`server.cp`, `session.cp`)**：
    - 仅在 `inspect=1` 或 `http(s)://` 时重定向 `/?url=`，对 `/` 返回带 CSP/`nosniff` 的着陆页；`navigate` 结束前先执行 `0ms` 定时器与非 dripping 图片等待再派发 `#fragment` `scrollIntoView()`。
+
+## Phase 122 `IntersectionObserver`、平台接口零自身属性与 CDP SessionId 路由技术方案
+1. **平台接口 `WeakMap` 零自身属性与原生工厂旁路 (`shim/index.js`, `cssom.js`, `collections.js`, ...)**:
+   - 将 `DOMTokenList`、`CSSStyleDeclaration`、`Range`/`StaticRange`、`File`、`FormData`、`NodeIterator`、`MutationObserver`、`ValidityState` 等内部状态迁入 `WeakMap`，确保实例无泄露自有属性；缓存 `__capsurf_native_createElement` 等原生工厂避免 `cloneNode`/`outerHTML` 触发页面劫持。
+2. **`IntersectionObserver` 与 `harness.ts` 路由修复 (`window.js`, `e2e/harness.ts`)**:
+   - 按 `rootMargin`/`scrollMargin` 与 `clip-path: inset(...)` 裁剪矩形并处理 detached document 静默；解除 `isPolicyDocUrl` `data:` 劫持，并为 `createCDPSession()` 分配独立 `sessionId` 实现多会话精确事件过滤。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -62,6 +62,7 @@ export class CDPClient {
   private nextId = 0;
   private pending = new Map<number, { resolve: (res: any) => void; reject: (err: any) => void }>();
   private listeners = new Map<string, Array<(params: any) => void>>();
+  private sessionListeners = new Map<string, Map<string, Array<(params: any) => void>>>();
   private sessions = new Map<string, any>();
 
   constructor(public wsUrl: string) {}
@@ -151,17 +152,30 @@ export class CDPClient {
             if (msg.method === "Page.frameNavigated" && msg.params && !msg.params.frame) {
               msg.params = { frame: { url: msg.params.url || "", ...msg.params }, ...msg.params };
             }
-            const handlers = this.listeners.get(msg.method) || [];
-            for (const h of handlers) {
-              try {
-                h(msg.params);
-              } catch (e) {
-                console.error(`Error in event handler for ${msg.method}:`, e);
+            const sid = msg.sessionId ? String(msg.sessionId) : "";
+            if (sid && this.sessionListeners.has(sid)) {
+              const sMap = this.sessionListeners.get(sid)!;
+              const sHandlers = sMap.get(msg.method) || [];
+              for (const h of [...sHandlers]) {
+                try {
+                  h(msg.params);
+                } catch (e) {
+                  console.error(`Error in session event handler for ${msg.method}:`, e);
+                }
+              }
+            } else if (!sid || sid === "default") {
+              const handlers = this.listeners.get(msg.method) || [];
+              for (const h of [...handlers]) {
+                try {
+                  h(msg.params);
+                } catch (e) {
+                  console.error(`Error in event handler for ${msg.method}:`, e);
+                }
               }
             }
           }
         } catch (e) {
-          console.error("Failed to parse incoming CDP message:", e);
+          console.error("Failed to parse incoming CDP message:", e, "RAW:", String(event.data).slice(0, 300));
         }
       };
       this.ws.onclose = () => {
@@ -318,6 +332,31 @@ export class CDPClient {
       }
     }
     return res;
+  }
+
+  onSession(sessionId: string, event: string, handler: (params: any) => void) {
+    let sMap = this.sessionListeners.get(sessionId);
+    if (!sMap) {
+      sMap = new Map();
+      this.sessionListeners.set(sessionId, sMap);
+    }
+    if (!sMap.has(event)) {
+      sMap.set(event, []);
+    }
+    sMap.get(event)!.push(handler);
+  }
+
+  offSession(sessionId: string, event: string, handler: (params: any) => void) {
+    const sMap = this.sessionListeners.get(sessionId);
+    if (!sMap) return;
+    const list = sMap.get(event);
+    if (!list) return;
+    const idx = list.indexOf(handler);
+    if (idx !== -1) list.splice(idx, 1);
+  }
+
+  clearSessionListeners(sessionId: string) {
+    this.sessionListeners.delete(sessionId);
   }
 
   on(event: string, handler: (params: any) => void) {
@@ -1135,9 +1174,7 @@ export class Page {
     const isFormEchoUrl =
       targetNavUrl.startsWith("https://ks.invalid/__fixtures/form-echo") ||
       targetNavUrl.startsWith("http://127.0.0.1:8787/__fixtures/form-echo");
-    const isPolicyDocUrl =
-      targetNavUrl.startsWith("https://ks.invalid/__fixtures/policy-doc.html") ||
-      targetNavUrl.startsWith("http://127.0.0.1:8787/__fixtures/policy-doc.html");
+    const isPolicyDocUrl = false; // Handled natively by CapSurf mock_fixtures.cp (preserves CSP/nosniff/reportOnly/origin)
     if (isFormEchoUrl) {
       const postInfo = (options as any)?.__formPost;
       const reqMethod = postInfo && postInfo.method ? String(postInfo.method).toUpperCase() : "GET";
@@ -1782,11 +1819,15 @@ export class Page {
     return this._closed;
   }
 
+  private _cdpSessionSeq = 0;
+
   async createCDPSession(): Promise<CDPClient> {
     const page = this;
+    const sessionId = `capsurf-cdp-session-${++this._cdpSessionSeq}`;
     const sessionClient = Object.create(this.cdp) as CDPClient;
     const registeredWrappers: Array<{ event: string; wrapper: (params: any) => void }> = [];
 
+    (sessionClient as any).id = () => sessionId;
     sessionClient.connection = () => page.cdp.connection();
 
     sessionClient.send = async (method: string, params: Record<string, any> = {}) => {
@@ -1794,7 +1835,7 @@ export class Page {
       if (page.browserContextId && page.browserContextId !== "default" && p.browserContextId === undefined) {
         p.browserContextId = page.browserContextId;
       }
-      return page.cdp.send(method, p);
+      return page.cdp.send(method, p, sessionId);
     };
 
     sessionClient.on = (event: string, handler: (params: any) => void) => {
@@ -1806,7 +1847,7 @@ export class Page {
       };
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
-      page.cdp.on(event, wrapper);
+      page.cdp.onSession(sessionId, event, wrapper);
       return sessionClient;
     };
 
@@ -1820,7 +1861,7 @@ export class Page {
       };
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
-      page.cdp.on(event, wrapper);
+      page.cdp.onSession(sessionId, event, wrapper);
       return sessionClient;
     };
 
@@ -1830,16 +1871,20 @@ export class Page {
       );
       if (idx !== -1) {
         const item = registeredWrappers.splice(idx, 1)[0];
-        page.cdp.off(item.event, item.wrapper);
+        page.cdp.offSession(sessionId, item.event, item.wrapper);
       }
       return sessionClient;
     };
 
     const cleanup = async () => {
       for (const item of registeredWrappers) {
-        page.cdp.off(item.event, item.wrapper);
+        page.cdp.offSession(sessionId, item.event, item.wrapper);
       }
       registeredWrappers.length = 0;
+      page.cdp.clearSessionListeners(sessionId);
+      try {
+        await page.cdp.send("WebMCP.disable", {}, sessionId);
+      } catch {}
       const sIdx = page.activeCDPSessions.indexOf(sessionRecord);
       if (sIdx !== -1) page.activeCDPSessions.splice(sIdx, 1);
     };
@@ -2541,7 +2586,10 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
       try {
         await fixtures.cdp.send("DOM.disable");
       } catch {}
-      if ((name.includes("blank page") || name.includes("fresh page") || name.includes("never-navigated page")) && fixtures.page.url() !== "about:blank") {
+      try {
+        await fixtures.cdp.send("WebMCP.disable");
+      } catch {}
+      if ((name.includes("blank page") || name.includes("fresh page") || name.includes("never-navigated page") || name.includes("WebMCP")) && fixtures.page.url() !== "about:blank") {
         await fixtures.page.goto("about:blank");
       }
       const browserFactory = async () => fixtures.browser;

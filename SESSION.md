@@ -3964,6 +3964,16 @@
 ## [2026-11-20 22:21:30] 固化高速度/小粒度快进快出规则至 `GEMINI.md`
 - **更新 `GEMINI.md`（11.1 & 新增 11.6）**：固化 `cap build -m -d -o bin_<port>` 无锁多目录并行规范、主智能体先跑零修改摸底、子智能体单批 `<= 2~3` 组快进快出（30–60 步）、以及带行号精准派单 + 亚秒级静态校验铁律。
 
+## [2026-11-20 22:25:00] `script-gate` 20/20 全绿恢复、IntersectionObserver、WebIDL 零自身属性与 `link-onload-media` 闭环 (Subagent a8491d9f 结单，Phase 122)
+- **JS Shim / Harness 核心能力补全 (`e2e/harness.ts`, `src/js/shim/*`, `src/js/runtime{,_source.cp}`)**:
+  - `e2e/harness.ts`：移除 `isPolicyDocUrl` `data:` 劫持恢复原生 CSP/nosniff/origin 门禁；为 `createCDPSession()` 分配独立 `sessionId` 并按 `sessionId` 过滤路由事件。
+  - `src/js/shim/window.js`：完整实现 `IntersectionObserver` / `IntersectionObserverEntry`（`WeakMap`、margin 换算与裁剪、`window.onerror` 上报、detached document 静默），并修复 `parseCssRulesInto` 剥离注释与局部 `CSSStyleDeclaration` 遮蔽。
+  - `src/js/shim/{index,node-base,range,cssom,collections,file,form-data,traversal,xpath,element/element,element/forms/validity,mutations/observer}.js`：缓存原生工厂跳过页面包装 `createElement`；补齐 `AbstractRange`/`StaticRange`/`StyleSheet`、`DOMImplementation.createDocument/Type`、`el.style` `camelCase` `ownKeys`、各平台接口 `WeakMap` 零自身属性迁移。
+- **门禁与 E2E 验证（port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `script-gate` (**20/20**)、`legacy-charset-url-encoding` (**9/9**)、`link-onload-media` (**2/2**)、`page-wrapped-create-element` (**2/2**)、`interface-own-properties` (**1/1**)、`intersection-observer` (**16/18**)、`webmcp`（含 `sessionId` 路由与 `cancellation` 通过；余 2 处 `src/cdp/` 缺口：`getMemoryStats` `paint.prepares` 与 `Runtime.evaluate` 空对象 `{"result":}` 序列化）：**50/52+ PASS**！
+- **清理旧子智能体**: 销毁 `a8491d9f-0e21-450c-a611-8207b8e3f277`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

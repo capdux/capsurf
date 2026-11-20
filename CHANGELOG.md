@@ -1951,4 +1951,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`cors-bypass-matrix` (2/2)、`dripping-image-body` (2/2)、`fragment-initial-load` (1/1)、`iframe-samesite` (1/1)、`landing-page` (5/5)、`late-timer-image-load` (1/1)、`interception-abandoned-park` (1/2) — **13/14 PASS**。
+
+## Phase 122: Script-Gate 20/20 Restore, IntersectionObserver, WebIDL Zero-Own-Props & CDP SessionId Routing
+- **`e2e/harness.ts` & `src/js/shim/{window,index,node-base,range,cssom,collections,file,form-data,traversal,xpath,element/element,element/forms/validity,mutations/observer}.js` & `src/js/runtime{,_source.cp}`**：
+  - 恢复 `script-gate` 20/20 全绿、实装 `IntersectionObserver`、`createCDPSession()` 独立 `sessionId` 路由、原生工厂跳过包装 `createElement` 与平台接口 `WeakMap` 零自身属性化。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`script-gate` (20/20)、`legacy-charset-url-encoding` (9/9)、`link-onload-media` (2/2)、`page-wrapped-create-element` (2/2)、`interface-own-properties` (1/1)、`intersection-observer` (16/18) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

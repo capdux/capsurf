@@ -1,17 +1,40 @@
 // src/js/shim/mutations/observer.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/mutations/observer.ts
 
+const _mrState = new WeakMap();
+const _moState = new WeakMap();
+
 function MutationRecord(type, target) {
-  this.type = type; // "childList", "attributes", "characterData"
-  this.target = target;
-  this.addedNodes = [];
-  this.removedNodes = [];
-  this.previousSibling = null;
-  this.nextSibling = null;
-  this.attributeName = null;
-  this.attributeNamespace = null;
-  this.oldValue = null;
+  if (arguments.length === 0) {
+    throw new TypeError("Illegal constructor");
+  }
+  _mrState.set(this, {
+    type: type,
+    target: target,
+    addedNodes: [],
+    removedNodes: [],
+    previousSibling: null,
+    nextSibling: null,
+    attributeName: null,
+    attributeNamespace: null,
+    oldValue: null,
+  });
 }
+["type", "target", "addedNodes", "removedNodes", "previousSibling", "nextSibling", "attributeName", "attributeNamespace", "oldValue"].forEach(function (prop) {
+  Object.defineProperty(MutationRecord.prototype, prop, {
+    get: function () {
+      const st = _mrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st[prop];
+    },
+    set: function (v) {
+      const st = _mrState.get(this);
+      if (st) st[prop] = v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+});
 markNative(MutationRecord, "MutationRecord");
 
 const activeObservers = new Set();
@@ -23,10 +46,11 @@ function scheduleMutationDelivery() {
   Promise.resolve().then(function () {
     mutationScheduled = false;
     for (const obs of activeObservers) {
-      if (obs._records.length > 0) {
-        const batch = obs._records.splice(0, obs._records.length);
+      const st = _moState.get(obs);
+      if (st && st.records.length > 0) {
+        const batch = st.records.splice(0, st.records.length);
         try {
-          obs.callback.call(obs, batch, obs);
+          st.callback.call(obs, batch, obs);
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
@@ -45,21 +69,28 @@ function notifyMutation(record) {
   if (typeof globalThis !== "undefined") {
     globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
   }
+  if (record && record.type === "childList" && record.removedNodes && record.removedNodes.length > 0 && typeof global.__capsurf_onNodeRemovedForIterators === "function") {
+    for (let ri = 0; ri < record.removedNodes.length; ri++) {
+      global.__capsurf_onNodeRemovedForIterators(record.target, record.removedNodes[ri], record.previousSibling);
+    }
+  }
   for (const obs of activeObservers) {
-    for (const sub of obs._targets) {
+    const st = _moState.get(obs);
+    if (!st) continue;
+    for (const sub of st.targets) {
       if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
         if (record.type === "attributes" && sub.options.attributes) {
           if (!sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1) {
-            obs._records.push(record);
+            st.records.push(record);
             scheduleMutationDelivery();
             break;
           }
         } else if (record.type === "childList" && sub.options.childList) {
-          obs._records.push(record);
+          st.records.push(record);
           scheduleMutationDelivery();
           break;
         } else if (record.type === "characterData" && sub.options.characterData) {
-          obs._records.push(record);
+          st.records.push(record);
           scheduleMutationDelivery();
           break;
         }
@@ -70,35 +101,43 @@ function notifyMutation(record) {
 
 function MutationObserver(callback) {
   if (typeof callback !== "function") throw new TypeError("Callback required");
-  this.callback = callback;
-  this._records = [];
-  this._targets = [];
+  _moState.set(this, {
+    callback: callback,
+    records: [],
+    targets: [],
+  });
 }
 
 MutationObserver.prototype.observe = function (target, options) {
+  const st = _moState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   if (!target) throw new TypeError("Target required");
   const opts = options || {};
   // Update existing observation of this target if present
-  for (let i = 0; i < this._targets.length; i++) {
-    if (isSameTarget(this._targets[i].target, target)) {
-      this._targets[i].options = opts;
+  for (let i = 0; i < st.targets.length; i++) {
+    if (isSameTarget(st.targets[i].target, target)) {
+      st.targets[i].options = opts;
       activeObservers.add(this);
       return;
     }
   }
-  this._targets.push({ target: target, options: opts });
+  st.targets.push({ target: target, options: opts });
   activeObservers.add(this);
 };
 
 MutationObserver.prototype.disconnect = function () {
-  this._records = [];
-  this._targets = [];
+  const st = _moState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  st.records = [];
+  st.targets = [];
   activeObservers.delete(this);
 };
 
 MutationObserver.prototype.takeRecords = function () {
-  const records = this._records.slice();
-  this._records = [];
+  const st = _moState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  const records = st.records.slice();
+  st.records = [];
   return records;
 };
 

@@ -1023,31 +1023,41 @@ function normalizeDataTransferFormat(format) {
   return lower;
 }
 
-function DataTransferItem(kind, type, payload) {
-  this._kind = kind;
-  this._type = type;
-  this._payload = payload;
+const _dtiState = new WeakMap();
+const _dtilState = new WeakMap();
+const _dtState = new WeakMap();
+const _dtInternalToken = {};
+
+function DataTransferItem() {
+  if (arguments[3] !== _dtInternalToken) {
+    throw new TypeError("Illegal constructor");
+  }
+  _dtiState.set(this, { kind: arguments[0], type: arguments[1], payload: arguments[2] });
 }
 
 Object.defineProperty(DataTransferItem.prototype, "kind", {
-  get: function () { return this._kind; },
+  get: function () { const st = _dtiState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.kind; },
   configurable: true,
   enumerable: true,
 });
 
 Object.defineProperty(DataTransferItem.prototype, "type", {
-  get: function () { return this._type; },
+  get: function () { const st = _dtiState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.type; },
   configurable: true,
   enumerable: true,
 });
 
 DataTransferItem.prototype.getAsFile = function () {
-  return this._kind === "file" ? this._payload : null;
+  const st = _dtiState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  return st.kind === "file" ? st.payload : null;
 };
 
 DataTransferItem.prototype.getAsString = function (callback) {
-  if (this._kind !== "string" || typeof callback !== "function") return;
-  const data = String(this._payload || "");
+  const st = _dtiState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  if (st.kind !== "string" || typeof callback !== "function") return;
+  const data = String(st.payload || "");
   setTimeout(function () {
     callback(data);
   }, 0);
@@ -1059,17 +1069,23 @@ Object.defineProperty(DataTransferItem.prototype, Symbol.toStringTag, {
 });
 markNative(DataTransferItem, "DataTransferItem");
 
-function DataTransferItemList(dt) {
-  this._dt = dt;
+function DataTransferItemList() {
+  if (arguments[1] !== _dtInternalToken) {
+    throw new TypeError("Illegal constructor");
+  }
+  _dtilState.set(this, arguments[0]);
 }
 
 Object.defineProperty(DataTransferItemList.prototype, "length", {
-  get: function () { return this._dt._items.length; },
+  get: function () { const dt = _dtilState.get(this); if (!dt) throw new TypeError("Illegal invocation"); return _dtState.get(dt).items.length; },
   configurable: true,
   enumerable: true,
 });
 
-DataTransferItemList.prototype.add = function (data, type) {
+DataTransferItemList.prototype.add = function (data) {
+  const dt = _dtilState.get(this);
+  if (!dt) throw new TypeError("Illegal invocation");
+  const dtSt = _dtState.get(dt);
   if (arguments.length === 0) {
     throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 1 argument required, but only 0 present.");
   }
@@ -1077,40 +1093,49 @@ DataTransferItemList.prototype.add = function (data, type) {
     if (!(data instanceof File)) {
       throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': parameter 1 is not of type 'File'.");
     }
-    const item = new DataTransferItem("file", data.type || "", data);
-    this._dt._items.push(item);
+    const item = new DataTransferItem("file", data.type || "", data, _dtInternalToken);
+    dtSt.items.push(item);
     return item;
   }
+  const type = arguments[1];
   const norm = normalizeDataTransferFormat(type);
   const str = String(data);
-  for (let i = 0; i < this._dt._items.length; i++) {
-    if (this._dt._items[i].kind === "string" && this._dt._items[i].type === norm) {
+  for (let i = 0; i < dtSt.items.length; i++) {
+    if (dtSt.items[i].kind === "string" && dtSt.items[i].type === norm) {
       const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
       throw new DOMEx("An item already exists for type '" + norm + "'.", "NotSupportedError");
     }
   }
-  const item = new DataTransferItem("string", norm, str);
-  this._dt._items.push(item);
-  this._dt._dataMap.set(norm, str);
+  const item = new DataTransferItem("string", norm, str, _dtInternalToken);
+  dtSt.items.push(item);
+  dtSt.dataMap.set(norm, str);
   return item;
 };
 
 DataTransferItemList.prototype.remove = function (index) {
+  const dt = _dtilState.get(this);
+  if (!dt) throw new TypeError("Illegal invocation");
+  const dtSt = _dtState.get(dt);
   const i = Number(index) >>> 0;
-  if (i >= this._dt._items.length) return;
-  const removed = this._dt._items.splice(i, 1)[0];
+  if (i >= dtSt.items.length) return;
+  const removed = dtSt.items.splice(i, 1)[0];
   if (removed && removed.kind === "string") {
-    this._dt._dataMap.delete(removed.type);
+    dtSt.dataMap.delete(removed.type);
   }
 };
 
 DataTransferItemList.prototype.clear = function () {
-  this._dt._items.length = 0;
-  this._dt._dataMap.clear();
+  const dt = _dtilState.get(this);
+  if (!dt) throw new TypeError("Illegal invocation");
+  const dtSt = _dtState.get(dt);
+  dtSt.items.length = 0;
+  dtSt.dataMap.clear();
 };
 
 DataTransferItemList.prototype[Symbol.iterator] = function () {
-  return this._dt._items.slice()[Symbol.iterator]();
+  const dt = _dtilState.get(this);
+  if (!dt) throw new TypeError("Illegal invocation");
+  return _dtState.get(dt).items.slice()[Symbol.iterator]();
 };
 
 Object.defineProperty(DataTransferItemList.prototype, Symbol.toStringTag, {
@@ -1120,14 +1145,16 @@ Object.defineProperty(DataTransferItemList.prototype, Symbol.toStringTag, {
 markNative(DataTransferItemList, "DataTransferItemList");
 
 function createDataTransferItemList(dt) {
-  const target = new DataTransferItemList(dt);
+  const target = new DataTransferItemList(dt, _dtInternalToken);
   return new Proxy(target, {
     get: function (t, prop) {
-      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      const dtObj = _dtilState.get(t);
+      const dtSt = dtObj ? _dtState.get(dtObj) : null;
+      if (dtSt && typeof prop === "string" && /^\d+$/.test(prop)) {
         const idx = Number(prop);
-        return idx < t._dt._items.length ? t._dt._items[idx] : undefined;
+        return idx < dtSt.items.length ? dtSt.items[idx] : undefined;
       }
-      if (prop === "length") return t._dt._items.length;
+      if (dtSt && prop === "length") return dtSt.items.length;
       const val = Reflect.get(t, prop, t);
       return typeof val === "function" ? val.bind(t) : val;
     },
@@ -1138,25 +1165,43 @@ function DataTransfer() {
   if (!(this instanceof DataTransfer)) {
     throw new TypeError("Failed to construct 'DataTransfer': Please use the 'new' operator.");
   }
-  this._items = [];
-  this._dataMap = new Map();
-  this._itemList = createDataTransferItemList(this);
-  this.dropEffect = "none";
-  this.effectAllowed = "uninitialized";
+  _dtState.set(this, {
+    items: [],
+    dataMap: new Map(),
+    itemList: createDataTransferItemList(this),
+    dropEffect: "none",
+    effectAllowed: "uninitialized",
+  });
 }
 
+Object.defineProperty(DataTransfer.prototype, "dropEffect", {
+  get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.dropEffect; },
+  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.dropEffect = String(v); },
+  configurable: true,
+  enumerable: true,
+});
+
+Object.defineProperty(DataTransfer.prototype, "effectAllowed", {
+  get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.effectAllowed; },
+  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.effectAllowed = String(v); },
+  configurable: true,
+  enumerable: true,
+});
+
 Object.defineProperty(DataTransfer.prototype, "items", {
-  get: function () { return this._itemList; },
+  get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.itemList; },
   configurable: true,
   enumerable: true,
 });
 
 Object.defineProperty(DataTransfer.prototype, "files", {
   get: function () {
+    const st = _dtState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const files = [];
-    for (let i = 0; i < this._items.length; i++) {
-      if (this._items[i].kind === "file") {
-        files.push(this._items[i].getAsFile());
+    for (let i = 0; i < st.items.length; i++) {
+      if (st.items[i].kind === "file") {
+        files.push(st.items[i].getAsFile());
       }
     }
     return createFileList(files);
@@ -1167,17 +1212,19 @@ Object.defineProperty(DataTransfer.prototype, "files", {
 
 Object.defineProperty(DataTransfer.prototype, "types", {
   get: function () {
+    const st = _dtState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const out = [];
     let hasFiles = false;
-    for (let i = 0; i < this._items.length; i++) {
-      const it = this._items[i];
+    for (let i = 0; i < st.items.length; i++) {
+      const it = st.items[i];
       if (it.kind === "file") {
         hasFiles = true;
       } else if (out.indexOf(it.type) === -1) {
         out.push(it.type);
       }
     }
-    this._dataMap.forEach(function (_v, k) {
+    st.dataMap.forEach(function (_v, k) {
       if (out.indexOf(k) === -1) out.push(k);
     });
     if (hasFiles && out.indexOf("Files") === -1) {
@@ -1190,32 +1237,39 @@ Object.defineProperty(DataTransfer.prototype, "types", {
 });
 
 DataTransfer.prototype.setData = function (format, data) {
+  const st = _dtState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   const norm = normalizeDataTransferFormat(format);
   const str = String(data == null ? "" : data);
-  this._dataMap.set(norm, str);
-  for (let i = 0; i < this._items.length; i++) {
-    if (this._items[i].kind === "string" && this._items[i].type === norm) {
-      this._items[i]._payload = str;
+  st.dataMap.set(norm, str);
+  for (let i = 0; i < st.items.length; i++) {
+    if (st.items[i].kind === "string" && st.items[i].type === norm) {
+      const itemSt = _dtiState.get(st.items[i]);
+      if (itemSt) itemSt.payload = str;
       return;
     }
   }
-  this._items.push(new DataTransferItem("string", norm, str));
+  st.items.push(new DataTransferItem("string", norm, str, _dtInternalToken));
 };
 
 DataTransfer.prototype.getData = function (format) {
+  const st = _dtState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   const norm = normalizeDataTransferFormat(format);
-  return this._dataMap.has(norm) ? this._dataMap.get(norm) : "";
+  return st.dataMap.has(norm) ? st.dataMap.get(norm) : "";
 };
 
 DataTransfer.prototype.clearData = function (format) {
+  const st = _dtState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   if (format === undefined) {
-    this._dataMap.clear();
-    this._items = this._items.filter(function (it) { return it.kind !== "string"; });
+    st.dataMap.clear();
+    st.items = st.items.filter(function (it) { return it.kind !== "string"; });
     return;
   }
   const norm = normalizeDataTransferFormat(format);
-  this._dataMap.delete(norm);
-  this._items = this._items.filter(function (it) { return !(it.kind === "string" && it.type === norm); });
+  st.dataMap.delete(norm);
+  st.items = st.items.filter(function (it) { return !(it.kind === "string" && it.type === norm); });
 };
 
 DataTransfer.prototype.setDragImage = function () {};

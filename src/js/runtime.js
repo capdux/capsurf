@@ -2287,17 +2287,40 @@
   // src/js/shim/mutations/observer.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/mutations/observer.ts
 
+  const _mrState = new WeakMap();
+  const _moState = new WeakMap();
+
   function MutationRecord(type, target) {
-    this.type = type; // "childList", "attributes", "characterData"
-    this.target = target;
-    this.addedNodes = [];
-    this.removedNodes = [];
-    this.previousSibling = null;
-    this.nextSibling = null;
-    this.attributeName = null;
-    this.attributeNamespace = null;
-    this.oldValue = null;
+    if (arguments.length === 0) {
+      throw new TypeError("Illegal constructor");
+    }
+    _mrState.set(this, {
+      type: type,
+      target: target,
+      addedNodes: [],
+      removedNodes: [],
+      previousSibling: null,
+      nextSibling: null,
+      attributeName: null,
+      attributeNamespace: null,
+      oldValue: null,
+    });
   }
+  ["type", "target", "addedNodes", "removedNodes", "previousSibling", "nextSibling", "attributeName", "attributeNamespace", "oldValue"].forEach(function (prop) {
+    Object.defineProperty(MutationRecord.prototype, prop, {
+      get: function () {
+        const st = _mrState.get(this);
+        if (!st) throw new TypeError("Illegal invocation");
+        return st[prop];
+      },
+      set: function (v) {
+        const st = _mrState.get(this);
+        if (st) st[prop] = v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
   markNative(MutationRecord, "MutationRecord");
 
   const activeObservers = new Set();
@@ -2309,10 +2332,11 @@
     Promise.resolve().then(function () {
       mutationScheduled = false;
       for (const obs of activeObservers) {
-        if (obs._records.length > 0) {
-          const batch = obs._records.splice(0, obs._records.length);
+        const st = _moState.get(obs);
+        if (st && st.records.length > 0) {
+          const batch = st.records.splice(0, st.records.length);
           try {
-            obs.callback.call(obs, batch, obs);
+            st.callback.call(obs, batch, obs);
           } catch (e) {
             if (typeof console !== "undefined" && console.error) console.error(e);
           }
@@ -2331,21 +2355,28 @@
     if (typeof globalThis !== "undefined") {
       globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
     }
+    if (record && record.type === "childList" && record.removedNodes && record.removedNodes.length > 0 && typeof global.__capsurf_onNodeRemovedForIterators === "function") {
+      for (let ri = 0; ri < record.removedNodes.length; ri++) {
+        global.__capsurf_onNodeRemovedForIterators(record.target, record.removedNodes[ri], record.previousSibling);
+      }
+    }
     for (const obs of activeObservers) {
-      for (const sub of obs._targets) {
+      const st = _moState.get(obs);
+      if (!st) continue;
+      for (const sub of st.targets) {
         if (isSameTarget(sub.target, record.target) || (sub.options.subtree && sub.target.contains && sub.target.contains(record.target))) {
           if (record.type === "attributes" && sub.options.attributes) {
             if (!sub.options.attributeFilter || sub.options.attributeFilter.indexOf(record.attributeName) !== -1) {
-              obs._records.push(record);
+              st.records.push(record);
               scheduleMutationDelivery();
               break;
             }
           } else if (record.type === "childList" && sub.options.childList) {
-            obs._records.push(record);
+            st.records.push(record);
             scheduleMutationDelivery();
             break;
           } else if (record.type === "characterData" && sub.options.characterData) {
-            obs._records.push(record);
+            st.records.push(record);
             scheduleMutationDelivery();
             break;
           }
@@ -2356,35 +2387,43 @@
 
   function MutationObserver(callback) {
     if (typeof callback !== "function") throw new TypeError("Callback required");
-    this.callback = callback;
-    this._records = [];
-    this._targets = [];
+    _moState.set(this, {
+      callback: callback,
+      records: [],
+      targets: [],
+    });
   }
 
   MutationObserver.prototype.observe = function (target, options) {
+    const st = _moState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     if (!target) throw new TypeError("Target required");
     const opts = options || {};
     // Update existing observation of this target if present
-    for (let i = 0; i < this._targets.length; i++) {
-      if (isSameTarget(this._targets[i].target, target)) {
-        this._targets[i].options = opts;
+    for (let i = 0; i < st.targets.length; i++) {
+      if (isSameTarget(st.targets[i].target, target)) {
+        st.targets[i].options = opts;
         activeObservers.add(this);
         return;
       }
     }
-    this._targets.push({ target: target, options: opts });
+    st.targets.push({ target: target, options: opts });
     activeObservers.add(this);
   };
 
   MutationObserver.prototype.disconnect = function () {
-    this._records = [];
-    this._targets = [];
+    const st = _moState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    st.records = [];
+    st.targets = [];
     activeObservers.delete(this);
   };
 
   MutationObserver.prototype.takeRecords = function () {
-    const records = this._records.slice();
-    this._records = [];
+    const st = _moState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    const records = st.records.slice();
+    st.records = [];
     return records;
   };
 
@@ -2399,24 +2438,50 @@
   // src/js/shim/collections.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/collections.ts
 
+  const _dtlState = new WeakMap();
+
   function DOMTokenList(getter, setter) {
-    this._getter = getter;
-    this._setter = setter;
+    const st = { getter: getter, setter: setter };
+    _dtlState.set(this, st);
+    const proxy = new Proxy(this, {
+      get: function (target, prop, receiver) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          return target.item(Number(prop));
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    _dtlState.set(proxy, st);
+    return proxy;
   }
 
   DOMTokenList.prototype._getTokens = function () {
-    const str = (this._getter() || "").trim();
+    const st = _dtlState.get(this);
+    const str = (st ? st.getter() : "" || "").trim();
     if (!str) return [];
     return str.split(/\s+/);
   };
 
   DOMTokenList.prototype._setTokens = function (tokens) {
-    this._setter(tokens.join(" "));
+    const st = _dtlState.get(this);
+    if (st) st.setter(tokens.join(" "));
   };
 
   Object.defineProperty(DOMTokenList.prototype, "length", {
     get: function () {
       return this._getTokens().length;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(DOMTokenList.prototype, "value", {
+    get: function () {
+      const st = _dtlState.get(this);
+      return st ? (st.getter() || "") : "";
+    },
+    set: function (v) {
+      const st = _dtlState.get(this);
+      if (st) st.setter(String(v == null ? "" : v));
     },
     configurable: true,
   });
@@ -2495,12 +2560,7 @@
     return true;
   };
 
-  DOMTokenList.prototype.forEach = function (callback, thisArg) {
-    const tokens = this._getTokens();
-    for (let i = 0; i < tokens.length; i++) {
-      callback.call(thisArg, tokens[i], i, this);
-    }
-  };
+  DOMTokenList.prototype.forEach = Array.prototype.forEach;
 
   DOMTokenList.prototype.values = function () {
     return this._getTokens()[Symbol.iterator]();
@@ -2514,12 +2574,11 @@
   };
 
   DOMTokenList.prototype.toString = function () {
-    return this._getter() || "";
+    const st = _dtlState.get(this);
+    return st ? (st.getter() || "") : "";
   };
 
-  DOMTokenList.prototype[Symbol.iterator] = function () {
-    return this.values();
-  };
+  DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
 
   markNative(DOMTokenList, "DOMTokenList");
   markNative(DOMTokenList.prototype.add, "add");
@@ -3862,51 +3921,60 @@
     // 3. MediaList
     // =========================================================================
 
+    const _mediaListState = new WeakMap();
+
     function MediaList(initialText, onMutate) {
-      this._media = [];
-      this._onMutate = onMutate || null;
+      _mediaListState.set(this, { media: [], onMutate: onMutate || null });
       if (initialText) this._setText(initialText);
     }
     MediaList.prototype._setText = function (text) {
-      const old = this._media.length;
-      this._media = String(text == null ? "" : text)
+      const st = _mediaListState.get(this);
+      if (!st) return;
+      const old = st.media.length;
+      st.media = String(text == null ? "" : text)
         .split(",")
         .map((m) => m.trim())
         .filter(Boolean);
-      for (let i = this._media.length; i < old; i++) delete this[i];
-      for (let i = 0; i < this._media.length; i++) this[i] = this._media[i];
+      for (let i = st.media.length; i < old; i++) delete this[i];
+      for (let i = 0; i < st.media.length; i++) this[i] = st.media[i];
     };
     MediaList.prototype._notify = function () {
-      if (this._onMutate) this._onMutate();
+      const st = _mediaListState.get(this);
+      if (st && st.onMutate) st.onMutate();
     };
     Object.defineProperty(MediaList.prototype, "length", {
-      get: function () { return this._media.length; },
+      get: function () { const st = _mediaListState.get(this); return st ? st.media.length : 0; },
       configurable: true,
     });
     Object.defineProperty(MediaList.prototype, "mediaText", {
-      get: function () { return this._media.join(", "); },
+      get: function () { const st = _mediaListState.get(this); return st ? st.media.join(", ") : ""; },
       set: function (v) { this._setText(v); this._notify(); },
       configurable: true,
     });
     MediaList.prototype.item = function (index) {
-      const m = this._media[Number(index) | 0];
+      const st = _mediaListState.get(this);
+      const m = st ? st.media[Number(index) | 0] : undefined;
       return m != null ? m : null;
     };
     MediaList.prototype.appendMedium = function (medium) {
+      const st = _mediaListState.get(this);
+      if (!st) return;
       const m = String(medium).trim();
-      if (m && !this._media.includes(m)) {
-        this._media.push(m);
-        this[this._media.length - 1] = m;
+      if (m && !st.media.includes(m)) {
+        st.media.push(m);
+        this[st.media.length - 1] = m;
         this._notify();
       }
     };
     MediaList.prototype.deleteMedium = function (medium) {
-      const idx = this._media.indexOf(String(medium).trim());
+      const st = _mediaListState.get(this);
+      if (!st) return;
+      const idx = st.media.indexOf(String(medium).trim());
       if (idx >= 0) {
-        const old = this._media.length;
-        this._media.splice(idx, 1);
-        for (let i = this._media.length; i < old; i++) delete this[i];
-        for (let i = 0; i < this._media.length; i++) this[i] = this._media[i];
+        const old = st.media.length;
+        st.media.splice(idx, 1);
+        for (let i = st.media.length; i < old; i++) delete this[i];
+        for (let i = 0; i < st.media.length; i++) this[i] = st.media[i];
         this._notify();
       }
     };
@@ -3919,9 +3987,15 @@
     // 4. CSSStyleDeclaration
     // =========================================================================
 
+    const _inlineStyleLookup = new WeakMap();
+    global.__capsurf_inlineStyleLookup = _inlineStyleLookup;
+
     function CSSStyleDeclaration() {}
     CSSStyleDeclaration.prototype.item = function (index) { return ""; };
-    CSSStyleDeclaration.prototype.getPropertyValue = function (property) { return ""; };
+    CSSStyleDeclaration.prototype.getPropertyValue = function (property) {
+      const fn = _inlineStyleLookup.get(this);
+      return typeof fn === "function" ? fn(property) : "";
+    };
     CSSStyleDeclaration.prototype.getPropertyPriority = function (property) { return ""; };
     CSSStyleDeclaration.prototype.setProperty = function (property, value, priority) {};
     CSSStyleDeclaration.prototype.removeProperty = function (property) { return ""; };
@@ -5369,53 +5443,92 @@
       }
     }
 
+    function StyleSheet() {
+      throw new TypeError("Illegal constructor");
+    }
+    StyleSheet.prototype = {};
+    Object.defineProperty(StyleSheet.prototype, "constructor", { value: StyleSheet, configurable: true, writable: true });
+    markNative(StyleSheet, "StyleSheet");
+    global.StyleSheet = StyleSheet;
+
+    const _sheetState = new WeakMap();
+    function getSheetSt(s) {
+      let st = _sheetState.get(s);
+      if (!st) {
+        st = {
+          ownerNode: null, ownerRule: null, parentStyleSheet: null, title: null,
+          media: null, disabled: false, _rules: [], _lastParsedText: null,
+          _loadedHref: null, _originClean: true, _cascadeCssText: "", _rulesList: null,
+        };
+        _sheetState.set(s, st);
+      }
+      return st;
+    }
+
     function CSSStyleSheet(ownerNode) {
-      this.ownerNode = ownerNode || null;
-      this.ownerRule = null;
-      this.parentStyleSheet = null;
-      this.title = null;
-      this.media = new MediaList("");
-      this.disabled = false;
-      this._rules = [];
-      this._lastParsedText = null;
-      this._loadedHref = null;
-      this._originClean = true;
-      this._cascadeCssText = "";
-
-      const self = this;
-      const rulesList = makeRuleList(this._rules);
-
-      Object.defineProperty(this, "href", {
-        get: function () {
-          if (self.ownerNode) {
-            const tag = String(self.ownerNode.localName || self.ownerNode.tagName || "").toLowerCase();
-            if (tag === "link") {
-              return resolveLinkHref(self.ownerNode);
-            }
-          }
-          return null;
-        },
-        set: function (_v) {},
-        configurable: true,
-        enumerable: true,
-      });
-
-      Object.defineProperty(this, "cssRules", {
-        get: function () {
-          self._syncFromOwner();
-          if (self._isCrossOriginOpaque()) {
-            throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
-          }
-          return rulesList;
-        },
-        configurable: true,
-      });
-
-      Object.defineProperty(this, "rules", {
-        get: function () { return this.cssRules; },
-        configurable: true,
+      let actualOwner = ownerNode || null;
+      let initDisabled = false;
+      if (ownerNode && typeof ownerNode === "object" && !ownerNode.nodeType) {
+        initDisabled = Boolean(ownerNode.disabled);
+        actualOwner = null;
+      }
+      const rules = [];
+      _sheetState.set(this, {
+        ownerNode: actualOwner,
+        ownerRule: null,
+        parentStyleSheet: null,
+        title: null,
+        media: new MediaList(""),
+        disabled: initDisabled,
+        _rules: rules,
+        _lastParsedText: null,
+        _loadedHref: null,
+        _originClean: true,
+        _cascadeCssText: "",
+        _rulesList: makeRuleList(rules),
       });
     }
+    CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
+    CSSStyleSheet.prototype.constructor = CSSStyleSheet;
+
+    ["ownerNode", "ownerRule", "parentStyleSheet", "title", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+      Object.defineProperty(CSSStyleSheet.prototype, prop, {
+        get: function () { return getSheetSt(this)[prop]; },
+        set: function (v) { getSheetSt(this)[prop] = v; },
+        configurable: true,
+      });
+    });
+
+    Object.defineProperty(CSSStyleSheet.prototype, "href", {
+      get: function () {
+        const ownerNode = getSheetSt(this).ownerNode;
+        if (ownerNode) {
+          const tag = String(ownerNode.localName || ownerNode.tagName || "").toLowerCase();
+          if (tag === "link") {
+            return resolveLinkHref(ownerNode);
+          }
+        }
+        return null;
+      },
+      set: function (_v) {},
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSStyleSheet.prototype, "cssRules", {
+      get: function () {
+        this._syncFromOwner();
+        if (this._isCrossOriginOpaque()) {
+          throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
+        }
+        return getSheetSt(this)._rulesList;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(CSSStyleSheet.prototype, "rules", {
+      get: function () { return this.cssRules; },
+      configurable: true,
+    });
 
     CSSStyleSheet.prototype._loadLinkSheet = function () {
       const ownerNode = this.ownerNode;
@@ -6761,7 +6874,10 @@
     }
     if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-      const frag = (doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment();
+      const nativeFrag = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createDocumentFragment : null;
+      const frag = (doc && typeof nativeFrag === "function")
+        ? nativeFrag.call(doc)
+        : ((doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment());
       if (deep) {
         const kids = Array.from(this.childNodes || this._children || []);
         for (let i = 0; i < kids.length; i++) {
@@ -6770,8 +6886,14 @@
       }
       return frag;
     }
-    if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
-      const clone = document.createElement(String(this.localName || this.tagName || "div").toLowerCase());
+    if (this.nodeType === ELEMENT_NODE) {
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const nativeCreate = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createElement : null;
+      const tag = String(this.localName || this.tagName || "div").toLowerCase();
+      const clone = (doc && typeof nativeCreate === "function")
+        ? nativeCreate.call(doc, tag)
+        : ((typeof document !== "undefined" && document.createElement) ? document.createElement(tag) : null);
+      if (!clone) return this;
       if (this.id) clone.id = this.id;
       if (this.className) clone.className = this.className;
       if (typeof this.getAttributeNames === "function") {
@@ -7838,7 +7960,10 @@
         this.removeChild(this.firstChild);
       }
       const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-      const temp = doc ? doc.createElement("div") : null;
+      const nativeCreate = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createElement : null;
+      const temp = (doc && typeof nativeCreate === "function")
+        ? nativeCreate.call(doc, "div")
+        : (doc ? doc.createElement("div") : null);
       if (temp) {
         temp.innerHTML = val;
         while (temp.firstChild) {
@@ -8664,7 +8789,63 @@
       return "";
     }
 
-    return new Proxy(declTarget, {
+    const cachedMethods = {
+      item: function (idx) {
+        const i = Number(idx) >>> 0;
+        const map = parseStyleMap();
+        let count = 0;
+        for (const entry of map.values()) {
+          if (count === i) return entry.name;
+          count++;
+        }
+        return "";
+      },
+      getPropertyValue: function (p) {
+        const map = parseStyleMap();
+        const key = normalizeStylePropKey(p);
+        return lookupPropertyValue(map, key);
+      },
+      getPropertyPriority: function (p) {
+        const map = parseStyleMap();
+        const key = normalizeStylePropKey(p);
+        const entry = map.get(key);
+        return entry ? entry.priority : "";
+      },
+      setProperty: function (p, val, priority) {
+        if (priority !== undefined && priority !== null && priority !== "") {
+          if (priority !== "important" && priority !== "!important") return;
+        }
+        const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
+        const map = parseStyleMap();
+        const rawStr = String(p).trim();
+        const key = normalizeStylePropKey(rawStr);
+        const vStr = val === null || val === undefined ? "" : String(val).trim();
+        if (vStr === "") {
+          removeKeyFromStyleMap(map, key);
+          if (key === "display") element._displayNone = false;
+          serializeStyleMap(map);
+          return;
+        }
+        if (!isValidInlinePropValue(key, vStr)) return;
+        setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
+        if (key === "display") {
+          element._displayNone = (vStr.toLowerCase() === "none");
+        }
+        serializeStyleMap(map);
+      },
+      removeProperty: function (p) {
+        const map = parseStyleMap();
+        const key = normalizeStylePropKey(p);
+        const prev = removeKeyFromStyleMap(map, key);
+        if (key === "display") {
+          element._displayNone = false;
+        }
+        serializeStyleMap(map);
+        return prev;
+      },
+    };
+
+    const styleProxy = new Proxy(declTarget, {
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") {
           if (prop === Symbol.iterator) {
@@ -8679,69 +8860,7 @@
         if (prop === "cssText") return element.getAttribute("style") || "";
         if (prop === "length") return parseStyleMap().size;
         if (prop === "parentRule") return null;
-        if (prop === "item") {
-          return function (idx) {
-            const i = Number(idx) >>> 0;
-            const map = parseStyleMap();
-            let count = 0;
-            for (const entry of map.values()) {
-              if (count === i) return entry.name;
-              count++;
-            }
-            return "";
-          };
-        }
-        if (prop === "getPropertyValue") {
-          return function (p) {
-            const map = parseStyleMap();
-            const key = normalizeStylePropKey(p);
-            return lookupPropertyValue(map, key);
-          };
-        }
-        if (prop === "getPropertyPriority") {
-          return function (p) {
-            const map = parseStyleMap();
-            const key = normalizeStylePropKey(p);
-            const entry = map.get(key);
-            return entry ? entry.priority : "";
-          };
-        }
-        if (prop === "setProperty") {
-          return function (p, val, priority) {
-            if (priority !== undefined && priority !== null && priority !== "") {
-              if (priority !== "important" && priority !== "!important") return;
-            }
-            const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
-            const map = parseStyleMap();
-            const rawStr = String(p).trim();
-            const key = normalizeStylePropKey(rawStr);
-            const vStr = val === null || val === undefined ? "" : String(val).trim();
-            if (vStr === "") {
-              removeKeyFromStyleMap(map, key);
-              if (key === "display") element._displayNone = false;
-              serializeStyleMap(map);
-              return;
-            }
-            if (!isValidInlinePropValue(key, vStr)) return;
-            setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
-            if (key === "display") {
-              element._displayNone = (vStr.toLowerCase() === "none");
-            }
-            serializeStyleMap(map);
-          };
-        }
-        if (prop === "removeProperty") {
-          return function (p) {
-            const map = parseStyleMap();
-            const key = normalizeStylePropKey(p);
-            const prev = removeKeyFromStyleMap(map, key);
-            if (key === "display") {
-              element._displayNone = false;
-            }
-            serializeStyleMap(map);
-            return prev;
-          };
-        }
+        if (Object.prototype.hasOwnProperty.call(cachedMethods, prop)) return cachedMethods[prop];
         if (prop in target) return target[prop];
 
         if (prop === "cssFloat" || prop === "float") {
@@ -8829,7 +8948,8 @@
         const keys = [];
         const seen = new Set();
         for (const [k, entry] of map.entries()) {
-          const name = entry && entry.name ? entry.name : k;
+          const rawName = entry && entry.name ? entry.name : k;
+          const name = rawName.startsWith("--") ? rawName : rawName.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
           if (!seen.has(name)) {
             seen.add(name);
             keys.push(name);
@@ -8853,6 +8973,10 @@
           if (map.has(prop)) {
             return { value: map.get(prop).value, writable: true, enumerable: true, configurable: true };
           }
+          const kebab = propToKebab(prop);
+          if (map.has(kebab)) {
+            return { value: map.get(kebab).value, writable: true, enumerable: true, configurable: true };
+          }
           const lower = prop.startsWith("--") ? prop : prop.toLowerCase();
           if (map.has(lower)) {
             return { value: map.get(lower).value, writable: true, enumerable: true, configurable: true };
@@ -8864,6 +8988,10 @@
         return false;
       }
     });
+    if (typeof global !== "undefined" && global.__capsurf_inlineStyleLookup) {
+      global.__capsurf_inlineStyleLookup.set(styleProxy, cachedMethods.getPropertyValue);
+    }
+    return styleProxy;
   }
 
   function isHtmlElement(el) {
@@ -15507,8 +15635,10 @@
     return "";
   }
 
+  const _validityControlMap = new WeakMap();
+
   function ValidityState(control) {
-    this._control = control;
+    _validityControlMap.set(this, control);
   }
 
   Object.defineProperty(ValidityState.prototype, Symbol.toStringTag, {
@@ -15534,7 +15664,9 @@
     (function (flagName) {
       Object.defineProperty(ValidityState.prototype, flagName, {
         get: function () {
-          return computeValidityFlags(this._control)[flagName];
+          const ctrl = _validityControlMap.get(this);
+          if (!ctrl) throw new TypeError("Illegal invocation");
+          return computeValidityFlags(ctrl)[flagName];
         },
         configurable: true,
         enumerable: true,
@@ -19265,31 +19397,41 @@
     return lower;
   }
 
-  function DataTransferItem(kind, type, payload) {
-    this._kind = kind;
-    this._type = type;
-    this._payload = payload;
+  const _dtiState = new WeakMap();
+  const _dtilState = new WeakMap();
+  const _dtState = new WeakMap();
+  const _dtInternalToken = {};
+
+  function DataTransferItem() {
+    if (arguments[3] !== _dtInternalToken) {
+      throw new TypeError("Illegal constructor");
+    }
+    _dtiState.set(this, { kind: arguments[0], type: arguments[1], payload: arguments[2] });
   }
 
   Object.defineProperty(DataTransferItem.prototype, "kind", {
-    get: function () { return this._kind; },
+    get: function () { const st = _dtiState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.kind; },
     configurable: true,
     enumerable: true,
   });
 
   Object.defineProperty(DataTransferItem.prototype, "type", {
-    get: function () { return this._type; },
+    get: function () { const st = _dtiState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.type; },
     configurable: true,
     enumerable: true,
   });
 
   DataTransferItem.prototype.getAsFile = function () {
-    return this._kind === "file" ? this._payload : null;
+    const st = _dtiState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.kind === "file" ? st.payload : null;
   };
 
   DataTransferItem.prototype.getAsString = function (callback) {
-    if (this._kind !== "string" || typeof callback !== "function") return;
-    const data = String(this._payload || "");
+    const st = _dtiState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (st.kind !== "string" || typeof callback !== "function") return;
+    const data = String(st.payload || "");
     setTimeout(function () {
       callback(data);
     }, 0);
@@ -19301,17 +19443,23 @@
   });
   markNative(DataTransferItem, "DataTransferItem");
 
-  function DataTransferItemList(dt) {
-    this._dt = dt;
+  function DataTransferItemList() {
+    if (arguments[1] !== _dtInternalToken) {
+      throw new TypeError("Illegal constructor");
+    }
+    _dtilState.set(this, arguments[0]);
   }
 
   Object.defineProperty(DataTransferItemList.prototype, "length", {
-    get: function () { return this._dt._items.length; },
+    get: function () { const dt = _dtilState.get(this); if (!dt) throw new TypeError("Illegal invocation"); return _dtState.get(dt).items.length; },
     configurable: true,
     enumerable: true,
   });
 
-  DataTransferItemList.prototype.add = function (data, type) {
+  DataTransferItemList.prototype.add = function (data) {
+    const dt = _dtilState.get(this);
+    if (!dt) throw new TypeError("Illegal invocation");
+    const dtSt = _dtState.get(dt);
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 1 argument required, but only 0 present.");
     }
@@ -19319,40 +19467,49 @@
       if (!(data instanceof File)) {
         throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': parameter 1 is not of type 'File'.");
       }
-      const item = new DataTransferItem("file", data.type || "", data);
-      this._dt._items.push(item);
+      const item = new DataTransferItem("file", data.type || "", data, _dtInternalToken);
+      dtSt.items.push(item);
       return item;
     }
+    const type = arguments[1];
     const norm = normalizeDataTransferFormat(type);
     const str = String(data);
-    for (let i = 0; i < this._dt._items.length; i++) {
-      if (this._dt._items[i].kind === "string" && this._dt._items[i].type === norm) {
+    for (let i = 0; i < dtSt.items.length; i++) {
+      if (dtSt.items[i].kind === "string" && dtSt.items[i].type === norm) {
         const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
         throw new DOMEx("An item already exists for type '" + norm + "'.", "NotSupportedError");
       }
     }
-    const item = new DataTransferItem("string", norm, str);
-    this._dt._items.push(item);
-    this._dt._dataMap.set(norm, str);
+    const item = new DataTransferItem("string", norm, str, _dtInternalToken);
+    dtSt.items.push(item);
+    dtSt.dataMap.set(norm, str);
     return item;
   };
 
   DataTransferItemList.prototype.remove = function (index) {
+    const dt = _dtilState.get(this);
+    if (!dt) throw new TypeError("Illegal invocation");
+    const dtSt = _dtState.get(dt);
     const i = Number(index) >>> 0;
-    if (i >= this._dt._items.length) return;
-    const removed = this._dt._items.splice(i, 1)[0];
+    if (i >= dtSt.items.length) return;
+    const removed = dtSt.items.splice(i, 1)[0];
     if (removed && removed.kind === "string") {
-      this._dt._dataMap.delete(removed.type);
+      dtSt.dataMap.delete(removed.type);
     }
   };
 
   DataTransferItemList.prototype.clear = function () {
-    this._dt._items.length = 0;
-    this._dt._dataMap.clear();
+    const dt = _dtilState.get(this);
+    if (!dt) throw new TypeError("Illegal invocation");
+    const dtSt = _dtState.get(dt);
+    dtSt.items.length = 0;
+    dtSt.dataMap.clear();
   };
 
   DataTransferItemList.prototype[Symbol.iterator] = function () {
-    return this._dt._items.slice()[Symbol.iterator]();
+    const dt = _dtilState.get(this);
+    if (!dt) throw new TypeError("Illegal invocation");
+    return _dtState.get(dt).items.slice()[Symbol.iterator]();
   };
 
   Object.defineProperty(DataTransferItemList.prototype, Symbol.toStringTag, {
@@ -19362,14 +19519,16 @@
   markNative(DataTransferItemList, "DataTransferItemList");
 
   function createDataTransferItemList(dt) {
-    const target = new DataTransferItemList(dt);
+    const target = new DataTransferItemList(dt, _dtInternalToken);
     return new Proxy(target, {
       get: function (t, prop) {
-        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        const dtObj = _dtilState.get(t);
+        const dtSt = dtObj ? _dtState.get(dtObj) : null;
+        if (dtSt && typeof prop === "string" && /^\d+$/.test(prop)) {
           const idx = Number(prop);
-          return idx < t._dt._items.length ? t._dt._items[idx] : undefined;
+          return idx < dtSt.items.length ? dtSt.items[idx] : undefined;
         }
-        if (prop === "length") return t._dt._items.length;
+        if (dtSt && prop === "length") return dtSt.items.length;
         const val = Reflect.get(t, prop, t);
         return typeof val === "function" ? val.bind(t) : val;
       },
@@ -19380,25 +19539,43 @@
     if (!(this instanceof DataTransfer)) {
       throw new TypeError("Failed to construct 'DataTransfer': Please use the 'new' operator.");
     }
-    this._items = [];
-    this._dataMap = new Map();
-    this._itemList = createDataTransferItemList(this);
-    this.dropEffect = "none";
-    this.effectAllowed = "uninitialized";
+    _dtState.set(this, {
+      items: [],
+      dataMap: new Map(),
+      itemList: createDataTransferItemList(this),
+      dropEffect: "none",
+      effectAllowed: "uninitialized",
+    });
   }
 
+  Object.defineProperty(DataTransfer.prototype, "dropEffect", {
+    get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.dropEffect; },
+    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.dropEffect = String(v); },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(DataTransfer.prototype, "effectAllowed", {
+    get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.effectAllowed; },
+    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.effectAllowed = String(v); },
+    configurable: true,
+    enumerable: true,
+  });
+
   Object.defineProperty(DataTransfer.prototype, "items", {
-    get: function () { return this._itemList; },
+    get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.itemList; },
     configurable: true,
     enumerable: true,
   });
 
   Object.defineProperty(DataTransfer.prototype, "files", {
     get: function () {
+      const st = _dtState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
       const files = [];
-      for (let i = 0; i < this._items.length; i++) {
-        if (this._items[i].kind === "file") {
-          files.push(this._items[i].getAsFile());
+      for (let i = 0; i < st.items.length; i++) {
+        if (st.items[i].kind === "file") {
+          files.push(st.items[i].getAsFile());
         }
       }
       return createFileList(files);
@@ -19409,17 +19586,19 @@
 
   Object.defineProperty(DataTransfer.prototype, "types", {
     get: function () {
+      const st = _dtState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
       const out = [];
       let hasFiles = false;
-      for (let i = 0; i < this._items.length; i++) {
-        const it = this._items[i];
+      for (let i = 0; i < st.items.length; i++) {
+        const it = st.items[i];
         if (it.kind === "file") {
           hasFiles = true;
         } else if (out.indexOf(it.type) === -1) {
           out.push(it.type);
         }
       }
-      this._dataMap.forEach(function (_v, k) {
+      st.dataMap.forEach(function (_v, k) {
         if (out.indexOf(k) === -1) out.push(k);
       });
       if (hasFiles && out.indexOf("Files") === -1) {
@@ -19432,32 +19611,39 @@
   });
 
   DataTransfer.prototype.setData = function (format, data) {
+    const st = _dtState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const norm = normalizeDataTransferFormat(format);
     const str = String(data == null ? "" : data);
-    this._dataMap.set(norm, str);
-    for (let i = 0; i < this._items.length; i++) {
-      if (this._items[i].kind === "string" && this._items[i].type === norm) {
-        this._items[i]._payload = str;
+    st.dataMap.set(norm, str);
+    for (let i = 0; i < st.items.length; i++) {
+      if (st.items[i].kind === "string" && st.items[i].type === norm) {
+        const itemSt = _dtiState.get(st.items[i]);
+        if (itemSt) itemSt.payload = str;
         return;
       }
     }
-    this._items.push(new DataTransferItem("string", norm, str));
+    st.items.push(new DataTransferItem("string", norm, str, _dtInternalToken));
   };
 
   DataTransfer.prototype.getData = function (format) {
+    const st = _dtState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const norm = normalizeDataTransferFormat(format);
-    return this._dataMap.has(norm) ? this._dataMap.get(norm) : "";
+    return st.dataMap.has(norm) ? st.dataMap.get(norm) : "";
   };
 
   DataTransfer.prototype.clearData = function (format) {
+    const st = _dtState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     if (format === undefined) {
-      this._dataMap.clear();
-      this._items = this._items.filter(function (it) { return it.kind !== "string"; });
+      st.dataMap.clear();
+      st.items = st.items.filter(function (it) { return it.kind !== "string"; });
       return;
     }
     const norm = normalizeDataTransferFormat(format);
-    this._dataMap.delete(norm);
-    this._items = this._items.filter(function (it) { return !(it.kind === "string" && it.type === norm); });
+    st.dataMap.delete(norm);
+    st.items = st.items.filter(function (it) { return !(it.kind === "string" && it.type === norm); });
   };
 
   DataTransfer.prototype.setDragImage = function () {};
@@ -19552,8 +19738,17 @@
     return false;
   }
 
-  function FormData(form, submitter) {
-    this._entries = []; // Array of [name, value]
+  const _fdState = new WeakMap();
+  function getFdEntries(fd) {
+    const entries = _fdState.get(fd);
+    if (!entries) throw new TypeError("Illegal invocation");
+    return entries;
+  }
+
+  function FormData(form) {
+    const submitter = arguments[1];
+    const entries = []; // Array of [name, value]
+    _fdState.set(this, entries);
     if (form && (form.tagName || "").toUpperCase() === "FORM") {
       if (form._constructingEntryList) {
         const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
@@ -19642,82 +19837,92 @@
     return String(value);
   }
 
-  FormData.prototype.append = function (name, value, filename) {
-    this._entries.push([String(name), normalizeFormDataValue(value, filename)]);
+  FormData.prototype.append = function (name, value) {
+    const entries = getFdEntries(this);
+    const filename = arguments[2];
+    entries.push([String(name), normalizeFormDataValue(value, filename)]);
   };
 
   FormData.prototype.delete = function (name) {
+    const entries = getFdEntries(this);
     const n = String(name);
-    this._entries = this._entries.filter(function (entry) {
+    const kept = entries.filter(function (entry) {
       return entry[0] !== n;
     });
+    _fdState.set(this, kept);
   };
 
   FormData.prototype.get = function (name) {
+    const entries = getFdEntries(this);
     const n = String(name);
-    for (let i = 0; i < this._entries.length; i++) {
-      if (this._entries[i][0] === n) {
-        return this._entries[i][1];
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i][0] === n) {
+        return entries[i][1];
       }
     }
     return null;
   };
 
   FormData.prototype.getAll = function (name) {
+    const entries = getFdEntries(this);
     const n = String(name);
     const res = [];
-    for (let i = 0; i < this._entries.length; i++) {
-      if (this._entries[i][0] === n) {
-        res.push(this._entries[i][1]);
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i][0] === n) {
+        res.push(entries[i][1]);
       }
     }
     return res;
   };
 
   FormData.prototype.has = function (name) {
+    const entries = getFdEntries(this);
     const n = String(name);
-    for (let i = 0; i < this._entries.length; i++) {
-      if (this._entries[i][0] === n) return true;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i][0] === n) return true;
     }
     return false;
   };
 
-  FormData.prototype.set = function (name, value, filename) {
+  FormData.prototype.set = function (name, value) {
+    const entries = getFdEntries(this);
+    const filename = arguments[2];
     const n = String(name);
     const val = normalizeFormDataValue(value, filename);
     let found = false;
     const newEntries = [];
-    for (let i = 0; i < this._entries.length; i++) {
-      if (this._entries[i][0] === n) {
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i][0] === n) {
         if (!found) {
           newEntries.push([n, val]);
           found = true;
         }
       } else {
-        newEntries.push(this._entries[i]);
+        newEntries.push(entries[i]);
       }
     }
     if (!found) {
       newEntries.push([n, val]);
     }
-    this._entries = newEntries;
+    _fdState.set(this, newEntries);
   };
 
   FormData.prototype.entries = function () {
-    return this._entries.slice()[Symbol.iterator]();
+    return getFdEntries(this).slice()[Symbol.iterator]();
   };
 
   FormData.prototype.keys = function () {
-    return this._entries.map(function (e) { return e[0]; })[Symbol.iterator]();
+    return getFdEntries(this).map(function (e) { return e[0]; })[Symbol.iterator]();
   };
 
   FormData.prototype.values = function () {
-    return this._entries.map(function (e) { return e[1]; })[Symbol.iterator]();
+    return getFdEntries(this).map(function (e) { return e[1]; })[Symbol.iterator]();
   };
 
   FormData.prototype.forEach = function (callback, thisArg) {
-    for (let i = 0; i < this._entries.length; i++) {
-      callback.call(thisArg, this._entries[i][1], this._entries[i][0], this);
+    const entries = getFdEntries(this);
+    for (let i = 0; i < entries.length; i++) {
+      callback.call(thisArg, entries[i][1], entries[i][0], this);
     }
   };
 
@@ -19779,13 +19984,43 @@
     return FILTER_ACCEPT;
   }
 
+  const _twState = new WeakMap();
+
   function TreeWalker(root, whatToShow, filter) {
     if (!root) throw new TypeError("Root node required");
-    this.root = root;
-    this.whatToShow = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
-    this.filter = filter || null;
-    this.currentNode = root;
+    _twState.set(this, {
+      root: root,
+      whatToShow: whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL,
+      filter: filter || null,
+      currentNode: root,
+    });
   }
+
+  ["root", "whatToShow", "filter"].forEach(function (prop) {
+    Object.defineProperty(TreeWalker.prototype, prop, {
+      get: function () {
+        const st = _twState.get(this);
+        if (!st) throw new TypeError("Illegal invocation");
+        return st[prop];
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  Object.defineProperty(TreeWalker.prototype, "currentNode", {
+    get: function () {
+      const st = _twState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.currentNode;
+    },
+    set: function (v) {
+      const st = _twState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      st.currentNode = v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
 
   TreeWalker.prototype.parentNode = function () {
     let node = this.currentNode;
@@ -19925,30 +20160,78 @@
   markNative(TreeWalker.prototype.nextNode, "nextNode");
   markNative(TreeWalker.prototype.previousNode, "previousNode");
 
+  const _niState = new WeakMap();
+  const _activeNodeIterators = [];
+
+  global.__capsurf_onNodeRemovedForIterators = function (parent, removedNode, prevSibling) {
+    for (let i = 0; i < _activeNodeIterators.length; i++) {
+      const ni = _activeNodeIterators[i];
+      const st = _niState.get(ni);
+      if (!st) continue;
+      const sameRef = st.referenceNode === removedNode ||
+        (st.referenceNode && removedNode && st.referenceNode._nid !== undefined && st.referenceNode._nid === removedNode._nid);
+      if (sameRef || (removedNode && typeof removedNode.contains === "function" && removedNode.contains(st.referenceNode))) {
+        st.referenceNode = prevSibling || parent;
+        st.pointerBeforeReferenceNode = false;
+        st.walker.currentNode = st.referenceNode;
+      }
+    }
+  };
+
   function NodeIterator(root, whatToShow, filter) {
     if (!root) throw new TypeError("Root node required");
-    this.root = root;
-    this.whatToShow = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
-    this.filter = filter || null;
-    this.referenceNode = root;
-    this.pointerBeforeReferenceNode = true;
-    this._walker = new TreeWalker(root, this.whatToShow, this.filter);
+    const wts = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
+    const flt = filter || null;
+    _niState.set(this, {
+      root: root,
+      whatToShow: wts,
+      filter: flt,
+      referenceNode: root,
+      pointerBeforeReferenceNode: true,
+      firstCall: true,
+      walker: new TreeWalker(root, wts, flt),
+    });
+    _activeNodeIterators.push(this);
   }
 
+  ["root", "whatToShow", "filter", "referenceNode", "pointerBeforeReferenceNode"].forEach(function (prop) {
+    Object.defineProperty(NodeIterator.prototype, prop, {
+      get: function () {
+        const st = _niState.get(this);
+        if (!st) throw new TypeError("Illegal invocation");
+        return st[prop];
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+
   NodeIterator.prototype.nextNode = function () {
-    const node = this._walker.nextNode();
+    const st = _niState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (st.firstCall) {
+      st.firstCall = false;
+      if (filterNode(st.root, st.whatToShow, st.filter) === FILTER_ACCEPT) {
+        st.referenceNode = st.root;
+        st.pointerBeforeReferenceNode = false;
+        return st.root;
+      }
+    }
+    const node = st.walker.nextNode();
     if (node) {
-      this.referenceNode = node;
-      this.pointerBeforeReferenceNode = false;
+      st.referenceNode = node;
+      st.pointerBeforeReferenceNode = false;
     }
     return node;
   };
 
   NodeIterator.prototype.previousNode = function () {
-    const node = this._walker.previousNode();
+    const st = _niState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    const node = st.walker.previousNode();
     if (node) {
-      this.referenceNode = node;
-      this.pointerBeforeReferenceNode = true;
+      st.referenceNode = node;
+      st.pointerBeforeReferenceNode = true;
     }
     return node;
   };
@@ -19967,16 +20250,80 @@
   // Aligned with vendor/kitesurf/packages/dom-shim/src/range.ts
 
   const _liveRanges = [];
+  const _rangeState = new WeakMap();
+
+  function AbstractRange() {
+    throw new TypeError("Illegal constructor");
+  }
+  AbstractRange.prototype = {};
+  Object.defineProperty(AbstractRange.prototype, "constructor", { value: AbstractRange, configurable: true, writable: true });
+  ["startContainer", "startOffset", "endContainer", "endOffset", "collapsed"].forEach(function (prop) {
+    Object.defineProperty(AbstractRange.prototype, prop, {
+      get: function () {
+        const st = _rangeState.get(this);
+        if (!st) throw new TypeError("Illegal invocation");
+        return st[prop];
+      },
+      set: function (v) {
+        const st = _rangeState.get(this);
+        if (st) st[prop] = v;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  markNative(AbstractRange, "AbstractRange");
+
+  function StaticRange(init) {
+    if (!init || typeof init !== "object") {
+      throw new TypeError("Failed to construct 'StaticRange': 1 argument required.");
+    }
+    const sc = init.startContainer;
+    const ec = init.endContainer;
+    const so = Number(init.startOffset) || 0;
+    const eo = Number(init.endOffset) || 0;
+    if (!sc || !ec) {
+      throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer are required.");
+    }
+    _rangeState.set(this, {
+      startContainer: sc,
+      startOffset: so,
+      endContainer: ec,
+      endOffset: eo,
+      collapsed: sc === ec && so === eo,
+    });
+  }
+  StaticRange.prototype = Object.create(AbstractRange.prototype);
+  StaticRange.prototype.constructor = StaticRange;
+  markNative(StaticRange, "StaticRange");
 
   function Range() {
-    this.startContainer = typeof document !== "undefined" ? document : null;
-    this.startOffset = 0;
-    this.endContainer = this.startContainer;
-    this.endOffset = 0;
-    this.collapsed = true;
-    this.commonAncestorContainer = this.startContainer;
+    const doc = typeof document !== "undefined" ? document : null;
+    _rangeState.set(this, {
+      startContainer: doc,
+      startOffset: 0,
+      endContainer: doc,
+      endOffset: 0,
+      collapsed: true,
+      commonAncestorContainer: doc,
+    });
     _liveRanges.push(this);
   }
+  Range.prototype = Object.create(AbstractRange.prototype);
+  Range.prototype.constructor = Range;
+  Object.defineProperty(Range.prototype, "commonAncestorContainer", {
+    get: function () {
+      const st = _rangeState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.commonAncestorContainer;
+    },
+    set: function (v) {
+      const st = _rangeState.get(this);
+      if (st) st.commonAncestorContainer = v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
 
   function getChildIndexInParent(node) {
     if (!node || !node.parentNode) return -1;
@@ -20102,7 +20449,7 @@
     this.startOffset = Number(offset || 0);
     this._updateState();
     if (this._selection) {
-      this._selection._onRangeMutated(this);
+      selOnRangeMutated(this._selection, this);
     }
   };
 
@@ -20111,7 +20458,7 @@
     this.endOffset = Number(offset || 0);
     this._updateState();
     if (this._selection) {
-      this._selection._onRangeMutated(this);
+      selOnRangeMutated(this._selection, this);
     }
   };
 
@@ -20164,7 +20511,7 @@
     this.endOffset = getNodeLength(node);
     this._updateState();
     if (this._selection) {
-      this._selection._onRangeMutated(this);
+      selOnRangeMutated(this._selection, this);
     }
   };
 
@@ -20528,43 +20875,50 @@
     }, 0);
   }
 
-  function Selection(doc) {
-    this._doc = doc || (typeof document !== "undefined" ? document : null);
-    this._range = null;
-    this._direction = "none";
+  const _selState = new WeakMap();
+
+  function selLive(sel) {
+    const st = _selState.get(sel);
+    if (!st || !st.range) return null;
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
+    if (st.range.startContainer && !isNodeInDocument(st.range.startContainer, doc)) {
+      if (st.range._selection === sel) st.range._selection = null;
+      st.range = null;
+      st.direction = "none";
+      return null;
+    }
+    if (st.range.endContainer && !isNodeInDocument(st.range.endContainer, doc)) {
+      if (st.range._selection === sel) st.range._selection = null;
+      st.range = null;
+      st.direction = "none";
+      return null;
+    }
+    return st.range;
   }
 
-  Selection.prototype._live = function () {
-    if (!this._range) return null;
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
-    if (this._range.startContainer && !isNodeInDocument(this._range.startContainer, doc)) {
-      if (this._range._selection === this) this._range._selection = null;
-      this._range = null;
-      this._direction = "none";
-      return null;
-    }
-    if (this._range.endContainer && !isNodeInDocument(this._range.endContainer, doc)) {
-      if (this._range._selection === this) this._range._selection = null;
-      this._range = null;
-      this._direction = "none";
-      return null;
-    }
-    return this._range;
-  };
+  function selScheduleChange(sel) {
+    const st = _selState.get(sel);
+    scheduleDocumentSelectionChange(st ? st.doc : null);
+  }
 
-  Selection.prototype._scheduleChange = function () {
-    scheduleDocumentSelectionChange(this._doc);
-  };
-
-  Selection.prototype._onRangeMutated = function (range) {
-    if (range === this._range) {
-      this._scheduleChange();
+  function selOnRangeMutated(sel, range) {
+    const st = _selState.get(sel);
+    if (st && range === st.range) {
+      selScheduleChange(sel);
     }
-  };
+  }
+
+  function Selection(doc) {
+    _selState.set(this, {
+      doc: doc || (typeof document !== "undefined" ? document : null),
+      range: null,
+      direction: "none",
+    });
+  }
 
   Object.defineProperty(Selection.prototype, "rangeCount", {
     get: function () {
-      return this._live() ? 1 : 0;
+      return selLive(this) ? 1 : 0;
     },
     configurable: true,
     enumerable: true,
@@ -20572,7 +20926,7 @@
 
   Object.defineProperty(Selection.prototype, "isCollapsed", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       return r ? r.collapsed : true;
     },
     configurable: true,
@@ -20581,7 +20935,7 @@
 
   Object.defineProperty(Selection.prototype, "type", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       if (!r) return "None";
       return r.collapsed ? "Caret" : "Range";
     },
@@ -20591,8 +20945,9 @@
 
   Object.defineProperty(Selection.prototype, "direction", {
     get: function () {
-      if (!this._live()) return "none";
-      return this._direction || "none";
+      if (!selLive(this)) return "none";
+      const st = _selState.get(this);
+      return (st && st.direction) || "none";
     },
     configurable: true,
     enumerable: true,
@@ -20600,9 +20955,10 @@
 
   Object.defineProperty(Selection.prototype, "anchorNode", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       if (!r) return null;
-      return this._direction === "backward" ? r.endContainer : r.startContainer;
+      const st = _selState.get(this);
+      return st && st.direction === "backward" ? r.endContainer : r.startContainer;
     },
     configurable: true,
     enumerable: true,
@@ -20610,9 +20966,10 @@
 
   Object.defineProperty(Selection.prototype, "anchorOffset", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       if (!r) return 0;
-      return this._direction === "backward" ? r.endOffset : r.startOffset;
+      const st = _selState.get(this);
+      return st && st.direction === "backward" ? r.endOffset : r.startOffset;
     },
     configurable: true,
     enumerable: true,
@@ -20620,9 +20977,10 @@
 
   Object.defineProperty(Selection.prototype, "focusNode", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       if (!r) return null;
-      return this._direction === "backward" ? r.startContainer : r.endContainer;
+      const st = _selState.get(this);
+      return st && st.direction === "backward" ? r.startContainer : r.endContainer;
     },
     configurable: true,
     enumerable: true,
@@ -20630,16 +20988,17 @@
 
   Object.defineProperty(Selection.prototype, "focusOffset", {
     get: function () {
-      const r = this._live();
+      const r = selLive(this);
       if (!r) return 0;
-      return this._direction === "backward" ? r.startOffset : r.endOffset;
+      const st = _selState.get(this);
+      return st && st.direction === "backward" ? r.startOffset : r.endOffset;
     },
     configurable: true,
     enumerable: true,
   });
 
   Selection.prototype.getRangeAt = function (index) {
-    const r = this._live();
+    const r = selLive(this);
     if (!r || index >>> 0 !== 0) {
       throw new DOMException("Selection.getRangeAt: index out of range", "IndexSizeError");
     }
@@ -20648,41 +21007,46 @@
 
   Selection.prototype.addRange = function (range) {
     if (!range) return;
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const st = _selState.get(this);
+    if (!st) return;
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(range.startContainer, doc) || !isNodeInDocument(range.endContainer, doc)) {
       return;
     }
-    if (this._live()) return;
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    if (selLive(this)) return;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = range;
+    st.range = range;
     range._selection = this;
-    this._direction = range.collapsed ? "none" : "forward";
-    this._scheduleChange();
+    st.direction = range.collapsed ? "none" : "forward";
+    selScheduleChange(this);
   };
 
   Selection.prototype.removeRange = function (range) {
-    const current = this._live();
-    if (current !== range) {
+    const st = _selState.get(this);
+    const current = selLive(this);
+    if (!st || current !== range) {
       throw new DOMException("removeRange: the given Range is not in the selection", "NotFoundError");
     }
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = null;
-    this._direction = "none";
-    this._scheduleChange();
+    st.range = null;
+    st.direction = "none";
+    selScheduleChange(this);
   };
 
   Selection.prototype.removeAllRanges = function () {
-    const hadRange = this._range !== null;
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    const st = _selState.get(this);
+    if (!st) return;
+    const hadRange = st.range !== null;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = null;
-    this._direction = "none";
-    if (hadRange) this._scheduleChange();
+    st.range = null;
+    st.direction = "none";
+    if (hadRange) selScheduleChange(this);
   };
 
   Selection.prototype.empty = function () {
@@ -20690,6 +21054,8 @@
   };
 
   Selection.prototype.collapse = function (node, offset) {
+    const st = _selState.get(this);
+    if (!st) return;
     if (node === null || node === undefined) {
       this.removeAllRanges();
       return;
@@ -20702,21 +21068,20 @@
     if (o > maxLen) {
       throw new DOMException("collapse: offset out of bounds", "IndexSizeError");
     }
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(node, doc)) {
-      // detached node: abort silently
       return;
     }
     const r = new Range();
     r.setStart(node, o);
     r.setEnd(node, o);
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = r;
+    st.range = r;
     r._selection = this;
-    this._direction = "none";
-    this._scheduleChange();
+    st.direction = "none";
+    selScheduleChange(this);
   };
 
   Selection.prototype.setPosition = function (node, offset) {
@@ -20724,21 +21089,22 @@
   };
 
   Selection.prototype.collapseToStart = function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) throw new DOMException("collapseToStart: there is no selection", "InvalidStateError");
     this.collapse(r.startContainer, r.startOffset);
   };
 
   Selection.prototype.collapseToEnd = function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) throw new DOMException("collapseToEnd: there is no selection", "InvalidStateError");
     this.collapse(r.endContainer, r.endOffset);
   };
 
   Selection.prototype.extend = function (node, offset) {
     if (!node) throw new TypeError("extend: node required");
-    const r = this._live();
-    if (!r) throw new DOMException("extend: there is no selection", "InvalidStateError");
+    const st = _selState.get(this);
+    const r = selLive(this);
+    if (!st || !r) throw new DOMException("extend: there is no selection", "InvalidStateError");
     const o = offset === undefined ? 0 : Number(offset);
     if (o < 0) {
       throw new DOMException("extend: offset out of bounds", "IndexSizeError");
@@ -20747,7 +21113,7 @@
     if (o > maxLen) {
       throw new DOMException("extend: offset out of bounds", "IndexSizeError");
     }
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(node, doc)) {
       return;
     }
@@ -20765,12 +21131,6 @@
       startOffset = o;
       endNode = anchorNode;
       endOffset = anchorOffset;
-    } else if (cmp < 0) {
-      isBackward = false;
-      startNode = anchorNode;
-      startOffset = anchorOffset;
-      endNode = node;
-      endOffset = o;
     } else {
       isBackward = false;
       startNode = anchorNode;
@@ -20781,12 +21141,14 @@
 
     r.setStart(startNode, startOffset);
     r.setEnd(endNode, endOffset);
-    this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
-    this._scheduleChange();
+    st.direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+    selScheduleChange(this);
   };
 
   Selection.prototype.setBaseAndExtent = function (anchorNode, anchorOffset, focusNode, focusOffset) {
     if (!anchorNode || !focusNode) throw new TypeError("setBaseAndExtent: nodes required");
+    const st = _selState.get(this);
+    if (!st) return;
     const ao = anchorOffset === undefined ? 0 : Number(anchorOffset);
     const fo = focusOffset === undefined ? 0 : Number(focusOffset);
     if (ao < 0 || ao > getNodeLength(anchorNode)) {
@@ -20795,7 +21157,7 @@
     if (fo < 0 || fo > getNodeLength(focusNode)) {
       throw new DOMException("setBaseAndExtent: focus offset out of bounds", "IndexSizeError");
     }
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(anchorNode, doc) || !isNodeInDocument(focusNode, doc)) {
       return;
     }
@@ -20818,36 +21180,39 @@
     const r = new Range();
     r.setStart(startNode, startOffset);
     r.setEnd(endNode, endOffset);
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = r;
+    st.range = r;
     r._selection = this;
-    this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
-    this._scheduleChange();
+    st.direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+    selScheduleChange(this);
   };
 
   Selection.prototype.selectAllChildren = function (node) {
     if (!node) throw new TypeError("selectAllChildren: node required");
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const st = _selState.get(this);
+    if (!st) return;
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(node, doc)) return;
     const childCount = node.childNodes ? node.childNodes.length : 0;
     const r = new Range();
     r.setStart(node, 0);
     r.setEnd(node, childCount);
-    if (this._range && this._range._selection === this) {
-      this._range._selection = null;
+    if (st.range && st.range._selection === this) {
+      st.range._selection = null;
     }
-    this._range = r;
+    st.range = r;
     r._selection = this;
-    this._direction = "none";
-    this._scheduleChange();
+    st.direction = "none";
+    selScheduleChange(this);
   };
 
   Selection.prototype.containsNode = function (node, allowPartialContainment) {
-    const r = this._live();
-    if (!r || !node) return false;
-    const doc = this._doc || (typeof document !== "undefined" ? document : null);
+    const st = _selState.get(this);
+    const r = selLive(this);
+    if (!st || !r || !node) return false;
+    const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(node, doc)) return false;
     const len = getNodeLength(node);
     const nodeStartCmp = compareBoundaryPoints(node, 0, r.endContainer, r.endOffset);
@@ -20860,7 +21225,7 @@
   };
 
   Selection.prototype.toString = function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return "";
     return r.toString ? r.toString() : "";
   };
@@ -22669,6 +23034,7 @@
       c = isAttr(n) ? null : n.firstChild;
     }
     while (c && !inModel(c)) c = c.nextSibling;
+    if (!c && n.nodeType === 9) return n.documentElement || null;
     return c || null;
   }
 
@@ -23282,82 +23648,103 @@
     if (!ok) throw new TypeError(`The result type is not ${what}.`);
   }
 
+  const _xrState = new WeakMap();
+  const _xeState = new WeakMap();
+
   function XPathResult(token, type = 0, value = false) {
     if (token !== INTERNAL_CONSTRUCT) throw new TypeError("Illegal constructor");
-    this._type = type;
-    this._value = value;
-    this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
-    this._cursor = 0;
+    _xrState.set(this, {
+      type: type,
+      value: value,
+      seq: (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0,
+      cursor: 0,
+    });
     xpathResultInstances.add(this);
   }
 
   XPathResult.prototype._refill = function (type, value) {
-    this._type = type;
-    this._value = value;
-    this._cursor = 0;
-    this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+    const st = _xrState.get(this);
+    if (st) {
+      st.type = type;
+      st.value = value;
+      st.cursor = 0;
+      st.seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+    }
   };
 
   Object.defineProperty(XPathResult.prototype, "resultType", {
     get: function () {
-      return this._type;
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.type;
     },
     configurable: true,
   });
 
   Object.defineProperty(XPathResult.prototype, "numberValue", {
     get: function () {
-      if (this._type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      if (st.type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
         if (isBoaLenient()) return undefined;
         need(false, "a number");
       }
-      return this._value;
+      return st.value;
     },
     configurable: true,
   });
 
   Object.defineProperty(XPathResult.prototype, "stringValue", {
     get: function () {
-      if (this._type !== XPATH_RESULT_TYPES.STRING_TYPE) {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      if (st.type !== XPATH_RESULT_TYPES.STRING_TYPE) {
         if (isBoaLenient()) return undefined;
         need(false, "a string");
       }
-      return this._value;
+      return st.value;
     },
     configurable: true,
   });
 
   Object.defineProperty(XPathResult.prototype, "booleanValue", {
     get: function () {
-      if (this._type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      if (st.type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
         if (isBoaLenient()) return undefined;
         need(false, "a boolean");
       }
-      return this._value;
+      return st.value;
     },
     configurable: true,
   });
 
   Object.defineProperty(XPathResult.prototype, "singleNodeValue", {
     get: function () {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
       const ok =
-        this._type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
-        this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
+        st.type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
+        st.type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
       if (!ok) {
         if (isBoaLenient()) return undefined;
         need(false, "a single node");
       }
-      return this._value[0] ?? null;
+      const n = st.value[0] ?? null;
+      return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
     },
     configurable: true,
   });
 
   Object.defineProperty(XPathResult.prototype, "invalidIteratorState", {
     get: function () {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
       return (
-        (this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
-          this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE) &&
-        ((typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0) !== this._seq
+        (st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+          st.type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE) &&
+        ((typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0) !== st.seq
       );
     },
     configurable: true,
@@ -23365,22 +23752,26 @@
 
   Object.defineProperty(XPathResult.prototype, "snapshotLength", {
     get: function () {
+      const st = _xrState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
       const ok =
-        this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
+        st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+        st.type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
       if (!ok) {
         if (isBoaLenient()) return undefined;
         need(false, "a snapshot");
       }
-      return this._value.length;
+      return st.value.length;
     },
     configurable: true,
   });
 
   XPathResult.prototype.iterateNext = function () {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     need(
-      this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
-        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE,
+      st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+        st.type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE,
       "an iterator"
     );
     if (this.invalidIteratorState) {
@@ -23389,16 +23780,20 @@
         "InvalidStateError"
       );
     }
-    return this._value[this._cursor++] ?? null;
+    const n = st.value[st.cursor++] ?? null;
+    return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
   };
 
   XPathResult.prototype.snapshotItem = function (index) {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     need(
-      this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
+      st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+        st.type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
       "a snapshot"
     );
-    return this._value[Number(index)] ?? null;
+    const n = st.value[Number(index)] ?? null;
+    return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
   };
 
   for (const [k, v] of Object.entries(XPATH_RESULT_TYPES)) {
@@ -23461,10 +23856,12 @@
 
   function XPathExpression(token, expr) {
     if (token !== INTERNAL_CONSTRUCT || !expr) throw new TypeError("Illegal constructor");
-    this._expr = expr;
+    _xeState.set(this, expr);
   }
 
   XPathExpression.prototype.evaluate = function (contextNode, type = 0, result = null) {
+    const expr = _xeState.get(this);
+    if (!expr) throw new TypeError("Illegal invocation");
     if (!isNode(contextNode)) {
       throw new TypeError(
         "Failed to execute 'evaluate' on 'XPathExpression': parameter 1 is not of type 'Node'."
@@ -23472,7 +23869,7 @@
     }
     const reuse = reusableResult(result);
     const ev = new Evaluation(rootOf(contextNode));
-    const value = evaluate(this._expr, { node: contextNode, pos: 1, size: 1, ev });
+    const value = evaluate(expr, { node: contextNode, pos: 1, size: 1, ev });
     return makeResult(isNodeSet(value) ? ev.sort(value) : value, type, reuse);
   };
 
@@ -30160,32 +30557,397 @@
     }
 
     // 6. Modern Observers (IntersectionObserver & ResizeObserver)
-    function IntersectionObserver(callback) {
-      if (typeof callback !== "function") throw new TypeError("Callback required");
-      this.callback = callback;
-    }
-    IntersectionObserver.prototype.observe = function (el) {
-      if (!el) return;
-      const cb = this.callback;
-      const obs = this;
-      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : { x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 };
-      Promise.resolve().then(function () {
+    const ioEntryState = new WeakMap();
+    function makeDOMRectReadOnly(x, y, w, h) {
+      const r = { x: x, y: y, width: w, height: h, top: y, left: x, right: x + w, bottom: y + h };
+      if (typeof DOMRectReadOnly === "function") {
         try {
-          cb([
-            {
-              target: el,
-              isIntersecting: true,
-              intersectionRatio: 1.0,
-              boundingClientRect: rect,
-              intersectionRect: rect,
-              rootBounds: { x: 0, y: 0, width: 1920, height: 1080, top: 0, left: 0, right: 1920, bottom: 1080 },
-            }
-          ], obs);
+          return new DOMRectReadOnly(x, y, w, h);
         } catch (e) {}
+      }
+      return r;
+    }
+    const ZERO_IO_RECT = makeDOMRectReadOnly(0, 0, 0, 0);
+
+    function IntersectionObserverEntry(init) {
+      if (!init || typeof init !== "object") {
+        throw new TypeError("Failed to construct 'IntersectionObserverEntry': 1 argument required.");
+      }
+      const toRect = function (r) {
+        if (!r || typeof r !== "object") return makeDOMRectReadOnly(0, 0, 0, 0);
+        const x = Number(r.x !== undefined ? r.x : (r.left || 0)) || 0;
+        const y = Number(r.y !== undefined ? r.y : (r.top || 0)) || 0;
+        const w = Number(r.width !== undefined ? r.width : ((Number(r.right || 0) - x))) || 0;
+        const h = Number(r.height !== undefined ? r.height : ((Number(r.bottom || 0) - y))) || 0;
+        return makeDOMRectReadOnly(x, y, w, h);
+      };
+      ioEntryState.set(this, {
+        time: Number(init.time || 0),
+        rootBounds: init.rootBounds ? toRect(init.rootBounds) : null,
+        boundingClientRect: toRect(init.boundingClientRect),
+        intersectionRect: toRect(init.intersectionRect),
+        isIntersecting: Boolean(init.isIntersecting),
+        isVisible: Boolean(init.isVisible),
+        intersectionRatio: Number(init.intersectionRatio || 0),
+        target: init.target || null,
       });
-    };
-    IntersectionObserver.prototype.unobserve = markNative(function () {}, "unobserve");
-    IntersectionObserver.prototype.disconnect = markNative(function () {}, "disconnect");
+    }
+    ["time", "rootBounds", "boundingClientRect", "intersectionRect", "isIntersecting", "isVisible", "intersectionRatio", "target"].forEach(function (prop) {
+      Object.defineProperty(IntersectionObserverEntry.prototype, prop, {
+        get: function () {
+          const st = ioEntryState.get(this);
+          if (!st) throw new TypeError("Illegal invocation");
+          return st[prop];
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    });
+    Object.defineProperty(IntersectionObserverEntry.prototype, Symbol.toStringTag, {
+      value: "IntersectionObserverEntry",
+      configurable: true,
+    });
+    markNative(IntersectionObserverEntry, "IntersectionObserverEntry");
+    global.IntersectionObserverEntry = IntersectionObserverEntry;
+
+    function parseIoMarginTokens(raw) {
+      const str = String(raw === undefined || raw === null ? "" : raw).trim();
+      const parts = str ? str.split(/\s+/) : ["0px"];
+      if (parts.length > 4) throw new DOMException("Failed to construct 'IntersectionObserver': Extra pixels in margin.", "SyntaxError");
+      const expand = function (arr) {
+        if (arr.length === 1) return [arr[0], arr[0], arr[0], arr[0]];
+        if (arr.length === 2) return [arr[0], arr[1], arr[0], arr[1]];
+        if (arr.length === 3) return [arr[0], arr[1], arr[2], arr[1]];
+        return [arr[0], arr[1], arr[2], arr[3]];
+      };
+      const tokens = expand(parts).map(function (tok) {
+        const m = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(px|%|in|cm|mm|q|pc|pt)?$/i.exec(tok);
+        if (!m) throw new DOMException("Failed to construct 'IntersectionObserver': Invalid margin token: " + tok, "SyntaxError");
+        const val = parseFloat(m[1]);
+        const unit = (m[2] || "px").toLowerCase();
+        if (unit === "%") return { value: val, unit: "%", text: val + "%" };
+        let px = val;
+        if (unit === "in") px = val * 96;
+        else if (unit === "cm") px = val * 96 / 2.54;
+        else if (unit === "mm") px = val * 96 / 25.4;
+        else if (unit === "q") px = val * 96 / 101.6;
+        else if (unit === "pc") px = val * 16;
+        else if (unit === "pt") px = val * 96 / 72;
+        const truncated = Math.trunc(px);
+        return { value: truncated, unit: "px", text: truncated + "px" };
+      });
+      return {
+        tokens: tokens,
+        text: tokens.map(function (t) { return t.text; }).join(" "),
+      };
+    }
+
+    function evalIoMarginPx(token, refSize) {
+      if (token.unit === "%") return (token.value / 100) * refSize;
+      return token.value;
+    }
+
+    function clipIoRect(a, b) {
+      const left = Math.max(a.left, b.left);
+      const top = Math.max(a.top, b.top);
+      const right = Math.min(a.right, b.right);
+      const bottom = Math.min(a.bottom, b.bottom);
+      if (right < left || bottom < top) return null;
+      return { left: left, top: top, right: right, bottom: bottom, width: right - left, height: bottom - top };
+    }
+
+    function isIoNodeBoxless(el) {
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        try {
+          const cs = typeof getComputedStyle === "function" ? getComputedStyle(cur) : null;
+          if (cs && String(cs.display || "").trim().toLowerCase() === "none") return true;
+        } catch (e) {}
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return false;
+    }
+
+    const ioStateMap = new WeakMap();
+    const activeIntersectionObservers = new Set();
+    let ioPollTimer = null;
+
+    function evaluateIntersectionObserver(obs) {
+      const st = ioStateMap.get(obs);
+      if (!st || st.targets.size === 0) return;
+      const doc = global.document || (typeof document !== "undefined" ? document : null);
+      const vw = typeof global.innerWidth === "number" ? global.innerWidth : 1920;
+      const vh = typeof global.innerHeight === "number" ? global.innerHeight : 1080;
+
+      let baseRootRect;
+      if (!st.root || st.root === doc) {
+        baseRootRect = { left: 0, top: 0, right: vw, bottom: vh, width: vw, height: vh };
+      } else if (st.root.getBoundingClientRect) {
+        const rr = st.root.getBoundingClientRect();
+        baseRootRect = { left: rr.left, top: rr.top, right: rr.right, bottom: rr.bottom, width: rr.width, height: rr.height };
+      } else {
+        baseRootRect = { left: 0, top: 0, right: vw, bottom: vh, width: vw, height: vh };
+      }
+
+      const mTop = evalIoMarginPx(st.rootMarginParsed.tokens[0], baseRootRect.height);
+      const mRight = evalIoMarginPx(st.rootMarginParsed.tokens[1], baseRootRect.width);
+      const mBottom = evalIoMarginPx(st.rootMarginParsed.tokens[2], baseRootRect.height);
+      const mLeft = evalIoMarginPx(st.rootMarginParsed.tokens[3], baseRootRect.width);
+      const expandedRoot = {
+        left: baseRootRect.left - mLeft,
+        top: baseRootRect.top - mTop,
+        right: baseRootRect.right + mRight,
+        bottom: baseRootRect.bottom + mBottom,
+      };
+      expandedRoot.width = Math.max(0, expandedRoot.right - expandedRoot.left);
+      expandedRoot.height = Math.max(0, expandedRoot.bottom - expandedRoot.top);
+
+      const newEntries = [];
+      for (const [target, tInfo] of st.targets.entries()) {
+        if (!target || !target.isConnected || (doc && target.ownerDocument && target.ownerDocument !== doc)) {
+          continue;
+        }
+        if (isIoNodeBoxless(target)) {
+          const key = "boxless";
+          if (tInfo.lastKey !== key) {
+            tInfo.lastKey = key;
+            newEntries.push(new IntersectionObserverEntry({
+              time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+              rootBounds: ZERO_IO_RECT,
+              boundingClientRect: ZERO_IO_RECT,
+              intersectionRect: ZERO_IO_RECT,
+              isIntersecting: false,
+              isVisible: false,
+              intersectionRatio: 0,
+              target: target,
+            }));
+          }
+          continue;
+        }
+
+        const rawRect = target.getBoundingClientRect ? target.getBoundingClientRect() : { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        const targetRect = {
+          left: Number(rawRect.left || 0),
+          top: Number(rawRect.top || 0),
+          right: Number(rawRect.right !== undefined ? rawRect.right : (Number(rawRect.left || 0) + Number(rawRect.width || 0))),
+          bottom: Number(rawRect.bottom !== undefined ? rawRect.bottom : (Number(rawRect.top || 0) + Number(rawRect.height || 0))),
+          width: Number(rawRect.width || 0),
+          height: Number(rawRect.height || 0),
+        };
+
+        let inRootTree = true;
+        if (st.root && st.root !== doc && st.root.nodeType === 1) {
+          inRootTree = typeof st.root.contains === "function" ? st.root.contains(target) : false;
+        }
+
+        let clipped = inRootTree ? { left: targetRect.left, top: targetRect.top, right: targetRect.right, bottom: targetRect.bottom, width: targetRect.width, height: targetRect.height } : null;
+        if (clipped) {
+          // Clip against ancestor scroll containers and clip-path insets, grown by scrollMargin
+          let anc = target.parentElement;
+          while (anc && anc.nodeType === 1 && anc !== st.root) {
+            let ancCs = null;
+            try { ancCs = typeof getComputedStyle === "function" ? getComputedStyle(anc) : null; } catch (e) {}
+            if (ancCs) {
+              const ov = String(ancCs.overflow || "").toLowerCase();
+              const ovX = String(ancCs.overflowX || "").toLowerCase();
+              const ovY = String(ancCs.overflowY || "").toLowerCase();
+              const isClipped = ov === "hidden" || ov === "scroll" || ov === "auto" || ov === "clip" ||
+                ovX === "hidden" || ovX === "scroll" || ovX === "auto" || ovX === "clip" ||
+                ovY === "hidden" || ovY === "scroll" || ovY === "auto" || ovY === "clip";
+              if (isClipped && anc.getBoundingClientRect) {
+                const ar = anc.getBoundingClientRect();
+                const smT = evalIoMarginPx(st.scrollMarginParsed.tokens[0], ar.height);
+                const smR = evalIoMarginPx(st.scrollMarginParsed.tokens[1], ar.width);
+                const smB = evalIoMarginPx(st.scrollMarginParsed.tokens[2], ar.height);
+                const smL = evalIoMarginPx(st.scrollMarginParsed.tokens[3], ar.width);
+                clipped = clipIoRect(clipped, {
+                  left: ar.left - smL,
+                  top: ar.top - smT,
+                  right: ar.right + smR,
+                  bottom: ar.bottom + smB,
+                });
+                if (!clipped) break;
+              }
+              const cp = String(ancCs.clipPath || ancCs["clip-path"] || "").trim();
+              const insetMatch = /^inset\(([^)]+)\)/i.exec(cp);
+              if (insetMatch && anc.getBoundingClientRect) {
+                const ar = anc.getBoundingClientRect();
+                const insParts = insetMatch[1].trim().split(/\s+/).map(function (v) { return parseFloat(v) || 0; });
+                const iT = insParts[0] || 0;
+                const iR = insParts.length > 1 ? insParts[1] : iT;
+                const iB = insParts.length > 2 ? insParts[2] : iT;
+                const iL = insParts.length > 3 ? insParts[3] : iR;
+                const smT = evalIoMarginPx(st.scrollMarginParsed.tokens[0], ar.height);
+                const smR = evalIoMarginPx(st.scrollMarginParsed.tokens[1], ar.width);
+                const smB = evalIoMarginPx(st.scrollMarginParsed.tokens[2], ar.height);
+                const smL = evalIoMarginPx(st.scrollMarginParsed.tokens[3], ar.width);
+                clipped = clipIoRect(clipped, {
+                  left: ar.left + iL - smL,
+                  top: ar.top + iT - smT,
+                  right: ar.right - iR + smR,
+                  bottom: ar.bottom - iB + smB,
+                });
+                if (!clipped) break;
+              }
+            }
+            anc = anc.parentElement;
+          }
+        }
+        if (clipped) {
+          clipped = clipIoRect(clipped, expandedRoot);
+        }
+
+        const isIntersecting = Boolean(clipped);
+        const iRect = clipped
+          ? makeDOMRectReadOnly(clipped.left, clipped.top, clipped.width, clipped.height)
+          : ZERO_IO_RECT;
+        const targetArea = targetRect.width * targetRect.height;
+        let ratio = 0;
+        if (isIntersecting) {
+          if (targetArea > 0) {
+            ratio = Math.min(1, Math.max(0, (clipped.width * clipped.height) / targetArea));
+          } else {
+            ratio = 1;
+          }
+        }
+
+        let threshIdx = -1;
+        for (let ti = 0; ti < st.thresholds.length; ti++) {
+          const th = st.thresholds[ti];
+          if (th === 0 ? isIntersecting : ratio >= th) threshIdx = ti;
+        }
+        const key = isIntersecting + "|" + threshIdx + "|" + targetRect.top + "," + targetRect.left + "," + targetRect.width + "," + targetRect.height;
+        if (tInfo.lastKey !== key) {
+          tInfo.lastKey = key;
+          newEntries.push(new IntersectionObserverEntry({
+            time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+            rootBounds: makeDOMRectReadOnly(expandedRoot.left, expandedRoot.top, expandedRoot.width, expandedRoot.height),
+            boundingClientRect: makeDOMRectReadOnly(targetRect.left, targetRect.top, targetRect.width, targetRect.height),
+            intersectionRect: iRect,
+            isIntersecting: isIntersecting,
+            isVisible: false,
+            intersectionRatio: ratio,
+            target: target,
+          }));
+        }
+      }
+
+      if (newEntries.length > 0) {
+        try {
+          st.callback.call(obs, newEntries, obs);
+        } catch (e) {
+          if (typeof global.onerror === "function") {
+            try { global.onerror(e && e.message ? e.message : String(e), "", 0, 0, e); } catch (e2) {}
+          }
+        }
+      }
+    }
+
+    function scheduleIoTick() {
+      if (ioPollTimer !== null) return;
+      if (activeIntersectionObservers.size === 0) return;
+      ioPollTimer = setTimeout(function () {
+        ioPollTimer = null;
+        for (const obs of Array.from(activeIntersectionObservers)) {
+          evaluateIntersectionObserver(obs);
+        }
+        if (activeIntersectionObservers.size > 0) {
+          scheduleIoTick();
+        }
+      }, 50);
+    }
+
+    function IntersectionObserver(callback, options) {
+      if (typeof callback !== "function") {
+        throw new TypeError("Failed to construct 'IntersectionObserver': parameter 1 is not of type 'Function'.");
+      }
+      const opts = options && typeof options === "object" ? options : {};
+      const root = opts.root !== undefined ? opts.root : null;
+      const rootMarginParsed = parseIoMarginTokens(opts.rootMargin);
+      const scrollMarginParsed = parseIoMarginTokens(opts.scrollMargin);
+      let threshArr;
+      if (opts.threshold === undefined) {
+        threshArr = [0];
+      } else if (Array.isArray(opts.threshold)) {
+        threshArr = opts.threshold.length === 0 ? [0] : opts.threshold.map(Number);
+      } else {
+        threshArr = [Number(opts.threshold)];
+      }
+      for (let i = 0; i < threshArr.length; i++) {
+        if (isNaN(threshArr[i]) || threshArr[i] < 0 || threshArr[i] > 1) {
+          throw new RangeError("Failed to construct 'IntersectionObserver': Thresholds must be in the range [0, 1].");
+        }
+      }
+      threshArr = Array.from(new Set(threshArr)).sort(function (a, b) { return a - b; });
+      ioStateMap.set(this, {
+        callback: callback,
+        root: root,
+        rootMarginParsed: rootMarginParsed,
+        scrollMarginParsed: scrollMarginParsed,
+        thresholds: Object.freeze(threshArr),
+        targets: new Map(),
+        records: [],
+        pendingMicrotask: false,
+      });
+    }
+    Object.defineProperty(IntersectionObserver.prototype, "root", {
+      get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.root; },
+      configurable: true, enumerable: true,
+    });
+    Object.defineProperty(IntersectionObserver.prototype, "rootMargin", {
+      get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.rootMarginParsed.text; },
+      configurable: true, enumerable: true,
+    });
+    Object.defineProperty(IntersectionObserver.prototype, "scrollMargin", {
+      get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.scrollMarginParsed.text; },
+      configurable: true, enumerable: true,
+    });
+    Object.defineProperty(IntersectionObserver.prototype, "thresholds", {
+      get: function () { const st = ioStateMap.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.thresholds; },
+      configurable: true, enumerable: true,
+    });
+    IntersectionObserver.prototype.observe = markNative(function (el) {
+      const st = ioStateMap.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      if (!el || typeof el !== "object") return;
+      if (!st.targets.has(el)) {
+        st.targets.set(el, { lastKey: null });
+      }
+      activeIntersectionObservers.add(this);
+      const obs = this;
+      if (!st.pendingMicrotask) {
+        st.pendingMicrotask = true;
+        setTimeout(function () {
+          st.pendingMicrotask = false;
+          evaluateIntersectionObserver(obs);
+        }, 0);
+      }
+      scheduleIoTick();
+    }, "observe");
+    IntersectionObserver.prototype.unobserve = markNative(function (el) {
+      const st = ioStateMap.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      st.targets.delete(el);
+      if (st.targets.size === 0) activeIntersectionObservers.delete(this);
+    }, "unobserve");
+    IntersectionObserver.prototype.disconnect = markNative(function () {
+      const st = ioStateMap.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      st.targets.clear();
+      st.records.length = 0;
+      activeIntersectionObservers.delete(this);
+    }, "disconnect");
+    IntersectionObserver.prototype.takeRecords = markNative(function () {
+      const st = ioStateMap.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      const out = st.records.slice();
+      st.records.length = 0;
+      return out;
+    }, "takeRecords");
+    Object.defineProperty(IntersectionObserver.prototype, Symbol.toStringTag, {
+      value: "IntersectionObserver",
+      configurable: true,
+    });
     markNative(IntersectionObserver, "IntersectionObserver");
     global.IntersectionObserver = IntersectionObserver;
 
@@ -30390,13 +31152,7 @@
       globalThis.prompt = promptFn;
     }
 
-    // 10. CSSOM getComputedStyle & CSSStyleDeclaration
-    function CSSStyleDeclaration() {}
-    Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
-      value: "CSSStyleDeclaration",
-      configurable: true,
-    });
-    markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
+    // 10. CSSOM getComputedStyle & CSSStyleDeclaration (uses global.CSSStyleDeclaration from cssom.js)
 
     function splitCssDeclarations(block) {
       const parts = [];
@@ -30753,9 +31509,10 @@
     }
 
     function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
+      const cleanCss = String(cssText || "").replace(/\/\*[\s\S]*?\*\//g, "");
       const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
       if (typeof parseFn === "function") {
-        const rules = parseFn(cssText);
+        const rules = parseFn(cleanCss);
         for (let i = 0; i < rules.length; i++) {
           const r = rules[i];
           if (!r) continue;
@@ -37996,7 +38753,10 @@
     global.NodeIterator = NodeIterator;
 
     // 6. Expose Range and Selection
+    global.AbstractRange = AbstractRange;
+    global.StaticRange = StaticRange;
     global.Range = Range;
+    global.__capsurf_upgradeElement = upgradeElement;
     global.Selection = Selection;
 
     // 7. Expose DOMParser
@@ -38078,6 +38838,41 @@
     if (global.Element) {
       installElementExtensions(global.Element.prototype);
       installHtmlElementExtensions(global.Element.prototype);
+
+      if (typeof global.Element.prototype.cloneNode === "function") {
+        const origElCloneNode = global.Element.prototype.cloneNode;
+        global.Element.prototype.cloneNode = markNative(function (deep) {
+          const cloned = origElCloneNode.call(this, Boolean(deep));
+          return cloned ? upgradeElement(cloned) : cloned;
+        }, "cloneNode");
+      }
+
+      const outerHtmlDesc = Object.getOwnPropertyDescriptor(global.Element.prototype, "outerHTML");
+      if (outerHtmlDesc && typeof outerHtmlDesc.get === "function" && !outerHtmlDesc.set) {
+        const origOuterGet = outerHtmlDesc.get;
+        Object.defineProperty(global.Element.prototype, "outerHTML", {
+          get: origOuterGet,
+          set: function (val) {
+            const parent = this.parentNode;
+            if (!parent) return;
+            const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+            const nativeCreate = global.__capsurf_native_createElement;
+            const temp = (doc && typeof nativeCreate === "function")
+              ? nativeCreate.call(doc, "div")
+              : (doc ? doc.createElement("div") : null);
+            if (!temp) return;
+            temp.innerHTML = String(val == null ? "" : val);
+            while (temp.firstChild) {
+              const ch = temp.firstChild;
+              try { temp.removeChild(ch); } catch (e) {}
+              parent.insertBefore(ch, this);
+            }
+            parent.removeChild(this);
+          },
+          configurable: true,
+          enumerable: true,
+        });
+      }
 
       global.Element.prototype.animate = markNative(function (keyframes, options) {
         return animateElement(this, keyframes, options);
@@ -38405,6 +39200,16 @@
           return el;
         };
         markNative(docProto.createElement, "createElement");
+        global.__capsurf_native_createElement = docProto.createElement;
+        if (typeof docProto.createDocumentFragment === "function") {
+          global.__capsurf_native_createDocumentFragment = docProto.createDocumentFragment;
+        }
+        if (typeof docProto.createTextNode === "function") {
+          global.__capsurf_native_createTextNode = docProto.createTextNode;
+        }
+        if (typeof docProto.createComment === "function") {
+          global.__capsurf_native_createComment = docProto.createComment;
+        }
         if (global.document) {
           global.document.createElement = docProto.createElement;
         }
@@ -38471,8 +39276,27 @@
         return el;
       };
       markNative(docProto.createElementNS, "createElementNS");
+      global.__capsurf_native_createElementNS = docProto.createElementNS;
       if (global.document) {
         global.document.createElementNS = docProto.createElementNS;
+      }
+
+      if (typeof docProto.adoptNode !== "function") {
+        docProto.adoptNode = markNative(function (node) {
+          if (!node || typeof node !== "object") return node;
+          if (node.parentNode && typeof node.parentNode.removeChild === "function") {
+            try { node.parentNode.removeChild(node); } catch (e) {}
+          }
+          try {
+            Object.defineProperty(node, "ownerDocument", { value: this, writable: true, configurable: true });
+          } catch (e) {
+            try { node.ownerDocument = this; } catch (e2) {}
+          }
+          return node;
+        }, "adoptNode");
+        if (global.document && !global.document.adoptNode) {
+          global.document.adoptNode = docProto.adoptNode;
+        }
       }
 
       if (docProto.getElementById) {
@@ -39575,9 +40399,12 @@
             let cached = implCache.get(this);
             if (cached) return cached;
             const impl = origImplGet.call(this);
-            if (impl && typeof impl.createHTMLDocument === "function") {
+            const implProto = Object.getPrototypeOf(impl);
+            if (impl && typeof impl.createHTMLDocument === "function" && implProto && !implProto.__capsurfWrapped) {
+              implProto.__capsurfWrapped = true;
               const origCreateHTMLDoc = impl.createHTMLDocument;
-              impl.createHTMLDocument = markNative(function (title) {
+              try { delete impl.createHTMLDocument; } catch (e) {}
+              implProto.createHTMLDocument = markNative(function (title) {
                 const doc = origCreateHTMLDoc.apply(this, arguments);
                 if (doc && typeof doc === "object") {
                   const setDocOwner = function (node) {
@@ -39636,6 +40463,44 @@
                 }
                 return doc;
               }, "createHTMLDocument");
+            }
+            if (impl && typeof impl.createDocument !== "function" && implProto) {
+              const createHtmlDocFn = implProto.createHTMLDocument || impl.createHTMLDocument;
+              implProto.createDocument = markNative(function (namespaceURI, qualifiedNameStr, _doctype) {
+                const doc = typeof createHtmlDocFn === "function" ? createHtmlDocFn.call(this, "") : Object.create(docProto);
+                if (doc && typeof doc === "object") {
+                  let rootEl = null;
+                  if (qualifiedNameStr) {
+                    const ns = namespaceURI !== undefined && namespaceURI !== null ? String(namespaceURI) : null;
+                    const nativeNS = global.__capsurf_native_createElementNS || doc.createElementNS;
+                    if (typeof nativeNS === "function") {
+                      rootEl = nativeNS.call(doc, ns, String(qualifiedNameStr));
+                    }
+                    if (rootEl) {
+                      try {
+                        Object.defineProperty(rootEl, "ownerDocument", { value: doc, writable: true, configurable: true });
+                      } catch (e) {}
+                    }
+                  }
+                  try {
+                    Object.defineProperty(doc, "documentElement", { value: rootEl, writable: true, configurable: true });
+                  } catch (e) {}
+                }
+                return doc;
+              }, "createDocument");
+            }
+            if (impl && typeof impl.createDocumentType !== "function" && implProto) {
+              const ownerDoc = this;
+              implProto.createDocumentType = markNative(function (qualifiedNameStr, publicId, systemId) {
+                const dt = Object.create(global.DocumentType ? global.DocumentType.prototype : (global.Node ? global.Node.prototype : Object.prototype));
+                dt.nodeType = 10;
+                dt.nodeName = String(qualifiedNameStr || "");
+                dt.name = String(qualifiedNameStr || "");
+                dt.publicId = String(publicId || "");
+                dt.systemId = String(systemId || "");
+                dt.ownerDocument = ownerDoc;
+                return dt;
+              }, "createDocumentType");
             }
             implCache.set(this, impl);
             return impl;
@@ -39697,6 +40562,21 @@
       if (typeof HTMLElement !== "undefined" && HTMLElement.prototype) markObjMembers(HTMLElement.prototype);
       if (typeof EventTarget !== "undefined" && EventTarget.prototype) markObjMembers(EventTarget.prototype);
     })();
+    try {
+      if (Object.prototype.hasOwnProperty.call(Object.prototype, "fetch")) {
+        delete Object.prototype.fetch;
+      }
+      Object.defineProperty(Object.prototype, "fetch", {
+        get: function () { return undefined; },
+        set: function (v) {
+          if (this !== Object.prototype) {
+            Object.defineProperty(this, "fetch", { value: v, writable: true, enumerable: true, configurable: true });
+          }
+        },
+        enumerable: false,
+        configurable: true,
+      });
+    } catch (e) {}
   }
 
   // Auto-install on globalThis/window

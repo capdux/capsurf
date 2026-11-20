@@ -30,8 +30,17 @@ function isFormControlActuallyDisabled(el) {
   return false;
 }
 
-function FormData(form, submitter) {
-  this._entries = []; // Array of [name, value]
+const _fdState = new WeakMap();
+function getFdEntries(fd) {
+  const entries = _fdState.get(fd);
+  if (!entries) throw new TypeError("Illegal invocation");
+  return entries;
+}
+
+function FormData(form) {
+  const submitter = arguments[1];
+  const entries = []; // Array of [name, value]
+  _fdState.set(this, entries);
   if (form && (form.tagName || "").toUpperCase() === "FORM") {
     if (form._constructingEntryList) {
       const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
@@ -120,82 +129,92 @@ function normalizeFormDataValue(value, filename) {
   return String(value);
 }
 
-FormData.prototype.append = function (name, value, filename) {
-  this._entries.push([String(name), normalizeFormDataValue(value, filename)]);
+FormData.prototype.append = function (name, value) {
+  const entries = getFdEntries(this);
+  const filename = arguments[2];
+  entries.push([String(name), normalizeFormDataValue(value, filename)]);
 };
 
 FormData.prototype.delete = function (name) {
+  const entries = getFdEntries(this);
   const n = String(name);
-  this._entries = this._entries.filter(function (entry) {
+  const kept = entries.filter(function (entry) {
     return entry[0] !== n;
   });
+  _fdState.set(this, kept);
 };
 
 FormData.prototype.get = function (name) {
+  const entries = getFdEntries(this);
   const n = String(name);
-  for (let i = 0; i < this._entries.length; i++) {
-    if (this._entries[i][0] === n) {
-      return this._entries[i][1];
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i][0] === n) {
+      return entries[i][1];
     }
   }
   return null;
 };
 
 FormData.prototype.getAll = function (name) {
+  const entries = getFdEntries(this);
   const n = String(name);
   const res = [];
-  for (let i = 0; i < this._entries.length; i++) {
-    if (this._entries[i][0] === n) {
-      res.push(this._entries[i][1]);
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i][0] === n) {
+      res.push(entries[i][1]);
     }
   }
   return res;
 };
 
 FormData.prototype.has = function (name) {
+  const entries = getFdEntries(this);
   const n = String(name);
-  for (let i = 0; i < this._entries.length; i++) {
-    if (this._entries[i][0] === n) return true;
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i][0] === n) return true;
   }
   return false;
 };
 
-FormData.prototype.set = function (name, value, filename) {
+FormData.prototype.set = function (name, value) {
+  const entries = getFdEntries(this);
+  const filename = arguments[2];
   const n = String(name);
   const val = normalizeFormDataValue(value, filename);
   let found = false;
   const newEntries = [];
-  for (let i = 0; i < this._entries.length; i++) {
-    if (this._entries[i][0] === n) {
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i][0] === n) {
       if (!found) {
         newEntries.push([n, val]);
         found = true;
       }
     } else {
-      newEntries.push(this._entries[i]);
+      newEntries.push(entries[i]);
     }
   }
   if (!found) {
     newEntries.push([n, val]);
   }
-  this._entries = newEntries;
+  _fdState.set(this, newEntries);
 };
 
 FormData.prototype.entries = function () {
-  return this._entries.slice()[Symbol.iterator]();
+  return getFdEntries(this).slice()[Symbol.iterator]();
 };
 
 FormData.prototype.keys = function () {
-  return this._entries.map(function (e) { return e[0]; })[Symbol.iterator]();
+  return getFdEntries(this).map(function (e) { return e[0]; })[Symbol.iterator]();
 };
 
 FormData.prototype.values = function () {
-  return this._entries.map(function (e) { return e[1]; })[Symbol.iterator]();
+  return getFdEntries(this).map(function (e) { return e[1]; })[Symbol.iterator]();
 };
 
 FormData.prototype.forEach = function (callback, thisArg) {
-  for (let i = 0; i < this._entries.length; i++) {
-    callback.call(thisArg, this._entries[i][1], this._entries[i][0], this);
+  const entries = getFdEntries(this);
+  for (let i = 0; i < entries.length; i++) {
+    callback.call(thisArg, entries[i][1], entries[i][0], this);
   }
 };
 

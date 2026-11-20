@@ -147,7 +147,10 @@ function installShim(global) {
   global.NodeIterator = NodeIterator;
 
   // 6. Expose Range and Selection
+  global.AbstractRange = AbstractRange;
+  global.StaticRange = StaticRange;
   global.Range = Range;
+  global.__capsurf_upgradeElement = upgradeElement;
   global.Selection = Selection;
 
   // 7. Expose DOMParser
@@ -229,6 +232,41 @@ function installShim(global) {
   if (global.Element) {
     installElementExtensions(global.Element.prototype);
     installHtmlElementExtensions(global.Element.prototype);
+
+    if (typeof global.Element.prototype.cloneNode === "function") {
+      const origElCloneNode = global.Element.prototype.cloneNode;
+      global.Element.prototype.cloneNode = markNative(function (deep) {
+        const cloned = origElCloneNode.call(this, Boolean(deep));
+        return cloned ? upgradeElement(cloned) : cloned;
+      }, "cloneNode");
+    }
+
+    const outerHtmlDesc = Object.getOwnPropertyDescriptor(global.Element.prototype, "outerHTML");
+    if (outerHtmlDesc && typeof outerHtmlDesc.get === "function" && !outerHtmlDesc.set) {
+      const origOuterGet = outerHtmlDesc.get;
+      Object.defineProperty(global.Element.prototype, "outerHTML", {
+        get: origOuterGet,
+        set: function (val) {
+          const parent = this.parentNode;
+          if (!parent) return;
+          const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+          const nativeCreate = global.__capsurf_native_createElement;
+          const temp = (doc && typeof nativeCreate === "function")
+            ? nativeCreate.call(doc, "div")
+            : (doc ? doc.createElement("div") : null);
+          if (!temp) return;
+          temp.innerHTML = String(val == null ? "" : val);
+          while (temp.firstChild) {
+            const ch = temp.firstChild;
+            try { temp.removeChild(ch); } catch (e) {}
+            parent.insertBefore(ch, this);
+          }
+          parent.removeChild(this);
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    }
 
     global.Element.prototype.animate = markNative(function (keyframes, options) {
       return animateElement(this, keyframes, options);
@@ -556,6 +594,16 @@ function installShim(global) {
         return el;
       };
       markNative(docProto.createElement, "createElement");
+      global.__capsurf_native_createElement = docProto.createElement;
+      if (typeof docProto.createDocumentFragment === "function") {
+        global.__capsurf_native_createDocumentFragment = docProto.createDocumentFragment;
+      }
+      if (typeof docProto.createTextNode === "function") {
+        global.__capsurf_native_createTextNode = docProto.createTextNode;
+      }
+      if (typeof docProto.createComment === "function") {
+        global.__capsurf_native_createComment = docProto.createComment;
+      }
       if (global.document) {
         global.document.createElement = docProto.createElement;
       }
@@ -622,8 +670,27 @@ function installShim(global) {
       return el;
     };
     markNative(docProto.createElementNS, "createElementNS");
+    global.__capsurf_native_createElementNS = docProto.createElementNS;
     if (global.document) {
       global.document.createElementNS = docProto.createElementNS;
+    }
+
+    if (typeof docProto.adoptNode !== "function") {
+      docProto.adoptNode = markNative(function (node) {
+        if (!node || typeof node !== "object") return node;
+        if (node.parentNode && typeof node.parentNode.removeChild === "function") {
+          try { node.parentNode.removeChild(node); } catch (e) {}
+        }
+        try {
+          Object.defineProperty(node, "ownerDocument", { value: this, writable: true, configurable: true });
+        } catch (e) {
+          try { node.ownerDocument = this; } catch (e2) {}
+        }
+        return node;
+      }, "adoptNode");
+      if (global.document && !global.document.adoptNode) {
+        global.document.adoptNode = docProto.adoptNode;
+      }
     }
 
     if (docProto.getElementById) {
@@ -1726,9 +1793,12 @@ function installShim(global) {
           let cached = implCache.get(this);
           if (cached) return cached;
           const impl = origImplGet.call(this);
-          if (impl && typeof impl.createHTMLDocument === "function") {
+          const implProto = Object.getPrototypeOf(impl);
+          if (impl && typeof impl.createHTMLDocument === "function" && implProto && !implProto.__capsurfWrapped) {
+            implProto.__capsurfWrapped = true;
             const origCreateHTMLDoc = impl.createHTMLDocument;
-            impl.createHTMLDocument = markNative(function (title) {
+            try { delete impl.createHTMLDocument; } catch (e) {}
+            implProto.createHTMLDocument = markNative(function (title) {
               const doc = origCreateHTMLDoc.apply(this, arguments);
               if (doc && typeof doc === "object") {
                 const setDocOwner = function (node) {
@@ -1787,6 +1857,44 @@ function installShim(global) {
               }
               return doc;
             }, "createHTMLDocument");
+          }
+          if (impl && typeof impl.createDocument !== "function" && implProto) {
+            const createHtmlDocFn = implProto.createHTMLDocument || impl.createHTMLDocument;
+            implProto.createDocument = markNative(function (namespaceURI, qualifiedNameStr, _doctype) {
+              const doc = typeof createHtmlDocFn === "function" ? createHtmlDocFn.call(this, "") : Object.create(docProto);
+              if (doc && typeof doc === "object") {
+                let rootEl = null;
+                if (qualifiedNameStr) {
+                  const ns = namespaceURI !== undefined && namespaceURI !== null ? String(namespaceURI) : null;
+                  const nativeNS = global.__capsurf_native_createElementNS || doc.createElementNS;
+                  if (typeof nativeNS === "function") {
+                    rootEl = nativeNS.call(doc, ns, String(qualifiedNameStr));
+                  }
+                  if (rootEl) {
+                    try {
+                      Object.defineProperty(rootEl, "ownerDocument", { value: doc, writable: true, configurable: true });
+                    } catch (e) {}
+                  }
+                }
+                try {
+                  Object.defineProperty(doc, "documentElement", { value: rootEl, writable: true, configurable: true });
+                } catch (e) {}
+              }
+              return doc;
+            }, "createDocument");
+          }
+          if (impl && typeof impl.createDocumentType !== "function" && implProto) {
+            const ownerDoc = this;
+            implProto.createDocumentType = markNative(function (qualifiedNameStr, publicId, systemId) {
+              const dt = Object.create(global.DocumentType ? global.DocumentType.prototype : (global.Node ? global.Node.prototype : Object.prototype));
+              dt.nodeType = 10;
+              dt.nodeName = String(qualifiedNameStr || "");
+              dt.name = String(qualifiedNameStr || "");
+              dt.publicId = String(publicId || "");
+              dt.systemId = String(systemId || "");
+              dt.ownerDocument = ownerDoc;
+              return dt;
+            }, "createDocumentType");
           }
           implCache.set(this, impl);
           return impl;
@@ -1848,6 +1956,21 @@ function installShim(global) {
     if (typeof HTMLElement !== "undefined" && HTMLElement.prototype) markObjMembers(HTMLElement.prototype);
     if (typeof EventTarget !== "undefined" && EventTarget.prototype) markObjMembers(EventTarget.prototype);
   })();
+  try {
+    if (Object.prototype.hasOwnProperty.call(Object.prototype, "fetch")) {
+      delete Object.prototype.fetch;
+    }
+    Object.defineProperty(Object.prototype, "fetch", {
+      get: function () { return undefined; },
+      set: function (v) {
+        if (this !== Object.prototype) {
+          Object.defineProperty(this, "fetch", { value: v, writable: true, enumerable: true, configurable: true });
+        }
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  } catch (e) {}
 }
 
 // Auto-install on globalThis/window

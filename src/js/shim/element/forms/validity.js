@@ -702,8 +702,10 @@ function computeValidationMessage(control) {
   return "";
 }
 
+const _validityControlMap = new WeakMap();
+
 function ValidityState(control) {
-  this._control = control;
+  _validityControlMap.set(this, control);
 }
 
 Object.defineProperty(ValidityState.prototype, Symbol.toStringTag, {
@@ -729,7 +731,9 @@ for (let i = 0; i < VALIDITY_FLAG_NAMES.length; i++) {
   (function (flagName) {
     Object.defineProperty(ValidityState.prototype, flagName, {
       get: function () {
-        return computeValidityFlags(this._control)[flagName];
+        const ctrl = _validityControlMap.get(this);
+        if (!ctrl) throw new TypeError("Illegal invocation");
+        return computeValidityFlags(ctrl)[flagName];
       },
       configurable: true,
       enumerable: true,

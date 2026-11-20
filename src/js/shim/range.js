@@ -2,16 +2,80 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/range.ts
 
 const _liveRanges = [];
+const _rangeState = new WeakMap();
+
+function AbstractRange() {
+  throw new TypeError("Illegal constructor");
+}
+AbstractRange.prototype = {};
+Object.defineProperty(AbstractRange.prototype, "constructor", { value: AbstractRange, configurable: true, writable: true });
+["startContainer", "startOffset", "endContainer", "endOffset", "collapsed"].forEach(function (prop) {
+  Object.defineProperty(AbstractRange.prototype, prop, {
+    get: function () {
+      const st = _rangeState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st[prop];
+    },
+    set: function (v) {
+      const st = _rangeState.get(this);
+      if (st) st[prop] = v;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+});
+markNative(AbstractRange, "AbstractRange");
+
+function StaticRange(init) {
+  if (!init || typeof init !== "object") {
+    throw new TypeError("Failed to construct 'StaticRange': 1 argument required.");
+  }
+  const sc = init.startContainer;
+  const ec = init.endContainer;
+  const so = Number(init.startOffset) || 0;
+  const eo = Number(init.endOffset) || 0;
+  if (!sc || !ec) {
+    throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer are required.");
+  }
+  _rangeState.set(this, {
+    startContainer: sc,
+    startOffset: so,
+    endContainer: ec,
+    endOffset: eo,
+    collapsed: sc === ec && so === eo,
+  });
+}
+StaticRange.prototype = Object.create(AbstractRange.prototype);
+StaticRange.prototype.constructor = StaticRange;
+markNative(StaticRange, "StaticRange");
 
 function Range() {
-  this.startContainer = typeof document !== "undefined" ? document : null;
-  this.startOffset = 0;
-  this.endContainer = this.startContainer;
-  this.endOffset = 0;
-  this.collapsed = true;
-  this.commonAncestorContainer = this.startContainer;
+  const doc = typeof document !== "undefined" ? document : null;
+  _rangeState.set(this, {
+    startContainer: doc,
+    startOffset: 0,
+    endContainer: doc,
+    endOffset: 0,
+    collapsed: true,
+    commonAncestorContainer: doc,
+  });
   _liveRanges.push(this);
 }
+Range.prototype = Object.create(AbstractRange.prototype);
+Range.prototype.constructor = Range;
+Object.defineProperty(Range.prototype, "commonAncestorContainer", {
+  get: function () {
+    const st = _rangeState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.commonAncestorContainer;
+  },
+  set: function (v) {
+    const st = _rangeState.get(this);
+    if (st) st.commonAncestorContainer = v;
+  },
+  configurable: true,
+  enumerable: true,
+});
 
 function getChildIndexInParent(node) {
   if (!node || !node.parentNode) return -1;
@@ -137,7 +201,7 @@ Range.prototype.setStart = function (node, offset) {
   this.startOffset = Number(offset || 0);
   this._updateState();
   if (this._selection) {
-    this._selection._onRangeMutated(this);
+    selOnRangeMutated(this._selection, this);
   }
 };
 
@@ -146,7 +210,7 @@ Range.prototype.setEnd = function (node, offset) {
   this.endOffset = Number(offset || 0);
   this._updateState();
   if (this._selection) {
-    this._selection._onRangeMutated(this);
+    selOnRangeMutated(this._selection, this);
   }
 };
 
@@ -199,7 +263,7 @@ Range.prototype.selectNodeContents = function (node) {
   this.endOffset = getNodeLength(node);
   this._updateState();
   if (this._selection) {
-    this._selection._onRangeMutated(this);
+    selOnRangeMutated(this._selection, this);
   }
 };
 
@@ -563,43 +627,50 @@ function scheduleDocumentSelectionChange(doc) {
   }, 0);
 }
 
-function Selection(doc) {
-  this._doc = doc || (typeof document !== "undefined" ? document : null);
-  this._range = null;
-  this._direction = "none";
+const _selState = new WeakMap();
+
+function selLive(sel) {
+  const st = _selState.get(sel);
+  if (!st || !st.range) return null;
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
+  if (st.range.startContainer && !isNodeInDocument(st.range.startContainer, doc)) {
+    if (st.range._selection === sel) st.range._selection = null;
+    st.range = null;
+    st.direction = "none";
+    return null;
+  }
+  if (st.range.endContainer && !isNodeInDocument(st.range.endContainer, doc)) {
+    if (st.range._selection === sel) st.range._selection = null;
+    st.range = null;
+    st.direction = "none";
+    return null;
+  }
+  return st.range;
 }
 
-Selection.prototype._live = function () {
-  if (!this._range) return null;
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
-  if (this._range.startContainer && !isNodeInDocument(this._range.startContainer, doc)) {
-    if (this._range._selection === this) this._range._selection = null;
-    this._range = null;
-    this._direction = "none";
-    return null;
-  }
-  if (this._range.endContainer && !isNodeInDocument(this._range.endContainer, doc)) {
-    if (this._range._selection === this) this._range._selection = null;
-    this._range = null;
-    this._direction = "none";
-    return null;
-  }
-  return this._range;
-};
+function selScheduleChange(sel) {
+  const st = _selState.get(sel);
+  scheduleDocumentSelectionChange(st ? st.doc : null);
+}
 
-Selection.prototype._scheduleChange = function () {
-  scheduleDocumentSelectionChange(this._doc);
-};
-
-Selection.prototype._onRangeMutated = function (range) {
-  if (range === this._range) {
-    this._scheduleChange();
+function selOnRangeMutated(sel, range) {
+  const st = _selState.get(sel);
+  if (st && range === st.range) {
+    selScheduleChange(sel);
   }
-};
+}
+
+function Selection(doc) {
+  _selState.set(this, {
+    doc: doc || (typeof document !== "undefined" ? document : null),
+    range: null,
+    direction: "none",
+  });
+}
 
 Object.defineProperty(Selection.prototype, "rangeCount", {
   get: function () {
-    return this._live() ? 1 : 0;
+    return selLive(this) ? 1 : 0;
   },
   configurable: true,
   enumerable: true,
@@ -607,7 +678,7 @@ Object.defineProperty(Selection.prototype, "rangeCount", {
 
 Object.defineProperty(Selection.prototype, "isCollapsed", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     return r ? r.collapsed : true;
   },
   configurable: true,
@@ -616,7 +687,7 @@ Object.defineProperty(Selection.prototype, "isCollapsed", {
 
 Object.defineProperty(Selection.prototype, "type", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return "None";
     return r.collapsed ? "Caret" : "Range";
   },
@@ -626,8 +697,9 @@ Object.defineProperty(Selection.prototype, "type", {
 
 Object.defineProperty(Selection.prototype, "direction", {
   get: function () {
-    if (!this._live()) return "none";
-    return this._direction || "none";
+    if (!selLive(this)) return "none";
+    const st = _selState.get(this);
+    return (st && st.direction) || "none";
   },
   configurable: true,
   enumerable: true,
@@ -635,9 +707,10 @@ Object.defineProperty(Selection.prototype, "direction", {
 
 Object.defineProperty(Selection.prototype, "anchorNode", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return null;
-    return this._direction === "backward" ? r.endContainer : r.startContainer;
+    const st = _selState.get(this);
+    return st && st.direction === "backward" ? r.endContainer : r.startContainer;
   },
   configurable: true,
   enumerable: true,
@@ -645,9 +718,10 @@ Object.defineProperty(Selection.prototype, "anchorNode", {
 
 Object.defineProperty(Selection.prototype, "anchorOffset", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return 0;
-    return this._direction === "backward" ? r.endOffset : r.startOffset;
+    const st = _selState.get(this);
+    return st && st.direction === "backward" ? r.endOffset : r.startOffset;
   },
   configurable: true,
   enumerable: true,
@@ -655,9 +729,10 @@ Object.defineProperty(Selection.prototype, "anchorOffset", {
 
 Object.defineProperty(Selection.prototype, "focusNode", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return null;
-    return this._direction === "backward" ? r.startContainer : r.endContainer;
+    const st = _selState.get(this);
+    return st && st.direction === "backward" ? r.startContainer : r.endContainer;
   },
   configurable: true,
   enumerable: true,
@@ -665,16 +740,17 @@ Object.defineProperty(Selection.prototype, "focusNode", {
 
 Object.defineProperty(Selection.prototype, "focusOffset", {
   get: function () {
-    const r = this._live();
+    const r = selLive(this);
     if (!r) return 0;
-    return this._direction === "backward" ? r.startOffset : r.endOffset;
+    const st = _selState.get(this);
+    return st && st.direction === "backward" ? r.startOffset : r.endOffset;
   },
   configurable: true,
   enumerable: true,
 });
 
 Selection.prototype.getRangeAt = function (index) {
-  const r = this._live();
+  const r = selLive(this);
   if (!r || index >>> 0 !== 0) {
     throw new DOMException("Selection.getRangeAt: index out of range", "IndexSizeError");
   }
@@ -683,41 +759,46 @@ Selection.prototype.getRangeAt = function (index) {
 
 Selection.prototype.addRange = function (range) {
   if (!range) return;
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const st = _selState.get(this);
+  if (!st) return;
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(range.startContainer, doc) || !isNodeInDocument(range.endContainer, doc)) {
     return;
   }
-  if (this._live()) return;
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  if (selLive(this)) return;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = range;
+  st.range = range;
   range._selection = this;
-  this._direction = range.collapsed ? "none" : "forward";
-  this._scheduleChange();
+  st.direction = range.collapsed ? "none" : "forward";
+  selScheduleChange(this);
 };
 
 Selection.prototype.removeRange = function (range) {
-  const current = this._live();
-  if (current !== range) {
+  const st = _selState.get(this);
+  const current = selLive(this);
+  if (!st || current !== range) {
     throw new DOMException("removeRange: the given Range is not in the selection", "NotFoundError");
   }
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = null;
-  this._direction = "none";
-  this._scheduleChange();
+  st.range = null;
+  st.direction = "none";
+  selScheduleChange(this);
 };
 
 Selection.prototype.removeAllRanges = function () {
-  const hadRange = this._range !== null;
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  const st = _selState.get(this);
+  if (!st) return;
+  const hadRange = st.range !== null;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = null;
-  this._direction = "none";
-  if (hadRange) this._scheduleChange();
+  st.range = null;
+  st.direction = "none";
+  if (hadRange) selScheduleChange(this);
 };
 
 Selection.prototype.empty = function () {
@@ -725,6 +806,8 @@ Selection.prototype.empty = function () {
 };
 
 Selection.prototype.collapse = function (node, offset) {
+  const st = _selState.get(this);
+  if (!st) return;
   if (node === null || node === undefined) {
     this.removeAllRanges();
     return;
@@ -737,21 +820,20 @@ Selection.prototype.collapse = function (node, offset) {
   if (o > maxLen) {
     throw new DOMException("collapse: offset out of bounds", "IndexSizeError");
   }
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(node, doc)) {
-    // detached node: abort silently
     return;
   }
   const r = new Range();
   r.setStart(node, o);
   r.setEnd(node, o);
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = r;
+  st.range = r;
   r._selection = this;
-  this._direction = "none";
-  this._scheduleChange();
+  st.direction = "none";
+  selScheduleChange(this);
 };
 
 Selection.prototype.setPosition = function (node, offset) {
@@ -759,21 +841,22 @@ Selection.prototype.setPosition = function (node, offset) {
 };
 
 Selection.prototype.collapseToStart = function () {
-  const r = this._live();
+  const r = selLive(this);
   if (!r) throw new DOMException("collapseToStart: there is no selection", "InvalidStateError");
   this.collapse(r.startContainer, r.startOffset);
 };
 
 Selection.prototype.collapseToEnd = function () {
-  const r = this._live();
+  const r = selLive(this);
   if (!r) throw new DOMException("collapseToEnd: there is no selection", "InvalidStateError");
   this.collapse(r.endContainer, r.endOffset);
 };
 
 Selection.prototype.extend = function (node, offset) {
   if (!node) throw new TypeError("extend: node required");
-  const r = this._live();
-  if (!r) throw new DOMException("extend: there is no selection", "InvalidStateError");
+  const st = _selState.get(this);
+  const r = selLive(this);
+  if (!st || !r) throw new DOMException("extend: there is no selection", "InvalidStateError");
   const o = offset === undefined ? 0 : Number(offset);
   if (o < 0) {
     throw new DOMException("extend: offset out of bounds", "IndexSizeError");
@@ -782,7 +865,7 @@ Selection.prototype.extend = function (node, offset) {
   if (o > maxLen) {
     throw new DOMException("extend: offset out of bounds", "IndexSizeError");
   }
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(node, doc)) {
     return;
   }
@@ -800,12 +883,6 @@ Selection.prototype.extend = function (node, offset) {
     startOffset = o;
     endNode = anchorNode;
     endOffset = anchorOffset;
-  } else if (cmp < 0) {
-    isBackward = false;
-    startNode = anchorNode;
-    startOffset = anchorOffset;
-    endNode = node;
-    endOffset = o;
   } else {
     isBackward = false;
     startNode = anchorNode;
@@ -816,12 +893,14 @@ Selection.prototype.extend = function (node, offset) {
 
   r.setStart(startNode, startOffset);
   r.setEnd(endNode, endOffset);
-  this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
-  this._scheduleChange();
+  st.direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+  selScheduleChange(this);
 };
 
 Selection.prototype.setBaseAndExtent = function (anchorNode, anchorOffset, focusNode, focusOffset) {
   if (!anchorNode || !focusNode) throw new TypeError("setBaseAndExtent: nodes required");
+  const st = _selState.get(this);
+  if (!st) return;
   const ao = anchorOffset === undefined ? 0 : Number(anchorOffset);
   const fo = focusOffset === undefined ? 0 : Number(focusOffset);
   if (ao < 0 || ao > getNodeLength(anchorNode)) {
@@ -830,7 +909,7 @@ Selection.prototype.setBaseAndExtent = function (anchorNode, anchorOffset, focus
   if (fo < 0 || fo > getNodeLength(focusNode)) {
     throw new DOMException("setBaseAndExtent: focus offset out of bounds", "IndexSizeError");
   }
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(anchorNode, doc) || !isNodeInDocument(focusNode, doc)) {
     return;
   }
@@ -853,36 +932,39 @@ Selection.prototype.setBaseAndExtent = function (anchorNode, anchorOffset, focus
   const r = new Range();
   r.setStart(startNode, startOffset);
   r.setEnd(endNode, endOffset);
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = r;
+  st.range = r;
   r._selection = this;
-  this._direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
-  this._scheduleChange();
+  st.direction = (startNode === endNode && startOffset === endOffset) ? "none" : (isBackward ? "backward" : "forward");
+  selScheduleChange(this);
 };
 
 Selection.prototype.selectAllChildren = function (node) {
   if (!node) throw new TypeError("selectAllChildren: node required");
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const st = _selState.get(this);
+  if (!st) return;
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(node, doc)) return;
   const childCount = node.childNodes ? node.childNodes.length : 0;
   const r = new Range();
   r.setStart(node, 0);
   r.setEnd(node, childCount);
-  if (this._range && this._range._selection === this) {
-    this._range._selection = null;
+  if (st.range && st.range._selection === this) {
+    st.range._selection = null;
   }
-  this._range = r;
+  st.range = r;
   r._selection = this;
-  this._direction = "none";
-  this._scheduleChange();
+  st.direction = "none";
+  selScheduleChange(this);
 };
 
 Selection.prototype.containsNode = function (node, allowPartialContainment) {
-  const r = this._live();
-  if (!r || !node) return false;
-  const doc = this._doc || (typeof document !== "undefined" ? document : null);
+  const st = _selState.get(this);
+  const r = selLive(this);
+  if (!st || !r || !node) return false;
+  const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(node, doc)) return false;
   const len = getNodeLength(node);
   const nodeStartCmp = compareBoundaryPoints(node, 0, r.endContainer, r.endOffset);
@@ -895,7 +977,7 @@ Selection.prototype.containsNode = function (node, allowPartialContainment) {
 };
 
 Selection.prototype.toString = function () {
-  const r = this._live();
+  const r = selLive(this);
   if (!r) return "";
   return r.toString ? r.toString() : "";
 };

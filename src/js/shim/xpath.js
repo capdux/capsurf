@@ -523,6 +523,7 @@ function firstChild(n) {
     c = isAttr(n) ? null : n.firstChild;
   }
   while (c && !inModel(c)) c = c.nextSibling;
+  if (!c && n.nodeType === 9) return n.documentElement || null;
   return c || null;
 }
 
@@ -1136,82 +1137,103 @@ function need(ok, what) {
   if (!ok) throw new TypeError(`The result type is not ${what}.`);
 }
 
+const _xrState = new WeakMap();
+const _xeState = new WeakMap();
+
 function XPathResult(token, type = 0, value = false) {
   if (token !== INTERNAL_CONSTRUCT) throw new TypeError("Illegal constructor");
-  this._type = type;
-  this._value = value;
-  this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
-  this._cursor = 0;
+  _xrState.set(this, {
+    type: type,
+    value: value,
+    seq: (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0,
+    cursor: 0,
+  });
   xpathResultInstances.add(this);
 }
 
 XPathResult.prototype._refill = function (type, value) {
-  this._type = type;
-  this._value = value;
-  this._cursor = 0;
-  this._seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+  const st = _xrState.get(this);
+  if (st) {
+    st.type = type;
+    st.value = value;
+    st.cursor = 0;
+    st.seq = (typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0;
+  }
 };
 
 Object.defineProperty(XPathResult.prototype, "resultType", {
   get: function () {
-    return this._type;
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.type;
   },
   configurable: true,
 });
 
 Object.defineProperty(XPathResult.prototype, "numberValue", {
   get: function () {
-    if (this._type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (st.type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
       if (isBoaLenient()) return undefined;
       need(false, "a number");
     }
-    return this._value;
+    return st.value;
   },
   configurable: true,
 });
 
 Object.defineProperty(XPathResult.prototype, "stringValue", {
   get: function () {
-    if (this._type !== XPATH_RESULT_TYPES.STRING_TYPE) {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (st.type !== XPATH_RESULT_TYPES.STRING_TYPE) {
       if (isBoaLenient()) return undefined;
       need(false, "a string");
     }
-    return this._value;
+    return st.value;
   },
   configurable: true,
 });
 
 Object.defineProperty(XPathResult.prototype, "booleanValue", {
   get: function () {
-    if (this._type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (st.type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
       if (isBoaLenient()) return undefined;
       need(false, "a boolean");
     }
-    return this._value;
+    return st.value;
   },
   configurable: true,
 });
 
 Object.defineProperty(XPathResult.prototype, "singleNodeValue", {
   get: function () {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const ok =
-      this._type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
-      this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
+      st.type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
+      st.type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
     if (!ok) {
       if (isBoaLenient()) return undefined;
       need(false, "a single node");
     }
-    return this._value[0] ?? null;
+    const n = st.value[0] ?? null;
+    return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
   },
   configurable: true,
 });
 
 Object.defineProperty(XPathResult.prototype, "invalidIteratorState", {
   get: function () {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     return (
-      (this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
-        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE) &&
-      ((typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0) !== this._seq
+      (st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+        st.type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE) &&
+      ((typeof globalThis !== "undefined" && globalThis.__treeSeq) || 0) !== st.seq
     );
   },
   configurable: true,
@@ -1219,22 +1241,26 @@ Object.defineProperty(XPathResult.prototype, "invalidIteratorState", {
 
 Object.defineProperty(XPathResult.prototype, "snapshotLength", {
   get: function () {
+    const st = _xrState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
     const ok =
-      this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-      this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
+      st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+      st.type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
     if (!ok) {
       if (isBoaLenient()) return undefined;
       need(false, "a snapshot");
     }
-    return this._value.length;
+    return st.value.length;
   },
   configurable: true,
 });
 
 XPathResult.prototype.iterateNext = function () {
+  const st = _xrState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   need(
-    this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
-      this._type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE,
+    st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_ITERATOR_TYPE ||
+      st.type === XPATH_RESULT_TYPES.ORDERED_NODE_ITERATOR_TYPE,
     "an iterator"
   );
   if (this.invalidIteratorState) {
@@ -1243,16 +1269,20 @@ XPathResult.prototype.iterateNext = function () {
       "InvalidStateError"
     );
   }
-  return this._value[this._cursor++] ?? null;
+  const n = st.value[st.cursor++] ?? null;
+  return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
 };
 
 XPathResult.prototype.snapshotItem = function (index) {
+  const st = _xrState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
   need(
-    this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-      this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
+    st.type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
+      st.type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
     "a snapshot"
   );
-  return this._value[Number(index)] ?? null;
+  const n = st.value[Number(index)] ?? null;
+  return n && typeof global.__capsurf_upgradeElement === "function" ? global.__capsurf_upgradeElement(n) : n;
 };
 
 for (const [k, v] of Object.entries(XPATH_RESULT_TYPES)) {
@@ -1315,10 +1345,12 @@ function reusableResult(value) {
 
 function XPathExpression(token, expr) {
   if (token !== INTERNAL_CONSTRUCT || !expr) throw new TypeError("Illegal constructor");
-  this._expr = expr;
+  _xeState.set(this, expr);
 }
 
 XPathExpression.prototype.evaluate = function (contextNode, type = 0, result = null) {
+  const expr = _xeState.get(this);
+  if (!expr) throw new TypeError("Illegal invocation");
   if (!isNode(contextNode)) {
     throw new TypeError(
       "Failed to execute 'evaluate' on 'XPathExpression': parameter 1 is not of type 'Node'."
@@ -1326,7 +1358,7 @@ XPathExpression.prototype.evaluate = function (contextNode, type = 0, result = n
   }
   const reuse = reusableResult(result);
   const ev = new Evaluation(rootOf(contextNode));
-  const value = evaluate(this._expr, { node: contextNode, pos: 1, size: 1, ev });
+  const value = evaluate(expr, { node: contextNode, pos: 1, size: 1, ev });
   return makeResult(isNodeSet(value) ? ev.sort(value) : value, type, reuse);
 };
 

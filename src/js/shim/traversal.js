@@ -36,13 +36,43 @@ function filterNode(node, whatToShow, filter) {
   return FILTER_ACCEPT;
 }
 
+const _twState = new WeakMap();
+
 function TreeWalker(root, whatToShow, filter) {
   if (!root) throw new TypeError("Root node required");
-  this.root = root;
-  this.whatToShow = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
-  this.filter = filter || null;
-  this.currentNode = root;
+  _twState.set(this, {
+    root: root,
+    whatToShow: whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL,
+    filter: filter || null,
+    currentNode: root,
+  });
 }
+
+["root", "whatToShow", "filter"].forEach(function (prop) {
+  Object.defineProperty(TreeWalker.prototype, prop, {
+    get: function () {
+      const st = _twState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st[prop];
+    },
+    configurable: true,
+    enumerable: true,
+  });
+});
+Object.defineProperty(TreeWalker.prototype, "currentNode", {
+  get: function () {
+    const st = _twState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.currentNode;
+  },
+  set: function (v) {
+    const st = _twState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    st.currentNode = v;
+  },
+  configurable: true,
+  enumerable: true,
+});
 
 TreeWalker.prototype.parentNode = function () {
   let node = this.currentNode;
@@ -182,30 +212,78 @@ markNative(TreeWalker.prototype.nextSibling, "nextSibling");
 markNative(TreeWalker.prototype.nextNode, "nextNode");
 markNative(TreeWalker.prototype.previousNode, "previousNode");
 
+const _niState = new WeakMap();
+const _activeNodeIterators = [];
+
+global.__capsurf_onNodeRemovedForIterators = function (parent, removedNode, prevSibling) {
+  for (let i = 0; i < _activeNodeIterators.length; i++) {
+    const ni = _activeNodeIterators[i];
+    const st = _niState.get(ni);
+    if (!st) continue;
+    const sameRef = st.referenceNode === removedNode ||
+      (st.referenceNode && removedNode && st.referenceNode._nid !== undefined && st.referenceNode._nid === removedNode._nid);
+    if (sameRef || (removedNode && typeof removedNode.contains === "function" && removedNode.contains(st.referenceNode))) {
+      st.referenceNode = prevSibling || parent;
+      st.pointerBeforeReferenceNode = false;
+      st.walker.currentNode = st.referenceNode;
+    }
+  }
+};
+
 function NodeIterator(root, whatToShow, filter) {
   if (!root) throw new TypeError("Root node required");
-  this.root = root;
-  this.whatToShow = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
-  this.filter = filter || null;
-  this.referenceNode = root;
-  this.pointerBeforeReferenceNode = true;
-  this._walker = new TreeWalker(root, this.whatToShow, this.filter);
+  const wts = whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL;
+  const flt = filter || null;
+  _niState.set(this, {
+    root: root,
+    whatToShow: wts,
+    filter: flt,
+    referenceNode: root,
+    pointerBeforeReferenceNode: true,
+    firstCall: true,
+    walker: new TreeWalker(root, wts, flt),
+  });
+  _activeNodeIterators.push(this);
 }
 
+["root", "whatToShow", "filter", "referenceNode", "pointerBeforeReferenceNode"].forEach(function (prop) {
+  Object.defineProperty(NodeIterator.prototype, prop, {
+    get: function () {
+      const st = _niState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st[prop];
+    },
+    configurable: true,
+    enumerable: true,
+  });
+});
+
 NodeIterator.prototype.nextNode = function () {
-  const node = this._walker.nextNode();
+  const st = _niState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  if (st.firstCall) {
+    st.firstCall = false;
+    if (filterNode(st.root, st.whatToShow, st.filter) === FILTER_ACCEPT) {
+      st.referenceNode = st.root;
+      st.pointerBeforeReferenceNode = false;
+      return st.root;
+    }
+  }
+  const node = st.walker.nextNode();
   if (node) {
-    this.referenceNode = node;
-    this.pointerBeforeReferenceNode = false;
+    st.referenceNode = node;
+    st.pointerBeforeReferenceNode = false;
   }
   return node;
 };
 
 NodeIterator.prototype.previousNode = function () {
-  const node = this._walker.previousNode();
+  const st = _niState.get(this);
+  if (!st) throw new TypeError("Illegal invocation");
+  const node = st.walker.previousNode();
   if (node) {
-    this.referenceNode = node;
-    this.pointerBeforeReferenceNode = true;
+    st.referenceNode = node;
+    st.pointerBeforeReferenceNode = true;
   }
   return node;
 };

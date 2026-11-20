@@ -343,7 +343,63 @@ function createStyleProxy(element) {
     return "";
   }
 
-  return new Proxy(declTarget, {
+  const cachedMethods = {
+    item: function (idx) {
+      const i = Number(idx) >>> 0;
+      const map = parseStyleMap();
+      let count = 0;
+      for (const entry of map.values()) {
+        if (count === i) return entry.name;
+        count++;
+      }
+      return "";
+    },
+    getPropertyValue: function (p) {
+      const map = parseStyleMap();
+      const key = normalizeStylePropKey(p);
+      return lookupPropertyValue(map, key);
+    },
+    getPropertyPriority: function (p) {
+      const map = parseStyleMap();
+      const key = normalizeStylePropKey(p);
+      const entry = map.get(key);
+      return entry ? entry.priority : "";
+    },
+    setProperty: function (p, val, priority) {
+      if (priority !== undefined && priority !== null && priority !== "") {
+        if (priority !== "important" && priority !== "!important") return;
+      }
+      const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
+      const map = parseStyleMap();
+      const rawStr = String(p).trim();
+      const key = normalizeStylePropKey(rawStr);
+      const vStr = val === null || val === undefined ? "" : String(val).trim();
+      if (vStr === "") {
+        removeKeyFromStyleMap(map, key);
+        if (key === "display") element._displayNone = false;
+        serializeStyleMap(map);
+        return;
+      }
+      if (!isValidInlinePropValue(key, vStr)) return;
+      setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
+      if (key === "display") {
+        element._displayNone = (vStr.toLowerCase() === "none");
+      }
+      serializeStyleMap(map);
+    },
+    removeProperty: function (p) {
+      const map = parseStyleMap();
+      const key = normalizeStylePropKey(p);
+      const prev = removeKeyFromStyleMap(map, key);
+      if (key === "display") {
+        element._displayNone = false;
+      }
+      serializeStyleMap(map);
+      return prev;
+    },
+  };
+
+  const styleProxy = new Proxy(declTarget, {
     get: function (target, prop, receiver) {
       if (typeof prop === "symbol") {
         if (prop === Symbol.iterator) {
@@ -358,69 +414,7 @@ function createStyleProxy(element) {
       if (prop === "cssText") return element.getAttribute("style") || "";
       if (prop === "length") return parseStyleMap().size;
       if (prop === "parentRule") return null;
-      if (prop === "item") {
-        return function (idx) {
-          const i = Number(idx) >>> 0;
-          const map = parseStyleMap();
-          let count = 0;
-          for (const entry of map.values()) {
-            if (count === i) return entry.name;
-            count++;
-          }
-          return "";
-        };
-      }
-      if (prop === "getPropertyValue") {
-        return function (p) {
-          const map = parseStyleMap();
-          const key = normalizeStylePropKey(p);
-          return lookupPropertyValue(map, key);
-        };
-      }
-      if (prop === "getPropertyPriority") {
-        return function (p) {
-          const map = parseStyleMap();
-          const key = normalizeStylePropKey(p);
-          const entry = map.get(key);
-          return entry ? entry.priority : "";
-        };
-      }
-      if (prop === "setProperty") {
-        return function (p, val, priority) {
-          if (priority !== undefined && priority !== null && priority !== "") {
-            if (priority !== "important" && priority !== "!important") return;
-          }
-          const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
-          const map = parseStyleMap();
-          const rawStr = String(p).trim();
-          const key = normalizeStylePropKey(rawStr);
-          const vStr = val === null || val === undefined ? "" : String(val).trim();
-          if (vStr === "") {
-            removeKeyFromStyleMap(map, key);
-            if (key === "display") element._displayNone = false;
-            serializeStyleMap(map);
-            return;
-          }
-          if (!isValidInlinePropValue(key, vStr)) return;
-          setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
-          if (key === "display") {
-            element._displayNone = (vStr.toLowerCase() === "none");
-          }
-          serializeStyleMap(map);
-        };
-      }
-      if (prop === "removeProperty") {
-        return function (p) {
-          const map = parseStyleMap();
-          const key = normalizeStylePropKey(p);
-          const prev = removeKeyFromStyleMap(map, key);
-          if (key === "display") {
-            element._displayNone = false;
-          }
-          serializeStyleMap(map);
-          return prev;
-        };
-      }
+      if (Object.prototype.hasOwnProperty.call(cachedMethods, prop)) return cachedMethods[prop];
       if (prop in target) return target[prop];
 
       if (prop === "cssFloat" || prop === "float") {
@@ -508,7 +502,8 @@ function createStyleProxy(element) {
       const keys = [];
       const seen = new Set();
       for (const [k, entry] of map.entries()) {
-        const name = entry && entry.name ? entry.name : k;
+        const rawName = entry && entry.name ? entry.name : k;
+        const name = rawName.startsWith("--") ? rawName : rawName.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
         if (!seen.has(name)) {
           seen.add(name);
           keys.push(name);
@@ -532,6 +527,10 @@ function createStyleProxy(element) {
         if (map.has(prop)) {
           return { value: map.get(prop).value, writable: true, enumerable: true, configurable: true };
         }
+        const kebab = propToKebab(prop);
+        if (map.has(kebab)) {
+          return { value: map.get(kebab).value, writable: true, enumerable: true, configurable: true };
+        }
         const lower = prop.startsWith("--") ? prop : prop.toLowerCase();
         if (map.has(lower)) {
           return { value: map.get(lower).value, writable: true, enumerable: true, configurable: true };
@@ -543,6 +542,10 @@ function createStyleProxy(element) {
       return false;
     }
   });
+  if (typeof global !== "undefined" && global.__capsurf_inlineStyleLookup) {
+    global.__capsurf_inlineStyleLookup.set(styleProxy, cachedMethods.getPropertyValue);
+  }
+  return styleProxy;
 }
 
 function isHtmlElement(el) {

@@ -229,7 +229,10 @@ Node.prototype.cloneNode = function (deep) {
   }
   if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-    const frag = (doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment();
+    const nativeFrag = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createDocumentFragment : null;
+    const frag = (doc && typeof nativeFrag === "function")
+      ? nativeFrag.call(doc)
+      : ((doc && typeof doc.createDocumentFragment === "function") ? doc.createDocumentFragment() : new DocumentFragment());
     if (deep) {
       const kids = Array.from(this.childNodes || this._children || []);
       for (let i = 0; i < kids.length; i++) {
@@ -238,8 +241,14 @@ Node.prototype.cloneNode = function (deep) {
     }
     return frag;
   }
-  if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
-    const clone = document.createElement(String(this.localName || this.tagName || "div").toLowerCase());
+  if (this.nodeType === ELEMENT_NODE) {
+    const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const nativeCreate = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createElement : null;
+    const tag = String(this.localName || this.tagName || "div").toLowerCase();
+    const clone = (doc && typeof nativeCreate === "function")
+      ? nativeCreate.call(doc, tag)
+      : ((typeof document !== "undefined" && document.createElement) ? document.createElement(tag) : null);
+    if (!clone) return this;
     if (this.id) clone.id = this.id;
     if (this.className) clone.className = this.className;
     if (typeof this.getAttributeNames === "function") {
@@ -1306,7 +1315,10 @@ Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
       this.removeChild(this.firstChild);
     }
     const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-    const temp = doc ? doc.createElement("div") : null;
+    const nativeCreate = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createElement : null;
+    const temp = (doc && typeof nativeCreate === "function")
+      ? nativeCreate.call(doc, "div")
+      : (doc ? doc.createElement("div") : null);
     if (temp) {
       temp.innerHTML = val;
       while (temp.firstChild) {

@@ -1,24 +1,50 @@
 // src/js/shim/collections.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/collections.ts
 
+const _dtlState = new WeakMap();
+
 function DOMTokenList(getter, setter) {
-  this._getter = getter;
-  this._setter = setter;
+  const st = { getter: getter, setter: setter };
+  _dtlState.set(this, st);
+  const proxy = new Proxy(this, {
+    get: function (target, prop, receiver) {
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        return target.item(Number(prop));
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+  _dtlState.set(proxy, st);
+  return proxy;
 }
 
 DOMTokenList.prototype._getTokens = function () {
-  const str = (this._getter() || "").trim();
+  const st = _dtlState.get(this);
+  const str = (st ? st.getter() : "" || "").trim();
   if (!str) return [];
   return str.split(/\s+/);
 };
 
 DOMTokenList.prototype._setTokens = function (tokens) {
-  this._setter(tokens.join(" "));
+  const st = _dtlState.get(this);
+  if (st) st.setter(tokens.join(" "));
 };
 
 Object.defineProperty(DOMTokenList.prototype, "length", {
   get: function () {
     return this._getTokens().length;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(DOMTokenList.prototype, "value", {
+  get: function () {
+    const st = _dtlState.get(this);
+    return st ? (st.getter() || "") : "";
+  },
+  set: function (v) {
+    const st = _dtlState.get(this);
+    if (st) st.setter(String(v == null ? "" : v));
   },
   configurable: true,
 });
@@ -97,12 +123,7 @@ DOMTokenList.prototype.replace = function (oldToken, newToken) {
   return true;
 };
 
-DOMTokenList.prototype.forEach = function (callback, thisArg) {
-  const tokens = this._getTokens();
-  for (let i = 0; i < tokens.length; i++) {
-    callback.call(thisArg, tokens[i], i, this);
-  }
-};
+DOMTokenList.prototype.forEach = Array.prototype.forEach;
 
 DOMTokenList.prototype.values = function () {
   return this._getTokens()[Symbol.iterator]();
@@ -116,12 +137,11 @@ DOMTokenList.prototype.entries = function () {
 };
 
 DOMTokenList.prototype.toString = function () {
-  return this._getter() || "";
+  const st = _dtlState.get(this);
+  return st ? (st.getter() || "") : "";
 };
 
-DOMTokenList.prototype[Symbol.iterator] = function () {
-  return this.values();
-};
+DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
 
 markNative(DOMTokenList, "DOMTokenList");
 markNative(DOMTokenList.prototype.add, "add");
