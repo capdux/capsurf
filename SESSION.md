@@ -4186,6 +4186,15 @@
   - `dom-mutation-events-demo` (**PASS**)、`pseudo-computed-style` (**PASS**)、`pseudo-text-font-arrival` (**PASS**)、`navigate-style-script-order` 用例 3 `nested-inline-pseudo-elements` (**PASS**)。
 - **清理旧子智能体**: 销毁 `3abd3cf2-02b0-437b-8861-5e18b2551951`。
 
+## [2026-11-20 23:32:00] Slot A (`c156cb68`) 1 分 40 秒摸底与 Screencast/Header 定位
+- 精准定位 `network-stylesheet-headers-demo.e2e.test.ts:6` 相对路径缺失（应为 `../page/external-sheet.css?raw`），以及 `screencast-idle-skip` / `screencast-partial-frames` 在 `kitesurf_facade.cp:130-161`、`protocol_extensions.cp:79-88`、`server.cp:715-743`、`screencast.cp:198` 的 `recordScene` (`seq`/`unchanged`) 与 `setPartialRaster` 缺口。
+- **清理旧子智能体**: 销毁 `c156cb68-ed3f-4278-a721-4b83eccb67a8`。
+
+## [2026-11-20 23:32:30] 50 秒验收 `devtools-elements-live-update-demo` 2/2 & `page-renderer-screencast` 1/1 全绿 (Subagent bb618ccd 结单，Phase 145)
+- **零修改直接验收**：`e2e/demo/devtools-elements-live-update-demo.e2e.test.ts` (**2/2 PASS**)、`e2e/demo/page-renderer-screencast.e2e.test.ts` (**1/1 PASS**，`frames=6 rendererFrames=6 relaunches=0 ackFailures=0`)。
+- **精准跨模块定位（留交 Slot B）**：`e2e/demo/page-renderer-relaunch.e2e.test.ts` 仅缺 `src/cdp/kitesurf_facade.cp:150-168` & `protocol_extensions.cp:79-89` 的 `Kitesurf.disposeRenderer` (`{"disposed":true}`)。
+- **清理旧子智能体**: 销毁 `bb618ccd-b511-4e00-81a1-f6ae96d2e591`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

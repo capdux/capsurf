@@ -2077,6 +2077,9 @@
 ## Phase 143: `dynamic-import-bake-demo` & `puppeteer-eval` 2/2 PASS & Module Network Event Localization
 - 零修改摸底验收 `dynamic-import-bake-demo` (1/1)、`puppeteer-eval` (1/1) PASS，并精准定位 `absolute-path-transitive-demo` 至 `src/cdp/session.cp:558-661`。
 
+## Phase 145: `devtools-elements-live-update-demo` 2/2 & `page-renderer-screencast` 1/1 (3/3 PASS)
+- 验证 Phase 141+144 双端修复生效，`devtools-elements-live-update-demo` (**2/2**) 与 `page-renderer-screencast` (**1/1**) 直接全绿通过；定位 `page-renderer-relaunch` 缺 `Kitesurf.disposeRenderer`。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。
