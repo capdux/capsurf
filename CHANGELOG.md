@@ -2286,3 +2286,6 @@
 
 ### Phase 209
 - Added `test/eval/test_dedicated_worker_and_clock.cp` covering DedicatedWorker lifecycle/registry, HostClock/WallClock tick progression, and SpanSink/TailTraceRegistry truncation & eviction bounds.
+
+### Phase 210
+- Added `test/eval/test_prefetch_scripts_and_wasm.cp` covering script prefetch origin classification/caps, Wasm header/manifest validation, and inline/URL Wasm literal scanning.

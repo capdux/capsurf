@@ -4578,3 +4578,7 @@
 ### Phase 209: Pure-CP Eval DedicatedWorker, HostClock & SpanSink Whitebox Tests (Slot A)
 - **Subagent**: `70e1dbfa` (killed after completion)
 - **Result**: `test/eval/test_dedicated_worker_and_clock.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1049ms; covering `DedicatedWorker` FSM, 32-slot registry reuse, `HostClock`/`WallClock`, `SpanSink` 2000-record/4MB bounds, and `TailTraceRegistry` 64-entry ring eviction).
+
+### Phase 210: Pure-CP Eval PrefetchScripts & Wasm Whitebox Tests (Slot A)
+- **Subagent**: `1ce124a4` (killed after completion)
+- **Result**: `test/eval/test_prefetch_scripts_and_wasm.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering `PrefetchScriptManager` 32-script cap & origin classification, `validateWasmHeader`, `WasmBakeManifestEntry` sha256, `scanForWasmLiterals` 8-URL/512-char bounds, and `scanForInlineWasm` dedup).
