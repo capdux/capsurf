@@ -1449,4 +1449,10 @@
 ## Phase 107 原生 UTF-8 码点解码与彩色 Emoji 光栅化技术方案
 1. **UTF-8 多字节与彩色 Emoji 矢量绘制 (`src/render/painter.cp`)**：
    - 将文本绘制管线从单字节 ASCII 升级为内联 UTF-8 多字节码点解码，识别 Unicode `Emoji_Presentation=Yes` 与 `U+FE0F` 变体选择符并通过 `drawColorEmojiClipped` 原生绘制 RGBA 彩色字形。
+
+## Phase 108 CSS 层叠上下文命中测试与 Text Decoration 3 传播技术方案
+1. **层叠上下文命中与 `transform` 子树平移 (`dom_binding.cp`, `layout.cp`, `cascade.cp`)**：
+   - `js_document_element_from_point` 按 `(sc_root, sc_z, sc_pos, local_z, local_pos)` + DOM 树序比较候选节点，完整支持 `pointer-events: none/auto`、`isolation: isolate` 与固定祖先逃逸裁剪；`layoutNode` 在应用 `transform: translate` 后递归 `shiftSubtree` 同步偏移后代。
+2. **Text Decoration 3 下划线传播 (`painter.cp`)**：
+   - 文本渲染时向上回溯修饰源并在 atomic/out-of-flow 边界截断，独立应用 `text-decoration-color`/`thickness`/`underline-offset` 并叠加 `group_opacity`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

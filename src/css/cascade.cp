@@ -1034,7 +1034,12 @@ pub const PROP_TEXT_DECORATION: usize = 86;
 pub const PROP_BG_CLIP: usize = 87;
 pub const PROP_BG_SIZE: usize = 88;
 pub const PROP_CARET_COLOR: usize = 89;
-pub const TOTAL_PROP_SLOTS: usize = 90;
+pub const PROP_POINTER_EVENTS: usize = 90;
+pub const PROP_ISOLATION: usize = 91;
+pub const PROP_TEXT_DECORATION_COLOR: usize = 92;
+pub const PROP_TEXT_DECORATION_THICKNESS: usize = 93;
+pub const PROP_TEXT_UNDERLINE_OFFSET: usize = 94;
+pub const TOTAL_PROP_SLOTS: usize = 95;
 
 pub enum ContainerType {
     Normal,
@@ -1879,6 +1884,12 @@ pub struct ComputedStyle {
     text_decoration_underline: bool = false;
     text_decoration_line_through: bool = false;
     text_decoration_overline: bool = false;
+    text_decoration_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_text_decoration_color: bool = false;
+    text_decoration_thickness: f32 = 0.0;
+    text_underline_offset: f32 = 0.0;
+    pointer_events_none: bool = false;
+    isolation_isolate: bool = false;
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
@@ -1888,6 +1899,7 @@ pub struct ComputedStyle {
     has_fill_none: bool = false,
     opacity: f32 = 1.0;
     z_index: i32 = 0;
+    has_z_index: bool = false;
     conic_gradient: ConicGradient = ConicGradient{};
     bg_gradient: BgGradient = BgGradient{};
     bg_gradient_layer_idx: usize = 0;
@@ -2173,6 +2185,7 @@ pub struct ComputedStyle {
             _.has_accent_color = p.has_accent_color;
             _.caret_color = p.caret_color;
             _.has_caret_color = p.has_caret_color;
+            _.pointer_events_none = p.pointer_events_none;
             if (p.has_fill_current_color) {
                 _.has_fill_current_color = true;
                 _.background_color = p.color;
@@ -3700,24 +3713,92 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "text-decoration") || std.ascii.eqlIgnoreCase(name, "text-decoration-line")) {
-            if (_.tryClaimSlot(PROP_TEXT_DECORATION, weight)) {
-                let ul = false;
-                let lt = false;
-                let ol = false;
-                let dit = std.mem.tokenizeAny(u8, val, " \t\r\n");
-                while (dtok := dit.next()) {
-                    if (std.ascii.eqlIgnoreCase(dtok, "underline")) ul = true;
-                    if (std.ascii.eqlIgnoreCase(dtok, "line-through")) lt = true;
-                    if (std.ascii.eqlIgnoreCase(dtok, "overline")) ol = true;
-                    if (std.ascii.eqlIgnoreCase(dtok, "none")) {
-                        ul = false;
-                        lt = false;
-                        ol = false;
+            const is_shorthand = std.ascii.eqlIgnoreCase(name, "text-decoration");
+            let ul = false;
+            let lt = false;
+            let ol = false;
+            let parsed_color: CssColor? = null;
+            let parsed_thickness: f32 = 0.0;
+            let dit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            while (dtok := dit.next()) {
+                if (std.ascii.eqlIgnoreCase(dtok, "underline")) {
+                    ul = true;
+                } else if (std.ascii.eqlIgnoreCase(dtok, "line-through")) {
+                    lt = true;
+                } else if (std.ascii.eqlIgnoreCase(dtok, "overline")) {
+                    ol = true;
+                } else if (std.ascii.eqlIgnoreCase(dtok, "none")) {
+                    ul = false;
+                    lt = false;
+                    ol = false;
+                } else if (is_shorthand) {
+                    if (std.ascii.eqlIgnoreCase(dtok, "solid") || std.ascii.eqlIgnoreCase(dtok, "double") ||
+                        std.ascii.eqlIgnoreCase(dtok, "dotted") || std.ascii.eqlIgnoreCase(dtok, "dashed") ||
+                        std.ascii.eqlIgnoreCase(dtok, "wavy") || std.ascii.eqlIgnoreCase(dtok, "auto")) {
+                        // decoration style keyword
+                    } else if (px_v := parseGradPxToken(dtok)) {
+                        if (px_v > 0.0) parsed_thickness = px_v;
+                    } else if (c := CssColor.parse(dtok)) {
+                        parsed_color = c;
                     }
                 }
+            }
+            if (_.tryClaimSlot(PROP_TEXT_DECORATION, weight)) {
                 _.text_decoration_underline = ul;
                 _.text_decoration_line_through = lt;
                 _.text_decoration_overline = ol;
+            }
+            if (is_shorthand) {
+                if (pc := parsed_color) {
+                    if (_.tryClaimSlot(PROP_TEXT_DECORATION_COLOR, weight)) {
+                        _.text_decoration_color = pc;
+                        _.has_text_decoration_color = true;
+                    }
+                }
+                if (parsed_thickness > 0.0) {
+                    if (_.tryClaimSlot(PROP_TEXT_DECORATION_THICKNESS, weight)) {
+                        _.text_decoration_thickness = parsed_thickness;
+                    }
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "text-decoration-color")) {
+            if (c := CssColor.parse(std.mem.trim(u8, val, " \t\r\n"))) {
+                if (_.tryClaimSlot(PROP_TEXT_DECORATION_COLOR, weight)) {
+                    _.text_decoration_color = c;
+                    _.has_text_decoration_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "text-decoration-thickness")) {
+            if (px_v := parseGradPxToken(std.mem.trim(u8, val, " \t\r\n"))) {
+                if (px_v > 0.0 && _.tryClaimSlot(PROP_TEXT_DECORATION_THICKNESS, weight)) {
+                    _.text_decoration_thickness = px_v;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "text-underline-offset")) {
+            if (px_v := parseGradPxToken(std.mem.trim(u8, val, " \t\r\n"))) {
+                if (_.tryClaimSlot(PROP_TEXT_UNDERLINE_OFFSET, weight)) {
+                    _.text_underline_offset = px_v;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "pointer-events")) {
+            const tv = std.mem.trim(u8, val, " \t\r\n");
+            if (_.tryClaimSlot(PROP_POINTER_EVENTS, weight)) {
+                _.pointer_events_none = std.ascii.eqlIgnoreCase(tv, "none");
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "isolation")) {
+            const tv = std.mem.trim(u8, val, " \t\r\n");
+            if (_.tryClaimSlot(PROP_ISOLATION, weight)) {
+                _.isolation_isolate = std.ascii.eqlIgnoreCase(tv, "isolate");
             }
             return;
         }
@@ -3990,8 +4071,19 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "z-index")) {
-            const z = std.fmt.parseInt(i32, std.mem.trim(u8, val, " \t"), 10) catch 0;
-            if (_.tryClaimSlot(PROP_Z_INDEX, weight)) _.z_index = z;
+            const tv = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(tv, "auto")) {
+                if (_.tryClaimSlot(PROP_Z_INDEX, weight)) {
+                    _.z_index = 0;
+                    _.has_z_index = false;
+                }
+            } else {
+                const z = std.fmt.parseInt(i32, tv, 10) catch 0;
+                if (_.tryClaimSlot(PROP_Z_INDEX, weight)) {
+                    _.z_index = z;
+                    _.has_z_index = true;
+                }
+            }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "overflow")) {

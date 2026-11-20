@@ -84,6 +84,10 @@ pub struct LayoutBox {
     position: Position = Position.Static;
     overflow_visible: bool = true;
     height_is_auto: bool = true;
+    z_index: i32 = 0;
+    has_z_index: bool = false;
+    pointer_events_none: bool = false;
+    creates_stacking_context: bool = false;
     sticky_top: f32 = 0.0;
     sticky_bottom: f32 = 0.0;
     sticky_left: f32 = 0.0;
@@ -774,6 +778,15 @@ pub struct LayoutTree {
 
         box.position = style.position;
         box.overflow_visible = style.overflow_visible;
+        box.z_index = style.z_index;
+        box.has_z_index = style.has_z_index;
+        box.pointer_events_none = style.pointer_events_none;
+        const has_tx = !style.transform_tx.is_auto && !style.transform_tx.is_none;
+        const has_ty = !style.transform_ty.is_auto && !style.transform_ty.is_none;
+        box.creates_stacking_context = style.isolation_isolate ||
+            (style.position != Position.Static && style.has_z_index) ||
+            (style.opacity < 1.0) ||
+            has_tx || has_ty;
         box.has_sticky_top = (style.position == Position.Sticky) && !style.top.is_auto && !style.top.is_none;
         box.has_sticky_bottom = (style.position == Position.Sticky) && !style.bottom.is_auto && !style.bottom.is_none;
         box.has_sticky_left = (style.position == Position.Sticky) && !style.left.is_auto && !style.left.is_none;
@@ -1227,12 +1240,14 @@ pub struct LayoutTree {
         }
 
         // Apply transform translation offsets
+        let tx_px: f32 = 0.0;
+        let ty_px: f32 = 0.0;
         if (!style.transform_tx.is_auto && !style.transform_tx.is_none) {
-            const tx_px = style.transform_tx.resolvePx(final_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            tx_px = style.transform_tx.resolvePx(final_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
             rect_x += tx_px;
         }
         if (!style.transform_ty.is_auto && !style.transform_ty.is_none) {
-            const ty_px = style.transform_ty.resolvePx(final_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            ty_px = style.transform_ty.resolvePx(final_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
             rect_y += ty_px;
         }
 
@@ -1244,6 +1259,16 @@ pub struct LayoutTree {
             height: final_h,
             visible: is_visible,
         };
+
+        if (tx_px != 0.0 || ty_px != 0.0) {
+            if (@as(usize, node_id) < doc.nodes.items.len) {
+                let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+                while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                    _.shiftSubtree(doc, ch, tx_px, ty_px);
+                    ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+                }
+            }
+        }
 
         if (node_id < doc.nodes.items.len && doc.nodes.items[@as(usize, node_id)].hasTag("svg")) {
             const final_content_x = rect_x + final_box.border_left + final_box.padding_left;

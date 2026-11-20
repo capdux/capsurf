@@ -1857,4 +1857,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`painter.cp` 4 门禁全 0（`-m -d -o` 2.71s 增量构建）；
   - E2E 测试：`entity-parse-demo` + `forms-textarea-bidi` + `bmp-emoji-fonts` (2/3) PASS。
+
+## Phase 108: CSS Stacking Context Hit-Testing, Transform Subtree Shift & Text Decoration 3 Propagation (Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/js/dom_binding.cp` & `src/render/painter.cp`**：
+  - 新增 `pointer-events`、`isolation: isolate`、`text-decoration-color`/`thickness`/`underline-offset` 级联；修复 `transform: translate()` 子树平移；重写 `elementFromPoint` 完整支持 CSS 层叠上下文排序与固定祖先逃逸裁剪；实装 CSS Text Decoration 3 下划线边界传播。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`fixed-in-fixed-demo` (1/1)、`floating-popup` (3/6 + 全命中精准)、`keyboard-scroll` 装饰传播用例 PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -3823,3 +3823,15 @@
   - `src/render/painter.cp` 4 门禁全 0；
   - `entity-parse-demo` (PASS)、`forms-textarea-bidi` (PASS)、`bmp-emoji-fonts` (2/3 PASS，第 3 项定位缺 HTML Named Access `window.<id>`)；`fixed-in-fixed-demo` 定位 `dom_binding.cp:1173` `elementFromPoint` 祖先层级继承缺陷。
 - **清理旧子智能体**: 销毁 `36774f96-a61a-4746-9705-d33fb9d8c0ed` 并清理端口 `19231` 残留进程。
+
+## [2026-11-20 19:44:40] 完整 CSS 层叠上下文命中测试、transform 子树平移与 Text Decoration 3 传播闭环 (Subagent 09826c61 结单，Phase 108)
+- **层叠上下文命中测试与 `transform` 子树平移 (`src/css/cascade.cp`, `src/layout/layout.cp`, `src/js/dom_binding.cp`)**:
+  - `cascade.cp`: 新增 `PROP_POINTER_EVENTS`、`PROP_ISOLATION`、`PROP_TEXT_DECORATION_COLOR`/`THICKNESS`/`UNDERLINE_OFFSET`（95 槽位）；
+  - `layout.cp`: 修复 `transform: translate(tx, ty)` 递归调用 `shiftSubtree` 同步平移子树；
+  - `dom_binding.cp`: 重写 `js_document_element_from_point` 支持 `pointer-events: none/auto`、`isolation: isolate`、固定祖先逃逸裁剪及完整 CSS 层叠上下文排序。
+- **CSS Text Decoration 3 下划线传播 (`src/render/painter.cp`)**:
+  - 实现向上遍历至 `inline-block`/`table`/`float`/`abspos`/`fixed` 边界停止的下划线传播，应用 `text_decoration_color`/`thickness`/`underline_offset` 与 `group_opacity`。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `fixed-in-fixed-demo` (1/1 PASS)、`floating-popup` (3/6 PASS + 另 3 项命中 100% 精准，仅余 `harness.ts`/`input.cp` 双重 click 修复)、`keyboard-scroll` 装饰传播用例 PASS；定位 `canvas-text-upgrade` 为 `canvas2d.js:1119` 1 行步进系数。
+- **清理旧子智能体**: 销毁 `09826c61-c9fb-4a4b-8bb3-fb216b950f7e`。

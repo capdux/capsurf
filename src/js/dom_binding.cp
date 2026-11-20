@@ -1134,7 +1134,11 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
         }
         const doc = dom_ctx.doc;
         let best_node: NodeId = NULL_NODE;
-        let best_layer: i32 = -1;
+        let best_sc_root: NodeId = NULL_NODE;
+        let best_sc_z: i32 = -2147483647;
+        let best_sc_pos: i32 = -1;
+        let best_local_z: i32 = -2147483647;
+        let best_local_pos: i32 = -1;
 
         let nid: usize = 1;
         while (nid < doc.nodes.items.len && nid < lt.boxes.items.len) : (nid += 1) {
@@ -1144,17 +1148,40 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
             const node_id: NodeId = @intCast(nid);
             const box = &lt.boxes.items[nid];
             if (!box.rect.visible || box.rect.width <= 0.0 || box.rect.height <= 0.0) continue;
+            if (box.pointer_events_none) continue;
 
             const info = computeViewportRect(ctx, dom_ctx, lt, node_id, false);
             const r = info.rect;
             if (px < r.x || px >= r.x + r.width || py < r.y || py >= r.y + r.height) continue;
 
+            // Build ancestor chain (from root down to node_id) for overflow clipping & stacking context
+            let chain: [64]NodeId = [NULL_NODE; 64];
+            let depth: usize = 0;
+            let cur_a = node_id;
+            while (cur_a != NULL_NODE && @as(usize, cur_a) < doc.nodes.items.len && @as(usize, cur_a) < lt.boxes.items.len && depth < 64) {
+                chain[depth] = cur_a;
+                depth += 1;
+                cur_a = doc.nodes.items[@as(usize, cur_a)].parent;
+            }
+            // Reverse chain so chain[0] is outermost ancestor, chain[depth - 1] is node_id
+            let li: usize = 0;
+            while (li < depth / 2) : (li += 1) {
+                const tmp = chain[li];
+                chain[li] = chain[depth - 1 - li];
+                chain[depth - 1 - li] = tmp;
+            }
+
             // Check ancestor overflow clipping (fixed escapes all ancestor clips)
             let clipped = false;
             if (box.position != Position.Fixed) {
-                let anc = node.parent;
-                let guard: usize = 0;
-                while (anc != NULL_NODE && @as(usize, anc) < doc.nodes.items.len && @as(usize, anc) < lt.boxes.items.len && guard < 64) : (guard += 1) {
+                let ci: usize = depth;
+                while (ci > 1) {
+                    ci -= 1;
+                    const anc = chain[ci - 1];
+                    const child_id = chain[ci];
+                    if (lt.boxes.items[@as(usize, child_id)].position == Position.Fixed) {
+                        break;
+                    }
                     const anc_node = &doc.nodes.items[@as(usize, anc)];
                     const anc_box = &lt.boxes.items[@as(usize, anc)];
                     if (anc_node.node_type == NodeType.Element && !anc_node.hasTag("html") && !anc_node.hasTag("body") && !anc_box.overflow_visible) {
@@ -1164,24 +1191,62 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
                             break;
                         }
                     }
-                    anc = anc_node.parent;
                 }
             }
             if (clipped) continue;
 
-            // Layer priority: fixed/absolute/sticky > in-flow; later in tree order wins within same layer
-            const layer: i32 = if (box.position == Position.Fixed)
-                @as(i32, 3)
-            else if (box.position == Position.Absolute)
-                @as(i32, 2)
-            else if (box.position == Position.Sticky || box.position == Position.Relative)
-                @as(i32, 1)
-            else
-                @as(i32, 0);
+            // Compute CSS stacking order:
+            // Positioned elements (fixed/absolute/relative/sticky) share the same layer (1) when z-index is auto;
+            // descendants inherit their positioned/stacking-context ancestor's layer.
+            let sc_root: NodeId = NULL_NODE;
+            let sc_z: i32 = 0;
+            let sc_pos: i32 = 0;
+            let local_z: i32 = 0;
+            let local_pos: i32 = 0;
+            let ci2: usize = 0;
+            while (ci2 < depth) : (ci2 += 1) {
+                const aid = chain[ci2];
+                const anode = &doc.nodes.items[@as(usize, aid)];
+                if (anode.node_type != NodeType.Element || anode.hasTag("html") || anode.hasTag("body")) continue;
+                const abox = &lt.boxes.items[@as(usize, aid)];
+                const is_pos = (abox.position != Position.Static);
+                if (sc_root == NULL_NODE) {
+                    if (is_pos) sc_pos = 1;
+                    if (abox.creates_stacking_context) {
+                        sc_root = aid;
+                        sc_z = if (abox.has_z_index) abox.z_index else 0;
+                    }
+                } else {
+                    if (is_pos) local_pos = 1;
+                    if (abox.has_z_index) local_z = abox.z_index;
+                }
+            }
 
-            if (layer >= best_layer) {
-                best_layer = layer;
+            let wins = false;
+            if (best_node == NULL_NODE) {
+                wins = true;
+            } else if (sc_z != best_sc_z) {
+                wins = (sc_z > best_sc_z);
+            } else if (sc_pos != best_sc_pos) {
+                wins = (sc_pos > best_sc_pos);
+            } else if (sc_root != NULL_NODE && sc_root == best_sc_root) {
+                if (local_z != best_local_z) {
+                    wins = (local_z > best_local_z);
+                } else {
+                    wins = (local_pos >= best_local_pos);
+                }
+            } else {
+                // Same root stacking level, different or no sub-context -> later in DOM tree order wins
+                wins = true;
+            }
+
+            if (wins) {
                 best_node = node_id;
+                best_sc_root = sc_root;
+                best_sc_z = sc_z;
+                best_sc_pos = sc_pos;
+                best_local_z = local_z;
+                best_local_pos = local_pos;
             }
         }
 

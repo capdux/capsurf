@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind, FloatMode } from "../css/cascade.cp";
 import { Rect, LayoutTree } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -2760,7 +2760,6 @@ fn paintNodeRecursive(
                 fsz = ps.font_size_px;
             }
             const txt_color = if (group_opacity < 1.0) scaleColorAlpha(raw_fill, group_opacity) else raw_fill;
-            const deco_color = if (group_opacity < 1.0) scaleColorAlpha(raw_color, group_opacity) else raw_color;
             const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
             if (trimmed.len > 0) {
                 const scaled_h = if (fsz >= 14.0) (fsz * 0.65) else 8.0;
@@ -2794,13 +2793,29 @@ fn paintNodeRecursive(
                         canvas.drawTextClipped(r.x + 1.0, r.y + 2.0, trimmed, txt_color, active_clip);
                     }
                 }
-                if (ps := p_style_opt) {
-                    if (ps.text_decoration_underline && deco_color.a > 0) {
-                        const ul_h = @max(1.0, fsz * 0.08);
-                        const ul_y = draw_y + scaled_h + @max(1.0, fsz * 0.05);
-                        const ul_w = @max(r.width, @as(f32, @floatFromInt(trimmed.len)) * scaled_h);
-                        canvas.fillRectClipped(r.x, ul_y, ul_w, ul_h, deco_color, active_clip);
+                // Propagate text-decoration underline from parent and in-flow ancestors
+                // (stops at atomic inlines, floats, and out-of-flow positioned elements per CSS Text Decor 3)
+                let cur_deco = parent_id;
+                let deco_guard: usize = 0;
+                while (cur_deco != NULL_NODE && @as(usize, cur_deco) < styles.len && @as(usize, cur_deco) < doc.nodes.items.len && deco_guard < 32) : (deco_guard += 1) {
+                    const cs = &styles[@as(usize, cur_deco)];
+                    if (cs.text_decoration_underline) {
+                        const base_dc = if (cs.has_text_decoration_color) cs.text_decoration_color else cs.color;
+                        const dc = if (group_opacity < 1.0) scaleColorAlpha(base_dc, group_opacity) else base_dc;
+                        if (dc.a > 0) {
+                            const ul_h = if (cs.text_decoration_thickness > 0.0) cs.text_decoration_thickness else @max(1.0, fsz * 0.08);
+                            const ul_y = draw_y + scaled_h + @max(1.0, fsz * 0.05) + cs.text_underline_offset;
+                            const ul_w = @max(r.width, @as(f32, @floatFromInt(trimmed.len)) * (scaled_h * 0.6));
+                            canvas.fillRectClipped(r.x, ul_y, ul_w, ul_h, dc, active_clip);
+                        }
                     }
+                    // Stop propagation past atomic inline-level, floated, or out-of-flow boxes
+                    if (cs.display.isInlineBlock() || cs.display.isTable() ||
+                        cs.float_mode != FloatMode.None ||
+                        cs.position == Position.Absolute || cs.position == Position.Fixed) {
+                        break;
+                    }
+                    cur_deco = doc.nodes.items[@as(usize, cur_deco)].parent;
                 }
             }
         }
