@@ -2,9 +2,11 @@
 // CDP Input Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/input.ts
 
-import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString } from "./types.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
+import { HttpLoader } from "../net/http_loader.cp";
+import { jsIsException } from "../js/qjs_engine.cp";
 
 pub enum MouseEventType {
     MousePressed,
@@ -185,11 +187,11 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
 
 fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32): bool {
     if (!session.has_document) return true;
-    let js_buf: [1024]u8 = [0; 1024];
+    let js_buf: [1280]u8 = [0; 1280];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
-        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}) || document.body || document.documentElement; if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0 }}); const ok = el.dispatchEvent(ev); return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
-        .{ target_node, ev_name, x, y },
+        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0 }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, 1); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
+        .{ target_node, x, y, ev_name, x, y, ev_name, x, y },
     ) catch return true;
     const val = session.ctx.eval(js_expr);
     let not_prevented = true;
@@ -232,9 +234,72 @@ fn dispatchRangeChange(session: *CdpPageSession, node_id: NodeId) {
     session.ctx.freeValue(val);
 }
 
+pub fn emitPendingNavigationEvents(
+    session: *CdpPageSession,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+) {
+    if (!session.has_document) return;
+    const val = session.ctx.eval(
+        "(function(){return String(globalThis.__capsurf_pending_navigation||'');})()",
+    );
+    defer session.ctx.freeValue(val);
+    if (jsIsException(val)) return;
+
+    const pending_raw = session.ctx.toCString(val);
+    if (pending_raw.len == 0 || pending_raw[0] == '#') return;
+
+    let resolved_buf: [2048]u8 = [0; 2048];
+    const target_url = HttpLoader.resolveRelativeUrl(session.url, pending_raw, &resolved_buf);
+    if (target_url.len == 0) return;
+
+    // Do not emit differentDocument navigation events for same-document fragment-only changes
+    let cur_base = session.url;
+    if (h := std.mem.indexOfScalar(u8, session.url, '#')) {
+        cur_base = session.url[0..h];
+    }
+    let tgt_base = target_url;
+    if (h := std.mem.indexOfScalar(u8, target_url, '#')) {
+        tgt_base = target_url[0..h];
+    }
+    if (std.mem.eql(u8, cur_base, tgt_base) && std.mem.indexOfScalar(u8, target_url, '#') != null) {
+        return;
+    }
+
+    let esc_u_buf: [2048]u8 = [0; 2048];
+    const esc_u = escapeJsonString(target_url, &esc_u_buf);
+
+    if (event_count.* < out_events.len) {
+        const req_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\",\"reason\":\"other\",\"url\":\"{s}\",\"disposition\":\"currentTab\"}}",
+            .{ session.frame_id, esc_u },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameRequestedNavigation", req_json);
+        event_count.* += 1;
+    }
+
+    if (event_count.* < out_events.len) {
+        const start_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\",\"url\":\"{s}\",\"loaderId\":\"{s}\",\"navigationType\":\"differentDocument\"}}",
+            .{ session.frame_id, esc_u, session.loader_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameStartedNavigating", start_json);
+        event_count.* += 1;
+    }
+}
+
 pub struct InputHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
+    pub static fn handle(
+        session: *CdpPageSession,
+        req: CdpRequest,
+        out_buf: []u8,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
+        event_count: *usize,
+    ): CdpResponse {
         * = out_buf;
+        event_count.* = 0;
 
         // 1. Mouse Events: dispatchMouseEvent
         if (std.mem.eql(u8, req.method, "Input.dispatchMouseEvent")) {
@@ -314,6 +379,7 @@ pub struct InputHandler {
             } else if (ev_type == .MouseReleased) {
                 const target_node = hitTest(session, x, y);
                 * = dispatchMouseDomEvent(session, target_node, "mouseup", x, y);
+                * = dispatchMouseDomEvent(session, target_node, "click", x, y);
                 if (session.range_drag_node != NULL_NODE) {
                     if (session.range_drag_changed) {
                         dispatchRangeChange(session, session.range_drag_node);
@@ -342,6 +408,7 @@ pub struct InputHandler {
                         }
                     }
                 }
+                emitPendingNavigationEvents(session, out_events, event_count);
             }
 
             return CdpResponse.ok(req.id, "{}");

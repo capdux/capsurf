@@ -132,6 +132,9 @@ pub struct MockFixtures {
             clean = clean[0..h_idx];
         }
 
+        if (std.mem.indexOf(u8, path_or_url, "euckr-child.html") != null) {
+            return "text/html; charset=euc-kr";
+        }
         if (std.ascii.endsWithIgnoreCase(clean, ".html") || std.ascii.eqlIgnoreCase(clean, "html")) {
             return "text/html";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".svg") || std.ascii.eqlIgnoreCase(clean, "svg")) {
@@ -211,6 +214,8 @@ pub struct MockFixtures {
         let target_name = filename;
         if (std.mem.eql(u8, filename, "ce-chunk.js") || std.mem.eql(u8, filename, "ce-chunk")) {
             target_name = "ce-mixin-chunk.js";
+        } else if (std.mem.eql(u8, filename, "euckr-child.html")) {
+            target_name = "euckr-child.html.bin";
         }
 
         // 1. Try relative path: e2e/page/<filename>

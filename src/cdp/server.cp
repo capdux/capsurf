@@ -853,7 +853,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         // Emit triggered events before the command response (matches Chrome CDP ordering)
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
-            if (events[i].session_id.len == 0 && req.session_id.len > 0) {
+            if (events[i].session_id.len == 0 && req.session_id.len > 0 &&
+                !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) {
                 events[i].session_id = req.session_id;
             }
         }

@@ -624,6 +624,41 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      g.__capsurf_retained_req_count = Math.max(0, (g.__capsurf_retained_req_count || 0) - 1);\n" ++
     "    }\n" ++
     "  }\n" ++
+    "  var OrigMatchMedia = g.matchMedia;\n" ++
+    "  if (typeof OrigMatchMedia === 'function') {\n" ++
+    "    var wrappedMatchMedia = function(query) {\n" ++
+    "      var res = OrigMatchMedia.call(this, query);\n" ++
+    "      var q = String(query || '').toLowerCase();\n" ++
+    "      if (q.indexOf('prefers-color-scheme') !== -1) {\n" ++
+    "        var isDark = Boolean(g.__capsurf_dark_color_scheme);\n" ++
+    "        var matchesScheme = true;\n" ++
+    "        if (/prefers-color-scheme\\s*:\\s*dark/.test(q)) matchesScheme = isDark;\n" ++
+    "        else if (/prefers-color-scheme\\s*:\\s*light/.test(q)) matchesScheme = !isDark;\n" ++
+    "        return {\n" ++
+    "          matches: Boolean(res && res.matches) && matchesScheme,\n" ++
+    "          media: res ? res.media : String(query),\n" ++
+    "          addEventListener: res && res.addEventListener ? res.addEventListener : function(){},\n" ++
+    "          removeEventListener: res && res.removeEventListener ? res.removeEventListener : function(){},\n" ++
+    "          onchange: null\n" ++
+    "        };\n" ++
+    "      }\n" ++
+    "      return res;\n" ++
+    "    };\n" ++
+    "    g.matchMedia = wrappedMatchMedia;\n" ++
+    "    if (typeof window !== 'undefined') window.matchMedia = wrappedMatchMedia;\n" ++
+    "  }\n" ++
+    "  var OrigSetDocUrl = g.__capsurf_set_document_url;\n" ++
+    "  if (typeof OrigSetDocUrl === 'function' && !OrigSetDocUrl.__tty_wrapped) {\n" ++
+    "    var wrappedSetDocUrl = function(u) {\n" ++
+    "      if (g.__capsurf_nav_tty_stripped && typeof u === 'string' && u.indexOf('ks_') !== -1) {\n" ++
+    "        u = u.replace(/([?&])(ks_color_scheme|ks_tty_css|ks_tty_cell)=[^&#]*/g, '$1').replace(/\\?&/, '?').replace(/&&+/g, '&').replace(/[?&](?=#|$)/, '');\n" ++
+    "      }\n" ++
+    "      return OrigSetDocUrl.call(this, u);\n" ++
+    "    };\n" ++
+    "    wrappedSetDocUrl.__tty_wrapped = true;\n" ++
+    "    g.__capsurf_set_document_url = wrappedSetDocUrl;\n" ++
+    "    if (typeof globalThis !== 'undefined') globalThis.__capsurf_set_document_url = wrappedSetDocUrl;\n" ++
+    "  }\n" ++
     "  if (g.document) {\n" ++
     "    var reopenBuf = '';\n" ++
     "    var reopenActive = false;\n" ++

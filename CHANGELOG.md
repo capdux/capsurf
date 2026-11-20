@@ -2010,4 +2010,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`internals-not-global` (1/1)、`html-instanceof-demo` (1/1)、`lazy-coalesce` (1/1) — **3/3 PASS (39 expect() calls)**。
+
+## Phase 131: `tty-nav-params-page-initiated`, `iframe-legacy-charset` & `input-navigation-reply` — 3/3 Suites (6/6 PASS)
+- **`src/cdp/{dispatch,input,page,runtime,server,session,session_hooks}.cp` & `src/net/mock_fixtures.cp`**：
+  - 隔离 `Page.navigate` 与页面内导航的 `ks_color_scheme` 参数、补全 `euckr-child.html` 同源 EUC-KR 字符集路由、实装输入触发导航的 `frameRequestedNavigation`/`frameStartedNavigating` 应答事件。
+- **测试与门禁验证**：
+  - 静态门禁：全部 8 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`tty-nav-params-page-initiated` (1/1)、`iframe-legacy-charset` (1/1)、`input-navigation-reply` (4/4) — **6/6 PASS (18 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

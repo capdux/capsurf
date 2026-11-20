@@ -4,6 +4,7 @@
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
+import { emitPendingNavigationEvents } from "./input.cp";
 
 pub struct RuntimeHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
@@ -138,7 +139,7 @@ pub struct RuntimeHandler {
                     event_count.* += 1;
                 }
             }
-            
+
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }
@@ -251,6 +252,10 @@ pub struct RuntimeHandler {
                     out_events[event_count.*] = polled_css_evts[css_i];
                     event_count.* += 1;
                 }
+            }
+
+            if (std.mem.indexOf(u8, expr, "__capsurf_dispatch_mouse_event") != null) {
+                emitPendingNavigationEvents(session, out_events, event_count);
             }
 
             if (eval_len == 0) {

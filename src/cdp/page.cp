@@ -4,6 +4,7 @@
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
+import { TtyNavState, applyTtyNavParams } from "../tty/nav_params.cp";
 import { jsIsException } from "../js/qjs_engine.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -203,6 +204,69 @@ fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
         const opener_fid = cf.parent_frame_id ?? session.frame_id;
         * = session.target_registry.registerIframeTarget(cf.url, cf.frame_id, opener_fid, bctx);
     }
+}
+
+fn applyTtyNavParamsFromUrl(raw_url: []const u8, session: *CdpPageSession): bool {
+    const q_pos = std.mem.indexOfScalar(u8, raw_url, '?') ?? return false;
+    const h_pos = std.mem.indexOfScalarPos(u8, raw_url, q_pos, '#') ?? raw_url.len;
+    const query = raw_url[q_pos + 1 .. h_pos];
+    if (query.len == 0) return false;
+
+    let state = TtyNavState{};
+    if (!applyTtyNavParams(query, &state)) {
+        return false;
+    }
+    if (d := state.dark_color_scheme) {
+        session.dark_color_scheme = d;
+    }
+    return true;
+}
+
+fn stripTtyNavParams(raw_url: []const u8, out_buf: []u8): []const u8 {
+    const q_pos = std.mem.indexOfScalar(u8, raw_url, '?') ?? return raw_url;
+    const h_pos = std.mem.indexOfScalarPos(u8, raw_url, q_pos, '#') ?? raw_url.len;
+    const query = raw_url[q_pos + 1 .. h_pos];
+    if (query.len == 0) return raw_url;
+
+    let off: usize = 0;
+    const base_part = raw_url[0..q_pos];
+    if (off + base_part.len > out_buf.len) return raw_url;
+    @memcpy(out_buf[off..off + base_part.len], base_part);
+    off += base_part.len;
+
+    let wrote_q = false;
+    let pos: usize = 0;
+    while (pos < query.len) {
+        let end = query.len;
+        if (amp := std.mem.indexOfScalarPos(u8, query, pos, '&')) {
+            end = amp;
+        }
+        const pair = query[pos..end];
+        pos = end + 1;
+        if (pair.len == 0) continue;
+        let key = pair;
+        if (eq := std.mem.indexOfScalar(u8, pair, '=')) {
+            key = pair[0..eq];
+        }
+        if (std.mem.eql(u8, key, "ks_color_scheme") ||
+            std.mem.eql(u8, key, "ks_tty_css") ||
+            std.mem.eql(u8, key, "ks_tty_cell")) {
+            continue;
+        }
+        const sep: u8 = if (!wrote_q) '?' else '&';
+        if (off + 1 + pair.len > out_buf.len) return raw_url;
+        out_buf[off] = sep;
+        off += 1;
+        @memcpy(out_buf[off..off + pair.len], pair);
+        off += pair.len;
+        wrote_q = true;
+    }
+
+    const hash_part = raw_url[h_pos..];
+    if (off + hash_part.len > out_buf.len) return raw_url;
+    @memcpy(out_buf[off..off + hash_part.len], hash_part);
+    off += hash_part.len;
+    return out_buf[0..off];
 }
 
 pub struct PageHandler {
@@ -494,7 +558,14 @@ pub struct PageHandler {
             if (bctx.len > 0) {
                 session.setContextId(bctx);
             }
-            const url = extractJsonString(req.params_raw, "url") ?? "about:blank";
+            const raw_nav_url = extractJsonString(req.params_raw, "url") ?? "about:blank";
+            let clean_nav_buf: [2048]u8 = [0; 2048];
+            const tty_matched = applyTtyNavParamsFromUrl(raw_nav_url, session);
+            session.nav_tty_stripped = tty_matched;
+            const url = if (tty_matched)
+                stripTtyNavParams(raw_nav_url, &clean_nav_buf)
+            else
+                raw_nav_url;
             const referrer = extractJsonString(req.params_raw, "referrer") ?? "";
 
             // Private Network Access: block a public page from navigating itself to a loopback address
@@ -1059,6 +1130,7 @@ pub fn performPendingNavigation(
         recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
     }
 
+    session.nav_tty_stripped = false;
     session.navigate(nav_html, fetch_res.final_url, "") catch return false;
 
     if (session.network_enabled && event_count.* < out_events.len) {

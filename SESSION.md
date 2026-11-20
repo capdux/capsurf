@@ -4061,6 +4061,20 @@
   - `internals-not-global` (**1/1**)、`html-instanceof-demo` (**1/1**)、`lazy-coalesce` (**1/1**)：**3/3 PASS (39 expect() calls)**！
 - **清理旧子智能体**: 销毁 `6515da33-4f83-4549-a80e-d5998ee0b8c4`。
 
+## [2026-11-20 23:05:00] Slot A (`53a66cda`) `clockFloorMs` / `readyState` 落地与清理卡死 Slot C (`ca29802e`)
+- **Slot A (`53a66cda`) 阶段成果（已销毁）**：在 `src/js/shim/constants.js` 实现单调 `clockFloorMs`、在 `src/js/shim/window.js` 实现 `Document.readyState` 流转与 `DOMContentLoaded`/`load`/`pageshow`（`runtime_source.cp` 4 门禁全 0），并精准定位 `lifecycle-demo` 与 `import-map` 的 `src/cdp/session.cp` 缺口；待 Slot B 编译恢复后一并终验提交。
+- **清理卡死 Slot C**: 销毁在无 `timeout` `Bun.spawn` 上挂起的 `ca29802e-6d91-400a-bbde-2ffa1db3b491`，重派严格带 `timeout` 的小粒度 CSS/Render Slot C。
+
+## [2026-11-20 23:06:30] `tty-nav-params-page-initiated`、`iframe-legacy-charset` 与 `input-navigation-reply` 6/6 全绿 (Subagent 8c63524e 结单，Phase 131)
+- **TTY 导航参数隔离、EUC-KR Iframe 与输入导航应答 (`src/cdp/{dispatch,input,page,runtime,server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
+  - `page.cp` & `session.cp` & `session_hooks.cp`：仅在 `Page.navigate` 入口解析 `ks_color_scheme` 到 `session.dark_color_scheme` 并剥离 `ks_*`，页面内导航保持 `matchMedia` 与 `location.search` 隔离；
+  - `mock_fixtures.cp` & `session.cp`：补全 `euckr-child.html` (`text/html; charset=euc-kr`) 映射与 `iframe_boot` 初始加载触发；
+  - `input.cp` & `dispatch.cp` & `runtime.cp` & `server.cp`：新增 `emitPendingNavigationEvents` 在鼠标/点击触发非同文档导航时发射 `Page.frameRequestedNavigation` / `Page.frameStartedNavigating`，`MouseReleased` 优先通过 `elementFromPoint` 激活元素。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - 全部 8 个 `.cp` 文件 4 门禁全 0；
+  - `tty-nav-params-page-initiated` (**1/1**)、`iframe-legacy-charset` (**1/1**)、`input-navigation-reply` (**4/4**)：**6/6 PASS (18 expect() calls)**！
+- **清理旧子智能体**: 销毁 `8c63524e-7114-4871-affd-b2d8a393818d`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

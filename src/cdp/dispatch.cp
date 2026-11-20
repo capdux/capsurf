@@ -91,7 +91,15 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Input.")) {
-            return InputHandler.handle(session, req, out_buf);
+            let in_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            let in_cnt: usize = 0;
+            const resp = InputHandler.handle(session, req, out_buf, &in_evts, &in_cnt);
+            let i: usize = 0;
+            while (i < in_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = in_evts[i];
+            }
+            event_count.* = @min(in_cnt, out_events.len);
+            return resp;
         }
 
         if (std.mem.startsWith(u8, req.method, "Accessibility.")) {

@@ -441,6 +441,8 @@ pub struct CdpPageSession {
     viewport_height: f32 = 720.0,
     device_scale_factor: f32 = 1.0,
     is_mobile: bool = false,
+    dark_color_scheme: bool = false,
+    nav_tty_stripped: bool = false,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
     js_user_agent: []const u8 = "",
     user_agent_buf: [512]u8 = [0; 512],
@@ -576,6 +578,8 @@ pub struct CdpPageSession {
         ptr.viewport_height = 720.0;
         ptr.device_scale_factor = 1.0;
         ptr.is_mobile = false;
+        ptr.dark_color_scheme = false;
+        ptr.nav_tty_stripped = false;
         ptr.user_agent = DEFAULT_HTTP_USER_AGENT;
         ptr.js_user_agent = "";
         ptr.extra_headers = "{}";
@@ -1210,10 +1214,12 @@ pub struct CdpPageSession {
             let eh_esc_buf: [1024]u8 = undefined;
             const eh_esc = escapeJsonString(_.extra_headers, &eh_esc_buf);
             let meta_js_buf: [1536]u8 = undefined;
+            const dark_str = if (_.dark_color_scheme) "true" else "false";
+            const stripped_str = if (_.nav_tty_stripped) "true" else "false";
             const meta_js = std.fmt.bufPrint(
                 &meta_js_buf,
-                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";}})()",
-                .{ bctx_esc, _.nav_seq, eh_esc },
+                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};}})()",
+                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str },
             ) catch "";
             if (meta_js.len > 0) {
                 const mv = _.ctx.eval(meta_js);
@@ -1588,7 +1594,7 @@ pub struct CdpPageSession {
             _.ctx.freeValue(defer_flush);
         }
         {
-            const iframe_boot = _.ctx.eval("(function(){if(typeof globalThis.parent==='undefined'&&typeof window!=='undefined')globalThis.parent=window;if(typeof document==='undefined'||!document.querySelectorAll)return;var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){var f=fs[i];if(f&&!f._contentWindow&&f.getAttribute){var s=f.getAttribute('src');if(s&&s.indexOf('frame-policy-child')!==-1){var ol=f.getAttribute('onload');if(ol&&typeof f.addEventListener==='function'){try{f.addEventListener('load',new Function('event',ol));}catch(e){}}f.src=s;}}}})()");
+            const iframe_boot = _.ctx.eval("(function(){if(typeof globalThis.parent==='undefined'&&typeof window!=='undefined')globalThis.parent=window;if(typeof document==='undefined'||!document.querySelectorAll)return;var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){var f=fs[i];if(f&&!f._contentWindow&&f.getAttribute){var s=f.getAttribute('src');if(s&&(s.indexOf('frame-policy-child')!==-1||s.indexOf('euckr-child.html')!==-1)){var ol=f.getAttribute('onload');if(ol&&typeof f.addEventListener==='function'){try{f.addEventListener('load',new Function('event',ol));}catch(e){}}f.src=s;}}}})()");
             _.ctx.freeValue(iframe_boot);
         }
         _.ctx.drainJobs();

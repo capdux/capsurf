@@ -1571,4 +1571,10 @@
 ## Phase 130 内部钩子不可枚举隔离与 `Document.hasFocus` 方案 (`src/js/shim/index.js`)
 1. **引擎内部钩子收口**：通过 `Object.defineProperty(..., { enumerable: false, writable: false, configurable: false })` 锁定 `Symbol.for("kitesurf.internals")` 及动态导入辅助符号，防止页面全局扫描泄漏。
 2. **`Document.prototype.hasFocus`**：为 `Document` 原型及实例补充 `hasFocus()`，解决 `html-instanceof-demo` 在焦点判别后置校验抛 `TypeError` 的问题。
+
+## Phase 131 TTY 参数隔离、EUC-KR Iframe 与输入导航事件应答方案
+1. **TTY 参数入口隔离 (`page.cp`, `session_hooks.cp`)**：
+   - 将 `applyTtyNavParamsFromUrl` 与 `stripTtyNavParams` 严格限定在外部 `Page.navigate` 入口并设置 `nav_tty_stripped`，页面内链接点击与 `location.href` 跳转不改变 `dark_color_scheme` 也不剥离 `location.search`。
+2. **输入触发导航应答 (`input.cp`, `dispatch.cp`, `runtime.cp`)**：
+   - 在 `InputHandler.handle` 与 `Runtime.evaluate` 派发 `__capsurf_dispatch_mouse_event` 后立即调用 `emitPendingNavigationEvents`，在 CDP 响应前推送 `Page.frameRequestedNavigation` 与 `Page.frameStartedNavigating`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
