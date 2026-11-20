@@ -2187,12 +2187,15 @@
     });
   }
 
+  const styleSheetListCache = new WeakMap();
   function getOrCreateStyleSheetList(root) {
     if (!root) return createStyleSheetListProxy(null);
-    if (!root._styleSheets) {
-      root._styleSheets = createStyleSheetListProxy(root);
+    let cached = styleSheetListCache.get(root);
+    if (!cached) {
+      cached = createStyleSheetListProxy(root);
+      styleSheetListCache.set(root, cached);
     }
-    return root._styleSheets;
+    return cached;
   }
   global.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
   if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheetList = getOrCreateStyleSheetList;

@@ -2,6 +2,7 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/events/dispatch.ts
 
 const nodeListenersMap = new Map();
+const hydratedHandlersMap = new WeakMap();
 
 function getListeners(target) {
   if (!target) return null;
@@ -354,10 +355,14 @@ function internalDispatch(target, event, trusted) {
       // Inline event handler (e.g. element.onclick, element.onsubmit)
       if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
         const propName = "on" + eventType;
-        if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
+        let hydrated = hydratedHandlersMap.get(entry);
+        if (!hydrated) {
+          hydrated = Object.create(null);
+          hydratedHandlersMap.set(entry, hydrated);
+        }
         const hasOwnProp = Object.prototype.hasOwnProperty.call(entry, propName);
-        if (!entry._hydratedHandlers[propName]) {
-          entry._hydratedHandlers[propName] = true;
+        if (!hydrated[propName]) {
+          hydrated[propName] = true;
           if (!hasOwnProp && typeof entry.getAttribute === "function") {
             const attrVal = entry.getAttribute(propName);
             if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {

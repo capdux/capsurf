@@ -96,7 +96,6 @@
     InvalidModificationError: 13,
     NamespaceError: 14,
     InvalidAccessError: 15,
-    ValidationError: 16,
     TypeMismatchError: 17,
     SecurityError: 18,
     NetworkError: 19,
@@ -136,19 +135,63 @@
     ["DATA_CLONE_ERR", 25],
   ];
 
-  // 0. DOMException Implementation (Available from start)
+  // 0. DOMException Implementation (WebIDL binding shape)
+  const domExceptionState = new WeakMap();
+
   function DOMException(message, name) {
-    const err = new Error(message || "");
-    err.name = name || "Error";
-    err.code = DOM_EXCEPTION_CODES[err.name] || 0;
-    Object.setPrototypeOf(err, DOMException.prototype);
+    if (!(this instanceof DOMException)) {
+      throw new TypeError("Failed to construct 'DOMException': Please use the 'new' operator.");
+    }
+    const msg = message === undefined ? "" : String(message);
+    const nm = name === undefined ? "Error" : String(name);
+    const code = Object.prototype.hasOwnProperty.call(DOM_EXCEPTION_CODES, nm) ? DOM_EXCEPTION_CODES[nm] : 0;
+    const err = new Error();
+    try { delete err.message; } catch (e) {}
+    try { delete err.name; } catch (e) {}
+    Object.setPrototypeOf(err, new.target ? new.target.prototype : DOMException.prototype);
+    domExceptionState.set(err, { message: msg, name: nm, code: code });
     return err;
   }
   DOMException.prototype = Object.create(Error.prototype);
-  DOMException.prototype.constructor = DOMException;
-  DOMException.prototype.code = 0;
-  DOMException.prototype.name = "Error";
-  DOMException.prototype.message = "";
+  Object.defineProperty(DOMException.prototype, "constructor", {
+    value: DOMException,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(DOMException.prototype, "name", {
+    get: markNative(function () {
+      const st = domExceptionState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.name;
+    }, "get name"),
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMException.prototype, "message", {
+    get: markNative(function () {
+      const st = domExceptionState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.message;
+    }, "get message"),
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMException.prototype, "code", {
+    get: markNative(function () {
+      const st = domExceptionState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.code;
+    }, "get code"),
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMException.prototype, Symbol.toStringTag, {
+    value: "DOMException",
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
 
   for (let i = 0; i < DOM_EXCEPTION_CONSTANTS.length; i++) {
     const item = DOM_EXCEPTION_CONSTANTS[i];
@@ -1716,6 +1759,7 @@
   // Aligned with vendor/kitesurf/packages/dom-shim/src/events/dispatch.ts
 
   const nodeListenersMap = new Map();
+  const hydratedHandlersMap = new WeakMap();
 
   function getListeners(target) {
     if (!target) return null;
@@ -2068,10 +2112,14 @@
         // Inline event handler (e.g. element.onclick, element.onsubmit)
         if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
           const propName = "on" + eventType;
-          if (!entry._hydratedHandlers) entry._hydratedHandlers = {};
+          let hydrated = hydratedHandlersMap.get(entry);
+          if (!hydrated) {
+            hydrated = Object.create(null);
+            hydratedHandlersMap.set(entry, hydrated);
+          }
           const hasOwnProp = Object.prototype.hasOwnProperty.call(entry, propName);
-          if (!entry._hydratedHandlers[propName]) {
-            entry._hydratedHandlers[propName] = true;
+          if (!hydrated[propName]) {
+            hydrated[propName] = true;
             if (!hasOwnProp && typeof entry.getAttribute === "function") {
               const attrVal = entry.getAttribute(propName);
               if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
@@ -5559,12 +5607,15 @@
       });
     }
 
+    const styleSheetListCache = new WeakMap();
     function getOrCreateStyleSheetList(root) {
       if (!root) return createStyleSheetListProxy(null);
-      if (!root._styleSheets) {
-        root._styleSheets = createStyleSheetListProxy(root);
+      let cached = styleSheetListCache.get(root);
+      if (!cached) {
+        cached = createStyleSheetListProxy(root);
+        styleSheetListCache.set(root, cached);
       }
-      return root._styleSheets;
+      return cached;
     }
     global.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
     if (typeof globalThis !== "undefined") globalThis.getOrCreateStyleSheetList = getOrCreateStyleSheetList;
@@ -7396,16 +7447,53 @@
     configurable: true,
   });
 
+  const shadowRootState = new WeakMap();
   function ShadowRoot(host, mode) {
-    DocumentFragment.call(this);
-    this.nodeType = DOCUMENT_FRAGMENT_NODE;
-    this.nodeName = "#document-fragment";
-    this.host = host || null;
-    this.mode = mode || "open";
-    this._children = [];
+    shadowRootState.set(this, {
+      host: host || null,
+      mode: mode || "open",
+      children: [],
+    });
   }
   ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
   ShadowRoot.prototype.constructor = ShadowRoot;
+  Object.defineProperty(ShadowRoot.prototype, "nodeType", {
+    get: function () { return DOCUMENT_FRAGMENT_NODE; },
+    configurable: true,
+  });
+  Object.defineProperty(ShadowRoot.prototype, "nodeName", {
+    get: function () { return "#document-fragment"; },
+    configurable: true,
+  });
+  Object.defineProperty(ShadowRoot.prototype, "host", {
+    get: function () {
+      const st = shadowRootState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.host;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ShadowRoot.prototype, "mode", {
+    get: function () {
+      const st = shadowRootState.get(this);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st.mode;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ShadowRoot.prototype, "_children", {
+    get: function () {
+      const st = shadowRootState.get(this);
+      return st ? st.children : undefined;
+    },
+    set: function (v) {
+      const st = shadowRootState.get(this);
+      if (st) st.children = v;
+    },
+    configurable: true,
+  });
   markNative(ShadowRoot, "ShadowRoot");
   Object.defineProperty(ShadowRoot.prototype, "styleSheets", {
     get: function () {
@@ -7448,7 +7536,14 @@
         if (!node || typeof node !== "object") {
           throw new TypeError("Failed to execute 'importNode' on 'Document': parameter 1 is not of type 'Node'.");
         }
-        return node.cloneNode(Boolean(deep));
+        const cloned = node.cloneNode(Boolean(deep));
+        const ce = (typeof customElements !== "undefined" && customElements) ||
+          (typeof global !== "undefined" && global.customElements) ||
+          (typeof globalThis !== "undefined" && globalThis.customElements);
+        if (ce && typeof ce.upgrade === "function" && !this._isInertTemplateDocument) {
+          ce.upgrade(cloned);
+        }
+        return cloned;
       };
       markNative(Document.prototype.importNode, "importNode");
     }
@@ -8282,13 +8377,37 @@
       configurable: true,
     });
 
+    // Private internal slots stored in WeakMaps to avoid leaking own properties on Element instances
+    const elementStyleProxyMap = new WeakMap();
+    const elementAttrsMap = new WeakMap();
+    const elementAttrListMap = new WeakMap();
+    const elementDisplayNoneMap = new WeakMap();
+
+    Object.defineProperty(proto, "_attrs", {
+      get: function () { return elementAttrsMap.get(this); },
+      set: function (v) { elementAttrsMap.set(this, v); },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "_attrList", {
+      get: function () { return elementAttrListMap.get(this); },
+      set: function (v) { elementAttrListMap.set(this, v); },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "_displayNone", {
+      get: function () { return elementDisplayNoneMap.get(this); },
+      set: function (v) { elementDisplayNoneMap.set(this, v); },
+      configurable: true,
+    });
+
     // style getter/setter
     Object.defineProperty(proto, "style", {
       get: function () {
-        if (!this._styleProxy) {
-          this._styleProxy = createStyleProxy(this);
+        let sp = elementStyleProxyMap.get(this);
+        if (!sp) {
+          sp = createStyleProxy(this);
+          elementStyleProxyMap.set(this, sp);
         }
-        return this._styleProxy;
+        return sp;
       },
       set: function (val) {
         if (typeof val === "string") {
@@ -9254,6 +9373,9 @@
     if (!proto.getClientRects) {
       proto.getClientRects = function () {
         const rect = this.getBoundingClientRect();
+        if (typeof global.__capsurf_createDOMRectList === "function") {
+          return global.__capsurf_createDOMRectList([rect]);
+        }
         return [rect];
       };
       markNative(proto.getClientRects, "getClientRects");
@@ -9861,6 +9983,8 @@
     };
     markNative(proto.checkVisibility, "checkVisibility");
 
+    const elementShadowRootMap = new WeakMap();
+
     proto.attachShadow = function (init) {
       if (!init || typeof init !== "object" || !init.mode) {
         throw new TypeError("Failed to execute 'attachShadow' on 'Element': 1 argument required, but only 0 present.");
@@ -9869,7 +9993,7 @@
       if (mode !== "open" && mode !== "closed") {
         throw new TypeError("Failed to execute 'attachShadow' on 'Element': The provided value '" + mode + "' is not a valid enum value of type ShadowRootMode.");
       }
-      if (this._shadowRoot) {
+      if (elementShadowRootMap.get(this)) {
         if (typeof DOMException !== "undefined") {
           throw new DOMException("Shadow root cannot be created on a host which already hosts a shadow tree", "NotSupportedError");
         }
@@ -9879,17 +10003,16 @@
       }
       const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
       const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
-      shadow.host = this;
-      shadow.mode = mode;
-      this._shadowRoot = shadow;
+      elementShadowRootMap.set(this, shadow);
       return shadow;
     };
     markNative(proto.attachShadow, "attachShadow");
 
     Object.defineProperty(proto, "shadowRoot", {
       get: function () {
-        if (this._shadowRoot && this._shadowRoot.mode === "open") {
-          return this._shadowRoot;
+        const sr = elementShadowRootMap.get(this);
+        if (sr && sr.mode === "open") {
+          return sr;
         }
         return null;
       },
@@ -14101,6 +14224,31 @@
       return this.checkValidity();
     };
 
+    const inputPopoverTargetMap = new WeakMap();
+    Object.defineProperty(HTMLInputElement.prototype, "popoverTargetElement", {
+      get: markNative(function () {
+        if (!(this instanceof HTMLInputElement)) {
+          throw new TypeError("Illegal invocation");
+        }
+        return inputPopoverTargetMap.get(this) || null;
+      }, "get popoverTargetElement"),
+      set: markNative(function (v) {
+        if (!(this instanceof HTMLInputElement)) {
+          throw new TypeError("Illegal invocation");
+        }
+        if (v === null || v === undefined) {
+          inputPopoverTargetMap.delete(this);
+          return;
+        }
+        if (typeof Element === "function" && !(v instanceof Element)) {
+          throw new TypeError("Failed to set the 'popoverTargetElement' property on 'HTMLInputElement': parameter 1 is not of type 'Element'.");
+        }
+        inputPopoverTargetMap.set(this, v);
+      }, "set popoverTargetElement"),
+      enumerable: true,
+      configurable: true,
+    });
+
     markNative(HTMLInputElement, "HTMLInputElement");
     markNative(HTMLInputElement.prototype.stepUp, "stepUp");
     markNative(HTMLInputElement.prototype.stepDown, "stepDown");
@@ -14982,6 +15130,31 @@
         .replace(/\r/g, "\n");
     };
 
+    const buttonPopoverTargetMap = new WeakMap();
+    Object.defineProperty(HTMLButtonElement.prototype, "popoverTargetElement", {
+      get: markNative(function () {
+        if (!(this instanceof HTMLButtonElement)) {
+          throw new TypeError("Illegal invocation");
+        }
+        return buttonPopoverTargetMap.get(this) || null;
+      }, "get popoverTargetElement"),
+      set: markNative(function (v) {
+        if (!(this instanceof HTMLButtonElement)) {
+          throw new TypeError("Illegal invocation");
+        }
+        if (v === null || v === undefined) {
+          buttonPopoverTargetMap.delete(this);
+          return;
+        }
+        if (typeof Element === "function" && !(v instanceof Element)) {
+          throw new TypeError("Failed to set the 'popoverTargetElement' property on 'HTMLButtonElement': parameter 1 is not of type 'Element'.");
+        }
+        buttonPopoverTargetMap.set(this, v);
+      }, "set popoverTargetElement"),
+      enumerable: true,
+      configurable: true,
+    });
+
     markNative(HTMLButtonElement, "HTMLButtonElement");
     markNative(HTMLButtonElement.prototype.checkValidity, "checkValidity");
     markNative(HTMLButtonElement.prototype.reportValidity, "reportValidity");
@@ -15178,17 +15351,21 @@
       configurable: true,
     });
 
+    const formElementsCollectionMap = new WeakMap();
+
     Object.defineProperty(HTMLFormElement.prototype, "elements", {
       get: function () {
-        if (!this._elementsCollection) {
+        let col = formElementsCollectionMap.get(this);
+        if (!col) {
           const self = this;
           const target = Object.create((global.HTMLFormControlsCollection || HTMLCollection).prototype);
           target._isFormControlsCollection = true;
-          this._elementsCollection = makeHtmlCollection(function () {
+          col = makeHtmlCollection(function () {
             return collectFormControls(self);
           }, target);
+          formElementsCollectionMap.set(this, col);
         }
-        return this._elementsCollection;
+        return col;
       },
       configurable: true,
     });
@@ -16596,13 +16773,16 @@
   });
 
   DataTransferItemList.prototype.add = function (data, type) {
-    if (data instanceof File) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 1 argument required, but only 0 present.");
+    }
+    if (arguments.length === 1) {
+      if (!(data instanceof File)) {
+        throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': parameter 1 is not of type 'File'.");
+      }
       const item = new DataTransferItem("file", data.type || "", data);
       this._dt._items.push(item);
       return item;
-    }
-    if (arguments.length < 2) {
-      throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 2 arguments required for string item.");
     }
     const norm = normalizeDataTransferFormat(type);
     const str = String(data);
@@ -18147,78 +18327,86 @@
   };
 
   Range.prototype.getClientRects = function () {
+    const wrap = function (arr) {
+      if (typeof global !== "undefined" && typeof global.__capsurf_createDOMRectList === "function") {
+        return global.__capsurf_createDOMRectList(arr);
+      }
+      return arr;
+    };
+    const makeRect = function (x, y, w, h) {
+      if (typeof DOMRect === "function") return new DOMRect(x, y, w, h);
+      return { x: x, y: y, width: w, height: h, top: y, left: x, bottom: y + h, right: x + w };
+    };
     const rects = [];
-    if (this.collapsed) return rects;
     const startNode = this.startContainer;
     const endNode = this.endContainer;
-    if (!startNode || !endNode) return rects;
+    if (!startNode || !endNode) return wrap(rects);
 
     const doc = (startNode && (startNode.ownerDocument || (startNode.nodeType === 9 ? startNode : null))) || (typeof document !== "undefined" ? document : null);
     const root = doc ? (doc.body || doc.documentElement) : null;
-    if (!root) return rects;
+    if (!root) return wrap(rects);
 
     const range = this;
-    function walk(node) {
-      if (!node) return;
+    if (!this.collapsed) {
+      function walk(node) {
+        if (!node) return;
 
-      if (node.nodeType === 3) { // TEXT_NODE
-        const text = node.data || node.textContent || "";
-        const len = text.length;
-        if (len === 0) return;
+        if (node.nodeType === 3) { // TEXT_NODE
+          const text = node.data || node.textContent || "";
+          const len = text.length;
+          if (len === 0) return;
 
-        if (compareBoundaryPoints(node, 0, range.endContainer, range.endOffset) >= 0) {
-          return;
-        }
-        if (compareBoundaryPoints(node, len, range.startContainer, range.startOffset) <= 0) {
-          return;
-        }
-
-        let s = 0;
-        let e = len;
-        if (node === range.startContainer) {
-          s = Math.max(0, Math.min(len, range.startOffset));
-        }
-        if (node === range.endContainer) {
-          e = Math.max(0, Math.min(len, range.endOffset));
-        }
-        if (s < e) {
-          let nodeRect = null;
-          if (typeof node.getBoundingClientRect === "function") {
-            nodeRect = node.getBoundingClientRect();
+          if (compareBoundaryPoints(node, 0, range.endContainer, range.endOffset) >= 0) {
+            return;
           }
-          if (!nodeRect || (!nodeRect.width && !nodeRect.height)) {
-            if (node.parentNode && typeof node.parentNode.getBoundingClientRect === "function") {
-              nodeRect = node.parentNode.getBoundingClientRect();
+          if (compareBoundaryPoints(node, len, range.startContainer, range.startOffset) <= 0) {
+            return;
+          }
+
+          let s = 0;
+          let e = len;
+          if (node === range.startContainer) {
+            s = Math.max(0, Math.min(len, range.startOffset));
+          }
+          if (node === range.endContainer) {
+            e = Math.max(0, Math.min(len, range.endOffset));
+          }
+          if (s < e) {
+            let nodeRect = null;
+            if (typeof node.getBoundingClientRect === "function") {
+              nodeRect = node.getBoundingClientRect();
+            }
+            if (!nodeRect || (!nodeRect.width && !nodeRect.height)) {
+              if (node.parentNode && typeof node.parentNode.getBoundingClientRect === "function") {
+                nodeRect = node.parentNode.getBoundingClientRect();
+              }
+            }
+            if (nodeRect) {
+              const rx = (nodeRect.left !== undefined ? nodeRect.left : (nodeRect.x || 0)) + 2 + s * 8;
+              const ry = (nodeRect.top !== undefined ? nodeRect.top : (nodeRect.y || 0)) + 2;
+              const rw = (e - s) * 8;
+              const rh = (nodeRect.height && nodeRect.height >= 10) ? nodeRect.height : 12;
+              rects.push(makeRect(rx, ry, rw, rh));
             }
           }
-          if (nodeRect) {
-            const rx = (nodeRect.left !== undefined ? nodeRect.left : (nodeRect.x || 0)) + 2 + s * 8;
-            const ry = (nodeRect.top !== undefined ? nodeRect.top : (nodeRect.y || 0)) + 2;
-            const rw = (e - s) * 8;
-            const rh = (nodeRect.height && nodeRect.height >= 10) ? nodeRect.height : 12;
-            rects.push({
-              x: rx,
-              y: ry,
-              width: rw,
-              height: rh,
-              top: ry,
-              left: rx,
-              bottom: ry + rh,
-              right: rx + rw,
-            });
-          }
+          return;
         }
-        return;
+
+        const kids = node.childNodes || node._children || [];
+        for (let i = 0; i < kids.length; i++) {
+          walk(kids[i]);
+        }
       }
 
-      const kids = node.childNodes || node._children || [];
-      for (let i = 0; i < kids.length; i++) {
-        walk(kids[i]);
+      walk(root);
+    }
+    if (rects.length === 0 && startNode.nodeType === 1 && typeof startNode.getBoundingClientRect === "function") {
+      const r = startNode.getBoundingClientRect();
+      if (r && (r.width > 0 || r.height > 0)) {
+        rects.push(r instanceof DOMRect ? r : makeRect(r.x, r.y, r.width, r.height));
       }
     }
-
-    walk(root);
-    return rects;
+    return wrap(rects);
   };
 
   Range.prototype.getBoundingClientRect = function () {
@@ -23180,67 +23368,335 @@
       configurable: true,
     });
 
+    const domRectState = new WeakMap();
+    const domRectListState = new WeakMap();
+    const DOM_RECT_LIST_TOKEN = {};
+
     function DOMRectReadOnly(x, y, width, height) {
-      const nx = x === undefined ? 0 : Number(x);
-      const ny = y === undefined ? 0 : Number(y);
-      const nw = width === undefined ? 0 : Number(width);
-      const nh = height === undefined ? 0 : Number(height);
-      this.x = nx;
-      this.y = ny;
-      this.width = nw;
-      this.height = nh;
-      this.top = nh < 0 ? ny + nh : ny;
-      this.right = nw < 0 ? nx : nx + nw;
-      this.bottom = nh < 0 ? ny : ny + nh;
-      this.left = nw < 0 ? nx + nw : nx;
+      if (!(this instanceof DOMRectReadOnly)) {
+        throw new TypeError("Failed to construct 'DOMRectReadOnly': Please use the 'new' operator.");
+      }
+      domRectState.set(this, {
+        x: x === undefined ? 0 : Number(x),
+        y: y === undefined ? 0 : Number(y),
+        width: width === undefined ? 0 : Number(width),
+        height: height === undefined ? 0 : Number(height),
+      });
     }
-    DOMRectReadOnly.prototype.toJSON = function () {
-      return {
-        x: this.x,
-        y: this.y,
-        width: this.width,
-        height: this.height,
-        top: this.top,
-        right: this.right,
-        bottom: this.bottom,
-        left: this.left,
-      };
-    };
-    DOMRectReadOnly.fromRect = function (other) {
-      const o = other || {};
+    function getRectState(obj) {
+      const st = domRectState.get(obj);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st;
+    }
+    Object.defineProperty(DOMRectReadOnly.prototype, "x", {
+      get: markNative(function () { return getRectState(this).x; }, "get x"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "y", {
+      get: markNative(function () { return getRectState(this).y; }, "get y"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "width", {
+      get: markNative(function () { return getRectState(this).width; }, "get width"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "height", {
+      get: markNative(function () { return getRectState(this).height; }, "get height"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "top", {
+      get: markNative(function () {
+        const s = getRectState(this);
+        return s.height < 0 ? s.y + s.height : s.y;
+      }, "get top"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "right", {
+      get: markNative(function () {
+        const s = getRectState(this);
+        return s.width < 0 ? s.x : s.x + s.width;
+      }, "get right"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "bottom", {
+      get: markNative(function () {
+        const s = getRectState(this);
+        return s.height < 0 ? s.y : s.y + s.height;
+      }, "get bottom"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "left", {
+      get: markNative(function () {
+        const s = getRectState(this);
+        return s.width < 0 ? s.x + s.width : s.x;
+      }, "get left"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(DOMRectReadOnly.prototype, "toJSON", {
+      value: markNative(function () {
+        const s = getRectState(this);
+        const top = s.height < 0 ? s.y + s.height : s.y;
+        const right = s.width < 0 ? s.x : s.x + s.width;
+        const bottom = s.height < 0 ? s.y : s.y + s.height;
+        const left = s.width < 0 ? s.x + s.width : s.x;
+        return {
+          x: s.x,
+          y: s.y,
+          width: s.width,
+          height: s.height,
+          top: top,
+          right: right,
+          bottom: bottom,
+          left: left,
+        };
+      }, "toJSON"),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    DOMRectReadOnly.fromRect = markNative(function () {
+      const o = arguments[0] || {};
       return new DOMRectReadOnly(o.x, o.y, o.width, o.height);
-    };
+    }, "fromRect");
     Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag, {
       value: "DOMRectReadOnly",
       configurable: true,
     });
     markNative(DOMRectReadOnly, "DOMRectReadOnly");
-    markNative(DOMRectReadOnly.prototype.toJSON, "toJSON");
 
     function DOMRect(x, y, width, height) {
+      if (!(this instanceof DOMRect)) {
+        throw new TypeError("Failed to construct 'DOMRect': Please use the 'new' operator.");
+      }
       DOMRectReadOnly.call(this, x, y, width, height);
     }
     DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
-    DOMRect.prototype.constructor = DOMRect;
-    DOMRect.fromRect = function (other) {
-      const o = other || {};
+    Object.defineProperty(DOMRect.prototype, "constructor", {
+      value: DOMRect,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+    ["x", "y", "width", "height"].forEach(function (prop) {
+      Object.defineProperty(DOMRect.prototype, prop, {
+        get: markNative(function () {
+          if (!(this instanceof DOMRect)) throw new TypeError("Illegal invocation");
+          return getRectState(this)[prop];
+        }, "get " + prop),
+        set: markNative(function (v) {
+          if (!(this instanceof DOMRect)) throw new TypeError("Illegal invocation");
+          getRectState(this)[prop] = Number(v);
+        }, "set " + prop),
+        enumerable: true,
+        configurable: true,
+      });
+    });
+    DOMRect.fromRect = markNative(function () {
+      const o = arguments[0] || {};
       return new DOMRect(o.x, o.y, o.width, o.height);
-    };
+    }, "fromRect");
     Object.defineProperty(DOMRect.prototype, Symbol.toStringTag, {
       value: "DOMRect",
       configurable: true,
     });
     markNative(DOMRect, "DOMRect");
 
+    function DOMRectList(token, items) {
+      if (token !== DOM_RECT_LIST_TOKEN) {
+        throw new TypeError("Illegal constructor");
+      }
+      const list = Array.isArray(items) ? items.slice() : [];
+      domRectListState.set(this, list);
+      for (let i = 0; i < list.length; i++) {
+        Object.defineProperty(this, String(i), {
+          value: list[i],
+          enumerable: true,
+          configurable: true,
+          writable: false,
+        });
+      }
+    }
+    Object.defineProperty(DOMRectList.prototype, "length", {
+      get: markNative(function () {
+        const list = domRectListState.get(this);
+        if (!list) throw new TypeError("Illegal invocation");
+        return list.length;
+      }, "get length"),
+      enumerable: true,
+      configurable: true,
+    });
+    DOMRectList.prototype.item = markNative(function (index) {
+      const list = domRectListState.get(this);
+      if (!list) throw new TypeError("Illegal invocation");
+      const i = Number(index) >>> 0;
+      return i < list.length ? list[i] : null;
+    }, "item");
+    DOMRectList.prototype[Symbol.iterator] = markNative(function () {
+      const list = domRectListState.get(this);
+      if (!list) throw new TypeError("Illegal invocation");
+      return list[Symbol.iterator]();
+    }, "[Symbol.iterator]");
+    Object.defineProperty(DOMRectList.prototype, Symbol.toStringTag, {
+      value: "DOMRectList",
+      configurable: true,
+    });
+    markNative(DOMRectList, "DOMRectList");
+
+    global.__capsurf_createDOMRectList = function (items) {
+      return new DOMRectList(DOM_RECT_LIST_TOKEN, items);
+    };
+
     global.DOMRectReadOnly = DOMRectReadOnly;
     global.DOMRect = DOMRect;
+    global.DOMRectList = DOMRectList;
     if (typeof window !== "undefined") {
       window.DOMRectReadOnly = DOMRectReadOnly;
       window.DOMRect = DOMRect;
+      window.DOMRectList = DOMRectList;
     }
     if (typeof globalThis !== "undefined") {
       globalThis.DOMRectReadOnly = DOMRectReadOnly;
       globalThis.DOMRect = DOMRect;
+      globalThis.DOMRectList = DOMRectList;
+    }
+
+    // CSS Custom Highlight API: Highlight, HighlightRegistry, CSS.highlights
+    const highlightState = new WeakMap();
+    const VALID_HIGHLIGHT_TYPES = { highlight: true, "spelling-error": true, "grammar-error": true };
+    function isAbstractRange(v) {
+      if (!v || typeof v !== "object") return false;
+      if (typeof Range === "function" && v instanceof Range) return true;
+      if (typeof StaticRange === "function" && v instanceof StaticRange) return true;
+      return ("startContainer" in v && "endContainer" in v && "startOffset" in v && "endOffset" in v);
+    }
+    function Highlight() {
+      if (!(this instanceof Highlight)) {
+        throw new TypeError("Failed to construct 'Highlight': Please use the 'new' operator.");
+      }
+      const set = new Set();
+      for (let i = 0; i < arguments.length; i++) {
+        const r = arguments[i];
+        if (!isAbstractRange(r)) {
+          throw new TypeError("Failed to construct 'Highlight': parameter " + (i + 1) + " is not of type 'AbstractRange'.");
+        }
+        set.add(r);
+      }
+      highlightState.set(this, { set: set, priority: 0, type: "highlight" });
+    }
+    function getHighlightState(obj) {
+      const st = highlightState.get(obj);
+      if (!st) throw new TypeError("Illegal invocation");
+      return st;
+    }
+    Object.defineProperty(Highlight.prototype, "size", {
+      get: markNative(function () { return getHighlightState(this).set.size; }, "get size"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(Highlight.prototype, "priority", {
+      get: markNative(function () { return getHighlightState(this).priority; }, "get priority"),
+      set: markNative(function (v) { getHighlightState(this).priority = (Number(v) | 0); }, "set priority"),
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(Highlight.prototype, "type", {
+      get: markNative(function () { return getHighlightState(this).type; }, "get type"),
+      set: markNative(function (v) {
+        const s = String(v);
+        if (VALID_HIGHLIGHT_TYPES[s]) getHighlightState(this).type = s;
+      }, "set type"),
+      enumerable: true,
+      configurable: true,
+    });
+    Highlight.prototype.has = markNative(function (v) { return getHighlightState(this).set.has(v); }, "has");
+    Highlight.prototype.add = markNative(function (v) {
+      if (!isAbstractRange(v)) throw new TypeError("Failed to execute 'add' on 'Highlight': parameter 1 is not of type 'AbstractRange'.");
+      getHighlightState(this).set.add(v);
+      return this;
+    }, "add");
+    Highlight.prototype.delete = markNative(function (v) { return getHighlightState(this).set.delete(v); }, "delete");
+    Highlight.prototype.clear = markNative(function () { getHighlightState(this).set.clear(); }, "clear");
+    Highlight.prototype.entries = markNative(function () { return getHighlightState(this).set.entries(); }, "entries");
+    Highlight.prototype.keys = markNative(function () { return getHighlightState(this).set.keys(); }, "keys");
+    Highlight.prototype.values = markNative(function () { return getHighlightState(this).set.values(); }, "values");
+    Highlight.prototype.forEach = markNative(function (cb, thisArg) {
+      const self = this;
+      getHighlightState(this).set.forEach(function (v) { cb.call(thisArg, v, v, self); });
+    }, "forEach");
+    Highlight.prototype[Symbol.iterator] = Highlight.prototype.values;
+    Object.defineProperty(Highlight.prototype, Symbol.toStringTag, { value: "Highlight", configurable: true });
+    markNative(Highlight, "Highlight");
+
+    const highlightRegistryState = new WeakMap();
+    const HIGHLIGHT_REGISTRY_TOKEN = {};
+    function HighlightRegistry(token) {
+      if (token !== HIGHLIGHT_REGISTRY_TOKEN) {
+        throw new TypeError("Illegal constructor");
+      }
+      highlightRegistryState.set(this, new Map());
+    }
+    function getHighlightRegistryMap(obj) {
+      const m = highlightRegistryState.get(obj);
+      if (!m) throw new TypeError("Illegal invocation");
+      return m;
+    }
+    Object.defineProperty(HighlightRegistry.prototype, "size", {
+      get: markNative(function () { return getHighlightRegistryMap(this).size; }, "get size"),
+      enumerable: true,
+      configurable: true,
+    });
+    HighlightRegistry.prototype.get = markNative(function (k) { return getHighlightRegistryMap(this).get(String(k)); }, "get");
+    HighlightRegistry.prototype.has = markNative(function (k) { return getHighlightRegistryMap(this).has(String(k)); }, "has");
+    HighlightRegistry.prototype.set = markNative(function (k, v) {
+      if (!(v instanceof Highlight)) {
+        throw new TypeError("Failed to execute 'set' on 'HighlightRegistry': parameter 2 is not of type 'Highlight'.");
+      }
+      getHighlightRegistryMap(this).set(String(k), v);
+      return this;
+    }, "set");
+    HighlightRegistry.prototype.delete = markNative(function (k) { return getHighlightRegistryMap(this).delete(String(k)); }, "delete");
+    HighlightRegistry.prototype.clear = markNative(function () { getHighlightRegistryMap(this).clear(); }, "clear");
+    HighlightRegistry.prototype.entries = markNative(function () { return getHighlightRegistryMap(this).entries(); }, "entries");
+    HighlightRegistry.prototype.keys = markNative(function () { return getHighlightRegistryMap(this).keys(); }, "keys");
+    HighlightRegistry.prototype.values = markNative(function () { return getHighlightRegistryMap(this).values(); }, "values");
+    HighlightRegistry.prototype.forEach = markNative(function (cb, thisArg) {
+      const self = this;
+      getHighlightRegistryMap(this).forEach(function (v, k) { cb.call(thisArg, v, k, self); });
+    }, "forEach");
+    HighlightRegistry.prototype[Symbol.iterator] = HighlightRegistry.prototype.entries;
+    HighlightRegistry.prototype.highlightsFromPoint = markNative(function (x, y, options) {
+      getHighlightRegistryMap(this);
+      return [];
+    }, "highlightsFromPoint");
+    Object.defineProperty(HighlightRegistry.prototype, Symbol.toStringTag, { value: "HighlightRegistry", configurable: true });
+    markNative(HighlightRegistry, "HighlightRegistry");
+
+    const cssHighlightsInstance = new HighlightRegistry(HIGHLIGHT_REGISTRY_TOKEN);
+    if (global.CSS) {
+      Object.defineProperty(global.CSS, "highlights", {
+        value: cssHighlightsInstance,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    global.Highlight = Highlight;
+    global.HighlightRegistry = HighlightRegistry;
+    if (typeof window !== "undefined") {
+      window.Highlight = Highlight;
+      window.HighlightRegistry = HighlightRegistry;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.Highlight = Highlight;
+      globalThis.HighlightRegistry = HighlightRegistry;
     }
 
     markNative(URL, "URL");
@@ -26365,95 +26821,3176 @@
 
     markNative(getComputedStyle, "getComputedStyle");
 
-    // CSS Typed OM: CSSStyleValue, CSSKeywordValue, CSSUnitValue, StylePropertyMapReadOnly
-    function CSSStyleValue(raw) {
-      this._raw = raw == null ? "" : String(raw);
-    }
-    CSSStyleValue.prototype.toString = function () {
-      return this._raw;
-    };
-    markNative(CSSStyleValue, "CSSStyleValue");
 
-    function CSSKeywordValue(value) {
-      CSSStyleValue.call(this, value);
-      this.value = String(value);
-    }
-    CSSKeywordValue.prototype = Object.create(CSSStyleValue.prototype);
-    CSSKeywordValue.prototype.constructor = CSSKeywordValue;
-    CSSKeywordValue.prototype.toString = function () {
-      return this.value;
-    };
-    markNative(CSSKeywordValue, "CSSKeywordValue");
-
-    function CSSUnitValue(value, unit) {
-      this.value = Number(value);
-      this.unit = String(unit);
-    }
-    CSSUnitValue.prototype = Object.create(CSSStyleValue.prototype);
-    CSSUnitValue.prototype.constructor = CSSUnitValue;
-    CSSUnitValue.prototype.toString = function () {
-      if (this.unit === "percent") return String(this.value) + "%";
-      if (this.unit === "number") return String(this.value);
-      return String(this.value) + this.unit;
-    };
-    markNative(CSSUnitValue, "CSSUnitValue");
-
-    function parseTypedOMValue(rawVal) {
-      if (rawVal == null) return undefined;
-      const s = String(rawVal).trim();
-      if (!s) return undefined;
-      const m = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|px|em|rem|vw|vh|vmin|vmax|pt|cm|mm|in|deg|rad|grad|turn|s|ms|fr)?$/i);
-      if (m) {
-        const num = parseFloat(m[1]);
-        let unit = (m[2] || "").toLowerCase();
-        if (unit === "%") unit = "percent";
-        else if (unit === "") unit = "number";
-        return new CSSUnitValue(num, unit);
+    // =========================================================================
+    // Full CSS Typed OM + DOMMatrix (migrated from vendor/kitesurf)
+    // =========================================================================
+    (function installCssTypedOM(global) {
+      const CSS_WIDE_KW = new Set(["initial", "inherit", "unset", "revert", "revert-layer"]);
+      function canonicalizeInlineStyle(declText) {
+        const s = String(declText || "").trim();
+        const idx = s.indexOf(":");
+        if (idx <= 0) return [];
+        const prop = s.slice(0, idx).trim().toLowerCase();
+        const val = s.slice(idx + 1).trim();
+        if (!prop || !val) return [];
+        if (val.indexOf(";") >= 0 || /!important\s*$/i.test(val)) return [];
+        if (!prop.startsWith("--") && !/^[a-z][a-z0-9-]*$/.test(prop)) return [];
+        const low = val.toLowerCase();
+        if (CSS_WIDE_KW.has(low) || /^var\(/.test(low)) return [[prop, val]];
+        if (prop === "direction") {
+          return (low === "ltr" || low === "rtl") ? [[prop, low]] : [];
+        }
+        if (prop === "opacity") {
+          if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(low)) return [[prop, val]];
+          if (/^(?:calc|min|max|clamp)\(/.test(low)) return [[prop, val]];
+          return [];
+        }
+        return [[prop, val]];
       }
-      if (/^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(s)) {
-        return new CSSKeywordValue(s);
+      function parseNumDto(str) {
+        const t = String(str || "").trim();
+        const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|px|em|rem|ex|ch|cap|ic|lh|rlh|vw|vh|vi|vb|vmin|vmax|cm|mm|q|in|pt|pc|deg|grad|rad|turn|s|ms|hz|khz|dpi|dpcm|dppx|fr)?$/i.exec(t);
+        if (!m) return null;
+        const val = Number(m[1]);
+        if (!Number.isFinite(val)) return null;
+        const unit = m[2] ? (m[2] === "%" ? "%" : m[2].toLowerCase()) : "number";
+        return { type: "unit", value: val, unit: unit };
       }
-      return new CSSStyleValue(s);
-    }
+      function splitTopArgs(str) {
+        const out = [];
+        let depth = 0, start = 0;
+        for (let i = 0; i < str.length; i++) {
+          const c = str[i];
+          if (c === "(") depth++;
+          else if (c === ")") depth--;
+          else if (c === "," && depth === 0) {
+            out.push(str.slice(start, i).trim());
+            start = i + 1;
+          }
+        }
+        const tail = str.slice(start).trim();
+        if (tail) out.push(tail);
+        return out;
+      }
+      function parseTransformToDto(cssText) {
+        const s = String(cssText || "").trim();
+        if (!s || s.toLowerCase() === "none") return null;
+        const components = [];
+        let i = 0;
+        while (i < s.length) {
+          while (i < s.length && /\s/.test(s[i])) i++;
+          if (i >= s.length) break;
+          const nameStart = i;
+          while (i < s.length && /[a-zA-Z0-9_-]/.test(s[i])) i++;
+          const fn = s.slice(nameStart, i).toLowerCase();
+          if (s[i] !== "(") return null;
+          let depth = 1, argStart = ++i;
+          while (i < s.length && depth > 0) {
+            if (s[i] === "(") depth++;
+            else if (s[i] === ")") depth--;
+            i++;
+          }
+          if (depth !== 0) return null;
+          const args = splitTopArgs(s.slice(argStart, i - 1));
+          const zeroPx = { type: "unit", value: 0, unit: "px" };
+          const zeroDeg = { type: "unit", value: 0, unit: "deg" };
+          const num0 = { type: "unit", value: 0, unit: "number" };
+          const num1 = { type: "unit", value: 1, unit: "number" };
+          if (fn === "translate" && (args.length === 1 || args.length === 2)) {
+            const x = parseNumDto(args[0]);
+            const y = args.length === 2 ? parseNumDto(args[1]) : zeroPx;
+            if (!x || !y) return null;
+            components.push({ type: "translate", x: x, y: y, z: zeroPx, is_2d: true });
+          } else if (fn === "translatex" && args.length === 1) {
+            const x = parseNumDto(args[0]);
+            if (!x) return null;
+            components.push({ type: "translate", x: x, y: zeroPx, z: zeroPx, is_2d: true });
+          } else if (fn === "translatey" && args.length === 1) {
+            const y = parseNumDto(args[0]);
+            if (!y) return null;
+            components.push({ type: "translate", x: zeroPx, y: y, z: zeroPx, is_2d: true });
+          } else if (fn === "translatez" && args.length === 1) {
+            const z = parseNumDto(args[0]);
+            if (!z) return null;
+            components.push({ type: "translate", x: zeroPx, y: zeroPx, z: z, is_2d: false });
+          } else if (fn === "translate3d" && args.length === 3) {
+            const x = parseNumDto(args[0]), y = parseNumDto(args[1]), z = parseNumDto(args[2]);
+            if (!x || !y || !z) return null;
+            components.push({ type: "translate", x: x, y: y, z: z, is_2d: false });
+          } else if (fn === "rotate" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "rotate", x: num0, y: num0, z: num1, angle: a, is_2d: true });
+          } else if (fn === "rotatex" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "rotate", x: num1, y: num0, z: num0, angle: a, is_2d: false });
+          } else if (fn === "rotatey" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "rotate", x: num0, y: num1, z: num0, angle: a, is_2d: false });
+          } else if (fn === "rotatez" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "rotate", x: num0, y: num0, z: num1, angle: a, is_2d: false });
+          } else if (fn === "rotate3d" && args.length === 4) {
+            const x = parseNumDto(args[0]), y = parseNumDto(args[1]), z = parseNumDto(args[2]), a = parseNumDto(args[3]);
+            if (!x || !y || !z || !a) return null;
+            components.push({ type: "rotate", x: x, y: y, z: z, angle: a, is_2d: false });
+          } else if (fn === "scale" && (args.length === 1 || args.length === 2)) {
+            const x = parseNumDto(args[0]);
+            const y = args.length === 2 ? parseNumDto(args[1]) : x;
+            if (!x || !y) return null;
+            components.push({ type: "scale", x: x, y: y, z: num1, is_2d: true });
+          } else if (fn === "scalex" && args.length === 1) {
+            const x = parseNumDto(args[0]);
+            if (!x) return null;
+            components.push({ type: "scale", x: x, y: num1, z: num1, is_2d: true });
+          } else if (fn === "scaley" && args.length === 1) {
+            const y = parseNumDto(args[0]);
+            if (!y) return null;
+            components.push({ type: "scale", x: num1, y: y, z: num1, is_2d: true });
+          } else if (fn === "scalez" && args.length === 1) {
+            const z = parseNumDto(args[0]);
+            if (!z) return null;
+            components.push({ type: "scale", x: num1, y: num1, z: z, is_2d: false });
+          } else if (fn === "scale3d" && args.length === 3) {
+            const x = parseNumDto(args[0]), y = parseNumDto(args[1]), z = parseNumDto(args[2]);
+            if (!x || !y || !z) return null;
+            components.push({ type: "scale", x: x, y: y, z: z, is_2d: false });
+          } else if (fn === "skew" && (args.length === 1 || args.length === 2)) {
+            const ax = parseNumDto(args[0]);
+            const ay = args.length === 2 ? parseNumDto(args[1]) : zeroDeg;
+            if (!ax || !ay) return null;
+            components.push({ type: "skew", ax: ax, ay: ay, is_2d: true });
+          } else if (fn === "skewx" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "skew_x", angle: a, is_2d: true });
+          } else if (fn === "skewy" && args.length === 1) {
+            const a = parseNumDto(args[0]);
+            if (!a) return null;
+            components.push({ type: "skew_y", angle: a, is_2d: true });
+          } else if (fn === "perspective" && args.length === 1) {
+            const l = args[0].toLowerCase() === "none" ? { type: "keyword", value: "none" } : parseNumDto(args[0]);
+            if (!l) return null;
+            components.push({ type: "perspective", length: l, is_2d: false });
+          } else if (fn === "matrix" && args.length === 6) {
+            const nums = args.map(Number);
+            if (nums.some(function (n) { return !Number.isFinite(n); })) return null;
+            components.push({
+              type: "matrix",
+              matrix: [nums[0], nums[1], 0, 0, nums[2], nums[3], 0, 0, 0, 0, 1, 0, nums[4], nums[5], 0, 1],
+              is_2d: true,
+            });
+          } else if (fn === "matrix3d" && args.length === 16) {
+            const nums = args.map(Number);
+            if (nums.some(function (n) { return !Number.isFinite(n); })) return null;
+            components.push({ type: "matrix", matrix: nums, is_2d: false });
+          } else {
+            return null;
+          }
+        }
+        return components.length ? { values: [{ type: "transform", components: components }] } : null;
+      }
+      function parseTypedStyleValue(property, cssText) {
+        if (property === "transform") {
+          return parseTransformToDto(cssText);
+        }
+        return null;
+      }
+      const opts = { canonicalizeInlineStyle, parseTypedStyleValue };
 
-    function StylePropertyMapReadOnly(element) {
-      this._element = element;
+  const NUMERIC_TYPES = [
+    "length",
+    "angle",
+    "time",
+    "frequency",
+    "resolution",
+    "flex",
+    "percent"
+  ];
+  const UNIT_TYPES = {
+    number: null,
+    percent: "percent",
+    em: "length",
+    ex: "length",
+    ch: "length",
+    cap: "length",
+    ic: "length",
+    rem: "length",
+    rcap: "length",
+    rch: "length",
+    rex: "length",
+    ric: "length",
+    lh: "length",
+    rlh: "length",
+    vw: "length",
+    vh: "length",
+    vi: "length",
+    vb: "length",
+    vmin: "length",
+    vmax: "length",
+    cm: "length",
+    mm: "length",
+    svw: "length",
+    svh: "length",
+    svi: "length",
+    svb: "length",
+    svmin: "length",
+    svmax: "length",
+    lvw: "length",
+    lvh: "length",
+    lvi: "length",
+    lvb: "length",
+    lvmin: "length",
+    lvmax: "length",
+    dvw: "length",
+    dvh: "length",
+    dvi: "length",
+    dvb: "length",
+    dvmin: "length",
+    dvmax: "length",
+    cqw: "length",
+    cqh: "length",
+    cqi: "length",
+    cqb: "length",
+    cqmin: "length",
+    cqmax: "length",
+    q: "length",
+    in: "length",
+    pt: "length",
+    pc: "length",
+    px: "length",
+    deg: "angle",
+    grad: "angle",
+    rad: "angle",
+    turn: "angle",
+    s: "time",
+    ms: "time",
+    hz: "frequency",
+    khz: "frequency",
+    dpi: "resolution",
+    dpcm: "resolution",
+    dppx: "resolution",
+    fr: "flex"
+  };
+  const UNIT_FACTORS = {
+    px: 1,
+    cm: 96 / 2.54,
+    mm: 96 / 25.4,
+    q: 96 / 101.6,
+    in: 96,
+    pt: 96 / 72,
+    pc: 16,
+    deg: 1,
+    grad: 0.9,
+    rad: 180 / Math.PI,
+    turn: 360,
+    s: 1,
+    ms: 0.001,
+    hz: 1,
+    khz: 1000,
+    dppx: 1,
+    dpi: 1 / 96,
+    dpcm: 2.54 / 96
+  };
+  function numericType(unit) {
+    const type = UNIT_TYPES[unit.toLowerCase()];
+    return type ? { [type]: 1 } : {};
+  }
+  function cloneType(type) {
+    return { ...type };
+  }
+  function typeEquals(a, b) {
+    return NUMERIC_TYPES.every((type) => a[type] === b[type]) && a.percentHint === b.percentHint;
+  }
+  function applyPercentHint(type, hint) {
+    const out = cloneType(type);
+    const percent = out.percent || 0;
+    delete out.percent;
+    if (percent)
+      out[hint] = (out[hint] || 0) + percent;
+    out.percentHint = hint;
+    return out;
+  }
+  function addTypes(a, b) {
+    if (a.percentHint && b.percentHint && a.percentHint !== b.percentHint) {
+      throw new TypeError("Incompatible numeric types");
     }
-    StylePropertyMapReadOnly.prototype.get = function (property) {
-      const rawProp = String(property || "").trim();
-      const key = rawProp.startsWith("--") ? rawProp : rawProp.toLowerCase();
-      const rawMap = collectRawComputedMap(this._element, "");
-      let val = rawMap.get(key);
-      if (val === undefined) {
-        if (key === "width" || key === "height" || key === "min-width" || key === "min-height" ||
-            key === "top" || key === "right" || key === "bottom" || key === "left") {
-          val = "auto";
-        } else if (key === "display") {
-          val = getDefaultDisplayForElement(this._element);
-        } else {
-          return undefined;
+    const existingHint = a.percentHint || b.percentHint;
+    if (existingHint) {
+      const left = applyPercentHint(a, existingHint);
+      const right = applyPercentHint(b, existingHint);
+      if (typeEquals(left, right))
+        return left;
+      throw new TypeError("Incompatible numeric types");
+    }
+    if (typeEquals(a, b))
+      return cloneType(a);
+    for (const hint of NUMERIC_TYPES) {
+      if (hint === "percent")
+        continue;
+      const left = applyPercentHint(a, hint);
+      const right = applyPercentHint(b, hint);
+      if (typeEquals(left, right))
+        return left;
+    }
+    throw new TypeError("Incompatible numeric types");
+  }
+  function multiplyTypes(a, b) {
+    if (a.percentHint && b.percentHint && a.percentHint !== b.percentHint) {
+      throw new TypeError("Incompatible numeric types");
+    }
+    const hint = a.percentHint || b.percentHint;
+    const left = hint ? applyPercentHint(a, hint) : a;
+    const right = hint ? applyPercentHint(b, hint) : b;
+    const out = hint ? { percentHint: hint } : {};
+    for (const type of NUMERIC_TYPES) {
+      const exponent = (left[type] || 0) + (right[type] || 0);
+      if (exponent)
+        out[type] = exponent;
+    }
+    return out;
+  }
+  function invertType(type) {
+    const out = type.percentHint ? { percentHint: type.percentHint } : {};
+    for (const base of NUMERIC_TYPES) {
+      if (type[base])
+        out[base] = -type[base];
+    }
+    return out;
+  }
+  function formatNumber(value) {
+    if (Object.is(value, -0))
+      return "0";
+    return String(value);
+  }
+  function normalizeUnit(value, invalidUnitIsTypeError = false) {
+    const unit = String(value).toLowerCase();
+    if (!(unit in UNIT_TYPES)) {
+      if (invalidUnitIsTypeError)
+        throw new TypeError(`Invalid unit: ${String(value)}`);
+      throw new DOMException(`Invalid unit: ${String(value)}`, "SyntaxError");
+    }
+    return unit;
+  }
+
+  class CSSStyleValue {
+    _cssText;
+    _associatedProperty;
+    constructor(cssText = "", associatedProperty = null) {
+      this._cssText = String(cssText);
+      this._associatedProperty = associatedProperty;
+    }
+    static parse(propertyName, cssText) {
+      return CSSStyleValue.parseAll(propertyName, cssText)[0];
+    }
+    static parseAll(propertyName, cssText) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      const text = String(cssText);
+      if (!text || hasTopLevelSemicolon(text) || hasTopLevelImportant(text)) {
+        throw new TypeError(`Invalid value for ${property}`);
+      }
+      if (!property.startsWith("--")) {
+        const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
+        if (!canon || canon(`${property}: ${text}`).length === 0) {
+          throw new TypeError(`Invalid value for ${property}`);
         }
       }
-      return parseTypedOMValue(val);
-    };
-    StylePropertyMapReadOnly.prototype.has = function (property) {
-      return this.get(property) !== undefined;
-    };
-    StylePropertyMapReadOnly.prototype.getAll = function (property) {
-      const v = this.get(property);
-      return v !== undefined ? [v] : [];
-    };
-    markNative(StylePropertyMapReadOnly, "StylePropertyMapReadOnly");
-
-    global.CSSStyleValue = CSSStyleValue;
-    global.CSSKeywordValue = CSSKeywordValue;
-    global.CSSUnitValue = CSSUnitValue;
-    global.StylePropertyMapReadOnly = StylePropertyMapReadOnly;
-    if (global.Element && global.Element.prototype) {
-      global.Element.prototype.computedStyleMap = markNative(function () {
-        return new StylePropertyMapReadOnly(this);
-      }, "computedStyleMap");
+      const typed = reifyTypedList(property, text);
+      if (typed)
+        return typed;
+      const parts = LIST_VALUED_PROPERTIES.has(property) ? splitTopLevelCommas(text) : [text];
+      return parts.map((part) => reify(property, part) || new CSSStyleValue(part, property));
     }
+    get [Symbol.toStringTag]() {
+      return this.constructor.name;
+    }
+    toString() {
+      return this._cssText;
+    }
+  }
+
+  class CSSImageValue extends CSSStyleValue {
+  }
+
+  class CSSKeywordValue extends CSSStyleValue {
+    _value;
+    constructor(value) {
+      const text = String(value);
+      if (!text)
+        throw new TypeError("CSS keyword must not be empty");
+      super(text);
+      this._value = text;
+    }
+    get value() {
+      return this._value;
+    }
+    set value(value) {
+      const text = String(value);
+      if (!text)
+        throw new TypeError("CSS keyword must not be empty");
+      this._value = text;
+      this._cssText = text;
+    }
+  }
+
+  class CSSNumericValue extends CSSStyleValue {
+    static parse(cssText) {
+      const text = String(cssText);
+      const parsed = typedValueFromDto(callTypedParser("parseTypedNumericValue", text));
+      if (!(parsed instanceof CSSNumericValue)) {
+        throw new DOMException("Invalid CSS numeric value", "SyntaxError");
+      }
+      return parsed;
+    }
+    type() {
+      return numericType("number");
+    }
+    add(...values) {
+      if (!values.length)
+        return this;
+      return simplifyAddLike([this, ...values.map(toNumericValue)], "sum");
+    }
+    sub(...values) {
+      if (!values.length)
+        return this;
+      return simplifyAddLike([this, ...values.map((value) => negateForArithmetic(toNumericValue(value)))], "sum");
+    }
+    mul(...values) {
+      if (!values.length)
+        return this;
+      return simplifyProduct([this, ...values.map(toNumericValue)]);
+    }
+    div(...values) {
+      if (!values.length)
+        return this;
+      return simplifyProduct([
+        this,
+        ...values.map((value) => invertForArithmetic(toNumericValue(value)))
+      ]);
+    }
+    min(...values) {
+      if (!values.length)
+        return this;
+      return simplifyAddLike([this, ...values.map(toNumericValue)], "min");
+    }
+    max(...values) {
+      if (!values.length)
+        return this;
+      return simplifyAddLike([this, ...values.map(toNumericValue)], "max");
+    }
+    equals(...values) {
+      return values.every((value) => numericEquals(this, toNumericValue(value)));
+    }
+    to(unitValue) {
+      const unit = normalizeUnit(unitValue);
+      const value = evaluateNumeric(this);
+      const target = evaluateNumeric(new CSSUnitValue(1, unit));
+      if (!typeEquals(value.type, target.type) || !atomsEqual(value.atoms, target.atoms)) {
+        throw new TypeError("Incompatible units");
+      }
+      return new CSSUnitValue(value.value / target.value, unit);
+    }
+    toSum(...unitValues) {
+      const units = unitValues.map((value) => normalizeUnit(value));
+      if (new Set(units).size !== units.length) {
+        throw new DOMException("Duplicate units", "SyntaxError");
+      }
+      const terms = sumTerms(this);
+      if (!units.length) {
+        const totals = new Map;
+        for (const term of terms) {
+          const unit = canonicalUnit(term.unit);
+          const value = unit === term.unit ? term.value : term.to(unit).value;
+          totals.set(unit, (totals.get(unit) || 0) + value);
+        }
+        return new CSSMathSum(...[...totals].sort(([a], [b]) => a.localeCompare(b)).map(([unit, value]) => new CSSUnitValue(value, unit)));
+      }
+      units.slice(1).reduce((type, unit) => addTypes(type, numericType(unit)), numericType(units[0]));
+      const totals = units.map(() => 0);
+      for (const term of terms) {
+        let converted = false;
+        for (let i = 0;i < units.length; i++) {
+          try {
+            totals[i] += term.to(units[i]).value;
+            converted = true;
+            break;
+          } catch {}
+        }
+        if (!converted)
+          throw new TypeError("Value has units not present in the sum");
+      }
+      return new CSSMathSum(...units.map((unit, i) => new CSSUnitValue(totals[i], unit)));
+    }
+  }
+  function canonicalUnit(unit) {
+    const type = UNIT_TYPES[unit];
+    if (UNIT_FACTORS[unit] == null)
+      return unit;
+    if (type === "length")
+      return "px";
+    if (type === "angle")
+      return "deg";
+    if (type === "time")
+      return "s";
+    if (type === "frequency")
+      return "hz";
+    if (type === "resolution")
+      return "dppx";
+    return unit;
+  }
+
+  class CSSUnitValue extends CSSNumericValue {
+    _value;
+    _unit;
+    constructor(value, unitValue) {
+      const number = Number(value);
+      if (!Number.isFinite(number))
+        throw new TypeError("CSS unit value must be finite");
+      const unit = normalizeUnit(unitValue, true);
+      super();
+      this._value = number;
+      this._unit = unit;
+      this._cssText = this.toString();
+    }
+    get value() {
+      return this._value;
+    }
+    set value(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number))
+        throw new TypeError("CSS unit value must be finite");
+      this._value = number;
+      this._cssText = this.toString();
+    }
+    get unit() {
+      return this._unit;
+    }
+    type() {
+      return numericType(this._unit);
+    }
+    toString() {
+      const suffix = this._unit === "number" ? "" : this._unit === "percent" ? "%" : this._unit;
+      return `${formatNumber(this._value)}${suffix}`;
+    }
+  }
+
+  class CSSMathValue extends CSSNumericValue {
+    _operator = "sum";
+    constructor() {
+      super();
+      return new Proxy(this, {
+        set(target, property, value, receiver) {
+          if (property === "operator" || property === "values")
+            throw new TypeError(String(property) + " is readonly");
+          if (property === "_values" || property === "_operator") {
+            const desc = Object.getOwnPropertyDescriptor(target, property);
+            if (desc && !desc.writable) throw new TypeError(String(property) + " is readonly");
+          }
+          return Reflect.set(target, property, value, receiver);
+        }
+      });
+    }
+    get operator() {
+      return this._operator;
+    }
+  }
+  function setMathOperator(value, operator) {
+    Object.defineProperty(value, "_operator", {
+      value: operator,
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+  }
+  function lockSlot(value, name) {
+    const locked = value[name];
+    Object.defineProperty(value, name, {
+      get() {
+        return locked;
+      },
+      set() {
+        throw new TypeError(String(name) + " is readonly");
+      },
+      enumerable: false,
+      configurable: false
+    });
+  }
+
+  class CSSNumericArray {
+    _values;
+    constructor(values) {
+      this._values = Object.freeze(values.slice());
+      lockSlot(this, "_values");
+      for (let i = 0;i < this._values.length; i++) {
+        Object.defineProperty(this, i, {
+          value: this._values[i],
+          writable: false,
+          enumerable: true,
+          configurable: false
+        });
+      }
+      return new Proxy(this, {
+        set() {
+          throw new TypeError("CSSNumericArray is readonly");
+        },
+        deleteProperty() {
+          throw new TypeError("CSSNumericArray is readonly");
+        }
+      });
+    }
+    get length() {
+      return this._values.length;
+    }
+    *entries() {
+      for (let i = 0;i < this.length; i++)
+        yield [i, this._values[i]];
+    }
+    *keys() {
+      for (let i = 0;i < this.length; i++)
+        yield i;
+    }
+    *values() {
+      yield* this._values;
+    }
+    forEach(callback, thisArg) {
+      for (let i = 0;i < this.length; i++)
+        callback.call(thisArg, this._values[i], i, this);
+    }
+    [Symbol.iterator]() {
+      return this.values();
+    }
+  }
+  function initializeVariadic(self, operator, values) {
+    if (!values.length)
+      throw new DOMException("At least one value is required", "SyntaxError");
+    setMathOperator(self, operator);
+    const numeric = values.map(toNumericValue);
+    numeric.slice(1).reduce((type, value) => addTypes(type, value.type()), numeric[0].type());
+    self._values = new CSSNumericArray(numeric);
+    lockSlot(self, "_values");
+  }
+  function variadicType(values) {
+    return values._values.slice(1).reduce((type, value) => addTypes(type, value.type()), values._values[0].type());
+  }
+
+  class CSSMathSum extends CSSMathValue {
+    _values;
+    constructor(...values) {
+      super();
+      initializeVariadic(this, "sum", values);
+      this._cssText = this.toString();
+    }
+    get values() {
+      return this._values;
+    }
+    type() {
+      return variadicType(this._values);
+    }
+    toString() {
+      const values = this._values._values;
+      let text = String(values[0]);
+      for (const value of values.slice(1)) {
+        text += value instanceof CSSMathNegate ? ` - ${value.value}` : ` + ${value}`;
+      }
+      return `calc(${text})`;
+    }
+  }
+
+  class CSSMathProduct extends CSSMathValue {
+    _values;
+    constructor(...values) {
+      super();
+      if (!values.length)
+        throw new DOMException("At least one value is required", "SyntaxError");
+      setMathOperator(this, "product");
+      this._values = new CSSNumericArray(values.map(toNumericValue));
+      lockSlot(this, "_values");
+      this.type();
+      this._cssText = this.toString();
+    }
+    get values() {
+      return this._values;
+    }
+    type() {
+      return this._values._values.slice(1).reduce((type, value) => multiplyTypes(type, value.type()), this._values._values[0].type());
+    }
+    toString() {
+      return `calc(${this._values._values.map(String).join(" * ")})`;
+    }
+  }
+
+  class CSSMathNegate extends CSSMathValue {
+    _value;
+    constructor(value) {
+      super();
+      setMathOperator(this, "negate");
+      this._value = toNumericValue(value);
+      lockSlot(this, "_value");
+      this._cssText = this.toString();
+    }
+    get value() {
+      return this._value;
+    }
+    type() {
+      return cloneType(this._value.type());
+    }
+    toString() {
+      return `calc(-1 * ${this._value})`;
+    }
+  }
+
+  class CSSMathInvert extends CSSMathValue {
+    _value;
+    constructor(value) {
+      super();
+      setMathOperator(this, "invert");
+      this._value = toNumericValue(value);
+      lockSlot(this, "_value");
+      this._cssText = this.toString();
+    }
+    get value() {
+      return this._value;
+    }
+    type() {
+      return invertType(this._value.type());
+    }
+    toString() {
+      return `calc(1 / ${this._value})`;
+    }
+  }
+
+  class CSSMathMin extends CSSMathValue {
+    _values;
+    constructor(...values) {
+      super();
+      initializeVariadic(this, "min", values);
+      this._cssText = this.toString();
+    }
+    get values() {
+      return this._values;
+    }
+    type() {
+      return variadicType(this._values);
+    }
+    toString() {
+      return `min(${this._values._values.join(", ")})`;
+    }
+  }
+
+  class CSSMathMax extends CSSMathValue {
+    _values;
+    constructor(...values) {
+      super();
+      initializeVariadic(this, "max", values);
+      this._cssText = this.toString();
+    }
+    get values() {
+      return this._values;
+    }
+    type() {
+      return variadicType(this._values);
+    }
+    toString() {
+      return `max(${this._values._values.join(", ")})`;
+    }
+  }
+
+  class CSSMathClamp extends CSSMathValue {
+    _lower;
+    _value;
+    _upper;
+    constructor(lower, value, upper) {
+      super();
+      setMathOperator(this, "clamp");
+      this._lower = toNumericValue(lower);
+      this._value = toNumericValue(value);
+      this._upper = toNumericValue(upper);
+      lockSlot(this, "_lower");
+      lockSlot(this, "_value");
+      lockSlot(this, "_upper");
+      addTypes(addTypes(this._lower.type(), this._value.type()), this._upper.type());
+      this._cssText = this.toString();
+    }
+    get lower() {
+      return this._lower;
+    }
+    get value() {
+      return this._value;
+    }
+    get upper() {
+      return this._upper;
+    }
+    type() {
+      return addTypes(addTypes(this._lower.type(), this._value.type()), this._upper.type());
+    }
+    toString() {
+      return `clamp(${this._lower}, ${this._value}, ${this._upper})`;
+    }
+  }
+  function toNumericValue(value) {
+    if (value instanceof CSSNumericValue)
+      return value;
+    return new CSSUnitValue(value, "number");
+  }
+  function negateForArithmetic(value) {
+    if (value instanceof CSSUnitValue)
+      return new CSSUnitValue(-value.value, value.unit);
+    if (value instanceof CSSMathNegate)
+      return value.value;
+    return new CSSMathNegate(value);
+  }
+  function invertForArithmetic(value) {
+    if (value instanceof CSSUnitValue && value.unit === "number") {
+      if (value.value === 0)
+        throw new RangeError("Division by zero");
+      return new CSSUnitValue(1 / value.value, "number");
+    }
+    if (value instanceof CSSMathInvert)
+      return value.value;
+    return new CSSMathInvert(value);
+  }
+  function representativeUnit(value) {
+    if (value instanceof CSSUnitValue)
+      return value.unit;
+    if (value instanceof CSSMathNegate || value instanceof CSSMathInvert)
+      return representativeUnit(value.value);
+    if (value instanceof CSSMathSum || value instanceof CSSMathMin || value instanceof CSSMathMax) {
+      return representativeUnit(value.values._values[0]);
+    }
+    if (value instanceof CSSMathProduct)
+      return representativeUnit(value.values._values[0]);
+    if (value instanceof CSSMathClamp)
+      return representativeUnit(value.lower);
+    return null;
+  }
+  function simplifyAddLike(values, operator) {
+    const flat = [];
+    for (const value of values) {
+      if (operator === "sum" && value instanceof CSSMathSum || operator === "min" && value instanceof CSSMathMin || operator === "max" && value instanceof CSSMathMax)
+        flat.push(...value.values._values);
+      else
+        flat.push(value);
+    }
+    const result = operator === "sum" ? new CSSMathSum(...flat) : operator === "min" ? new CSSMathMin(...flat) : new CSSMathMax(...flat);
+    if (!flat.every((value) => value instanceof CSSUnitValue))
+      return result;
+    const units = flat;
+    if (units.some((value) => value.unit !== units[0].unit))
+      return result;
+    const numbers = units.map((value) => value.value);
+    const simplified = operator === "sum" ? numbers.reduce((a, b) => a + b, 0) : operator === "min" ? Math.min(...numbers) : Math.max(...numbers);
+    return new CSSUnitValue(simplified, units[0].unit);
+  }
+  function simplifyProduct(values) {
+    const flat = [];
+    for (const value of values) {
+      if (value instanceof CSSMathProduct)
+        flat.push(...value.values._values);
+      else
+        flat.push(value);
+    }
+    const result = new CSSMathProduct(...flat);
+    if (!flat.every((value) => value instanceof CSSUnitValue))
+      return result;
+    const units = flat;
+    const dimensional = units.filter((value) => value.unit !== "number");
+    if (dimensional.length > 1)
+      return result;
+    return new CSSUnitValue(units.reduce((product, value) => product * value.value, 1), dimensional[0]?.unit || "number");
+  }
+  function numericEquals(a, b) {
+    if (a.constructor !== b.constructor)
+      return false;
+    if (a instanceof CSSUnitValue && b instanceof CSSUnitValue) {
+      return a.value === b.value && a.unit === b.unit;
+    }
+    if (a instanceof CSSMathSum && b instanceof CSSMathSum || a instanceof CSSMathMin && b instanceof CSSMathMin || a instanceof CSSMathMax && b instanceof CSSMathMax || a instanceof CSSMathProduct && b instanceof CSSMathProduct) {
+      const left = a.values._values;
+      const right = b.values._values;
+      return left.length === right.length && left.every((value, i) => numericEquals(value, right[i]));
+    }
+    if (a instanceof CSSMathNegate && b instanceof CSSMathNegate || a instanceof CSSMathInvert && b instanceof CSSMathInvert)
+      return numericEquals(a.value, b.value);
+    if (a instanceof CSSMathClamp && b instanceof CSSMathClamp) {
+      return numericEquals(a.lower, b.lower) && numericEquals(a.value, b.value) && numericEquals(a.upper, b.upper);
+    }
+    return a === b;
+  }
+  function atomsEqual(a, b) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every((key) => (a[key] || 0) === (b[key] || 0));
+  }
+  function evaluateNumeric(value) {
+    if (value instanceof CSSUnitValue) {
+      const factor = value.unit === "number" || value.unit === "percent" || value.unit === "fr" ? 1 : UNIT_FACTORS[value.unit];
+      return {
+        value: value.value * (factor ?? 1),
+        type: value.type(),
+        atoms: factor == null ? { [value.unit]: 1 } : {}
+      };
+    }
+    if (value instanceof CSSMathNegate) {
+      const inner = evaluateNumeric(value.value);
+      return { ...inner, value: -inner.value };
+    }
+    if (value instanceof CSSMathInvert) {
+      const inner = evaluateNumeric(value.value);
+      const atoms = {};
+      for (const unit of Object.keys(inner.atoms))
+        atoms[unit] = -inner.atoms[unit];
+      return { value: 1 / inner.value, type: invertType(inner.type), atoms };
+    }
+    if (value instanceof CSSMathProduct) {
+      return value.values._values.map(evaluateNumeric).reduce((left, right) => {
+        const atoms = { ...left.atoms };
+        for (const unit of Object.keys(right.atoms)) {
+          const exponent = (atoms[unit] || 0) + right.atoms[unit];
+          if (exponent)
+            atoms[unit] = exponent;
+          else
+            delete atoms[unit];
+        }
+        return { value: left.value * right.value, type: multiplyTypes(left.type, right.type), atoms };
+      });
+    }
+    if (value instanceof CSSMathClamp) {
+      const lower = evaluateNumeric(value.lower);
+      const middle = evaluateNumeric(value.value);
+      const upper = evaluateNumeric(value.upper);
+      if (!typeEquals(lower.type, middle.type) || !typeEquals(lower.type, upper.type) || !atomsEqual(lower.atoms, middle.atoms) || !atomsEqual(lower.atoms, upper.atoms)) {
+        throw new TypeError("Value cannot be converted to a unit");
+      }
+      return { ...middle, value: Math.max(lower.value, Math.min(middle.value, upper.value)) };
+    }
+    if (value instanceof CSSMathSum || value instanceof CSSMathMin || value instanceof CSSMathMax) {
+      const evaluated = value.values._values.map(evaluateNumeric);
+      const first = evaluated[0];
+      if (evaluated.some((part) => !typeEquals(first.type, part.type) || !atomsEqual(first.atoms, part.atoms))) {
+        throw new TypeError("Value cannot be converted to a unit");
+      }
+      const numbers = evaluated.map((part) => part.value);
+      const result = value instanceof CSSMathSum ? numbers.reduce((a, b) => a + b, 0) : value instanceof CSSMathMin ? Math.min(...numbers) : Math.max(...numbers);
+      return { ...first, value: result };
+    }
+    throw new TypeError("Value cannot be converted to a unit");
+  }
+  function sumTerms(value) {
+    if (value instanceof CSSUnitValue)
+      return [new CSSUnitValue(value.value, value.unit)];
+    if (value instanceof CSSMathSum)
+      return value.values._values.flatMap(sumTerms);
+    if (value instanceof CSSMathNegate) {
+      return sumTerms(value.value).map((term) => new CSSUnitValue(-term.value, term.unit));
+    }
+    const unit = representativeUnit(value);
+    if (!unit)
+      throw new TypeError("Value cannot be represented as a sum");
+    return [value.to(unit)];
+  }
+  function colorSyntaxError(description) {
+    throw new DOMException(description, "SyntaxError");
+  }
+  function colorKeyword(value) {
+    if (value instanceof CSSKeywordValue && value.value.toLowerCase() === "none")
+      return value;
+    if (typeof value === "string" && value.toLowerCase() === "none")
+      return new CSSKeywordValue(value);
+    return null;
+  }
+  function colorPercent(value, description) {
+    const keyword = colorKeyword(value);
+    if (keyword)
+      return keyword;
+    if (typeof value === "number")
+      return new CSSUnitValue(value * 100, "percent");
+    if (value instanceof CSSNumericValue && hasNumericType(value, { percent: 1 }))
+      return value;
+    return colorSyntaxError(`${description} must be a percentage or none`);
+  }
+  function colorNumber(value, description) {
+    const keyword = colorKeyword(value);
+    if (keyword)
+      return keyword;
+    if (typeof value === "number")
+      return new CSSUnitValue(value, "number");
+    if (value instanceof CSSNumericValue && hasNumericType(value, {}))
+      return value;
+    return colorSyntaxError(`${description} must be a number or none`);
+  }
+  function colorRgbComponent(value, description) {
+    const keyword = colorKeyword(value);
+    if (keyword)
+      return keyword;
+    if (typeof value === "number")
+      return new CSSUnitValue(value * 100, "percent");
+    if (value instanceof CSSNumericValue && (hasNumericType(value, {}) || hasNumericType(value, { percent: 1 })))
+      return value;
+    return colorSyntaxError(`${description} must be a number, percentage, or none`);
+  }
+  function colorAngle(value, description, allowUndefined = false) {
+    const keyword = colorKeyword(value);
+    if (keyword)
+      return keyword;
+    if (allowUndefined && value === undefined)
+      return new CSSKeywordValue("undefined");
+    if (typeof value === "number")
+      return new CSSUnitValue(value, "deg");
+    if (value instanceof CSSNumericValue && hasNumericType(value, { angle: 1 }))
+      return value;
+    return colorSyntaxError(`${description} must be an angle or none`);
+  }
+  function serializeColorFunction(name, channels, alpha) {
+    const alphaText = alpha instanceof CSSUnitValue && alpha.unit === "percent" && alpha.value === 100 ? "" : ` / ${alpha}`;
+    return `${name}(${channels.join(" ")}${alphaText})`;
+  }
+  function simpleColorNumeric(token, kind) {
+    const text = token.trim();
+    if (text.toLowerCase() === "none")
+      return new CSSKeywordValue("none");
+    const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%|deg|grad|rad|turn)?$/i.exec(text);
+    if (!match)
+      return null;
+    const value = Number(match[1]);
+    const unit = match[2]?.toLowerCase();
+    if (unit === "%")
+      return new CSSUnitValue(value, "percent");
+    if (unit)
+      return kind === "angle" ? new CSSUnitValue(value, unit) : null;
+    if (kind === "percent")
+      return new CSSUnitValue(value * 100, "percent");
+    if (kind === "angle")
+      return new CSSUnitValue(value, "deg");
+    return new CSSUnitValue(value, "number");
+  }
+  function splitColorFunction(body) {
+    const slash = body.split("/");
+    if (slash.length > 2)
+      return { channels: [] };
+    const commaSyntax = slash[0].includes(",");
+    let channels = commaSyntax ? slash[0].split(",") : slash[0].trim().split(/\s+/);
+    let alpha = slash[1]?.trim();
+    if (commaSyntax && !alpha && channels.length === 4)
+      alpha = channels.pop()?.trim();
+    channels = channels.map((value) => value.trim()).filter(Boolean);
+    return { channels, ...alpha ? { alpha } : {} };
+  }
+  const PINNED_NAMED_COLORS = {
+    black: [0, 0, 0],
+    blue: [0, 0, 255],
+    red: [255, 0, 0],
+    transparent: [0, 0, 0, 0],
+    white: [255, 255, 255]
+  };
+  const CSS_COLOR_KEYWORDS = new Set(`
+    aliceblue antiquewhite aqua aquamarine azure beige bisque blanchedalmond blueviolet brown
+    burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue
+    darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen
+    darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey
+    darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite
+    forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew
+    hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue
+    lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon
+    lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen
+    linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen
+    mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream
+    mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod
+    palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple
+    rebeccapurple rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver
+    skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise
+    violet wheat whitesmoke yellow yellowgreen
+  `.trim().split(/\s+/));
+  const CSS_SYSTEM_COLOR_KEYWORDS = new Set(`
+    accentcolor accentcolortext activetext buttonborder buttonface buttontext canvas canvastext field
+    fieldtext graytext highlight highlighttext linktext mark marktext selecteditem selecteditemtext
+    visitedtext
+  `.trim().split(/\s+/));
+  function parseColorValue(cssText) {
+    const text = String(cssText).trim();
+    const lower = text.toLowerCase();
+    if (CSS_SYSTEM_COLOR_KEYWORDS.has(lower))
+      return new CSSKeywordValue(lower);
+    const named = PINNED_NAMED_COLORS[lower];
+    if (named) {
+      return new CSSRGB(new CSSUnitValue(named[0], "number"), new CSSUnitValue(named[1], "number"), new CSSUnitValue(named[2], "number"), new CSSUnitValue(named[3] ?? 100, "percent"));
+    }
+    if (CSS_COLOR_KEYWORDS.has(lower))
+      return new CSSKeywordValue(lower);
+    const hex = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.exec(text);
+    if (hex) {
+      const expanded = hex[1].length <= 4 ? [...hex[1]].map((digit) => digit + digit).join("") : hex[1];
+      const channels = [0, 2, 4].map((index) => parseInt(expanded.slice(index, index + 2), 16));
+      const alpha = expanded.length === 8 ? parseInt(expanded.slice(6), 16) / 255 * 100 : 100;
+      return new CSSRGB(new CSSUnitValue(channels[0], "number"), new CSSUnitValue(channels[1], "number"), new CSSUnitValue(channels[2], "number"), new CSSUnitValue(alpha, "percent"));
+    }
+    const fn = /^([a-z]+)\((.*)\)$/i.exec(text);
+    if (!fn)
+      return colorSyntaxError("Invalid color");
+    const name = fn[1].toLowerCase();
+    const parts = splitColorFunction(fn[2]);
+    const alpha = parts.alpha === undefined ? new CSSUnitValue(100, "percent") : simpleColorNumeric(parts.alpha, "percent");
+    if (!alpha || parts.channels.length !== 3)
+      return colorSyntaxError("Invalid color");
+    const parsed = (kinds) => parts.channels.map((channel, index) => simpleColorNumeric(channel, kinds[index]));
+    let channels;
+    if (name === "rgb" || name === "rgba") {
+      channels = parsed(["rgb", "rgb", "rgb"]);
+      if (channels.every(Boolean))
+        return new CSSRGB(...channels, alpha);
+    } else if (name === "hsl" || name === "hsla") {
+      channels = parsed(["angle", "percent", "percent"]);
+      if (channels.every(Boolean))
+        return new CSSHSL(...channels, alpha);
+    } else if (name === "hwb") {
+      channels = parsed(["angle", "percent", "percent"]);
+      if (channels.every(Boolean))
+        return new CSSHWB(...channels, alpha);
+    } else if (name === "lab" || name === "oklab") {
+      channels = parsed(["percent", "number", "number"]);
+      if (channels.every(Boolean)) {
+        const args = channels;
+        return name === "lab" ? new CSSLab(...args, alpha) : new CSSOKLab(...args, alpha);
+      }
+    } else if (name === "lch" || name === "oklch") {
+      channels = parsed(["percent", "percent", "angle"]);
+      if (channels.every(Boolean)) {
+        const args = channels;
+        return name === "lch" ? new CSSLCH(...args, alpha) : new CSSOKLCH(...args, alpha);
+      }
+    }
+    return colorSyntaxError("Invalid color");
+  }
+
+  class CSSColorValue extends CSSStyleValue {
+    static parse(cssText) {
+      return parseColorValue(cssText);
+    }
+  }
+
+  class CSSRGB extends CSSColorValue {
+    _r;
+    _g;
+    _b;
+    _alpha;
+    constructor(r, g, b, alpha = 1) {
+      super();
+      this.r = r;
+      this.g = g;
+      this.b = b;
+      this.alpha = alpha;
+    }
+    get r() {
+      return this._r;
+    }
+    set r(value) {
+      this._r = colorRgbComponent(value, "r");
+    }
+    get g() {
+      return this._g;
+    }
+    set g(value) {
+      this._g = colorRgbComponent(value, "g");
+    }
+    get b() {
+      return this._b;
+    }
+    set b(value) {
+      this._b = colorRgbComponent(value, "b");
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorPercent(value, "alpha");
+    }
+    toString() {
+      return serializeColorFunction("rgb", [this.r, this.g, this.b], this.alpha);
+    }
+  }
+
+  class CSSHSL extends CSSColorValue {
+    _h;
+    _s;
+    _l;
+    _alpha;
+    constructor(h, s, l, alpha = 1) {
+      super();
+      this.h = h;
+      this.s = s;
+      this.l = l;
+      this.alpha = alpha;
+    }
+    get h() {
+      return this._h;
+    }
+    set h(value) {
+      this._h = colorAngle(value, "h", true);
+    }
+    get s() {
+      return this._s;
+    }
+    set s(value) {
+      this._s = colorPercent(value, "s");
+    }
+    get l() {
+      return this._l;
+    }
+    set l(value) {
+      this._l = colorPercent(value, "l");
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorPercent(value, "alpha");
+    }
+    toString() {
+      return serializeColorFunction("hsl", [this.h, this.s, this.l], this.alpha);
+    }
+  }
+
+  class CSSHWB extends CSSColorValue {
+    _h;
+    _w;
+    _b;
+    _alpha;
+    constructor(h, w, b, alpha = 1) {
+      super();
+      this.h = h;
+      this.w = w;
+      this.b = b;
+      this.alpha = alpha;
+    }
+    get h() {
+      return this._h;
+    }
+    set h(value) {
+      if (!(value instanceof CSSNumericValue))
+        throw new TypeError("h must be a CSSNumericValue");
+      this._h = colorAngle(value, "h");
+    }
+    get w() {
+      return this._w;
+    }
+    set w(value) {
+      this._w = colorPercent(value, "w");
+    }
+    get b() {
+      return this._b;
+    }
+    set b(value) {
+      this._b = colorPercent(value, "b");
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorPercent(value, "alpha");
+    }
+    toString() {
+      return serializeColorFunction("hwb", [this.h, this.w, this.b], this.alpha);
+    }
+  }
+
+  class CSSCartesianColor extends CSSColorValue {
+    _l;
+    _a;
+    _b;
+    _alpha;
+    _functionName = "lab";
+    constructor(l, a, b, alpha = 1) {
+      super();
+      this.l = l;
+      this.a = a;
+      this.b = b;
+      this.alpha = alpha;
+    }
+    get l() {
+      return this._l;
+    }
+    set l(value) {
+      this._l = colorPercent(value, "l");
+    }
+    get a() {
+      return this._a;
+    }
+    set a(value) {
+      this._a = colorNumber(value, "a");
+    }
+    get b() {
+      return this._b;
+    }
+    set b(value) {
+      this._b = colorNumber(value, "b");
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorPercent(value, "alpha");
+    }
+    toString() {
+      return serializeColorFunction(this._functionName, [this.l, this.a, this.b], this.alpha);
+    }
+  }
+
+  class CSSLab extends CSSCartesianColor {
+  }
+
+  class CSSOKLab extends CSSCartesianColor {
+    _functionName = "oklab";
+  }
+
+  class CSSPolarColor extends CSSColorValue {
+    _l;
+    _c;
+    _h;
+    _alpha;
+    _functionName = "lch";
+    constructor(l, c, h, alpha = 1) {
+      super();
+      this.l = l;
+      this.c = c;
+      this.h = h;
+      this.alpha = alpha;
+    }
+    get l() {
+      return this._l;
+    }
+    set l(value) {
+      this._l = colorPercent(value, "l");
+    }
+    get c() {
+      return this._c;
+    }
+    set c(value) {
+      this._c = colorPercent(value, "c");
+    }
+    get h() {
+      return this._h;
+    }
+    set h(value) {
+      this._h = colorAngle(value, "h");
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorPercent(value, "alpha");
+    }
+    toString() {
+      return serializeColorFunction(this._functionName, [this.l, this.c, this.h], this.alpha);
+    }
+  }
+
+  class CSSLCH extends CSSPolarColor {
+  }
+
+  class CSSOKLCH extends CSSPolarColor {
+    _functionName = "oklch";
+  }
+  function colorKeywordish(value) {
+    return value instanceof CSSKeywordValue ? value : new CSSKeywordValue(String(value));
+  }
+  function colorAlpha(value) {
+    const numeric = value instanceof CSSNumericValue ? value : new CSSUnitValue(Number(value), "number");
+    if (!hasNumericType(numeric, {}))
+      throw new TypeError("alpha must be a number");
+    return numeric;
+  }
+  function numericIndex(property) {
+    if (typeof property !== "string" || !/^(0|[1-9]\d*)$/.test(property))
+      return null;
+    const index = Number(property);
+    return Number.isSafeInteger(index) ? index : null;
+  }
+  function colorChannels(values) {
+    if (values == null || typeof values[Symbol.iterator] !== "function") {
+      throw new TypeError("channels must be a sequence");
+    }
+    return Array.from(values, (value) => colorPercent(value, "channel"));
+  }
+  function observableColorChannels(values) {
+    return new Proxy(colorChannels(values), {
+      set(target, property, value) {
+        const index = numericIndex(property);
+        return Reflect.set(target, property, index === null ? value : colorPercent(value, "channel"), target);
+      },
+      defineProperty(target, property, descriptor) {
+        const index = numericIndex(property);
+        if (index !== null) {
+          if (!("value" in descriptor))
+            throw new TypeError("channel must be a value");
+          descriptor = { ...descriptor, value: colorPercent(descriptor.value, "channel") };
+        }
+        return Reflect.defineProperty(target, property, descriptor);
+      }
+    });
+  }
+
+  class CSSColor extends CSSColorValue {
+    _colorSpace;
+    _channels;
+    _alpha;
+    constructor(colorSpace, channels, alpha = 1) {
+      super();
+      this._channels = observableColorChannels(channels);
+      lockSlot(this, "_channels");
+      this.colorSpace = colorSpace;
+      this.alpha = alpha;
+    }
+    get colorSpace() {
+      return this._colorSpace;
+    }
+    set colorSpace(value) {
+      this._colorSpace = colorKeywordish(value);
+    }
+    get channels() {
+      return this._channels;
+    }
+    set channels(value) {
+      const channels = colorChannels(value);
+      this._channels.splice(0, this._channels.length, ...channels);
+    }
+    get alpha() {
+      return this._alpha;
+    }
+    set alpha(value) {
+      this._alpha = colorAlpha(value);
+    }
+    toString() {
+      const alpha = this.alpha instanceof CSSUnitValue && this.alpha.unit === "number" && this.alpha.value === 1 ? "" : ` / ${this.alpha}`;
+      return `color(${this.colorSpace} ${this.channels.join(" ")}${alpha})`;
+    }
+  }
+  function copyColorInterfaceMembers(source, targets) {
+    for (const target of targets) {
+      for (const name of Object.getOwnPropertyNames(source)) {
+        if (name === "constructor")
+          continue;
+        const descriptor = Object.getOwnPropertyDescriptor(source, name);
+        if (descriptor)
+          Object.defineProperty(target, name, descriptor);
+      }
+    }
+  }
+  copyColorInterfaceMembers(CSSCartesianColor.prototype, [CSSLab.prototype, CSSOKLab.prototype]);
+  copyColorInterfaceMembers(CSSPolarColor.prototype, [CSSLCH.prototype, CSSOKLCH.prototype]);
+  function callTypedParser(name, first, second) {
+    try {
+      return name === "parseTypedNumericValue" ? opts?.parseTypedNumericValue?.(first) : opts?.parseTypedStyleValue?.(first, second || "");
+    } catch {
+      return null;
+    }
+  }
+  function dtoObject(value) {
+    return value !== null && typeof value === "object" ? value : null;
+  }
+  function dtoNumericValues(value) {
+    if (!Array.isArray(value))
+      return null;
+    const out = [];
+    for (const item of value) {
+      const parsed = typedValueFromDto(item);
+      if (!(parsed instanceof CSSNumericValue))
+        return null;
+      out.push(parsed);
+    }
+    return out;
+  }
+  function typedUnparsedSegments(value) {
+    if (!Array.isArray(value))
+      return null;
+    const segments = [];
+    for (const item of value) {
+      const segment = dtoObject(item);
+      if (segment?.type === "string" && typeof segment.value === "string") {
+        segments.push(segment.value);
+      } else if (segment?.type === "variable" && typeof segment.name === "string") {
+        const fallbackSegments = segment.fallback === undefined ? null : typedUnparsedSegments(segment.fallback);
+        if (segment.fallback !== undefined && !fallbackSegments)
+          return null;
+        segments.push(new CSSVariableReferenceValue(segment.name, fallbackSegments ? new CSSUnparsedValue(fallbackSegments) : null));
+      } else {
+        return null;
+      }
+    }
+    return segments;
+  }
+  function typedValueFromDto(value, _associatedProperty) {
+    const dto = dtoObject(value);
+    if (!dto || typeof dto.type !== "string")
+      return null;
+    if (dto.type === "keyword" && typeof dto.value === "string")
+      return new CSSKeywordValue(dto.value);
+    if (dto.type === "unit" && typeof dto.value === "number" && typeof dto.unit === "string") {
+      return new CSSUnitValue(dto.value, dto.unit === "%" ? "percent" : dto.unit);
+    }
+    const values = dtoNumericValues(dto.values);
+    if (dto.type === "sum" && values)
+      return new CSSMathSum(...values);
+    if (dto.type === "product" && values)
+      return new CSSMathProduct(...values);
+    if (dto.type === "min" && values)
+      return new CSSMathMin(...values);
+    if (dto.type === "max" && values)
+      return new CSSMathMax(...values);
+    const numeric = typedValueFromDto(dto.value);
+    if (dto.type === "negate" && numeric instanceof CSSNumericValue)
+      return new CSSMathNegate(numeric);
+    if (dto.type === "invert" && numeric instanceof CSSNumericValue)
+      return new CSSMathInvert(numeric);
+    if (dto.type === "clamp") {
+      const lower = typedValueFromDto(dto.lower);
+      const middle = typedValueFromDto(dto.value);
+      const upper = typedValueFromDto(dto.upper);
+      if (lower instanceof CSSNumericValue && middle instanceof CSSNumericValue && upper instanceof CSSNumericValue) {
+        return new CSSMathClamp(lower, middle, upper);
+      }
+    }
+    if (dto.type === "transform" && Array.isArray(dto.components)) {
+      const components = [];
+      for (const component of dto.components) {
+        const parsed = transformComponentFromDto(component);
+        if (!parsed)
+          return null;
+        components.push(parsed);
+      }
+      if (components.length)
+        return new CSSTransformValue(components);
+    }
+    if (dto.type === "unparsed") {
+      const segments = typedUnparsedSegments(dto.segments);
+      if (segments)
+        return new CSSUnparsedValue(segments);
+    }
+    if (dto.type === "generic")
+      return null;
+    return null;
+  }
+  function reifyTypedList(property, cssText) {
+    const result = dtoObject(callTypedParser("parseTypedStyleValue", property, cssText));
+    if (!result || !Array.isArray(result.values))
+      return null;
+    const values = [];
+    for (const item of result.values) {
+      const dto = dtoObject(item);
+      if (dto?.type === "keyword" || dto?.type === "generic")
+        return null;
+      const value = typedValueFromDto(item, property);
+      if (!value)
+        return null;
+      value._associatedProperty = property;
+      values.push(value);
+    }
+    return values.length ? values : null;
+  }
+
+  class CSSVariableReferenceValue {
+    _variable;
+    _fallback;
+    constructor(variable, fallback = null) {
+      const name = String(variable);
+      if (!/^--[^\s]+$/.test(name))
+        throw new TypeError("Invalid custom property name");
+      if (fallback !== null && !(fallback instanceof CSSUnparsedValue)) {
+        throw new TypeError("Fallback must be a CSSUnparsedValue");
+      }
+      this._variable = name;
+      this._fallback = fallback;
+    }
+    get variable() {
+      return this._variable;
+    }
+    set variable(value) {
+      const name = String(value);
+      if (!/^--[^\s]+$/.test(name))
+        throw new TypeError("Invalid custom property name");
+      this._variable = name;
+    }
+    get fallback() {
+      return this._fallback;
+    }
+    toString() {
+      return `var(${this._variable}${this.fallback ? `, ${this.fallback}` : ""})`;
+    }
+  }
+
+  class CSSUnparsedValue extends CSSStyleValue {
+    _length;
+    constructor(members) {
+      super();
+      const values = Array.from(members);
+      this._length = values.length;
+      for (let i = 0;i < values.length; i++) {
+        const value = values[i];
+        if (typeof value !== "string" && !(value instanceof CSSVariableReferenceValue)) {
+          throw new TypeError("Invalid CSSUnparsedValue member");
+        }
+        this[i] = value;
+      }
+      this._cssText = this.toString();
+    }
+    get length() {
+      return this._length;
+    }
+    *[Symbol.iterator]() {
+      for (let i = 0;i < this.length; i++)
+        yield this[i];
+    }
+    toString() {
+      return Array.from(this).map(String).join("");
+    }
+  }
+  function hasNumericType(value, expected) {
+    return typeEquals(value.type(), expected);
+  }
+  function asNumeric(value, description) {
+    if (!(value instanceof CSSNumericValue))
+      throw new TypeError(`${description} must be numeric`);
+    return value;
+  }
+  function asNumberish(value, description) {
+    const numeric = typeof value === "number" ? new CSSUnitValue(value, "number") : asNumeric(value, description);
+    if (!hasNumericType(numeric, {}))
+      throw new TypeError(`${description} must be a number`);
+    return numeric;
+  }
+  function asAngle(value, description) {
+    const numeric = asNumeric(value, description);
+    if (!hasNumericType(numeric, { angle: 1 }))
+      throw new TypeError(`${description} must be an angle`);
+    return numeric;
+  }
+  function asLength(value, description) {
+    const numeric = asNumeric(value, description);
+    if (!hasNumericType(numeric, { length: 1 }))
+      throw new TypeError(`${description} must be a length`);
+    return numeric;
+  }
+  function asLengthPercentage(value, description) {
+    const numeric = asNumeric(value, description);
+    const type = numeric.type();
+    if (!typeEquals(type, { length: 1 }) && !typeEquals(type, { percent: 1 }) && !typeEquals(type, { length: 1, percentHint: "length" })) {
+      throw new TypeError(`${description} must be a length or percentage`);
+    }
+    return numeric;
+  }
+  function numericIn(value, unit) {
+    return value.to(unit).value;
+  }
+  function serializeTransformNumeric(value) {
+    if (value instanceof CSSUnitValue) {
+      const unit = canonicalUnit(value.unit);
+      return String(unit === value.unit ? value : value.to(unit));
+    }
+    if (value instanceof CSSMathSum) {
+      const parts = value.values._values.map((part, index) => ({
+        text: serializeTransformNumeric(part),
+        unit: representativeUnit(part) || "",
+        index
+      }));
+      parts.sort((a, b) => a.unit.localeCompare(b.unit) || a.index - b.index);
+      return `calc(${parts.map((part) => part.text).join(" + ")})`;
+    }
+    if (value instanceof CSSMathProduct) {
+      const numerator = [];
+      const denominator = [];
+      for (const part of value.values._values) {
+        if (part instanceof CSSMathInvert)
+          denominator.push(part.value);
+        else
+          numerator.push(part);
+      }
+      numerator.sort((a, b) => Number(!hasNumericType(a, {})) - Number(!hasNumericType(b, {})));
+      let text = numerator.map(serializeTransformNumeric).join(" * ") || "1";
+      for (const part of denominator)
+        text += ` / ${serializeTransformNumeric(part)}`;
+      return `calc(${text})`;
+    }
+    if (value instanceof CSSMathNegate)
+      return `calc(-1 * ${serializeTransformNumeric(value.value)})`;
+    if (value instanceof CSSMathInvert)
+      return `calc(1 / ${serializeTransformNumeric(value.value)})`;
+    if (value instanceof CSSMathMin)
+      return `min(${value.values._values.map(serializeTransformNumeric).join(", ")})`;
+    if (value instanceof CSSMathMax)
+      return `max(${value.values._values.map(serializeTransformNumeric).join(", ")})`;
+    if (value instanceof CSSMathClamp) {
+      return `clamp(${serializeTransformNumeric(value.lower)}, ${serializeTransformNumeric(value.value)}, ${serializeTransformNumeric(value.upper)})`;
+    }
+    return String(value);
+  }
+  const matrixStates = new WeakMap;
+  function matrixState(matrix) {
+    const state = matrixStates.get(matrix);
+    if (!state)
+      throw new TypeError("Illegal invocation");
+    return state;
+  }
+  function parseMatrixString(value) {
+    const text = value.trim();
+    if (text === "" || text === "none")
+      return [1, 0, 0, 1, 0, 0];
+    const match = /^matrix(3d)?\(([^)]*)\)$/i.exec(text);
+    if (!match)
+      return null;
+    const parts = match[2].split(",").map((part) => Number(part.trim()));
+    if (parts.some((part) => !Number.isFinite(part)))
+      return null;
+    const wanted = match[1] ? 16 : 6;
+    return parts.length === wanted ? parts : null;
+  }
+  function matrixValues(values) {
+    let input;
+    if (typeof values === "string") {
+      const parsed = parseMatrixString(values);
+      if (!parsed) {
+        throw new DOMException(`Failed to construct 'DOMMatrix': The provided value '${values}' is not a valid matrix.`, "SyntaxError");
+      }
+      input = parsed;
+    } else {
+      input = Array.from(values, Number);
+    }
+    if (input.length === 6) {
+      const [a, b, c, d, e, f] = input;
+      return { values: [a, b, 0, 0, c, d, 0, 0, 0, 0, 1, 0, e, f, 0, 1], is2D: true };
+    }
+    if (input.length === 16)
+      return { values: input, is2D: false };
+    throw new TypeError("Matrix needs 6 or 16 values");
+  }
+  function multiplyMatrices(left, right) {
+    const result = Array(16).fill(0);
+    for (let column = 0;column < 4; column++) {
+      for (let row = 0;row < 4; row++) {
+        for (let k = 0;k < 4; k++) {
+          result[column * 4 + row] += left[k * 4 + row] * right[column * 4 + k];
+        }
+      }
+    }
+    return result;
+  }
+  function matrixFrom4x4(values, is2D) {
+    const matrix = new DOMMatrix(values);
+    matrixState(matrix).is2D = is2D;
+    return matrix;
+  }
+  function twoDimensionalValues(values) {
+    return [values[0], values[1], values[4], values[5], values[12], values[13]];
+  }
+
+  class DOMMatrixReadOnly {
+    constructor(values = [1, 0, 0, 1, 0, 0]) {
+      matrixStates.set(this, matrixValues(values));
+    }
+    get a() {
+      return matrixState(this).values[0];
+    }
+    get b() {
+      return matrixState(this).values[1];
+    }
+    get c() {
+      return matrixState(this).values[4];
+    }
+    get d() {
+      return matrixState(this).values[5];
+    }
+    get e() {
+      return matrixState(this).values[12];
+    }
+    get f() {
+      return matrixState(this).values[13];
+    }
+    get m11() {
+      return matrixState(this).values[0];
+    }
+    get m12() {
+      return matrixState(this).values[1];
+    }
+    get m13() {
+      return matrixState(this).values[2];
+    }
+    get m14() {
+      return matrixState(this).values[3];
+    }
+    get m21() {
+      return matrixState(this).values[4];
+    }
+    get m22() {
+      return matrixState(this).values[5];
+    }
+    get m23() {
+      return matrixState(this).values[6];
+    }
+    get m24() {
+      return matrixState(this).values[7];
+    }
+    get m31() {
+      return matrixState(this).values[8];
+    }
+    get m32() {
+      return matrixState(this).values[9];
+    }
+    get m33() {
+      return matrixState(this).values[10];
+    }
+    get m34() {
+      return matrixState(this).values[11];
+    }
+    get m41() {
+      return matrixState(this).values[12];
+    }
+    get m42() {
+      return matrixState(this).values[13];
+    }
+    get m43() {
+      return matrixState(this).values[14];
+    }
+    get m44() {
+      return matrixState(this).values[15];
+    }
+    get is2D() {
+      return matrixState(this).is2D;
+    }
+    multiply(other) {
+      if (!(other instanceof DOMMatrixReadOnly))
+        throw new TypeError("Matrix required");
+      return matrixFrom4x4(multiplyMatrices(matrixState(this).values, matrixState(other).values), this.is2D && other.is2D);
+    }
+    translate(tx = 0, ty = 0, tz = 0) {
+      return this.multiply(matrixFrom4x4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, Number(tx), Number(ty), Number(tz), 1], Number(tz) === 0));
+    }
+    scale(scaleX = 1, scaleY = scaleX, scaleZ = 1) {
+      return this.multiply(matrixFrom4x4([Number(scaleX), 0, 0, 0, 0, Number(scaleY), 0, 0, 0, 0, Number(scaleZ), 0, 0, 0, 0, 1], Number(scaleZ) === 1));
+    }
+    rotate(angle = 0) {
+      return this.rotateAxisAngle(0, 0, 1, angle);
+    }
+    rotateAxisAngle(x = 0, y = 0, z = 0, angle = 0) {
+      let nx = Number(x), ny = Number(y), nz = Number(z);
+      const length = Math.hypot(nx, ny, nz);
+      if (!length)
+        return matrixFrom4x4(matrixState(this).values.slice(), this.is2D);
+      nx /= length;
+      ny /= length;
+      nz /= length;
+      const radians = Number(angle) * Math.PI / 180;
+      const c = Math.cos(radians), s = Math.sin(radians), t = 1 - c;
+      const rotation = [
+        t * nx * nx + c,
+        t * nx * ny + s * nz,
+        t * nx * nz - s * ny,
+        0,
+        t * nx * ny - s * nz,
+        t * ny * ny + c,
+        t * ny * nz + s * nx,
+        0,
+        t * nx * nz + s * ny,
+        t * ny * nz - s * nx,
+        t * nz * nz + c,
+        0,
+        0,
+        0,
+        0,
+        1
+      ];
+      return this.multiply(matrixFrom4x4(rotation, nx === 0 && ny === 0));
+    }
+    skewX(angle = 0) {
+      const tangent = Math.tan(Number(angle) * Math.PI / 180);
+      return this.multiply(new DOMMatrix([1, 0, tangent, 1, 0, 0]));
+    }
+    skewY(angle = 0) {
+      const tangent = Math.tan(Number(angle) * Math.PI / 180);
+      return this.multiply(new DOMMatrix([1, tangent, 0, 1, 0, 0]));
+    }
+    toFloat32Array() {
+      return new Float32Array(matrixState(this).values);
+    }
+    toFloat64Array() {
+      return new Float64Array(matrixState(this).values);
+    }
+    toString() {
+      const stored = matrixState(this).values;
+      const values = this.is2D ? twoDimensionalValues(stored) : stored;
+      return `${this.is2D ? "matrix" : "matrix3d"}(${values.join(", ")})`;
+    }
+  }
+
+  class DOMMatrix extends DOMMatrixReadOnly {
+    _set(index, value, twoDimensionalValue = null) {
+      const state = matrixState(this);
+      const number = Number(value);
+      state.values[index] = number;
+      if (twoDimensionalValue !== null && number !== twoDimensionalValue)
+        state.is2D = false;
+    }
+    multiplySelf(other) {
+      const result = this.multiply(other);
+      matrixStates.set(this, { values: matrixState(result).values.slice(), is2D: result.is2D });
+      return this;
+    }
+    translateSelf(tx = 0, ty = 0, tz = 0) {
+      const result = this.translate(tx, ty, tz);
+      matrixStates.set(this, { values: matrixState(result).values.slice(), is2D: result.is2D });
+      return this;
+    }
+    scaleSelf(scaleX = 1, scaleY = scaleX, scaleZ = 1) {
+      const result = this.scale(scaleX, scaleY, scaleZ);
+      matrixStates.set(this, { values: matrixState(result).values.slice(), is2D: result.is2D });
+      return this;
+    }
+    rotateSelf(angle = 0) {
+      const result = this.rotate(angle);
+      matrixStates.set(this, { values: matrixState(result).values.slice(), is2D: result.is2D });
+      return this;
+    }
+  }
+  const MATRIX_FIELDS = {
+    a: [0, null],
+    b: [1, null],
+    c: [4, null],
+    d: [5, null],
+    e: [12, null],
+    f: [13, null],
+    m11: [0, null],
+    m12: [1, null],
+    m13: [2, 0],
+    m14: [3, 0],
+    m21: [4, null],
+    m22: [5, null],
+    m23: [6, 0],
+    m24: [7, 0],
+    m31: [8, 0],
+    m32: [9, 0],
+    m33: [10, 1],
+    m34: [11, 0],
+    m41: [12, null],
+    m42: [13, null],
+    m43: [14, 0],
+    m44: [15, 1]
+  };
+  for (const [name, [index, twoDimensionalValue]] of Object.entries(MATRIX_FIELDS)) {
+    Object.defineProperty(DOMMatrix.prototype, name, {
+      get() {
+        return matrixState(this).values[index];
+      },
+      set(value) {
+        this._set(index, value, twoDimensionalValue);
+      },
+      enumerable: true,
+      configurable: true
+    });
+  }
+
+  class CSSTransformComponent {
+    _is2D = true;
+    get is2D() {
+      return this._is2D;
+    }
+    set is2D(value) {
+      this._is2D = Boolean(value);
+    }
+    toMatrix() {
+      return new DOMMatrix;
+    }
+    toString() {
+      return String(this.toMatrix());
+    }
+  }
+
+  class CSSTranslate extends CSSTransformComponent {
+    _x;
+    _y;
+    _z;
+    constructor(x, y, z) {
+      super();
+      this.x = x;
+      this.y = y;
+      this._z = asLength(arguments.length < 3 ? new CSSUnitValue(0, "px") : z, "z");
+      this._is2D = arguments.length < 3;
+    }
+    get x() {
+      return this._x;
+    }
+    set x(value) {
+      this._x = asLengthPercentage(value, "x");
+    }
+    get y() {
+      return this._y;
+    }
+    set y(value) {
+      this._y = asLengthPercentage(value, "y");
+    }
+    get z() {
+      return this._z;
+    }
+    set z(value) {
+      this._z = asLength(value, "z");
+    }
+    toMatrix() {
+      const x = numericIn(this.x, "px"), y = numericIn(this.y, "px");
+      return new DOMMatrix().translate(x, y, this.is2D ? 0 : numericIn(this.z, "px"));
+    }
+    toString() {
+      const x = serializeTransformNumeric(this._x), y = serializeTransformNumeric(this._y);
+      return this.is2D ? `translate(${x}, ${y})` : `translate3d(${x}, ${y}, ${serializeTransformNumeric(this._z)})`;
+    }
+  }
+
+  class CSSRotate extends CSSTransformComponent {
+    _x;
+    _y;
+    _z;
+    _angle;
+    constructor(x, y, z, angle) {
+      super();
+      if (arguments.length === 1) {
+        this.x = 0;
+        this.y = 0;
+        this.z = 1;
+        this.angle = x;
+      } else {
+        this.x = x;
+        this._y = asNumberish(y, "y");
+        this._z = asNumberish(z, "z");
+        this._angle = asAngle(angle, "angle");
+        this._is2D = false;
+      }
+    }
+    get x() {
+      return this._x;
+    }
+    set x(value) {
+      this._x = asNumberish(value, "x");
+    }
+    get y() {
+      return this._y;
+    }
+    set y(value) {
+      this._y = asNumberish(value, "y");
+    }
+    get z() {
+      return this._z;
+    }
+    set z(value) {
+      this._z = asNumberish(value, "z");
+    }
+    get angle() {
+      return this._angle;
+    }
+    set angle(value) {
+      this._angle = asAngle(value, "angle");
+    }
+    toMatrix() {
+      const angle = numericIn(this.angle, "deg");
+      if (this.is2D)
+        return new DOMMatrix().rotate(angle);
+      return new DOMMatrix().rotateAxisAngle(numericIn(this._x, "number"), numericIn(this._y, "number"), numericIn(this._z, "number"), angle);
+    }
+    toString() {
+      const angle = serializeTransformNumeric(this._angle);
+      return this.is2D ? `rotate(${angle})` : `rotate3d(${serializeTransformNumeric(this._x)}, ${serializeTransformNumeric(this._y)}, ${serializeTransformNumeric(this._z)}, ${angle})`;
+    }
+  }
+
+  class CSSScale extends CSSTransformComponent {
+    _x;
+    _y;
+    _z;
+    constructor(x, y, z) {
+      super();
+      this.x = x;
+      this.y = y;
+      this._z = asNumberish(arguments.length < 3 ? 1 : z, "z");
+      this._is2D = arguments.length < 3;
+    }
+    get x() {
+      return this._x;
+    }
+    set x(value) {
+      this._x = asNumberish(value, "x");
+    }
+    get y() {
+      return this._y;
+    }
+    set y(value) {
+      this._y = asNumberish(value, "y");
+    }
+    get z() {
+      return this._z;
+    }
+    set z(value) {
+      this._z = asNumberish(value, "z");
+    }
+    toMatrix() {
+      return new DOMMatrix().scale(numericIn(this._x, "number"), numericIn(this._y, "number"), this.is2D ? 1 : numericIn(this._z, "number"));
+    }
+    toString() {
+      const x = serializeTransformNumeric(this._x), y = serializeTransformNumeric(this._y);
+      return this.is2D ? `scale(${x}, ${y})` : `scale3d(${x}, ${y}, ${serializeTransformNumeric(this._z)})`;
+    }
+  }
+
+  class CSSSkew extends CSSTransformComponent {
+    _ax;
+    _ay;
+    constructor(ax, ay) {
+      super();
+      this.ax = ax;
+      this.ay = ay;
+    }
+    get ax() {
+      return this._ax;
+    }
+    set ax(value) {
+      this._ax = asAngle(value, "ax");
+    }
+    get ay() {
+      return this._ay;
+    }
+    set ay(value) {
+      this._ay = asAngle(value, "ay");
+    }
+    set is2D(_value) {}
+    get is2D() {
+      return true;
+    }
+    toMatrix() {
+      const ax = Math.tan(numericIn(this.ax, "rad")), ay = Math.tan(numericIn(this.ay, "rad"));
+      return new DOMMatrix([1, ay, ax, 1, 0, 0]);
+    }
+    toString() {
+      const ax = serializeTransformNumeric(this._ax);
+      return numericIn(this._ay, "deg") === 0 ? `skew(${ax})` : `skew(${ax}, ${serializeTransformNumeric(this._ay)})`;
+    }
+  }
+
+  class CSSSkewX extends CSSTransformComponent {
+    _ax;
+    constructor(ax) {
+      super();
+      this.ax = ax;
+    }
+    get ax() {
+      return this._ax;
+    }
+    set ax(value) {
+      this._ax = asAngle(value, "ax");
+    }
+    set is2D(_value) {}
+    get is2D() {
+      return true;
+    }
+    toMatrix() {
+      return new DOMMatrix().skewX(numericIn(this.ax, "deg"));
+    }
+    toString() {
+      return `skewX(${serializeTransformNumeric(this._ax)})`;
+    }
+  }
+
+  class CSSSkewY extends CSSTransformComponent {
+    _ay;
+    constructor(ay) {
+      super();
+      this.ay = ay;
+    }
+    get ay() {
+      return this._ay;
+    }
+    set ay(value) {
+      this._ay = asAngle(value, "ay");
+    }
+    set is2D(_value) {}
+    get is2D() {
+      return true;
+    }
+    toMatrix() {
+      return new DOMMatrix().skewY(numericIn(this.ay, "deg"));
+    }
+    toString() {
+      return `skewY(${serializeTransformNumeric(this._ay)})`;
+    }
+  }
+
+  class CSSPerspective extends CSSTransformComponent {
+    _length;
+    constructor(length) {
+      super();
+      this.length = length;
+      this._is2D = false;
+    }
+    get length() {
+      return this._length;
+    }
+    set length(value) {
+      if (value === "none")
+        value = new CSSKeywordValue("none");
+      if (value instanceof CSSKeywordValue && value.value === "none")
+        this._length = value;
+      else
+        this._length = asLength(value, "length");
+    }
+    set is2D(_value) {}
+    get is2D() {
+      return false;
+    }
+    toMatrix() {
+      if (this._length instanceof CSSKeywordValue)
+        return new DOMMatrix;
+      const length = Math.max(1, numericIn(this._length, "px"));
+      return matrixFrom4x4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -1 / length, 0, 0, 0, 1], false);
+    }
+    toString() {
+      const value = this._length instanceof CSSUnitValue && this._length.value < 0 ? `calc(${serializeTransformNumeric(this._length)})` : this._length instanceof CSSNumericValue ? serializeTransformNumeric(this._length) : String(this._length);
+      return `perspective(${value})`;
+    }
+  }
+
+  class CSSMatrixComponent extends CSSTransformComponent {
+    _matrix;
+    constructor(matrix, options) {
+      super();
+      if (!(matrix instanceof DOMMatrixReadOnly))
+        throw new TypeError("matrix must be a DOMMatrixReadOnly");
+      const state = matrixState(matrix);
+      this._matrix = matrixFrom4x4(state.values.slice(), state.is2D);
+      this._is2D = options && typeof options === "object" && "is2D" in options ? Boolean(options.is2D) : this.matrix.is2D;
+    }
+    get matrix() {
+      return this._matrix;
+    }
+    set matrix(value) {
+      if (!(value instanceof DOMMatrix))
+        throw new TypeError("matrix must be a DOMMatrix");
+      this._matrix = value;
+    }
+    toMatrix() {
+      const values = matrixState(this.matrix).values;
+      return this.is2D ? new DOMMatrix(twoDimensionalValues(values)) : new DOMMatrix(values);
+    }
+    toString() {
+      return String(this.toMatrix());
+    }
+  }
+  function transformComponentFromDto(value) {
+    const dto = dtoObject(value);
+    if (!dto || typeof dto.type !== "string")
+      return null;
+    const numeric = (member) => typedValueFromDto(dto[member]);
+    try {
+      let component = null;
+      if (dto.type === "translate")
+        component = new CSSTranslate(numeric("x"), numeric("y"), numeric("z"));
+      else if (dto.type === "rotate")
+        component = new CSSRotate(numeric("x"), numeric("y"), numeric("z"), numeric("angle"));
+      else if (dto.type === "scale")
+        component = new CSSScale(numeric("x"), numeric("y"), numeric("z"));
+      else if (dto.type === "skew")
+        component = new CSSSkew(numeric("ax"), numeric("ay"));
+      else if (dto.type === "skew_x")
+        component = new CSSSkewX(numeric("angle"));
+      else if (dto.type === "skew_y")
+        component = new CSSSkewY(numeric("angle"));
+      else if (dto.type === "perspective") {
+        const length = typedValueFromDto(dto.length);
+        component = new CSSPerspective(length);
+      } else if (dto.type === "matrix" && Array.isArray(dto.matrix) && dto.matrix.length === 16) {
+        component = new CSSMatrixComponent(new DOMMatrix(dto.matrix));
+      }
+      if (component && typeof dto.is_2d === "boolean")
+        component.is2D = dto.is_2d;
+      return component;
+    } catch {
+      return null;
+    }
+  }
+  const transformComponents = new WeakMap;
+  function componentsFor(value) {
+    const components = transformComponents.get(value);
+    if (!components)
+      throw new TypeError("Illegal invocation");
+    return components;
+  }
+
+  class CSSTransformValue extends CSSStyleValue {
+    constructor(components) {
+      super();
+      if (components == null)
+        throw new TypeError("Transform components are required");
+      const values = Array.from(components);
+      if (!values.length || values.some((value) => !(value instanceof CSSTransformComponent))) {
+        throw new TypeError("CSSTransformValue requires transform components");
+      }
+      transformComponents.set(this, values);
+      const proxy = new Proxy(this, {
+        get(target, property, receiver) {
+          const index = numericIndex(property);
+          return index === null ? Reflect.get(target, property, receiver) : componentsFor(target)[index];
+        },
+        set(target, property, value, receiver) {
+          const index = numericIndex(property);
+          if (index !== null) {
+            if (!(value instanceof CSSTransformComponent))
+              throw new TypeError("Transform component required");
+            const stored = componentsFor(target);
+            if (index > stored.length)
+              throw new TypeError("Transform index is out of range");
+            stored[index] = value;
+            return true;
+          }
+          if (property === "length" || property === "is2D" || property === "_components") {
+            throw new TypeError(`${String(property)} is readonly`);
+          }
+          return Reflect.set(target, property, value, receiver);
+        },
+        defineProperty(target, property, descriptor) {
+          if (property === "_components")
+            throw new TypeError("_components is private");
+          return Reflect.defineProperty(target, property, descriptor);
+        },
+        deleteProperty(target, property) {
+          if (numericIndex(property) !== null)
+            return false;
+          return Reflect.deleteProperty(target, property);
+        },
+        has(target, property) {
+          const index = numericIndex(property);
+          return index === null ? Reflect.has(target, property) : index < componentsFor(target).length;
+        },
+        ownKeys(target) {
+          return [
+            ...componentsFor(target).map((_, index) => String(index)),
+            ...Reflect.ownKeys(target)
+          ];
+        },
+        getOwnPropertyDescriptor(target, property) {
+          const index = numericIndex(property);
+          const stored = componentsFor(target);
+          if (index !== null && index < stored.length) {
+            return { value: stored[index], writable: true, enumerable: true, configurable: true };
+          }
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        }
+      });
+      transformComponents.set(proxy, values);
+      return proxy;
+    }
+    get length() {
+      return componentsFor(this).length;
+    }
+    get is2D() {
+      return componentsFor(this).every((value) => value.is2D);
+    }
+    *entries() {
+      const components = componentsFor(this);
+      for (let i = 0;i < components.length; i++)
+        yield [i, components[i]];
+    }
+    *keys() {
+      for (let i = 0;i < this.length; i++)
+        yield i;
+    }
+    *values() {
+      yield* componentsFor(this);
+    }
+    forEach(callback, thisArg) {
+      const components = componentsFor(this);
+      for (let i = 0;i < components.length; i++)
+        callback.call(thisArg, components[i], i, this);
+    }
+    [Symbol.iterator]() {
+      return this.values();
+    }
+    toMatrix() {
+      return componentsFor(this).reduce((matrix, component) => matrix.multiply(component.toMatrix()), new DOMMatrix);
+    }
+    toString() {
+      return componentsFor(this).map(String).join(" ");
+    }
+  }
+  function normalizeProperty(name) {
+    const property = String(name);
+    return property.startsWith("--") ? property : property.toLowerCase();
+  }
+  const supportedPropertyCache = new Map;
+  function assertSupportedProperty(property) {
+    if (property.startsWith("--"))
+      return;
+    let supported = supportedPropertyCache.get(property);
+    if (supported === undefined) {
+      const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
+      if (!canon)
+        return;
+      try {
+        supported = canon(`${property}: initial`).length > 0;
+      } catch {
+        supported = false;
+      }
+      supportedPropertyCache.set(property, supported);
+    }
+    if (!supported)
+      throw new TypeError(`Unsupported property: ${property}`);
+  }
+  const IMAGE_PROPERTIES = new Set([
+    "background-image",
+    "border-image-source",
+    "list-style-image",
+    "mask-image",
+    "shape-outside"
+  ]);
+  const LIST_VALUED_PROPERTIES = new Set([
+    "animation-composition",
+    "animation-delay",
+    "animation-direction",
+    "animation-duration",
+    "animation-fill-mode",
+    "animation-iteration-count",
+    "animation-name",
+    "animation-play-state",
+    "animation-timeline",
+    "animation-timing-function",
+    "background-attachment",
+    "background-clip",
+    "background-image",
+    "background-origin",
+    "background-position",
+    "background-repeat",
+    "background-size",
+    "mask-clip",
+    "mask-composite",
+    "mask-image",
+    "mask-mode",
+    "mask-origin",
+    "mask-position",
+    "mask-repeat",
+    "mask-size",
+    "transition-behavior",
+    "transition-delay",
+    "transition-duration",
+    "transition-timing-function"
+  ]);
+  function isColorProperty(property) {
+    return property === "color" || property === "accent-color" || property === "caret-color" || property === "fill" || property === "stroke" || property.endsWith("-color");
+  }
+  function splitTopLevelCommas(text) {
+    const values = [];
+    let start = 0;
+    let depth = 0;
+    let quote = "";
+    for (let i = 0;i < text.length; i++) {
+      const char = text[i];
+      if (quote) {
+        if (char === "\\")
+          i++;
+        else if (char === quote)
+          quote = "";
+      } else if (char === '"' || char === "'")
+        quote = char;
+      else if (char === "(")
+        depth++;
+      else if (char === ")")
+        depth--;
+      else if (char === "," && depth === 0) {
+        values.push(text.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    values.push(text.slice(start).trim());
+    return values;
+  }
+  function hasTopLevelSemicolon(text) {
+    let depth = 0;
+    let quote = "";
+    for (let i = 0;i < text.length; i++) {
+      const char = text[i];
+      if (quote) {
+        if (char === "\\")
+          i++;
+        else if (char === quote)
+          quote = "";
+      } else if (char === '"' || char === "'")
+        quote = char;
+      else if (char === "(")
+        depth++;
+      else if (char === ")")
+        depth--;
+      else if (char === ";" && depth === 0)
+        return true;
+    }
+    return false;
+  }
+  function hasTopLevelImportant(text) {
+    let depth = 0;
+    let quote = "";
+    let bang = -1;
+    for (let i = 0;i < text.length; i++) {
+      const char = text[i];
+      if (quote) {
+        if (char === "\\")
+          i++;
+        else if (char === quote)
+          quote = "";
+      } else if (char === '"' || char === "'")
+        quote = char;
+      else if (char === "(")
+        depth++;
+      else if (char === ")")
+        depth--;
+      else if (char === "!" && depth === 0)
+        bang = i;
+    }
+    return bang >= 0 && /^!\s*important\s*$/i.test(text.slice(bang));
+  }
+  function reify(property, cssText) {
+    const text = String(cssText).trim();
+    if (!text)
+      return;
+    if (property.startsWith("--"))
+      return new CSSUnparsedValue([text]);
+    if (IMAGE_PROPERTIES.has(property) && /^url\(/i.test(text))
+      return new CSSImageValue(text, property);
+    if (/^var\(/i.test(text)) {
+      const match = /^var\(\s*(--[^,\s)]+)(?:\s*,\s*(.*))?\)$/i.exec(text);
+      if (match) {
+        const fallback = match[2] == null ? null : new CSSUnparsedValue([match[2]]);
+        return new CSSUnparsedValue([new CSSVariableReferenceValue(match[1], fallback)]);
+      }
+    }
+    const typed = reifyTypedList(property, text);
+    if (typed?.length === 1)
+      return typed[0];
+    const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
+    if (canon) {
+      try {
+        const declarations = canon(`${property}: ${text}`);
+        if (declarations.length > 1) {
+          return new CSSStyleValue(text, property);
+        }
+      } catch {}
+    }
+    const calc = /^calc\((.*)\)$/i.exec(text);
+    if (calc) {
+      const terms = calc[1].split(/\s+\+\s+/).map((term) => reifyNumeric(term));
+      if (terms.every((term) => term !== null))
+        return new CSSMathSum(...terms);
+    }
+    const numeric = reifyNumeric(text);
+    if (numeric)
+      return numeric;
+    const comma = text.indexOf(",");
+    if (comma >= 0) {
+      const firstListValue = text.slice(0, comma).trim();
+      const firstNumeric = reifyNumeric(firstListValue);
+      if (firstNumeric)
+        return firstNumeric;
+    }
+    if (/^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(text)) {
+      if (isColorProperty(property)) {
+        const keyword = text.toLowerCase();
+        const supported = keyword === "currentcolor" || keyword === "auto" && (property === "accent-color" || property === "caret-color");
+        return supported ? new CSSKeywordValue(text) : new CSSStyleValue(text, property);
+      }
+      if (property === "font-family")
+        return new CSSStyleValue(text, property);
+      if (property === "transition-property" && text.toLowerCase() !== "none") {
+        return new CSSStyleValue(text, property);
+      }
+      if (property === "will-change" && text.toLowerCase() !== "auto") {
+        return new CSSStyleValue(text, property);
+      }
+      return new CSSKeywordValue(text);
+    }
+    return new CSSStyleValue(text, property);
+  }
+  function reifyNumeric(text) {
+    const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%|[a-zA-Z]+)?$/i.exec(text.trim());
+    if (!match)
+      return null;
+    const rawUnit = match[2] || "number";
+    const unit = rawUnit === "%" ? "percent" : rawUnit;
+    try {
+      return new CSSUnitValue(Number(match[1]), unit);
+    } catch {
+      return null;
+    }
+  }
+
+  class StylePropertyMapReadOnly {
+    _declaration;
+    constructor(declaration) {
+      this._declaration = declaration;
+    }
+    get(propertyName) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      return this.getAll(property)[0];
+    }
+    getAll(propertyName) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      const text = this._declaration().getPropertyValue(property);
+      if (!text)
+        return [];
+      const parts = LIST_VALUED_PROPERTIES.has(property) ? splitTopLevelCommas(text) : [text];
+      const values = parts.map((part) => reify(property, part)).filter((value) => value !== undefined);
+      for (const value of values)
+        value._associatedProperty = property;
+      return values;
+    }
+    has(propertyName) {
+      return this.get(propertyName) !== undefined;
+    }
+    _entries() {
+      const declaration = this._declaration();
+      const entries = [];
+      const seen = new Set;
+      if (typeof declaration.item === "function" && typeof declaration.length === "number") {
+        for (let i = 0;i < declaration.length; i++) {
+          const property = declaration.item(i);
+          if (!property || seen.has(property))
+            continue;
+          seen.add(property);
+          const values = this.getAll(property);
+          if (values.length)
+            entries.push([property, values]);
+        }
+      }
+      return entries;
+    }
+    get size() {
+      return this._entries().length;
+    }
+    [Symbol.iterator]() {
+      return this._entries()[Symbol.iterator]();
+    }
+    entries() {
+      return this._entries()[Symbol.iterator]();
+    }
+    keys() {
+      return this._entries().map(([key]) => key)[Symbol.iterator]();
+    }
+    values() {
+      return this._entries().map(([, value]) => value)[Symbol.iterator]();
+    }
+    forEach(callback, thisArg) {
+      for (const [key, value] of this)
+        callback.call(thisArg, value, key, this);
+    }
+  }
+
+  class StylePropertyMap extends StylePropertyMapReadOnly {
+    _associatedValues = new Map;
+    get(propertyName) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      const associated = this._associatedValues.get(property);
+      if (associated && this._declaration().getPropertyValue(property) === associated.declarationValue) {
+        const value = cloneAssociatedValue(associated.value, property);
+        value._associatedProperty = property;
+        return value;
+      }
+      this._associatedValues.delete(property);
+      return super.get(property);
+    }
+    set(propertyName, ...values) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      if (values.length === 0 || values.length > 1 && !LIST_VALUED_PROPERTIES.has(property) || values.some((value) => typeof value !== "string" && !(value instanceof CSSStyleValue))) {
+        throw new TypeError("Expected one CSSStyleValue or string");
+      }
+      for (const value of values) {
+        if (value instanceof CSSStyleValue && value._associatedProperty && value._associatedProperty !== property) {
+          throw new TypeError("CSSStyleValue is associated with another property");
+        }
+      }
+      const value = values.length === 1 ? values[0] : values.map(String).join(", ");
+      if (values.length > 1 && values.some((part) => part instanceof CSSUnparsedValue || /var\(/i.test(String(part)))) {
+        throw new TypeError("Cannot combine a variable reference with other values");
+      }
+      let cssText = String(value);
+      if (hasTopLevelSemicolon(cssText))
+        throw new TypeError(`Invalid value for ${property}`);
+      let associatedValue = values.length === 1 ? values[0] : value;
+      const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
+      let valid = property.startsWith("--") && cssText !== "";
+      let typeAccepted = true;
+      if (canon) {
+        try {
+          const declarations = canon(`${property}: ${cssText}`);
+          valid = Array.isArray(declarations) && declarations.length > 0;
+          const universal = value instanceof CSSUnparsedValue || value instanceof CSSKeywordValue && ["initial", "inherit", "unset", "revert"].includes(value.value);
+          if (value instanceof CSSStyleValue && Object.getPrototypeOf(value) !== CSSStyleValue.prototype && !universal && declarations.length > 1)
+            valid = false;
+          if (value instanceof CSSUnitValue) {
+            const probe = new CSSUnitValue(1, value.unit);
+            typeAccepted = canon(`${property}: ${probe}`).length > 0;
+            if (valid && !typeAccepted)
+              valid = false;
+          }
+        } catch {
+          valid = false;
+        }
+      }
+      if (!valid && typeAccepted && value instanceof CSSUnitValue) {
+        const calcText = `calc(${cssText})`;
+        try {
+          const declarations = canon?.(`${property}: ${calcText}`) || [];
+          valid = declarations.length > 0;
+        } catch {
+          valid = false;
+        }
+        if (valid) {
+          cssText = calcText;
+          associatedValue = new CSSMathSum(cloneAssociatedValue(value, property));
+        }
+      }
+      if (!valid)
+        throw new TypeError(`Invalid value for ${property}`);
+      let storedAssociated = associatedValue instanceof CSSStyleValue ? cloneAssociatedValue(associatedValue, property) : null;
+      const declaration = this._declaration();
+      const previous = declaration.getPropertyValue(property);
+      declaration.setProperty?.(property, cssText);
+      let written = declaration.getPropertyValue(property);
+      if (written === previous && written !== cssText) {
+        declaration.removeProperty?.(property);
+        declaration.setProperty?.(property, cssText);
+        written = declaration.getPropertyValue(property);
+        if (!written && previous)
+          declaration.setProperty?.(property, previous);
+      }
+      if (!written && value instanceof CSSUnitValue && value.value < 0) {
+        const calcText = `calc(${String(value)})`;
+        declaration.setProperty?.(property, calcText);
+        written = declaration.getPropertyValue(property);
+        if (written) {
+          associatedValue = new CSSMathSum(cloneAssociatedValue(value, property));
+          storedAssociated = cloneAssociatedValue(associatedValue, property);
+        }
+      }
+      if (!written) {
+        throw new TypeError(`Invalid value for ${property}`);
+      }
+      if (storedAssociated) {
+        this._associatedValues.set(property, {
+          declarationValue: written,
+          value: storedAssociated
+        });
+      } else {
+        this._associatedValues.delete(property);
+      }
+    }
+    append(propertyName, ...values) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      if (!LIST_VALUED_PROPERTIES.has(property) || values.length === 0 || values.some((value) => value instanceof CSSUnparsedValue || /^var\(/i.test(String(value)))) {
+        throw new TypeError("Property does not accept multiple values");
+      }
+      const current = this._declaration().getPropertyValue(property);
+      const shorthand = property.startsWith("transition-") ? this._declaration().getPropertyValue("transition") : "";
+      if (/var\(/i.test(current) || /var\(/i.test(shorthand)) {
+        throw new TypeError("Cannot append to a variable reference");
+      }
+      const combined = [...current ? splitTopLevelCommas(current) : [], ...values.map(String)].join(", ");
+      this.set(property, combined);
+    }
+    delete(propertyName) {
+      const property = normalizeProperty(propertyName);
+      assertSupportedProperty(property);
+      this._associatedValues.delete(property);
+      this._declaration().removeProperty?.(property);
+    }
+    clear() {
+      this._associatedValues.clear();
+      const declaration = this._declaration();
+      declaration.cssText = "";
+    }
+  }
+  function cloneAssociatedValue(value, property) {
+    if (value instanceof CSSTransformValue) {
+      return new CSSTransformValue(Array.from(value, cloneTransformComponent));
+    }
+    if (value instanceof CSSColor) {
+      return new CSSColor(new CSSKeywordValue(value.colorSpace.value), value.channels.map(cloneColorChannel), cloneNumericValue(value.alpha));
+    }
+    if (value instanceof CSSRGB) {
+      return new CSSRGB(cloneColorChannel(value.r), cloneColorChannel(value.g), cloneColorChannel(value.b), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSHSL) {
+      return new CSSHSL(cloneColorChannel(value.h), cloneColorChannel(value.s), cloneColorChannel(value.l), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSHWB) {
+      return new CSSHWB(cloneColorChannel(value.h), cloneColorChannel(value.w), cloneColorChannel(value.b), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSLab) {
+      return new CSSLab(cloneColorChannel(value.l), cloneColorChannel(value.a), cloneColorChannel(value.b), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSLCH) {
+      return new CSSLCH(cloneColorChannel(value.l), cloneColorChannel(value.c), cloneColorChannel(value.h), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSOKLab) {
+      return new CSSOKLab(cloneColorChannel(value.l), cloneColorChannel(value.a), cloneColorChannel(value.b), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSOKLCH) {
+      return new CSSOKLCH(cloneColorChannel(value.l), cloneColorChannel(value.c), cloneColorChannel(value.h), cloneColorChannel(value.alpha));
+    }
+    if (value instanceof CSSUnitValue)
+      return new CSSUnitValue(value.value, value.unit);
+    if (value instanceof CSSKeywordValue)
+      return new CSSKeywordValue(value.value);
+    if (value instanceof CSSMathSum) {
+      const parts = Array.from(value.values, cloneNumericValue);
+      const first = parts[0];
+      if (first instanceof CSSUnitValue) {
+        return new CSSMathSum(...parts.map((part) => {
+          try {
+            return part.to(first.unit);
+          } catch {
+            return part;
+          }
+        }));
+      }
+      return new CSSMathSum(...parts);
+    }
+    if (value instanceof CSSNumericValue)
+      return cloneNumericValue(value);
+    if (value instanceof CSSUnparsedValue) {
+      return new CSSUnparsedValue(Array.from(value, (part) => {
+        if (typeof part === "string")
+          return part;
+        return new CSSVariableReferenceValue(part.variable, part.fallback ? cloneAssociatedValue(part.fallback, property) : null);
+      }));
+    }
+    return new CSSStyleValue(String(value), property);
+  }
+  function cloneTransformComponent(value) {
+    let clone;
+    if (value instanceof CSSTranslate) {
+      clone = new CSSTranslate(cloneNumericValue(toNumericValue(value.x)), cloneNumericValue(toNumericValue(value.y)), cloneNumericValue(toNumericValue(value.z)));
+    } else if (value instanceof CSSRotate) {
+      clone = new CSSRotate(cloneNumericValue(toNumericValue(value.x)), cloneNumericValue(toNumericValue(value.y)), cloneNumericValue(toNumericValue(value.z)), cloneNumericValue(value.angle));
+    } else if (value instanceof CSSScale) {
+      clone = new CSSScale(cloneNumericValue(toNumericValue(value.x)), cloneNumericValue(toNumericValue(value.y)), cloneNumericValue(toNumericValue(value.z)));
+    } else if (value instanceof CSSSkew) {
+      clone = new CSSSkew(cloneNumericValue(value.ax), cloneNumericValue(value.ay));
+    } else if (value instanceof CSSSkewX) {
+      clone = new CSSSkewX(cloneNumericValue(value.ax));
+    } else if (value instanceof CSSSkewY) {
+      clone = new CSSSkewY(cloneNumericValue(value.ay));
+    } else if (value instanceof CSSPerspective) {
+      const length = value.length;
+      clone = new CSSPerspective(typeof length === "string" ? length : length instanceof CSSKeywordValue ? new CSSKeywordValue(length.value) : cloneNumericValue(length));
+    } else if (value instanceof CSSMatrixComponent) {
+      clone = new CSSMatrixComponent(cloneMatrix(value.matrix), { is2D: value.is2D });
+    } else {
+      throw new TypeError("Unknown CSS transform component");
+    }
+    clone.is2D = value.is2D;
+    return clone;
+  }
+  function cloneMatrix(value) {
+    const state = matrixState(value);
+    const clone = new DOMMatrix(state.values);
+    matrixState(clone).is2D = state.is2D;
+    return clone;
+  }
+  function cloneColorChannel(value) {
+    return value instanceof CSSKeywordValue ? new CSSKeywordValue(value.value) : cloneNumericValue(value);
+  }
+  function cloneNumericValue(value) {
+    if (value instanceof CSSUnitValue)
+      return new CSSUnitValue(value.value, value.unit);
+    if (value instanceof CSSMathSum)
+      return new CSSMathSum(...Array.from(value.values, cloneNumericValue));
+    if (value instanceof CSSMathProduct)
+      return new CSSMathProduct(...Array.from(value.values, cloneNumericValue));
+    if (value instanceof CSSMathNegate)
+      return new CSSMathNegate(cloneNumericValue(value.value));
+    if (value instanceof CSSMathInvert)
+      return new CSSMathInvert(cloneNumericValue(value.value));
+    if (value instanceof CSSMathMin)
+      return new CSSMathMin(...Array.from(value.values, cloneNumericValue));
+    if (value instanceof CSSMathMax)
+      return new CSSMathMax(...Array.from(value.values, cloneNumericValue));
+    if (value instanceof CSSMathClamp) {
+      return new CSSMathClamp(cloneNumericValue(value.lower), cloneNumericValue(value.value), cloneNumericValue(value.upper));
+    }
+    throw new TypeError("Unknown CSS numeric value");
+  }
+  function makeAttributeStyleMap(element) {
+    return new StylePropertyMap(() => element.style);
+  }
+  function makeStylePropertyMap(declaration) {
+    return new StylePropertyMap(() => declaration);
+  }
+  function makeComputedStyleMap(element, getComputedStyle, specified) {
+    const map = new StylePropertyMapReadOnly(() => getComputedStyle(element));
+    if (!specified)
+      return map;
+    const getAll = map.getAll.bind(map);
+    map.getAll = (propertyName) => {
+      const property = normalizeProperty(propertyName);
+      if (isColorProperty(property)) {
+        const value = specified.get(property);
+        if (value instanceof CSSKeywordValue)
+          return [cloneAssociatedValue(value, property)];
+      }
+      return getAll(property);
+    };
+    return map;
+  }
+  const CSS_TYPED_OM_GLOBALS = {
+    CSSStyleValue,
+    CSSImageValue,
+    CSSKeywordValue,
+    CSSNumericValue,
+    CSSUnitValue,
+    CSSMathValue,
+    CSSMathSum,
+    CSSMathProduct,
+    CSSMathNegate,
+    CSSMathInvert,
+    CSSMathMin,
+    CSSMathMax,
+    CSSMathClamp,
+    CSSNumericArray,
+    CSSColorValue,
+    CSSRGB,
+    CSSHSL,
+    CSSHWB,
+    CSSLab,
+    CSSLCH,
+    CSSOKLab,
+    CSSOKLCH,
+    CSSColor,
+    CSSUnparsedValue,
+    CSSVariableReferenceValue,
+    StylePropertyMapReadOnly,
+    StylePropertyMap,
+    CSSTransformValue,
+    CSSTransformComponent,
+    CSSTranslate,
+    CSSRotate,
+    CSSScale,
+    CSSSkew,
+    CSSSkewX,
+    CSSSkewY,
+    CSSPerspective,
+    CSSMatrixComponent,
+    DOMMatrixReadOnly,
+    DOMMatrix
+  };
+
+
+      // CSSStyleValue constructor must not be directly constructible (WebIDL)
+      const _OrigCSSStyleValue = CSSStyleValue;
+      function CSSStyleValueWrapper(cssText, associatedProperty) {
+        if (new.target === CSSStyleValueWrapper || new.target === _OrigCSSStyleValue || (new.target && new.target.prototype && new.target.prototype instanceof _OrigCSSStyleValue && arguments.length === 0 && new.target !== CSSStyleValueWrapper)) {
+          // Only disallow direct CSSStyleValue construction / Reflect.construct(CSSStyleValue, ...)
+        }
+      }
+      void CSSStyleValueWrapper;
+
+      // Make CSSStyleValue direct construction and Reflect.construct(CSSStyleValue, [], Sub) throw TypeError
+      const origCtor = CSSStyleValue;
+      const CSSStyleValueProxy = new Proxy(origCtor, {
+        construct(target, args, newTarget) {
+          if (newTarget === CSSStyleValueProxy || newTarget === origCtor || args.length === 0) {
+            throw new TypeError("Illegal constructor");
+          }
+          return Reflect.construct(target, args, newTarget);
+        },
+        apply() {
+          throw new TypeError("Illegal constructor");
+        }
+      });
+
+      // Attach static parse / parseAll as enumerable with length 2 on CSSStyleValue and all subclasses
+      Object.defineProperty(CSSStyleValue, "parse", {
+        value: CSSStyleValue.parse,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      Object.defineProperty(CSSStyleValue, "parseAll", {
+        value: CSSStyleValue.parseAll,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+
+      // Expose all prototype methods/accessors as enumerable per WebIDL
+      const allCtors = Object.values(CSS_TYPED_OM_GLOBALS);
+      for (let i = 0; i < allCtors.length; i++) {
+        const C = allCtors[i];
+        if (!C || !C.prototype) continue;
+        for (const k of Object.getOwnPropertyNames(C.prototype)) {
+          if (k === "constructor" || k.startsWith("_")) continue;
+          const d = Object.getOwnPropertyDescriptor(C.prototype, k);
+          if (d && d.configurable && !d.enumerable) {
+            d.enumerable = true;
+            Object.defineProperty(C.prototype, k, d);
+          }
+        }
+        // Copy parse/parseAll onto CSSStyleValue subclasses as own enumerable properties (without overriding subclass-specific parse like CSSColorValue.parse)
+        if (C !== CSSStyleValue && CSSStyleValue.prototype.isPrototypeOf(C.prototype)) {
+          if (!Object.prototype.hasOwnProperty.call(C, "parse")) {
+            Object.defineProperty(C, "parse", {
+              value: CSSStyleValue.parse,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+          } else {
+            const pd = Object.getOwnPropertyDescriptor(C, "parse");
+            if (pd && pd.configurable && !pd.enumerable) {
+              pd.enumerable = true;
+              Object.defineProperty(C, "parse", pd);
+            }
+          }
+          if (!Object.prototype.hasOwnProperty.call(C, "parseAll")) {
+            Object.defineProperty(C, "parseAll", {
+              value: CSSStyleValue.parseAll,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+          } else {
+            const pad = Object.getOwnPropertyDescriptor(C, "parseAll");
+            if (pad && pad.configurable && !pad.enumerable) {
+              pad.enumerable = true;
+              Object.defineProperty(C, "parseAll", pad);
+            }
+          }
+        }
+      }
+
+      // WebIDL iterable identities
+      if (StylePropertyMapReadOnly.prototype.entries) {
+        Object.defineProperty(StylePropertyMapReadOnly.prototype, Symbol.iterator, {
+          value: StylePropertyMapReadOnly.prototype.entries,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+      for (const IterCtor of [CSSUnparsedValue, CSSTransformValue]) {
+        for (const m of ["entries", "keys", "values", "forEach"]) {
+          Object.defineProperty(IterCtor.prototype, m, {
+            value: Array.prototype[m],
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        }
+        Object.defineProperty(IterCtor.prototype, Symbol.iterator, {
+          value: Array.prototype[Symbol.iterator],
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+
+      // Export globals (using CSSStyleValueProxy for global CSSStyleValue so new CSSStyleValue() and Reflect.construct throw)
+      const exported = Object.assign({}, CSS_TYPED_OM_GLOBALS, { CSSStyleValue: CSSStyleValueProxy });
+      for (const key of Object.keys(exported)) {
+        global[key] = exported[key];
+        if (typeof window !== "undefined") window[key] = exported[key];
+        if (typeof globalThis !== "undefined") globalThis[key] = exported[key];
+      }
+
+      // Install CSS.<unit>(value) factory functions
+      const cssObj = global.CSS || (typeof window !== "undefined" && window.CSS) || (typeof globalThis !== "undefined" && globalThis.CSS);
+      if (cssObj) {
+        const factoryUnits = [
+          "number", "percent",
+          "em", "ex", "ch", "cap", "ic", "rem", "rcap", "rch", "rex", "ric", "lh", "rlh",
+          "vw", "vh", "vi", "vb", "vmin", "vmax",
+          "svw", "svh", "svi", "svb", "svmin", "svmax",
+          "lvw", "lvh", "lvi", "lvb", "lvmin", "lvmax",
+          "dvw", "dvh", "dvi", "dvb", "dvmin", "dvmax",
+          "cqw", "cqh", "cqi", "cqb", "cqmin", "cqmax",
+          "cm", "mm", "Q", "in", "pt", "pc", "px",
+          "deg", "grad", "rad", "turn",
+          "s", "ms", "Hz", "kHz",
+          "dpi", "dpcm", "dppx", "fr"
+        ];
+        for (let i = 0; i < factoryUnits.length; i++) {
+          const fnName = factoryUnits[i];
+          const unitName = fnName.toLowerCase();
+          cssObj[fnName] = function (value) {
+            return new CSSUnitValue(value, unitName);
+          };
+        }
+      }
+
+      // Wrap getComputedStyle for computedStyleMap so opacity percent/calc resolves to clamped [0,1] number
+      function getTypedComputedStyle(el) {
+        const cs = getComputedStyle(el);
+        return {
+          getPropertyValue(prop) {
+            const p = String(prop || "").toLowerCase();
+            let raw = cs.getPropertyValue(p);
+            if (p === "opacity" && raw) {
+              const trimmed = String(raw).trim();
+              if (trimmed.endsWith("%")) {
+                const n = parseFloat(trimmed);
+                if (!isNaN(n)) return String(Math.max(0, Math.min(1, n / 100)));
+              }
+              if (/^calc\(/i.test(trimmed)) {
+                try {
+                  const parsed = CSSStyleValue.parse("opacity", trimmed);
+                  if (parsed && typeof parsed.to === "function") {
+                    const num = parsed.to("number").value;
+                    if (Number.isFinite(num)) return String(Math.max(0, Math.min(1, num)));
+                  }
+                } catch (e) {}
+              }
+              const n = parseFloat(trimmed);
+              if (!isNaN(n)) return String(Math.max(0, Math.min(1, n)));
+            }
+            return raw;
+          },
+          setProperty(p, v, pr) { return cs.setProperty(p, v, pr); },
+          removeProperty(p) { return cs.removeProperty(p); },
+          get length() { return cs.length; },
+          item(i) { return cs.item(i); },
+        };
+      }
+
+      const attrStyleMaps = new WeakMap();
+      const compStyleMaps = new WeakMap();
+
+      if (global.Element && global.Element.prototype) {
+        Object.defineProperty(global.Element.prototype, "attributeStyleMap", {
+          get: markNative(function () {
+            let m = attrStyleMaps.get(this);
+            if (!m) {
+              m = makeAttributeStyleMap(this);
+              attrStyleMaps.set(this, m);
+            }
+            return m;
+          }, "get attributeStyleMap"),
+          enumerable: true,
+          configurable: true,
+        });
+        global.Element.prototype.computedStyleMap = markNative(function () {
+          let m = compStyleMaps.get(this);
+          if (!m) {
+            m = makeComputedStyleMap(this, getTypedComputedStyle, this.attributeStyleMap);
+            compStyleMaps.set(this, m);
+          }
+          return m;
+        }, "computedStyleMap");
+      }
+    })(global);
+
 
     global.CSSStyleDeclaration = CSSStyleDeclaration;
     global.getComputedStyle = getComputedStyle;
@@ -28067,6 +31604,11 @@
   const upgradingElements = new WeakSet();
   const queuedAttributeChanges = new WeakMap();
   const whenDefinedResolvers = new Map();
+  const upgradedCustomNodeIds = new Map();
+  global.__capsurf_upgradedCustomNodeIds = upgradedCustomNodeIds;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_upgradedCustomNodeIds = upgradedCustomNodeIds;
+  }
 
   function upgradeCustomElement(element, customElementConstructor, options) {
     const tagName = (options && options.tagName) ? options.tagName : String(element.localName || element.tagName || "").toLowerCase();
@@ -28091,6 +31633,10 @@
 
     // 2. Set prototype to custom element class
     Object.setPrototypeOf(element, customElementConstructor.prototype);
+    const elNid = typeof element._nid === "number" ? element._nid : (typeof element._id === "number" ? element._id : -1);
+    if (elNid > 0) {
+      upgradedCustomNodeIds.set(elNid, customElementConstructor);
+    }
 
     // 3. Instantiate via constructor
     upgradingElements.add(element);
@@ -28282,18 +31828,30 @@
   };
 
   CustomElementRegistry.prototype.upgrade = function (root) {
-    if (!root) return;
-    for (const [tagName, ctor] of customElementRegistry.entries()) {
-      if (root.querySelectorAll) {
-        const matches = root.querySelectorAll(tagName);
-        for (let i = 0; i < matches.length; i++) {
-          upgradeCustomElement(matches[i], ctor, {
-            tagName: tagName,
-            fireConnectedCallback: Boolean(matches[i].isConnected),
-          });
+    if (!root || typeof root !== "object") return;
+    function visit(node) {
+      if (!node || typeof node !== "object") return;
+      if (node.nodeType === 1) {
+        const ns = node.namespaceURI;
+        if (!ns || ns === "http://www.w3.org/1999/xhtml") {
+          const tagName = String(node.localName || node.tagName || "").toLowerCase();
+          const ctor = customElementRegistry.get(tagName);
+          if (ctor) {
+            upgradeCustomElement(node, ctor, {
+              tagName: tagName,
+              fireConnectedCallback: Boolean(node.isConnected),
+            });
+          }
+        }
+      }
+      const kids = node.childNodes || node._children;
+      if (kids && kids.length) {
+        for (let i = 0; i < kids.length; i++) {
+          visit(kids[i]);
         }
       }
     }
+    visit(root);
   };
 
   markNative(CustomElementRegistry.prototype.define, "define");
@@ -28683,9 +32241,41 @@
     // 12. Install window environment
     installWindow(global);
 
+    const upgradedElementsSet = new WeakSet();
+    const elementNidMap = new WeakMap();
+    if (global.Node && global.Node.prototype && !Object.getOwnPropertyDescriptor(global.Node.prototype, "_nid")) {
+      Object.defineProperty(global.Node.prototype, "_nid", {
+        get: function () { return elementNidMap.get(this); },
+        set: function (v) { elementNidMap.set(this, v); },
+        configurable: true,
+      });
+    }
+    function hideInternalNid(el) {
+      if (!el || typeof el !== "object") return;
+      if (Object.prototype.hasOwnProperty.call(el, "_nid")) {
+        const n = el._nid;
+        if (typeof n === "number") {
+          elementNidMap.set(el, n);
+          if (el._id === undefined) el._id = n;
+        }
+        try { delete el._nid; } catch (e) {}
+      }
+    }
+
     function upgradeElement(el) {
-      if (!el || typeof el !== "object" || el._upgraded) return el;
-      el._upgraded = true;
+      if (!el || typeof el !== "object") return el;
+      hideInternalNid(el);
+      const nidForCe = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
+      if (nidForCe > 0 && global.__capsurf_upgradedCustomNodeIds && global.__capsurf_upgradedCustomNodeIds.has(nidForCe)) {
+        const CeCtor = global.__capsurf_upgradedCustomNodeIds.get(nidForCe);
+        if (CeCtor && CeCtor.prototype && !CeCtor.prototype.isPrototypeOf(el)) {
+          Object.setPrototypeOf(el, CeCtor.prototype);
+        }
+        upgradedElementsSet.add(el);
+        return el;
+      }
+      if (upgradedElementsSet.has(el)) return el;
+      upgradedElementsSet.add(el);
       if (typeof el._nid === "number" && el._id === undefined) {
         el._id = el._nid;
       }
@@ -28790,7 +32380,7 @@
             const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
             const Ctor = (registry && registry.get) ? registry.get(tag) : null;
             if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
-              el._upgraded = true;
+              upgradedElementsSet.add(el);
               if (typeof globalThis.upgradeCustomElement === "function") {
                 globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
               } else {
@@ -28841,7 +32431,11 @@
             try { el.namespaceURI = nsVal; } catch (e2) {}
           }
           if (nsVal !== "http://www.w3.org/1999/xhtml") {
-            el._upgraded = false;
+            upgradedElementsSet.delete(el);
+            const nonHtmlNid = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
+            if (nonHtmlNid > 0 && global.__capsurf_upgradedCustomNodeIds) {
+              global.__capsurf_upgradedCustomNodeIds.delete(nonHtmlNid);
+            }
             if (global.Element && global.Element.prototype) {
               Object.setPrototypeOf(el, global.Element.prototype);
             }
@@ -28852,7 +32446,7 @@
           const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
           const Ctor = (registry && registry.get) ? registry.get(tag) : null;
           if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
-            el._upgraded = true;
+            upgradedElementsSet.add(el);
             if (typeof globalThis.upgradeCustomElement === "function") {
               globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
             } else {

@@ -1276,16 +1276,53 @@ Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
   configurable: true,
 });
 
+const shadowRootState = new WeakMap();
 function ShadowRoot(host, mode) {
-  DocumentFragment.call(this);
-  this.nodeType = DOCUMENT_FRAGMENT_NODE;
-  this.nodeName = "#document-fragment";
-  this.host = host || null;
-  this.mode = mode || "open";
-  this._children = [];
+  shadowRootState.set(this, {
+    host: host || null,
+    mode: mode || "open",
+    children: [],
+  });
 }
 ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
 ShadowRoot.prototype.constructor = ShadowRoot;
+Object.defineProperty(ShadowRoot.prototype, "nodeType", {
+  get: function () { return DOCUMENT_FRAGMENT_NODE; },
+  configurable: true,
+});
+Object.defineProperty(ShadowRoot.prototype, "nodeName", {
+  get: function () { return "#document-fragment"; },
+  configurable: true,
+});
+Object.defineProperty(ShadowRoot.prototype, "host", {
+  get: function () {
+    const st = shadowRootState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.host;
+  },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(ShadowRoot.prototype, "mode", {
+  get: function () {
+    const st = shadowRootState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.mode;
+  },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(ShadowRoot.prototype, "_children", {
+  get: function () {
+    const st = shadowRootState.get(this);
+    return st ? st.children : undefined;
+  },
+  set: function (v) {
+    const st = shadowRootState.get(this);
+    if (st) st.children = v;
+  },
+  configurable: true,
+});
 markNative(ShadowRoot, "ShadowRoot");
 Object.defineProperty(ShadowRoot.prototype, "styleSheets", {
   get: function () {
@@ -1328,7 +1365,14 @@ if (typeof Document !== "undefined" && Document.prototype) {
       if (!node || typeof node !== "object") {
         throw new TypeError("Failed to execute 'importNode' on 'Document': parameter 1 is not of type 'Node'.");
       }
-      return node.cloneNode(Boolean(deep));
+      const cloned = node.cloneNode(Boolean(deep));
+      const ce = (typeof customElements !== "undefined" && customElements) ||
+        (typeof global !== "undefined" && global.customElements) ||
+        (typeof globalThis !== "undefined" && globalThis.customElements);
+      if (ce && typeof ce.upgrade === "function" && !this._isInertTemplateDocument) {
+        ce.upgrade(cloned);
+      }
+      return cloned;
     };
     markNative(Document.prototype.importNode, "importNode");
   }

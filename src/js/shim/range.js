@@ -901,78 +901,86 @@ Selection.prototype.toString = function () {
 };
 
 Range.prototype.getClientRects = function () {
+  const wrap = function (arr) {
+    if (typeof global !== "undefined" && typeof global.__capsurf_createDOMRectList === "function") {
+      return global.__capsurf_createDOMRectList(arr);
+    }
+    return arr;
+  };
+  const makeRect = function (x, y, w, h) {
+    if (typeof DOMRect === "function") return new DOMRect(x, y, w, h);
+    return { x: x, y: y, width: w, height: h, top: y, left: x, bottom: y + h, right: x + w };
+  };
   const rects = [];
-  if (this.collapsed) return rects;
   const startNode = this.startContainer;
   const endNode = this.endContainer;
-  if (!startNode || !endNode) return rects;
+  if (!startNode || !endNode) return wrap(rects);
 
   const doc = (startNode && (startNode.ownerDocument || (startNode.nodeType === 9 ? startNode : null))) || (typeof document !== "undefined" ? document : null);
   const root = doc ? (doc.body || doc.documentElement) : null;
-  if (!root) return rects;
+  if (!root) return wrap(rects);
 
   const range = this;
-  function walk(node) {
-    if (!node) return;
+  if (!this.collapsed) {
+    function walk(node) {
+      if (!node) return;
 
-    if (node.nodeType === 3) { // TEXT_NODE
-      const text = node.data || node.textContent || "";
-      const len = text.length;
-      if (len === 0) return;
+      if (node.nodeType === 3) { // TEXT_NODE
+        const text = node.data || node.textContent || "";
+        const len = text.length;
+        if (len === 0) return;
 
-      if (compareBoundaryPoints(node, 0, range.endContainer, range.endOffset) >= 0) {
-        return;
-      }
-      if (compareBoundaryPoints(node, len, range.startContainer, range.startOffset) <= 0) {
-        return;
-      }
-
-      let s = 0;
-      let e = len;
-      if (node === range.startContainer) {
-        s = Math.max(0, Math.min(len, range.startOffset));
-      }
-      if (node === range.endContainer) {
-        e = Math.max(0, Math.min(len, range.endOffset));
-      }
-      if (s < e) {
-        let nodeRect = null;
-        if (typeof node.getBoundingClientRect === "function") {
-          nodeRect = node.getBoundingClientRect();
+        if (compareBoundaryPoints(node, 0, range.endContainer, range.endOffset) >= 0) {
+          return;
         }
-        if (!nodeRect || (!nodeRect.width && !nodeRect.height)) {
-          if (node.parentNode && typeof node.parentNode.getBoundingClientRect === "function") {
-            nodeRect = node.parentNode.getBoundingClientRect();
+        if (compareBoundaryPoints(node, len, range.startContainer, range.startOffset) <= 0) {
+          return;
+        }
+
+        let s = 0;
+        let e = len;
+        if (node === range.startContainer) {
+          s = Math.max(0, Math.min(len, range.startOffset));
+        }
+        if (node === range.endContainer) {
+          e = Math.max(0, Math.min(len, range.endOffset));
+        }
+        if (s < e) {
+          let nodeRect = null;
+          if (typeof node.getBoundingClientRect === "function") {
+            nodeRect = node.getBoundingClientRect();
+          }
+          if (!nodeRect || (!nodeRect.width && !nodeRect.height)) {
+            if (node.parentNode && typeof node.parentNode.getBoundingClientRect === "function") {
+              nodeRect = node.parentNode.getBoundingClientRect();
+            }
+          }
+          if (nodeRect) {
+            const rx = (nodeRect.left !== undefined ? nodeRect.left : (nodeRect.x || 0)) + 2 + s * 8;
+            const ry = (nodeRect.top !== undefined ? nodeRect.top : (nodeRect.y || 0)) + 2;
+            const rw = (e - s) * 8;
+            const rh = (nodeRect.height && nodeRect.height >= 10) ? nodeRect.height : 12;
+            rects.push(makeRect(rx, ry, rw, rh));
           }
         }
-        if (nodeRect) {
-          const rx = (nodeRect.left !== undefined ? nodeRect.left : (nodeRect.x || 0)) + 2 + s * 8;
-          const ry = (nodeRect.top !== undefined ? nodeRect.top : (nodeRect.y || 0)) + 2;
-          const rw = (e - s) * 8;
-          const rh = (nodeRect.height && nodeRect.height >= 10) ? nodeRect.height : 12;
-          rects.push({
-            x: rx,
-            y: ry,
-            width: rw,
-            height: rh,
-            top: ry,
-            left: rx,
-            bottom: ry + rh,
-            right: rx + rw,
-          });
-        }
+        return;
       }
-      return;
+
+      const kids = node.childNodes || node._children || [];
+      for (let i = 0; i < kids.length; i++) {
+        walk(kids[i]);
+      }
     }
 
-    const kids = node.childNodes || node._children || [];
-    for (let i = 0; i < kids.length; i++) {
-      walk(kids[i]);
+    walk(root);
+  }
+  if (rects.length === 0 && startNode.nodeType === 1 && typeof startNode.getBoundingClientRect === "function") {
+    const r = startNode.getBoundingClientRect();
+    if (r && (r.width > 0 || r.height > 0)) {
+      rects.push(r instanceof DOMRect ? r : makeRect(r.x, r.y, r.width, r.height));
     }
   }
-
-  walk(root);
-  return rects;
+  return wrap(rects);
 };
 
 Range.prototype.getBoundingClientRect = function () {

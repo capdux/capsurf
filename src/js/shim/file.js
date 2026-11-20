@@ -948,13 +948,16 @@ Object.defineProperty(DataTransferItemList.prototype, "length", {
 });
 
 DataTransferItemList.prototype.add = function (data, type) {
-  if (data instanceof File) {
+  if (arguments.length === 0) {
+    throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 1 argument required, but only 0 present.");
+  }
+  if (arguments.length === 1) {
+    if (!(data instanceof File)) {
+      throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': parameter 1 is not of type 'File'.");
+    }
     const item = new DataTransferItem("file", data.type || "", data);
     this._dt._items.push(item);
     return item;
-  }
-  if (arguments.length < 2) {
-    throw new TypeError("Failed to execute 'add' on 'DataTransferItemList': 2 arguments required for string item.");
   }
   const norm = normalizeDataTransferFormat(type);
   const str = String(data);

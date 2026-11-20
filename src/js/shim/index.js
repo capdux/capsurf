@@ -340,9 +340,41 @@ function installShim(global) {
   // 12. Install window environment
   installWindow(global);
 
+  const upgradedElementsSet = new WeakSet();
+  const elementNidMap = new WeakMap();
+  if (global.Node && global.Node.prototype && !Object.getOwnPropertyDescriptor(global.Node.prototype, "_nid")) {
+    Object.defineProperty(global.Node.prototype, "_nid", {
+      get: function () { return elementNidMap.get(this); },
+      set: function (v) { elementNidMap.set(this, v); },
+      configurable: true,
+    });
+  }
+  function hideInternalNid(el) {
+    if (!el || typeof el !== "object") return;
+    if (Object.prototype.hasOwnProperty.call(el, "_nid")) {
+      const n = el._nid;
+      if (typeof n === "number") {
+        elementNidMap.set(el, n);
+        if (el._id === undefined) el._id = n;
+      }
+      try { delete el._nid; } catch (e) {}
+    }
+  }
+
   function upgradeElement(el) {
-    if (!el || typeof el !== "object" || el._upgraded) return el;
-    el._upgraded = true;
+    if (!el || typeof el !== "object") return el;
+    hideInternalNid(el);
+    const nidForCe = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
+    if (nidForCe > 0 && global.__capsurf_upgradedCustomNodeIds && global.__capsurf_upgradedCustomNodeIds.has(nidForCe)) {
+      const CeCtor = global.__capsurf_upgradedCustomNodeIds.get(nidForCe);
+      if (CeCtor && CeCtor.prototype && !CeCtor.prototype.isPrototypeOf(el)) {
+        Object.setPrototypeOf(el, CeCtor.prototype);
+      }
+      upgradedElementsSet.add(el);
+      return el;
+    }
+    if (upgradedElementsSet.has(el)) return el;
+    upgradedElementsSet.add(el);
     if (typeof el._nid === "number" && el._id === undefined) {
       el._id = el._nid;
     }
@@ -447,7 +479,7 @@ function installShim(global) {
           const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
           const Ctor = (registry && registry.get) ? registry.get(tag) : null;
           if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
-            el._upgraded = true;
+            upgradedElementsSet.add(el);
             if (typeof globalThis.upgradeCustomElement === "function") {
               globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
             } else {
@@ -498,7 +530,11 @@ function installShim(global) {
           try { el.namespaceURI = nsVal; } catch (e2) {}
         }
         if (nsVal !== "http://www.w3.org/1999/xhtml") {
-          el._upgraded = false;
+          upgradedElementsSet.delete(el);
+          const nonHtmlNid = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
+          if (nonHtmlNid > 0 && global.__capsurf_upgradedCustomNodeIds) {
+            global.__capsurf_upgradedCustomNodeIds.delete(nonHtmlNid);
+          }
           if (global.Element && global.Element.prototype) {
             Object.setPrototypeOf(el, global.Element.prototype);
           }
@@ -509,7 +545,7 @@ function installShim(global) {
         const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
         const Ctor = (registry && registry.get) ? registry.get(tag) : null;
         if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
-          el._upgraded = true;
+          upgradedElementsSet.add(el);
           if (typeof globalThis.upgradeCustomElement === "function") {
             globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
           } else {

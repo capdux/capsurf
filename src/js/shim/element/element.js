@@ -493,13 +493,37 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  // Private internal slots stored in WeakMaps to avoid leaking own properties on Element instances
+  const elementStyleProxyMap = new WeakMap();
+  const elementAttrsMap = new WeakMap();
+  const elementAttrListMap = new WeakMap();
+  const elementDisplayNoneMap = new WeakMap();
+
+  Object.defineProperty(proto, "_attrs", {
+    get: function () { return elementAttrsMap.get(this); },
+    set: function (v) { elementAttrsMap.set(this, v); },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "_attrList", {
+    get: function () { return elementAttrListMap.get(this); },
+    set: function (v) { elementAttrListMap.set(this, v); },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "_displayNone", {
+    get: function () { return elementDisplayNoneMap.get(this); },
+    set: function (v) { elementDisplayNoneMap.set(this, v); },
+    configurable: true,
+  });
+
   // style getter/setter
   Object.defineProperty(proto, "style", {
     get: function () {
-      if (!this._styleProxy) {
-        this._styleProxy = createStyleProxy(this);
+      let sp = elementStyleProxyMap.get(this);
+      if (!sp) {
+        sp = createStyleProxy(this);
+        elementStyleProxyMap.set(this, sp);
       }
-      return this._styleProxy;
+      return sp;
     },
     set: function (val) {
       if (typeof val === "string") {
@@ -1465,6 +1489,9 @@ function installElementExtensions(proto) {
   if (!proto.getClientRects) {
     proto.getClientRects = function () {
       const rect = this.getBoundingClientRect();
+      if (typeof global.__capsurf_createDOMRectList === "function") {
+        return global.__capsurf_createDOMRectList([rect]);
+      }
       return [rect];
     };
     markNative(proto.getClientRects, "getClientRects");
@@ -2072,6 +2099,8 @@ function installElementExtensions(proto) {
   };
   markNative(proto.checkVisibility, "checkVisibility");
 
+  const elementShadowRootMap = new WeakMap();
+
   proto.attachShadow = function (init) {
     if (!init || typeof init !== "object" || !init.mode) {
       throw new TypeError("Failed to execute 'attachShadow' on 'Element': 1 argument required, but only 0 present.");
@@ -2080,7 +2109,7 @@ function installElementExtensions(proto) {
     if (mode !== "open" && mode !== "closed") {
       throw new TypeError("Failed to execute 'attachShadow' on 'Element': The provided value '" + mode + "' is not a valid enum value of type ShadowRootMode.");
     }
-    if (this._shadowRoot) {
+    if (elementShadowRootMap.get(this)) {
       if (typeof DOMException !== "undefined") {
         throw new DOMException("Shadow root cannot be created on a host which already hosts a shadow tree", "NotSupportedError");
       }
@@ -2090,17 +2119,16 @@ function installElementExtensions(proto) {
     }
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
-    shadow.host = this;
-    shadow.mode = mode;
-    this._shadowRoot = shadow;
+    elementShadowRootMap.set(this, shadow);
     return shadow;
   };
   markNative(proto.attachShadow, "attachShadow");
 
   Object.defineProperty(proto, "shadowRoot", {
     get: function () {
-      if (this._shadowRoot && this._shadowRoot.mode === "open") {
-        return this._shadowRoot;
+      const sr = elementShadowRootMap.get(this);
+      if (sr && sr.mode === "open") {
+        return sr;
       }
       return null;
     },

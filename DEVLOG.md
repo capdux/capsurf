@@ -1297,4 +1297,10 @@
    - 将 `overflow-x`/`overflow-y` 拆分至独立槽位，实现 CSS Overflow 3 单轴 `clip` 仅裁剪对应轴（另一轴保持无界）而 `hidden`/`scroll`/`auto` 触发双轴裁剪；引入括号感知 `parseBoxQuad` 与 `evalCalcPx` 支持 `margin-inline: calc(50% - 50vw)`。
 2. **Grid 绝对定位包含块与网格线 (`layout.cp`)**：
    - 在 `layoutGridContainer` 计算 1-based 行/列网格线偏移表，将 `abspos` 子项移出正常网格流，依据 `grid-area` / `auto` 精准锚定到对应网格线或 padding/content edge。
+
+## Phase 81 CSS Typed OM、`DOMMatrix`、`HighlightRegistry` 与 WeakMap WebIDL 封装技术方案
+1. **CSS Typed OM 与 `DOMMatrix`/`HighlightRegistry` (`window.js`, `range.js`)**：
+   - 完整集成 `CSS.<unit>()`、`attributeStyleMap`/`computedStyleMap()`、`DOMMatrixReadOnly`/`DOMMatrix` 与 `Highlight`/`CSS.highlights`，并通过 `WeakMap` 私有态与原型 brand check 满足 WebIDL 规范。
+2. **零 Own-Property 泄露封装 (`element.js`, `node-base.js`, `index.js`, `constants.js`)**：
+   - 将 `_nid`/`_styleProxy`/`_attrs`/`_shadowRoot` 等内部字段全面迁入 `WeakMap` + 原型访问器，使 `Object.keys(el)` 与 `DOMException` 属性描述符完全符合浏览器标准。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

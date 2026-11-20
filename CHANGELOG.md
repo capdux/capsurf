@@ -1666,4 +1666,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0；
   - E2E 测试：5 大 Core 套件共 **5/5 PASS (9 expect calls)**。
+
+## Phase 81: CSS Typed OM, `DOMMatrix`, Custom Highlight API & WeakMap WebIDL Binding Shape — 11 Suites (100% Closed)
+- **`src/js/shim/{window,constants,file,range,node-base,index,cssom,events/dispatch,element/*}.js`**：
+  - 完整实装 CSS Typed OM、`DOMMatrixReadOnly`/`DOMMatrix`、`Highlight`/`HighlightRegistry`/`CSS.highlights`、`DOMRectList` 与 WebIDL `DOMException`；
+  - 将 DOM/ShadowRoot/Form/CSSOM 内部状态全面迁入 `WeakMap` 根除实例 own property 泄露；补齐 `importNode` 自定义元素升级、`popoverTargetElement` 与 `DataTransferItemList.add` 重载。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：11/12 Core 套件共 **17/17 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -86,7 +86,6 @@ const DOM_EXCEPTION_CODES = {
   InvalidModificationError: 13,
   NamespaceError: 14,
   InvalidAccessError: 15,
-  ValidationError: 16,
   TypeMismatchError: 17,
   SecurityError: 18,
   NetworkError: 19,
@@ -126,19 +125,63 @@ const DOM_EXCEPTION_CONSTANTS = [
   ["DATA_CLONE_ERR", 25],
 ];
 
-// 0. DOMException Implementation (Available from start)
+// 0. DOMException Implementation (WebIDL binding shape)
+const domExceptionState = new WeakMap();
+
 function DOMException(message, name) {
-  const err = new Error(message || "");
-  err.name = name || "Error";
-  err.code = DOM_EXCEPTION_CODES[err.name] || 0;
-  Object.setPrototypeOf(err, DOMException.prototype);
+  if (!(this instanceof DOMException)) {
+    throw new TypeError("Failed to construct 'DOMException': Please use the 'new' operator.");
+  }
+  const msg = message === undefined ? "" : String(message);
+  const nm = name === undefined ? "Error" : String(name);
+  const code = Object.prototype.hasOwnProperty.call(DOM_EXCEPTION_CODES, nm) ? DOM_EXCEPTION_CODES[nm] : 0;
+  const err = new Error();
+  try { delete err.message; } catch (e) {}
+  try { delete err.name; } catch (e) {}
+  Object.setPrototypeOf(err, new.target ? new.target.prototype : DOMException.prototype);
+  domExceptionState.set(err, { message: msg, name: nm, code: code });
   return err;
 }
 DOMException.prototype = Object.create(Error.prototype);
-DOMException.prototype.constructor = DOMException;
-DOMException.prototype.code = 0;
-DOMException.prototype.name = "Error";
-DOMException.prototype.message = "";
+Object.defineProperty(DOMException.prototype, "constructor", {
+  value: DOMException,
+  writable: true,
+  enumerable: false,
+  configurable: true,
+});
+Object.defineProperty(DOMException.prototype, "name", {
+  get: markNative(function () {
+    const st = domExceptionState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.name;
+  }, "get name"),
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(DOMException.prototype, "message", {
+  get: markNative(function () {
+    const st = domExceptionState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.message;
+  }, "get message"),
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(DOMException.prototype, "code", {
+  get: markNative(function () {
+    const st = domExceptionState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st.code;
+  }, "get code"),
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(DOMException.prototype, Symbol.toStringTag, {
+  value: "DOMException",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
 
 for (let i = 0; i < DOM_EXCEPTION_CONSTANTS.length; i++) {
   const item = DOM_EXCEPTION_CONSTANTS[i];

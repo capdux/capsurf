@@ -184,17 +184,21 @@ function installFormElement(global) {
     configurable: true,
   });
 
+  const formElementsCollectionMap = new WeakMap();
+
   Object.defineProperty(HTMLFormElement.prototype, "elements", {
     get: function () {
-      if (!this._elementsCollection) {
+      let col = formElementsCollectionMap.get(this);
+      if (!col) {
         const self = this;
         const target = Object.create((global.HTMLFormControlsCollection || HTMLCollection).prototype);
         target._isFormControlsCollection = true;
-        this._elementsCollection = makeHtmlCollection(function () {
+        col = makeHtmlCollection(function () {
           return collectFormControls(self);
         }, target);
+        formElementsCollectionMap.set(this, col);
       }
-      return this._elementsCollection;
+      return col;
     },
     configurable: true,
   });

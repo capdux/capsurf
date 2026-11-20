@@ -528,6 +528,31 @@ function installInputElement(global) {
     return this.checkValidity();
   };
 
+  const inputPopoverTargetMap = new WeakMap();
+  Object.defineProperty(HTMLInputElement.prototype, "popoverTargetElement", {
+    get: markNative(function () {
+      if (!(this instanceof HTMLInputElement)) {
+        throw new TypeError("Illegal invocation");
+      }
+      return inputPopoverTargetMap.get(this) || null;
+    }, "get popoverTargetElement"),
+    set: markNative(function (v) {
+      if (!(this instanceof HTMLInputElement)) {
+        throw new TypeError("Illegal invocation");
+      }
+      if (v === null || v === undefined) {
+        inputPopoverTargetMap.delete(this);
+        return;
+      }
+      if (typeof Element === "function" && !(v instanceof Element)) {
+        throw new TypeError("Failed to set the 'popoverTargetElement' property on 'HTMLInputElement': parameter 1 is not of type 'Element'.");
+      }
+      inputPopoverTargetMap.set(this, v);
+    }, "set popoverTargetElement"),
+    enumerable: true,
+    configurable: true,
+  });
+
   markNative(HTMLInputElement, "HTMLInputElement");
   markNative(HTMLInputElement.prototype.stepUp, "stepUp");
   markNative(HTMLInputElement.prototype.stepDown, "stepDown");

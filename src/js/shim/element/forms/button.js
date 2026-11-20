@@ -156,6 +156,31 @@ function installButtonElement(global) {
       .replace(/\r/g, "\n");
   };
 
+  const buttonPopoverTargetMap = new WeakMap();
+  Object.defineProperty(HTMLButtonElement.prototype, "popoverTargetElement", {
+    get: markNative(function () {
+      if (!(this instanceof HTMLButtonElement)) {
+        throw new TypeError("Illegal invocation");
+      }
+      return buttonPopoverTargetMap.get(this) || null;
+    }, "get popoverTargetElement"),
+    set: markNative(function (v) {
+      if (!(this instanceof HTMLButtonElement)) {
+        throw new TypeError("Illegal invocation");
+      }
+      if (v === null || v === undefined) {
+        buttonPopoverTargetMap.delete(this);
+        return;
+      }
+      if (typeof Element === "function" && !(v instanceof Element)) {
+        throw new TypeError("Failed to set the 'popoverTargetElement' property on 'HTMLButtonElement': parameter 1 is not of type 'Element'.");
+      }
+      buttonPopoverTargetMap.set(this, v);
+    }, "set popoverTargetElement"),
+    enumerable: true,
+    configurable: true,
+  });
+
   markNative(HTMLButtonElement, "HTMLButtonElement");
   markNative(HTMLButtonElement.prototype.checkValidity, "checkValidity");
   markNative(HTMLButtonElement.prototype.reportValidity, "reportValidity");

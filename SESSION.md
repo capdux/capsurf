@@ -3431,6 +3431,17 @@
   - 派发全新子智能体 **Subagent 46**: Inline Layout & Paint Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/inline-box-baseline-shift.e2e.test.ts`、`e2e/inline-metrics-regressions.e2e.test.ts`、`e2e/inline-opacity.e2e.test.ts`、`e2e/inline-positioning-regressions.e2e.test.ts`、`e2e/inline-visibility-hidden.e2e.test.ts`。
 
+## [2026-11-20 16:45:30] CSS Typed OM、DOMMatrix、Custom Highlight API 与全量 WeakMap WebIDL 形态 11/12 全绿闭环 (Subagent 19f5f301 结单，Phase 81)
+- **CSS Typed OM、`DOMMatrix`、`HighlightRegistry` 与 WebIDL Binding Shape (`src/js/shim/`)**:
+  - `window.js`: 完整实装 CSS Typed OM、`DOMMatrixReadOnly`/`DOMMatrix`、`CSS.<unit>()`、`attributeStyleMap`/`computedStyleMap()`、CSS Custom Highlight API（`Highlight`/`HighlightRegistry`/`CSS.highlights`）以及 WeakMap 私有态 `DOMRectReadOnly`/`DOMRect`/`DOMRectList`；
+  - `constants.js` & `file.js`: 重构 `DOMException` 符合 WebIDL binding shape（`Error.isError` + brand check）；修复 `DataTransferItemList.prototype.add` 重载分发；
+  - `element/*` & `node-base.js` & `index.js` & `range.js` & `dispatch.js` & `cssom.js`: 将 `_styleProxy`/`_attrs`/`_shadowRoot`/`_nid`/`_elementsCollection`/`_hydratedHandlers`/`_styleSheets` 全面迁入 WeakMap 消除实例 own property 泄露；补齐 `importNode` 自定义元素升级与 `popoverTargetElement`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 11/12 Core 套件（`crypto-key-usages-array`、`css-highlight-api`、`css-typed-om` (4/4)、`custom-element-import-node`、`data-transfer-items-add`、`document-created-legacy-members`、`document-title-svg` (2/2)、`dom-rect`、`domexception-binding-shape` (2/2)、`dommatrix-transform-string` (2/2)、`element-own-properties`）：**17/17 PASS**！`document-types` 归档为原生 CDP 导航 MIME 合成待跟进项。
+- **清理旧子智能体**: 销毁 `19f5f301-b053-4e21-933a-01a413e6b479`。
+
+
 
 
 

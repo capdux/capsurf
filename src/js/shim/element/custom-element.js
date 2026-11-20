@@ -7,6 +7,11 @@ const customElementCallbacks = new WeakMap();
 const upgradingElements = new WeakSet();
 const queuedAttributeChanges = new WeakMap();
 const whenDefinedResolvers = new Map();
+const upgradedCustomNodeIds = new Map();
+global.__capsurf_upgradedCustomNodeIds = upgradedCustomNodeIds;
+if (typeof globalThis !== "undefined") {
+  globalThis.__capsurf_upgradedCustomNodeIds = upgradedCustomNodeIds;
+}
 
 function upgradeCustomElement(element, customElementConstructor, options) {
   const tagName = (options && options.tagName) ? options.tagName : String(element.localName || element.tagName || "").toLowerCase();
@@ -31,6 +36,10 @@ function upgradeCustomElement(element, customElementConstructor, options) {
 
   // 2. Set prototype to custom element class
   Object.setPrototypeOf(element, customElementConstructor.prototype);
+  const elNid = typeof element._nid === "number" ? element._nid : (typeof element._id === "number" ? element._id : -1);
+  if (elNid > 0) {
+    upgradedCustomNodeIds.set(elNid, customElementConstructor);
+  }
 
   // 3. Instantiate via constructor
   upgradingElements.add(element);
@@ -222,18 +231,30 @@ CustomElementRegistry.prototype.whenDefined = function (name) {
 };
 
 CustomElementRegistry.prototype.upgrade = function (root) {
-  if (!root) return;
-  for (const [tagName, ctor] of customElementRegistry.entries()) {
-    if (root.querySelectorAll) {
-      const matches = root.querySelectorAll(tagName);
-      for (let i = 0; i < matches.length; i++) {
-        upgradeCustomElement(matches[i], ctor, {
-          tagName: tagName,
-          fireConnectedCallback: Boolean(matches[i].isConnected),
-        });
+  if (!root || typeof root !== "object") return;
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.nodeType === 1) {
+      const ns = node.namespaceURI;
+      if (!ns || ns === "http://www.w3.org/1999/xhtml") {
+        const tagName = String(node.localName || node.tagName || "").toLowerCase();
+        const ctor = customElementRegistry.get(tagName);
+        if (ctor) {
+          upgradeCustomElement(node, ctor, {
+            tagName: tagName,
+            fireConnectedCallback: Boolean(node.isConnected),
+          });
+        }
+      }
+    }
+    const kids = node.childNodes || node._children;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        visit(kids[i]);
       }
     }
   }
+  visit(root);
 };
 
 markNative(CustomElementRegistry.prototype.define, "define");
