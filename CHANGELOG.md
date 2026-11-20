@@ -2247,3 +2247,6 @@
 
 ### Phase 195
 - Added `test/render/test_png_encoder.cp` covering PNG signature/IHDR/IDAT/IEND chunks, RGBA roundtrips, boundary guards, and `ComputedStyle.extractPaintStyle`.
+
+### Phase 196
+- Added `test/tty/test_nav_params.cp` covering TTY cell parsing/clamping, query param state preservation, and focus/UA stylesheet generation.
