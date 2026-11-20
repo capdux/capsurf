@@ -2204,3 +2204,6 @@
 
 ## Phase 181: Pure-CP Flex, Grid, BoxSizing & Sticky/Fixed Layout Whitebox Suite `test/layout/test_flex_grid_sticky.cp` (4/4 PASS)
 - 新增 `test/layout/test_flex_grid_sticky.cp`，覆盖 Flexbox 换行对齐、Grid 轨道、`border-box`/`content-box` 与 `sticky`/`fixed`/`display: none`（`cap test -m` **4/4 PASS**, 1229ms）。
+
+## Phase 182: Dedicated `_rafQueue` & `__capsurf_pump_raf` Driver Hooks
+- **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：实装独立 `requestAnimationFrame` 帧队列、单共享 16ms 后备定时器与 `__capsurf_pump_raf`/`__capsurf_has_pending_raf` 钩子（4 门禁全 0）。

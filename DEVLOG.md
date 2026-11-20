@@ -1678,3 +1678,6 @@
 
 ## Phase 180 `800x600` 默认视口隔离与 TTY 整格滚动链方案 (`e2e/harness.ts`)
 1. **整格滚动量化 (`Mouse.wheel`)**：读取 `kitesurf.internals.ttyCellHeight/Width`，通过 `Math.trunc(movement / cell) * cell` 截断内层容器消费量，将未消费增量完整冒泡至根文档滚动。
+
+## Phase 182 独立 rAF 帧队列与外部步进钩子方案 (`src/js/shim/window.js`)
+1. **原子帧切出与防重入**：`__capsurf_pump_raf(ts)` 先取消 16ms 后备器再以 `_rafQueue.splice(0, _rafQueue.length)` 原子切出当前帧回调，确保回调内新注册的 `rAF` 严格推迟至下一帧。

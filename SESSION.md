@@ -4443,3 +4443,10 @@
 ## [2026-11-21 00:59:00] 2 分 10 秒新增并全绿通过纯 CP Flex/Grid/Sticky 白盒单测 `test/layout/test_flex_grid_sticky.cp` (Subagent b8c99821 结单，Phase 181)
 - **新增白盒测试 (`test/layout/test_flex_grid_sticky.cp`)**: 覆盖 Flexbox (`flex-wrap`/`space-between`/`align-items`)、CSS Grid (`1fr`/跨列 `span 2`)、`box-sizing` (`content-box` vs `border-box`) 及 `sticky`/`fixed`/`display: none` 盒模型计算（**4/4 PASS**, 1229ms, 4 门禁全 0；`test/layout/` 达 **2/2 PASS**）。
 - **清理旧子智能体**: 销毁 `b8c99821-3164-4511-bd5f-1f2d3d958ba2`。
+
+## [2026-11-21 01:00:00] 2 分 20 秒实现独立 `_rafQueue` 与 `__capsurf_pump_raf` 驱动钩子 (Subagent 8e7e19d5 结单，Phase 182)
+- **独立 rAF 帧队列 (`src/js/shim/window.js:4110-4203`, `src/js/runtime{,_source.cp}`)**:
+  - 升级 `requestAnimationFrame`/`cancelAnimationFrame` 使用独立 `_rafQueue`、`_rafEntries` 与单共享 16ms 后备器；
+  - 导出 `__capsurf_pump_raf(timestampMs)` 与 `__capsurf_has_pending_raf()`，原子切出当前帧队列并取消后备器防止重复执行，为 `screencast-raf-pacing` 铺平 JS 驱动接口。
+- **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0。
+- **清理旧子智能体**: 销毁 `8e7e19d5-0228-4fe0-b186-b5cf30c611a0`。

@@ -31952,22 +31952,100 @@
       globalThis.performance = perfInstance;
     }
 
+    const _rafQueue = [];
+    const _rafEntries = new Map();
+    let _rafNextId = 1;
+    let _rafFallbackTimerId = 0;
+
+    function _clearRafFallbackTimer() {
+      if (_rafFallbackTimerId !== 0) {
+        global.clearTimeout(_rafFallbackTimerId);
+        _rafFallbackTimerId = 0;
+      }
+    }
+
+    function _scheduleRafFallbackTimer() {
+      if (_rafFallbackTimerId !== 0 || _rafQueue.length === 0) return;
+      _rafFallbackTimerId = global.setTimeout(function () {
+        _rafFallbackTimerId = 0;
+        pumpRaf();
+      }, 16);
+    }
+
+    function hasPendingRaf() {
+      return _rafQueue.length > 0;
+    }
+
+    function pumpRaf(timestampMs) {
+      _clearRafFallbackTimer();
+      if (_rafQueue.length === 0) return 0;
+      const batch = _rafQueue.splice(0, _rafQueue.length);
+      const ts = (typeof timestampMs === "number" && isFinite(timestampMs))
+        ? timestampMs
+        : ((typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now());
+      let ran = 0;
+      for (let i = 0; i < batch.length; i++) {
+        const entry = batch[i];
+        _rafEntries.delete(entry.id);
+        if (entry.cancelled) continue;
+        ran++;
+        try {
+          if (typeof entry.cb === "function") {
+            entry.cb(ts);
+          }
+        } catch (e) {
+          if (typeof console !== "undefined" && console.error) console.error(e);
+        }
+      }
+      return ran;
+    }
+
+    global.__capsurf_pump_raf = pumpRaf;
+    global.__capsurf_has_pending_raf = hasPendingRaf;
+    if (typeof window !== "undefined") {
+      window.__capsurf_pump_raf = pumpRaf;
+      window.__capsurf_has_pending_raf = hasPendingRaf;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_pump_raf = pumpRaf;
+      globalThis.__capsurf_has_pending_raf = hasPendingRaf;
+    }
+
     if (!global.requestAnimationFrame) {
       global.requestAnimationFrame = markNative(function (cb) {
-        return global.setTimeout(function () {
-          try {
-            if (typeof cb === "function") cb((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now());
-          } catch (e) {
-            if (typeof console !== "undefined" && console.error) console.error(e);
-          }
-        }, 16);
+        const id = _rafNextId++;
+        const entry = { id: id, cb: cb, cancelled: false };
+        _rafEntries.set(id, entry);
+        _rafQueue.push(entry);
+        _scheduleRafFallbackTimer();
+        return id;
       }, "requestAnimationFrame");
     }
 
     if (!global.cancelAnimationFrame) {
       global.cancelAnimationFrame = markNative(function (id) {
-        global.clearTimeout(id);
+        const numId = Number(id);
+        const entry = _rafEntries.get(numId);
+        if (!entry) return;
+        entry.cancelled = true;
+        _rafEntries.delete(numId);
+        const idx = _rafQueue.indexOf(entry);
+        if (idx !== -1) {
+          _rafQueue.splice(idx, 1);
+        }
+        if (_rafQueue.length === 0) {
+          _clearRafFallbackTimer();
+        }
       }, "cancelAnimationFrame");
+    }
+
+    if (typeof window !== "undefined") {
+      if (!window.requestAnimationFrame) window.requestAnimationFrame = global.requestAnimationFrame;
+      if (!window.cancelAnimationFrame) window.cancelAnimationFrame = global.cancelAnimationFrame;
+    }
+    if (typeof globalThis !== "undefined") {
+      if (!globalThis.requestAnimationFrame) globalThis.requestAnimationFrame = global.requestAnimationFrame;
+      if (!globalThis.cancelAnimationFrame) globalThis.cancelAnimationFrame = global.cancelAnimationFrame;
     }
 
     // 6. Modern Observers (IntersectionObserver & ResizeObserver)
