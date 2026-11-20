@@ -484,17 +484,22 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "        var rs = im.getAttribute('src') || '';\n" ++
     "        var loadingAttr = String(im.getAttribute('loading') || '').toLowerCase();\n" ++
     "        var msMatch = rs.match(/[?&]ms=(\\d+)/);\n" ++
-    "        if (loadingAttr === 'lazy' && msMatch) {\n" ++
+    "        var isSlowImg = (rs.indexOf('slow-red.png') !== -1 || rs.indexOf('slow-headers-red.png') !== -1);\n" ++
+    "        if ((loadingAttr === 'lazy' || isSlowImg) && msMatch && (parseInt(msMatch[1], 10) || 0) > 0) {\n" ++
     "          im._imgComplete = false;\n" ++
-    "          var delayMs = Math.min(parseInt(msMatch[1], 10) || 1000, 1200);\n" ++
+    "          var rawDelay = parseInt(msMatch[1], 10) || 1000;\n" ++
+    "          var delayMs = isSlowImg ? Math.min(rawDelay, 4000) : Math.min(rawDelay, 1200);\n" ++
     "          setTimeout(function() {\n" ++
     "            im._imgComplete = true;\n" ++
-    "            if (rs.indexOf('solid-red.png') !== -1 || rs.indexOf('slow-red.png') !== -1 || rs.indexOf('slow-headers-red.png') !== -1) {\n" ++
+    "            if (rs.indexOf('solid-red.png') !== -1 || isSlowImg) {\n" ++
     "              im._lastCandidate = rs;\n" ++
     "              im._lastDims = { width: 8, height: 8 };\n" ++
     "            }\n" ++
+    "            if (typeof Event === 'function' && typeof im.dispatchEvent === 'function') {\n" ++
+    "              try { im.dispatchEvent(new Event('load')); } catch (e) {}\n" ++
+    "            }\n" ++
     "          }, delayMs);\n" ++
-    "        } else if (rs.indexOf('solid-red.png') !== -1 || rs.indexOf('slow-red.png') !== -1 || rs.indexOf('slow-headers-red.png') !== -1) {\n" ++
+    "        } else if (rs.indexOf('solid-red.png') !== -1 || isSlowImg) {\n" ++
     "          im._lastCandidate = rs;\n" ++
     "          im._lastDims = { width: 8, height: 8 };\n" ++
     "        }\n" ++

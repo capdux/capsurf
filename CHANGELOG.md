@@ -1961,4 +1961,11 @@
 
 ## Phase 123: Zero-Edit Sweep Verification of 10 JS/DOM Suites (15/15 PASS)
 - 零修改摸底确认 `lazy-load-event` (2/2)、`require-global-shadow` (1/1)、`window-page-functions` (2/2)、`collection-named-shadowing` (1/1)、`custom-element-attributes` (1/1)、`data-transfer-items-add` (1/1)、`event-target-instance-listeners` (1/1)、`invalid-selector-throws` (2/2)、`style-declaration-object-members` (3/3)、`svg-animated-string` (1/1) 共 **15/15 PASS**。
+
+## Phase 124: CDP FrameTree/OOPIF, Screencast Partial Image & Page/Network Event Lifecycle (14/14 PASS)
+- **`src/cdp/{target,page,session,session_hooks,server}.cp`**：
+  - 实装 `Page.getFrameTree` 子会话帧树、iframe Target `openerFrameId`、完整 `Page`/`Network` 导航生命周期事件与 `Page.screencastFrame` 部分图片增量帧推流。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`kitesurf-page-ops` (3/3)、`page-get-layout-metrics` (4/4)、`screencast-partial-image` (1/1)、`network-event-shape-probe` (1/1)、`page-frame-metadata` (独立 2/2) + Demo 摸底 `forms-radio-demo` (1/1)、`location-mutate-probe` (1/1)、`modules-demo` (1/1) 共 **14/14 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

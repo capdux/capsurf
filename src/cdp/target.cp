@@ -30,6 +30,10 @@ pub struct TargetItem {
     browser_context_id_len: usize = 0,
     session_id_buf: [64]u8 = [0; 64],
     session_id_len: usize = 0,
+    frame_id_buf: [64]u8 = [0; 64],
+    frame_id_len: usize = 0,
+    opener_frame_id_buf: [64]u8 = [0; 64],
+    opener_frame_id_len: usize = 0,
     attached: bool = false,
     active: bool = false,
 
@@ -55,6 +59,14 @@ pub struct TargetItem {
 
     fn sessionId(*_): []const u8 {
         return _.session_id_buf[0.._.session_id_len];
+    }
+
+    fn frameId(*_): []const u8 {
+        return _.frame_id_buf[0.._.frame_id_len];
+    }
+
+    fn openerFrameId(*_): []const u8 {
+        return _.opener_frame_id_buf[0.._.opener_frame_id_len];
     }
 }
 
@@ -316,18 +328,35 @@ pub struct TargetRegistry {
                     out_buf[pos] = ',';
                     pos += 1;
                 }
-                const formatted = std.fmt.bufPrint(
-                    out_buf[pos..],
-                    "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"browserContextId\":\"{s}\"}}",
-                    .{
-                        _.targets[i].targetId(),
-                        _.targets[i].targetType(),
-                        _.targets[i].title(),
-                        _.targets[i].url(),
-                        if (_.targets[i].attached) "true" else "false",
-                        _.targets[i].browserContextId(),
-                    },
-                ) catch break;
+                let formatted: []const u8 = "";
+                if (_.targets[i].opener_frame_id_len > 0) {
+                    formatted = std.fmt.bufPrint(
+                        out_buf[pos..],
+                        "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"browserContextId\":\"{s}\",\"openerFrameId\":\"{s}\"}}",
+                        .{
+                            _.targets[i].targetId(),
+                            _.targets[i].targetType(),
+                            _.targets[i].title(),
+                            _.targets[i].url(),
+                            if (_.targets[i].attached) "true" else "false",
+                            _.targets[i].browserContextId(),
+                            _.targets[i].openerFrameId(),
+                        },
+                    ) catch break;
+                } else {
+                    formatted = std.fmt.bufPrint(
+                        out_buf[pos..],
+                        "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"browserContextId\":\"{s}\"}}",
+                        .{
+                            _.targets[i].targetId(),
+                            _.targets[i].targetType(),
+                            _.targets[i].title(),
+                            _.targets[i].url(),
+                            if (_.targets[i].attached) "true" else "false",
+                            _.targets[i].browserContextId(),
+                        },
+                    ) catch break;
+                }
                 pos += formatted.len;
                 first = false;
             }
@@ -405,6 +434,58 @@ pub struct TargetRegistry {
             }
         }
         return null;
+    }
+
+    fn findFrameIdBySessionId(*_, session_id: []const u8): ([]const u8)? {
+        if (session_id.len == 0) return null;
+        let i: usize = 0;
+        while (i < _.targets.len) : (i += 1) {
+            if (_.targets[i].active && _.targets[i].attached && std.mem.eql(u8, _.targets[i].sessionId(), session_id)) {
+                if (_.targets[i].frame_id_len > 0) {
+                    return _.targets[i].frameId();
+                }
+                return null;
+            }
+        }
+        return null;
+    }
+
+    fn clearIframeTargets(*_) {
+        let i: usize = 0;
+        while (i < _.targets.len) : (i += 1) {
+            if (_.targets[i].active && std.mem.eql(u8, _.targets[i].targetType(), "iframe")) {
+                _.targets[i].active = false;
+                _.targets[i].attached = false;
+                _.targets[i].session_id_len = 0;
+                _.targets[i].frame_id_len = 0;
+                _.targets[i].opener_frame_id_len = 0;
+            }
+        }
+    }
+
+    fn registerIframeTarget(*_, url: []const u8, frame_id: []const u8, opener_frame_id: []const u8, bctx: []const u8): []const u8 {
+        let i: usize = 0;
+        while (i < _.targets.len) : (i += 1) {
+            if (_.targets[i].active && std.mem.eql(u8, _.targets[i].targetType(), "iframe") && std.mem.eql(u8, _.targets[i].frameId(), frame_id)) {
+                const target_url = if (url.len > 0) url else "about:blank";
+                const u_len = @min(target_url.len, _.targets[i].url_buf.len);
+                @memcpy(_.targets[i].url_buf[0..u_len], target_url[0..u_len]);
+                _.targets[i].url_len = u_len;
+                return _.targets[i].targetId();
+            }
+        }
+        const tid = _.createTargetWithType(url, "iframe", bctx);
+        if (tid.len > 0) {
+            if (idx := _.findTargetIndex(tid)) {
+                const f_len = @min(frame_id.len, _.targets[idx].frame_id_buf.len);
+                @memcpy(_.targets[idx].frame_id_buf[0..f_len], frame_id[0..f_len]);
+                _.targets[idx].frame_id_len = f_len;
+                const op_len = @min(opener_frame_id.len, _.targets[idx].opener_frame_id_buf.len);
+                @memcpy(_.targets[idx].opener_frame_id_buf[0..op_len], opener_frame_id[0..op_len]);
+                _.targets[idx].opener_frame_id_len = op_len;
+            }
+        }
+        return tid;
     }
 
     fn hasBrowserContext(*_, ctx_id: []const u8): bool {

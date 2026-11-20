@@ -11,6 +11,8 @@ import { performPendingNavigation } from "./page.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
+import { Base64 } from "cap:encoding";
+import { formatScreencastFrameParams } from "./screencast.cp";
 
 pub @c {
     struct SockAddrIn {
@@ -654,6 +656,36 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
+    fn pumpScreencastFrame(*_, client_fd: i32): bool! {
+        if (!_.session.has_document) return false;
+        if (!_.session.screencast_handler.isActive()) return false;
+        if (_.session.screencast_handler.state.hasPendingAck()) return false;
+
+        const st = _.session.screencast_handler.getState();
+        const png_bytes = _.session.captureScreencastFrame(st.max_width, st.max_height) catch return false;
+        defer _.session.allocator.free(png_bytes);
+
+        const b64_str = Base64.encodeAlloc(_.session.allocator, png_bytes) catch return false;
+        defer _.session.allocator.free(b64_str);
+
+        const seq = _.session.screencast_handler.nextFrameSeq();
+        const ts_sec = @as(f64, @floatFromInt(serverNowMs())) / 1000.0;
+        const params_buf = std.heap.c_allocator.alloc(u8, b64_str.len + 512) catch return false;
+        defer std.heap.c_allocator.free(params_buf);
+
+        if (params_json := formatScreencastFrameParams(seq, b64_str, st.max_width, st.max_height, ts_sec, params_buf)) {
+            let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            evts[0] = CdpEvent.create("Page.screencastFrame", params_json);
+            const owner = _.session.screencast_handler.getOwnerSession();
+            if (owner.len > 0 && !std.mem.eql(u8, owner, _.session.target_id)) {
+                evts[0].session_id = owner;
+            }
+            _.emitCdpEvents(client_fd, &evts, 1)?;
+            return true;
+        }
+        return false;
+    }
+
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {
         _.session.resetSession();
         defer _.session.resetSession();
@@ -663,6 +695,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const session_start_ms = serverNowMs();
         let last_client_activity_ms = session_start_ms;
+        let last_screencast_ms: i64 = 0;
 
         // Pending slow-navigation state for non-blocking navigate window
         let pending_nav_active = false;
@@ -720,6 +753,13 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     _.flushPendingNavigation(client_fd) catch break;
                     if (_.session.dom_document_sent) {
                         _.flushDomEvents(client_fd) catch break;
+                    }
+                }
+                if (_.session.has_document && _.session.screencast_handler.isActive() && !_.session.screencast_handler.state.hasPendingAck()) {
+                    if (loop_now_ms - last_screencast_ms >= 80) {
+                        if (_.pumpScreencastFrame(client_fd) catch false) {
+                            last_screencast_ms = loop_now_ms;
+                        }
                     }
                 }
                 continue;

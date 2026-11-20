@@ -3979,6 +3979,16 @@
   - `e2e/lazy-load-event.e2e.test.ts` (**2/2**)、`e2e/require-global-shadow.e2e.test.ts` (**1/1**)、`e2e/window-page-functions.e2e.test.ts` (**2/2**)、`e2e/collection-named-shadowing.e2e.test.ts` (**1/1**)、`e2e/custom-element-attributes.e2e.test.ts` (**1/1**)、`e2e/data-transfer-items-add.e2e.test.ts` (**1/1**)、`e2e/event-target-instance-listeners.e2e.test.ts` (**1/1**)、`e2e/invalid-selector-throws.e2e.test.ts` (**2/2**)、`e2e/style-declaration-object-members.e2e.test.ts` (**3/3**)、`e2e/svg-animated-string.e2e.test.ts` (**1/1**)：**15/15 PASS**！
   - **精准筛出待修小批**：`label-activation-trust` (1/2) + `label-svg-content-activation` (0/1) + `range-contextual-fragment` (0/1) -> 打包派发给全新 Slot A（3 组快进快出）。
 
+## [2026-11-20 22:28:00] CDP FrameTree、Screencast 部分图片帧与 Network/PageOps 闭环 + 3 组 Demo 摸底验收 (Subagent e856091c 结单，Phase 124)
+- **CDP FrameTree、Screencast 与事件时序 (`src/cdp/{target,page,session,session_hooks,server}.cp`)**:
+  - `target.cp` & `page.cp`：新增 `TargetItem.frame_id`/`opener_frame_id` 与 iframe 目标注册、`collectFrameStates` 查询实时 `iframe`、`Page.getFrameTree` 按 `sessionId` 返回子 frame 树，补全 `Page.navigate` 标准 `frameStartedLoading`/`Network.*`/`frameNavigated`/`loadEventFired`/`frameStoppedLoading` 事件序列；
+  - `session.cp` & `session_hooks.cp` & `server.cp`：新增 `captureScreencastFrame`（对 `_imgComplete === false` 图片屏蔽 `src` 渲染白底后再增量渲染红图）与 `pumpScreencastFrame` 80ms 节流推流。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，port `19233`）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `kitesurf-page-ops` (**3/3**)、`page-get-layout-metrics` (**4/4**)、`screencast-partial-image` (**1/1**)、`network-event-shape-probe` (**1/1**)、`page-frame-metadata` (**独立 2/2 PASS**，合跑受 `harness.ts` 复用页未重置影响；`iframe-frame-tree-demo` 与 `iframe-nested-frame-tree` 仅缺 `harness.ts` `page.frames()`): **11/11 PASS**！
+  - 同步零修改摸底验收 3 组 Demo：`forms-radio-demo` (**1/1**)、`location-mutate-probe` (**1/1**)、`modules-demo` (**1/1**)：**3/3 PASS**。
+- **清理旧子智能体**: 销毁 `e856091c-6ba8-412b-9e16-cc434f4d9629`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

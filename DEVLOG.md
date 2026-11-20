@@ -1533,4 +1533,10 @@
    - 将 `DOMTokenList`、`CSSStyleDeclaration`、`Range`/`StaticRange`、`File`、`FormData`、`NodeIterator`、`MutationObserver`、`ValidityState` 等内部状态迁入 `WeakMap`，确保实例无泄露自有属性；缓存 `__capsurf_native_createElement` 等原生工厂避免 `cloneNode`/`outerHTML` 触发页面劫持。
 2. **`IntersectionObserver` 与 `harness.ts` 路由修复 (`window.js`, `e2e/harness.ts`)**:
    - 按 `rootMargin`/`scrollMargin` 与 `clip-path: inset(...)` 裁剪矩形并处理 detached document 静默；解除 `isPolicyDocUrl` `data:` 劫持，并为 `createCDPSession()` 分配独立 `sessionId` 实现多会话精确事件过滤。
+
+## Phase 124 CDP FrameTree/OOPIF 与 Screencast 增量图片帧技术方案
+1. **子会话 FrameTree 与生命周期事件序列 (`target.cp`, `page.cp`)**：
+   - 注册 iframe Target 时记录 `frame_id` 与 `opener_frame_id`，`Page.getFrameTree` 按 `req.session_id` 定位 `frame_id` 返回子树；`Page.navigate` 依次发射 `frameStartedLoading`、`Network.*`、`frameNavigated`、`loadEventFired`、`frameStoppedLoading`。
+2. **Screencast 部分图片增量帧 (`session.cp`, `session_hooks.cp`, `server.cp`)**：
+   - 对未就绪图片在 `captureScreencastFrame` 渲染期间临时屏蔽 `src`，并在 `runWebSocketSession` 事件循环中以 `hasPendingAck` + 80ms 节流推送帧数据。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

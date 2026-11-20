@@ -3054,6 +3054,43 @@ pub struct CdpPageSession {
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
     }
 
+    pub fn captureScreencastFrame(*_, max_w: u32, max_h: u32): ([]const u8)! {
+        let saved_nids: [16]u32 = [0; 16];
+        let saved_srcs: [16][]const u8 = [""; 16];
+        let saved_count: usize = 0;
+
+        if (_.has_document) {
+            const js_pending = "(function(){try{var imgs=document.querySelectorAll('img[src]');var out=[];for(var i=0;i<imgs.length&&out.length<16;i++){if(imgs[i]._imgComplete===false&&typeof imgs[i]._nid==='number'&&imgs[i]._nid>0){out.push(imgs[i]._nid);}}return out.join(',');}catch(e){return '';}})()";
+            const val = _.ctx.eval(js_pending);
+            const cstr = _.ctx.toCString(val);
+            if (cstr.len > 0) {
+                let it = std.mem.splitAny(u8, cstr, ",");
+                while (part := it.next()) {
+                    if (part.len == 0 || saved_count >= 16) continue;
+                    const nid = std.fmt.parseInt(u32, part, 10) catch 0;
+                    if (nid > 0 && @as(usize, nid) < _.doc.nodes.items.len) {
+                        if (old_src := _.doc.nodes.items[@as(usize, nid)].getAttribute("src")) {
+                            saved_nids[saved_count] = nid;
+                            saved_srcs[saved_count] = old_src;
+                            saved_count += 1;
+                            * = _.doc.setAttribute(nid, "src", "");
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val);
+        }
+
+        const png = _.captureScreenshotClipped(0, 0, 0, max_w, max_h);
+
+        let ri: usize = 0;
+        while (ri < saved_count) : (ri += 1) {
+            * = _.doc.setAttribute(saved_nids[ri], "src", saved_srcs[ri]);
+        }
+
+        return png;
+    }
+
     fn currentBrowserContextId(): []const u8 {
         return _.current_browser_context_id_buf[0.._.current_browser_context_id_len];
     }
