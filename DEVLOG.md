@@ -1691,3 +1691,7 @@
 
 ### Phase 206: Zero-ms Timer `isExecutingTask` Drain Guard
 - Self-rescheduling `setTimeout(tick, 0)` callbacks previously re-entered `scheduleTaskDrain()` without `fromDrain`, resetting `microtaskDrainBudget = 0` inside `ctx.drainJobs()` until QuickJS hit its interrupt budget (12.8s+ timeout). Guarding `scheduleTaskDrain()` with `isExecutingTask` keeps `post-load-settle` crisp at 11.49s across all 7 cases.
+
+### Phase 213: Screencast Frame-Hash & rAF Driver Baseline (`bin_19233`)
+- Fixed `src/cdp/screencast.cp:210` `*%=` syntax error (`h = h *% 1099511628211;`) unblocking full `src/cdp/` compilation and non-CDP whitebox tests that transitively import `cdp`.
+- Cleaned orphaned stale `main` processes (`2042386`, `4067317`, `884633`) occupying ports `19233`–`19235`.

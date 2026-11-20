@@ -4590,3 +4590,7 @@
 ### Phase 212: Pure-CP Eval EngineErrors, IsolateId & PageIsolateEntry Whitebox Tests (Slot A)
 - **Subagent**: `c7426186` (killed after completion)
 - **Result**: `test/eval/test_engine_errors_and_isolate_id.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 929ms; covering `classifyOrigin`/`parseKsErrLine` field bounds, RFC 4122 UUIDv4 `engineIsolateId` uniqueness/foreign check, and `pageIsolateEntry` JS identifier/buffer guards).
+
+### Phase 213: MutationObserver Whitebox Acceptance & Screencast Baseline (`screencast.cp` `*%=` Fix)
+- **Slot A (`2e1e98c1`, killed)**: `test/dom/test_mutation_observer_edge.cp` verified (`cpc fix` OK, `cpc_brief.py -n 8` 4 gates 0, `cap test -m` 1/1 PASS in 1722ms).
+- **Slot B (`a59e5537`, killed)**: Fixed `src/cdp/screencast.cp:210` (`*%=` -> `*%`), bundled runtime (`1590065` bytes / 133 chunks), passed `cpc fix` & `cpc_brief.py -n 8` on `src/cdp/{screencast,server,kitesurf_facade,page}.cp`, compiled `bin_19233/main` in 8.56s. Screencast E2E baseline on port `19233`: `screencast-idle-skip` 9/14 PASS, `screencast-partial-frames` 2/5 PASS, `screencast-raf-pacing` 3/6 PASS, `screencast-wheel-coalescing` 0/3 PASS (remaining gaps queued for follow-up).

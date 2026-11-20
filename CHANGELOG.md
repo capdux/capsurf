@@ -2295,3 +2295,7 @@
 
 ### Phase 212
 - Added `test/eval/test_engine_errors_and_isolate_id.cp` covering error origin classification/parsing, isolate UUIDv4 identity lifecycle, and page isolate entry source validation.
+
+### Phase 213
+- Added `test/dom/test_mutation_observer_edge.cp` covering `MutationObserver` / `MutationManager` queue bounds, disconnect/re-observe, and attribute/childList filtering.
+- Fixed `src/cdp/screencast.cp:210` wrapping multiply syntax (`*%`) and committed in-progress CDP screencast frame-hash/throttling/rAF-driver baseline (`src/cdp/{screencast,server,kitesurf_facade,page}.cp`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`), plus `GEMINI.md` / `CP_PITFALLS.md` updates.

@@ -19,11 +19,17 @@ import {
 } from "./protocol_extensions.cp";
 
 import { CdpPageSession } from "./session.cp";
+import { ScreencastHandler } from "./screencast.cp";
+import { extractJsonBool, extractJsonInt } from "./types.cp";
+import { getMilliTimestamp } from "../js/dom_binding.cp";
 
 pub struct KitesurfFacade {
     host_manifest: SceneHostManifest = SceneHostManifest{},
     stream_mgr: SceneStreamManager = SceneStreamManager{},
     ext_state: ExtensionSessionState = ExtensionSessionState{},
+    record_scene_seq: u64 = 0,
+    last_record_scene_hash: u64 = 0,
+    has_last_record_scene: bool = false,
 
     fn dispatchCommand(
         *_,
@@ -129,10 +135,65 @@ pub struct KitesurfFacade {
 
         if (std.mem.eql(u8, method, "Kitesurf.recordScene") ||
             std.mem.eql(u8, method, "CapSurf.recordScene")) {
-            let ok_res = "{\"sceneB64\":\"Y2Fwc3VyZi1zY2VuZS12MQ==\",\"resourceBatchB64\":\"Y2Fwc3VyZi1yZXNvdXJjZXMtdjE=\"}";
-            if (ok_res.len > out_buf.len) return null;
-            @memcpy(out_buf[0..ok_res.len], ok_res);
-            return out_buf[0..ok_res.len];
+            const pump_raf = extractJsonBool(params_json, "pumpRaf") ?? false;
+            if (pump_raf && session.has_document) {
+                let interval_ms: i64 = 16;
+                if (fi := extractJsonInt(params_json, "frameIntervalMs")) {
+                    if (fi > 0) interval_ms = fi;
+                }
+                const now_ms = getMilliTimestamp();
+                let raf_buf: [256]u8 = [0; 256];
+                const raf_js = std.fmt.bufPrint(
+                    &raf_buf,
+                    "(function(){{if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(true,{d});if(typeof __capsurf_pump_raf==='function')__capsurf_pump_raf({d});}})()",
+                    .{ interval_ms, now_ms },
+                ) catch "";
+                if (raf_js.len > 0) {
+                    const rv = session.ctx.eval(raf_js);
+                    session.ctx.freeValue(rv);
+                    session.ctx.drainJobs();
+                }
+            }
+
+            const since_seq = extractJsonInt(params_json, "sinceSeq") ?? 0;
+            let is_unchanged = false;
+            if (session.has_document) {
+                const vw: u32 = if (session.viewport_width > 0.0) @as(u32, @intFromFloat(session.viewport_width)) else 1280;
+                const vh: u32 = if (session.viewport_height > 0.0) @as(u32, @intFromFloat(session.viewport_height)) else 720;
+                const png_bytes: []const u8 = session.captureScreencastFrame(vw, vh) catch "";
+                if (png_bytes.len > 0) {
+                    defer session.allocator.free(png_bytes);
+                    const h = ScreencastHandler.computeFrameHash(png_bytes);
+                    if (_.has_last_record_scene && _.last_record_scene_hash == h && since_seq > 0) {
+                        is_unchanged = true;
+                    } else {
+                        _.record_scene_seq += 1;
+                        _.last_record_scene_hash = h;
+                        _.has_last_record_scene = true;
+                    }
+                } else {
+                    _.record_scene_seq += 1;
+                }
+            } else {
+                _.record_scene_seq += 1;
+            }
+
+            const unch_str = if (is_unchanged) "true" else "false";
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"seq\":{d},\"unchanged\":{s},\"sceneB64\":\"Y2Fwc3VyZi1zY2VuZS12MQ==\",\"resourceBatchB64\":\"Y2Fwc3VyZi1yZXNvdXJjZXMtdjE=\"}}",
+                .{ _.record_scene_seq, unch_str },
+            ) catch return null;
+            return res;
+        }
+
+        if (std.mem.eql(u8, method, "Kitesurf.setPartialRaster") ||
+            std.mem.eql(u8, method, "CapSurf.setPartialRaster")) {
+            const enabled = extractJsonBool(params_json, "enabled") ?? true;
+            session.screencast_handler.state.partial_raster = enabled;
+            const en_str = if (enabled) "true" else "false";
+            const res = std.fmt.bufPrint(out_buf, "{{\"enabled\":{s}}}", .{en_str}) catch return null;
+            return res;
         }
 
         if (std.mem.eql(u8, method, "Kitesurf.getSceneResources") ||
@@ -160,10 +221,14 @@ pub struct KitesurfFacade {
             const renderer_bytes = session.computeRendererBytes();
             const active_str = if (session.renderer_active) "true" else "false";
             const frames_rendered: u64 = session.frames_rendered;
+            const partial_frames: u64 = session.screencast_handler.state.partial_frames_rendered;
+            const partial_raster_str = if (session.screencast_handler.state.partial_raster) "true" else "false";
+            const vw: u32 = if (session.viewport_width > 0.0) @as(u32, @intFromFloat(session.viewport_width)) else 1280;
+            const vh: u32 = if (session.viewport_height > 0.0) @as(u32, @intFromFloat(session.viewport_height)) else 720;
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"enabled\":true,\"active\":{s},\"framesRendered\":{d},\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false,\"rendererWasmBytes\":{d}}}",
-                .{ active_str, frames_rendered, renderer_bytes },
+                "{{\"enabled\":true,\"active\":{s},\"framesRendered\":{d},\"partialFramesRendered\":{d},\"relaunchCount\":0,\"partialRaster\":{s},\"initialRes\":\"{d}x{d}\",\"rendererWasmBytes\":{d}}}",
+                .{ active_str, frames_rendered, partial_frames, partial_raster_str, vw, vh, renderer_bytes },
             ) catch return null;
             return res;
         }

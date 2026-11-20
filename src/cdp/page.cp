@@ -623,11 +623,27 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.startScreencast")) {
             const owner_sid = if (req.session_id.len > 0) req.session_id else session.target_id;
             * = session.screencast_handler.startScreencast(req.params_raw, owner_sid);
+            if (session.has_document) {
+                let drv_buf: [160]u8 = [0; 160];
+                const drv_js = std.fmt.bufPrint(
+                    &drv_buf,
+                    "(function(){{if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(true,{d});}})()",
+                    .{session.screencast_handler.state.min_frame_interval_ms},
+                ) catch "";
+                if (drv_js.len > 0) {
+                    const dv = session.ctx.eval(drv_js);
+                    session.ctx.freeValue(dv);
+                }
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "Page.stopScreencast")) {
             * = session.screencast_handler.stopScreencast();
+            if (session.has_document) {
+                const dv = session.ctx.eval("(function(){if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(false,0);})()");
+                session.ctx.freeValue(dv);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

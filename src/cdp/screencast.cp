@@ -22,10 +22,18 @@ pub struct ScreencastState {
     max_width: u32 = 1280,
     max_height: u32 = 720,
     every_nth_frame: u32 = 1,
+    min_frame_interval_ms: u32 = 16,
     frame_seq: u32 = 0,
     last_acked_seq: u32 = 0,
     pending_ack_session_id: u32 = 0,
     owner_session_id: []const u8 = "",
+    last_frame_hash: u64 = 0,
+    has_last_frame_hash: bool = false,
+    last_frame_sent_ms: i64 = 0,
+    last_viewport_w: u32 = 0,
+    last_viewport_h: u32 = 0,
+    partial_raster: bool = true,
+    partial_frames_rendered: u64 = 0,
 
     fn reset(*_) {
         _.active = false;
@@ -34,10 +42,18 @@ pub struct ScreencastState {
         _.max_width = 1280;
         _.max_height = 720;
         _.every_nth_frame = 1;
+        _.min_frame_interval_ms = 16;
         _.frame_seq = 0;
         _.last_acked_seq = 0;
         _.pending_ack_session_id = 0;
         _.owner_session_id = "";
+        _.last_frame_hash = 0;
+        _.has_last_frame_hash = false;
+        _.last_frame_sent_ms = 0;
+        _.last_viewport_w = 0;
+        _.last_viewport_h = 0;
+        _.partial_raster = true;
+        _.partial_frames_rendered = 0;
     }
 
     fn inFlight(): u32 {
@@ -155,18 +171,69 @@ pub struct ScreencastHandler {
             }
         }
 
+        let min_interval: u32 = 16;
+        if (mi := extractJsonInt(req_params_json, "minFrameIntervalMs")) {
+            if (mi >= 0) {
+                if (mi > 60000) {
+                    min_interval = 60000;
+                } else {
+                    min_interval = @as(u32, @intCast(mi));
+                }
+            }
+        }
+
         _.state.active = true;
         _.state.format = fmt;
         _.state.quality = quality;
         _.state.max_width = max_w;
         _.state.max_height = max_h;
         _.state.every_nth_frame = every_nth;
+        _.state.min_frame_interval_ms = min_interval;
         _.state.owner_session_id = owner_session;
         _.state.frame_seq = 0;
         _.state.last_acked_seq = 0;
         _.state.pending_ack_session_id = 0;
+        _.state.last_frame_hash = 0;
+        _.state.has_last_frame_hash = false;
+        _.state.last_frame_sent_ms = 0;
+        _.state.last_viewport_w = 0;
+        _.state.last_viewport_h = 0;
 
         return true;
+    }
+
+    static fn computeFrameHash(bytes: []const u8): u64 {
+        let h: u64 = (@as(u64, 0xcbf29ce4) << 32) | 0x84222325;
+        let i: usize = 0;
+        while (i < bytes.len) : (i += 1) {
+            h ^= @as(u64, bytes[i]);
+            h = h *% 1099511628211;
+        }
+        return h;
+    }
+
+    fn isIntervalElapsed(now_ms: i64): bool {
+        if (_.state.last_frame_sent_ms == 0) return true;
+        return (now_ms - _.state.last_frame_sent_ms) >= @as(i64, @intCast(_.state.min_frame_interval_ms));
+    }
+
+    fn shouldSkipIdleFrame(frame_hash: u64, vw: u32, vh: u32): bool {
+        return _.state.has_last_frame_hash &&
+            _.state.last_frame_hash == frame_hash &&
+            _.state.last_viewport_w == vw &&
+            _.state.last_viewport_h == vh;
+    }
+
+    fn recordSentFrame(*_, frame_hash: u64, vw: u32, vh: u32, now_ms: i64) {
+        if (_.state.has_last_frame_hash && _.state.partial_raster &&
+            _.state.last_viewport_w == vw && _.state.last_viewport_h == vh) {
+            _.state.partial_frames_rendered += 1;
+        }
+        _.state.last_frame_hash = frame_hash;
+        _.state.has_last_frame_hash = true;
+        _.state.last_frame_sent_ms = now_ms;
+        _.state.last_viewport_w = vw;
+        _.state.last_viewport_h = vh;
     }
 
     fn stopScreencast(*_): bool {
@@ -237,13 +304,17 @@ pub fn formatScreencastFrameParams(
     base64_data: []const u8,
     width: u32,
     height: u32,
+    scroll_x: f32,
+    scroll_y: f32,
     timestamp_sec: f64,
     out_buf: []u8,
 ): ([]const u8)? {
+    const sx: i64 = @as(i64, @intFromFloat(scroll_x));
+    const sy: i64 = @as(i64, @intFromFloat(scroll_y));
     return std.fmt.bufPrint(
         out_buf,
-        "{{\"data\":\"{s}\",\"metadata\":{{\"offsetTop\":0,\"pageScaleFactor\":1,\"deviceWidth\":{d},\"deviceHeight\":{d},\"scrollOffsetX\":0,\"scrollOffsetY\":0,\"timestamp\":{d}}},\"sessionId\":{d}}}",
-        .{ base64_data, width, height, timestamp_sec, frame_seq },
+        "{{\"data\":\"{s}\",\"metadata\":{{\"offsetTop\":0,\"pageScaleFactor\":1,\"deviceWidth\":{d},\"deviceHeight\":{d},\"scrollOffsetX\":{d},\"scrollOffsetY\":{d},\"timestamp\":{d}}},\"sessionId\":{d}}}",
+        .{ base64_data, width, height, sx, sy, timestamp_sec, frame_seq },
     ) catch null;
 }
 

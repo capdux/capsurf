@@ -4127,6 +4127,9 @@ function installWindow(global) {
   const _rafEntries = new Map();
   let _rafNextId = 1;
   let _rafFallbackTimerId = 0;
+  let _rafDriverActive = false;
+  let _rafDriverIntervalMs = 0;
+  let _rafDriverDeadlineMs = 0;
 
   function _clearRafFallbackTimer() {
     if (_rafFallbackTimerId !== 0) {
@@ -4137,10 +4140,34 @@ function installWindow(global) {
 
   function _scheduleRafFallbackTimer() {
     if (_rafFallbackTimerId !== 0 || _rafQueue.length === 0) return;
+    const delay = _rafDriverActive ? Math.max(16, _rafDriverIntervalMs * 2) : 16;
     _rafFallbackTimerId = global.setTimeout(function () {
       _rafFallbackTimerId = 0;
+      if (_rafDriverActive && Date.now() < _rafDriverDeadlineMs) {
+        _scheduleRafFallbackTimer();
+        return;
+      }
+      _rafDriverActive = false;
+      _rafDriverIntervalMs = 0;
+      _rafDriverDeadlineMs = 0;
       pumpRaf();
-    }, 16);
+    }, delay);
+  }
+
+  function setRafDriver(active, intervalMs) {
+    if (active) {
+      _rafDriverActive = true;
+      _rafDriverIntervalMs = Math.max(16, Number(intervalMs) || 16);
+      _rafDriverDeadlineMs = Date.now() + _rafDriverIntervalMs * 2;
+    } else {
+      _rafDriverActive = false;
+      _rafDriverIntervalMs = 0;
+      _rafDriverDeadlineMs = 0;
+    }
+    _clearRafFallbackTimer();
+    if (_rafQueue.length > 0) {
+      _scheduleRafFallbackTimer();
+    }
   }
 
   function hasPendingRaf() {
@@ -4149,6 +4176,9 @@ function installWindow(global) {
 
   function pumpRaf(timestampMs) {
     _clearRafFallbackTimer();
+    if (_rafDriverActive) {
+      _rafDriverDeadlineMs = Date.now() + _rafDriverIntervalMs * 2;
+    }
     if (_rafQueue.length === 0) return 0;
     const batch = _rafQueue.splice(0, _rafQueue.length);
     const ts = (typeof timestampMs === "number" && isFinite(timestampMs))
@@ -4173,13 +4203,16 @@ function installWindow(global) {
 
   global.__capsurf_pump_raf = pumpRaf;
   global.__capsurf_has_pending_raf = hasPendingRaf;
+  global.__capsurf_set_raf_driver = setRafDriver;
   if (typeof window !== "undefined") {
     window.__capsurf_pump_raf = pumpRaf;
     window.__capsurf_has_pending_raf = hasPendingRaf;
+    window.__capsurf_set_raf_driver = setRafDriver;
   }
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_pump_raf = pumpRaf;
     globalThis.__capsurf_has_pending_raf = hasPendingRaf;
+    globalThis.__capsurf_set_raf_driver = setRafDriver;
   }
 
   if (!global.requestAnimationFrame) {

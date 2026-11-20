@@ -12,7 +12,7 @@ import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
 import { Base64 } from "cap:encoding";
-import { formatScreencastFrameParams } from "./screencast.cp";
+import { ScreencastHandler, formatScreencastFrameParams } from "./screencast.cp";
 
 pub @c {
     struct SockAddrIn {
@@ -779,23 +779,51 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
-    fn pumpScreencastFrame(*_, client_fd: i32): bool! {
+    fn pumpScreencastFrame(*_, client_fd: i32, now_ms: i64): bool! {
         if (!_.session.has_document) return false;
         if (!_.session.screencast_handler.canSendFrame()) return false;
+        if (!_.session.screencast_handler.isIntervalElapsed(now_ms)) return false;
+
+        let raf_buf: [128]u8 = [0; 128];
+        const raf_js = std.fmt.bufPrint(
+            &raf_buf,
+            "(function(){{if(typeof __capsurf_pump_raf==='function')return __capsurf_pump_raf({d});return 0;}})()",
+            .{now_ms},
+        ) catch "";
+        if (raf_js.len > 0) {
+            const rv = _.session.ctx.eval(raf_js);
+            _.session.ctx.freeValue(rv);
+            _.session.ctx.drainJobs();
+        }
+
+        let sx: f32 = 0.0;
+        let sy: f32 = 0.0;
+        let cw: f32 = 0.0;
+        let ch: f32 = 0.0;
+        _.session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
 
         const st = _.session.screencast_handler.getState();
+        const vw: u32 = if (_.session.viewport_width > 0.0) @as(u32, @intFromFloat(_.session.viewport_width)) else 1280;
+        const vh: u32 = if (_.session.viewport_height > 0.0) @as(u32, @intFromFloat(_.session.viewport_height)) else 720;
+
         const png_bytes = _.session.captureScreencastFrame(st.max_width, st.max_height) catch return false;
         defer _.session.allocator.free(png_bytes);
+
+        const frame_hash = ScreencastHandler.computeFrameHash(png_bytes);
+        if (_.session.screencast_handler.shouldSkipIdleFrame(frame_hash, vw, vh)) {
+            if (_.session.frames_rendered > 0) _.session.frames_rendered -= 1;
+            return false;
+        }
 
         const b64_str = Base64.encodeAlloc(_.session.allocator, png_bytes) catch return false;
         defer _.session.allocator.free(b64_str);
 
         const seq = _.session.screencast_handler.nextFrameSeq();
-        const ts_sec = @as(f64, @floatFromInt(serverNowMs())) / 1000.0;
+        const ts_sec = @as(f64, @floatFromInt(now_ms)) / 1000.0;
         const params_buf = std.heap.c_allocator.alloc(u8, b64_str.len + 512) catch return false;
         defer std.heap.c_allocator.free(params_buf);
 
-        if (params_json := formatScreencastFrameParams(seq, b64_str, st.max_width, st.max_height, ts_sec, params_buf)) {
+        if (params_json := formatScreencastFrameParams(seq, b64_str, st.max_width, st.max_height, sx, sy, ts_sec, params_buf)) {
             let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             evts[0] = CdpEvent.create("Page.screencastFrame", params_json);
             const owner = _.session.screencast_handler.getOwnerSession();
@@ -803,6 +831,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 evts[0].session_id = owner;
             }
             _.emitCdpEvents(client_fd, &evts, 1)?;
+            _.session.screencast_handler.recordSentFrame(frame_hash, vw, vh, now_ms);
             return true;
         }
         return false;
@@ -818,7 +847,6 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const session_start_ms = serverNowMs();
         let last_client_activity_ms = session_start_ms;
-        let last_screencast_ms: i64 = 0;
 
         // Pending slow-navigation state for non-blocking navigate window
         let pending_nav_active = false;
@@ -886,11 +914,13 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
 
             let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
-            const pr = poll(&pfd, 1, 15);
+            const poll_ms: i32 = if (_.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15) 5 else 15;
+            const pr = poll(&pfd, 1, poll_ms);
             if (pr < 0) {
                 break;
             }
             if (pr == 0) {
+                const tick_now_ms = serverNowMs();
                 if (_.session.has_document) {
                     _.session.pumpTimers();
                     _.flushReopenLoadEvents(client_fd) catch break;
@@ -900,11 +930,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     }
                 }
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
-                    if (loop_now_ms - last_screencast_ms >= 80) {
-                        if (_.pumpScreencastFrame(client_fd) catch false) {
-                            last_screencast_ms = loop_now_ms;
-                        }
-                    }
+                    * = _.pumpScreencastFrame(client_fd, tick_now_ms) catch false;
                 }
                 continue;
             }
@@ -979,6 +1005,10 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 if (is_browser_close) {
                     writeWsCloseFrame(client_fd, 1000, "Browser.close") catch {};
                     break;
+                }
+                if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
+                    const post_now_ms = serverNowMs();
+                    * = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
                 }
             } else {
                 break;
