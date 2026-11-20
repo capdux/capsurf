@@ -117,6 +117,7 @@ function notifyMutation(record) {
             const rn = record.removedNodes[ri];
             if (rn) st.transientTargets.push({ target: rn, options: sub.options });
           }
+          scheduleMutationDelivery();
         }
         if (!matched && matchesObserverRecord(sub, record)) {
           st.records.push(record);

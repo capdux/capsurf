@@ -1074,7 +1074,16 @@ markNative(Node.prototype.getRootNode, "getRootNode");
 markNative(Node.prototype.normalize, "normalize");
 
 function characterDataReplaceData(node, offset, count, data) {
-  const cur = node._data !== undefined ? String(node._data) : "";
+  let cur = "";
+  if (node._data !== undefined) {
+    cur = String(node._data);
+  } else if (node._nid !== undefined && nativeElementGetTextContent) {
+    try {
+      cur = String(nativeElementGetTextContent.call(node) || "");
+    } catch (e) {
+      cur = "";
+    }
+  }
   const len = cur.length;
   const off = offset >>> 0;
   if (off > len) {
@@ -1092,6 +1101,11 @@ function characterDataReplaceData(node, offset, count, data) {
   const str = String(data !== undefined ? data : "");
   const oldVal = cur;
   node._data = cur.slice(0, off) + str + cur.slice(off + cnt);
+  if (node._nid !== undefined && nativeElementSetTextContent) {
+    try {
+      nativeElementSetTextContent.call(node, node._data);
+    } catch (e) {}
+  }
   if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
     global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
   }

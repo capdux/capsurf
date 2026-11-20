@@ -2355,3 +2355,9 @@
 ### Phase 226
 - Added `test/dom/test_attr_and_classlist_edge.cp`.
 - Verified `e2e/detached-owned-caches.e2e.test.ts` 5/5 PASS.
+
+### Phase 227-228
+- Added `2000x2000` scrollable spacer to `test/cdp/test_screenshot_input.cp` (117/117 whitebox PASS).
+- Fixed empty `<style>` `innerText` recursion (`src/js/shim/window.js`), `#text`/`#comment` prototype & `data` setter (`src/js/shim/{index.js,node-base.js,element/element.js}`), and `MutationObserver` `transientTargets` flush (`src/js/shim/mutations/observer.js` + `runtime.js`/`runtime_source.cp`).
+- Implemented `emitNewChildFrameEvents` context emission, `TargetRegistry.registerIframeTarget` URL updates, `documentKindStats`, and `Kitesurf.evalDocumentKind` across `src/cdp/{page,target,session,kitesurf_facade,protocol_extensions}.cp`.
+- Updated `GEMINI.md` section `11.6` with rule #6.

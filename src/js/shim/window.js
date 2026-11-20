@@ -5413,7 +5413,7 @@ function installWindow(global) {
           text = sheet._cascadeCssText || "";
         }
       } else {
-        text = (sn.textContent || sn.innerText) || "";
+        text = sn.textContent || "";
       }
       if (text) {
         parseCssRulesInto(element, text, targetMap, normalizedPseudo);
@@ -10400,7 +10400,9 @@ const CSS_TYPED_OM_GLOBALS = {
       set: function (v) {
         prevSetInner.call(this, v);
         try {
-          markSubtreeScripts(this);
+          if (typeof v === "string" ? v.toLowerCase().indexOf("<script") !== -1 : String(v).toLowerCase().indexOf("<script") !== -1) {
+            markSubtreeScripts(this);
+          }
         } catch (e) {}
       },
       configurable: true,

@@ -90,7 +90,7 @@ fn testDispatchMouseEvent()! {
     let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
     let evt_cnt: usize = 0;
 
-    const html_data = "data:text/html,<html><body><button id='action-btn' onclick='globalThis.clickCount = (globalThis.clickCount || 0) + 1; globalThis.btnClicked = true;' style='width: 120px; height: 50px;'>Click Me</button></body></html>";
+    const html_data = "data:text/html,<html><body><button id='action-btn' onclick='globalThis.clickCount = (globalThis.clickCount || 0) + 1; globalThis.btnClicked = true;' style='width: 120px; height: 50px;'>Click Me</button><div style='width: 2000px; height: 2000px;'></div></body></html>";
     const nav_req = CdpRequest{
         id: 1,
         method: "Page.navigate",

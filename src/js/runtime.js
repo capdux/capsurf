@@ -2430,6 +2430,7 @@
               const rn = record.removedNodes[ri];
               if (rn) st.transientTargets.push({ target: rn, options: sub.options });
             }
+            scheduleMutationDelivery();
           }
           if (!matched && matchesObserverRecord(sub, record)) {
             st.records.push(record);
@@ -7808,7 +7809,16 @@
   markNative(Node.prototype.normalize, "normalize");
 
   function characterDataReplaceData(node, offset, count, data) {
-    const cur = node._data !== undefined ? String(node._data) : "";
+    let cur = "";
+    if (node._data !== undefined) {
+      cur = String(node._data);
+    } else if (node._nid !== undefined && nativeElementGetTextContent) {
+      try {
+        cur = String(nativeElementGetTextContent.call(node) || "");
+      } catch (e) {
+        cur = "";
+      }
+    }
     const len = cur.length;
     const off = offset >>> 0;
     if (off > len) {
@@ -7826,6 +7836,11 @@
     const str = String(data !== undefined ? data : "");
     const oldVal = cur;
     node._data = cur.slice(0, off) + str + cur.slice(off + cnt);
+    if (node._nid !== undefined && nativeElementSetTextContent) {
+      try {
+        nativeElementSetTextContent.call(node, node._data);
+      } catch (e) {}
+    }
     if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
       global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
     }
@@ -9285,9 +9300,28 @@
     });
 
     Object.defineProperty(proto, "data", {
-      get: function () { return this.textContent || ""; },
+      get: function () {
+        if (this.nodeType === 3 || this.nodeType === 8) {
+          if (this._data !== undefined) return this._data;
+          if (nativeElementGetTextContent) {
+            try { return String(nativeElementGetTextContent.call(this) || ""); } catch (e) {}
+          }
+        }
+        return this.textContent || "";
+      },
       set: function (v) {
-        this.textContent = String(v);
+        const str = v === null ? "" : String(v);
+        if (this.nodeType === 3 || this.nodeType === 8) {
+          let cur = "";
+          if (this._data !== undefined) {
+            cur = String(this._data);
+          } else if (nativeElementGetTextContent) {
+            try { cur = String(nativeElementGetTextContent.call(this) || ""); } catch (e) {}
+          }
+          characterDataReplaceData(this, 0, cur.length, str);
+          return;
+        }
+        this.textContent = str;
         if (typeof notifyMutation === "function") {
           notifyMutation(new MutationRecord("characterData", this));
         }
@@ -33437,7 +33471,7 @@
             text = sheet._cascadeCssText || "";
           }
         } else {
-          text = (sn.textContent || sn.innerText) || "";
+          text = sn.textContent || "";
         }
         if (text) {
           parseCssRulesInto(element, text, targetMap, normalizedPseudo);
@@ -38424,7 +38458,9 @@
         set: function (v) {
           prevSetInner.call(this, v);
           try {
-            markSubtreeScripts(this);
+            if (typeof v === "string" ? v.toLowerCase().indexOf("<script") !== -1 : String(v).toLowerCase().indexOf("<script") !== -1) {
+              markSubtreeScripts(this);
+            }
           } catch (e) {}
         },
         configurable: true,
@@ -41134,6 +41170,21 @@
     function upgradeElement(el) {
       if (!el || typeof el !== "object") return el;
       hideInternalNid(el);
+      if (el.nodeType === 3) {
+        if (global.Text && global.Text.prototype && !global.Text.prototype.isPrototypeOf(el)) {
+          Object.setPrototypeOf(el, global.Text.prototype);
+        }
+        return el;
+      }
+      if (el.nodeType === 8) {
+        if (global.Comment && global.Comment.prototype && !global.Comment.prototype.isPrototypeOf(el)) {
+          Object.setPrototypeOf(el, global.Comment.prototype);
+        }
+        return el;
+      }
+      if (el.nodeType !== undefined && el.nodeType !== 1) {
+        return el;
+      }
       const nidForCe = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
       if (nidForCe > 0 && global.__capsurf_upgradedCustomNodeIds && global.__capsurf_upgradedCustomNodeIds.has(nidForCe)) {
         const CeCtor = global.__capsurf_upgradedCustomNodeIds.get(nidForCe);

@@ -1743,3 +1743,7 @@
 
 ### Phase 226: `PROGRESS.md` 1.3 & Screencast 4-Pack 100% Closure
 - With `detached-owned-caches` (5/5), `detached-node-reclaim` (6/6), `module-registry` (1/1), `oopif-*` (6/6), `tldraw-app-shell` (6/6), and Screencast 4-pack (35/35) all green, every explicit backlog item from `PROGRESS.md` 1.3 is now closed.
+
+### Phase 227-228: Whitebox 117/117, `Text`/`Comment` Shim Fixes & OOPIF 3-Pack 6/6
+- `collectElementOwnDeclarations` falling back to `sn.innerText` on empty `<style>` caused infinite recursion via `getElDisplayForInnerText` -> `getComputedStyle`; restricting to `sn.textContent || ""` eliminates the crash.
+- Updating `TargetRegistry.registerIframeTarget` in-place when an iframe navigates from `about:blank` to its real URL and emitting `executionContextCreated` with `nextContextId()` resolves `oopif-late-spawn` and `oopif-heap-usage`.

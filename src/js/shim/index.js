@@ -402,6 +402,21 @@ function installShim(global) {
   function upgradeElement(el) {
     if (!el || typeof el !== "object") return el;
     hideInternalNid(el);
+    if (el.nodeType === 3) {
+      if (global.Text && global.Text.prototype && !global.Text.prototype.isPrototypeOf(el)) {
+        Object.setPrototypeOf(el, global.Text.prototype);
+      }
+      return el;
+    }
+    if (el.nodeType === 8) {
+      if (global.Comment && global.Comment.prototype && !global.Comment.prototype.isPrototypeOf(el)) {
+        Object.setPrototypeOf(el, global.Comment.prototype);
+      }
+      return el;
+    }
+    if (el.nodeType !== undefined && el.nodeType !== 1) {
+      return el;
+    }
     const nidForCe = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
     if (nidForCe > 0 && global.__capsurf_upgradedCustomNodeIds && global.__capsurf_upgradedCustomNodeIds.has(nidForCe)) {
       const CeCtor = global.__capsurf_upgradedCustomNodeIds.get(nidForCe);

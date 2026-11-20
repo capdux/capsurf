@@ -4676,3 +4676,13 @@
 ### Phase 226: DOM Attr/DOMTokenList Whitebox + `detached-owned-caches` 5/5 PASS
 - **Slot A (`eae3830d`)**: Added `test/dom/test_attr_and_classlist_edge.cp` covering case-insensitive attr overwrite/removal, `MAX_ATTRS_PER_NODE`/`MAX_CLASSES_PER_NODE` bounds, `id_map` sync, `setAttributeNS`, `DOMTokenList` (`MAX_TOKENS`), and `NULL_NODE` guards (**1/1 PASS**, 715ms). Total whitebox now **118/118 (100% PASS)**.
 - **Slot B (`b037a0d5`)**: Verified `e2e/detached-owned-caches.e2e.test.ts` **5/5 PASS** (8 assertions, 89.41s, exit 0) on `bin_19233/main` (`getAttributeNode`, `HTMLStyleElement.sheet`, `HTMLTrackElement.track` and weak-owned cache reclaim all green).
+
+### Phase 227-228: 117/117 Whitebox 100% PASS + 87-File E2E Sweep + Memory/DOM Fixes + OOPIF 3-Pack 6/6 PASS
+- **Slot A (`90c0779c`, `475e682b`, `80571b9b`, `c6fd5ab2`)**:
+  - Fixed `test/cdp/test_screenshot_input.cp:93` (`2000x2000` scrollable spacer) -> **5/5 PASS**; full-repo whitebox now **117/117 (100% PASS)** across all 10 directories.
+  - Zero-edit swept 52 `boa-*`/`bridge-*`/other E2E files on port `19232`: **31 PASS / 13 FAIL / 8 TIMEOUT**.
+  - Zero-edit swept first 35 non-Boa/non-Wasm E2E files on port `19234`: **25 PASS / 7 FAIL / 3 TIMEOUT**; follow-up confirmed `e2e/demo/forms-post-submit-demo.e2e.test.ts` **7/7 PASS** (18.15s) and pinpointed `css-typed-om` (`colorClass`), `matchmedia-demo` (`portrait`), and `element-scroll-demo:128`.
+- **Slot B (`d1af9595`, `5f5717d5`)**:
+  - Fixed empty `<style>` `innerText`->`getComputedStyle` recursion segfault (`src/js/shim/window.js`), `#text`/`#comment` prototype & `data` setter (`src/js/shim/{index.js,node-base.js,element/element.js}`), and `MutationObserver` `transientTargets` microtask delivery (`src/js/shim/mutations/observer.js`); `style-churn-memory` + `text-content-memory` passed 4/7 (3 remaining are Kitesurf `observed.delta` leak-control assertions where QuickJS RC frees immediately).
+  - Fixed `emitNewChildFrameEvents` context emission (`src/cdp/page.cp`), `TargetRegistry.registerIframeTarget` URL update (`src/cdp/target.cp`), `documentKindStats` & `Kitesurf.evalDocumentKind` (`src/cdp/{session,kitesurf_facade,protocol_extensions}.cp`). Built `bin_19233/main` (6.69s); `oopif-heap-usage`, `oopif-late-spawn`, `oopif-document-kind` **6/6 PASS** (19 assertions, 12.31s).
+- **GEMINI.md**: Added rule #6 (`timeout 15` diagnostic guard & dual-port `19232`/`19233` sweep isolation).

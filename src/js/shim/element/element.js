@@ -635,9 +635,28 @@ function installElementExtensions(proto) {
   });
 
   Object.defineProperty(proto, "data", {
-    get: function () { return this.textContent || ""; },
+    get: function () {
+      if (this.nodeType === 3 || this.nodeType === 8) {
+        if (this._data !== undefined) return this._data;
+        if (nativeElementGetTextContent) {
+          try { return String(nativeElementGetTextContent.call(this) || ""); } catch (e) {}
+        }
+      }
+      return this.textContent || "";
+    },
     set: function (v) {
-      this.textContent = String(v);
+      const str = v === null ? "" : String(v);
+      if (this.nodeType === 3 || this.nodeType === 8) {
+        let cur = "";
+        if (this._data !== undefined) {
+          cur = String(this._data);
+        } else if (nativeElementGetTextContent) {
+          try { cur = String(nativeElementGetTextContent.call(this) || ""); } catch (e) {}
+        }
+        characterDataReplaceData(this, 0, cur.length, str);
+        return;
+      }
+      this.textContent = str;
       if (typeof notifyMutation === "function") {
         notifyMutation(new MutationRecord("characterData", this));
       }
