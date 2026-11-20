@@ -962,6 +962,8 @@ pub struct CdpPageSession {
     next_context_id: i64 = 3,
     isolated_worlds: [16]IsolatedWorldEntry = [IsolatedWorldEntry{}; 16],
     isolated_world_count: usize = 0,
+    retired_isolated_world_ids: [32]i64 = [0; 32],
+    retired_isolated_world_count: usize = 0,
     iframe_ctx_created: bool = false,
     iframe_ctx_id: i64 = 3,
     iframe_origin_buf: [256]u8 = [0; 256],
@@ -2655,6 +2657,7 @@ pub struct CdpPageSession {
         _.dom_enabled = false;
         _.next_context_id = 3;
         _.isolated_world_count = 0;
+        _.retired_isolated_world_count = 0;
         let wi: usize = 0;
         while (wi < _.isolated_worlds.len) : (wi += 1) {
             _.isolated_worlds[wi].active = false;
@@ -2716,11 +2719,24 @@ pub struct CdpPageSession {
     pub fn rotateIsolatedWorldsOnNavigate(*_) {
         let i: usize = 0;
         while (i < _.isolated_world_count) : (i += 1) {
+            const old_cid = _.isolated_worlds[i].context_id;
+            if (_.isolated_worlds[i].active && old_cid > 0 && _.retired_isolated_world_count < _.retired_isolated_world_ids.len) {
+                _.retired_isolated_world_ids[_.retired_isolated_world_count] = old_cid;
+                _.retired_isolated_world_count += 1;
+            }
             const cid = _.next_context_id;
             _.next_context_id += 1;
             _.isolated_worlds[i].context_id = cid;
             _.isolated_worlds[i].active = true;
         }
+    }
+
+    pub fn isRetiredIsolatedWorldId(*_, cid: i64): bool {
+        let i: usize = 0;
+        while (i < _.retired_isolated_world_count) : (i += 1) {
+            if (_.retired_isolated_world_ids[i] == cid) return true;
+        }
+        return false;
     }
 
     pub fn isIsolatedWorldId(*_, cid: i64): bool {

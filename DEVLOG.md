@@ -1711,3 +1711,6 @@
 ### Phase 217: `DOM.getBoxModel` Content-Box Quads & Single-Fire `click` Semantics
 - `CdpPageSession.getBoxModel` now derives `padding` (inset by `border`) and `content` (inset by `padding`) quads plus `margin` (outset) from `LayoutBox` instead of returning border-box dimensions for all four quads.
 - `CdpInputHandler.handle` now fires `click` once on `MouseReleased` via DOM event dispatch rather than firing raw `onclick` attributes + `el.onclick()` on both `MousePressed` and `MouseReleased`.
+
+### Phase 218: Retired Isolated World Tracking & `Runtime.evaluate` `contextId` Semantics
+- `rotateIsolatedWorldsOnNavigate` now records retired isolated world IDs in `CdpPageSession.retired_isolated_world_ids` so `Runtime.evaluate` returns `-32000 Cannot find context with specified id` for retired worlds while returning `exceptionDetails` (`Error: unknown or destroyed execution context ...`) for destroyed child frames and unknown `contextId`s.

@@ -4624,3 +4624,8 @@
   - Fixed `DOM.getBoxModel` in `src/cdp/{types,session,dom}.cp` to compute content-box `width`/`height` and distinct `content`/`padding`/`border`/`margin` quads.
   - Fixed `Input.dispatchMouseEvent` in `src/cdp/input.cp` (deduplicated `onclick` firing to single `MouseReleased` `click`, synced native `value` attribute in `applyInputText`), `KeyboardEvent` `keypress` `Enter` `charCode = 13` in `src/js/shim/events/event.js` (re-bundled `runtime.js`/`runtime_source.cp`), and aligned `test/cdp/test_screenshot_input.cp` assertions.
   - `test/cdp/test_cdp.cp` (2/2), `test/cdp/test_playwright_e2e.cp` (1/1), `test/cdp/test_screenshot_input.cp` (5/5) all PASS; `bin_19233/main` built in 6.39s. Total whitebox now **108/108 (100% PASS)**.
+
+### Phase 218: CSS Selector Whitebox + `18f88c2` 4/8 Sweep + OOPIF `runtime-evaluate` PASS
+- **Batch Sweep (`bin_19233/main`, port `19233`)**: `oopif-postmessage` (1/1, 16 assertions), `page-renderer-parity` (1/1, 8 assertions), `screenshot-demo` (1/1, 3 assertions), `tty-wheel-grid` (1/1, 5 assertions) all PASS.
+- **Slot A (`a709c9a0`, killed)**: Added `test/css/test_selectors_and_pseudo_classes.cp` covering `:nth-child(An+B)`, `:is/:where/:not/:has`, attribute operators, combinators, and cascade specificity (**5/5 PASS**, 1289ms). Total whitebox now **109/109 (100% PASS)**.
+- **Slot B (`b4561d81`, killed)**: Added `retired_isolated_world_ids` tracking in `src/cdp/session.cp` and aligned `Runtime.evaluate` invalid `contextId` handling in `src/cdp/runtime.cp:253-263`. Built `bin_19233/main` (9.71s); `oopif-runtime-evaluate` **1/1 PASS** (3.68s), `context-lifecycle` **3/3 PASS** (8.04s); `tldraw-app-shell` 2/6 PASS (pinpointed `IndexedDB` timeout & duplicate mouse boundary events).

@@ -2319,3 +2319,7 @@
 - Added `test/html/test_after_head_and_foreign.cp` and `test/layout/test_flex_and_table_layout.cp`.
 - Implemented distinct `content`/`padding`/`border`/`margin` quads and content-box dimensions for `DOM.getBoxModel` in `src/cdp/{types,session,dom}.cp`.
 - Deduplicated `onclick` dispatch in `src/cdp/input.cp`, synced `value` attribute in `applyInputText`, fixed `KeyboardEvent` `Enter` `charCode = 13` in `src/js/shim/events/event.js` (with `runtime.js`/`runtime_source.cp` re-bundle), and updated `test/cdp/test_screenshot_input.cp`.
+
+### Phase 218
+- Added `test/css/test_selectors_and_pseudo_classes.cp` covering structural/logical pseudo-classes, attribute operators, combinators, and cascade specificity.
+- Tracked `retired_isolated_world_ids` in `src/cdp/session.cp` and aligned `Runtime.evaluate` invalid vs retired `contextId` responses in `src/cdp/runtime.cp`.
