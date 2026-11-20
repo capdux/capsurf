@@ -4501,3 +4501,7 @@
 ### Phase 190: Pure-CP Arena DOM Mutations & Clone Whitebox Tests (Slot A)
 - **Subagent**: `dead6ef0` (killed after completion)
 - **Result**: `test/dom/test_arena_mutations_and_clone.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 1/1 PASS in 1345ms; 4 test functions covering Arena sentinel, insert/remove/replace, shallow/deep `cloneNode`, attributes & `NULL_NODE` boundaries).
+
+### Phase 191: Pure-CP Net Redirect, Referrer & Forbidden Headers Whitebox Tests (Slot A)
+- **Subagent**: `a2fcadcf` (killed after completion)
+- **Result**: `test/net/test_redirect_referrer.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 5/5 PASS in 859ms; covering `redirect_walk.cp`, `referrer_policy.cp`, `forbidden_headers.cp`).

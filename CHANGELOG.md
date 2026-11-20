@@ -2232,3 +2232,6 @@
 
 ### Phase 190
 - Added `test/dom/test_arena_mutations_and_clone.cp` covering Arena DOM sentinel, node creation, insert/remove/replace mutations, shallow/deep `cloneNode`, attributes, and `NULL_NODE`/OOB boundary guards.
+
+### Phase 191
+- Added `test/net/test_redirect_referrer.cp` covering redirect status/method downgrade, cross-origin sensitive header stripping, max-hops/loop stop reasons, referrer policy determination, and forbidden header filtering.
