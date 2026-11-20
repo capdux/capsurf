@@ -1344,6 +1344,93 @@ function installHtmlClasses(global) {
     return doc;
   }
 
+  function executeIframeInlineScripts(win, doc) {
+    if (!win || !doc) return;
+    const scripts = [];
+    function collect(node) {
+      if (!node) return;
+      if (node.nodeType === 1 && String(node.tagName || node.localName || "").toLowerCase() === "script") {
+        scripts.push(node);
+        return;
+      }
+      const kids = node._children || node.childNodes || [];
+      for (let i = 0; i < kids.length; i++) {
+        collect(kids[i]);
+      }
+    }
+    collect(doc);
+    const stack = global.__capsurf_active_window_stack;
+    for (let i = 0; i < scripts.length; i++) {
+      const sc = scripts[i];
+      if (sc.getAttribute && sc.getAttribute("src")) continue;
+      const code = sc.textContent || "";
+      if (!code.trim()) continue;
+      if (Array.isArray(stack)) stack.push(win);
+      try {
+        const fn = new Function(
+          "window", "document", "location", "fetch", "self", "globalThis",
+          "addEventListener", "removeEventListener", "postMessage",
+          code
+        );
+        fn.call(
+          win,
+          win,
+          doc,
+          win.location,
+          win.fetch,
+          win,
+          win,
+          win.addEventListener.bind(win),
+          win.removeEventListener.bind(win),
+          win.postMessage.bind(win)
+        );
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) {
+          try { console.error(e); } catch (_) {}
+        }
+      } finally {
+        if (Array.isArray(stack)) stack.pop();
+      }
+    }
+  }
+
+  function applyLoadedIframeHtml(iframeEl, resolvedUrl, html) {
+    let newDoc = null;
+    try {
+      const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+      if (Ctor) {
+        const parser = new Ctor();
+        newDoc = parser.parseFromString(html, "text/html");
+        if (newDoc) {
+          newDoc._mutable = true;
+          try {
+            Object.defineProperty(newDoc, "_baseUrl", {
+              value: resolvedUrl,
+              configurable: true,
+              writable: true,
+            });
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
+    if (newDoc) {
+      if (iframeEl._contentWindow) {
+        iframeEl._contentWindow.document = newDoc;
+        try {
+          Object.defineProperty(newDoc, "defaultView", {
+            value: iframeEl._contentWindow,
+            configurable: true,
+          });
+        } catch (e) {}
+      }
+      iframeEl._contentDocument = newDoc;
+      if (iframeEl._contentWindow) {
+        executeIframeInlineScripts(iframeEl._contentWindow, newDoc);
+      }
+    }
+  }
+
   function handleIframeNavigation(iframeEl, resolvedUrl) {
     if (!iframeEl) return;
 
@@ -1367,57 +1454,28 @@ function installHtmlClasses(global) {
       return;
     }
 
-    let loadPromise = null;
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
       const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
       if (fixtureHtml !== null && fixtureHtml !== undefined) {
-        loadPromise = Promise.resolve(fixtureHtml);
+        applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
+        Promise.resolve().then(function () {
+          fireIframeLoadEvent(iframeEl);
+        });
+        return;
       }
     }
 
-    if (!loadPromise) {
-      if (typeof fetch === "function") {
-        loadPromise = fetch(resolvedUrl).then(function (res) {
-          return res.text();
-        });
-      } else {
-        loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
-      }
+    let loadPromise = null;
+    if (typeof fetch === "function") {
+      loadPromise = fetch(resolvedUrl).then(function (res) {
+        return res.text();
+      });
+    } else {
+      loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
     }
 
     loadPromise.then(function (html) {
-      let newDoc = null;
-      try {
-        const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
-        if (Ctor) {
-          const parser = new Ctor();
-          newDoc = parser.parseFromString(html, "text/html");
-          if (newDoc) {
-            newDoc._mutable = true;
-            try {
-              Object.defineProperty(newDoc, "_baseUrl", {
-                value: resolvedUrl,
-                configurable: true,
-                writable: true,
-              });
-            } catch (e) {}
-          }
-        }
-      } catch (e) {}
-
-      if (newDoc) {
-        if (iframeEl._contentWindow) {
-          iframeEl._contentWindow.document = newDoc;
-          try {
-            Object.defineProperty(newDoc, "defaultView", {
-              value: iframeEl._contentWindow,
-              configurable: true,
-            });
-          } catch (e) {}
-        }
-        iframeEl._contentDocument = newDoc;
-      }
-
+      applyLoadedIframeHtml(iframeEl, resolvedUrl, html);
       fireIframeLoadEvent(iframeEl);
     }).catch(function () {
       fireIframeLoadEvent(iframeEl);
@@ -1464,10 +1522,12 @@ function installHtmlClasses(global) {
 
     const initialDoc = createIframePlaceholderDoc(initialUrl);
 
+    const parentWin = (iframeEl && iframeEl.ownerDocument && iframeEl.ownerDocument.defaultView) || global.window || global;
+    const frameListeners = new Map();
     const contentWindow = {
       document: initialDoc,
-      parent: global.window || global,
-      top: (global.window && global.window.top) || global,
+      parent: parentWin,
+      top: (parentWin && parentWin.top) || (global.window && global.window.top) || global,
       frames: [],
       frameElement: iframeEl,
       name: (function () {
@@ -1477,9 +1537,54 @@ function installHtmlClasses(global) {
           return "";
         }
       })(),
-      addEventListener: function () {},
-      removeEventListener: function () {},
-      dispatchEvent: function () { return true; },
+      addEventListener: function (type, listener, options) {
+        if (!listener || (typeof listener !== "function" && typeof listener.handleEvent !== "function")) return;
+        const t = String(type);
+        let list = frameListeners.get(t);
+        if (!list) {
+          list = [];
+          frameListeners.set(t, list);
+        }
+        const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+        const once = Boolean(options && typeof options === "object" && options.once);
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].listener === listener && list[i].capture === capture) return;
+        }
+        list.push({ listener: listener, capture: capture, once: once });
+      },
+      removeEventListener: function (type, listener, options) {
+        const t = String(type);
+        const list = frameListeners.get(t);
+        if (!list) return;
+        const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].listener === listener && list[i].capture === capture) {
+            list.splice(i, 1);
+            return;
+          }
+        }
+      },
+      dispatchEvent: function (evt) {
+        if (!evt || !evt.type) return true;
+        const list = frameListeners.get(String(evt.type));
+        if (!list || list.length === 0) return !evt.defaultPrevented;
+        const snapshot = list.slice();
+        for (let i = 0; i < snapshot.length; i++) {
+          const item = snapshot[i];
+          if (item.once) {
+            const idx = list.indexOf(item);
+            if (idx >= 0) list.splice(idx, 1);
+          }
+          try {
+            if (typeof item.listener === "function") {
+              item.listener.call(contentWindow, evt);
+            } else if (item.listener && typeof item.listener.handleEvent === "function") {
+              item.listener.handleEvent(evt);
+            }
+          } catch (e) {}
+        }
+        return !evt.defaultPrevented;
+      },
     };
 
     contentWindow.self = contentWindow;
@@ -1497,7 +1602,15 @@ function installHtmlClasses(global) {
       } catch (e) {}
     }
 
-    contentWindow.postMessage = function () {};
+    contentWindow.postMessage = function (message, targetOrigin) {
+      const fn = global.__capsurf_postMessage || (typeof globalThis !== "undefined" && globalThis.__capsurf_postMessage);
+      if (typeof fn === "function") {
+        if (arguments.length >= 2) {
+          return fn(contentWindow, message, targetOrigin);
+        }
+        return fn(contentWindow, message);
+      }
+    };
 
     iframeEl._contentWindow = contentWindow;
     iframeEl._contentDocument = initialDoc;
@@ -1508,6 +1621,9 @@ function installHtmlClasses(global) {
 
     return contentWindow;
   }
+
+  global.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
 
   function HTMLIFrameElement() {}
   HTMLIFrameElement.prototype = Object.create(HTMLElementProto);

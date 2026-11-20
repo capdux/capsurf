@@ -3802,6 +3802,10 @@
       configurable: true,
     });
     CSSStyleDeclaration.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+    Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
+      value: "CSSStyleDeclaration",
+      configurable: true,
+    });
     markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
 
     let _CSSStyleDeclaration = CSSStyleDeclaration;
@@ -3878,7 +3882,12 @@
       }
 
       const decl = Object.create(CSSStyleDeclaration.prototype);
-      decl._isCSSStyleDeclaration = true;
+      Object.defineProperty(decl, "_isCSSStyleDeclaration", {
+        value: true,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
 
       Object.defineProperty(decl, "length", {
         get: function () { return data.size; },
@@ -3890,15 +3899,20 @@
         configurable: true,
       });
 
-      decl.item = function (index) {
-        const idx = Number(index) >>> 0;
-        let keys = authoredOrder;
-        if (context === "font-face") {
-          keys = Array.from(data.keys()).sort();
-        }
-        const k = keys[idx];
-        return k != null ? (data.get(k)?.name || k) : "";
-      };
+      Object.defineProperty(decl, "item", {
+        value: function (index) {
+          const idx = Number(index) >>> 0;
+          let keys = authoredOrder;
+          if (context === "font-face") {
+            keys = Array.from(data.keys()).sort();
+          }
+          const k = keys[idx];
+          return k != null ? (data.get(k)?.name || k) : "";
+        },
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
 
       decl.getPropertyValue = function (prop) {
         const p = String(prop).trim();
@@ -4132,16 +4146,31 @@
           if (!pStr.includes("-") && /^(?:moz|ms|o)[A-Z]/.test(pStr)) return false;
           return isCssPropertySupported(pStr);
         },
-        ownKeys: function () {
+        ownKeys: function (target) {
           let keys = authoredOrder;
           if (context === "font-face") keys = Array.from(data.keys()).sort();
-          return keys.slice();
+          const out = keys.slice();
+          const seen = new Set(out);
+          const own = Reflect.ownKeys(target);
+          for (let i = 0; i < own.length; i++) {
+            const k = own[i];
+            if (!seen.has(k)) {
+              seen.add(k);
+              out.push(k);
+            }
+          }
+          return out;
         },
         getOwnPropertyDescriptor: function (target, prop) {
+          const own = Reflect.getOwnPropertyDescriptor(target, prop);
+          if (own) return own;
           if (typeof prop === "string" && data.has(prop)) {
             return { value: data.get(prop).value, writable: true, enumerable: true, configurable: true };
           }
-          return Reflect.getOwnPropertyDescriptor(target, prop);
+          return undefined;
+        },
+        preventExtensions: function () {
+          return false;
         }
       });
     }
@@ -5650,6 +5679,73 @@
 
     let _capturedGetComputedStyle = null;
 
+    function serializeComputedTransform(val) {
+      if (!val || typeof val !== "string") return val;
+      const trimmed = val.trim();
+      if (!trimmed || trimmed === "none" || /^matrix(?:3d)?\(/i.test(trimmed)) return trimmed;
+      let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
+      const mul = function (ma, mb, mc, md, me, mf) {
+        const na = a * ma + c * mb;
+        const nb = b * ma + d * mb;
+        const nc = a * mc + c * md;
+        const nd = b * mc + d * md;
+        const ne = a * me + c * mf + e;
+        const nf = b * me + d * mf + f;
+        a = na; b = nb; c = nc; d = nd; e = ne; f = nf;
+      };
+      const fnRe = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
+      let m;
+      let matched = false;
+      while ((m = fnRe.exec(trimmed)) !== null) {
+        const fn = m[1].toLowerCase();
+        const args = m[2].split(",").map((s) => s.trim()).filter(Boolean);
+        if (fn === "scale") {
+          const sx = parseFloat(args[0]);
+          const sy = args.length > 1 ? parseFloat(args[1]) : sx;
+          if (!isNaN(sx) && !isNaN(sy)) { mul(sx, 0, 0, sy, 0, 0); matched = true; }
+        } else if (fn === "scalex") {
+          const sx = parseFloat(args[0]);
+          if (!isNaN(sx)) { mul(sx, 0, 0, 1, 0, 0); matched = true; }
+        } else if (fn === "scaley") {
+          const sy = parseFloat(args[0]);
+          if (!isNaN(sy)) { mul(1, 0, 0, sy, 0, 0); matched = true; }
+        } else if (fn === "translate") {
+          const tx = parseFloat(args[0]) || 0;
+          const ty = args.length > 1 ? (parseFloat(args[1]) || 0) : 0;
+          mul(1, 0, 0, 1, tx, ty); matched = true;
+        } else if (fn === "translatex") {
+          const tx = parseFloat(args[0]) || 0;
+          mul(1, 0, 0, 1, tx, 0); matched = true;
+        } else if (fn === "translatey") {
+          const ty = parseFloat(args[0]) || 0;
+          mul(1, 0, 0, 1, 0, ty); matched = true;
+        } else if (fn === "rotate") {
+          const raw = args[0] || "0";
+          let rad = parseFloat(raw) || 0;
+          if (raw.endsWith("deg")) rad = rad * Math.PI / 180;
+          else if (raw.endsWith("turn")) rad = rad * Math.PI * 2;
+          else if (raw.endsWith("grad")) rad = rad * Math.PI / 200;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          mul(cos, sin, -sin, cos, 0, 0); matched = true;
+        } else if (fn === "matrix" && args.length >= 6) {
+          const nums = args.map(parseFloat);
+          if (nums.every((n) => !isNaN(n))) {
+            mul(nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]);
+            matched = true;
+          }
+        } else {
+          return trimmed;
+        }
+      }
+      if (!matched) return trimmed;
+      const fmt = (n) => {
+        if (Math.abs(n) < 1e-12) return "0";
+        return String(Number(n.toFixed(6)));
+      };
+      return "matrix(" + [a, b, c, d, e, f].map(fmt).join(", ") + ")";
+    }
+
     function wrapComputedStyleDecl(decl, element) {
       if (!decl || typeof decl !== "object") return decl;
       return new Proxy(decl, {
@@ -5658,8 +5754,21 @@
           if (typeof prop === "string") {
             if (prop === "getPropertyValue") {
               return function (propertyName) {
-                const k = cssPropCamelToKebab(String(propertyName || "").trim());
+                const rawName = String(propertyName || "").trim();
+                const k = cssPropCamelToKebab(rawName);
+                if (k === "-webkit-transform" || k === "transform") {
+                  let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
+                  if (tv) {
+                    tv = resolveCssVars(element, tv);
+                    tv = serializeComputedTransform(tv);
+                  }
+                  return tv || "";
+                }
                 let val = receiver[k] || (target.getPropertyValue ? target.getPropertyValue(propertyName) : "");
+                if (!val && (k.startsWith("-webkit-") || k.startsWith("-moz-"))) {
+                  const unprefixed = k.replace(/^-(?:webkit|moz)-/, "");
+                  val = receiver[unprefixed] || (target.getPropertyValue ? target.getPropertyValue(unprefixed) : "");
+                }
                 if (typeof val === "string") {
                   val = resolveCssVars(element, val);
                   val = normalizeCssColor(val);
@@ -5670,11 +5779,13 @@
             if (prop === "cssFloat" || prop === "float") {
               return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
             }
-            if (prop === "webkitTransform") {
-              return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
-            }
-            if (prop === "transform") {
-              return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+            if (prop === "webkitTransform" || prop === "-webkit-transform" || prop === "transform") {
+              let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
+              if (tv) {
+                tv = resolveCssVars(element, tv);
+                tv = serializeComputedTransform(tv);
+              }
+              return tv || "";
             }
             const kebab = cssPropCamelToKebab(prop);
 
@@ -5765,14 +5876,22 @@
     }
     markNative(enhancedGetComputedStyle, "getComputedStyle");
 
+    let _overrideGetComputedStyle = null;
+
     function installGetComputedStyle(targetObj) {
       if (!targetObj) return;
       Object.defineProperty(targetObj, "getComputedStyle", {
         get: function () {
+          if (_overrideGetComputedStyle !== null) return _overrideGetComputedStyle;
           return _capturedGetComputedStyle ? enhancedGetComputedStyle : undefined;
         },
         set: function (fn) {
-          _capturedGetComputedStyle = fn;
+          if (fn === enhancedGetComputedStyle || fn === _capturedGetComputedStyle) return;
+          if (_capturedGetComputedStyle === null && typeof fn === "function") {
+            _capturedGetComputedStyle = fn;
+          } else {
+            _overrideGetComputedStyle = fn;
+          }
         },
         configurable: true,
         enumerable: true,
@@ -7711,6 +7830,45 @@
         if (typeof globalThis !== "undefined" && typeof globalThis.__isCssPropertySupported === "function") {
           return globalThis.__isCssPropertySupported(pStr);
         }
+        return false;
+      },
+      ownKeys: function (target) {
+        const map = parseStyleMap();
+        const keys = [];
+        const seen = new Set();
+        for (const [k, entry] of map.entries()) {
+          const name = entry && entry.name ? entry.name : k;
+          if (!seen.has(name)) {
+            seen.add(name);
+            keys.push(name);
+          }
+        }
+        const targetKeys = Reflect.ownKeys(target);
+        for (let i = 0; i < targetKeys.length; i++) {
+          const k = targetKeys[i];
+          if (!seen.has(k)) {
+            seen.add(k);
+            keys.push(k);
+          }
+        }
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (target, prop) {
+        const own = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (own) return own;
+        if (typeof prop === "string") {
+          const map = parseStyleMap();
+          if (map.has(prop)) {
+            return { value: map.get(prop).value, writable: true, enumerable: true, configurable: true };
+          }
+          const lower = prop.startsWith("--") ? prop : prop.toLowerCase();
+          if (map.has(lower)) {
+            return { value: map.get(lower).value, writable: true, enumerable: true, configurable: true };
+          }
+        }
+        return undefined;
+      },
+      preventExtensions: function () {
         return false;
       }
     });
@@ -9857,6 +10015,26 @@
       configurable: true,
     });
 
+    Object.defineProperty(proto, "writingSuggestions", {
+      get: function () {
+        let cur = this;
+        while (cur && cur.nodeType === 1) {
+          if (typeof cur.hasAttribute === "function" && cur.hasAttribute("writingsuggestions")) {
+            const raw = cur.getAttribute("writingsuggestions");
+            return String(raw == null ? "" : raw).toLowerCase() === "false" ? "false" : "true";
+          }
+          cur = cur.parentElement || cur.parentNode;
+        }
+        return "true";
+      },
+      set: function (v) {
+        if (typeof this.setAttribute === "function") {
+          this.setAttribute("writingsuggestions", String(v));
+        }
+      },
+      configurable: true,
+    });
+
     if (!proto.click) {
       proto.click = function () {
         const evt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
@@ -11283,6 +11461,93 @@
       return doc;
     }
 
+    function executeIframeInlineScripts(win, doc) {
+      if (!win || !doc) return;
+      const scripts = [];
+      function collect(node) {
+        if (!node) return;
+        if (node.nodeType === 1 && String(node.tagName || node.localName || "").toLowerCase() === "script") {
+          scripts.push(node);
+          return;
+        }
+        const kids = node._children || node.childNodes || [];
+        for (let i = 0; i < kids.length; i++) {
+          collect(kids[i]);
+        }
+      }
+      collect(doc);
+      const stack = global.__capsurf_active_window_stack;
+      for (let i = 0; i < scripts.length; i++) {
+        const sc = scripts[i];
+        if (sc.getAttribute && sc.getAttribute("src")) continue;
+        const code = sc.textContent || "";
+        if (!code.trim()) continue;
+        if (Array.isArray(stack)) stack.push(win);
+        try {
+          const fn = new Function(
+            "window", "document", "location", "fetch", "self", "globalThis",
+            "addEventListener", "removeEventListener", "postMessage",
+            code
+          );
+          fn.call(
+            win,
+            win,
+            doc,
+            win.location,
+            win.fetch,
+            win,
+            win,
+            win.addEventListener.bind(win),
+            win.removeEventListener.bind(win),
+            win.postMessage.bind(win)
+          );
+        } catch (e) {
+          if (typeof console !== "undefined" && console.error) {
+            try { console.error(e); } catch (_) {}
+          }
+        } finally {
+          if (Array.isArray(stack)) stack.pop();
+        }
+      }
+    }
+
+    function applyLoadedIframeHtml(iframeEl, resolvedUrl, html) {
+      let newDoc = null;
+      try {
+        const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
+        if (Ctor) {
+          const parser = new Ctor();
+          newDoc = parser.parseFromString(html, "text/html");
+          if (newDoc) {
+            newDoc._mutable = true;
+            try {
+              Object.defineProperty(newDoc, "_baseUrl", {
+                value: resolvedUrl,
+                configurable: true,
+                writable: true,
+              });
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+
+      if (newDoc) {
+        if (iframeEl._contentWindow) {
+          iframeEl._contentWindow.document = newDoc;
+          try {
+            Object.defineProperty(newDoc, "defaultView", {
+              value: iframeEl._contentWindow,
+              configurable: true,
+            });
+          } catch (e) {}
+        }
+        iframeEl._contentDocument = newDoc;
+        if (iframeEl._contentWindow) {
+          executeIframeInlineScripts(iframeEl._contentWindow, newDoc);
+        }
+      }
+    }
+
     function handleIframeNavigation(iframeEl, resolvedUrl) {
       if (!iframeEl) return;
 
@@ -11306,57 +11571,28 @@
         return;
       }
 
-      let loadPromise = null;
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
         const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
         if (fixtureHtml !== null && fixtureHtml !== undefined) {
-          loadPromise = Promise.resolve(fixtureHtml);
+          applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
+          Promise.resolve().then(function () {
+            fireIframeLoadEvent(iframeEl);
+          });
+          return;
         }
       }
 
-      if (!loadPromise) {
-        if (typeof fetch === "function") {
-          loadPromise = fetch(resolvedUrl).then(function (res) {
-            return res.text();
-          });
-        } else {
-          loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
-        }
+      let loadPromise = null;
+      if (typeof fetch === "function") {
+        loadPromise = fetch(resolvedUrl).then(function (res) {
+          return res.text();
+        });
+      } else {
+        loadPromise = Promise.resolve("<!doctype html><html><head></head><body></body></html>");
       }
 
       loadPromise.then(function (html) {
-        let newDoc = null;
-        try {
-          const Ctor = global.DOMParser || (typeof DOMParser !== "undefined" ? DOMParser : null);
-          if (Ctor) {
-            const parser = new Ctor();
-            newDoc = parser.parseFromString(html, "text/html");
-            if (newDoc) {
-              newDoc._mutable = true;
-              try {
-                Object.defineProperty(newDoc, "_baseUrl", {
-                  value: resolvedUrl,
-                  configurable: true,
-                  writable: true,
-                });
-              } catch (e) {}
-            }
-          }
-        } catch (e) {}
-
-        if (newDoc) {
-          if (iframeEl._contentWindow) {
-            iframeEl._contentWindow.document = newDoc;
-            try {
-              Object.defineProperty(newDoc, "defaultView", {
-                value: iframeEl._contentWindow,
-                configurable: true,
-              });
-            } catch (e) {}
-          }
-          iframeEl._contentDocument = newDoc;
-        }
-
+        applyLoadedIframeHtml(iframeEl, resolvedUrl, html);
         fireIframeLoadEvent(iframeEl);
       }).catch(function () {
         fireIframeLoadEvent(iframeEl);
@@ -11403,10 +11639,12 @@
 
       const initialDoc = createIframePlaceholderDoc(initialUrl);
 
+      const parentWin = (iframeEl && iframeEl.ownerDocument && iframeEl.ownerDocument.defaultView) || global.window || global;
+      const frameListeners = new Map();
       const contentWindow = {
         document: initialDoc,
-        parent: global.window || global,
-        top: (global.window && global.window.top) || global,
+        parent: parentWin,
+        top: (parentWin && parentWin.top) || (global.window && global.window.top) || global,
         frames: [],
         frameElement: iframeEl,
         name: (function () {
@@ -11416,9 +11654,54 @@
             return "";
           }
         })(),
-        addEventListener: function () {},
-        removeEventListener: function () {},
-        dispatchEvent: function () { return true; },
+        addEventListener: function (type, listener, options) {
+          if (!listener || (typeof listener !== "function" && typeof listener.handleEvent !== "function")) return;
+          const t = String(type);
+          let list = frameListeners.get(t);
+          if (!list) {
+            list = [];
+            frameListeners.set(t, list);
+          }
+          const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+          const once = Boolean(options && typeof options === "object" && options.once);
+          for (let i = 0; i < list.length; i++) {
+            if (list[i].listener === listener && list[i].capture === capture) return;
+          }
+          list.push({ listener: listener, capture: capture, once: once });
+        },
+        removeEventListener: function (type, listener, options) {
+          const t = String(type);
+          const list = frameListeners.get(t);
+          if (!list) return;
+          const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+          for (let i = 0; i < list.length; i++) {
+            if (list[i].listener === listener && list[i].capture === capture) {
+              list.splice(i, 1);
+              return;
+            }
+          }
+        },
+        dispatchEvent: function (evt) {
+          if (!evt || !evt.type) return true;
+          const list = frameListeners.get(String(evt.type));
+          if (!list || list.length === 0) return !evt.defaultPrevented;
+          const snapshot = list.slice();
+          for (let i = 0; i < snapshot.length; i++) {
+            const item = snapshot[i];
+            if (item.once) {
+              const idx = list.indexOf(item);
+              if (idx >= 0) list.splice(idx, 1);
+            }
+            try {
+              if (typeof item.listener === "function") {
+                item.listener.call(contentWindow, evt);
+              } else if (item.listener && typeof item.listener.handleEvent === "function") {
+                item.listener.handleEvent(evt);
+              }
+            } catch (e) {}
+          }
+          return !evt.defaultPrevented;
+        },
       };
 
       contentWindow.self = contentWindow;
@@ -11436,7 +11719,15 @@
         } catch (e) {}
       }
 
-      contentWindow.postMessage = function () {};
+      contentWindow.postMessage = function (message, targetOrigin) {
+        const fn = global.__capsurf_postMessage || (typeof globalThis !== "undefined" && globalThis.__capsurf_postMessage);
+        if (typeof fn === "function") {
+          if (arguments.length >= 2) {
+            return fn(contentWindow, message, targetOrigin);
+          }
+          return fn(contentWindow, message);
+        }
+      };
 
       iframeEl._contentWindow = contentWindow;
       iframeEl._contentDocument = initialDoc;
@@ -11447,6 +11738,9 @@
 
       return contentWindow;
     }
+
+    global.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
 
     function HTMLIFrameElement() {}
     HTMLIFrameElement.prototype = Object.create(HTMLElementProto);
@@ -18441,7 +18735,26 @@
   });
 
   ParsedDocument.prototype.createElement = function (tagName) {
-    return new ParsedElement(tagName, this);
+    const el = new ParsedElement(tagName, this);
+    if (String(tagName).toLowerCase() === "iframe") {
+      Object.defineProperty(el, "contentWindow", {
+        get: function () {
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getOrCreateIframeWindow === "function") {
+            return globalThis.__capsurf_getOrCreateIframeWindow(this);
+          }
+          return null;
+        },
+        configurable: true,
+      });
+      Object.defineProperty(el, "contentDocument", {
+        get: function () {
+          const win = this.contentWindow;
+          return (win && win.document) || this._contentDocument || null;
+        },
+        configurable: true,
+      });
+    }
+    return el;
   };
 
   ParsedDocument.prototype.createTextNode = function (text) {
@@ -24509,6 +24822,10 @@
 
     // 10. CSSOM getComputedStyle & CSSStyleDeclaration
     function CSSStyleDeclaration() {}
+    Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
+      value: "CSSStyleDeclaration",
+      configurable: true,
+    });
     markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
 
     function splitCssDeclarations(block) {
@@ -24929,6 +25246,9 @@
             const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
             if (computedMap.has(kebab)) return true;
           }
+          return false;
+        },
+        preventExtensions: function () {
           return false;
         },
       });
@@ -26109,15 +26429,151 @@
       globalThis.__capsurf_dispatch_key_event = dispatchKeyEvent;
     }
 
+    const activeWindowStack = [];
+    global.__capsurf_active_window_stack = activeWindowStack;
+
+    function getWindowOrigin(win) {
+      try {
+        const loc = win && win.location;
+        if (loc) {
+          if (typeof loc.origin === "string" && loc.origin && loc.origin !== "about:") {
+            return loc.origin;
+          }
+          if (typeof loc.href === "string" && loc.href) {
+            const u = new HistoryURL(loc.href);
+            return u.origin || "null";
+          }
+        }
+        const doc = win && win.document;
+        if (doc && typeof doc._baseUrl === "string" && doc._baseUrl) {
+          const u = new HistoryURL(doc._baseUrl);
+          return u.origin || "null";
+        }
+      } catch (e) {}
+      return "null";
+    }
+
+    function clonePostMessageData(data) {
+      if (data === null || data === undefined || typeof data !== "object") return data;
+      if (typeof structuredClone === "function") {
+        try { return structuredClone(data); } catch (e) {}
+      }
+      try {
+        return JSON.parse(JSON.stringify(data));
+      } catch (e) {
+        return data;
+      }
+    }
+
+    function dispatchPostMessage(targetWin, message, targetOriginOrOptions) {
+      if (!targetWin) return;
+      const senderWin = activeWindowStack.length > 0
+        ? activeWindowStack[activeWindowStack.length - 1]
+        : (typeof window !== "undefined" ? window : global);
+      const senderOrigin = getWindowOrigin(senderWin);
+      let targetOrigin = "/";
+      if (targetOriginOrOptions && typeof targetOriginOrOptions === "object") {
+        targetOrigin = targetOriginOrOptions.targetOrigin !== undefined ? String(targetOriginOrOptions.targetOrigin) : "/";
+      } else if (arguments.length >= 3 && targetOriginOrOptions !== undefined) {
+        targetOrigin = String(targetOriginOrOptions);
+      }
+
+      const receiverOrigin = getWindowOrigin(targetWin);
+      if (targetOrigin === "*") {
+        // Allow any target origin
+      } else if (targetOrigin === "/") {
+        if (senderOrigin === "null" || receiverOrigin !== senderOrigin) return;
+      } else {
+        let parsedTargetOrigin = null;
+        try {
+          parsedTargetOrigin = new HistoryURL(targetOrigin).origin;
+        } catch (e) {
+          throw new DOMException(
+            "Failed to execute 'postMessage' on 'Window': Invalid target origin '" + targetOrigin + "' in a call to 'postMessage'.",
+            "SyntaxError"
+          );
+        }
+        if (!parsedTargetOrigin || parsedTargetOrigin === "null" || receiverOrigin !== parsedTargetOrigin) {
+          return;
+        }
+      }
+
+      const cloned = clonePostMessageData(message);
+      Promise.resolve().then(function () {
+        try {
+          const evt = new MessageEvent("message", {
+            data: cloned,
+            origin: senderOrigin,
+            source: senderWin,
+          });
+          activeWindowStack.push(targetWin);
+          try {
+            if (typeof targetWin.dispatchEvent === "function") {
+              targetWin.dispatchEvent(evt);
+            }
+            if (typeof targetWin.onmessage === "function") {
+              targetWin.onmessage.call(targetWin, evt);
+            }
+          } finally {
+            activeWindowStack.pop();
+          }
+        } catch (e) {}
+      });
+    }
+
+    global.__capsurf_postMessage = dispatchPostMessage;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_postMessage = dispatchPostMessage;
+
+    function windowPostMessage(message, targetOriginOrOptions) {
+      const target = (this && typeof this.dispatchEvent === "function")
+        ? this
+        : (typeof window !== "undefined" ? window : global);
+      if (arguments.length >= 2) {
+        return dispatchPostMessage(target, message, targetOriginOrOptions);
+      }
+      return dispatchPostMessage(target, message);
+    }
+    markNative(windowPostMessage, "postMessage");
+    global.postMessage = windowPostMessage;
+    if (typeof window !== "undefined") window.postMessage = windowPostMessage;
+    if (typeof globalThis !== "undefined") globalThis.postMessage = windowPostMessage;
+
     function evalInIframe(expr) {
       const iframeEl = document.querySelector("iframe");
       const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
+      activeWindowStack.push(win);
       try {
-        const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "return (" + expr + ");");
-        return fn.call(win, win, win.document, win.location, win.fetch, win, win);
-      } catch (e) {
-        const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", expr);
-        return stmtFn.call(win, win, win.document, win.location, win.fetch, win, win);
+        try {
+          const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", "return (" + expr + ");");
+          return fn.call(
+            win,
+            win,
+            win.document,
+            win.location,
+            win.fetch,
+            win,
+            win,
+            win.addEventListener.bind(win),
+            win.removeEventListener.bind(win),
+            win.postMessage.bind(win)
+          );
+        } catch (e) {
+          const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", expr);
+          return stmtFn.call(
+            win,
+            win,
+            win.document,
+            win.location,
+            win.fetch,
+            win,
+            win,
+            win.addEventListener.bind(win),
+            win.removeEventListener.bind(win),
+            win.postMessage.bind(win)
+          );
+        }
+      } finally {
+        activeWindowStack.pop();
       }
     }
     global.__capsurf_eval_in_iframe = evalInIframe;

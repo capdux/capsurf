@@ -1612,4 +1612,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`boa-bridge-fidelity` (2/2) + `boa-long-comma-chain` (1/1) + `boa-null-base-message` (1/1) PASS；完成全部 Boa 专有指标套件归档与 `boa-import-meta-url` 内核缺口定位。
+
+## Phase 74: Window `postMessage`, CSSOM Proxy Invariants, Vendor Prefixes & `writingSuggestions` — 10 Suites (100% Closed)
+- **`src/js/shim/{cssom,window,parser,element/element,element/html-element,element/html-classes}.js`**：
+  - 补齐 `CSSStyleDeclaration` Proxy traps（`ownKeys`/`getOwnPropertyDescriptor`/`preventExtensions`）、2D `matrix()` 序列化、`-webkit-`/`-moz-` 属性别名与 `installGetComputedStyle` 防递归；
+  - 实装 WHATWG `window.postMessage`（origin 校验 + 嵌套 iframe `contentWindow` 独立事件）与 `HTMLElement.prototype.writingSuggestions`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：10 项 Window/CSSOM Core E2E 套件共 **20/20 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

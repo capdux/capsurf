@@ -1255,4 +1255,10 @@
    - 补齐 `URLSearchParams` 全套增删改查与迭代器接口并挂载至 `URL.prototype.searchParams`；将所有 `getBoundingClientRect()` 返回值包装为带 `toJSON()` 的标准 `DOMRect` 实例。
 2. **Boa-Wasm/V8 架构专有测试边界厘清**：
    - 确认剩余 6 项 `boa-*` 套件依赖 Kitesurf 特有的 V8-Boa 双引擎重入与 Wasm 堆统计指标，仅有 `boa-import-meta-url` 为 QuickJS `JS_GetImportMeta` 功能缺口，排入纯 CP 内核后续闭环。
+
+## Phase 74 CSSOM Proxy 不变量、2D 变换序列化与跨 Iframe `postMessage` 技术方案
+1. **CSSOM Proxy 不变量与前缀映射 (`cssom.js`, `element.js`)**：
+   - 在 `createStyleProxy` 与 `makeRuleStyleDeclaration` 实装 `ownKeys`/`getOwnPropertyDescriptor`/`preventExtensions` 满足 WebIDL `Object.freeze` 契约；新增 2D transform `matrix()` 序列化与 `-webkit-`/`-moz-` 属性回退，并将覆写槽从 `_capturedGetComputedStyle` 分离根除二次包装栈溢出。
+2. **多窗口 `postMessage` 与 `writingSuggestions` (`window.js`, `html-classes.js`, `parser.js`)**：
+   - 维护 `__capsurf_active_window_stack` 追踪发起窗口与 origin，在 `contentWindow` 隔离事件监听与嵌套 iframe 创建，实现 WHATWG 标准跨窗口 `MessageEvent` 投递。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

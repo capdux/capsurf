@@ -2747,6 +2747,10 @@ function installWindow(global) {
 
   // 10. CSSOM getComputedStyle & CSSStyleDeclaration
   function CSSStyleDeclaration() {}
+  Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
+    value: "CSSStyleDeclaration",
+    configurable: true,
+  });
   markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
 
   function splitCssDeclarations(block) {
@@ -3167,6 +3171,9 @@ function installWindow(global) {
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
           if (computedMap.has(kebab)) return true;
         }
+        return false;
+      },
+      preventExtensions: function () {
         return false;
       },
     });
@@ -4347,15 +4354,151 @@ function installWindow(global) {
     globalThis.__capsurf_dispatch_key_event = dispatchKeyEvent;
   }
 
+  const activeWindowStack = [];
+  global.__capsurf_active_window_stack = activeWindowStack;
+
+  function getWindowOrigin(win) {
+    try {
+      const loc = win && win.location;
+      if (loc) {
+        if (typeof loc.origin === "string" && loc.origin && loc.origin !== "about:") {
+          return loc.origin;
+        }
+        if (typeof loc.href === "string" && loc.href) {
+          const u = new HistoryURL(loc.href);
+          return u.origin || "null";
+        }
+      }
+      const doc = win && win.document;
+      if (doc && typeof doc._baseUrl === "string" && doc._baseUrl) {
+        const u = new HistoryURL(doc._baseUrl);
+        return u.origin || "null";
+      }
+    } catch (e) {}
+    return "null";
+  }
+
+  function clonePostMessageData(data) {
+    if (data === null || data === undefined || typeof data !== "object") return data;
+    if (typeof structuredClone === "function") {
+      try { return structuredClone(data); } catch (e) {}
+    }
+    try {
+      return JSON.parse(JSON.stringify(data));
+    } catch (e) {
+      return data;
+    }
+  }
+
+  function dispatchPostMessage(targetWin, message, targetOriginOrOptions) {
+    if (!targetWin) return;
+    const senderWin = activeWindowStack.length > 0
+      ? activeWindowStack[activeWindowStack.length - 1]
+      : (typeof window !== "undefined" ? window : global);
+    const senderOrigin = getWindowOrigin(senderWin);
+    let targetOrigin = "/";
+    if (targetOriginOrOptions && typeof targetOriginOrOptions === "object") {
+      targetOrigin = targetOriginOrOptions.targetOrigin !== undefined ? String(targetOriginOrOptions.targetOrigin) : "/";
+    } else if (arguments.length >= 3 && targetOriginOrOptions !== undefined) {
+      targetOrigin = String(targetOriginOrOptions);
+    }
+
+    const receiverOrigin = getWindowOrigin(targetWin);
+    if (targetOrigin === "*") {
+      // Allow any target origin
+    } else if (targetOrigin === "/") {
+      if (senderOrigin === "null" || receiverOrigin !== senderOrigin) return;
+    } else {
+      let parsedTargetOrigin = null;
+      try {
+        parsedTargetOrigin = new HistoryURL(targetOrigin).origin;
+      } catch (e) {
+        throw new DOMException(
+          "Failed to execute 'postMessage' on 'Window': Invalid target origin '" + targetOrigin + "' in a call to 'postMessage'.",
+          "SyntaxError"
+        );
+      }
+      if (!parsedTargetOrigin || parsedTargetOrigin === "null" || receiverOrigin !== parsedTargetOrigin) {
+        return;
+      }
+    }
+
+    const cloned = clonePostMessageData(message);
+    Promise.resolve().then(function () {
+      try {
+        const evt = new MessageEvent("message", {
+          data: cloned,
+          origin: senderOrigin,
+          source: senderWin,
+        });
+        activeWindowStack.push(targetWin);
+        try {
+          if (typeof targetWin.dispatchEvent === "function") {
+            targetWin.dispatchEvent(evt);
+          }
+          if (typeof targetWin.onmessage === "function") {
+            targetWin.onmessage.call(targetWin, evt);
+          }
+        } finally {
+          activeWindowStack.pop();
+        }
+      } catch (e) {}
+    });
+  }
+
+  global.__capsurf_postMessage = dispatchPostMessage;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_postMessage = dispatchPostMessage;
+
+  function windowPostMessage(message, targetOriginOrOptions) {
+    const target = (this && typeof this.dispatchEvent === "function")
+      ? this
+      : (typeof window !== "undefined" ? window : global);
+    if (arguments.length >= 2) {
+      return dispatchPostMessage(target, message, targetOriginOrOptions);
+    }
+    return dispatchPostMessage(target, message);
+  }
+  markNative(windowPostMessage, "postMessage");
+  global.postMessage = windowPostMessage;
+  if (typeof window !== "undefined") window.postMessage = windowPostMessage;
+  if (typeof globalThis !== "undefined") globalThis.postMessage = windowPostMessage;
+
   function evalInIframe(expr) {
     const iframeEl = document.querySelector("iframe");
     const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
+    activeWindowStack.push(win);
     try {
-      const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "return (" + expr + ");");
-      return fn.call(win, win, win.document, win.location, win.fetch, win, win);
-    } catch (e) {
-      const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", expr);
-      return stmtFn.call(win, win, win.document, win.location, win.fetch, win, win);
+      try {
+        const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", "return (" + expr + ");");
+        return fn.call(
+          win,
+          win,
+          win.document,
+          win.location,
+          win.fetch,
+          win,
+          win,
+          win.addEventListener.bind(win),
+          win.removeEventListener.bind(win),
+          win.postMessage.bind(win)
+        );
+      } catch (e) {
+        const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", expr);
+        return stmtFn.call(
+          win,
+          win,
+          win.document,
+          win.location,
+          win.fetch,
+          win,
+          win,
+          win.addEventListener.bind(win),
+          win.removeEventListener.bind(win),
+          win.postMessage.bind(win)
+        );
+      }
+    } finally {
+      activeWindowStack.pop();
     }
   }
   global.__capsurf_eval_in_iframe = evalInIframe;

@@ -3336,6 +3336,22 @@
   - **Kitesurf Boa-Wasm/V8 架构专有指标 (6 套件)**：`boa-bridged-intrinsic-proto`、`boa-code-stats`、`boa-ctx-reentry`、`boa-heap-shape`、`boa-interner-reclaim` 及 `boa-object-from-page` 第 6 项，均为 V8-Boa 双引擎内部监控指标，非 CapSurf 单 QuickJS-NG 引擎功能缺口。
 - **清理旧子智能体**: 销毁 `1729b7e6-9c53-41cf-940b-30277400312d`。
 
+## [2026-11-20 15:31:00] 10 项 Window/CSSOM/postMessage/VendorPrefix 核心套件 20/20 全绿闭环 (Subagent 59decb23 结单，Phase 74)
+- **CSSOM Proxy 不变量、2D `matrix()` 序列化与前缀别名 (`src/js/shim/cssom.js`, `element/element.js`)**:
+  - 为 `CSSStyleDeclaration` 补齐 `Symbol.toStringTag` 与 `ownKeys`/`getOwnPropertyDescriptor`/`preventExtensions` Proxy traps，满足 `Object.freeze` 抛出 `TypeError`；
+  - 实装 2D transform `matrix(a, b, c, d, e, f)` 序列化与 `-webkit-`/`-moz-` 前缀属性回退；修复 `installGetComputedStyle` 二次包装递归栈溢出。
+- **WHATWG `window.postMessage`、Iframe 独立事件与 `writingSuggestions` (`window.js`, `html-classes.js`, `parser.js`, `html-element.js`)**:
+  - 实装 `__capsurf_postMessage` 与 `__capsurf_active_window_stack` origin 校验及嵌套 iframe `contentWindow` 独立事件派发；
+  - 实装 `HTMLElement.prototype.writingSuggestions` 祖先链继承计算。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 10 项 Core E2E 套件（`alert-non-throwing`、`post-message-origin`、`raf-wrap-reentrancy`、`reentrant-new-function-scope`、`require-global-shadow`、`style-declaration-object-members`、`vendor-prefix-style`、`window-global-scope`、`window-page-functions`、`writing-suggestions`）：**20/20 PASS**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `59decb23-7ab8-47cb-80e1-ecd911caa62c`；
+  - 派发全新子智能体 **Subagent 40**: SVG IDL & Script Core Specialist（JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：10 项 Core E2E（`svg-anchor-xlink-href`、`svg-animated-string`、`svg-attribute-case`、`svg-css-attribute-values`、`svg-dynamic-text-upgrade`、`svg-geometry-length`、`select-default-submit`、`script-nomodule`、`script-text`、`trusted-events`）。
+
+
 
 
 

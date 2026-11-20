@@ -493,6 +493,10 @@
     configurable: true,
   });
   CSSStyleDeclaration.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+  Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
+    value: "CSSStyleDeclaration",
+    configurable: true,
+  });
   markNative(CSSStyleDeclaration, "CSSStyleDeclaration");
 
   let _CSSStyleDeclaration = CSSStyleDeclaration;
@@ -569,7 +573,12 @@
     }
 
     const decl = Object.create(CSSStyleDeclaration.prototype);
-    decl._isCSSStyleDeclaration = true;
+    Object.defineProperty(decl, "_isCSSStyleDeclaration", {
+      value: true,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
 
     Object.defineProperty(decl, "length", {
       get: function () { return data.size; },
@@ -581,15 +590,20 @@
       configurable: true,
     });
 
-    decl.item = function (index) {
-      const idx = Number(index) >>> 0;
-      let keys = authoredOrder;
-      if (context === "font-face") {
-        keys = Array.from(data.keys()).sort();
-      }
-      const k = keys[idx];
-      return k != null ? (data.get(k)?.name || k) : "";
-    };
+    Object.defineProperty(decl, "item", {
+      value: function (index) {
+        const idx = Number(index) >>> 0;
+        let keys = authoredOrder;
+        if (context === "font-face") {
+          keys = Array.from(data.keys()).sort();
+        }
+        const k = keys[idx];
+        return k != null ? (data.get(k)?.name || k) : "";
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
 
     decl.getPropertyValue = function (prop) {
       const p = String(prop).trim();
@@ -823,16 +837,31 @@
         if (!pStr.includes("-") && /^(?:moz|ms|o)[A-Z]/.test(pStr)) return false;
         return isCssPropertySupported(pStr);
       },
-      ownKeys: function () {
+      ownKeys: function (target) {
         let keys = authoredOrder;
         if (context === "font-face") keys = Array.from(data.keys()).sort();
-        return keys.slice();
+        const out = keys.slice();
+        const seen = new Set(out);
+        const own = Reflect.ownKeys(target);
+        for (let i = 0; i < own.length; i++) {
+          const k = own[i];
+          if (!seen.has(k)) {
+            seen.add(k);
+            out.push(k);
+          }
+        }
+        return out;
       },
       getOwnPropertyDescriptor: function (target, prop) {
+        const own = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (own) return own;
         if (typeof prop === "string" && data.has(prop)) {
           return { value: data.get(prop).value, writable: true, enumerable: true, configurable: true };
         }
-        return Reflect.getOwnPropertyDescriptor(target, prop);
+        return undefined;
+      },
+      preventExtensions: function () {
+        return false;
       }
     });
   }
@@ -2341,6 +2370,73 @@
 
   let _capturedGetComputedStyle = null;
 
+  function serializeComputedTransform(val) {
+    if (!val || typeof val !== "string") return val;
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "none" || /^matrix(?:3d)?\(/i.test(trimmed)) return trimmed;
+    let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
+    const mul = function (ma, mb, mc, md, me, mf) {
+      const na = a * ma + c * mb;
+      const nb = b * ma + d * mb;
+      const nc = a * mc + c * md;
+      const nd = b * mc + d * md;
+      const ne = a * me + c * mf + e;
+      const nf = b * me + d * mf + f;
+      a = na; b = nb; c = nc; d = nd; e = ne; f = nf;
+    };
+    const fnRe = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
+    let m;
+    let matched = false;
+    while ((m = fnRe.exec(trimmed)) !== null) {
+      const fn = m[1].toLowerCase();
+      const args = m[2].split(",").map((s) => s.trim()).filter(Boolean);
+      if (fn === "scale") {
+        const sx = parseFloat(args[0]);
+        const sy = args.length > 1 ? parseFloat(args[1]) : sx;
+        if (!isNaN(sx) && !isNaN(sy)) { mul(sx, 0, 0, sy, 0, 0); matched = true; }
+      } else if (fn === "scalex") {
+        const sx = parseFloat(args[0]);
+        if (!isNaN(sx)) { mul(sx, 0, 0, 1, 0, 0); matched = true; }
+      } else if (fn === "scaley") {
+        const sy = parseFloat(args[0]);
+        if (!isNaN(sy)) { mul(1, 0, 0, sy, 0, 0); matched = true; }
+      } else if (fn === "translate") {
+        const tx = parseFloat(args[0]) || 0;
+        const ty = args.length > 1 ? (parseFloat(args[1]) || 0) : 0;
+        mul(1, 0, 0, 1, tx, ty); matched = true;
+      } else if (fn === "translatex") {
+        const tx = parseFloat(args[0]) || 0;
+        mul(1, 0, 0, 1, tx, 0); matched = true;
+      } else if (fn === "translatey") {
+        const ty = parseFloat(args[0]) || 0;
+        mul(1, 0, 0, 1, 0, ty); matched = true;
+      } else if (fn === "rotate") {
+        const raw = args[0] || "0";
+        let rad = parseFloat(raw) || 0;
+        if (raw.endsWith("deg")) rad = rad * Math.PI / 180;
+        else if (raw.endsWith("turn")) rad = rad * Math.PI * 2;
+        else if (raw.endsWith("grad")) rad = rad * Math.PI / 200;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        mul(cos, sin, -sin, cos, 0, 0); matched = true;
+      } else if (fn === "matrix" && args.length >= 6) {
+        const nums = args.map(parseFloat);
+        if (nums.every((n) => !isNaN(n))) {
+          mul(nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]);
+          matched = true;
+        }
+      } else {
+        return trimmed;
+      }
+    }
+    if (!matched) return trimmed;
+    const fmt = (n) => {
+      if (Math.abs(n) < 1e-12) return "0";
+      return String(Number(n.toFixed(6)));
+    };
+    return "matrix(" + [a, b, c, d, e, f].map(fmt).join(", ") + ")";
+  }
+
   function wrapComputedStyleDecl(decl, element) {
     if (!decl || typeof decl !== "object") return decl;
     return new Proxy(decl, {
@@ -2349,8 +2445,21 @@
         if (typeof prop === "string") {
           if (prop === "getPropertyValue") {
             return function (propertyName) {
-              const k = cssPropCamelToKebab(String(propertyName || "").trim());
+              const rawName = String(propertyName || "").trim();
+              const k = cssPropCamelToKebab(rawName);
+              if (k === "-webkit-transform" || k === "transform") {
+                let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
+                if (tv) {
+                  tv = resolveCssVars(element, tv);
+                  tv = serializeComputedTransform(tv);
+                }
+                return tv || "";
+              }
               let val = receiver[k] || (target.getPropertyValue ? target.getPropertyValue(propertyName) : "");
+              if (!val && (k.startsWith("-webkit-") || k.startsWith("-moz-"))) {
+                const unprefixed = k.replace(/^-(?:webkit|moz)-/, "");
+                val = receiver[unprefixed] || (target.getPropertyValue ? target.getPropertyValue(unprefixed) : "");
+              }
               if (typeof val === "string") {
                 val = resolveCssVars(element, val);
                 val = normalizeCssColor(val);
@@ -2361,11 +2470,13 @@
           if (prop === "cssFloat" || prop === "float") {
             return target.getPropertyValue ? target.getPropertyValue("float") : (target.float || "");
           }
-          if (prop === "webkitTransform") {
-            return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
-          }
-          if (prop === "transform") {
-            return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+          if (prop === "webkitTransform" || prop === "-webkit-transform" || prop === "transform") {
+            let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
+            if (tv) {
+              tv = resolveCssVars(element, tv);
+              tv = serializeComputedTransform(tv);
+            }
+            return tv || "";
           }
           const kebab = cssPropCamelToKebab(prop);
 
@@ -2456,14 +2567,22 @@
   }
   markNative(enhancedGetComputedStyle, "getComputedStyle");
 
+  let _overrideGetComputedStyle = null;
+
   function installGetComputedStyle(targetObj) {
     if (!targetObj) return;
     Object.defineProperty(targetObj, "getComputedStyle", {
       get: function () {
+        if (_overrideGetComputedStyle !== null) return _overrideGetComputedStyle;
         return _capturedGetComputedStyle ? enhancedGetComputedStyle : undefined;
       },
       set: function (fn) {
-        _capturedGetComputedStyle = fn;
+        if (fn === enhancedGetComputedStyle || fn === _capturedGetComputedStyle) return;
+        if (_capturedGetComputedStyle === null && typeof fn === "function") {
+          _capturedGetComputedStyle = fn;
+        } else {
+          _overrideGetComputedStyle = fn;
+        }
       },
       configurable: true,
       enumerable: true,

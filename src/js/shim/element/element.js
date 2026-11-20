@@ -253,6 +253,45 @@ function createStyleProxy(element) {
         return globalThis.__isCssPropertySupported(pStr);
       }
       return false;
+    },
+    ownKeys: function (target) {
+      const map = parseStyleMap();
+      const keys = [];
+      const seen = new Set();
+      for (const [k, entry] of map.entries()) {
+        const name = entry && entry.name ? entry.name : k;
+        if (!seen.has(name)) {
+          seen.add(name);
+          keys.push(name);
+        }
+      }
+      const targetKeys = Reflect.ownKeys(target);
+      for (let i = 0; i < targetKeys.length; i++) {
+        const k = targetKeys[i];
+        if (!seen.has(k)) {
+          seen.add(k);
+          keys.push(k);
+        }
+      }
+      return keys;
+    },
+    getOwnPropertyDescriptor: function (target, prop) {
+      const own = Reflect.getOwnPropertyDescriptor(target, prop);
+      if (own) return own;
+      if (typeof prop === "string") {
+        const map = parseStyleMap();
+        if (map.has(prop)) {
+          return { value: map.get(prop).value, writable: true, enumerable: true, configurable: true };
+        }
+        const lower = prop.startsWith("--") ? prop : prop.toLowerCase();
+        if (map.has(lower)) {
+          return { value: map.get(lower).value, writable: true, enumerable: true, configurable: true };
+        }
+      }
+      return undefined;
+    },
+    preventExtensions: function () {
+      return false;
     }
   });
 }

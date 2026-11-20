@@ -91,6 +91,26 @@ function installHtmlElementExtensions(proto) {
     configurable: true,
   });
 
+  Object.defineProperty(proto, "writingSuggestions", {
+    get: function () {
+      let cur = this;
+      while (cur && cur.nodeType === 1) {
+        if (typeof cur.hasAttribute === "function" && cur.hasAttribute("writingsuggestions")) {
+          const raw = cur.getAttribute("writingsuggestions");
+          return String(raw == null ? "" : raw).toLowerCase() === "false" ? "false" : "true";
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return "true";
+    },
+    set: function (v) {
+      if (typeof this.setAttribute === "function") {
+        this.setAttribute("writingsuggestions", String(v));
+      }
+    },
+    configurable: true,
+  });
+
   if (!proto.click) {
     proto.click = function () {
       const evt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });

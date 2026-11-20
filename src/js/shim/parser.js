@@ -745,7 +745,26 @@ Object.defineProperty(ParsedDocument.prototype, "lastChild", {
 });
 
 ParsedDocument.prototype.createElement = function (tagName) {
-  return new ParsedElement(tagName, this);
+  const el = new ParsedElement(tagName, this);
+  if (String(tagName).toLowerCase() === "iframe") {
+    Object.defineProperty(el, "contentWindow", {
+      get: function () {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getOrCreateIframeWindow === "function") {
+          return globalThis.__capsurf_getOrCreateIframeWindow(this);
+        }
+        return null;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(el, "contentDocument", {
+      get: function () {
+        const win = this.contentWindow;
+        return (win && win.document) || this._contentDocument || null;
+      },
+      configurable: true,
+    });
+  }
+  return el;
 };
 
 ParsedDocument.prototype.createTextNode = function (text) {
