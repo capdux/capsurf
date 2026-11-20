@@ -29803,9 +29803,17 @@
       return targetHref;
     }
 
+    let scrollRestoration = "auto";
+
     const historyObj = {
       get length() { return historyStack.length; },
       get state() { return historyStack[historyIdx]?.state ?? null; },
+      get scrollRestoration() { return scrollRestoration; },
+      set scrollRestoration(v) {
+        if (v === "auto" || v === "manual") {
+          scrollRestoration = v;
+        }
+      },
       pushState: markNative(function (st, title, url) {
         const target = resolveHistoryUrl(url, "pushState");
         const oldUrl = currentHref;
@@ -29941,14 +29949,21 @@
     };
     global.history = historyObj;
 
+    if (global.onhashchange === undefined) global.onhashchange = null;
+    if (global.onpopstate === undefined) global.onpopstate = null;
+
     if (typeof window !== "undefined") {
       window.location = locationObj;
       window.history = historyObj;
+      if (window.onhashchange === undefined) window.onhashchange = null;
+      if (window.onpopstate === undefined) window.onpopstate = null;
     }
     if (typeof globalThis !== "undefined") {
       globalThis.location = locationObj;
       globalThis.history = historyObj;
       globalThis.__capsurf_same_doc_nav = global.__capsurf_same_doc_nav;
+      if (globalThis.onhashchange === undefined) globalThis.onhashchange = null;
+      if (globalThis.onpopstate === undefined) globalThis.onpopstate = null;
     }
 
     // 4. Screen
@@ -32895,28 +32910,102 @@
     markNative(ResizeObserver, "ResizeObserver");
     global.ResizeObserver = ResizeObserver;
 
-    function evaluateMediaQuery(query) {
-      if (!query) return true;
-      const q = String(query).toLowerCase().trim();
-      const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
+    function evaluateMediaFeature(featureStr, w, h, dpr) {
+      const m = featureStr.match(/^\(\s*([a-z-]+)\s*(?::\s*(.+?))?\s*\)$/);
+      if (!m) return false;
+      const feat = m[1];
+      const val = (m[2] || "").trim();
 
-      if (q.startsWith("print") && !q.includes("screen") && !q.includes("all")) {
+      if (feat === "min-width" || feat === "max-width" || feat === "width") {
+        const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+        if (!numM) return false;
+        const px = parseFloat(numM[1]);
+        if (isNaN(px)) return false;
+        if (feat === "min-width") return w >= px;
+        if (feat === "max-width") return w <= px;
+        return w === px;
+      }
+      if (feat === "min-height" || feat === "max-height" || feat === "height") {
+        const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+        if (!numM) return false;
+        const px = parseFloat(numM[1]);
+        if (isNaN(px)) return false;
+        if (feat === "min-height") return h >= px;
+        if (feat === "max-height") return h <= px;
+        return h === px;
+      }
+      if (feat === "orientation") {
+        if (val === "landscape") return w >= h;
+        if (val === "portrait") return w < h;
         return false;
       }
-
-      const minMatch = q.match(/\(\s*min-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
-      if (minMatch) {
-        const minW = parseFloat(minMatch[1]);
-        if (!isNaN(minW) && w < minW) return false;
+      if (feat === "prefers-color-scheme") {
+        return val === "light";
       }
-
-      const maxMatch = q.match(/\(\s*max-width\s*:\s*([0-9.]+)\s*(px)?\s*\)/);
-      if (maxMatch) {
-        const maxW = parseFloat(maxMatch[1]);
-        if (!isNaN(maxW) && w > maxW) return false;
+      if (feat === "prefers-reduced-motion") {
+        return val === "no-preference";
       }
+      if (feat === "hover") {
+        return val === "hover";
+      }
+      if (feat === "pointer") {
+        return val === "fine";
+      }
+      if (feat === "min-resolution" || feat === "max-resolution" || feat === "resolution") {
+        const resM = val.match(/^([0-9.]+)\s*(dppx|x|dpi)$/);
+        if (!resM) return false;
+        let targetDpr = parseFloat(resM[1]);
+        if (isNaN(targetDpr)) return false;
+        if (resM[2] === "dpi") targetDpr = targetDpr / 96;
+        if (feat === "min-resolution") return dpr >= targetDpr;
+        if (feat === "max-resolution") return dpr <= targetDpr;
+        return dpr === targetDpr;
+      }
+      return false;
+    }
 
-      return true;
+    function evaluateMediaQuery(query) {
+      if (!query || !String(query).trim()) return true;
+      const raw = String(query).toLowerCase().trim();
+      const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
+      const h = (global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 720)) || 720;
+      const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
+
+      const branches = raw.split(",");
+      for (let i = 0; i < branches.length; i++) {
+        let branch = branches[i].trim();
+        if (!branch) continue;
+        let negate = false;
+        if (branch.startsWith("not ") || branch.startsWith("not\t")) {
+          negate = true;
+          branch = branch.slice(3).trim();
+        } else if (branch.startsWith("only ") || branch.startsWith("only\t")) {
+          branch = branch.slice(4).trim();
+        }
+        const parts = branch.split(/\s+and\s+/);
+        let branchOk = true;
+        for (let j = 0; j < parts.length; j++) {
+          const part = parts[j].trim();
+          if (!part) {
+            branchOk = false;
+            break;
+          }
+          if (part.startsWith("(") && part.endsWith(")")) {
+            if (!evaluateMediaFeature(part, w, h, dpr)) {
+              branchOk = false;
+              break;
+            }
+          } else if (part === "all" || part === "screen") {
+            // matches
+          } else {
+            branchOk = false;
+            break;
+          }
+        }
+        if (negate) branchOk = !branchOk;
+        if (branchOk) return true;
+      }
+      return false;
     }
 
     // 7. matchMedia
@@ -34489,42 +34578,41 @@
     return unit;
   }
 
-  class CSSStyleValue {
-    _cssText;
-    _associatedProperty;
-    constructor(cssText = "", associatedProperty = null) {
-      this._cssText = String(cssText);
-      this._associatedProperty = associatedProperty;
+  function CSSStyleValue(cssText = "", associatedProperty = null) {
+    this._cssText = String(cssText);
+    this._associatedProperty = associatedProperty;
+  }
+  CSSStyleValue.parse = function parse(propertyName, cssText) {
+    return CSSStyleValue.parseAll(propertyName, cssText)[0];
+  };
+  CSSStyleValue.parseAll = function parseAll(propertyName, cssText) {
+    const property = normalizeProperty(propertyName);
+    assertSupportedProperty(property);
+    const text = String(cssText);
+    if (!text || hasTopLevelSemicolon(text) || hasTopLevelImportant(text)) {
+      throw new TypeError(`Invalid value for ${property}`);
     }
-    static parse(propertyName, cssText) {
-      return CSSStyleValue.parseAll(propertyName, cssText)[0];
-    }
-    static parseAll(propertyName, cssText) {
-      const property = normalizeProperty(propertyName);
-      assertSupportedProperty(property);
-      const text = String(cssText);
-      if (!text || hasTopLevelSemicolon(text) || hasTopLevelImportant(text)) {
+    if (!property.startsWith("--")) {
+      const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
+      if (!canon || canon(`${property}: ${text}`).length === 0) {
         throw new TypeError(`Invalid value for ${property}`);
       }
-      if (!property.startsWith("--")) {
-        const canon = opts && typeof opts.canonicalizeInlineStyle === "function" ? opts.canonicalizeInlineStyle : null;
-        if (!canon || canon(`${property}: ${text}`).length === 0) {
-          throw new TypeError(`Invalid value for ${property}`);
-        }
-      }
-      const typed = reifyTypedList(property, text);
-      if (typed)
-        return typed;
-      const parts = LIST_VALUED_PROPERTIES.has(property) ? splitTopLevelCommas(text) : [text];
-      return parts.map((part) => reify(property, part) || new CSSStyleValue(part, property));
     }
-    get [Symbol.toStringTag]() {
+    const typed = reifyTypedList(property, text);
+    if (typed)
+      return typed;
+    const parts = LIST_VALUED_PROPERTIES.has(property) ? splitTopLevelCommas(text) : [text];
+    return parts.map((part) => reify(property, part) || new CSSStyleValue(part, property));
+  };
+  Object.defineProperty(CSSStyleValue.prototype, Symbol.toStringTag, {
+    get() {
       return this.constructor.name;
-    }
-    toString() {
-      return this._cssText;
-    }
-  }
+    },
+    configurable: true,
+  });
+  CSSStyleValue.prototype.toString = function toString() {
+    return this._cssText;
+  };
 
   class CSSImageValue extends CSSStyleValue {
   }
@@ -37111,6 +37199,7 @@
 
       // Make CSSStyleValue direct construction and Reflect.construct(CSSStyleValue, [], Sub) throw TypeError
       const origCtor = CSSStyleValue;
+      markNative(origCtor, "CSSStyleValue");
       const CSSStyleValueProxy = new Proxy(origCtor, {
         construct(target, args, newTarget) {
           if (newTarget === CSSStyleValueProxy || newTarget === origCtor || args.length === 0) {
@@ -37212,9 +37301,20 @@
       // Export globals (using CSSStyleValueProxy for global CSSStyleValue so new CSSStyleValue() and Reflect.construct throw)
       const exported = Object.assign({}, CSS_TYPED_OM_GLOBALS, { CSSStyleValue: CSSStyleValueProxy });
       for (const key of Object.keys(exported)) {
-        global[key] = exported[key];
-        if (typeof window !== "undefined") window[key] = exported[key];
-        if (typeof globalThis !== "undefined") globalThis[key] = exported[key];
+        const ctor = exported[key];
+        if (ctor && ctor.name === "constructor") {
+          try {
+            Object.defineProperty(ctor, "name", {
+              value: key,
+              writable: false,
+              enumerable: false,
+              configurable: true,
+            });
+          } catch {}
+        }
+        global[key] = ctor;
+        if (typeof window !== "undefined") window[key] = ctor;
+        if (typeof globalThis !== "undefined") globalThis[key] = ctor;
       }
 
       // Install CSS.<unit>(value) factory functions
@@ -42769,7 +42869,7 @@
         }
         for (let i = 0; i < keys.length; i++) {
           const k = keys[i];
-          if (k === "prototype" || k === "__proto__" || k.startsWith("__capsurf_")) continue;
+          if (k === "constructor" || k === "prototype" || k === "__proto__" || k.startsWith("__capsurf_")) continue;
           let desc;
           try {
             desc = Object.getOwnPropertyDescriptor(obj, k);

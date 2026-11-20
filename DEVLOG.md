@@ -1751,3 +1751,7 @@
 ### Phase 229: OOPIF Flat-Session Event Routing & Dynamic `src` Navigation
 - `_createFlatSession` in `e2e/harness.ts` now subscribes via `parent.onSession(sessionId, ...)` so `childSession` receives `Runtime.executionContextCreated` and `Network.*` events tagged with its `sessionId`.
 - `setAttribute("src", ...)` on an already-connected `<iframe>` triggers `__capsurf_navigate_iframe`, unblocking late-spawned cross-origin iframes.
+
+### Phase 230: `CSSStyleValue` Constructor Name, `matchMedia`, `scrollRestoration` & `onhashchange`
+- `markObjMembers` in `src/js/shim/index.js` previously overwrote `origCtor.name` to `"constructor"` when traversing prototype `.constructor` properties; skipping `k === "constructor"` preserves `"CSSStyleValue"`.
+- Implemented `evaluateMediaQuery` (`orientation: landscape/portrait`, `width`/`height`, `prefers-color-scheme`, `resolution`, etc.) and `history.scrollRestoration` (`"auto"`/`"manual"`) in `src/js/shim/window.js`.

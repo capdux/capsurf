@@ -1961,7 +1961,7 @@ function installShim(global) {
       }
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i];
-        if (k === "prototype" || k === "__proto__" || k.startsWith("__capsurf_")) continue;
+        if (k === "constructor" || k === "prototype" || k === "__proto__" || k.startsWith("__capsurf_")) continue;
         let desc;
         try {
           desc = Object.getOwnPropertyDescriptor(obj, k);

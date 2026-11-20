@@ -4693,3 +4693,10 @@
 - **Slot B (`5f5717d5`)**:
   - Fixed `_createFlatSession` event routing in `e2e/harness.ts`, iframe `Runtime.enable` & `Network.enable` routing in `src/cdp/{runtime,network,session}.cp`, `activeWindowStack` origin in `src/js/shim/window.js`, `setAttribute("src")` iframe navigation in `src/js/shim/element/element.js`, `Target.getTargets` sync in `src/cdp/{dispatch,page}.cp`, and `/oopif-kind-*` fixtures in `src/net/mock_fixtures.cp` / `src/cdp/session_hooks.cp` / `src/js/shim/element/html-classes.js`.
   - Built `bin_19233/main` (6.03s); `oopif-document-kind`, `oopif-heap-usage`, `oopif-late-spawn` **3/3 PASS** (16 assertions, 26.89s, exit 0).
+
+### Phase 230: DOM Forms Whitebox (118/118) + JS Shim 4-Pack 7/7 PASS (`css-typed-om`, `matchmedia-demo`, `history-shim-probe`, `onhashchange-probe`)
+- **Slot A (`7cd252f5`, `271696b5`)**:
+  - Added `test/dom/test_forms_and_validation_edge.cp` (**1/1 PASS**, 802ms). Full-repo pure-CP whitebox now **118/118 (100% PASS)**.
+  - Pinpointed root causes for `e2e/event-handler-idl.e2e.test.ts` (`[LenientThis]` on `onmouseenter`/`onmouseleave`, `window` own `on*` accessors, `HTMLBodyElement` window-reflecting forwarding) and `e2e/script-navigation-tab.e2e.test.ts` (`server.cp` single `_.session` per WS connection).
+- **Main Agent (`task-378`)**: Verified `e2e/script-gate.e2e.test.ts` **18/20 PASS** (only 2 inline event handler CSP assertions remaining: `unsafe-inline` & `script-src-attr`).
+- **Slot B (`8d3e9d87`)**: Fixed `markObjMembers` skipping `"constructor"` in `src/js/shim/index.js:1964`, `CSSStyleValue` constructor `.name`, `evaluateMediaQuery` (`orientation` & full features), `history.scrollRestoration`, and top-level `window.onhashchange`/`onpopstate = null` in `src/js/shim/window.js` (re-bundled `runtime.js`/`runtime_source.cp`). Built `bin_19233/main`; `css-typed-om`, `matchmedia-demo`, `history-shim-probe`, `onhashchange-probe` **7/7 PASS** (55 assertions, exit 0).
