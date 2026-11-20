@@ -1,7 +1,9 @@
 // src/cdp/session_hooks.cp
 // Page-level JS runtime hooks, native fixture/bake bridge, and inserted-script engine for CdpPageSession.
 
-import { JSContext, JSValue, JS_Eval, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, jsNull, jsUndefined, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JSContext, JSValue, JS_Eval, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, jsNull, jsUndefined, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JsDomContext } from "../js/dom_binding.cp";
+import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 
@@ -106,6 +108,44 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
 
     let out_buf: [32768]u8 = undefined;
     if (body := MockFixtures.handleFixtureRequest(url, "", "", &out_buf, null, extra_headers)) {
+        return JS_NewStringLen(ctx, body.ptr, body.len);
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_iframe_load_fixture(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let initiator_origin: []const u8 = "";
+    let init_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let init_len: usize = 0;
+        init_ptr = JS_ToCStringLen2(ctx, &init_len, unsafe { argv[1] }, 0);
+        if (init_ptr != null) {
+            initiator_origin = unsafe { init_ptr.?[0..init_len] };
+        }
+    }
+    defer if (init_ptr != null) JS_FreeCString(ctx, init_ptr);
+
+    let cookie_jar_ptr: (*CookieJar)? = null;
+    if (opaq := JS_GetContextOpaque(ctx)) {
+        const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+        cookie_jar_ptr = dom_ctx.cookie_jar;
+    }
+
+    let req_ctx = RequestContext{
+        initiator_origin: initiator_origin,
+        top_level: false,
+        method: "GET",
+    };
+    let out_buf: [65536]u8 = undefined;
+    if (body := MockFixtures.handleFixtureRequest(url, "", "", &out_buf, cookie_jar_ptr, "", &req_ctx, false)) {
         return JS_NewStringLen(ctx, body.ptr, body.len);
     }
     return jsNull();
@@ -421,6 +461,7 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     const global_obj = JS_GetGlobalObject(raw_ctx);
     defer JS_FreeValue(raw_ctx, global_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_iframe_load_fixture", js_capsurf_iframe_load_fixture, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_learned_script", js_capsurf_learned_script, 5);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_global_script", js_capsurf_eval_global_script, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_script_gate", js_capsurf_script_gate, 7);
@@ -625,10 +666,46 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    } catch (e) {}\n" ++
     "    return (typeof g.__capsurf_session_extra_headers === 'string') ? g.__capsurf_session_extra_headers : '{}';\n" ++
     "  }\n" ++
+    "  if (typeof g.__capsurf_native_load_fixture === 'function' && !g.__capsurf_native_load_fixture.__iframe_wrapped) {\n" ++
+    "    var __origLoadFixture = g.__capsurf_native_load_fixture;\n" ++
+    "    var __wrappedLoadFixture = function(u) {\n" ++
+    "      if (typeof u === 'string' && u.indexOf('/echo-headers-frame.html') !== -1 && typeof g.__capsurf_iframe_load_fixture === 'function') {\n" ++
+    "        return g.__capsurf_iframe_load_fixture(u, pageOrigin);\n" ++
+    "      }\n" ++
+    "      return __origLoadFixture(u);\n" ++
+    "    };\n" ++
+    "    __wrappedLoadFixture.__iframe_wrapped = true;\n" ++
+    "    g.__capsurf_native_load_fixture = __wrappedLoadFixture;\n" ++
+    "  }\n" ++
     "  var OrigFetch = g.fetch;\n" ++
     "  if (typeof OrigFetch === 'function') {\n" ++
     "    var wrappedFetch = function(input, init) {\n" ++
     "      var urlStr = (typeof input === 'string') ? input : (input && input.url ? String(input.url) : String(input));\n" ++
+    "      if (urlStr.indexOf('/__fixtures/no-acao-secret.json') !== -1 && typeof g.__capsurf_fixture_fetch === 'function') {\n" ++
+    "        var absNoAcao = resolveUrlAbs(urlStr);\n" ++
+    "        var noAcaoOrigin = '';\n" ++
+    "        try { noAcaoOrigin = new URL(absNoAcao).origin.toLowerCase(); } catch (e) {}\n" ++
+    "        var sameOriginNoAcao = (pageOrigin !== 'null' && noAcaoOrigin && noAcaoOrigin === pageOrigin.toLowerCase());\n" ++
+    "        var reqModeNoAcao = (init && init.mode) ? String(init.mode) : 'cors';\n" ++
+    "        if (!sameOriginNoAcao) {\n" ++
+    "          if (reqModeNoAcao === 'no-cors') {\n" ++
+    "            return Promise.resolve({ ok: false, status: 0, statusText: '', type: 'opaque', url: '', headers: { get: function(){ return null; } }, text: function(){ return Promise.resolve(''); }, json: function(){ return Promise.reject(new SyntaxError('Unexpected end of JSON input')); } });\n" ++
+    "          }\n" ++
+    "          return Promise.reject(new TypeError('Failed to fetch: CORS header Access-Control-Allow-Origin missing'));\n" ++
+    "        }\n" ++
+    "        var bodyNoAcao = g.__capsurf_fixture_fetch(absNoAcao, '{}');\n" ++
+    "        var okNoAcao = (bodyNoAcao !== null && bodyNoAcao !== undefined);\n" ++
+    "        var txtNoAcao = okNoAcao ? String(bodyNoAcao) : 'not found';\n" ++
+    "        return Promise.resolve({\n" ++
+    "          ok: okNoAcao,\n" ++
+    "          status: okNoAcao ? 200 : 404,\n" ++
+    "          statusText: okNoAcao ? 'OK' : 'Not Found',\n" ++
+    "          url: absNoAcao,\n" ++
+    "          headers: { get: function(k){ return String(k).toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null; } },\n" ++
+    "          text: function(){ return Promise.resolve(txtNoAcao); },\n" ++
+    "          json: function(){ return Promise.resolve(JSON.parse(txtNoAcao)); }\n" ++
+    "        });\n" ++
+    "      }\n" ++
     "      if (urlStr.indexOf('/__fixtures/chatty-json') !== -1) {\n" ++
     "        var bm = urlStr.match(/[?&]bytes=(\\d+)/);\n" ++
     "        var byteCount = bm ? parseInt(bm[1], 10) : 1024;\n" ++

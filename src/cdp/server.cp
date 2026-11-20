@@ -405,11 +405,17 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             return;
         }
 
-        // 6. /?inspect=1 or /?url=...
+        // 6. /?inspect=1 or /?url=http(s)://...
         if (std.mem.eql(u8, path, "/") && query.len > 0) {
             const has_inspect = std.mem.indexOf(u8, query, "inspect=1") != null;
             const url_param = MockFixtures.extractQueryParam(target, "url");
-            if (has_inspect || url_param != null) {
+            let dec_url_buf: [1024]u8 = undefined;
+            let is_http_url = false;
+            if (url_param != null && url_param.?.len > 0) {
+                const du = MockFixtures.decodeUri(url_param.?, &dec_url_buf);
+                is_http_url = std.ascii.startsWithIgnoreCase(du, "http://") || std.ascii.startsWithIgnoreCase(du, "https://");
+            }
+            if (has_inspect || is_http_url) {
                 if (no_inspector) {
                     sendHttpResponse(client_fd, "501 Not Implemented", "text/plain", "Inspector base URL not configured")?;
                     return;
@@ -421,7 +427,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     inspector_base;
                 let loc_buf: [2048]u8 = [0; 2048];
                 let loc: []const u8 = "";
-                if (url_param != null && url_param.?.len > 0) {
+                if (is_http_url) {
                     let dec_buf: [1024]u8 = undefined;
                     const decoded_url = MockFixtures.decodeUri(url_param.?, &dec_buf);
                     let enc_inner_buf: [1536]u8 = undefined;
@@ -451,6 +457,12 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     return;
                 }
             }
+        }
+
+        // 6b. Landing page at /
+        if (std.mem.eql(u8, path, "/")) {
+            sendLandingPage(client_fd, req_host, http_scheme, ws_scheme, inspector_base, no_inspector, path_only_inspector)?;
+            return;
         }
 
         // 7. Non-upgrade /__fixtures/* requests
@@ -880,6 +892,170 @@ fn sendHttpResponse(client_fd: i32, status: []const u8, content_type: []const u8
         "Content-Length: {d}\r\n" ++
         "Connection: close\r\n\r\n",
         .{ status, content_type, body.len },
+    ) catch return error.BufPrintFailed;
+
+    socketWriteAll(client_fd, hdr)?;
+    if (body.len > 0) {
+        socketWriteAll(client_fd, body)?;
+    }
+}
+
+fn sendLandingPage(
+    client_fd: i32,
+    req_host: []const u8,
+    http_scheme: []const u8,
+    ws_scheme: []const u8,
+    inspector_base: []const u8,
+    no_inspector: bool,
+    path_only_inspector: bool,
+)! {
+    const is_https = std.ascii.eqlIgnoreCase(http_scheme, "https");
+
+    // Discovery target: host:port (with default port 443/80 when omitted)
+    let disc_buf: [300]u8 = [0; 300];
+    const discovery_target = if (std.mem.indexOfScalar(u8, req_host, ':') != null)
+        req_host
+    else
+        (std.fmt.bufPrint(&disc_buf, "{s}:{s}", .{ req_host, if (is_https) "443" else "80" }) catch req_host);
+
+    // Hosted example host: map localhost[:port] -> 127.0.0.1[:port]
+    let ex_host_buf: [300]u8 = [0; 300];
+    let example_host = req_host;
+    if (!path_only_inspector) {
+        if (std.ascii.eqlIgnoreCase(req_host, "localhost")) {
+            example_host = "127.0.0.1";
+        } else if (req_host.len > 10 && std.ascii.startsWithIgnoreCase(req_host, "localhost:")) {
+            example_host = std.fmt.bufPrint(&ex_host_buf, "127.0.0.1{s}", .{ req_host[9..] }) catch req_host;
+        }
+    }
+
+    let base_buf: [512]u8 = [0; 512];
+    const resolved_base = if (path_only_inspector)
+        (std.fmt.bufPrint(&base_buf, "{s}://{s}{s}", .{ http_scheme, req_host, inspector_base }) catch inspector_base)
+    else
+        inspector_base;
+
+    // Extract host from resolved_base for the DevTools note
+    let insp_host: []const u8 = "example.com";
+    if (sp := std.mem.indexOf(u8, resolved_base, "://")) {
+        const after = resolved_base[sp + 3..];
+        if (sl := std.mem.indexOfScalar(u8, after, '/')) {
+            insp_host = after[0..sl];
+        } else {
+            insp_host = after;
+        }
+    }
+
+    const ex_titles: [4][]const u8 = [
+        "Example Domain",
+        "Wikipedia: Kitesurfing",
+        "The Cloudflare Blog",
+        "Browser Run docs",
+    ];
+    const ex_urls: [4][]const u8 = [
+        "https://example.com/",
+        "https://en.wikipedia.org/wiki/Kitesurfing",
+        "https://blog.cloudflare.com/",
+        "https://developers.cloudflare.com/browser-run/",
+    ];
+
+    let body_buf: [16384]u8 = [0; 16384];
+    let pos: usize = 0;
+
+    const head_html =
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n" ++
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" ++
+        "<title>Kitesurf</title>\n</head>\n<body>\n<h1>Kitesurf</h1>\n";
+    @memcpy(body_buf[pos..pos + head_html.len], head_html);
+    pos += head_html.len;
+
+    if (no_inspector) {
+        const s =
+            "<p>This engine speaks the Chrome DevTools Protocol and serves no DevTools frontend. " ++
+            "Connect your agent or DevTools client to the endpoints below.</p>\n";
+        @memcpy(body_buf[pos..pos + s.len], s);
+        pos += s.len;
+    } else {
+        const s1 =
+            "<p>This engine speaks the Chrome DevTools Protocol. Enter a URL to open it in Chrome DevTools.</p>" ++
+            "<form class=\"omnibox\" action=\"/\" method=\"get\" autocomplete=\"off\">\n" ++
+            "<input id=\"inspect-url\" type=\"url\" name=\"url\" placeholder=\"Enter a URL to inspect\" required>\n" ++
+            "<button type=\"submit\">Inspect</button>\n</form>\n" ++
+            "<p>Or open an example page in DevTools:</p>\n<ul class=\"examples\">\n";
+        @memcpy(body_buf[pos..pos + s1.len], s1);
+        pos += s1.len;
+
+        let ei: usize = 0;
+        while (ei < ex_titles.len) : (ei += 1) {
+            const title = ex_titles[ei];
+            const page_url = ex_urls[ei];
+            let enc_page_buf: [512]u8 = [0; 512];
+            const enc_page = encodeUriComponent(page_url, &enc_page_buf);
+            let ep_buf: [1024]u8 = [0; 1024];
+            const ep = std.fmt.bufPrint(&ep_buf, "{s}/devtools/page/kitesurf?initialUrl={s}", .{ example_host, enc_page }) catch "";
+            let enc_ep_buf: [1536]u8 = [0; 1536];
+            const enc_ep = encodeUriComponent(ep, &enc_ep_buf);
+            const li = std.fmt.bufPrint(
+                body_buf[pos..],
+                "<li><a href=\"{s}?{s}={s}\">{s}</a> <code>{s}</code></li>\n",
+                .{ resolved_base, ws_scheme, enc_ep, title, page_url },
+            ) catch "";
+            pos += li.len;
+        }
+
+        const ul_end = "</ul>\n";
+        @memcpy(body_buf[pos..pos + ul_end.len], ul_end);
+        pos += ul_end.len;
+
+        if (!path_only_inspector) {
+            const note = std.fmt.bufPrint(
+                body_buf[pos..],
+                "<p class=\"muted\">DevTools loads from <code>{s}</code>.</p>\n",
+                .{ insp_host },
+            ) catch "";
+            pos += note.len;
+        }
+    }
+
+    const cdp_sec = std.fmt.bufPrint(
+        body_buf[pos..],
+        "<h2>Connect a CDP client</h2>\n<dl class=\"endpoints\">\n" ++
+        "<dd><code>{s}://{s}/devtools/browser</code></dd>\n" ++
+        "<dd><code>{s}://{s}/devtools/page/kitesurf</code></dd>\n" ++
+        "<dd><a href=\"/json/version\"><code>{s}://{s}/json/version</code></a>, <a href=\"/json/list\"><code>{s}://{s}/json/list</code></a></dd>\n" ++
+        "</dl>\n<pre><code>const browser = await puppeteer.connect({{\n  browserWSEndpoint: \"{s}://{s}/devtools/browser\",\n}});</code></pre>\n",
+        .{ ws_scheme, req_host, ws_scheme, req_host, http_scheme, req_host, http_scheme, req_host, ws_scheme, req_host },
+    ) catch "";
+    pos += cdp_sec.len;
+
+    if (!is_https) {
+        const ci_sec = std.fmt.bufPrint(
+            body_buf[pos..],
+            "<h2>Use chrome://inspect</h2>\n<ol>\n" ++
+            "<li>Open <code>chrome://inspect/#devices</code> in Chrome.</li>\n" ++
+            "<li>Add <code>{s}</code>.</li>\n</ol>\n",
+            .{ discovery_target },
+        ) catch "";
+        pos += ci_sec.len;
+    }
+
+    const tail_html = "</body>\n</html>\n";
+    if (pos + tail_html.len <= body_buf.len) {
+        @memcpy(body_buf[pos..pos + tail_html.len], tail_html);
+        pos += tail_html.len;
+    }
+
+    const body = body_buf[0..pos];
+    let hdr_buf: [1024]u8 = [0; 1024];
+    const hdr = std.fmt.bufPrint(
+        &hdr_buf,
+        "HTTP/1.1 200 OK\r\n" ++
+        "Content-Type: text/html; charset=utf-8\r\n" ++
+        "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n" ++
+        "X-Content-Type-Options: nosniff\r\n" ++
+        "Content-Length: {d}\r\n" ++
+        "Connection: close\r\n\r\n",
+        .{ body.len },
     ) catch return error.BufPrintFailed;
 
     socketWriteAll(client_fd, hdr)?;

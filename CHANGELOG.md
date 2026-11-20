@@ -1944,4 +1944,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 8 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`pdf-break-properties` (2/2)、`pdf-page-margins` (1/1)、`viewport-drain` (2/2)、`opaque-sheet-text` (4/4)、`css-external-sheets-demo` (1/1)、`layout-resolve-pollers` (3/3)、`img-srcset-reload-complete` (2/2)、`gateway-font-shaping` (1/2) — **16/18 PASS**。
+
+## Phase 121: Landing Page, CORS Bypass Matrix, SameSite Iframe & Fragment/Timer Image Load — 7 Suites (13/14 PASS)
+- **`src/cdp/{server,session,session_hooks}.cp` & `src/net/mock_fixtures.cp`**：
+  - 实装 `sendLandingPage`（含 CSP/`nosniff`/代理头）、`/no-acao-secret.json` CORS 检查、`js_capsurf_iframe_load_fixture` 跨站 iframe `SameSite=None` 门禁、`0ms` 定时器/挂起图片等待与 `#fragment` 自动 `scrollIntoView()`。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`cors-bypass-matrix` (2/2)、`dripping-image-body` (2/2)、`fragment-initial-load` (1/1)、`iframe-samesite` (1/1)、`landing-page` (5/5)、`late-timer-image-load` (1/1)、`interception-abandoned-park` (1/2) — **13/14 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

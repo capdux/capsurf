@@ -3957,3 +3957,16 @@
   - 全部 8 个 `.cp` 文件 4 门禁全 0；
   - `pdf-break-properties` (**2/2**)、`pdf-page-margins` (**1/1**)、`viewport-drain` (**2/2**)、`opaque-sheet-text` (**4/4**)、`css-external-sheets-demo` (**1/1**)、`layout-resolve-pollers` (**3/3**)、`img-srcset-reload-complete` (**2/2**)、`gateway-font-shaping` (**1/2**)、`pixel-free-shaping-fonts` (0/1，待 `harness.ts` `browserFactory` 透传 `options.headers` 与独立 WS 连接)：**16/18 PASS**！
 - **清理旧子智能体**: 销毁 `1492b12f-b526-42e9-86e9-e965506e719e`。
+
+## [2026-11-20 22:12:30] 用户指令：恢复 3 路并发子智能体并优化提速
+- **执行**: 维持 Slot A (`a8491d9f`, `bin_19232`)、Slot B (`058b656d`, `bin_19233`)，新增 **Slot C (`bin_19231`, port `19231`)** 专攻 `src/{html,css,layout,render}` + `dom_binding.cp`，恢复 3 路全速无锁并发。
+
+## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
+- **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
+  - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
+  - `src/net/mock_fixtures.cp` & `src/cdp/session_hooks.cp`：新增 `/no-acao-secret.json` 并在 `wrappedFetch` 强制同源/CORS 检查；新增 `js_capsurf_iframe_load_fixture` 透传 `initiator_origin` 与 `top_level: false`，使跨站 `/echo-headers-frame.html` 仅发送 `SameSite=None` Cookie；
+  - `src/cdp/session.cp`：`navigate` 前先 pump `0ms` 定时器并等待挂起 `<img>`，存在 `#fragment` 时自动 `scrollIntoView()`。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建 6.32s，port `19233`）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `cors-bypass-matrix` (**2/2**)、`dripping-image-body` (**2/2**)、`fragment-initial-load` (**1/1**)、`iframe-samesite` (**1/1**)、`landing-page` (**5/5**)、`late-timer-image-load` (**1/1**)、`interception-abandoned-park` (**1/2**，第 2 项缺口已定位至 `e2e/harness.ts:1126-1152` `request` 永久 `await`)：**13/14 PASS**！
+- **清理旧子智能体**: 销毁 `058b656d-8181-43da-8584-b827c24e4624`。

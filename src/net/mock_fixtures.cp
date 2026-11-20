@@ -1331,6 +1331,14 @@ pub struct MockFixtures {
             return res;
         }
 
+        // 2.15. /no-acao-secret.json
+        if (std.mem.indexOf(u8, url, "/no-acao-secret.json") != null) {
+            const body = "{\"secret\":\"kitesurf-cross-origin-secret\",\"cookie\":\"\",\"origin\":\"\",\"headers\":\"\"}";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {

@@ -1521,4 +1521,10 @@
    - `Page.printToPDF` 执行 document-scoped 图片 drain 后调用 `computePdfPagination` + `renderPdfAlloc` 输出符合 `@page` 边距与 `break-*` 约束的多页 PDF；`CSS.enable` 新增 `getExternalStylesheetMeta` 发射外部 `<link>` 的 `CSS.styleSheetAdded` 并通过 `dispatchCdpCommand` 透传 `sessionId`。
 2. **内存/布局轮询遥测与 `ResizeObserver` 动画避让 (`session.cp`, `session_hooks.cp`)**：
    - 统计 `wasmDeltaBytes`、`retainedImageCount` 与 `layout.{mutationResolves,animationResolves}`；在 `WrappedRO` 中跳过绑定 `@keyframes` 宽度动画的节点以避免初始非动画宽度干扰。
+
+## Phase 121 跨站 Iframe SameSite 门禁、着陆页代理头与 `#fragment`/延迟加载技术方案
+1. **跨站 Iframe `RequestContext` 门禁 (`session_hooks.cp`)**：
+   - 新增 `js_capsurf_iframe_load_fixture` 构造带 `initiator_origin` 与 `top_level: false` 的子资源上下文，使跨站 `/echo-headers-frame.html` 严格按 RFC 6265bis 过滤非 `SameSite=None` Cookie。
+2. **着陆页响应头与导航前定时/图片排空 (`server.cp`, `session.cp`)**：
+   - 仅在 `inspect=1` 或 `http(s)://` 时重定向 `/?url=`，对 `/` 返回带 CSP/`nosniff` 的着陆页；`navigate` 结束前先执行 `0ms` 定时器与非 dripping 图片等待再派发 `#fragment` `scrollIntoView()`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -1592,6 +1592,28 @@ pub struct CdpPageSession {
             _.ctx.freeValue(iframe_boot);
         }
         _.ctx.drainJobs();
+        {
+            // Pump due 0ms timers (e.g. late-timer-insert.html) and wait for non-lazy, non-dripping pending images before load
+            usleep(2000);
+            _.pumpTimers();
+            let img_wait_iter: usize = 0;
+            while (img_wait_iter < 300) : (img_wait_iter += 1) {
+                const pv = _.ctx.eval("(function(){if(typeof document==='undefined'||!document.querySelectorAll)return 0;var imgs=document.querySelectorAll('img[src]');var p=0;for(var i=0;i<imgs.length;i++){var im=imgs[i];var ld=String(im.getAttribute('loading')||'').toLowerCase();var s=String(im.getAttribute('src')||'');if(ld!=='lazy'&&!im.complete&&s.indexOf('dripping-')===-1&&s.indexOf('ms=45000')===-1)p++;}return p;})()");
+                let pending_imgs: i32 = 0;
+                * = JS_ToInt32(_.ctx.raw_ctx, &pending_imgs, pv);
+                _.ctx.freeValue(pv);
+                if (pending_imgs <= 0) break;
+                usleep(10000);
+                _.pumpTimers();
+            }
+        }
+        if (hash_pos := std.mem.indexOfScalar(u8, nav_url, '#')) {
+            if (hash_pos + 1 < nav_url.len) {
+                const frag_js = "(function(){try{var h=location.hash?location.hash.slice(1):'';if(!h)return;var dec=h;try{dec=decodeURIComponent(h);}catch(e){}var el=document.getElementById(dec)||document.querySelector('[name=\"'+dec.replace(/\"/g,'\\\\\"')+'\"]');if(el&&typeof el.scrollIntoView==='function')el.scrollIntoView();}catch(e){}})()";
+                const fv = _.ctx.eval(frag_js);
+                _.ctx.freeValue(fv);
+            }
+        }
 
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
         const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
