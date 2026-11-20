@@ -1491,4 +1491,10 @@
    - 以 `syncNamedGlobals()` 替代原型 Proxy（避免 QuickJS 缺失标识符不抛 `ReferenceError`），在 DOM 增删与脚本执行前实时同步 `iframe`/`id` 且不覆盖页面自有属性；通过 `WeakMap` + `Function.prototype.toString` 规范化输出 Chrome 单行 `[native code]`。
 2. **Pointer/Mouse 规范流与独立消息队列 (`window.js`, `harness.ts`)**：
    - 实装 `pointerdown` 取消抑制兼容鼠标事件、`mousedown` 后置默认焦点迁移与 UTF-16 代理对删除，并通过独立 `messageTaskQueue` 确保每条 `MessagePort` 宏任务后立即排空微任务。
+
+## Phase 116 CSS Paged Media、原生 PDF 分页与旧字符集样式表转码技术方案
+1. **CSS Paged Media 与 `%PDF-1.4` 分页引擎 (`paged_media.cp`, `pdf.cp`, `cascade.cp`)**：
+   - 在 `Cascade` 级联阶段解析 `@page` 页边距与 `break-before`/`break-after`/`break-inside` 属性，通过 `computePdfPagination` 按纸张内容框高度自动切分页面并遵守 `avoid` 约束，由 `renderPdfAlloc` 输出标准多页 `%PDF-1.4` 字节流。
+2. **旧字符集样式表 UTF-8 转码 (`paged_media.cp`, `dom_binding.cp`)**：
+   - 当外部样式表非合法 UTF-8 时，结合响应 `charset` 与 `@charset` 规则将其安全转码为 UTF-8（支持 ISO-8859-15 / Windows-1252）后再送入 `cap:css` 解析器。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

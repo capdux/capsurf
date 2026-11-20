@@ -3901,3 +3901,14 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - `load-event-propagation` (1/1)、`message-channel-task-queue` (1/1)、`mutation-observer-created-document` (2/2)、`no-set-immediate` (1/1)、`location-assign-navigates` (4/4)、`mousedown-focus-default-action` (4/4)、`named-global-live` (7/7)、`native-function-shape` (1/1)：**21/21 PASS (100%)**！
 - **清理旧子智能体**: 销毁 `6a69ad24-ad68-4ba0-a104-ffd86197d131`。
+
+## [2026-11-20 20:49:00] CSS Paged Media (`@page`/break-*), PDF 分页光栅引擎与旧字符集样式表转码闭环 (Subagent 9677507f 结单，Phase 116)
+- **CSS Paged Media、PDF 分页与旧编码转码 (`src/css/paged_media.cp`, `src/css/cascade.cp`, `src/render/pdf.cp`, `src/js/dom_binding.cp`, `test/render/test_pdf_pagination.cp`)**:
+  - 新增 `src/css/paged_media.cp`：实装 `BreakValue` / `BreakInsideValue`、`PageMarginRule`（`@page` / `@page :first` 等页边距解析）、`isValidUtf8` 与 `decodeLegacyCssToUtf8`（ISO-8859-15 / Windows-1252 -> UTF-8）；
+  - 新增 `src/render/pdf.cp`：实装 `PdfOptions`、`computePdfPagination`（支持 `break-before`/`break-after`/`break-inside: avoid` 孤行/分页避让）与 `renderPdfAlloc` 多页 `%PDF-1.4` 矢量/文本生成器；
+  - 更新 `src/css/cascade.cp`（接入 `PROP_BREAK_BEFORE/AFTER/INSIDE` 与 `@page` 规则提取）及 `src/js/dom_binding.cp`（`.bin` 回退与旧字符集样式表转码）；
+  - 新增白盒单测 `test/render/test_pdf_pagination.cp`：**4/4 PASS**（全量白盒单测增至 **70/70 PASS**）。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `attr-type-url` (1/1)、`legacy-charset-sheet` (1/1) PASS；`pdf-break-properties` 与 `pdf-page-margins` 已就绪，仅待 Slot 3 在 `src/cdp/page.cp` 将 `Page.printToPDF` 接通 `computePdfPagination` + `renderPdfAlloc`。
+- **清理旧子智能体**: 销毁 `9677507f-2775-4c0e-a295-eead07a87a25`。

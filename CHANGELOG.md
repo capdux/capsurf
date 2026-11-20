@@ -1908,4 +1908,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：8 大 Core 套件共 **21/21 PASS (100%)**。
+
+## Phase 116: CSS Paged Media (`@page`/break-*), Native Multi-Page PDF Engine & Legacy Charset Stylesheet Transcoding (Closed)
+- **`src/css/paged_media.cp`（新增）、`src/render/pdf.cp`（新增）、`src/css/cascade.cp`、`src/js/dom_binding.cp`、`test/render/test_pdf_pagination.cp`（新增）**：
+  - 实装 `@page` 边距解析、`break-before/after/inside` 级联属性、多页 `%PDF-1.4` 分页光栅/矢量输出与 ISO-8859-15/Windows-1252 样式表 UTF-8 转码。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - 白盒单测：`test/render/test_pdf_pagination.cp` **4/4 PASS**（累计 **70/70 PASS**）；
+  - E2E 测试：`attr-type-url` (1/1)、`legacy-charset-sheet` (1/1) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

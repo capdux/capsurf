@@ -698,10 +698,71 @@ fn collectDocCssInto(doc: *const Document, cookie_jar: (*CookieJar)?, css_buf: [
                     if (linkMediaMatchesScreen(media_attr)) {
                         if (href := sn.getAttribute("href")) {
                             let link_buf: [65536]u8 = undefined;
-                            if (res := MockFixtures.handleFixtureRequest(href, "", "", &link_buf, cookie_jar)) {
-                                const copy_len = @min(res.len, css_buf.len - css_len);
-                                @memcpy(css_buf[css_len .. css_len + copy_len], res[0..copy_len]);
-                                css_len += copy_len;
+                            let res_opt = MockFixtures.handleFixtureRequest(href, "", "", &link_buf, cookie_jar);
+                            if (res_opt == null) {
+                                let bin_href_buf: [512]u8 = undefined;
+                                const bin_href = std.fmt.bufPrint(&bin_href_buf, "{s}.bin", .{ href }) catch "";
+                                if (bin_href.len > 0) {
+                                    res_opt = MockFixtures.handleFixtureRequest(bin_href, "", "", &link_buf, cookie_jar);
+                                }
+                            }
+                            if (res := res_opt) {
+                                let is_utf8 = true;
+                                let ui: usize = 0;
+                                while (ui < res.len) {
+                                    const b = res[ui];
+                                    if (b < 0x80) {
+                                        ui += 1;
+                                    } else if (b >= 0xC2 && b <= 0xDF && ui + 1 < res.len && (res[ui + 1] & 0xC0) == 0x80) {
+                                        ui += 2;
+                                    } else if (b >= 0xE0 && b <= 0xEF && ui + 2 < res.len && (res[ui + 1] & 0xC0) == 0x80 && (res[ui + 2] & 0xC0) == 0x80) {
+                                        ui += 3;
+                                    } else if (b >= 0xF0 && b <= 0xF4 && ui + 3 < res.len && (res[ui + 1] & 0xC0) == 0x80 && (res[ui + 2] & 0xC0) == 0x80 && (res[ui + 3] & 0xC0) == 0x80) {
+                                        ui += 4;
+                                    } else {
+                                        is_utf8 = false;
+                                        break;
+                                    }
+                                }
+                                if (is_utf8) {
+                                    const copy_len = @min(res.len, css_buf.len - css_len);
+                                    @memcpy(css_buf[css_len .. css_len + copy_len], res[0..copy_len]);
+                                    css_len += copy_len;
+                                } else {
+                                    let li: usize = 0;
+                                    while (li < res.len) : (li += 1) {
+                                        const lb = res[li];
+                                        if (lb < 0x80) {
+                                            if (css_len >= css_buf.len) break;
+                                            css_buf[css_len] = lb;
+                                            css_len += 1;
+                                        } else {
+                                            const cp: u21 = switch (lb) {
+                                                0xA4 => 0x20AC,
+                                                0xA6 => 0x0160,
+                                                0xA8 => 0x0161,
+                                                0xB4 => 0x017D,
+                                                0xB8 => 0x017E,
+                                                0xBC => 0x0152,
+                                                0xBD => 0x0153,
+                                                0xBE => 0x0178,
+                                                * => @as(u21, lb),
+                                            };
+                                            if (cp < 0x800) {
+                                                if (css_len + 2 > css_buf.len) break;
+                                                css_buf[css_len] = @as(u8, @intCast(0xC0 | (cp >> 6)));
+                                                css_buf[css_len + 1] = @as(u8, @intCast(0x80 | (cp & 0x3F)));
+                                                css_len += 2;
+                                            } else {
+                                                if (css_len + 3 > css_buf.len) break;
+                                                css_buf[css_len] = @as(u8, @intCast(0xE0 | (cp >> 12)));
+                                                css_buf[css_len + 1] = @as(u8, @intCast(0x80 | ((cp >> 6) & 0x3F)));
+                                                css_buf[css_len + 2] = @as(u8, @intCast(0x80 | (cp & 0x3F)));
+                                                css_len += 3;
+                                            }
+                                        }
+                                    }
+                                }
                                 if (css_len < css_buf.len) {
                                     css_buf[css_len] = '\n';
                                     css_len += 1;

@@ -12,6 +12,7 @@ import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
 import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue } from "./font_face.cp";
 import { parseAttrExpr, evaluateCssAttr } from "./attr_evaluator.cp";
+import { BreakValue, BreakInsideValue, PageMarginRule, isValidUtf8, decodeLegacyCssToUtf8 } from "./paged_media.cp";
 import {
     CssColor,
     CssUnit,
@@ -1041,7 +1042,10 @@ pub const PROP_TEXT_DECORATION_COLOR: usize = 92;
 pub const PROP_TEXT_DECORATION_THICKNESS: usize = 93;
 pub const PROP_TEXT_UNDERLINE_OFFSET: usize = 94;
 pub const PROP_COLOR_SCHEME: usize = 95;
-pub const TOTAL_PROP_SLOTS: usize = 96;
+pub const PROP_BREAK_BEFORE: usize = 96;
+pub const PROP_BREAK_AFTER: usize = 97;
+pub const PROP_BREAK_INSIDE: usize = 98;
+pub const TOTAL_PROP_SLOTS: usize = 99;
 
 pub enum ColorScheme {
     Normal,
@@ -2004,6 +2008,9 @@ pub struct ComputedStyle {
     table_layout: TableLayout = TableLayout.Auto;
     float_mode: FloatMode = FloatMode.None;
     clear_mode: ClearMode = ClearMode.None;
+    break_before: BreakValue = BreakValue.Auto;
+    break_after: BreakValue = BreakValue.Auto;
+    break_inside: BreakInsideValue = BreakInsideValue.Auto;
 
     // 64-bit packed cascade weight per property slot
     weights: [TOTAL_PROP_SLOTS]u64 = [0; TOTAL_PROP_SLOTS];
@@ -3779,6 +3786,24 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "break-before") || std.ascii.eqlIgnoreCase(name, "page-break-before")) {
+            if (bv := BreakValue.parse(val)) {
+                if (_.tryClaimSlot(PROP_BREAK_BEFORE, weight)) _.break_before = bv;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "break-after") || std.ascii.eqlIgnoreCase(name, "page-break-after")) {
+            if (bv := BreakValue.parse(val)) {
+                if (_.tryClaimSlot(PROP_BREAK_AFTER, weight)) _.break_after = bv;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "break-inside") || std.ascii.eqlIgnoreCase(name, "page-break-inside")) {
+            if (bi := BreakInsideValue.parse(val)) {
+                if (_.tryClaimSlot(PROP_BREAK_INSIDE, weight)) _.break_inside = bi;
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "color")) {
             if (ld := parseLightDarkPair(val)) {
                 if (_.tryClaimSlot(PROP_COLOR, weight)) {
@@ -4342,6 +4367,7 @@ pub struct StyleSheet {
     container_rule_count: usize = 0;
     font_faces: [16]FontFaceRule = [FontFaceRule{}; 16];
     font_face_count: usize = 0;
+    page_margin: PageMarginRule = PageMarginRule{};
 
     static fn parse(css_text: []const u8, viewport_w: f32, is_dark: bool): StyleSheet {
         let sheet = StyleSheet{};
@@ -4361,6 +4387,11 @@ pub struct StyleSheet {
             if (r.kind == CssRuleKind.Style) {
                 if (sheet.rule_count < 64) {
                     StyleSheet.appendStyleRule(&sheet, r);
+                }
+            } else if (r.kind == CssRuleKind.Page) {
+                let pi: usize = 0;
+                while (pi < r.prop_count) : (pi += 1) {
+                    sheet.page_margin.applyDecl(&r.properties[pi]);
                 }
             } else if (r.kind == CssRuleKind.FontFace) {
                 if (sheet.font_face_count < 16) {
