@@ -2283,3 +2283,6 @@
 
 ### Phase 207
 - Added `test/net/test_http_loader.cp` covering offline HTTP/data URL parsing, relative resolution, redirect-depth/oversize guards, and mock fixture/Fetch interception.
+
+### Phase 209
+- Added `test/eval/test_dedicated_worker_and_clock.cp` covering DedicatedWorker lifecycle/registry, HostClock/WallClock tick progression, and SpanSink/TailTraceRegistry truncation & eviction bounds.

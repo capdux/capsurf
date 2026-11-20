@@ -4574,3 +4574,7 @@
 ### Phase 208: Non-CDP Pure-CP Whitebox Full Regression Sweep (Slot A)
 - **Subagent**: `6521d4bf` (killed after completion)
 - **Result**: **68/71 PASS** across 9 directories (`dom` 15/15, `css` 9/9, `layout` 3/3, `html` 6/6, `render` 6/6, `eval` 12/12, `tty` 2/2, `net` 14/15, `js` 1/3). The 3 failures (`test_http_loader`, `test_js_dom`, `test_dom_events`) all hit transient in-progress `src/cdp/screencast.cp:210` `*%=` syntax being edited concurrently by Slot B.
+
+### Phase 209: Pure-CP Eval DedicatedWorker, HostClock & SpanSink Whitebox Tests (Slot A)
+- **Subagent**: `70e1dbfa` (killed after completion)
+- **Result**: `test/eval/test_dedicated_worker_and_clock.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1049ms; covering `DedicatedWorker` FSM, 32-slot registry reuse, `HostClock`/`WallClock`, `SpanSink` 2000-record/4MB bounds, and `TailTraceRegistry` 64-entry ring eviction).
