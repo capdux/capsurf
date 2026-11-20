@@ -63,6 +63,62 @@ pub fn findResponseBody(request_id: []const u8): (*const StoredResponseBody)? {
     return null;
 }
 
+pub struct PendingFetchBody {
+    url_buf: [1024]u8 = [0; 1024],
+    url_len: usize = 0,
+    body: []u8 = [],
+    active: bool = false,
+}
+
+const MAX_PENDING_FETCH_BODIES: usize = 32;
+let g_pending_fetch_bodies: [MAX_PENDING_FETCH_BODIES]PendingFetchBody = [PendingFetchBody{}; MAX_PENDING_FETCH_BODIES];
+let g_pending_fetch_cursor: usize = 0;
+
+pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
+    if (url.len == 0) return;
+    let slot = &g_pending_fetch_bodies[g_pending_fetch_cursor % MAX_PENDING_FETCH_BODIES];
+    g_pending_fetch_cursor += 1;
+    if (slot.active && slot.body.len > 0) {
+        std.heap.c_allocator.free(slot.body);
+        slot.body = [];
+    }
+    const u_len = @min(url.len, slot.url_buf.len);
+    @memcpy(slot.url_buf[0..u_len], url[0..u_len]);
+    slot.url_len = u_len;
+    if (body.len > 0) {
+        const dup = std.heap.c_allocator.alloc(u8, body.len) catch {
+            slot.body = [];
+            slot.active = true;
+            return;
+        };
+        @memcpy(dup, body);
+        slot.body = dup;
+    } else {
+        slot.body = [];
+    }
+    slot.active = true;
+}
+
+pub struct PendingFetchResult {
+    found: bool = false,
+    body: []const u8 = "",
+}
+
+pub fn consumePendingFetchBody(url: []const u8): PendingFetchResult {
+    if (url.len == 0) return PendingFetchResult{};
+    let i: usize = 0;
+    while (i < MAX_PENDING_FETCH_BODIES) : (i += 1) {
+        let slot = &g_pending_fetch_bodies[i];
+        if (slot.active && std.mem.eql(u8, slot.url_buf[0..slot.url_len], url)) {
+            const b = slot.body;
+            slot.body = [];
+            slot.active = false;
+            return PendingFetchResult{ found: true, body: b };
+        }
+    }
+    return PendingFetchResult{};
+}
+
 fn jsonEscapeBody(src: []const u8, allocator: std.mem.Allocator): ([]u8)! {
     let extra: usize = 0;
     let i: usize = 0;

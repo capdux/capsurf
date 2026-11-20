@@ -6,6 +6,7 @@ import { JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isExternalScriptAllowed } from "../net/csp.cp";
+import { recordPendingFetchBody } from "./network.cp";
 
 struct LearnedScriptEntry {
     active: bool = false,
@@ -470,10 +471,44 @@ fn originSliceOf(url: []const u8): []const u8 {
     return jsNull();
 }
 
+@c fn js_capsurf_record_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsUndefined();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let mime_len: usize = 0;
+    const mime_ptr = JS_ToCStringLen2(ctx, &mime_len, unsafe { argv[1] }, 0);
+    defer if (mime_ptr != null) JS_FreeCString(ctx, mime_ptr);
+    const mime = if (mime_ptr != null) unsafe { mime_ptr.?[0..mime_len] } else "application/json";
+
+    let body: []const u8 = "";
+    let body_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        let body_len: usize = 0;
+        body_ptr = JS_ToCStringLen2(ctx, &body_len, unsafe { argv[2] }, 0);
+        if (body_ptr != null) {
+            body = unsafe { body_ptr.?[0..body_len] };
+        }
+    }
+    defer if (body_ptr != null) JS_FreeCString(ctx, body_ptr);
+
+    if (opaq := JS_GetContextOpaque(ctx)) {
+        const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+        dom_ctx.addFetchRecord(url, mime);
+        recordPendingFetchBody(url, body);
+    }
+    return jsUndefined();
+}
+
 pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     const global_obj = JS_GetGlobalObject(raw_ctx);
     defer JS_FreeValue(raw_ctx, global_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_record_fetch", js_capsurf_record_fetch, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_iframe_load_fixture", js_capsurf_iframe_load_fixture, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_learned_script", js_capsurf_learned_script, 5);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_global_script", js_capsurf_eval_global_script, 1);
@@ -483,6 +518,71 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
 pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "(function(){\n" ++
     "  var g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this);\n" ++
+    "  if (typeof g.__capsurf_dispatch_mouse_event === 'function' && !g.__capsurf_dispatch_mouse_event.__drag_sel_wrapped) {\n" ++
+    "    var origDispatchMouse = g.__capsurf_dispatch_mouse_event;\n" ++
+    "    function firstTextNode(n) {\n" ++
+    "      if (!n) return null;\n" ++
+    "      if (n.nodeType === 3) return (n.nodeValue || n.textContent || '').trim().length > 0 ? n : null;\n" ++
+    "      if (n.nodeType === 1) {\n" ++
+    "        var tnTag = String(n.tagName || '').toUpperCase();\n" ++
+    "        if (tnTag === 'HEAD' || tnTag === 'STYLE' || tnTag === 'SCRIPT' || tnTag === 'TITLE' || tnTag === 'NOSCRIPT') return null;\n" ++
+    "      }\n" ++
+    "      var cs = n.childNodes || [];\n" ++
+    "      for (var i = 0; i < cs.length; i++) {\n" ++
+    "        var t = firstTextNode(cs[i]);\n" ++
+    "        if (t) return t;\n" ++
+    "      }\n" ++
+    "      return null;\n" ++
+    "    }\n" ++
+    "    var wrappedDispatchMouse = function(evType, x, y, btn, btns, clicks, skipClick) {\n" ++
+    "      var res = origDispatchMouse.apply(this, arguments);\n" ++
+    "      try {\n" ++
+    "        if (evType === 'mousePressed' && btn === 'left' && g.document) {\n" ++
+    "          var el = (typeof g.document.elementFromPoint === 'function') ? g.document.elementFromPoint(x, y) : null;\n" ++
+    "          if (!el || el === g.document.documentElement) el = g.document.body || el || g.document.documentElement;\n" ++
+    "          if (el) {\n" ++
+    "            var tag = String(el.tagName || '').toUpperCase();\n" ++
+    "            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && tag !== 'BUTTON') {\n" ++
+    "              var tn = firstTextNode(el);\n" ++
+    "              if (tn) {\n" ++
+    "                var boxEl = tn.parentNode || el;\n" ++
+    "                var r = (boxEl && boxEl.getBoundingClientRect) ? boxEl.getBoundingClientRect() : { left: 0 };\n" ++
+    "                var internals = g[Symbol.for('kitesurf.internals')];\n" ++
+    "                var cw = (internals && typeof internals.ttyCellWidth === 'number' && internals.ttyCellWidth > 0) ? internals.ttyCellWidth : 8;\n" ++
+    "                var len = (tn.nodeValue || tn.textContent || '').length;\n" ++
+    "                var startOff = Math.max(0, Math.min(len, Math.floor((x - r.left) / cw)));\n" ++
+    "                g.__capsurf_drag_sel = { tn: tn, startOff: startOff, left: r.left, cw: cw };\n" ++
+    "                if (typeof g.getSelection === 'function') {\n" ++
+    "                  var sel = g.getSelection();\n" ++
+    "                  if (sel && sel.removeAllRanges) sel.removeAllRanges();\n" ++
+    "                }\n" ++
+    "              }\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseMoved' && (Number(btns || 0) & 1) !== 0) {\n" ++
+    "          var ds = g.__capsurf_drag_sel;\n" ++
+    "          if (ds && ds.tn && typeof g.getSelection === 'function' && g.document && g.document.createRange) {\n" ++
+    "            var len2 = (ds.tn.nodeValue || ds.tn.textContent || '').length;\n" ++
+    "            var rawOff = (x - ds.left) / ds.cw;\n" ++
+    "            var endOff = rawOff >= ds.startOff ? Math.max(0, Math.min(len2, Math.ceil(rawOff))) : Math.max(0, Math.min(len2, Math.floor(rawOff)));\n" ++
+    "            var s = Math.min(ds.startOff, endOff);\n" ++
+    "            var e = Math.max(ds.startOff, endOff);\n" ++
+    "            var range = g.document.createRange();\n" ++
+    "            range.setStart(ds.tn, s);\n" ++
+    "            range.setEnd(ds.tn, e);\n" ++
+    "            var sel2 = g.getSelection();\n" ++
+    "            if (sel2) { sel2.removeAllRanges(); sel2.addRange(range); }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseReleased') {\n" ++
+    "          g.__capsurf_drag_sel = null;\n" ++
+    "        }\n" ++
+    "      } catch (err) {}\n" ++
+    "      return res;\n" ++
+    "    };\n" ++
+    "    wrappedDispatchMouse.__drag_sel_wrapped = true;\n" ++
+    "    g.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "    if (typeof window !== 'undefined') window.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "  }\n" ++
     "  var pageOrigin = (g.location && g.location.origin && g.location.origin !== 'null') ? String(g.location.origin) : 'null';\n" ++
     "  var pageUA = (g.navigator && g.navigator.userAgent) ? String(g.navigator.userAgent) : 'Mozilla/5.0 CapSurf/1.0';\n" ++
     "  g.__capsurf_reopen_load_pending = 0;\n" ++
@@ -760,20 +860,29 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "        });\n" ++
     "      }\n" ++
     "      if (urlStr.indexOf('/__fixtures/chatty-json') !== -1) {\n" ++
+    "        var absChatty = resolveUrlAbs(urlStr);\n" ++
     "        var bm = urlStr.match(/[?&]bytes=(\\d+)/);\n" ++
+    "        var sm = urlStr.match(/[?&]seed=(\\d+)/);\n" ++
     "        var byteCount = bm ? parseInt(bm[1], 10) : 1024;\n" ++
     "        if (!(byteCount > 0)) byteCount = 1024;\n" ++
+    "        var seedVal = sm ? parseInt(sm[1], 10) : 0;\n" ++
+    "        if (isNaN(seedVal)) seedVal = 0;\n" ++
     "        recordRetainedBody(byteCount);\n" ++
-    "        var padLen = Math.max(0, byteCount - 16);\n" ++
-    "        var bodyText = '{\"d\":\"' + 'a'.repeat(Math.min(padLen, 1024)) + '\"}';\n" ++
+    "        var prefix = '{\"seed\":' + seedVal + ',\"filler\":\"';\n" ++
+    "        var suffix = '\"}';\n" ++
+    "        var padLen = Math.max(0, byteCount - prefix.length - suffix.length);\n" ++
+    "        var bodyText = prefix + 'a'.repeat(padLen) + suffix;\n" ++
+    "        if (typeof g.__capsurf_record_fetch === 'function') {\n" ++
+    "          g.__capsurf_record_fetch(absChatty, 'application/json', bodyText.length <= 262144 ? bodyText : '');\n" ++
+    "        }\n" ++
     "        return Promise.resolve({\n" ++
     "          ok: true,\n" ++
     "          status: 200,\n" ++
     "          statusText: 'OK',\n" ++
-    "          url: urlStr,\n" ++
+    "          url: absChatty,\n" ++
     "          headers: { get: function(k){ return String(k).toLowerCase() === 'content-type' ? 'application/json' : null; } },\n" ++
     "          text: function(){ return Promise.resolve(bodyText); },\n" ++
-    "          json: function(){ return Promise.resolve({ d: 'a' }); }\n" ++
+    "          json: function(){ return Promise.resolve(JSON.parse(bodyText)); }\n" ++
     "        });\n" ++
     "      }\n" ++
     "      if (typeof g.__capsurf_fixture_fetch === 'function' &&\n" ++
@@ -1112,6 +1221,71 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
 pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "(function(){\n" ++
     "  var g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this);\n" ++
+    "  if (typeof g.__capsurf_dispatch_mouse_event === 'function' && !g.__capsurf_dispatch_mouse_event.__drag_sel_wrapped) {\n" ++
+    "    var origDispatchMouse = g.__capsurf_dispatch_mouse_event;\n" ++
+    "    function firstTextNode(n) {\n" ++
+    "      if (!n) return null;\n" ++
+    "      if (n.nodeType === 3) return (n.nodeValue || n.textContent || '').trim().length > 0 ? n : null;\n" ++
+    "      if (n.nodeType === 1) {\n" ++
+    "        var tnTag = String(n.tagName || '').toUpperCase();\n" ++
+    "        if (tnTag === 'HEAD' || tnTag === 'STYLE' || tnTag === 'SCRIPT' || tnTag === 'TITLE' || tnTag === 'NOSCRIPT') return null;\n" ++
+    "      }\n" ++
+    "      var cs = n.childNodes || [];\n" ++
+    "      for (var i = 0; i < cs.length; i++) {\n" ++
+    "        var t = firstTextNode(cs[i]);\n" ++
+    "        if (t) return t;\n" ++
+    "      }\n" ++
+    "      return null;\n" ++
+    "    }\n" ++
+    "    var wrappedDispatchMouse = function(evType, x, y, btn, btns, clicks, skipClick) {\n" ++
+    "      var res = origDispatchMouse.apply(this, arguments);\n" ++
+    "      try {\n" ++
+    "        if (evType === 'mousePressed' && btn === 'left' && g.document) {\n" ++
+    "          var el = (typeof g.document.elementFromPoint === 'function') ? g.document.elementFromPoint(x, y) : null;\n" ++
+    "          if (!el || el === g.document.documentElement) el = g.document.body || el || g.document.documentElement;\n" ++
+    "          if (el) {\n" ++
+    "            var tag = String(el.tagName || '').toUpperCase();\n" ++
+    "            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && tag !== 'BUTTON') {\n" ++
+    "              var tn = firstTextNode(el);\n" ++
+    "              if (tn) {\n" ++
+    "                var boxEl = tn.parentNode || el;\n" ++
+    "                var r = (boxEl && boxEl.getBoundingClientRect) ? boxEl.getBoundingClientRect() : { left: 0 };\n" ++
+    "                var internals = g[Symbol.for('kitesurf.internals')];\n" ++
+    "                var cw = (internals && typeof internals.ttyCellWidth === 'number' && internals.ttyCellWidth > 0) ? internals.ttyCellWidth : 8;\n" ++
+    "                var len = (tn.nodeValue || tn.textContent || '').length;\n" ++
+    "                var startOff = Math.max(0, Math.min(len, Math.floor((x - r.left) / cw)));\n" ++
+    "                g.__capsurf_drag_sel = { tn: tn, startOff: startOff, left: r.left, cw: cw };\n" ++
+    "                if (typeof g.getSelection === 'function') {\n" ++
+    "                  var sel = g.getSelection();\n" ++
+    "                  if (sel && sel.removeAllRanges) sel.removeAllRanges();\n" ++
+    "                }\n" ++
+    "              }\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseMoved' && (Number(btns || 0) & 1) !== 0) {\n" ++
+    "          var ds = g.__capsurf_drag_sel;\n" ++
+    "          if (ds && ds.tn && typeof g.getSelection === 'function' && g.document && g.document.createRange) {\n" ++
+    "            var len2 = (ds.tn.nodeValue || ds.tn.textContent || '').length;\n" ++
+    "            var rawOff = (x - ds.left) / ds.cw;\n" ++
+    "            var endOff = rawOff >= ds.startOff ? Math.max(0, Math.min(len2, Math.ceil(rawOff))) : Math.max(0, Math.min(len2, Math.floor(rawOff)));\n" ++
+    "            var s = Math.min(ds.startOff, endOff);\n" ++
+    "            var e = Math.max(ds.startOff, endOff);\n" ++
+    "            var range = g.document.createRange();\n" ++
+    "            range.setStart(ds.tn, s);\n" ++
+    "            range.setEnd(ds.tn, e);\n" ++
+    "            var sel2 = g.getSelection();\n" ++
+    "            if (sel2) { sel2.removeAllRanges(); sel2.addRange(range); }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseReleased') {\n" ++
+    "          g.__capsurf_drag_sel = null;\n" ++
+    "        }\n" ++
+    "      } catch (err) {}\n" ++
+    "      return res;\n" ++
+    "    };\n" ++
+    "    wrappedDispatchMouse.__drag_sel_wrapped = true;\n" ++
+    "    g.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "    if (typeof window !== 'undefined') window.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "  }\n" ++
     "  var pageOrigin = (g.location && g.location.origin && g.location.origin !== 'null') ? String(g.location.origin) : 'null';\n" ++
     "  function resolveUrlAbs(raw, base) { try { return new URL(raw, base || (g.location ? g.location.href : 'http://127.0.0.1:8787/')).href; } catch (e) { return raw; } }\n" ++
     "  function getSessionExtraHeadersJson() { try { if (typeof g.__capsurf_get_extra_headers === 'function') { var v = g.__capsurf_get_extra_headers(); if (typeof v === 'string' && v.length > 0) return v; } } catch (e) {} return (typeof g.__capsurf_session_extra_headers === 'string') ? g.__capsurf_session_extra_headers : '{}'; }\n" ++
@@ -1356,6 +1530,71 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
 pub const PAGE_WEBMCP_HOOKS_JS: []const u8 =
     "(function(){\n" ++
     "  var g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this);\n" ++
+    "  if (typeof g.__capsurf_dispatch_mouse_event === 'function' && !g.__capsurf_dispatch_mouse_event.__drag_sel_wrapped) {\n" ++
+    "    var origDispatchMouse = g.__capsurf_dispatch_mouse_event;\n" ++
+    "    function firstTextNode(n) {\n" ++
+    "      if (!n) return null;\n" ++
+    "      if (n.nodeType === 3) return (n.nodeValue || n.textContent || '').trim().length > 0 ? n : null;\n" ++
+    "      if (n.nodeType === 1) {\n" ++
+    "        var tnTag = String(n.tagName || '').toUpperCase();\n" ++
+    "        if (tnTag === 'HEAD' || tnTag === 'STYLE' || tnTag === 'SCRIPT' || tnTag === 'TITLE' || tnTag === 'NOSCRIPT') return null;\n" ++
+    "      }\n" ++
+    "      var cs = n.childNodes || [];\n" ++
+    "      for (var i = 0; i < cs.length; i++) {\n" ++
+    "        var t = firstTextNode(cs[i]);\n" ++
+    "        if (t) return t;\n" ++
+    "      }\n" ++
+    "      return null;\n" ++
+    "    }\n" ++
+    "    var wrappedDispatchMouse = function(evType, x, y, btn, btns, clicks, skipClick) {\n" ++
+    "      var res = origDispatchMouse.apply(this, arguments);\n" ++
+    "      try {\n" ++
+    "        if (evType === 'mousePressed' && btn === 'left' && g.document) {\n" ++
+    "          var el = (typeof g.document.elementFromPoint === 'function') ? g.document.elementFromPoint(x, y) : null;\n" ++
+    "          if (!el || el === g.document.documentElement) el = g.document.body || el || g.document.documentElement;\n" ++
+    "          if (el) {\n" ++
+    "            var tag = String(el.tagName || '').toUpperCase();\n" ++
+    "            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && tag !== 'BUTTON') {\n" ++
+    "              var tn = firstTextNode(el);\n" ++
+    "              if (tn) {\n" ++
+    "                var boxEl = tn.parentNode || el;\n" ++
+    "                var r = (boxEl && boxEl.getBoundingClientRect) ? boxEl.getBoundingClientRect() : { left: 0 };\n" ++
+    "                var internals = g[Symbol.for('kitesurf.internals')];\n" ++
+    "                var cw = (internals && typeof internals.ttyCellWidth === 'number' && internals.ttyCellWidth > 0) ? internals.ttyCellWidth : 8;\n" ++
+    "                var len = (tn.nodeValue || tn.textContent || '').length;\n" ++
+    "                var startOff = Math.max(0, Math.min(len, Math.floor((x - r.left) / cw)));\n" ++
+    "                g.__capsurf_drag_sel = { tn: tn, startOff: startOff, left: r.left, cw: cw };\n" ++
+    "                if (typeof g.getSelection === 'function') {\n" ++
+    "                  var sel = g.getSelection();\n" ++
+    "                  if (sel && sel.removeAllRanges) sel.removeAllRanges();\n" ++
+    "                }\n" ++
+    "              }\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseMoved' && (Number(btns || 0) & 1) !== 0) {\n" ++
+    "          var ds = g.__capsurf_drag_sel;\n" ++
+    "          if (ds && ds.tn && typeof g.getSelection === 'function' && g.document && g.document.createRange) {\n" ++
+    "            var len2 = (ds.tn.nodeValue || ds.tn.textContent || '').length;\n" ++
+    "            var rawOff = (x - ds.left) / ds.cw;\n" ++
+    "            var endOff = rawOff >= ds.startOff ? Math.max(0, Math.min(len2, Math.ceil(rawOff))) : Math.max(0, Math.min(len2, Math.floor(rawOff)));\n" ++
+    "            var s = Math.min(ds.startOff, endOff);\n" ++
+    "            var e = Math.max(ds.startOff, endOff);\n" ++
+    "            var range = g.document.createRange();\n" ++
+    "            range.setStart(ds.tn, s);\n" ++
+    "            range.setEnd(ds.tn, e);\n" ++
+    "            var sel2 = g.getSelection();\n" ++
+    "            if (sel2) { sel2.removeAllRanges(); sel2.addRange(range); }\n" ++
+    "          }\n" ++
+    "        } else if (evType === 'mouseReleased') {\n" ++
+    "          g.__capsurf_drag_sel = null;\n" ++
+    "        }\n" ++
+    "      } catch (err) {}\n" ++
+    "      return res;\n" ++
+    "    };\n" ++
+    "    wrappedDispatchMouse.__drag_sel_wrapped = true;\n" ++
+    "    g.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "    if (typeof window !== 'undefined') window.__capsurf_dispatch_mouse_event = wrappedDispatchMouse;\n" ++
+    "  }\n" ++
     "  if (!g.document) return;\n" ++
     "  var nativeSetTimeout = g.setTimeout;\n" ++
     "  function scheduleTask(fn) {\n" ++

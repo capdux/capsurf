@@ -962,10 +962,24 @@ pub struct MockFixtures {
         }
 
         if (std.mem.indexOf(u8, url, "/chatty-json") != null) {
-            const body = "{\"ok\":true,\"data\":\"chatty\"}";
-            const len = @min(body.len, out_buf.len);
-            @memcpy(out_buf[0..len], body[0..len]);
-            return out_buf[0..len];
+            let bytes_val: usize = 1024;
+            let seed_val: usize = 0;
+            if (b_str := MockFixtures.extractQueryParam(url, "bytes")) {
+                bytes_val = std.fmt.parseInt(usize, b_str, 10) catch 1024;
+            }
+            if (s_str := MockFixtures.extractQueryParam(url, "seed")) {
+                seed_val = std.fmt.parseInt(usize, s_str, 10) catch 0;
+            }
+            const prefix = std.fmt.bufPrint(out_buf, "{{\"seed\":{d},\"filler\":\"", .{seed_val}) catch return null;
+            const target_len = @min(@max(bytes_val, prefix.len + 2), out_buf.len);
+            const fill_end = target_len - 2;
+            let fi: usize = prefix.len;
+            while (fi < fill_end) : (fi += 1) {
+                out_buf[fi] = 'a';
+            }
+            out_buf[fill_end] = '"';
+            out_buf[fill_end + 1] = '}';
+            return out_buf[0..target_len];
         }
 
         if (std.mem.indexOf(u8, url, "/slow-document.html") != null) {

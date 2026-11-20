@@ -1684,3 +1684,7 @@
 
 ## Phase 184 静态 Iframe 自动挂载与子窗口视口隔离方案 (`src/js/shim/`)
 1. **子窗口作用域显式遮蔽**：为 `contentWindow` 定义基于 iframe 自身几何的 `innerWidth`/`innerHeight`，并在 `executeIframeInlineScripts` 与 `evalInIframe` 的 `new Function` 形参中显式传入，避免子 frame 脚本穿透读取父窗口 `800x600`。
+
+## Phase 186 动态 Iframe 事件、256KB 响应体上限与选区拖拽方案 (`src/cdp/`)
+1. **动态 Iframe 与 256KB 保留 (`page.cp`, `network.cp`, `session_hooks.cp`)**：`emitNewChildFrameEvents` 在 `Runtime.evaluate` 后比对 `emitted_child_frame_count` 补发子帧生命周期；`js_capsurf_record_fetch` 对超过 `262144` 字节响应体置空缓存以保护内存。
+2. **JS 鼠标入口选区同步 (`session_hooks.cp`)**：在 `PAGE_RUNTIME_HOOKS_JS` 拦截 `__capsurf_dispatch_mouse_event`，按 `ttyCellWidth` 跳过非正文节点更新 `getSelection()`。

@@ -15,7 +15,7 @@ import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, Scrol
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
-import { recordResponseBody } from "./network.cp";
+import { recordResponseBody, consumePendingFetchBody } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -820,6 +820,8 @@ pub struct CdpPageSession {
     iframe_frame_id_buf: [64]u8 = [0; 64],
     iframe_frame_id_len: usize = 0,
     pending_iframe_ctx_event: bool = false,
+    emitted_child_frame_count: usize = 0,
+    net_req_seq: u64 = 0,
 
     // Navigation History state
     nav_entries: [16]NavigationEntry = [NavigationEntry{}; 16],
@@ -858,7 +860,7 @@ pub struct CdpPageSession {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
         const document = Document.init(allocator) catch return error.DocInitFailed;
         const layout_tree = LayoutTree.init(allocator, 1280.0, 720.0) catch return error.LayoutInitFailed;
-        const js_rt = JsRuntime.init(256 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
+        const js_rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
         const jar = CookieJar.init(allocator);
 
         @memset(std.mem.asBytes(ptr), 0);
@@ -1737,6 +1739,8 @@ pub struct CdpPageSession {
         _.scroll_y = 0.0;
         _.iframe_ctx_created = false;
         _.pending_iframe_ctx_event = false;
+        _.emitted_child_frame_count = 0;
+        _.net_req_seq = 0;
         _.rotateIsolatedWorldsOnNavigate();
 
         // Set document url and referrer in JS environment
@@ -4136,10 +4140,22 @@ pub struct CdpPageSession {
             let i: usize = 0;
             while (i < dom.fetch_count && ev_idx + 3 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
+                _.net_req_seq += 1;
+                const req_seq = _.net_req_seq;
                 const fetch_url = rec.getUrl();
                 const fetch_mime = rec.getMimeType();
                 const fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
                 const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
+
+                const pending = consumePendingFetchBody(fetch_url);
+                if (pending.found) {
+                    let p_req_id_buf: [32]u8 = undefined;
+                    const p_req_id = std.fmt.bufPrint(&p_req_id_buf, "req-{d}", .{ req_seq }) catch "req-1";
+                    recordResponseBody(p_req_id, pending.body, false);
+                    if (pending.body.len > 0) {
+                        std.heap.c_allocator.free(pending.body);
+                    }
+                }
 
                 const is_font = std.mem.indexOf(u8, fetch_url, ".woff") != null ||
                                 std.mem.indexOf(u8, fetch_url, ".ttf") != null ||
@@ -4169,7 +4185,7 @@ pub struct CdpPageSession {
                 const req_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
-                    .{ i + 1, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid },
+                    .{ req_seq, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid },
                 ) catch "";
                 if (req_json.len > 0) {
                     storage_pos += req_json.len;
@@ -4180,7 +4196,7 @@ pub struct CdpPageSession {
                 const resp_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
-                    .{ i + 1, lid, res_type, fetch_url, fetch_mime, fid },
+                    .{ req_seq, lid, res_type, fetch_url, fetch_mime, fid },
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;
@@ -4191,7 +4207,7 @@ pub struct CdpPageSession {
                 const fin_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":0}}",
-                    .{ i + 1 },
+                    .{ req_seq },
                 ) catch "";
                 if (fin_json.len > 0) {
                     storage_pos += fin_json.len;

@@ -2216,3 +2216,7 @@
 
 ## Phase 185: Pure-CP BoxShadow, `clip-path`, `opacity` & `overflow: clip` Whitebox Suite (4/4 PASS)
 - 新增 `test/render/test_box_shadow_and_clip.cp`，覆盖 `box-shadow: inset`、`clip-path: inset`、`opacity` 混合与 `overflow: clip` 像素验证（`cap test -m` **4/4 PASS**, 1595ms）。
+
+## Phase 186: `iframe-dynamic-cdp-demo`, `oversize-body-streams` & `terminal-selection-after-navigation` — 3/3 Suites (21 Expects) + 512MB Heap
+- **`src/cdp/{network,session,page,runtime,session_hooks,input}.cp` & `src/net/mock_fixtures.cp`**：
+  - 实装动态 iframe CDP 事件推流、`/chatty-json` 256KB 保留上限、`ttyCellWidth` 拖拽选区同步与 512MB QuickJS 堆上限（4 门禁全 0，**3/3 PASS, 6.76s**）。

@@ -4465,3 +4465,14 @@
 ## [2026-11-21 01:05:30] 2 分钟新增并全绿通过纯 CP `box-shadow`/裁剪/透明度白盒单测 `test/render/test_box_shadow_and_clip.cp` (Subagent bfc10005 结单，Phase 185)
 - **新增白盒测试 (`test/render/test_box_shadow_and_clip.cp`)**: 覆盖 `box-shadow: inset`/outset 级联与像素断言、`clip-path: inset(...)` 裁剪、`opacity: 0.5/0.0` Alpha 混合及 `overflow: clip` 子盒裁剪（**4/4 PASS**, 1595ms, 4 门禁全 0；`test/render/` 达 **5/5 PASS**）。
 - **清理旧子智能体**: 销毁 `bfc10005-d948-404e-828d-68d7a160752c`。
+
+## [2026-11-21 01:06:30] 4 项高密 CDP 收口全绿 (`iframe-dynamic-cdp-demo`、`oversize-body-streams`、`terminal-selection-after-navigation` 3/3 PASS) (Subagent fe1eaadb 结单，Phase 186)
+- **动态 Iframe、256KB 流式保留上限、导航后拖拽选区与 512MB 堆 (`src/cdp/{network,session,page,runtime,session_hooks,input}.cp`, `src/net/mock_fixtures.cp`)**:
+  - `page.cp` & `runtime.cp` & `session.cp`：新增 `emitNewChildFrameEvents()` 在 `Runtime.evaluate` 轮询并发射动态 `<iframe>` 的 `frameAttached`/`frameStartedLoading`/`frameNavigated`/`lifecycleEvent`/`frameStoppedLoading`；
+  - `session_hooks.cp` & `network.cp` & `mock_fixtures.cp`：取消 `/chatty-json` 1024B 截断并接入 `js_capsurf_record_fetch`（`<=262144` 保留 body，`>262144` 置空）关联 `PendingFetchBody`；
+  - `session_hooks.cp`：包装 `__capsurf_dispatch_mouse_event` 按 `ttyCellWidth` 在正文节点维护 `getSelection()` 拖拽选区；
+  - `session.cp:863`：`JsRuntime.init` 提升至 `512MB` 解除 3×300k 对象 OOM。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - 全部 7 个 `.cp` 文件 4 门禁全 0；
+  - `iframe-dynamic-cdp-demo` (**1/1**)、`oversize-body-streams` (**1/1**)、`terminal-selection-after-navigation` (**1/1**)：**3/3 PASS (21 expect() calls, 6.76s)**！
+- **清理旧子智能体**: 销毁 `fe1eaadb-d251-468d-bae4-b2194fae0e15`。

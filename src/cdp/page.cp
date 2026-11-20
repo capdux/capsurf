@@ -207,6 +207,118 @@ fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
     }
 }
 
+pub fn emitNewChildFrameEvents(
+    session: *CdpPageSession,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+) {
+    if (!session.has_document) return;
+    const nav_frames = session.allocator.alloc(FrameState, 8) catch return;
+    const nav_urls = session.allocator.alloc(u8, 8 * 512) catch {
+        session.allocator.free(nav_frames);
+        return;
+    };
+    const nav_ids = session.allocator.alloc(u8, 8 * 32) catch {
+        session.allocator.free(nav_frames);
+        session.allocator.free(nav_urls);
+        return;
+    };
+    defer session.allocator.free(nav_frames);
+    defer session.allocator.free(nav_urls);
+    defer session.allocator.free(nav_ids);
+
+    const nav_frame_count = collectFrameStates(session, nav_frames, nav_urls, nav_ids);
+    const total_children: usize = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
+    if (total_children <= session.emitted_child_frame_count) return;
+
+    let frame_info_buf: [2048]u8 = [0; 2048];
+    let fi: usize = @as(usize, 1) + session.emitted_child_frame_count;
+    while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
+        const cf = &nav_frames[fi];
+        const parent_fid = cf.parent_frame_id ?? session.frame_id;
+        if (event_count.* < out_events.len) {
+            const att_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\",\"parentFrameId\":\"{s}\"}}",
+                .{ cf.frame_id, parent_fid },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.frameAttached", att_json);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const start_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\"}}",
+                .{ cf.frame_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const frame_info = makeFrameInfoWithFrames(cf, nav_frames[0..nav_frame_count], &frame_info_buf);
+            const nav_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frame\":{s},\"type\":\"Navigation\"}}",
+                .{ frame_info },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", nav_json);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const lc_init = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
+                .{ cf.frame_id, cf.loader_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_init);
+            event_count.* += 1;
+        }
+        if (session.runtime_enabled && event_count.* < out_events.len) {
+            const ctx_id = session.next_context_id;
+            session.next_context_id += 1;
+            const cf_origin = originOf(cf.url);
+            let esc_orig_buf: [256]u8 = [0; 256];
+            const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
+            const ctx_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"frameId\":\"{s}\"}}}}}}",
+                .{ ctx_id, esc_orig, cf.frame_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const lc_dcl = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.05}}",
+                .{ cf.frame_id, cf.loader_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_dcl);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const lc_load = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.08}}",
+                .{ cf.frame_id, cf.loader_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const stop_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\"}}",
+                .{ cf.frame_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+            event_count.* += 1;
+        }
+    }
+    session.emitted_child_frame_count = total_children;
+    syncIframeTargets(session, true);
+}
+
 fn applyTtyNavParamsFromUrl(raw_url: []const u8, session: *CdpPageSession): bool {
     const q_pos = std.mem.indexOfScalar(u8, raw_url, '?') ?? return false;
     const h_pos = std.mem.indexOfScalarPos(u8, raw_url, q_pos, '#') ?? raw_url.len;
@@ -963,6 +1075,7 @@ pub struct PageHandler {
                         event_count.* += 1;
                     }
                 }
+                session.emitted_child_frame_count = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
             }
 
             if (session.css_enabled) {

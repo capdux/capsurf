@@ -5,6 +5,7 @@
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { emitPendingNavigationEvents } from "./input.cp";
+import { emitNewChildFrameEvents } from "./page.cp";
 import { JS_Eval, jsIsException } from "../js/qjs_engine.cp";
 import { makeCompiledScriptMeta, emitScriptParsedEvent } from "./debugger.cp";
 
@@ -321,6 +322,9 @@ pub struct RuntimeHandler {
                 out_events[event_count.*] = polled_ctx_evts[c_i];
                 event_count.* += 1;
             }
+
+            // Emit dynamic child iframe lifecycle events if any new iframes were attached
+            emitNewChildFrameEvents(session, out_events, event_count);
 
             // Poll any CSS events produced during evaluation
             if (session.css_enabled) {
