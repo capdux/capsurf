@@ -2192,3 +2192,6 @@
 
 ## Phase 177: `Element.textContent` Setter `MutationRecord` Dispatch & `transientTargets` Cleanup
 - **`src/js/shim/{node-base,mutations/observer}.js` & `src/js/runtime{,_source.cp}`**：修复 `textContent` setter 缺失旧子节点断开与 `MutationRecord` 派发，并清理 `transientTargets` 强引用（4 门禁全 0）。
+
+## Phase 178: Pure-CP Transitions & `@keyframes` Whitebox Suite `test/css/test_transitions_keyframes.cp` (3/3 PASS)
+- 新增 `test/css/test_transitions_keyframes.cp`，覆盖 `cubic-bezier`/`steps` 缓动、`TransitionItem`、`AnimationItem` 与 `@keyframes`（`cap test -m` **3/3 PASS**, 847ms）。

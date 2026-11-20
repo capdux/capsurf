@@ -4425,3 +4425,7 @@
   - `observer.js:55-176`：补齐 `subtree: true` 瞬态观测目标 `transientTargets` 并在微任务投递前与 `disconnect()` 时清空避免强引用泄漏。
 - **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 复测 `style-churn-memory` & `text-content-memory`）。
 - **清理旧子智能体**: 销毁 `89f2e756-107a-46b6-9587-095312e59b1f`。
+
+## [2026-11-21 00:53:30] 2 分钟新增并全绿通过纯 CP Transitions/@keyframes 白盒单测 `test/css/test_transitions_keyframes.cp` (Subagent c4b2a39f 结单，Phase 178)
+- **新增白盒测试 (`test/css/test_transitions_keyframes.cp`)**: 覆盖 `EasingFunction` (`linear`/`ease`/`cubic-bezier`/`steps`)、`TransitionItem`/`Time` 解析格式化、`AnimationItem` 与 `@keyframes` 解析（**3/3 PASS**, 847ms, 4 门禁全 0；`test/css/` 达 **6/6 PASS**）。
+- **清理旧子智能体**: 销毁 `c4b2a39f-ddba-4bae-8d0a-92b23ac7d848`。
