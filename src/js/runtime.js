@@ -40159,6 +40159,19 @@
       });
       _dispatchTrusted(target, ev);
       if (!ev.defaultPrevented) {
+        const ksInternals = (typeof globalThis !== "undefined") ? globalThis[Symbol.for("kitesurf.internals")] : null;
+        const cellX = Math.max(0, Number(ksInternals && ksInternals.ttyCellWidth) || 0);
+        const cellY = Math.max(0, Number(ksInternals && ksInternals.ttyCellHeight) || 0);
+        const snapWheelDelta = function (before, delta, maxScroll, cell) {
+          let movement = delta;
+          if (maxScroll !== null) {
+            movement = Math.max(-before, Math.min(delta, maxScroll - before));
+          } else if (before + delta < 0) {
+            movement = -before;
+          }
+          if (cell > 0) movement = Math.trunc(movement / cell) * cell;
+          return movement;
+        };
         let remX = dx;
         let remY = dy;
         let cur = target;
@@ -40173,22 +40186,22 @@
             const ox = (cs && (cs.overflowX || cs.overflow)) || "";
             const oy = (cs && (cs.overflowY || cs.overflow)) || "";
             if ((ox === "auto" || ox === "scroll") && remX !== 0) {
-              const maxX = Math.max(0, (cur.scrollWidth || 0) - (cur.clientWidth || 0));
+              const maxX = (cur.clientWidth || 0) > 0 ? Math.max(0, (cur.scrollWidth || 0) - (cur.clientWidth || 0)) : null;
               const curX = cur.scrollLeft || 0;
-              const nextX = Math.max(0, Math.min(maxX, curX + remX));
-              const consumedX = nextX - curX;
-              if (consumedX !== 0) {
-                cur.scrollLeft = nextX;
+              const moveX = snapWheelDelta(curX, remX, maxX, cellX);
+              if (moveX !== 0) {
+                cur.scrollLeft = curX + moveX;
+                const consumedX = (cur.scrollLeft || 0) - curX;
                 remX -= consumedX;
               }
             }
             if ((oy === "auto" || oy === "scroll") && remY !== 0) {
-              const maxY = Math.max(0, (cur.scrollHeight || 0) - (cur.clientHeight || 0));
+              const maxY = (cur.clientHeight || 0) > 0 ? Math.max(0, (cur.scrollHeight || 0) - (cur.clientHeight || 0)) : null;
               const curY = cur.scrollTop || 0;
-              const nextY = Math.max(0, Math.min(maxY, curY + remY));
-              const consumedY = nextY - curY;
-              if (consumedY !== 0) {
-                cur.scrollTop = nextY;
+              const moveY = snapWheelDelta(curY, remY, maxY, cellY);
+              if (moveY !== 0) {
+                cur.scrollTop = curY + moveY;
+                const consumedY = (cur.scrollTop || 0) - curY;
                 remY -= consumedY;
               }
             }
@@ -40198,8 +40211,10 @@
             if (oby === "contain" || oby === "none") remY = 0;
             if (remX === 0 && remY === 0) break;
           }
-          cur = cur.parentElement || cur.parentNode;
+          cur = cur.parentElement || cur.parentNode || cur.host;
         }
+        if (cellX > 0) remX = Math.trunc(remX / cellX) * cellX;
+        if (cellY > 0) remY = Math.trunc(remY / cellY) * cellY;
         if ((remX !== 0 || remY !== 0) && typeof global.scrollBy === "function") {
           global.scrollBy(remX, remY);
         }

@@ -1759,3 +1759,7 @@
 ### Phase 231: `GlobalEventHandlers` Spec Alignment & Inline CSP (`event-handler-idl` + `script-gate` 23/23)
 - `[LenientThis]` on `onmouseenter`/`onmouseleave` returns `undefined` instead of throwing `TypeError: Illegal invocation` on non-element receivers; `HTMLBodyElement.prototype` forwards 22 window-reflecting handlers to `window` and invalidates cached inline attributes on `setAttribute`/`removeAttribute`.
 - Removing the redundant `img[src*="missing.png"]` fallback timer in `session_hooks.cp` stops double `onerror` firing.
+
+### Phase 232: Wheel Deduplication, Shadow Traversal & Fragment Layout (`Scroll 4-Pack 5/5`)
+- `Mouse.wheel` in `e2e/harness.ts` previously fired both `Input.dispatchMouseEvent(mouseWheel)` and a manual `page.evaluate` scroll, causing 2x scroll deltas; removing the manual fallback and adding `cur.host` traversal in `dispatchWheelEvent` aligns Shadow DOM and container wheel behavior.
+- Calling `ensureLayout()` before `#fragment` `scrollIntoView()` and removing the unconditional `window.scrollTo(0, 0)` reset in `Emulation.setDeviceMetricsOverride` preserves initial fragment scroll positions.

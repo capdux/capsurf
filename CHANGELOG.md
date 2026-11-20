@@ -2373,3 +2373,8 @@
 - Added `test/dom/test_template_inert_and_script_edge.cp`.
 - Implemented `[LenientThis]`, `HTMLBodyElement` window-reflecting handlers, top-level `window` own `on*` accessors, bounded `window.onerror`, and inline handler CSP alignment in `src/js/shim/{element/html-classes.js,window.js,events/dispatch.js}` (+ `runtime.js`/`runtime_source.cp`) and `src/cdp/session_hooks.cp`.
 - Added `GEMINI.md` section `11.7` self-evolving efficiency rules.
+
+### Phase 232
+- Added `test/css/test_shorthand_and_computed_edge.cp` and `test/html/test_entities_and_tokenizer_edge.cp`.
+- Fixed numeric entity overflow clamping in `src/html/entities.cp`.
+- Fixed double wheel scrolling (`e2e/harness.ts`), Shadow DOM wheel traversal & TTY cell snapping (`src/js/shim/window.js` + `runtime.js`/`runtime_source.cp`), `#fragment` pre-scroll layout (`src/cdp/session.cp`), and `Emulation.setDeviceMetricsOverride` scroll reset (`src/cdp/emulation.cp`).

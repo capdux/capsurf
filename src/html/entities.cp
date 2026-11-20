@@ -101,6 +101,7 @@ pub fn decodeEntity(slice: []const u8, in_attribute: bool): DecodedCharRef? {
         }
 
         let num: u32 = 0;
+        let overflow: bool = false;
         let idx = start_idx;
         while (idx < slice.len) : (idx += 1) {
             const ch = slice[idx];
@@ -108,24 +109,36 @@ pub fn decodeEntity(slice: []const u8, in_attribute: bool): DecodedCharRef? {
                 break;
             }
             if (is_hex) {
+                let digit: u32 = 0;
                 if (ch >= '0' && ch <= '9') {
-                    num = (num << 4) | @as(u32, ch - '0');
+                    digit = @as(u32, ch - '0');
                 } else if (ch >= 'a' && ch <= 'f') {
-                    num = (num << 4) | @as(u32, ch - 'a' + 10);
+                    digit = @as(u32, ch - 'a' + 10);
                 } else if (ch >= 'A' && ch <= 'F') {
-                    num = (num << 4) | @as(u32, ch - 'A' + 10);
+                    digit = @as(u32, ch - 'A' + 10);
                 } else {
                     break;
+                }
+                if (!overflow) {
+                    if (num > (0x10FFFF - digit) >> 4) {
+                        overflow = true;
+                    } else {
+                        num = (num << 4) | digit;
+                    }
                 }
             } else {
                 if (ch >= '0' && ch <= '9') {
-                    num = (num * 10) + @as(u32, ch - '0');
+                    const digit = @as(u32, ch - '0');
+                    if (!overflow) {
+                        if (num > (0x10FFFF - digit) / 10) {
+                            overflow = true;
+                        } else {
+                            num = (num * 10) + digit;
+                        }
+                    }
                 } else {
                     break;
                 }
-            }
-            if (num > 0x10FFFF) {
-                num = 0xFFFD;
             }
         }
 
@@ -137,7 +150,7 @@ pub fn decodeEntity(slice: []const u8, in_attribute: bool): DecodedCharRef? {
         }
 
         // Apply HTML5 numeric character reference rules
-        if (num == 0 || (num >= 0xD800 && num <= 0xDFFF) || num > 0x10FFFF) {
+        if (overflow || num == 0 || (num >= 0xD800 && num <= 0xDFFF) || num > 0x10FFFF) {
             num = 0xFFFD;
         } else if (num >= 0x80 && num <= 0x9F) {
             num = mapWindows1252(num);

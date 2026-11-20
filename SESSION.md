@@ -4709,3 +4709,11 @@
   - Added `[LenientThis]` (`onmouseenter`/`onmouseleave`), `GlobalEventHandlers` accessor naming & `[LegacyTreatNonObjectAsNull]`, 22 `HTMLBodyElement` window-reflecting handlers + `setAttribute`/`removeAttribute` cache invalidation (`src/js/shim/element/html-classes.js`), top-level `window` own `on*` accessors (`src/js/shim/window.js`), bounded `window.onerror` forwarding (`src/js/shim/events/dispatch.js`), and removed duplicate `img` `onerror` timer in `src/cdp/session_hooks.cp` (re-bundled `runtime.js`/`runtime_source.cp`).
   - Built `bin_19233/main`; `e2e/event-handler-idl.e2e.test.ts` (**3/3 PASS**) + `e2e/script-gate.e2e.test.ts` (**20/20 PASS**) = **23/23 PASS** (36 assertions, exit 0).
 - **GEMINI.md**: Added section `11.7` (Pre-Seeded Prompts, Subtest-Scaled Timeout, Binary Sync on Commit).
+
+### Phase 232: CSS Shorthand & HTML Entities Whitebox (121/121) + Scroll/Fragment 4-Pack 5/5 PASS
+- **Slot A (`fb3eda41`, `4cc39a15`, `98a17609`)**:
+  - Added `test/css/test_shorthand_and_computed_edge.cp` (**4/4 PASS**, 1170ms) and `test/html/test_entities_and_tokenizer_edge.cp` (**5/5 PASS**, 768ms).
+  - Fixed numeric entity overflow loop in `src/html/entities.cp` (`overflow` flag preventing `&#99999999;` -> `655339`), verified `test/html/` **9/9 PASS**. Full-repo pure-CP whitebox now **121/121 (100% PASS)**.
+- **Slot B (`58f10505`)**:
+  - Removed duplicate `page.evaluate` scroll in `e2e/harness.ts` `Mouse.wheel`, added Shadow DOM `cur.host` traversal & TTY cell delta snapping in `src/js/shim/window.js` (re-bundled `runtime.js`/`runtime_source.cp`), added `ensureLayout()` + `updateLayoutMetrics()` before/after `#fragment` scroll in `src/cdp/session.cp`, and stopped `Emulation.setDeviceMetricsOverride` from resetting scroll in `src/cdp/emulation.cp`.
+  - Built `bin_19233/main` (5.99s); `fragment-initial-load`, `element-scroll-demo`, `shadow-scroll-ownership`, `vertical-scroll-demo` **5/5 PASS** (32 assertions, 15.14s) + regression `fixed-position-scroll` (2/2) & `tty-wheel-grid` (1/1) PASS.

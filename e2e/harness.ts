@@ -677,62 +677,6 @@ export class Mouse {
       params.browserContextId = this.page.browserContextId;
     }
     await this.page.cdp.send("Input.dispatchMouseEvent", params);
-    try {
-      await this.page.evaluate((dx: number, dy: number, cx: number, cy: number) => {
-        const ksInternals = (globalThis as any)[Symbol.for("kitesurf.internals")];
-        const cellX = Math.max(0, Number(ksInternals?.ttyCellWidth) || 0);
-        const cellY = Math.max(0, Number(ksInternals?.ttyCellHeight) || 0);
-        const wheelDelta = (before: number, delta: number, maxScroll: number | null, cell: number): number => {
-          let movement = delta;
-          if (maxScroll !== null) {
-            movement = Math.max(-before, Math.min(delta, maxScroll - before));
-          } else if (before + delta < 0) {
-            movement = -before;
-          }
-          if (cell > 0) movement = Math.trunc(movement / cell) * cell;
-          return movement;
-        };
-        let cur: any = (typeof document !== "undefined" && document.elementFromPoint) ? document.elementFromPoint(cx, cy) : null;
-        let remX = dx;
-        let remY = dy;
-        while (cur && cur !== document.body && cur !== document.documentElement) {
-          const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
-          const overflow = (style && (style.overflow || style.overflowY || style.overflowX)) || "";
-          const isScrollable = (overflow === "auto" || overflow === "scroll" || (cur.getAttribute && cur.getAttribute("style") && cur.getAttribute("style").includes("overflow")));
-          if (isScrollable) {
-            if (remY !== 0) {
-              const prev = cur.scrollTop || 0;
-              const sh = cur.scrollHeight || 0;
-              const ch = cur.clientHeight || 0;
-              const maxY = ch > 0 ? Math.max(0, sh - ch) : null;
-              const moveY = wheelDelta(prev, remY, maxY, cellY);
-              if (moveY !== 0) {
-                cur.scrollTop = prev + moveY;
-                const actual = cur.scrollTop - prev;
-                remY -= actual;
-              }
-            }
-            if (remX !== 0) {
-              const prev = cur.scrollLeft || 0;
-              const sw = cur.scrollWidth || 0;
-              const cw = cur.clientWidth || 0;
-              const maxX = cw > 0 ? Math.max(0, sw - cw) : null;
-              const moveX = wheelDelta(prev, remX, maxX, cellX);
-              if (moveX !== 0) {
-                cur.scrollLeft = prev + moveX;
-                const actual = cur.scrollLeft - prev;
-                remX -= actual;
-              }
-            }
-          }
-          if (remX === 0 && remY === 0) break;
-          cur = cur.parentElement;
-        }
-        if ((remX !== 0 || remY !== 0) && typeof window !== "undefined" && typeof window.scrollBy === "function") {
-          window.scrollBy(remX, remY);
-        }
-      }, deltaX, deltaY, this._x, this._y);
-    } catch {}
   }
 }
 

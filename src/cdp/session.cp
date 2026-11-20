@@ -2554,9 +2554,15 @@ pub struct CdpPageSession {
         }
         if (hash_pos := std.mem.indexOfScalar(u8, nav_url, '#')) {
             if (hash_pos + 1 < nav_url.len) {
+                _.ensureLayout();
                 const frag_js = "(function(){try{var h=location.hash?location.hash.slice(1):'';if(!h)return;var dec=h;try{dec=decodeURIComponent(h);}catch(e){}var el=document.getElementById(dec)||document.querySelector('[name=\"'+dec.replace(/\"/g,'\\\\\"')+'\"]');if(el&&typeof el.scrollIntoView==='function')el.scrollIntoView();}catch(e){}})()";
                 const fv = _.ctx.eval(frag_js);
                 _.ctx.freeValue(fv);
+                let sx: f32 = 0.0;
+                let sy: f32 = 0.0;
+                let cw: f32 = 0.0;
+                let ch: f32 = 0.0;
+                _.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             }
         }
 

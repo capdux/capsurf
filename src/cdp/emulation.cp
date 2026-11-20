@@ -53,8 +53,6 @@ pub struct EmulationHandler {
             session.viewport_height = clamped.height;
             session.layout.viewport_width = clamped.width;
             session.layout.viewport_height = clamped.height;
-            session.scroll_x = 0.0;
-            session.scroll_y = 0.0;
             if (dctx := session.dom_ctx) {
                 dctx.layout_dirty = true;
             }
@@ -74,7 +72,7 @@ pub struct EmulationHandler {
                 let js_buf: [1024]u8 = [0; 1024];
                 const js_expr = std.fmt.bufPrint(
                     &js_buf,
-                    "(() => {{ const w = {d}; const h = {d}; if (typeof window !== 'undefined') {{ window.innerWidth = w; window.innerHeight = h; if (window.scrollTo) {{ window.scrollTo(0, 0); }} else {{ window.scrollX = 0; window.scrollY = 0; }} }} if (typeof global !== 'undefined') {{ global.innerWidth = w; global.innerHeight = h; if (global.scrollTo) {{ global.scrollTo(0, 0); }} else {{ global.scrollX = 0; global.scrollY = 0; }} }} if (typeof globalThis !== 'undefined') {{ globalThis.innerWidth = w; globalThis.innerHeight = h; if (globalThis.scrollTo) {{ globalThis.scrollTo(0, 0); }} else {{ globalThis.scrollX = 0; globalThis.scrollY = 0; }} }} }})()",
+                    "(() => {{ const w = {d}; const h = {d}; if (typeof window !== 'undefined') {{ window.innerWidth = w; window.innerHeight = h; }} if (typeof global !== 'undefined') {{ global.innerWidth = w; global.innerHeight = h; }} if (typeof globalThis !== 'undefined') {{ globalThis.innerWidth = w; globalThis.innerHeight = h; }} }})()",
                     .{ @as(i64, @intFromFloat(clamped.width)), @as(i64, @intFromFloat(clamped.height)) },
                 ) catch null;
                 if (e := js_expr) {
