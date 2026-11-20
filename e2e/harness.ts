@@ -298,21 +298,24 @@ export class CDPClient {
       typeof params.y === "number"
     ) {
       if (params.type === "mouseMoved") {
-        (this as any)._pendingMouseMove = {
-          x: params.x,
-          y: params.y,
-          button: params.button !== undefined ? params.button : "none",
-          buttons: params.buttons !== undefined ? params.buttons : null,
-          clickCount: params.clickCount ?? 1,
-          sessionId,
-        };
-        if (!(this as any)._pendingMouseMoveTimer) {
-          (this as any)._pendingMouseMoveTimer = setTimeout(() => {
-            (this as any)._pendingMouseMoveTimer = null;
-            void flushPendingMouseMove();
-          }, 16);
+        const hasHeldButtons = typeof params.buttons === "number" && params.buttons !== 0;
+        if (!hasHeldButtons) {
+          (this as any)._pendingMouseMove = {
+            x: params.x,
+            y: params.y,
+            button: params.button !== undefined ? params.button : "none",
+            buttons: params.buttons !== undefined ? params.buttons : null,
+            clickCount: params.clickCount ?? 1,
+            sessionId,
+          };
+          if (!(this as any)._pendingMouseMoveTimer) {
+            (this as any)._pendingMouseMoveTimer = setTimeout(() => {
+              (this as any)._pendingMouseMoveTimer = null;
+              void flushPendingMouseMove();
+            }, 16);
+          }
+          return {};
         }
-        return {};
       }
       if ((this as any)._pendingMouseMove || (this as any)._flushMouseMovePromise) {
         await flushPendingMouseMove();
@@ -1128,7 +1131,7 @@ export class Page {
     });
     this.cdp.on("Page.frameNavigated", (e: any) => {
       const u = e?.frame?.url || e?.url;
-      if (u) {
+      if (u && !e?.frame?.parentId) {
         this._url = u;
       }
       this.emit("framenavigated", e?.frame || e);

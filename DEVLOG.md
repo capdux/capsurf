@@ -1763,3 +1763,7 @@
 ### Phase 232: Wheel Deduplication, Shadow Traversal & Fragment Layout (`Scroll 4-Pack 5/5`)
 - `Mouse.wheel` in `e2e/harness.ts` previously fired both `Input.dispatchMouseEvent(mouseWheel)` and a manual `page.evaluate` scroll, causing 2x scroll deltas; removing the manual fallback and adding `cur.host` traversal in `dispatchWheelEvent` aligns Shadow DOM and container wheel behavior.
 - Calling `ensureLayout()` before `#fragment` `scrollIntoView()` and removing the unconditional `window.scrollTo(0, 0)` reset in `Emulation.setDeviceMetricsOverride` preserves initial fragment scroll positions.
+
+### Phase 233: Drag `buttons` Bypass, Top-Frame URL Guard & Finite `@keyframes` Clamping
+- Bypassing `_pendingMouseMove` coalescing when `params.buttons !== 0` preserves every drag step while keeping hover coalescing intact.
+- Clamping finite `@keyframes` animations at `elapsed >= dur * iterCount` in `session_hooks.cp` ensures `ResizeObserver` observes the final `100%` frame.

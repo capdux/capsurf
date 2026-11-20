@@ -1113,7 +1113,17 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "        var kfName = am[1];\n" ++
     "        var dur = parseFloat(am[2]) * (am[3].toLowerCase() === 's' ? 1000 : 1);\n" ++
     "        if (!(dur > 0)) dur = 1000;\n" ++
-    "        var alternate = /alternate/i.test(am[4] || '');\n" ++
+    "        var rest = am[4] || '';\n" ++
+    "        var alternate = /alternate/i.test(rest);\n" ++
+    "        var isInfinite = /\\binfinite\\b/i.test(rest);\n" ++
+    "        var iterCount = isInfinite ? Infinity : 1;\n" ++
+    "        if (!isInfinite) {\n" ++
+    "          var icm = /\\b(\\d+(?:\\.\\d+)?)\\b/.exec(rest.replace(/\\b[\\d.]+(?:ms|s)\\b/gi, ''));\n" ++
+    "          if (icm) {\n" ++
+    "            var parsedIc = parseFloat(icm[1]);\n" ++
+    "            if (parsedIc >= 0) iterCount = parsedIc;\n" ++
+    "          }\n" ++
+    "        }\n" ++
     "        var els = g.document.querySelectorAll(sel);\n" ++
     "        for (var ei = 0; ei < els.length; ei++) {\n" ++
     "          animStates.push({\n" ++
@@ -1121,6 +1131,8 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "            name: kfName,\n" ++
     "            dur: dur,\n" ++
     "            alternate: alternate,\n" ++
+    "            iterCount: iterCount,\n" ++
+    "            finished: false,\n" ++
     "            kf: kfMap[kfName] || { fromW: null, toW: null },\n" ++
     "            iters: 0,\n" ++
     "            lastW: -1\n" ++
@@ -1166,13 +1178,16 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      var didAnimResolve = false;\n" ++
     "      for (var i = 0; i < animStates.length; i++) {\n" ++
     "        var st = animStates[i];\n" ++
-    "        var curIter = Math.floor(elapsed / st.dur);\n" ++
+    "        if (st.finished) continue;\n" ++
+    "        var totalDur = st.iterCount === Infinity ? Infinity : st.dur * st.iterCount;\n" ++
+    "        var isDone = totalDur !== Infinity && elapsed >= totalDur;\n" ++
+    "        var curIter = isDone ? Math.floor(st.iterCount) : Math.floor(elapsed / st.dur);\n" ++
     "        if (curIter > st.iters) {\n" ++
     "          var diff = Math.min(curIter - st.iters, 4);\n" ++
     "          st.iters = curIter;\n" ++
     "          for (var k = 0; k < diff; k++) {\n" ++
     "            try {\n" ++
-    "              var ev = new Event('animationiteration', { bubbles: true });\n" ++
+    "              var ev = new Event(isDone && k === diff - 1 ? 'animationend' : 'animationiteration', { bubbles: true });\n" ++
     "              ev.animationName = st.name;\n" ++
     "              ev.elapsedTime = (st.iters * st.dur) / 1000;\n" ++
     "              st.el.dispatchEvent(ev);\n" ++
@@ -1180,9 +1195,15 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          }\n" ++
     "        }\n" ++
     "        if (st.kf.fromW !== null && st.kf.toW !== null) {\n" ++
-    "          var phase = (elapsed % st.dur) / st.dur;\n" ++
-    "          if (st.alternate && (curIter % 2 === 1)) phase = 1 - phase;\n" ++
+    "          var phase;\n" ++
+    "          if (isDone) {\n" ++
+    "            phase = (st.alternate && (Math.floor(st.iterCount) % 2 === 0)) ? 0 : 1;\n" ++
+    "          } else {\n" ++
+    "            phase = (elapsed % st.dur) / st.dur;\n" ++
+    "            if (st.alternate && (curIter % 2 === 1)) phase = 1 - phase;\n" ++
+    "          }\n" ++
     "          var w = Math.round(st.kf.fromW + (st.kf.toW - st.kf.fromW) * phase);\n" ++
+    "          if (isDone) st.finished = true;\n" ++
     "          if (w !== st.lastW) {\n" ++
     "            st.lastW = w;\n" ++
     "            didAnimResolve = true;\n" ++
