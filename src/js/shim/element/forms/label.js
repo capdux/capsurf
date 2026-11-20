@@ -64,10 +64,15 @@ function getLabelsForControl(control) {
 
 function installLabelElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLLabelElement() {}
-  HTMLLabelElement.prototype = Object.create(ElementProto);
+  HTMLLabelElement.prototype = Object.create(HTMLElementProto);
   HTMLLabelElement.prototype.constructor = HTMLLabelElement;
+  Object.defineProperty(HTMLLabelElement.prototype, Symbol.toStringTag, {
+    value: "HTMLLabelElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLLabelElement.prototype, "htmlFor", {
     get: function () { return this.getAttribute("for") || ""; },

@@ -174,10 +174,15 @@ function submitForm(form, submitter) {
 
 function installFormElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLFormElement() {}
-  HTMLFormElement.prototype = Object.create(ElementProto);
+  HTMLFormElement.prototype = Object.create(HTMLElementProto);
   HTMLFormElement.prototype.constructor = HTMLFormElement;
+  Object.defineProperty(HTMLFormElement.prototype, Symbol.toStringTag, {
+    value: "HTMLFormElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLFormElement.prototype, "elements", {
     get: function () {

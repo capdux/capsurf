@@ -22,6 +22,53 @@ function installHtmlClasses(global) {
   global.__capsurf_clearScriptForceAsync = clearScriptForceAsync;
   global.__capsurf_isScriptForceAsync = isScriptForceAsync;
 
+  // 0. Generic HTMLElement (base class for all HTML*Element interfaces)
+  const upgradeTargets = [];
+  const constructionStacks = new Map();
+  global._constructionStacks = constructionStacks;
+  global._upgradeTargets = upgradeTargets;
+
+  function HTMLElement() {
+    const targetCtor = new.target;
+    if (targetCtor) {
+      const stack = constructionStacks.get(targetCtor);
+      if (stack && stack.length > 0) {
+        const el = stack.pop();
+        const uIdx = upgradeTargets.indexOf(el);
+        if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
+        return el;
+      }
+    }
+    if (upgradeTargets.length > 0) {
+      return upgradeTargets.pop();
+    }
+  }
+  HTMLElement.prototype = Object.create(ElementProto);
+  HTMLElement.prototype.constructor = HTMLElement;
+  Object.defineProperty(HTMLElement.prototype, Symbol.toStringTag, {
+    value: "HTMLElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLElement, "_upgradeTarget", {
+    get: function () {
+      return upgradeTargets.length > 0 ? upgradeTargets[upgradeTargets.length - 1] : null;
+    },
+    set: function (val) {
+      if (val === null || val === undefined) {
+        if (upgradeTargets.length > 0) upgradeTargets.pop();
+      } else {
+        upgradeTargets.push(val);
+      }
+    },
+    configurable: true,
+  });
+  markNative(HTMLElement, "HTMLElement");
+  global.HTMLElement = HTMLElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLElement = HTMLElement;
+  if (typeof window !== "undefined") window.HTMLElement = HTMLElement;
+
+  const HTMLElementProto = HTMLElement.prototype;
+
   function installHyperlinkDecomposition(proto) {
     Object.defineProperty(proto, "href", {
       get: function () {
@@ -84,16 +131,24 @@ function installHtmlClasses(global) {
 
   // 1. HTMLAnchorElement
   function HTMLAnchorElement() {}
-  HTMLAnchorElement.prototype = Object.create(ElementProto);
+  HTMLAnchorElement.prototype = Object.create(HTMLElementProto);
   HTMLAnchorElement.prototype.constructor = HTMLAnchorElement;
+  Object.defineProperty(HTMLAnchorElement.prototype, Symbol.toStringTag, {
+    value: "HTMLAnchorElement",
+    configurable: true,
+  });
   installHyperlinkDecomposition(HTMLAnchorElement.prototype);
   markNative(HTMLAnchorElement, "HTMLAnchorElement");
   global.HTMLAnchorElement = HTMLAnchorElement;
 
   // 1.05 HTMLStyleElement
   function HTMLStyleElement() {}
-  HTMLStyleElement.prototype = Object.create(ElementProto);
+  HTMLStyleElement.prototype = Object.create(HTMLElementProto);
   HTMLStyleElement.prototype.constructor = HTMLStyleElement;
+  Object.defineProperty(HTMLStyleElement.prototype, Symbol.toStringTag, {
+    value: "HTMLStyleElement",
+    configurable: true,
+  });
 
   function getSheetForElement(el) {
     if (!el._sheet) {
@@ -123,8 +178,12 @@ function installHtmlClasses(global) {
 
   // 1.06 HTMLLinkElement
   function HTMLLinkElement() {}
-  HTMLLinkElement.prototype = Object.create(ElementProto);
+  HTMLLinkElement.prototype = Object.create(HTMLElementProto);
   HTMLLinkElement.prototype.constructor = HTMLLinkElement;
+  Object.defineProperty(HTMLLinkElement.prototype, Symbol.toStringTag, {
+    value: "HTMLLinkElement",
+    configurable: true,
+  });
   installHyperlinkDecomposition(HTMLLinkElement.prototype);
   Object.defineProperty(HTMLLinkElement.prototype, "rel", {
     get: function () { return this.getAttribute("rel") || ""; },
@@ -174,8 +233,12 @@ function installHtmlClasses(global) {
 
   // 1.1 HTMLAreaElement
   function HTMLAreaElement() {}
-  HTMLAreaElement.prototype = Object.create(ElementProto);
+  HTMLAreaElement.prototype = Object.create(HTMLElementProto);
   HTMLAreaElement.prototype.constructor = HTMLAreaElement;
+  Object.defineProperty(HTMLAreaElement.prototype, Symbol.toStringTag, {
+    value: "HTMLAreaElement",
+    configurable: true,
+  });
   installHyperlinkDecomposition(HTMLAreaElement.prototype);
   Object.defineProperty(HTMLAreaElement.prototype, "alt", {
     get: function () { return this.getAttribute("alt") || ""; },
@@ -415,8 +478,12 @@ function installHtmlClasses(global) {
 
   // 2. HTMLImageElement
   function HTMLImageElement() {}
-  HTMLImageElement.prototype = Object.create(ElementProto);
+  HTMLImageElement.prototype = Object.create(HTMLElementProto);
   HTMLImageElement.prototype.constructor = HTMLImageElement;
+  Object.defineProperty(HTMLImageElement.prototype, Symbol.toStringTag, {
+    value: "HTMLImageElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLImageElement.prototype, "src", {
     get: function () {
@@ -554,15 +621,23 @@ function installHtmlClasses(global) {
 
   // HTMLPictureElement
   function HTMLPictureElement() {}
-  HTMLPictureElement.prototype = Object.create(ElementProto);
+  HTMLPictureElement.prototype = Object.create(HTMLElementProto);
   HTMLPictureElement.prototype.constructor = HTMLPictureElement;
+  Object.defineProperty(HTMLPictureElement.prototype, Symbol.toStringTag, {
+    value: "HTMLPictureElement",
+    configurable: true,
+  });
   markNative(HTMLPictureElement, "HTMLPictureElement");
   global.HTMLPictureElement = HTMLPictureElement;
 
   // HTMLSourceElement
   function HTMLSourceElement() {}
-  HTMLSourceElement.prototype = Object.create(ElementProto);
+  HTMLSourceElement.prototype = Object.create(HTMLElementProto);
   HTMLSourceElement.prototype.constructor = HTMLSourceElement;
+  Object.defineProperty(HTMLSourceElement.prototype, Symbol.toStringTag, {
+    value: "HTMLSourceElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLSourceElement.prototype, "src", {
     get: function () {
@@ -629,8 +704,12 @@ function installHtmlClasses(global) {
   function HTMLScriptElement() {
     markScriptForceAsync(this);
   }
-  HTMLScriptElement.prototype = Object.create(ElementProto);
+  HTMLScriptElement.prototype = Object.create(HTMLElementProto);
   HTMLScriptElement.prototype.constructor = HTMLScriptElement;
+  Object.defineProperty(HTMLScriptElement.prototype, Symbol.toStringTag, {
+    value: "HTMLScriptElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLScriptElement.prototype, "text", {
     get: function () {
@@ -694,8 +773,12 @@ function installHtmlClasses(global) {
 
   // 4. HTMLCanvasElement
   function HTMLCanvasElement() {}
-  HTMLCanvasElement.prototype = Object.create(ElementProto);
+  HTMLCanvasElement.prototype = Object.create(HTMLElementProto);
   HTMLCanvasElement.prototype.constructor = HTMLCanvasElement;
+  Object.defineProperty(HTMLCanvasElement.prototype, Symbol.toStringTag, {
+    value: "HTMLCanvasElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLCanvasElement.prototype, "width", {
     get: function () { return Number(this.getAttribute("width") || 300); },
@@ -1067,8 +1150,12 @@ function installHtmlClasses(global) {
   }
 
   function HTMLIFrameElement() {}
-  HTMLIFrameElement.prototype = Object.create(ElementProto);
+  HTMLIFrameElement.prototype = Object.create(HTMLElementProto);
   HTMLIFrameElement.prototype.constructor = HTMLIFrameElement;
+  Object.defineProperty(HTMLIFrameElement.prototype, Symbol.toStringTag, {
+    value: "HTMLIFrameElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLIFrameElement.prototype, "src", {
     get: function () {
@@ -1117,44 +1204,82 @@ function installHtmlClasses(global) {
   markNative(HTMLIFrameElement, "HTMLIFrameElement");
   global.HTMLIFrameElement = HTMLIFrameElement;
 
-  // 6. Generic HTMLElement
-  const upgradeTargets = [];
-  const constructionStacks = new Map();
-  global._constructionStacks = constructionStacks;
-  global._upgradeTargets = upgradeTargets;
-
-  function HTMLElement() {
-    const targetCtor = new.target;
-    if (targetCtor) {
-      const stack = constructionStacks.get(targetCtor);
-      if (stack && stack.length > 0) {
-        const el = stack.pop();
-        const uIdx = upgradeTargets.indexOf(el);
-        if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
-        return el;
-      }
-    }
-    if (upgradeTargets.length > 0) {
-      return upgradeTargets.pop();
-    }
-  }
-  HTMLElement.prototype = Object.create(ElementProto);
-  HTMLElement.prototype.constructor = HTMLElement;
-  Object.defineProperty(HTMLElement, "_upgradeTarget", {
+  // 6. HTMLDataListElement & standard HTMLElement subclasses
+  function HTMLDataListElement() {}
+  HTMLDataListElement.prototype = Object.create(HTMLElementProto);
+  HTMLDataListElement.prototype.constructor = HTMLDataListElement;
+  Object.defineProperty(HTMLDataListElement.prototype, Symbol.toStringTag, {
+    value: "HTMLDataListElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLDataListElement.prototype, "options", {
     get: function () {
-      return upgradeTargets.length > 0 ? upgradeTargets[upgradeTargets.length - 1] : null;
-    },
-    set: function (val) {
-      if (val === null || val === undefined) {
-        if (upgradeTargets.length > 0) upgradeTargets.pop();
-      } else {
-        upgradeTargets.push(val);
-      }
+      const self = this;
+      return makeHtmlCollection(function () {
+        const out = [];
+        function walk(node) {
+          if (!node) return;
+          let ch = node.firstChild;
+          while (ch) {
+            if (ch.nodeType === 1) {
+              const t = String(ch.localName || ch.tagName || "").toLowerCase();
+              if (t === "option") {
+                out.push(typeof upgradeElement === "function" ? upgradeElement(ch) : ch);
+              }
+              walk(ch);
+            }
+            ch = ch.nextSibling;
+          }
+        }
+        walk(self);
+        return out;
+      });
     },
     configurable: true,
   });
-  markNative(HTMLElement, "HTMLElement");
-  global.HTMLElement = HTMLElement;
+  markNative(HTMLDataListElement, "HTMLDataListElement");
+  global.HTMLDataListElement = HTMLDataListElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLDataListElement = HTMLDataListElement;
+  if (typeof window !== "undefined") window.HTMLDataListElement = HTMLDataListElement;
+
+  const SIMPLE_HTML_CLASSES = [
+    "HTMLDivElement",
+    "HTMLHeadingElement",
+    "HTMLSpanElement",
+    "HTMLParagraphElement",
+    "HTMLUListElement",
+    "HTMLOListElement",
+    "HTMLLIElement",
+    "HTMLPreElement",
+    "HTMLBRElement",
+    "HTMLHRElement",
+    "HTMLBodyElement",
+    "HTMLHeadElement",
+    "HTMLHtmlElement",
+    "HTMLTitleElement",
+    "HTMLMetaElement",
+    "HTMLTableElement",
+    "HTMLTableRowElement",
+    "HTMLTableCellElement",
+    "HTMLTableSectionElement",
+    "HTMLOutputElement",
+    "HTMLProgressElement",
+    "HTMLMeterElement",
+  ];
+  for (let i = 0; i < SIMPLE_HTML_CLASSES.length; i++) {
+    const clsName = SIMPLE_HTML_CLASSES[i];
+    const Ctor = function () {};
+    Ctor.prototype = Object.create(HTMLElementProto);
+    Ctor.prototype.constructor = Ctor;
+    Object.defineProperty(Ctor.prototype, Symbol.toStringTag, {
+      value: clsName,
+      configurable: true,
+    });
+    markNative(Ctor, clsName);
+    global[clsName] = Ctor;
+    if (typeof globalThis !== "undefined") globalThis[clsName] = Ctor;
+    if (typeof window !== "undefined") window[clsName] = Ctor;
+  }
 
   // 7. HTMLTemplateElement
   function HTMLTemplateElement() {
@@ -1162,6 +1287,10 @@ function installHtmlClasses(global) {
   }
   HTMLTemplateElement.prototype = Object.create(HTMLElement.prototype);
   HTMLTemplateElement.prototype.constructor = HTMLTemplateElement;
+  Object.defineProperty(HTMLTemplateElement.prototype, Symbol.toStringTag, {
+    value: "HTMLTemplateElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLTemplateElement.prototype, "content", {
     get: function () {

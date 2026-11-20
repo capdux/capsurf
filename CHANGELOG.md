@@ -1505,4 +1505,14 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`svg-overflow-clip` + `svg-sprite-sidebar` + `svg-document-render` 共 **3 pass, 0 fail (26 expect calls)**。
+
+## Phase 62: EventListener Spec Fixes, FormDataEvent & Standard HTML*Element Prototype Chain (100% Closed)
+- **`src/js/shim/events/{dispatch,event}.js` & `src/js/shim/form-data.js`**：
+  - `addEventListener`/`removeEventListener` 按规范先解析 `options`（含 `signal`）再检查 `callback`；支持 `{ handleEvent }` 监听对象与派发期间 `window.event` 维护；
+  - 新增 `FormDataEvent`，`new FormData(form, submitter)` 支持派发 `"formdata"` 事件并跳过 `<fieldset disabled>`（首个 `<legend>` 例外）控件。
+- **`src/js/shim/element/{html-classes,forms/*}.js` & `src/js/shim/index.js`**：
+  - 将 `Element`/`Document`/`Window` 包装为标准构造函数修复 `instanceof`；统一所有 `HTML*Element` 子类继承 `HTMLElement.prototype` 并补齐 `Symbol.toStringTag`；新增 `HTMLDataListElement` 与 `HTMLInputElement.prototype.list`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`event-listener-fixes-demo` + `forms-instanceof-demo` + `forms-misc-demo` 共 **3 pass, 0 fail (35 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

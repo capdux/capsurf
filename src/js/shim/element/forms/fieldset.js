@@ -22,10 +22,15 @@ function formListedDescendants(root) {
 
 function installFieldSetElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLFieldSetElement() {}
-  HTMLFieldSetElement.prototype = Object.create(ElementProto);
+  HTMLFieldSetElement.prototype = Object.create(HTMLElementProto);
   HTMLFieldSetElement.prototype.constructor = HTMLFieldSetElement;
+  Object.defineProperty(HTMLFieldSetElement.prototype, Symbol.toStringTag, {
+    value: "HTMLFieldSetElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLFieldSetElement.prototype, "type", {
     get: function () { return "fieldset"; },
@@ -71,8 +76,12 @@ function installFieldSetElement(global) {
   }
 
   function HTMLLegendElement() {}
-  HTMLLegendElement.prototype = Object.create(ElementProto);
+  HTMLLegendElement.prototype = Object.create(HTMLElementProto);
   HTMLLegendElement.prototype.constructor = HTMLLegendElement;
+  Object.defineProperty(HTMLLegendElement.prototype, Symbol.toStringTag, {
+    value: "HTMLLegendElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLLegendElement.prototype, "form", {
     get: function () {

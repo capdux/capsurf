@@ -317,6 +317,7 @@
   const _inputEventState = new WeakMap();
   const _messageEventState = new WeakMap();
   const _submitEventState = new WeakMap();
+  const _formDataEventState = new WeakMap();
   const _storageEventState = new WeakMap();
   const _compositionEventState = new WeakMap();
   const _textEventState = new WeakMap();
@@ -1084,6 +1085,35 @@
   });
 
   // -------------------------------------------------------------
+  // FormDataEvent
+  // -------------------------------------------------------------
+  function FormDataEvent(type, options) {
+    if (arguments.length < 2 || !options || typeof options !== "object" || !(options.formData instanceof FormData)) {
+      throw new TypeError("Failed to construct 'FormDataEvent': Failed to read the 'formData' property from 'FormDataEventInit': Required member is undefined or not a FormData.");
+    }
+    Event.call(this, type, options);
+    _formDataEventState.set(this, {
+      formData: options.formData,
+    });
+  }
+  FormDataEvent.prototype = Object.create(Event.prototype);
+  FormDataEvent.prototype.constructor = FormDataEvent;
+  markNative(FormDataEvent, "FormDataEvent");
+  Object.defineProperty(FormDataEvent.prototype, Symbol.toStringTag, {
+    value: "FormDataEvent",
+    configurable: true,
+  });
+  Object.defineProperty(FormDataEvent.prototype, "formData", {
+    get: function () {
+      const s = _formDataEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.formData;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  // -------------------------------------------------------------
   // StorageEvent
   // -------------------------------------------------------------
   function StorageEvent(type, options) {
@@ -1672,7 +1702,22 @@
       throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
     }
     const options = arguments[2];
-    if (!type || typeof callback !== "function") return;
+    // Per WHATWG DOM spec, flatten options BEFORE checking if callback is null
+    let capture = false;
+    let once = false;
+    let passive = false;
+    let signal = undefined;
+    if (typeof options === "boolean") {
+      capture = options;
+    } else if (options !== null && typeof options === "object") {
+      capture = Boolean(options.capture);
+      once = Boolean(options.once);
+      passive = Boolean(options.passive);
+      signal = options.signal;
+    }
+    if (!type || callback === null || callback === undefined) return;
+    if (typeof callback !== "function" && typeof callback !== "object") return;
+    if (signal && signal.aborted) return;
     const map = getListeners(this);
     if (!map) return;
     const t = String(type).toLowerCase();
@@ -1681,15 +1726,19 @@
       list = [];
       map.set(t, list);
     }
-    const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
-    const once = Boolean(options && options.once);
-    const passive = Boolean(options && options.passive);
     for (let i = 0; i < list.length; i++) {
       if (list[i].callback === callback && list[i].capture === capture) {
         return;
       }
     }
-    list.push({ callback: callback, capture: capture, once: once, passive: passive });
+    const entry = { callback: callback, capture: capture, once: once, passive: passive };
+    list.push(entry);
+    if (signal && typeof signal.addEventListener === "function") {
+      const self = this;
+      signal.addEventListener("abort", function () {
+        self.removeEventListener(type, callback, capture);
+      }, { once: true });
+    }
   };
 
   EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
@@ -1697,13 +1746,15 @@
       throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
     }
     const options = arguments[2];
-    if (!type || typeof callback !== "function") return;
+    // Per WHATWG DOM spec, flatten options BEFORE checking if callback is null
+    const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+    if (!type || callback === null || callback === undefined) return;
+    if (typeof callback !== "function" && typeof callback !== "object") return;
     const map = getListeners(this);
     if (!map) return;
     const t = String(type).toLowerCase();
     const list = map.get(t);
     if (!list) return;
-    const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
     for (let i = 0; i < list.length; i++) {
       if (list[i].callback === callback && list[i].capture === capture) {
         list.splice(i, 1);
@@ -1754,7 +1805,11 @@
       throw e;
     }
 
+    const prevWindowEvent = typeof window !== "undefined" ? window.event : undefined;
     try {
+      if (typeof window !== "undefined") {
+        try { window.event = event; } catch (e) {}
+      }
       event.target = target;
       const rawType = event._type !== undefined ? event._type : event.type;
       if (typeof rawType !== "string") {
@@ -1814,7 +1869,14 @@
                 entry.removeEventListener(eventType, item.callback, item.capture);
               }
               try {
-                item.callback.call(entry, event);
+                if (typeof item.callback === "function") {
+                  item.callback.call(entry, event);
+                } else if (item.callback && typeof item.callback === "object") {
+                  const handleFn = item.callback.handleEvent;
+                  if (typeof handleFn === "function") {
+                    handleFn.call(item.callback, event);
+                  }
+                }
               } catch (e) {
                 if (typeof console !== "undefined" && console.error) console.error(e);
               }
@@ -1892,6 +1954,9 @@
       event._isDispatching = false;
       event.eventPhase = PHASE_NONE;
       event.currentTarget = null;
+      if (typeof window !== "undefined") {
+        try { window.event = prevWindowEvent; } catch (e) {}
+      }
     }
 
     return !event._canceled;
@@ -9073,6 +9138,53 @@
     global.__capsurf_clearScriptForceAsync = clearScriptForceAsync;
     global.__capsurf_isScriptForceAsync = isScriptForceAsync;
 
+    // 0. Generic HTMLElement (base class for all HTML*Element interfaces)
+    const upgradeTargets = [];
+    const constructionStacks = new Map();
+    global._constructionStacks = constructionStacks;
+    global._upgradeTargets = upgradeTargets;
+
+    function HTMLElement() {
+      const targetCtor = new.target;
+      if (targetCtor) {
+        const stack = constructionStacks.get(targetCtor);
+        if (stack && stack.length > 0) {
+          const el = stack.pop();
+          const uIdx = upgradeTargets.indexOf(el);
+          if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
+          return el;
+        }
+      }
+      if (upgradeTargets.length > 0) {
+        return upgradeTargets.pop();
+      }
+    }
+    HTMLElement.prototype = Object.create(ElementProto);
+    HTMLElement.prototype.constructor = HTMLElement;
+    Object.defineProperty(HTMLElement.prototype, Symbol.toStringTag, {
+      value: "HTMLElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLElement, "_upgradeTarget", {
+      get: function () {
+        return upgradeTargets.length > 0 ? upgradeTargets[upgradeTargets.length - 1] : null;
+      },
+      set: function (val) {
+        if (val === null || val === undefined) {
+          if (upgradeTargets.length > 0) upgradeTargets.pop();
+        } else {
+          upgradeTargets.push(val);
+        }
+      },
+      configurable: true,
+    });
+    markNative(HTMLElement, "HTMLElement");
+    global.HTMLElement = HTMLElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLElement = HTMLElement;
+    if (typeof window !== "undefined") window.HTMLElement = HTMLElement;
+
+    const HTMLElementProto = HTMLElement.prototype;
+
     function installHyperlinkDecomposition(proto) {
       Object.defineProperty(proto, "href", {
         get: function () {
@@ -9135,16 +9247,24 @@
 
     // 1. HTMLAnchorElement
     function HTMLAnchorElement() {}
-    HTMLAnchorElement.prototype = Object.create(ElementProto);
+    HTMLAnchorElement.prototype = Object.create(HTMLElementProto);
     HTMLAnchorElement.prototype.constructor = HTMLAnchorElement;
+    Object.defineProperty(HTMLAnchorElement.prototype, Symbol.toStringTag, {
+      value: "HTMLAnchorElement",
+      configurable: true,
+    });
     installHyperlinkDecomposition(HTMLAnchorElement.prototype);
     markNative(HTMLAnchorElement, "HTMLAnchorElement");
     global.HTMLAnchorElement = HTMLAnchorElement;
 
     // 1.05 HTMLStyleElement
     function HTMLStyleElement() {}
-    HTMLStyleElement.prototype = Object.create(ElementProto);
+    HTMLStyleElement.prototype = Object.create(HTMLElementProto);
     HTMLStyleElement.prototype.constructor = HTMLStyleElement;
+    Object.defineProperty(HTMLStyleElement.prototype, Symbol.toStringTag, {
+      value: "HTMLStyleElement",
+      configurable: true,
+    });
 
     function getSheetForElement(el) {
       if (!el._sheet) {
@@ -9174,8 +9294,12 @@
 
     // 1.06 HTMLLinkElement
     function HTMLLinkElement() {}
-    HTMLLinkElement.prototype = Object.create(ElementProto);
+    HTMLLinkElement.prototype = Object.create(HTMLElementProto);
     HTMLLinkElement.prototype.constructor = HTMLLinkElement;
+    Object.defineProperty(HTMLLinkElement.prototype, Symbol.toStringTag, {
+      value: "HTMLLinkElement",
+      configurable: true,
+    });
     installHyperlinkDecomposition(HTMLLinkElement.prototype);
     Object.defineProperty(HTMLLinkElement.prototype, "rel", {
       get: function () { return this.getAttribute("rel") || ""; },
@@ -9225,8 +9349,12 @@
 
     // 1.1 HTMLAreaElement
     function HTMLAreaElement() {}
-    HTMLAreaElement.prototype = Object.create(ElementProto);
+    HTMLAreaElement.prototype = Object.create(HTMLElementProto);
     HTMLAreaElement.prototype.constructor = HTMLAreaElement;
+    Object.defineProperty(HTMLAreaElement.prototype, Symbol.toStringTag, {
+      value: "HTMLAreaElement",
+      configurable: true,
+    });
     installHyperlinkDecomposition(HTMLAreaElement.prototype);
     Object.defineProperty(HTMLAreaElement.prototype, "alt", {
       get: function () { return this.getAttribute("alt") || ""; },
@@ -9466,8 +9594,12 @@
 
     // 2. HTMLImageElement
     function HTMLImageElement() {}
-    HTMLImageElement.prototype = Object.create(ElementProto);
+    HTMLImageElement.prototype = Object.create(HTMLElementProto);
     HTMLImageElement.prototype.constructor = HTMLImageElement;
+    Object.defineProperty(HTMLImageElement.prototype, Symbol.toStringTag, {
+      value: "HTMLImageElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLImageElement.prototype, "src", {
       get: function () {
@@ -9605,15 +9737,23 @@
 
     // HTMLPictureElement
     function HTMLPictureElement() {}
-    HTMLPictureElement.prototype = Object.create(ElementProto);
+    HTMLPictureElement.prototype = Object.create(HTMLElementProto);
     HTMLPictureElement.prototype.constructor = HTMLPictureElement;
+    Object.defineProperty(HTMLPictureElement.prototype, Symbol.toStringTag, {
+      value: "HTMLPictureElement",
+      configurable: true,
+    });
     markNative(HTMLPictureElement, "HTMLPictureElement");
     global.HTMLPictureElement = HTMLPictureElement;
 
     // HTMLSourceElement
     function HTMLSourceElement() {}
-    HTMLSourceElement.prototype = Object.create(ElementProto);
+    HTMLSourceElement.prototype = Object.create(HTMLElementProto);
     HTMLSourceElement.prototype.constructor = HTMLSourceElement;
+    Object.defineProperty(HTMLSourceElement.prototype, Symbol.toStringTag, {
+      value: "HTMLSourceElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLSourceElement.prototype, "src", {
       get: function () {
@@ -9680,8 +9820,12 @@
     function HTMLScriptElement() {
       markScriptForceAsync(this);
     }
-    HTMLScriptElement.prototype = Object.create(ElementProto);
+    HTMLScriptElement.prototype = Object.create(HTMLElementProto);
     HTMLScriptElement.prototype.constructor = HTMLScriptElement;
+    Object.defineProperty(HTMLScriptElement.prototype, Symbol.toStringTag, {
+      value: "HTMLScriptElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLScriptElement.prototype, "text", {
       get: function () {
@@ -9745,8 +9889,12 @@
 
     // 4. HTMLCanvasElement
     function HTMLCanvasElement() {}
-    HTMLCanvasElement.prototype = Object.create(ElementProto);
+    HTMLCanvasElement.prototype = Object.create(HTMLElementProto);
     HTMLCanvasElement.prototype.constructor = HTMLCanvasElement;
+    Object.defineProperty(HTMLCanvasElement.prototype, Symbol.toStringTag, {
+      value: "HTMLCanvasElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLCanvasElement.prototype, "width", {
       get: function () { return Number(this.getAttribute("width") || 300); },
@@ -10118,8 +10266,12 @@
     }
 
     function HTMLIFrameElement() {}
-    HTMLIFrameElement.prototype = Object.create(ElementProto);
+    HTMLIFrameElement.prototype = Object.create(HTMLElementProto);
     HTMLIFrameElement.prototype.constructor = HTMLIFrameElement;
+    Object.defineProperty(HTMLIFrameElement.prototype, Symbol.toStringTag, {
+      value: "HTMLIFrameElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLIFrameElement.prototype, "src", {
       get: function () {
@@ -10168,44 +10320,82 @@
     markNative(HTMLIFrameElement, "HTMLIFrameElement");
     global.HTMLIFrameElement = HTMLIFrameElement;
 
-    // 6. Generic HTMLElement
-    const upgradeTargets = [];
-    const constructionStacks = new Map();
-    global._constructionStacks = constructionStacks;
-    global._upgradeTargets = upgradeTargets;
-
-    function HTMLElement() {
-      const targetCtor = new.target;
-      if (targetCtor) {
-        const stack = constructionStacks.get(targetCtor);
-        if (stack && stack.length > 0) {
-          const el = stack.pop();
-          const uIdx = upgradeTargets.indexOf(el);
-          if (uIdx !== -1) upgradeTargets.splice(uIdx, 1);
-          return el;
-        }
-      }
-      if (upgradeTargets.length > 0) {
-        return upgradeTargets.pop();
-      }
-    }
-    HTMLElement.prototype = Object.create(ElementProto);
-    HTMLElement.prototype.constructor = HTMLElement;
-    Object.defineProperty(HTMLElement, "_upgradeTarget", {
+    // 6. HTMLDataListElement & standard HTMLElement subclasses
+    function HTMLDataListElement() {}
+    HTMLDataListElement.prototype = Object.create(HTMLElementProto);
+    HTMLDataListElement.prototype.constructor = HTMLDataListElement;
+    Object.defineProperty(HTMLDataListElement.prototype, Symbol.toStringTag, {
+      value: "HTMLDataListElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLDataListElement.prototype, "options", {
       get: function () {
-        return upgradeTargets.length > 0 ? upgradeTargets[upgradeTargets.length - 1] : null;
-      },
-      set: function (val) {
-        if (val === null || val === undefined) {
-          if (upgradeTargets.length > 0) upgradeTargets.pop();
-        } else {
-          upgradeTargets.push(val);
-        }
+        const self = this;
+        return makeHtmlCollection(function () {
+          const out = [];
+          function walk(node) {
+            if (!node) return;
+            let ch = node.firstChild;
+            while (ch) {
+              if (ch.nodeType === 1) {
+                const t = String(ch.localName || ch.tagName || "").toLowerCase();
+                if (t === "option") {
+                  out.push(typeof upgradeElement === "function" ? upgradeElement(ch) : ch);
+                }
+                walk(ch);
+              }
+              ch = ch.nextSibling;
+            }
+          }
+          walk(self);
+          return out;
+        });
       },
       configurable: true,
     });
-    markNative(HTMLElement, "HTMLElement");
-    global.HTMLElement = HTMLElement;
+    markNative(HTMLDataListElement, "HTMLDataListElement");
+    global.HTMLDataListElement = HTMLDataListElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLDataListElement = HTMLDataListElement;
+    if (typeof window !== "undefined") window.HTMLDataListElement = HTMLDataListElement;
+
+    const SIMPLE_HTML_CLASSES = [
+      "HTMLDivElement",
+      "HTMLHeadingElement",
+      "HTMLSpanElement",
+      "HTMLParagraphElement",
+      "HTMLUListElement",
+      "HTMLOListElement",
+      "HTMLLIElement",
+      "HTMLPreElement",
+      "HTMLBRElement",
+      "HTMLHRElement",
+      "HTMLBodyElement",
+      "HTMLHeadElement",
+      "HTMLHtmlElement",
+      "HTMLTitleElement",
+      "HTMLMetaElement",
+      "HTMLTableElement",
+      "HTMLTableRowElement",
+      "HTMLTableCellElement",
+      "HTMLTableSectionElement",
+      "HTMLOutputElement",
+      "HTMLProgressElement",
+      "HTMLMeterElement",
+    ];
+    for (let i = 0; i < SIMPLE_HTML_CLASSES.length; i++) {
+      const clsName = SIMPLE_HTML_CLASSES[i];
+      const Ctor = function () {};
+      Ctor.prototype = Object.create(HTMLElementProto);
+      Ctor.prototype.constructor = Ctor;
+      Object.defineProperty(Ctor.prototype, Symbol.toStringTag, {
+        value: clsName,
+        configurable: true,
+      });
+      markNative(Ctor, clsName);
+      global[clsName] = Ctor;
+      if (typeof globalThis !== "undefined") globalThis[clsName] = Ctor;
+      if (typeof window !== "undefined") window[clsName] = Ctor;
+    }
 
     // 7. HTMLTemplateElement
     function HTMLTemplateElement() {
@@ -10213,6 +10403,10 @@
     }
     HTMLTemplateElement.prototype = Object.create(HTMLElement.prototype);
     HTMLTemplateElement.prototype.constructor = HTMLTemplateElement;
+    Object.defineProperty(HTMLTemplateElement.prototype, Symbol.toStringTag, {
+      value: "HTMLTemplateElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLTemplateElement.prototype, "content", {
       get: function () {
@@ -11542,6 +11736,7 @@
 
   function installInputElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLInputElement() {
       this._value = "";
@@ -11555,8 +11750,12 @@
       this._selectionEnd = 0;
       this._selectionDirection = "none";
     }
-    HTMLInputElement.prototype = Object.create(ElementProto);
+    HTMLInputElement.prototype = Object.create(HTMLElementProto);
     HTMLInputElement.prototype.constructor = HTMLInputElement;
+    Object.defineProperty(HTMLInputElement.prototype, Symbol.toStringTag, {
+      value: "HTMLInputElement",
+      configurable: true,
+    });
     installSelectionMixin(HTMLInputElement);
 
     Object.defineProperty(HTMLInputElement.prototype, "type", {
@@ -11889,6 +12088,28 @@
       configurable: true,
     });
 
+    Object.defineProperty(HTMLInputElement.prototype, "list", {
+      get: function () {
+        const t = this.type;
+        if (
+          t === "hidden" || t === "password" || t === "checkbox" || t === "radio" ||
+          t === "file" || t === "submit" || t === "image" || t === "reset" || t === "button"
+        ) {
+          return null;
+        }
+        const listId = this.getAttribute ? this.getAttribute("list") : null;
+        if (!listId) return null;
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (!doc || typeof doc.getElementById !== "function") return null;
+        const el = doc.getElementById(listId);
+        if (!el) return null;
+        const tag = String(el.localName || el.tagName || "").toLowerCase();
+        if (tag !== "datalist") return null;
+        return typeof upgradeElement === "function" ? upgradeElement(el) : el;
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(HTMLInputElement.prototype, "willValidate", {
       get: function () {
         return computeWillValidate(this);
@@ -11948,6 +12169,7 @@
 
   function installTextAreaElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLTextAreaElement() {
       this._value = undefined;
@@ -11956,8 +12178,12 @@
       this._selectionEnd = 0;
       this._selectionDirection = "none";
     }
-    HTMLTextAreaElement.prototype = Object.create(ElementProto);
+    HTMLTextAreaElement.prototype = Object.create(HTMLElementProto);
     HTMLTextAreaElement.prototype.constructor = HTMLTextAreaElement;
+    Object.defineProperty(HTMLTextAreaElement.prototype, Symbol.toStringTag, {
+      value: "HTMLTextAreaElement",
+      configurable: true,
+    });
     installSelectionMixin(HTMLTextAreaElement);
 
     Object.defineProperty(HTMLTextAreaElement.prototype, "type", {
@@ -12233,13 +12459,18 @@
 
   function installSelectElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     // 1. HTMLOptionElement
     function HTMLOptionElement() {
       this._selected = undefined;
     }
-    HTMLOptionElement.prototype = Object.create(ElementProto);
+    HTMLOptionElement.prototype = Object.create(HTMLElementProto);
     HTMLOptionElement.prototype.constructor = HTMLOptionElement;
+    Object.defineProperty(HTMLOptionElement.prototype, Symbol.toStringTag, {
+      value: "HTMLOptionElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLOptionElement.prototype, "value", {
       get: function () {
@@ -12427,8 +12658,12 @@
 
     // 2. HTMLOptGroupElement
     function HTMLOptGroupElement() {}
-    HTMLOptGroupElement.prototype = Object.create(ElementProto);
+    HTMLOptGroupElement.prototype = Object.create(HTMLElementProto);
     HTMLOptGroupElement.prototype.constructor = HTMLOptGroupElement;
+    Object.defineProperty(HTMLOptGroupElement.prototype, Symbol.toStringTag, {
+      value: "HTMLOptGroupElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLOptGroupElement.prototype, "disabled", {
       get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
@@ -12455,8 +12690,12 @@
     function HTMLSelectElement() {
       this._customValidityMessage = "";
     }
-    HTMLSelectElement.prototype = Object.create(ElementProto);
+    HTMLSelectElement.prototype = Object.create(HTMLElementProto);
     HTMLSelectElement.prototype.constructor = HTMLSelectElement;
+    Object.defineProperty(HTMLSelectElement.prototype, Symbol.toStringTag, {
+      value: "HTMLSelectElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLSelectElement.prototype, "type", {
       get: function () { return this.multiple ? "select-multiple" : "select-one"; },
@@ -12694,12 +12933,17 @@
 
   function installButtonElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLButtonElement() {
       this._customValidityMessage = "";
     }
-    HTMLButtonElement.prototype = Object.create(ElementProto);
+    HTMLButtonElement.prototype = Object.create(HTMLElementProto);
     HTMLButtonElement.prototype.constructor = HTMLButtonElement;
+    Object.defineProperty(HTMLButtonElement.prototype, Symbol.toStringTag, {
+      value: "HTMLButtonElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLButtonElement.prototype, "type", {
       get: function () {
@@ -12976,10 +13220,15 @@
 
   function installFormElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLFormElement() {}
-    HTMLFormElement.prototype = Object.create(ElementProto);
+    HTMLFormElement.prototype = Object.create(HTMLElementProto);
     HTMLFormElement.prototype.constructor = HTMLFormElement;
+    Object.defineProperty(HTMLFormElement.prototype, Symbol.toStringTag, {
+      value: "HTMLFormElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLFormElement.prototype, "elements", {
       get: function () {
@@ -13214,10 +13463,15 @@
 
   function installFieldSetElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLFieldSetElement() {}
-    HTMLFieldSetElement.prototype = Object.create(ElementProto);
+    HTMLFieldSetElement.prototype = Object.create(HTMLElementProto);
     HTMLFieldSetElement.prototype.constructor = HTMLFieldSetElement;
+    Object.defineProperty(HTMLFieldSetElement.prototype, Symbol.toStringTag, {
+      value: "HTMLFieldSetElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLFieldSetElement.prototype, "type", {
       get: function () { return "fieldset"; },
@@ -13263,8 +13517,12 @@
     }
 
     function HTMLLegendElement() {}
-    HTMLLegendElement.prototype = Object.create(ElementProto);
+    HTMLLegendElement.prototype = Object.create(HTMLElementProto);
     HTMLLegendElement.prototype.constructor = HTMLLegendElement;
+    Object.defineProperty(HTMLLegendElement.prototype, Symbol.toStringTag, {
+      value: "HTMLLegendElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLLegendElement.prototype, "form", {
       get: function () {
@@ -13356,10 +13614,15 @@
 
   function installLabelElement(global) {
     const ElementProto = global.Element ? global.Element.prototype : {};
+    const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
     function HTMLLabelElement() {}
-    HTMLLabelElement.prototype = Object.create(ElementProto);
+    HTMLLabelElement.prototype = Object.create(HTMLElementProto);
     HTMLLabelElement.prototype.constructor = HTMLLabelElement;
+    Object.defineProperty(HTMLLabelElement.prototype, Symbol.toStringTag, {
+      value: "HTMLLabelElement",
+      configurable: true,
+    });
 
     Object.defineProperty(HTMLLabelElement.prototype, "htmlFor", {
       get: function () { return this.getAttribute("for") || ""; },
@@ -14286,19 +14549,53 @@
   // src/js/shim/form-data.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/form-data.ts
 
+  function isFormControlActuallyDisabled(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.disabled || (typeof el.hasAttribute === "function" && el.hasAttribute("disabled"))) {
+      return true;
+    }
+    let cur = el;
+    let parent = el.parentElement || el.parentNode;
+    while (parent && parent.nodeType === 1) {
+      const pTag = (parent.tagName || "").toLowerCase();
+      if (pTag === "fieldset" && (parent.disabled || (typeof parent.hasAttribute === "function" && parent.hasAttribute("disabled")))) {
+        let firstLegend = null;
+        let ch = parent.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1 && (ch.tagName || "").toLowerCase() === "legend") {
+            firstLegend = ch;
+            break;
+          }
+          ch = ch.nextSibling;
+        }
+        if (!firstLegend || cur !== firstLegend) {
+          return true;
+        }
+      }
+      cur = parent;
+      parent = parent.parentElement || parent.parentNode;
+    }
+    return false;
+  }
+
   function FormData(form, submitter) {
     this._entries = []; // Array of [name, value]
     if (form && (form.tagName || "").toUpperCase() === "FORM") {
+      if (form._constructingEntryList) {
+        const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+        throw new DOMEx("Failed to construct 'FormData': The form is already constructing an entry list.", "InvalidStateError");
+      }
       let submitterEl = null;
-      if (submitter && submitter.name && !submitter.disabled) {
+      if (submitter && submitter.name && !isFormControlActuallyDisabled(submitter)) {
         submitterEl = submitter;
       }
       let submitterAppended = false;
       const controls = form.elements || [];
       for (let i = 0; i < controls.length; i++) {
         const c = controls[i];
-        if (!c.name || c.disabled) continue;
         const tag = (c.tagName || "").toLowerCase();
+        if (tag === "fieldset") continue;
+        if (!c.name || isFormControlActuallyDisabled(c)) continue;
         const type = (c.type || "").toLowerCase();
 
         if (tag === "button" || type === "submit" || type === "reset" || type === "button" || type === "image") {
@@ -14324,6 +14621,23 @@
       }
       if (!submitterAppended && submitterEl) {
         this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
+      }
+
+      // Dispatch "formdata" event per WHATWG HTML spec
+      form._constructingEntryList = true;
+      try {
+        let evt;
+        if (typeof FormDataEvent === "function") {
+          evt = new FormDataEvent("formdata", { bubbles: true, cancelable: false, formData: this });
+        } else {
+          evt = new Event("formdata", { bubbles: true, cancelable: false });
+          Object.defineProperty(evt, "formData", { value: this, configurable: true });
+        }
+        if (typeof form.dispatchEvent === "function") {
+          form.dispatchEvent(evt);
+        }
+      } finally {
+        form._constructingEntryList = false;
       }
     }
   }
@@ -23943,6 +24257,7 @@
     global.InputEvent = InputEvent;
     global.MessageEvent = MessageEvent;
     global.SubmitEvent = SubmitEvent;
+    global.FormDataEvent = FormDataEvent;
     global.EventTarget = EventTarget;
     global.DeviceMotionEvent = DeviceMotionEvent;
     global.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
@@ -23973,6 +24288,7 @@
       globalThis.InputEvent = InputEvent;
       globalThis.MessageEvent = MessageEvent;
       globalThis.SubmitEvent = SubmitEvent;
+      globalThis.FormDataEvent = FormDataEvent;
       globalThis.EventTarget = EventTarget;
       globalThis.DeviceMotionEvent = DeviceMotionEvent;
       globalThis.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
@@ -24095,6 +24411,52 @@
     global.DocumentTimeline = DocumentTimeline;
 
     // 10. Install Element & HTML extensions
+    if (global.Element && typeof global.Element !== "function") {
+      const nativeElProto = global.Element.prototype;
+      const ElementCtor = function Element() {
+        throw new TypeError("Illegal constructor");
+      };
+      ElementCtor.prototype = nativeElProto;
+      nativeElProto.constructor = ElementCtor;
+      Object.defineProperty(ElementCtor.prototype, Symbol.toStringTag, {
+        value: "Element",
+        configurable: true,
+      });
+      markNative(ElementCtor, "Element");
+      global.Element = ElementCtor;
+      if (typeof globalThis !== "undefined") globalThis.Element = ElementCtor;
+      if (typeof window !== "undefined") window.Element = ElementCtor;
+    }
+    if (global.Document && typeof global.Document !== "function") {
+      const nativeDocProto = global.Document.prototype;
+      const DocumentCtor = function Document() {};
+      DocumentCtor.prototype = nativeDocProto;
+      nativeDocProto.constructor = DocumentCtor;
+      Object.defineProperty(DocumentCtor.prototype, Symbol.toStringTag, {
+        value: "Document",
+        configurable: true,
+      });
+      markNative(DocumentCtor, "Document");
+      global.Document = DocumentCtor;
+      if (typeof globalThis !== "undefined") globalThis.Document = DocumentCtor;
+      if (typeof window !== "undefined") window.Document = DocumentCtor;
+    }
+    if (global.Window && typeof global.Window !== "function") {
+      const nativeWinProto = global.Window.prototype;
+      const WindowCtor = function Window() {
+        throw new TypeError("Illegal constructor");
+      };
+      WindowCtor.prototype = nativeWinProto;
+      nativeWinProto.constructor = WindowCtor;
+      Object.defineProperty(WindowCtor.prototype, Symbol.toStringTag, {
+        value: "Window",
+        configurable: true,
+      });
+      markNative(WindowCtor, "Window");
+      global.Window = WindowCtor;
+      if (typeof globalThis !== "undefined") globalThis.Window = WindowCtor;
+      if (typeof window !== "undefined") window.Window = WindowCtor;
+    }
     if (global.Element) {
       installElementExtensions(global.Element.prototype);
       installHtmlElementExtensions(global.Element.prototype);
@@ -24201,6 +24563,37 @@
         case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
         case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
         case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
+        case "datalist": Object.setPrototypeOf(el, (global.HTMLDataListElement || global.HTMLElement).prototype); break;
+        case "div": Object.setPrototypeOf(el, (global.HTMLDivElement || global.HTMLElement).prototype); break;
+        case "h1":
+        case "h2":
+        case "h3":
+        case "h4":
+        case "h5":
+        case "h6": Object.setPrototypeOf(el, (global.HTMLHeadingElement || global.HTMLElement).prototype); break;
+        case "span": Object.setPrototypeOf(el, (global.HTMLSpanElement || global.HTMLElement).prototype); break;
+        case "p": Object.setPrototypeOf(el, (global.HTMLParagraphElement || global.HTMLElement).prototype); break;
+        case "ul": Object.setPrototypeOf(el, (global.HTMLUListElement || global.HTMLElement).prototype); break;
+        case "ol": Object.setPrototypeOf(el, (global.HTMLOListElement || global.HTMLElement).prototype); break;
+        case "li": Object.setPrototypeOf(el, (global.HTMLLIElement || global.HTMLElement).prototype); break;
+        case "pre": Object.setPrototypeOf(el, (global.HTMLPreElement || global.HTMLElement).prototype); break;
+        case "br": Object.setPrototypeOf(el, (global.HTMLBRElement || global.HTMLElement).prototype); break;
+        case "hr": Object.setPrototypeOf(el, (global.HTMLHRElement || global.HTMLElement).prototype); break;
+        case "body": Object.setPrototypeOf(el, (global.HTMLBodyElement || global.HTMLElement).prototype); break;
+        case "head": Object.setPrototypeOf(el, (global.HTMLHeadElement || global.HTMLElement).prototype); break;
+        case "html": Object.setPrototypeOf(el, (global.HTMLHtmlElement || global.HTMLElement).prototype); break;
+        case "title": Object.setPrototypeOf(el, (global.HTMLTitleElement || global.HTMLElement).prototype); break;
+        case "meta": Object.setPrototypeOf(el, (global.HTMLMetaElement || global.HTMLElement).prototype); break;
+        case "table": Object.setPrototypeOf(el, (global.HTMLTableElement || global.HTMLElement).prototype); break;
+        case "tr": Object.setPrototypeOf(el, (global.HTMLTableRowElement || global.HTMLElement).prototype); break;
+        case "td":
+        case "th": Object.setPrototypeOf(el, (global.HTMLTableCellElement || global.HTMLElement).prototype); break;
+        case "thead":
+        case "tbody":
+        case "tfoot": Object.setPrototypeOf(el, (global.HTMLTableSectionElement || global.HTMLElement).prototype); break;
+        case "output": Object.setPrototypeOf(el, (global.HTMLOutputElement || global.HTMLElement).prototype); break;
+        case "progress": Object.setPrototypeOf(el, (global.HTMLProgressElement || global.HTMLElement).prototype); break;
+        case "meter": Object.setPrototypeOf(el, (global.HTMLMeterElement || global.HTMLElement).prototype); break;
         default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
       }
       return el;
@@ -24744,7 +25137,31 @@
       }
     }
 
-    // 14. Mount window EventTarget methods
+    // 14. Mount window EventTarget methods and window.event own property
+    if (!Object.prototype.hasOwnProperty.call(global, "event")) {
+      Object.defineProperty(global, "event", {
+        value: undefined,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    if (typeof window !== "undefined" && !Object.prototype.hasOwnProperty.call(window, "event")) {
+      Object.defineProperty(window, "event", {
+        value: undefined,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    if (typeof globalThis !== "undefined" && !Object.prototype.hasOwnProperty.call(globalThis, "event")) {
+      Object.defineProperty(globalThis, "event", {
+        value: undefined,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
     global.addEventListener = EventTarget.prototype.addEventListener.bind(global);
     global.removeEventListener = EventTarget.prototype.removeEventListener.bind(global);
     global.dispatchEvent = EventTarget.prototype.dispatchEvent.bind(global);

@@ -103,13 +103,18 @@ function computeSelectedIndex(selectEl) {
 
 function installSelectElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   // 1. HTMLOptionElement
   function HTMLOptionElement() {
     this._selected = undefined;
   }
-  HTMLOptionElement.prototype = Object.create(ElementProto);
+  HTMLOptionElement.prototype = Object.create(HTMLElementProto);
   HTMLOptionElement.prototype.constructor = HTMLOptionElement;
+  Object.defineProperty(HTMLOptionElement.prototype, Symbol.toStringTag, {
+    value: "HTMLOptionElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLOptionElement.prototype, "value", {
     get: function () {
@@ -297,8 +302,12 @@ function installSelectElement(global) {
 
   // 2. HTMLOptGroupElement
   function HTMLOptGroupElement() {}
-  HTMLOptGroupElement.prototype = Object.create(ElementProto);
+  HTMLOptGroupElement.prototype = Object.create(HTMLElementProto);
   HTMLOptGroupElement.prototype.constructor = HTMLOptGroupElement;
+  Object.defineProperty(HTMLOptGroupElement.prototype, Symbol.toStringTag, {
+    value: "HTMLOptGroupElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLOptGroupElement.prototype, "disabled", {
     get: function () { return Boolean(this.hasAttribute && this.hasAttribute("disabled")); },
@@ -325,8 +334,12 @@ function installSelectElement(global) {
   function HTMLSelectElement() {
     this._customValidityMessage = "";
   }
-  HTMLSelectElement.prototype = Object.create(ElementProto);
+  HTMLSelectElement.prototype = Object.create(HTMLElementProto);
   HTMLSelectElement.prototype.constructor = HTMLSelectElement;
+  Object.defineProperty(HTMLSelectElement.prototype, Symbol.toStringTag, {
+    value: "HTMLSelectElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLSelectElement.prototype, "type", {
     get: function () { return this.multiple ? "select-multiple" : "select-one"; },

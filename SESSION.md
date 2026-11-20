@@ -3174,6 +3174,21 @@
   - 派发全新子智能体 **Subagent 27**: SVG Paint & Dash Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/svg-paint-fidelity.e2e.test.ts`、`e2e/svg-dash-stroke.e2e.test.ts`、`e2e/svg-ratio-sizing.e2e.test.ts`。
 
+## [2026-11-20 14:23:30] HTML 原型继承链、FormDataEvent 与 EventListener 规范修复闭环 (Subagent a1a6788c 结单，Phase 62)
+- **EventListener 对象、`options.signal` 与 `window.event` 规范化 (`src/js/shim/events/`)**:
+  - `dispatch.js`: `addEventListener`/`removeEventListener` 按 WHATWG 规范先 flatten `options`（`capture`/`once`/`passive`/`signal`）再校验 `callback`；支持 `{ handleEvent }` 监听对象单次读取 getter 与 `this` 绑定；派发期间维护并恢复 `window.event`。
+  - `event.js` & `form-data.js`: 新增 `FormDataEvent`；`new FormData(form, submitter)` 跳过 `<fieldset disabled>`（含首个 `<legend>` 例外）并派发带防重入检查的 `"formdata"` 事件。
+- **全量 `HTMLElement` 原型继承链与 `instanceof` 修复 (`src/js/shim/element/`, `src/js/shim/index.js`)**:
+  - 将 `Element`/`Document`/`Window` 包装为标准构造函数修复 `instanceof Element`；统一修复所有表单与常用 `HTML*Element` 子类继承 `HTMLElement.prototype` 并补齐 `Symbol.toStringTag`；新增 `HTMLInputElement.prototype.list` 与 `HTMLDataListElement`（`.options`）。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `event-listener-fixes-demo` + `forms-instanceof-demo` + `forms-misc-demo`：**3 pass, 0 fail (35 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `a1a6788c-8369-4ac8-b11a-2640ac22da05`；
+  - 派发全新子智能体 **Subagent 28**: DOM Mutation & Forms Specialist（纯 JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：`e2e/demo/dom-mutation-events-demo.e2e.test.ts`、`e2e/demo/forms-activation-demo.e2e.test.ts`、`e2e/demo/forms-file-input-demo.e2e.test.ts`、`e2e/demo/forms-selection-demo.e2e.test.ts`。
+
+
 
 
 

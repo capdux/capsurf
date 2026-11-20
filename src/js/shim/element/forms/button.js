@@ -55,12 +55,17 @@ function handleButtonActivation(button) {
 
 function installButtonElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLButtonElement() {
     this._customValidityMessage = "";
   }
-  HTMLButtonElement.prototype = Object.create(ElementProto);
+  HTMLButtonElement.prototype = Object.create(HTMLElementProto);
   HTMLButtonElement.prototype.constructor = HTMLButtonElement;
+  Object.defineProperty(HTMLButtonElement.prototype, Symbol.toStringTag, {
+    value: "HTMLButtonElement",
+    configurable: true,
+  });
 
   Object.defineProperty(HTMLButtonElement.prototype, "type", {
     get: function () {

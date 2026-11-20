@@ -26,7 +26,22 @@ EventTarget.prototype.addEventListener = function addEventListener(type, callbac
     throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
   }
   const options = arguments[2];
-  if (!type || typeof callback !== "function") return;
+  // Per WHATWG DOM spec, flatten options BEFORE checking if callback is null
+  let capture = false;
+  let once = false;
+  let passive = false;
+  let signal = undefined;
+  if (typeof options === "boolean") {
+    capture = options;
+  } else if (options !== null && typeof options === "object") {
+    capture = Boolean(options.capture);
+    once = Boolean(options.once);
+    passive = Boolean(options.passive);
+    signal = options.signal;
+  }
+  if (!type || callback === null || callback === undefined) return;
+  if (typeof callback !== "function" && typeof callback !== "object") return;
+  if (signal && signal.aborted) return;
   const map = getListeners(this);
   if (!map) return;
   const t = String(type).toLowerCase();
@@ -35,15 +50,19 @@ EventTarget.prototype.addEventListener = function addEventListener(type, callbac
     list = [];
     map.set(t, list);
   }
-  const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
-  const once = Boolean(options && options.once);
-  const passive = Boolean(options && options.passive);
   for (let i = 0; i < list.length; i++) {
     if (list[i].callback === callback && list[i].capture === capture) {
       return;
     }
   }
-  list.push({ callback: callback, capture: capture, once: once, passive: passive });
+  const entry = { callback: callback, capture: capture, once: once, passive: passive };
+  list.push(entry);
+  if (signal && typeof signal.addEventListener === "function") {
+    const self = this;
+    signal.addEventListener("abort", function () {
+      self.removeEventListener(type, callback, capture);
+    }, { once: true });
+  }
 };
 
 EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
@@ -51,13 +70,15 @@ EventTarget.prototype.removeEventListener = function removeEventListener(type, c
     throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
   }
   const options = arguments[2];
-  if (!type || typeof callback !== "function") return;
+  // Per WHATWG DOM spec, flatten options BEFORE checking if callback is null
+  const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
+  if (!type || callback === null || callback === undefined) return;
+  if (typeof callback !== "function" && typeof callback !== "object") return;
   const map = getListeners(this);
   if (!map) return;
   const t = String(type).toLowerCase();
   const list = map.get(t);
   if (!list) return;
-  const capture = typeof options === "boolean" ? options : Boolean(options && options.capture);
   for (let i = 0; i < list.length; i++) {
     if (list[i].callback === callback && list[i].capture === capture) {
       list.splice(i, 1);
@@ -108,7 +129,11 @@ function internalDispatch(target, event, trusted) {
     throw e;
   }
 
+  const prevWindowEvent = typeof window !== "undefined" ? window.event : undefined;
   try {
+    if (typeof window !== "undefined") {
+      try { window.event = event; } catch (e) {}
+    }
     event.target = target;
     const rawType = event._type !== undefined ? event._type : event.type;
     if (typeof rawType !== "string") {
@@ -168,7 +193,14 @@ function internalDispatch(target, event, trusted) {
               entry.removeEventListener(eventType, item.callback, item.capture);
             }
             try {
-              item.callback.call(entry, event);
+              if (typeof item.callback === "function") {
+                item.callback.call(entry, event);
+              } else if (item.callback && typeof item.callback === "object") {
+                const handleFn = item.callback.handleEvent;
+                if (typeof handleFn === "function") {
+                  handleFn.call(item.callback, event);
+                }
+              }
             } catch (e) {
               if (typeof console !== "undefined" && console.error) console.error(e);
             }
@@ -246,6 +278,9 @@ function internalDispatch(target, event, trusted) {
     event._isDispatching = false;
     event.eventPhase = PHASE_NONE;
     event.currentTarget = null;
+    if (typeof window !== "undefined") {
+      try { window.event = prevWindowEvent; } catch (e) {}
+    }
   }
 
   return !event._canceled;

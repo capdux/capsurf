@@ -3,6 +3,7 @@
 
 function installTextAreaElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLTextAreaElement() {
     this._value = undefined;
@@ -11,8 +12,12 @@ function installTextAreaElement(global) {
     this._selectionEnd = 0;
     this._selectionDirection = "none";
   }
-  HTMLTextAreaElement.prototype = Object.create(ElementProto);
+  HTMLTextAreaElement.prototype = Object.create(HTMLElementProto);
   HTMLTextAreaElement.prototype.constructor = HTMLTextAreaElement;
+  Object.defineProperty(HTMLTextAreaElement.prototype, Symbol.toStringTag, {
+    value: "HTMLTextAreaElement",
+    configurable: true,
+  });
   installSelectionMixin(HTMLTextAreaElement);
 
   Object.defineProperty(HTMLTextAreaElement.prototype, "type", {

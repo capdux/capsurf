@@ -13,6 +13,7 @@ function installShim(global) {
   global.InputEvent = InputEvent;
   global.MessageEvent = MessageEvent;
   global.SubmitEvent = SubmitEvent;
+  global.FormDataEvent = FormDataEvent;
   global.EventTarget = EventTarget;
   global.DeviceMotionEvent = DeviceMotionEvent;
   global.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
@@ -43,6 +44,7 @@ function installShim(global) {
     globalThis.InputEvent = InputEvent;
     globalThis.MessageEvent = MessageEvent;
     globalThis.SubmitEvent = SubmitEvent;
+    globalThis.FormDataEvent = FormDataEvent;
     globalThis.EventTarget = EventTarget;
     globalThis.DeviceMotionEvent = DeviceMotionEvent;
     globalThis.DeviceMotionEventAcceleration = DeviceMotionEventAcceleration;
@@ -165,6 +167,52 @@ function installShim(global) {
   global.DocumentTimeline = DocumentTimeline;
 
   // 10. Install Element & HTML extensions
+  if (global.Element && typeof global.Element !== "function") {
+    const nativeElProto = global.Element.prototype;
+    const ElementCtor = function Element() {
+      throw new TypeError("Illegal constructor");
+    };
+    ElementCtor.prototype = nativeElProto;
+    nativeElProto.constructor = ElementCtor;
+    Object.defineProperty(ElementCtor.prototype, Symbol.toStringTag, {
+      value: "Element",
+      configurable: true,
+    });
+    markNative(ElementCtor, "Element");
+    global.Element = ElementCtor;
+    if (typeof globalThis !== "undefined") globalThis.Element = ElementCtor;
+    if (typeof window !== "undefined") window.Element = ElementCtor;
+  }
+  if (global.Document && typeof global.Document !== "function") {
+    const nativeDocProto = global.Document.prototype;
+    const DocumentCtor = function Document() {};
+    DocumentCtor.prototype = nativeDocProto;
+    nativeDocProto.constructor = DocumentCtor;
+    Object.defineProperty(DocumentCtor.prototype, Symbol.toStringTag, {
+      value: "Document",
+      configurable: true,
+    });
+    markNative(DocumentCtor, "Document");
+    global.Document = DocumentCtor;
+    if (typeof globalThis !== "undefined") globalThis.Document = DocumentCtor;
+    if (typeof window !== "undefined") window.Document = DocumentCtor;
+  }
+  if (global.Window && typeof global.Window !== "function") {
+    const nativeWinProto = global.Window.prototype;
+    const WindowCtor = function Window() {
+      throw new TypeError("Illegal constructor");
+    };
+    WindowCtor.prototype = nativeWinProto;
+    nativeWinProto.constructor = WindowCtor;
+    Object.defineProperty(WindowCtor.prototype, Symbol.toStringTag, {
+      value: "Window",
+      configurable: true,
+    });
+    markNative(WindowCtor, "Window");
+    global.Window = WindowCtor;
+    if (typeof globalThis !== "undefined") globalThis.Window = WindowCtor;
+    if (typeof window !== "undefined") window.Window = WindowCtor;
+  }
   if (global.Element) {
     installElementExtensions(global.Element.prototype);
     installHtmlElementExtensions(global.Element.prototype);
@@ -271,6 +319,37 @@ function installShim(global) {
       case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
       case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
       case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
+      case "datalist": Object.setPrototypeOf(el, (global.HTMLDataListElement || global.HTMLElement).prototype); break;
+      case "div": Object.setPrototypeOf(el, (global.HTMLDivElement || global.HTMLElement).prototype); break;
+      case "h1":
+      case "h2":
+      case "h3":
+      case "h4":
+      case "h5":
+      case "h6": Object.setPrototypeOf(el, (global.HTMLHeadingElement || global.HTMLElement).prototype); break;
+      case "span": Object.setPrototypeOf(el, (global.HTMLSpanElement || global.HTMLElement).prototype); break;
+      case "p": Object.setPrototypeOf(el, (global.HTMLParagraphElement || global.HTMLElement).prototype); break;
+      case "ul": Object.setPrototypeOf(el, (global.HTMLUListElement || global.HTMLElement).prototype); break;
+      case "ol": Object.setPrototypeOf(el, (global.HTMLOListElement || global.HTMLElement).prototype); break;
+      case "li": Object.setPrototypeOf(el, (global.HTMLLIElement || global.HTMLElement).prototype); break;
+      case "pre": Object.setPrototypeOf(el, (global.HTMLPreElement || global.HTMLElement).prototype); break;
+      case "br": Object.setPrototypeOf(el, (global.HTMLBRElement || global.HTMLElement).prototype); break;
+      case "hr": Object.setPrototypeOf(el, (global.HTMLHRElement || global.HTMLElement).prototype); break;
+      case "body": Object.setPrototypeOf(el, (global.HTMLBodyElement || global.HTMLElement).prototype); break;
+      case "head": Object.setPrototypeOf(el, (global.HTMLHeadElement || global.HTMLElement).prototype); break;
+      case "html": Object.setPrototypeOf(el, (global.HTMLHtmlElement || global.HTMLElement).prototype); break;
+      case "title": Object.setPrototypeOf(el, (global.HTMLTitleElement || global.HTMLElement).prototype); break;
+      case "meta": Object.setPrototypeOf(el, (global.HTMLMetaElement || global.HTMLElement).prototype); break;
+      case "table": Object.setPrototypeOf(el, (global.HTMLTableElement || global.HTMLElement).prototype); break;
+      case "tr": Object.setPrototypeOf(el, (global.HTMLTableRowElement || global.HTMLElement).prototype); break;
+      case "td":
+      case "th": Object.setPrototypeOf(el, (global.HTMLTableCellElement || global.HTMLElement).prototype); break;
+      case "thead":
+      case "tbody":
+      case "tfoot": Object.setPrototypeOf(el, (global.HTMLTableSectionElement || global.HTMLElement).prototype); break;
+      case "output": Object.setPrototypeOf(el, (global.HTMLOutputElement || global.HTMLElement).prototype); break;
+      case "progress": Object.setPrototypeOf(el, (global.HTMLProgressElement || global.HTMLElement).prototype); break;
+      case "meter": Object.setPrototypeOf(el, (global.HTMLMeterElement || global.HTMLElement).prototype); break;
       default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
     }
     return el;
@@ -814,7 +893,31 @@ function installShim(global) {
     }
   }
 
-  // 14. Mount window EventTarget methods
+  // 14. Mount window EventTarget methods and window.event own property
+  if (!Object.prototype.hasOwnProperty.call(global, "event")) {
+    Object.defineProperty(global, "event", {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  if (typeof window !== "undefined" && !Object.prototype.hasOwnProperty.call(window, "event")) {
+    Object.defineProperty(window, "event", {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  if (typeof globalThis !== "undefined" && !Object.prototype.hasOwnProperty.call(globalThis, "event")) {
+    Object.defineProperty(globalThis, "event", {
+      value: undefined,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
   global.addEventListener = EventTarget.prototype.addEventListener.bind(global);
   global.removeEventListener = EventTarget.prototype.removeEventListener.bind(global);
   global.dispatchEvent = EventTarget.prototype.dispatchEvent.bind(global);

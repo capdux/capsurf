@@ -74,6 +74,7 @@ function findAssociatedForm(element) {
 
 function installInputElement(global) {
   const ElementProto = global.Element ? global.Element.prototype : {};
+  const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLInputElement() {
     this._value = "";
@@ -87,8 +88,12 @@ function installInputElement(global) {
     this._selectionEnd = 0;
     this._selectionDirection = "none";
   }
-  HTMLInputElement.prototype = Object.create(ElementProto);
+  HTMLInputElement.prototype = Object.create(HTMLElementProto);
   HTMLInputElement.prototype.constructor = HTMLInputElement;
+  Object.defineProperty(HTMLInputElement.prototype, Symbol.toStringTag, {
+    value: "HTMLInputElement",
+    configurable: true,
+  });
   installSelectionMixin(HTMLInputElement);
 
   Object.defineProperty(HTMLInputElement.prototype, "type", {
@@ -417,6 +422,28 @@ function installInputElement(global) {
   Object.defineProperty(HTMLInputElement.prototype, "form", {
     get: function () {
       return findAssociatedForm(this);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "list", {
+    get: function () {
+      const t = this.type;
+      if (
+        t === "hidden" || t === "password" || t === "checkbox" || t === "radio" ||
+        t === "file" || t === "submit" || t === "image" || t === "reset" || t === "button"
+      ) {
+        return null;
+      }
+      const listId = this.getAttribute ? this.getAttribute("list") : null;
+      if (!listId) return null;
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (!doc || typeof doc.getElementById !== "function") return null;
+      const el = doc.getElementById(listId);
+      if (!el) return null;
+      const tag = String(el.localName || el.tagName || "").toLowerCase();
+      if (tag !== "datalist") return null;
+      return typeof upgradeElement === "function" ? upgradeElement(el) : el;
     },
     configurable: true,
   });

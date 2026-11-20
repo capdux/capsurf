@@ -1185,4 +1185,10 @@
 2. **`<use>` 引用 `<symbol>` 与 `<path>` 扫描线光栅化 (`src/layout/layout.cp`, `src/render/painter.cp`)**：
    - 实现 `findNodeById` 与 `paintSvgContainerRef`，支持 `<use href/xlink:href="#...">` 跨 `display: none` 隐藏容器引用 `<symbol>` 定义，继承 `viewBox` 缩放与 `fill`/`currentColor`；
    - 实现 `paintSvgPath` 解析 `M/m/L/l/H/h/V/v/Z/z` 路径指令并通过 even-odd 扫描线算法填充光栅化。
+
+## Phase 62 WHATWG EventListener 规范、FormDataEvent 与标准 HTML*Element 原型链技术方案
+1. **EventListener 规范化 (`src/js/shim/events/dispatch.js`)**：
+   - 先 flatten `options` 再判定 `callback` 为空，接入 `AbortSignal` 取消监听；区分函数监听与 `{ handleEvent }` 对象监听，确保每次派发仅读取一次 `handleEvent` getter 并正确绑定 `this`，同时在派发周期维护 `window.event`。
+2. **`HTMLElement` 继承树与 `FormDataEvent` (`html-classes.js`, `index.js`, `form-data.js`)**：
+   - 将原生 `Element`/`Document`/`Window` 包装为可 `instanceof` 的标准构造函数，统一全部表单与通用 HTML 元素继承自 `HTMLElement.prototype`；在 `FormData` 构造中派发防重入 `"formdata"` 事件并遵循 `<fieldset disabled>` 首个 `<legend>` 豁免规则。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

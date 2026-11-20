@@ -11,6 +11,7 @@ const _focusEventState = new WeakMap();
 const _inputEventState = new WeakMap();
 const _messageEventState = new WeakMap();
 const _submitEventState = new WeakMap();
+const _formDataEventState = new WeakMap();
 const _storageEventState = new WeakMap();
 const _compositionEventState = new WeakMap();
 const _textEventState = new WeakMap();
@@ -772,6 +773,35 @@ Object.defineProperty(SubmitEvent.prototype, "submitter", {
     const s = _submitEventState.get(this);
     if (!s) throw new TypeError("Illegal invocation");
     return s.submitter;
+  },
+  enumerable: false,
+  configurable: true,
+});
+
+// -------------------------------------------------------------
+// FormDataEvent
+// -------------------------------------------------------------
+function FormDataEvent(type, options) {
+  if (arguments.length < 2 || !options || typeof options !== "object" || !(options.formData instanceof FormData)) {
+    throw new TypeError("Failed to construct 'FormDataEvent': Failed to read the 'formData' property from 'FormDataEventInit': Required member is undefined or not a FormData.");
+  }
+  Event.call(this, type, options);
+  _formDataEventState.set(this, {
+    formData: options.formData,
+  });
+}
+FormDataEvent.prototype = Object.create(Event.prototype);
+FormDataEvent.prototype.constructor = FormDataEvent;
+markNative(FormDataEvent, "FormDataEvent");
+Object.defineProperty(FormDataEvent.prototype, Symbol.toStringTag, {
+  value: "FormDataEvent",
+  configurable: true,
+});
+Object.defineProperty(FormDataEvent.prototype, "formData", {
+  get: function () {
+    const s = _formDataEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.formData;
   },
   enumerable: false,
   configurable: true,
