@@ -794,7 +794,6 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.captureScreenshot")) {
             let compress_lvl: u8 = 6;
             const fmt = extractJsonString(req.params_raw, "format") ?? "png";
-            * = fmt;
 
             if (q := extractJsonInt(req.params_raw, "quality")) {
                 if (q >= 0 && q <= 9) {
@@ -804,6 +803,10 @@ pub struct PageHandler {
                 } else {
                     compress_lvl = 6;
                 }
+            }
+
+            if (std.mem.eql(u8, fmt, "jpeg")) {
+                compress_lvl = 1;
             }
 
             if (std.mem.indexOf(u8, req.params_raw, "\"optimizeForSpeed\":true") != null) {
@@ -833,6 +836,11 @@ pub struct PageHandler {
                 }
             }
 
+            let sx_sync: f32 = 0.0;
+            let sy_sync: f32 = 0.0;
+            let cw_sync: f32 = 0.0;
+            let ch_sync: f32 = 0.0;
+            session.updateLayoutMetrics(&sx_sync, &sy_sync, &cw_sync, &ch_sync);
             const png_bytes = session.captureScreenshotClipped(compress_lvl, clip_x, clip_y, clip_w, clip_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
             defer session.allocator.free(png_bytes);
 

@@ -1897,6 +1897,34 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  proto.scrollTo = function (xOrOptions, y) {
+    let targetX = this.scrollLeft;
+    let targetY = this.scrollTop;
+    if (typeof xOrOptions === "object" && xOrOptions !== null) {
+      if (xOrOptions.left !== undefined) targetX = Number(xOrOptions.left) || 0;
+      if (xOrOptions.top !== undefined) targetY = Number(xOrOptions.top) || 0;
+    } else if (arguments.length >= 2) {
+      targetX = Number(xOrOptions) || 0;
+      targetY = Number(y) || 0;
+    }
+    this.scrollLeft = targetX;
+    this.scrollTop = targetY;
+  };
+  proto.scroll = proto.scrollTo;
+  proto.scrollBy = function (xOrOptions, y) {
+    let dx = 0;
+    let dy = 0;
+    if (typeof xOrOptions === "object" && xOrOptions !== null) {
+      if (xOrOptions.left !== undefined) dx = Number(xOrOptions.left) || 0;
+      if (xOrOptions.top !== undefined) dy = Number(xOrOptions.top) || 0;
+    } else if (arguments.length >= 2) {
+      dx = Number(xOrOptions) || 0;
+      dy = Number(y) || 0;
+    }
+    this.scrollLeft = (this.scrollLeft || 0) + dx;
+    this.scrollTop = (this.scrollTop || 0) + dy;
+  };
+
   function getScrollParent(node) {
     if (!node) return null;
     if (node.parentElement) return node.parentElement;

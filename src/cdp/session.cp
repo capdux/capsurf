@@ -2679,6 +2679,7 @@ pub struct CdpPageSession {
         _.webmcp_retract_len = 0;
         _.renderer_active = false;
         _.frames_rendered = 0;
+        _.screencast_handler.state.reset();
         clearLearnedScripts();
         _.resetDomTracking();
     }

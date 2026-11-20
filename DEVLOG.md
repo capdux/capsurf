@@ -1732,3 +1732,7 @@
 
 ### Phase 223: Native Checkbox Paint, Viewport Scroll & Live CSS Animation Sampling
 - `captureScreenshotClipped` now samples `__capsurf_sample_active_animations()` before `Cascade.computeStyles` and temporarily overlays interpolated declarations onto `NodeData.inline_style` (restored via `defer`), allowing CSS transitions and `@keyframes` animations to stream live frames during screencast.
+
+### Phase 224: Screencast Partial-Frames 11/11 Closure
+- Cross-test `partialRaster` / viewport pollution in shared CDP sessions is eliminated by resetting `screencast_handler.state` in `resetSession`, `Target.createTarget`, and `e2e/harness.ts` (`Kitesurf.setPartialRaster({ enabled: true })`).
+- Aligning `Page.captureScreenshot` (`scroll_x`/`scroll_y` sync + JPEG `compress_lvl=1`) with `captureScreencastFrame` ensures byte-identical JPEG comparisons.

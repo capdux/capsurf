@@ -2521,7 +2521,7 @@ fn drawBidiParagraphLine(
     const vis_n = reorderVisual(cps[0..n], base_rtl, order[0..n]);
 
     const use_scaled = (fsz >= 14.0);
-    const scaled_h = if (use_scaled) (fsz * 0.65) else 8.0;
+    const scaled_h = if (use_scaled) (fsz * 0.75) else 8.0;
     const scale = @max(1.0, scaled_h / 8.0);
     const step_x = if (use_scaled) (8.0 * scale) else 8.0;
     let cursor_x = start_x;
@@ -2615,7 +2615,7 @@ fn paintBlockBidiParagraphs(
     if (count == 0) return;
 
     const fsz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
-    const scaled_h = if (fsz >= 14.0) (fsz * 0.65) else 8.0;
+    const scaled_h = if (fsz >= 14.0) (fsz * 0.75) else 8.0;
     const pad_l = st.padding_left.resolvePx(block_rect.width, fsz, 16.0, vw, vh);
     const pad_t = st.padding_top.resolvePx(block_rect.height, fsz, 16.0, vw, vh);
     const content_x = block_rect.x + st.border_left_width + pad_l;
@@ -3298,7 +3298,7 @@ fn paintNodeRecursive(
             const txt_color = if (group_opacity < 1.0) scaleColorAlpha(raw_fill, group_opacity) else raw_fill;
             const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
             if (trimmed.len > 0) {
-                const scaled_h = if (fsz >= 14.0) (fsz * 0.65) else 8.0;
+                const scaled_h = if (fsz >= 14.0) (fsz * 0.75) else 8.0;
                 const draw_y = if (fsz >= 14.0) (r.y + @max(0.0, (r.height - scaled_h) * 0.5)) else (r.y + 2.0);
                 let painted_grad_text = false;
                 if (ps := p_style_opt) {
@@ -3453,7 +3453,7 @@ fn getAsciiGlyph8x8(ch: u8): []const u8 {
         'J', 'j' => "\x1E\x0C\x0C\x0C\x6C\x6C\x38\x00",
         'K', 'k' => "\x66\x6C\x78\x70\x78\x6C\x66\x00",
         'L', 'l' => "\x60\x60\x60\x60\x60\x60\x7E\x00",
-        'M', 'm' => "\x63\x77\x7F\x6B\x63\x63\x63\x00",
+        'M', 'm' => "\x63\x77\x6B\x6B\x63\x63\x63\x00",
         'N', 'n' => "\x66\x76\x7E\x7E\x6E\x66\x66\x00",
         'O', 'o' => "\x3C\x66\x66\x66\x66\x66\x3C\x00",
         'P', 'p' => "\x7C\x66\x66\x7C\x60\x60\x60\x00",

@@ -2860,6 +2860,9 @@ export function test(
       try {
         await fixtures.cdp.send("WebMCP.disable");
       } catch {}
+      try {
+        await fixtures.cdp.send("Kitesurf.setPartialRaster", { enabled: true });
+      } catch {}
       await fixtures.page.setViewport({ width: 800, height: 600, deviceScaleFactor: 1 });
       await fixtures.page.goto("about:blank");
       const factoryBrowsers: Browser[] = [];

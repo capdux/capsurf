@@ -4656,3 +4656,12 @@
 ### Phase 223: QjsEngine Whitebox + `screencast-idle-skip` 15/15 PASS (86 Assertions)
 - **Slot A (`6f4e4c94`)**: Added `test/js/test_qjs_eval_and_error_edge.cp` covering `QjsEngine` value types, exception extraction/clearing, Promise/microtask `drainJobs`, 1500-reduction preemption recovery, and multi-context isolation (**4/4 PASS**, 962ms). Total whitebox now **115/115 (100% PASS)**.
 - **Slot B (`22237395`)**: Added `FormControlValue.checked` checkbox painting & `viewport_scroll_x/y` in `src/render/painter.cp`, live CSS animation style overlay in `src/cdp/session.cp` (`__capsurf_sample_active_animations`), and unitless-0 interpolation + `reverse`/`alternate` keyframes in `src/js/shim/animations.js` (re-bundled `runtime.js`/`runtime_source.cp`). Built `bin_19233/main`; `e2e/demo/screencast-idle-skip.e2e.test.ts` **15/15 PASS** (86 assertions, 45.32s).
+
+### Phase 224: Render Checkbox/Scroll Whitebox + `screencast-partial-frames` 11/11 PASS (Screencast 4-Pack 35/35 Complete!)
+- **Slot A (`0fd7e790`)**: Verified `test/render/` 7/7 zero regression; added `test/render/test_checkbox_and_scroll_paint.cp` (**2/2 PASS**). Total whitebox now **116/116 (100% PASS)**.
+- **Slot B (`b37d69a1`)**:
+  - Reset `screencast_handler.state` in `resetSession` (`src/cdp/session.cp:2680-2684`), `Target.createTarget` (`src/cdp/target.cp:618-625`), and shared-CDP reset (`e2e/harness.ts:2860-2866`).
+  - Synced `updateLayoutMetrics` & JPEG `compress_lvl = 1` in `Page.captureScreenshot` (`src/cdp/page.cp:795-845`).
+  - Added `Element.prototype.scrollTo/scroll/scrollBy` in `src/js/shim/element/element.js:1871-1897` (re-bundled `runtime.js`/`runtime_source.cp`).
+  - Tuned `>= 14px` scaled text `scaled_h` (`0.75`) and `M/m` glyph row 2 (`k`) in `src/render/painter.cp`.
+  - Built `bin_19233/main`; `e2e/demo/screencast-partial-frames.e2e.test.ts` **11/11 PASS** (158 assertions, exit 0). Screencast 4-pack now **35/35 PASS (582 assertions)**.

@@ -2343,3 +2343,7 @@
 ### Phase 223
 - Added `test/js/test_qjs_eval_and_error_edge.cp`.
 - Added native checkbox checked painting and `viewport_scroll_x`/`viewport_scroll_y` in `src/render/painter.cp`, live CSS animation sampling overlay in `src/cdp/session.cp`, and animation interpolation/direction fixes in `src/js/shim/animations.js` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 224
+- Added `test/render/test_checkbox_and_scroll_paint.cp`.
+- Reset screencast state across session/target/harness boundaries (`src/cdp/session.cp`, `src/cdp/target.cp`, `e2e/harness.ts`), synced scroll & JPEG compression in `Page.captureScreenshot` (`src/cdp/page.cp`), added `Element.prototype.scrollTo/scroll/scrollBy` (`src/js/shim/element/element.js` + `runtime.js`/`runtime_source.cp`), and tuned scaled text `0.75` cap-height & `M/m` glyph in `src/render/painter.cp`.
