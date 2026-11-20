@@ -3138,4 +3138,43 @@
     - 攻坚目标：`e2e/demo/svg-overflow-clip.e2e.test.ts` 与 `e2e/demo/svg-sprite-sidebar.e2e.test.ts`。
     - 任务：在 mock_fixtures 注册对应 fixture，实装 SVG overflow 裁剪规则与 `<use xlink:href="#...">` 引用 `<symbol>` 精灵图渲染。
 
+## [2026-11-20 14:06:30] 账号切换重启恢复、跨 AGY 通信自检与双智能体流水线再派发
+- **跨 AGY 通信协议自检 (`/root/.agy/comm/COMM.md`)**:
+  - 确认已切换为 `agy-comm.service`（systemd 常驻托管）+ `/root/.agy/comm/queue.db` 架构，不再自建 `watch_task.py` 轮询进程；
+  - 检查 `systemctl is-active agy-comm.service` 为 `active`（PID 3237474），`unacked` 队列为 `[]`（0 条未确认消息）。
+- **清理旧子智能体并重新派发 2 路全新并发子智能体（物理文件隔离 + `flock` 构建锁 + 独立 CDP 端口）**:
+  - 清理此前因 429 配额耗尽停止的 `70955724` 与 `5cc94afc`；
+  - **Subagent 24 (`4e89f94a-d1a7-4882-abfc-6ccc1ff7e737`)**: SVG Overflow Sprite Specialist（纯 CP 模块隔离，端口 `19231`）
+    - 攻坚目标：`e2e/demo/svg-overflow-clip.e2e.test.ts` 与 `e2e/demo/svg-sprite-sidebar.e2e.test.ts`。
+  - **Subagent 25 (`41be6b01-ff14-470c-89de-402512ede6cf`)**: Forms Validation Specialist（JS 运行时垫片隔离，端口 `19232`）
+    - 攻坚目标：`e2e/demo/forms-validation-demo.e2e.test.ts` 与 `e2e/demo/forms-step-numeric-demo.e2e.test.ts`。
+
+## [2026-11-20 14:16:00] 表单约束验证 API 与步进数值输入规范全绿闭环 (Subagent 41be6b01 结单，Phase 60)
+- **HTML 约束验证与步进输入规范实装 (`src/js/shim/element/forms/`)**:
+  - `validity.js`: 实装 7 种步进/日期时间类型（`number`/`range`/`date`/`month`/`week`/`time`/`datetime-local`）解析、序列化、清洗与步进计算；补齐 `computeWillValidate`（含 `<fieldset disabled>` 首个 `<legend>` 例外与 `<datalist>` 祖先排除）、`computeValidityFlags`（全部 11 个标准标志）、`computeValidationMessage` 与 `WeakMap` 单例缓存的 `ValidityState`。
+  - `input.js` / `selection.js` / `textarea.js` / `select.js` / `button.js` / `element.js`: 补齐 `pattern`/`min`/`max`/`step`/`multiple`/`maxLength`/`minLength`/`autocomplete`/`autofocus`/`size`/`indeterminate` 反射属性，升级 `valueAsNumber`/`valueAsDate` 与 `stepUp(n)`/`stepDown(n)`，并在用户输入写入时执行 `sanitizeInputValue` 清洗；重新打包 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+- **门禁与 E2E 回归验证**:
+  - `python3 scripts/cpc_brief.py -n 8 src/js/runtime_source.cp`: PASS（4 门禁全 0）；
+  - `forms-validation-demo.e2e.test.ts` (6/6) + `forms-step-numeric-demo.e2e.test.ts` (1/1) + `forms-input-demo` + `forms-form-demo` 回归：**9 pass, 0 fail (104 expect() calls, 5.77s)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `41be6b01-ff14-470c-89de-402512ede6cf`；
+  - 派发全新子智能体 **Subagent 26**: Forms Misc & Events Specialist（纯 JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：`e2e/demo/forms-misc-demo.e2e.test.ts`、`e2e/demo/forms-instanceof-demo.e2e.test.ts`、`e2e/demo/event-listener-fixes-demo.e2e.test.ts`。
+
+## [2026-11-20 14:17:00] SVG 溢出裁剪、外链 SVG 光栅化与 `<use>`/`<symbol>` 精灵图全绿闭环 (Subagent 4e89f94a 结单，Phase 61)
+- **SVG 溢出裁剪与绝对定位脱离流修正 (`src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`)**:
+  - `cascade.cp`: 在 `overflow`/`overflow-x`/`overflow-y` 解析中执行空白裁剪，确保 `style="overflow: visible"` 准确置位 `overflow_visible = true`。
+  - `layout.cp`: 在 `layoutSvgContainer` 中按 `!overflow_visible` 控制裁剪，补齐 `<use>` 与 `<path>` 布局盒计算；在 `layoutBlockContainer` 与 `layoutFlexContainer` 中将 `position: absolute/fixed` 移出常规流并保护 `flex` 的 `min-height`。
+  - `painter.cp`: 新增 `ClipRect` 与 `Canvas.paintBoxClipped` 裁剪框体系；实装 `loadSvgAssetForImg`/`paintImgSvg` 支持 `<img>` 外链 SVG 严格盒裁剪渲染；实装 `findNodeById`、`paintSvgContainerRef`、`paintSvgPath`（`M/m/L/l/H/h/V/v/Z/z` even-odd 扫描线填充），打通 `<use href/xlink:href="#...">` 引用 `display: none` 中的 `<symbol>` 精灵图。
+- **门禁与 E2E 回归验证**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 全部通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `svg-overflow-clip.e2e.test.ts` + `svg-sprite-sidebar.e2e.test.ts` + `svg-document-render.e2e.test.ts`：**3 pass, 0 fail (26 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `4e89f94a-d1a7-48c1-abfc-6ccc1ff7e737`；
+  - 派发全新子智能体 **Subagent 27**: SVG Paint & Dash Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/svg-paint-fidelity.e2e.test.ts`、`e2e/svg-dash-stroke.e2e.test.ts`、`e2e/svg-ratio-sizing.e2e.test.ts`。
+
+
+
+
 

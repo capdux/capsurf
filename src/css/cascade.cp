@@ -1625,9 +1625,10 @@ pub struct ComputedStyle {
         }
         if (std.ascii.eqlIgnoreCase(name, "overflow") || std.ascii.eqlIgnoreCase(name, "overflow-x") || std.ascii.eqlIgnoreCase(name, "overflow-y")) {
             if (_.tryClaimSlot(PROP_OVERFLOW, weight)) {
-                if (std.ascii.eqlIgnoreCase(val, "visible")) {
+                const v = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(v, "visible")) {
                     _.overflow_visible = true;
-                } else if (std.ascii.eqlIgnoreCase(val, "hidden") || std.ascii.eqlIgnoreCase(val, "clip")) {
+                } else if (std.ascii.eqlIgnoreCase(v, "hidden") || std.ascii.eqlIgnoreCase(v, "clip")) {
                     _.overflow_visible = false;
                 }
             }

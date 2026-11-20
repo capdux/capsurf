@@ -430,21 +430,18 @@ function installSelectElement(global) {
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "willValidate", {
-    get: function () { return !this.disabled; },
+    get: function () { return computeWillValidate(this); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "validity", {
-    get: function () { return new ValidityState(this); },
+    get: function () { return makeValidityState(this); },
     configurable: true,
   });
 
   Object.defineProperty(HTMLSelectElement.prototype, "validationMessage", {
     get: function () {
-      if (!this.willValidate || this.validity.valid) return "";
-      if (this._customValidityMessage) return this._customValidityMessage;
-      if (this.validity.valueMissing) return "Please select an item in the list.";
-      return "Constraints not satisfied.";
+      return computeValidationMessage(this);
     },
     configurable: true,
   });

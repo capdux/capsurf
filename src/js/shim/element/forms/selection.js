@@ -26,8 +26,24 @@ function getValueRaw(el) {
 }
 
 function setValueRaw(el, newValue) {
-  el._value = String(newValue);
-  if (el.setAttribute) el.setAttribute("value", String(newValue));
+  const str = String(newValue);
+  const tag = (el && (el.tagName || el.localName) || "").toLowerCase();
+  if (tag === "input") {
+    const rawType = typeof el.getAttribute === "function" ? el.getAttribute("type") : "";
+    const type = typeof normalizeInputType === "function" ? normalizeInputType(rawType) : (rawType || "text").toLowerCase();
+    const sanitized = typeof sanitizeInputValue === "function"
+      ? sanitizeInputValue(type, str, {
+          multiple: typeof el.hasAttribute === "function" && el.hasAttribute("multiple"),
+          minAttr: typeof el.getAttribute === "function" ? el.getAttribute("min") : null,
+          maxAttr: typeof el.getAttribute === "function" ? el.getAttribute("max") : null,
+          stepAttr: typeof el.getAttribute === "function" ? el.getAttribute("step") : null,
+        })
+      : str;
+    el._valueDirty = true;
+    el._value = sanitized;
+    return;
+  }
+  el._value = str;
 }
 
 function notifyControlValueMutation(control, cursor) {

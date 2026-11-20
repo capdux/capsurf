@@ -32,15 +32,30 @@ function normalizeInputType(raw) {
   return VALID_INPUT_TYPES.has(lower) ? lower : "text";
 }
 
-const STEPPABLE_TYPES = new Set([
-  "number",
-  "range",
-  "date",
-  "month",
-  "week",
-  "time",
-  "datetime-local",
-]);
+function inputValueMode(type) {
+  if (type === "checkbox" || type === "radio") return "default/on";
+  if (type === "file") return "filename";
+  if (
+    type === "hidden" ||
+    type === "submit" ||
+    type === "reset" ||
+    type === "image" ||
+    type === "button"
+  ) {
+    return "default";
+  }
+  return "value";
+}
+
+function sanitizeForInput(el, raw) {
+  const t = normalizeInputType(el.getAttribute ? el.getAttribute("type") : "");
+  return sanitizeInputValue(t, raw, {
+    multiple: el.hasAttribute ? el.hasAttribute("multiple") : false,
+    minAttr: el.getAttribute ? el.getAttribute("min") : null,
+    maxAttr: el.getAttribute ? el.getAttribute("max") : null,
+    stepAttr: el.getAttribute ? el.getAttribute("step") : null,
+  });
+}
 
 function findAssociatedForm(element) {
   if (!element) return null;
@@ -65,6 +80,8 @@ function installInputElement(global) {
     this._valueDirty = false;
     this._checked = false;
     this._checkedDirty = false;
+    this._indeterminate = false;
+    this._userEdited = false;
     this._customValidityMessage = "";
     this._selectionStart = 0;
     this._selectionEnd = 0;
@@ -87,25 +104,41 @@ function installInputElement(global) {
   Object.defineProperty(HTMLInputElement.prototype, "value", {
     get: function () {
       const t = this.type;
-      if (t === "checkbox" || t === "radio") {
-        const attr = this.getAttribute("value");
+      const mode = inputValueMode(t);
+      const attr = this.getAttribute("value");
+      if (mode === "default/on") {
         return attr !== null ? attr : "on";
       }
+      if (mode === "default") {
+        return attr !== null ? attr : "";
+      }
+      if (mode === "filename") {
+        return this._valueDirty ? (this._value || "") : "";
+      }
       if (this._valueDirty) return this._value;
-      const attr = this.getAttribute("value");
-      return attr !== null ? attr : "";
+      return sanitizeForInput(this, attr !== null ? attr : "");
     },
     set: function (v) {
       const t = this.type;
+      const mode = inputValueMode(t);
       const str = v === null ? "" : String(v);
-      if (t === "checkbox" || t === "radio") {
+      if (mode === "filename") {
+        if (str !== "") {
+          const DOMEx = global.DOMException || Error;
+          throw new DOMEx("HTMLInputElement.value: setting non-empty value on file input not allowed", "InvalidStateError");
+        }
+        this._valueDirty = true;
+        this._value = "";
+        return;
+      }
+      if (mode === "default" || mode === "default/on") {
         this.setAttribute("value", str);
         return;
       }
       this._valueDirty = true;
-      this._value = str;
-      this._selectionStart = str.length;
-      this._selectionEnd = str.length;
+      this._value = sanitizeForInput(this, str);
+      this._selectionStart = this._value.length;
+      this._selectionEnd = this._value.length;
     },
     configurable: true,
   });
@@ -158,6 +191,16 @@ function installInputElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLInputElement.prototype, "indeterminate", {
+    get: function () {
+      return Boolean(this._indeterminate);
+    },
+    set: function (v) {
+      this._indeterminate = Boolean(v);
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLInputElement.prototype, "textLength", {
     get: function () {
       return this.value.length;
@@ -168,55 +211,9 @@ function installInputElement(global) {
   Object.defineProperty(HTMLInputElement.prototype, "valueAsNumber", {
     get: function () {
       const t = this.type;
-      if (!STEPPABLE_TYPES.has(t)) return NaN;
-      if (t === "number" || t === "range") {
-        const v = parseFloat(this.value);
-        return isNaN(v) ? NaN : v;
-      }
-      if (t === "date") {
-        const parts = this.value.split("-");
-        if (parts.length === 3) {
-          const y = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10) - 1;
-          const d = parseInt(parts[2], 10);
-          return Date.UTC(y, m, d);
-        }
-        return NaN;
-      }
-      if (t === "month") {
-        const parts = this.value.split("-");
-        if (parts.length === 2) {
-          const y = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10);
-          return (y - 1970) * 12 + (m - 1);
-        }
-        return NaN;
-      }
-      if (t === "time") {
-        const parts = this.value.split(":");
-        if (parts.length >= 2) {
-          const h = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10);
-          const s = parts.length > 2 ? parseFloat(parts[2]) : 0;
-          return h * 3600000 + m * 60000 + Math.round(s * 1000);
-        }
-        return NaN;
-      }
-      if (t === "datetime-local") {
-        const m = /^(\d{4,})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(this.value);
-        if (m) {
-          const y = +m[1];
-          const mo = +m[2] - 1;
-          const d = +m[3];
-          const h = +m[4];
-          const mi = +m[5];
-          const s = m[6] ? +m[6] : 0;
-          const ms = m[7] ? +m[7].padEnd(3, "0") : 0;
-          return Date.UTC(y, mo, d, h, mi, s, ms);
-        }
-        return NaN;
-      }
-      return NaN;
+      if (!isSteppableInputType(t)) return NaN;
+      const parsed = parseInputByType(t, this.value);
+      return parsed == null ? NaN : parsed;
     },
     set: function (v) {
       const n = Number(v);
@@ -224,7 +221,7 @@ function installInputElement(global) {
         throw new TypeError("valueAsNumber: value is infinite");
       }
       const t = this.type;
-      if (!STEPPABLE_TYPES.has(t)) {
+      if (!isSteppableInputType(t)) {
         const DOMEx = global.DOMException || Error;
         throw new DOMEx("valueAsNumber: not supported on input[type=" + t + "]", "InvalidStateError");
       }
@@ -232,7 +229,8 @@ function installInputElement(global) {
         this.value = "";
         return;
       }
-      this.value = String(n);
+      const s = serializeInputByType(t, n);
+      this.value = parseInputByType(t, s) == null ? "" : s;
     },
     configurable: true,
   });
@@ -240,39 +238,55 @@ function installInputElement(global) {
   Object.defineProperty(HTMLInputElement.prototype, "valueAsDate", {
     get: function () {
       const t = this.type;
-      if (t !== "date" && t !== "month" && t !== "week" && t !== "time") return null;
-      const num = this.valueAsNumber;
-      if (isNaN(num)) return null;
-      if (t === "month") {
-        return new Date(Date.UTC(1970, num, 1));
-      }
-      return new Date(num);
+      if (!acceptsValueAsDateType(t)) return null;
+      return valueAsDateFromString(t, this.value);
     },
     set: function (v) {
       const t = this.type;
-      if (t !== "date" && t !== "month" && t !== "week" && t !== "time") {
+      if (!acceptsValueAsDateType(t)) {
         const DOMEx = global.DOMException || Error;
         throw new DOMEx("valueAsDate: not supported on input[type=" + t + "]", "InvalidStateError");
       }
-      if (v === null || v === undefined) {
-        this.value = "";
-        return;
+      if (v !== null && !(v instanceof Date)) {
+        throw new TypeError("valueAsDate: expected Date or null");
       }
-      if (!(v instanceof Date) || isNaN(v.getTime())) {
-        this.value = "";
-        return;
-      }
-      if (t === "date") {
-        const y = v.getUTCFullYear();
-        const m = String(v.getUTCMonth() + 1).padStart(2, "0");
-        const d = String(v.getUTCDate()).padStart(2, "0");
-        this.value = y + "-" + m + "-" + d;
-      } else {
-        this.value = String(v.getTime());
-      }
+      const s = valueAsDateToString(t, v);
+      this.value = s == null ? "" : s;
     },
     configurable: true,
   });
+
+  function applyStep(input, n) {
+    const t = input.type;
+    const step = input.getAttribute("step");
+    const min = input.getAttribute("min");
+    const max = input.getAttribute("max");
+    const valAttr = input.getAttribute("value");
+    const stepResult = computeInputStep(t, input.value, min, max, step, n, valAttr);
+    if (stepResult.error) {
+      const DOMEx = global.DOMException || Error;
+      throw new DOMEx(
+        "stepUp/stepDown: not supported on input[type=" + t + "] with step=" + (step || "default"),
+        "InvalidStateError"
+      );
+    }
+    if (stepResult.noop || stepResult.value === undefined) return;
+    input.value = stepResult.value;
+  }
+
+  function stepArg(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return n | 0;
+  }
+
+  HTMLInputElement.prototype.stepUp = function (n) {
+    applyStep(this, stepArg(arguments.length ? n : 1));
+  };
+
+  HTMLInputElement.prototype.stepDown = function (n) {
+    applyStep(this, -stepArg(arguments.length ? n : 1));
+  };
 
   Object.defineProperty(HTMLInputElement.prototype, "name", {
     get: function () { return this.getAttribute("name") || ""; },
@@ -298,9 +312,105 @@ function installInputElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLInputElement.prototype, "multiple", {
+    get: function () { return this.hasAttribute("multiple"); },
+    set: function (v) { if (v) this.setAttribute("multiple", ""); else this.removeAttribute("multiple"); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "autofocus", {
+    get: function () { return this.hasAttribute("autofocus"); },
+    set: function (v) { if (v) this.setAttribute("autofocus", ""); else this.removeAttribute("autofocus"); },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLInputElement.prototype, "placeholder", {
     get: function () { return this.getAttribute("placeholder") || ""; },
     set: function (v) { this.setAttribute("placeholder", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "autocomplete", {
+    get: function () { return this.getAttribute("autocomplete") || ""; },
+    set: function (v) { this.setAttribute("autocomplete", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "pattern", {
+    get: function () { return this.getAttribute("pattern") || ""; },
+    set: function (v) { this.setAttribute("pattern", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "min", {
+    get: function () { return this.getAttribute("min") || ""; },
+    set: function (v) { this.setAttribute("min", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "max", {
+    get: function () { return this.getAttribute("max") || ""; },
+    set: function (v) { this.setAttribute("max", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "step", {
+    get: function () { return this.getAttribute("step") || ""; },
+    set: function (v) { this.setAttribute("step", String(v)); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "maxLength", {
+    get: function () {
+      const v = this.getAttribute("maxlength");
+      if (v == null) return -1;
+      const n = parseInt(v, 10);
+      return isNaN(n) || n < 0 ? -1 : n;
+    },
+    set: function (v) {
+      const n = Number(v) | 0;
+      if (n < 0) {
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("maxLength: negative value", "IndexSizeError");
+      }
+      this.setAttribute("maxlength", String(n));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "minLength", {
+    get: function () {
+      const v = this.getAttribute("minlength");
+      if (v == null) return -1;
+      const n = parseInt(v, 10);
+      return isNaN(n) || n < 0 ? -1 : n;
+    },
+    set: function (v) {
+      const n = Number(v) | 0;
+      if (n < 0) {
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("minLength: negative value", "IndexSizeError");
+      }
+      this.setAttribute("minlength", String(n));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "size", {
+    get: function () {
+      const v = this.getAttribute("size");
+      if (v == null) return 20;
+      const n = parseInt(v, 10);
+      return isNaN(n) || n <= 0 ? 20 : n;
+    },
+    set: function (v) {
+      const n = Number(v) | 0;
+      if (n <= 0) {
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("size: value must be > 0", "IndexSizeError");
+      }
+      this.setAttribute("size", String(n));
+    },
     configurable: true,
   });
 
@@ -313,33 +423,29 @@ function installInputElement(global) {
 
   Object.defineProperty(HTMLInputElement.prototype, "willValidate", {
     get: function () {
-      if (this.disabled || this.readOnly) return false;
-      const t = this.type;
-      return !(t === "hidden" || t === "button" || t === "reset");
+      return computeWillValidate(this);
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLInputElement.prototype, "validity", {
     get: function () {
-      return new ValidityState(this);
+      return makeValidityState(this);
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLInputElement.prototype, "validationMessage", {
     get: function () {
-      if (!this.willValidate || this.validity.valid) return "";
-      if (this._customValidityMessage) return this._customValidityMessage;
-      if (this.validity.valueMissing) return "Please fill out this field.";
-      if (this.validity.typeMismatch) return "Please enter a valid value.";
-      return "Constraints not satisfied.";
+      return computeValidationMessage(this);
     },
     configurable: true,
   });
 
   HTMLInputElement.prototype.setCustomValidity = function (msg) {
-    this._customValidityMessage = String(msg || "");
+    this._customValidityMessage = String(msg == null ? "" : msg)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
   };
 
   HTMLInputElement.prototype.checkValidity = function () {
@@ -357,6 +463,8 @@ function installInputElement(global) {
   };
 
   markNative(HTMLInputElement, "HTMLInputElement");
+  markNative(HTMLInputElement.prototype.stepUp, "stepUp");
+  markNative(HTMLInputElement.prototype.stepDown, "stepDown");
   markNative(HTMLInputElement.prototype.setCustomValidity, "setCustomValidity");
   markNative(HTMLInputElement.prototype.checkValidity, "checkValidity");
   markNative(HTMLInputElement.prototype.reportValidity, "reportValidity");

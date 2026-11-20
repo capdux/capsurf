@@ -1975,17 +1975,13 @@ function installElementExtensions(proto) {
   });
 
   Object.defineProperty(proto, "validity", {
-    get: function () { return new ValidityState(this); },
+    get: function () { return makeValidityState(this); },
     configurable: true,
   });
 
   Object.defineProperty(proto, "willValidate", {
     get: function () {
-      if (this.disabled || this.readOnly) return false;
-      const tag = (this.tagName || "").toLowerCase();
-      if (tag === "button") return false;
-      const t = this.type;
-      return !(t === "hidden" || t === "button" || t === "reset" || t === "submit");
+      return computeWillValidate(this);
     },
     configurable: true,
   });

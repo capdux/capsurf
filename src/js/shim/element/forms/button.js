@@ -121,14 +121,34 @@ function installButtonElement(global) {
   });
 
   Object.defineProperty(HTMLButtonElement.prototype, "willValidate", {
-    get: function () { return false; },
+    get: function () { return computeWillValidate(this); },
     configurable: true,
   });
 
-  HTMLButtonElement.prototype.checkValidity = function () { return true; };
-  HTMLButtonElement.prototype.reportValidity = function () { return true; };
+  Object.defineProperty(HTMLButtonElement.prototype, "validity", {
+    get: function () { return makeValidityState(this); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLButtonElement.prototype, "validationMessage", {
+    get: function () { return computeValidationMessage(this); },
+    configurable: true,
+  });
+
+  HTMLButtonElement.prototype.checkValidity = function () {
+    if (!this.willValidate) return true;
+    if (!this.validity.valid) {
+      const evt = new Event("invalid", { bubbles: false, cancelable: true });
+      this.dispatchEvent(evt);
+      return false;
+    }
+    return true;
+  };
+  HTMLButtonElement.prototype.reportValidity = function () { return this.checkValidity(); };
   HTMLButtonElement.prototype.setCustomValidity = function (msg) {
-    this._customValidityMessage = String(msg || "");
+    this._customValidityMessage = String(msg == null ? "" : msg)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
   };
 
   markNative(HTMLButtonElement, "HTMLButtonElement");

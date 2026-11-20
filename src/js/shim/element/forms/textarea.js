@@ -95,26 +95,59 @@ function installTextAreaElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLTextAreaElement.prototype, "maxLength", {
+    get: function () {
+      const v = this.getAttribute("maxlength");
+      if (v == null) return -1;
+      const n = parseInt(v, 10);
+      return isNaN(n) || n < 0 ? -1 : n;
+    },
+    set: function (v) {
+      const n = Number(v) | 0;
+      if (n < 0) {
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("maxLength: negative value", "IndexSizeError");
+      }
+      this.setAttribute("maxlength", String(n));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLTextAreaElement.prototype, "minLength", {
+    get: function () {
+      const v = this.getAttribute("minlength");
+      if (v == null) return -1;
+      const n = parseInt(v, 10);
+      return isNaN(n) || n < 0 ? -1 : n;
+    },
+    set: function (v) {
+      const n = Number(v) | 0;
+      if (n < 0) {
+        const DOMEx = global.DOMException || Error;
+        throw new DOMEx("minLength: negative value", "IndexSizeError");
+      }
+      this.setAttribute("minlength", String(n));
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLTextAreaElement.prototype, "willValidate", {
     get: function () {
-      return !this.disabled && !this.readOnly;
+      return computeWillValidate(this);
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLTextAreaElement.prototype, "validity", {
     get: function () {
-      return new ValidityState(this);
+      return makeValidityState(this);
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLTextAreaElement.prototype, "validationMessage", {
     get: function () {
-      if (!this.willValidate || this.validity.valid) return "";
-      if (this._customValidityMessage) return this._customValidityMessage;
-      if (this.validity.valueMissing) return "Please fill out this field.";
-      return "Constraints not satisfied.";
+      return computeValidationMessage(this);
     },
     configurable: true,
   });

@@ -1169,4 +1169,20 @@
      - 在 `cascade.cp` 中新增 `has_fill_current_color`，解析 `fill: currentColor` 并在级联计算中映射为当前节点级联文本色 `color`；支持 `fill="..."` 表现性属性作为低优先级权重注入；
      - 在 `layout.cp` 中实装 `layoutSvgContainer` 与 `layoutSvgChildren`，依据 W3C SVG 规范实现 `xMidYMid meet` 保持纵横比的几何缩放（`scale = min(svg_w / vb_w, svg_h / vb_h)`）与偏置居中（`offset_x`, `offset_y`），并实施溢出截幅；
      - 在 `painter.cp` 中为 `<rect>` 元素回退提取 `fill` 表现性属性并支持 `currentColor`。
+
+## Phase 60 HTML 表单约束验证引擎与步进数值/日期输入规范技术方案
+1. **统一约束验证引擎 (`src/js/shim/element/forms/validity.js`)**：
+   - 将所有可验证表单控件（`input`/`textarea`/`select`/`button`）的 `willValidate`、`validity`、`validationMessage`、`checkValidity`/`reportValidity` 收敛至 `validity.js`，通过 `WeakMap` 缓存 `ValidityState` 实例以满足同对象语义；
+   - 严格实现 `<fieldset disabled>` 首个 `<legend>` 子树免禁用传播与 `<datalist>` 祖先禁用验证规则。
+2. **多类型步进与清洗流水线 (`input.js`, `selection.js`)**：
+   - 在 `setValueRaw` 入口对 `<input>` 应用 `sanitizeInputValue` 与 `_valueDirty = true`，确保用户输入非数字（如 `type="number"` 键入 `"e"`）时立即触发 `badInput` 并将 `.value` 清洗为空串；
+   - 为 `stepUp`/`stepDown`、`valueAsNumber`/`valueAsDate` 实现 7 种标准类型的数值与日期双向转换及 `InvalidStateError` 校验。
+
+## Phase 61 SVG 溢出裁剪、外链 `<img>` SVG 光栅化与 `<use>`/`<symbol>` 精灵图技术方案
+1. **裁剪框透传与外链 SVG 盒裁剪 (`src/render/painter.cp`)**：
+   - 引入 `ClipRect` 与 `Canvas.paintBoxClipped`，在 `paintNodeRecursive` 中向下透传有效裁剪区域；`<svg>` 默认按视口盒裁剪，显式声明 `overflow: visible` 时放开裁剪；
+   - `<img>` 指向 SVG 资源（`/__fixtures/*.svg` 或 `data:image/svg+xml,...`）时通过 `loadSvgAssetForImg` 加载解析并严格裁剪于 `<img>` 几何盒内，彻底杜绝内容溢出。
+2. **`<use>` 引用 `<symbol>` 与 `<path>` 扫描线光栅化 (`src/layout/layout.cp`, `src/render/painter.cp`)**：
+   - 实现 `findNodeById` 与 `paintSvgContainerRef`，支持 `<use href/xlink:href="#...">` 跨 `display: none` 隐藏容器引用 `<symbol>` 定义，继承 `viewBox` 缩放与 `fill`/`currentColor`；
+   - 实现 `paintSvgPath` 解析 `M/m/L/l/H/h/V/v/Z/z` 路径指令并通过 even-odd 扫描线算法填充光栅化。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

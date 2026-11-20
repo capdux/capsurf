@@ -1483,4 +1483,26 @@
   - 4 道静态门禁：所有 8 个修改的 CP 源码 100% PASS（`zig{}: 0`, `var: 0`, `tuple.@N: 0`, `anyopaque: 0`）；
   - E2E 测试：`e2e/demo/svg-document-render.e2e.test.ts` 100% PASS（1 pass, 0 fail, 16 expect calls in 4.38s）；
   - 独立单二进制：`bin/main` 成功构建。
+
+## Phase 60: HTML Form Constraint Validation API & Steppable Numeric/Date Inputs (100% Closed)
+- **`src/js/shim/element/forms/validity.js`**：
+  - 实装 `number`/`range`/`date`/`month`/`week`/`time`/`datetime-local` 解析、序列化、清洗与步进计算；
+  - 补齐 `computeWillValidate`（含 `<fieldset disabled>` 首个 `<legend>` 例外与 `<datalist>` 祖先排除）、`computeValidityFlags`、`computeValidationMessage` 与 `WeakMap` 单例缓存 `ValidityState`。
+- **`src/js/shim/element/forms/{input,selection,textarea,select,button}.js` & `src/js/shim/element/element.js`**：
+  - 补齐表单约束反射属性（`pattern`/`min`/`max`/`step`/`multiple`/`maxLength`/`minLength` 等），实装 `valueAsNumber`/`valueAsDate`、`stepUp(n)`/`stepDown(n)` 与 `sanitizeInputValue` 用户输入清洗；
+  - 重新打包 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`forms-validation-demo` (6/6) + `forms-step-numeric-demo` (1/1) + 表单回归共 **9 pass, 0 fail (104 expect calls, 5.77s)**。
+
+## Phase 61: SVG Overflow Clipping, `<img>` SVG Rasterization & `<use>`/`<symbol>` Sprites (100% Closed)
+- **`src/css/cascade.cp`**：
+  - `overflow`/`overflow-x`/`overflow-y` 解析补齐空白裁剪，精准识别 `overflow: visible`。
+- **`src/layout/layout.cp`**：
+  - 内联 SVG 按 `!overflow_visible` 启用裁剪；补齐 `<use>`/`<path>` 布局盒；将 `position: absolute/fixed` 子元素移出块流/Flex 流并保护 `min-height`。
+- **`src/render/painter.cp`**：
+  - 新增 `ClipRect` 与 `Canvas.paintBoxClipped`；实装 `<img>` 外链 SVG 严格盒裁剪渲染；实装 `<use>` 引用 `<symbol>` 及 `<path>` even-odd 扫描线填充光栅化。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`svg-overflow-clip` + `svg-sprite-sidebar` + `svg-document-render` 共 **3 pass, 0 fail (26 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
