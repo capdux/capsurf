@@ -4741,3 +4741,11 @@
   - Enforced `MAX_CONCURRENT_OOPIF` (`1`) on cross-origin `Runtime.executionContextCreated` with freed-slot promotion in `src/cdp/page.cp` & `src/cdp/session.cp`.
   - Unconditionally bound `parentNode` on `createHTMLDocument` root/head/body in `src/js/shim/index.js` and fixed `isSameTarget` for `nodeType === 9` Documents in `src/js/shim/mutations/observer.js` (re-bundled `runtime.js`/`runtime_source.cp`).
   - Built `bin_19233/main`; `mutation-observer-created-document` (**2/2**), `oopif-worker-budget` (**1/1**), `screencast-viewport-demo` (**1/1**) = **4/4 PASS** (17 assertions, 9.73s, exit 0).
+
+### Phase 235: DOM Traversal Whitebox (126/126) + `inserted-script-cap` + `source-script-pipeline` & `tty-todomvc-controls` 8/8 PASS
+- **Main Agent (`task-524`)**: Verified `e2e/inserted-script-cap.e2e.test.ts` **1/1 PASS** (15.77s, exit 0); caught `e2e/demo/oopif-elements-panel.e2e.test.ts` regression at `src/cdp/dom.cp:476` (`ev.session_id = "default"` vs `req.session_id`).
+- **Slot A (`9b72c908`)**: Added `test/dom/test_node_traversal_and_clone_edge.cp` (**1/1 PASS**, 884ms). Full-repo pure-CP whitebox now **126/126 (100% PASS)**.
+- **Slot B (`75a69397`)**:
+  - Normalized `Page.setDocumentContent` URLs (`https://kitesurf.local/`), added `data:` module loading (`src/cdp/session.cp`), `__capsurf_eval_module_script` (`src/cdp/session_hooks.cp`), `/oopif-csp-hop/` fixture (`src/net/mock_fixtures.cp`), and `ttyUaStylesheet` TodoMVC rules (`src/tty/nav_params.cp`).
+  - Added CSS4 `i`/`s` attribute flags (`src/js/shim/selector.js`), `!important`/logical props/`ch`/`lh` units (`src/js/shim/window.js`), and iframe `<template>` inertness + CSP + `type="module"` + `load` event (`src/js/shim/element/html-classes.js`, re-bundled `runtime.js`/`runtime_source.cp`).
+  - Built `bin_19233/main` (7.25s); `e2e/source-script-pipeline.e2e.test.ts` (**7/7 PASS**) + `e2e/tty-todomvc-controls.e2e.test.ts` (**1/1 PASS**) = **8/8 PASS** (12.11s, exit 0).

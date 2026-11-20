@@ -129,12 +129,23 @@ function matchesCompoundSelector(el, compound) {
           attrName = attrName.slice(0, -1).trim();
         }
         let expectedVal = inside.slice(eqIdx + 1).trim();
+        let caseInsensitive = false;
+        if (/\s+[iI]$/.test(expectedVal)) {
+          caseInsensitive = true;
+          expectedVal = expectedVal.slice(0, -1).trim();
+        } else if (/\s+[sS]$/.test(expectedVal)) {
+          expectedVal = expectedVal.slice(0, -1).trim();
+        }
         if ((expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
             (expectedVal.startsWith("'") && expectedVal.endsWith("'"))) {
           expectedVal = expectedVal.slice(1, -1);
         }
-        const actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
+        let actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
         if (actualVal === null) return false;
+        if (caseInsensitive) {
+          actualVal = actualVal.toLowerCase();
+          expectedVal = expectedVal.toLowerCase();
+        }
         if (op === "=" && actualVal !== expectedVal) return false;
         if (op === "~=" && actualVal.split(/\s+/).indexOf(expectedVal) === -1) return false;
         if (op === "|=" && actualVal !== expectedVal && !actualVal.startsWith(expectedVal + "-")) return false;

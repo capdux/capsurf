@@ -5120,6 +5120,12 @@ function installWindow(global) {
   }
 
   function parseDeclarationsBlockInto(element, declBlock, computedMap) {
+    const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
+    function setDecl(k, v, isImp) {
+      if (!isImp && impSet.has(k)) return;
+      computedMap.set(k, v);
+      if (isImp) impSet.add(k);
+    }
     const decls = splitCssDeclarations(declBlock);
     for (let i = 0; i < decls.length; i++) {
       const d = decls[i].trim();
@@ -5129,52 +5135,88 @@ function installWindow(global) {
       const prop = d.slice(0, colon).trim();
       let val = d.slice(colon + 1).trim();
       if (!prop) continue;
+      let isImp = false;
       if (val.toLowerCase().endsWith("!important")) {
+        isImp = true;
         val = val.slice(0, -10).trim();
       }
       val = resolveAttrExpressions(element, val);
       const key = prop.startsWith("--") ? prop : prop.toLowerCase();
-      computedMap.set(key, val);
+      setDecl(key, val, isImp);
 
       if (key === "inset") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
-          computedMap.set("top", sides[0]);
-          computedMap.set("right", sides[1]);
-          computedMap.set("bottom", sides[2]);
-          computedMap.set("left", sides[3]);
+          setDecl("top", sides[0], isImp);
+          setDecl("right", sides[1], isImp);
+          setDecl("bottom", sides[2], isImp);
+          setDecl("left", sides[3], isImp);
         }
       } else if (key === "margin") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
-          computedMap.set("margin-top", sides[0]);
-          computedMap.set("margin-right", sides[1]);
-          computedMap.set("margin-bottom", sides[2]);
-          computedMap.set("margin-left", sides[3]);
+          setDecl("margin-top", sides[0], isImp);
+          setDecl("margin-right", sides[1], isImp);
+          setDecl("margin-bottom", sides[2], isImp);
+          setDecl("margin-left", sides[3], isImp);
         }
       } else if (key === "padding") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
-          computedMap.set("padding-top", sides[0]);
-          computedMap.set("padding-right", sides[1]);
-          computedMap.set("padding-bottom", sides[2]);
-          computedMap.set("padding-left", sides[3]);
+          setDecl("padding-top", sides[0], isImp);
+          setDecl("padding-right", sides[1], isImp);
+          setDecl("padding-bottom", sides[2], isImp);
+          setDecl("padding-left", sides[3], isImp);
         }
+      } else if (key === "padding-inline-start") {
+        setDecl("padding-left", val, isImp);
+      } else if (key === "padding-inline-end") {
+        setDecl("padding-right", val, isImp);
+      } else if (key === "padding-block-start") {
+        setDecl("padding-top", val, isImp);
+      } else if (key === "padding-block-end") {
+        setDecl("padding-bottom", val, isImp);
+      } else if (key === "padding-inline") {
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          setDecl("padding-left", parts[0], isImp);
+          setDecl("padding-right", parts[0], isImp);
+        } else if (parts.length >= 2) {
+          setDecl("padding-left", parts[0], isImp);
+          setDecl("padding-right", parts[1], isImp);
+        }
+      } else if (key === "padding-block") {
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          setDecl("padding-top", parts[0], isImp);
+          setDecl("padding-bottom", parts[0], isImp);
+        } else if (parts.length >= 2) {
+          setDecl("padding-top", parts[0], isImp);
+          setDecl("padding-bottom", parts[1], isImp);
+        }
+      } else if (key === "margin-inline-start") {
+        setDecl("margin-left", val, isImp);
+      } else if (key === "margin-inline-end") {
+        setDecl("margin-right", val, isImp);
+      } else if (key === "margin-block-start") {
+        setDecl("margin-top", val, isImp);
+      } else if (key === "margin-block-end") {
+        setDecl("margin-bottom", val, isImp);
       } else if (key === "border-width") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
-          computedMap.set("border-top-width", sides[0]);
-          computedMap.set("border-right-width", sides[1]);
-          computedMap.set("border-bottom-width", sides[2]);
-          computedMap.set("border-left-width", sides[3]);
+          setDecl("border-top-width", sides[0], isImp);
+          setDecl("border-right-width", sides[1], isImp);
+          setDecl("border-bottom-width", sides[2], isImp);
+          setDecl("border-left-width", sides[3], isImp);
         }
       } else if (key === "border-style") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
-          computedMap.set("border-top-style", sides[0]);
-          computedMap.set("border-right-style", sides[1]);
-          computedMap.set("border-bottom-style", sides[2]);
-          computedMap.set("border-left-style", sides[3]);
+          setDecl("border-top-style", sides[0], isImp);
+          setDecl("border-right-style", sides[1], isImp);
+          setDecl("border-bottom-style", sides[2], isImp);
+          setDecl("border-left-style", sides[3], isImp);
         }
       } else if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
         const parts = splitCssTopLevelWhitespace(val);
@@ -5192,21 +5234,21 @@ function installWindow(global) {
         const targetSides = key === "border" ? ["top", "right", "bottom", "left"] : [key.slice(7)];
         for (let si = 0; si < targetSides.length; si++) {
           const side = targetSides[si];
-          if (bStyle) computedMap.set("border-" + side + "-style", bStyle);
+          if (bStyle) setDecl("border-" + side + "-style", bStyle, isImp);
           if (bStyle === "none" || bStyle === "hidden") {
-            computedMap.set("border-" + side + "-width", "0px");
+            setDecl("border-" + side + "-width", "0px", isImp);
           } else if (bWidth) {
-            computedMap.set("border-" + side + "-width", bWidth);
+            setDecl("border-" + side + "-width", bWidth, isImp);
           }
         }
       } else if (key === "overflow") {
         const parts = splitCssTopLevelWhitespace(val);
         if (parts.length === 1) {
-          computedMap.set("overflow-x", parts[0]);
-          computedMap.set("overflow-y", parts[0]);
+          setDecl("overflow-x", parts[0], isImp);
+          setDecl("overflow-y", parts[0], isImp);
         } else if (parts.length >= 2) {
-          computedMap.set("overflow-x", parts[0]);
-          computedMap.set("overflow-y", parts[1]);
+          setDecl("overflow-x", parts[0], isImp);
+          setDecl("overflow-y", parts[1], isImp);
         }
       }
     }
@@ -5475,6 +5517,9 @@ function installWindow(global) {
   }
 
   function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text) {
+      parseCssRulesInto(element, globalThis.__capsurf_tty_ua_css_text, targetMap, normalizedPseudo);
+    }
     for (let i = 0; i < styleNodes.length; i++) {
       const sn = styleNodes[i];
       if (!sn) continue;
@@ -5590,7 +5635,7 @@ function installWindow(global) {
     if (s === "0") return 0;
 
     // Fast path for simple length/percentage
-    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?$/i);
+    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh|ch|lh)?$/i);
     if (simple) {
       const num = parseFloat(simple[1]);
       const unit = (simple[2] || "").toLowerCase();
@@ -5601,6 +5646,14 @@ function installWindow(global) {
       if (unit === "pt") return num * (96 / 72);
       if (unit === "vw") return (num / 100) * 800;
       if (unit === "vh") return (num / 100) * 600;
+      if (unit === "ch") {
+        const cw = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8;
+        return num * cw;
+      }
+      if (unit === "lh") {
+        const ch = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_h === "number" && globalThis.__capsurf_tty_cell_h > 0) ? globalThis.__capsurf_tty_cell_h : 17;
+        return num * ch;
+      }
       return null;
     }
 
@@ -5830,6 +5883,10 @@ function installWindow(global) {
 
   function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
     if (normalizedPseudo || !element || element.nodeType !== 1) return;
+    const fsRaw = computedMap.get("font-size");
+    if (fsRaw !== undefined && fsRaw.trim() === "0") {
+      computedMap.set("font-size", "0px");
+    }
     if (!computedMap.has("z-index")) {
       computedMap.set("z-index", "auto");
     }
@@ -5906,12 +5963,12 @@ function installWindow(global) {
         computedMap.set("width", formatCssPx(usedW));
       }
 
-      // Resolve padding-* percentages / calc against cbW
+      // Resolve padding-* percentages / calc / relative units against cbW
       const padProps = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
       for (let i = 0; i < padProps.length; i++) {
         const pk = padProps[i];
         const pv = computedMap.get(pk);
-        if (pv && (pv.indexOf("%") !== -1 || pv.indexOf("(") !== -1)) {
+        if (pv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(pv.trim())) {
           const px = evalCssLengthExpr(pv, cbW, fontSize);
           if (px !== null) computedMap.set(pk, formatCssPx(px));
         }

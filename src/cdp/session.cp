@@ -27,6 +27,7 @@ import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInli
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
 import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
 import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
+import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX } from "../tty/nav_params.cp";
 
 @c {
     fn usleep(usec: u32): i32;
@@ -544,6 +545,7 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
     if (module_name == null) return js_strdup(ctx, "");
     const raw_name: []const u8 = std.mem.sliceTo(module_name, 0);
     if (raw_name.len == 0) return js_strdup(ctx, module_name);
+    if (std.mem.startsWith(u8, raw_name, "data:")) return js_strdup(ctx, module_name);
 
     let session_ptr: (*CdpPageSession)? = null;
     if (opaque_ptr != null) {
@@ -713,7 +715,20 @@ fn hasJsonExtension(url: []const u8): bool {
     defer std.heap.c_allocator.free(static_buf);
     let module_code: ([]const u8)? = null;
 
-    if (MockFixtures.isFixtureUrl(full_url) || MockFixtures.isFixtureUrl(raw_name)) {
+    if (std.mem.startsWith(u8, raw_name, "data:")) {
+        if (comma := std.mem.indexOfScalar(u8, raw_name, ',')) {
+            const meta = raw_name[5..comma];
+            const payload = raw_name[comma + 1 ..];
+            if (std.mem.indexOf(u8, meta, ";base64") != null) {
+                const decoded_len = Base64.decode(static_buf, payload) catch 0;
+                module_code = static_buf[0..decoded_len];
+            } else {
+                module_code = MockFixtures.decodeUri(payload, static_buf);
+            }
+        }
+    }
+
+    if (module_code == null && (MockFixtures.isFixtureUrl(full_url) || MockFixtures.isFixtureUrl(raw_name))) {
         if (fc := MockFixtures.handleFixtureRequest(full_url, "", "", static_buf, null)) {
             module_code = fc;
         } else if (fc2 := MockFixtures.handleFixtureRequest(raw_name, "", "", static_buf, null)) {
@@ -893,6 +908,7 @@ pub struct CdpPageSession {
     dark_color_scheme: bool = false,
     emulated_media_print: bool = false,
     nav_tty_stripped: bool = false,
+    tty_ua_css: u32 = 0,
     tty_cell_w: u32 = 0,
     tty_cell_h: u32 = 0,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
@@ -1042,6 +1058,7 @@ pub struct CdpPageSession {
         ptr.is_mobile = false;
         ptr.dark_color_scheme = false;
         ptr.nav_tty_stripped = false;
+        ptr.tty_ua_css = 0;
         ptr.tty_cell_w = 0;
         ptr.tty_cell_h = 0;
         ptr.user_agent = DEFAULT_HTTP_USER_AGENT;
@@ -1525,6 +1542,18 @@ pub struct CdpPageSession {
             const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
             css_len = base_css.len;
+            if (_.tty_ua_css > 0) {
+                let tty_css_buf: [2048]u8 = undefined;
+                const cw = if (_.tty_cell_w > 0) _.tty_cell_w else DEFAULT_TTY_CELL_WIDTH_PX;
+                const ch = if (_.tty_cell_h > 0) _.tty_cell_h else DEFAULT_TTY_CELL_HEIGHT_PX;
+                const tty_css = ttyUaStylesheet(_.tty_ua_css, ch, cw, &tty_css_buf);
+                if (tty_css.len > 0 && css_len + tty_css.len + 1 <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + tty_css.len], tty_css);
+                    css_len += tty_css.len;
+                    css_buf.?[css_len] = '\n';
+                    css_len += 1;
+                }
+            }
             let snid: usize = 0;
             while (snid < _.doc.nodes.items.len) : (snid += 1) {
                 const sn = &_.doc.nodes.items[snid];
@@ -2019,13 +2048,24 @@ pub struct CdpPageSession {
             const bctx_esc = escapeJsonString(active_bctx, &bctx_esc_buf);
             let eh_esc_buf: [1024]u8 = undefined;
             const eh_esc = escapeJsonString(_.extra_headers, &eh_esc_buf);
-            let meta_js_buf: [1536]u8 = undefined;
+            let meta_js_buf: [4096]u8 = undefined;
             const dark_str = if (_.dark_color_scheme) "true" else "false";
             const stripped_str = if (_.nav_tty_stripped) "true" else "false";
+            let tty_raw_buf: [1536]u8 = undefined;
+            let tty_css_esc_buf: [2048]u8 = undefined;
+            let tty_css_esc_len: usize = 0;
+            if (_.tty_ua_css > 0) {
+                const cw = if (_.tty_cell_w > 0) _.tty_cell_w else DEFAULT_TTY_CELL_WIDTH_PX;
+                const ch = if (_.tty_cell_h > 0) _.tty_cell_h else DEFAULT_TTY_CELL_HEIGHT_PX;
+                const tty_raw = ttyUaStylesheet(_.tty_ua_css, ch, cw, &tty_raw_buf);
+                const esc_slice = escapeJsonString(tty_raw, &tty_css_esc_buf);
+                tty_css_esc_len = esc_slice.len;
+            }
+            const tty_css_esc = tty_css_esc_buf[0..tty_css_esc_len];
             const meta_js = std.fmt.bufPrint(
                 &meta_js_buf,
-                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};globalThis.__capsurf_tty_cell_w={d};globalThis.__capsurf_tty_cell_h={d};}})()",
-                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str, _.tty_cell_w, _.tty_cell_h },
+                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};globalThis.__capsurf_tty_cell_w={d};globalThis.__capsurf_tty_cell_h={d};globalThis.__capsurf_tty_ua_css_text=\"{s}\";}})()",
+                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str, _.tty_cell_w, _.tty_cell_h, tty_css_esc },
             ) catch "";
             if (meta_js.len > 0) {
                 const mv = _.ctx.eval(meta_js);
@@ -3985,6 +4025,18 @@ pub struct CdpPageSession {
             const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
             css_len = base_css.len;
+            if (_.tty_ua_css > 0) {
+                let tty_css_buf: [2048]u8 = undefined;
+                const cw = if (_.tty_cell_w > 0) _.tty_cell_w else DEFAULT_TTY_CELL_WIDTH_PX;
+                const ch = if (_.tty_cell_h > 0) _.tty_cell_h else DEFAULT_TTY_CELL_HEIGHT_PX;
+                const tty_css = ttyUaStylesheet(_.tty_ua_css, ch, cw, &tty_css_buf);
+                if (tty_css.len > 0 && css_len + tty_css.len + 1 <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + tty_css.len], tty_css);
+                    css_len += tty_css.len;
+                    css_buf.?[css_len] = '\n';
+                    css_len += 1;
+                }
+            }
             let snid: usize = 0;
             while (snid < _.doc.nodes.items.len) : (snid += 1) {
                 const sn = &_.doc.nodes.items[snid];

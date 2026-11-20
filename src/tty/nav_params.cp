@@ -74,9 +74,9 @@ pub fn applyTtyNavParams(query: []const u8, state: *TtyNavState): bool {
             if (std.mem.eql(u8, key, "ks_tty_css")) {
                 seen = true;
                 if (level := parseU32(val)) {
-                    if (level > 0) {
-                        state.tty_ua_css = if (level > 2) 2 else level;
-                    }
+                    state.tty_ua_css = if (level > 2) 2 else level;
+                } else {
+                    state.tty_ua_css = 0;
                 }
             } else if (std.mem.eql(u8, key, "ks_color_scheme")) {
                 seen = true;
@@ -113,6 +113,15 @@ pub fn ttyUaStylesheet(
         ":root {\n" ++
         "  font-family: monospace !important;\n" ++
         "  line-height: 1 !important;\n" ++
+        "}\n" ++
+        "input[type=\"checkbox\"][class*=\"toggle-all\" i] + label {\n" ++
+        "  font-size: 0 !important;\n" ++
+        "}\n" ++
+        "input[type=\"checkbox\"][class*=\"toggle-all\" i] + label::before {\n" ++
+        "  content: none !important;\n" ++
+        "}\n" ++
+        "input:not([type=\"checkbox\"]):not([type=\"radio\"]).new-todo {\n" ++
+        "  padding-inline-start: 3ch !important;\n" ++
         "}\n";
 
     let prefix = ":root {\n  --ks-tty-cell-w: ";

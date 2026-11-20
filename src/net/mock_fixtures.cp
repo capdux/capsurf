@@ -809,10 +809,8 @@ pub struct MockFixtures {
                 let hit_key_buf: [160]u8 = undefined;
                 const hit_key = std.fmt.bufPrint(&hit_key_buf, "oopif-csp:{s}", .{ key }) catch key;
                 incrementFramePolicyHits(hit_key);
-                const body = "parent.postMessage(\"hop\", \"*\");";
-                const len = @min(body.len, out_buf.len);
-                @memcpy(out_buf[0..len], body[0..len]);
-                return out_buf[0..len];
+                const body = std.fmt.bufPrint(out_buf, "parent.postMessage(\"ran:{s}\", \"*\");", .{ key }) catch return null;
+                return body;
             }
         }
 

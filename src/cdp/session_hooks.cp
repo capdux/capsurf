@@ -1,12 +1,18 @@
 // src/cdp/session_hooks.cp
 // Page-level JS runtime hooks, native fixture/bake bridge, and inserted-script engine for CdpPageSession.
 
-import { JSContext, JSValue, JS_Eval, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, jsNull, jsUndefined, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, jsNull, jsUndefined, jsIsException, defineMethod } from "../js/qjs_engine.cp";
 import { JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { recordPendingFetchBody } from "./network.cp";
+
+@c {
+    fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
+    fn JS_GetRuntime(ctx: *JSContext): *JSRuntime;
+    fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
+}
 
 struct LearnedScriptEntry {
     active: bool = false,
@@ -292,6 +298,88 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     return jsNull();
 }
 
+@c fn js_capsurf_eval_module_script(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let code_len: usize = 0;
+    const code_ptr = JS_ToCStringLen2(ctx, &code_len, unsafe { argv[0] }, 0);
+    if (code_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, code_ptr);
+
+    let url_buf: [1024]u8 = [0; 1024];
+    let url_len: usize = 0;
+    if (argc >= 2) {
+        let ulen: usize = 0;
+        const uptr = JS_ToCStringLen2(ctx, &ulen, unsafe { argv[1] }, 0);
+        if (uptr != null) {
+            defer JS_FreeCString(ctx, uptr);
+            url_len = @min(ulen, url_buf.len - 1);
+            @memcpy(url_buf[0..url_len], unsafe { uptr.?[0..url_len] });
+        }
+    }
+    if (url_len == 0) {
+        const def_u = "about:blank";
+        @memcpy(url_buf[0..def_u.len], def_u);
+        url_len = def_u.len;
+    }
+    url_buf[url_len] = 0;
+
+    const compiled = JS_Eval(ctx, code_ptr.?, code_len, @ptrCast(&url_buf), 33);
+    if (jsIsException(compiled)) {
+        const exc = JS_GetException(ctx);
+        defer JS_FreeValue(ctx, exc);
+        let msg_len: usize = 0;
+        const msg_ptr = JS_ToCStringLen2(ctx, &msg_len, exc, 0);
+        if (msg_ptr != null) {
+            defer JS_FreeCString(ctx, msg_ptr);
+            return JS_NewStringLen(ctx, msg_ptr.?, msg_len);
+        }
+        const fallback = "Module compile error";
+        return JS_NewStringLen(ctx, fallback.ptr, fallback.len);
+    }
+
+    const ptr_val = @as(usize, @intCast(compiled.u.uint64));
+    const m: *JSModuleDef = @ptrFromInt(ptr_val);
+    const meta = JS_GetImportMeta(ctx, m);
+    if (!jsIsException(meta)) {
+        const uval = JS_NewStringLen(ctx, &url_buf, url_len);
+        * = JS_SetPropertyStr(ctx, meta, "url", uval);
+        JS_FreeValue(ctx, meta);
+    } else {
+        const me = JS_GetException(ctx);
+        JS_FreeValue(ctx, me);
+    }
+
+    const exec_res = JS_EvalFunction(ctx, compiled);
+    if (jsIsException(exec_res)) {
+        const exc2 = JS_GetException(ctx);
+        defer JS_FreeValue(ctx, exc2);
+        let msg_len2: usize = 0;
+        const msg_ptr2 = JS_ToCStringLen2(ctx, &msg_len2, exc2, 0);
+        if (msg_ptr2 != null) {
+            defer JS_FreeCString(ctx, msg_ptr2);
+            return JS_NewStringLen(ctx, msg_ptr2.?, msg_len2);
+        }
+        const fallback2 = "Module eval error";
+        return JS_NewStringLen(ctx, fallback2.ptr, fallback2.len);
+    }
+
+    let pctx: (*JSContext)? = null;
+    if (JS_IsPromise(exec_res)) {
+        let iter: usize = 0;
+        while (iter < 50) : (iter += 1) {
+            if (JS_PromiseState(ctx, exec_res) != 0) break;
+            let jobs: usize = 256;
+            while (jobs > 0 && JS_ExecutePendingJob(JS_GetRuntime(ctx), &pctx) > 0) : (jobs -= 1) {}
+        }
+    } else {
+        let jobs2: usize = 256;
+        while (jobs2 > 0 && JS_ExecutePendingJob(JS_GetRuntime(ctx), &pctx) > 0) : (jobs2 -= 1) {}
+    }
+    JS_FreeValue(ctx, exec_res);
+    return jsNull();
+}
+
 fn resolveHookUrl(base_url: []const u8, raw_ref: []const u8, out_buf: []u8): []const u8 {
     if (std.mem.startsWith(u8, raw_ref, "http://") || std.mem.startsWith(u8, raw_ref, "https://")) {
         return raw_ref;
@@ -512,6 +600,7 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     defineMethod(raw_ctx, global_obj, "__capsurf_iframe_load_fixture", js_capsurf_iframe_load_fixture, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_learned_script", js_capsurf_learned_script, 5);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_global_script", js_capsurf_eval_global_script, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_eval_module_script", js_capsurf_eval_module_script, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_script_gate", js_capsurf_script_gate, 7);
 }
 

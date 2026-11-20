@@ -576,6 +576,9 @@ fn applyTtyNavParamsFromUrl(raw_url: []const u8, session: *CdpPageSession): bool
     if (!applyTtyNavParams(query, &state)) {
         return false;
     }
+    if (lvl := state.tty_ua_css) {
+        session.tty_ua_css = lvl;
+    }
     if (d := state.dark_color_scheme) {
         session.dark_color_scheme = d;
     }
@@ -635,6 +638,20 @@ fn stripTtyNavParams(raw_url: []const u8, out_buf: []u8): []const u8 {
     return out_buf[0..off];
 }
 
+fn sanitizeSetContentUrl(url: []const u8): []const u8 {
+    if (url.len == 0) return "https://kitesurf.local/";
+    if (std.ascii.startsWithIgnoreCase(url, "http://") ||
+        std.ascii.startsWithIgnoreCase(url, "https://") ||
+        std.ascii.startsWithIgnoreCase(url, "file://") ||
+        std.ascii.startsWithIgnoreCase(url, "ftp://") ||
+        std.ascii.startsWithIgnoreCase(url, "ws://") ||
+        std.ascii.startsWithIgnoreCase(url, "wss://"))
+    {
+        return url;
+    }
+    return "https://kitesurf.local/";
+}
+
 pub struct PageHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
@@ -685,14 +702,15 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
+            const target_url = sanitizeSetContentUrl(session.url);
             if (raw_html := extractJsonString(req.params_raw, "html")) {
                 if (raw_html.len == 0) {
-                    session.navigate("", session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+                    session.navigate("", target_url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
                 } else {
                     let unesc_buf = session.allocator.alloc(u8, raw_html.len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
                     defer session.allocator.free(unesc_buf);
                     const html = unescapeJsonString(raw_html, unesc_buf);
-                    session.navigate(html, session.url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
+                    session.navigate(html, target_url, "") catch return CdpResponse.err(req.id, -32000, "Failed to set document content");
                 }
             }
 

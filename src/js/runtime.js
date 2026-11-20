@@ -8449,12 +8449,23 @@
             attrName = attrName.slice(0, -1).trim();
           }
           let expectedVal = inside.slice(eqIdx + 1).trim();
+          let caseInsensitive = false;
+          if (/\s+[iI]$/.test(expectedVal)) {
+            caseInsensitive = true;
+            expectedVal = expectedVal.slice(0, -1).trim();
+          } else if (/\s+[sS]$/.test(expectedVal)) {
+            expectedVal = expectedVal.slice(0, -1).trim();
+          }
           if ((expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
               (expectedVal.startsWith("'") && expectedVal.endsWith("'"))) {
             expectedVal = expectedVal.slice(1, -1);
           }
-          const actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
+          let actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
           if (actualVal === null) return false;
+          if (caseInsensitive) {
+            actualVal = actualVal.toLowerCase();
+            expectedVal = expectedVal.toLowerCase();
+          }
           if (op === "=" && actualVal !== expectedVal) return false;
           if (op === "~=" && actualVal.split(/\s+/).indexOf(expectedVal) === -1) return false;
           if (op === "|=" && actualVal !== expectedVal && !actualVal.startsWith(expectedVal + "-")) return false;
@@ -14123,14 +14134,64 @@
       return doc;
     }
 
-    function executeIframeInlineScripts(win, doc) {
-      if (!win || !doc) return;
+    function collectIframeCspPolicies(doc, opts) {
+      const policies = [];
+      if (opts && opts.cspHeader) {
+        policies.push(String(opts.cspHeader));
+      }
+      function scanMeta(node) {
+        if (!node) return;
+        if (node.nodeType === 1) {
+          const tag = String(node.tagName || node.localName || "").toLowerCase();
+          if (tag === "template") return;
+          if (tag === "meta") {
+            const he = node.getAttribute ? String(node.getAttribute("http-equiv") || "").trim().toLowerCase() : "";
+            if (he === "content-security-policy") {
+              const content = node.getAttribute ? String(node.getAttribute("content") || "").trim() : "";
+              if (content) policies.push(content);
+            }
+          }
+        }
+        const kids = node._children || node.childNodes || [];
+        for (let i = 0; i < kids.length; i++) {
+          scanMeta(kids[i]);
+        }
+      }
+      scanMeta(doc);
+      return policies.join("\n");
+    }
+
+    function decodeDataUrlText(urlStr) {
+      const commaIdx = urlStr.indexOf(",");
+      if (commaIdx === -1) return "";
+      const meta = urlStr.slice(5, commaIdx);
+      const payload = urlStr.slice(commaIdx + 1);
+      if (/;base64/i.test(meta)) {
+        try {
+          return typeof atob === "function" ? atob(payload) : payload;
+        } catch (e) {
+          return payload;
+        }
+      }
+      try {
+        return decodeURIComponent(payload);
+      } catch (e) {
+        return payload;
+      }
+    }
+
+    function executeIframeInlineScripts(win, doc, opts) {
+      if (!win || !doc) return Promise.resolve();
       const scripts = [];
       function collect(node) {
         if (!node) return;
-        if (node.nodeType === 1 && String(node.tagName || node.localName || "").toLowerCase() === "script") {
-          scripts.push(node);
-          return;
+        if (node.nodeType === 1) {
+          const tag = String(node.tagName || node.localName || "").toLowerCase();
+          if (tag === "template") return;
+          if (tag === "script") {
+            scripts.push(node);
+            return;
+          }
         }
         const kids = node._children || node.childNodes || [];
         for (let i = 0; i < kids.length; i++) {
@@ -14138,49 +14199,160 @@
         }
       }
       collect(doc);
-      const stack = global.__capsurf_active_window_stack;
-      for (let i = 0; i < scripts.length; i++) {
-        const sc = scripts[i];
-        if (sc.getAttribute && sc.getAttribute("src")) continue;
-        const code = sc.textContent || "";
-        if (!code.trim()) continue;
-        if (Array.isArray(stack)) stack.push(win);
+      if (scripts.length === 0) return Promise.resolve();
+
+      const cspJoined = collectIframeCspPolicies(doc, opts);
+      const docUrl = String(doc.URL || "about:blank");
+      const docBase = String(doc.baseURI || docUrl || "about:blank");
+      let docOrigin = "null";
+      try {
+        const uo = new URL(docUrl);
+        if (uo.origin && uo.origin !== "null") docOrigin = uo.origin;
+      } catch (e) {}
+
+      const gateFn = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_script_gate === "function")
+        ? globalThis.__capsurf_script_gate
+        : null;
+      const modEvalFn = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_module_script === "function")
+        ? globalThis.__capsurf_eval_module_script
+        : null;
+      const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) || (typeof fetch === "function" ? fetch : null);
+
+      function withIframeGlobals(fn) {
+        const g = typeof globalThis !== "undefined" ? globalThis : global;
+        const saved = {
+          document: g.document,
+          location: g.location,
+          self: g.self,
+          parent: g.parent,
+          top: g.top,
+          frames: g.frames,
+          frameElement: g.frameElement,
+          addEventListener: g.addEventListener,
+          removeEventListener: g.removeEventListener,
+        };
         try {
-          const fn = new Function(
-            "window", "document", "location", "fetch", "self", "globalThis",
-            "addEventListener", "removeEventListener", "postMessage",
-            "innerWidth", "innerHeight", "outerWidth", "outerHeight",
-            "parent", "top", "frames", "frameElement",
-            code
-          );
-          fn.call(
-            win,
-            win,
-            doc,
-            win.location,
-            win.fetch,
-            win,
-            win,
-            win.addEventListener.bind(win),
-            win.removeEventListener.bind(win),
-            win.postMessage.bind(win),
-            win.innerWidth,
-            win.innerHeight,
-            win.outerWidth,
-            win.outerHeight,
-            win.parent,
-            win.top,
-            win.frames,
-            win.frameElement
-          );
-        } catch (e) {
-          if (typeof console !== "undefined" && console.error) {
-            try { console.error(e); } catch (_) {}
-          }
+          Object.defineProperty(g, "document", {
+            value: doc,
+            writable: false,
+            configurable: true,
+            enumerable: true,
+          });
+        } catch (e) {}
+        try { g.location = win.location; } catch (e) {}
+        try { g.self = win; } catch (e) {}
+        try { g.parent = win.parent; } catch (e) {}
+        try { g.top = win.top; } catch (e) {}
+        try { g.frames = win.frames; } catch (e) {}
+        try { g.frameElement = win.frameElement; } catch (e) {}
+        try { g.addEventListener = win.addEventListener.bind(win); } catch (e) {}
+        try { g.removeEventListener = win.removeEventListener.bind(win); } catch (e) {}
+        try {
+          return fn();
         } finally {
-          if (Array.isArray(stack)) stack.pop();
+          try {
+            Object.defineProperty(g, "document", {
+              value: saved.document,
+              writable: false,
+              configurable: true,
+              enumerable: true,
+            });
+          } catch (e) {}
+          try { g.location = saved.location; } catch (e) {}
+          try { g.self = saved.self; } catch (e) {}
+          try { g.parent = saved.parent; } catch (e) {}
+          try { g.top = saved.top; } catch (e) {}
+          try { g.frames = saved.frames; } catch (e) {}
+          try { g.frameElement = saved.frameElement; } catch (e) {}
+          try { g.addEventListener = saved.addEventListener; } catch (e) {}
+          try { g.removeEventListener = saved.removeEventListener; } catch (e) {}
         }
       }
+
+      function runCode(code, isModule, scriptUrl) {
+        if (!code || !code.trim()) return;
+        withIframeGlobals(function () {
+          if (isModule && modEvalFn) {
+            const errMsg = modEvalFn(code, scriptUrl || docUrl);
+            if (errMsg && typeof console !== "undefined" && console.error) {
+              try { console.error(errMsg); } catch (_) {}
+            }
+            return;
+          }
+          try {
+            (0, eval)(code);
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) {
+              try { console.error(e); } catch (_) {}
+            }
+          }
+        });
+      }
+
+      function fetchExternalScript(resolvedSrc) {
+        if (resolvedSrc.startsWith("data:")) {
+          return Promise.resolve(decodeDataUrlText(resolvedSrc));
+        }
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
+          const fx = globalThis.__capsurf_native_load_fixture(resolvedSrc);
+          if (fx !== null && fx !== undefined) {
+            return Promise.resolve(String(fx));
+          }
+        }
+        if (typeof nativeFetch === "function") {
+          return nativeFetch(resolvedSrc).then(function (res) {
+            if (!res || !res.ok) return "";
+            return res.text();
+          }).catch(function () { return ""; });
+        }
+        return Promise.resolve("");
+      }
+
+      let chain = Promise.resolve();
+      for (let i = 0; i < scripts.length; i++) {
+        const sc = scripts[i];
+        const rawType = sc.getAttribute ? String(sc.getAttribute("type") || "").trim().toLowerCase() : "";
+        const isModule = rawType === "module";
+        if (rawType && rawType !== "module" && rawType !== "text/javascript" && rawType !== "application/javascript" && rawType !== "application/ecmascript" && rawType !== "text/ecmascript") {
+          continue;
+        }
+        const nonce = sc.getAttribute ? String(sc.getAttribute("nonce") || "") : "";
+        const integrity = sc.getAttribute ? String(sc.getAttribute("integrity") || "") : "";
+        const hasCo = sc.hasAttribute && sc.hasAttribute("crossorigin") ? "1" : "0";
+        const rawSrc = sc.getAttribute ? String(sc.getAttribute("src") || "").trim() : "";
+
+        if (rawSrc) {
+          let resolvedSrc = rawSrc;
+          try {
+            resolvedSrc = new URL(rawSrc, docBase).toString();
+          } catch (e) {}
+          if (cspJoined && gateFn) {
+            const allowed = gateFn("parser_external", docOrigin, cspJoined, resolvedSrc, nonce, integrity, hasCo);
+            if (allowed === null || allowed === undefined) {
+              continue;
+            }
+          }
+          chain = chain.then(function () {
+            return fetchExternalScript(resolvedSrc).then(function (code) {
+              runCode(code, isModule, resolvedSrc);
+            });
+          });
+        } else {
+          const code = sc.textContent || "";
+          if (!code.trim()) continue;
+          if (cspJoined && gateFn) {
+            const allowed = gateFn("inline", docOrigin, cspJoined, code, nonce, "", "0");
+            if (allowed === null || allowed === undefined) {
+              continue;
+            }
+          }
+          const inlineUrl = docUrl + "#inline-" + i;
+          chain = chain.then(function () {
+            runCode(code, isModule, inlineUrl);
+          });
+        }
+      }
+      return chain;
     }
 
     function applyLoadedIframeHtml(iframeEl, resolvedUrl, html, opts) {
@@ -14255,9 +14427,10 @@
         }
         iframeEl._contentDocument = newDoc;
         if (iframeEl._contentWindow && allowScripts) {
-          executeIframeInlineScripts(iframeEl._contentWindow, newDoc);
+          return executeIframeInlineScripts(iframeEl._contentWindow, newDoc, opts);
         }
       }
+      return Promise.resolve();
     }
 
     function handleIframeSrcdocNavigation(iframeEl, html) {
@@ -14268,8 +14441,10 @@
       const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
       Promise.resolve().then(function () {
         if (iframeEl._navSeq !== seq) return;
-        applyLoadedIframeHtml(iframeEl, "about:srcdoc", String(html), { isSrcdoc: true });
-        fireIframeLoadEvent(iframeEl);
+        Promise.resolve(applyLoadedIframeHtml(iframeEl, "about:srcdoc", String(html), { isSrcdoc: true })).then(function () {
+          if (iframeEl._navSeq !== seq) return;
+          fireIframeLoadEvent(iframeEl);
+        });
       });
     }
 
@@ -14303,18 +14478,34 @@
         return;
       }
 
+      if (resolvedUrl.startsWith("data:")) {
+        const html = decodeDataUrlText(resolvedUrl);
+        Promise.resolve().then(function () {
+          if (iframeEl._navSeq !== seq) return;
+          Promise.resolve(applyLoadedIframeHtml(iframeEl, resolvedUrl, html)).then(function () {
+            if (iframeEl._navSeq !== seq) return;
+            fireIframeLoadEvent(iframeEl);
+          });
+        });
+        return;
+      }
+
       if (resolvedUrl.startsWith("blob:")) {
         const reg = global.__capsurf_blob_registry || (typeof globalThis !== "undefined" && globalThis.__capsurf_blob_registry);
         const blobObj = reg ? reg.get(resolvedUrl) : null;
         const pText = blobObj && typeof blobObj.text === "function" ? blobObj.text() : Promise.resolve("");
         pText.then(function (html) {
           if (iframeEl._navSeq !== seq) return;
-          applyLoadedIframeHtml(iframeEl, resolvedUrl, html, { isBlob: true });
-          fireIframeLoadEvent(iframeEl);
+          return Promise.resolve(applyLoadedIframeHtml(iframeEl, resolvedUrl, html, { isBlob: true })).then(function () {
+            if (iframeEl._navSeq !== seq) return;
+            fireIframeLoadEvent(iframeEl);
+          });
         }).catch(function () {
           if (iframeEl._navSeq !== seq) return;
-          applyLoadedIframeHtml(iframeEl, resolvedUrl, "", { isBlob: true });
-          fireIframeLoadEvent(iframeEl);
+          return Promise.resolve(applyLoadedIframeHtml(iframeEl, resolvedUrl, "", { isBlob: true })).then(function () {
+            if (iframeEl._navSeq !== seq) return;
+            fireIframeLoadEvent(iframeEl);
+          });
         });
         return;
       }
@@ -14341,8 +14532,7 @@
               return;
             }
           }
-          applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
-          Promise.resolve().then(function () {
+          Promise.resolve(applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml)).then(function () {
             if (iframeEl._navSeq !== seq) return;
             fireIframeLoadEvent(iframeEl);
           });
@@ -14368,8 +14558,10 @@
 
       loadPromise.then(function (result) {
         if (iframeEl._navSeq !== seq) return;
-        applyLoadedIframeHtml(iframeEl, resolvedUrl, result.html, { charset: result.charset });
-        fireIframeLoadEvent(iframeEl);
+        return Promise.resolve(applyLoadedIframeHtml(iframeEl, resolvedUrl, result.html, { charset: result.charset })).then(function () {
+          if (iframeEl._navSeq !== seq) return;
+          fireIframeLoadEvent(iframeEl);
+        });
       }).catch(function () {
         if (iframeEl._navSeq !== seq) return;
         fireIframeLoadEvent(iframeEl);
@@ -14387,6 +14579,13 @@
 
     function fireIframeLoadEvent(iframeEl) {
       try {
+        const win = iframeEl && iframeEl._contentWindow;
+        if (win && typeof win.dispatchEvent === "function") {
+          try {
+            const winEvt = new Event("load", { bubbles: false, cancelable: false });
+            win.dispatchEvent(winEvt);
+          } catch (e) {}
+        }
         const evt = new Event("load", { bubbles: false, cancelable: false });
         if (typeof iframeEl.dispatchEvent === "function") {
           try {
@@ -33299,6 +33498,12 @@
     }
 
     function parseDeclarationsBlockInto(element, declBlock, computedMap) {
+      const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
+      function setDecl(k, v, isImp) {
+        if (!isImp && impSet.has(k)) return;
+        computedMap.set(k, v);
+        if (isImp) impSet.add(k);
+      }
       const decls = splitCssDeclarations(declBlock);
       for (let i = 0; i < decls.length; i++) {
         const d = decls[i].trim();
@@ -33308,52 +33513,88 @@
         const prop = d.slice(0, colon).trim();
         let val = d.slice(colon + 1).trim();
         if (!prop) continue;
+        let isImp = false;
         if (val.toLowerCase().endsWith("!important")) {
+          isImp = true;
           val = val.slice(0, -10).trim();
         }
         val = resolveAttrExpressions(element, val);
         const key = prop.startsWith("--") ? prop : prop.toLowerCase();
-        computedMap.set(key, val);
+        setDecl(key, val, isImp);
 
         if (key === "inset") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
-            computedMap.set("top", sides[0]);
-            computedMap.set("right", sides[1]);
-            computedMap.set("bottom", sides[2]);
-            computedMap.set("left", sides[3]);
+            setDecl("top", sides[0], isImp);
+            setDecl("right", sides[1], isImp);
+            setDecl("bottom", sides[2], isImp);
+            setDecl("left", sides[3], isImp);
           }
         } else if (key === "margin") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
-            computedMap.set("margin-top", sides[0]);
-            computedMap.set("margin-right", sides[1]);
-            computedMap.set("margin-bottom", sides[2]);
-            computedMap.set("margin-left", sides[3]);
+            setDecl("margin-top", sides[0], isImp);
+            setDecl("margin-right", sides[1], isImp);
+            setDecl("margin-bottom", sides[2], isImp);
+            setDecl("margin-left", sides[3], isImp);
           }
         } else if (key === "padding") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
-            computedMap.set("padding-top", sides[0]);
-            computedMap.set("padding-right", sides[1]);
-            computedMap.set("padding-bottom", sides[2]);
-            computedMap.set("padding-left", sides[3]);
+            setDecl("padding-top", sides[0], isImp);
+            setDecl("padding-right", sides[1], isImp);
+            setDecl("padding-bottom", sides[2], isImp);
+            setDecl("padding-left", sides[3], isImp);
           }
+        } else if (key === "padding-inline-start") {
+          setDecl("padding-left", val, isImp);
+        } else if (key === "padding-inline-end") {
+          setDecl("padding-right", val, isImp);
+        } else if (key === "padding-block-start") {
+          setDecl("padding-top", val, isImp);
+        } else if (key === "padding-block-end") {
+          setDecl("padding-bottom", val, isImp);
+        } else if (key === "padding-inline") {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            setDecl("padding-left", parts[0], isImp);
+            setDecl("padding-right", parts[0], isImp);
+          } else if (parts.length >= 2) {
+            setDecl("padding-left", parts[0], isImp);
+            setDecl("padding-right", parts[1], isImp);
+          }
+        } else if (key === "padding-block") {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            setDecl("padding-top", parts[0], isImp);
+            setDecl("padding-bottom", parts[0], isImp);
+          } else if (parts.length >= 2) {
+            setDecl("padding-top", parts[0], isImp);
+            setDecl("padding-bottom", parts[1], isImp);
+          }
+        } else if (key === "margin-inline-start") {
+          setDecl("margin-left", val, isImp);
+        } else if (key === "margin-inline-end") {
+          setDecl("margin-right", val, isImp);
+        } else if (key === "margin-block-start") {
+          setDecl("margin-top", val, isImp);
+        } else if (key === "margin-block-end") {
+          setDecl("margin-bottom", val, isImp);
         } else if (key === "border-width") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
-            computedMap.set("border-top-width", sides[0]);
-            computedMap.set("border-right-width", sides[1]);
-            computedMap.set("border-bottom-width", sides[2]);
-            computedMap.set("border-left-width", sides[3]);
+            setDecl("border-top-width", sides[0], isImp);
+            setDecl("border-right-width", sides[1], isImp);
+            setDecl("border-bottom-width", sides[2], isImp);
+            setDecl("border-left-width", sides[3], isImp);
           }
         } else if (key === "border-style") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
-            computedMap.set("border-top-style", sides[0]);
-            computedMap.set("border-right-style", sides[1]);
-            computedMap.set("border-bottom-style", sides[2]);
-            computedMap.set("border-left-style", sides[3]);
+            setDecl("border-top-style", sides[0], isImp);
+            setDecl("border-right-style", sides[1], isImp);
+            setDecl("border-bottom-style", sides[2], isImp);
+            setDecl("border-left-style", sides[3], isImp);
           }
         } else if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
           const parts = splitCssTopLevelWhitespace(val);
@@ -33371,21 +33612,21 @@
           const targetSides = key === "border" ? ["top", "right", "bottom", "left"] : [key.slice(7)];
           for (let si = 0; si < targetSides.length; si++) {
             const side = targetSides[si];
-            if (bStyle) computedMap.set("border-" + side + "-style", bStyle);
+            if (bStyle) setDecl("border-" + side + "-style", bStyle, isImp);
             if (bStyle === "none" || bStyle === "hidden") {
-              computedMap.set("border-" + side + "-width", "0px");
+              setDecl("border-" + side + "-width", "0px", isImp);
             } else if (bWidth) {
-              computedMap.set("border-" + side + "-width", bWidth);
+              setDecl("border-" + side + "-width", bWidth, isImp);
             }
           }
         } else if (key === "overflow") {
           const parts = splitCssTopLevelWhitespace(val);
           if (parts.length === 1) {
-            computedMap.set("overflow-x", parts[0]);
-            computedMap.set("overflow-y", parts[0]);
+            setDecl("overflow-x", parts[0], isImp);
+            setDecl("overflow-y", parts[0], isImp);
           } else if (parts.length >= 2) {
-            computedMap.set("overflow-x", parts[0]);
-            computedMap.set("overflow-y", parts[1]);
+            setDecl("overflow-x", parts[0], isImp);
+            setDecl("overflow-y", parts[1], isImp);
           }
         }
       }
@@ -33654,6 +33895,9 @@
     }
 
     function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text) {
+        parseCssRulesInto(element, globalThis.__capsurf_tty_ua_css_text, targetMap, normalizedPseudo);
+      }
       for (let i = 0; i < styleNodes.length; i++) {
         const sn = styleNodes[i];
         if (!sn) continue;
@@ -33769,7 +34013,7 @@
       if (s === "0") return 0;
 
       // Fast path for simple length/percentage
-      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?$/i);
+      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh|ch|lh)?$/i);
       if (simple) {
         const num = parseFloat(simple[1]);
         const unit = (simple[2] || "").toLowerCase();
@@ -33780,6 +34024,14 @@
         if (unit === "pt") return num * (96 / 72);
         if (unit === "vw") return (num / 100) * 800;
         if (unit === "vh") return (num / 100) * 600;
+        if (unit === "ch") {
+          const cw = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8;
+          return num * cw;
+        }
+        if (unit === "lh") {
+          const ch = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_h === "number" && globalThis.__capsurf_tty_cell_h > 0) ? globalThis.__capsurf_tty_cell_h : 17;
+          return num * ch;
+        }
         return null;
       }
 
@@ -34009,6 +34261,10 @@
 
     function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
       if (normalizedPseudo || !element || element.nodeType !== 1) return;
+      const fsRaw = computedMap.get("font-size");
+      if (fsRaw !== undefined && fsRaw.trim() === "0") {
+        computedMap.set("font-size", "0px");
+      }
       if (!computedMap.has("z-index")) {
         computedMap.set("z-index", "auto");
       }
@@ -34085,12 +34341,12 @@
           computedMap.set("width", formatCssPx(usedW));
         }
 
-        // Resolve padding-* percentages / calc against cbW
+        // Resolve padding-* percentages / calc / relative units against cbW
         const padProps = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
         for (let i = 0; i < padProps.length; i++) {
           const pk = padProps[i];
           const pv = computedMap.get(pk);
-          if (pv && (pv.indexOf("%") !== -1 || pv.indexOf("(") !== -1)) {
+          if (pv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(pv.trim())) {
             const px = evalCssLengthExpr(pv, cbW, fontSize);
             if (px !== null) computedMap.set(pk, formatCssPx(px));
           }

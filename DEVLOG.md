@@ -1775,3 +1775,7 @@
 ### Phase 234: Screencast Viewport Sync, OOPIF Context Budget & Created-Document `MutationObserver`
 - `Page.startScreencast` now updates `viewport_width`/`viewport_height` and sets `layout_dirty = true` when both `maxWidth > 0` and `maxHeight > 0`.
 - `isSameTarget(a, b)` in `observer.js` no longer treats distinct `Document` nodes (`nodeType === 9`) with `_nid === 0` as identical, and `createHTMLDocument` unconditionally wires `parentNode` on `documentElement`/`head`/`body`.
+
+### Phase 235: Iframe Source Pipeline (`7/7`) & TodoMVC TTY UA CSS (`1/1`)
+- `executeIframeInlineScripts` now skips `<template>` subtrees, enforces `<meta http-equiv="Content-Security-Policy">` via `__capsurf_script_gate`, evaluates `type="module"` via `__capsurf_eval_module_script`, and dispatches `load` on `contentWindow` and `<iframe>`.
+- `ttyUaStylesheet` + CSS4 `i` flag + `ch`/`lh` unit resolution + `!important` tracking bring `tty-todomvc-controls` to green.
