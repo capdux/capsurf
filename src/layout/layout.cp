@@ -1818,6 +1818,17 @@ pub struct LayoutTree {
                             if (cw > max_w) max_w = cw;
                         }
                     }
+                } else if (cn.node_type == NodeType.Text) {
+                    const trimmed = std.mem.trim(u8, cn.text_content, " \t\r\n");
+                    if (trimmed.len > 0) {
+                        const cw = LayoutTree.estimateTextWidth(trimmed, st);
+                        if (is_row) {
+                            sum_w += cw;
+                            cnt += 1;
+                        } else {
+                            if (cw > max_w) max_w = cw;
+                        }
+                    }
                 }
                 ch = cn.next_sibling;
             }
@@ -3872,6 +3883,27 @@ pub struct LayoutTree {
                     };
                     item_count += 1;
                 }
+            } else if (cnode.node_type == NodeType.Text) {
+                const trimmed = std.mem.trim(u8, cnode.text_content, " \t\r\n");
+                if (trimmed.len > 0 && item_count < 32) {
+                    const tw = LayoutTree.estimateTextWidth(trimmed, pstyle);
+                    const fs = if (pstyle.font_size_px > 0.0) pstyle.font_size_px else 16.0;
+                    const th = if (pstyle.has_line_height && pstyle.line_height_px > 0.0) pstyle.line_height_px else (fs * 1.2);
+                    _.boxes.items[@as(usize, child)].content_width = tw;
+                    _.boxes.items[@as(usize, child)].content_height = th;
+                    const base_m = if (is_row) tw else th;
+                    const base_c = if (is_row) th else tw;
+                    items[item_count] = FlexItem {
+                        node_id: child,
+                        base_main: base_m,
+                        base_cross: base_c,
+                        target_main: base_m,
+                        target_cross: base_c,
+                        grow: 0.0,
+                        shrink: 1.0,
+                    };
+                    item_count += 1;
+                }
             }
             child = cnode.next_sibling;
         }
@@ -4059,7 +4091,21 @@ pub struct LayoutTree {
                 const item_avail_w = if (is_row) itm.target_main else container_w;
                 const item_avail_h = if (is_row) (if (container_h > 0.0) container_h else 0.0) else itm.target_main;
 
-                _.layoutNode(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h);
+                if (doc.nodes.items[@as(usize, cid)].node_type == NodeType.Text) {
+                    const tw = if (is_row) itm.target_main else itm.target_cross;
+                    const th = if (is_row) itm.target_cross else itm.target_main;
+                    _.boxes.items[@as(usize, cid)].content_width = tw;
+                    _.boxes.items[@as(usize, cid)].content_height = th;
+                    _.boxes.items[@as(usize, cid)].rect = Rect {
+                        x: item_x,
+                        y: item_y,
+                        width: tw,
+                        height: th,
+                        visible: (pstyle.visibility == Visibility.Visible),
+                    };
+                } else {
+                    _.layoutNode(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h);
+                }
 
                 const rendered_cross = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxHeight() else _.boxes.items[@as(usize, cid)].borderBoxWidth();
                 if (rendered_cross > line_max_cross) {

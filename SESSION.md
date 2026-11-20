@@ -3752,3 +3752,11 @@
   - 销毁 `01656d31-fe99-4802-b08f-3b01a61ad93c`；
   - 派发 **Subagent 70**: CDP & Net Precision Closer（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`，`-m -d -o`）
     - 攻坚目标：5 项已定位纯 CP 收尾（`engine-routes` 17/17、`font-face-unicode-range-gating` 3/3、`pseudo-text-font-arrival`、`fetch-interception` Test 7、`DOM.getOuterHTML` + `Runtime.bindingCalled` 转义）。
+
+## [2026-11-20 19:11:00] 匿名 Flex 文本子项布局与主题切换重绘闭环（4 分钟 / 2.72s 热增量构建）(Subagent 61749a45 结单，Phase 102)
+- **Flex 匿名文本子项布局 (`src/layout/layout.cp`)**:
+  - 在 `measureIntrinsicWidth` 与 `layoutFlexChildren` 中支持非空白 `NodeType.Text` 子节点创建匿名 `FlexItem` 并写入真实布局 `rect`，修复 `display: flex` 直接文本节点在主题切换重绘中未绘制问题。
+- **门禁与 E2E 验证（`-m -d -o` 1/82 模块热增量构建 2.72s）**:
+  - `src/layout/layout.cp` 4 门禁全 0；
+  - `theme-flip-repaint` (2/2 PASS)、`canvas-batch-sources` (2/2 PASS)；另 3 项 canvas 套件已定位至 `src/js/shim/canvas2d.js` 与 `Kitesurf.recordScene`。
+- **清理旧子智能体**: 销毁 `61749a45-a840-44e6-bfad-13afb6dcc0e0`。

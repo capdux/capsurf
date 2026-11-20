@@ -1419,4 +1419,8 @@
    - `serializeCdpNodeWithOptions` 保留 SVG 标签大小写并收集 QuickJS 宿主 `shadowRoots` 附着至文档树，剔除内部 `attributeNamespaces`；`formatMemoryStatsJson` 与 `formatHeapUsageJson` 严格守恒 `accounted_bytes`。
 2. **帧嵌入策略与跨域 302 Cookie (`mock_fixtures.cp`, `http_loader.cp`)**：
    - 实装 `isFrameEmbeddingAllowed` 优先遵循 CSP `frame-ancestors` 并兼容严格 `X-Frame-Options` 规则（被拒返回空白文档），跨域 302 重定向响应头中的 `Set-Cookie` 同步写入会话 `CookieJar`。
+
+## Phase 102 匿名 Flex 文本子项布局与主题重绘技术方案
+1. **Flex 匿名文本子项 (`src/layout/layout.cp`)**：
+   - 在 `layoutFlexChildren` 与 `measureIntrinsicWidth` 中将非空白直接 `NodeType.Text` 子节点按父字体度量纳入 `FlexItem` 列表并回填 `LayoutBox.rect`，彻底打通 `display: flex` 文本节点在 `html.dark` 主题切换后的重新级联重绘。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

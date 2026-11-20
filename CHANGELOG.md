@@ -1815,4 +1815,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`runtime-get-heap-usage` (2/2)、`dom-attribute-namespace-wire` (4/4)、`frame-policy` (4/4)、`cross-origin-redirect-shell` (1/3) 共 **11/15 PASS**。
+
+## Phase 102: Anonymous Flex Text Items & Theme-Flip Repaint (Closed — 2.72s Hot Modular Build)
+- **`src/layout/layout.cp`**：
+  - 在 `measureIntrinsicWidth` 与 `layoutFlexChildren` 支持非空白 `NodeType.Text` 匿名 Flex 子项布局与可见矩形写入。
+- **测试与门禁验证**：
+  - 静态门禁：`layout.cp` 4 门禁全 0（`-m -d -o` 1/82 模块热构建 2.72s）；
+  - E2E 测试：`theme-flip-repaint` (2/2) + `canvas-batch-sources` (2/2) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
