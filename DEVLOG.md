@@ -1767,3 +1767,7 @@
 ### Phase 233: Drag `buttons` Bypass, Top-Frame URL Guard & Finite `@keyframes` Clamping
 - Bypassing `_pendingMouseMove` coalescing when `params.buttons !== 0` preserves every drag step while keeping hover coalescing intact.
 - Clamping finite `@keyframes` animations at `elapsed >= dur * iterCount` in `session_hooks.cp` ensures `ResizeObserver` observes the final `100%` frame.
+
+### Phase 233: Drag `buttons` Bypass, Top-Frame URL Guard & Finite `@keyframes` Clamping
+- Bypassing `_pendingMouseMove` coalescing when `params.buttons !== 0` preserves every drag step while keeping hover coalescing intact.
+- Clamping finite `@keyframes` animations at `elapsed >= dur * iterCount` in `session_hooks.cp` ensures `ResizeObserver` observes the final `100%` frame.

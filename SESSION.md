@@ -4725,3 +4725,11 @@
   - Skipped `_pendingMouseMove` coalescing when `params.buttons !== 0` (`e2e/harness.ts:300-319`) and restricted `this._url` updates to top-level frames (`!e?.frame?.parentId`, `e2e/harness.ts:1129-1135`).
   - Parsed `animation-iteration-count` and clamped finite `@keyframes` animations to final phase + `animationend` in `src/cdp/session_hooks.cp:1116-1215`.
   - Built `bin_19233/main` (7.17s); `mouse-input-fields` (**4/4**), `legacy-charset-url-encoding` (**9/9**), `element-measurement` (**5/5**) = **18/18 PASS** (33 assertions, exit 0).
+
+### Phase 233: CSS Calc/Color & Grid/AspectRatio Whitebox (123/123) + `forms-formdata-demo` + `mouse-input-fields`/`legacy-charset`/`element-measurement` 18/18 PASS
+- **Main Agent (`task-468`)**: Verified `e2e/demo/forms-formdata-demo.e2e.test.ts` **1/1 PASS** (21 assertions, 9.15s); pre-diagnosed `screencast-viewport-demo` (`src/cdp/page.cp:683`), `oopif-worker-budget` (`Expected: 1 / Received: 3`), and `mutation-observer-created-document` (`src/js/shim/index.js:1830-1901`).
+- **Slot A (`919356fa`, `80450943`)**: Added `test/css/test_calc_and_colors_edge.cp` (**6/6 PASS**, 1915ms) and `test/layout/test_grid_and_aspect_ratio_edge.cp` (**4/4 PASS**, 1838ms). Full-repo pure-CP whitebox now **123/123 (100% PASS)**.
+- **Slot B (`32d0a1ef`)**:
+  - Skipped `_pendingMouseMove` coalescing when `params.buttons !== 0` (`e2e/harness.ts:300-319`) and restricted `this._url` updates to top-level frames (`!e?.frame?.parentId`, `e2e/harness.ts:1129-1135`).
+  - Parsed `animation-iteration-count` and clamped finite `@keyframes` animations to final phase + `animationend` in `src/cdp/session_hooks.cp:1116-1215`.
+  - Built `bin_19233/main` (7.17s); `mouse-input-fields` (**4/4**), `legacy-charset-url-encoding` (**9/9**), `element-measurement` (**5/5**) = **18/18 PASS** (33 assertions, exit 0).
