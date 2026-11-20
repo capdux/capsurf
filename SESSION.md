@@ -3760,3 +3760,19 @@
   - `src/layout/layout.cp` 4 门禁全 0；
   - `theme-flip-repaint` (2/2 PASS)、`canvas-batch-sources` (2/2 PASS)；另 3 项 canvas 套件已定位至 `src/js/shim/canvas2d.js` 与 `Kitesurf.recordScene`。
 - **清理旧子智能体**: 销毁 `61749a45-a840-44e6-bfad-13afb6dcc0e0`。
+
+## [2026-11-20 19:16:40] insertAdjacentHTML、innerText 规范收集、CSS Color 4 相对色与内联样式同步 6/6 全绿闭环 (Subagent 13f61f80 结单，Phase 103)
+- **DOM 注入、Rendered `innerText` 与图片竞态防护 (`element.js`, `html-classes.js`)**:
+  - 实装 `insertAdjacentHTML`/`insertAdjacentElement`/`insertAdjacentText`；
+  - 完整实现 HTML rendered-text `innerText` getter（空白折叠、`<br>`、块/段落换行、`<pre>`、`<table>` 单元格 `\t`/行 `\n`）；
+  - `HTMLImageElement.src` 支持 `fetch` 异步加载与 `_imgLoadSeq` 丢弃陈旧响应。
+- **CSS Color 4 相对色、内联样式序列化与角度求值 (`element.js`, `cssom.js`, `window.js`)**:
+  - 升级 `createStyleProxy`（分号序列化、`margin`/`padding`/`gap`/`background` 简写展开/清除、legacy 别名、`z-index` 整数校验与 `rgb(none none none)`）；
+  - `cssom.js` 实装 `color(srgb ...)` 与 `rgb(from currentColor r g b)` 相对色解析；`window.js` 新增 `evalCssAngleDeg`（`hypot(1grad)` -> `0.9deg`）。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，9 分钟 6/6 全绿）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `pseudo-computed-style`、`img-src-change`、`inner-text-getter`、`inline-style-attribute-resync`、`inline-style-flush` (2/2)、`incremental-shadow-insert`：**7/7 PASS (39 expect() calls)**！
+- **全新子智能体调度（路 2 无缝补位，`-m -d -o` 增量构建）**:
+  - 销毁 `13f61f80-e3d8-4baa-b860-60c4347484e5`；
+  - 派发 **Subagent 72**: Fetch Redirect & Canvas2D JS Closer（`src/js/shim/*` + `e2e/harness.ts`，`bin_19232` / `19232`）
+    - 攻坚目标：`cross-origin-redirect-shell` (3/3)、`fetch-cache-mode-cors` (2/2)、`xhtml-doctype-parser-routing`、`canvas-detached-readback`、`canvas-image-bytes`、`css-transitions`。

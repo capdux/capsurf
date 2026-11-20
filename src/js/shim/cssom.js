@@ -2480,8 +2480,80 @@
     return val;
   }
 
+  function resolveRelativeColor(val, currentColorStr) {
+    if (!val || typeof val !== "string") return val;
+    const trimmed = val.trim();
+    const relMatch = trimmed.match(/^rgba?\(\s*from\s+([^\s]+)\s+([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+    if (!relMatch) return val;
+    let originStr = relMatch[1].trim();
+    if (originStr.toLowerCase() === "currentcolor") {
+      originStr = currentColorStr || "rgb(0, 0, 0)";
+    }
+    originStr = normalizeCssColor(originStr);
+    let or = 0, og = 0, ob = 0, oa = 1;
+    const rgbM = originStr.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+    if (rgbM) {
+      or = parseFloat(rgbM[1]) / 255;
+      og = parseFloat(rgbM[2]) / 255;
+      ob = parseFloat(rgbM[3]) / 255;
+      if (rgbM[4] !== undefined) oa = parseFloat(rgbM[4]);
+    } else {
+      const srgbM = originStr.match(/^color\(srgb\s+([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\)$/i);
+      if (srgbM) {
+        or = srgbM[1] === "none" ? 0 : parseFloat(srgbM[1]);
+        og = srgbM[2] === "none" ? 0 : parseFloat(srgbM[2]);
+        ob = srgbM[3] === "none" ? 0 : parseFloat(srgbM[3]);
+        if (srgbM[4] !== undefined) oa = srgbM[4] === "none" ? 0 : parseFloat(srgbM[4]);
+      } else {
+        return val;
+      }
+    }
+    const fmtComp = function (expr) {
+      const e = String(expr).trim().toLowerCase();
+      if (e === "none") return "none";
+      if (e === "r") return String(Number(or.toFixed(6)));
+      if (e === "g") return String(Number(og.toFixed(6)));
+      if (e === "b") return String(Number(ob.toFixed(6)));
+      if (e === "alpha") return String(Number(oa.toFixed(6)));
+      if (e.endsWith("%")) return String(Number((parseFloat(e) / 100).toFixed(6)));
+      const n = parseFloat(e);
+      if (!isNaN(n)) return String(Number((n / 255).toFixed(6)));
+      return "0";
+    };
+    const cr = fmtComp(relMatch[2]);
+    const cg = fmtComp(relMatch[3]);
+    const cb = fmtComp(relMatch[4]);
+    if (relMatch[5] !== undefined) {
+      const ca = fmtComp(relMatch[5]);
+      if (ca !== "1") return "color(srgb " + cr + " " + cg + " " + cb + " / " + ca + ")";
+    }
+    return "color(srgb " + cr + " " + cg + " " + cb + ")";
+  }
+
   function normalizeCssColor(val) {
     if (!val || typeof val !== "string") return val;
+    const trimmed = val.trim();
+    // CSS Color 4: rgb()/rgba() containing `none` serializes as color(srgb ...)
+    if (/^rgba?\s*\(/i.test(trimmed) && /\bnone\b/i.test(trimmed)) {
+      const m = trimmed.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+      if (m) {
+        const fmtSrgb = function (c) {
+          const cl = c.toLowerCase();
+          if (cl === "none") return "none";
+          if (cl.endsWith("%")) return String(Number((parseFloat(cl) / 100).toFixed(6)));
+          return String(Number((parseFloat(cl) / 255).toFixed(6)));
+        };
+        const r = fmtSrgb(m[1]);
+        const g = fmtSrgb(m[2]);
+        const b = fmtSrgb(m[3]);
+        if (m[4] !== undefined) {
+          const al = m[4].toLowerCase();
+          const a = al === "none" ? "none" : (al.endsWith("%") ? String(Number((parseFloat(al) / 100).toFixed(6))) : String(Number(parseFloat(al).toFixed(6))));
+          if (a !== "1") return "color(srgb " + r + " " + g + " " + b + " / " + a + ")";
+        }
+        return "color(srgb " + r + " " + g + " " + b + ")";
+      }
+    }
     let res = normalizeSingleColor(val);
     if (res.includes("rgb(") || res.includes("rgba(")) {
       res = res.replace(/rgba?\(\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)(?:\s*[, /]\s*([0-9.]+%?))?\s*\)/gi, function (match, p1, p2, p3, p4) {
@@ -2757,6 +2829,9 @@
                 if ((k === "color" || k.endsWith("-color")) && val.trim().toLowerCase() === "currentcolor") {
                   val = receiver.color || "rgb(0, 0, 0)";
                 }
+                if ((k === "color" || k.endsWith("-color")) && /\bfrom\s+/i.test(val)) {
+                  val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
+                }
                 if (k === "shape-outside" || k === "clip-path" || k === "offset-path") {
                   val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
                 }
@@ -2806,6 +2881,9 @@
             if (!val && target.background) val = target.background;
             if (val) {
               val = resolveCssVars(element, val);
+              if (/\bfrom\s+/i.test(val)) {
+                val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
+              }
               val = normalizeCssColor(val);
             }
             return val || "";
@@ -2817,6 +2895,9 @@
               val = resolveCssVars(element, val);
               if (val.trim().toLowerCase() === "currentcolor") {
                 val = receiver.color || "rgb(0, 0, 0)";
+              }
+              if (/\bfrom\s+/i.test(val)) {
+                val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
               }
               val = normalizeCssColor(val);
             }

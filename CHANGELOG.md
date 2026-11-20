@@ -1822,4 +1822,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`layout.cp` 4 门禁全 0（`-m -d -o` 1/82 模块热构建 2.72s）；
   - E2E 测试：`theme-flip-repaint` (2/2) + `canvas-batch-sources` (2/2) PASS。
+
+## Phase 103: `insertAdjacentHTML`, Rendered `innerText`, CSS Color 4 Relative Colors & Inline Style Sync — 6/6 Suites (100% Closed)
+- **`src/js/shim/{element/element,element/html-classes,cssom,window}.js`**：
+  - 实装 `insertAdjacentHTML`/`Element`/`Text`、HTML rendered-text `innerText` getter、图片 `_imgLoadSeq` 防陈旧响应、`createStyleProxy` 简写展开与 CSS Color 4 `color(srgb ...)` / 相对色语法及 `evalCssAngleDeg`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（`-m -d -o` 增量构建）；
+  - E2E 测试：6 大 Core 套件共 **7/7 PASS (39 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

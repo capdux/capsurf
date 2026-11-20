@@ -1423,4 +1423,10 @@
 ## Phase 102 匿名 Flex 文本子项布局与主题重绘技术方案
 1. **Flex 匿名文本子项 (`src/layout/layout.cp`)**：
    - 在 `layoutFlexChildren` 与 `measureIntrinsicWidth` 中将非空白直接 `NodeType.Text` 子节点按父字体度量纳入 `FlexItem` 列表并回填 `LayoutBox.rect`，彻底打通 `display: flex` 文本节点在 `html.dark` 主题切换后的重新级联重绘。
+
+## Phase 103 `insertAdjacentHTML`、Rendered `innerText` 与 CSS Color 4 相对色技术方案
+1. **Rendered `innerText` 与内联样式代理 (`html-classes.js`, `element.js`)**：
+   - 按 HTML rendered-text collection steps 实装 `innerText` getter（处理空白折叠、`<pre>`、`<table>` 与隐藏节点）；升级 `createStyleProxy` 完整支持简写展开/清除与属性双向同步。
+2. **CSS Color 4 相对色与角度求值 (`cssom.js`, `window.js`)**：
+   - 支持 `rgb(none none none)` 与 `rgb(from currentColor r g b)` 向 `color(srgb ...)` 规范化序列化，并实现 `evalCssAngleDeg` 计算三角/双曲角度函数。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

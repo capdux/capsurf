@@ -183,9 +183,252 @@ function installHtmlClasses(global) {
     return frag;
   }
 
+  // HTML rendered text collection helper (for innerText getter)
+  const IT_HIDDEN_TAGS = new Set(["script", "style", "noscript", "template", "head", "title", "meta", "link", "base"]);
+  const IT_BLOCK_DISPLAYS = new Set([
+    "block", "flex", "grid", "list-item", "table", "table-caption", "flow-root",
+    "table-row-group", "table-header-group", "table-footer-group",
+  ]);
+  const IT_BLOCK_TAGS = new Set([
+    "html", "body", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "dl", "dt", "dd", "section", "article", "nav",
+    "aside", "header", "footer", "main", "form", "fieldset", "blockquote",
+    "pre", "hr", "figure", "figcaption", "address", "details", "summary", "dialog",
+  ]);
+
+  function getElComputedStyleSafe(el) {
+    try {
+      const fn = global.getComputedStyle || (typeof getComputedStyle === "function" ? getComputedStyle : null);
+      if (typeof fn === "function") return fn(el);
+    } catch (e) {}
+    return null;
+  }
+
+  function getElDisplayForInnerText(el) {
+    const tag = String(el.localName || el.tagName || "").toLowerCase();
+    const cs = getElComputedStyleSafe(el);
+    let disp = cs ? String(cs.display || "").trim().toLowerCase() : "";
+    if (!disp && el.style && el.style.display) {
+      disp = String(el.style.display).trim().toLowerCase();
+    }
+    if (disp) return disp;
+    if (IT_HIDDEN_TAGS.has(tag)) return "none";
+    if (tag === "table") return "table";
+    if (tag === "tr") return "table-row";
+    if (tag === "td" || tag === "th") return "table-cell";
+    if (tag === "tbody") return "table-row-group";
+    if (tag === "thead") return "table-header-group";
+    if (tag === "tfoot") return "table-footer-group";
+    if (IT_BLOCK_TAGS.has(tag)) return "block";
+    return "inline";
+  }
+
+  function isElementBeingRendered(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.isConnected === false) return false;
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      if (getElDisplayForInnerText(cur) === "none") return false;
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return true;
+  }
+
+  function collectRenderedText(root) {
+    const items = []; // { type: "text", text: string, preserveWs: boolean } | { type: "br" } | { type: "tab" } | { type: "rb", count: number }
+
+    function hasNextRenderedSiblingWithDisplay(el, targetDisp) {
+      const parent = el.parentNode;
+      if (parent) {
+        const siblings = parent.childNodes || parent._children || [];
+        let found = false;
+        for (let i = 0; i < siblings.length; i++) {
+          const sib = siblings[i];
+          if (!found) {
+            if (sib === el) found = true;
+            continue;
+          }
+          if (sib && sib.nodeType === 1) {
+            const d = getElDisplayForInnerText(sib);
+            if (d !== "none") return d === targetDisp;
+          }
+        }
+        if (found) return false;
+      }
+      let sib = el.nextSibling;
+      while (sib) {
+        if (sib.nodeType === 1) {
+          const d = getElDisplayForInnerText(sib);
+          if (d !== "none") return d === targetDisp;
+        }
+        sib = sib.nextSibling;
+      }
+      return false;
+    }
+
+    function walk(node, inheritedVis, inheritedWs, isRoot) {
+      if (!node) return;
+      if (node.nodeType === 3) {
+        if (inheritedVis === "hidden" || inheritedVis === "collapse") return;
+        const raw = String(
+          (node.textContent !== undefined && node.textContent !== null && node.textContent !== "")
+            ? node.textContent
+            : (node.nodeValue !== undefined && node.nodeValue !== null ? node.nodeValue : (node.data || ""))
+        );
+        if (!raw) return;
+        const preserve = inheritedWs === "pre" || inheritedWs === "pre-wrap" || inheritedWs === "break-spaces";
+        if (preserve) {
+          items.push({ type: "text", text: raw.replace(/\r\n?/g, "\n"), preserveWs: true });
+        } else if (inheritedWs === "pre-line") {
+          const parts = raw.replace(/\r\n?/g, "\n").split("\n");
+          for (let i = 0; i < parts.length; i++) {
+            if (i > 0) items.push({ type: "br" });
+            const collapsed = parts[i].replace(/[\t\f ]+/g, " ");
+            if (collapsed) items.push({ type: "text", text: collapsed, preserveWs: false });
+          }
+        } else {
+          const collapsed = raw.replace(/[\t\n\f\r ]+/g, " ");
+          if (collapsed) items.push({ type: "text", text: collapsed, preserveWs: false });
+        }
+        return;
+      }
+      if (node.nodeType !== 1) return;
+
+      const tag = String(node.localName || node.tagName || "").toLowerCase();
+      if (!isRoot && IT_HIDDEN_TAGS.has(tag)) return;
+
+      const cs = getElComputedStyleSafe(node);
+      const disp = getElDisplayForInnerText(node);
+      if (!isRoot && disp === "none") return;
+
+      let vis = inheritedVis;
+      const ownVis = cs ? String(cs.visibility || "").trim().toLowerCase() : (node.style && node.style.visibility ? String(node.style.visibility).trim().toLowerCase() : "");
+      if (ownVis) vis = ownVis;
+
+      let ws = inheritedWs;
+      const ownWs = cs ? String(cs.whiteSpace || cs["white-space"] || "").trim().toLowerCase() : (node.style && node.style.whiteSpace ? String(node.style.whiteSpace).trim().toLowerCase() : "");
+      if (ownWs) ws = ownWs;
+      else if (tag === "pre" || tag === "textarea") ws = "pre";
+
+      if (tag === "br") {
+        if (vis !== "hidden" && vis !== "collapse") {
+          items.push({ type: "br" });
+        }
+        return;
+      }
+
+      const isP = tag === "p";
+      const isBlock = !isRoot && (IT_BLOCK_DISPLAYS.has(disp) || isP);
+      if (isBlock) {
+        items.push({ type: "rb", count: isP ? 2 : 1 });
+      }
+
+      const kids = node.childNodes || node._children || [];
+      if (kids && kids.length > 0) {
+        for (let ki = 0; ki < kids.length; ki++) {
+          walk(kids[ki], vis, ws, false);
+        }
+      } else {
+        let ch = node.firstChild;
+        while (ch) {
+          walk(ch, vis, ws, false);
+          ch = ch.nextSibling;
+        }
+      }
+
+      if (!isRoot) {
+        if (disp === "table-cell") {
+          if (hasNextRenderedSiblingWithDisplay(node, "table-cell")) {
+            items.push({ type: "tab" });
+          }
+        } else if (disp === "table-row") {
+          if (hasNextRenderedSiblingWithDisplay(node, "table-row")) {
+            items.push({ type: "br" });
+          }
+        } else if (isBlock) {
+          items.push({ type: "rb", count: isP ? 2 : 1 });
+        }
+      }
+    }
+
+    const rootCs = getElComputedStyleSafe(root);
+    const rootVis = (rootCs && rootCs.visibility ? String(rootCs.visibility).trim().toLowerCase() : "") || "visible";
+    const rootTag = String(root.localName || root.tagName || "").toLowerCase();
+    const rootWs = (rootCs && (rootCs.whiteSpace || rootCs["white-space"]) ? String(rootCs.whiteSpace || rootCs["white-space"]).trim().toLowerCase() : "") || (rootTag === "pre" ? "pre" : "normal");
+    walk(root, rootVis, rootWs, true);
+
+    // 1. Merge consecutive collapsible text items and collapse adjacent spaces
+    const merged = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.type === "rb") {
+        if (merged.length > 0 && merged[merged.length - 1].type === "rb") {
+          merged[merged.length - 1].count = Math.max(merged[merged.length - 1].count, it.count);
+        } else {
+          merged.push({ type: "rb", count: it.count });
+        }
+      } else if (it.type === "text" && !it.preserveWs) {
+        if (merged.length > 0 && merged[merged.length - 1].type === "text" && !merged[merged.length - 1].preserveWs) {
+          merged[merged.length - 1].text = (merged[merged.length - 1].text + it.text).replace(/ +/g, " ");
+        } else {
+          merged.push({ type: "text", text: it.text, preserveWs: false });
+        }
+      } else {
+        merged.push(it);
+      }
+    }
+
+    // 2. Trim collapsible spaces adjacent to line breaks, tabs, or boundaries
+    for (let i = 0; i < merged.length; i++) {
+      const it = merged[i];
+      if (it.type === "text" && !it.preserveWs) {
+        const prev = i > 0 ? merged[i - 1] : null;
+        const next = i + 1 < merged.length ? merged[i + 1] : null;
+        if (!prev || prev.type === "br" || prev.type === "rb" || prev.type === "tab") {
+          it.text = it.text.replace(/^ +/, "");
+        }
+        if (!next || next.type === "br" || next.type === "rb" || next.type === "tab") {
+          it.text = it.text.replace(/ +$/, "");
+        }
+      }
+    }
+
+    // 3. Remove empty text items and re-merge adjacent rb items
+    const cleaned = [];
+    for (let i = 0; i < merged.length; i++) {
+      const it = merged[i];
+      if (it.type === "text" && it.text === "") continue;
+      if (it.type === "rb") {
+        if (cleaned.length > 0 && cleaned[cleaned.length - 1].type === "rb") {
+          cleaned[cleaned.length - 1].count = Math.max(cleaned[cleaned.length - 1].count, it.count);
+          continue;
+        }
+      }
+      cleaned.push(it);
+    }
+
+    // 4. Drop leading and trailing required line breaks
+    while (cleaned.length > 0 && cleaned[0].type === "rb") cleaned.shift();
+    while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === "rb") cleaned.pop();
+
+    // 5. Serialize
+    let out = "";
+    for (let i = 0; i < cleaned.length; i++) {
+      const it = cleaned[i];
+      if (it.type === "text") out += it.text;
+      else if (it.type === "br") out += "\n";
+      else if (it.type === "tab") out += "\t";
+      else if (it.type === "rb") out += "\n".repeat(it.count);
+    }
+    return out;
+  }
+
   Object.defineProperty(HTMLElementProto, "innerText", {
     get: function () {
-      return this.textContent || "";
+      if (!isElementBeingRendered(this)) {
+        return this.textContent || "";
+      }
+      return collectRenderedText(this);
     },
     set: function (v) {
       // [LegacyNullToEmptyString]
@@ -926,6 +1169,62 @@ function installHtmlClasses(global) {
             }
           } catch (e) {}
         }, 0);
+      } else if (str.length > 0 && typeof global.fetch === "function") {
+        const self = this;
+        self._imgComplete = false;
+        self._imgLoadSeq = (self._imgLoadSeq || 0) + 1;
+        const seq = self._imgLoadSeq;
+        const dispatchImgEvent = function (ok, dims) {
+          if (self._imgLoadSeq !== seq) return;
+          self._imgComplete = true;
+          self._lastCandidate = str;
+          self._lastDims = ok ? (dims || { width: 16, height: 16 }) : { width: 0, height: 0 };
+          const evName = ok ? "load" : "error";
+          try {
+            const EvCls = global.__NativeEvent || global.Event;
+            const ev = typeof EvCls === "function" ? new EvCls(evName) : { type: evName, target: self, currentTarget: self };
+            if (typeof self.dispatchEvent === "function") {
+              self.dispatchEvent(ev);
+            } else if (ok && typeof self.onload === "function") {
+              self.onload.call(self, ev);
+            } else if (!ok && typeof self.onerror === "function") {
+              self.onerror.call(self, ev);
+            }
+          } catch (e) {}
+        };
+        try {
+          global.fetch(str).then(function (res) {
+            if (self._imgLoadSeq !== seq) return;
+            if (!res || !res.ok) {
+              dispatchImgEvent(false, null);
+              return;
+            }
+            if (typeof res.arrayBuffer === "function") {
+              res.arrayBuffer().then(function (buf) {
+                if (self._imgLoadSeq !== seq) return;
+                let dims = { width: 16, height: 16 };
+                try {
+                  const u8 = new Uint8Array(buf);
+                  // PNG header: 89 50 4E 47 0D 0A 1A 0A, IHDR width@16..19 height@20..23
+                  if (u8.length >= 24 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
+                    const w = ((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0;
+                    const h = ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0;
+                    if (w > 0 && h > 0) dims = { width: w, height: h };
+                  }
+                } catch (e) {}
+                dispatchImgEvent(true, dims);
+              }, function () {
+                dispatchImgEvent(true, { width: 16, height: 16 });
+              });
+            } else {
+              dispatchImgEvent(true, { width: 16, height: 16 });
+            }
+          }, function () {
+            dispatchImgEvent(false, null);
+          });
+        } catch (e) {
+          dispatchImgEvent(false, null);
+        }
       }
     },
     configurable: true,

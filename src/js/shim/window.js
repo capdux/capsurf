@@ -4469,8 +4469,51 @@ function installWindow(global) {
     return axis === "x" ? 800 : 600;
   }
 
+  function evalCssAngleDeg(expr) {
+    if (typeof expr !== "string") return null;
+    const s = expr.trim().toLowerCase();
+    if (!s) return null;
+    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(deg|grad|rad|turn)$/);
+    if (simple) {
+      const n = parseFloat(simple[1]);
+      const u = simple[2];
+      if (u === "deg") return n;
+      if (u === "grad") return n * 0.9;
+      if (u === "rad") return n * (180 / Math.PI);
+      if (u === "turn") return n * 360;
+    }
+    const fnMatch = s.match(/^(hypot|abs|min|max|calc)\((.+)\)$/);
+    if (fnMatch) {
+      const fn = fnMatch[1];
+      const args = fnMatch[2].split(",").map(function (a) { return evalCssAngleDeg(a.trim()); });
+      if (args.some(function (a) { return a === null || isNaN(a); })) return null;
+      if (fn === "hypot") return Math.hypot.apply(Math, args);
+      if (fn === "abs") return Math.abs(args[0]);
+      if (fn === "min") return Math.min.apply(Math, args);
+      if (fn === "max") return Math.max.apply(Math, args);
+      if (fn === "calc") return args[0];
+    }
+    return null;
+  }
+
   function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
     if (normalizedPseudo || !element || element.nodeType !== 1) return;
+    if (!computedMap.has("z-index")) {
+      computedMap.set("z-index", "auto");
+    }
+    const defaultZeroMargins = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+    for (let mi = 0; mi < defaultZeroMargins.length; mi++) {
+      if (!computedMap.has(defaultZeroMargins[mi])) {
+        computedMap.set(defaultZeroMargins[mi], "0px");
+      }
+    }
+    if (computedMap.has("rotate")) {
+      const rotRaw = computedMap.get("rotate");
+      const deg = evalCssAngleDeg(rotRaw);
+      if (deg !== null && isFinite(deg)) {
+        computedMap.set("rotate", String(Number(deg.toFixed(6))) + "deg");
+      }
+    }
     let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
     if (disp === "-webkit-box") {
       const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();

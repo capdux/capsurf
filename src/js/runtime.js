@@ -5900,8 +5900,80 @@
       return val;
     }
 
+    function resolveRelativeColor(val, currentColorStr) {
+      if (!val || typeof val !== "string") return val;
+      const trimmed = val.trim();
+      const relMatch = trimmed.match(/^rgba?\(\s*from\s+([^\s]+)\s+([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+      if (!relMatch) return val;
+      let originStr = relMatch[1].trim();
+      if (originStr.toLowerCase() === "currentcolor") {
+        originStr = currentColorStr || "rgb(0, 0, 0)";
+      }
+      originStr = normalizeCssColor(originStr);
+      let or = 0, og = 0, ob = 0, oa = 1;
+      const rgbM = originStr.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+      if (rgbM) {
+        or = parseFloat(rgbM[1]) / 255;
+        og = parseFloat(rgbM[2]) / 255;
+        ob = parseFloat(rgbM[3]) / 255;
+        if (rgbM[4] !== undefined) oa = parseFloat(rgbM[4]);
+      } else {
+        const srgbM = originStr.match(/^color\(srgb\s+([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\)$/i);
+        if (srgbM) {
+          or = srgbM[1] === "none" ? 0 : parseFloat(srgbM[1]);
+          og = srgbM[2] === "none" ? 0 : parseFloat(srgbM[2]);
+          ob = srgbM[3] === "none" ? 0 : parseFloat(srgbM[3]);
+          if (srgbM[4] !== undefined) oa = srgbM[4] === "none" ? 0 : parseFloat(srgbM[4]);
+        } else {
+          return val;
+        }
+      }
+      const fmtComp = function (expr) {
+        const e = String(expr).trim().toLowerCase();
+        if (e === "none") return "none";
+        if (e === "r") return String(Number(or.toFixed(6)));
+        if (e === "g") return String(Number(og.toFixed(6)));
+        if (e === "b") return String(Number(ob.toFixed(6)));
+        if (e === "alpha") return String(Number(oa.toFixed(6)));
+        if (e.endsWith("%")) return String(Number((parseFloat(e) / 100).toFixed(6)));
+        const n = parseFloat(e);
+        if (!isNaN(n)) return String(Number((n / 255).toFixed(6)));
+        return "0";
+      };
+      const cr = fmtComp(relMatch[2]);
+      const cg = fmtComp(relMatch[3]);
+      const cb = fmtComp(relMatch[4]);
+      if (relMatch[5] !== undefined) {
+        const ca = fmtComp(relMatch[5]);
+        if (ca !== "1") return "color(srgb " + cr + " " + cg + " " + cb + " / " + ca + ")";
+      }
+      return "color(srgb " + cr + " " + cg + " " + cb + ")";
+    }
+
     function normalizeCssColor(val) {
       if (!val || typeof val !== "string") return val;
+      const trimmed = val.trim();
+      // CSS Color 4: rgb()/rgba() containing `none` serializes as color(srgb ...)
+      if (/^rgba?\s*\(/i.test(trimmed) && /\bnone\b/i.test(trimmed)) {
+        const m = trimmed.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+        if (m) {
+          const fmtSrgb = function (c) {
+            const cl = c.toLowerCase();
+            if (cl === "none") return "none";
+            if (cl.endsWith("%")) return String(Number((parseFloat(cl) / 100).toFixed(6)));
+            return String(Number((parseFloat(cl) / 255).toFixed(6)));
+          };
+          const r = fmtSrgb(m[1]);
+          const g = fmtSrgb(m[2]);
+          const b = fmtSrgb(m[3]);
+          if (m[4] !== undefined) {
+            const al = m[4].toLowerCase();
+            const a = al === "none" ? "none" : (al.endsWith("%") ? String(Number((parseFloat(al) / 100).toFixed(6))) : String(Number(parseFloat(al).toFixed(6))));
+            if (a !== "1") return "color(srgb " + r + " " + g + " " + b + " / " + a + ")";
+          }
+          return "color(srgb " + r + " " + g + " " + b + ")";
+        }
+      }
       let res = normalizeSingleColor(val);
       if (res.includes("rgb(") || res.includes("rgba(")) {
         res = res.replace(/rgba?\(\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)(?:\s*[, /]\s*([0-9.]+%?))?\s*\)/gi, function (match, p1, p2, p3, p4) {
@@ -6177,6 +6249,9 @@
                   if ((k === "color" || k.endsWith("-color")) && val.trim().toLowerCase() === "currentcolor") {
                     val = receiver.color || "rgb(0, 0, 0)";
                   }
+                  if ((k === "color" || k.endsWith("-color")) && /\bfrom\s+/i.test(val)) {
+                    val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
+                  }
                   if (k === "shape-outside" || k === "clip-path" || k === "offset-path") {
                     val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
                   }
@@ -6226,6 +6301,9 @@
               if (!val && target.background) val = target.background;
               if (val) {
                 val = resolveCssVars(element, val);
+                if (/\bfrom\s+/i.test(val)) {
+                  val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
+                }
                 val = normalizeCssColor(val);
               }
               return val || "";
@@ -6237,6 +6315,9 @@
                 val = resolveCssVars(element, val);
                 if (val.trim().toLowerCase() === "currentcolor") {
                   val = receiver.color || "rgb(0, 0, 0)";
+                }
+                if (/\bfrom\s+/i.test(val)) {
+                  val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
                 }
                 val = normalizeCssColor(val);
               }
@@ -8083,6 +8164,228 @@
     "getPropertyValue", "getPropertyPriority", "removeProperty"
   ]);
 
+  const STYLE_LEGACY_ALIASES = {
+    "cssfloat": "float",
+    "css-float": "float",
+    "grid-row-gap": "row-gap",
+    "grid-column-gap": "column-gap",
+    "grid-gap": "gap",
+  };
+
+  const BG_LONGHANDS = [
+    "background-image",
+    "background-position",
+    "background-size",
+    "background-repeat",
+    "background-attachment",
+    "background-origin",
+    "background-clip",
+    "background-color",
+  ];
+
+  const CSS_WIDE_KEYWORDS = new Set(["initial", "inherit", "unset", "revert", "revert-layer"]);
+
+  function normalizeStylePropKey(p) {
+    const str = String(p).trim();
+    if (str.startsWith("--")) return str;
+    const lower = str.toLowerCase();
+    return STYLE_LEGACY_ALIASES[lower] || lower;
+  }
+
+  function splitCssWhitespaceTokens(val) {
+    const tokens = [];
+    let cur = "";
+    let depth = 0;
+    let quote = "";
+    for (let i = 0; i < val.length; i++) {
+      const ch = val[i];
+      if (quote) {
+        cur += ch;
+        if (ch === quote && val[i - 1] !== "\\") quote = "";
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+        cur += ch;
+      } else if (ch === "(") {
+        depth++;
+        cur += ch;
+      } else if (ch === ")") {
+        if (depth > 0) depth--;
+        cur += ch;
+      } else if (depth === 0 && /\s/.test(ch)) {
+        if (cur) {
+          tokens.push(cur);
+          cur = "";
+        }
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur) tokens.push(cur);
+    return tokens;
+  }
+
+  function expandFourSideValues(val) {
+    const parts = splitCssWhitespaceTokens(val);
+    if (parts.length === 1) return [parts[0], parts[0], parts[0], parts[0]];
+    if (parts.length === 2) return [parts[0], parts[1], parts[0], parts[1]];
+    if (parts.length === 3) return [parts[0], parts[1], parts[2], parts[1]];
+    if (parts.length === 4) return [parts[0], parts[1], parts[2], parts[3]];
+    return null;
+  }
+
+  function collapseFourSideValues(vals) {
+    if (vals[0] === vals[1] && vals[1] === vals[2] && vals[2] === vals[3]) return vals[0];
+    if (vals[0] === vals[2] && vals[1] === vals[3]) return vals[0] + " " + vals[1];
+    if (vals[1] === vals[3]) return vals[0] + " " + vals[1] + " " + vals[2];
+    return vals.join(" ");
+  }
+
+  function isValidInlinePropValue(key, val) {
+    const v = String(val).trim();
+    if (!v) return false;
+    if (key.startsWith("--")) return true;
+    const lower = v.toLowerCase();
+    if (CSS_WIDE_KEYWORDS.has(lower)) return true;
+    if (lower.indexOf("var(") !== -1) return true;
+    if (key === "z-index") {
+      if (lower === "auto") return true;
+      if (/^[+-]?\d+$/.test(v)) return true;
+      if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign)\s*\(/i.test(v)) return true;
+      return false;
+    }
+    return true;
+  }
+
+  function serializeInlineSpecifiedValue(key, val) {
+    if (!val || typeof val !== "string") return val || "";
+    const v = val.trim();
+    // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
+    if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
+      const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+      if (m) {
+        const parseC = function (c) {
+          const cl = c.toLowerCase();
+          if (cl === "none") return 0;
+          if (cl.endsWith("%")) return Math.round((parseFloat(cl) / 100) * 255);
+          return Math.round(parseFloat(cl));
+        };
+        const r = Math.min(255, Math.max(0, parseC(m[1])));
+        const g = Math.min(255, Math.max(0, parseC(m[2])));
+        const b = Math.min(255, Math.max(0, parseC(m[3])));
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+          if (m[4] !== undefined) {
+            const al = m[4].toLowerCase();
+            const a = al === "none" ? 0 : (al.endsWith("%") ? parseFloat(al) / 100 : parseFloat(al));
+            if (!isNaN(a) && a < 1) {
+              return "rgba(" + r + ", " + g + ", " + b + ", " + a + ")";
+            }
+          }
+          return "rgb(" + r + ", " + g + ", " + b + ")";
+        }
+      }
+    }
+    return v;
+  }
+
+  function setEntryInStyleMap(map, key, rawName, val, pri) {
+    if (key === "margin" || key === "padding") {
+      const sides = expandFourSideValues(val);
+      if (sides) {
+        map.delete(key);
+        const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+        for (let i = 0; i < 4; i++) {
+          map.set(names[i], { name: names[i], value: sides[i], priority: pri });
+        }
+        return;
+      }
+    }
+    if (key === "gap") {
+      const parts = splitCssWhitespaceTokens(val);
+      if (parts.length === 1 || parts.length === 2) {
+        map.delete("gap");
+        map.delete("grid-gap");
+        map.set("row-gap", { name: "row-gap", value: parts[0], priority: pri });
+        map.set("column-gap", { name: "column-gap", value: parts.length === 2 ? parts[1] : parts[0], priority: pri });
+        return;
+      }
+    }
+    if (key === "background") {
+      map.delete("background");
+      map.delete("background-position-x");
+      map.delete("background-position-y");
+      const lower = val.trim().toLowerCase();
+      const defaults = {
+        "background-image": "none",
+        "background-position": "0% 0%",
+        "background-size": "auto",
+        "background-repeat": "repeat",
+        "background-attachment": "scroll",
+        "background-origin": "padding-box",
+        "background-clip": "border-box",
+        "background-color": "transparent",
+      };
+      if (lower !== "none" && lower !== "initial" && lower !== "transparent") {
+        if (lower.indexOf("url(") !== -1 || lower.indexOf("gradient(") !== -1) {
+          defaults["background-image"] = val;
+        } else {
+          defaults["background-color"] = val;
+        }
+      }
+      for (let i = 0; i < BG_LONGHANDS.length; i++) {
+        const lh = BG_LONGHANDS[i];
+        map.set(lh, { name: lh, value: defaults[lh], priority: pri });
+      }
+      return;
+    }
+    map.set(key, { name: key.startsWith("--") ? rawName : key, value: val, priority: pri });
+  }
+
+  function removeKeyFromStyleMap(map, key) {
+    let oldVal = "";
+    if (key === "margin" || key === "padding") {
+      if (map.has(key)) {
+        oldVal = map.get(key).value;
+        map.delete(key);
+      }
+      const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+      for (let i = 0; i < 4; i++) {
+        if (map.has(names[i])) {
+          if (!oldVal) oldVal = map.get(names[i]).value;
+          map.delete(names[i]);
+        }
+      }
+      return oldVal;
+    }
+    if (key === "gap") {
+      if (map.has("gap")) { oldVal = map.get("gap").value; map.delete("gap"); }
+      if (map.has("row-gap")) { if (!oldVal) oldVal = map.get("row-gap").value; map.delete("row-gap"); }
+      if (map.has("column-gap")) { if (!oldVal) oldVal = map.get("column-gap").value; map.delete("column-gap"); }
+      return oldVal;
+    }
+    if (key === "background") {
+      if (map.has("background")) { oldVal = map.get("background").value; map.delete("background"); }
+      for (let i = 0; i < BG_LONGHANDS.length; i++) {
+        if (map.has(BG_LONGHANDS[i])) {
+          if (!oldVal) oldVal = map.get(BG_LONGHANDS[i]).value;
+          map.delete(BG_LONGHANDS[i]);
+        }
+      }
+      map.delete("background-position-x");
+      map.delete("background-position-y");
+      return oldVal;
+    }
+    if (key === "background-position") {
+      map.delete("background-position-x");
+      map.delete("background-position-y");
+    }
+    const old = map.get(key);
+    map.delete(key);
+    if (key === "float") map.delete("css-float");
+    if (key === "transform") map.delete("-webkit-transform");
+    if (key === "-webkit-transform") map.delete("transform");
+    return old ? old.value : "";
+  }
+
   function createStyleProxy(element) {
     function parseStyleMap() {
       const raw = element.getAttribute("style") || "";
@@ -8094,14 +8397,16 @@
         const colon = p.indexOf(":");
         if (colon !== -1) {
           const rawKey = p.slice(0, colon).trim();
-          const k = rawKey.startsWith("--") ? rawKey : rawKey.toLowerCase();
+          const k = normalizeStylePropKey(rawKey);
           let v = p.slice(colon + 1).trim();
           let pri = "";
           if (/!important\s*$/i.test(v)) {
             pri = "important";
             v = v.replace(/\s*!important\s*$/i, "").trim();
           }
-          map.set(k, { name: rawKey, value: v, priority: pri });
+          if (v !== "") {
+            setEntryInStyleMap(map, k, rawKey, v, pri);
+          }
         }
       }
       return map;
@@ -8112,13 +8417,13 @@
       for (const [k, entry] of map.entries()) {
         let s = entry.name + ": " + entry.value;
         if (entry.priority) s += " !" + entry.priority;
-        arr.push(s);
+        arr.push(s + ";");
       }
-      const res = arr.join("; ");
+      const res = arr.join(" ");
       if (res.length > 0) {
         element.setAttribute("style", res);
       } else {
-        element.removeAttribute("style");
+        element.setAttribute("style", "");
       }
     }
 
@@ -8145,6 +8450,55 @@
         body = body[0].toLowerCase() + body.slice(1);
       }
       return prefix + body.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+    }
+
+    function lookupPropertyValue(map, key) {
+      const entry = map.get(key);
+      if (entry) return serializeInlineSpecifiedValue(key, entry.value);
+      if (key === "margin" || key === "padding") {
+        const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+        const vals = [];
+        let pri = null;
+        for (let i = 0; i < 4; i++) {
+          const e = map.get(names[i]);
+          if (!e) return "";
+          if (pri === null) pri = e.priority;
+          else if (pri !== e.priority) return "";
+          vals.push(e.value);
+        }
+        return collapseFourSideValues(vals);
+      }
+      if (key === "gap") {
+        const rg = map.get("row-gap");
+        const cg = map.get("column-gap");
+        if (rg && cg && rg.priority === cg.priority) {
+          return rg.value === cg.value ? rg.value : (rg.value + " " + cg.value);
+        }
+        return "";
+      }
+      if (key === "background") {
+        for (let i = 0; i < BG_LONGHANDS.length; i++) {
+          if (!map.has(BG_LONGHANDS[i])) return "";
+        }
+        return map.get("background-image").value;
+      }
+      if (key === "float") {
+        const e = map.get("css-float");
+        if (e) return e.value;
+      } else if (key === "-webkit-transform") {
+        const e = map.get("transform");
+        if (e) return e.value;
+      } else if (key === "transform") {
+        const e = map.get("-webkit-transform");
+        if (e) return e.value;
+      } else if (key === "-webkit-align-content") {
+        const e = map.get("align-content");
+        if (e) return e.value;
+      } else if (key === "align-content") {
+        const e = map.get("-webkit-align-content");
+        if (e) return e.value;
+      }
+      return "";
     }
 
     return new Proxy(declTarget, {
@@ -8177,37 +8531,14 @@
         if (prop === "getPropertyValue") {
           return function (p) {
             const map = parseStyleMap();
-            const str = String(p);
-            const key = str.startsWith("--") ? str : str.toLowerCase();
-            const entry = map.get(key);
-            if (entry) return entry.value;
-            if (key === "css-float" || key === "cssfloat") {
-              const e = map.get("float");
-              if (e) return e.value;
-            } else if (key === "float") {
-              const e = map.get("css-float");
-              if (e) return e.value;
-            } else if (key === "-webkit-transform") {
-              const e = map.get("transform");
-              if (e) return e.value;
-            } else if (key === "transform") {
-              const e = map.get("-webkit-transform");
-              if (e) return e.value;
-            } else if (key === "-webkit-align-content") {
-              const e = map.get("align-content");
-              if (e) return e.value;
-            } else if (key === "align-content") {
-              const e = map.get("-webkit-align-content");
-              if (e) return e.value;
-            }
-            return "";
+            const key = normalizeStylePropKey(p);
+            return lookupPropertyValue(map, key);
           };
         }
         if (prop === "getPropertyPriority") {
           return function (p) {
             const map = parseStyleMap();
-            const str = String(p);
-            const key = str.startsWith("--") ? str : str.toLowerCase();
+            const key = normalizeStylePropKey(p);
             const entry = map.get(key);
             return entry ? entry.priority : "";
           };
@@ -8219,14 +8550,19 @@
             }
             const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
             const map = parseStyleMap();
-            let str = String(p);
-            if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
-              str = "float";
+            const rawStr = String(p).trim();
+            const key = normalizeStylePropKey(rawStr);
+            const vStr = val === null || val === undefined ? "" : String(val).trim();
+            if (vStr === "") {
+              removeKeyFromStyleMap(map, key);
+              if (key === "display") element._displayNone = false;
+              serializeStyleMap(map);
+              return;
             }
-            const key = str.startsWith("--") ? str : str.toLowerCase();
-            map.set(key, { name: str, value: String(val), priority: pPriority });
+            if (!isValidInlinePropValue(key, vStr)) return;
+            setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
             if (key === "display") {
-              element._displayNone = (String(val).trim().toLowerCase() === "none");
+              element._displayNone = (vStr.toLowerCase() === "none");
             }
             serializeStyleMap(map);
           };
@@ -8234,21 +8570,13 @@
         if (prop === "removeProperty") {
           return function (p) {
             const map = parseStyleMap();
-            let str = String(p);
-            if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
-              str = "float";
-            }
-            const key = str.startsWith("--") ? str : str.toLowerCase();
-            const old = map.get(key);
-            map.delete(key);
-            if (key === "float") map.delete("css-float");
-            if (key === "transform") map.delete("-webkit-transform");
-            if (key === "-webkit-transform") map.delete("transform");
+            const key = normalizeStylePropKey(p);
+            const prev = removeKeyFromStyleMap(map, key);
             if (key === "display") {
               element._displayNone = false;
             }
             serializeStyleMap(map);
-            return old ? old.value : "";
+            return prev;
           };
         }
         if (prop in target) return target[prop];
@@ -8271,10 +8599,9 @@
 
         // CamelCase or kebab-case lookup
         const map = parseStyleMap();
-        if (map.has(prop)) return map.get(prop).value;
-        const kebab = propToKebab(prop);
-        if (map.has(kebab)) return map.get(kebab).value;
-        return "";
+        if (map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
+        const kebab = normalizeStylePropKey(propToKebab(prop));
+        return lookupPropertyValue(map, kebab);
       },
       set: function (target, prop, value) {
         if (typeof prop === "symbol") {
@@ -8291,25 +8618,28 @@
         if (prop === "cssFloat" || prop === "float") {
           const map = parseStyleMap();
           map.delete("css-float");
-          if (value === null || value === undefined || value === "") {
+          const vStr = value === null || value === undefined ? "" : String(value).trim();
+          if (vStr === "") {
             map.delete("float");
           } else {
-            map.set("float", { name: "float", value: String(value), priority: "" });
+            map.set("float", { name: "float", value: vStr, priority: "" });
           }
           serializeStyleMap(map);
           return true;
         }
-        let key = propToKebab(prop);
-        if (key === "css-float") key = "float";
+        const rawKey = propToKebab(prop);
+        const normKey = normalizeStylePropKey(rawKey);
         const map = parseStyleMap();
-        const normKey = key.startsWith("--") ? key : key.toLowerCase();
-        if (value === null || value === undefined || value === "") {
-          map.delete(normKey);
+        const vStr = value === null || value === undefined ? "" : String(value).trim();
+        if (vStr === "") {
+          removeKeyFromStyleMap(map, normKey);
+          if (normKey === "display") element._displayNone = false;
         } else {
-          map.set(normKey, { name: key, value: String(value), priority: "" });
-        }
-        if (normKey === "display") {
-          element._displayNone = (value !== null && value !== undefined && String(value).trim().toLowerCase() === "none");
+          if (!isValidInlinePropValue(normKey, vStr)) return true;
+          setEntryInStyleMap(map, normKey, rawKey, vStr, "");
+          if (normKey === "display") {
+            element._displayNone = (vStr.toLowerCase() === "none");
+          }
         }
         serializeStyleMap(map);
         return true;
@@ -10662,6 +10992,115 @@
       this._customValidityMessage = String(msg || "");
     };
     markNative(proto.setCustomValidity, "setCustomValidity");
+
+    proto.insertAdjacentElement = function (position, element) {
+      const pos = String(position).toLowerCase();
+      if (pos === "beforebegin") {
+        if (!this.parentNode) return null;
+        return this.parentNode.insertBefore(element, this);
+      }
+      if (pos === "afterbegin") {
+        return this.insertBefore(element, this.firstChild);
+      }
+      if (pos === "beforeend") {
+        return this.appendChild(element);
+      }
+      if (pos === "afterend") {
+        if (!this.parentNode) return null;
+        return this.parentNode.insertBefore(element, this.nextSibling);
+      }
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+      }
+      const e = new Error("SyntaxError");
+      e.name = "SyntaxError";
+      throw e;
+    };
+    markNative(proto.insertAdjacentElement, "insertAdjacentElement");
+
+    proto.insertAdjacentText = function (position, data) {
+      const pos = String(position).toLowerCase();
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const textNode = doc && typeof doc.createTextNode === "function" ? doc.createTextNode(String(data)) : new Text(String(data));
+      if (pos === "beforebegin") {
+        if (!this.parentNode) return;
+        this.parentNode.insertBefore(textNode, this);
+        return;
+      }
+      if (pos === "afterbegin") {
+        this.insertBefore(textNode, this.firstChild);
+        return;
+      }
+      if (pos === "beforeend") {
+        this.appendChild(textNode);
+        return;
+      }
+      if (pos === "afterend") {
+        if (!this.parentNode) return;
+        this.parentNode.insertBefore(textNode, this.nextSibling);
+        return;
+      }
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+      }
+      const e = new Error("SyntaxError");
+      e.name = "SyntaxError";
+      throw e;
+    };
+    markNative(proto.insertAdjacentText, "insertAdjacentText");
+
+    proto.insertAdjacentHTML = function (position, text) {
+      const pos = String(position).toLowerCase();
+      if (pos !== "beforebegin" && pos !== "afterbegin" && pos !== "beforeend" && pos !== "afterend") {
+        if (typeof DOMException !== "undefined") {
+          throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+        }
+        const e = new Error("SyntaxError");
+        e.name = "SyntaxError";
+        throw e;
+      }
+      if ((pos === "beforebegin" || pos === "afterend") && !this.parentNode) {
+        if (typeof DOMException !== "undefined") {
+          throw new DOMException("The element has no parent.", "NoModificationAllowedError");
+        }
+        const e = new Error("NoModificationAllowedError");
+        e.name = "NoModificationAllowedError";
+        throw e;
+      }
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const temp = doc && typeof doc.createElement === "function" ? doc.createElement("div") : null;
+      if (!temp) return;
+      temp.innerHTML = String(text);
+      const nodes = [];
+      let ch = temp.firstChild;
+      while (ch) {
+        const next = ch.nextSibling;
+        nodes.push(ch);
+        ch = next;
+      }
+      if (pos === "beforebegin") {
+        const parent = this.parentNode;
+        for (let i = 0; i < nodes.length; i++) {
+          parent.insertBefore(nodes[i], this);
+        }
+      } else if (pos === "afterbegin") {
+        const ref = this.firstChild;
+        for (let i = 0; i < nodes.length; i++) {
+          this.insertBefore(nodes[i], ref);
+        }
+      } else if (pos === "beforeend") {
+        for (let i = 0; i < nodes.length; i++) {
+          this.appendChild(nodes[i]);
+        }
+      } else if (pos === "afterend") {
+        const parent = this.parentNode;
+        const ref = this.nextSibling;
+        for (let i = 0; i < nodes.length; i++) {
+          parent.insertBefore(nodes[i], ref);
+        }
+      }
+    };
+    markNative(proto.insertAdjacentHTML, "insertAdjacentHTML");
   }
 
   // =============================================================
@@ -11063,9 +11502,252 @@
       return frag;
     }
 
+    // HTML rendered text collection helper (for innerText getter)
+    const IT_HIDDEN_TAGS = new Set(["script", "style", "noscript", "template", "head", "title", "meta", "link", "base"]);
+    const IT_BLOCK_DISPLAYS = new Set([
+      "block", "flex", "grid", "list-item", "table", "table-caption", "flow-root",
+      "table-row-group", "table-header-group", "table-footer-group",
+    ]);
+    const IT_BLOCK_TAGS = new Set([
+      "html", "body", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+      "ul", "ol", "li", "dl", "dt", "dd", "section", "article", "nav",
+      "aside", "header", "footer", "main", "form", "fieldset", "blockquote",
+      "pre", "hr", "figure", "figcaption", "address", "details", "summary", "dialog",
+    ]);
+
+    function getElComputedStyleSafe(el) {
+      try {
+        const fn = global.getComputedStyle || (typeof getComputedStyle === "function" ? getComputedStyle : null);
+        if (typeof fn === "function") return fn(el);
+      } catch (e) {}
+      return null;
+    }
+
+    function getElDisplayForInnerText(el) {
+      const tag = String(el.localName || el.tagName || "").toLowerCase();
+      const cs = getElComputedStyleSafe(el);
+      let disp = cs ? String(cs.display || "").trim().toLowerCase() : "";
+      if (!disp && el.style && el.style.display) {
+        disp = String(el.style.display).trim().toLowerCase();
+      }
+      if (disp) return disp;
+      if (IT_HIDDEN_TAGS.has(tag)) return "none";
+      if (tag === "table") return "table";
+      if (tag === "tr") return "table-row";
+      if (tag === "td" || tag === "th") return "table-cell";
+      if (tag === "tbody") return "table-row-group";
+      if (tag === "thead") return "table-header-group";
+      if (tag === "tfoot") return "table-footer-group";
+      if (IT_BLOCK_TAGS.has(tag)) return "block";
+      return "inline";
+    }
+
+    function isElementBeingRendered(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.isConnected === false) return false;
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        if (getElDisplayForInnerText(cur) === "none") return false;
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return true;
+    }
+
+    function collectRenderedText(root) {
+      const items = []; // { type: "text", text: string, preserveWs: boolean } | { type: "br" } | { type: "tab" } | { type: "rb", count: number }
+
+      function hasNextRenderedSiblingWithDisplay(el, targetDisp) {
+        const parent = el.parentNode;
+        if (parent) {
+          const siblings = parent.childNodes || parent._children || [];
+          let found = false;
+          for (let i = 0; i < siblings.length; i++) {
+            const sib = siblings[i];
+            if (!found) {
+              if (sib === el) found = true;
+              continue;
+            }
+            if (sib && sib.nodeType === 1) {
+              const d = getElDisplayForInnerText(sib);
+              if (d !== "none") return d === targetDisp;
+            }
+          }
+          if (found) return false;
+        }
+        let sib = el.nextSibling;
+        while (sib) {
+          if (sib.nodeType === 1) {
+            const d = getElDisplayForInnerText(sib);
+            if (d !== "none") return d === targetDisp;
+          }
+          sib = sib.nextSibling;
+        }
+        return false;
+      }
+
+      function walk(node, inheritedVis, inheritedWs, isRoot) {
+        if (!node) return;
+        if (node.nodeType === 3) {
+          if (inheritedVis === "hidden" || inheritedVis === "collapse") return;
+          const raw = String(
+            (node.textContent !== undefined && node.textContent !== null && node.textContent !== "")
+              ? node.textContent
+              : (node.nodeValue !== undefined && node.nodeValue !== null ? node.nodeValue : (node.data || ""))
+          );
+          if (!raw) return;
+          const preserve = inheritedWs === "pre" || inheritedWs === "pre-wrap" || inheritedWs === "break-spaces";
+          if (preserve) {
+            items.push({ type: "text", text: raw.replace(/\r\n?/g, "\n"), preserveWs: true });
+          } else if (inheritedWs === "pre-line") {
+            const parts = raw.replace(/\r\n?/g, "\n").split("\n");
+            for (let i = 0; i < parts.length; i++) {
+              if (i > 0) items.push({ type: "br" });
+              const collapsed = parts[i].replace(/[\t\f ]+/g, " ");
+              if (collapsed) items.push({ type: "text", text: collapsed, preserveWs: false });
+            }
+          } else {
+            const collapsed = raw.replace(/[\t\n\f\r ]+/g, " ");
+            if (collapsed) items.push({ type: "text", text: collapsed, preserveWs: false });
+          }
+          return;
+        }
+        if (node.nodeType !== 1) return;
+
+        const tag = String(node.localName || node.tagName || "").toLowerCase();
+        if (!isRoot && IT_HIDDEN_TAGS.has(tag)) return;
+
+        const cs = getElComputedStyleSafe(node);
+        const disp = getElDisplayForInnerText(node);
+        if (!isRoot && disp === "none") return;
+
+        let vis = inheritedVis;
+        const ownVis = cs ? String(cs.visibility || "").trim().toLowerCase() : (node.style && node.style.visibility ? String(node.style.visibility).trim().toLowerCase() : "");
+        if (ownVis) vis = ownVis;
+
+        let ws = inheritedWs;
+        const ownWs = cs ? String(cs.whiteSpace || cs["white-space"] || "").trim().toLowerCase() : (node.style && node.style.whiteSpace ? String(node.style.whiteSpace).trim().toLowerCase() : "");
+        if (ownWs) ws = ownWs;
+        else if (tag === "pre" || tag === "textarea") ws = "pre";
+
+        if (tag === "br") {
+          if (vis !== "hidden" && vis !== "collapse") {
+            items.push({ type: "br" });
+          }
+          return;
+        }
+
+        const isP = tag === "p";
+        const isBlock = !isRoot && (IT_BLOCK_DISPLAYS.has(disp) || isP);
+        if (isBlock) {
+          items.push({ type: "rb", count: isP ? 2 : 1 });
+        }
+
+        const kids = node.childNodes || node._children || [];
+        if (kids && kids.length > 0) {
+          for (let ki = 0; ki < kids.length; ki++) {
+            walk(kids[ki], vis, ws, false);
+          }
+        } else {
+          let ch = node.firstChild;
+          while (ch) {
+            walk(ch, vis, ws, false);
+            ch = ch.nextSibling;
+          }
+        }
+
+        if (!isRoot) {
+          if (disp === "table-cell") {
+            if (hasNextRenderedSiblingWithDisplay(node, "table-cell")) {
+              items.push({ type: "tab" });
+            }
+          } else if (disp === "table-row") {
+            if (hasNextRenderedSiblingWithDisplay(node, "table-row")) {
+              items.push({ type: "br" });
+            }
+          } else if (isBlock) {
+            items.push({ type: "rb", count: isP ? 2 : 1 });
+          }
+        }
+      }
+
+      const rootCs = getElComputedStyleSafe(root);
+      const rootVis = (rootCs && rootCs.visibility ? String(rootCs.visibility).trim().toLowerCase() : "") || "visible";
+      const rootTag = String(root.localName || root.tagName || "").toLowerCase();
+      const rootWs = (rootCs && (rootCs.whiteSpace || rootCs["white-space"]) ? String(rootCs.whiteSpace || rootCs["white-space"]).trim().toLowerCase() : "") || (rootTag === "pre" ? "pre" : "normal");
+      walk(root, rootVis, rootWs, true);
+
+      // 1. Merge consecutive collapsible text items and collapse adjacent spaces
+      const merged = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.type === "rb") {
+          if (merged.length > 0 && merged[merged.length - 1].type === "rb") {
+            merged[merged.length - 1].count = Math.max(merged[merged.length - 1].count, it.count);
+          } else {
+            merged.push({ type: "rb", count: it.count });
+          }
+        } else if (it.type === "text" && !it.preserveWs) {
+          if (merged.length > 0 && merged[merged.length - 1].type === "text" && !merged[merged.length - 1].preserveWs) {
+            merged[merged.length - 1].text = (merged[merged.length - 1].text + it.text).replace(/ +/g, " ");
+          } else {
+            merged.push({ type: "text", text: it.text, preserveWs: false });
+          }
+        } else {
+          merged.push(it);
+        }
+      }
+
+      // 2. Trim collapsible spaces adjacent to line breaks, tabs, or boundaries
+      for (let i = 0; i < merged.length; i++) {
+        const it = merged[i];
+        if (it.type === "text" && !it.preserveWs) {
+          const prev = i > 0 ? merged[i - 1] : null;
+          const next = i + 1 < merged.length ? merged[i + 1] : null;
+          if (!prev || prev.type === "br" || prev.type === "rb" || prev.type === "tab") {
+            it.text = it.text.replace(/^ +/, "");
+          }
+          if (!next || next.type === "br" || next.type === "rb" || next.type === "tab") {
+            it.text = it.text.replace(/ +$/, "");
+          }
+        }
+      }
+
+      // 3. Remove empty text items and re-merge adjacent rb items
+      const cleaned = [];
+      for (let i = 0; i < merged.length; i++) {
+        const it = merged[i];
+        if (it.type === "text" && it.text === "") continue;
+        if (it.type === "rb") {
+          if (cleaned.length > 0 && cleaned[cleaned.length - 1].type === "rb") {
+            cleaned[cleaned.length - 1].count = Math.max(cleaned[cleaned.length - 1].count, it.count);
+            continue;
+          }
+        }
+        cleaned.push(it);
+      }
+
+      // 4. Drop leading and trailing required line breaks
+      while (cleaned.length > 0 && cleaned[0].type === "rb") cleaned.shift();
+      while (cleaned.length > 0 && cleaned[cleaned.length - 1].type === "rb") cleaned.pop();
+
+      // 5. Serialize
+      let out = "";
+      for (let i = 0; i < cleaned.length; i++) {
+        const it = cleaned[i];
+        if (it.type === "text") out += it.text;
+        else if (it.type === "br") out += "\n";
+        else if (it.type === "tab") out += "\t";
+        else if (it.type === "rb") out += "\n".repeat(it.count);
+      }
+      return out;
+    }
+
     Object.defineProperty(HTMLElementProto, "innerText", {
       get: function () {
-        return this.textContent || "";
+        if (!isElementBeingRendered(this)) {
+          return this.textContent || "";
+        }
+        return collectRenderedText(this);
       },
       set: function (v) {
         // [LegacyNullToEmptyString]
@@ -11806,6 +12488,62 @@
               }
             } catch (e) {}
           }, 0);
+        } else if (str.length > 0 && typeof global.fetch === "function") {
+          const self = this;
+          self._imgComplete = false;
+          self._imgLoadSeq = (self._imgLoadSeq || 0) + 1;
+          const seq = self._imgLoadSeq;
+          const dispatchImgEvent = function (ok, dims) {
+            if (self._imgLoadSeq !== seq) return;
+            self._imgComplete = true;
+            self._lastCandidate = str;
+            self._lastDims = ok ? (dims || { width: 16, height: 16 }) : { width: 0, height: 0 };
+            const evName = ok ? "load" : "error";
+            try {
+              const EvCls = global.__NativeEvent || global.Event;
+              const ev = typeof EvCls === "function" ? new EvCls(evName) : { type: evName, target: self, currentTarget: self };
+              if (typeof self.dispatchEvent === "function") {
+                self.dispatchEvent(ev);
+              } else if (ok && typeof self.onload === "function") {
+                self.onload.call(self, ev);
+              } else if (!ok && typeof self.onerror === "function") {
+                self.onerror.call(self, ev);
+              }
+            } catch (e) {}
+          };
+          try {
+            global.fetch(str).then(function (res) {
+              if (self._imgLoadSeq !== seq) return;
+              if (!res || !res.ok) {
+                dispatchImgEvent(false, null);
+                return;
+              }
+              if (typeof res.arrayBuffer === "function") {
+                res.arrayBuffer().then(function (buf) {
+                  if (self._imgLoadSeq !== seq) return;
+                  let dims = { width: 16, height: 16 };
+                  try {
+                    const u8 = new Uint8Array(buf);
+                    // PNG header: 89 50 4E 47 0D 0A 1A 0A, IHDR width@16..19 height@20..23
+                    if (u8.length >= 24 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
+                      const w = ((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0;
+                      const h = ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0;
+                      if (w > 0 && h > 0) dims = { width: w, height: h };
+                    }
+                  } catch (e) {}
+                  dispatchImgEvent(true, dims);
+                }, function () {
+                  dispatchImgEvent(true, { width: 16, height: 16 });
+                });
+              } else {
+                dispatchImgEvent(true, { width: 16, height: 16 });
+              }
+            }, function () {
+              dispatchImgEvent(false, null);
+            });
+          } catch (e) {
+            dispatchImgEvent(false, null);
+          }
         }
       },
       configurable: true,
@@ -28315,8 +29053,51 @@
       return axis === "x" ? 800 : 600;
     }
 
+    function evalCssAngleDeg(expr) {
+      if (typeof expr !== "string") return null;
+      const s = expr.trim().toLowerCase();
+      if (!s) return null;
+      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(deg|grad|rad|turn)$/);
+      if (simple) {
+        const n = parseFloat(simple[1]);
+        const u = simple[2];
+        if (u === "deg") return n;
+        if (u === "grad") return n * 0.9;
+        if (u === "rad") return n * (180 / Math.PI);
+        if (u === "turn") return n * 360;
+      }
+      const fnMatch = s.match(/^(hypot|abs|min|max|calc)\((.+)\)$/);
+      if (fnMatch) {
+        const fn = fnMatch[1];
+        const args = fnMatch[2].split(",").map(function (a) { return evalCssAngleDeg(a.trim()); });
+        if (args.some(function (a) { return a === null || isNaN(a); })) return null;
+        if (fn === "hypot") return Math.hypot.apply(Math, args);
+        if (fn === "abs") return Math.abs(args[0]);
+        if (fn === "min") return Math.min.apply(Math, args);
+        if (fn === "max") return Math.max.apply(Math, args);
+        if (fn === "calc") return args[0];
+      }
+      return null;
+    }
+
     function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
       if (normalizedPseudo || !element || element.nodeType !== 1) return;
+      if (!computedMap.has("z-index")) {
+        computedMap.set("z-index", "auto");
+      }
+      const defaultZeroMargins = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+      for (let mi = 0; mi < defaultZeroMargins.length; mi++) {
+        if (!computedMap.has(defaultZeroMargins[mi])) {
+          computedMap.set(defaultZeroMargins[mi], "0px");
+        }
+      }
+      if (computedMap.has("rotate")) {
+        const rotRaw = computedMap.get("rotate");
+        const deg = evalCssAngleDeg(rotRaw);
+        if (deg !== null && isFinite(deg)) {
+          computedMap.set("rotate", String(Number(deg.toFixed(6))) + "deg");
+        }
+      }
       let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
       if (disp === "-webkit-box") {
         const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();

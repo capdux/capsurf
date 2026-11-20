@@ -6,6 +6,228 @@ const STYLE_DECL_MEMBERS = new Set([
   "getPropertyValue", "getPropertyPriority", "removeProperty"
 ]);
 
+const STYLE_LEGACY_ALIASES = {
+  "cssfloat": "float",
+  "css-float": "float",
+  "grid-row-gap": "row-gap",
+  "grid-column-gap": "column-gap",
+  "grid-gap": "gap",
+};
+
+const BG_LONGHANDS = [
+  "background-image",
+  "background-position",
+  "background-size",
+  "background-repeat",
+  "background-attachment",
+  "background-origin",
+  "background-clip",
+  "background-color",
+];
+
+const CSS_WIDE_KEYWORDS = new Set(["initial", "inherit", "unset", "revert", "revert-layer"]);
+
+function normalizeStylePropKey(p) {
+  const str = String(p).trim();
+  if (str.startsWith("--")) return str;
+  const lower = str.toLowerCase();
+  return STYLE_LEGACY_ALIASES[lower] || lower;
+}
+
+function splitCssWhitespaceTokens(val) {
+  const tokens = [];
+  let cur = "";
+  let depth = 0;
+  let quote = "";
+  for (let i = 0; i < val.length; i++) {
+    const ch = val[i];
+    if (quote) {
+      cur += ch;
+      if (ch === quote && val[i - 1] !== "\\") quote = "";
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      cur += ch;
+    } else if (ch === "(") {
+      depth++;
+      cur += ch;
+    } else if (ch === ")") {
+      if (depth > 0) depth--;
+      cur += ch;
+    } else if (depth === 0 && /\s/.test(ch)) {
+      if (cur) {
+        tokens.push(cur);
+        cur = "";
+      }
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) tokens.push(cur);
+  return tokens;
+}
+
+function expandFourSideValues(val) {
+  const parts = splitCssWhitespaceTokens(val);
+  if (parts.length === 1) return [parts[0], parts[0], parts[0], parts[0]];
+  if (parts.length === 2) return [parts[0], parts[1], parts[0], parts[1]];
+  if (parts.length === 3) return [parts[0], parts[1], parts[2], parts[1]];
+  if (parts.length === 4) return [parts[0], parts[1], parts[2], parts[3]];
+  return null;
+}
+
+function collapseFourSideValues(vals) {
+  if (vals[0] === vals[1] && vals[1] === vals[2] && vals[2] === vals[3]) return vals[0];
+  if (vals[0] === vals[2] && vals[1] === vals[3]) return vals[0] + " " + vals[1];
+  if (vals[1] === vals[3]) return vals[0] + " " + vals[1] + " " + vals[2];
+  return vals.join(" ");
+}
+
+function isValidInlinePropValue(key, val) {
+  const v = String(val).trim();
+  if (!v) return false;
+  if (key.startsWith("--")) return true;
+  const lower = v.toLowerCase();
+  if (CSS_WIDE_KEYWORDS.has(lower)) return true;
+  if (lower.indexOf("var(") !== -1) return true;
+  if (key === "z-index") {
+    if (lower === "auto") return true;
+    if (/^[+-]?\d+$/.test(v)) return true;
+    if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign)\s*\(/i.test(v)) return true;
+    return false;
+  }
+  return true;
+}
+
+function serializeInlineSpecifiedValue(key, val) {
+  if (!val || typeof val !== "string") return val || "";
+  const v = val.trim();
+  // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
+  if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
+    const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
+    if (m) {
+      const parseC = function (c) {
+        const cl = c.toLowerCase();
+        if (cl === "none") return 0;
+        if (cl.endsWith("%")) return Math.round((parseFloat(cl) / 100) * 255);
+        return Math.round(parseFloat(cl));
+      };
+      const r = Math.min(255, Math.max(0, parseC(m[1])));
+      const g = Math.min(255, Math.max(0, parseC(m[2])));
+      const b = Math.min(255, Math.max(0, parseC(m[3])));
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+        if (m[4] !== undefined) {
+          const al = m[4].toLowerCase();
+          const a = al === "none" ? 0 : (al.endsWith("%") ? parseFloat(al) / 100 : parseFloat(al));
+          if (!isNaN(a) && a < 1) {
+            return "rgba(" + r + ", " + g + ", " + b + ", " + a + ")";
+          }
+        }
+        return "rgb(" + r + ", " + g + ", " + b + ")";
+      }
+    }
+  }
+  return v;
+}
+
+function setEntryInStyleMap(map, key, rawName, val, pri) {
+  if (key === "margin" || key === "padding") {
+    const sides = expandFourSideValues(val);
+    if (sides) {
+      map.delete(key);
+      const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+      for (let i = 0; i < 4; i++) {
+        map.set(names[i], { name: names[i], value: sides[i], priority: pri });
+      }
+      return;
+    }
+  }
+  if (key === "gap") {
+    const parts = splitCssWhitespaceTokens(val);
+    if (parts.length === 1 || parts.length === 2) {
+      map.delete("gap");
+      map.delete("grid-gap");
+      map.set("row-gap", { name: "row-gap", value: parts[0], priority: pri });
+      map.set("column-gap", { name: "column-gap", value: parts.length === 2 ? parts[1] : parts[0], priority: pri });
+      return;
+    }
+  }
+  if (key === "background") {
+    map.delete("background");
+    map.delete("background-position-x");
+    map.delete("background-position-y");
+    const lower = val.trim().toLowerCase();
+    const defaults = {
+      "background-image": "none",
+      "background-position": "0% 0%",
+      "background-size": "auto",
+      "background-repeat": "repeat",
+      "background-attachment": "scroll",
+      "background-origin": "padding-box",
+      "background-clip": "border-box",
+      "background-color": "transparent",
+    };
+    if (lower !== "none" && lower !== "initial" && lower !== "transparent") {
+      if (lower.indexOf("url(") !== -1 || lower.indexOf("gradient(") !== -1) {
+        defaults["background-image"] = val;
+      } else {
+        defaults["background-color"] = val;
+      }
+    }
+    for (let i = 0; i < BG_LONGHANDS.length; i++) {
+      const lh = BG_LONGHANDS[i];
+      map.set(lh, { name: lh, value: defaults[lh], priority: pri });
+    }
+    return;
+  }
+  map.set(key, { name: key.startsWith("--") ? rawName : key, value: val, priority: pri });
+}
+
+function removeKeyFromStyleMap(map, key) {
+  let oldVal = "";
+  if (key === "margin" || key === "padding") {
+    if (map.has(key)) {
+      oldVal = map.get(key).value;
+      map.delete(key);
+    }
+    const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+    for (let i = 0; i < 4; i++) {
+      if (map.has(names[i])) {
+        if (!oldVal) oldVal = map.get(names[i]).value;
+        map.delete(names[i]);
+      }
+    }
+    return oldVal;
+  }
+  if (key === "gap") {
+    if (map.has("gap")) { oldVal = map.get("gap").value; map.delete("gap"); }
+    if (map.has("row-gap")) { if (!oldVal) oldVal = map.get("row-gap").value; map.delete("row-gap"); }
+    if (map.has("column-gap")) { if (!oldVal) oldVal = map.get("column-gap").value; map.delete("column-gap"); }
+    return oldVal;
+  }
+  if (key === "background") {
+    if (map.has("background")) { oldVal = map.get("background").value; map.delete("background"); }
+    for (let i = 0; i < BG_LONGHANDS.length; i++) {
+      if (map.has(BG_LONGHANDS[i])) {
+        if (!oldVal) oldVal = map.get(BG_LONGHANDS[i]).value;
+        map.delete(BG_LONGHANDS[i]);
+      }
+    }
+    map.delete("background-position-x");
+    map.delete("background-position-y");
+    return oldVal;
+  }
+  if (key === "background-position") {
+    map.delete("background-position-x");
+    map.delete("background-position-y");
+  }
+  const old = map.get(key);
+  map.delete(key);
+  if (key === "float") map.delete("css-float");
+  if (key === "transform") map.delete("-webkit-transform");
+  if (key === "-webkit-transform") map.delete("transform");
+  return old ? old.value : "";
+}
+
 function createStyleProxy(element) {
   function parseStyleMap() {
     const raw = element.getAttribute("style") || "";
@@ -17,14 +239,16 @@ function createStyleProxy(element) {
       const colon = p.indexOf(":");
       if (colon !== -1) {
         const rawKey = p.slice(0, colon).trim();
-        const k = rawKey.startsWith("--") ? rawKey : rawKey.toLowerCase();
+        const k = normalizeStylePropKey(rawKey);
         let v = p.slice(colon + 1).trim();
         let pri = "";
         if (/!important\s*$/i.test(v)) {
           pri = "important";
           v = v.replace(/\s*!important\s*$/i, "").trim();
         }
-        map.set(k, { name: rawKey, value: v, priority: pri });
+        if (v !== "") {
+          setEntryInStyleMap(map, k, rawKey, v, pri);
+        }
       }
     }
     return map;
@@ -35,13 +259,13 @@ function createStyleProxy(element) {
     for (const [k, entry] of map.entries()) {
       let s = entry.name + ": " + entry.value;
       if (entry.priority) s += " !" + entry.priority;
-      arr.push(s);
+      arr.push(s + ";");
     }
-    const res = arr.join("; ");
+    const res = arr.join(" ");
     if (res.length > 0) {
       element.setAttribute("style", res);
     } else {
-      element.removeAttribute("style");
+      element.setAttribute("style", "");
     }
   }
 
@@ -68,6 +292,55 @@ function createStyleProxy(element) {
       body = body[0].toLowerCase() + body.slice(1);
     }
     return prefix + body.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+  }
+
+  function lookupPropertyValue(map, key) {
+    const entry = map.get(key);
+    if (entry) return serializeInlineSpecifiedValue(key, entry.value);
+    if (key === "margin" || key === "padding") {
+      const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
+      const vals = [];
+      let pri = null;
+      for (let i = 0; i < 4; i++) {
+        const e = map.get(names[i]);
+        if (!e) return "";
+        if (pri === null) pri = e.priority;
+        else if (pri !== e.priority) return "";
+        vals.push(e.value);
+      }
+      return collapseFourSideValues(vals);
+    }
+    if (key === "gap") {
+      const rg = map.get("row-gap");
+      const cg = map.get("column-gap");
+      if (rg && cg && rg.priority === cg.priority) {
+        return rg.value === cg.value ? rg.value : (rg.value + " " + cg.value);
+      }
+      return "";
+    }
+    if (key === "background") {
+      for (let i = 0; i < BG_LONGHANDS.length; i++) {
+        if (!map.has(BG_LONGHANDS[i])) return "";
+      }
+      return map.get("background-image").value;
+    }
+    if (key === "float") {
+      const e = map.get("css-float");
+      if (e) return e.value;
+    } else if (key === "-webkit-transform") {
+      const e = map.get("transform");
+      if (e) return e.value;
+    } else if (key === "transform") {
+      const e = map.get("-webkit-transform");
+      if (e) return e.value;
+    } else if (key === "-webkit-align-content") {
+      const e = map.get("align-content");
+      if (e) return e.value;
+    } else if (key === "align-content") {
+      const e = map.get("-webkit-align-content");
+      if (e) return e.value;
+    }
+    return "";
   }
 
   return new Proxy(declTarget, {
@@ -100,37 +373,14 @@ function createStyleProxy(element) {
       if (prop === "getPropertyValue") {
         return function (p) {
           const map = parseStyleMap();
-          const str = String(p);
-          const key = str.startsWith("--") ? str : str.toLowerCase();
-          const entry = map.get(key);
-          if (entry) return entry.value;
-          if (key === "css-float" || key === "cssfloat") {
-            const e = map.get("float");
-            if (e) return e.value;
-          } else if (key === "float") {
-            const e = map.get("css-float");
-            if (e) return e.value;
-          } else if (key === "-webkit-transform") {
-            const e = map.get("transform");
-            if (e) return e.value;
-          } else if (key === "transform") {
-            const e = map.get("-webkit-transform");
-            if (e) return e.value;
-          } else if (key === "-webkit-align-content") {
-            const e = map.get("align-content");
-            if (e) return e.value;
-          } else if (key === "align-content") {
-            const e = map.get("-webkit-align-content");
-            if (e) return e.value;
-          }
-          return "";
+          const key = normalizeStylePropKey(p);
+          return lookupPropertyValue(map, key);
         };
       }
       if (prop === "getPropertyPriority") {
         return function (p) {
           const map = parseStyleMap();
-          const str = String(p);
-          const key = str.startsWith("--") ? str : str.toLowerCase();
+          const key = normalizeStylePropKey(p);
           const entry = map.get(key);
           return entry ? entry.priority : "";
         };
@@ -142,14 +392,19 @@ function createStyleProxy(element) {
           }
           const pPriority = (priority === "important" || priority === "!important") ? "important" : "";
           const map = parseStyleMap();
-          let str = String(p);
-          if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
-            str = "float";
+          const rawStr = String(p).trim();
+          const key = normalizeStylePropKey(rawStr);
+          const vStr = val === null || val === undefined ? "" : String(val).trim();
+          if (vStr === "") {
+            removeKeyFromStyleMap(map, key);
+            if (key === "display") element._displayNone = false;
+            serializeStyleMap(map);
+            return;
           }
-          const key = str.startsWith("--") ? str : str.toLowerCase();
-          map.set(key, { name: str, value: String(val), priority: pPriority });
+          if (!isValidInlinePropValue(key, vStr)) return;
+          setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
           if (key === "display") {
-            element._displayNone = (String(val).trim().toLowerCase() === "none");
+            element._displayNone = (vStr.toLowerCase() === "none");
           }
           serializeStyleMap(map);
         };
@@ -157,21 +412,13 @@ function createStyleProxy(element) {
       if (prop === "removeProperty") {
         return function (p) {
           const map = parseStyleMap();
-          let str = String(p);
-          if (str.toLowerCase() === "cssfloat" || str.toLowerCase() === "css-float") {
-            str = "float";
-          }
-          const key = str.startsWith("--") ? str : str.toLowerCase();
-          const old = map.get(key);
-          map.delete(key);
-          if (key === "float") map.delete("css-float");
-          if (key === "transform") map.delete("-webkit-transform");
-          if (key === "-webkit-transform") map.delete("transform");
+          const key = normalizeStylePropKey(p);
+          const prev = removeKeyFromStyleMap(map, key);
           if (key === "display") {
             element._displayNone = false;
           }
           serializeStyleMap(map);
-          return old ? old.value : "";
+          return prev;
         };
       }
       if (prop in target) return target[prop];
@@ -194,10 +441,9 @@ function createStyleProxy(element) {
 
       // CamelCase or kebab-case lookup
       const map = parseStyleMap();
-      if (map.has(prop)) return map.get(prop).value;
-      const kebab = propToKebab(prop);
-      if (map.has(kebab)) return map.get(kebab).value;
-      return "";
+      if (map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
+      const kebab = normalizeStylePropKey(propToKebab(prop));
+      return lookupPropertyValue(map, kebab);
     },
     set: function (target, prop, value) {
       if (typeof prop === "symbol") {
@@ -214,25 +460,28 @@ function createStyleProxy(element) {
       if (prop === "cssFloat" || prop === "float") {
         const map = parseStyleMap();
         map.delete("css-float");
-        if (value === null || value === undefined || value === "") {
+        const vStr = value === null || value === undefined ? "" : String(value).trim();
+        if (vStr === "") {
           map.delete("float");
         } else {
-          map.set("float", { name: "float", value: String(value), priority: "" });
+          map.set("float", { name: "float", value: vStr, priority: "" });
         }
         serializeStyleMap(map);
         return true;
       }
-      let key = propToKebab(prop);
-      if (key === "css-float") key = "float";
+      const rawKey = propToKebab(prop);
+      const normKey = normalizeStylePropKey(rawKey);
       const map = parseStyleMap();
-      const normKey = key.startsWith("--") ? key : key.toLowerCase();
-      if (value === null || value === undefined || value === "") {
-        map.delete(normKey);
+      const vStr = value === null || value === undefined ? "" : String(value).trim();
+      if (vStr === "") {
+        removeKeyFromStyleMap(map, normKey);
+        if (normKey === "display") element._displayNone = false;
       } else {
-        map.set(normKey, { name: key, value: String(value), priority: "" });
-      }
-      if (normKey === "display") {
-        element._displayNone = (value !== null && value !== undefined && String(value).trim().toLowerCase() === "none");
+        if (!isValidInlinePropValue(normKey, vStr)) return true;
+        setEntryInStyleMap(map, normKey, rawKey, vStr, "");
+        if (normKey === "display") {
+          element._displayNone = (vStr.toLowerCase() === "none");
+        }
       }
       serializeStyleMap(map);
       return true;
@@ -2585,4 +2834,113 @@ function installElementExtensions(proto) {
     this._customValidityMessage = String(msg || "");
   };
   markNative(proto.setCustomValidity, "setCustomValidity");
+
+  proto.insertAdjacentElement = function (position, element) {
+    const pos = String(position).toLowerCase();
+    if (pos === "beforebegin") {
+      if (!this.parentNode) return null;
+      return this.parentNode.insertBefore(element, this);
+    }
+    if (pos === "afterbegin") {
+      return this.insertBefore(element, this.firstChild);
+    }
+    if (pos === "beforeend") {
+      return this.appendChild(element);
+    }
+    if (pos === "afterend") {
+      if (!this.parentNode) return null;
+      return this.parentNode.insertBefore(element, this.nextSibling);
+    }
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+    }
+    const e = new Error("SyntaxError");
+    e.name = "SyntaxError";
+    throw e;
+  };
+  markNative(proto.insertAdjacentElement, "insertAdjacentElement");
+
+  proto.insertAdjacentText = function (position, data) {
+    const pos = String(position).toLowerCase();
+    const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const textNode = doc && typeof doc.createTextNode === "function" ? doc.createTextNode(String(data)) : new Text(String(data));
+    if (pos === "beforebegin") {
+      if (!this.parentNode) return;
+      this.parentNode.insertBefore(textNode, this);
+      return;
+    }
+    if (pos === "afterbegin") {
+      this.insertBefore(textNode, this.firstChild);
+      return;
+    }
+    if (pos === "beforeend") {
+      this.appendChild(textNode);
+      return;
+    }
+    if (pos === "afterend") {
+      if (!this.parentNode) return;
+      this.parentNode.insertBefore(textNode, this.nextSibling);
+      return;
+    }
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+    }
+    const e = new Error("SyntaxError");
+    e.name = "SyntaxError";
+    throw e;
+  };
+  markNative(proto.insertAdjacentText, "insertAdjacentText");
+
+  proto.insertAdjacentHTML = function (position, text) {
+    const pos = String(position).toLowerCase();
+    if (pos !== "beforebegin" && pos !== "afterbegin" && pos !== "beforeend" && pos !== "afterend") {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", "SyntaxError");
+      }
+      const e = new Error("SyntaxError");
+      e.name = "SyntaxError";
+      throw e;
+    }
+    if ((pos === "beforebegin" || pos === "afterend") && !this.parentNode) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The element has no parent.", "NoModificationAllowedError");
+      }
+      const e = new Error("NoModificationAllowedError");
+      e.name = "NoModificationAllowedError";
+      throw e;
+    }
+    const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const temp = doc && typeof doc.createElement === "function" ? doc.createElement("div") : null;
+    if (!temp) return;
+    temp.innerHTML = String(text);
+    const nodes = [];
+    let ch = temp.firstChild;
+    while (ch) {
+      const next = ch.nextSibling;
+      nodes.push(ch);
+      ch = next;
+    }
+    if (pos === "beforebegin") {
+      const parent = this.parentNode;
+      for (let i = 0; i < nodes.length; i++) {
+        parent.insertBefore(nodes[i], this);
+      }
+    } else if (pos === "afterbegin") {
+      const ref = this.firstChild;
+      for (let i = 0; i < nodes.length; i++) {
+        this.insertBefore(nodes[i], ref);
+      }
+    } else if (pos === "beforeend") {
+      for (let i = 0; i < nodes.length; i++) {
+        this.appendChild(nodes[i]);
+      }
+    } else if (pos === "afterend") {
+      const parent = this.parentNode;
+      const ref = this.nextSibling;
+      for (let i = 0; i < nodes.length; i++) {
+        parent.insertBefore(nodes[i], ref);
+      }
+    }
+  };
+  markNative(proto.insertAdjacentHTML, "insertAdjacentHTML");
 }
