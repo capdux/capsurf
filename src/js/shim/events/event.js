@@ -1012,7 +1012,14 @@ markNative(PointerEvent, "PointerEvent");
 PointerEvent.prototype.getCoalescedEvents = function () {
   const s = _pointerEventState.get(this);
   if (!s) throw new TypeError("Illegal invocation");
-  return s.coalesced.slice();
+  if (s.coalesced.length > 0) return s.coalesced.slice();
+  const es = _eventState.get(this);
+  const evType = es ? es.type : this.type;
+  const isTrusted = es ? Boolean(es.isTrusted) : Boolean(this.isTrusted);
+  if (isTrusted && (evType === "pointermove" || evType === "pointerrawupdate")) {
+    return [this];
+  }
+  return [];
 };
 markNative(PointerEvent.prototype.getCoalescedEvents, "getCoalescedEvents");
 

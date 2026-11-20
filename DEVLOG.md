@@ -1665,3 +1665,6 @@
 
 ## Phase 170 `window.scheduler.postTask` 优先级调度方案 (`src/js/shim/window.js`)
 1. **三级优先级与中止信号**：维护 `user-blocking`/`user-visible`/`background` 三级队列，支持 `delay` 定时器与 `AbortSignal` 预先/中途取消并按 `signal.reason` reject Promise。
+
+## Phase 172 Pointer 边界事件顺序与 `getCoalescedEvents()` 方案 (`src/js/shim/`)
+1. **最近公共祖先边界派发 (`window.js`)**：在 `mouseMoved` 切换命中节点时，按由内向外 `pointerout`/`pointerleave`、由外向内 `pointerover`/`pointerenter` 顺序先于对应 `mouse*` 事件派发，避免遗漏或乱序。

@@ -4391,3 +4391,10 @@
 - **新增白盒测试 (`test/css/test_bidi.cp`)**: 覆盖 UAX #9 `reorderVisual` (LTR/RTL/混排/`RLO`/`LRI..PDI`/`FSI`/`RLE`)、`dir="auto"` 首强扫描、`<bdi>`/`<bdo>` 与 CSS `direction`/`unicode-bidi` 级联（PASS 1~3 全绿）。
 - **门禁与验证**: 4 门禁全 0；`cap test -m test/css/test_bidi.cp` **1/1 PASS**（`test/css/` 达 **3/3 PASS**）。
 - **清理旧子智能体**: 销毁 `4f6c12a2-f999-4f13-8090-276358ccf75c`。
+
+## [2026-11-21 00:42:30] 实装 `PointerEvent.getCoalescedEvents()` 与 Pointer/Mouse 边界事件序 & 定位 `Mouse.click` 重复点击 (Subagent 3e2c4733 结单，Phase 172)
+- **PointerEvent 规范补全 (`src/js/shim/{events/event,window}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `event.js:1012-1023`：实装 `PointerEvent.prototype.getCoalescedEvents()`（可信 `pointermove`/`pointerrawupdate` 返回 `[this]`）；
+  - `window.js:10917-11011,11232-11239`：新增 `_dispatchPointerAndMouseBoundary`，在 `mouseMoved` 命中节点变更时按最近公共祖先顺序先于 `mouse*` 派发 `pointerout`/`pointerleave`/`pointerover`/`pointerenter`。
+- **门禁与定位**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0；精准定位 `tldraw-app-shell` 用例 5 重复点击源自 `e2e/harness.ts:327` 未透传 `_skipSyntheticClick`。
+- **清理旧子智能体**: 销毁 `3e2c4733-0ffa-4518-a4fa-278b11244023`。

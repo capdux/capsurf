@@ -1437,7 +1437,14 @@
   PointerEvent.prototype.getCoalescedEvents = function () {
     const s = _pointerEventState.get(this);
     if (!s) throw new TypeError("Illegal invocation");
-    return s.coalesced.slice();
+    if (s.coalesced.length > 0) return s.coalesced.slice();
+    const es = _eventState.get(this);
+    const evType = es ? es.type : this.type;
+    const isTrusted = es ? Boolean(es.isTrusted) : Boolean(this.isTrusted);
+    if (isTrusted && (evType === "pointermove" || evType === "pointerrawupdate")) {
+      return [this];
+    }
+    return [];
   };
   markNative(PointerEvent.prototype.getCoalescedEvents, "getCoalescedEvents");
 
@@ -38333,6 +38340,103 @@
     let _heldButtonsMask = 0;
     let _lastMouseX = null;
     let _lastMouseY = null;
+    let _lastHoveredElement = null;
+    function _getElementAncestors(el) {
+      const list = [];
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        list.push(cur);
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return list;
+    }
+    function _dispatchPointerAndMouseBoundary(target, x, y, dx, dy, btnNum, effectiveButtons) {
+      const prev = _lastHoveredElement;
+      if (prev === target) return;
+      _lastHoveredElement = target;
+      const PtrCtor = typeof PointerEvent === "function" ? PointerEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
+      const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+      const prevAnc = prev ? _getElementAncestors(prev) : [];
+      const nextAnc = target ? _getElementAncestors(target) : [];
+      const nextSet = new Set(nextAnc);
+      let commonIdxPrev = prevAnc.length;
+      for (let i = 0; i < prevAnc.length; i++) {
+        if (nextSet.has(prevAnc[i])) {
+          commonIdxPrev = i;
+          break;
+        }
+      }
+      const commonEl = commonIdxPrev < prevAnc.length ? prevAnc[commonIdxPrev] : null;
+      const leftElements = prevAnc.slice(0, commonIdxPrev);
+      const enteredElements = [];
+      for (let i = 0; i < nextAnc.length; i++) {
+        if (nextAnc[i] === commonEl) break;
+        enteredElements.push(nextAnc[i]);
+      }
+      enteredElements.reverse();
+
+      const makePtrOpts = function (bubbles, cancelable, composed, relatedTarget) {
+        return {
+          bubbles: bubbles,
+          cancelable: cancelable,
+          composed: composed,
+          clientX: x,
+          clientY: y,
+          movementX: dx,
+          movementY: dy,
+          button: btnNum,
+          buttons: effectiveButtons,
+          relatedTarget: relatedTarget || null,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true,
+        };
+      };
+      const makeMouseOpts = function (bubbles, cancelable, composed, relatedTarget) {
+        return {
+          bubbles: bubbles,
+          cancelable: cancelable,
+          composed: composed,
+          clientX: x,
+          clientY: y,
+          movementX: dx,
+          movementY: dy,
+          button: btnNum,
+          buttons: effectiveButtons,
+          relatedTarget: relatedTarget || null,
+        };
+      };
+
+      // 1. Pointer boundary events before mouse boundary events
+      if (prev) {
+        _dispatchTrusted(prev, new PtrCtor("pointerout", makePtrOpts(true, true, true, target)));
+        for (let i = 0; i < leftElements.length; i++) {
+          _dispatchTrusted(leftElements[i], new PtrCtor("pointerleave", makePtrOpts(false, false, false, target)));
+        }
+      }
+      if (target) {
+        _dispatchTrusted(target, new PtrCtor("pointerover", makePtrOpts(true, true, true, prev)));
+        for (let i = 0; i < enteredElements.length; i++) {
+          _dispatchTrusted(enteredElements[i], new PtrCtor("pointerenter", makePtrOpts(false, false, false, prev)));
+        }
+      }
+
+      // 2. Mouse boundary events (unless suppressed by pointerdown)
+      if (!_pointerDownPrevented) {
+        if (prev) {
+          _dispatchTrusted(prev, new MouseCtor("mouseout", makeMouseOpts(true, true, true, target)));
+          for (let i = 0; i < leftElements.length; i++) {
+            _dispatchTrusted(leftElements[i], new MouseCtor("mouseleave", makeMouseOpts(false, false, false, target)));
+          }
+        }
+        if (target) {
+          _dispatchTrusted(target, new MouseCtor("mouseover", makeMouseOpts(true, true, true, prev)));
+          for (let i = 0; i < enteredElements.length; i++) {
+            _dispatchTrusted(enteredElements[i], new MouseCtor("mouseenter", makeMouseOpts(false, false, false, prev)));
+          }
+        }
+      }
+    }
     function _mouseButtonToMask(btn) {
       if (btn === "left" || btn === 0) return 1;
       if (btn === "right" || btn === 2) return 2;
@@ -38557,6 +38661,7 @@
         const dy = _lastMouseY === null ? 0 : (y - _lastMouseY);
         _lastMouseX = x;
         _lastMouseY = y;
+        _dispatchPointerAndMouseBoundary(target, x, y, dx, dy, btnNum, effectiveButtons);
         const ptrEv = new PtrCtor("pointermove", {
           bubbles: true,
           cancelable: false,

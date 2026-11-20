@@ -2174,3 +2174,6 @@
 
 ## Phase 171: Pure-CP UAX #9 BiDi Whitebox Suite `test/css/test_bidi.cp` (PASS 1~3)
 - 新增 `test/css/test_bidi.cp`，完整覆盖 UAX #9 视觉重排、`dir="auto"`、`<bdi>`/`<bdo>` 级联（4 门禁全 0，`cap test -m` PASS）。
+
+## Phase 172: `PointerEvent.getCoalescedEvents()` & Pointer/Mouse Boundary Event Ordering
+- **`src/js/shim/{events/event,window}.js` & `src/js/runtime{,_source.cp}`**：实装 `getCoalescedEvents()` 与先于 `mouse*` 的 `pointerout`/`pointerleave`/`pointerover`/`pointerenter` 边界事件（4 门禁全 0）。
