@@ -658,21 +658,6 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          return origSetAttr.apply(this, arguments);\n" ++
     "        };\n" ++
     "      }\n" ++
-    "    } else if (g.document && typeof g.document.querySelectorAll === 'function') {\n" ++
-    "      var errImgs = g.document.querySelectorAll('img[src]');\n" ++
-    "      for (var mi = 0; mi < errImgs.length; mi++) {\n" ++
-    "        (function(im) {\n" ++
-    "          var s = im.getAttribute('src') || '';\n" ++
-    "          if (s.indexOf('missing.png') !== -1) {\n" ++
-    "            setTimeout(function() {\n" ++
-    "              if (g.__capsurf_allow_inline_handlers === false) return;\n" ++
-    "              var h = im.getAttribute('onerror');\n" ++
-    "              if (h) { try { (new Function('event', h)).call(im, new Event('error')); } catch (e) {} }\n" ++
-    "              else if (typeof im.onerror === 'function') { try { im.onerror.call(im, new Event('error')); } catch (e) {} }\n" ++
-    "            }, 0);\n" ++
-    "          }\n" ++
-    "        })(errImgs[mi]);\n" ++
-    "      }\n" ++
     "    }\n" ++
     "  };\n" ++
     "  var __capsurf_img_intercept_ran = false;\n" ++

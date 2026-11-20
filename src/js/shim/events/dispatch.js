@@ -309,6 +309,24 @@ function internalDispatch(target, event, trusted) {
       return eventState ? eventState.stopImmediatePropagation : Boolean(event._immediateStopped);
     }
 
+    let _inErrorReportingMode = false;
+    function reportListenerError(e) {
+      if (typeof console !== "undefined" && console.error) console.error(e);
+      if (_inErrorReportingMode) return;
+      _inErrorReportingMode = true;
+      try {
+        const win = typeof window !== "undefined" ? window : global;
+        const msg = (e && e.message) ? String(e.message) : String(e);
+        if (win && typeof win.onerror === "function") {
+          try {
+            win.onerror.call(win, msg, "", 0, 0, e);
+          } catch (e2) {}
+        }
+      } finally {
+        _inErrorReportingMode = false;
+      }
+    }
+
     function invoke(entry, phase) {
       const retargeted = retargetEventTarget(target, entry);
       if (eventState) {
@@ -345,7 +363,7 @@ function internalDispatch(target, event, trusted) {
                 }
               }
             } catch (e) {
-              if (typeof console !== "undefined" && console.error) console.error(e);
+              reportListenerError(e);
             }
           }
         }

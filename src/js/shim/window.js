@@ -12224,5 +12224,84 @@ const CSS_TYPED_OM_GLOBALS = {
         enumerable: true,
       });
     } catch (e) {}
+
+    // Own event-handler IDL accessors on window (not on Window.prototype)
+    const _windowEventHandlers = Object.create(null);
+    const WINDOW_REFLECTING_ATTRS = new Set([
+      "onafterprint", "onbeforeprint", "onbeforeunload", "onblur",
+      "onerror", "onfocus", "onhashchange", "onlanguagechange",
+      "onload", "onmessage", "onmessageerror", "onoffline",
+      "ononline", "onpagehide", "onpageshow", "onpopstate",
+      "onrejectionhandled", "onresize", "onscroll", "onstorage",
+      "onunhandledrejection", "onunload",
+    ]);
+    const WINDOW_EVENT_HANDLER_NAMES = [
+      "onabort", "onafterprint", "onanimationcancel", "onanimationend", "onanimationiteration", "onanimationstart",
+      "onauxclick", "onbeforeinput", "onbeforeprint", "onbeforeunload", "onblur", "oncancel", "oncanplay",
+      "oncanplaythrough", "onchange", "onclick", "onclose", "oncontextmenu",
+      "oncopy", "oncut", "ondblclick", "ondrag", "ondragend", "ondragenter",
+      "ondragleave", "ondragover", "ondragstart", "ondrop", "ondurationchange",
+      "onemptied", "onended", "onerror", "onfocus", "onformdata", "ongotpointercapture",
+      "onhashchange", "oninput", "oninvalid", "onkeydown", "onkeypress", "onkeyup", "onlanguagechange", "onload",
+      "onloadeddata", "onloadedmetadata", "onloadstart", "onlostpointercapture",
+      "onmessage", "onmessageerror", "onmousedown", "onmouseenter", "onmouseleave", "onmousemove", "onmouseout",
+      "onmouseover", "onmouseup", "onoffline", "ononline", "onpagehide", "onpageshow",
+      "onpaste", "onpause", "onplay", "onplaying",
+      "onpointercancel", "onpointerdown", "onpointerenter", "onpointerleave",
+      "onpointermove", "onpointerout", "onpointerover", "onpointerup", "onpopstate", "onprogress",
+      "onratechange", "onrejectionhandled", "onreset", "onresize", "onscroll", "onscrollend", "onseeked",
+      "onseeking", "onselect", "onselectionchange", "onselectstart", "onstalled", "onstorage",
+      "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontouchcancel",
+      "ontouchend", "ontouchmove", "ontouchstart", "ontransitioncancel",
+      "ontransitionend", "ontransitionrun", "ontransitionstart", "onunhandledrejection", "onunload",
+      "onvolumechange", "onwaiting", "onwheel",
+    ];
+    global.__capsurf_invalidateWindowEventHandler = function (prop) {
+      delete _windowEventHandlers[prop];
+    };
+    if (typeof window !== "undefined") {
+      window.__capsurf_invalidateWindowEventHandler = global.__capsurf_invalidateWindowEventHandler;
+    }
+    for (let i = 0; i < WINDOW_EVENT_HANDLER_NAMES.length; i++) {
+      const prop = WINDOW_EVENT_HANDLER_NAMES[i];
+      if (Object.prototype.hasOwnProperty.call(winTarget, prop)) continue;
+      const getter = function () {
+        if (Object.prototype.hasOwnProperty.call(_windowEventHandlers, prop)) {
+          return _windowEventHandlers[prop];
+        }
+        if (WINDOW_REFLECTING_ATTRS.has(prop) && global.__capsurf_allow_inline_handlers !== false) {
+          const doc = global.document || (typeof document !== "undefined" ? document : null);
+          const body = doc && doc.body ? doc.body : null;
+          if (body && typeof body.getAttribute === "function") {
+            const attr = body.getAttribute(prop);
+            if (typeof attr === "string") {
+              try {
+                const fn = new Function("event", attr);
+                _windowEventHandlers[prop] = fn;
+                return fn;
+              } catch (e) {}
+            }
+          }
+        }
+        return null;
+      };
+      const setter = function (v) {
+        _windowEventHandlers[prop] = (v !== null && (typeof v === "object" || typeof v === "function")) ? v : null;
+      };
+      Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
+      Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
+      const desc = {
+        get: getter,
+        set: setter,
+        configurable: true,
+        enumerable: true,
+      };
+      try {
+        Object.defineProperty(winTarget, prop, desc);
+        if (typeof window !== "undefined" && window !== winTarget && !Object.prototype.hasOwnProperty.call(window, prop)) {
+          Object.defineProperty(window, prop, desc);
+        }
+      } catch (e) {}
+    }
   } catch (e) {}
 }

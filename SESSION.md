@@ -4700,3 +4700,12 @@
   - Pinpointed root causes for `e2e/event-handler-idl.e2e.test.ts` (`[LenientThis]` on `onmouseenter`/`onmouseleave`, `window` own `on*` accessors, `HTMLBodyElement` window-reflecting forwarding) and `e2e/script-navigation-tab.e2e.test.ts` (`server.cp` single `_.session` per WS connection).
 - **Main Agent (`task-378`)**: Verified `e2e/script-gate.e2e.test.ts` **18/20 PASS** (only 2 inline event handler CSP assertions remaining: `unsafe-inline` & `script-src-attr`).
 - **Slot B (`8d3e9d87`)**: Fixed `markObjMembers` skipping `"constructor"` in `src/js/shim/index.js:1964`, `CSSStyleValue` constructor `.name`, `evaluateMediaQuery` (`orientation` & full features), `history.scrollRestoration`, and top-level `window.onhashchange`/`onpopstate = null` in `src/js/shim/window.js` (re-bundled `runtime.js`/`runtime_source.cp`). Built `bin_19233/main`; `css-typed-om`, `matchmedia-demo`, `history-shim-probe`, `onhashchange-probe` **7/7 PASS** (55 assertions, exit 0).
+
+### Phase 231: Template Whitebox (119/119) + `event-handler-idl` & `script-gate` 23/23 PASS + `GEMINI.md` 11.7
+- **Slot A (`cebbcaa6`, `7527c0e2`)**:
+  - Pinpointed 3 timeout E2Es: `flex-svg-intrinsic` (2 subtests hang in `flex-direction:column;flex-wrap:wrap` + `aspect-ratio` + `position:absolute` on `setViewport`), `inserted-script-cap` (`Page.setDocumentContent` blocking on 1030 `data:` scripts), and `source-script-pipeline` (1/7 PASS, 6 FAIL).
+  - Added `test/dom/test_template_inert_and_script_edge.cp` (**1/1 PASS**). Full-repo pure-CP whitebox now **119/119 (100% PASS)**.
+- **Slot B (`a662bfe5`)**:
+  - Added `[LenientThis]` (`onmouseenter`/`onmouseleave`), `GlobalEventHandlers` accessor naming & `[LegacyTreatNonObjectAsNull]`, 22 `HTMLBodyElement` window-reflecting handlers + `setAttribute`/`removeAttribute` cache invalidation (`src/js/shim/element/html-classes.js`), top-level `window` own `on*` accessors (`src/js/shim/window.js`), bounded `window.onerror` forwarding (`src/js/shim/events/dispatch.js`), and removed duplicate `img` `onerror` timer in `src/cdp/session_hooks.cp` (re-bundled `runtime.js`/`runtime_source.cp`).
+  - Built `bin_19233/main`; `e2e/event-handler-idl.e2e.test.ts` (**3/3 PASS**) + `e2e/script-gate.e2e.test.ts` (**20/20 PASS**) = **23/23 PASS** (36 assertions, exit 0).
+- **GEMINI.md**: Added section `11.7` (Pre-Seeded Prompts, Subtest-Scaled Timeout, Binary Sync on Commit).

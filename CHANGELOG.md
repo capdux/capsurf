@@ -2368,3 +2368,8 @@
 ### Phase 230
 - Added `test/dom/test_forms_and_validation_edge.cp`.
 - Fixed `CSSStyleValue` constructor name (`src/js/shim/index.js`), `matchMedia` evaluation, `history.scrollRestoration`, and top-level `onhashchange`/`onpopstate` in `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 231
+- Added `test/dom/test_template_inert_and_script_edge.cp`.
+- Implemented `[LenientThis]`, `HTMLBodyElement` window-reflecting handlers, top-level `window` own `on*` accessors, bounded `window.onerror`, and inline handler CSP alignment in `src/js/shim/{element/html-classes.js,window.js,events/dispatch.js}` (+ `runtime.js`/`runtime_source.cp`) and `src/cdp/session_hooks.cp`.
+- Added `GEMINI.md` section `11.7` self-evolving efficiency rules.

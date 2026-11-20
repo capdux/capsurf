@@ -1755,3 +1755,7 @@
 ### Phase 230: `CSSStyleValue` Constructor Name, `matchMedia`, `scrollRestoration` & `onhashchange`
 - `markObjMembers` in `src/js/shim/index.js` previously overwrote `origCtor.name` to `"constructor"` when traversing prototype `.constructor` properties; skipping `k === "constructor"` preserves `"CSSStyleValue"`.
 - Implemented `evaluateMediaQuery` (`orientation: landscape/portrait`, `width`/`height`, `prefers-color-scheme`, `resolution`, etc.) and `history.scrollRestoration` (`"auto"`/`"manual"`) in `src/js/shim/window.js`.
+
+### Phase 231: `GlobalEventHandlers` Spec Alignment & Inline CSP (`event-handler-idl` + `script-gate` 23/23)
+- `[LenientThis]` on `onmouseenter`/`onmouseleave` returns `undefined` instead of throwing `TypeError: Illegal invocation` on non-element receivers; `HTMLBodyElement.prototype` forwards 22 window-reflecting handlers to `window` and invalidates cached inline attributes on `setAttribute`/`removeAttribute`.
+- Removing the redundant `img[src*="missing.png"]` fallback timer in `session_hooks.cp` stops double `onerror` firing.

@@ -108,45 +108,52 @@ function installHtmlClasses(global) {
   for (let i = 0; i < GLOBAL_EVENT_HANDLER_NAMES.length; i++) {
     const prop = GLOBAL_EVENT_HANDLER_NAMES[i];
     if (Object.prototype.hasOwnProperty.call(HTMLElementProto, prop)) continue;
+    const isLenientThis = prop === "onmouseenter" || prop === "onmouseleave";
+    const getter = function () {
+      if (!_isValidHtmlElementReceiver(this)) {
+        if (isLenientThis) return undefined;
+        throw new TypeError("Illegal invocation");
+      }
+      const m = _htmlEventHandlers.get(this);
+      if (m && Object.prototype.hasOwnProperty.call(m, prop)) {
+        return m[prop];
+      }
+      if (typeof this.getAttribute === "function") {
+        const attr = this.getAttribute(prop);
+        if (typeof attr === "string") {
+          try {
+            const fn = new Function("event", attr);
+            let map = m;
+            if (!map) {
+              map = Object.create(null);
+              _htmlEventHandlers.set(this, map);
+            }
+            map[prop] = fn;
+            return fn;
+          } catch (_) {}
+        }
+      }
+      return null;
+    };
+    const setter = function (v) {
+      if (!_isValidHtmlElementReceiver(this)) {
+        if (isLenientThis) return;
+        throw new TypeError("Illegal invocation");
+      }
+      let m = _htmlEventHandlers.get(this);
+      if (!m) {
+        m = Object.create(null);
+        _htmlEventHandlers.set(this, m);
+      }
+      m[prop] = (v !== null && (typeof v === "object" || typeof v === "function")) ? v : null;
+    };
+    Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
+    Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
     Object.defineProperty(HTMLElementProto, prop, {
       configurable: true,
       enumerable: true,
-      get: function () {
-        if (!_isValidHtmlElementReceiver(this)) {
-          throw new TypeError("Illegal invocation");
-        }
-        const m = _htmlEventHandlers.get(this);
-        if (m && Object.prototype.hasOwnProperty.call(m, prop)) {
-          return m[prop];
-        }
-        if (typeof this.getAttribute === "function") {
-          const attr = this.getAttribute(prop);
-          if (typeof attr === "string") {
-            try {
-              const fn = new Function("event", attr);
-              let map = m;
-              if (!map) {
-                map = Object.create(null);
-                _htmlEventHandlers.set(this, map);
-              }
-              map[prop] = fn;
-              return fn;
-            } catch (_) {}
-          }
-        }
-        return null;
-      },
-      set: function (v) {
-        if (!_isValidHtmlElementReceiver(this)) {
-          throw new TypeError("Illegal invocation");
-        }
-        let m = _htmlEventHandlers.get(this);
-        if (!m) {
-          m = Object.create(null);
-          _htmlEventHandlers.set(this, m);
-        }
-        m[prop] = typeof v === "function" ? v : null;
-      },
+      get: getter,
+      set: setter,
     });
   }
 
@@ -2953,6 +2960,63 @@ function installHtmlClasses(global) {
     global[clsName] = Ctor;
     if (typeof globalThis !== "undefined") globalThis[clsName] = Ctor;
     if (typeof window !== "undefined") window[clsName] = Ctor;
+  }
+
+  // Window-reflecting event handlers on HTMLBodyElement.prototype
+  if (global.HTMLBodyElement && global.HTMLBodyElement.prototype) {
+    const bodyProto = global.HTMLBodyElement.prototype;
+    const WINDOW_REFLECTING_HANDLERS = [
+      "onafterprint", "onbeforeprint", "onbeforeunload", "onblur",
+      "onerror", "onfocus", "onhashchange", "onlanguagechange",
+      "onload", "onmessage", "onmessageerror", "onoffline",
+      "ononline", "onpagehide", "onpageshow", "onpopstate",
+      "onrejectionhandled", "onresize", "onscroll", "onstorage",
+      "onunhandledrejection", "onunload",
+    ];
+    const windowReflectingSet = new Set(WINDOW_REFLECTING_HANDLERS);
+    for (let i = 0; i < WINDOW_REFLECTING_HANDLERS.length; i++) {
+      const prop = WINDOW_REFLECTING_HANDLERS[i];
+      const getter = function () {
+        if (!_isValidHtmlElementReceiver(this)) {
+          throw new TypeError("Illegal invocation");
+        }
+        const win = typeof window !== "undefined" ? window : global;
+        return win ? win[prop] : null;
+      };
+      const setter = function (v) {
+        if (!_isValidHtmlElementReceiver(this)) {
+          throw new TypeError("Illegal invocation");
+        }
+        const win = typeof window !== "undefined" ? window : global;
+        if (win) win[prop] = v;
+      };
+      Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
+      Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
+      Object.defineProperty(bodyProto, prop, {
+        configurable: true,
+        enumerable: true,
+        get: getter,
+        set: setter,
+      });
+    }
+    const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
+    bodyProto.setAttribute = function (name, val) {
+      const res = origBodySetAttr.apply(this, arguments);
+      const lower = typeof name === "string" ? name.toLowerCase() : "";
+      if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+        global.__capsurf_invalidateWindowEventHandler(lower);
+      }
+      return res;
+    };
+    const origBodyRemoveAttr = bodyProto.removeAttribute || nativeRemoveAttribute;
+    bodyProto.removeAttribute = function (name) {
+      const res = origBodyRemoveAttr.apply(this, arguments);
+      const lower = typeof name === "string" ? name.toLowerCase() : "";
+      if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+        global.__capsurf_invalidateWindowEventHandler(lower);
+      }
+      return res;
+    };
   }
 
   // 7. HTMLTemplateElement

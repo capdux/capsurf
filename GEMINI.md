@@ -302,3 +302,9 @@
   4. **E2E 端口僵尸进程预检铁律**：启动 `bun test` 前，先清理目标调试端口上的前序遗留进程（`lsof -ti :<port> | xargs -r kill -9`），避免旧 `main` 占端口导致测试卡死并空耗超时。
   5. **双轨零冲突与切片出参包装**：Slot A 专注纯 CP 白盒（严禁改 `src/cdp/` 或跑 `cap build`），1~3 分钟快进快出；遇 `cpc` 剥离 `&slice` 取址时，统一用单字段 `struct { value: []const u8 = "" }` 包装出参。
   6. **诊断超时防护与双端口并发扫盘**：任何临时 `bun -e` WebSocket 诊断脚本必须外加 `timeout 15` 护栏，严禁无超时挂起空转；利用 `bin_19232`（端口 `19232`）与 `bin_19233`（端口 `19233`）物理隔离，可让 Slot A 在不触发编译的前提下并行快扫未记录 E2E 用例，吞吐翻倍。
+
+### 11.7 主控前置投喂与自适应超时铁律 (SELF-EVOLVING TOKEN OPTIMIZATION)
+
+- **前置精确投喂（Pre-Seeded Prompts）**：派发修复子智能体前，主智能体或诊断槽位必须先用 `rg -n` / 单跑提取出「精确报错行号 + `Expected`/`Received` diff + 目标 `src/` 函数/行号」直接写入 Prompt，实测可将修复型子智能体从 10–15 分钟压缩至 **3–5 分钟**、节省 60%+ 探索 Token。
+- **自适应超时预算（Subtest-Scaled Timeout）**：批量扫盘前先用 `rg -c "test\(" <file>` 统计子测数 `N`，按 `max(20, N * 4)` 秒设置超时（如 33 子测的 `inline-metrics-regressions` 需 `120s`），避免把「慢但全绿」误判为挂起而重复浪费轮次。
+- **双端口镜像同步（Binary Sync on Commit）**：每次 Slot B 完成 `bin_19233/main` 构建并提交后，主智能体立即执行 `cp -f bin_19233/main bin_19232/main`，防止 `e2e/harness.ts` 与旧版 `bin_19232` 协议错配产生假失败。
