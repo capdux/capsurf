@@ -2253,3 +2253,6 @@
 
 ### Phase 197
 - Added `test/js/test_qjs_interrupt_and_budget.cp` covering QuickJS reductions preemption, error recovery, multi-context isolation, and memory limit GC handling.
+
+### Phase 198
+- Added `test/dom/test_form_submission.cp` covering form method/enctype resolution, control entry filtering, URL-encoded serialization, and multipart/form-data boundary formatting.

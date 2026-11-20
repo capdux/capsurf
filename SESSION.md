@@ -4529,3 +4529,7 @@
 ### Phase 197: Pure-CP QuickJS Reductions Interrupt & Memory Limit Whitebox Tests (Slot A)
 - **Subagent**: `211e2a66` (killed after completion)
 - **Result**: `test/js/test_qjs_interrupt_and_budget.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1565ms; covering arithmetic/JSON eval + RAII `deinit`, 2000-reduction preemption of `while(true){}`, SyntaxError/ReferenceError isolation, and multi-context + `JS_SetMemoryLimit` OOM/GC recovery).
+
+### Phase 198: Pure-CP DOM FormSubmission Whitebox Tests (Slot A)
+- **Subagent**: `64d84a93` (killed after completion)
+- **Result**: `test/dom/test_form_submission.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 877ms; covering GET/POST resolution, `collectFormEntries` filtering, `encodeUrlEncoded`, and `encodeMultipart`).
