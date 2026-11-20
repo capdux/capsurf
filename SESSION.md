@@ -4566,3 +4566,7 @@
 - **Subagent**: `bfbee30d` (killed after completion)
 - **Fixes**: `src/cdp/{page,session,target}.cp`, `src/net/mock_fixtures.cp`, `src/js/shim/window.js` (`isExecutingTask` guard in `drainOneTask`/`scheduleTaskDrain` preventing 0ms self-rescheduling timers from exhausting `microtaskDrainBudget` / QuickJS interrupt limit).
 - **Results (`bin_19233/main`, port `19233`)**: `e2e/demo/navigate-style-script-order.e2e.test.ts` **3/3 PASS**, `e2e/iframe-dom-reclaim.e2e.test.ts` **2/2 PASS (1 upstream skip)**, `e2e/post-load-settle.e2e.test.ts` **7/7 PASS**.
+
+### Phase 207: Pure-CP Net HttpLoader Whitebox Tests (Slot A)
+- **Subagent**: `bf928e20` (killed after completion)
+- **Result**: `test/net/test_http_loader.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering URL/IPv6/data: parsing, relative URL & mock redirect helpers, `TooManyRedirects`/`FileTooBig` error bounds, and offline mock fixtures + CDP Fetch interception).

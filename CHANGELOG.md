@@ -2280,3 +2280,6 @@
 
 ### Phase 206
 - Updated `src/cdp/page.cp`, `src/cdp/session.cp`, `src/cdp/target.cp`, `src/net/mock_fixtures.cp`, and `src/js/shim/window.js` (re-bundled to `runtime.js` / `runtime_source.cp`) to close `navigate-style-script-order`, `iframe-dom-reclaim`, and `post-load-settle`.
+
+### Phase 207
+- Added `test/net/test_http_loader.cp` covering offline HTTP/data URL parsing, relative resolution, redirect-depth/oversize guards, and mock fixture/Fetch interception.
