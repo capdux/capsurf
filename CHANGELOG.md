@@ -2165,3 +2165,6 @@
 
 ## Phase 168: Whitebox Alignment (`test_page_navigation` 4/4, `test_runtime_workers` 3/3, `test_dom_events` 9/9, `test_js_dom` 8/9) & High-Velocity `GEMINI.md` Rule
 - 更新 6 个白盒单测断言并固化 `GEMINI.md` 11.6「主智能体全量快扫 + 集中式带行号收口单」提速规范。
+
+## Phase 169: `input-reply-origin` 1/1 PASS & `wasm-panic-unwind` Classification
+- 零修改验收 `e2e/input-reply-origin.e2e.test.ts` (**1/1 PASS**)，归档 `wasm-panic-unwind` 为 Boa-Wasm/Rust panic 架构专属。

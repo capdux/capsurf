@@ -4377,3 +4377,6 @@
 - **Isolate 架构定位 (`Slot A 7ebb6c98`)**: 精准定位 `isolate-kill` (`target.cp:267` + `worker_budget.cp`) 与 `isolate-wall-cap` / `navigate-isolate-death` (`server.cp` `?ksWallCapMs` + `qjs_engine.cp` 墙钟)。
 - **规则固化 (`GEMINI.md` 11.6)**: 正式写入「主智能体一次性批量快扫全量测试 + 热文件集中式带行号高密收口单（1 次编译）」终极提速规则。
 - **清理旧子智能体**: 销毁 `a0a835ca-390b-49b4-9466-fcaff10f73f7` 与 `7ebb6c98-c8a8-4734-9762-86c0df7ae8d7`。
+
+## [2026-11-21 00:34:00] 验收 `input-reply-origin` 1/1 PASS & 归档 `wasm-panic-unwind`
+- **直接验收**：`e2e/input-reply-origin.e2e.test.ts` (**1/1 PASS**, 4 expect() calls, 1.48s)；`e2e/wasm-panic-unwind.e2e.test.ts` 属 Boa-Wasm/Rust panic 架构专属归档。
