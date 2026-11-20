@@ -4672,3 +4672,7 @@
   - Reinitialized `_.rt` (`_.ctx.deinit(); _.rt.deinit(); _.rt = JsRuntime.init(...)`) on `navigate` in `src/cdp/session.cp:1606-1612` to eliminate cross-page JS heap residue/OOM.
   - Changed `nodeListenersMap` from `Map(_nid)` to `WeakMap(target)` in `src/js/shim/events/dispatch.js:4-15` (re-bundled `runtime.js`/`runtime_source.cp`) so detached nodes with self-capturing listeners are reclaimed by GC.
   - Built `bin_19233/main` (6.19s); `e2e/detached-node-reclaim.e2e.test.ts` **6/6 PASS** (8 assertions, 71.21s, exit 0).
+
+### Phase 226: DOM Attr/DOMTokenList Whitebox + `detached-owned-caches` 5/5 PASS
+- **Slot A (`eae3830d`)**: Added `test/dom/test_attr_and_classlist_edge.cp` covering case-insensitive attr overwrite/removal, `MAX_ATTRS_PER_NODE`/`MAX_CLASSES_PER_NODE` bounds, `id_map` sync, `setAttributeNS`, `DOMTokenList` (`MAX_TOKENS`), and `NULL_NODE` guards (**1/1 PASS**, 715ms). Total whitebox now **118/118 (100% PASS)**.
+- **Slot B (`b037a0d5`)**: Verified `e2e/detached-owned-caches.e2e.test.ts` **5/5 PASS** (8 assertions, 89.41s, exit 0) on `bin_19233/main` (`getAttributeNode`, `HTMLStyleElement.sheet`, `HTMLTrackElement.track` and weak-owned cache reclaim all green).

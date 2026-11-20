@@ -2351,3 +2351,7 @@
 ### Phase 225
 - Added `test/css/test_transform_and_overflow_edge.cp`.
 - Reinitialized `JsRuntime` on navigation in `src/cdp/session.cp` and switched `nodeListenersMap` to `WeakMap` in `src/js/shim/events/dispatch.js` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 226
+- Added `test/dom/test_attr_and_classlist_edge.cp`.
+- Verified `e2e/detached-owned-caches.e2e.test.ts` 5/5 PASS.

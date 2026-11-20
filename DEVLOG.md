@@ -1740,3 +1740,6 @@
 ### Phase 225: Per-Navigation `JsRuntime` Reset & `WeakMap` Listener Storage (`detached-node-reclaim` 6/6)
 - Reusing a single `512MB` `JsRuntime` across `navigate` calls allowed `__pressure()` allocations from earlier tests to trigger `InternalError: out of memory` in subsequent tests; resetting `_.rt` on `navigate` isolates each page cleanly.
 - Storing event listeners in a `WeakMap` keyed by the target wrapper (instead of a global `Map` keyed by `_nid`) breaks closure reference cycles on detached DOM nodes.
+
+### Phase 226: `PROGRESS.md` 1.3 & Screencast 4-Pack 100% Closure
+- With `detached-owned-caches` (5/5), `detached-node-reclaim` (6/6), `module-registry` (1/1), `oopif-*` (6/6), `tldraw-app-shell` (6/6), and Screencast 4-pack (35/35) all green, every explicit backlog item from `PROGRESS.md` 1.3 is now closed.
