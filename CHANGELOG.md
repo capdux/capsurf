@@ -2268,3 +2268,6 @@
 
 ### Phase 202
 - Added `test/eval/test_font_shaping.cp` covering supported font format magic detection, font byte shaping/truncation, 4-slot concurrent transform budget, and oversize/invalid input guards.
+
+### Phase 203
+- Added `test/net/test_cookie_jar_registry.cp` covering cookie jar registry isolation, domain/path matching, capacity/key-length bounds, expiry purging, and connection-level cleanup.

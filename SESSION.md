@@ -4549,3 +4549,7 @@
 ### Phase 202: Pure-CP Eval FontShaping Whitebox Tests (Slot A)
 - **Subagent**: `74182902` (killed after completion)
 - **Result**: `test/eval/test_font_shaping.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 909ms; covering TrueType/OpenType/WOFF/WOFF2 magic headers, `shapeFontBytes` bounds, `FontShapingSlotManager` 4-slot queue/release, and invalid/oversize input boundaries).
+
+### Phase 203: Pure-CP CookieJarRegistry Whitebox Tests (Slot A)
+- **Subagent**: `f891c099` (killed after completion)
+- **Result**: `test/net/test_cookie_jar_registry.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 857ms; covering `makeKey`/`cookieKeyFor`, multi-tenant jar isolation, cross-domain/path sorting & removal, 16-entry capacity/129-byte key bounds, `purgeExpired`, and `unregisterConnection` prefix isolation).
