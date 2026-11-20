@@ -2376,6 +2376,19 @@
             return val || "rgb(0, 0, 0)";
           }
 
+          if (kebab === "direction") {
+            let val = target.getPropertyValue ? target.getPropertyValue("direction") : target[prop];
+            if (val) {
+              val = resolveCssVars(element, val);
+              const lower = String(val).trim().toLowerCase();
+              if (lower === "ltr" || lower === "rtl") return lower;
+            }
+            if (typeof global !== "undefined" && typeof global.__capsurf_getComputedDirection === "function") {
+              return global.__capsurf_getComputedDirection(element);
+            }
+            return "ltr";
+          }
+
           if (kebab === "background-color") {
             let val = target.getPropertyValue ? target.getPropertyValue("background-color") : target[prop];
             if (!val && target.getPropertyValue) {

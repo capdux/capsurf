@@ -1139,36 +1139,259 @@ function installElementExtensions(proto) {
     markNative(proto.toggleAttribute, "toggleAttribute");
   }
 
-  // matches & closest
-  if (!proto.matches) {
-    proto.matches = function (selector) {
-      if (!selector || typeof selector !== "string") return false;
-      const s = selector.trim();
-      if (s === ":checked") return Boolean(this.checked);
-      if (s === ":disabled") return Boolean(this.disabled);
-      if (s === ":enabled") return !this.disabled;
-      if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
-      if (s.endsWith(":focus")) {
-        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-        if (!doc || doc.activeElement !== this) return false;
-        const base = s.slice(0, -6).trim();
-        if (!base || base === "*") return true;
-        return this.matches(base);
+  // Directionality helpers (WHATWG HTML §3.2.6.4 + Shadow DOM + Selectors 4 :dir())
+  function isStrongRtlCodePoint(cp) {
+    return (
+      (cp >= 0x0590 && cp <= 0x05FF) || // Hebrew
+      (cp >= 0x0600 && cp <= 0x06FF) || // Arabic
+      (cp >= 0x0700 && cp <= 0x074F) || // Syriac
+      (cp >= 0x0750 && cp <= 0x077F) || // Arabic Supplement
+      (cp >= 0x0780 && cp <= 0x07BF) || // Thaana
+      (cp >= 0x07C0 && cp <= 0x07FF) || // NKo
+      (cp >= 0x0800 && cp <= 0x085F) || // Samaritan / Mandaic
+      (cp >= 0x08A0 && cp <= 0x08FF) || // Arabic Extended-A
+      (cp >= 0xFB1D && cp <= 0xFDFF) || // Hebrew/Arabic Presentation Forms-A
+      (cp >= 0xFE70 && cp <= 0xFEFF) || // Arabic Presentation Forms-B
+      (cp >= 0x10800 && cp <= 0x10FFF) || // Ancient RTL scripts
+      (cp >= 0x1E800 && cp <= 0x1EFFF) // Adlam / Arabic Math
+    );
+  }
+
+  function isStrongLtrCodePoint(cp) {
+    return (
+      (cp >= 0x0041 && cp <= 0x005A) || // A-Z
+      (cp >= 0x0061 && cp <= 0x007A) || // a-z
+      (cp >= 0x00C0 && cp <= 0x00D6) ||
+      (cp >= 0x00D8 && cp <= 0x00F6) ||
+      (cp >= 0x00F8 && cp <= 0x02B8) || // Latin Extended
+      (cp >= 0x0370 && cp <= 0x058F) || // Greek, Cyrillic, Armenian
+      (cp >= 0x0900 && cp <= 0x1FFF) || // Indic, SE Asian, etc.
+      (cp >= 0x2C00 && cp <= 0x2DFF) ||
+      (cp >= 0x3040 && cp <= 0xA4CF) || // CJK, Hiragana, Katakana
+      (cp >= 0xAC00 && cp <= 0xD7AF) // Hangul
+    );
+  }
+
+  function firstStrongDirectionInText(str) {
+    if (!str || typeof str !== "string") return null;
+    for (let i = 0; i < str.length; i++) {
+      const cp = str.codePointAt(i);
+      if (cp > 0xFFFF) i++;
+      if (isStrongRtlCodePoint(cp)) return "rtl";
+      if (isStrongLtrCodePoint(cp)) return "ltr";
+    }
+    return null;
+  }
+
+  function getElementDirAttr(el) {
+    if (!el || el.nodeType !== 1 || typeof el.getAttribute !== "function") return "";
+    const raw = el.getAttribute("dir");
+    if (!raw) return "";
+    const v = String(raw).trim().toLowerCase();
+    if (v === "ltr" || v === "rtl" || v === "auto") return v;
+    return "";
+  }
+
+  function getLightChildren(node) {
+    if (!node) return [];
+    if (typeof ensureChildren === "function") return ensureChildren(node);
+    if (node._children) return node._children;
+    if (node.childNodes) return Array.from(node.childNodes);
+    return [];
+  }
+
+  function findSlotForLightChild(host, child) {
+    if (!host || !host._shadowRoot) return null;
+    const slotName = (child && child.nodeType === 1 && typeof child.getAttribute === "function")
+      ? (child.getAttribute("slot") || "")
+      : "";
+    function walk(root) {
+      const kids = getLightChildren(root);
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (!k || k.nodeType !== 1) continue;
+        const t = String(k.localName || k.tagName || "").toLowerCase();
+        if (t === "slot") {
+          const name = (typeof k.getAttribute === "function" ? k.getAttribute("name") : "") || "";
+          if (name === slotName) return k;
+        }
+        const nested = walk(k);
+        if (nested) return nested;
       }
-      if (s === "*") return true;
-      if (s.startsWith("#") && this.id === s.slice(1)) return true;
-      if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
-      if (s.toLowerCase() === this.localName) return true;
-      if (typeof document !== "undefined" && document.querySelectorAll) {
-        const matches = document.querySelectorAll(s);
-        for (let i = 0; i < matches.length; i++) {
-          if (matches[i] === this) return true;
+      return null;
+    }
+    return walk(host._shadowRoot);
+  }
+
+  function getSlotAssignedNodes(slotEl) {
+    let cur = slotEl;
+    let shadowRoot = null;
+    while (cur) {
+      if (cur.nodeType === 11 && cur.host) {
+        shadowRoot = cur;
+        break;
+      }
+      cur = cur.parentNode || cur.parentElement;
+    }
+    if (!shadowRoot || !shadowRoot.host) return [];
+    const host = shadowRoot.host;
+    const targetName = (typeof slotEl.getAttribute === "function" ? slotEl.getAttribute("name") : "") || "";
+    const hostKids = getLightChildren(host);
+    const assigned = [];
+    for (let i = 0; i < hostKids.length; i++) {
+      const c = hostKids[i];
+      if (!c) continue;
+      if (c.nodeType === 1) {
+        const cSlot = (typeof c.getAttribute === "function" ? c.getAttribute("slot") : "") || "";
+        if (cSlot === targetName) assigned.push(c);
+      } else if (c.nodeType === 3) {
+        if (targetName === "") assigned.push(c);
+      }
+    }
+    return assigned;
+  }
+
+  function scanSubtreeForFirstStrong(node, isRoot, followSlotAssigned) {
+    if (!node) return null;
+    if (node.nodeType === 3) {
+      const txt = node.data !== undefined ? node.data : (node.textContent || "");
+      return firstStrongDirectionInText(txt);
+    }
+    if (node.nodeType !== 1 && node.nodeType !== 11) return null;
+    if (!isRoot && node.nodeType === 1) {
+      const tag = String(node.localName || node.tagName || "").toLowerCase();
+      if (tag === "bdi" || tag === "script" || tag === "style" || tag === "textarea") {
+        return null;
+      }
+      if (getElementDirAttr(node) !== "") {
+        return null;
+      }
+    }
+    if (node.nodeType === 1) {
+      const tag = String(node.localName || node.tagName || "").toLowerCase();
+      if (tag === "slot" && followSlotAssigned) {
+        const assigned = getSlotAssignedNodes(node);
+        if (assigned.length > 0) {
+          for (let i = 0; i < assigned.length; i++) {
+            const d = scanSubtreeForFirstStrong(assigned[i], false, followSlotAssigned);
+            if (d) return d;
+          }
+          return null;
         }
       }
-      return false;
-    };
-    markNative(proto.matches, "matches");
+    }
+    // IMPORTANT: Never descend into node._shadowRoot (light tree only for dir=auto)
+    const kids = getLightChildren(node);
+    for (let i = 0; i < kids.length; i++) {
+      const d = scanSubtreeForFirstStrong(kids[i], false, followSlotAssigned);
+      if (d) return d;
+    }
+    return null;
   }
+
+  function getNodeDirectionality(el) {
+    let cur = el;
+    while (cur) {
+      if (cur.nodeType === 1) {
+        const dirAttr = getElementDirAttr(cur);
+        const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+        if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
+          const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
+          return found || "ltr";
+        }
+      }
+      if (cur.parentNode && cur.parentNode.nodeType === 11 && cur.parentNode.host) {
+        cur = cur.parentNode.host;
+        continue;
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return "ltr";
+  }
+
+  function getFlatTreeParent(el) {
+    if (!el) return null;
+    const p = el.parentNode || el.parentElement;
+    if (!p) return null;
+    if (p.nodeType === 1 && p._shadowRoot) {
+      const slot = findSlotForLightChild(p, el);
+      if (slot) return slot;
+    }
+    if (p.nodeType === 11 && p.host) {
+      return p.host;
+    }
+    return p.nodeType === 1 ? p : null;
+  }
+
+  function getComputedDirection(el) {
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      // 1. Explicit inline style direction
+      const inlineDir = (cur.style && typeof cur.style.getPropertyValue === "function")
+        ? String(cur.style.getPropertyValue("direction") || "").trim().toLowerCase()
+        : "";
+      if (inlineDir === "ltr" || inlineDir === "rtl") return inlineDir;
+
+      // 2. HTML dir attribute or <bdi>
+      const dirAttr = getElementDirAttr(cur);
+      const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+      if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+      if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
+        const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
+        if (found) return found;
+        if (tag !== "slot") return "ltr";
+      }
+      cur = getFlatTreeParent(cur);
+    }
+    return "ltr";
+  }
+
+  global.__capsurf_getNodeDirectionality = getNodeDirectionality;
+  global.__capsurf_getComputedDirection = getComputedDirection;
+
+  // matches & closest
+  const origProtoMatches = typeof proto.matches === "function" ? proto.matches : null;
+  proto.matches = function (selector) {
+    if (!selector || typeof selector !== "string") return false;
+    const s = selector.trim();
+    const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);
+    if (dirMatch) {
+      const targetDir = dirMatch[1].toLowerCase();
+      if (targetDir !== "ltr" && targetDir !== "rtl") {
+        return false;
+      }
+      return getNodeDirectionality(this) === targetDir;
+    }
+    if (origProtoMatches) {
+      try {
+        return origProtoMatches.call(this, selector);
+      } catch (e) {}
+    }
+    if (s === ":checked") return Boolean(this.checked);
+    if (s === ":disabled") return Boolean(this.disabled);
+    if (s === ":enabled") return !this.disabled;
+    if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
+    if (s.endsWith(":focus")) {
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (!doc || doc.activeElement !== this) return false;
+      const base = s.slice(0, -6).trim();
+      if (!base || base === "*") return true;
+      return this.matches(base);
+    }
+    if (s === "*") return true;
+    if (s.startsWith("#") && this.id === s.slice(1)) return true;
+    if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
+    if (s.toLowerCase() === this.localName) return true;
+    if (typeof document !== "undefined" && document.querySelectorAll) {
+      const matches = document.querySelectorAll(s);
+      for (let i = 0; i < matches.length; i++) {
+        if (matches[i] === this) return true;
+      }
+    }
+    return false;
+  };
+  markNative(proto.matches, "matches");
 
   if (!proto.closest) {
     proto.closest = function (selector) {

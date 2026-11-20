@@ -329,6 +329,7 @@ function installShim(global) {
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
+      case "details": Object.setPrototypeOf(el, (global.HTMLDetailsElement || global.HTMLElement).prototype); break;
       case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
       case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
       case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
@@ -501,6 +502,48 @@ function installShim(global) {
     docProto.createRange = markNative(function () {
       return new Range();
     }, "createRange");
+
+    if (!docProto.open) {
+      docProto.open = markNative(function () {
+        return this;
+      }, "open");
+    }
+    if (!docProto.close) {
+      docProto.close = markNative(function () {}, "close");
+    }
+    if (!docProto.write) {
+      docProto.write = markNative(function () {
+        let markup = "";
+        for (let i = 0; i < arguments.length; i++) {
+          markup += String(arguments[i]);
+        }
+        const target = this.body || this.documentElement;
+        if (target && typeof this.createElement === "function") {
+          const temp = this.createElement("div");
+          temp.innerHTML = markup;
+          while (temp.firstChild) {
+            const ch = temp.firstChild;
+            try { temp.removeChild(ch); } catch (e) {}
+            target.appendChild(ch);
+          }
+        }
+      }, "write");
+      if (global.document) {
+        global.document.write = docProto.write;
+      }
+    }
+    if (!docProto.writeln) {
+      docProto.writeln = markNative(function () {
+        let markup = "";
+        for (let i = 0; i < arguments.length; i++) {
+          markup += String(arguments[i]);
+        }
+        return this.write(markup + "\n");
+      }, "writeln");
+      if (global.document) {
+        global.document.writeln = docProto.writeln;
+      }
+    }
 
     docProto.createTreeWalker = markNative(function (root, whatToShow, filter) {
       return new TreeWalker(root, whatToShow, filter);

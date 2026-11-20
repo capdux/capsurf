@@ -239,18 +239,27 @@ Node.prototype.cloneNode = function (deep) {
     return frag;
   }
   if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
-    const clone = document.createElement(this.tagName.toLowerCase());
+    const clone = document.createElement(String(this.localName || this.tagName || "div").toLowerCase());
     if (this.id) clone.id = this.id;
     if (this.className) clone.className = this.className;
-    if (this.getAttributeNames) {
+    if (typeof this.getAttributeNames === "function") {
       const attrs = this.getAttributeNames();
       for (let i = 0; i < attrs.length; i++) {
-        clone.setAttribute(attrs[i], this.getAttribute(attrs[i]));
+        const val = this.getAttribute(attrs[i]);
+        if (val !== null && val !== undefined) {
+          clone.setAttribute(attrs[i], val);
+        }
+      }
+    } else if (this.attributes && this.attributes.length) {
+      for (let i = 0; i < this.attributes.length; i++) {
+        const a = this.attributes[i];
+        if (a && a.name) clone.setAttribute(a.name, a.value != null ? a.value : "");
       }
     }
-    if (deep && this.childNodes) {
-      for (let i = 0; i < this.childNodes.length; i++) {
-        clone.appendChild(this.childNodes[i].cloneNode(true));
+    if (deep) {
+      const kids = ensureChildren(this);
+      for (let i = 0; i < kids.length; i++) {
+        clone.appendChild(kids[i].cloneNode(true));
       }
     }
     return clone;
@@ -555,7 +564,12 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   }
 
   const curIdx = children.indexOf(refChild);
-  children.splice(curIdx >= 0 ? curIdx : children.length, 0, newChild);
+  const insertPos = curIdx >= 0 ? curIdx : children.length;
+  children.splice(insertPos, 0, newChild);
+
+  if (!newChild._skipRangeInsertNotify && typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeInserted === "function") {
+    global.__capsurf_rangeOnNodeInserted(this, insertPos, 1);
+  }
 
   if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
     try {
@@ -595,6 +609,9 @@ Node.prototype.removeChild = function (child) {
   }
 
   if (idx >= 0) {
+    if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
+      global.__capsurf_rangeOnNodeRemoved(this, child, idx);
+    }
     children.splice(idx, 1);
   }
   child.parentNode = null;
@@ -844,6 +861,94 @@ markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
 markNative(Node.prototype.getRootNode, "getRootNode");
 markNative(Node.prototype.normalize, "normalize");
 
+function characterDataReplaceData(node, offset, count, data) {
+  const cur = node._data !== undefined ? String(node._data) : "";
+  const len = cur.length;
+  const off = offset >>> 0;
+  if (off > len) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("The offset " + off + " is larger than the node's length (" + len + ").", "IndexSizeError");
+    }
+    const err = new Error("IndexSizeError");
+    err.name = "IndexSizeError";
+    throw err;
+  }
+  let cnt = count >>> 0;
+  if (off + cnt > len) {
+    cnt = len - off;
+  }
+  const str = String(data !== undefined ? data : "");
+  const oldVal = cur;
+  node._data = cur.slice(0, off) + str + cur.slice(off + cnt);
+  if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
+    global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
+  }
+  if (typeof notifyMutation === "function") {
+    const rec = new MutationRecord("characterData", node);
+    rec.oldValue = oldVal;
+    notifyMutation(rec);
+  }
+}
+
+function installCharacterDataMethods(proto) {
+  Object.defineProperty(proto, "data", {
+    get: function () { return this._data !== undefined ? this._data : ""; },
+    set: function (v) {
+      const str = v === null ? "" : String(v);
+      const curLen = this._data !== undefined ? String(this._data).length : 0;
+      characterDataReplaceData(this, 0, curLen, str);
+    },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "textContent", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = v === null || v === undefined ? "" : String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "nodeValue", {
+    get: function () { return this.data; },
+    set: function (v) { this.data = v === null || v === undefined ? "" : String(v); },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "length", {
+    get: function () { return this.data.length; },
+    configurable: true,
+  });
+  proto.substringData = function (offset, count) {
+    const cur = this.data;
+    const len = cur.length;
+    const off = offset >>> 0;
+    if (off > len) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("IndexSizeError", "IndexSizeError");
+      }
+      const err = new Error("IndexSizeError");
+      err.name = "IndexSizeError";
+      throw err;
+    }
+    const cnt = count >>> 0;
+    if (off + cnt > len) return cur.slice(off);
+    return cur.slice(off, off + cnt);
+  };
+  proto.appendData = function (data) {
+    characterDataReplaceData(this, this.length, 0, data);
+  };
+  proto.insertData = function (offset, data) {
+    characterDataReplaceData(this, offset, 0, data);
+  };
+  proto.deleteData = function (offset, count) {
+    characterDataReplaceData(this, offset, count, "");
+  };
+  proto.replaceData = function (offset, count, data) {
+    characterDataReplaceData(this, offset, count, data);
+  };
+  markNative(proto.substringData, "substringData");
+  markNative(proto.appendData, "appendData");
+  markNative(proto.insertData, "insertData");
+  markNative(proto.deleteData, "deleteData");
+  markNative(proto.replaceData, "replaceData");
+}
+
 function Text(data) {
   Node.call(this);
   this._data = String(data !== undefined ? data : "");
@@ -852,54 +957,58 @@ function Text(data) {
 }
 Text.prototype = Object.create(Node.prototype);
 Text.prototype.constructor = Text;
-Object.defineProperty(Text.prototype, "data", {
-  get: function () { return this._data !== undefined ? this._data : ""; },
-  set: function (v) {
-    this._data = String(v);
-    if (typeof notifyMutation === "function") {
-      notifyMutation(new MutationRecord("characterData", this));
+installCharacterDataMethods(Text.prototype);
+
+Text.prototype.splitText = function (offset) {
+  const cur = this.data;
+  const len = cur.length;
+  const off = offset >>> 0;
+  if (off > len) {
+    if (typeof DOMException !== "undefined") {
+      throw new DOMException("The offset " + off + " is larger than the Text node's length (" + len + ").", "IndexSizeError");
     }
-  },
-  configurable: true,
-});
-Object.defineProperty(Text.prototype, "textContent", {
-  get: function () { return this.data; },
-  set: function (v) { this.data = v; },
-  configurable: true,
-});
-Object.defineProperty(Text.prototype, "nodeValue", {
-  get: function () { return this.data; },
-  set: function (v) { this.data = v; },
-  configurable: true,
-});
-Object.defineProperty(Text.prototype, "length", {
-  get: function () { return this.data.length; },
-  configurable: true,
-});
+    const err = new Error("IndexSizeError");
+    err.name = "IndexSizeError";
+    throw err;
+  }
+  const count = len - off;
+  const newData = this.substringData(off, count);
+  const newNode = new Text(newData);
+  newNode.ownerDocument = this.ownerDocument;
+  const parent = this.parentNode;
+  if (parent !== null && parent !== undefined) {
+    const kids = ensureChildren(parent);
+    const nodeIndex = kids.indexOf(this);
+    const nextSib = (nodeIndex >= 0 && nodeIndex + 1 < kids.length) ? kids[nodeIndex + 1] : null;
+    newNode._skipRangeInsertNotify = true;
+    try {
+      if (nextSib) {
+        parent.insertBefore(newNode, nextSib);
+      } else {
+        parent.appendChild(newNode);
+      }
+    } finally {
+      newNode._skipRangeInsertNotify = false;
+    }
+    if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnSplitText === "function") {
+      global.__capsurf_rangeOnSplitText(this, newNode, off, parent, nodeIndex);
+    }
+  }
+  this.replaceData(off, count, "");
+  return newNode;
+};
+markNative(Text.prototype.splitText, "splitText");
 markNative(Text, "Text");
 
 function Comment(data) {
   Node.call(this);
-  this.data = String(data !== undefined ? data : "");
+  this._data = String(data !== undefined ? data : "");
   this.nodeType = COMMENT_NODE;
   this.nodeName = "#comment";
 }
 Comment.prototype = Object.create(Node.prototype);
 Comment.prototype.constructor = Comment;
-Object.defineProperty(Comment.prototype, "textContent", {
-  get: function () { return this.data; },
-  set: function (v) { this.data = String(v); },
-  configurable: true,
-});
-Object.defineProperty(Comment.prototype, "nodeValue", {
-  get: function () { return this.data; },
-  set: function (v) { this.data = String(v); },
-  configurable: true,
-});
-Object.defineProperty(Comment.prototype, "length", {
-  get: function () { return this.data.length; },
-  configurable: true,
-});
+installCharacterDataMethods(Comment.prototype);
 markNative(Comment, "Comment");
 
 function DocumentFragment() {

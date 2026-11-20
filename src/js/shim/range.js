@@ -1,6 +1,8 @@
 // src/js/shim/range.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/range.ts
 
+const _liveRanges = [];
+
 function Range() {
   this.startContainer = typeof document !== "undefined" ? document : null;
   this.startOffset = 0;
@@ -8,7 +10,122 @@ function Range() {
   this.endOffset = 0;
   this.collapsed = true;
   this.commonAncestorContainer = this.startContainer;
+  _liveRanges.push(this);
 }
+
+function getChildIndexInParent(node) {
+  if (!node || !node.parentNode) return -1;
+  const parent = node.parentNode;
+  const kids = parent._children || (parent.childNodes ? Array.from(parent.childNodes) : []);
+  return kids.indexOf(node);
+}
+
+global.__capsurf_rangeOnReplaceData = function (node, offset, count, insertedLen) {
+  for (let i = 0; i < _liveRanges.length; i++) {
+    const r = _liveRanges[i];
+    if (!r) continue;
+    let changed = false;
+    if (r.startContainer === node) {
+      if (r.startOffset > offset && r.startOffset <= offset + count) {
+        r.startOffset = offset;
+        changed = true;
+      } else if (r.startOffset > offset + count) {
+        r.startOffset = r.startOffset + insertedLen - count;
+        changed = true;
+      }
+    }
+    if (r.endContainer === node) {
+      if (r.endOffset > offset && r.endOffset <= offset + count) {
+        r.endOffset = offset;
+        changed = true;
+      } else if (r.endOffset > offset + count) {
+        r.endOffset = r.endOffset + insertedLen - count;
+        changed = true;
+      }
+    }
+    if (changed) {
+      r._updateState();
+    }
+  }
+};
+
+global.__capsurf_rangeOnSplitText = function (oldNode, newNode, offset, parent, nodeIndex) {
+  for (let i = 0; i < _liveRanges.length; i++) {
+    const r = _liveRanges[i];
+    if (!r) continue;
+    let changed = false;
+    if (r.startContainer === oldNode && r.startOffset > offset) {
+      r.startContainer = newNode;
+      r.startOffset = r.startOffset - offset;
+      changed = true;
+    }
+    if (r.endContainer === oldNode && r.endOffset > offset) {
+      r.endContainer = newNode;
+      r.endOffset = r.endOffset - offset;
+      changed = true;
+    }
+    if (parent && nodeIndex >= 0) {
+      if (r.startContainer === parent && r.startOffset >= nodeIndex + 1) {
+        r.startOffset += 1;
+        changed = true;
+      }
+      if (r.endContainer === parent && r.endOffset >= nodeIndex + 1) {
+        r.endOffset += 1;
+        changed = true;
+      }
+    }
+    if (changed) {
+      r._updateState();
+    }
+  }
+};
+
+global.__capsurf_rangeOnNodeInserted = function (parent, insertIndex, count) {
+  const delta = count || 1;
+  for (let i = 0; i < _liveRanges.length; i++) {
+    const r = _liveRanges[i];
+    if (!r) continue;
+    let changed = false;
+    if (r.startContainer === parent && r.startOffset > insertIndex) {
+      r.startOffset += delta;
+      changed = true;
+    }
+    if (r.endContainer === parent && r.endOffset > insertIndex) {
+      r.endOffset += delta;
+      changed = true;
+    }
+    if (changed) {
+      r._updateState();
+    }
+  }
+};
+
+global.__capsurf_rangeOnNodeRemoved = function (parent, removedNode, removedIndex) {
+  for (let i = 0; i < _liveRanges.length; i++) {
+    const r = _liveRanges[i];
+    if (!r) continue;
+    let changed = false;
+    if (r.startContainer && (r.startContainer === removedNode || (removedNode.contains && removedNode.contains(r.startContainer)))) {
+      r.startContainer = parent;
+      r.startOffset = removedIndex;
+      changed = true;
+    } else if (r.startContainer === parent && r.startOffset > removedIndex) {
+      r.startOffset -= 1;
+      changed = true;
+    }
+    if (r.endContainer && (r.endContainer === removedNode || (removedNode.contains && removedNode.contains(r.endContainer)))) {
+      r.endContainer = parent;
+      r.endOffset = removedIndex;
+      changed = true;
+    } else if (r.endContainer === parent && r.endOffset > removedIndex) {
+      r.endOffset -= 1;
+      changed = true;
+    }
+    if (changed) {
+      r._updateState();
+    }
+  }
+};
 
 Range.START_TO_START = 0;
 Range.START_TO_END = 1;
@@ -35,22 +152,26 @@ Range.prototype.setEnd = function (node, offset) {
 
 Range.prototype.setStartBefore = function (node) {
   if (!node || !node.parentNode) throw new Error("Parent node required");
-  this.setStart(node.parentNode, 0);
+  const idx = getChildIndexInParent(node);
+  this.setStart(node.parentNode, idx >= 0 ? idx : 0);
 };
 
 Range.prototype.setStartAfter = function (node) {
   if (!node || !node.parentNode) throw new Error("Parent node required");
-  this.setStart(node.parentNode, 1);
+  const idx = getChildIndexInParent(node);
+  this.setStart(node.parentNode, idx >= 0 ? idx + 1 : 1);
 };
 
 Range.prototype.setEndBefore = function (node) {
   if (!node || !node.parentNode) throw new Error("Parent node required");
-  this.setEnd(node.parentNode, 0);
+  const idx = getChildIndexInParent(node);
+  this.setEnd(node.parentNode, idx >= 0 ? idx : 0);
 };
 
 Range.prototype.setEndAfter = function (node) {
   if (!node || !node.parentNode) throw new Error("Parent node required");
-  this.setEnd(node.parentNode, 1);
+  const idx = getChildIndexInParent(node);
+  this.setEnd(node.parentNode, idx >= 0 ? idx + 1 : 1);
 };
 
 Range.prototype.collapse = function (toStart) {

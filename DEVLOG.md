@@ -1215,4 +1215,10 @@
    - 在 `layoutSvgChildren` 中沿子树累加 `transform="translate(tx, ty)"` 并为 `<g>` 计算子图形矩形并集；新增 `has_fill_none` 统一级联权重；在 `painter.cp` 新增 `paintExternalSvgUse` 解析外部 SVG 精灵路径的 `#symbol`。
 2. **`abspos` 包含块与双裁剪通道 (`layout.cp`, `painter.cp`)**：
    - 在 `LayoutTree` 维护 `abs_cb_*`（最近非 `static` 祖先或初始包含块）并支持 `left+right`/`top+bottom` 推导 `auto` 尺寸；在 `paintNodeRecursive` 区分流内裁剪框 `clip` 与定位裁剪框 `abs_clip`，仅非 `static` 祖先更新 `abs_clip`，使 `position: absolute` 精准穿透静态 `overflow: hidden` 容器。
+
+## Phase 67 活态 Range 边界、CharacterData 规范与 Shadow DOM 方向性引擎技术方案
+1. **活态 Range 边界维护 (`node-base.js`, `range.js`)**：
+   - 将 `Text`/`Comment` 全部字符修改统一收口至 `replaceData`，并在 `insertBefore`/`removeChild`/`splitText` 触发 `_liveRanges` 回调，确保所有活跃 `Range` 的 `startOffset`/`endOffset` 与容器节点在 DOM 变更时严格同步。
+2. **Shadow DOM 方向性双树算法 (`element.js`, `cssom.js`)**：
+   - 区分 `:dir()` 选择器（仅沿 light tree 查找，`<bdi>`/`dir="auto"` 不穿透 ShadowRoot）与 `getComputedStyle(el).direction`（沿 flat tree 经 `<slot>` 向上继承，`<slot dir="auto">` 扫描 assigned nodes）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -1554,4 +1554,13 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`svg-shape-client-rect` + `svg-sprite-icons` + `svg-text-escape` + `abspos-escapes-overflow-clip` + 3 项 SVG 回归共 **7/7 PASS (39 expect calls)**。
+
+## Phase 67: Live Range Mutation, CharacterData Spec & Shadow DOM Directionality (100% Closed)
+- **`src/js/shim/node-base.js` & `src/js/shim/range.js`**：
+  - 实装 WHATWG CharacterData 全套方法与 `Text.prototype.splitText(offset)`；建立 `_liveRanges` 活态边界随 DOM 增删与文本修改自动更新机制。
+- **`src/js/shim/element/{element,html-classes,html-element}.js` & `cssom.js` & `index.js`**：
+  - 实装 WHATWG HTML §3.2.6.4 方向性引擎（`:dir()` light tree 计算 + `getComputedStyle().direction` flat tree `<slot>` 继承）；新增 `HTMLDetailsElement`、`<summary>` 点击切换与 `document.write/writeln/open/close`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`dom-eval-demo` + `dom-primitives-demo` + `range-live-mutation-demo` + `shadow-dir-directionality` 共 **4/4 PASS (228 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

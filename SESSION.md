@@ -3244,6 +3244,19 @@
   - 派发全新子智能体 **Subagent 32**: Positioned & Sticky Layout Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/positioned-root-hoist.e2e.test.ts`、`e2e/rehomed-fixed-paint-parent.e2e.test.ts`、`e2e/size-container-abspos.e2e.test.ts`、`e2e/sticky-position.e2e.test.ts`。
 
+## [2026-11-20 14:44:40] 活态 Range 边界更新、CharacterData 规范与 Shadow DOM 方向性引擎闭环 (Subagent e2153913 结单，Phase 67)
+- **活态 Range 与 CharacterData 规范 (`src/js/shim/node-base.js`, `src/js/shim/range.js`)**:
+  - 为 `Text`/`Comment` 实装完整 WHATWG CharacterData 方法（`data`/`substringData`/`appendData`/`insertData`/`deleteData`/`replaceData`）与 `Text.prototype.splitText(offset)`；
+  - 在 `range.js` 维护 `_liveRanges` 活态注册表并暴露 replaceData/splitText/nodeInserted/nodeRemoved 钩子，修复 `setStartBefore/After`/`setEndBefore/After` 真实子节点索引。
+- **Shadow DOM 方向性引擎与 HTMLDetailsElement (`element/element.js`, `cssom.js`, `html-classes.js`, `html-element.js`, `index.js`)**:
+  - 实装 WHATWG HTML §3.2.6.4 方向性引擎（`:dir()` 沿 light tree、`dir="auto"` 不穿透 ShadowRoot、`getComputedDirection` 沿 flat tree 经 `<slot>` 继承）；
+  - 新增 `HTMLDetailsElement`、`<summary>` 点击切换 `open` + `toggle` 事件，以及 `document.write`/`writeln`/`open`/`close`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `dom-eval-demo` + `dom-primitives-demo` + `range-live-mutation-demo` (16/16) + `shadow-dir-directionality` (9/9)：**4/5 PASS（228 expect() calls）**；`dom-innerhtml-rebuild-demo` 已明确定位需原生 CDP DOM 增量事件通道，排入后续 CP 专场。
+- **清理旧子智能体**: 销毁 `e2153913-e20a-45b7-871b-58350b559b30`。
+
+
 
 
 

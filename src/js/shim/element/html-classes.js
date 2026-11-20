@@ -1331,6 +1331,40 @@ function installHtmlClasses(global) {
     globalThis.HTMLTemplateElement = HTMLTemplateElement;
   }
 
+  // 7.5 HTMLDetailsElement
+  function HTMLDetailsElement() {
+    HTMLElement.call(this);
+  }
+  HTMLDetailsElement.prototype = Object.create(HTMLElement.prototype);
+  HTMLDetailsElement.prototype.constructor = HTMLDetailsElement;
+  Object.defineProperty(HTMLDetailsElement.prototype, Symbol.toStringTag, {
+    value: "HTMLDetailsElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLDetailsElement.prototype, "open", {
+    get: function () {
+      return typeof this.hasAttribute === "function" ? this.hasAttribute("open") : Boolean(this._open);
+    },
+    set: function (v) {
+      const boolVal = Boolean(v);
+      this._open = boolVal;
+      if (boolVal) {
+        if (typeof this.setAttribute === "function") this.setAttribute("open", "");
+      } else {
+        if (typeof this.removeAttribute === "function") this.removeAttribute("open");
+      }
+    },
+    configurable: true,
+  });
+  markNative(HTMLDetailsElement, "HTMLDetailsElement");
+  global.HTMLDetailsElement = HTMLDetailsElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLDetailsElement = HTMLDetailsElement;
+  }
+  if (typeof window !== "undefined") {
+    window.HTMLDetailsElement = HTMLDetailsElement;
+  }
+
   // 8. SVG Interfaces & AnimatedString
   function SVGAnimatedString() {
     throw new TypeError("Illegal constructor");

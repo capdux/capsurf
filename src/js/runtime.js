@@ -5540,6 +5540,19 @@
               return val || "rgb(0, 0, 0)";
             }
 
+            if (kebab === "direction") {
+              let val = target.getPropertyValue ? target.getPropertyValue("direction") : target[prop];
+              if (val) {
+                val = resolveCssVars(element, val);
+                const lower = String(val).trim().toLowerCase();
+                if (lower === "ltr" || lower === "rtl") return lower;
+              }
+              if (typeof global !== "undefined" && typeof global.__capsurf_getComputedDirection === "function") {
+                return global.__capsurf_getComputedDirection(element);
+              }
+              return "ltr";
+            }
+
             if (kebab === "background-color") {
               let val = target.getPropertyValue ? target.getPropertyValue("background-color") : target[prop];
               if (!val && target.getPropertyValue) {
@@ -5871,18 +5884,27 @@
       return frag;
     }
     if (this.nodeType === ELEMENT_NODE && typeof document !== "undefined" && document.createElement) {
-      const clone = document.createElement(this.tagName.toLowerCase());
+      const clone = document.createElement(String(this.localName || this.tagName || "div").toLowerCase());
       if (this.id) clone.id = this.id;
       if (this.className) clone.className = this.className;
-      if (this.getAttributeNames) {
+      if (typeof this.getAttributeNames === "function") {
         const attrs = this.getAttributeNames();
         for (let i = 0; i < attrs.length; i++) {
-          clone.setAttribute(attrs[i], this.getAttribute(attrs[i]));
+          const val = this.getAttribute(attrs[i]);
+          if (val !== null && val !== undefined) {
+            clone.setAttribute(attrs[i], val);
+          }
+        }
+      } else if (this.attributes && this.attributes.length) {
+        for (let i = 0; i < this.attributes.length; i++) {
+          const a = this.attributes[i];
+          if (a && a.name) clone.setAttribute(a.name, a.value != null ? a.value : "");
         }
       }
-      if (deep && this.childNodes) {
-        for (let i = 0; i < this.childNodes.length; i++) {
-          clone.appendChild(this.childNodes[i].cloneNode(true));
+      if (deep) {
+        const kids = ensureChildren(this);
+        for (let i = 0; i < kids.length; i++) {
+          clone.appendChild(kids[i].cloneNode(true));
         }
       }
       return clone;
@@ -6187,7 +6209,12 @@
     }
 
     const curIdx = children.indexOf(refChild);
-    children.splice(curIdx >= 0 ? curIdx : children.length, 0, newChild);
+    const insertPos = curIdx >= 0 ? curIdx : children.length;
+    children.splice(insertPos, 0, newChild);
+
+    if (!newChild._skipRangeInsertNotify && typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeInserted === "function") {
+      global.__capsurf_rangeOnNodeInserted(this, insertPos, 1);
+    }
 
     if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
       try {
@@ -6227,6 +6254,9 @@
     }
 
     if (idx >= 0) {
+      if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
+        global.__capsurf_rangeOnNodeRemoved(this, child, idx);
+      }
       children.splice(idx, 1);
     }
     child.parentNode = null;
@@ -6476,6 +6506,94 @@
   markNative(Node.prototype.getRootNode, "getRootNode");
   markNative(Node.prototype.normalize, "normalize");
 
+  function characterDataReplaceData(node, offset, count, data) {
+    const cur = node._data !== undefined ? String(node._data) : "";
+    const len = cur.length;
+    const off = offset >>> 0;
+    if (off > len) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The offset " + off + " is larger than the node's length (" + len + ").", "IndexSizeError");
+      }
+      const err = new Error("IndexSizeError");
+      err.name = "IndexSizeError";
+      throw err;
+    }
+    let cnt = count >>> 0;
+    if (off + cnt > len) {
+      cnt = len - off;
+    }
+    const str = String(data !== undefined ? data : "");
+    const oldVal = cur;
+    node._data = cur.slice(0, off) + str + cur.slice(off + cnt);
+    if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
+      global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
+    }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("characterData", node);
+      rec.oldValue = oldVal;
+      notifyMutation(rec);
+    }
+  }
+
+  function installCharacterDataMethods(proto) {
+    Object.defineProperty(proto, "data", {
+      get: function () { return this._data !== undefined ? this._data : ""; },
+      set: function (v) {
+        const str = v === null ? "" : String(v);
+        const curLen = this._data !== undefined ? String(this._data).length : 0;
+        characterDataReplaceData(this, 0, curLen, str);
+      },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "textContent", {
+      get: function () { return this.data; },
+      set: function (v) { this.data = v === null || v === undefined ? "" : String(v); },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "nodeValue", {
+      get: function () { return this.data; },
+      set: function (v) { this.data = v === null || v === undefined ? "" : String(v); },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "length", {
+      get: function () { return this.data.length; },
+      configurable: true,
+    });
+    proto.substringData = function (offset, count) {
+      const cur = this.data;
+      const len = cur.length;
+      const off = offset >>> 0;
+      if (off > len) {
+        if (typeof DOMException !== "undefined") {
+          throw new DOMException("IndexSizeError", "IndexSizeError");
+        }
+        const err = new Error("IndexSizeError");
+        err.name = "IndexSizeError";
+        throw err;
+      }
+      const cnt = count >>> 0;
+      if (off + cnt > len) return cur.slice(off);
+      return cur.slice(off, off + cnt);
+    };
+    proto.appendData = function (data) {
+      characterDataReplaceData(this, this.length, 0, data);
+    };
+    proto.insertData = function (offset, data) {
+      characterDataReplaceData(this, offset, 0, data);
+    };
+    proto.deleteData = function (offset, count) {
+      characterDataReplaceData(this, offset, count, "");
+    };
+    proto.replaceData = function (offset, count, data) {
+      characterDataReplaceData(this, offset, count, data);
+    };
+    markNative(proto.substringData, "substringData");
+    markNative(proto.appendData, "appendData");
+    markNative(proto.insertData, "insertData");
+    markNative(proto.deleteData, "deleteData");
+    markNative(proto.replaceData, "replaceData");
+  }
+
   function Text(data) {
     Node.call(this);
     this._data = String(data !== undefined ? data : "");
@@ -6484,54 +6602,58 @@
   }
   Text.prototype = Object.create(Node.prototype);
   Text.prototype.constructor = Text;
-  Object.defineProperty(Text.prototype, "data", {
-    get: function () { return this._data !== undefined ? this._data : ""; },
-    set: function (v) {
-      this._data = String(v);
-      if (typeof notifyMutation === "function") {
-        notifyMutation(new MutationRecord("characterData", this));
+  installCharacterDataMethods(Text.prototype);
+
+  Text.prototype.splitText = function (offset) {
+    const cur = this.data;
+    const len = cur.length;
+    const off = offset >>> 0;
+    if (off > len) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("The offset " + off + " is larger than the Text node's length (" + len + ").", "IndexSizeError");
       }
-    },
-    configurable: true,
-  });
-  Object.defineProperty(Text.prototype, "textContent", {
-    get: function () { return this.data; },
-    set: function (v) { this.data = v; },
-    configurable: true,
-  });
-  Object.defineProperty(Text.prototype, "nodeValue", {
-    get: function () { return this.data; },
-    set: function (v) { this.data = v; },
-    configurable: true,
-  });
-  Object.defineProperty(Text.prototype, "length", {
-    get: function () { return this.data.length; },
-    configurable: true,
-  });
+      const err = new Error("IndexSizeError");
+      err.name = "IndexSizeError";
+      throw err;
+    }
+    const count = len - off;
+    const newData = this.substringData(off, count);
+    const newNode = new Text(newData);
+    newNode.ownerDocument = this.ownerDocument;
+    const parent = this.parentNode;
+    if (parent !== null && parent !== undefined) {
+      const kids = ensureChildren(parent);
+      const nodeIndex = kids.indexOf(this);
+      const nextSib = (nodeIndex >= 0 && nodeIndex + 1 < kids.length) ? kids[nodeIndex + 1] : null;
+      newNode._skipRangeInsertNotify = true;
+      try {
+        if (nextSib) {
+          parent.insertBefore(newNode, nextSib);
+        } else {
+          parent.appendChild(newNode);
+        }
+      } finally {
+        newNode._skipRangeInsertNotify = false;
+      }
+      if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnSplitText === "function") {
+        global.__capsurf_rangeOnSplitText(this, newNode, off, parent, nodeIndex);
+      }
+    }
+    this.replaceData(off, count, "");
+    return newNode;
+  };
+  markNative(Text.prototype.splitText, "splitText");
   markNative(Text, "Text");
 
   function Comment(data) {
     Node.call(this);
-    this.data = String(data !== undefined ? data : "");
+    this._data = String(data !== undefined ? data : "");
     this.nodeType = COMMENT_NODE;
     this.nodeName = "#comment";
   }
   Comment.prototype = Object.create(Node.prototype);
   Comment.prototype.constructor = Comment;
-  Object.defineProperty(Comment.prototype, "textContent", {
-    get: function () { return this.data; },
-    set: function (v) { this.data = String(v); },
-    configurable: true,
-  });
-  Object.defineProperty(Comment.prototype, "nodeValue", {
-    get: function () { return this.data; },
-    set: function (v) { this.data = String(v); },
-    configurable: true,
-  });
-  Object.defineProperty(Comment.prototype, "length", {
-    get: function () { return this.data.length; },
-    configurable: true,
-  });
+  installCharacterDataMethods(Comment.prototype);
   markNative(Comment, "Comment");
 
   function DocumentFragment() {
@@ -8111,36 +8233,259 @@
       markNative(proto.toggleAttribute, "toggleAttribute");
     }
 
-    // matches & closest
-    if (!proto.matches) {
-      proto.matches = function (selector) {
-        if (!selector || typeof selector !== "string") return false;
-        const s = selector.trim();
-        if (s === ":checked") return Boolean(this.checked);
-        if (s === ":disabled") return Boolean(this.disabled);
-        if (s === ":enabled") return !this.disabled;
-        if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
-        if (s.endsWith(":focus")) {
-          const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-          if (!doc || doc.activeElement !== this) return false;
-          const base = s.slice(0, -6).trim();
-          if (!base || base === "*") return true;
-          return this.matches(base);
+    // Directionality helpers (WHATWG HTML §3.2.6.4 + Shadow DOM + Selectors 4 :dir())
+    function isStrongRtlCodePoint(cp) {
+      return (
+        (cp >= 0x0590 && cp <= 0x05FF) || // Hebrew
+        (cp >= 0x0600 && cp <= 0x06FF) || // Arabic
+        (cp >= 0x0700 && cp <= 0x074F) || // Syriac
+        (cp >= 0x0750 && cp <= 0x077F) || // Arabic Supplement
+        (cp >= 0x0780 && cp <= 0x07BF) || // Thaana
+        (cp >= 0x07C0 && cp <= 0x07FF) || // NKo
+        (cp >= 0x0800 && cp <= 0x085F) || // Samaritan / Mandaic
+        (cp >= 0x08A0 && cp <= 0x08FF) || // Arabic Extended-A
+        (cp >= 0xFB1D && cp <= 0xFDFF) || // Hebrew/Arabic Presentation Forms-A
+        (cp >= 0xFE70 && cp <= 0xFEFF) || // Arabic Presentation Forms-B
+        (cp >= 0x10800 && cp <= 0x10FFF) || // Ancient RTL scripts
+        (cp >= 0x1E800 && cp <= 0x1EFFF) // Adlam / Arabic Math
+      );
+    }
+
+    function isStrongLtrCodePoint(cp) {
+      return (
+        (cp >= 0x0041 && cp <= 0x005A) || // A-Z
+        (cp >= 0x0061 && cp <= 0x007A) || // a-z
+        (cp >= 0x00C0 && cp <= 0x00D6) ||
+        (cp >= 0x00D8 && cp <= 0x00F6) ||
+        (cp >= 0x00F8 && cp <= 0x02B8) || // Latin Extended
+        (cp >= 0x0370 && cp <= 0x058F) || // Greek, Cyrillic, Armenian
+        (cp >= 0x0900 && cp <= 0x1FFF) || // Indic, SE Asian, etc.
+        (cp >= 0x2C00 && cp <= 0x2DFF) ||
+        (cp >= 0x3040 && cp <= 0xA4CF) || // CJK, Hiragana, Katakana
+        (cp >= 0xAC00 && cp <= 0xD7AF) // Hangul
+      );
+    }
+
+    function firstStrongDirectionInText(str) {
+      if (!str || typeof str !== "string") return null;
+      for (let i = 0; i < str.length; i++) {
+        const cp = str.codePointAt(i);
+        if (cp > 0xFFFF) i++;
+        if (isStrongRtlCodePoint(cp)) return "rtl";
+        if (isStrongLtrCodePoint(cp)) return "ltr";
+      }
+      return null;
+    }
+
+    function getElementDirAttr(el) {
+      if (!el || el.nodeType !== 1 || typeof el.getAttribute !== "function") return "";
+      const raw = el.getAttribute("dir");
+      if (!raw) return "";
+      const v = String(raw).trim().toLowerCase();
+      if (v === "ltr" || v === "rtl" || v === "auto") return v;
+      return "";
+    }
+
+    function getLightChildren(node) {
+      if (!node) return [];
+      if (typeof ensureChildren === "function") return ensureChildren(node);
+      if (node._children) return node._children;
+      if (node.childNodes) return Array.from(node.childNodes);
+      return [];
+    }
+
+    function findSlotForLightChild(host, child) {
+      if (!host || !host._shadowRoot) return null;
+      const slotName = (child && child.nodeType === 1 && typeof child.getAttribute === "function")
+        ? (child.getAttribute("slot") || "")
+        : "";
+      function walk(root) {
+        const kids = getLightChildren(root);
+        for (let i = 0; i < kids.length; i++) {
+          const k = kids[i];
+          if (!k || k.nodeType !== 1) continue;
+          const t = String(k.localName || k.tagName || "").toLowerCase();
+          if (t === "slot") {
+            const name = (typeof k.getAttribute === "function" ? k.getAttribute("name") : "") || "";
+            if (name === slotName) return k;
+          }
+          const nested = walk(k);
+          if (nested) return nested;
         }
-        if (s === "*") return true;
-        if (s.startsWith("#") && this.id === s.slice(1)) return true;
-        if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
-        if (s.toLowerCase() === this.localName) return true;
-        if (typeof document !== "undefined" && document.querySelectorAll) {
-          const matches = document.querySelectorAll(s);
-          for (let i = 0; i < matches.length; i++) {
-            if (matches[i] === this) return true;
+        return null;
+      }
+      return walk(host._shadowRoot);
+    }
+
+    function getSlotAssignedNodes(slotEl) {
+      let cur = slotEl;
+      let shadowRoot = null;
+      while (cur) {
+        if (cur.nodeType === 11 && cur.host) {
+          shadowRoot = cur;
+          break;
+        }
+        cur = cur.parentNode || cur.parentElement;
+      }
+      if (!shadowRoot || !shadowRoot.host) return [];
+      const host = shadowRoot.host;
+      const targetName = (typeof slotEl.getAttribute === "function" ? slotEl.getAttribute("name") : "") || "";
+      const hostKids = getLightChildren(host);
+      const assigned = [];
+      for (let i = 0; i < hostKids.length; i++) {
+        const c = hostKids[i];
+        if (!c) continue;
+        if (c.nodeType === 1) {
+          const cSlot = (typeof c.getAttribute === "function" ? c.getAttribute("slot") : "") || "";
+          if (cSlot === targetName) assigned.push(c);
+        } else if (c.nodeType === 3) {
+          if (targetName === "") assigned.push(c);
+        }
+      }
+      return assigned;
+    }
+
+    function scanSubtreeForFirstStrong(node, isRoot, followSlotAssigned) {
+      if (!node) return null;
+      if (node.nodeType === 3) {
+        const txt = node.data !== undefined ? node.data : (node.textContent || "");
+        return firstStrongDirectionInText(txt);
+      }
+      if (node.nodeType !== 1 && node.nodeType !== 11) return null;
+      if (!isRoot && node.nodeType === 1) {
+        const tag = String(node.localName || node.tagName || "").toLowerCase();
+        if (tag === "bdi" || tag === "script" || tag === "style" || tag === "textarea") {
+          return null;
+        }
+        if (getElementDirAttr(node) !== "") {
+          return null;
+        }
+      }
+      if (node.nodeType === 1) {
+        const tag = String(node.localName || node.tagName || "").toLowerCase();
+        if (tag === "slot" && followSlotAssigned) {
+          const assigned = getSlotAssignedNodes(node);
+          if (assigned.length > 0) {
+            for (let i = 0; i < assigned.length; i++) {
+              const d = scanSubtreeForFirstStrong(assigned[i], false, followSlotAssigned);
+              if (d) return d;
+            }
+            return null;
           }
         }
-        return false;
-      };
-      markNative(proto.matches, "matches");
+      }
+      // IMPORTANT: Never descend into node._shadowRoot (light tree only for dir=auto)
+      const kids = getLightChildren(node);
+      for (let i = 0; i < kids.length; i++) {
+        const d = scanSubtreeForFirstStrong(kids[i], false, followSlotAssigned);
+        if (d) return d;
+      }
+      return null;
     }
+
+    function getNodeDirectionality(el) {
+      let cur = el;
+      while (cur) {
+        if (cur.nodeType === 1) {
+          const dirAttr = getElementDirAttr(cur);
+          const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+          if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+          if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
+            const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
+            return found || "ltr";
+          }
+        }
+        if (cur.parentNode && cur.parentNode.nodeType === 11 && cur.parentNode.host) {
+          cur = cur.parentNode.host;
+          continue;
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return "ltr";
+    }
+
+    function getFlatTreeParent(el) {
+      if (!el) return null;
+      const p = el.parentNode || el.parentElement;
+      if (!p) return null;
+      if (p.nodeType === 1 && p._shadowRoot) {
+        const slot = findSlotForLightChild(p, el);
+        if (slot) return slot;
+      }
+      if (p.nodeType === 11 && p.host) {
+        return p.host;
+      }
+      return p.nodeType === 1 ? p : null;
+    }
+
+    function getComputedDirection(el) {
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        // 1. Explicit inline style direction
+        const inlineDir = (cur.style && typeof cur.style.getPropertyValue === "function")
+          ? String(cur.style.getPropertyValue("direction") || "").trim().toLowerCase()
+          : "";
+        if (inlineDir === "ltr" || inlineDir === "rtl") return inlineDir;
+
+        // 2. HTML dir attribute or <bdi>
+        const dirAttr = getElementDirAttr(cur);
+        const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+        if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
+          const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
+          if (found) return found;
+          if (tag !== "slot") return "ltr";
+        }
+        cur = getFlatTreeParent(cur);
+      }
+      return "ltr";
+    }
+
+    global.__capsurf_getNodeDirectionality = getNodeDirectionality;
+    global.__capsurf_getComputedDirection = getComputedDirection;
+
+    // matches & closest
+    const origProtoMatches = typeof proto.matches === "function" ? proto.matches : null;
+    proto.matches = function (selector) {
+      if (!selector || typeof selector !== "string") return false;
+      const s = selector.trim();
+      const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);
+      if (dirMatch) {
+        const targetDir = dirMatch[1].toLowerCase();
+        if (targetDir !== "ltr" && targetDir !== "rtl") {
+          return false;
+        }
+        return getNodeDirectionality(this) === targetDir;
+      }
+      if (origProtoMatches) {
+        try {
+          return origProtoMatches.call(this, selector);
+        } catch (e) {}
+      }
+      if (s === ":checked") return Boolean(this.checked);
+      if (s === ":disabled") return Boolean(this.disabled);
+      if (s === ":enabled") return !this.disabled;
+      if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
+      if (s.endsWith(":focus")) {
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (!doc || doc.activeElement !== this) return false;
+        const base = s.slice(0, -6).trim();
+        if (!base || base === "*") return true;
+        return this.matches(base);
+      }
+      if (s === "*") return true;
+      if (s.startsWith("#") && this.id === s.slice(1)) return true;
+      if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
+      if (s.toLowerCase() === this.localName) return true;
+      if (typeof document !== "undefined" && document.querySelectorAll) {
+        const matches = document.querySelectorAll(s);
+        for (let i = 0; i < matches.length; i++) {
+          if (matches[i] === this) return true;
+        }
+      }
+      return false;
+    };
+    markNative(proto.matches, "matches");
 
     if (!proto.closest) {
       proto.closest = function (selector) {
@@ -9098,6 +9443,27 @@
                   loc.hash = href;
                 } else {
                   loc.href = href;
+                }
+              }
+            }
+          } else if (tag === "summary") {
+            const parent = this.parentElement || this.parentNode;
+            if (parent && String(parent.localName || parent.tagName || "").toLowerCase() === "details") {
+              const kids = parent._children || (parent.childNodes ? Array.from(parent.childNodes) : []);
+              let firstSummary = null;
+              for (let i = 0; i < kids.length; i++) {
+                const k = kids[i];
+                if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+                  firstSummary = k;
+                  break;
+                }
+              }
+              if (firstSummary === this) {
+                parent.open = !parent.open;
+                if (typeof parent.dispatchEvent === "function") {
+                  try {
+                    parent.dispatchEvent(new Event("toggle", { bubbles: false, cancelable: false }));
+                  } catch (e) {}
                 }
               }
             }
@@ -10472,6 +10838,40 @@
     global.HTMLTemplateElement = HTMLTemplateElement;
     if (typeof globalThis !== "undefined") {
       globalThis.HTMLTemplateElement = HTMLTemplateElement;
+    }
+
+    // 7.5 HTMLDetailsElement
+    function HTMLDetailsElement() {
+      HTMLElement.call(this);
+    }
+    HTMLDetailsElement.prototype = Object.create(HTMLElement.prototype);
+    HTMLDetailsElement.prototype.constructor = HTMLDetailsElement;
+    Object.defineProperty(HTMLDetailsElement.prototype, Symbol.toStringTag, {
+      value: "HTMLDetailsElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLDetailsElement.prototype, "open", {
+      get: function () {
+        return typeof this.hasAttribute === "function" ? this.hasAttribute("open") : Boolean(this._open);
+      },
+      set: function (v) {
+        const boolVal = Boolean(v);
+        this._open = boolVal;
+        if (boolVal) {
+          if (typeof this.setAttribute === "function") this.setAttribute("open", "");
+        } else {
+          if (typeof this.removeAttribute === "function") this.removeAttribute("open");
+        }
+      },
+      configurable: true,
+    });
+    markNative(HTMLDetailsElement, "HTMLDetailsElement");
+    global.HTMLDetailsElement = HTMLDetailsElement;
+    if (typeof globalThis !== "undefined") {
+      globalThis.HTMLDetailsElement = HTMLDetailsElement;
+    }
+    if (typeof window !== "undefined") {
+      window.HTMLDetailsElement = HTMLDetailsElement;
     }
 
     // 8. SVG Interfaces & AnimatedString
@@ -15451,6 +15851,8 @@
   // src/js/shim/range.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/range.ts
 
+  const _liveRanges = [];
+
   function Range() {
     this.startContainer = typeof document !== "undefined" ? document : null;
     this.startOffset = 0;
@@ -15458,7 +15860,122 @@
     this.endOffset = 0;
     this.collapsed = true;
     this.commonAncestorContainer = this.startContainer;
+    _liveRanges.push(this);
   }
+
+  function getChildIndexInParent(node) {
+    if (!node || !node.parentNode) return -1;
+    const parent = node.parentNode;
+    const kids = parent._children || (parent.childNodes ? Array.from(parent.childNodes) : []);
+    return kids.indexOf(node);
+  }
+
+  global.__capsurf_rangeOnReplaceData = function (node, offset, count, insertedLen) {
+    for (let i = 0; i < _liveRanges.length; i++) {
+      const r = _liveRanges[i];
+      if (!r) continue;
+      let changed = false;
+      if (r.startContainer === node) {
+        if (r.startOffset > offset && r.startOffset <= offset + count) {
+          r.startOffset = offset;
+          changed = true;
+        } else if (r.startOffset > offset + count) {
+          r.startOffset = r.startOffset + insertedLen - count;
+          changed = true;
+        }
+      }
+      if (r.endContainer === node) {
+        if (r.endOffset > offset && r.endOffset <= offset + count) {
+          r.endOffset = offset;
+          changed = true;
+        } else if (r.endOffset > offset + count) {
+          r.endOffset = r.endOffset + insertedLen - count;
+          changed = true;
+        }
+      }
+      if (changed) {
+        r._updateState();
+      }
+    }
+  };
+
+  global.__capsurf_rangeOnSplitText = function (oldNode, newNode, offset, parent, nodeIndex) {
+    for (let i = 0; i < _liveRanges.length; i++) {
+      const r = _liveRanges[i];
+      if (!r) continue;
+      let changed = false;
+      if (r.startContainer === oldNode && r.startOffset > offset) {
+        r.startContainer = newNode;
+        r.startOffset = r.startOffset - offset;
+        changed = true;
+      }
+      if (r.endContainer === oldNode && r.endOffset > offset) {
+        r.endContainer = newNode;
+        r.endOffset = r.endOffset - offset;
+        changed = true;
+      }
+      if (parent && nodeIndex >= 0) {
+        if (r.startContainer === parent && r.startOffset >= nodeIndex + 1) {
+          r.startOffset += 1;
+          changed = true;
+        }
+        if (r.endContainer === parent && r.endOffset >= nodeIndex + 1) {
+          r.endOffset += 1;
+          changed = true;
+        }
+      }
+      if (changed) {
+        r._updateState();
+      }
+    }
+  };
+
+  global.__capsurf_rangeOnNodeInserted = function (parent, insertIndex, count) {
+    const delta = count || 1;
+    for (let i = 0; i < _liveRanges.length; i++) {
+      const r = _liveRanges[i];
+      if (!r) continue;
+      let changed = false;
+      if (r.startContainer === parent && r.startOffset > insertIndex) {
+        r.startOffset += delta;
+        changed = true;
+      }
+      if (r.endContainer === parent && r.endOffset > insertIndex) {
+        r.endOffset += delta;
+        changed = true;
+      }
+      if (changed) {
+        r._updateState();
+      }
+    }
+  };
+
+  global.__capsurf_rangeOnNodeRemoved = function (parent, removedNode, removedIndex) {
+    for (let i = 0; i < _liveRanges.length; i++) {
+      const r = _liveRanges[i];
+      if (!r) continue;
+      let changed = false;
+      if (r.startContainer && (r.startContainer === removedNode || (removedNode.contains && removedNode.contains(r.startContainer)))) {
+        r.startContainer = parent;
+        r.startOffset = removedIndex;
+        changed = true;
+      } else if (r.startContainer === parent && r.startOffset > removedIndex) {
+        r.startOffset -= 1;
+        changed = true;
+      }
+      if (r.endContainer && (r.endContainer === removedNode || (removedNode.contains && removedNode.contains(r.endContainer)))) {
+        r.endContainer = parent;
+        r.endOffset = removedIndex;
+        changed = true;
+      } else if (r.endContainer === parent && r.endOffset > removedIndex) {
+        r.endOffset -= 1;
+        changed = true;
+      }
+      if (changed) {
+        r._updateState();
+      }
+    }
+  };
 
   Range.START_TO_START = 0;
   Range.START_TO_END = 1;
@@ -15485,22 +16002,26 @@
 
   Range.prototype.setStartBefore = function (node) {
     if (!node || !node.parentNode) throw new Error("Parent node required");
-    this.setStart(node.parentNode, 0);
+    const idx = getChildIndexInParent(node);
+    this.setStart(node.parentNode, idx >= 0 ? idx : 0);
   };
 
   Range.prototype.setStartAfter = function (node) {
     if (!node || !node.parentNode) throw new Error("Parent node required");
-    this.setStart(node.parentNode, 1);
+    const idx = getChildIndexInParent(node);
+    this.setStart(node.parentNode, idx >= 0 ? idx + 1 : 1);
   };
 
   Range.prototype.setEndBefore = function (node) {
     if (!node || !node.parentNode) throw new Error("Parent node required");
-    this.setEnd(node.parentNode, 0);
+    const idx = getChildIndexInParent(node);
+    this.setEnd(node.parentNode, idx >= 0 ? idx : 0);
   };
 
   Range.prototype.setEndAfter = function (node) {
     if (!node || !node.parentNode) throw new Error("Parent node required");
-    this.setEnd(node.parentNode, 1);
+    const idx = getChildIndexInParent(node);
+    this.setEnd(node.parentNode, idx >= 0 ? idx + 1 : 1);
   };
 
   Range.prototype.collapse = function (toStart) {
@@ -25434,6 +25955,7 @@
         case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
         case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
         case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
+        case "details": Object.setPrototypeOf(el, (global.HTMLDetailsElement || global.HTMLElement).prototype); break;
         case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
         case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
         case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
@@ -25606,6 +26128,48 @@
       docProto.createRange = markNative(function () {
         return new Range();
       }, "createRange");
+
+      if (!docProto.open) {
+        docProto.open = markNative(function () {
+          return this;
+        }, "open");
+      }
+      if (!docProto.close) {
+        docProto.close = markNative(function () {}, "close");
+      }
+      if (!docProto.write) {
+        docProto.write = markNative(function () {
+          let markup = "";
+          for (let i = 0; i < arguments.length; i++) {
+            markup += String(arguments[i]);
+          }
+          const target = this.body || this.documentElement;
+          if (target && typeof this.createElement === "function") {
+            const temp = this.createElement("div");
+            temp.innerHTML = markup;
+            while (temp.firstChild) {
+              const ch = temp.firstChild;
+              try { temp.removeChild(ch); } catch (e) {}
+              target.appendChild(ch);
+            }
+          }
+        }, "write");
+        if (global.document) {
+          global.document.write = docProto.write;
+        }
+      }
+      if (!docProto.writeln) {
+        docProto.writeln = markNative(function () {
+          let markup = "";
+          for (let i = 0; i < arguments.length; i++) {
+            markup += String(arguments[i]);
+          }
+          return this.write(markup + "\n");
+        }, "writeln");
+        if (global.document) {
+          global.document.writeln = docProto.writeln;
+        }
+      }
 
       docProto.createTreeWalker = markNative(function (root, whatToShow, filter) {
         return new TreeWalker(root, whatToShow, filter);

@@ -116,6 +116,27 @@ function installHtmlElementExtensions(proto) {
               }
             }
           }
+        } else if (tag === "summary") {
+          const parent = this.parentElement || this.parentNode;
+          if (parent && String(parent.localName || parent.tagName || "").toLowerCase() === "details") {
+            const kids = parent._children || (parent.childNodes ? Array.from(parent.childNodes) : []);
+            let firstSummary = null;
+            for (let i = 0; i < kids.length; i++) {
+              const k = kids[i];
+              if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+                firstSummary = k;
+                break;
+              }
+            }
+            if (firstSummary === this) {
+              parent.open = !parent.open;
+              if (typeof parent.dispatchEvent === "function") {
+                try {
+                  parent.dispatchEvent(new Event("toggle", { bubbles: false, cancelable: false }));
+                } catch (e) {}
+              }
+            }
+          }
         }
       }
     };
