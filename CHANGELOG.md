@@ -2059,4 +2059,7 @@
 ## Phase 139: `renderer-laziness` 4/4, `canvas-raw-renderer` 1/1 & `auto-navigate-demo` 1/1 (6/6 PASS)
 - **`src/cdp/{session,page,kitesurf_facade,protocol_extensions,server}.cp`**：
   - 动态追踪 `renderer_active`/`frames_rendered`、新增 `Kitesurf.recordScene` 与 WS `initialUrl` 自动导航，**6/6 PASS (43 expect() calls)**。
+
+## Phase 140: `external-scripts-demo` & `page-script-demo` 2/2 PASS & `Runtime.compileScript` Localization
+- 零修改摸底验收 `external-scripts-demo` (1/1)、`page-script-demo` (1/1) PASS，并精准定位 `runtime-compile-script-demo` 至 `src/cdp/runtime.cp:74-84`。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

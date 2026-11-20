@@ -4145,6 +4145,11 @@
   - `renderer-laziness` (**4/4**)、`canvas-raw-renderer` (**1/1**)、`auto-navigate-demo` (**1/1**)：**6/6 PASS (43 expect() calls)**！
 - **清理旧子智能体**: 销毁 `c5024d2b-15f5-4b5d-9ef9-66cddce17782`。
 
+## [2026-11-20 23:23:00] 25 秒摸底验收 `external-scripts-demo` & `page-script-demo` 2/2 PASS (Subagent a65ad788 结单，Phase 140)
+- **零修改直接验收**：`e2e/demo/external-scripts-demo.e2e.test.ts` (**1/1 PASS**)、`e2e/demo/page-script-demo.e2e.test.ts` (**1/1 PASS**)。
+- **精准跨模块定位（留交 Slot B）**：`e2e/demo/runtime-compile-script-demo.e2e.test.ts` 根因位于 `src/cdp/runtime.cp:74-84`（`Runtime.compileScript`/`runScript` 桩实现，缺真实编译校验、`cs:N` ID、脚本持久化与 `Debugger.scriptParsed` 重放）。
+- **清理旧子智能体**: 销毁 `a65ad788-a234-4b95-af87-33f8f037382c`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
