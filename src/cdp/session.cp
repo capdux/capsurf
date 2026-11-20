@@ -615,7 +615,7 @@ pub struct CdpPageSession {
         defer if (css_buf != null) _.allocator.free(css_buf.?);
         let css_len: usize = 0;
         if (css_buf != null) {
-            const base_css = "* { box-sizing: border-box; }\n";
+            const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
             css_len = base_css.len;
             let snid: usize = 0;
@@ -641,7 +641,7 @@ pub struct CdpPageSession {
         }
         _.layout.viewport_width = _.viewport_width;
         _.layout.viewport_height = _.viewport_height;
-        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
         const count = @max(@as(usize, 1), _.doc.nodeCount());
         let styles = _.allocator.alloc(ComputedStyle, count) catch null;
@@ -1610,7 +1610,7 @@ pub struct CdpPageSession {
         defer if (css_buf != null) _.allocator.free(css_buf.?);
         let css_len: usize = 0;
         if (css_buf != null) {
-            const base_css = "* { box-sizing: border-box; }\n";
+            const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
             css_len = base_css.len;
             let snid: usize = 0;
@@ -1634,7 +1634,7 @@ pub struct CdpPageSession {
                 }
             }
         }
-        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
         let styles = _.allocator.alloc(ComputedStyle, count)?;
         defer _.allocator.free(styles);

@@ -1581,4 +1581,20 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：7 大 Core DOM 套件共 **10 pass, 0 fail (32 expect calls)**。
+
+## Phase 70: CSS Table 3 Layout Engine, Anonymous Table Boxes, Collapsed Borders & Floats (100% Closed)
+- **`src/css/cascade.cp` & `src/css/ua_stylesheet.cp`**：
+  - 补齐全部 CSS Table `DisplayInside` 与 UA 表格默认样式；新增 `border-collapse`/`border-spacing`/`caption-side`/`table-layout`/`float`/`clear`/`margin-inline`/`font` 简写解析。
+- **`src/layout/layout.cp` & `src/cdp/{session,css}.cp` & `src/js/dom_binding.cp`**：
+  - 实装 CSS Table 3 布局引擎（`thead/tbody/tfoot` 排序、`colspan`/`rowspan` 网格、`separate`/`collapse` 边框、`caption-side`、`table-layout: fixed/auto` 及 §2.2 匿名盒生成）；补齐 `float`/`clear`、`margin: auto` 居中与替换元素 `display: table` 尺寸；恢复 W3C 默认 `content-box`。
+- **测试与门禁验证**：
+  - 静态门禁：全部修改 `.cp` 4 门禁全 0；
+  - E2E 测试：`replaced-display-table` + `table-anonymous-boxes` + `table-caption-sizing` + `table-collapsed-border-spans` 共 **4/4 PASS**。
+
+## Phase 71: Boa JS Runtime & WebIDL Compatibility Sweep — 11 Suites (100% Closed)
+- **`src/js/shim/{constants,xpath,element/html-classes}.js`**：
+  - 规范化 `Error.prototype.stack` 首行为 `Name: message`；支持 `ks_boa_lenient=1` 下 `XPathResult` 宽松读取；在 `HTMLElement.prototype` 安装 `GlobalEventHandlers` 访问器并执行合法 receiver 校验（非法调用抛 `TypeError("Illegal invocation")`）。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：11 项 `e2e/boa-*.e2e.test.ts` 套件共 **17/17 PASS (28 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

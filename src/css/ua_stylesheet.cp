@@ -59,7 +59,31 @@ pub struct UaStylesheet {
 
             // Table elements
             .Table => {
-                style.display = Display.block(); // simplified table container
+                style.display = Display.table();
+            },
+            .Thead => {
+                style.display = Display.tableHeaderGroup();
+            },
+            .Tbody => {
+                style.display = Display.tableRowGroup();
+            },
+            .Tfoot => {
+                style.display = Display.tableFooterGroup();
+            },
+            .Tr => {
+                style.display = Display.tableRow();
+            },
+            .Td, .Th => {
+                style.display = Display.tableCell();
+            },
+            .Caption => {
+                style.display = Display.tableCaption();
+            },
+            .Col => {
+                style.display = Display.tableColumn();
+            },
+            .Colgroup => {
+                style.display = Display.tableColumnGroup();
             },
 
             // Block-level container elements

@@ -3284,6 +3284,35 @@
   - 派发全新子智能体 **Subagent 35**: Boa Runtime Sweep Specialist（JS 垫片隔离，端口 `19232`）
     - 攻坚目标：批量清扫 11 项 `e2e/boa-*.e2e.test.ts` 核心 JS 运行时兼容性测试。
 
+## [2026-11-20 15:08:00] CSS Table 3 完整表格布局引擎、匿名盒生成与合并边框闭环 (Subagent d20ed7e0 结单，Phase 70)
+- **CSS Table 3 级联属性与 UA 默认样式 (`src/css/cascade.cp`, `src/css/ua_stylesheet.cp`)**:
+  - 补齐全部表格 `DisplayInside`（`table`/`inline-table`/`table-row-group`/`table-header-group`/`table-footer-group`/`table-row`/`table-cell`/`table-caption`/`table-column`/`table-column-group`）与 `border-collapse`/`border-spacing`/`caption-side`/`table-layout`/`float`/`clear`/`margin-inline`/`font` 简写；修复 `font-size` 与 `line-height` 相对继承计算。
+- **CSS Table 3 布局核心、匿名盒与浮动/居中 (`src/layout/layout.cp`, `src/cdp/session.cp`, `src/js/dom_binding.cp`, `src/cdp/css.cp`)**:
+  - 实装 `layoutTableContainer` / `layoutTableCore`：`thead`/`tbody`/`tfoot` 排序、`colspan`/`rowspan` 二维网格槽位分配、`border-collapse: separate/collapse`、`table-layout: fixed/auto`、`caption-side: top/bottom` 及 `caption` min-content 撑宽；
+  - 实装 CSS Table 3 §2.2 匿名表格/行/单元格自动包裹、`float: left/right` & `clear`、`margin-inline: auto` 居中平移；移除硬编码 `* { box-sizing: border-box; }` 恢复标准 `content-box`；替换元素设 `display: table` 保持固有替换尺寸（`video`/`iframe` 默认 `300x150`）。
+- **门禁与 E2E 验证**:
+  - 全部修改 `.cp` 文件通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `replaced-display-table` + `table-anonymous-boxes` + `table-caption-sizing` + `table-collapsed-border-spans`：**4/4 PASS**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `d20ed7e0-f360-4a8e-a395-4dd203eef23c`；
+  - 派发全新子智能体 **Subagent 36**: CDP DOM Events Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/demo/dom-mutation-events-demo.e2e.test.ts` 与 `e2e/demo/dom-innerhtml-rebuild-demo.e2e.test.ts`。
+
+## [2026-11-20 15:08:30] 11 项 Boa JS 运行时与 WebIDL 兼容性套件 100% 全绿清扫 (Subagent a75f0057 结单，Phase 71)
+- **V8 Error.stack 规范与 WebIDL Receiver 校验 (`src/js/shim/`)**:
+  - `constants.js`: 包装 `Error.prototype.stack` getter 使首行遵循 V8/Chromium `Name: message` 规范，修复 `boa-error-stack`。
+  - `xpath.js`: 支持 `ks_boa_lenient=1` 宽松模式下的 `XPathResult` 类型不匹配降级返回 `undefined`。
+  - `element/html-classes.js`: 在 `HTMLElement.prototype` 安装标准 `GlobalEventHandlers` 访问器并校验非法 receiver 抛出 `TypeError("Illegal invocation")`，修复 `boa-getter-throws`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 11 项 `e2e/boa-*.e2e.test.ts` 套件（`accessor-descriptor`/`call-receiver`/`contextual-class-name`/`deep-nesting`/`error-stack`/`finally-stack`/`getter-throws`/`prototype-chain`/`realm-intrinsics`/`typed-array-natives`/`using-identifier`）：**17/17 PASS (28 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `a75f0057-bcd1-494d-aaed-f811b056c0dd`；
+  - 派发全新子智能体 **Subagent 37**: Boa Remaining Sweep Specialist（JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：清扫剩余 10 项 `e2e/boa-*.e2e.test.ts` 核心测试。
+
+
+
 
 
 

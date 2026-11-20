@@ -184,3 +184,32 @@ if (typeof globalThis !== "undefined") {
     if (!window[csSym]) window[csSym] = window[ksSym];
   }
 })();
+
+// V8-compatible Error.prototype.stack: lead with "Name: message" (or "Name" when message is empty)
+(function () {
+  if (typeof Error === "undefined" || !Error.prototype) return;
+  const desc = Object.getOwnPropertyDescriptor(Error.prototype, "stack");
+  if (!desc || typeof desc.get !== "function" || !desc.configurable) return;
+  const origGet = desc.get;
+  const origSet = desc.set;
+  Object.defineProperty(Error.prototype, "stack", {
+    configurable: true,
+    enumerable: Boolean(desc.enumerable),
+    get: function () {
+      const raw = origGet.call(this);
+      if (typeof raw !== "string") return raw;
+      let header;
+      try {
+        const name = this.name === undefined ? "Error" : String(this.name);
+        const msg = this.message === undefined ? "" : String(this.message);
+        header = name === "" ? msg : (msg === "" ? name : name + ": " + msg);
+      } catch (_) {
+        header = "Error";
+      }
+      if (!header) return raw;
+      if (raw === header || raw.startsWith(header + "\n")) return raw;
+      return raw ? header + "\n" + raw : header;
+    },
+    set: origSet,
+  });
+})();

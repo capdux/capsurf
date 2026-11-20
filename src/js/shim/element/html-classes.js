@@ -69,6 +69,87 @@ function installHtmlClasses(global) {
 
   const HTMLElementProto = HTMLElement.prototype;
 
+  // GlobalEventHandlers IDL accessors on HTMLElement.prototype
+  const _htmlEventHandlers = new WeakMap();
+  function _isValidHtmlElementReceiver(obj) {
+    if (!obj || typeof obj !== "object") return false;
+    if (
+      Object.prototype.hasOwnProperty.call(obj, "constructor") &&
+      obj.constructor &&
+      obj.constructor.prototype === obj
+    ) {
+      return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(obj, Symbol.toStringTag)) {
+      return false;
+    }
+    return obj.nodeType === 1;
+  }
+  const GLOBAL_EVENT_HANDLER_NAMES = [
+    "onabort", "onanimationend", "onanimationiteration", "onanimationstart",
+    "onauxclick", "onbeforeinput", "onblur", "oncancel", "oncanplay",
+    "oncanplaythrough", "onchange", "onclick", "onclose", "oncontextmenu",
+    "oncopy", "oncut", "ondblclick", "ondrag", "ondragend", "ondragenter",
+    "ondragleave", "ondragover", "ondragstart", "ondrop", "ondurationchange",
+    "onemptied", "onended", "onerror", "onfocus", "onformdata", "ongotpointercapture",
+    "oninput", "oninvalid", "onkeydown", "onkeypress", "onkeyup", "onload",
+    "onloadeddata", "onloadedmetadata", "onloadstart", "onlostpointercapture",
+    "onmousedown", "onmouseenter", "onmouseleave", "onmousemove", "onmouseout",
+    "onmouseover", "onmouseup", "onpaste", "onpause", "onplay", "onplaying",
+    "onpointercancel", "onpointerdown", "onpointerenter", "onpointerleave",
+    "onpointermove", "onpointerout", "onpointerover", "onpointerup", "onprogress",
+    "onratechange", "onreset", "onresize", "onscroll", "onscrollend", "onseeked",
+    "onseeking", "onselect", "onselectionchange", "onselectstart", "onstalled",
+    "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontouchcancel",
+    "ontouchend", "ontouchmove", "ontouchstart", "ontransitioncancel",
+    "ontransitionend", "ontransitionrun", "ontransitionstart", "onvolumechange",
+    "onwaiting", "onwheel",
+  ];
+  for (let i = 0; i < GLOBAL_EVENT_HANDLER_NAMES.length; i++) {
+    const prop = GLOBAL_EVENT_HANDLER_NAMES[i];
+    if (Object.prototype.hasOwnProperty.call(HTMLElementProto, prop)) continue;
+    Object.defineProperty(HTMLElementProto, prop, {
+      configurable: true,
+      enumerable: true,
+      get: function () {
+        if (!_isValidHtmlElementReceiver(this)) {
+          throw new TypeError("Illegal invocation");
+        }
+        const m = _htmlEventHandlers.get(this);
+        if (m && Object.prototype.hasOwnProperty.call(m, prop)) {
+          return m[prop];
+        }
+        if (typeof this.getAttribute === "function") {
+          const attr = this.getAttribute(prop);
+          if (typeof attr === "string") {
+            try {
+              const fn = new Function("event", attr);
+              let map = m;
+              if (!map) {
+                map = Object.create(null);
+                _htmlEventHandlers.set(this, map);
+              }
+              map[prop] = fn;
+              return fn;
+            } catch (_) {}
+          }
+        }
+        return null;
+      },
+      set: function (v) {
+        if (!_isValidHtmlElementReceiver(this)) {
+          throw new TypeError("Illegal invocation");
+        }
+        let m = _htmlEventHandlers.get(this);
+        if (!m) {
+          m = Object.create(null);
+          _htmlEventHandlers.set(this, m);
+        }
+        m[prop] = typeof v === "function" ? v : null;
+      },
+    });
+  }
+
   // HTML rendered text fragment helper (for innerText / outerText setters)
   function createRenderedTextFragment(str, doc) {
     const d = doc || global.document || (typeof document !== "undefined" ? document : null);

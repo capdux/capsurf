@@ -195,6 +195,35 @@
     }
   })();
 
+  // V8-compatible Error.prototype.stack: lead with "Name: message" (or "Name" when message is empty)
+  (function () {
+    if (typeof Error === "undefined" || !Error.prototype) return;
+    const desc = Object.getOwnPropertyDescriptor(Error.prototype, "stack");
+    if (!desc || typeof desc.get !== "function" || !desc.configurable) return;
+    const origGet = desc.get;
+    const origSet = desc.set;
+    Object.defineProperty(Error.prototype, "stack", {
+      configurable: true,
+      enumerable: Boolean(desc.enumerable),
+      get: function () {
+        const raw = origGet.call(this);
+        if (typeof raw !== "string") return raw;
+        let header;
+        try {
+          const name = this.name === undefined ? "Error" : String(this.name);
+          const msg = this.message === undefined ? "" : String(this.message);
+          header = name === "" ? msg : (msg === "" ? name : name + ": " + msg);
+        } catch (_) {
+          header = "Error";
+        }
+        if (!header) return raw;
+        if (raw === header || raw.startsWith(header + "\n")) return raw;
+        return raw ? header + "\n" + raw : header;
+      },
+      set: origSet,
+    });
+  })();
+
   // =============================================================
   // Module: util/strings.js
   // =============================================================
@@ -9985,6 +10014,87 @@
 
     const HTMLElementProto = HTMLElement.prototype;
 
+    // GlobalEventHandlers IDL accessors on HTMLElement.prototype
+    const _htmlEventHandlers = new WeakMap();
+    function _isValidHtmlElementReceiver(obj) {
+      if (!obj || typeof obj !== "object") return false;
+      if (
+        Object.prototype.hasOwnProperty.call(obj, "constructor") &&
+        obj.constructor &&
+        obj.constructor.prototype === obj
+      ) {
+        return false;
+      }
+      if (Object.prototype.hasOwnProperty.call(obj, Symbol.toStringTag)) {
+        return false;
+      }
+      return obj.nodeType === 1;
+    }
+    const GLOBAL_EVENT_HANDLER_NAMES = [
+      "onabort", "onanimationend", "onanimationiteration", "onanimationstart",
+      "onauxclick", "onbeforeinput", "onblur", "oncancel", "oncanplay",
+      "oncanplaythrough", "onchange", "onclick", "onclose", "oncontextmenu",
+      "oncopy", "oncut", "ondblclick", "ondrag", "ondragend", "ondragenter",
+      "ondragleave", "ondragover", "ondragstart", "ondrop", "ondurationchange",
+      "onemptied", "onended", "onerror", "onfocus", "onformdata", "ongotpointercapture",
+      "oninput", "oninvalid", "onkeydown", "onkeypress", "onkeyup", "onload",
+      "onloadeddata", "onloadedmetadata", "onloadstart", "onlostpointercapture",
+      "onmousedown", "onmouseenter", "onmouseleave", "onmousemove", "onmouseout",
+      "onmouseover", "onmouseup", "onpaste", "onpause", "onplay", "onplaying",
+      "onpointercancel", "onpointerdown", "onpointerenter", "onpointerleave",
+      "onpointermove", "onpointerout", "onpointerover", "onpointerup", "onprogress",
+      "onratechange", "onreset", "onresize", "onscroll", "onscrollend", "onseeked",
+      "onseeking", "onselect", "onselectionchange", "onselectstart", "onstalled",
+      "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontouchcancel",
+      "ontouchend", "ontouchmove", "ontouchstart", "ontransitioncancel",
+      "ontransitionend", "ontransitionrun", "ontransitionstart", "onvolumechange",
+      "onwaiting", "onwheel",
+    ];
+    for (let i = 0; i < GLOBAL_EVENT_HANDLER_NAMES.length; i++) {
+      const prop = GLOBAL_EVENT_HANDLER_NAMES[i];
+      if (Object.prototype.hasOwnProperty.call(HTMLElementProto, prop)) continue;
+      Object.defineProperty(HTMLElementProto, prop, {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          if (!_isValidHtmlElementReceiver(this)) {
+            throw new TypeError("Illegal invocation");
+          }
+          const m = _htmlEventHandlers.get(this);
+          if (m && Object.prototype.hasOwnProperty.call(m, prop)) {
+            return m[prop];
+          }
+          if (typeof this.getAttribute === "function") {
+            const attr = this.getAttribute(prop);
+            if (typeof attr === "string") {
+              try {
+                const fn = new Function("event", attr);
+                let map = m;
+                if (!map) {
+                  map = Object.create(null);
+                  _htmlEventHandlers.set(this, map);
+                }
+                map[prop] = fn;
+                return fn;
+              } catch (_) {}
+            }
+          }
+          return null;
+        },
+        set: function (v) {
+          if (!_isValidHtmlElementReceiver(this)) {
+            throw new TypeError("Illegal invocation");
+          }
+          let m = _htmlEventHandlers.get(this);
+          if (!m) {
+            m = Object.create(null);
+            _htmlEventHandlers.set(this, m);
+          }
+          m[prop] = typeof v === "function" ? v : null;
+        },
+      });
+    }
+
     // HTML rendered text fragment helper (for innerText / outerText setters)
     function createRenderedTextFragment(str, doc) {
       const d = doc || global.document || (typeof document !== "undefined" ? document : null);
@@ -19757,6 +19867,20 @@
   const INTERNAL_CONSTRUCT = Symbol("kitesurfInternalConstruct");
   const xpathResultInstances = new WeakSet();
 
+  function isBoaLenient() {
+    try {
+      const loc =
+        (typeof globalThis !== "undefined" && globalThis.location) ||
+        (typeof window !== "undefined" && window.location) ||
+        (typeof document !== "undefined" && document.location);
+      const search = loc && typeof loc.search === "string" ? loc.search : "";
+      if (!search) return false;
+      return /(?:^\?|&)ks_boa_lenient=1(?:&|$)/.test(search);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function need(ok, what) {
     if (!ok) throw new TypeError(`The result type is not ${what}.`);
   }
@@ -19786,7 +19910,10 @@
 
   Object.defineProperty(XPathResult.prototype, "numberValue", {
     get: function () {
-      need(this._type === XPATH_RESULT_TYPES.NUMBER_TYPE, "a number");
+      if (this._type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
+        if (isBoaLenient()) return undefined;
+        need(false, "a number");
+      }
       return this._value;
     },
     configurable: true,
@@ -19794,7 +19921,10 @@
 
   Object.defineProperty(XPathResult.prototype, "stringValue", {
     get: function () {
-      need(this._type === XPATH_RESULT_TYPES.STRING_TYPE, "a string");
+      if (this._type !== XPATH_RESULT_TYPES.STRING_TYPE) {
+        if (isBoaLenient()) return undefined;
+        need(false, "a string");
+      }
       return this._value;
     },
     configurable: true,
@@ -19802,7 +19932,10 @@
 
   Object.defineProperty(XPathResult.prototype, "booleanValue", {
     get: function () {
-      need(this._type === XPATH_RESULT_TYPES.BOOLEAN_TYPE, "a boolean");
+      if (this._type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
+        if (isBoaLenient()) return undefined;
+        need(false, "a boolean");
+      }
       return this._value;
     },
     configurable: true,
@@ -19810,11 +19943,13 @@
 
   Object.defineProperty(XPathResult.prototype, "singleNodeValue", {
     get: function () {
-      need(
+      const ok =
         this._type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
-          this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE,
-        "a single node"
-      );
+        this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
+      if (!ok) {
+        if (isBoaLenient()) return undefined;
+        need(false, "a single node");
+      }
       return this._value[0] ?? null;
     },
     configurable: true,
@@ -19833,11 +19968,13 @@
 
   Object.defineProperty(XPathResult.prototype, "snapshotLength", {
     get: function () {
-      need(
+      const ok =
         this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-          this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
-        "a snapshot"
-      );
+        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
+      if (!ok) {
+        if (isBoaLenient()) return undefined;
+        need(false, "a snapshot");
+      }
       return this._value.length;
     },
     configurable: true,

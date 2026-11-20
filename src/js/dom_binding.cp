@@ -466,7 +466,7 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         defer if (css_buf != null) std.heap.page_allocator.free(css_buf.?);
         let css_len: usize = 0;
         if (css_buf != null) {
-            const base_css = "* { box-sizing: border-box; }\n";
+            const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
             css_len = base_css.len;
             let snid: usize = 0;
@@ -490,7 +490,7 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
                 }
             }
         }
-        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, lt.viewport_width, false);
         let styles = std.heap.page_allocator.alloc(ComputedStyle, count) catch return;
         defer std.heap.page_allocator.free(styles);

@@ -1233,4 +1233,14 @@
    - 在事件派发路径中沿 `<slot>` 穿越影子子树，按 `composed` 标志控制是否越过 ShadowRoot 边界，对 `event.target` 实施标准 retargeting 并在 `composedPath()` 中过滤 closed shadow tree；`getComputedStyle` 限定 ShadowRoot 内部 `<style>` 作用域。
 2. **`HTMLElement` 文本设置器与游离子树选择器 (`html-classes.js`, `selector.js`, `element.js`)**：
    - 将 `innerText`/`outerText` 严格定义于 `HTMLElement.prototype` 以保留 `SVGElement` expando 语义；扩展 `matchesElementSelector` 支持组合子与逗号选择器，使游离节点与 ShadowRoot 脱离原生文档句柄仍可精确匹配。
+
+## Phase 70 CSS Table 3 布局引擎、匿名盒生成与合并边框技术方案
+1. **二维网格与合并边框布局 (`src/layout/layout.cp`, `src/css/cascade.cp`)**：
+   - 在 `layoutTableCore` 按 `thead`/`tbody`/`tfoot` 排序并为 `colspan`/`rowspan` 分配不重叠二维槽位，支持 `border-collapse: separate`（`border-spacing`）与 `collapse`（共享网格边框线），并按 `caption` min-content 宽度下限撑宽表格。
+2. **匿名盒生成与标准 `content-box` 恢复 (`layout.cp`, `session.cp`, `dom_binding.cp`)**：
+   - 在 `layoutBlockContainer` 与 `layoutTableContainer` 按 CSS Table 3 §2.2 自动将孤立 `table-cell`/`table-row` 包裹为匿名表/行盒；移除硬编码 `* { box-sizing: border-box; }` 以恢复标准 `content-box` 盒模型。
+
+## Phase 71 Boa JS 运行时与 WebIDL 访问器规范清扫技术方案
+1. **`Error.prototype.stack` 与 `GlobalEventHandlers` 规范化 (`constants.js`, `html-classes.js`, `xpath.js`)**：
+   - 包装 `Error.prototype.stack` getter 确保首行符合 V8/Chromium `Name: message` 格式；在 `HTMLElement.prototype` 统一定义 `GlobalEventHandlers` 访问器并校验非法 receiver 抛出 `TypeError("Illegal invocation")`，一举打通 11 项 `e2e/boa-*.e2e.test.ts` 运行时兼容性套件。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

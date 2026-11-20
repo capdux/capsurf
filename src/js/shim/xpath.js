@@ -1118,6 +1118,20 @@ function isNode(v) {
 const INTERNAL_CONSTRUCT = Symbol("kitesurfInternalConstruct");
 const xpathResultInstances = new WeakSet();
 
+function isBoaLenient() {
+  try {
+    const loc =
+      (typeof globalThis !== "undefined" && globalThis.location) ||
+      (typeof window !== "undefined" && window.location) ||
+      (typeof document !== "undefined" && document.location);
+    const search = loc && typeof loc.search === "string" ? loc.search : "";
+    if (!search) return false;
+    return /(?:^\?|&)ks_boa_lenient=1(?:&|$)/.test(search);
+  } catch (_) {
+    return false;
+  }
+}
+
 function need(ok, what) {
   if (!ok) throw new TypeError(`The result type is not ${what}.`);
 }
@@ -1147,7 +1161,10 @@ Object.defineProperty(XPathResult.prototype, "resultType", {
 
 Object.defineProperty(XPathResult.prototype, "numberValue", {
   get: function () {
-    need(this._type === XPATH_RESULT_TYPES.NUMBER_TYPE, "a number");
+    if (this._type !== XPATH_RESULT_TYPES.NUMBER_TYPE) {
+      if (isBoaLenient()) return undefined;
+      need(false, "a number");
+    }
     return this._value;
   },
   configurable: true,
@@ -1155,7 +1172,10 @@ Object.defineProperty(XPathResult.prototype, "numberValue", {
 
 Object.defineProperty(XPathResult.prototype, "stringValue", {
   get: function () {
-    need(this._type === XPATH_RESULT_TYPES.STRING_TYPE, "a string");
+    if (this._type !== XPATH_RESULT_TYPES.STRING_TYPE) {
+      if (isBoaLenient()) return undefined;
+      need(false, "a string");
+    }
     return this._value;
   },
   configurable: true,
@@ -1163,7 +1183,10 @@ Object.defineProperty(XPathResult.prototype, "stringValue", {
 
 Object.defineProperty(XPathResult.prototype, "booleanValue", {
   get: function () {
-    need(this._type === XPATH_RESULT_TYPES.BOOLEAN_TYPE, "a boolean");
+    if (this._type !== XPATH_RESULT_TYPES.BOOLEAN_TYPE) {
+      if (isBoaLenient()) return undefined;
+      need(false, "a boolean");
+    }
     return this._value;
   },
   configurable: true,
@@ -1171,11 +1194,13 @@ Object.defineProperty(XPathResult.prototype, "booleanValue", {
 
 Object.defineProperty(XPathResult.prototype, "singleNodeValue", {
   get: function () {
-    need(
+    const ok =
       this._type === XPATH_RESULT_TYPES.ANY_UNORDERED_NODE_TYPE ||
-        this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE,
-      "a single node"
-    );
+      this._type === XPATH_RESULT_TYPES.FIRST_ORDERED_NODE_TYPE;
+    if (!ok) {
+      if (isBoaLenient()) return undefined;
+      need(false, "a single node");
+    }
     return this._value[0] ?? null;
   },
   configurable: true,
@@ -1194,11 +1219,13 @@ Object.defineProperty(XPathResult.prototype, "invalidIteratorState", {
 
 Object.defineProperty(XPathResult.prototype, "snapshotLength", {
   get: function () {
-    need(
+    const ok =
       this._type === XPATH_RESULT_TYPES.UNORDERED_NODE_SNAPSHOT_TYPE ||
-        this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE,
-      "a snapshot"
-    );
+      this._type === XPATH_RESULT_TYPES.ORDERED_NODE_SNAPSHOT_TYPE;
+    if (!ok) {
+      if (isBoaLenient()) return undefined;
+      need(false, "a snapshot");
+    }
     return this._value.length;
   },
   configurable: true,

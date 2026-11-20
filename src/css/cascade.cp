@@ -37,6 +37,80 @@ pub enum DisplayInside {
     Flex,
     Grid,
     Table,
+    TableRowGroup,
+    TableHeaderGroup,
+    TableFooterGroup,
+    TableRow,
+    TableCell,
+    TableCaption,
+    TableColumn,
+    TableColumnGroup,
+}
+
+pub enum BorderCollapse {
+    Separate,
+    Collapse,
+
+    static fn parse(raw: []const u8): BorderCollapse? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "separate")) return BorderCollapse.Separate;
+        if (std.ascii.eqlIgnoreCase(s, "collapse")) return BorderCollapse.Collapse;
+        return null;
+    }
+}
+
+pub enum CaptionSide {
+    Top,
+    Bottom,
+
+    static fn parse(raw: []const u8): CaptionSide? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "top")) return CaptionSide.Top;
+        if (std.ascii.eqlIgnoreCase(s, "bottom")) return CaptionSide.Bottom;
+        return null;
+    }
+}
+
+pub enum TableLayout {
+    Auto,
+    Fixed,
+
+    static fn parse(raw: []const u8): TableLayout? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "auto")) return TableLayout.Auto;
+        if (std.ascii.eqlIgnoreCase(s, "fixed")) return TableLayout.Fixed;
+        return null;
+    }
+}
+
+pub enum FloatMode {
+    None,
+    Left,
+    Right,
+
+    static fn parse(raw: []const u8): FloatMode? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "none")) return FloatMode.None;
+        if (std.ascii.eqlIgnoreCase(s, "left") || std.ascii.eqlIgnoreCase(s, "inline-start")) return FloatMode.Left;
+        if (std.ascii.eqlIgnoreCase(s, "right") || std.ascii.eqlIgnoreCase(s, "inline-end")) return FloatMode.Right;
+        return null;
+    }
+}
+
+pub enum ClearMode {
+    None,
+    Left,
+    Right,
+    Both,
+
+    static fn parse(raw: []const u8): ClearMode? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "none")) return ClearMode.None;
+        if (std.ascii.eqlIgnoreCase(s, "left") || std.ascii.eqlIgnoreCase(s, "inline-start")) return ClearMode.Left;
+        if (std.ascii.eqlIgnoreCase(s, "right") || std.ascii.eqlIgnoreCase(s, "inline-end")) return ClearMode.Right;
+        if (std.ascii.eqlIgnoreCase(s, "both")) return ClearMode.Both;
+        return null;
+    }
 }
 
 pub struct DisplayPair {
@@ -106,6 +180,76 @@ pub struct Display {
         };
     }
 
+    static fn table(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.Table },
+        };
+    }
+
+    static fn inlineTable(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Inline, inside: DisplayInside.Table },
+        };
+    }
+
+    static fn tableRowGroup(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableRowGroup },
+        };
+    }
+
+    static fn tableHeaderGroup(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableHeaderGroup },
+        };
+    }
+
+    static fn tableFooterGroup(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableFooterGroup },
+        };
+    }
+
+    static fn tableRow(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableRow },
+        };
+    }
+
+    static fn tableCell(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableCell },
+        };
+    }
+
+    static fn tableCaption(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableCaption },
+        };
+    }
+
+    static fn tableColumn(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableColumn },
+        };
+    }
+
+    static fn tableColumnGroup(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.TableColumnGroup },
+        };
+    }
+
     static fn parse(raw: []const u8): Display? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "none")) return Display.none();
@@ -116,6 +260,16 @@ pub struct Display {
         if (std.ascii.eqlIgnoreCase(s, "flex") || std.ascii.eqlIgnoreCase(s, "-webkit-flex")) return Display.flex();
         if (std.ascii.eqlIgnoreCase(s, "inline-flex")) return Display.inlineFlex();
         if (std.ascii.eqlIgnoreCase(s, "grid") || std.ascii.eqlIgnoreCase(s, "inline-grid")) return Display.grid();
+        if (std.ascii.eqlIgnoreCase(s, "table")) return Display.table();
+        if (std.ascii.eqlIgnoreCase(s, "inline-table")) return Display.inlineTable();
+        if (std.ascii.eqlIgnoreCase(s, "table-row-group")) return Display.tableRowGroup();
+        if (std.ascii.eqlIgnoreCase(s, "table-header-group")) return Display.tableHeaderGroup();
+        if (std.ascii.eqlIgnoreCase(s, "table-footer-group")) return Display.tableFooterGroup();
+        if (std.ascii.eqlIgnoreCase(s, "table-row")) return Display.tableRow();
+        if (std.ascii.eqlIgnoreCase(s, "table-cell")) return Display.tableCell();
+        if (std.ascii.eqlIgnoreCase(s, "table-caption")) return Display.tableCaption();
+        if (std.ascii.eqlIgnoreCase(s, "table-column")) return Display.tableColumn();
+        if (std.ascii.eqlIgnoreCase(s, "table-column-group")) return Display.tableColumnGroup();
         return null;
     }
 
@@ -133,6 +287,42 @@ pub struct Display {
 
     fn isGrid(): bool {
         return !_.is_keyword && _.pair.inside == DisplayInside.Grid;
+    }
+
+    fn isTable(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.Table;
+    }
+
+    fn isTableRowGroup(): bool {
+        return !_.is_keyword && (_.pair.inside == DisplayInside.TableRowGroup || _.pair.inside == DisplayInside.TableHeaderGroup || _.pair.inside == DisplayInside.TableFooterGroup);
+    }
+
+    fn isTableHeaderGroup(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.TableHeaderGroup;
+    }
+
+    fn isTableFooterGroup(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.TableFooterGroup;
+    }
+
+    fn isTableRow(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.TableRow;
+    }
+
+    fn isTableCell(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.TableCell;
+    }
+
+    fn isTableCaption(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.TableCaption;
+    }
+
+    fn isTableColumn(): bool {
+        return !_.is_keyword && (_.pair.inside == DisplayInside.TableColumn || _.pair.inside == DisplayInside.TableColumnGroup);
+    }
+
+    fn isTableInternal(): bool {
+        return _.isTableRowGroup() || _.isTableRow() || _.isTableCell() || _.isTableCaption() || _.isTableColumn();
     }
 
     fn isInline(): bool {
@@ -501,7 +691,13 @@ pub const PROP_FONT_FAMILY: usize = 45;
 pub const PROP_FONT_WEIGHT: usize = 46;
 pub const PROP_OVERFLOW: usize = 47;
 pub const PROP_TRANSFORM: usize = 48;
-pub const TOTAL_PROP_SLOTS: usize = 49;
+pub const PROP_BORDER_COLLAPSE: usize = 49;
+pub const PROP_BORDER_SPACING: usize = 50;
+pub const PROP_CAPTION_SIDE: usize = 51;
+pub const PROP_TABLE_LAYOUT: usize = 52;
+pub const PROP_FLOAT: usize = 53;
+pub const PROP_CLEAR: usize = 54;
+pub const TOTAL_PROP_SLOTS: usize = 55;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -892,6 +1088,15 @@ pub struct ComputedStyle {
     transform_tx: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 
+    // Table & float properties
+    border_collapse: BorderCollapse = BorderCollapse.Separate;
+    border_spacing_h: f32 = 0.0;
+    border_spacing_v: f32 = 0.0;
+    caption_side: CaptionSide = CaptionSide.Top;
+    table_layout: TableLayout = TableLayout.Auto;
+    float_mode: FloatMode = FloatMode.None;
+    clear_mode: ClearMode = ClearMode.None;
+
     // 64-bit packed cascade weight per property slot
     weights: [TOTAL_PROP_SLOTS]u64 = [0; TOTAL_PROP_SLOTS];
 
@@ -927,7 +1132,31 @@ pub struct ComputedStyle {
                 _.display = Display.inlineBlock();
             },
             .Table => {
-                _.display = Display.block();
+                _.display = Display.table();
+            },
+            .Thead => {
+                _.display = Display.tableHeaderGroup();
+            },
+            .Tbody => {
+                _.display = Display.tableRowGroup();
+            },
+            .Tfoot => {
+                _.display = Display.tableFooterGroup();
+            },
+            .Tr => {
+                _.display = Display.tableRow();
+            },
+            .Td, .Th => {
+                _.display = Display.tableCell();
+            },
+            .Caption => {
+                _.display = Display.tableCaption();
+            },
+            .Col => {
+                _.display = Display.tableColumn();
+            },
+            .Colgroup => {
+                _.display = Display.tableColumnGroup();
             },
             * => {
                 _.display = Display.block();
@@ -1019,6 +1248,12 @@ pub struct ComputedStyle {
                 _.border_color = CssColor.rgb(118, 118, 118);
                 _.has_explicit_border_color = true;
             },
+            .Iframe => {
+                _.border_top_width = 2.0;
+                _.border_right_width = 2.0;
+                _.border_bottom_width = 2.0;
+                _.border_left_width = 2.0;
+            },
             * => {},
         }
 
@@ -1047,6 +1282,10 @@ pub struct ComputedStyle {
             if (tag != .B && tag != .Strong) {
                 _.font_weight = p.font_weight;
             }
+            _.border_collapse = p.border_collapse;
+            _.border_spacing_h = p.border_spacing_h;
+            _.border_spacing_v = p.border_spacing_v;
+            _.caption_side = p.caption_side;
         }
         if (tag == .B || tag == .Strong) {
             _.font_weight = 700.0;
@@ -1238,9 +1477,47 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "margin-left")) {
+        if (std.ascii.eqlIgnoreCase(name, "margin-left") || std.ascii.eqlIgnoreCase(name, "margin-inline-start")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MARGIN_LEFT, weight)) _.margin_left = lpa;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "margin-inline-end")) {
+            if (lpa := LengthPercentageOrAuto.parse(val)) {
+                if (_.tryClaimSlot(PROP_MARGIN_RIGHT, weight)) _.margin_right = lpa;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "margin-inline")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (t1 := it.next()) {
+                if (l1 := LengthPercentageOrAuto.parse(t1)) {
+                    let l2 = l1;
+                    if (t2 := it.next()) {
+                        if (parsed2 := LengthPercentageOrAuto.parse(t2)) {
+                            l2 = parsed2;
+                        }
+                    }
+                    if (_.tryClaimSlot(PROP_MARGIN_LEFT, weight)) _.margin_left = l1;
+                    if (_.tryClaimSlot(PROP_MARGIN_RIGHT, weight)) _.margin_right = l2;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "margin-block")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (t1 := it.next()) {
+                if (l1 := LengthPercentageOrAuto.parse(t1)) {
+                    let l2 = l1;
+                    if (t2 := it.next()) {
+                        if (parsed2 := LengthPercentageOrAuto.parse(t2)) {
+                            l2 = parsed2;
+                        }
+                    }
+                    if (_.tryClaimSlot(PROP_MARGIN_TOP, weight)) _.margin_top = l1;
+                    if (_.tryClaimSlot(PROP_MARGIN_BOTTOM, weight)) _.margin_bottom = l2;
+                }
             }
             return;
         }
@@ -1563,17 +1840,108 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "font")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            let found_size = false;
+            let fam_pos: usize = 0;
+            while (tok := it.next()) {
+                if (!found_size) {
+                    if (slash_idx := std.mem.indexOfScalar(u8, tok, '/')) {
+                        const sz_str = tok[0..slash_idx];
+                        const lh_str = tok[slash_idx + 1 ..];
+                        if (l := CssLength.parse(sz_str)) {
+                            let fs: f32 = 16.0;
+                            if (l.unit == CssUnit.Percent) {
+                                const ratio: f32 = @floatCast(l.value / 100.0);
+                                fs = _.font_size_px * ratio;
+                            } else if (l.unit == CssUnit.Em) {
+                                const mult: f32 = @floatCast(l.value);
+                                fs = _.font_size_px * mult;
+                            } else {
+                                fs = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                            }
+                            if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
+                            found_size = true;
+                        }
+                        if (lh_l := CssLength.parse(lh_str)) {
+                            let lh_px: f32 = 0.0;
+                            if (lh_l.unit == CssUnit.Unitless || lh_l.unit == CssUnit.Em) {
+                                const mult: f32 = @floatCast(lh_l.value);
+                                lh_px = _.font_size_px * mult;
+                            } else if (lh_l.unit == CssUnit.Percent) {
+                                const ratio: f32 = @floatCast(lh_l.value / 100.0);
+                                lh_px = _.font_size_px * ratio;
+                            } else {
+                                lh_px = @floatCast(lh_l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                            }
+                            if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) _.line_height_px = lh_px;
+                        }
+                    } else if (l := CssLength.parse(tok)) {
+                        if (l.unit != CssUnit.Unitless) {
+                            let fs: f32 = 16.0;
+                            if (l.unit == CssUnit.Percent) {
+                                const ratio: f32 = @floatCast(l.value / 100.0);
+                                fs = _.font_size_px * ratio;
+                            } else if (l.unit == CssUnit.Em) {
+                                const mult: f32 = @floatCast(l.value);
+                                fs = _.font_size_px * mult;
+                            } else {
+                                fs = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                            }
+                            if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
+                            found_size = true;
+                        }
+                    }
+                } else {
+                    if (fam_pos == 0) {
+                        if (idx := std.mem.indexOf(u8, val, tok)) {
+                            const fam = std.mem.trim(u8, val[idx..], " \t\r\n");
+                            if (_.tryClaimSlot(PROP_FONT_FAMILY, weight)) {
+                                const copy_len = @min(fam.len, _.font_family_buf.len);
+                                @memcpy(_.font_family_buf[0..copy_len], fam[0..copy_len]);
+                                _.font_family_len = copy_len;
+                            }
+                            fam_pos = 1;
+                        }
+                    }
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "font-size")) {
             if (l := CssLength.parse(val)) {
-                const fs: f32 = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                let fs: f32 = 16.0;
+                if (l.unit == CssUnit.Percent) {
+                    const ratio: f32 = @floatCast(l.value / 100.0);
+                    fs = _.font_size_px * ratio;
+                } else if (l.unit == CssUnit.Em) {
+                    const mult: f32 = @floatCast(l.value);
+                    fs = _.font_size_px * mult;
+                } else {
+                    fs = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                }
                 if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
             }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "line-height")) {
-            if (lpa := LengthPercentageOrAuto.parse(val)) {
+            if (l := CssLength.parse(val)) {
+                let lh_px: f32 = 0.0;
+                if (l.unit == CssUnit.Unitless || l.unit == CssUnit.Em) {
+                    const mult: f32 = @floatCast(l.value);
+                    lh_px = _.font_size_px * mult;
+                } else if (l.unit == CssUnit.Percent) {
+                    const ratio: f32 = @floatCast(l.value / 100.0);
+                    lh_px = _.font_size_px * ratio;
+                } else {
+                    lh_px = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                }
                 if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
-                    _.line_height_px = lpa.resolvePx(root_font_px, _.font_size_px, root_font_px, 1280.0, 800.0);
+                    _.line_height_px = lh_px;
+                }
+            } else if (lpa := LengthPercentageOrAuto.parse(val)) {
+                if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                    _.line_height_px = lpa.resolvePx(_.font_size_px, _.font_size_px, root_font_px, 1280.0, 800.0);
                 }
             }
             return;
@@ -1650,6 +2018,55 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "transform") || std.ascii.eqlIgnoreCase(name, "-webkit-transform")) {
             if (_.tryClaimSlot(PROP_TRANSFORM, weight)) {
                 _.parseTransform(val);
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-collapse")) {
+            if (bc := BorderCollapse.parse(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_COLLAPSE, weight)) _.border_collapse = bc;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-spacing")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (t1 := it.next()) {
+                if (l1 := CssLength.parse(t1)) {
+                    const h_px: f32 = @floatCast(l1.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                    let v_px: f32 = h_px;
+                    if (t2 := it.next()) {
+                        if (l2 := CssLength.parse(t2)) {
+                            v_px = @floatCast(l2.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                        }
+                    }
+                    if (_.tryClaimSlot(PROP_BORDER_SPACING, weight)) {
+                        _.border_spacing_h = h_px;
+                        _.border_spacing_v = v_px;
+                    }
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "caption-side")) {
+            if (cs := CaptionSide.parse(val)) {
+                if (_.tryClaimSlot(PROP_CAPTION_SIDE, weight)) _.caption_side = cs;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "table-layout")) {
+            if (tl := TableLayout.parse(val)) {
+                if (_.tryClaimSlot(PROP_TABLE_LAYOUT, weight)) _.table_layout = tl;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "float")) {
+            if (fm := FloatMode.parse(val)) {
+                if (_.tryClaimSlot(PROP_FLOAT, weight)) _.float_mode = fm;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "clear")) {
+            if (cm := ClearMode.parse(val)) {
+                if (_.tryClaimSlot(PROP_CLEAR, weight)) _.clear_mode = cm;
             }
             return;
         }

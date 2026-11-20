@@ -15,7 +15,12 @@ import {
     Position,
     FlexDirection,
     JustifyContent,
-    AlignItems
+    AlignItems,
+    BorderCollapse,
+    CaptionSide,
+    TableLayout,
+    FloatMode,
+    ClearMode
 } from "../css/cascade.cp";
 
 pub struct Rect {
@@ -142,6 +147,26 @@ pub struct ReplacedSize {
     height: f32 = 150.0;
     is_authored: bool = false;
     is_ratio_only: bool = false;
+}
+
+pub struct TableCellEntry {
+    node_id: NodeId = NULL_NODE;
+    is_anon: bool = false;
+    anon_nodes: [16]NodeId = [NULL_NODE; 16];
+    anon_count: usize = 0;
+    row: usize = 0;
+    col: usize = 0;
+    rowspan: usize = 1;
+    colspan: usize = 1;
+    pref_w: f32 = 0.0;
+    measured_h: f32 = 0.0;
+    layout_x: f32 = 0.0;
+    layout_y: f32 = 0.0;
+}
+
+pub struct TableRowEntry {
+    node_id: NodeId = NULL_NODE;
+    group_id: NodeId = NULL_NODE;
 }
 
 pub struct LayoutTree {
@@ -435,7 +460,7 @@ pub struct LayoutTree {
     }
 
     static fn getReplacedSize(node: *const NodeData): ReplacedSize? {
-        if (node.hasTag("canvas")) {
+        if (node.hasTag("canvas") || node.hasTag("video") || node.hasTag("iframe")) {
             let nat_w: f32 = 300.0;
             let nat_h: f32 = 150.0;
             if (w_attr := node.getAttribute("width")) {
@@ -755,7 +780,7 @@ pub struct LayoutTree {
         }
 
         // Adjust for box-sizing or auto width filling parent
-        if (style.box_sizing == BoxSizing.BorderBox || style.width.is_auto) {
+        if (style.box_sizing == BoxSizing.BorderBox || (style.width.is_auto && replaced_opt == null)) {
             const h_decor = box.paddingHorizontal() + box.borderHorizontal();
             box.content_width = if (raw_w > h_decor) (raw_w - h_decor) else 0.0;
         } else {
@@ -957,7 +982,9 @@ pub struct LayoutTree {
             _.abs_cb_h = prev_abs_cb_h;
         }
 
-        if (style.display.isFlex()) {
+        if (!is_replaced && !is_svg_elem && style.display.isTable()) {
+            _.layoutTableContainer(doc, styles, node_id, border_box_x, border_box_y, avail_w);
+        } else if (style.display.isFlex()) {
             _.layoutFlexContainer(doc, styles, node_id, content_x, content_y);
         } else if (style.display.isGrid()) {
             _.layoutGridContainer(doc, styles, node_id, content_x, content_y);
@@ -966,12 +993,17 @@ pub struct LayoutTree {
         }
 
         let box_after = &_.boxes.items[@as(usize, node_id)];
-        if (!is_replaced && !is_svg_elem) {
+        if (!is_replaced && !is_svg_elem && !style.display.isTable()) {
             const text_len = LayoutTree.getNodeTextLength(doc, node_id);
             if (text_len > 0) {
                 if (style.height.is_auto && box_after.content_height <= 0.0) {
                     const font_h = if (style.line_height_px > 0.0) style.line_height_px else (if (style.font_size_px > 0.0) style.font_size_px else 16.0);
-                    box_after.content_height = font_h;
+                    let line_count: usize = 1;
+                    if (!style.display.isInline() && !style.display.isInlineBlock() && box_after.content_width > 0.0) {
+                        const base_sz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+                        line_count = LayoutTree.estimateWrappedLines(doc, node_id, box_after.content_width, base_sz);
+                    }
+                    box_after.content_height = @as(f32, @floatFromInt(line_count)) * font_h;
                 }
                 if (style.width.is_auto && (box_after.content_width <= 0.0 || style.display.isInlineBlock() || style.display.isInline())) {
                     const base_size = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
@@ -1361,6 +1393,852 @@ pub struct LayoutTree {
         }
     }
 
+    static fn estimateCharWidth(ch: u8, font_size_px: f32): f32 {
+        if (ch == ' ' || ch == '\t') return font_size_px * 0.28;
+        if (ch == 'i' || ch == 'l' || ch == 'I' || ch == 'j' || ch == 't' || ch == 'f' || ch == 'r' || ch == '.' || ch == ',' || ch == ':' || ch == ';' || ch == '!') {
+            return font_size_px * 0.30;
+        }
+        if (ch == 'm' || ch == 'w' || ch == 'M' || ch == 'W') {
+            return font_size_px * 0.78;
+        }
+        if (ch >= 'A' && ch <= 'Z') {
+            return font_size_px * 0.62;
+        }
+        return font_size_px * 0.51;
+    }
+
+    static fn estimateWrappedLines(doc: *const Document, node_id: NodeId, max_w: f32, font_size_px: f32): usize {
+        if (max_w <= 0.0 || font_size_px <= 0.0) return 1;
+        let lines: usize = 1;
+        let line_w: f32 = 0.0;
+        let word_w: f32 = 0.0;
+        let in_ws = true;
+        let has_any = false;
+        const space_w = font_size_px * 0.28;
+
+        // Collect direct text children (and inline text descendants)
+        let stack: [64]NodeId = [NULL_NODE; 64];
+        let sp: usize = 0;
+        stack[0] = node_id;
+        sp = 1;
+        // Traverse in document order using recursive helper via direct child walk
+        let child = doc.nodes.items[@as(usize, node_id)].first_child;
+        while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) {
+            const cn = &doc.nodes.items[@as(usize, child)];
+            if (cn.node_type == NodeType.Text) {
+                let ti: usize = 0;
+                while (ti < cn.text_content.len) : (ti += 1) {
+                    const ch = cn.text_content[ti];
+                    const is_ws = (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n');
+                    if (is_ws) {
+                        if (!in_ws) {
+                            // flush word
+                            if (line_w > 0.0 && line_w + space_w + word_w > max_w) {
+                                lines += 1;
+                                line_w = word_w;
+                            } else if (line_w > 0.0) {
+                                line_w += space_w + word_w;
+                            } else {
+                                line_w = word_w;
+                            }
+                            word_w = 0.0;
+                            in_ws = true;
+                        }
+                    } else {
+                        has_any = true;
+                        in_ws = false;
+                        word_w += LayoutTree.estimateCharWidth(ch, font_size_px);
+                    }
+                }
+            }
+            child = cn.next_sibling;
+        }
+        if (!in_ws && word_w > 0.0) {
+            if (line_w > 0.0 && line_w + space_w + word_w > max_w) {
+                lines += 1;
+            }
+        }
+        if (!has_any) return 1;
+        return lines;
+    }
+
+    static fn parseSpanAttr(node: *const NodeData, attr_name: []const u8): usize {
+        if (val_str := node.getAttribute(attr_name)) {
+            const trimmed = std.mem.trim(u8, val_str, " \t\r\n");
+            if (v := std.fmt.parseInt(usize, trimmed, 10) catch null) {
+                if (v >= 1 && v <= 32) return v;
+            }
+        }
+        return 1;
+    }
+
+    fn shiftSubtree(*_, doc: *const Document, node_id: NodeId, dx: f32, dy: f32) {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= _.boxes.items.len) return;
+        if (dx == 0.0 && dy == 0.0) return;
+        _.boxes.items[@as(usize, node_id)].rect.x += dx;
+        _.boxes.items[@as(usize, node_id)].rect.y += dy;
+        let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            _.shiftSubtree(doc, ch, dx, dy);
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+    }
+
+    fn measureIntrinsicWidth(
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        node_id: NodeId,
+        avail_w: f32,
+    ): f32 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0.0;
+        const node = &doc.nodes.items[@as(usize, node_id)];
+        if (node.node_type == NodeType.Text) {
+            const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
+            if (trimmed.len == 0) return 0.0;
+            let parent_fs: f32 = 16.0;
+            if (node.parent != NULL_NODE && @as(usize, node.parent) < styles.len) {
+                parent_fs = styles[@as(usize, node.parent)].font_size_px;
+            }
+            let tw: f32 = 0.0;
+            let ti: usize = 0;
+            while (ti < trimmed.len) : (ti += 1) {
+                tw += LayoutTree.estimateCharWidth(trimmed[ti], parent_fs);
+            }
+            return tw;
+        }
+        if (node.node_type != NodeType.Element) return 0.0;
+        const st = &styles[@as(usize, node_id)];
+        if (st.display.isNone()) return 0.0;
+
+        const fs = st.font_size_px;
+        const ml = st.margin_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const mr = st.margin_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pl = st.padding_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pr = st.padding_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const bl = st.border_left_width;
+        const br = st.border_right_width;
+
+        if (!st.width.is_auto && !st.width.is_none) {
+            const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            if (st.box_sizing == BoxSizing.BorderBox) {
+                return w + ml + mr;
+            }
+            return w + pl + pr + bl + br + ml + mr;
+        }
+        if (rep := LayoutTree.getReplacedSize(node)) {
+            return rep.width + pl + pr + bl + br + ml + mr;
+        }
+
+        let max_child_w: f32 = 0.0;
+        let ch = node.first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            const cw = _.measureIntrinsicWidth(doc, styles, ch, avail_w);
+            if (cw > max_child_w) max_child_w = cw;
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        return max_child_w + pl + pr + bl + br + ml + mr;
+    }
+
+    fn measureMinContentWidth(
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        node_id: NodeId,
+        avail_w: f32,
+    ): f32 {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0.0;
+        const node = &doc.nodes.items[@as(usize, node_id)];
+        if (node.node_type == NodeType.Text) {
+            let parent_fs: f32 = 16.0;
+            if (node.parent != NULL_NODE && @as(usize, node.parent) < styles.len) {
+                parent_fs = styles[@as(usize, node.parent)].font_size_px;
+            }
+            // Longest single word width
+            let max_word_w: f32 = 0.0;
+            let cur_w: f32 = 0.0;
+            let ti: usize = 0;
+            while (ti < node.text_content.len) : (ti += 1) {
+                const ch = node.text_content[ti];
+                if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                    if (cur_w > max_word_w) max_word_w = cur_w;
+                    cur_w = 0.0;
+                } else {
+                    cur_w += LayoutTree.estimateCharWidth(ch, parent_fs);
+                }
+            }
+            if (cur_w > max_word_w) max_word_w = cur_w;
+            return max_word_w;
+        }
+        if (node.node_type != NodeType.Element) return 0.0;
+        const st = &styles[@as(usize, node_id)];
+        if (st.display.isNone()) return 0.0;
+
+        const fs = st.font_size_px;
+        const ml = st.margin_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const mr = st.margin_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pl = st.padding_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pr = st.padding_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const bl = st.border_left_width;
+        const br = st.border_right_width;
+
+        if (!st.width.is_auto && !st.width.is_none) {
+            const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            if (st.box_sizing == BoxSizing.BorderBox) {
+                return w + ml + mr;
+            }
+            return w + pl + pr + bl + br + ml + mr;
+        }
+        if (rep := LayoutTree.getReplacedSize(node)) {
+            return rep.width + pl + pr + bl + br + ml + mr;
+        }
+
+        let max_child_w: f32 = 0.0;
+        let ch = node.first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            const cw = _.measureMinContentWidth(doc, styles, ch, avail_w);
+            if (cw > max_child_w) max_child_w = cw;
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        return max_child_w + pl + pr + bl + br + ml + mr;
+    }
+
+    fn layoutTableContainer(
+        *_,
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        table_id: NodeId,
+        origin_x: f32,
+        origin_y: f32,
+        avail_w: f32,
+    ) {
+        let children: [64]NodeId = [NULL_NODE; 64];
+        let child_count: usize = 0;
+        let ch = doc.nodes.items[@as(usize, table_id)].first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            const cn = &doc.nodes.items[@as(usize, ch)];
+            if (cn.node_type == NodeType.Element) {
+                if (!styles[@as(usize, ch)].display.isNone()) {
+                    if (child_count < 64) {
+                        children[child_count] = ch;
+                        child_count += 1;
+                    }
+                } else {
+                    _.boxes.items[@as(usize, ch)].rect = Rect.zero();
+                }
+            }
+            ch = cn.next_sibling;
+        }
+
+        const tstyle = &styles[@as(usize, table_id)];
+        const dims = _.layoutTableCore(doc, styles, table_id, tstyle, children[0..child_count], origin_x, origin_y, avail_w);
+        let tbox = &_.boxes.items[@as(usize, table_id)];
+        const h_decor = tbox.paddingHorizontal() + tbox.borderHorizontal();
+        const v_decor = tbox.paddingVertical() + tbox.borderVertical();
+        tbox.content_width = if (dims[0] > h_decor) (dims[0] - h_decor) else 0.0;
+        tbox.content_height = if (dims[1] > v_decor) (dims[1] - v_decor) else 0.0;
+    }
+
+    fn layoutTableCore(
+        *_,
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        table_id: NodeId,
+        tstyle_opt: (*const ComputedStyle)?,
+        direct_children: []const NodeId,
+        origin_x: f32,
+        origin_y: f32,
+        avail_w: f32,
+    ): [2]f32 {
+        let is_collapse = false;
+        let h_spacing: f32 = 0.0;
+        let v_spacing: f32 = 0.0;
+        let is_fixed = false;
+        let has_explicit_table_w = false;
+        let explicit_table_w: f32 = 0.0;
+        let table_border_h: f32 = 0.0;
+        let table_border_v: f32 = 0.0;
+        let table_pad_h: f32 = 0.0;
+        let table_pad_v: f32 = 0.0;
+        let table_border_left: f32 = 0.0;
+        let table_border_top: f32 = 0.0;
+        let table_pad_left: f32 = 0.0;
+        let table_pad_top: f32 = 0.0;
+
+        if (ts := tstyle_opt) {
+            is_collapse = (ts.border_collapse == BorderCollapse.Collapse);
+            if (!is_collapse) {
+                h_spacing = ts.border_spacing_h;
+                v_spacing = ts.border_spacing_v;
+            }
+            is_fixed = (ts.table_layout == TableLayout.Fixed);
+            if (table_id != NULL_NODE) {
+                const tb = &_.boxes.items[@as(usize, table_id)];
+                if (!is_collapse) {
+                    table_border_h = tb.borderHorizontal();
+                    table_border_v = tb.borderVertical();
+                    table_pad_h = tb.paddingHorizontal();
+                    table_pad_v = tb.paddingVertical();
+                    table_border_left = tb.border_left;
+                    table_border_top = tb.border_top;
+                    table_pad_left = tb.padding_left;
+                    table_pad_top = tb.padding_top;
+                }
+            }
+            if (!ts.width.is_auto && !ts.width.is_none) {
+                has_explicit_table_w = true;
+                const raw_tw = ts.width.resolvePx(avail_w, ts.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                if (ts.box_sizing == BoxSizing.BorderBox || is_collapse) {
+                    explicit_table_w = raw_tw;
+                } else {
+                    explicit_table_w = raw_tw + table_border_h + table_pad_h;
+                }
+            }
+        }
+
+        // 1. Partition children into top_captions, bottom_captions, and ordered row/cell structure
+        let top_captions: [16]NodeId = [NULL_NODE; 16];
+        let top_cap_count: usize = 0;
+        let bot_captions: [16]NodeId = [NULL_NODE; 16];
+        let bot_cap_count: usize = 0;
+
+        // Collect row groups in CSS order: thead, tbody/stray, tfoot
+        let head_items: [64]NodeId = [NULL_NODE; 64];
+        let head_count: usize = 0;
+        let body_items: [64]NodeId = [NULL_NODE; 64];
+        let body_count: usize = 0;
+        let foot_items: [64]NodeId = [NULL_NODE; 64];
+        let foot_count: usize = 0;
+
+        let ci: usize = 0;
+        while (ci < direct_children.len) : (ci += 1) {
+            const cid = direct_children[ci];
+            const cstyle = &styles[@as(usize, cid)];
+            if (cstyle.display.isTableCaption()) {
+                if (cstyle.caption_side == CaptionSide.Bottom) {
+                    if (bot_cap_count < 16) {
+                        bot_captions[bot_cap_count] = cid;
+                        bot_cap_count += 1;
+                    }
+                } else {
+                    if (top_cap_count < 16) {
+                        top_captions[top_cap_count] = cid;
+                        top_cap_count += 1;
+                    }
+                }
+            } else if (cstyle.display.isTableColumn()) {
+                _.boxes.items[@as(usize, cid)].rect = Rect.zero();
+            } else if (cstyle.display.isTableHeaderGroup()) {
+                if (head_count < 64) {
+                    head_items[head_count] = cid;
+                    head_count += 1;
+                }
+            } else if (cstyle.display.isTableFooterGroup()) {
+                if (foot_count < 64) {
+                    foot_items[foot_count] = cid;
+                    foot_count += 1;
+                }
+            } else {
+                if (body_count < 64) {
+                    body_items[body_count] = cid;
+                    body_count += 1;
+                }
+            }
+        }
+
+        // Flatten ordered sections into rows & cells
+        let rows: [64]TableRowEntry = [TableRowEntry{}; 64];
+        let row_count: usize = 0;
+        let cells: [128]TableCellEntry = [TableCellEntry{}; 128];
+        let cell_count: usize = 0;
+        let occupied: [2048]bool = [false; 2048]; // 64 rows x 32 cols
+        let max_cols: usize = 0;
+
+        // Build unified list of items to process across head, body, foot
+        let ordered: [128]NodeId = [NULL_NODE; 128];
+        let ordered_group: [128]NodeId = [NULL_NODE; 128];
+        let ord_count: usize = 0;
+
+        let pass: usize = 0;
+        while (pass < 3) : (pass += 1) {
+            const src_len = if (pass == 0) head_count else (if (pass == 1) body_count else foot_count);
+            let si: usize = 0;
+            while (si < src_len) : (si += 1) {
+                const item_id = if (pass == 0) head_items[si] else (if (pass == 1) body_items[si] else foot_items[si]);
+                const istyle = &styles[@as(usize, item_id)];
+                if (istyle.display.isTableRowGroup()) {
+                    let gc = doc.nodes.items[@as(usize, item_id)].first_child;
+                    while (gc != NULL_NODE && @as(usize, gc) < doc.nodes.items.len) {
+                        const gcn = &doc.nodes.items[@as(usize, gc)];
+                        if (gcn.node_type == NodeType.Element) {
+                            if (!styles[@as(usize, gc)].display.isNone()) {
+                                if (ord_count < 128) {
+                                    ordered[ord_count] = gc;
+                                    ordered_group[ord_count] = item_id;
+                                    ord_count += 1;
+                                }
+                            } else {
+                                _.boxes.items[@as(usize, gc)].rect = Rect.zero();
+                            }
+                        }
+                        gc = gcn.next_sibling;
+                    }
+                } else {
+                    if (ord_count < 128) {
+                        ordered[ord_count] = item_id;
+                        ordered_group[ord_count] = NULL_NODE;
+                        ord_count += 1;
+                    }
+                }
+            }
+        }
+
+        // Convert ordered items into rows & cells with rowspan/colspan grid placement
+        let oi: usize = 0;
+        while (oi < ord_count && row_count < 64) {
+            const item_id = ordered[oi];
+            const grp_id = ordered_group[oi];
+            const istyle = &styles[@as(usize, item_id)];
+
+            if (istyle.display.isTableRow()) {
+                const r_idx = row_count;
+                rows[r_idx] = TableRowEntry{ node_id: item_id, group_id: grp_id };
+                row_count += 1;
+                let cur_col: usize = 0;
+
+                let rc = doc.nodes.items[@as(usize, item_id)].first_child;
+                while (rc != NULL_NODE && @as(usize, rc) < doc.nodes.items.len) {
+                    const rcn = &doc.nodes.items[@as(usize, rc)];
+                    if (rcn.node_type == NodeType.Element) {
+                        const rcstyle = &styles[@as(usize, rc)];
+                        if (rcstyle.display.isNone()) {
+                            _.boxes.items[@as(usize, rc)].rect = Rect.zero();
+                        } else if (rcstyle.display.isTableCell()) {
+                            while (cur_col < 32 && occupied[r_idx * 32 + cur_col]) : (cur_col += 1) {}
+                            if (cur_col < 32 && cell_count < 128) {
+                                const cs = LayoutTree.parseSpanAttr(rcn, "colspan");
+                                const rs = LayoutTree.parseSpanAttr(rcn, "rowspan");
+                                cells[cell_count] = TableCellEntry{
+                                    node_id: rc,
+                                    is_anon: false,
+                                    row: r_idx,
+                                    col: cur_col,
+                                    rowspan: rs,
+                                    colspan: cs,
+                                };
+                                cell_count += 1;
+                                let dr: usize = 0;
+                                while (dr < rs && r_idx + dr < 64) : (dr += 1) {
+                                    let dc: usize = 0;
+                                    while (dc < cs && cur_col + dc < 32) : (dc += 1) {
+                                        occupied[(r_idx + dr) * 32 + (cur_col + dc)] = true;
+                                    }
+                                }
+                                if (cur_col + cs > max_cols) max_cols = cur_col + cs;
+                                cur_col += cs;
+                            }
+                        } else {
+                            // Non-table-cell inside table-row -> wrap in anonymous cell
+                            while (cur_col < 32 && occupied[r_idx * 32 + cur_col]) : (cur_col += 1) {}
+                            if (cur_col < 32 && cell_count < 128) {
+                                let entry = TableCellEntry{
+                                    node_id: NULL_NODE,
+                                    is_anon: true,
+                                    row: r_idx,
+                                    col: cur_col,
+                                    rowspan: 1,
+                                    colspan: 1,
+                                };
+                                entry.anon_nodes[0] = rc;
+                                entry.anon_count = 1;
+                                cells[cell_count] = entry;
+                                cell_count += 1;
+                                occupied[r_idx * 32 + cur_col] = true;
+                                if (cur_col + 1 > max_cols) max_cols = cur_col + 1;
+                                cur_col += 1;
+                            }
+                        }
+                    }
+                    rc = rcn.next_sibling;
+                }
+                oi += 1;
+            } else if (istyle.display.isTableCell()) {
+                // Consecutive stray table-cells form a single anonymous table-row
+                const r_idx = row_count;
+                rows[r_idx] = TableRowEntry{ node_id: NULL_NODE, group_id: grp_id };
+                row_count += 1;
+                let cur_col: usize = 0;
+                while (oi < ord_count) {
+                    const cid = ordered[oi];
+                    if (ordered_group[oi] != grp_id || !styles[@as(usize, cid)].display.isTableCell()) break;
+                    const cn = &doc.nodes.items[@as(usize, cid)];
+                    while (cur_col < 32 && occupied[r_idx * 32 + cur_col]) : (cur_col += 1) {}
+                    if (cur_col < 32 && cell_count < 128) {
+                        const cs = LayoutTree.parseSpanAttr(cn, "colspan");
+                        const rs = LayoutTree.parseSpanAttr(cn, "rowspan");
+                        cells[cell_count] = TableCellEntry{
+                            node_id: cid,
+                            is_anon: false,
+                            row: r_idx,
+                            col: cur_col,
+                            rowspan: rs,
+                            colspan: cs,
+                        };
+                        cell_count += 1;
+                        let dr: usize = 0;
+                        while (dr < rs && r_idx + dr < 64) : (dr += 1) {
+                            let dc: usize = 0;
+                            while (dc < cs && cur_col + dc < 32) : (dc += 1) {
+                                occupied[(r_idx + dr) * 32 + (cur_col + dc)] = true;
+                            }
+                        }
+                        if (cur_col + cs > max_cols) max_cols = cur_col + cs;
+                        cur_col += cs;
+                    }
+                    oi += 1;
+                }
+            } else {
+                // Consecutive non-table children inside display:table -> single anonymous cell in an anonymous row
+                const r_idx = row_count;
+                rows[r_idx] = TableRowEntry{ node_id: NULL_NODE, group_id: grp_id };
+                row_count += 1;
+                let cur_col: usize = 0;
+                while (cur_col < 32 && occupied[r_idx * 32 + cur_col]) : (cur_col += 1) {}
+                if (cur_col < 32 && cell_count < 128) {
+                    let entry = TableCellEntry{
+                        node_id: NULL_NODE,
+                        is_anon: true,
+                        row: r_idx,
+                        col: cur_col,
+                        rowspan: 1,
+                        colspan: 1,
+                    };
+                    while (oi < ord_count) {
+                        const nid = ordered[oi];
+                        const nst = &styles[@as(usize, nid)];
+                        if (ordered_group[oi] != grp_id || nst.display.isTableRow() || nst.display.isTableCell()) break;
+                        if (entry.anon_count < 16) {
+                            entry.anon_nodes[entry.anon_count] = nid;
+                            entry.anon_count += 1;
+                        }
+                        oi += 1;
+                    }
+                    cells[cell_count] = entry;
+                    cell_count += 1;
+                    occupied[r_idx * 32 + cur_col] = true;
+                    if (cur_col + 1 > max_cols) max_cols = cur_col + 1;
+                } else {
+                    oi += 1;
+                }
+            }
+        }
+
+        // Clamp rowspan to actual row_count
+        let ci2: usize = 0;
+        while (ci2 < cell_count) : (ci2 += 1) {
+            if (cells[ci2].row + cells[ci2].rowspan > row_count) {
+                cells[ci2].rowspan = row_count - cells[ci2].row;
+            }
+            if (cells[ci2].rowspan == 0) cells[ci2].rowspan = 1;
+        }
+
+        // 2. Measure preferred width of each cell
+        let col_w: [32]f32 = [0.0; 32];
+        let ci3: usize = 0;
+        while (ci3 < cell_count) : (ci3 += 1) {
+            let cell = &cells[ci3];
+            let pw: f32 = 0.0;
+            if (!cell.is_anon) {
+                const cstyle = &styles[@as(usize, cell.node_id)];
+                if (!cstyle.width.is_auto && !cstyle.width.is_none) {
+                    const rw = cstyle.width.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    if (cstyle.box_sizing == BoxSizing.BorderBox) {
+                        pw = rw;
+                    } else {
+                        const pl = cstyle.padding_left.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        const pr = cstyle.padding_right.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        const bdr_h = if (is_collapse) 0.0 else (cstyle.border_left_width + cstyle.border_right_width);
+                        pw = rw + pl + pr + bdr_h;
+                    }
+                } else {
+                    pw = _.measureIntrinsicWidth(doc, styles, cell.node_id, avail_w);
+                }
+            } else {
+                let ai: usize = 0;
+                while (ai < cell.anon_count) : (ai += 1) {
+                    const aw = _.measureIntrinsicWidth(doc, styles, cell.anon_nodes[ai], avail_w);
+                    if (aw > pw) pw = aw;
+                }
+            }
+            cell.pref_w = pw;
+            if (cell.colspan == 1 && cell.col < 32) {
+                if (pw > col_w[cell.col]) col_w[cell.col] = pw;
+            }
+        }
+
+        // Distribute colspan > 1 widths
+        let ci4: usize = 0;
+        while (ci4 < cell_count) : (ci4 += 1) {
+            const cell = &cells[ci4];
+            if (cell.colspan > 1) {
+                let cur_span_w: f32 = 0.0;
+                let dc: usize = 0;
+                while (dc < cell.colspan && cell.col + dc < 32) : (dc += 1) {
+                    cur_span_w += col_w[cell.col + dc];
+                }
+                if (cell.colspan > 1) {
+                    cur_span_w += @as(f32, @floatFromInt(cell.colspan - 1)) * h_spacing;
+                }
+                if (cell.pref_w > cur_span_w) {
+                    const add_each = (cell.pref_w - cur_span_w) / @as(f32, @floatFromInt(cell.colspan));
+                    let dc2: usize = 0;
+                    while (dc2 < cell.colspan && cell.col + dc2 < 32) : (dc2 += 1) {
+                        col_w[cell.col + dc2] += add_each;
+                    }
+                }
+            }
+        }
+
+        let sum_cols_w: f32 = 0.0;
+        let k: usize = 0;
+        while (k < max_cols) : (k += 1) {
+            sum_cols_w += col_w[k];
+        }
+        const total_h_spacing = if (max_cols > 0) (@as(f32, @floatFromInt(max_cols + 1)) * h_spacing) else 0.0;
+        const natural_grid_w = sum_cols_w + total_h_spacing + table_border_h + table_pad_h;
+
+        // 3. Measure caption min-content widths (CSS Table 3: table width >= max caption min-content width)
+        let max_cap_min_w: f32 = 0.0;
+        let tci: usize = 0;
+        while (tci < top_cap_count) : (tci += 1) {
+            const cw = _.measureMinContentWidth(doc, styles, top_captions[tci], avail_w);
+            if (cw > max_cap_min_w) max_cap_min_w = cw;
+        }
+        let bci: usize = 0;
+        while (bci < bot_cap_count) : (bci += 1) {
+            const cw = _.measureMinContentWidth(doc, styles, bot_captions[bci], avail_w);
+            if (cw > max_cap_min_w) max_cap_min_w = cw;
+        }
+
+        // 4. Final table border-box width
+        let final_table_w: f32 = natural_grid_w;
+        if (has_explicit_table_w) {
+            final_table_w = @max(explicit_table_w, max_cap_min_w);
+        } else {
+            final_table_w = @max(natural_grid_w, max_cap_min_w);
+        }
+
+        // Expand or distribute column widths to match final_table_w
+        if (max_cols > 0) {
+            const target_cols_sum = @max(0.0, final_table_w - table_border_h - table_pad_h - total_h_spacing);
+            if (sum_cols_w <= 0.0) {
+                const each_w = target_cols_sum / @as(f32, @floatFromInt(max_cols));
+                let c0: usize = 0;
+                while (c0 < max_cols) : (c0 += 1) {
+                    col_w[c0] = each_w;
+                }
+            } else if (target_cols_sum > sum_cols_w) {
+                const extra_each = (target_cols_sum - sum_cols_w) / @as(f32, @floatFromInt(max_cols));
+                let c0: usize = 0;
+                while (c0 < max_cols) : (c0 += 1) {
+                    col_w[c0] += extra_each;
+                }
+            } else if (is_fixed && target_cols_sum < sum_cols_w) {
+                const scale = target_cols_sum / sum_cols_w;
+                let c0: usize = 0;
+                while (c0 < max_cols) : (c0 += 1) {
+                    col_w[c0] *= scale;
+                }
+            }
+        }
+
+        // 5. Lay out Top Captions
+        let cur_y = origin_y;
+        let tci2: usize = 0;
+        while (tci2 < top_cap_count) : (tci2 += 1) {
+            const cap_id = top_captions[tci2];
+            _.layoutNodeEx(doc, styles, cap_id, origin_x, cur_y, final_table_w, 0.0, origin_x, cur_y, false);
+            cur_y += _.boxes.items[@as(usize, cap_id)].outerHeight();
+        }
+
+        // 6. Lay out Table Grid Rows & Cells
+        const grid_top_y = cur_y;
+        const grid_inner_x = origin_x + table_border_left + table_pad_left;
+        let col_x: [32]f32 = [0.0; 32];
+        let cx_cur = grid_inner_x + h_spacing;
+        let c1: usize = 0;
+        while (c1 < max_cols) : (c1 += 1) {
+            col_x[c1] = cx_cur;
+            cx_cur += col_w[c1] + h_spacing;
+        }
+
+        // First pass: lay out each cell at its final width to measure height
+        let row_h: [64]f32 = [0.0; 64];
+        let ci5: usize = 0;
+        while (ci5 < cell_count) : (ci5 += 1) {
+            let cell = &cells[ci5];
+            let cell_w: f32 = 0.0;
+            let dc: usize = 0;
+            while (dc < cell.colspan && cell.col + dc < max_cols) : (dc += 1) {
+                cell_w += col_w[cell.col + dc];
+            }
+            if (cell.colspan > 1) {
+                cell_w += @as(f32, @floatFromInt(cell.colspan - 1)) * h_spacing;
+            }
+            const cell_x = if (cell.col < max_cols) col_x[cell.col] else grid_inner_x;
+            cell.layout_x = cell_x;
+            cell.layout_y = grid_top_y;
+
+            if (!cell.is_anon) {
+                const cid = cell.node_id;
+                const cstyle = &styles[@as(usize, cid)];
+                _.layoutNodeEx(doc, styles, cid, cell_x, grid_top_y, cell_w, 0.0, cell_x, grid_top_y, false);
+                let cbox = &_.boxes.items[@as(usize, cid)];
+                const ch_decor = cbox.paddingHorizontal() + cbox.borderHorizontal();
+                cbox.content_width = if (cell_w > ch_decor) (cell_w - ch_decor) else 0.0;
+                cbox.rect.x = cell_x;
+                cbox.rect.width = cell_w;
+                let measured = cbox.borderBoxHeight();
+                if (is_collapse && !cstyle.height.is_auto && !cstyle.height.is_none) {
+                    const rh = cstyle.height.resolvePx(0.0, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    const bdr_half = (cstyle.border_top_width + cstyle.border_bottom_width) * 0.5;
+                    const expected_h = rh + cbox.paddingVertical() + bdr_half;
+                    if (measured > expected_h) {
+                        measured = expected_h;
+                    }
+                }
+                cell.measured_h = measured;
+            } else {
+                let anon_y = grid_top_y;
+                let ai: usize = 0;
+                while (ai < cell.anon_count) : (ai += 1) {
+                    const aid = cell.anon_nodes[ai];
+                    _.layoutNodeEx(doc, styles, aid, cell_x, anon_y, cell_w, 0.0, cell_x, anon_y, false);
+                    anon_y += _.boxes.items[@as(usize, aid)].outerHeight();
+                }
+                cell.measured_h = anon_y - grid_top_y;
+            }
+
+            if (cell.rowspan == 1 && cell.row < 64) {
+                if (cell.measured_h > row_h[cell.row]) {
+                    row_h[cell.row] = cell.measured_h;
+                }
+            }
+        }
+
+        // Distribute rowspan > 1 heights
+        let ci6: usize = 0;
+        while (ci6 < cell_count) : (ci6 += 1) {
+            const cell = &cells[ci6];
+            if (cell.rowspan > 1) {
+                let cur_span_h: f32 = 0.0;
+                let dr: usize = 0;
+                while (dr < cell.rowspan && cell.row + dr < row_count) : (dr += 1) {
+                    cur_span_h += row_h[cell.row + dr];
+                }
+                if (cell.rowspan > 1) {
+                    cur_span_h += @as(f32, @floatFromInt(cell.rowspan - 1)) * v_spacing;
+                }
+                if (cell.measured_h > cur_span_h && cell.row + cell.rowspan > 0) {
+                    const last_r = cell.row + cell.rowspan - 1;
+                    if (last_r < row_count) {
+                        row_h[last_r] += (cell.measured_h - cur_span_h);
+                    }
+                }
+            }
+        }
+
+        // Compute row Y positions
+        let row_y: [64]f32 = [0.0; 64];
+        let ry_cur = grid_top_y + table_border_top + table_pad_top + v_spacing;
+        let r1: usize = 0;
+        while (r1 < row_count) : (r1 += 1) {
+            row_y[r1] = ry_cur;
+            ry_cur += row_h[r1] + v_spacing;
+        }
+        const grid_total_h = if (row_count > 0) (ry_cur - grid_top_y + table_border_v - table_border_top + table_pad_v - table_pad_top) else (table_border_v + table_pad_v);
+
+        // Second pass: position each cell at (col_x[col], row_y[row]) with spanned height
+        let ci7: usize = 0;
+        while (ci7 < cell_count) : (ci7 += 1) {
+            const cell = &cells[ci7];
+            let cell_h: f32 = 0.0;
+            let dr: usize = 0;
+            while (dr < cell.rowspan && cell.row + dr < row_count) : (dr += 1) {
+                cell_h += row_h[cell.row + dr];
+            }
+            if (cell.rowspan > 1) {
+                cell_h += @as(f32, @floatFromInt(cell.rowspan - 1)) * v_spacing;
+            }
+            const target_y = if (cell.row < row_count) row_y[cell.row] else grid_top_y;
+            const dy = target_y - cell.layout_y;
+
+            if (!cell.is_anon) {
+                const cid = cell.node_id;
+                if (dy != 0.0) {
+                    _.shiftSubtree(doc, cid, 0.0, dy);
+                }
+                let cbox = &_.boxes.items[@as(usize, cid)];
+                cbox.rect.y = target_y;
+                cbox.rect.height = cell_h;
+                const cv_decor = cbox.paddingVertical() + cbox.borderVertical();
+                cbox.content_height = if (cell_h > cv_decor) (cell_h - cv_decor) else 0.0;
+            } else {
+                if (dy != 0.0) {
+                    let ai: usize = 0;
+                    while (ai < cell.anon_count) : (ai += 1) {
+                        _.shiftSubtree(doc, cell.anon_nodes[ai], 0.0, dy);
+                    }
+                }
+            }
+        }
+
+        // Set rects for explicit <tr> and row-group elements so painter visits their children
+        let r2: usize = 0;
+        while (r2 < row_count) : (r2 += 1) {
+            const rid = rows[r2].node_id;
+            if (rid != NULL_NODE) {
+                _.boxes.items[@as(usize, rid)].rect = Rect{
+                    x: grid_inner_x,
+                    y: row_y[r2],
+                    width: @max(0.0, final_table_w - table_border_h - table_pad_h),
+                    height: row_h[r2],
+                    visible: styles[@as(usize, rid)].visibility == Visibility.Visible,
+                };
+            }
+            const gid = rows[r2].group_id;
+            if (gid != NULL_NODE) {
+                let gbox = &_.boxes.items[@as(usize, gid)];
+                if (!gbox.rect.visible) {
+                    gbox.rect = Rect{
+                        x: grid_inner_x,
+                        y: row_y[r2],
+                        width: @max(0.0, final_table_w - table_border_h - table_pad_h),
+                        height: row_h[r2],
+                        visible: styles[@as(usize, gid)].visibility == Visibility.Visible,
+                    };
+                } else {
+                    const new_bottom = row_y[r2] + row_h[r2];
+                    if (new_bottom > gbox.rect.bottom()) {
+                        gbox.rect.height = new_bottom - gbox.rect.y;
+                    }
+                }
+            }
+        }
+
+        cur_y = grid_top_y + grid_total_h;
+
+        // 7. Lay out Bottom Captions
+        let bci2: usize = 0;
+        while (bci2 < bot_cap_count) : (bci2 += 1) {
+            const cap_id = bot_captions[bci2];
+            _.layoutNodeEx(doc, styles, cap_id, origin_x, cur_y, final_table_w, 0.0, origin_x, cur_y, false);
+            cur_y += _.boxes.items[@as(usize, cap_id)].outerHeight();
+        }
+
+        const total_h = cur_y - origin_y;
+        const res: [2]f32 = [final_table_w, total_h];
+        return res;
+    }
+
     /// Block formatting layout: stacks children vertically and calculates auto height.
     fn layoutBlockContainer(
         *_,
@@ -1375,6 +2253,8 @@ pub struct LayoutTree {
         const content_h = parent_box.content_height;
         let cursor_y = content_y;
         let max_child_right = content_x;
+        let float_left_bottom = content_y;
+        let float_right_bottom = content_y;
 
         const pstyle_blk = &styles[@as(usize, parent_id)];
         const parent_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
@@ -1395,7 +2275,50 @@ pub struct LayoutTree {
                         } else {
                             _.layoutNodeEx(doc, styles, child, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, cursor_y, true);
                         }
+                    } else if (cstyle.display.isTableInternal()) {
+                        // CSS Table 3 § 2.2: consecutive misparented table-internal boxes form an anonymous table
+                        let run: [64]NodeId = [NULL_NODE; 64];
+                        let run_count: usize = 0;
+                        let scan = child;
+                        let last_consumed = child;
+                        while (scan != NULL_NODE && @as(usize, scan) < doc.nodes.items.len) {
+                            const sn = &doc.nodes.items[@as(usize, scan)];
+                            if (sn.node_type == NodeType.Element) {
+                                const sst = &styles[@as(usize, scan)];
+                                if (sst.display.isNone()) {
+                                    _.boxes.items[@as(usize, scan)].rect = Rect.zero();
+                                    last_consumed = scan;
+                                    scan = sn.next_sibling;
+                                    continue;
+                                }
+                                if (!sst.display.isTableInternal()) break;
+                                if (run_count < 64) {
+                                    run[run_count] = scan;
+                                    run_count += 1;
+                                }
+                                last_consumed = scan;
+                            } else if (sn.node_type == NodeType.Text) {
+                                const trimmed = std.mem.trim(u8, sn.text_content, " \t\r\n");
+                                if (trimmed.len > 0) break;
+                            }
+                            scan = sn.next_sibling;
+                        }
+                        const dims = _.layoutTableCore(doc, styles, NULL_NODE, null, run[0..run_count], content_x, cursor_y, content_w);
+                        cursor_y += dims[1];
+                        if (content_x + dims[0] > max_child_right) {
+                            max_child_right = content_x + dims[0];
+                        }
+                        child = doc.nodes.items[@as(usize, last_consumed)].next_sibling;
+                        continue;
                     } else {
+                        // Handle CSS clear
+                        if (cstyle.clear_mode == ClearMode.Left || cstyle.clear_mode == ClearMode.Both) {
+                            if (float_left_bottom > cursor_y) cursor_y = float_left_bottom;
+                        }
+                        if (cstyle.clear_mode == ClearMode.Right || cstyle.clear_mode == ClearMode.Both) {
+                            if (float_right_bottom > cursor_y) cursor_y = float_right_bottom;
+                        }
+
                         let child_x = content_x;
                         if (cstyle.display.isInline()) {
                             const prev_id = cnode.prev_sibling;
@@ -1411,12 +2334,37 @@ pub struct LayoutTree {
                         }
                         _.layoutNodeEx(doc, styles, child, child_x, cursor_y, content_w, content_h, child_x, cursor_y, child_h_definite);
                         const cbox = &_.boxes.items[@as(usize, child)];
-                        cursor_y += cbox.outerHeight();
-                        if (cnode.hasTag("svg") && cstyle.display.isInline() && cbox.outerHeight() > 0.0) {
-                            const fsz = if (cstyle.font_size_px > 0.0) cstyle.font_size_px else 16.0;
-                            cursor_y += @round(fsz * 0.3125);
+
+                        if (cstyle.float_mode == FloatMode.Right) {
+                            const target_x = content_x + content_w - cbox.borderBoxWidth() - cbox.margin_right;
+                            const dx = target_x - cbox.rect.x;
+                            if (dx != 0.0) {
+                                _.shiftSubtree(doc, child, dx, 0.0);
+                            }
+                            const fb = cursor_y + cbox.outerHeight();
+                            if (fb > float_right_bottom) float_right_bottom = fb;
+                        } else if (cstyle.float_mode == FloatMode.Left) {
+                            const fb = cursor_y + cbox.outerHeight();
+                            if (fb > float_left_bottom) float_left_bottom = fb;
+                        } else {
+                            // Horizontal centering for `margin-left: auto; margin-right: auto`
+                            if (cstyle.margin_left.is_auto && cstyle.margin_right.is_auto && !cstyle.display.isInline()) {
+                                const bw = cbox.borderBoxWidth();
+                                if (content_w > bw) {
+                                    const target_x = content_x + (content_w - bw) * 0.5;
+                                    const dx = target_x - cbox.rect.x;
+                                    if (dx != 0.0) {
+                                        _.shiftSubtree(doc, child, dx, 0.0);
+                                    }
+                                }
+                            }
+                            cursor_y += cbox.outerHeight();
+                            if (cnode.hasTag("svg") && cstyle.display.isInline() && cbox.outerHeight() > 0.0) {
+                                const fsz = if (cstyle.font_size_px > 0.0) cstyle.font_size_px else 16.0;
+                                cursor_y += @round(fsz * 0.3125);
+                            }
                         }
-                        const cr = cbox.rect.right();
+                        const cr = _.boxes.items[@as(usize, child)].rect.right();
                         if (cr > max_child_right) {
                             max_child_right = cr;
                         }
@@ -1428,7 +2376,8 @@ pub struct LayoutTree {
             child = cnode.next_sibling;
         }
 
-        const auto_h = if (cursor_y > content_y) (cursor_y - content_y) else 0.0;
+        const effective_bottom = @max(cursor_y, @max(float_left_bottom, float_right_bottom));
+        const auto_h = if (effective_bottom > content_y) (effective_bottom - content_y) else 0.0;
         const auto_w = if (max_child_right > content_x) (max_child_right - content_x) else 0.0;
         _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, auto_h);
         _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, auto_w);
