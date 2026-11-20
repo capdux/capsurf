@@ -4303,3 +4303,8 @@
 - **标准库符号冲突修复 (`src/css/cascade.cp:221`)**: 将 `pub struct BoxShadow` 重命名为 `CssBoxShadow`（4 处），消除非模块化编译时与 `/data/dev/cp/lib/css/engine/properties.cp:320` 同名结构体的 `E0207` 冲突。
 - **白盒单测验证**: `src/css/cascade.cp` 4 门禁全 0；`test/css/` (`2/2`)、`test/render/` (`3/3`)、`test/dom/` (`12/12`) 全部 PASS！
 - **清理旧子智能体**: 销毁 `628e287f-048c-4977-88b0-f56387278bfa`。
+
+## [2026-11-21 00:02:30] 验收 `raf-overrun-frame-gap` 1/1 PASS & 定位 `echo-headers`/`wheel` 跨模块缺口 (Subagent 8cee075b 结单，Phase 158)
+- **直接验收**：`e2e/raf-overrun-frame-gap.e2e.test.ts` (**1/1 PASS**)。
+- **精准跨模块定位**：`fixture-script-escaping` (`server.cp:543` HTTP 直连未传客户端请求头给 `MockFixtures`)、`screencast-wheel-coalescing` (`input.cp:331-335` & `screencast.cp:92-170` DOM `wheel`/scroll 同步与 `minFrameIntervalMs`)。
+- **清理旧子智能体**: 销毁 `8cee075b-53b5-41ad-b3b7-103a321fc10b`。

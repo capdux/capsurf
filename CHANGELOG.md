@@ -2132,3 +2132,6 @@
 
 ## Phase 157: Resolve `BoxShadow` Symbol Clash with `cap:css` & Full CSS/Render/DOM Whitebox Pass
 - **`src/css/cascade.cp`**：将 `BoxShadow` 重命名为 `CssBoxShadow` 消除 `E0207` 冲突，`test/css/` (2/2)、`test/render/` (3/3)、`test/dom/` (12/12) 全绿 PASS。
+
+## Phase 158: `raf-overrun-frame-gap` 1/1 PASS & HTTP Echo/Wheel Localization
+- 零修改验收 `e2e/raf-overrun-frame-gap.e2e.test.ts` (**1/1 PASS**)，并定位 `fixture-script-escaping` (`server.cp:543`) 与 `screencast-wheel-coalescing` (`input.cp:331`, `screencast.cp:92`)。
