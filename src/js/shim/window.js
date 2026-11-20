@@ -2798,6 +2798,144 @@ function installWindow(global) {
     globalThis.MessageChannel = MessageChannel;
   }
 
+  const _broadcastChannelRegistry = new Map();
+
+  function _getBroadcastOrigin() {
+    if (typeof location !== "undefined" && location && location.origin) {
+      return String(location.origin);
+    }
+    return "null";
+  }
+
+  function BroadcastChannel(name) {
+    if (!(this instanceof BroadcastChannel)) {
+      throw new TypeError("Failed to construct 'BroadcastChannel': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+    }
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'BroadcastChannel': 1 argument required, but only 0 present.");
+    }
+    EventTarget.call(this);
+    this._name = String(name);
+    this._origin = _getBroadcastOrigin();
+    this._closed = false;
+    this._onmessage = null;
+    this._onmessageerror = null;
+
+    const key = this._origin + "\0" + this._name;
+    let peers = _broadcastChannelRegistry.get(key);
+    if (!peers) {
+      peers = new Set();
+      _broadcastChannelRegistry.set(key, peers);
+    }
+    peers.add(this);
+  }
+  BroadcastChannel.prototype = Object.create(EventTarget.prototype);
+  BroadcastChannel.prototype.constructor = BroadcastChannel;
+
+  Object.defineProperty(BroadcastChannel.prototype, "name", {
+    get: function () {
+      return this._name;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(BroadcastChannel.prototype, "onmessage", {
+    get: function () {
+      return this._onmessage;
+    },
+    set: function (handler) {
+      this._onmessage = typeof handler === "function" ? handler : null;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(BroadcastChannel.prototype, "onmessageerror", {
+    get: function () {
+      return this._onmessageerror;
+    },
+    set: function (handler) {
+      this._onmessageerror = typeof handler === "function" ? handler : null;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  BroadcastChannel.prototype.postMessage = function (message) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'postMessage' on 'BroadcastChannel': 1 argument required, but only 0 present.");
+    }
+    if (this._closed) {
+      if (typeof DOMException !== "undefined") {
+        throw new DOMException("Failed to execute 'postMessage' on 'BroadcastChannel': Channel is closed", "InvalidStateError");
+      }
+      throw new Error("InvalidStateError: Channel is closed");
+    }
+
+    const clonedBase = _structuredClone(message, undefined, null).data;
+    const key = this._origin + "\0" + this._name;
+    const peers = _broadcastChannelRegistry.get(key);
+    if (!peers || peers.size === 0) return;
+
+    const sender = this;
+    const origin = this._origin;
+    const targets = [];
+    peers.forEach(function (peer) {
+      if (peer !== sender && !peer._closed) {
+        targets.push(peer);
+      }
+    });
+    if (targets.length === 0) return;
+
+    for (let i = 0; i < targets.length; i++) {
+      const peer = targets[i];
+      const peerData = i === 0 ? clonedBase : _structuredClone(clonedBase, undefined, null).data;
+      enqueueMessageTask(function () {
+        if (peer._closed) return;
+        let evt;
+        if (typeof MessageEvent !== "undefined") {
+          evt = new MessageEvent("message", {
+            data: peerData,
+            origin: origin,
+          });
+        } else {
+          evt = new Event("message");
+          evt.data = peerData;
+          evt.origin = origin;
+        }
+        evt.target = peer;
+        evt.currentTarget = peer;
+        peer.dispatchEvent(evt);
+      });
+    }
+  };
+
+  BroadcastChannel.prototype.close = function () {
+    if (this._closed) return;
+    this._closed = true;
+    const key = this._origin + "\0" + this._name;
+    const peers = _broadcastChannelRegistry.get(key);
+    if (peers) {
+      peers.delete(this);
+      if (peers.size === 0) {
+        _broadcastChannelRegistry.delete(key);
+      }
+    }
+  };
+
+  markNative(BroadcastChannel, "BroadcastChannel");
+  markNative(BroadcastChannel.prototype.postMessage, "postMessage");
+  markNative(BroadcastChannel.prototype.close, "close");
+
+  global.BroadcastChannel = BroadcastChannel;
+  if (typeof window !== "undefined") {
+    window.BroadcastChannel = BroadcastChannel;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.BroadcastChannel = BroadcastChannel;
+  }
+
   // 5.3 Fetch API
   const FORBIDDEN_REQUEST_HEADERS = new Set([
     "accept-charset",

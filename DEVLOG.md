@@ -1805,3 +1805,6 @@
 ### Phase 242: Retained-Frame RGBA Diffing & `MSG_PARTIAL (5)` (`scene-stream-partials` 1/1)
 - `runWebSocketSession` now polls `listen_fd` alongside the active WS fd so `engine.fetch("/rbi/scene_host.json")` is served immediately without single-thread deadlock.
 - When viewport, scroll, and layout `rects_hash` are unchanged, `pumpSceneStreamFrameForSession` diffs RGBA buffers to emit a tight 31B-header `MSG_PARTIAL (5)` PNG patch.
+
+### Phase 243: `BroadcastChannel` & RGBA Dirty-Rect Whitebox
+- Added `BroadcastChannel` to `src/js/shim/window.js` using `_structuredClone` and `enqueueMessageTask` across same-origin channels, passing all `structuredClone` boundary checks in `bridge-inherit-v8`.

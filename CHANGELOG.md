@@ -2423,3 +2423,7 @@
 ### Phase 242
 - Updated `test/cdp/test_scene_stream_facade.cp` and added `test/cdp/test_scene_stream_envelope_edge.cp`.
 - Implemented `MSG_PARTIAL (5)` retained-frame RGBA diffing, `renderDocumentToRgba`/`encodeRgbaRectToPng`, `/rbi/scene_host.json` + in-poll HTTP serving, and `SCENE_HOST_WASM` shim across `src/cdp/{scene_stream,session,server}.cp`, `src/render/painter.cp`, and `e2e/shim/cloudflare-test.ts`.
+
+### Phase 243
+- Added `test/render/test_rgba_dirty_rect_encode_edge.cp`.
+- Implemented `BroadcastChannel` in `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`).
