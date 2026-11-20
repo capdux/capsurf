@@ -1729,8 +1729,16 @@ fn paintNodeRecursive(
     }
 
     let child_clip = active_clip;
-    if (node.node_type == NodeType.Element && !style.overflow_visible && r.width > 0.0 && r.height > 0.0) {
-        const own_clip = ClipRect.fromRect(r);
+    const clip_x = style.clipsOverflowX();
+    const clip_y = style.clipsOverflowY();
+    if (node.node_type == NodeType.Element && (clip_x || clip_y) && r.width > 0.0 && r.height > 0.0) {
+        const box_clip = ClipRect.fromRect(r);
+        const own_clip = ClipRect {
+            x0: if (clip_x) box_clip.x0 else -100000000,
+            y0: if (clip_y) box_clip.y0 else -100000000,
+            x1: if (clip_x) box_clip.x1 else 100000000,
+            y1: if (clip_y) box_clip.y1 else 100000000,
+        };
         if (cc := child_clip) {
             child_clip = cc.intersect(own_clip);
         } else {

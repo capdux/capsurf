@@ -1291,4 +1291,10 @@
    - 仅在容器建立 BFC（`flow-root` / 非 `overflow: visible` / `inline-block` / 浮动 / 绝对固定 / 单元格）时计入浮动子元素底部高度；在 `layoutFlexContainer` 中按主轴可用宽度实装 `flex-wrap: wrap/wrap-reverse` 分行累加。
 2. **Corner-Shape 几何与分层裁剪 (`painter.cp`)**：
    - 实装 `round`/`bevel`/`scoop`/`squircle`($p=4$)/`notch` 内外轮廓判定与防串色四象限边框；在绘制管线中区分 `clip: rect(...)`（裁剪 outline+盒体）与 `clip-path: inset(...)`（仅裁剪盒体与子树）。
+
+## Phase 80 CSS Grid 绝对定位、单轴 Overflow Clip 与百分比 `calc()` 技术方案
+1. **单轴裁剪与逻辑属性 (`cascade.cp`, `painter.cp`)**：
+   - 将 `overflow-x`/`overflow-y` 拆分至独立槽位，实现 CSS Overflow 3 单轴 `clip` 仅裁剪对应轴（另一轴保持无界）而 `hidden`/`scroll`/`auto` 触发双轴裁剪；引入括号感知 `parseBoxQuad` 与 `evalCalcPx` 支持 `margin-inline: calc(50% - 50vw)`。
+2. **Grid 绝对定位包含块与网格线 (`layout.cp`)**：
+   - 在 `layoutGridContainer` 计算 1-based 行/列网格线偏移表，将 `abspos` 子项移出正常网格流，依据 `grid-area` / `auto` 精准锚定到对应网格线或 padding/content edge。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

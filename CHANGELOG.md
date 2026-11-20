@@ -1659,4 +1659,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0；
   - E2E 测试：5 大 Core 套件共 **12/12 PASS (40 expect calls)**。
+
+## Phase 80: CSS Grid Abspos Static Position, One-Axis Overflow Clip & Percentage `calc()` — 5 Suites (100% Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/render/painter.cp`**：
+  - 实装百分比 `calc()` 求值、逻辑尺寸/外边距属性、`OverflowMode` 单轴 `clip` 独立裁剪、`grid-template`/`grid-area` 网格线解析及 CSS Grid 1 §10.1/§10.2 绝对定位子项包含块与静态位置计算。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0；
+  - E2E 测试：5 大 Core 套件共 **5/5 PASS (9 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

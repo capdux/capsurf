@@ -2422,38 +2422,120 @@ pub struct LayoutTree {
         const pstyle = &styles[@as(usize, parent_id)];
         const pbox = &_.boxes.items[@as(usize, parent_id)];
         const container_w = pbox.content_width;
+        const container_h = pbox.content_height;
 
         const cols = if (pstyle.grid_cols > 0) pstyle.grid_cols else 1;
         const col_gap = pstyle.column_gap;
         const row_gap = pstyle.row_gap;
 
-        const total_col_gaps = if (cols > 1) @as(f32, @floatFromInt(cols - 1)) * col_gap else 0.0;
-        const col_w = if (container_w > total_col_gaps) (container_w - total_col_gaps) / @as(f32, @floatFromInt(cols)) else 0.0;
+        // Resolve column track sizes and cumulative line offsets (1-based line k => col_offsets[k-1])
+        let col_widths: [16]f32 = [0.0; 16];
+        let col_offsets: [17]f32 = [0.0; 17];
+        const eff_cols: usize = @min(@as(usize, cols), 16);
+        const total_col_gaps = if (eff_cols > 1) @as(f32, @floatFromInt(eff_cols - 1)) * col_gap else 0.0;
+        const default_col_w = if (container_w > total_col_gaps) (container_w - total_col_gaps) / @as(f32, @floatFromInt(eff_cols)) else 0.0;
+
+        if (pstyle.grid_col_track_count > 0) {
+            let fixed_sum: f32 = 0.0;
+            let flex_count: u32 = 0;
+            let ci: usize = 0;
+            while (ci < eff_cols) : (ci += 1) {
+                if (ci < @as(usize, pstyle.grid_col_track_count)) {
+                    const tr = pstyle.grid_col_tracks[ci];
+                    if (!tr.is_auto && !tr.is_none) {
+                        const w = tr.resolvePx(container_w, pstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        col_widths[ci] = w;
+                        fixed_sum += w;
+                    } else {
+                        flex_count += 1;
+                    }
+                } else {
+                    flex_count += 1;
+                }
+            }
+            const rem_w = if (container_w > fixed_sum + total_col_gaps) (container_w - fixed_sum - total_col_gaps) else 0.0;
+            const flex_w = if (flex_count > 0) rem_w / @as(f32, @floatFromInt(flex_count)) else 0.0;
+            ci = 0;
+            while (ci < eff_cols) : (ci += 1) {
+                if (ci < @as(usize, pstyle.grid_col_track_count)) {
+                    const tr = pstyle.grid_col_tracks[ci];
+                    if (tr.is_auto || tr.is_none) {
+                        col_widths[ci] = flex_w;
+                    }
+                } else {
+                    col_widths[ci] = flex_w;
+                }
+            }
+        } else {
+            let ci: usize = 0;
+            while (ci < eff_cols) : (ci += 1) {
+                col_widths[ci] = default_col_w;
+            }
+        }
+
+        col_offsets[0] = 0.0;
+        let oi: usize = 0;
+        while (oi < eff_cols) : (oi += 1) {
+            col_offsets[oi + 1] = col_offsets[oi] + col_widths[oi] + (if (oi + 1 < eff_cols) col_gap else 0.0);
+        }
+
+        // Resolve explicit row track sizes if declared
+        let row_heights: [16]f32 = [0.0; 16];
+        let row_offsets: [17]f32 = [0.0; 17];
+        const explicit_rows: usize = @min(@as(usize, pstyle.grid_row_track_count), 16);
+        let ri: usize = 0;
+        while (ri < explicit_rows) : (ri += 1) {
+            const tr = pstyle.grid_row_tracks[ri];
+            if (!tr.is_auto && !tr.is_none) {
+                row_heights[ri] = tr.resolvePx(container_h, pstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            }
+        }
 
         let cur_col: u32 = 0;
         let cur_y: f32 = content_y;
         let cur_row_max_h: f32 = 0.0;
         let row_count: u32 = 0;
 
+        let abs_children: [32]NodeId = [NULL_NODE; 32];
+        let abs_count: usize = 0;
+
         let child = doc.nodes.items[@as(usize, parent_id)].first_child;
         while (child != NULL_NODE) {
             const cnode = &doc.nodes.items[@as(usize, child)];
             if (cnode.node_type == NodeType.Element) {
                 const cstyle = &styles[@as(usize, child)];
-                if (!cstyle.display.isNone()) {
+                if (cstyle.display.isNone()) {
+                    _.boxes.items[@as(usize, child)].rect = Rect.zero();
+                } else if (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed) {
+                    if (abs_count < 32) {
+                        abs_children[abs_count] = child;
+                        abs_count += 1;
+                    }
+                } else {
                     const span_raw = if (cstyle.grid_col_span > 0) cstyle.grid_col_span else 1;
                     const span = if (span_raw > cols) cols else span_raw;
 
                     // If item does not fit in current row, advance to next row
                     if (cur_col + span > cols && cur_col > 0) {
-                        cur_y += cur_row_max_h + row_gap;
+                        if (@as(usize, row_count) < 16 && cur_row_max_h > row_heights[@as(usize, row_count)]) {
+                            row_heights[@as(usize, row_count)] = cur_row_max_h;
+                        }
+                        const adv_h = if (@as(usize, row_count) < 16) row_heights[@as(usize, row_count)] else cur_row_max_h;
+                        cur_y += adv_h + row_gap;
                         cur_col = 0;
                         cur_row_max_h = 0.0;
                         row_count += 1;
                     }
 
-                    const item_x = content_x + @as(f32, @floatFromInt(cur_col)) * (col_w + col_gap);
-                    const item_w = @as(f32, @floatFromInt(span)) * col_w + if (span > 1) @as(f32, @floatFromInt(span - 1)) * col_gap else 0.0;
+                    const col_idx: usize = @min(@as(usize, cur_col), eff_cols - 1);
+                    const item_x = content_x + col_offsets[col_idx];
+                    let item_w: f32 = 0.0;
+                    let si: u32 = 0;
+                    while (si < span) : (si += 1) {
+                        const ti: usize = @min(col_idx + @as(usize, si), eff_cols - 1);
+                        item_w += col_widths[ti];
+                        if (si + 1 < span) item_w += col_gap;
+                    }
                     const item_y = cur_y;
 
                     // Grid item measures its content-based height (auto row)
@@ -2467,13 +2549,15 @@ pub struct LayoutTree {
 
                     cur_col += span;
                     if (cur_col >= cols) {
-                        cur_y += cur_row_max_h + row_gap;
+                        if (@as(usize, row_count) < 16 && cur_row_max_h > row_heights[@as(usize, row_count)]) {
+                            row_heights[@as(usize, row_count)] = cur_row_max_h;
+                        }
+                        const adv_h = if (@as(usize, row_count) < 16) row_heights[@as(usize, row_count)] else cur_row_max_h;
+                        cur_y += adv_h + row_gap;
                         cur_col = 0;
                         cur_row_max_h = 0.0;
                         row_count += 1;
                     }
-                } else {
-                    _.boxes.items[@as(usize, child)].rect = Rect.zero();
                 }
             }
             child = cnode.next_sibling;
@@ -2482,15 +2566,77 @@ pub struct LayoutTree {
         // Calculate total grid height
         let total_grid_h: f32 = 0.0;
         if (cur_col > 0) {
-            cur_y += cur_row_max_h;
+            if (@as(usize, row_count) < 16 && cur_row_max_h > row_heights[@as(usize, row_count)]) {
+                row_heights[@as(usize, row_count)] = cur_row_max_h;
+            }
+            const adv_h = if (@as(usize, row_count) < 16) row_heights[@as(usize, row_count)] else cur_row_max_h;
+            cur_y += adv_h;
             row_count += 1;
             total_grid_h = cur_y - content_y;
         } else if (row_count > 0) {
             total_grid_h = (cur_y - content_y) - row_gap;
         }
 
+        const total_rows: usize = @min(@max(@as(usize, row_count), explicit_rows), 16);
+        row_offsets[0] = 0.0;
+        let roi: usize = 0;
+        while (roi < total_rows) : (roi += 1) {
+            row_offsets[roi + 1] = row_offsets[roi] + row_heights[roi] + (if (roi + 1 < total_rows) row_gap else 0.0);
+        }
+
         if (pstyle.height.is_auto) {
-            _.boxes.items[@as(usize, parent_id)].content_height = if (total_grid_h > 0.0) total_grid_h else 0.0;
+            const explicit_h = if (total_rows > 0) row_offsets[total_rows] else 0.0;
+            const final_h = @max(total_grid_h, explicit_h);
+            _.boxes.items[@as(usize, parent_id)].content_height = if (final_h > 0.0) final_h else 0.0;
+        }
+
+        // Lay out out-of-flow absolute/fixed children per CSS Grid 1 §10.1
+        if (abs_count > 0) {
+            const pbox_now = &_.boxes.items[@as(usize, parent_id)];
+            const pad_x = _.abs_cb_x;
+            const pad_y = _.abs_cb_y;
+            const pad_w = _.abs_cb_w;
+            const pad_h = if (pstyle.position != Position.Static) (pbox_now.content_height + pbox_now.paddingVertical()) else _.abs_cb_h;
+            let ai: usize = 0;
+            while (ai < abs_count) : (ai += 1) {
+                const abs_id = abs_children[ai];
+                const astyle = &styles[@as(usize, abs_id)];
+                if (astyle.position == Position.Fixed) {
+                    _.layoutNodeEx(doc, styles, abs_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
+                } else {
+                    let cb_left = pad_x;
+                    let cb_right = pad_x + pad_w;
+                    let cb_top = pad_y;
+                    let cb_bottom = pad_y + pad_h;
+                    let sx = content_x;
+                    let sy = content_y;
+
+                    if (pstyle.position != Position.Static) {
+                        if (astyle.grid_col_start > 0) {
+                            const line_idx: usize = @min(@as(usize, @intCast(astyle.grid_col_start - 1)), eff_cols);
+                            cb_left = content_x + col_offsets[line_idx];
+                            sx = cb_left;
+                        }
+                        if (astyle.grid_col_end > 0) {
+                            const line_idx: usize = @min(@as(usize, @intCast(astyle.grid_col_end - 1)), eff_cols);
+                            cb_right = content_x + col_offsets[line_idx];
+                        }
+                        if (astyle.grid_row_start > 0) {
+                            const line_idx: usize = @min(@as(usize, @intCast(astyle.grid_row_start - 1)), total_rows);
+                            cb_top = content_y + row_offsets[line_idx];
+                            sy = cb_top;
+                        }
+                        if (astyle.grid_row_end > 0) {
+                            const line_idx: usize = @min(@as(usize, @intCast(astyle.grid_row_end - 1)), total_rows);
+                            cb_bottom = content_y + row_offsets[line_idx];
+                        }
+                    }
+
+                    const cb_w = if (cb_right > cb_left) (cb_right - cb_left) else 0.0;
+                    const cb_h = if (cb_bottom > cb_top) (cb_bottom - cb_top) else 0.0;
+                    _.layoutNodeEx(doc, styles, abs_id, cb_left, cb_top, cb_w, cb_h, sx, sy, true);
+                }
+            }
         }
     }
 

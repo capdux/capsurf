@@ -3415,6 +3415,23 @@
   - `flex-svg-intrinsic` (3/3) + `flex-wrap-stretch-fit` (2/2) + `float-containment` (1/1) + `clip-regions` (2/2) + `corner-shape-paint` (4/4)：**12/12 PASS (40 expect() calls)**！
 - **清理旧子智能体**: 销毁 `9c755a3b-5c4f-4ac4-8863-efc3908858be`。
 
+## [2026-11-20 16:30:00] CSS Grid 绝对定位、单轴 Overflow Clip 与百分比 calc() 5/5 全绿闭环 (Subagent b480c0cf 结单，Phase 80)
+- **CSS Overflow Level 3 单轴裁剪、逻辑属性与 Grid Track 解析 (`src/css/cascade.cp`)**:
+  - 实装 `evalCalcPx` 支持 `calc(...)` 百分比/em 求值、`inline-size`/`block-size`/`margin-block-*` 逻辑属性与括号感知 `parseBoxQuad`；
+  - 新增 `OverflowMode` 与 `PROP_OVERFLOW_X`/`PROP_OVERFLOW_Y`，实装 `clipsOverflowX()`/`clipsOverflowY()`（单轴 `clip` 仅裁该轴）；
+  - 新增 `grid`/`grid-template`/`grid-template-rows/columns`（含 `repeat()`）与 `grid-area`/`grid-row*`/`grid-column*` 解析。
+- **CSS Grid 1 §10.1/§10.2 绝对定位与单轴光栅裁剪 (`src/layout/layout.cp`, `src/render/painter.cp`)**:
+  - 重构 `layoutGridContainer` 计算 1-based 网格线偏移，将 `abspos`/`fixed` 子项移出网格流并精准锚定 padding/content/grid-line；
+  - `painter.cp` 改为分别按 `clipsOverflowX()`/`clipsOverflowY()` 执行单轴裁剪。
+- **门禁与 E2E 验证**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 全部通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `float-layout-regressions` + `grid-abspos-static-position` + `grid-auto-row-content-size` + `overflow-clip-one-axis` + `percent-margin-basis`：**5/5 PASS (9 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `b480c0cf-62bc-45fd-91f5-19de5a939198`；
+  - 派发全新子智能体 **Subagent 46**: Inline Layout & Paint Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/inline-box-baseline-shift.e2e.test.ts`、`e2e/inline-metrics-regressions.e2e.test.ts`、`e2e/inline-opacity.e2e.test.ts`、`e2e/inline-positioning-regressions.e2e.test.ts`、`e2e/inline-visibility-hidden.e2e.test.ts`。
+
+
 
 
 

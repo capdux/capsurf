@@ -677,6 +677,88 @@ pub struct LengthPercentageOrAuto {
         return null;
     }
 
+    static fn evalCalcPx(
+        expr: []const u8,
+        parent_px: f32,
+        element_font_px: f32,
+        root_font_px: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ): f64? {
+        let s = std.mem.trim(u8, expr, " \t\r\n");
+        if (std.ascii.startsWithIgnoreCase(s, "calc(") && s.len >= 6 && s[s.len - 1] == ')') {
+            s = std.mem.trim(u8, s[5 .. s.len - 1], " \t\r\n");
+        }
+        if (s.len == 0) return null;
+
+        let values: [16]f64 = std.mem.zeroes([16]f64);
+        let ops: [16]u8 = std.mem.zeroes([16]u8);
+        let val_count: usize = 0;
+        let op_count: usize = 0;
+
+        let it = std.mem.tokenizeAny(u8, s, " \t\r\n");
+        while (tok := it.next()) {
+            if (tok.len == 1 && (tok[0] == '+' || tok[0] == '-' || tok[0] == '*' || tok[0] == '/')) {
+                if (op_count >= 16) return null;
+                ops[op_count] = tok[0];
+                op_count += 1;
+            } else {
+                if (val_count >= 16) return null;
+                let term_v: f64 = 0.0;
+                if (len_val := CssLength.parse(tok)) {
+                    if (len_val.unit == CssUnit.Percent) {
+                        term_v = (len_val.value / 100.0) * @as(f64, parent_px);
+                    } else if (len_val.unit == CssUnit.Em) {
+                        term_v = len_val.value * @as(f64, element_font_px);
+                    } else {
+                        term_v = len_val.toPx(@as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h));
+                    }
+                } else {
+                    const num = std.fmt.parseFloat(f64, tok) catch return null;
+                    term_v = num;
+                }
+                values[val_count] = term_v;
+                val_count += 1;
+            }
+        }
+
+        if (val_count == 0 || op_count + 1 != val_count) {
+            return null;
+        }
+
+        let collapsed_vals: [16]f64 = std.mem.zeroes([16]f64);
+        let collapsed_ops: [16]u8 = std.mem.zeroes([16]u8);
+        collapsed_vals[0] = values[0];
+        let c_idx: usize = 0;
+
+        let i: usize = 0;
+        while (i < op_count) : (i += 1) {
+            const op = ops[i];
+            const rhs = values[i + 1];
+            if (op == '*') {
+                collapsed_vals[c_idx] = collapsed_vals[c_idx] * rhs;
+            } else if (op == '/') {
+                if (rhs == 0.0) return null;
+                collapsed_vals[c_idx] = collapsed_vals[c_idx] / rhs;
+            } else {
+                collapsed_ops[c_idx] = op;
+                c_idx += 1;
+                collapsed_vals[c_idx] = rhs;
+            }
+        }
+
+        let acc = collapsed_vals[0];
+        let j: usize = 0;
+        while (j < c_idx) : (j += 1) {
+            if (collapsed_ops[j] == '+') {
+                acc += collapsed_vals[j + 1];
+            } else {
+                acc -= collapsed_vals[j + 1];
+            }
+        }
+        return acc;
+    }
+
     fn resolvePx(
         parent_px: f32,
         element_font_px: f32,
@@ -693,8 +775,11 @@ pub struct LengthPercentageOrAuto {
             if (std.mem.indexOf(u8, expr, "anchor") != null) {
                 expr = LengthPercentageOrAuto.substituteAnchorFallbacks(expr, &buf);
             }
-            if (v := CssCalc.evalPx(expr, @as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h))) {
+            if (v := LengthPercentageOrAuto.evalCalcPx(expr, parent_px, element_font_px, root_font_px, viewport_w, viewport_h)) {
                 return @floatCast(v);
+            }
+            if (v2 := CssCalc.evalPx(expr, @as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h))) {
+                return @floatCast(v2);
             }
             return 0.0;
         }
@@ -708,6 +793,24 @@ pub struct LengthPercentageOrAuto {
         }
         const px_f64 = _.length.toPx(@as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h));
         return @floatCast(px_f64);
+    }
+}
+
+pub enum OverflowMode {
+    Visible,
+    Clip,
+    Hidden,
+    Scroll,
+    Auto,
+
+    static fn parse(raw: []const u8): OverflowMode? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "visible")) return OverflowMode.Visible;
+        if (std.ascii.eqlIgnoreCase(s, "clip")) return OverflowMode.Clip;
+        if (std.ascii.eqlIgnoreCase(s, "hidden")) return OverflowMode.Hidden;
+        if (std.ascii.eqlIgnoreCase(s, "scroll")) return OverflowMode.Scroll;
+        if (std.ascii.eqlIgnoreCase(s, "auto")) return OverflowMode.Auto;
+        return null;
     }
 }
 
@@ -760,6 +863,7 @@ pub const PROP_BG_IMAGE: usize = 44;
 pub const PROP_FONT_FAMILY: usize = 45;
 pub const PROP_FONT_WEIGHT: usize = 46;
 pub const PROP_OVERFLOW: usize = 47;
+pub const PROP_OVERFLOW_X: usize = 47;
 pub const PROP_TRANSFORM: usize = 48;
 pub const PROP_BORDER_COLLAPSE: usize = 49;
 pub const PROP_BORDER_SPACING: usize = 50;
@@ -785,7 +889,13 @@ pub const PROP_BORDER_BR_RADIUS: usize = 69;
 pub const PROP_BORDER_BL_RADIUS: usize = 70;
 pub const PROP_CORNER_SHAPE: usize = 71;
 pub const PROP_BOX_SHADOW: usize = 72;
-pub const TOTAL_PROP_SLOTS: usize = 73;
+pub const PROP_OVERFLOW_Y: usize = 73;
+pub const PROP_GRID_ROWS: usize = 74;
+pub const PROP_GRID_COL_START: usize = 75;
+pub const PROP_GRID_COL_END: usize = 76;
+pub const PROP_GRID_ROW_START: usize = 77;
+pub const PROP_GRID_ROW_END: usize = 78;
+pub const TOTAL_PROP_SLOTS: usize = 79;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1238,6 +1348,14 @@ pub struct ComputedStyle {
     column_gap: f32 = 0.0;
     grid_cols: u32 = 1;
     grid_col_span: u32 = 1;
+    grid_col_tracks: [16]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 16];
+    grid_col_track_count: u32 = 0;
+    grid_row_tracks: [16]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 16];
+    grid_row_track_count: u32 = 0;
+    grid_col_start: i32 = 0;
+    grid_col_end: i32 = 0;
+    grid_row_start: i32 = 0;
+    grid_row_end: i32 = 0;
 
     font_size_px: f32 = 16.0;
     line_height_px: f32 = 0.0;
@@ -1254,6 +1372,8 @@ pub struct ComputedStyle {
     z_index: i32 = 0;
     conic_gradient: ConicGradient = ConicGradient{};
     overflow_visible: bool = true;
+    overflow_x: OverflowMode = OverflowMode.Visible;
+    overflow_y: OverflowMode = OverflowMode.Visible;
     transform_tx: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 
@@ -1272,6 +1392,22 @@ pub struct ComputedStyle {
     // Inherited CSS custom properties (`--*`)
     custom_props: [16]CustomProp = [CustomProp{}; 16],
     custom_prop_count: usize = 0,
+
+    fn clipsOverflowX(): bool {
+        if (_.overflow_x != OverflowMode.Visible) return true;
+        if (_.overflow_y != OverflowMode.Visible && _.overflow_y != OverflowMode.Clip) return true;
+        return false;
+    }
+
+    fn clipsOverflowY(): bool {
+        if (_.overflow_y != OverflowMode.Visible) return true;
+        if (_.overflow_x != OverflowMode.Visible && _.overflow_x != OverflowMode.Clip) return true;
+        return false;
+    }
+
+    fn syncOverflowVisible(*_) {
+        _.overflow_visible = (_.overflow_x == OverflowMode.Visible && _.overflow_y == OverflowMode.Visible);
+    }
 
     /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
     fn initForNode(*_, node: *const NodeData, parent_style: (*const ComputedStyle)?) {
@@ -1432,6 +1568,8 @@ pub struct ComputedStyle {
 
         if (tag == .Svg || node.hasTag("svg")) {
             _.display = Display.inlineFlow();
+            _.overflow_x = OverflowMode.Hidden;
+            _.overflow_y = OverflowMode.Hidden;
             _.overflow_visible = false;
         }
 
@@ -1699,7 +1837,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "width")) {
+        if (std.ascii.eqlIgnoreCase(name, "width") || std.ascii.eqlIgnoreCase(name, "inline-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_WIDTH, weight)) {
                     _.width = lpa;
@@ -1707,7 +1845,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "height")) {
+        if (std.ascii.eqlIgnoreCase(name, "height") || std.ascii.eqlIgnoreCase(name, "block-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_HEIGHT, weight)) {
                     _.height = lpa;
@@ -1715,7 +1853,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "min-width")) {
+        if (std.ascii.eqlIgnoreCase(name, "min-width") || std.ascii.eqlIgnoreCase(name, "min-inline-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MIN_WIDTH, weight)) {
                     _.min_width = lpa;
@@ -1723,7 +1861,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "min-height")) {
+        if (std.ascii.eqlIgnoreCase(name, "min-height") || std.ascii.eqlIgnoreCase(name, "min-block-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MIN_HEIGHT, weight)) {
                     _.min_height = lpa;
@@ -1731,7 +1869,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "max-width")) {
+        if (std.ascii.eqlIgnoreCase(name, "max-width") || std.ascii.eqlIgnoreCase(name, "max-inline-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MAX_WIDTH, weight)) {
                     _.max_width = lpa;
@@ -1739,7 +1877,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "max-height")) {
+        if (std.ascii.eqlIgnoreCase(name, "max-height") || std.ascii.eqlIgnoreCase(name, "max-block-size")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MAX_HEIGHT, weight)) {
                     _.max_height = lpa;
@@ -1758,7 +1896,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "margin-top")) {
+        if (std.ascii.eqlIgnoreCase(name, "margin-top") || std.ascii.eqlIgnoreCase(name, "margin-block-start")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MARGIN_TOP, weight)) _.margin_top = lpa;
             }
@@ -1770,7 +1908,7 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "margin-bottom")) {
+        if (std.ascii.eqlIgnoreCase(name, "margin-bottom") || std.ascii.eqlIgnoreCase(name, "margin-block-end")) {
             if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_MARGIN_BOTTOM, weight)) _.margin_bottom = lpa;
             }
@@ -1789,34 +1927,17 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "margin-inline")) {
-            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
-            if (t1 := it.next()) {
-                if (l1 := LengthPercentageOrAuto.parse(t1)) {
-                    let l2 = l1;
-                    if (t2 := it.next()) {
-                        if (parsed2 := LengthPercentageOrAuto.parse(t2)) {
-                            l2 = parsed2;
-                        }
-                    }
-                    if (_.tryClaimSlot(PROP_MARGIN_LEFT, weight)) _.margin_left = l1;
-                    if (_.tryClaimSlot(PROP_MARGIN_RIGHT, weight)) _.margin_right = l2;
-                }
+            if (quad := Cascade.parseBoxQuad(val)) {
+                // For 1 token: top=t1, right=t1. For 2 tokens: top=t1, right=t2.
+                if (_.tryClaimSlot(PROP_MARGIN_LEFT, weight)) _.margin_left = quad.top;
+                if (_.tryClaimSlot(PROP_MARGIN_RIGHT, weight)) _.margin_right = quad.right;
             }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "margin-block")) {
-            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
-            if (t1 := it.next()) {
-                if (l1 := LengthPercentageOrAuto.parse(t1)) {
-                    let l2 = l1;
-                    if (t2 := it.next()) {
-                        if (parsed2 := LengthPercentageOrAuto.parse(t2)) {
-                            l2 = parsed2;
-                        }
-                    }
-                    if (_.tryClaimSlot(PROP_MARGIN_TOP, weight)) _.margin_top = l1;
-                    if (_.tryClaimSlot(PROP_MARGIN_BOTTOM, weight)) _.margin_bottom = l2;
-                }
+            if (quad := Cascade.parseBoxQuad(val)) {
+                if (_.tryClaimSlot(PROP_MARGIN_TOP, weight)) _.margin_top = quad.top;
+                if (_.tryClaimSlot(PROP_MARGIN_BOTTOM, weight)) _.margin_bottom = quad.right;
             }
             return;
         }
@@ -2422,6 +2543,98 @@ pub struct ComputedStyle {
             return;
         }
 
+        // Grid template shorthand (`grid: 40px 40px / 40px 40px` or `grid-template: ...`)
+        if (std.ascii.eqlIgnoreCase(name, "grid") || std.ascii.eqlIgnoreCase(name, "grid-template")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (slash_idx := std.mem.indexOfScalar(u8, trimmed, '/')) {
+                const rows_part = std.mem.trim(u8, trimmed[0..slash_idx], " \t\r\n");
+                const cols_part = std.mem.trim(u8, trimmed[slash_idx + 1 ..], " \t\r\n");
+                if (rows_part.len > 0 && _.tryClaimSlot(PROP_GRID_ROWS, weight)) {
+                    let r_cnt: u32 = 0;
+                    let rit = std.mem.tokenizeAny(u8, rows_part, " \t\r\n");
+                    while (rtok := rit.next()) {
+                        if (r_cnt < 16) {
+                            if (std.mem.endsWith(u8, rtok, "fr")) {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = LengthPercentageOrAuto.autoVal();
+                            } else if (lpa := LengthPercentageOrAuto.parse(rtok)) {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = lpa;
+                            } else {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = LengthPercentageOrAuto.autoVal();
+                            }
+                        }
+                        r_cnt += 1;
+                    }
+                    _.grid_row_track_count = @min(r_cnt, 16);
+                }
+                if (cols_part.len > 0 && _.tryClaimSlot(PROP_GRID_COLS, weight)) {
+                    let c_cnt: u32 = 0;
+                    let cit = std.mem.tokenizeAny(u8, cols_part, " \t\r\n");
+                    while (ctok := cit.next()) {
+                        if (c_cnt < 16) {
+                            if (std.mem.endsWith(u8, ctok, "fr")) {
+                                _.grid_col_tracks[@as(usize, c_cnt)] = LengthPercentageOrAuto.autoVal();
+                            } else if (lpa := LengthPercentageOrAuto.parse(ctok)) {
+                                _.grid_col_tracks[@as(usize, c_cnt)] = lpa;
+                            } else {
+                                _.grid_col_tracks[@as(usize, c_cnt)] = LengthPercentageOrAuto.autoVal();
+                            }
+                        }
+                        c_cnt += 1;
+                    }
+                    if (c_cnt > 0) {
+                        _.grid_cols = c_cnt;
+                        _.grid_col_track_count = @min(c_cnt, 16);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Grid template rows (e.g. `40px 40px` or `repeat(2, 40px)`)
+        if (std.ascii.eqlIgnoreCase(name, "grid-template-rows")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (_.tryClaimSlot(PROP_GRID_ROWS, weight)) {
+                if (std.ascii.startsWithIgnoreCase(trimmed, "repeat(")) {
+                    if (comma_idx := std.mem.indexOfScalar(u8, trimmed, ',')) {
+                        const cnt_str = std.mem.trim(u8, trimmed[7..comma_idx], " \t");
+                        const rows = std.fmt.parseInt(u32, cnt_str, 10) catch 0;
+                        let track_val = LengthPercentageOrAuto.autoVal();
+                        if (trimmed.len > comma_idx + 1 && trimmed[trimmed.len - 1] == ')') {
+                            const inner = std.mem.trim(u8, trimmed[comma_idx + 1 .. trimmed.len - 1], " \t");
+                            if (!std.mem.endsWith(u8, inner, "fr")) {
+                                if (lpa := LengthPercentageOrAuto.parse(inner)) {
+                                    track_val = lpa;
+                                }
+                            }
+                        }
+                        const clamped = @min(rows, 16);
+                        let ri: u32 = 0;
+                        while (ri < clamped) : (ri += 1) {
+                            _.grid_row_tracks[@as(usize, ri)] = track_val;
+                        }
+                        _.grid_row_track_count = clamped;
+                    }
+                } else {
+                    let r_cnt: u32 = 0;
+                    let rit = std.mem.tokenizeAny(u8, trimmed, " \t\r\n");
+                    while (rtok := rit.next()) {
+                        if (r_cnt < 16) {
+                            if (std.mem.endsWith(u8, rtok, "fr")) {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = LengthPercentageOrAuto.autoVal();
+                            } else if (lpa := LengthPercentageOrAuto.parse(rtok)) {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = lpa;
+                            } else {
+                                _.grid_row_tracks[@as(usize, r_cnt)] = LengthPercentageOrAuto.autoVal();
+                            }
+                        }
+                        r_cnt += 1;
+                    }
+                    _.grid_row_track_count = @min(r_cnt, 16);
+                }
+            }
+            return;
+        }
+
         // Grid template columns (e.g. `repeat(3, 1fr)` or `100px 200px`)
         if (std.ascii.eqlIgnoreCase(name, "grid-template-columns")) {
             const trimmed = std.mem.trim(u8, val, " \t\r\n");
@@ -2431,18 +2644,114 @@ pub struct ComputedStyle {
                     const cols = std.fmt.parseInt(u32, cnt_str, 10) catch 1;
                     if (_.tryClaimSlot(PROP_GRID_COLS, weight)) {
                         _.grid_cols = if (cols > 0) cols else 1;
+                        let track_val = LengthPercentageOrAuto.autoVal();
+                        if (trimmed.len > comma_idx + 1 && trimmed[trimmed.len - 1] == ')') {
+                            const inner = std.mem.trim(u8, trimmed[comma_idx + 1 .. trimmed.len - 1], " \t");
+                            if (!std.mem.endsWith(u8, inner, "fr")) {
+                                if (lpa := LengthPercentageOrAuto.parse(inner)) {
+                                    track_val = lpa;
+                                }
+                            }
+                        }
+                        const clamped = @min(_.grid_cols, 16);
+                        let ci: u32 = 0;
+                        while (ci < clamped) : (ci += 1) {
+                            _.grid_col_tracks[@as(usize, ci)] = track_val;
+                        }
+                        _.grid_col_track_count = clamped;
                     }
                 }
             } else {
                 let cols: u32 = 0;
+                let parsed_tracks: [16]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 16];
                 let it = std.mem.tokenizeAny(u8, trimmed, " \t\r\n");
-                while (it.next() != null) {
+                while (ctok := it.next()) {
+                    if (cols < 16) {
+                        if (std.mem.endsWith(u8, ctok, "fr")) {
+                            parsed_tracks[@as(usize, cols)] = LengthPercentageOrAuto.autoVal();
+                        } else if (lpa := LengthPercentageOrAuto.parse(ctok)) {
+                            parsed_tracks[@as(usize, cols)] = lpa;
+                        } else {
+                            parsed_tracks[@as(usize, cols)] = LengthPercentageOrAuto.autoVal();
+                        }
+                    }
                     cols += 1;
                 }
                 if (cols > 0 && _.tryClaimSlot(PROP_GRID_COLS, weight)) {
                     _.grid_cols = cols;
+                    const clamped = @min(cols, 16);
+                    let ci: u32 = 0;
+                    while (ci < clamped) : (ci += 1) {
+                        _.grid_col_tracks[@as(usize, ci)] = parsed_tracks[@as(usize, ci)];
+                    }
+                    _.grid_col_track_count = clamped;
                 }
             }
+            return;
+        }
+
+        // Grid area shorthand (`grid-area: row-start / col-start / row-end / col-end`)
+        if (std.ascii.eqlIgnoreCase(name, "grid-area")) {
+            let parts: [4][]const u8 = [""; 4];
+            let pcount: usize = 0;
+            let pit = std.mem.splitScalar(u8, val, '/');
+            while (seg := pit.next()) {
+                if (pcount < 4) {
+                    parts[pcount] = std.mem.trim(u8, seg, " \t\r\n");
+                    pcount += 1;
+                }
+            }
+            if (pcount >= 1) {
+                const n = std.fmt.parseInt(i32, parts[0], 10) catch 0;
+                if (n > 0 && _.tryClaimSlot(PROP_GRID_ROW_START, weight)) {
+                    _.grid_row_start = n;
+                }
+            }
+            if (pcount >= 2) {
+                const n = std.fmt.parseInt(i32, parts[1], 10) catch 0;
+                if (n > 0 && _.tryClaimSlot(PROP_GRID_COL_START, weight)) {
+                    _.grid_col_start = n;
+                }
+            }
+            if (pcount >= 3) {
+                const n = std.fmt.parseInt(i32, parts[2], 10) catch 0;
+                if (n > 0 && _.tryClaimSlot(PROP_GRID_ROW_END, weight)) {
+                    _.grid_row_end = n;
+                }
+            }
+            if (pcount >= 4) {
+                const n = std.fmt.parseInt(i32, parts[3], 10) catch 0;
+                if (n > 0 && _.tryClaimSlot(PROP_GRID_COL_END, weight)) {
+                    _.grid_col_end = n;
+                }
+            }
+            return;
+        }
+
+        // Grid row placement (`grid-row`, `grid-row-start`, `grid-row-end`)
+        if (std.ascii.eqlIgnoreCase(name, "grid-row")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (slash_idx := std.mem.indexOfScalar(u8, trimmed, '/')) {
+                const s1 = std.mem.trim(u8, trimmed[0..slash_idx], " \t");
+                const s2 = std.mem.trim(u8, trimmed[slash_idx + 1 ..], " \t");
+                const n1 = std.fmt.parseInt(i32, s1, 10) catch 0;
+                const n2 = std.fmt.parseInt(i32, s2, 10) catch 0;
+                if (n1 > 0 && _.tryClaimSlot(PROP_GRID_ROW_START, weight)) _.grid_row_start = n1;
+                if (n2 > 0 && _.tryClaimSlot(PROP_GRID_ROW_END, weight)) _.grid_row_end = n2;
+            } else {
+                const n1 = std.fmt.parseInt(i32, trimmed, 10) catch 0;
+                if (n1 > 0 && _.tryClaimSlot(PROP_GRID_ROW_START, weight)) _.grid_row_start = n1;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "grid-row-start")) {
+            const n = std.fmt.parseInt(i32, std.mem.trim(u8, val, " \t\r\n"), 10) catch 0;
+            if (n > 0 && _.tryClaimSlot(PROP_GRID_ROW_START, weight)) _.grid_row_start = n;
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "grid-row-end")) {
+            const n = std.fmt.parseInt(i32, std.mem.trim(u8, val, " \t\r\n"), 10) catch 0;
+            if (n > 0 && _.tryClaimSlot(PROP_GRID_ROW_END, weight)) _.grid_row_end = n;
             return;
         }
 
@@ -2465,9 +2774,24 @@ pub struct ComputedStyle {
                 const s2 = std.mem.trim(u8, trimmed[slash_idx + 1 ..], " \t");
                 const n1 = std.fmt.parseInt(u32, s1, 10) catch 0;
                 const n2 = std.fmt.parseInt(u32, s2, 10) catch 0;
+                if (n1 > 0 && _.tryClaimSlot(PROP_GRID_COL_START, weight)) {
+                    _.grid_col_start = @intCast(n1);
+                }
+                if (n2 > 0 && _.tryClaimSlot(PROP_GRID_COL_END, weight)) {
+                    _.grid_col_end = @intCast(n2);
+                }
                 if (n2 > n1 && n1 > 0) {
                     if (_.tryClaimSlot(PROP_GRID_COL_SPAN, weight)) {
                         _.grid_col_span = n2 - n1;
+                    }
+                }
+            } else {
+                const n = std.fmt.parseInt(i32, trimmed, 10) catch 0;
+                if (n > 0) {
+                    if (std.ascii.eqlIgnoreCase(name, "grid-column-end")) {
+                        if (_.tryClaimSlot(PROP_GRID_COL_END, weight)) _.grid_col_end = n;
+                    } else {
+                        if (_.tryClaimSlot(PROP_GRID_COL_START, weight)) _.grid_col_start = n;
                     }
                 }
             }
@@ -2688,13 +3012,37 @@ pub struct ComputedStyle {
             if (_.tryClaimSlot(PROP_Z_INDEX, weight)) _.z_index = z;
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "overflow") || std.ascii.eqlIgnoreCase(name, "overflow-x") || std.ascii.eqlIgnoreCase(name, "overflow-y")) {
-            if (_.tryClaimSlot(PROP_OVERFLOW, weight)) {
-                const v = std.mem.trim(u8, val, " \t\r\n");
-                if (std.ascii.eqlIgnoreCase(v, "visible")) {
-                    _.overflow_visible = true;
-                } else if (std.ascii.eqlIgnoreCase(v, "hidden") || std.ascii.eqlIgnoreCase(v, "clip") || std.ascii.eqlIgnoreCase(v, "auto") || std.ascii.eqlIgnoreCase(v, "scroll")) {
-                    _.overflow_visible = false;
+        if (std.ascii.eqlIgnoreCase(name, "overflow")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (t1 := it.next()) {
+                if (m1 := OverflowMode.parse(t1)) {
+                    let m2 = m1;
+                    if (t2 := it.next()) {
+                        if (parsed2 := OverflowMode.parse(t2)) {
+                            m2 = parsed2;
+                        }
+                    }
+                    if (_.tryClaimSlot(PROP_OVERFLOW_X, weight)) _.overflow_x = m1;
+                    if (_.tryClaimSlot(PROP_OVERFLOW_Y, weight)) _.overflow_y = m2;
+                    _.syncOverflowVisible();
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "overflow-x")) {
+            if (m := OverflowMode.parse(val)) {
+                if (_.tryClaimSlot(PROP_OVERFLOW_X, weight)) {
+                    _.overflow_x = m;
+                    _.syncOverflowVisible();
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "overflow-y")) {
+            if (m := OverflowMode.parse(val)) {
+                if (_.tryClaimSlot(PROP_OVERFLOW_Y, weight)) {
+                    _.overflow_y = m;
+                    _.syncOverflowVisible();
                 }
             }
             return;
