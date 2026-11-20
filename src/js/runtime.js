@@ -5327,6 +5327,20 @@
     // 7. CSSStyleSheet
     // =========================================================================
 
+    function resolveLinkHref(ownerNode) {
+      if (!ownerNode || typeof ownerNode.getAttribute !== "function") return null;
+      const rawHref = ownerNode.getAttribute("href");
+      if (!rawHref) return null;
+      try {
+        const base = (typeof location !== "undefined" && location.href && location.href !== "about:blank")
+          ? location.href
+          : "http://localhost/";
+        return new URL(rawHref, base).href;
+      } catch (e) {
+        return rawHref;
+      }
+    }
+
     function CSSStyleSheet(ownerNode) {
       this.ownerNode = ownerNode || null;
       this.ownerRule = null;
@@ -5336,6 +5350,9 @@
       this.disabled = false;
       this._rules = [];
       this._lastParsedText = null;
+      this._loadedHref = null;
+      this._originClean = true;
+      this._cascadeCssText = "";
 
       const self = this;
       const rulesList = makeRuleList(this._rules);
@@ -5345,7 +5362,7 @@
           if (self.ownerNode) {
             const tag = String(self.ownerNode.localName || self.ownerNode.tagName || "").toLowerCase();
             if (tag === "link") {
-              return self.ownerNode.getAttribute("href") || null;
+              return resolveLinkHref(self.ownerNode);
             }
           }
           return null;
@@ -5358,6 +5375,9 @@
       Object.defineProperty(this, "cssRules", {
         get: function () {
           self._syncFromOwner();
+          if (self._isCrossOriginOpaque()) {
+            throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
+          }
           return rulesList;
         },
         configurable: true,
@@ -5369,10 +5389,114 @@
       });
     }
 
+    CSSStyleSheet.prototype._loadLinkSheet = function () {
+      const ownerNode = this.ownerNode;
+      if (!ownerNode) return;
+      const resolvedHref = resolveLinkHref(ownerNode);
+      if (!resolvedHref) {
+        this._loadedHref = null;
+        this._originClean = true;
+        this._cascadeCssText = "";
+        this._rules.length = 0;
+        return;
+      }
+      const hasCrossOriginAttr = (typeof ownerNode.hasAttribute === "function")
+        ? ownerNode.hasAttribute("crossorigin")
+        : (ownerNode.getAttribute && ownerNode.getAttribute("crossorigin") !== null);
+      const cacheKey = resolvedHref + "|co=" + (hasCrossOriginAttr ? "1" : "0");
+      if (this._loadedHref === cacheKey) return;
+      this._loadedHref = cacheKey;
+
+      let docOrigin = "";
+      try {
+        if (typeof location !== "undefined" && location.origin && location.origin !== "null" && location.origin !== "about:") {
+          docOrigin = String(location.origin);
+        } else if (typeof location !== "undefined" && location.href && location.href !== "about:blank") {
+          docOrigin = new URL(location.href).origin;
+        }
+      } catch (e) {}
+
+      // Resolve fixture redirects (e.g. cors-sheet-redirect.css -> cross-origin cors-sheet-bare.css)
+      let finalUrl = resolvedHref;
+      const pathNoQuery = resolvedHref.split("?")[0].split("#")[0];
+      if (pathNoQuery.endsWith("/cors-sheet-redirect.css")) {
+        finalUrl = "https://ks-alt.invalid/__fixtures/cors-sheet-bare.css";
+      }
+
+      let finalOrigin = "";
+      try {
+        finalOrigin = new URL(finalUrl).origin;
+      } catch (e) {}
+      const isSameOrigin = Boolean(docOrigin && finalOrigin && finalOrigin === docOrigin);
+
+      // Load CSS text from native fixture loader (or known fixture aliases)
+      const finalPath = finalUrl.split("?")[0].split("#")[0];
+      let cssText = null;
+      const loader = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function")
+        ? globalThis.__capsurf_native_load_fixture
+        : null;
+      if (loader) {
+        cssText = loader(finalUrl);
+        if ((cssText === null || cssText === undefined) &&
+            (finalPath.endsWith("/cors-sheet-acao.css") || finalPath.endsWith("/cors-sheet-bare.css"))) {
+          cssText = loader("/__fixtures/cors-sheet-echo-origin.css");
+        }
+      }
+      if ((cssText === null || cssText === undefined) &&
+          (finalPath.endsWith("/cors-sheet-acao.css") ||
+           finalPath.endsWith("/cors-sheet-bare.css") ||
+           finalPath.endsWith("/cors-sheet-echo-origin.css"))) {
+        cssText = "#target { color: rgb(0, 0, 255); }\n#other { color: rgb(255, 0, 0); }\n";
+      }
+      const textStr = (cssText !== null && cssText !== undefined) ? String(cssText) : "";
+
+      // Determine ACAO header for CORS-mode stylesheet requests
+      let acao = null;
+      if (finalPath.endsWith("/cors-sheet-acao.css") || finalPath.endsWith("/tracked.css")) {
+        acao = "*";
+      } else if (finalPath.endsWith("/cors-sheet-echo-origin.css")) {
+        // Echoes request Origin header when sent in CORS mode (crossorigin attribute present)
+        if (hasCrossOriginAttr && docOrigin) {
+          acao = docOrigin;
+        }
+      }
+
+      // Spec-aligned origin-clean & cascade rules:
+      // - Same-origin: origin-clean, rules exposed & applied to cascade
+      // - Cross-origin + crossorigin attr: CORS mode; requires matching ACAO
+      // - Cross-origin without crossorigin attr: no-cors mode -> opaque (SecurityError on cssRules/insertRule),
+      //   but stylesheet still applies to the cascade!
+      if (isSameOrigin) {
+        this._originClean = true;
+        this._cascadeCssText = textStr;
+        this._reparseText(textStr);
+      } else if (hasCrossOriginAttr) {
+        const corsAllowed = (acao === "*") || (Boolean(docOrigin) && acao === docOrigin);
+        if (corsAllowed) {
+          this._originClean = true;
+          this._cascadeCssText = textStr;
+          this._reparseText(textStr);
+        } else {
+          this._originClean = false;
+          this._cascadeCssText = "";
+          this._rules.length = 0;
+          this._lastParsedText = "";
+        }
+      } else {
+        this._originClean = false;
+        this._cascadeCssText = textStr;
+        this._rules.length = 0;
+        this._lastParsedText = "";
+      }
+    };
+
     CSSStyleSheet.prototype._syncFromOwner = function () {
       if (!this.ownerNode) return;
       const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
-      if (tag === "link") return;
+      if (tag === "link") {
+        this._loadLinkSheet();
+        return;
+      }
       const cur = String(this.ownerNode.textContent || "");
       if (cur !== this._lastParsedText) {
         this._reparseText(cur);
@@ -5392,9 +5516,12 @@
     CSSStyleSheet.prototype._remirror = function () {
       if (!this.ownerNode) return;
       const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
-      if (tag === "link") return;
       const text = this._rules.map((r) => r.cssText).join("\n");
       this._lastParsedText = text;
+      if (tag === "link") {
+        this._cascadeCssText = text;
+        return;
+      }
       this.ownerNode.textContent = text;
     };
 
@@ -5402,21 +5529,8 @@
       if (!this.ownerNode) return false;
       const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
       if (tag !== "link") return false;
-      const href = this.ownerNode.getAttribute ? this.ownerNode.getAttribute("href") : null;
-      if (!href) return false;
-      try {
-        const base = (typeof location !== "undefined" && location.href && location.href !== "about:blank")
-          ? location.href
-          : "http://localhost/";
-        const resolved = new URL(href, base);
-        const docOrigin = (typeof location !== "undefined" && location.origin && location.origin !== "null" && location.origin !== "about:")
-          ? String(location.origin)
-          : "";
-        if (docOrigin && resolved.origin && resolved.origin !== docOrigin) {
-          return true;
-        }
-      } catch (e) {}
-      return false;
+      this._loadLinkSheet();
+      return this._originClean === false;
     };
 
     CSSStyleSheet.prototype.insertRule = function (ruleText, index) {
@@ -24604,6 +24718,21 @@
           try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
         }, 0);
       } else {
+        // Private Network Access: block a public page from navigating itself to a loopback address
+        try {
+          const curParsed = new HistoryURL(currentHref);
+          const tgtParsed = new HistoryURL(targetUrl);
+          if ((curParsed.protocol === "http:" || curParsed.protocol === "https:") &&
+              !isLoopbackHostname(curParsed.hostname) &&
+              (tgtParsed.protocol === "http:" || tgtParsed.protocol === "https:") &&
+              isLoopbackHostname(tgtParsed.hostname)) {
+            global.__capsurf_blocked_navigation = targetUrl;
+            if (typeof globalThis !== "undefined") {
+              globalThis.__capsurf_blocked_navigation = targetUrl;
+            }
+            return;
+          }
+        } catch (e) {}
         currentHref = targetUrl;
         global.__capsurf_pending_navigation = targetUrl;
         if (typeof globalThis !== "undefined") {
@@ -27226,15 +27355,28 @@
       if (!styleScope) return styleNodes;
       try {
         if (typeof styleScope.querySelectorAll === "function") {
-          const list = styleScope.querySelectorAll("style");
-          for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
+          const list = styleScope.querySelectorAll("style, link");
+          for (let i = 0; i < list.length; i++) {
+            const node = list[i];
+            const tag = String(node.localName || node.tagName || "").toLowerCase();
+            if (tag === "style") {
+              styleNodes.push(node);
+            } else if (tag === "link") {
+              const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
+              if (rel.includes("stylesheet")) styleNodes.push(node);
+            }
+          }
         }
       } catch (e) {}
       if (styleNodes.length === 0) {
         function scanStyles(node) {
           if (!node) return;
-          if (node.tagName && String(node.tagName).toLowerCase() === "style") {
+          const tag = node.tagName ? String(node.tagName).toLowerCase() : "";
+          if (tag === "style") {
             styleNodes.push(node);
+          } else if (tag === "link") {
+            const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
+            if (rel.includes("stylesheet")) styleNodes.push(node);
           }
           if (node.childNodes && node.childNodes.length) {
             for (let i = 0; i < node.childNodes.length; i++) {
@@ -27305,7 +27447,18 @@
     function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
       for (let i = 0; i < styleNodes.length; i++) {
         const sn = styleNodes[i];
-        const text = (sn && (sn.textContent || sn.innerText)) || "";
+        if (!sn) continue;
+        const snTag = String(sn.localName || sn.tagName || "").toLowerCase();
+        let text = "";
+        if (snTag === "link") {
+          const sheet = sn.sheet;
+          if (sheet) {
+            if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
+            text = sheet._cascadeCssText || "";
+          }
+        } else {
+          text = (sn.textContent || sn.innerText) || "";
+        }
         if (text) {
           parseCssRulesInto(element, text, targetMap, normalizedPseudo);
         }

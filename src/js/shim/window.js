@@ -1214,6 +1214,21 @@ function installWindow(global) {
         try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
       }, 0);
     } else {
+      // Private Network Access: block a public page from navigating itself to a loopback address
+      try {
+        const curParsed = new HistoryURL(currentHref);
+        const tgtParsed = new HistoryURL(targetUrl);
+        if ((curParsed.protocol === "http:" || curParsed.protocol === "https:") &&
+            !isLoopbackHostname(curParsed.hostname) &&
+            (tgtParsed.protocol === "http:" || tgtParsed.protocol === "https:") &&
+            isLoopbackHostname(tgtParsed.hostname)) {
+          global.__capsurf_blocked_navigation = targetUrl;
+          if (typeof globalThis !== "undefined") {
+            globalThis.__capsurf_blocked_navigation = targetUrl;
+          }
+          return;
+        }
+      } catch (e) {}
       currentHref = targetUrl;
       global.__capsurf_pending_navigation = targetUrl;
       if (typeof globalThis !== "undefined") {
@@ -3836,15 +3851,28 @@ function installWindow(global) {
     if (!styleScope) return styleNodes;
     try {
       if (typeof styleScope.querySelectorAll === "function") {
-        const list = styleScope.querySelectorAll("style");
-        for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
+        const list = styleScope.querySelectorAll("style, link");
+        for (let i = 0; i < list.length; i++) {
+          const node = list[i];
+          const tag = String(node.localName || node.tagName || "").toLowerCase();
+          if (tag === "style") {
+            styleNodes.push(node);
+          } else if (tag === "link") {
+            const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
+            if (rel.includes("stylesheet")) styleNodes.push(node);
+          }
+        }
       }
     } catch (e) {}
     if (styleNodes.length === 0) {
       function scanStyles(node) {
         if (!node) return;
-        if (node.tagName && String(node.tagName).toLowerCase() === "style") {
+        const tag = node.tagName ? String(node.tagName).toLowerCase() : "";
+        if (tag === "style") {
           styleNodes.push(node);
+        } else if (tag === "link") {
+          const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
+          if (rel.includes("stylesheet")) styleNodes.push(node);
         }
         if (node.childNodes && node.childNodes.length) {
           for (let i = 0; i < node.childNodes.length; i++) {
@@ -3915,7 +3943,18 @@ function installWindow(global) {
   function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
     for (let i = 0; i < styleNodes.length; i++) {
       const sn = styleNodes[i];
-      const text = (sn && (sn.textContent || sn.innerText)) || "";
+      if (!sn) continue;
+      const snTag = String(sn.localName || sn.tagName || "").toLowerCase();
+      let text = "";
+      if (snTag === "link") {
+        const sheet = sn.sheet;
+        if (sheet) {
+          if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
+          text = sheet._cascadeCssText || "";
+        }
+      } else {
+        text = (sn.textContent || sn.innerText) || "";
+      }
       if (text) {
         parseCssRulesInto(element, text, targetMap, normalizedPseudo);
       }

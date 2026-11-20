@@ -62,8 +62,72 @@ export class CDPClient {
   private nextId = 0;
   private pending = new Map<number, { resolve: (res: any) => void; reject: (err: any) => void }>();
   private listeners = new Map<string, Array<(params: any) => void>>();
+  private sessions = new Map<string, any>();
 
   constructor(public wsUrl: string) {}
+
+  private _createFlatSession(sessionId: string): any {
+    const parent = this;
+    const sessionListeners = new Map<string, Array<(params: any) => void>>();
+    const flatSession: any = {
+      id: () => sessionId,
+      connection: () => parent.connection(),
+      send: (method: string, params: Record<string, any> = {}) => {
+        return parent.send(method, params, sessionId);
+      },
+      on: (event: string, handler: (params: any) => void) => {
+        if (!sessionListeners.has(event)) sessionListeners.set(event, []);
+        sessionListeners.get(event)!.push(handler);
+        parent.on(event, handler);
+        return flatSession;
+      },
+      once: (event: string, handler: (params: any) => void) => {
+        const wrapper = (params: any) => {
+          flatSession.off(event, wrapper);
+          handler(params);
+        };
+        return flatSession.on(event, wrapper);
+      },
+      off: (event: string, handler: (params: any) => void) => {
+        const list = sessionListeners.get(event);
+        if (list) {
+          const idx = list.indexOf(handler);
+          if (idx !== -1) list.splice(idx, 1);
+        }
+        parent.off(event, handler);
+        return flatSession;
+      },
+      detach: async () => {
+        for (const [ev, list] of sessionListeners) {
+          for (const h of list) parent.off(ev, h);
+        }
+        sessionListeners.clear();
+        parent.sessions.delete(sessionId);
+        try {
+          await parent.send("Target.detachFromTarget", { sessionId });
+        } catch {}
+      },
+      close: async () => {
+        await flatSession.detach();
+      },
+    };
+    return flatSession;
+  }
+
+  connection(): { session: (sessionId: string) => any } {
+    const self = this;
+    return {
+      session(sessionId: string) {
+        if (!sessionId) return null;
+        let s = self.sessions.get(sessionId);
+        if (!s) {
+          s = self._createFlatSession(sessionId);
+          self.sessions.set(sessionId, s);
+        }
+        return s;
+      },
+    };
+  }
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -109,7 +173,7 @@ export class CDPClient {
     });
   }
 
-  async send(method: string, params: Record<string, any> = {}): Promise<any> {
+  async send(method: string, params: Record<string, any> = {}, sessionId?: string): Promise<any> {
     if (method === "Page.setLifecycleEventsEnabled") {
       this.lifecycleEventsEnabled = Boolean(params?.enabled);
     }
@@ -133,17 +197,26 @@ export class CDPClient {
       }
     }
     if (method === "Input.dispatchMouseEvent" && params && params.type === "click") {
-      await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" });
-      return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" });
+      await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" }, sessionId);
+      return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" }, sessionId);
     }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error(`WebSocket is not open (readyState=${this.ws?.readyState})`);
     }
     const id = ++this.nextId;
+    const payload: Record<string, any> = { id, method, params };
+    if (sessionId) {
+      payload.sessionId = sessionId;
+    }
     const res: any = await new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.ws!.send(JSON.stringify({ id, method, params }));
+      this.ws!.send(JSON.stringify(payload));
     });
+    if (method === "Target.attachToTarget" && res && res.sessionId) {
+      if (!this.sessions.has(res.sessionId)) {
+        this.sessions.set(res.sessionId, this._createFlatSession(res.sessionId));
+      }
+    }
     if (method === "Input.dispatchMouseEvent" && params && params.type === "mouseReleased" && sharedPage && typeof params.x === "number" && typeof params.y === "number") {
       try {
         await sharedPage.evaluate((cx: number, cy: number) => {
@@ -935,7 +1008,9 @@ export class Page {
               : [];
             var pending = globalThis.__capsurf_pending_navigation || null;
             if (pending) delete globalThis.__capsurf_pending_navigation;
-            return { same: same, pending: pending };
+            var blocked = globalThis.__capsurf_blocked_navigation || null;
+            if (blocked) delete globalThis.__capsurf_blocked_navigation;
+            return { same: same, pending: pending, blocked: blocked };
           })()`,
           returnByValue: true,
         };
@@ -969,6 +1044,23 @@ export class Page {
                 navigationType: item.type === "fragment" ? "fragment" : "historyApi",
               });
             }
+          }
+
+          if (navResult.blocked) {
+            const targetUrl = navResult.blocked;
+            this.emit("response", {
+              url: () => targetUrl,
+              status: () => 403,
+              headers: () => ({}),
+              ok: () => false,
+            });
+            if (!settled) {
+              settled = true;
+              this.inFlightEvaluates.delete(item);
+              this.cancelInFlightEvaluations();
+              reject(new Error("Execution context was destroyed -- most likely because of a navigation."));
+            }
+            return;
           }
 
           if (navResult.pending) {
@@ -1030,6 +1122,35 @@ export class Page {
       await new Promise((r) => setTimeout(r, 50));
     }
     const err: any = new Error(`${timeout}ms exceeded`);
+    err.name = "TimeoutError";
+    throw err;
+  }
+
+  async waitForSelector(
+    selector: string,
+    options: { visible?: boolean; hidden?: boolean; timeout?: number } = {},
+  ): Promise<ElementHandle | null> {
+    const timeout = options.timeout ?? 30000;
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try {
+        const handle = await this.$(selector);
+        if (options.hidden) {
+          if (!handle) return null;
+          const box = await handle.boundingBox();
+          if (!box || (box.width === 0 && box.height === 0)) return null;
+        } else if (handle) {
+          if (options.visible) {
+            const box = await handle.boundingBox();
+            if (box && box.width > 0 && box.height > 0) return handle;
+          } else {
+            return handle;
+          }
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const err: any = new Error(`Waiting for selector \`${selector}\` failed: timeout ${timeout}ms exceeded`);
     err.name = "TimeoutError";
     throw err;
   }
@@ -1099,7 +1220,9 @@ export class Page {
                 : [];
               var pending = globalThis.__capsurf_pending_navigation || null;
               if (pending) delete globalThis.__capsurf_pending_navigation;
-              return { same: same, pending: pending };
+              var blocked = globalThis.__capsurf_blocked_navigation || null;
+              if (blocked) delete globalThis.__capsurf_blocked_navigation;
+              return { same: same, pending: pending, blocked: blocked };
             })()`,
             returnByValue: true,
           };
@@ -1132,6 +1255,15 @@ export class Page {
                   navigationType: item.type === "fragment" ? "fragment" : "historyApi",
                 });
               }
+            }
+            if (navResult.blocked) {
+              const targetUrl = navResult.blocked;
+              this.emit("response", {
+                url: () => targetUrl,
+                status: () => 403,
+                headers: () => ({}),
+                ok: () => false,
+              });
             }
             if (navResult.pending) {
               const targetUrl = navResult.pending;
@@ -1173,6 +1305,8 @@ export class Page {
     const page = this;
     const sessionClient = Object.create(this.cdp) as CDPClient;
     const registeredWrappers: Array<{ event: string; wrapper: (params: any) => void }> = [];
+
+    sessionClient.connection = () => page.cdp.connection();
 
     sessionClient.send = async (method: string, params: Record<string, any> = {}) => {
       const p = { ...params };

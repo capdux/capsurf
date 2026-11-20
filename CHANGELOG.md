@@ -1766,4 +1766,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0（5.55s 无锁 `-d -o` 构建）；
   - E2E 测试：`engine-memory-accounting` (1/1)、`background-reopen-lifecycle` (2/2)、`unload-cookie-origin` (1/1)、`websocket-outbound` (2/2) 全绿，`engine-routes` 6/17 PASS（服务端 17/17 就绪）。
+
+## Phase 95: CORS Stylesheets, Session Outbound, Private Network, `waitForSelector` & Flat CDP Sessions — 7/8 Suites (25/26 PASS)
+- **`e2e/harness.ts` & `src/js/shim/{window,cssom}.js`**：
+  - 实装 `CDPClient.connection().session()`、`Page.waitForSelector()`、`__capsurf_blocked_navigation` PNA 上报及完整 `<link rel="stylesheet" crossorigin>` 加载与跨域 `SecurityError` + opaque 级联。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`runtime-wait-for-selector` (1)、`inline-span-white-space` (1)、`intrinsic-sizing` (4)、`webkit-box-line-clamp` (1)、`private-network` (3)、`session-outbound` (7)、`cors-stylesheets` (7)、`runtime-get-heap-usage` (1/2) 共 **25/26 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

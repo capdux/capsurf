@@ -1379,4 +1379,10 @@
    - 导航切换文档前先派发 `pagehide`/`unload` 并排空微任务确保 Cookie 写入旧源；通过 `__capsurf_reopen_load_pending` 在 `consoleAPICalled` 之后与 `poll` 空闲 tick 精确发射 `Page.loadEventFired`。
 2. **有界内存统计与 HTTP 路由 (`session.cp`, `server.cp`, `mock_fixtures.cp`)**：
    - 对 `/__fixtures/chatty-json` 实施 12MB FIFO 淘汰记录 `retainedBodyBytes`；在 `handleHttpRequest` 完整实装 `/health`、`/json/*`、`/?inspect=1`/`/?url=` 与代理头解析。
+
+## Phase 95 CORS 样式表、Flat CDP Session 与 `waitForSelector` 收割技术方案
+1. **CORS `<link rel="stylesheet">` 规范 (`cssom.js`, `window.js`)**：
+   - 在 `_loadLinkSheet()` 区分同源、跨域 `crossorigin` + ACAO、跨域无 ACAO 与重定向后跨域，对 opaque 样式表在 `cssRules`/`insertRule` 抛 `SecurityError` 同时保留 `_cascadeCssText` 参与 `getComputedStyle` 级联。
+2. **Flat CDP Session 与 `waitForSelector` (`e2e/harness.ts`)**：
+   - 支持顶层 `sessionId` 多路复用与 `CDPClient.connection().session(sessionId)` 句柄，补齐 `Page.waitForSelector` 轮询，一举收口 7 大套件（25/26 PASS）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

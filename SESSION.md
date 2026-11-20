@@ -3652,3 +3652,23 @@
   - 销毁 `31682e10-1af0-43e5-b0e2-7b993a03d3fe`；
   - 派发 **Subagent 62**: CDP Interception & Script Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
     - 攻坚目标：`gradient-tile-count`（补 `Kitesurf.getRendererInfo` `rendererWasmBytes`）、`current-script-microtask`、`expose-function`、`fetch-interception`、`fetch-slot-order`。
+
+## [2026-11-20 18:36:50] 确认 `anonymous-block-style-flush` & `ancestor-dir-lang-restyle` 全绿 + 精准定位 3 项 JS 度量缺陷 (Subagent 666db393 结单)
+- **已验证 PASS**: `e2e/anonymous-block-style-flush.e2e.test.ts` (1/1 PASS)、`e2e/ancestor-dir-lang-restyle.e2e.test.ts` (2/2 PASS)。
+- **精准定位 JS Shim 收尾项**: `stylo-layout-misc-values`（`lighting-color: currentcolor` & `shape-outside` 引号）、`element-measurement`（`offsetWidth/Height`/`clientTop/Left`/`clientWidth` 扣 border/`ResizeObserver`）、`root-element-metrics`（`scrollWidth/Height` 排除 fixed + 含 abspos、`window.scrollTo` clamp），已排入路 2 队列。
+- **全新子智能体调度（路 1 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `666db393-c096-4789-b22c-82f5f03f998c`；
+  - 派发 **Subagent 63**: HTML Parser & Img Sizing Specialist（`src/html/`、`src/layout/`、`src/render/`、`src/css/`，`bin_19231` / `19231`）
+    - 攻坚目标：`e2e/html-parser.e2e.test.ts`、`e2e/xhtml-doctype-parser-routing.e2e.test.ts`、`e2e/img-dimensions.e2e.test.ts`、`e2e/img-data-url-load.e2e.test.ts`、`e2e/source-dimensions.e2e.test.ts`。
+
+## [2026-11-20 18:39:20] 8 大高 ROI 套件 7/8 全绿收割（25/26 PASS，8 分钟极速闭环）(Subagent a8f3cbb5 结单，Phase 95)
+- **Harness Flat Session、`waitForSelector` 与 PNA 拦截同步 (`e2e/harness.ts`, `src/js/shim/window.js`)**:
+  - `harness.ts`: 实装 `CDPClient.connection().session(sessionId)`、`Page.waitForSelector(selector, options)` 与 `__capsurf_blocked_navigation` 403 上报；
+  - `window.js` & `cssom.js`: 实装 `<link rel="stylesheet" crossorigin>` 加载、ACAO / 重定向 origin-clean 判定、跨域 `cssRules`/`insertRule` 抛 `SecurityError` 且保留 opaque 样式表参与级联计算。
+- **门禁与 E2E 验证（无锁 `-d -o` 快编）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `runtime-wait-for-selector` (1/1)、`inline-span-white-space` (1/1, 646ms)、`intrinsic-sizing` (4/4)、`webkit-box-line-clamp` (1/1)、`private-network` (3/3)、`session-outbound` (7/7)、`cors-stylesheets` (7/7)、`runtime-get-heap-usage` (1/2，余 `session.cp` 2 行 `accounted_bytes` 对齐)：**25/26 PASS**！
+- **全新子智能体调度（路 2 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `a8f3cbb5-e8cd-4b27-a031-4d5fd4c29adc`；
+  - 派发 **Subagent 64**: JS Metrics & Routes Closer（`e2e/shim/cloudflare-test.ts` + `src/js/shim/*`，`bin_19232` / `19232`）
+    - 攻坚目标：一次性收割 6 大已定位套件（`engine-routes` 17/17、`stylo-layout-misc-values`、`element-measurement`、`root-element-metrics`、`scrollable-overflow-origin`、`theme-flip-repaint`）。
