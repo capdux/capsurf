@@ -3383,6 +3383,11 @@ pub struct CdpPageSession {
 
     pub fn ensureIframeContext(*_): bool {
         if (_.iframe_ctx_created) return true;
+        let k_check: usize = 0;
+        while (k_check < _.known_child_frame_count) : (k_check += 1) {
+            const kf = &_.known_child_frames[k_check];
+            if (kf.active && !kf.detached && kf.is_cross_origin) return false;
+        }
         let found_origin_buf: [256]u8 = [0; 256];
         let found_origin_len: usize = 0;
         const main_origin = extractOriginFromUrl(_.url);

@@ -2407,7 +2407,7 @@
 
   function isSameTarget(a, b) {
     if (a === b) return true;
-    if (a && b && a._nid !== undefined && b._nid !== undefined && a._nid === b._nid) return true;
+    if (a && b && a.nodeType !== 9 && b.nodeType !== 9 && a._nid !== undefined && b._nid !== undefined && a._nid === b._nid && a.ownerDocument === b.ownerDocument) return true;
     return false;
   }
 
@@ -42925,11 +42925,9 @@
                   const setParent = function (node, parent) {
                     if (!node || typeof node !== "object" || !parent) return;
                     try {
-                      if (!node.parentNode) {
-                        Object.defineProperty(node, "parentNode", { value: parent, writable: true, configurable: true });
-                      }
+                      Object.defineProperty(node, "parentNode", { value: parent, writable: true, configurable: true });
                     } catch (e) {
-                      try { if (!node.parentNode) node.parentNode = parent; } catch (e2) {}
+                      try { node.parentNode = parent; } catch (e2) {}
                     }
                   };
                   const cachedBody = doc.body ? upgradeElement(doc.body) : null;

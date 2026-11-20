@@ -35,6 +35,8 @@ import {
     buildFrameResourceTree
 } from "./frames.cp";
 import { extractAckSessionId } from "./screencast.cp";
+import { Viewport } from "./emulation.cp";
+import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
 
 fn resolveIframeFinalUrl(base_url: []const u8, src: []const u8, out_buf: []u8): []const u8 {
     let cur_buf: [1024]u8 = undefined;
@@ -303,6 +305,18 @@ pub fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
     }
 }
 
+fn countActiveOopifContexts(session: *CdpPageSession): usize {
+    let n: usize = 0;
+    let ki: usize = 0;
+    while (ki < session.known_child_frame_count) : (ki += 1) {
+        const kf = &session.known_child_frames[ki];
+        if (kf.active && !kf.detached && kf.is_cross_origin && kf.exec_context_id > 0) {
+            n += 1;
+        }
+    }
+    return n;
+}
+
 pub fn emitNewChildFrameEvents(
     session: *CdpPageSession,
     out_events: *[MAX_CDP_EVENTS]CdpEvent,
@@ -381,12 +395,16 @@ pub fn emitNewChildFrameEvents(
                     out_events[event_count.*] = CdpEvent.create("Runtime.executionContextDestroyed", des_json);
                     event_count.* += 1;
                 }
+                kf.exec_context_id = 0;
             }
         }
     }
 
+    let active_oopifs = countActiveOopifContexts(session);
+
     // Detect URL/origin changes on already-known child frames (e.g. about:blank -> cross-origin src)
     {
+        const main_orig = originOf(session.url);
         let ki: usize = 0;
         while (ki < session.known_child_frame_count && event_count.* < out_events.len) : (ki += 1) {
             let kf = &session.known_child_frames[ki];
@@ -403,10 +421,14 @@ pub fn emitNewChildFrameEvents(
                         const ul = @min(cf.url.len, kf.url_buf.len);
                         @memcpy(kf.url_buf[0..ul], cf.url[0..ul]);
                         kf.url_len = ul;
-                        if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
+                        const is_xo = main_orig.len > 0 && !std.mem.eql(u8, new_origin, main_orig);
+                        kf.is_cross_origin = is_xo;
+                        const allow_ctx = !is_xo || active_oopifs < MAX_CONCURRENT_OOPIF;
+                        if (allow_ctx && session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
                             const ctx_id = session.next_context_id;
                             session.next_context_id += 1;
                             kf.exec_context_id = ctx_id;
+                            if (is_xo) active_oopifs += 1;
                             let esc_orig_buf: [256]u8 = [0; 256];
                             const esc_orig = escapeJsonString(new_origin, &esc_orig_buf);
                             const ctx_json = std.fmt.allocPrint(
@@ -421,6 +443,31 @@ pub fn emitNewChildFrameEvents(
                     break;
                 }
             }
+        }
+    }
+
+    // Promote waiting cross-origin child frames if an OOPIF slot freed up
+    if (session.runtime_enabled && active_oopifs < MAX_CONCURRENT_OOPIF) {
+        let pi: usize = 0;
+        while (pi < session.known_child_frame_count && active_oopifs < MAX_CONCURRENT_OOPIF && event_count.* < out_events.len) : (pi += 1) {
+            let kf = &session.known_child_frames[pi];
+            if (!kf.active || kf.detached || !kf.is_cross_origin || kf.exec_context_id != 0) continue;
+            const k_url = kf.url_buf[0..kf.url_len];
+            if (isRefusedKindFrameUrl(k_url)) continue;
+            const k_orig = originOf(k_url);
+            const ctx_id = session.next_context_id;
+            session.next_context_id += 1;
+            kf.exec_context_id = ctx_id;
+            let esc_orig_buf: [256]u8 = [0; 256];
+            const esc_orig = escapeJsonString(k_orig, &esc_orig_buf);
+            const ctx_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
+                .{ ctx_id, esc_orig, kf.frame_id_buf[0..kf.frame_id_len] },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+            event_count.* += 1;
+            active_oopifs += 1;
         }
     }
 
@@ -469,10 +516,12 @@ pub fn emitNewChildFrameEvents(
             out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_init);
             event_count.* += 1;
         }
-        if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
+        const allow_ctx = !cf.is_cross_origin || active_oopifs < MAX_CONCURRENT_OOPIF;
+        if (allow_ctx && session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
             const ctx_id = session.next_context_id;
             session.next_context_id += 1;
             cf.exec_context_id = ctx_id;
+            if (cf.is_cross_origin) active_oopifs += 1;
             const cf_origin = originOf(cf.url);
             let esc_orig_buf: [256]u8 = [0; 256];
             const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
@@ -681,6 +730,18 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.startScreencast")) {
+            const req_mw = extractJsonInt(req.params_raw, "maxWidth") ?? 0;
+            const req_mh = extractJsonInt(req.params_raw, "maxHeight") ?? 0;
+            if (req_mw > 0 && req_mh > 0) {
+                const clamped = Viewport.clampViewport(@floatFromInt(req_mw), @floatFromInt(req_mh));
+                session.viewport_width = clamped.width;
+                session.viewport_height = clamped.height;
+                session.layout.viewport_width = clamped.width;
+                session.layout.viewport_height = clamped.height;
+                if (dctx := session.dom_ctx) {
+                    dctx.layout_dirty = true;
+                }
+            }
             const owner_sid = if (req.session_id.len > 0) req.session_id else session.target_id;
             * = session.screencast_handler.startScreencast(req.params_raw, owner_sid);
             if (session.has_document) {
@@ -1282,19 +1343,26 @@ pub struct PageHandler {
                         event_count.* += 1;
                     }
                     if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
-                        const ctx_id = session.next_context_id;
-                        session.next_context_id += 1;
-                        cf.exec_context_id = ctx_id;
-                        const cf_origin = originOf(cf.url);
-                        let esc_orig_buf: [256]u8 = [0; 256];
-                        const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
-                        const ctx_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
-                            .{ ctx_id, esc_orig, cf.frame_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
-                        event_count.* += 1;
+                        const allow_nav_ctx = !cf.is_cross_origin || countActiveOopifContexts(session) < MAX_CONCURRENT_OOPIF;
+                        if (allow_nav_ctx) {
+                            const ctx_id = session.next_context_id;
+                            session.next_context_id += 1;
+                            cf.exec_context_id = ctx_id;
+                            const cf_origin = originOf(cf.url);
+                            let esc_orig_buf: [256]u8 = [0; 256];
+                            const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
+                            const ctx_json = std.fmt.allocPrint(
+                                session.allocator,
+                                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
+                                .{ ctx_id, esc_orig, cf.frame_id },
+                            ) catch "{}";
+                            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                            event_count.* += 1;
+                            if (cf.is_cross_origin) {
+                                // Record immediately so subsequent iterations in this loop see the active OOPIF slot
+                                recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
+                            }
+                        }
                     }
                     if (event_count.* < out_events.len) {
                         const stop_json = std.fmt.allocPrint(

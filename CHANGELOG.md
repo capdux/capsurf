@@ -2386,3 +2386,7 @@
 ### Phase 233
 - Added `test/css/test_calc_and_colors_edge.cp` and `test/layout/test_grid_and_aspect_ratio_edge.cp`.
 - Fixed held-button drag `mouseMoved` coalescing and child-frame `Page.frameNavigated` URL overwrite in `e2e/harness.ts`, and finite `@keyframes` `animation-iteration-count` clamping in `src/cdp/session_hooks.cp`.
+
+### Phase 234
+- Added `test/eval/test_origin_and_csp_edge.cp` and `test/net/test_fetch_and_cors_edge.cp`.
+- Implemented `Page.startScreencast` viewport sync & `MAX_CONCURRENT_OOPIF` context budgeting (`src/cdp/{page,session}.cp`), `DOM.getNodeForLocation` (`src/cdp/dom.cp`, `e2e/harness.ts`), and `createHTMLDocument` `parentNode` / `isSameTarget` fixes (`src/js/shim/{index.js,mutations/observer.js}` + `runtime.js`/`runtime_source.cp`).

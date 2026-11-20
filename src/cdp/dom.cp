@@ -2,8 +2,9 @@
 // CDP DOM Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/dom.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, CdpBoxModel, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, CdpBoxModel, extractJsonString, extractJsonInt, extractJsonFloat, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
+import { hitTest } from "./input.cp";
 import { clearLearnedScripts } from "./session_hooks.cp";
 import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 
@@ -678,6 +679,32 @@ pub struct DomHandler {
             }
 
             const res = std.fmt.bufPrint(out_buf, "{s}", .{str_buf[0..offset]}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.getNodeForLocation")) {
+            session.ensureLayout();
+            let x: f32 = 0.0;
+            let y: f32 = 0.0;
+            if (xf := extractJsonFloat(req.params_raw, "x")) {
+                x = @floatCast(xf);
+            } else if (xi := extractJsonInt(req.params_raw, "x")) {
+                x = @floatFromInt(xi);
+            }
+            if (yf := extractJsonFloat(req.params_raw, "y")) {
+                y = @floatCast(yf);
+            } else if (yi := extractJsonInt(req.params_raw, "y")) {
+                y = @floatFromInt(yi);
+            }
+            const hit_id = hitTest(session, x, y);
+            if (hit_id == NULL_NODE) {
+                return CdpResponse.err(req.id, -32000, "No node found at given location");
+            }
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"backendNodeId\":{d},\"frameId\":\"{s}\",\"nodeId\":{d}}}",
+                .{ hit_id, session.frame_id, hit_id },
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }
 

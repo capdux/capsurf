@@ -212,7 +212,7 @@ export class CDPClient {
             const el: any = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
             return (el && el._nid) ? el._nid : 1;
           }, params.x, params.y);
-          return { nodeId: hitId || 1 };
+          return { nodeId: hitId || 1, backendNodeId: hitId || 1 };
         } catch {}
       }
     }

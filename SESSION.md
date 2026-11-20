@@ -4733,3 +4733,11 @@
   - Skipped `_pendingMouseMove` coalescing when `params.buttons !== 0` (`e2e/harness.ts:300-319`) and restricted `this._url` updates to top-level frames (`!e?.frame?.parentId`, `e2e/harness.ts:1129-1135`).
   - Parsed `animation-iteration-count` and clamped finite `@keyframes` animations to final phase + `animationend` in `src/cdp/session_hooks.cp:1116-1215`.
   - Built `bin_19233/main` (7.17s); `mouse-input-fields` (**4/4**), `legacy-charset-url-encoding` (**9/9**), `element-measurement` (**5/5**) = **18/18 PASS** (33 assertions, exit 0).
+
+### Phase 234: CSP/Origin & Fetch/CORS Whitebox (125/125) + `screencast-viewport-demo`, `oopif-worker-budget`, `mutation-observer-created-document` 4/4 PASS
+- **Slot A (`45c382fe`, `7bbda173`)**: Added `test/eval/test_origin_and_csp_edge.cp` (**1/1 PASS**, 1245ms) and `test/net/test_fetch_and_cors_edge.cp` (**6/6 PASS**, 1028ms). Full-repo pure-CP whitebox now **125/125 (100% PASS)**.
+- **Slot B (`56a9c358`)**:
+  - Synced `Page.startScreencast` `maxWidth`/`maxHeight` to viewport & layout dirty in `src/cdp/page.cp`, added `DOM.getNodeForLocation` in `src/cdp/dom.cp` & `e2e/harness.ts`.
+  - Enforced `MAX_CONCURRENT_OOPIF` (`1`) on cross-origin `Runtime.executionContextCreated` with freed-slot promotion in `src/cdp/page.cp` & `src/cdp/session.cp`.
+  - Unconditionally bound `parentNode` on `createHTMLDocument` root/head/body in `src/js/shim/index.js` and fixed `isSameTarget` for `nodeType === 9` Documents in `src/js/shim/mutations/observer.js` (re-bundled `runtime.js`/`runtime_source.cp`).
+  - Built `bin_19233/main`; `mutation-observer-created-document` (**2/2**), `oopif-worker-budget` (**1/1**), `screencast-viewport-demo` (**1/1**) = **4/4 PASS** (17 assertions, 9.73s, exit 0).

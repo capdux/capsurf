@@ -1771,3 +1771,7 @@
 ### Phase 233: Drag `buttons` Bypass, Top-Frame URL Guard & Finite `@keyframes` Clamping
 - Bypassing `_pendingMouseMove` coalescing when `params.buttons !== 0` preserves every drag step while keeping hover coalescing intact.
 - Clamping finite `@keyframes` animations at `elapsed >= dur * iterCount` in `session_hooks.cp` ensures `ResizeObserver` observes the final `100%` frame.
+
+### Phase 234: Screencast Viewport Sync, OOPIF Context Budget & Created-Document `MutationObserver`
+- `Page.startScreencast` now updates `viewport_width`/`viewport_height` and sets `layout_dirty = true` when both `maxWidth > 0` and `maxHeight > 0`.
+- `isSameTarget(a, b)` in `observer.js` no longer treats distinct `Document` nodes (`nodeType === 9`) with `_nid === 0` as identical, and `createHTMLDocument` unconditionally wires `parentNode` on `documentElement`/`head`/`body`.
