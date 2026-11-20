@@ -4461,3 +4461,7 @@
   - `html-classes.js:2074-2104,2403-2452` & `window.js:11249-11300`：`getOrCreateIframeWindow` 定义子 frame `innerWidth`/`innerHeight`/`outerWidth`/`outerHeight`，`executeIframeInlineScripts` 与 `evalInIframe` 注入子 frame 视口及 `parent`/`top`/`frames`/`frameElement`，并为 `evalInIframe` 多语句补齐末句 `return (...)`。
 - **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 复测 `oopif-postmessage` & `oopif-runtime-evaluate`）。
 - **清理旧子智能体**: 销毁 `1ae7d75f-2b15-4078-b6b7-c3cc7359b946`。
+
+## [2026-11-21 01:05:30] 2 分钟新增并全绿通过纯 CP `box-shadow`/裁剪/透明度白盒单测 `test/render/test_box_shadow_and_clip.cp` (Subagent bfc10005 结单，Phase 185)
+- **新增白盒测试 (`test/render/test_box_shadow_and_clip.cp`)**: 覆盖 `box-shadow: inset`/outset 级联与像素断言、`clip-path: inset(...)` 裁剪、`opacity: 0.5/0.0` Alpha 混合及 `overflow: clip` 子盒裁剪（**4/4 PASS**, 1595ms, 4 门禁全 0；`test/render/` 达 **5/5 PASS**）。
+- **清理旧子智能体**: 销毁 `bfc10005-d948-404e-828d-68d7a160752c`。

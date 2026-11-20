@@ -2213,3 +2213,6 @@
 
 ## Phase 184: Static `<iframe>` Lifecycle Init, Child `innerWidth`/`innerHeight` & `evalInIframe` Return
 - **`src/js/shim/{element/html-classes,window}.js` & `src/js/runtime{,_source.cp}`**：补齐静态 `<iframe>` 自动挂载、子窗口 `innerWidth`/`innerHeight` 与多语句 `evalInIframe` 返回值（4 门禁全 0）。
+
+## Phase 185: Pure-CP BoxShadow, `clip-path`, `opacity` & `overflow: clip` Whitebox Suite (4/4 PASS)
+- 新增 `test/render/test_box_shadow_and_clip.cp`，覆盖 `box-shadow: inset`、`clip-path: inset`、`opacity` 混合与 `overflow: clip` 像素验证（`cap test -m` **4/4 PASS**, 1595ms）。
