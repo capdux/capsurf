@@ -2223,3 +2223,6 @@
 
 ## Phase 187: Pure-CP `@container` & 64-Bit Cascade Weight Whitebox Suite `test/css/test_container_and_layers.cp` (4/4 PASS)
 - 新增 `test/css/test_container_and_layers.cp`，覆盖 64 位级联权重、`@container` 尺寸重算与属性继承（`cap test -m` **4/4 PASS**, 1470ms）。
+
+## Phase 188: `oopif-rerender` 1/1 PASS & `oopif-quads-paint` 8px Offset Localization
+- 零修改验收 `e2e/demo/oopif-rerender.e2e.test.ts` (**1/1 PASS**) 与 `oopif-quads-paint` 跨域像素绕过用例，并定位 `TL @(25,25)` 偏移与 `oopif-prespawn` fixture 缺口。
