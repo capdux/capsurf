@@ -4150,6 +4150,26 @@
 - **精准跨模块定位（留交 Slot B）**：`e2e/demo/runtime-compile-script-demo.e2e.test.ts` 根因位于 `src/cdp/runtime.cp:74-84`（`Runtime.compileScript`/`runScript` 桩实现，缺真实编译校验、`cs:N` ID、脚本持久化与 `Debugger.scriptParsed` 重放）。
 - **清理旧子智能体**: 销毁 `a65ad788-a234-4b95-af87-33f8f037382c`。
 
+## [2026-11-20 23:27:00] `page-renderer-pdf` 1/1 全绿、2MB WS 帧与 `JS_ComputeMemoryUsage` 真实 JS 堆统计 (Subagent 5184e9ac 结单，Phase 141)
+- **PDF 内容流接通、控制字符转义、2MB WS 帧与真实 JS 堆 (`src/cdp/{page,dom,runtime,server,session}.cp`)**:
+  - `page.cp`：接通 `renderPdfWithDocAlloc` 输出真实图文 PDF 内容流（>10KB）；
+  - `dom.cp`：`appendJsonEscaped` 补全 `< 0x20` 控制字符 `\u00XX` 转义；
+  - `server.cp:749`：`frame_payload` 从 64KB 扩至 `2MB`，消除 >64KB `evaluate`/`setContent` 断连；
+  - `runtime.cp:104,170`：`decl_buf`/`unesc_buf` 写入 `\0` 结尾，消除 `>=4096B` 表达式 UTF-8 误报；
+  - `session.cp:39-67,3168`：通过 `@c` 接入 `JS_ComputeMemoryUsage` 计入真实 `mu.malloc_size`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `page-renderer-pdf` (**1/1**)、`pdf-break-properties` (**2/2**)、`pdf-page-margins` (**1/1**)、`style-churn-memory` (**2/3**)、`text-content-memory` (**1/3**)：**7/10 PASS**！
+- **清理旧子智能体**: 销毁 `5184e9ac-a527-423a-ad34-8457b98cc6c8`。
+
+## [2026-11-20 23:27:30] `defer-shim-nested-modinit-demo`、`module-init-shim-demo` & `absolute-path-import-demo` 3/3 全绿 (Subagent 56e6f51d 结单，Phase 142)
+- **模块初始化延迟定时器取消修复 (`src/js/shim/window.js`, `src/js/runtime{,_source.cp}`)**:
+  - `src/js/shim/window.js:1697-1708`：在 `global.clearTimeout` 识别 `numId > 900000` 延迟定时器占位 ID 并清空 `__capsurf_deferred_timers[numId - 900001]`，修复 `<script type=module>` 内 `setTimeout` + `clearTimeout` 回放已取消回调的缺陷。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `defer-shim-nested-modinit-demo` (**1/1**)、`module-init-shim-demo` (**1/1**)、`absolute-path-import-demo` (**1/1**)：**3/3 PASS (30 expect() calls)**！
+- **清理旧子智能体**: 销毁 `56e6f51d-83b1-470c-94e3-03e37fde3842`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

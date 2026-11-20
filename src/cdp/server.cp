@@ -746,7 +746,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         _.session.resetSession();
         defer _.session.resetSession();
         let pending_initial_url = initial_url;
-        let frame_payload = std.heap.c_allocator.alloc(u8, 65536) catch return;
+        let frame_payload = std.heap.c_allocator.alloc(u8, 2 * 1024 * 1024) catch return;
         defer std.heap.c_allocator.free(frame_payload);
         @memset(frame_payload, 0);
 

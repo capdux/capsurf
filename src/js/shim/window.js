@@ -1695,7 +1695,16 @@ function installWindow(global) {
   }, "setTimeout");
 
   global.clearTimeout = markNative(function (id) {
-    activeTimers.delete(Number(id));
+    const numId = Number(id);
+    activeTimers.delete(numId);
+    const deferred = global.__capsurf_deferred_timers ||
+      (typeof globalThis !== "undefined" ? globalThis.__capsurf_deferred_timers : null);
+    if (numId > 900000 && Array.isArray(deferred)) {
+      const idx = numId - 900001;
+      if (idx >= 0 && idx < deferred.length) {
+        deferred[idx] = [];
+      }
+    }
   }, "clearTimeout");
 
   global.setInterval = markNative(function (cb, ms) {

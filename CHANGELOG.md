@@ -2062,4 +2062,15 @@
 
 ## Phase 140: `external-scripts-demo` & `page-script-demo` 2/2 PASS & `Runtime.compileScript` Localization
 - 零修改摸底验收 `external-scripts-demo` (1/1)、`page-script-demo` (1/1) PASS，并精准定位 `runtime-compile-script-demo` 至 `src/cdp/runtime.cp:74-84`。
+
+## Phase 141: `page-renderer-pdf` 1/1, 2MB WS Frames, `JS_ComputeMemoryUsage` & Control Char Escaping
+- **`src/cdp/{page,dom,runtime,server,session}.cp`**：
+  - 接通 `renderPdfWithDocAlloc`、扩充 WS `frame_payload` 至 2MB、修复 `>=4096B` `unesc_buf` `\0` 结尾、接入 `JS_ComputeMemoryUsage` 真实 JS 堆统计并转义 `< 0x20` JSON 控制字符。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`page-renderer-pdf` (1/1)、`pdf-break-properties` (2/2)、`pdf-page-margins` (1/1)、`style-churn-memory` (2/3)、`text-content-memory` (1/3) PASS。
+
+## Phase 142: `defer-shim-nested-modinit-demo`, `module-init-shim-demo` & `absolute-path-import-demo` — 3/3 Suites (30 Expects)
+- **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：
+  - 在 `global.clearTimeout` 同步取消 `numId > 900000` 的 `__capsurf_deferred_timers` 占位定时器，**3/3 PASS (30 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -1600,6 +1600,15 @@
 2. **HTML5 脚本阶段与 `beforeunload` 控制台保留**：
    - 将脚本队列按同步 / `defer` / `async` 分阶段调度，并在导航卸载前补充 `beforeunload` 同时跨 `dom_ctx` 重建保留已记录的 `ConsoleRecord`。
 
+## Phase 141 2MB WS 帧、大表达式 `\0` 终止与真实 JS 堆统计方案 (`src/cdp/`)
+1. **大载荷 WS 帧与 Eval 缓冲 (`server.cp`, `runtime.cp`)**：
+   - 将 `runWebSocketSession` 的 `frame_payload` 扩至 2MB 彻底解决 >64KB `setContent`/`evaluate` 断连；在 `unescapeJsonString` 后对 `decl_buf`/`unesc_buf` 写入 `\0` 终止符修复 `>=4096B` 表达式 UTF-8 误报。
+2. **真实 JS 堆内存统计 (`session.cp`)**：
+   - 通过 `@c` 绑定 QuickJS `JS_ComputeMemoryUsage`，将 `mu.malloc_size` 计入 `computePageScriptBytes` 支撑 `Runtime.getHeapUsage`。
+
+## Phase 142 延迟定时器占位 ID 取消方案 (`src/js/shim/window.js`)
+1. **同步取消 `__capsurf_deferred_timers`**：`session_hooks.cp` 在 `__capsurf_defer_timers` 期间返回 `900000 + idx` 占位 ID；在 `window.js` `clearTimeout` 中同步识别 `> 900000` 并清空对应槽位数组，确保后续 flush 不再执行已取消回调。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。

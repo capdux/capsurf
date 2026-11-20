@@ -22,6 +22,14 @@ pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnman
             list.appendSlice(allocator, "\\r")?;
         } else if (c == '\t') {
             list.appendSlice(allocator, "\\t")?;
+        } else if (c == '\x08') {
+            list.appendSlice(allocator, "\\b")?;
+        } else if (c == '\x0c') {
+            list.appendSlice(allocator, "\\f")?;
+        } else if (c < 0x20) {
+            const hex = "0123456789abcdef";
+            let esc: [6]u8 = [ '\\', 'u', '0', '0', hex[(c >> 4) & 0xF], hex[c & 0xF] ];
+            list.appendSlice(allocator, &esc)?;
         } else {
             list.append(allocator, c)?;
         }

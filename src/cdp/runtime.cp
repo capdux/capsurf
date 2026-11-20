@@ -101,7 +101,9 @@ pub struct RuntimeHandler {
             const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
             let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(decl_buf);
-            const func_decl = unescapeJsonString(raw_decl, decl_buf);
+            const func_decl_len = unescapeJsonString(raw_decl, decl_buf).len;
+            decl_buf[func_decl_len] = 0;
+            const func_decl = decl_buf[0..func_decl_len];
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             
@@ -165,7 +167,9 @@ pub struct RuntimeHandler {
             const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
             let unesc_buf = session.allocator.alloc(u8, @max(raw_expr.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(unesc_buf);
-            const expr = unescapeJsonString(raw_expr, unesc_buf);
+            const expr_len = unescapeJsonString(raw_expr, unesc_buf).len;
+            unesc_buf[expr_len] = 0;
+            const expr = unesc_buf[0..expr_len];
             
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;

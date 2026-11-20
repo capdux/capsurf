@@ -36,6 +36,35 @@ import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS
         opaque_ptr: *!?,
     );
     fn js_strdup(ctx: *JSContext, str: [*c]const u8): [*c]u8;
+    struct JSMemoryUsage {
+        malloc_size: i64,
+        malloc_limit: i64,
+        memory_used_size: i64,
+        malloc_count: i64,
+        memory_used_count: i64,
+        atom_count: i64,
+        atom_size: i64,
+        str_count: i64,
+        str_size: i64,
+        obj_count: i64,
+        obj_size: i64,
+        prop_count: i64,
+        prop_size: i64,
+        shape_count: i64,
+        shape_size: i64,
+        js_func_count: i64,
+        js_func_size: i64,
+        js_func_code_size: i64,
+        js_func_pc2line_count: i64,
+        js_func_pc2line_size: i64,
+        c_func_count: i64,
+        array_count: i64,
+        fast_array_count: i64,
+        fast_array_elements: i64,
+        binary_object_count: i64,
+        binary_object_size: i64,
+    }
+    fn JS_ComputeMemoryUsage(rt: *JSRuntime, s: *JSMemoryUsage);
 }
 
 pub struct NavigationEntry {
@@ -3136,10 +3165,13 @@ pub struct CdpPageSession {
         return base_bytes + node_bytes + canvas_bytes;
     }
 
-    fn computePageScriptBytes(): u64 {
+    fn computePageScriptBytes(*_): u64 {
         const base_bytes: u64 = 1572864;
         const html_bytes: u64 = @as(u64, _.raw_html.len);
-        return base_bytes + html_bytes;
+        let mu: JSMemoryUsage = std.mem.zeroes(JSMemoryUsage);
+        JS_ComputeMemoryUsage(_.rt.raw_rt, &mu);
+        const js_bytes: u64 = if (mu.malloc_size > 0) @as(u64, @intCast(mu.malloc_size)) else 0;
+        return base_bytes + html_bytes + js_bytes;
     }
 
     fn computeRendererBytes(): u64 {
@@ -3149,7 +3181,7 @@ pub struct CdpPageSession {
         return base_bytes + vw * vh * 4;
     }
 
-    fn formatHeapUsageJson(session_id: []const u8, out_buf: []u8): []const u8 {
+    fn formatHeapUsageJson(*_, session_id: []const u8, out_buf: []u8): []const u8 {
         let used: u64 = _.computePageScriptBytes();
         if (std.mem.eql(u8, session_id, "capsurf-session-engine")) {
             used = _.computeEngineBytes() + _.retained_body_bytes + _.font_asset_cache_bytes;

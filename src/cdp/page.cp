@@ -10,7 +10,7 @@ import { HttpLoader } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeType, NULL_NODE } from "../dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
-import { PdfOptions, computePdfPagination, renderPdfAlloc } from "../render/pdf.cp";
+import { PdfOptions, computePdfPagination, renderPdfAlloc, renderPdfWithDocAlloc } from "../render/pdf.cp";
 import { Base64 } from "cap:encoding";
 import {
     DocumentKind,
@@ -421,6 +421,8 @@ pub struct PageHandler {
             let page_count: u32 = 1;
             let media_w_pt: f32 = (if (opts.landscape) opts.paper_height_in else opts.paper_width_in) * 72.0;
             let media_h_pt: f32 = (if (opts.landscape) opts.paper_width_in else opts.paper_height_in) * 72.0;
+            let styles_opt: ([]ComputedStyle)? = null;
+            defer if (styles_opt != null) session.allocator.free(styles_opt.?);
 
             if (session.has_document) {
                 const count = @max(@as(usize, 1), session.doc.nodeCount());
@@ -451,8 +453,7 @@ pub struct PageHandler {
                 }
                 const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
                 const sheet = StyleSheet.parse(full_css, session.viewport_width, false);
-                let styles_opt = session.allocator.alloc(ComputedStyle, count) catch null;
-                defer if (styles_opt != null) session.allocator.free(styles_opt.?);
+                styles_opt = session.allocator.alloc(ComputedStyle, count) catch null;
                 if (styles_opt != null) {
                     const styles = styles_opt.?;
                     Cascade.computeStyles(&session.doc, &sheet, styles, 16.0);
@@ -464,7 +465,10 @@ pub struct PageHandler {
                 }
             }
 
-            const pdf_bytes = renderPdfAlloc(session.allocator, page_count, media_w_pt, media_h_pt) catch return CdpResponse.err(req.id, -32000, "PDF generation failed");
+            const pdf_bytes = if (session.has_document && styles_opt != null)
+                (renderPdfWithDocAlloc(session.allocator, &session.doc, styles_opt.?, &session.layout, page_count, media_w_pt, media_h_pt) catch return CdpResponse.err(req.id, -32000, "PDF generation failed"))
+            else
+                (renderPdfAlloc(session.allocator, page_count, media_w_pt, media_h_pt) catch return CdpResponse.err(req.id, -32000, "PDF generation failed"));
             defer session.allocator.free(pdf_bytes);
             session.renderer_active = true;
             session.frames_rendered += page_count;
