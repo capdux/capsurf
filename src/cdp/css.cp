@@ -197,6 +197,10 @@ fn formatFontSize(fs: f32, out: []u8): []const u8 {
 fn formatDisplay(d: Display): []const u8 {
     if (d.isNone()) return "none";
     if (d.isContents()) return "contents";
+    if (d.isWebkitBox()) {
+        if (d.pair.outside == DisplayOutside.Inline) return "-webkit-inline-box";
+        return "-webkit-box";
+    }
     if (d.isFlex()) {
         if (d.pair.outside == DisplayOutside.Inline) return "inline-flex";
         return "flex";
@@ -209,6 +213,7 @@ fn formatDisplay(d: Display): []const u8 {
         if (d.pair.inside == DisplayInside.FlowRoot) return "inline-block";
         return "inline";
     }
+    if (d.pair.inside == DisplayInside.FlowRoot) return "flow-root";
     return "block";
 }
 

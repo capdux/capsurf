@@ -1309,4 +1309,10 @@
    - 精确区分 `line-height: normal`/0/无单位乘数/长度，并实装 `collectInlineItems`/`flushInlineLine`/`computeVerticalAlignShift` 统一处理行内文本、`<br>`、atomic inline、strut、half-leading 与 `inline-block` 末行基线传递。
 2. **累积透明度与 `visibility` 继承光栅化 (`painter.cp`)**：
    - 在 `paintNodeRecursive` 向下透传 `group_opacity`，修复缩放字形重叠双重混合；`visibility: hidden` 仅跳过自身绘制而继续递归子节点，完整支持 `visibility: visible` 后代重现。
+
+## Phase 83 CSS Text 3 空白折叠、Sizing 3 固有尺寸与 `-webkit-line-clamp` 纯 CP 技术方案
+1. **跨 `<span>` 空白折叠与固有尺寸 (`cascade.cp`, `layout.cp`)**：
+   - 在 `collectInlineItems` 中维护 `prev_ws` 跨节点空白状态机，实现词边界断行与行首行尾空白裁剪；在 `measureIntrinsicWidth`/`measureMinContentWidth` 实装 `min-content`/`max-content`/`fit-content`/`stretch` 及循环百分比视作 `auto`。
+2. **`-webkit-line-clamp` 与 `<svg>` `vertical-align: middle` (`cascade.cp`, `layout.cp`, `cdp/css.cp`)**：
+   - 对 `display: -webkit-box` + `-webkit-box-orient: vertical` + `-webkit-line-clamp: N` 自动收敛计算 `display` 为 `flow-root` 并按行数截断盒高；修正 `.Middle` 偏移公式符号并使用直接父行内元素 `xHeightRatio()`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

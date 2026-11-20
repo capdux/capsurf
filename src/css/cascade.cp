@@ -45,6 +45,59 @@ pub enum DisplayInside {
     TableCaption,
     TableColumn,
     TableColumnGroup,
+    WebkitBox,
+}
+
+pub enum WhiteSpace {
+    Normal,
+    NoWrap,
+    Pre,
+    PreWrap,
+    PreLine,
+    BreakSpaces,
+
+    static fn parse(raw: []const u8): WhiteSpace? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "normal")) return WhiteSpace.Normal;
+        if (std.ascii.eqlIgnoreCase(s, "nowrap")) return WhiteSpace.NoWrap;
+        if (std.ascii.eqlIgnoreCase(s, "pre")) return WhiteSpace.Pre;
+        if (std.ascii.eqlIgnoreCase(s, "pre-wrap")) return WhiteSpace.PreWrap;
+        if (std.ascii.eqlIgnoreCase(s, "pre-line")) return WhiteSpace.PreLine;
+        if (std.ascii.eqlIgnoreCase(s, "break-spaces")) return WhiteSpace.BreakSpaces;
+        return null;
+    }
+
+    fn preservesSpaces(): bool {
+        return _ == WhiteSpace.Pre || _ == WhiteSpace.PreWrap || _ == WhiteSpace.BreakSpaces;
+    }
+
+    fn preservesNewlines(): bool {
+        return _ == WhiteSpace.Pre || _ == WhiteSpace.PreWrap || _ == WhiteSpace.PreLine || _ == WhiteSpace.BreakSpaces;
+    }
+
+    fn allowsWrap(): bool {
+        return _ != WhiteSpace.NoWrap && _ != WhiteSpace.Pre;
+    }
+}
+
+pub enum BoxOrient {
+    Horizontal,
+    Vertical,
+
+    static fn parse(raw: []const u8): BoxOrient? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "horizontal") || std.ascii.eqlIgnoreCase(s, "inline-axis")) return BoxOrient.Horizontal;
+        if (std.ascii.eqlIgnoreCase(s, "vertical") || std.ascii.eqlIgnoreCase(s, "block-axis")) return BoxOrient.Vertical;
+        return null;
+    }
+}
+
+pub enum IntrinsicSizeKeyword {
+    None,
+    MinContent,
+    MaxContent,
+    FitContent,
+    Stretch,
 }
 
 pub enum BorderCollapse {
@@ -224,6 +277,20 @@ pub struct Display {
         };
     }
 
+    static fn webkitBox(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.WebkitBox },
+        };
+    }
+
+    static fn inlineWebkitBox(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Inline, inside: DisplayInside.WebkitBox },
+        };
+    }
+
     static fn grid(): Display {
         return Display {
             is_keyword: false,
@@ -324,7 +391,9 @@ pub struct Display {
         if (std.ascii.eqlIgnoreCase(s, "inline")) return Display.inlineFlow();
         if (std.ascii.eqlIgnoreCase(s, "inline-block")) return Display.inlineBlock();
         if (std.ascii.eqlIgnoreCase(s, "flex") || std.ascii.eqlIgnoreCase(s, "-webkit-flex")) return Display.flex();
-        if (std.ascii.eqlIgnoreCase(s, "inline-flex")) return Display.inlineFlex();
+        if (std.ascii.eqlIgnoreCase(s, "inline-flex") || std.ascii.eqlIgnoreCase(s, "-webkit-inline-flex")) return Display.inlineFlex();
+        if (std.ascii.eqlIgnoreCase(s, "-webkit-box") || std.ascii.eqlIgnoreCase(s, "-moz-box")) return Display.webkitBox();
+        if (std.ascii.eqlIgnoreCase(s, "-webkit-inline-box") || std.ascii.eqlIgnoreCase(s, "-moz-inline-box")) return Display.inlineWebkitBox();
         if (std.ascii.eqlIgnoreCase(s, "grid") || std.ascii.eqlIgnoreCase(s, "inline-grid")) return Display.grid();
         if (std.ascii.eqlIgnoreCase(s, "table")) return Display.table();
         if (std.ascii.eqlIgnoreCase(s, "inline-table")) return Display.inlineTable();
@@ -349,6 +418,10 @@ pub struct Display {
 
     fn isFlex(): bool {
         return !_.is_keyword && _.pair.inside == DisplayInside.Flex;
+    }
+
+    fn isWebkitBox(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.WebkitBox;
     }
 
     fn isFlowRoot(): bool {
@@ -537,8 +610,29 @@ pub struct LengthPercentageOrAuto {
     is_auto: bool = false;
     is_none: bool = false;
     is_calc: bool = false;
+    intrinsic: IntrinsicSizeKeyword = IntrinsicSizeKeyword.None;
     calc_expr: []const u8 = "";
     length: CssLength = CssLength { value: 0.0, unit: CssUnit.Px };
+
+    fn isIntrinsic(): bool {
+        return _.intrinsic != IntrinsicSizeKeyword.None;
+    }
+
+    static fn minContentVal(): LengthPercentageOrAuto {
+        return LengthPercentageOrAuto { intrinsic: IntrinsicSizeKeyword.MinContent };
+    }
+
+    static fn maxContentVal(): LengthPercentageOrAuto {
+        return LengthPercentageOrAuto { intrinsic: IntrinsicSizeKeyword.MaxContent };
+    }
+
+    static fn fitContentVal(): LengthPercentageOrAuto {
+        return LengthPercentageOrAuto { intrinsic: IntrinsicSizeKeyword.FitContent };
+    }
+
+    static fn stretchVal(): LengthPercentageOrAuto {
+        return LengthPercentageOrAuto { intrinsic: IntrinsicSizeKeyword.Stretch };
+    }
 
     static fn zeroPx(): LengthPercentageOrAuto {
         return LengthPercentageOrAuto {
@@ -670,6 +764,18 @@ pub struct LengthPercentageOrAuto {
         if (std.ascii.eqlIgnoreCase(s, "none")) {
             return LengthPercentageOrAuto.noneVal();
         }
+        if (std.ascii.eqlIgnoreCase(s, "min-content") || std.ascii.eqlIgnoreCase(s, "-webkit-min-content") || std.ascii.eqlIgnoreCase(s, "-moz-min-content")) {
+            return LengthPercentageOrAuto.minContentVal();
+        }
+        if (std.ascii.eqlIgnoreCase(s, "max-content") || std.ascii.eqlIgnoreCase(s, "-webkit-max-content") || std.ascii.eqlIgnoreCase(s, "-moz-max-content")) {
+            return LengthPercentageOrAuto.maxContentVal();
+        }
+        if (std.ascii.eqlIgnoreCase(s, "fit-content") || std.ascii.eqlIgnoreCase(s, "-webkit-fit-content") || std.ascii.eqlIgnoreCase(s, "-moz-fit-content")) {
+            return LengthPercentageOrAuto.fitContentVal();
+        }
+        if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "-webkit-fill-available") || std.ascii.eqlIgnoreCase(s, "-moz-available") || std.ascii.eqlIgnoreCase(s, "fill-available")) {
+            return LengthPercentageOrAuto.stretchVal();
+        }
         if (std.ascii.startsWithIgnoreCase(s, "calc(")) {
             return LengthPercentageOrAuto {
                 is_calc: true,
@@ -787,7 +893,7 @@ pub struct LengthPercentageOrAuto {
         viewport_w: f32,
         viewport_h: f32,
     ): f32 {
-        if (_.is_auto || _.is_none) {
+        if (_.is_auto || _.is_none || _.isIntrinsic()) {
             return 0.0;
         }
         if (_.is_calc) {
@@ -917,7 +1023,10 @@ pub const PROP_GRID_COL_END: usize = 76;
 pub const PROP_GRID_ROW_START: usize = 77;
 pub const PROP_GRID_ROW_END: usize = 78;
 pub const PROP_VERTICAL_ALIGN: usize = 79;
-pub const TOTAL_PROP_SLOTS: usize = 80;
+pub const PROP_WHITE_SPACE: usize = 80;
+pub const PROP_BOX_ORIENT: usize = 81;
+pub const PROP_LINE_CLAMP: usize = 82;
+pub const TOTAL_PROP_SLOTS: usize = 83;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1386,6 +1495,10 @@ pub struct ComputedStyle {
     line_height_number: f32 = 0.0;
     vertical_align_kind: VerticalAlignKind = VerticalAlignKind.Baseline;
     vertical_align_length: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    white_space: WhiteSpace = WhiteSpace.Normal;
+    box_orient: BoxOrient = BoxOrient.Horizontal;
+    webkit_line_clamp: u32 = 0;
+    is_line_clamped: bool = false;
     font_family_buf: [64]u8 = [0; 64],
     font_family_len: usize = 0,
     font_weight: f32 = 400.0,
@@ -1448,6 +1561,12 @@ pub struct ComputedStyle {
 
     fn naturalLineHeight(): f32 {
         return _.naturalAscent() + _.naturalDescent();
+    }
+
+    fn xHeightRatio(): f32 {
+        if (_.hasFontFamily("Bungee")) return 0.72;
+        if (_.hasFontFamily("serif") && !_.hasFontFamily("sans-serif")) return 0.45;
+        return 0.50;
     }
 
     fn resolvedLineHeight(): f32 {
@@ -1628,8 +1747,15 @@ pub struct ComputedStyle {
             _.overflow_visible = false;
         }
 
+        if (node.hasTag("pre")) {
+            _.white_space = WhiteSpace.Pre;
+        }
+
         if (p := parent_style) {
             _.visibility = p.visibility;
+            if (!node.hasTag("pre")) {
+                _.white_space = p.white_space;
+            }
             if (tag != .H1 && tag != .H2 && tag != .H3 && tag != .H4 && tag != .H5 && tag != .H6) {
                 _.font_size_px = p.font_size_px;
             }
@@ -3088,6 +3214,35 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "white-space")) {
+            if (ws := WhiteSpace.parse(val)) {
+                if (_.tryClaimSlot(PROP_WHITE_SPACE, weight)) {
+                    _.white_space = ws;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "-webkit-box-orient") || std.ascii.eqlIgnoreCase(name, "box-orient")) {
+            if (bo := BoxOrient.parse(val)) {
+                if (_.tryClaimSlot(PROP_BOX_ORIENT, weight)) {
+                    _.box_orient = bo;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "-webkit-line-clamp") || std.ascii.eqlIgnoreCase(name, "line-clamp")) {
+            const trimmed_lc = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed_lc, "none")) {
+                if (_.tryClaimSlot(PROP_LINE_CLAMP, weight)) {
+                    _.webkit_line_clamp = 0;
+                }
+            } else if (n := std.fmt.parseInt(u32, trimmed_lc, 10) catch null) {
+                if (n > 0 && _.tryClaimSlot(PROP_LINE_CLAMP, weight)) {
+                    _.webkit_line_clamp = n;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "color")) {
             if (c := CssColor.parse(val)) {
                 if (_.tryClaimSlot(PROP_COLOR, weight)) _.color = c;
@@ -3600,6 +3755,15 @@ pub struct Cascade {
                         source_order += 1;
                         style.applyProperty(&prop, w, root_font_px);
                     }
+                }
+            }
+
+            if (style.display.isWebkitBox()) {
+                if (style.box_orient == BoxOrient.Vertical && style.webkit_line_clamp > 0) {
+                    style.display = Display.flowRoot();
+                    style.is_line_clamped = true;
+                } else {
+                    style.flex_direction = if (style.box_orient == BoxOrient.Vertical) FlexDirection.Column else FlexDirection.Row;
                 }
             }
 

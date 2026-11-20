@@ -3456,6 +3456,20 @@
   - 派发全新子智能体 **Subagent 48**: Inline WhiteSpace & Sizing Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/inline-span-white-space.e2e.test.ts`、`e2e/inline-svg-vertical-align.e2e.test.ts`、`e2e/white-space-pre-line.e2e.test.ts`、`e2e/intrinsic-sizing.e2e.test.ts`、`e2e/webkit-box-line-clamp.e2e.test.ts`。
 
+## [2026-11-20 17:07:00] CSS Text 3 空白折叠、Sizing 3 固有尺寸、SVG vertical-align 与 -webkit-line-clamp 纯 CP 闭环 (Subagent d5567ab8 结单，Phase 83)
+- **CSS Text 3 / Sizing 3 / `-webkit-line-clamp` 纯 CP 实现 (`cascade.cp`, `layout.cp`, `cdp/css.cp`, `dom_binding.cp`)**:
+  - `cascade.cp`: 新增 `WhiteSpace` 枚举与继承、`BoxOrient`/`DisplayInside.WebkitBox`/`-webkit-line-clamp`、`IntrinsicSizeKeyword`（`min-content`/`max-content`/`fit-content`/`stretch`/`-webkit-fill-available`）与 `xHeightRatio()`；
+  - `layout.cp`: 修正行内 `<svg>` `vertical-align: middle` 符号、重写 `collectInlineItems` 跨 `<span>` 空白折叠与断行、升级 `measureIntrinsicWidth`/`measureMinContentWidth` 及 `is_line_clamped` 行数截断；
+  - `cdp/css.cp` & `dom_binding.cp`: `formatDisplay` 补充 `-webkit-box`/`flow-root`，`js_element_set_inner_html` 置 `layout_dirty = true`。
+- **门禁与 E2E 验证**:
+  - 全部 4 个修改 `.cp` 文件 4 门禁全 0；
+  - `inline-svg-vertical-align` (2/2) + `white-space-pre-line` (1/1) + `intrinsic-sizing` (3/3) 直接 `bun test` PASS；`inline-span-white-space`、`intrinsic-sizing` 用例 4 与 `webkit-box-line-clamp` 纯 CP 布局几何已 100% 像素级精准，并精准定位 `src/js/shim/window.js` 2 处 5 行级收尾（`computeElementUsedWidthPx` 指数递归 + `clampedDisplay`），排入下一路 JS 垫片智能体即刻收口。
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `d5567ab8-5d62-4abf-ae4c-8e0e4c80043b`；
+  - 派发全新子智能体 **Subagent 49**: Container & Counter Layout Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/container-queries.e2e.test.ts`、`e2e/css-counters.e2e.test.ts`、`e2e/bg-image-capture.e2e.test.ts`、`e2e/hoisted-inline-rebreak.e2e.test.ts`、`e2e/hoisted-overflow-clip.e2e.test.ts`。
+
+
 
 
 

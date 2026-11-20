@@ -22,7 +22,9 @@ import {
     TableLayout,
     FloatMode,
     ClearMode,
-    VerticalAlignKind
+    VerticalAlignKind,
+    WhiteSpace,
+    IntrinsicSizeKeyword
 } from "../css/cascade.cp";
 
 pub struct Rect {
@@ -185,6 +187,7 @@ pub struct InlineItem {
     kind: InlineItemKind = InlineItemKind.Text;
     node_id: NodeId = NULL_NODE;
     style_node_id: NodeId = NULL_NODE;
+    parent_style_id: NodeId = NULL_NODE;
     width: f32 = 0.0;
     height: f32 = 0.0;
     orig_border_x: f32 = 0.0;
@@ -192,6 +195,10 @@ pub struct InlineItem {
     line_x: f32 = 0.0;
     wrapped_lines: usize = 1;
     is_replaced: bool = false;
+    has_leading_space: bool = false;
+    has_trailing_space: bool = false;
+    is_space_only: bool = false;
+    trailing_space_w: f32 = 0.0;
 }
 
 pub struct LayoutTree {
@@ -745,6 +752,7 @@ pub struct LayoutTree {
     fn resolveBoxMetrics(
         *_,
         doc: *const Document,
+        styles: []const ComputedStyle,
         node_id: NodeId,
         style: *const ComputedStyle,
         parent_w: f32,
@@ -801,17 +809,42 @@ pub struct LayoutTree {
 
         // Content width calculation
         const is_abs_or_fixed = (style.position == Position.Absolute || style.position == Position.Fixed);
+        const h_decor = box.paddingHorizontal() + box.borderHorizontal();
+        const mh = box.marginHorizontal();
         let raw_w: f32 = 0.0;
-        if (!style.width.is_auto && !style.width.is_none) {
+        let raw_is_border_box = false;
+
+        if (style.width.isIntrinsic()) {
+            const avail = if (parent_w > mh) (parent_w - mh) else 0.0;
+            if (style.width.intrinsic == IntrinsicSizeKeyword.MinContent) {
+                const mc = _.measureMinContentWidth(doc, styles, node_id, parent_w);
+                raw_w = if (mc > mh) (mc - mh) else 0.0;
+            } else if (style.width.intrinsic == IntrinsicSizeKeyword.MaxContent) {
+                const mc = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
+                raw_w = if (mc > mh) (mc - mh) else 0.0;
+            } else if (style.width.intrinsic == IntrinsicSizeKeyword.FitContent) {
+                const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
+                const max_o = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
+                const min_c = if (min_o > mh) (min_o - mh) else 0.0;
+                const max_c = if (max_o > mh) (max_o - mh) else 0.0;
+                raw_w = @min(@max(min_c, avail), max_c);
+            } else {
+                // Stretch / -webkit-fill-available
+                raw_w = avail;
+            }
+            raw_is_border_box = true;
+        } else if (!style.width.is_auto && !style.width.is_none) {
             raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
+            raw_is_border_box = (style.box_sizing == BoxSizing.BorderBox);
         } else if (is_abs_or_fixed && !style.left.is_auto && !style.left.is_none && !style.right.is_auto && !style.right.is_none) {
             const l_px = style.left.resolvePx(parent_w, font_px, root_px, vw, vh);
             const r_px = style.right.resolvePx(parent_w, font_px, root_px, vw, vh);
-            const avail = parent_w - l_px - r_px - box.marginHorizontal();
+            const avail = parent_w - l_px - r_px - mh;
             raw_w = if (avail > 0.0) avail else 0.0;
+            raw_is_border_box = true;
         } else if (rep := replaced_opt) {
             if (rep.is_ratio_only) {
-                const avail = parent_w - box.marginHorizontal();
+                const avail = parent_w - mh;
                 if (avail > 0.0) {
                     raw_w = avail;
                 } else {
@@ -820,40 +853,52 @@ pub struct LayoutTree {
             } else if (rep.is_authored) {
                 raw_w = rep.width;
             } else {
-                const avail = parent_w - box.marginHorizontal();
+                const avail = parent_w - mh;
                 if (avail > 0.0 && rep.width > avail) {
                     raw_w = avail;
                 } else {
                     raw_w = rep.width;
                 }
             }
+            raw_is_border_box = (style.box_sizing == BoxSizing.BorderBox);
+        } else if (style.display.isInlineFlex() || is_abs_or_fixed) {
+            // Shrink-to-fit auto width (CSS 2.1 §10.3.7 / CSS Flexbox §9)
+            const avail = if (parent_w > mh) (parent_w - mh) else 0.0;
+            const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
+            const max_o = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
+            const min_c = if (min_o > mh) (min_o - mh) else 0.0;
+            const max_c = if (max_o > mh) (max_o - mh) else 0.0;
+            raw_w = @min(@max(min_c, avail), max_c);
+            raw_is_border_box = true;
         } else {
             if (style.display.isInlineBlock() || style.display.isInline() || style.float_mode != FloatMode.None) {
                 raw_w = 0.0;
             } else {
                 // Default block width fills available parent content area minus horizontal margins
-                const avail = parent_w - box.marginHorizontal();
+                const avail = parent_w - mh;
                 raw_w = if (avail > 0.0) avail else 0.0;
             }
+            raw_is_border_box = true;
         }
 
-        // Adjust for box-sizing or auto width filling parent
-        if (style.box_sizing == BoxSizing.BorderBox || (style.width.is_auto && replaced_opt == null)) {
-            const h_decor = box.paddingHorizontal() + box.borderHorizontal();
+        // Adjust for box-sizing or border-box resolved width
+        if (raw_is_border_box) {
             box.content_width = if (raw_w > h_decor) (raw_w - h_decor) else 0.0;
         } else {
             box.content_width = raw_w;
         }
 
         // Min/max width constraints
-        if (!style.min_width.is_auto && !style.min_width.is_none) {
-            const min_w = style.min_width.resolvePx(parent_w, font_px, root_px, vw, vh);
+        if (!style.min_width.is_auto && !style.min_width.is_none && !style.min_width.isIntrinsic()) {
+            const min_w_raw = style.min_width.resolvePx(parent_w, font_px, root_px, vw, vh);
+            const min_w = if (style.box_sizing == BoxSizing.BorderBox) (if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0) else min_w_raw;
             if (box.content_width < min_w) {
                 box.content_width = min_w;
             }
         }
-        if (!style.max_width.is_auto && !style.max_width.is_none) {
-            const max_w = style.max_width.resolvePx(parent_w, font_px, root_px, vw, vh);
+        if (!style.max_width.is_auto && !style.max_width.is_none && !style.max_width.isIntrinsic()) {
+            const max_w_raw = style.max_width.resolvePx(parent_w, font_px, root_px, vw, vh);
+            const max_w = if (style.box_sizing == BoxSizing.BorderBox) (if (max_w_raw > h_decor) (max_w_raw - h_decor) else 0.0) else max_w_raw;
             if (box.content_width > max_w) {
                 box.content_width = max_w;
             }
@@ -953,7 +998,7 @@ pub struct LayoutTree {
             return;
         }
 
-        _.resolveBoxMetrics(doc, node_id, style, avail_w, avail_h, parent_h_definite);
+        _.resolveBoxMetrics(doc, styles, node_id, style, avail_w, avail_h, parent_h_definite);
         const box = &_.boxes.items[@as(usize, node_id)];
 
         // Compute screen coordinates for this element's border box.
@@ -1046,7 +1091,7 @@ pub struct LayoutTree {
 
         if (!is_replaced && !is_svg_elem && style.display.isTable()) {
             _.layoutTableContainer(doc, styles, node_id, border_box_x, border_box_y, avail_w);
-        } else if (style.display.isFlex()) {
+        } else if (style.display.isFlex() || style.display.isWebkitBox()) {
             _.layoutFlexContainer(doc, styles, node_id, content_x, content_y);
         } else if (style.display.isGrid()) {
             _.layoutGridContainer(doc, styles, node_id, content_x, content_y);
@@ -1064,6 +1109,9 @@ pub struct LayoutTree {
                     if (!style.display.isInline() && !style.display.isInlineBlock() && box_after.content_width > 0.0) {
                         const base_sz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
                         line_count = LayoutTree.estimateWrappedLines(doc, node_id, box_after.content_width, base_sz);
+                    }
+                    if (style.is_line_clamped && style.webkit_line_clamp > 0 && line_count > @as(usize, style.webkit_line_clamp)) {
+                        line_count = @as(usize, style.webkit_line_clamp);
                     }
                     box_after.content_height = @as(f32, @floatFromInt(line_count)) * font_h;
                 }
@@ -1546,6 +1594,91 @@ pub struct LayoutTree {
         }
     }
 
+    fn measureInlineMaxRun(
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        node_id: NodeId,
+        style_parent_id: NodeId,
+        avail_w: f32,
+        cur_w: *f32,
+        best_w: *f32,
+        prev_ws: *bool,
+        trailing_ws_w: *f32,
+    ) {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return;
+        const node = &doc.nodes.items[@as(usize, node_id)];
+        if (node.node_type == NodeType.Text) {
+            const st = &styles[@as(usize, style_parent_id)];
+            const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+            const space_w = base_sz * 0.28;
+            const preserve_sp = st.white_space.preservesSpaces();
+            const preserve_nl = st.white_space.preservesNewlines();
+            let ti: usize = 0;
+            while (ti < node.text_content.len) : (ti += 1) {
+                const ch = node.text_content[ti];
+                if (ch == '\n' && preserve_nl) {
+                    const line_final = if (!preserve_sp && cur_w.* >= trailing_ws_w.*) (cur_w.* - trailing_ws_w.*) else cur_w.*;
+                    if (line_final > best_w.*) best_w.* = line_final;
+                    cur_w.* = 0.0;
+                    prev_ws.* = true;
+                    trailing_ws_w.* = 0.0;
+                } else if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                    if (preserve_sp) {
+                        if (ch != '\r') {
+                            cur_w.* += space_w;
+                            trailing_ws_w.* = 0.0;
+                            prev_ws.* = false;
+                        }
+                    } else {
+                        if (!prev_ws.*) {
+                            cur_w.* += space_w;
+                            trailing_ws_w.* = space_w;
+                            prev_ws.* = true;
+                        }
+                    }
+                } else {
+                    cur_w.* += LayoutTree.estimateCharWidth(ch, base_sz);
+                    trailing_ws_w.* = 0.0;
+                    prev_ws.* = false;
+                }
+            }
+            return;
+        }
+        if (node.node_type != NodeType.Element) return;
+        const st = &styles[@as(usize, node_id)];
+        if (st.display.isNone() || st.position == Position.Absolute || st.position == Position.Fixed) return;
+        if (node.hasTag("br")) {
+            const line_final = if (cur_w.* >= trailing_ws_w.*) (cur_w.* - trailing_ws_w.*) else cur_w.*;
+            if (line_final > best_w.*) best_w.* = line_final;
+            cur_w.* = 0.0;
+            prev_ws.* = true;
+            trailing_ws_w.* = 0.0;
+            return;
+        }
+        if (LayoutTree.isAtomicInline(node, st)) {
+            cur_w.* += _.measureIntrinsicWidth(doc, styles, node_id, avail_w);
+            trailing_ws_w.* = 0.0;
+            prev_ws.* = false;
+            return;
+        }
+        // Inline non-replaced wrapper: add its horizontal padding/border/margin and recurse
+        const fs = st.font_size_px;
+        const ml = st.margin_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const mr = st.margin_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pl = st.padding_left.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const pr = st.padding_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+        const h_extra = ml + mr + pl + pr + st.border_left_width + st.border_right_width;
+        if (h_extra > 0.0) {
+            cur_w.* += h_extra;
+            trailing_ws_w.* = 0.0;
+        }
+        let ch = node.first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            _.measureInlineMaxRun(doc, styles, ch, node_id, avail_w, cur_w, best_w, prev_ws, trailing_ws_w);
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+    }
+
     fn measureIntrinsicWidth(
         doc: *const Document,
         styles: []const ComputedStyle,
@@ -1555,18 +1688,17 @@ pub struct LayoutTree {
         if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0.0;
         const node = &doc.nodes.items[@as(usize, node_id)];
         if (node.node_type == NodeType.Text) {
-            const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
-            if (trimmed.len == 0) return 0.0;
-            let parent_fs: f32 = 16.0;
+            let parent_st_id: NodeId = NULL_NODE;
             if (node.parent != NULL_NODE && @as(usize, node.parent) < styles.len) {
-                parent_fs = styles[@as(usize, node.parent)].font_size_px;
+                parent_st_id = node.parent;
             }
-            let tw: f32 = 0.0;
-            let ti: usize = 0;
-            while (ti < trimmed.len) : (ti += 1) {
-                tw += LayoutTree.estimateCharWidth(trimmed[ti], parent_fs);
-            }
-            return tw;
+            let cur_w: f32 = 0.0;
+            let best_w: f32 = 0.0;
+            let prev_ws = true;
+            let trailing_ws_w: f32 = 0.0;
+            _.measureInlineMaxRun(doc, styles, node_id, parent_st_id, avail_w, &cur_w, &best_w, &prev_ws, &trailing_ws_w);
+            const final_cur = if (cur_w >= trailing_ws_w) (cur_w - trailing_ws_w) else cur_w;
+            return @max(best_w, final_cur);
         }
         if (node.node_type != NodeType.Element) return 0.0;
         const st = &styles[@as(usize, node_id)];
@@ -1579,26 +1711,91 @@ pub struct LayoutTree {
         const pr = st.padding_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
         const bl = st.border_left_width;
         const br = st.border_right_width;
+        const h_decor = pl + pr + bl + br;
 
-        if (!st.width.is_auto && !st.width.is_none) {
+        let content_w: f32 = 0.0;
+        const width_is_definite = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
+            (st.width.is_calc || st.width.length.unit != CssUnit.Percent);
+        if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
-            if (st.box_sizing == BoxSizing.BorderBox) {
-                return w + ml + mr;
+            content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
+        } else if (rep := LayoutTree.getReplacedSize(node)) {
+            content_w = rep.width;
+        } else if (st.display.isFlex() || st.display.isWebkitBox()) {
+            const is_row = st.flex_direction.isRow();
+            let sum_w: f32 = 0.0;
+            let max_w: f32 = 0.0;
+            let cnt: usize = 0;
+            let ch = node.first_child;
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                const cn = &doc.nodes.items[@as(usize, ch)];
+                if (cn.node_type == NodeType.Element) {
+                    const cst = &styles[@as(usize, ch)];
+                    if (!cst.display.isNone() && cst.position != Position.Absolute && cst.position != Position.Fixed) {
+                        const cw = _.measureIntrinsicWidth(doc, styles, ch, avail_w);
+                        if (is_row) {
+                            sum_w += cw;
+                            cnt += 1;
+                        } else {
+                            if (cw > max_w) max_w = cw;
+                        }
+                    }
+                }
+                ch = cn.next_sibling;
             }
-            return w + pl + pr + bl + br + ml + mr;
-        }
-        if (rep := LayoutTree.getReplacedSize(node)) {
-            return rep.width + pl + pr + bl + br + ml + mr;
+            if (is_row) {
+                if (cnt > 1) sum_w += @as(f32, @floatFromInt(cnt - 1)) * st.column_gap;
+                content_w = sum_w;
+            } else {
+                content_w = max_w;
+            }
+        } else {
+            let best_w: f32 = 0.0;
+            let cur_w: f32 = 0.0;
+            let prev_ws = true;
+            let trailing_ws_w: f32 = 0.0;
+            let ch = node.first_child;
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                const cn = &doc.nodes.items[@as(usize, ch)];
+                if (cn.node_type == NodeType.Element) {
+                    const cst = &styles[@as(usize, ch)];
+                    if (cst.display.isNone() || cst.position == Position.Absolute || cst.position == Position.Fixed) {
+                        ch = cn.next_sibling;
+                        continue;
+                    }
+                    if (LayoutTree.isBlockLevelInFlow(cn, cst)) {
+                        const final_cur = if (cur_w >= trailing_ws_w) (cur_w - trailing_ws_w) else cur_w;
+                        if (final_cur > best_w) best_w = final_cur;
+                        cur_w = 0.0;
+                        prev_ws = true;
+                        trailing_ws_w = 0.0;
+                        const cw = _.measureIntrinsicWidth(doc, styles, ch, avail_w);
+                        if (cw > best_w) best_w = cw;
+                        ch = cn.next_sibling;
+                        continue;
+                    }
+                }
+                _.measureInlineMaxRun(doc, styles, ch, node_id, avail_w, &cur_w, &best_w, &prev_ws, &trailing_ws_w);
+                ch = cn.next_sibling;
+            }
+            const final_cur = if (cur_w >= trailing_ws_w) (cur_w - trailing_ws_w) else cur_w;
+            if (final_cur > best_w) best_w = final_cur;
+            content_w = best_w;
         }
 
-        let max_child_w: f32 = 0.0;
-        let ch = node.first_child;
-        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
-            const cw = _.measureIntrinsicWidth(doc, styles, ch, avail_w);
-            if (cw > max_child_w) max_child_w = cw;
-            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        if (!st.min_width.is_auto && !st.min_width.is_none && !st.min_width.isIntrinsic() &&
+            (st.min_width.is_calc || st.min_width.length.unit != CssUnit.Percent)) {
+            const min_w_raw = st.min_width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            const min_c = if (st.box_sizing == BoxSizing.BorderBox) (if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0) else min_w_raw;
+            if (content_w < min_c) content_w = min_c;
         }
-        return max_child_w + pl + pr + bl + br + ml + mr;
+        if (!st.max_width.is_auto && !st.max_width.is_none && !st.max_width.isIntrinsic() &&
+            (st.max_width.is_calc || st.max_width.length.unit != CssUnit.Percent)) {
+            const max_w_raw = st.max_width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            const max_c = if (st.box_sizing == BoxSizing.BorderBox) (if (max_w_raw > h_decor) (max_w_raw - h_decor) else 0.0) else max_w_raw;
+            if (content_w > max_c) content_w = max_c;
+        }
+        return content_w + h_decor + ml + mr;
     }
 
     fn measureMinContentWidth(
@@ -1611,8 +1808,13 @@ pub struct LayoutTree {
         const node = &doc.nodes.items[@as(usize, node_id)];
         if (node.node_type == NodeType.Text) {
             let parent_fs: f32 = 16.0;
+            let allows_wrap = true;
             if (node.parent != NULL_NODE && @as(usize, node.parent) < styles.len) {
                 parent_fs = styles[@as(usize, node.parent)].font_size_px;
+                allows_wrap = styles[@as(usize, node.parent)].white_space.allowsWrap();
+            }
+            if (!allows_wrap) {
+                return _.measureIntrinsicWidth(doc, styles, node_id, avail_w);
             }
             // Longest single word width
             let max_word_w: f32 = 0.0;
@@ -1641,26 +1843,76 @@ pub struct LayoutTree {
         const pr = st.padding_right.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
         const bl = st.border_left_width;
         const br = st.border_right_width;
+        const h_decor = pl + pr + bl + br;
 
-        if (!st.width.is_auto && !st.width.is_none) {
+        let content_w: f32 = 0.0;
+        const width_is_definite = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
+            (st.width.is_calc || st.width.length.unit != CssUnit.Percent);
+        if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
-            if (st.box_sizing == BoxSizing.BorderBox) {
-                return w + ml + mr;
+            content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
+        } else if (rep := LayoutTree.getReplacedSize(node)) {
+            content_w = rep.width;
+        } else if (st.display.isFlex() || st.display.isWebkitBox()) {
+            const is_row_nowrap = st.flex_direction.isRow() && st.flex_wrap == FlexWrap.NoWrap;
+            let sum_w: f32 = 0.0;
+            let max_w: f32 = 0.0;
+            let cnt: usize = 0;
+            let ch = node.first_child;
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                const cn = &doc.nodes.items[@as(usize, ch)];
+                if (cn.node_type == NodeType.Element) {
+                    const cst = &styles[@as(usize, ch)];
+                    if (!cst.display.isNone() && cst.position != Position.Absolute && cst.position != Position.Fixed) {
+                        const cw = _.measureMinContentWidth(doc, styles, ch, avail_w);
+                        if (is_row_nowrap) {
+                            sum_w += cw;
+                            cnt += 1;
+                        } else {
+                            if (cw > max_w) max_w = cw;
+                        }
+                    }
+                }
+                ch = cn.next_sibling;
             }
-            return w + pl + pr + bl + br + ml + mr;
-        }
-        if (rep := LayoutTree.getReplacedSize(node)) {
-            return rep.width + pl + pr + bl + br + ml + mr;
+            if (is_row_nowrap) {
+                if (cnt > 1) sum_w += @as(f32, @floatFromInt(cnt - 1)) * st.column_gap;
+                content_w = sum_w;
+            } else {
+                content_w = max_w;
+            }
+        } else {
+            let max_child_w: f32 = 0.0;
+            let ch = node.first_child;
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                const cn = &doc.nodes.items[@as(usize, ch)];
+                if (cn.node_type == NodeType.Element) {
+                    const cst = &styles[@as(usize, ch)];
+                    if (cst.display.isNone() || cst.position == Position.Absolute || cst.position == Position.Fixed) {
+                        ch = cn.next_sibling;
+                        continue;
+                    }
+                }
+                const cw = _.measureMinContentWidth(doc, styles, ch, avail_w);
+                if (cw > max_child_w) max_child_w = cw;
+                ch = cn.next_sibling;
+            }
+            content_w = max_child_w;
         }
 
-        let max_child_w: f32 = 0.0;
-        let ch = node.first_child;
-        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
-            const cw = _.measureMinContentWidth(doc, styles, ch, avail_w);
-            if (cw > max_child_w) max_child_w = cw;
-            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        if (!st.min_width.is_auto && !st.min_width.is_none && !st.min_width.isIntrinsic() &&
+            (st.min_width.is_calc || st.min_width.length.unit != CssUnit.Percent)) {
+            const min_w_raw = st.min_width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            const min_c = if (st.box_sizing == BoxSizing.BorderBox) (if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0) else min_w_raw;
+            if (content_w < min_c) content_w = min_c;
         }
-        return max_child_w + pl + pr + bl + br + ml + mr;
+        if (!st.max_width.is_auto && !st.max_width.is_none && !st.max_width.isIntrinsic() &&
+            (st.max_width.is_calc || st.max_width.length.unit != CssUnit.Percent)) {
+            const max_w_raw = st.max_width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            const max_c = if (st.box_sizing == BoxSizing.BorderBox) (if (max_w_raw > h_decor) (max_w_raw - h_decor) else 0.0) else max_w_raw;
+            if (content_w > max_c) content_w = max_c;
+        }
+        return content_w + h_decor + ml + mr;
     }
 
     fn layoutTableContainer(
@@ -2387,6 +2639,95 @@ pub struct LayoutTree {
         return lines;
     }
 
+    fn appendTextSegment(
+        *_,
+        seg: []const u8,
+        node_id: NodeId,
+        style_parent_id: NodeId,
+        st: *const ComputedStyle,
+        content_w: f32,
+        items: *std.ArrayListUnmanaged(InlineItem),
+        prev_ws: *bool,
+    ) {
+        if (seg.len == 0) return;
+        const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        const space_w = base_sz * 0.28;
+        const preserve_sp = st.white_space.preservesSpaces();
+        const allows_wrap = st.white_space.allowsWrap();
+
+        if (preserve_sp) {
+            let tw: f32 = 0.0;
+            let ti: usize = 0;
+            while (ti < seg.len) : (ti += 1) {
+                const ch = seg[ti];
+                if (ch == '\r') continue;
+                if (ch == ' ' || ch == '\t') {
+                    tw += space_w;
+                } else {
+                    tw += LayoutTree.estimateCharWidth(ch, base_sz);
+                }
+            }
+            const wlines = if (allows_wrap && content_w > 0.0 && tw > content_w) LayoutTree.estimateTextWrappedLines(seg, content_w, base_sz) else @as(usize, 1);
+            items.append(_.allocator, InlineItem {
+                kind: InlineItemKind.Text,
+                node_id: node_id,
+                style_node_id: style_parent_id,
+                width: tw,
+                height: st.naturalLineHeight(),
+                wrapped_lines: wlines,
+            }) catch {};
+            prev_ws.* = false;
+            return;
+        }
+
+        // Collapsible whitespace (normal, nowrap, pre-line)
+        let tw: f32 = 0.0;
+        let has_non_ws = false;
+        let has_lead_sp = false;
+        let has_trail_sp = false;
+        let trail_sp_w: f32 = 0.0;
+        let in_ws = prev_ws.*;
+        let ti: usize = 0;
+        while (ti < seg.len) : (ti += 1) {
+            const ch = seg[ti];
+            const is_ws = (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n');
+            if (is_ws) {
+                if (!in_ws) {
+                    tw += space_w;
+                    if (!has_non_ws) {
+                        has_lead_sp = true;
+                    }
+                    has_trail_sp = true;
+                    trail_sp_w = space_w;
+                    in_ws = true;
+                }
+            } else {
+                has_non_ws = true;
+                has_trail_sp = false;
+                trail_sp_w = 0.0;
+                in_ws = false;
+                tw += LayoutTree.estimateCharWidth(ch, base_sz);
+            }
+        }
+        prev_ws.* = in_ws;
+        if (tw <= 0.0) return;
+
+        const trimmed = std.mem.trim(u8, seg, " \t\r\n");
+        const wlines = if (allows_wrap && content_w > 0.0 && has_non_ws) LayoutTree.estimateTextWrappedLines(trimmed, content_w, base_sz) else @as(usize, 1);
+        items.append(_.allocator, InlineItem {
+            kind: InlineItemKind.Text,
+            node_id: node_id,
+            style_node_id: style_parent_id,
+            width: tw,
+            height: st.naturalLineHeight(),
+            wrapped_lines: wlines,
+            has_leading_space: has_lead_sp,
+            has_trailing_space: has_trail_sp,
+            is_space_only: !has_non_ws,
+            trailing_space_w: trail_sp_w,
+        }) catch {};
+    }
+
     fn collectInlineItems(
         *_,
         doc: *const Document,
@@ -2400,24 +2741,33 @@ pub struct LayoutTree {
         child_h_definite: bool,
         items: *std.ArrayListUnmanaged(InlineItem),
         wrappers: *std.ArrayListUnmanaged(NodeId),
+        prev_ws: *bool,
     ) {
         if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return;
         const node = &doc.nodes.items[@as(usize, node_id)];
         if (node.node_type == NodeType.Text) {
-            const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
-            if (trimmed.len == 0) return;
             const st = &styles[@as(usize, style_parent_id)];
-            const tw = LayoutTree.estimateTextWidth(node.text_content, st);
-            const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
-            const wlines = if (content_w > 0.0) LayoutTree.estimateTextWrappedLines(trimmed, content_w, base_sz) else @as(usize, 1);
-            items.append(_.allocator, InlineItem {
-                kind: InlineItemKind.Text,
-                node_id: node_id,
-                style_node_id: style_parent_id,
-                width: tw,
-                height: st.naturalLineHeight(),
-                wrapped_lines: wlines,
-            }) catch {};
+            if (st.white_space.preservesNewlines()) {
+                let start: usize = 0;
+                let ti: usize = 0;
+                while (ti < node.text_content.len) : (ti += 1) {
+                    if (node.text_content[ti] == '\n') {
+                        _.appendTextSegment(node.text_content[start..ti], node_id, style_parent_id, st, content_w, items, prev_ws);
+                        items.append(_.allocator, InlineItem {
+                            kind: InlineItemKind.Break,
+                            node_id: node_id,
+                            style_node_id: style_parent_id,
+                        }) catch {};
+                        prev_ws.* = true;
+                        start = ti + 1;
+                    }
+                }
+                if (start < node.text_content.len) {
+                    _.appendTextSegment(node.text_content[start..], node_id, style_parent_id, st, content_w, items, prev_ws);
+                }
+            } else {
+                _.appendTextSegment(node.text_content, node_id, style_parent_id, st, content_w, items, prev_ws);
+            }
             return;
         }
         if (node.node_type != NodeType.Element) return;
@@ -2448,6 +2798,7 @@ pub struct LayoutTree {
                 node_id: node_id,
                 style_node_id: style_parent_id,
             }) catch {};
+            prev_ws.* = true;
             return;
         }
         if (LayoutTree.isAtomicInline(node, cstyle)) {
@@ -2458,19 +2809,21 @@ pub struct LayoutTree {
                 kind: InlineItemKind.Atomic,
                 node_id: node_id,
                 style_node_id: node_id,
+                parent_style_id: style_parent_id,
                 width: cbox.outerWidth(),
                 height: cbox.outerHeight(),
                 orig_border_x: content_x + cbox.margin_left,
                 orig_border_y: cursor_y + cbox.margin_top,
                 is_replaced: is_rep,
             }) catch {};
+            prev_ws.* = false;
             return;
         }
         // Non-replaced display: inline wrapper
         wrappers.append(_.allocator, node_id) catch {};
         let ch = node.first_child;
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
-            _.collectInlineItems(doc, styles, ch, node_id, content_x, cursor_y, content_w, content_h, child_h_definite, items, wrappers);
+            _.collectInlineItems(doc, styles, ch, node_id, content_x, cursor_y, content_w, content_h, child_h_definite, items, wrappers, prev_ws);
             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
         }
     }
@@ -2488,7 +2841,7 @@ pub struct LayoutTree {
             .Percent => cstyle.vertical_align_length.resolvePx(cstyle.resolvedLineHeight(), cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height),
             .Super => (if (cstyle.font_size_px > 0.0) cstyle.font_size_px else 16.0) * 0.3835,
             .Sub => 0.0 - (if (cstyle.font_size_px > 0.0) cstyle.font_size_px else 16.0) * 0.25,
-            .Middle => (outer_h * 0.5) - ((if (pstyle.font_size_px > 0.0) pstyle.font_size_px else 16.0) * 0.25),
+            .Middle => ((if (pstyle.font_size_px > 0.0) pstyle.font_size_px else 16.0) * pstyle.xHeightRatio() * 0.5) - (outer_h * 0.5),
             .TextTop => strut_ascent - outer_h,
             .TextBottom => 0.0 - strut_descent,
             * => 0.0,
@@ -2511,7 +2864,9 @@ pub struct LayoutTree {
         float_right_bottom: *f32,
         max_child_right: *f32,
         out_baseline_y: *f32,
+        out_lines_used: *u32,
     ): f32 {
+        out_lines_used.* = 0;
         if (!has_inflow) {
             // Out-of-flow-only line generates no line box (CSS 2.1 §9.4.2),
             // but still positions abs/fixed placeholders and floats at line_y.
@@ -2583,7 +2938,8 @@ pub struct LayoutTree {
                 if (cst.vertical_align_kind == VerticalAlignKind.Top || cst.vertical_align_kind == VerticalAlignKind.Bottom) {
                     if (outer_h > max_tb_h) max_tb_h = outer_h;
                 } else {
-                    const shift = _.computeVerticalAlignShift(cst, pstyle, outer_h, strut_ascent, strut_descent);
+                    const atomic_pstyle = if (it.parent_style_id != NULL_NODE && @as(usize, it.parent_style_id) < styles.len) &styles[@as(usize, it.parent_style_id)] else pstyle;
+                    const shift = _.computeVerticalAlignShift(cst, atomic_pstyle, outer_h, strut_ascent, strut_descent);
                     let item_above = outer_h;
                     let item_below: f32 = 0.0;
                     if (cbox.baseline_offset >= 0.0 && cst.overflow_visible && !it.is_replaced) {
@@ -2604,6 +2960,7 @@ pub struct LayoutTree {
         const baseline_y = 0.0 - min_y;
         out_baseline_y.* = baseline_y;
 
+        out_lines_used.* = @intCast(max_wrapped_lines);
         const total_line_h = if (max_wrapped_lines > 1) (@as(f32, @floatFromInt(max_wrapped_lines)) * single_line_h) else single_line_h;
 
         // Position every item on this line
@@ -2635,7 +2992,8 @@ pub struct LayoutTree {
                 } else if (cst.vertical_align_kind == VerticalAlignKind.Bottom) {
                     target_outer_y = line_y + single_line_h - outer_h;
                 } else {
-                    const shift = _.computeVerticalAlignShift(cst, pstyle, outer_h, strut_ascent, strut_descent);
+                    const atomic_pstyle = if (it.parent_style_id != NULL_NODE && @as(usize, it.parent_style_id) < styles.len) &styles[@as(usize, it.parent_style_id)] else pstyle;
+                    const shift = _.computeVerticalAlignShift(cst, atomic_pstyle, outer_h, strut_ascent, strut_descent);
                     let item_above = outer_h;
                     if (cbox.baseline_offset >= 0.0 && cst.overflow_visible && !it.is_replaced) {
                         item_above = cbox.margin_top + cbox.baseline_offset;
@@ -2780,6 +3138,8 @@ pub struct LayoutTree {
         let last_baseline_rel: f32 = -1.0;
 
         const pstyle_blk = &styles[@as(usize, parent_id)];
+        let emitted_lines: u32 = 0;
+        const clamp_limit: u32 = if (pstyle_blk.is_line_clamped) pstyle_blk.webkit_line_clamp else 0;
         const parent_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
             !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
             !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
@@ -2873,6 +3233,7 @@ pub struct LayoutTree {
             defer wrappers.deinit(_.allocator);
 
             const run_start_y = cursor_y;
+            let prev_ws = true;
             let scan = child;
             while (scan != NULL_NODE && @as(usize, scan) < doc.nodes.items.len) {
                 const sn = &doc.nodes.items[@as(usize, scan)];
@@ -2882,7 +3243,7 @@ pub struct LayoutTree {
                         break;
                     }
                 }
-                _.collectInlineItems(doc, styles, scan, parent_id, content_x, cursor_y, content_w, content_h, child_h_definite, &items, &wrappers);
+                _.collectInlineItems(doc, styles, scan, parent_id, content_x, cursor_y, content_w, content_h, child_h_definite, &items, &wrappers, &prev_ws);
                 scan = sn.next_sibling;
             }
             child = scan;
@@ -2891,43 +3252,134 @@ pub struct LayoutTree {
             let line_start: usize = 0;
             let line_x: f32 = 0.0;
             let line_has_inflow = false;
+            let last_break_idx: usize = 0;
+            let has_break_opp = false;
             let idx: usize = 0;
-            while (idx < items.items.len) : (idx += 1) {
+            while (idx < items.items.len) {
                 let it = &items.items[idx];
                 if (it.kind == InlineItemKind.Break) {
-                    // Forced break always produces a line box (even if line only had abspos/empty)
+                    // Strip trailing collapsible space before forced break
+                    if (idx > line_start) {
+                        let prev_it = &items.items[idx - 1];
+                        if (prev_it.kind == InlineItemKind.Text && prev_it.has_trailing_space && prev_it.trailing_space_w > 0.0) {
+                            prev_it.width = @max(0.0, prev_it.width - prev_it.trailing_space_w);
+                            prev_it.trailing_space_w = 0.0;
+                        }
+                    }
                     let bl: f32 = 0.0;
-                    const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start .. idx + 1], content_x, content_w, content_h, cursor_y, child_h_definite, true, &float_left_bottom, &float_right_bottom, &max_child_right, &bl);
-                    last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
-                    cursor_y += lh;
+                    let used_l: u32 = 0;
+                    const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start .. idx + 1], content_x, content_w, content_h, cursor_y, child_h_definite, true, &float_left_bottom, &float_right_bottom, &max_child_right, &bl, &used_l);
+                    if (clamp_limit == 0 || emitted_lines < clamp_limit) {
+                        let eff_lh = lh;
+                        if (clamp_limit > 0 && emitted_lines + used_l > clamp_limit && used_l > 0) {
+                            const rem = clamp_limit - emitted_lines;
+                            eff_lh = (lh / @as(f32, @floatFromInt(used_l))) * @as(f32, @floatFromInt(rem));
+                        }
+                        last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
+                        cursor_y += eff_lh;
+                    }
+                    emitted_lines += used_l;
                     line_start = idx + 1;
                     line_x = 0.0;
                     line_has_inflow = false;
+                    has_break_opp = false;
+                    idx += 1;
                 } else if (it.kind == InlineItemKind.AbsPos || it.kind == InlineItemKind.FloatItem) {
                     it.line_x = line_x;
+                    idx += 1;
                 } else {
-                    // Text or Atomic
-                    if (line_has_inflow && content_w > 0.0 && line_x > 0.0 && line_x + it.width > content_w) {
+                    const allows_wrap = pstyle_blk.white_space.allowsWrap();
+                    if (allows_wrap && line_has_inflow && content_w > 0.0 && line_x > 0.0 && !it.is_space_only && line_x + it.width > content_w) {
+                        let break_at = idx;
+                        if (has_break_opp && last_break_idx > line_start && last_break_idx <= idx) {
+                            break_at = last_break_idx;
+                        }
+                        // Strip trailing space on the line being flushed
+                        if (break_at > line_start) {
+                            let prev_it = &items.items[break_at - 1];
+                            if (prev_it.kind == InlineItemKind.Text && prev_it.has_trailing_space && prev_it.trailing_space_w > 0.0) {
+                                prev_it.width = @max(0.0, prev_it.width - prev_it.trailing_space_w);
+                                prev_it.trailing_space_w = 0.0;
+                            }
+                        }
                         let bl: f32 = 0.0;
-                        const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start..idx], content_x, content_w, content_h, cursor_y, child_h_definite, true, &float_left_bottom, &float_right_bottom, &max_child_right, &bl);
-                        last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
-                        cursor_y += lh;
-                        line_start = idx;
+                        let used_l: u32 = 0;
+                        const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start..break_at], content_x, content_w, content_h, cursor_y, child_h_definite, true, &float_left_bottom, &float_right_bottom, &max_child_right, &bl, &used_l);
+                        if (clamp_limit == 0 || emitted_lines < clamp_limit) {
+                            let eff_lh = lh;
+                            if (clamp_limit > 0 && emitted_lines + used_l > clamp_limit && used_l > 0) {
+                                const rem = clamp_limit - emitted_lines;
+                                eff_lh = (lh / @as(f32, @floatFromInt(used_l))) * @as(f32, @floatFromInt(rem));
+                            }
+                            last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
+                            cursor_y += eff_lh;
+                        }
+                        emitted_lines += used_l;
+                        line_start = break_at;
+                        // Skip any space-only item at the start of the new line
+                        while (line_start < items.items.len && items.items[line_start].kind == InlineItemKind.Text && items.items[line_start].is_space_only) {
+                            items.items[line_start].width = 0.0;
+                            items.items[line_start].line_x = 0.0;
+                            line_start += 1;
+                        }
                         line_x = 0.0;
                         line_has_inflow = false;
+                        has_break_opp = false;
+                        idx = line_start;
+                        continue;
+                    }
+                    // Strip leading space-only item at start of a line
+                    if (!line_has_inflow && it.kind == InlineItemKind.Text && it.is_space_only) {
+                        it.width = 0.0;
+                        it.line_x = 0.0;
+                        idx += 1;
+                        continue;
+                    }
+                    if (it.kind == InlineItemKind.Text && it.has_leading_space && line_has_inflow) {
+                        last_break_idx = idx;
+                        has_break_opp = true;
                     }
                     it.line_x = line_x;
                     line_x += it.width;
                     line_has_inflow = true;
+                    if (it.kind == InlineItemKind.Text && (it.is_space_only || it.has_trailing_space)) {
+                        last_break_idx = idx + 1;
+                        has_break_opp = true;
+                    }
+                    idx += 1;
                 }
             }
             if (line_start < items.items.len) {
-                let bl: f32 = 0.0;
-                const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start..items.items.len], content_x, content_w, content_h, cursor_y, child_h_definite, line_has_inflow, &float_left_bottom, &float_right_bottom, &max_child_right, &bl);
-                if (line_has_inflow) {
-                    last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
+                // Strip trailing collapsible space at end of last line in run
+                let end_i = items.items.len;
+                while (end_i > line_start) {
+                    const last_it = &items.items[end_i - 1];
+                    if (last_it.kind == InlineItemKind.Text && last_it.is_space_only) {
+                        items.items[end_i - 1].width = 0.0;
+                        end_i -= 1;
+                    } else if (last_it.kind == InlineItemKind.Text && last_it.has_trailing_space && last_it.trailing_space_w > 0.0) {
+                        items.items[end_i - 1].width = @max(0.0, last_it.width - last_it.trailing_space_w);
+                        items.items[end_i - 1].trailing_space_w = 0.0;
+                        break;
+                    } else {
+                        break;
+                    }
                 }
-                cursor_y += lh;
+                let bl: f32 = 0.0;
+                let used_l: u32 = 0;
+                const lh = _.flushInlineLine(doc, styles, pstyle_blk, items.items[line_start..items.items.len], content_x, content_w, content_h, cursor_y, child_h_definite, line_has_inflow, &float_left_bottom, &float_right_bottom, &max_child_right, &bl, &used_l);
+                if (line_has_inflow) {
+                    if (clamp_limit == 0 || emitted_lines < clamp_limit) {
+                        let eff_lh = lh;
+                        if (clamp_limit > 0 && emitted_lines + used_l > clamp_limit && used_l > 0) {
+                            const rem = clamp_limit - emitted_lines;
+                            eff_lh = (lh / @as(f32, @floatFromInt(used_l))) * @as(f32, @floatFromInt(rem));
+                        }
+                        last_baseline_rel = (cursor_y + bl) - parent_border_top_y;
+                        cursor_y += eff_lh;
+                    }
+                    emitted_lines += used_l;
+                }
             }
 
             // Compute bounding rects for inline wrappers bottom-up (deepest first)
@@ -3251,7 +3703,7 @@ pub struct LayoutTree {
                         abs_count += 1;
                     }
                 } else if (item_count < 32) {
-                    _.resolveBoxMetrics(doc, child, cstyle, container_w, container_h, !pbox.height_is_auto);
+                    _.resolveBoxMetrics(doc, styles, child, cstyle, container_w, container_h, !pbox.height_is_auto);
                     const cbox = &_.boxes.items[@as(usize, child)];
 
                     let base_m: f32 = 0.0;

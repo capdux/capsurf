@@ -1170,6 +1170,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     defer std.heap.page_allocator.free(html);
     el.dom_ctx.doc.setInnerHtml(el.node_id, html) catch return jsUndefined();
     el.dom_ctx.recordInnerHtmlRebuilt(el.node_id);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 

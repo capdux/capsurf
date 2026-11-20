@@ -1681,4 +1681,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：5 大 Inline Core 套件共 **47/47 PASS (102 expect calls)**。
+
+## Phase 83: CSS Text 3 White-Space Collapsing, Sizing 3 Intrinsic Keywords & `-webkit-line-clamp` (Pure CP Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/cdp/css.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `white-space` 跨节点空白折叠与断行、`min-content`/`max-content`/`fit-content`/`stretch` 固有尺寸推导、行内 `<svg>` `vertical-align: middle` 与 `-webkit-line-clamp` 截断；修复 `innerHTML` 未置 `layout_dirty`。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`inline-svg-vertical-align` (2/2) + `white-space-pre-line` (1/1) + `intrinsic-sizing` (3/3) PASS，其余 2 项纯 CP 布局 100% 就绪（待 `window.js` 2 处 5 行收口）。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
