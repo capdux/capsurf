@@ -60,9 +60,33 @@ function sanitizeForInput(el, raw) {
 function findAssociatedForm(element) {
   if (!element) return null;
   const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
-  if (formAttr && typeof document !== "undefined" && document.getElementById) {
-    const f = document.getElementById(formAttr);
-    if (f && (f.tagName || "").toLowerCase() === "form") return f;
+  if (formAttr) {
+    const doc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (doc && typeof doc.getElementById === "function") {
+      const f = doc.getElementById(formAttr);
+      if (f && (f.tagName || "").toLowerCase() === "form") return f;
+    }
+    // Walk root tree for detached documents/subtrees
+    let root = element;
+    while (root.parentNode) root = root.parentNode;
+    let found = null;
+    function walkFind(n) {
+      if (!n || found) return;
+      if (n.nodeType === 1 && (n.tagName || "").toLowerCase() === "form") {
+        const nid = typeof n.getAttribute === "function" ? n.getAttribute("id") : null;
+        if (nid === formAttr) {
+          found = n;
+          return;
+        }
+      }
+      let c = n.firstChild;
+      while (c && !found) {
+        walkFind(c);
+        c = c.nextSibling;
+      }
+    }
+    walkFind(root);
+    if (found) return found;
   }
   let curr = element.parentElement || element.parentNode;
   while (curr) {

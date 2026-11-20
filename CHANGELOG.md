@@ -1709,4 +1709,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`page.cp`、`server.cp` 4 门禁全 0（3.73s Debug 快编）；
   - E2E 测试：`same-document-origin` (2/2)、`sealed-outbound-identity` (4/4)、`navigate-window-frames` (1/1)、`navigate-window-cookies` (1/2) PASS。
+
+## Phase 87: Fetch Forbidden/Tamper-Proof Headers, Form Named Proxy, `execCommand` & WebIDL Shape — 9 Suites (100% Closed)
+- **`src/js/shim/{window,file,cssom,canvas2d,form-data,node-base,index,element/*}.js` & `e2e/harness.ts`**：
+  - 实装 WHATWG Forbidden Request-Header 过滤与防原型篡改、`HTMLFormElement` `[LegacyOverrideBuiltIns]` 命名代理、`HTML*Element` 构造器继承链、`Document.prototype.execCommand`/`queryCommand*`、WebIDL 接口形态及 `Page.lifecycleEvent` 派发。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：9/10 Core 套件共 **19/19 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

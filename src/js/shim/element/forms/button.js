@@ -41,13 +41,17 @@ function handleButtonActivation(button) {
     type = (button.type || (typeof button.getAttribute === "function" ? button.getAttribute("type") : "") || "submit").toLowerCase();
   }
 
-  const form = findAssociatedForm(button);
-  if (!form) return;
+  const rawForm = findAssociatedForm(button);
+  if (!rawForm) return;
+  const form = typeof upgradeElement === "function" ? upgradeElement(rawForm) : rawForm;
 
   if (type === "submit" || type === "image") {
     submitForm(form, button);
   } else if (type === "reset") {
-    if (typeof form.reset === "function") {
+    const resetProto = (typeof HTMLFormElement !== "undefined" && HTMLFormElement.prototype && HTMLFormElement.prototype.reset) || null;
+    if (typeof resetProto === "function") {
+      resetProto.call(form);
+    } else if (typeof form.reset === "function") {
       form.reset();
     }
   }

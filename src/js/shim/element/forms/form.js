@@ -34,9 +34,10 @@ function collectFormControls(form) {
   }
   walk(form);
 
-  const formId = form.id || (typeof form.getAttribute === "function" ? form.getAttribute("id") : null);
+  const formId = (typeof form.getAttribute === "function" ? form.getAttribute("id") : null) || (typeof form.id === "string" ? form.id : null);
   if (formId) {
     const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
+    let foundExternals = false;
     if (doc && typeof doc.querySelectorAll === "function") {
       try {
         const externals = doc.querySelectorAll('[form="' + formId + '"]');
@@ -47,10 +48,34 @@ function collectFormControls(form) {
             if (owner === form) {
               controls.push(ext);
               seen.add(ext);
+              foundExternals = true;
             }
           }
         }
       } catch (e) {}
+    }
+    if (!foundExternals) {
+      let root = form;
+      while (root.parentNode) root = root.parentNode;
+      function walkExt(n) {
+        if (!n) return;
+        if (n.nodeType === 1 && !seen.has(n) && isFormListed(n)) {
+          const fAttr = typeof n.getAttribute === "function" ? n.getAttribute("form") : null;
+          if (fAttr === formId) {
+            const owner = typeof findAssociatedForm === "function" ? findAssociatedForm(n) : null;
+            if (owner === form) {
+              controls.push(n);
+              seen.add(n);
+            }
+          }
+        }
+        let c = n.firstChild;
+        while (c) {
+          walkExt(c);
+          c = c.nextSibling;
+        }
+      }
+      walkExt(root);
     }
   }
 
@@ -400,5 +425,93 @@ function installFormElement(global) {
   global.HTMLFormElement = HTMLFormElement;
   if (typeof globalThis !== "undefined") {
     globalThis.HTMLFormElement = HTMLFormElement;
+  }
+
+  // [LegacyOverrideBuiltIns] named & indexed property proxy on HTMLFormElement instances.
+  // Tree/EventTarget/Node/Element members stay the form's own so engine walks never break.
+  const FORM_OWN_KEEP = new Set([
+    "parentNode", "parentElement", "firstChild", "lastChild", "childNodes", "children",
+    "nextSibling", "previousSibling", "nextElementSibling", "previousElementSibling",
+    "ownerDocument", "nodeType", "nodeName", "tagName", "localName", "namespaceURI",
+    "prefix", "isConnected", "getRootNode", "contains", "hasChildNodes",
+    "appendChild", "insertBefore", "removeChild", "replaceChild", "cloneNode",
+    "compareDocumentPosition", "normalize", "isEqualNode", "isSameNode",
+    "getAttribute", "setAttribute", "removeAttribute", "hasAttribute",
+    "getAttributeNS", "setAttributeNS", "removeAttributeNS", "hasAttributeNS",
+    "getAttributeNames", "attributes",
+    "addEventListener", "removeEventListener", "dispatchEvent",
+    "querySelector", "querySelectorAll", "getElementsByTagName", "getElementsByClassName",
+    "matches", "closest", "remove", "before", "after", "replaceWith", "append", "prepend",
+    "focus", "blur", "click", "getBoundingClientRect", "getClientRects",
+    "style", "classList", "className", "innerHTML", "outerHTML", "textContent", "innerText",
+    "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
+    "propertyIsEnumerable", "toLocaleString", "__proto__", "shadowRoot", "attachShadow",
+    "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot",
+  ]);
+  const RX_ARRAY_INDEX = /^(0|[1-9]\d*)$/;
+
+  function lookupFormNamedProperty(form, prop) {
+    const controls = collectFormControls(form);
+    const matches = [];
+    for (let i = 0; i < controls.length; i++) {
+      const c = controls[i];
+      if (!c || c.nodeType !== 1) continue;
+      const n = typeof c.getAttribute === "function" ? c.getAttribute("name") : null;
+      const id = typeof c.getAttribute === "function" ? c.getAttribute("id") : null;
+      if (n === prop || id === prop) {
+        matches.push(typeof upgradeElement === "function" ? upgradeElement(c) : c);
+      }
+    }
+    if (matches.length === 0) return undefined;
+    if (matches.length === 1) return matches[0];
+    return makeHtmlCollection(function () { return matches; });
+  }
+
+  const formNamedPropsProxy = new Proxy(HTMLFormElement.prototype, {
+    get: function (target, prop, receiver) {
+      if (
+        !receiver ||
+        receiver === target ||
+        receiver === formNamedPropsProxy ||
+        typeof prop !== "string" ||
+        prop.charCodeAt(0) === 95 || // '_'
+        FORM_OWN_KEEP.has(prop)
+      ) {
+        return Reflect.get(target, prop, receiver);
+      }
+      if (RX_ARRAY_INDEX.test(prop)) {
+        const idx = Number(prop);
+        const controls = collectFormControls(receiver);
+        if (idx >= 0 && idx < controls.length) {
+          const item = controls[idx];
+          return typeof upgradeElement === "function" ? upgradeElement(item) : item;
+        }
+        return undefined;
+      }
+      const named = lookupFormNamedProperty(receiver, prop);
+      if (named !== undefined) return named;
+      return Reflect.get(target, prop, receiver);
+    },
+    has: function (target, prop) {
+      return Reflect.has(target, prop);
+    },
+  });
+
+  Object.defineProperty(HTMLFormElement, Symbol.hasInstance, {
+    value: function (inst) {
+      if (!inst || (typeof inst !== "object" && typeof inst !== "function")) return false;
+      let p = Object.getPrototypeOf(inst);
+      while (p) {
+        if (p === HTMLFormElement.prototype || p === formNamedPropsProxy) return true;
+        p = Object.getPrototypeOf(p);
+      }
+      return false;
+    },
+    configurable: true,
+  });
+
+  global.__capsurf_formNamedPropsProxy = formNamedPropsProxy;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_formNamedPropsProxy = formNamedPropsProxy;
   }
 }

@@ -1282,6 +1282,10 @@ CanvasRenderingContext2D.prototype.__opsCount = function () {
   return this._ops.length;
 };
 
+Object.defineProperty(CanvasRenderingContext2D.prototype, Symbol.toStringTag, {
+  value: "CanvasRenderingContext2D",
+  configurable: true,
+});
 markNative(CanvasRenderingContext2D, "CanvasRenderingContext2D");
 markNative(CanvasRenderingContext2D.prototype.save, "save");
 markNative(CanvasRenderingContext2D.prototype.restore, "restore");

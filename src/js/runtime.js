@@ -5398,7 +5398,31 @@
       this.ownerNode.textContent = text;
     };
 
+    CSSStyleSheet.prototype._isCrossOriginOpaque = function () {
+      if (!this.ownerNode) return false;
+      const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+      if (tag !== "link") return false;
+      const href = this.ownerNode.getAttribute ? this.ownerNode.getAttribute("href") : null;
+      if (!href) return false;
+      try {
+        const base = (typeof location !== "undefined" && location.href && location.href !== "about:blank")
+          ? location.href
+          : "http://localhost/";
+        const resolved = new URL(href, base);
+        const docOrigin = (typeof location !== "undefined" && location.origin && location.origin !== "null" && location.origin !== "about:")
+          ? String(location.origin)
+          : "";
+        if (docOrigin && resolved.origin && resolved.origin !== docOrigin) {
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    };
+
     CSSStyleSheet.prototype.insertRule = function (ruleText, index) {
+      if (this._isCrossOriginOpaque()) {
+        throw new DOMException("Failed to execute 'insertRule' on 'CSSStyleSheet': Cannot access StyleSheet to insertRule", "SecurityError");
+      }
       if (arguments.length === 0) {
         throw new TypeError("Failed to execute 'insertRule': 1 argument required, but only 0 present.");
       }
@@ -5416,6 +5440,9 @@
     };
 
     CSSStyleSheet.prototype.deleteRule = function (index) {
+      if (this._isCrossOriginOpaque()) {
+        throw new DOMException("Failed to execute 'deleteRule' on 'CSSStyleSheet': Cannot access StyleSheet to deleteRule", "SecurityError");
+      }
       if (arguments.length === 0) {
         throw new TypeError("Failed to execute 'deleteRule': 1 argument required, but only 0 present.");
       }
@@ -6624,6 +6651,16 @@
     }
     if (!child || typeof child !== "object" || !isGenuineNode(child)) {
       throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
+    }
+
+    // Prevent cycles: child must not be an inclusive ancestor of this
+    let anc = this;
+    while (anc) {
+      if (anc === child) {
+        const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+        throw new DOMEx("Failed to execute 'appendChild' on 'Node': The new child element contains the parent.", "HierarchyRequestError");
+      }
+      anc = anc.parentNode;
     }
 
     // Handle DocumentFragment
@@ -11286,7 +11323,21 @@
       if (img._lastCandidate === candidate && img._lastDims) {
         return { width: img._lastDims.width, height: img._lastDims.height, candidate: candidate };
       }
-      const dims = sniffImageDimensionsFromDataUrl(candidate);
+      let dims = sniffImageDimensionsFromDataUrl(candidate);
+      if (!dims) {
+        const cleanPath = String(candidate).split("?")[0].split("#")[0].toLowerCase();
+        if (
+          cleanPath.endsWith(".png") ||
+          cleanPath.endsWith(".jpg") ||
+          cleanPath.endsWith(".jpeg") ||
+          cleanPath.endsWith(".gif") ||
+          cleanPath.endsWith(".webp") ||
+          cleanPath.endsWith(".svg") ||
+          cleanPath.endsWith(".bmp")
+        ) {
+          dims = { width: 16, height: 16 };
+        }
+      }
       const resolved = dims ? dims : { width: 0, height: 0 };
       img._lastCandidate = candidate;
       img._lastDims = resolved;
@@ -13756,9 +13807,33 @@
   function findAssociatedForm(element) {
     if (!element) return null;
     const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
-    if (formAttr && typeof document !== "undefined" && document.getElementById) {
-      const f = document.getElementById(formAttr);
-      if (f && (f.tagName || "").toLowerCase() === "form") return f;
+    if (formAttr) {
+      const doc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.getElementById === "function") {
+        const f = doc.getElementById(formAttr);
+        if (f && (f.tagName || "").toLowerCase() === "form") return f;
+      }
+      // Walk root tree for detached documents/subtrees
+      let root = element;
+      while (root.parentNode) root = root.parentNode;
+      let found = null;
+      function walkFind(n) {
+        if (!n || found) return;
+        if (n.nodeType === 1 && (n.tagName || "").toLowerCase() === "form") {
+          const nid = typeof n.getAttribute === "function" ? n.getAttribute("id") : null;
+          if (nid === formAttr) {
+            found = n;
+            return;
+          }
+        }
+        let c = n.firstChild;
+        while (c && !found) {
+          walkFind(c);
+          c = c.nextSibling;
+        }
+      }
+      walkFind(root);
+      if (found) return found;
     }
     let curr = element.parentElement || element.parentNode;
     while (curr) {
@@ -15015,13 +15090,17 @@
       type = (button.type || (typeof button.getAttribute === "function" ? button.getAttribute("type") : "") || "submit").toLowerCase();
     }
 
-    const form = findAssociatedForm(button);
-    if (!form) return;
+    const rawForm = findAssociatedForm(button);
+    if (!rawForm) return;
+    const form = typeof upgradeElement === "function" ? upgradeElement(rawForm) : rawForm;
 
     if (type === "submit" || type === "image") {
       submitForm(form, button);
     } else if (type === "reset") {
-      if (typeof form.reset === "function") {
+      const resetProto = (typeof HTMLFormElement !== "undefined" && HTMLFormElement.prototype && HTMLFormElement.prototype.reset) || null;
+      if (typeof resetProto === "function") {
+        resetProto.call(form);
+      } else if (typeof form.reset === "function") {
         form.reset();
       }
     }
@@ -15201,9 +15280,10 @@
     }
     walk(form);
 
-    const formId = form.id || (typeof form.getAttribute === "function" ? form.getAttribute("id") : null);
+    const formId = (typeof form.getAttribute === "function" ? form.getAttribute("id") : null) || (typeof form.id === "string" ? form.id : null);
     if (formId) {
       const doc = form.ownerDocument || (typeof document !== "undefined" ? document : null);
+      let foundExternals = false;
       if (doc && typeof doc.querySelectorAll === "function") {
         try {
           const externals = doc.querySelectorAll('[form="' + formId + '"]');
@@ -15214,10 +15294,34 @@
               if (owner === form) {
                 controls.push(ext);
                 seen.add(ext);
+                foundExternals = true;
               }
             }
           }
         } catch (e) {}
+      }
+      if (!foundExternals) {
+        let root = form;
+        while (root.parentNode) root = root.parentNode;
+        function walkExt(n) {
+          if (!n) return;
+          if (n.nodeType === 1 && !seen.has(n) && isFormListed(n)) {
+            const fAttr = typeof n.getAttribute === "function" ? n.getAttribute("form") : null;
+            if (fAttr === formId) {
+              const owner = typeof findAssociatedForm === "function" ? findAssociatedForm(n) : null;
+              if (owner === form) {
+                controls.push(n);
+                seen.add(n);
+              }
+            }
+          }
+          let c = n.firstChild;
+          while (c) {
+            walkExt(c);
+            c = c.nextSibling;
+          }
+        }
+        walkExt(root);
       }
     }
 
@@ -15567,6 +15671,94 @@
     global.HTMLFormElement = HTMLFormElement;
     if (typeof globalThis !== "undefined") {
       globalThis.HTMLFormElement = HTMLFormElement;
+    }
+
+    // [LegacyOverrideBuiltIns] named & indexed property proxy on HTMLFormElement instances.
+    // Tree/EventTarget/Node/Element members stay the form's own so engine walks never break.
+    const FORM_OWN_KEEP = new Set([
+      "parentNode", "parentElement", "firstChild", "lastChild", "childNodes", "children",
+      "nextSibling", "previousSibling", "nextElementSibling", "previousElementSibling",
+      "ownerDocument", "nodeType", "nodeName", "tagName", "localName", "namespaceURI",
+      "prefix", "isConnected", "getRootNode", "contains", "hasChildNodes",
+      "appendChild", "insertBefore", "removeChild", "replaceChild", "cloneNode",
+      "compareDocumentPosition", "normalize", "isEqualNode", "isSameNode",
+      "getAttribute", "setAttribute", "removeAttribute", "hasAttribute",
+      "getAttributeNS", "setAttributeNS", "removeAttributeNS", "hasAttributeNS",
+      "getAttributeNames", "attributes",
+      "addEventListener", "removeEventListener", "dispatchEvent",
+      "querySelector", "querySelectorAll", "getElementsByTagName", "getElementsByClassName",
+      "matches", "closest", "remove", "before", "after", "replaceWith", "append", "prepend",
+      "focus", "blur", "click", "getBoundingClientRect", "getClientRects",
+      "style", "classList", "className", "innerHTML", "outerHTML", "textContent", "innerText",
+      "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
+      "propertyIsEnumerable", "toLocaleString", "__proto__", "shadowRoot", "attachShadow",
+      "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot",
+    ]);
+    const RX_ARRAY_INDEX = /^(0|[1-9]\d*)$/;
+
+    function lookupFormNamedProperty(form, prop) {
+      const controls = collectFormControls(form);
+      const matches = [];
+      for (let i = 0; i < controls.length; i++) {
+        const c = controls[i];
+        if (!c || c.nodeType !== 1) continue;
+        const n = typeof c.getAttribute === "function" ? c.getAttribute("name") : null;
+        const id = typeof c.getAttribute === "function" ? c.getAttribute("id") : null;
+        if (n === prop || id === prop) {
+          matches.push(typeof upgradeElement === "function" ? upgradeElement(c) : c);
+        }
+      }
+      if (matches.length === 0) return undefined;
+      if (matches.length === 1) return matches[0];
+      return makeHtmlCollection(function () { return matches; });
+    }
+
+    const formNamedPropsProxy = new Proxy(HTMLFormElement.prototype, {
+      get: function (target, prop, receiver) {
+        if (
+          !receiver ||
+          receiver === target ||
+          receiver === formNamedPropsProxy ||
+          typeof prop !== "string" ||
+          prop.charCodeAt(0) === 95 || // '_'
+          FORM_OWN_KEEP.has(prop)
+        ) {
+          return Reflect.get(target, prop, receiver);
+        }
+        if (RX_ARRAY_INDEX.test(prop)) {
+          const idx = Number(prop);
+          const controls = collectFormControls(receiver);
+          if (idx >= 0 && idx < controls.length) {
+            const item = controls[idx];
+            return typeof upgradeElement === "function" ? upgradeElement(item) : item;
+          }
+          return undefined;
+        }
+        const named = lookupFormNamedProperty(receiver, prop);
+        if (named !== undefined) return named;
+        return Reflect.get(target, prop, receiver);
+      },
+      has: function (target, prop) {
+        return Reflect.has(target, prop);
+      },
+    });
+
+    Object.defineProperty(HTMLFormElement, Symbol.hasInstance, {
+      value: function (inst) {
+        if (!inst || (typeof inst !== "object" && typeof inst !== "function")) return false;
+        let p = Object.getPrototypeOf(inst);
+        while (p) {
+          if (p === HTMLFormElement.prototype || p === formNamedPropsProxy) return true;
+          p = Object.getPrototypeOf(p);
+        }
+        return false;
+      },
+      configurable: true,
+    });
+
+    global.__capsurf_formNamedPropsProxy = formNamedPropsProxy;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_formNamedPropsProxy = formNamedPropsProxy;
     }
   }
 
@@ -16308,6 +16500,7 @@
     init = init || {};
     this.status = init.status !== undefined ? Number(init.status) : 200;
     this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
+    this.ok = this.status >= 200 && this.status < 300;
     this.headers = new Headers(init.headers);
     this._rawMimeType = extractMimeFromHeaders(this.headers);
     this._body = body !== undefined ? body : "";
@@ -17025,7 +17218,7 @@
         submitterEl = submitter;
       }
       let submitterAppended = false;
-      const controls = form.elements || [];
+      const controls = (typeof collectFormControls === "function") ? collectFormControls(form) : (form.elements || []);
       for (let i = 0; i < controls.length; i++) {
         const c = controls[i];
         const tag = (c.tagName || "").toLowerCase();
@@ -22230,6 +22423,10 @@
     return this._ops.length;
   };
 
+  Object.defineProperty(CanvasRenderingContext2D.prototype, Symbol.toStringTag, {
+    value: "CanvasRenderingContext2D",
+    configurable: true,
+  });
   markNative(CanvasRenderingContext2D, "CanvasRenderingContext2D");
   markNative(CanvasRenderingContext2D.prototype.save, "save");
   markNative(CanvasRenderingContext2D.prototype.restore, "restore");
@@ -23735,6 +23932,10 @@
       const i = Number(index);
       return (i >= 0 && i < keys.length) ? keys[i] : null;
     };
+    Object.defineProperty(Storage.prototype, Symbol.toStringTag, {
+      value: "Storage",
+      configurable: true,
+    });
     markNative(Storage, "Storage");
     markNative(Storage.prototype.getItem, "getItem");
     markNative(Storage.prototype.setItem, "setItem");
@@ -23743,8 +23944,60 @@
     markNative(Storage.prototype.key, "key");
 
     global.Storage = Storage;
+    if (typeof window !== "undefined") window.Storage = Storage;
+    if (typeof globalThis !== "undefined") globalThis.Storage = Storage;
     global.localStorage = new Storage();
     global.sessionStorage = new Storage();
+
+    // WebIDL interface objects with proper name & Symbol.toStringTag shape
+    function TimeRanges() {}
+    Object.defineProperty(TimeRanges.prototype, Symbol.toStringTag, {
+      value: "TimeRanges",
+      configurable: true,
+    });
+    Object.defineProperty(TimeRanges.prototype, "length", {
+      get: function () { return 0; },
+      configurable: true,
+    });
+    TimeRanges.prototype.start = function () { throw new DOMException("Index out of range", "IndexSizeError"); };
+    TimeRanges.prototype.end = function () { throw new DOMException("Index out of range", "IndexSizeError"); };
+    markNative(TimeRanges, "TimeRanges");
+    global.TimeRanges = TimeRanges;
+    if (typeof window !== "undefined") window.TimeRanges = TimeRanges;
+    if (typeof globalThis !== "undefined") globalThis.TimeRanges = TimeRanges;
+
+    function MediaError() {}
+    MediaError.MEDIA_ERR_ABORTED = 1;
+    MediaError.MEDIA_ERR_NETWORK = 2;
+    MediaError.MEDIA_ERR_DECODE = 3;
+    MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+    MediaError.prototype.MEDIA_ERR_ABORTED = 1;
+    MediaError.prototype.MEDIA_ERR_NETWORK = 2;
+    MediaError.prototype.MEDIA_ERR_DECODE = 3;
+    MediaError.prototype.MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+    Object.defineProperty(MediaError.prototype, Symbol.toStringTag, {
+      value: "MediaError",
+      configurable: true,
+    });
+    markNative(MediaError, "MediaError");
+    global.MediaError = MediaError;
+    if (typeof window !== "undefined") window.MediaError = MediaError;
+    if (typeof globalThis !== "undefined") globalThis.MediaError = MediaError;
+
+    function Navigation() {}
+    if (typeof EventTarget === "function") {
+      Navigation.prototype = Object.create(EventTarget.prototype);
+      Navigation.prototype.constructor = Navigation;
+      Object.setPrototypeOf(Navigation, EventTarget);
+    }
+    Object.defineProperty(Navigation.prototype, Symbol.toStringTag, {
+      value: "Navigation",
+      configurable: true,
+    });
+    markNative(Navigation, "Navigation");
+    global.Navigation = Navigation;
+    if (typeof window !== "undefined") window.Navigation = Navigation;
+    if (typeof globalThis !== "undefined") globalThis.Navigation = Navigation;
 
     // 2. Navigator: modern lightweight shield & Client Hints
     const navigatorObj = {
@@ -24913,6 +25166,73 @@
     }
 
     // 5.3 Fetch API
+    const FORBIDDEN_REQUEST_HEADERS = new Set([
+      "accept-charset",
+      "accept-encoding",
+      "access-control-request-headers",
+      "access-control-request-method",
+      "connection",
+      "content-length",
+      "cookie",
+      "cookie2",
+      "date",
+      "dnt",
+      "expect",
+      "host",
+      "keep-alive",
+      "origin",
+      "referer",
+      "set-cookie",
+      "te",
+      "trailer",
+      "transfer-encoding",
+      "upgrade",
+      "via",
+    ]);
+    const _origMapForEach = Map.prototype.forEach;
+    const _origReflectApply = Reflect.apply;
+    const _origHeadersCtor = typeof Headers === "function" ? Headers : null;
+
+    function isForbiddenRequestHeader(nameLower) {
+      if (FORBIDDEN_REQUEST_HEADERS.has(nameLower)) return true;
+      if (nameLower.startsWith("proxy-") || nameLower.startsWith("sec-")) return true;
+      if (nameLower.startsWith("x-kitesurf-")) return true;
+      return false;
+    }
+
+    function applyPageHeader(reqHeaders, rawName, rawVal) {
+      const lk = String(rawName).toLowerCase();
+      if (isForbiddenRequestHeader(lk)) return;
+      reqHeaders[lk] = String(rawVal);
+    }
+
+    function copyHeadersInto(reqHeaders, hdrs) {
+      if (!hdrs) return;
+      if (_origHeadersCtor && hdrs instanceof _origHeadersCtor && hdrs._map instanceof Map) {
+        _origReflectApply(_origMapForEach, hdrs._map, [function (v, k) {
+          applyPageHeader(reqHeaders, k, v);
+        }]);
+      } else if (typeof Headers !== "undefined" && hdrs instanceof Headers) {
+        try {
+          hdrs.forEach(function (v, k) {
+            applyPageHeader(reqHeaders, k, v);
+          });
+        } catch (e) {}
+      } else if (Array.isArray(hdrs)) {
+        for (let i = 0; i < hdrs.length; i++) {
+          const pair = hdrs[i];
+          if (pair && pair.length >= 2) {
+            applyPageHeader(reqHeaders, pair[0], pair[1]);
+          }
+        }
+      } else if (typeof hdrs === "object") {
+        const ks = Object.keys(hdrs);
+        for (let i = 0; i < ks.length; i++) {
+          applyPageHeader(reqHeaders, ks[i], hdrs[ks[i]]);
+        }
+      }
+    }
+
     const fetchFn = markNative(function (resource, init) {
       init = init || {};
       let urlStr = "";
@@ -24935,6 +25255,9 @@
         "accept": "*/*",
         "accept-encoding": "gzip, br",
       };
+      if (loc && loc.href && loc.href !== "about:blank") {
+        reqHeaders["referer"] = String(loc.href);
+      }
 
       let extraHStr = null;
       if (typeof __capsurf_get_extra_headers === "function") {
@@ -24963,32 +25286,11 @@
       }
 
       if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
-        try {
-          resource.headers.forEach(function (v, k) {
-            reqHeaders[k.toLowerCase()] = String(v);
-          });
-        } catch (e) {}
+        copyHeadersInto(reqHeaders, resource.headers);
       }
 
       if (init.headers) {
-        if (typeof Headers !== "undefined" && init.headers instanceof Headers) {
-          try {
-            init.headers.forEach(function (v, k) {
-              reqHeaders[k.toLowerCase()] = String(v);
-            });
-          } catch (e) {}
-        } else if (Array.isArray(init.headers)) {
-          for (let i = 0; i < init.headers.length; i++) {
-            const pair = init.headers[i];
-            if (pair && pair.length >= 2) {
-              reqHeaders[String(pair[0]).toLowerCase()] = String(pair[1]);
-            }
-          }
-        } else if (typeof init.headers === "object") {
-          for (const k of Object.keys(init.headers)) {
-            reqHeaders[k.toLowerCase()] = String(init.headers[k]);
-          }
-        }
+        copyHeadersInto(reqHeaders, init.headers);
       }
 
       const decodableCodings = new Set(["gzip", "br", "identity"]);
@@ -32302,7 +32604,7 @@
         case "option": Object.setPrototypeOf(el, global.HTMLOptionElement.prototype); break;
         case "optgroup": Object.setPrototypeOf(el, (global.HTMLOptGroupElement || global.HTMLElement).prototype); break;
         case "button": Object.setPrototypeOf(el, global.HTMLButtonElement.prototype); break;
-        case "form": Object.setPrototypeOf(el, global.HTMLFormElement.prototype); break;
+        case "form": Object.setPrototypeOf(el, global.__capsurf_formNamedPropsProxy || global.HTMLFormElement.prototype); break;
         case "fieldset": Object.setPrototypeOf(el, (global.HTMLFieldSetElement || global.HTMLElement).prototype); break;
         case "legend": Object.setPrototypeOf(el, (global.HTMLLegendElement || global.HTMLElement).prototype); break;
         case "label": Object.setPrototypeOf(el, (global.HTMLLabelElement || global.HTMLElement).prototype); break;
@@ -33149,6 +33451,377 @@
     global.__capsurf_setControlValueJson = setControlValueJson;
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_setControlValueJson = setControlValueJson;
+    }
+
+    // Ensure HTML*Element constructor inheritance chain (WebIDL interface object prototype)
+    if (typeof global.HTMLElement === "function") {
+      if (typeof global.Element === "function") {
+        try { Object.setPrototypeOf(global.HTMLElement, global.Element); } catch (e) {}
+      }
+      const keys = Object.keys(global);
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
+        if (k !== "HTMLElement" && /^HTML.+Element$/.test(k)) {
+          const Ctor = global[k];
+          if (typeof Ctor === "function" && Ctor.prototype && global.HTMLElement.prototype.isPrototypeOf(Ctor.prototype)) {
+            try { Object.setPrototypeOf(Ctor, global.HTMLElement); } catch (e) {}
+          }
+        }
+      }
+    }
+
+    // Expose HTMLDocument legacy alias per WHATWG HTML spec
+    if (typeof global.Document === "function" && !global.HTMLDocument) {
+      global.HTMLDocument = global.Document;
+      if (typeof globalThis !== "undefined") globalThis.HTMLDocument = global.Document;
+      if (typeof window !== "undefined") window.HTMLDocument = global.Document;
+    }
+
+    // W3C Editing API: document.execCommand / queryCommand*
+    const editingStateMap = new WeakMap();
+    function getEditingState(doc) {
+      let st = editingStateMap.get(doc);
+      if (!st) {
+        st = { styleWithCSS: false, defaultParagraphSeparator: "div" };
+        editingStateMap.set(doc, st);
+      }
+      return st;
+    }
+
+    const SUPPORTED_EDITING_COMMANDS = new Set([
+      "bold", "italic", "underline", "strikethrough",
+      "subscript", "superscript",
+      "stylewithcss", "defaultparagraphseparator",
+      "inserttext", "inserthtml", "delete", "forwarddelete",
+      "selectall", "removeformat",
+    ]);
+
+    function isNodeEditable(node) {
+      let cur = node && node.nodeType === 1 ? node : (node ? node.parentNode : null);
+      while (cur) {
+        if (cur.nodeType === 1 && typeof cur.getAttribute === "function") {
+          const ce = cur.getAttribute("contenteditable");
+          if (ce !== null) {
+            const v = String(ce).toLowerCase();
+            if (v === "false") return false;
+            return true;
+          }
+        }
+        if (cur.nodeType === 9 && String(cur.designMode || "").toLowerCase() === "on") {
+          return true;
+        }
+        cur = cur.parentNode;
+      }
+      return false;
+    }
+
+    function getActiveEditingRange(doc) {
+      const sel = (doc && typeof doc.getSelection === "function")
+        ? doc.getSelection()
+        : (typeof global.getSelection === "function" ? global.getSelection() : null);
+      if (!sel || !sel.rangeCount || sel.rangeCount <= 0) return null;
+      try {
+        return sel.getRangeAt(0);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function isNodeStyledForCommand(node, cmd) {
+      let cur = node && node.nodeType === 1 ? node : (node ? node.parentNode : null);
+      while (cur && cur.nodeType === 1) {
+        const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (cmd === "bold") {
+          if (tag === "b" || tag === "strong") return true;
+          if (cur.style && cur.style.fontWeight) {
+            const fw = String(cur.style.fontWeight).toLowerCase();
+            if (fw === "bold" || Number(fw) >= 600) return true;
+          }
+        } else if (cmd === "italic") {
+          if (tag === "i" || tag === "em") return true;
+          if (cur.style && String(cur.style.fontStyle || "").toLowerCase() === "italic") return true;
+        } else if (cmd === "underline") {
+          if (tag === "u") return true;
+          if (cur.style && String(cur.style.textDecoration || "").toLowerCase().includes("underline")) return true;
+        } else if (cmd === "strikethrough") {
+          if (tag === "s" || tag === "strike" || tag === "del") return true;
+        }
+        cur = cur.parentNode;
+      }
+      return false;
+    }
+
+    function collectRangeTextNodes(range) {
+      const out = [];
+      if (!range) return out;
+      const sc = range.startContainer;
+      const ec = range.endContainer;
+      const so = range.startOffset;
+      const eo = range.endOffset;
+      if (sc === ec && sc && sc.nodeType === 3) {
+        if (eo > so) out.push(sc);
+        return out;
+      }
+      const ancestor = range.commonAncestorContainer || (sc ? sc.parentNode : null);
+      if (!ancestor) return out;
+      let started = false;
+      let done = false;
+      function walk(node) {
+        if (!node || done) return;
+        if (node === sc && node.nodeType === 3) {
+          started = true;
+          if ((node.data || node.textContent || "").length > so) out.push(node);
+          if (node === ec) { done = true; return; }
+          return;
+        }
+        if (node === ec && node.nodeType === 3) {
+          if (eo > 0) out.push(node);
+          done = true;
+          return;
+        }
+        if (node.nodeType === 3) {
+          if (started && (node.data || node.textContent || "").length > 0) out.push(node);
+          return;
+        }
+        const kids = node.childNodes && node.childNodes.length > 0
+          ? Array.from(node.childNodes)
+          : (node._children && node._children.length > 0 ? node._children.slice() : []);
+        if (kids.length === 0) {
+          let ch = node.firstChild;
+          while (ch) { kids.push(ch); ch = ch.nextSibling; }
+        }
+        if (kids.length === 0 && node.nodeType === 1 && started && (node.textContent || "").length > 0) {
+          out.push(node);
+        }
+        for (let i = 0; i < kids.length; i++) {
+          if (node === sc && i === so) started = true;
+          if (node === ec && i === eo) { done = true; return; }
+          walk(kids[i]);
+          if (done) return;
+        }
+        if (node === sc && so >= kids.length) started = true;
+        if (node === ec && eo >= kids.length) done = true;
+      }
+      walk(ancestor);
+      return out;
+    }
+
+    function installEditingCommands(target) {
+      if (!target) return;
+      target.queryCommandSupported = markNative(function (command) {
+        const cmd = String(command || "").toLowerCase();
+        return SUPPORTED_EDITING_COMMANDS.has(cmd);
+      }, "queryCommandSupported");
+
+      target.queryCommandEnabled = markNative(function (command) {
+        const cmd = String(command || "").toLowerCase();
+        if (!SUPPORTED_EDITING_COMMANDS.has(cmd)) return false;
+        if (cmd === "stylewithcss" || cmd === "defaultparagraphseparator") return true;
+        const range = getActiveEditingRange(this);
+        if (!range) return false;
+        return isNodeEditable(range.startContainer) && isNodeEditable(range.endContainer);
+      }, "queryCommandEnabled");
+
+      target.queryCommandState = markNative(function (command) {
+        const cmd = String(command || "").toLowerCase();
+        const st = getEditingState(this);
+        if (cmd === "stylewithcss") return st.styleWithCSS;
+        if (cmd === "bold" || cmd === "italic" || cmd === "underline" || cmd === "strikethrough") {
+          const range = getActiveEditingRange(this);
+          if (!range) return false;
+          const texts = collectRangeTextNodes(range);
+          if (texts.length === 0) {
+            return isNodeStyledForCommand(range.startContainer, cmd);
+          }
+          for (let i = 0; i < texts.length; i++) {
+            if (!isNodeStyledForCommand(texts[i], cmd)) return false;
+          }
+          return true;
+        }
+        return false;
+      }, "queryCommandState");
+
+      target.queryCommandIndeterm = markNative(function (command) {
+        const cmd = String(command || "").toLowerCase();
+        if (cmd === "bold" || cmd === "italic" || cmd === "underline" || cmd === "strikethrough") {
+          const range = getActiveEditingRange(this);
+          if (!range) return false;
+          const texts = collectRangeTextNodes(range);
+          if (texts.length < 2) return false;
+          let hasTrue = false;
+          let hasFalse = false;
+          for (let i = 0; i < texts.length; i++) {
+            if (isNodeStyledForCommand(texts[i], cmd)) hasTrue = true;
+            else hasFalse = true;
+            if (hasTrue && hasFalse) return true;
+          }
+        }
+        return false;
+      }, "queryCommandIndeterm");
+
+      target.queryCommandValue = markNative(function (command) {
+        const cmd = String(command || "").toLowerCase();
+        const st = getEditingState(this);
+        if (cmd === "defaultparagraphseparator") return st.defaultParagraphSeparator;
+        if (cmd === "stylewithcss") return "";
+        return "";
+      }, "queryCommandValue");
+
+      target.execCommand = markNative(function (command, showUI, value) {
+        const cmd = String(command || "").toLowerCase();
+        const st = getEditingState(this);
+        if (!SUPPORTED_EDITING_COMMANDS.has(cmd)) return false;
+
+        if (cmd === "stylewithcss") {
+          const v = value !== undefined && value !== null ? String(value) : "";
+          st.styleWithCSS = v.toLowerCase() !== "false";
+          return true;
+        }
+        if (cmd === "defaultparagraphseparator") {
+          const v = value !== undefined && value !== null ? String(value).toLowerCase() : "";
+          if (v === "p" || v === "div") {
+            st.defaultParagraphSeparator = v;
+            return true;
+          }
+          return false;
+        }
+
+        const range = getActiveEditingRange(this);
+        if (!range || !isNodeEditable(range.startContainer) || !isNodeEditable(range.endContainer)) {
+          return false;
+        }
+
+        const tagMap = { bold: "b", italic: "i", underline: "u", strikethrough: "strike", subscript: "sub", superscript: "sup" };
+        if (tagMap[cmd]) {
+          const doc = this && this.createElement ? this : global.document;
+          if (range.startContainer === range.endContainer && range.startContainer.nodeType === 3) {
+            const textNode = range.startContainer;
+            const fullText = textNode.data !== undefined ? String(textNode.data) : String(textNode.textContent || "");
+            const so = Math.max(0, Math.min(range.startOffset, fullText.length));
+            const eo = Math.max(so, Math.min(range.endOffset, fullText.length));
+            if (eo > so && textNode.parentNode) {
+              const before = fullText.slice(0, so);
+              const selected = fullText.slice(so, eo);
+              const after = fullText.slice(eo);
+              const parent = textNode.parentNode;
+              const wrapper = doc.createElement(tagMap[cmd]);
+              wrapper.textContent = selected;
+              if (before) {
+                parent.insertBefore(doc.createTextNode(before), textNode);
+              }
+              parent.insertBefore(wrapper, textNode);
+              if (after) {
+                parent.insertBefore(doc.createTextNode(after), textNode);
+              }
+              parent.removeChild(textNode);
+              const innerNode = wrapper.firstChild || wrapper;
+              range.setStart(innerNode, 0);
+              range.setEnd(innerNode, innerNode.nodeType === 3 ? selected.length : (wrapper.childNodes ? wrapper.childNodes.length : 1));
+              return true;
+            }
+          }
+          const texts = collectRangeTextNodes(range);
+          for (let i = 0; i < texts.length; i++) {
+            const t = texts[i];
+            if (!isNodeStyledForCommand(t, cmd) && t.parentNode) {
+              const wrapper = doc.createElement(tagMap[cmd]);
+              t.parentNode.insertBefore(wrapper, t);
+              wrapper.appendChild(t);
+            }
+          }
+          return true;
+        }
+        return false;
+      }, "execCommand");
+    }
+
+    if (docProto) {
+      installEditingCommands(docProto);
+    }
+    if (global.document && typeof global.document.execCommand !== "function") {
+      installEditingCommands(global.document);
+    }
+
+    // Wrap Document.prototype.implementation getter so createHTMLDocument returns a detached document
+    // whose elements properly report ownerDocument === doc and resolve getElementById within doc.
+    if (docProto) {
+      const implDesc = Object.getOwnPropertyDescriptor(docProto, "implementation");
+      if (implDesc && typeof implDesc.get === "function") {
+        const origImplGet = implDesc.get;
+        const implCache = new WeakMap();
+        Object.defineProperty(docProto, "implementation", {
+          get: function () {
+            let cached = implCache.get(this);
+            if (cached) return cached;
+            const impl = origImplGet.call(this);
+            if (impl && typeof impl.createHTMLDocument === "function") {
+              const origCreateHTMLDoc = impl.createHTMLDocument;
+              impl.createHTMLDocument = markNative(function (title) {
+                const doc = origCreateHTMLDoc.apply(this, arguments);
+                if (doc && typeof doc === "object") {
+                  const setDocOwner = function (node) {
+                    if (!node || typeof node !== "object") return;
+                    try {
+                      Object.defineProperty(node, "ownerDocument", { value: doc, writable: true, configurable: true });
+                    } catch (e) {
+                      try { node.ownerDocument = doc; } catch (e2) {}
+                    }
+                  };
+                  const cachedBody = doc.body;
+                  const cachedHead = doc.head;
+                  const cachedDocEl = doc.documentElement;
+                  if (cachedDocEl) {
+                    setDocOwner(cachedDocEl);
+                    Object.defineProperty(doc, "documentElement", { value: cachedDocEl, configurable: true });
+                  }
+                  if (cachedHead) {
+                    setDocOwner(cachedHead);
+                    Object.defineProperty(doc, "head", { value: cachedHead, configurable: true });
+                  }
+                  if (cachedBody) {
+                    setDocOwner(cachedBody);
+                    Object.defineProperty(doc, "body", { value: cachedBody, configurable: true });
+                  }
+                  const origDocCreateElement = doc.createElement;
+                  if (typeof origDocCreateElement === "function") {
+                    doc.createElement = function (tagName) {
+                      const el = origDocCreateElement.call(this, tagName);
+                      if (el) {
+                        const upgraded = upgradeElement(el);
+                        setDocOwner(upgraded);
+                        return upgraded;
+                      }
+                      return el;
+                    };
+                  }
+                  doc.getElementById = function (id) {
+                    const targetId = String(id);
+                    let found = null;
+                    function walk(n) {
+                      if (!n || found) return;
+                      if (n.nodeType === 1 && typeof n.getAttribute === "function" && n.getAttribute("id") === targetId) {
+                        found = upgradeElement(n);
+                        return;
+                      }
+                      let c = n.firstChild;
+                      while (c && !found) {
+                        walk(c);
+                        c = c.nextSibling;
+                      }
+                    }
+                    walk(cachedDocEl || cachedBody || doc);
+                    return found;
+                  };
+                }
+                return doc;
+              }, "createHTMLDocument");
+            }
+            implCache.set(this, impl);
+            return impl;
+          },
+          configurable: true,
+        });
+      }
     }
   }
 

@@ -3534,3 +3534,13 @@
   - `page.cp` / `server.cp` 4 门禁全 0；
   - `same-document-origin` (2/2 PASS)、`sealed-outbound-identity` (4/4 PASS)、`navigate-window-frames` (1/1 PASS)、`navigate-window-cookies` (1/2 PASS)；`session-outbound` 6 项失败明确定位在 `src/js/shim/window.js:fetchFn`。
 - **清理旧子智能体**: 销毁 `17e124ae-6ac3-4444-a1a1-33a063e925be`。
+
+## [2026-11-20 18:01:00] WebIDL 形态、Fetch 防篡改头、Form 命名代理与 execCommand 9/10 (19/19) 全绿闭环 (Subagent 84825930 结单，Phase 87)
+- **Fetch Forbidden Headers、防篡改与 WebIDL 接口形态 (`src/js/shim/`)**:
+  - `window.js` & `file.js` & `cssom.js` & `canvas2d.js`: 实装 WHATWG Forbidden Request-Header 过滤、捕获 `Map.prototype.forEach`/`Reflect.apply` 免疫原型篡改、`Response.ok`、`CSSStyleSheet.insertRule/deleteRule` 跨域 `SecurityError` 及 `Storage`/`TimeRanges`/`MediaError`/`Navigation`/`CanvasRenderingContext2D` WebIDL 接口形态；
+  - `element/forms/{form,input,button}.js` & `form-data.js` & `node-base.js` & `index.js`: 实装 `HTMLFormElement` `[LegacyOverrideBuiltIns]` 命名属性代理、`HTML*Element -> HTMLElement -> Element` 构造器继承链、`Document.prototype.execCommand`/`queryCommand*` 及 `appendChild` 环路 `HierarchyRequestError`；
+  - `e2e/harness.ts`: `CDPClient` 跟踪 `Page.setLifecycleEventsEnabled` 主动派发 `Page.lifecycleEvent`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - 9/10 Core 套件（`exec-command`、`fetch-init-headers`、`forbidden-request-headers`、`form-data-blob-entries`、`form-named-properties` (6/6)、`header-intrinsic-tamper` (4/4)、`hostile-global-timers`、`html-element-chain`、`idl-interface-shape`）：**19/19 PASS**！`idl-conformance` 因 monorepo 相对路径与 Vitest `toMatchFileSnapshot` 归档。
+- **清理旧子智能体**: 销毁 `84825930-064b-4018-874b-ea4f528a6126`。

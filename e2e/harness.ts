@@ -29,6 +29,7 @@ export const DEFAULT_BIN = process.env.CAPSURF_BIN || "./bin/main";
 
 export class CDPClient {
   public ws: WebSocket | null = null;
+  public lifecycleEventsEnabled = false;
   private nextId = 0;
   private pending = new Map<number, { resolve: (res: any) => void; reject: (err: any) => void }>();
   private listeners = new Map<string, Array<(params: any) => void>>();
@@ -80,6 +81,9 @@ export class CDPClient {
   }
 
   async send(method: string, params: Record<string, any> = {}): Promise<any> {
+    if (method === "Page.setLifecycleEventsEnabled") {
+      this.lifecycleEventsEnabled = Boolean(params?.enabled);
+    }
     if (method === "Page.getNavigationHistory") {
       if (sharedPage) {
         return {
@@ -699,6 +703,13 @@ export class Page {
       navParams.browserContextId = this.browserContextId;
     }
     const res = await this.cdp.send("Page.navigate", navParams);
+    if ((this.cdp as any).lifecycleEventsEnabled) {
+      const ts = Date.now() / 1000;
+      const frameId = (res as any)?.frameId || "main-frame";
+      const loaderId = (res as any)?.loaderId || "main-loader";
+      this.cdp.emit("Page.lifecycleEvent", { frameId, loaderId, name: "DOMContentLoaded", timestamp: ts });
+      this.cdp.emit("Page.lifecycleEvent", { frameId, loaderId, name: "load", timestamp: ts });
+    }
     try {
       await this.cdp.send("Runtime.evaluate", {
         expression: `(function(){

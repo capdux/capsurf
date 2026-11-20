@@ -42,7 +42,7 @@ function FormData(form, submitter) {
       submitterEl = submitter;
     }
     let submitterAppended = false;
-    const controls = form.elements || [];
+    const controls = (typeof collectFormControls === "function") ? collectFormControls(form) : (form.elements || []);
     for (let i = 0; i < controls.length; i++) {
       const c = controls[i];
       const tag = (c.tagName || "").toLowerCase();

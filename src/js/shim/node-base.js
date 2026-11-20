@@ -455,6 +455,16 @@ Node.prototype.appendChild = function (child) {
     throw new TypeError("Failed to execute 'appendChild' on 'Node': parameter 1 is not of type 'Node'.");
   }
 
+  // Prevent cycles: child must not be an inclusive ancestor of this
+  let anc = this;
+  while (anc) {
+    if (anc === child) {
+      const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+      throw new DOMEx("Failed to execute 'appendChild' on 'Node': The new child element contains the parent.", "HierarchyRequestError");
+    }
+    anc = anc.parentNode;
+  }
+
   // Handle DocumentFragment
   if (child.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const kids = Array.from(child.childNodes || child._children || []);

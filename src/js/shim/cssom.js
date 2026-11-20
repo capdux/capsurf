@@ -1978,7 +1978,31 @@
     this.ownerNode.textContent = text;
   };
 
+  CSSStyleSheet.prototype._isCrossOriginOpaque = function () {
+    if (!this.ownerNode) return false;
+    const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
+    if (tag !== "link") return false;
+    const href = this.ownerNode.getAttribute ? this.ownerNode.getAttribute("href") : null;
+    if (!href) return false;
+    try {
+      const base = (typeof location !== "undefined" && location.href && location.href !== "about:blank")
+        ? location.href
+        : "http://localhost/";
+      const resolved = new URL(href, base);
+      const docOrigin = (typeof location !== "undefined" && location.origin && location.origin !== "null" && location.origin !== "about:")
+        ? String(location.origin)
+        : "";
+      if (docOrigin && resolved.origin && resolved.origin !== docOrigin) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  };
+
   CSSStyleSheet.prototype.insertRule = function (ruleText, index) {
+    if (this._isCrossOriginOpaque()) {
+      throw new DOMException("Failed to execute 'insertRule' on 'CSSStyleSheet': Cannot access StyleSheet to insertRule", "SecurityError");
+    }
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'insertRule': 1 argument required, but only 0 present.");
     }
@@ -1996,6 +2020,9 @@
   };
 
   CSSStyleSheet.prototype.deleteRule = function (index) {
+    if (this._isCrossOriginOpaque()) {
+      throw new DOMException("Failed to execute 'deleteRule' on 'CSSStyleSheet': Cannot access StyleSheet to deleteRule", "SecurityError");
+    }
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'deleteRule': 1 argument required, but only 0 present.");
     }

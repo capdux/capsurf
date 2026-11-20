@@ -889,6 +889,10 @@ function installWindow(global) {
     const i = Number(index);
     return (i >= 0 && i < keys.length) ? keys[i] : null;
   };
+  Object.defineProperty(Storage.prototype, Symbol.toStringTag, {
+    value: "Storage",
+    configurable: true,
+  });
   markNative(Storage, "Storage");
   markNative(Storage.prototype.getItem, "getItem");
   markNative(Storage.prototype.setItem, "setItem");
@@ -897,8 +901,60 @@ function installWindow(global) {
   markNative(Storage.prototype.key, "key");
 
   global.Storage = Storage;
+  if (typeof window !== "undefined") window.Storage = Storage;
+  if (typeof globalThis !== "undefined") globalThis.Storage = Storage;
   global.localStorage = new Storage();
   global.sessionStorage = new Storage();
+
+  // WebIDL interface objects with proper name & Symbol.toStringTag shape
+  function TimeRanges() {}
+  Object.defineProperty(TimeRanges.prototype, Symbol.toStringTag, {
+    value: "TimeRanges",
+    configurable: true,
+  });
+  Object.defineProperty(TimeRanges.prototype, "length", {
+    get: function () { return 0; },
+    configurable: true,
+  });
+  TimeRanges.prototype.start = function () { throw new DOMException("Index out of range", "IndexSizeError"); };
+  TimeRanges.prototype.end = function () { throw new DOMException("Index out of range", "IndexSizeError"); };
+  markNative(TimeRanges, "TimeRanges");
+  global.TimeRanges = TimeRanges;
+  if (typeof window !== "undefined") window.TimeRanges = TimeRanges;
+  if (typeof globalThis !== "undefined") globalThis.TimeRanges = TimeRanges;
+
+  function MediaError() {}
+  MediaError.MEDIA_ERR_ABORTED = 1;
+  MediaError.MEDIA_ERR_NETWORK = 2;
+  MediaError.MEDIA_ERR_DECODE = 3;
+  MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+  MediaError.prototype.MEDIA_ERR_ABORTED = 1;
+  MediaError.prototype.MEDIA_ERR_NETWORK = 2;
+  MediaError.prototype.MEDIA_ERR_DECODE = 3;
+  MediaError.prototype.MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+  Object.defineProperty(MediaError.prototype, Symbol.toStringTag, {
+    value: "MediaError",
+    configurable: true,
+  });
+  markNative(MediaError, "MediaError");
+  global.MediaError = MediaError;
+  if (typeof window !== "undefined") window.MediaError = MediaError;
+  if (typeof globalThis !== "undefined") globalThis.MediaError = MediaError;
+
+  function Navigation() {}
+  if (typeof EventTarget === "function") {
+    Navigation.prototype = Object.create(EventTarget.prototype);
+    Navigation.prototype.constructor = Navigation;
+    Object.setPrototypeOf(Navigation, EventTarget);
+  }
+  Object.defineProperty(Navigation.prototype, Symbol.toStringTag, {
+    value: "Navigation",
+    configurable: true,
+  });
+  markNative(Navigation, "Navigation");
+  global.Navigation = Navigation;
+  if (typeof window !== "undefined") window.Navigation = Navigation;
+  if (typeof globalThis !== "undefined") globalThis.Navigation = Navigation;
 
   // 2. Navigator: modern lightweight shield & Client Hints
   const navigatorObj = {
@@ -2067,6 +2123,73 @@ function installWindow(global) {
   }
 
   // 5.3 Fetch API
+  const FORBIDDEN_REQUEST_HEADERS = new Set([
+    "accept-charset",
+    "accept-encoding",
+    "access-control-request-headers",
+    "access-control-request-method",
+    "connection",
+    "content-length",
+    "cookie",
+    "cookie2",
+    "date",
+    "dnt",
+    "expect",
+    "host",
+    "keep-alive",
+    "origin",
+    "referer",
+    "set-cookie",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "via",
+  ]);
+  const _origMapForEach = Map.prototype.forEach;
+  const _origReflectApply = Reflect.apply;
+  const _origHeadersCtor = typeof Headers === "function" ? Headers : null;
+
+  function isForbiddenRequestHeader(nameLower) {
+    if (FORBIDDEN_REQUEST_HEADERS.has(nameLower)) return true;
+    if (nameLower.startsWith("proxy-") || nameLower.startsWith("sec-")) return true;
+    if (nameLower.startsWith("x-kitesurf-")) return true;
+    return false;
+  }
+
+  function applyPageHeader(reqHeaders, rawName, rawVal) {
+    const lk = String(rawName).toLowerCase();
+    if (isForbiddenRequestHeader(lk)) return;
+    reqHeaders[lk] = String(rawVal);
+  }
+
+  function copyHeadersInto(reqHeaders, hdrs) {
+    if (!hdrs) return;
+    if (_origHeadersCtor && hdrs instanceof _origHeadersCtor && hdrs._map instanceof Map) {
+      _origReflectApply(_origMapForEach, hdrs._map, [function (v, k) {
+        applyPageHeader(reqHeaders, k, v);
+      }]);
+    } else if (typeof Headers !== "undefined" && hdrs instanceof Headers) {
+      try {
+        hdrs.forEach(function (v, k) {
+          applyPageHeader(reqHeaders, k, v);
+        });
+      } catch (e) {}
+    } else if (Array.isArray(hdrs)) {
+      for (let i = 0; i < hdrs.length; i++) {
+        const pair = hdrs[i];
+        if (pair && pair.length >= 2) {
+          applyPageHeader(reqHeaders, pair[0], pair[1]);
+        }
+      }
+    } else if (typeof hdrs === "object") {
+      const ks = Object.keys(hdrs);
+      for (let i = 0; i < ks.length; i++) {
+        applyPageHeader(reqHeaders, ks[i], hdrs[ks[i]]);
+      }
+    }
+  }
+
   const fetchFn = markNative(function (resource, init) {
     init = init || {};
     let urlStr = "";
@@ -2089,6 +2212,9 @@ function installWindow(global) {
       "accept": "*/*",
       "accept-encoding": "gzip, br",
     };
+    if (loc && loc.href && loc.href !== "about:blank") {
+      reqHeaders["referer"] = String(loc.href);
+    }
 
     let extraHStr = null;
     if (typeof __capsurf_get_extra_headers === "function") {
@@ -2117,32 +2243,11 @@ function installWindow(global) {
     }
 
     if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
-      try {
-        resource.headers.forEach(function (v, k) {
-          reqHeaders[k.toLowerCase()] = String(v);
-        });
-      } catch (e) {}
+      copyHeadersInto(reqHeaders, resource.headers);
     }
 
     if (init.headers) {
-      if (typeof Headers !== "undefined" && init.headers instanceof Headers) {
-        try {
-          init.headers.forEach(function (v, k) {
-            reqHeaders[k.toLowerCase()] = String(v);
-          });
-        } catch (e) {}
-      } else if (Array.isArray(init.headers)) {
-        for (let i = 0; i < init.headers.length; i++) {
-          const pair = init.headers[i];
-          if (pair && pair.length >= 2) {
-            reqHeaders[String(pair[0]).toLowerCase()] = String(pair[1]);
-          }
-        }
-      } else if (typeof init.headers === "object") {
-        for (const k of Object.keys(init.headers)) {
-          reqHeaders[k.toLowerCase()] = String(init.headers[k]);
-        }
-      }
+      copyHeadersInto(reqHeaders, init.headers);
     }
 
     const decodableCodings = new Set(["gzip", "br", "identity"]);

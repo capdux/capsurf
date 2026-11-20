@@ -1331,4 +1331,10 @@
 ## Phase 86 脚本挂起导航消费与 WebSocket 主动推送技术方案
 1. **挂起导航异步消费 (`page.cp`, `server.cp`)**：
    - 在 `performPendingNavigation` 读取并清空 `globalThis.__capsurf_pending_navigation`，完整复用相对 URL 解析、Private Network Access、`HttpLoader.fetchDocument` 与 `documentKind` 管线；在 `server.cp` 的 `poll` 空闲 tick 与 `dispatchCdpCommand` 末尾自动冲刷事件帧，解决脚本发起 `location.href` 跳转时 `waitForNavigation` 超时问题。
+
+## Phase 87 Fetch 防篡改头、Form `[LegacyOverrideBuiltIns]` 与 `execCommand` 技术方案
+1. **防篡改 Fetch Headers 与 WebIDL 构造器链 (`window.js`, `index.js`)**：
+   - 在引导期捕获 `Map.prototype.forEach` 与 `Reflect.apply` 直接读取内部 `Headers._map` 并执行 WHATWG Forbidden Request-Header 过滤；统一将所有 `HTML*Element` 构造器原型链接至 `HTMLElement -> Element`。
+2. **`HTMLFormElement` 命名属性代理与 `execCommand` (`form.js`, `index.js`)**：
+   - 基于 Proxy 实装 `[LegacyOverrideBuiltIns]`（索引优先、命名控件覆盖自身属性、保留 DOM 树方法）并在 `Document.prototype` 实装 `execCommand`/`queryCommand*` 富文本命令集。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

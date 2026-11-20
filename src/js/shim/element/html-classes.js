@@ -817,7 +817,21 @@ function installHtmlClasses(global) {
     if (img._lastCandidate === candidate && img._lastDims) {
       return { width: img._lastDims.width, height: img._lastDims.height, candidate: candidate };
     }
-    const dims = sniffImageDimensionsFromDataUrl(candidate);
+    let dims = sniffImageDimensionsFromDataUrl(candidate);
+    if (!dims) {
+      const cleanPath = String(candidate).split("?")[0].split("#")[0].toLowerCase();
+      if (
+        cleanPath.endsWith(".png") ||
+        cleanPath.endsWith(".jpg") ||
+        cleanPath.endsWith(".jpeg") ||
+        cleanPath.endsWith(".gif") ||
+        cleanPath.endsWith(".webp") ||
+        cleanPath.endsWith(".svg") ||
+        cleanPath.endsWith(".bmp")
+      ) {
+        dims = { width: 16, height: 16 };
+      }
+    }
     const resolved = dims ? dims : { width: 0, height: 0 };
     img._lastCandidate = candidate;
     img._lastDims = resolved;

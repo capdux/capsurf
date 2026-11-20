@@ -483,6 +483,7 @@ function Response(body, init) {
   init = init || {};
   this.status = init.status !== undefined ? Number(init.status) : 200;
   this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
+  this.ok = this.status >= 200 && this.status < 300;
   this.headers = new Headers(init.headers);
   this._rawMimeType = extractMimeFromHeaders(this.headers);
   this._body = body !== undefined ? body : "";
