@@ -139,8 +139,8 @@
      ```
      同类错误在文件中一次性修完再重编，严禁修一行编一次。
    - **大文件阅读**：调用 `read_file`（指定 `StartLine`/`EndLine`）；对 `> 800` 行的大文件（如 `html5ever/tree_builder/mod.rs`），先用 `run_command` 执行 `rg -n` 提取结构大纲，再分段读取。
-2. **子智能体「用完即弃」与并发上限 `<= 2` 铁律**：
-   - 同时运行的子智能体严格限制在 **最多 2 路**。
+2. **子智能体「用完即弃」与并发上限 `<= 3` 铁律**：
+   - 同时运行的子智能体严格限制在 **最多 3 路**。
    - **彻底禁止通过 `send_message` 向已完成上一批任务的子智能体追加新任务**（复用会导致 200k+ Tokens $O(N^2)$ 爆炸）！每批任务必须通过 `invoke_subagent` 启动**全新子智能体**（从 0 上下文起步）。
    - **踩坑表驱动 Prompt**：给子智能体的 Prompt 只写「先读 `CP_PITFALLS.md`，按规范完成指定文件并通过 `cpc fix` 与 `cpc_brief.py` 门禁」，不再内联长篇语法说明，也不包含复杂正则字符串。
    - **步数熔断与大文件拆分**：子智能体单文件 `<= 50` 步仍未过门禁立即汇报 `BLOCKED` 并停止；`> 2,500` 行的大文件（如 `tree_builder`）按状态段拆给多个全新子智能体分治。
@@ -150,34 +150,36 @@
    - 在撰写文档及汇报时使用中性工程术语（用「异常边界防护 / 畸形报文校验」替代含 attack/exploit 词汇，用「资源耗尽防护」替代 bomb/flood，用「终止生命周期」替代敏感进程控制词）；交互语言统一使用**中文**。
 4. **配额耗尽（Quota Exhaustion 429）自主定时恢复**：
    - 若遇到 `RESOURCE_EXHAUSTED (code 429): ... Resets in XhYmZs`，主智能体计算重置秒数 + 120 秒缓冲，调用 `schedule(DurationSeconds=..., Prompt="配额已重置，请检查状态并继续迁移")` 注册单次唤醒定时器后立即休眠结束轮次；唤醒后重派全新子智能体。
+5. “针对 > 800 行的大文件，推荐优先使用 rg -n "^(pub\s+)?(fn|class|export|const)\s+" <path> 秒级提取全局结构与方法大纲，再精准使用 read_file 查阅目标实现，消除跨 800行多次分段读取的往返开销。”
+6. “修改超过 2000 行的文件时，禁止单回合多次调用编辑工具，必须一次性合并修改（或先拆分子模块）”
 
 ---
 
 ## 7. 与上游 `cp agy` 跨智能体异步双向通信协议（多 AGY 路由隔离与语法广播）
 
-- **职责边界与多 AGY 隔离铁律**：
-  - **主智能体 (`capsurf_agy`) 与子智能体严禁直接修改 `/data/dev/cp/cpc/src` 编译器源码！**
-  - 所有 `cpc` 编译器 Bug 或缺失特性，必须且只能通过本仓库 `scripts/task_queue.py` 提交给上游 `cp agy` 修复。
-  - **身份识别与防冲突机制**：
-    - `capsurf_agy` 投递的工单自动规范化为 `task-capsurf-YYYYMMDD-<slug>`，并携带 `"created_by": "capsurf_agy"`、`"project": "capsurf"`、`"target_agy": ["capsurf_agy"]`，供 `cp agy` 明确区分 `bun_agy` 与 `capsurf_agy`。
-    - **精准结单路由**：普通编译器 Bug 结单按 `target_agy` 分发至各自专属收件箱（`/data/dev/cp/.tasks/resolved/capsurf_agy/` vs `/data/dev/cp/.tasks/resolved/bun_agy/`），并通过独立游标 `/data/dev/cp/.tasks/.ack_capsurf_agy.json` 过滤，严防与 `bun_agy` 串台误唤醒。
-    - **CP 语法更新双端广播**：当上游 `cp agy` 更新 CP 语法规范并执行 `task_queue.py broadcast --id "syntax-YYYYMMDD-<slug>" --note "..."`（或 `resolve --broadcast`）时，通知会同时扇出投递给 `bun_agy` 与 `capsurf_agy`；`capsurf_agy` 唤醒后须第一时间同步更新本地 `CP_PITFALLS.md` 与 `GEMINI.md`。
-- **标准操作指令**：
-  1. **后台常驻监听守护进程（主智能体启动/重启后必检）**：
-     保持后台运行（`IsDaemon: true, WaitMsBeforeAsync: 500`）：
-     ```bash
-     python3 scripts/watch_task.py --status resolved --agent capsurf_agy
-     ```
-     一旦 `cp agy` 结单 `capsurf_agy` 的任务或发布 CP 语法更新广播，守护进程立即退出（Exit 0）并自动唤醒主智能体（休眠期间 0 Token 消耗）。
-  2. **遇到编译器缺陷时的标准上报流程（5 轮熔断，绝不用非标语法硬绕）**：
-     - 单个文件编译修复尝试不超过 **5 轮**；
-     - 提炼 `<= 10` 行最小可复现代码写入 `temp/repro_<name>.cp`；
-     - 调用本地投递脚本：
-       ```bash
-       python3 scripts/task_queue.py submit --id "task-capsurf-YYYYMMDD-<slug>" --repro "temp/repro_<name>.cp" --error "简明报错说明与代码生成根因定位" --by "capsurf_agy"
-       ```
-     - 将受阻文件标记为 `BLOCKED`，立即切换开发下一个无依赖模块。
-  3. **双轨强制留痕**：发送任务给 `cp agy`、收到专属结单通知或收到 CP 语法更新广播时，必须在对话屏幕显式打印摘要，并**第一时间实时追加写入 `SESSION.md`**；收到结单后立即重新启动常驻 `watch_task.py` 并用新 `cpc` 编译解封 `BLOCKED` 文件。
+1. **标准操作指令**：`/root/.agy/comm/COMM.md`文件，熟悉多AGY通信机制与指令。
+2. **职责边界与多 AGY 隔离铁律**：
+
+- 当前项目名称为`capsurf`，agy名称为`capsurf_agy`。
+- **主智能体 (`capsurf_agy`) 与子智能体严禁直接修改 `/data/dev/cp/cpc/src` 编译器源码！**
+- 所有 `cpc` 编译器 Bug 或缺失特性，必须且只能通过 `COMM.md` 中约定的方式提交给上游 `cp agy` 修复。
+- **CP 语法更新双端广播**：当上游 `cp agy` 更新 CP 语法规范并广播时，`capsurf_agy` 唤醒后须第一时间同步更新本地 `CP_PITFALLS.md`。
+
+3. **遇到`cp`编译器缺陷时的标准上报流程（绝不单点死锁、绝不用非标语法绕过）**：
+
+- 单个文件编译修复尝试不超过 **5 轮**（Token 熔断安全阀）；
+- 提炼 `<= 10` 行最小可复现代码写入 `/data/dev/cp/temp/repro_<name>.cp`；
+- 调用投递脚本：
+  ```bash
+  python3 /root/.agy/comm/task_queue.py submit --id "task-capsurf-YYYYMMDD-<slug>" --repro "/data/dev/cp/temp/repro_<name>.cp" --error "简明报错说明与代码生成根因定位" --by "capsurf_agy"
+  ```
+- 将受阻文件标记为 `BLOCKED`（保留原 `<stem>.zig` 不被破坏），立即切换迁移下一个无依赖模块。
+
+4. **查看看板状态**：
+   ```bash
+   python3 /root/.agy/comm/task_queue.py list
+   ```
+5. **收到 `cp agy` 结单通知时**：必须在对话屏幕显式打印结单详情（Task ID、修复结论、复现验证结果），**第一时间实时追加写入 `SESSION.md`**，并立即用新 `cpc` 编译解封此前 `BLOCKED` 的文件。
 
 ---
 
@@ -199,7 +201,7 @@
 
 1. **自主推导与持续自驱推进铁律**：
    - **自驱推进无间断**：主智能体在完成当前 Phase 任务与提交后，不得停滞等待用户指令，必须自行推导分析依赖拓扑、明确下一个 Milestone/Phase 目标，自动派发全新子智能体推进，循环往复。
-   - **双智能体满负荷并行流水线**：始终保持最多 **2 路全新子智能体** 并行推进（严格遵守「用完即弃」铁律，严禁复用已完成上下文）：
+   - **双智能体满负荷并行流水线**：始终保持最多 **3 路全新子智能体** 并行推进（严格遵守「用完即弃」铁律，严禁复用已完成上下文）：
      - 一路攻坚原生核心模块（DOM/CSS/JS/网络/存储等）；
      - 一路攻坚配套测试套件、适配驱动或验证框架。
    - **单阶段七步闭环交付**：每个 Phase 必须严格完成「代码编写 -> `cpc fix` -> `cpc_brief.py` 4 门禁 -> 原生单元测试通过 -> E2E 回归验证 -> 四线文档实时更新 -> 唯一 1 次 Git 原子提交」七步闭环，绝不带病进入下一阶段。
@@ -244,7 +246,6 @@
    - `e2e/` 根目录下的 391 个 `.e2e.test.ts` 用例按功能域（DOM、CSS、Navigation、Worker、Storage、SVG、Table 等）系统化适配为原生 Node.js 测试；
    - 维护统一的批量执行器 `node e2e/run_all.js`，将其无缝集成到每个 Milestone / Phase 的自动化交付回归流水线中。
 
-
 ---
 
 ## 11. 实战深度复盘：Token 极致节省、高效并发与架构防坑准则 (TOKEN OPTIMIZATION & WORKFLOW SOLIDIFICATION)
@@ -252,12 +253,14 @@
 在百万级无头浏览器工程演进中，针对长上下文消耗、多智能体并发冲突与 C-FFI / Arena DOM 阻抗失配，必须严格执行以下实战准则：
 
 ### 11.1 多子智能体构建权限隔离与防冲突铁律 (Build Isolation & Race Prevention)
+
 - **痛点根因**：多路子智能体并发运行时，若各自调用 `cap build src/main.cp -f`，会并发争抢写入同一个 `bin/main` 二进制产物。一旦某个子智能体的编译动作删除了正在被 `bun test` 调用的二进制，就会引发 `CapSurf process exited prematurely (code=0)` 偶发假死报错，导致子智能体陷入无谓的排错与盲目重试，浪费数万 Tokens！
 - **执行规范**：
   1. **纯 JS/TS Shim 优先轻量打包**：若当前任务仅修改 `src/js/shim/` 下的代码，**严禁执行耗时的 `cap build`**！只需运行毫秒级的 `python3 scripts/bundle_runtime.py` 重新生成 `runtime.js` 与 `runtime_source.cp`，若主二进制已具备动态运行时挂载即可直接运行测试；
-  2. **原生 CP 修改的门禁前置与串行编译**：若涉及修改底层 `.cp` 文件，子智能体先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8` 静态门禁；编译必须保证独占（由主控协调或串行触发），杜绝并发覆盖 `bin/main`。
+  2. **原生 CP 修改的门禁前置与无锁多目录并行编译**：若涉及修改底层 `.cp` 文件，子智能体先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8`（或 `cpc check`）静态门禁；编译统一使用各槽位独立输出目录的模块化增量构建 `ulimit -s 65536 && cap build -m -d -o bin_<port> src/main.cp`（约 3–5s，零 `flock`、零 `FileBusy`），严禁多路同时写入同一个 `bin/main`。仅在发版或性能压测前由主智能体统一运行一次 `cap build -B -r -f src/main.cp`。
 
 ### 11.2 Arena DOM 唯一真理源与 C-FFI 包装器单例铁律 (Single Source of Truth & Identity Bridge)
+
 - **痛点根因**：Kitesurf 原始运行时的 `_children`、`childNodes` 纯 JS 镜像与底层 CP 原生 Arena DOM 发生脱节：
   - 双写导致倍增（如原生写入文本节点后，JS 端又 new 了一个 `Text` 放入 `_children`，读出 `"cc"` 重复文本）；
   - C-FFI 跨界生成的临时对象导致引用不恒等（`el.parentNode !== el.parentNode`），破坏 JS 的对象恒等律（Equality）并导致临时状态丢失。
@@ -267,15 +270,18 @@
   3. **惰性镜像与清空同步**：JS 端的 `_children` 仅作为惰性只读投影，在设置 `textContent` 或 `innerHTML` 时必须同步清空 `this._children = []` 或删除缓存，严禁双端冗余追加。
 
 ### 11.3 分域精准聚类攻坚（Domain-Clustered Milestones）
+
 - **痛点根因**：全量 391 个测试若盲目批量执行，遇到包含 20s/60s 超时的未实现特性测试会长时间阻塞；且发散修复多个不同领域的用例会导致上下文膨胀。
 - **执行规范**：
   1. 每个 Phase 主智能体依据拓扑依赖，挑选 3~5 个具有共同协议或 DOM 机制的紧凑领域用例（如 Options/Select 集合组、Script IDL 组、Canvas 2D 组、Template 隔离组）；
   2. 派给子智能体的任务明确限制在专属用例范围，跑通即收割，绝不跨域漫游。
 
 ### 11.4 Bun 测试诊断流向铁律 (Bun Test Diagnostics Flow)
+
 - **执行规范**：`bun test` 的测试断言详情与执行摘要默认输出在 **`stderr`**，进程返回码 `exitCode === 0` 即代表该文件全部测试 100% 绿色通过。自动化脚本与子智能体诊断测试结果时，必须同时读取 `stderr` 与 `exitCode`，切勿仅因 `stdout` 为空而误判。
 
 ### 11.5 精益 Prompt 模板（Ultra-Lean Subagent Prompts）
+
 - **执行规范**：派发全新子智能体时，严禁在 Prompt 中内联长篇背景、代码大纲或复杂正则字符串。统一使用 4 要素极简模板（消耗 `< 500` Tokens）：
   ```text
   你负责 Phase XX Track Y：[模块名称与核心目标]
@@ -285,3 +291,11 @@
   4. 目标测试：运行 bun test e2e/<target>.e2e.test.ts 确保 100% PASS。
   完成即汇报修改清单与结果。
   ```
+
+### 11.6 零修改摸底、小粒度快进快出与带行号派单铁律 (HIGH-VELOCITY EXECUTION)
+
+- **痛点根因**：实测 `cap build -m -d -o` 仅需 4–6 秒，而单轮推进仍耗时 9–14 分钟（170–240 步），80% 以上时间消耗在“单批塞入 7–9 个无关套件导致 40–60 次 `read_file` 冷启动探索 + 大量 LLM 往返”。
+- **执行规范（强制固化）**：
+  1. **主智能体先跑“零修改摸底”**：用现有二进制先批量快扫未验证的 E2E 测试，**直接 PASS 的当场批量登记验收**，只把真正 FAIL 的用例分派给子智能体。
+  2. **小粒度快进快出（单批 `<= 2~3` 组同域套件）**：每个子智能体专注 2–3 组紧密相关且有明确缺口的测试，控制在 **30–60 步（2–5 分钟）** 内快进快出、高频原子提交。
+  3. **带行号精准派单 + 亚秒级静态校验**：主智能体先用 `rg -n` 定位关键函数和行号再写入 Prompt，压缩子智能体探索轮数；子智能体改完同一批 `.cp` 文件后先用 `cpc check` + `cpc_brief.py` 一次性静态校验通过，再执行 1 次 `cap build -m -d -o bin_<port>` + `bun test`。

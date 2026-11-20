@@ -3961,6 +3961,9 @@
 ## [2026-11-20 22:12:30] 用户指令：恢复 3 路并发子智能体并优化提速
 - **执行**: 维持 Slot A (`a8491d9f`, `bin_19232`)、Slot B (`058b656d`, `bin_19233`)，新增 **Slot C (`bin_19231`, port `19231`)** 专攻 `src/{html,css,layout,render}` + `dom_binding.cp`，恢复 3 路全速无锁并发。
 
+## [2026-11-20 22:21:30] 固化高速度/小粒度快进快出规则至 `GEMINI.md`
+- **更新 `GEMINI.md`（11.1 & 新增 11.6）**：固化 `cap build -m -d -o bin_<port>` 无锁多目录并行规范、主智能体先跑零修改摸底、子智能体单批 `<= 2~3` 组快进快出（30–60 步）、以及带行号精准派单 + 亚秒级静态校验铁律。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
