@@ -2250,3 +2250,6 @@
 
 ### Phase 196
 - Added `test/tty/test_nav_params.cp` covering TTY cell parsing/clamping, query param state preservation, and focus/UA stylesheet generation.
+
+### Phase 197
+- Added `test/js/test_qjs_interrupt_and_budget.cp` covering QuickJS reductions preemption, error recovery, multi-context isolation, and memory limit GC handling.
