@@ -2,7 +2,7 @@
 // Chrome DevTools Protocol (CDP) Data Types & Protocol Structures for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/types.ts
 
-pub const MAX_CDP_EVENTS: usize = 16;
+pub const MAX_CDP_EVENTS: usize = 64;
 
 pub struct CdpBoxModel {
     width: f32 = 0.0,

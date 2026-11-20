@@ -355,6 +355,26 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
     return m;
 }
 
+fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): []const u8 {
+    if (std.mem.startsWith(u8, rel, "http://") || std.mem.startsWith(u8, rel, "https://") || std.mem.startsWith(u8, rel, "data:")) {
+        return rel;
+    }
+    if (std.mem.startsWith(u8, rel, "/")) {
+        let origin = base_url;
+        if (idx := std.mem.indexOf(u8, base_url, "://")) {
+            const after_scheme = base_url[idx + 3 ..];
+            if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+                origin = base_url[0 .. idx + 3 + slash_pos];
+            }
+        }
+        return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, rel }) catch rel;
+    }
+    if (last_slash := std.mem.lastIndexOfScalar(u8, base_url, '/')) {
+        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ base_url[0..last_slash], rel }) catch rel;
+    }
+    return rel;
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -392,10 +412,14 @@ pub struct CdpPageSession {
     current_browser_context_id_len: usize = 0,
     net_req_event_buf: [2048]u8 = [0; 2048],
     net_resp_event_buf: [2048]u8 = [0; 2048],
+    net_event_storage: [32768]u8 = [0; 32768],
 
     // Runtime & Log domain flags
     runtime_enabled: bool = false,
     log_enabled: bool = false,
+    binding_names: [2048]u8 = [0; 2048],
+    binding_name_lens: [16]usize = [0; 16],
+    binding_count: usize = 0,
     dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
 
     debugger_state: DebuggerState = DebuggerState{},
@@ -647,10 +671,13 @@ pub struct CdpPageSession {
             }
         }
 
-        // Layout & Styles: collect embedded <style> tags
+        // Layout & Styles: collect embedded <style> tags and external <link rel="stylesheet">
         let css_buf = _.allocator.alloc(u8, 65536) catch null;
         defer if (css_buf != null) _.allocator.free(css_buf.?);
         let css_len: usize = 0;
+        let ext_css_buf = _.allocator.alloc(u8, 32768) catch null;
+        defer if (ext_css_buf != null) _.allocator.free(ext_css_buf.?);
+        let ext_css_len: usize = 0;
         if (css_buf != null) {
             const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
@@ -671,6 +698,37 @@ pub struct CdpPageSession {
                             const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
                             @memcpy(css_buf.?[css_len..css_len + copy_len], scn.text_content[0..copy_len]);
                             css_len += copy_len;
+                        }
+                    }
+                } else if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "link")) {
+                    const rel_attr = sn.getAttribute("rel") ?? "";
+                    if (std.ascii.eqlIgnoreCase(rel_attr, "stylesheet")) {
+                        if (href_attr := sn.getAttribute("href")) {
+                            if (href_attr.len > 0) {
+                                let full_href_buf: [1024]u8 = undefined;
+                                const full_href = resolveSubresourceUrl(nav_url, href_attr, &full_href_buf);
+                                if (MockFixtures.isFixtureUrl(href_attr) || MockFixtures.isFixtureUrl(full_href)) {
+                                    let tmp_css_buf: [16384]u8 = undefined;
+                                    let loaded_css: ([]const u8)? = MockFixtures.handleFixtureRequest(full_href, "", "", &tmp_css_buf, null);
+                                    if (loaded_css == null) {
+                                        loaded_css = MockFixtures.handleFixtureRequest(href_attr, "", "", &tmp_css_buf, null);
+                                    }
+                                    if (lcss := loaded_css) {
+                                        if (lcss.len > 0 && css_len + lcss.len + 1 <= css_buf.?.len) {
+                                            @memcpy(css_buf.?[css_len..css_len + lcss.len], lcss);
+                                            css_len += lcss.len;
+                                            css_buf.?[css_len] = '\n';
+                                            css_len += 1;
+                                        }
+                                        if (ext_css_buf != null && lcss.len > 0 && ext_css_len + lcss.len + 1 <= ext_css_buf.?.len) {
+                                            @memcpy(ext_css_buf.?[ext_css_len..ext_css_len + lcss.len], lcss);
+                                            ext_css_len += lcss.len;
+                                            ext_css_buf.?[ext_css_len] = '\n';
+                                            ext_css_len += 1;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -784,6 +842,61 @@ pub struct CdpPageSession {
             }
         }
 
+        // Admit subresources (<img> and <link rel="stylesheet">) with priority-ordered fetch slots:
+        // Low-priority images occupy at most 4 initial slots; high-priority stylesheets are admitted
+        // ahead of remaining queued images.
+        {
+            const MAX_INITIAL_IMG_SLOTS: usize = 4;
+            let img_nodes: [32]usize = [0; 32];
+            let img_count: usize = 0;
+            let link_nodes: [16]usize = [0; 16];
+            let link_count: usize = 0;
+            let sub_nid: usize = 1;
+            while (sub_nid < _.doc.nodes.items.len) : (sub_nid += 1) {
+                const sub_n = &_.doc.nodes.items[sub_nid];
+                if (sub_n.node_type != NodeType.Element) continue;
+                if (std.ascii.eqlIgnoreCase(sub_n.tag_name, "img")) {
+                    if (src_a := sub_n.getAttribute("src")) {
+                        if (src_a.len > 0 && img_count < img_nodes.len) {
+                            img_nodes[img_count] = sub_nid;
+                            img_count += 1;
+                        }
+                    }
+                } else if (std.ascii.eqlIgnoreCase(sub_n.tag_name, "link")) {
+                    const rel_a = sub_n.getAttribute("rel") ?? "";
+                    if (std.ascii.eqlIgnoreCase(rel_a, "stylesheet")) {
+                        if (href_a := sub_n.getAttribute("href")) {
+                            if (href_a.len > 0 && link_count < link_nodes.len) {
+                                link_nodes[link_count] = sub_nid;
+                                link_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            let ii: usize = 0;
+            const first_batch = @min(img_count, MAX_INITIAL_IMG_SLOTS);
+            while (ii < first_batch) : (ii += 1) {
+                const src_a = _.doc.nodes.items[img_nodes[ii]].getAttribute("src") ?? "";
+                let u_buf: [1024]u8 = undefined;
+                const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
+                m.addFetchRecord(full_u, "image/png");
+            }
+            let li: usize = 0;
+            while (li < link_count) : (li += 1) {
+                const href_a = _.doc.nodes.items[link_nodes[li]].getAttribute("href") ?? "";
+                let u_buf: [1024]u8 = undefined;
+                const full_u = resolveSubresourceUrl(nav_url, href_a, &u_buf);
+                m.addFetchRecord(full_u, "text/css");
+            }
+            while (ii < img_count) : (ii += 1) {
+                const src_a = _.doc.nodes.items[img_nodes[ii]].getAttribute("src") ?? "";
+                let u_buf: [1024]u8 = undefined;
+                const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
+                m.addFetchRecord(full_u, "image/png");
+            }
+        }
+
         _.dom_ctx = m;
         _.url = nav_url;
         _.referrer = nav_referrer;
@@ -867,6 +980,31 @@ pub struct CdpPageSession {
             }
             _.ctx.freeValue(hooks_res);
         }
+        _.reinstallBindings();
+        if (ext_css_buf != null && ext_css_len > 0) {
+            let esc_ext_css = _.allocator.alloc(u8, ext_css_len * 2 + 16) catch null;
+            defer if (esc_ext_css != null) _.allocator.free(esc_ext_css.?);
+            if (esc_ext_css != null) {
+                const escaped_css = escapeJsonString(ext_css_buf.?[0..ext_css_len], esc_ext_css.?);
+                let inj_buf = _.allocator.alloc(u8, escaped_css.len + 256) catch null;
+                defer if (inj_buf != null) _.allocator.free(inj_buf.?);
+                if (inj_buf != null) {
+                    const inj_js = std.fmt.bufPrint(
+                        inj_buf.?,
+                        "(function(){{if(typeof document==='undefined')return;var ls=document.querySelectorAll?document.querySelectorAll('link'):[];for(var i=0;i<ls.length;i++){{var l=ls[i];if(l&&l.sheet)l.sheet._cascadeCssText=\"{s}\";}}}})()",
+                        .{escaped_css},
+                    ) catch "";
+                    if (inj_js.len > 0) {
+                        const iv = _.ctx.eval(inj_js);
+                        if (jsIsException(iv)) {
+                            const exc = _.ctx.getException();
+                            _.ctx.freeValue(exc);
+                        }
+                        _.ctx.freeValue(iv);
+                    }
+                }
+            }
+        }
         if (!std.mem.eql(u8, nav_url, "about:blank") && nav_url.len > 0) {
             if (_.font_asset_cache_bytes == 0) {
                 _.font_asset_cache_bytes = 65536;
@@ -897,12 +1035,23 @@ pub struct CdpPageSession {
         }
         _.ctx.freeValue(sync_named_val);
 
+        // Defer macrotask timers (setTimeout) during initial script parsing so per-script
+        // microtask draining (drainJobs) does not prematurely fire macrotasks before subsequent
+        // scripts execute or while document.currentScript is still set.
+        {
+            const defer_on = _.ctx.eval("(function(){globalThis.__capsurf_defer_timers=true;})()");
+            _.ctx.freeValue(defer_on);
+        }
+
         // Execute inline <script> tags in document order
         const initial_node_count = _.doc.nodes.items.len;
         let nid: usize = 1;
+        let script_idx: usize = 0;
         while (nid < initial_node_count) : (nid += 1) {
             const n = &_.doc.nodes.items[nid];
             if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
+                const cur_script_idx = script_idx;
+                script_idx += 1;
                 const has_nomodule = n.hasAttribute("nomodule");
                 const type_attr = n.getAttribute("type") ?? "";
                 const is_module = std.ascii.eqlIgnoreCase(type_attr, "module");
@@ -916,23 +1065,7 @@ pub struct CdpPageSession {
                 if (src_attr := n.getAttribute("src")) {
                     if (src_attr.len > 0) {
                         let full_src_buf: [1024]u8 = undefined;
-                        let full_src = src_attr;
-                        if (!std.mem.startsWith(u8, src_attr, "http://") && !std.mem.startsWith(u8, src_attr, "https://")) {
-                            if (std.mem.startsWith(u8, src_attr, "/")) {
-                                let origin = _.url;
-                                if (idx := std.mem.indexOf(u8, _.url, "://")) {
-                                    const after_scheme = _.url[idx + 3..];
-                                    if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
-                                        origin = _.url[0 .. idx + 3 + slash_pos];
-                                    }
-                                }
-                                full_src = std.fmt.bufPrint(&full_src_buf, "{s}{s}", .{ origin, src_attr }) catch src_attr;
-                            } else {
-                                if (last_slash := std.mem.lastIndexOfScalar(u8, _.url, '/')) {
-                                    full_src = std.fmt.bufPrint(&full_src_buf, "{s}/{s}", .{ _.url[0..last_slash], src_attr }) catch src_attr;
-                                }
-                            }
-                        }
+                        const full_src = resolveSubresourceUrl(_.url, src_attr, &full_src_buf);
                         if (MockFixtures.isFixtureUrl(src_attr) || MockFixtures.isFixtureUrl(full_src)) {
                             if (fixture_code := MockFixtures.handleFixtureRequest(full_src, "", "", code_buf, null)) {
                                 code_len = fixture_code.len;
@@ -970,6 +1103,19 @@ pub struct CdpPageSession {
                             wrapped_code = mb;
                             mod_alloc = mb;
                         }
+                        const clr_mod = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
+                        _.ctx.freeValue(clr_mod);
+                    } else {
+                        let cs_buf: [256]u8 = undefined;
+                        const cs_js = std.fmt.bufPrint(
+                            &cs_buf,
+                            "(function(){{if(typeof document!=='undefined'){{var ss=document.querySelectorAll?document.querySelectorAll('script'):[];document._currentScript=ss[{d}]||null;}}}})()",
+                            .{cur_script_idx},
+                        ) catch "";
+                        if (cs_js.len > 0) {
+                            const cs_v = _.ctx.eval(cs_js);
+                            _.ctx.freeValue(cs_v);
+                        }
                     }
                     const js_res = _.ctx.eval(wrapped_code);
                     if (jsIsException(js_res)) {
@@ -980,8 +1126,15 @@ pub struct CdpPageSession {
                         _.ctx.freeValue(exc);
                     }
                     _.ctx.freeValue(js_res);
+                    _.ctx.drainJobs();
+                    const clr_cs = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
+                    _.ctx.freeValue(clr_cs);
                 }
             }
+        }
+        {
+            const defer_flush = _.ctx.eval("(function(){if(typeof globalThis.__capsurf_flush_deferred_timers==='function')globalThis.__capsurf_flush_deferred_timers();else globalThis.__capsurf_defer_timers=false;})()");
+            _.ctx.freeValue(defer_flush);
         }
         _.ctx.drainJobs();
 
@@ -1010,6 +1163,7 @@ pub struct CdpPageSession {
         }
         _.runtime_enabled = false;
         _.log_enabled = false;
+        _.binding_count = 0;
         _.network_enabled = false;
         _.fetch_enabled = false;
         _.dom_enabled = false;
@@ -2339,6 +2493,7 @@ pub struct CdpPageSession {
             if (dom.fetch_count == 0) return 0;
 
             let ev_idx: usize = 0;
+            let storage_pos: usize = 0;
             let i: usize = 0;
             while (i < dom.fetch_count && ev_idx + 2 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
@@ -2351,25 +2506,35 @@ pub struct CdpPageSession {
                                 std.mem.indexOf(u8, fetch_url, ".ttf") != null ||
                                 std.mem.indexOf(u8, fetch_url, ".otf") != null ||
                                 std.mem.startsWith(u8, fetch_mime, "font/");
-                const res_type = if (is_font) "Font" else "Fetch";
-                const init_type = if (is_font) "parser" else "script";
+                const is_css = std.mem.indexOf(u8, fetch_url, ".css") != null ||
+                               std.mem.startsWith(u8, fetch_mime, "text/css");
+                const is_img = std.mem.indexOf(u8, fetch_url, ".png") != null ||
+                               std.mem.indexOf(u8, fetch_url, ".jpg") != null ||
+                               std.mem.indexOf(u8, fetch_url, ".jpeg") != null ||
+                               std.mem.indexOf(u8, fetch_url, ".gif") != null ||
+                               std.mem.indexOf(u8, fetch_url, ".webp") != null ||
+                               std.mem.startsWith(u8, fetch_mime, "image/");
+                const res_type = if (is_font) "Font" else if (is_css) "Stylesheet" else if (is_img) "Image" else "Fetch";
+                const init_type = if (is_font || is_css || is_img) "parser" else "script";
 
                 const req_json = std.fmt.bufPrint(
-                    &_.net_req_event_buf,
+                    _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
                     .{ i + 1, lid, _.url, fetch_url, init_type, res_type, fid },
                 ) catch "";
                 if (req_json.len > 0) {
+                    storage_pos += req_json.len;
                     out_events[ev_idx] = CdpEvent.create("Network.requestWillBeSent", req_json);
                     ev_idx += 1;
                 }
 
                 const resp_json = std.fmt.bufPrint(
-                    &_.net_resp_event_buf,
+                    _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
                     .{ i + 1, lid, res_type, fetch_url, fetch_mime, fid },
                 ) catch "";
                 if (resp_json.len > 0) {
+                    storage_pos += resp_json.len;
                     out_events[ev_idx] = CdpEvent.create("Network.responseReceived", resp_json);
                     ev_idx += 1;
                 }
@@ -2436,15 +2601,66 @@ pub struct CdpPageSession {
         return 0;
     }
 
-    pub fn addBinding(*_, name: []const u8) {
+    fn hasBinding(name: []const u8): bool {
+        let i: usize = 0;
+        while (i < _.binding_count) : (i += 1) {
+            const len = _.binding_name_lens[i];
+            const off = i * 128;
+            if (std.mem.eql(u8, _.binding_names[off .. off + len], name)) return true;
+        }
+        return false;
+    }
+
+    fn installBindingInJs(*_, name: []const u8) {
         let script_buf: [512]u8 = [0; 512];
         const script = std.fmt.bufPrint(
             &script_buf,
-            "(function(){{const n=\"{s}\";const fn=function(p){{if(typeof __capsurf_call_binding==='function')__capsurf_call_binding(n,p);}};globalThis[n]=fn;if(typeof window!=='undefined')window[n]=fn;}})()",
+            "(function(){{const n=\"{s}\";const fn=function(p){{if(typeof p==='string'&&typeof __capsurf_call_binding==='function')__capsurf_call_binding(n,p);}};globalThis[n]=fn;if(typeof window!=='undefined')window[n]=fn;}})()",
             .{name},
         ) catch return;
         const v = _.ctx.eval(script);
         _.ctx.freeValue(v);
+    }
+
+    fn reinstallBindings(*_) {
+        let i: usize = 0;
+        while (i < _.binding_count) : (i += 1) {
+            const len = _.binding_name_lens[i];
+            const off = i * 128;
+            if (len > 0) {
+                _.installBindingInJs(_.binding_names[off .. off + len]);
+            }
+        }
+    }
+
+    pub fn addBinding(*_, name: []const u8) {
+        if (name.len > 0 && name.len <= 128 && !_.hasBinding(name) && _.binding_count < 16) {
+            const off = _.binding_count * 128;
+            @memcpy(_.binding_names[off .. off + name.len], name);
+            _.binding_name_lens[_.binding_count] = name.len;
+            _.binding_count += 1;
+        }
+        _.installBindingInJs(name);
+    }
+
+    pub fn removeBinding(*_, name: []const u8) {
+        let i: usize = 0;
+        while (i < _.binding_count) : (i += 1) {
+            const len = _.binding_name_lens[i];
+            const off = i * 128;
+            if (std.mem.eql(u8, _.binding_names[off .. off + len], name)) {
+                let j: usize = i;
+                while (j + 1 < _.binding_count) : (j += 1) {
+                    const next_len = _.binding_name_lens[j + 1];
+                    const dst_off = j * 128;
+                    const src_off = (j + 1) * 128;
+                    @memcpy(_.binding_names[dst_off .. dst_off + next_len], _.binding_names[src_off .. src_off + next_len]);
+                    _.binding_name_lens[j] = next_len;
+                }
+                _.binding_count -= 1;
+                return;
+            }
+        }
     }
 
     pub fn pollBindingEvents(*_, out_events: []CdpEvent): usize {
@@ -2454,13 +2670,11 @@ pub struct CdpPageSession {
 
         const json_str = _.ctx.toCString(val);
         defer std.heap.page_allocator.free(json_str);
-        if (json_str.len > 2) {
-            std.debug.print("drain_expr json_str: {s}\n", .{json_str});
-        }
 
         if (json_str.len <= 2) return 0;
 
         let ev_idx: usize = 0;
+        let bpos: usize = 0;
         let pos: usize = 0;
         while (ev_idx < out_events.len) {
             const name_marker = "\"name\":\"";
@@ -2481,11 +2695,14 @@ pub struct CdpPageSession {
 
             pos = payload_end_opt.? + 1;
 
+            if (!_.hasBinding(name)) continue;
+
             const rt_json = std.fmt.bufPrint(
-                &_.binding_event_buf,
+                _.binding_event_buf[bpos..],
                 "{{\"name\":\"{s}\",\"payload\":\"{s}\",\"executionContextId\":1}}",
                 .{ name, payload },
             ) catch break;
+            bpos += rt_json.len;
 
             out_events[ev_idx] = CdpEvent.create("Runtime.bindingCalled", rt_json);
             ev_idx += 1;

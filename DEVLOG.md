@@ -1389,4 +1389,10 @@
 ## Phase 96 XHTML 嗅探、CDATA 样式解包与 RawText 状态保持技术方案
 1. **XHTML 嗅探与 CDATA 解包 (`tokenizer.cp`, `tree_builder.cp`)**：
    - `sniffXhtml` 跳过前导 BOM、XML 声明、注释与 DOCTYPE 后精确校验根标签名 `html`；在 XHTML 模式下解包 `<![CDATA[...]]>` 为字符流，并在 `TreeBuilder.processText` 持久保留 `text_tokenizer_state` 防止 RawText/ScriptData 中途退回 Data 态。
+
+## Phase 97 `currentScript` 微任务排空、样式表优先准入与 `addBinding` 持久化技术方案
+1. **逐脚本微任务排空与宏任务延后 (`session.cp`, `session_hooks.cp`)**：
+   - 在执行每个经典 `<script>` 前设置 `document._currentScript`，执行完毕后立即 `drainJobs()` 再清零，期间通过 `__capsurf_defer_timers` 暂存 `setTimeout` 宏任务，确保 Promise 微任务可见 `currentScript` 而 `setTimeout` 仅见 `null`。
+2. **优先资源准入与持久化绑定 (`session.cp`, `types.cp`, `kitesurf_facade.cp`)**：
+   - 提升 `MAX_CDP_EVENTS=64` 并以连续游标缓冲 `net_event_storage` 承载多子资源事件；实装 `<link rel="stylesheet">` 高优先级槽位准入与跨导航自动重装 `Runtime.addBinding`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

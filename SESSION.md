@@ -3684,3 +3684,16 @@
   - 销毁 `d7fca33f-6c39-4f5b-804f-b1b4a7d90294`；
   - 派发 **Subagent 65**: Font & Pseudo CSS Specialist（`src/css/*`、`src/layout/*`、`src/render/*`，`bin_19231` / `19231`）
     - 攻坚目标：`e2e/cross-origin-font-cors.e2e.test.ts`、`e2e/author-webfont.e2e.test.ts`、`e2e/pseudo-computed-style.e2e.test.ts`、`e2e/pseudo-text-font-arrival.e2e.test.ts`、`e2e/font-face-unicode-range-gating.e2e.test.ts`。
+
+## [2026-11-20 18:48:00] Kitesurf.getRendererInfo、currentScript 微任务、样式表优先准入与 addBinding 持久化闭环 (Subagent 7caf7da0 结单，Phase 97)
+- **CDP 协议与脚本执行时序增强 (`src/cdp/{kitesurf_facade,types,runtime,session_hooks,session}.cp`)**:
+  - `kitesurf_facade.cp`: 新增 `Kitesurf.getRendererInfo` 返回 `rendererWasmBytes` 与 `framesRendered`；
+  - `types.cp`: `MAX_CDP_EVENTS` 从 16 提升至 64；`session.cp` `pollNetworkEvents` 改用连续游标 `net_event_storage[32768]` 防覆写；
+  - `session.cp` & `session_hooks.cp`: 经典脚本执行前设 `document._currentScript` 并按脚本粒度 `drainJobs()` + 延迟 `setTimeout` 宏任务；实装外链 `<link rel="stylesheet">` 优先槽位准入与 `Runtime.addBinding`/`removeBinding` 持久化注册表。
+- **门禁与 E2E 验证（4.90s 无锁 `-d -o` 构建）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `gradient-tile-count` (2/2 PASS)、`current-script-microtask` (1/1 PASS)、`fetch-slot-order` (1/1 PASS)、`expose-function` (3/4 PASS)；精准定位 `expose-function` 第 4 项与 `fetch-interception` 缺 `e2e/harness.ts` 桥接。
+- **全新子智能体调度（路 3 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `7caf7da0-27dd-4b0e-84e8-2bb87c59548c`；
+  - 派发 **Subagent 66**: CDP Heap & Policy Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
+    - 攻坚目标：`runtime-get-heap-usage`（2 行修 `session.cp` 2/2 PASS）、`dom-attribute-namespace-wire`、`frame-policy`、`cross-origin-redirect-shell`、`fetch-cache-mode-cors`。

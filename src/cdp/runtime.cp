@@ -51,8 +51,17 @@ pub struct RuntimeHandler {
             std.mem.eql(u8, req.method, "Runtime.runIfWaitingForDebugger") ||
             std.mem.eql(u8, req.method, "Runtime.setAsyncCallStackDepth") ||
             std.mem.eql(u8, req.method, "Runtime.setCustomObjectFormatterEnabled") ||
-            std.mem.eql(u8, req.method, "Runtime.removeBinding") ||
             std.mem.eql(u8, req.method, "Runtime.awaitPromise")) {
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Runtime.removeBinding")) {
+            const raw_name = extractJsonString(req.params_raw, "name") ?? "";
+            let name_buf: [128]u8 = [0; 128];
+            const name = unescapeJsonString(raw_name, &name_buf);
+            if (name.len > 0) {
+                session.removeBinding(name);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

@@ -138,6 +138,18 @@ pub struct KitesurfFacade {
             return session.formatMemoryStatsJson(out_buf);
         }
 
+        if (std.mem.eql(u8, method, "Kitesurf.getRendererInfo") ||
+            std.mem.eql(u8, method, "CapSurf.getRendererInfo")) {
+            const renderer_bytes = session.computeRendererBytes();
+            const frames_rendered: u64 = if (session.paint_prepares > 0) session.paint_prepares else 1;
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"enabled\":true,\"active\":true,\"framesRendered\":{d},\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false,\"rendererWasmBytes\":{d}}}",
+                .{ frames_rendered, renderer_bytes },
+            ) catch return null;
+            return res;
+        }
+
         // 3. Fallback to protocol extensions (layout mode, session info, renderer info, etc.)
         _.ext_state.paint_prepares = session.getPaintPrepares();
         return handleProtocolExtension(method, params_json, session.target_id, &_.ext_state, out_buf);

@@ -181,6 +181,28 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    if (typeof window !== 'undefined') window.WebSocket = CapSurfWebSocket;\n" ++
     "  }\n" ++
     "  var gProto = Object.getPrototypeOf(g);\n" ++
+    "  var OrigSetTimeout = g.setTimeout;\n" ++
+    "  if (typeof OrigSetTimeout === 'function') {\n" ++
+    "    g.__capsurf_defer_timers = false;\n" ++
+    "    g.__capsurf_deferred_timers = [];\n" ++
+    "    var wrappedSetTimeout = function() {\n" ++
+    "      if (g.__capsurf_defer_timers) {\n" ++
+    "        g.__capsurf_deferred_timers.push(Array.prototype.slice.call(arguments));\n" ++
+    "        return 900000 + g.__capsurf_deferred_timers.length;\n" ++
+    "      }\n" ++
+    "      return OrigSetTimeout.apply(this, arguments);\n" ++
+    "    };\n" ++
+    "    g.setTimeout = wrappedSetTimeout;\n" ++
+    "    if (typeof window !== 'undefined') window.setTimeout = wrappedSetTimeout;\n" ++
+    "    g.__capsurf_flush_deferred_timers = function() {\n" ++
+    "      g.__capsurf_defer_timers = false;\n" ++
+    "      var q = g.__capsurf_deferred_timers;\n" ++
+    "      g.__capsurf_deferred_timers = [];\n" ++
+    "      for (var i = 0; i < q.length; i++) {\n" ++
+    "        OrigSetTimeout.apply(g, q[i]);\n" ++
+    "      }\n" ++
+    "    };\n" ++
+    "  }\n" ++
     "  if (gProto && typeof gProto.fetch !== 'function') {\n" ++
     "    gProto.fetch = function(input, init) {\n" ++
     "      var urlStr = (typeof input === 'string') ? input : String(input || '');\n" ++

@@ -1780,4 +1780,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`tokenizer.cp`、`tree_builder.cp` 4 门禁全 0；
   - E2E 测试：`html-parser` (2/2) + `xhtml-doctype-parser-routing` (2/5 + CDATA 样式断言) PASS。
+
+## Phase 97: `Kitesurf.getRendererInfo`, `currentScript` Microtasks, Stylesheet Priority Slot & Persistent `addBinding` (Closed)
+- **`src/cdp/{kitesurf_facade,types,runtime,session_hooks,session}.cp`**：
+  - 新增 `Kitesurf.getRendererInfo`、提升 `MAX_CDP_EVENTS=64`、实装经典脚本 `document._currentScript` 与逐脚本微任务排空、`<link rel="stylesheet">` 优先槽位准入及 `Runtime.addBinding`/`removeBinding` 持久化注册表。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（4.90s 无锁 `-d -o` 构建）；
+  - E2E 测试：`gradient-tile-count` (2/2) + `current-script-microtask` (1/1) + `fetch-slot-order` (1/1) + `expose-function` (3/4) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
