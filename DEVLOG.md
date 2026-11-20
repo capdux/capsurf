@@ -1549,4 +1549,10 @@
 ## Phase 126 嵌套 Iframe `Page.frameAttached` 与生命周期事件序列技术方案
 1. **子/孙 Frame 有序事件推流 (`src/cdp/page.cp`)**：
    - 导入 `makeFrameInfoWithFrames`，在 `Page.navigate` 遍历并构建嵌套 frame 树时，严格按 `frameAttached -> frameStartedLoading -> frameNavigated -> lifecycleEvent(init) -> frameStoppedLoading` 时序发射，使递归深度限制与 `Target` 注册联动全绿通过。
+
+## Phase 127 WebMCP 会话事件去重与 `<label>` 原型升级技术方案
+1. **Session 级 CDP 事件去重 (`e2e/harness.ts`)**：
+   - `createCDPSession()` 对 `WebMCP.*` 仅注册 `onSession(sessionId, ...)` 通道而不向全局 `page.cdp.on` 重复注册，彻底消除多会话下同一工具的重复通知。
+2. **原生父节点与控件升级 (`src/js/shim/window.js`)**：
+   - 在 `activateClickedElement` 向上查找 `<label>` 及解析 `label.control` 时统一调用 `__capsurf_upgradeElement`，确保未经 JS 查询过的 DOM 元素也能正确激活表单控件。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

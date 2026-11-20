@@ -1982,4 +1982,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/cdp/page.cp` 4 门禁全 0；
   - E2E 测试：`page-frame-metadata` (2/2)、`iframe-frame-tree-demo` (1/1)、`iframe-nested-frame-tree` (1/1) — **4/4 PASS (100%)**。
+
+## Phase 127: `label-activation-trust` 2/2 & WebMCP Multi-Session Event Deduplication
+- **`e2e/harness.ts` & `src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：
+  - 修复 `createCDPSession()` `WebMCP.*` 双重监听去重，并在 `activateClickedElement` 中升级遍历到的 `<label>` 与 `control` 原型。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`label-activation-trust` (2/2)、`webmcp` (第 1–9、11 项 PASS)。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

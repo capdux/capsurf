@@ -10685,6 +10685,9 @@ const CSS_TYPED_OM_GLOBALS = {
     let cur = target;
     for (let d = 0; cur && d < 64; d++) {
       if (cur.nodeType === 1) {
+        if (typeof global.__capsurf_upgradeElement === "function") {
+          global.__capsurf_upgradeElement(cur);
+        }
         const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
         if (cTag === "button" || cTag === "input") {
           activateControl(cur, isTrustedClick);
@@ -10704,6 +10707,9 @@ const CSS_TYPED_OM_GLOBALS = {
         }
         if (cTag === "label") {
           const control = cur.control;
+          if (control && typeof global.__capsurf_upgradeElement === "function") {
+            global.__capsurf_upgradeElement(control);
+          }
           if (control && control !== target && !(typeof control.contains === "function" && control.contains(target))) {
             const isCtrlDisabled = Boolean(control.disabled || (control.hasAttribute && control.hasAttribute("disabled")));
             if (!isCtrlDisabled) {

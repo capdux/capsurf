@@ -4022,6 +4022,15 @@
   - `page-frame-metadata` (**2/2**)、`iframe-frame-tree-demo` (**1/1**)、`iframe-nested-frame-tree` (**1/1**)：**4/4 PASS（50 expect() calls，耗时 6.37s）**！
 - **清理旧子智能体**: 销毁 `ccfd314a-d8ec-41a3-b1f3-3dc903d7f4b0`。
 
+## [2026-11-20 22:45:30] `label-activation-trust` 2/2 全绿与 `webmcp` 多会话事件去重闭环 (Subagent af57c728 结单，Phase 127)
+- **WebMCP 事件去重与 `<label>` 原型升级 (`e2e/harness.ts`, `src/js/shim/window.js`, `src/js/runtime{,_source.cp}`)**:
+  - `e2e/harness.ts:1951-1970`：对 `WebMCP.*` 事件仅向 `page.cdp.onSession(sessionId, ...)` 注册，消除 `page.cdp.on` 重复派发 `["late", "late"]`；
+  - `src/js/shim/window.js:10688,10711`：`activateClickedElement` 对沿 `parentNode` 查找到的 `<label>` 与 `control` 调用 `global.__capsurf_upgradeElement(...)`，使 `label.control` 与 `checkbox.checked` 正确触发。
+- **门禁与 E2E 验证（`-m -d -o` 编译 5.24s，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `label-activation-trust` (**2/2 PASS**)、`webmcp`（第 1–9、11 项全通，含第 7 项 `replays to a late session`）。
+- **清理旧子智能体**: 销毁 `af57c728-67fd-444b-b335-2c91eaa861e4`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

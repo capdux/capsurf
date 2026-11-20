@@ -1949,7 +1949,9 @@ export class Page {
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
       page.cdp.onSession(sessionId, event, wrapper);
-      page.cdp.on(event, wrapper);
+      if (!event.startsWith("WebMCP.")) {
+        page.cdp.on(event, wrapper);
+      }
       return sessionClient;
     };
 
@@ -1964,7 +1966,9 @@ export class Page {
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
       page.cdp.onSession(sessionId, event, wrapper);
-      page.cdp.on(event, wrapper);
+      if (!event.startsWith("WebMCP.")) {
+        page.cdp.on(event, wrapper);
+      }
       return sessionClient;
     };
 
