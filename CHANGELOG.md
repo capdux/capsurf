@@ -1968,4 +1968,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`kitesurf-page-ops` (3/3)、`page-get-layout-metrics` (4/4)、`screencast-partial-image` (1/1)、`network-event-shape-probe` (1/1)、`page-frame-metadata` (独立 2/2) + Demo 摸底 `forms-radio-demo` (1/1)、`location-mutate-probe` (1/1)、`modules-demo` (1/1) 共 **14/14 PASS**。
+
+## Phase 125: Font Shaping 2/2, Pixel-Free Shaping, Label-SVG, ContextualFragment & CDP Runtime JSON Fix
+- **`e2e/harness.ts` & `src/js/shim/{window,node-base,range,element/element,element/html-element}.js` & `src/cdp/{runtime,session,target}.cp`**：
+  - 实现 `Page.frames()`/`mainFrame()`、独立 `browserFactory(options)` `headers` 透传、`<label>` `<svg>` 后代激活、`Range.createContextualFragment` 原生内部挂载与 `Runtime.evaluate` 空对象 JSON 兜底。
+- **测试与门禁验证**：
+  - 静态门禁：全部 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`gateway-font-shaping` (2/2)、`pixel-free-shaping-fonts` (1/1)、`label-svg-content-activation` (1/1)、`range-contextual-fragment` (1/1)、`interception-abandoned-park` (2/2) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

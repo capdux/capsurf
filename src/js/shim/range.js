@@ -448,8 +448,12 @@ Range.prototype.createContextualFragment = function (fragmentHtml) {
   const temp = mkEl ? mkEl("div") : (doc.createElement ? doc.createElement("div") : null);
 
   if (temp) {
-    if (_nativeSetInnerHtml) {
-      _nativeSetInnerHtml.call(temp, fullHtml);
+    const rawSet = (typeof globalThis !== "undefined" && globalThis.__capsurf_raw_setInnerHTML) || _nativeSetInnerHtml;
+    if (rawSet) {
+      rawSet.call(temp, fullHtml);
+      if (fullHtml.indexOf("<template") !== -1 && typeof processSubtreeTemplates === "function") {
+        processSubtreeTemplates(temp);
+      }
     } else {
       temp.innerHTML = fullHtml;
     }

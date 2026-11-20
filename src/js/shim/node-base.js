@@ -876,6 +876,8 @@ if (typeof Element !== "undefined" && Element.prototype) {
   if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
     const origGetInnerHtml = nativeElementInnerHtmlDesc.get;
     const origSetInnerHtml = nativeElementInnerHtmlDesc.set;
+    if (typeof global !== "undefined") global.__capsurf_raw_setInnerHTML = origSetInnerHtml;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_raw_setInnerHTML = origSetInnerHtml;
     Object.defineProperty(Element.prototype, "innerHTML", {
       get: function () {
         if (this._children && this._children.length > 0 && hasJsOnlyChild(this._children)) {

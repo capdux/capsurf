@@ -3989,6 +3989,31 @@
   - 同步零修改摸底验收 3 组 Demo：`forms-radio-demo` (**1/1**)、`location-mutate-probe` (**1/1**)、`modules-demo` (**1/1**)：**3/3 PASS**。
 - **清理旧子智能体**: 销毁 `e856091c-6ba8-412b-9e16-cc434f4d9629`。
 
+## [2026-11-20 22:31:00] Slot A 阶段代码落地 & 上报 `cp_agy` 标准库阻塞 (`task-capsurf-20261120-lib-pack-zip-writer`)
+- **Slot A (`fcc807b7`) 成果**：`interception-abandoned-park` (**2/2 PASS**)；`<label>` 激活转发（`window.js`/`html-element.js`/`harness.ts`）与 `Range.createContextualFragment` 原生内部挂载（`node-base.js`/`range.js`/`element.js`）均已编码打包并过 4 门禁。
+- **外部阻塞上报**：`cap build -m -d -o` 触发 `/data/dev/cp/lib/pack/zip_writer.cp:161:60`（`E0111`：`method: ZipCompressionMethod = ZipCompressionMethod.Stored`），已通过 `task_queue.py submit` 上报 `cp_agy`（`task-capsurf-20261120-lib-pack-zip-writer`），等待结单后立即重编验收上述 3 组套件。
+- **清理旧子智能体**: 销毁 `fcc807b7-ec61-4c68-a0ec-9a1b85c0a1ad`，并派发纯 TS `e2e/harness.ts` 收口任务（不依赖 `cap build`）。
+
+## [2026-11-20 22:32:00] Slot B 阶段成果与 `zip_writer.cp` 第 2 处报错补充上报 (`1cebae4a`)
+- **Slot B (`1cebae4a`) 成果**：修复 `src/cdp/session.cp` & `src/cdp/runtime.cp` `formatCdpRemoteObject` 空对象 `{"result":}` 非法 JSON（`webmcp` 第 5 项 `lazy about:blank` **已 PASS 698ms**）、`formatMemoryStatsJson` `getPaintPrepares()`（`intersection-observer` 第 18 项 **已 PASS 3.09s**，定位第 16 项超时因 `window.js:3867` `ioPollTimer`），并在 `target.cp` `closeTarget` 复位会话状态；全部 4 门禁全 0。
+- **上报 `cp_agy`**：补充提交 `task-capsurf-20261120-lib-pack-zip-writer-const`，等待 `cp_agy` 统一修复后重编验收。
+- **清理旧子智能体**: 销毁 `1cebae4a-34c4-4107-9e9e-c1aadb34bf69`。
+
+## [2026-11-20 22:34:30] 签收 `cp_agy` 结单 (`task-capsurf-20261120-lib-pack-zip-writer`, `task-capsurf-20261120-lib-pack-zip-writer-const`)
+- **修复结论**：`cp_agy` 已修复 `/data/dev/cp/lib/pack/zip_writer.cp`（`const tmp -> let tmp` 与默认枚举参数语法）；
+- **复现验证**：`cpc check /data/dev/cp/lib/pack/zip_writer.cp` Check successful；清理 `.cap/ws/bin_19233` 后 `cap build -m -d -o bin_19233 src/main.cp` 96 个模块全量重建 **10.71s** 绿灯通过，已完成 `ack`。
+
+## [2026-11-20 22:38:30] 字体整形/SVG Label/ContextualFragment/WebMCP 与 Harness `Page.frames()` 闭环 (Phase 125)
+- **JS Shim & Harness 升级 (`e2e/harness.ts`, `src/js/shim/{window,node-base,range,element/element,element/html-element}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `e2e/harness.ts`：新增 `Frame` 类与 `Page.frames()`/`mainFrame()`；测试前强制重置 `about:blank` 防串联污染；`browserFactory(options)` 支持独立 WS 连接与透传 `headers`；`navVerdict` 增加 2000ms 超时保护；
+  - `window.js` & `html-element.js` & `node-base.js` & `range.js` & `element.js`：实现 `__capsurf_activate_clicked_element`（`<label>` 祖先链激活含 `<svg>` 后代）、`__capsurf_raw_setInnerHTML` 上下文解析与 `_internalGetAttribute`；
+- **CDP 序列化与遥测修复 (`src/cdp/{runtime,session,target}.cp`)**:
+  - `runtime.cp` & `session.cp`：修复 `formatCdpRemoteObject` 空结果非法 JSON、`Runtime.evaluate`/`callFunctionOn` `{"result":{"type":"undefined"}}` 兜底与 `getPaintPrepares()` 汇总；`target.cp` `closeTarget` 重置 `has_document`/`webmcp_enabled`。
+- **门禁与 E2E 验证**:
+  - 全部 `.cp` 文件 4 门禁全 0；
+  - `gateway-font-shaping` (**2/2**)、`pixel-free-shaping-fonts` (**1/1**)、`label-svg-content-activation` (**1/1**)、`range-contextual-fragment` (**1/1**)、`interception-abandoned-park` (**2/2**)、`webmcp`（`lazy about:blank` 787ms PASS、`cancellation belongs to the invoking session` PASS，前 9 项 8 PASS）。
+- **清理旧子智能体**: 销毁 `e5fc2604-a105-4aaf-b323-55f8e7b30bd5`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

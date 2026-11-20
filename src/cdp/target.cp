@@ -653,6 +653,8 @@ pub struct TargetHandler {
             const target_id = extractJsonString(req.params_raw, "targetId") ?? "";
             const existed = session.target_registry.closeTarget(target_id);
             if (existed) {
+                session.has_document = false;
+                session.webmcp_enabled = false;
                 const td_json = std.fmt.bufPrint(&session.target_registry.event_buf0, "{{\"targetId\":\"{s}\"}}", .{target_id}) catch "{}";
                 out_events[0] = CdpEvent.create("Target.targetDestroyed", td_json);
                 event_count.* = 1;

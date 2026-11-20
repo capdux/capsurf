@@ -1539,4 +1539,10 @@
    - 注册 iframe Target 时记录 `frame_id` 与 `opener_frame_id`，`Page.getFrameTree` 按 `req.session_id` 定位 `frame_id` 返回子树；`Page.navigate` 依次发射 `frameStartedLoading`、`Network.*`、`frameNavigated`、`loadEventFired`、`frameStoppedLoading`。
 2. **Screencast 部分图片增量帧 (`session.cp`, `session_hooks.cp`, `server.cp`)**：
    - 对未就绪图片在 `captureScreencastFrame` 渲染期间临时屏蔽 `src`，并在 `runWebSocketSession` 事件循环中以 `hasPendingAck` + 80ms 节流推送帧数据。
+
+## Phase 125 独立 WS `browserFactory`、`<label>` SVG 激活与 `Runtime.evaluate` JSON 兜底技术方案
+1. **独立 `browserFactory(options)` 与 `Page.frames()` (`e2e/harness.ts`)**：
+   - `CDPClient` 支持自定义握手 `headers` 并通过 `releaseSharedCdp()` 隔离独立会话，使 `x-kitesurf-skip-raster: 1` 与 `disconnect()` 互不干扰；基于 `Page.getFrameTree` 构建 `Frame` 树与 `about:blank` 测试前强制重置。
+2. **原生内部挂载与 CDP 空对象 JSON 兜底 (`range.js`, `runtime.cp`, `session.cp`)**：
+   - 暴露 `__capsurf_raw_setInnerHTML` 与 `_internalGetAttribute` 绕过页面覆盖钩子；`formatCdpRemoteObject` 对空/异常值兜底输出 `{"result":{"type":"undefined"}}` 消除非法的 `{"result":}` 截断。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

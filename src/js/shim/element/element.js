@@ -606,11 +606,13 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  let _internalGetAttribute = typeof proto.getAttribute === "function" ? proto.getAttribute : null;
   Object.defineProperty(proto, "namespaceURI", {
     get: function () {
       if (this._namespaceURI !== undefined) return this._namespaceURI;
-      if (this.getAttribute) {
-        const xmlns = this.getAttribute("xmlns");
+      const ga = _internalGetAttribute || proto.getAttribute || this.getAttribute;
+      if (ga) {
+        const xmlns = ga.call(this, "xmlns");
         if (xmlns !== null && xmlns !== undefined && xmlns !== "") return xmlns;
       }
       let curr = this;

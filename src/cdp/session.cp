@@ -2158,13 +2158,18 @@ pub struct CdpPageSession {
         defer _.ctx.freeValue(res_val);
 
         if (jsIsException(res_val)) {
-             return _.formatCdpException(_.ctx.getException(), out_buf);
+            const exc = _.ctx.getException();
+            defer _.ctx.freeValue(exc);
+            return _.formatCdpResult(val, out_buf);
         }
 
         const json_str = _.ctx.jsonStringify(res_val);
         defer std.heap.page_allocator.free(json_str);
-        
-        const formatted = std.fmt.bufPrint(out_buf, "{{\"result\":{s}}}", .{json_str}) catch return 0;
+        if (json_str.len == 0 || std.mem.eql(u8, json_str, "undefined")) {
+            return _.formatCdpResult(val, out_buf);
+        }
+
+        const formatted = std.fmt.bufPrint(out_buf, "{{\"result\":{s}}}", .{json_str}) catch return _.formatCdpResult(val, out_buf);
         return formatted.len;
     }
 
@@ -2710,7 +2715,7 @@ pub struct CdpPageSession {
                 renderer_bytes,
                 _.mutation_resolves,
                 _.animation_resolves,
-                _.paint_prepares,
+                _.getPaintPrepares(),
                 total_bytes,
                 accounted_bytes,
                 page_script_bytes,

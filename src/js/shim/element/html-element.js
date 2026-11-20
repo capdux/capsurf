@@ -166,23 +166,80 @@ function installHtmlElementExtensions(proto) {
       this.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         const tag = String(this.tagName || this.localName || "").toLowerCase();
-        // Walk up ancestors to find an <a> (HTML or SVG with href / xlink:href)
+        // Walk up ancestors to find an <a>, <label>, or interactive control
         let anchor = null;
+        let labelEl = null;
         let cur = this;
-        for (let depth = 0; cur && depth < 32; depth++) {
-          const curTag = String(cur.tagName || cur.localName || "").toLowerCase();
-          if (curTag === "a") {
-            const curHref = cur.getAttribute
-              ? (cur.getAttribute("href") ?? (cur.namespaceURI === SVG_NS ? cur.getAttribute("xlink:href") : null))
-              : null;
-            if (curHref !== null && curHref !== "") {
-              anchor = cur;
+        for (let depth = 0; cur && depth < 64; depth++) {
+          if (cur.nodeType === 1) {
+            const curTag = String(cur.tagName || cur.localName || "").toLowerCase();
+            if (curTag === "input") {
+              const iType = String(cur.getAttribute ? (cur.getAttribute("type") || "text") : "text").toLowerCase();
+              if (!cur.disabled && !(cur.hasAttribute && cur.hasAttribute("disabled"))) {
+                if (iType === "checkbox") {
+                  cur.checked = !cur.checked;
+                  if (typeof cur.dispatchEvent === "function") {
+                    cur.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                    cur.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                  }
+                } else if (iType === "radio") {
+                  const wasChecked = Boolean(cur.checked);
+                  cur.checked = true;
+                  if (!wasChecked && typeof cur.dispatchEvent === "function") {
+                    cur.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                    cur.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                  }
+                }
+              }
+              break;
+            }
+            if (curTag === "button" || curTag === "select" || curTag === "textarea") {
+              break;
+            }
+            if (curTag === "a") {
+              const curHref = cur.getAttribute
+                ? (cur.getAttribute("href") ?? (cur.namespaceURI === SVG_NS ? cur.getAttribute("xlink:href") : null))
+                : null;
+              if (curHref !== null && curHref !== "") {
+                anchor = cur;
+                break;
+              }
+            }
+            if (curTag === "label") {
+              labelEl = cur;
               break;
             }
           }
-          cur = cur.parentElement || cur.parentNode;
+          cur = cur.parentNode;
         }
-        if (anchor) {
+        if (labelEl) {
+          const ctrl = labelEl.control;
+          if (ctrl && ctrl !== this && !(typeof ctrl.contains === "function" && ctrl.contains(this))) {
+            const isCtrlDisabled = Boolean(ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled")));
+            if (!isCtrlDisabled && typeof ctrl.dispatchEvent === "function") {
+              const fwdEvt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+              ctrl.dispatchEvent(fwdEvt);
+              if (!fwdEvt.defaultPrevented) {
+                const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
+                if (ctrlTag === "input") {
+                  const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
+                  if (iType === "checkbox") {
+                    ctrl.checked = !ctrl.checked;
+                    ctrl.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                    ctrl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                  } else if (iType === "radio") {
+                    const wasChecked = Boolean(ctrl.checked);
+                    ctrl.checked = true;
+                    if (!wasChecked) {
+                      ctrl.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                      ctrl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (anchor) {
           const rawHref = anchor.getAttribute
             ? (anchor.getAttribute("href") ?? (anchor.namespaceURI === SVG_NS ? anchor.getAttribute("xlink:href") : null))
             : anchor.href;

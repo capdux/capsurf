@@ -65,7 +65,7 @@ export class CDPClient {
   private sessionListeners = new Map<string, Map<string, Array<(params: any) => void>>>();
   private sessions = new Map<string, any>();
 
-  constructor(public wsUrl: string) {}
+  constructor(public wsUrl: string, public headers?: Record<string, string>) {}
 
   private _createFlatSession(sessionId: string): any {
     const parent = this;
@@ -132,7 +132,9 @@ export class CDPClient {
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.wsUrl);
+      this.ws = this.headers
+        ? new WebSocket(this.wsUrl, { headers: this.headers } as any)
+        : new WebSocket(this.wsUrl);
       this.ws.onopen = () => resolve();
       this.ws.onerror = (err) => reject(err);
       this.ws.onmessage = (event) => {
@@ -738,9 +740,60 @@ export class Keyboard {
   }
 }
 
+export class Frame {
+  public id: string;
+  public _id: string;
+  private _url: string;
+  private _name: string;
+  private _parent: Frame | null;
+  private _children: Frame[] = [];
+  private _page: Page;
+
+  constructor(
+    page: Page,
+    info: { id: string; url?: string; urlFragment?: string; name?: string },
+    parent: Frame | null,
+  ) {
+    this._page = page;
+    this.id = info.id;
+    this._id = info.id;
+    this._url = (info.url || "") + (info.urlFragment || "");
+    this._name = info.name || "";
+    this._parent = parent;
+    if (parent) {
+      parent._children.push(this);
+    }
+  }
+
+  url(): string {
+    return this._url;
+  }
+
+  name(): string {
+    return this._name;
+  }
+
+  parentFrame(): Frame | null {
+    return this._parent;
+  }
+
+  childFrames(): Frame[] {
+    return [...this._children];
+  }
+
+  page(): Page {
+    return this._page;
+  }
+
+  async evaluate(fnOrExpr: any, ...args: any[]): Promise<any> {
+    return this._page.evaluate(fnOrExpr, ...args);
+  }
+}
+
 export class Page {
   public _closed: boolean = false;
   private _lastTitle: string = "";
+  private _frames: Frame[] = [];
   public browserContextId: string = "default";
   public frameId: string = "capsurf-frame-001";
   public mouse: Mouse;
@@ -1088,6 +1141,45 @@ export class Page {
     return this._url;
   }
 
+  private async _refreshFrames(): Promise<void> {
+    try {
+      const params: Record<string, any> = {};
+      if (this.browserContextId && this.browserContextId !== "default") {
+        params.browserContextId = this.browserContextId;
+      }
+      const res: any = await this.cdp.send("Page.getFrameTree", params);
+      if (res && res.frameTree && res.frameTree.frame) {
+        const list: Frame[] = [];
+        const walk = (node: any, parent: Frame | null) => {
+          if (!node || !node.frame) return;
+          const f = new Frame(this, node.frame, parent);
+          list.push(f);
+          if (Array.isArray(node.childFrames)) {
+            for (const child of node.childFrames) {
+              walk(child, f);
+            }
+          }
+        };
+        walk(res.frameTree, null);
+        if (list.length > 0) {
+          this._frames = list;
+          this.frameId = list[0].id;
+        }
+      }
+    } catch {}
+  }
+
+  frames(): Frame[] {
+    if (this._frames.length === 0) {
+      this._frames = [new Frame(this, { id: this.frameId, url: this._url, name: "" }, null)];
+    }
+    return [...this._frames];
+  }
+
+  mainFrame(): Frame {
+    return this.frames()[0];
+  }
+
   private cancelInFlightEvaluations(reason?: string) {
     const errorMsg = reason || "Execution context was destroyed -- most likely because of a navigation.";
     for (const item of this.inFlightEvaluates) {
@@ -1126,12 +1218,20 @@ export class Page {
     if (this._requestInterceptionEnabled && this.listenerCount("request") > 0) {
       const navVerdict = await new Promise<{ action: string; url?: string; status?: number; contentType?: string; body?: string }>((resolve) => {
         let settled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
         const done = (v: { action: string; url?: string; status?: number; contentType?: string; body?: string }) => {
           if (!settled) {
             settled = true;
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
             resolve(v);
           }
         };
+        timer = setTimeout(() => {
+          done({ action: "continue" });
+        }, 2000);
         const navReq = {
           url: () => url,
           method: () => "GET",
@@ -1374,6 +1474,7 @@ export class Page {
         this._lastTitle = String(titleRes.result.value);
       }
     } catch {}
+    await this._refreshFrames();
     return navResponse;
   }
 
@@ -1840,7 +1941,7 @@ export class Page {
 
     sessionClient.on = (event: string, handler: (params: any) => void) => {
       const wrapper = (params: any) => {
-        if (params && params.frameId && params.frameId !== page.frameId) {
+        if (params && params.browserContextId && params.browserContextId !== page.browserContextId) {
           return;
         }
         handler(params);
@@ -1848,13 +1949,14 @@ export class Page {
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
       page.cdp.onSession(sessionId, event, wrapper);
+      page.cdp.on(event, wrapper);
       return sessionClient;
     };
 
     sessionClient.once = (event: string, handler: (params: any) => void) => {
       const wrapper = (params: any) => {
         sessionClient.off(event, handler);
-        if (params && params.frameId && params.frameId !== page.frameId) {
+        if (params && params.browserContextId && params.browserContextId !== page.browserContextId) {
           return;
         }
         handler(params);
@@ -1862,6 +1964,7 @@ export class Page {
       (wrapper as any).__orig = handler;
       registeredWrappers.push({ event, wrapper });
       page.cdp.onSession(sessionId, event, wrapper);
+      page.cdp.on(event, wrapper);
       return sessionClient;
     };
 
@@ -1872,6 +1975,7 @@ export class Page {
       if (idx !== -1) {
         const item = registeredWrappers.splice(idx, 1)[0];
         page.cdp.offSession(sessionId, item.event, item.wrapper);
+        page.cdp.off(item.event, item.wrapper);
       }
       return sessionClient;
     };
@@ -1879,6 +1983,7 @@ export class Page {
     const cleanup = async () => {
       for (const item of registeredWrappers) {
         page.cdp.offSession(sessionId, item.event, item.wrapper);
+        page.cdp.off(item.event, item.wrapper);
       }
       registeredWrappers.length = 0;
       page.cdp.clearSessionListeners(sessionId);
@@ -1978,35 +2083,39 @@ export class Page {
             } catch (e) {}
           }
           let clickPrevented = false;
-          try {
-            const EvCls = (globalThis as any).__NativeEvent || Event;
-            const ev = new EvCls("click", { bubbles: true, cancelable: true });
-            el.dispatchEvent?.(ev);
-            if (ev.defaultPrevented) clickPrevented = true;
-          } catch (e) {
-            el.click?.();
-          }
+          const MouseCls = (globalThis as any).MouseEvent || (globalThis as any).__NativeEvent || Event;
           if (typeof (globalThis as any).__capsurf_dispatchTrustedEvent === "function") {
-            const EvCls = (globalThis as any).__NativeEvent || Event;
-            const trustedEv = new EvCls("click", { bubbles: true, cancelable: true });
+            const trustedEv = new MouseCls("click", { bubbles: true, cancelable: true, composed: true });
             (globalThis as any).__capsurf_dispatchTrustedEvent(el, trustedEv);
             if (trustedEv.defaultPrevented) clickPrevented = true;
+          } else {
+            try {
+              const ev = new MouseCls("click", { bubbles: true, cancelable: true, composed: true });
+              el.dispatchEvent?.(ev);
+              if (ev.defaultPrevented) clickPrevented = true;
+            } catch (e) {
+              el.click?.();
+            }
           }
           if (!clickPrevented) {
-            let cur: any = el;
-            for (let d = 0; cur && d < 32; d++) {
-              const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
-              if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
-                const rawHref = cur.getAttribute("href");
-                const targetHref = cur.href || rawHref;
-                if (rawHref.startsWith("#")) {
-                  location.hash = rawHref;
-                } else if (targetHref) {
-                  location.href = targetHref;
+            if (typeof (globalThis as any).__capsurf_activate_clicked_element === "function") {
+              (globalThis as any).__capsurf_activate_clicked_element(el, true, 0, 0, 1);
+            } else {
+              let cur: any = el;
+              for (let d = 0; cur && d < 32; d++) {
+                const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
+                if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
+                  const rawHref = cur.getAttribute("href");
+                  const targetHref = cur.href || rawHref;
+                  if (rawHref.startsWith("#")) {
+                    location.hash = rawHref;
+                  } else if (targetHref) {
+                    location.href = targetHref;
+                  }
+                  break;
                 }
-                break;
+                cur = cur.parentElement || cur.parentNode;
               }
-              cur = cur.parentElement || cur.parentNode;
             }
           }
         }
@@ -2589,20 +2698,38 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
       try {
         await fixtures.cdp.send("WebMCP.disable");
       } catch {}
-      if ((name.includes("blank page") || name.includes("fresh page") || name.includes("never-navigated page") || name.includes("WebMCP")) && fixtures.page.url() !== "about:blank") {
-        await fixtures.page.goto("about:blank");
-      }
-      const browserFactory = async () => fixtures.browser;
+      await fixtures.page.goto("about:blank");
+      const factoryBrowsers: Browser[] = [];
+      const browserFactory = async (options?: { headers?: Record<string, string> }) => {
+        await releaseSharedCdp();
+        for (const b of factoryBrowsers) {
+          try { await b.disconnect(); } catch {}
+        }
+        factoryBrowsers.length = 0;
+        const wsUrl = await ensureServerRunning();
+        const cdp = new CDPClient(wsUrl, options?.headers);
+        await cdp.connect();
+        const page = new Page(cdp);
+        const b = new Browser(cdp, page);
+        factoryBrowsers.push(b);
+        return b;
+      };
       try {
         await fn({ ...fixtures, browserFactory });
       } finally {
-        await fixtures.page.cleanupCDPSessions();
-        try {
-          await fixtures.cdp.send("CSS.disable");
-        } catch {}
-        try {
-          await fixtures.cdp.send("DOM.disable");
-        } catch {}
+        for (const b of factoryBrowsers) {
+          try { await b.disconnect(); } catch {}
+        }
+        factoryBrowsers.length = 0;
+        if (sharedCdp && sharedCdp.ws && (sharedCdp.ws as any).readyState === 1) {
+          await fixtures.page.cleanupCDPSessions();
+          try {
+            await fixtures.cdp.send("CSS.disable");
+          } catch {}
+          try {
+            await fixtures.cdp.send("DOM.disable");
+          } catch {}
+        }
       }
     } else {
       await ensureServerRunning();

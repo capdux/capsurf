@@ -10620,6 +10620,122 @@ const CSS_TYPED_OM_GLOBALS = {
     if (btn === "forward" || btn === 4) return 16;
     return 0;
   }
+  function activateClickedElement(target, isTrustedClick, x, y, detail) {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+    const activateControl = function (ctrl, trusted) {
+      if (!ctrl || ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled"))) return;
+      const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
+      if (ctrlTag === "input") {
+        const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
+        if (iType === "checkbox") {
+          ctrl.checked = !ctrl.checked;
+          const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
+          const chEv = new Event("change", { bubbles: true, cancelable: false });
+          if (trusted) {
+            _dispatchTrusted(ctrl, inEv);
+            _dispatchTrusted(ctrl, chEv);
+          } else if (typeof ctrl.dispatchEvent === "function") {
+            ctrl.dispatchEvent(inEv);
+            ctrl.dispatchEvent(chEv);
+          }
+        } else if (iType === "radio") {
+          const name = ctrl.getAttribute ? ctrl.getAttribute("name") : ctrl.name;
+          if (name && doc && typeof doc.querySelectorAll === "function") {
+            try {
+              const radios = doc.querySelectorAll('input[type="radio"]');
+              for (let ri = 0; ri < radios.length; ri++) {
+                const r = radios[ri];
+                if (r !== ctrl && r.getAttribute && r.getAttribute("name") === name && r.form === ctrl.form) {
+                  r.checked = false;
+                }
+              }
+            } catch (e) {}
+          }
+          const wasChecked = Boolean(ctrl.checked);
+          ctrl.checked = true;
+          if (!wasChecked) {
+            const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
+            const chEv = new Event("change", { bubbles: true, cancelable: false });
+            if (trusted) {
+              _dispatchTrusted(ctrl, inEv);
+              _dispatchTrusted(ctrl, chEv);
+            } else if (typeof ctrl.dispatchEvent === "function") {
+              ctrl.dispatchEvent(inEv);
+              ctrl.dispatchEvent(chEv);
+            }
+          }
+        } else if (iType === "submit" || iType === "image") {
+          const form = typeof findAssociatedForm === "function" ? findAssociatedForm(ctrl) : ctrl.form;
+          if (form && typeof submitForm === "function") {
+            submitForm(form, ctrl);
+          }
+        }
+      } else if (ctrlTag === "button") {
+        const bType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "submit") : "submit").toLowerCase();
+        if (bType === "submit") {
+          const form = typeof findAssociatedForm === "function" ? findAssociatedForm(ctrl) : ctrl.form;
+          if (form && typeof submitForm === "function") {
+            submitForm(form, ctrl);
+          }
+        }
+      }
+    };
+
+    let cur = target;
+    for (let d = 0; cur && d < 64; d++) {
+      if (cur.nodeType === 1) {
+        const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (cTag === "button" || cTag === "input") {
+          activateControl(cur, isTrustedClick);
+          break;
+        }
+        if (cTag === "select" || cTag === "textarea") {
+          break;
+        }
+        if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
+          const href = cur.getAttribute("href");
+          const loc = (typeof location !== "undefined") ? location : global.location;
+          if (loc && href) {
+            if (href.startsWith("#")) loc.hash = href;
+            else loc.href = cur.href || href;
+          }
+          break;
+        }
+        if (cTag === "label") {
+          const control = cur.control;
+          if (control && control !== target && !(typeof control.contains === "function" && control.contains(target))) {
+            const isCtrlDisabled = Boolean(control.disabled || (control.hasAttribute && control.hasAttribute("disabled")));
+            if (!isCtrlDisabled) {
+              const fwdClickEv = new MouseCtor("click", {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+                clientX: x || 0,
+                clientY: y || 0,
+                button: 0,
+                detail: detail || 1,
+              });
+              if (isTrustedClick) {
+                _dispatchTrusted(control, fwdClickEv);
+              } else if (typeof control.dispatchEvent === "function") {
+                control.dispatchEvent(fwdClickEv);
+              }
+              if (!fwdClickEv.defaultPrevented) {
+                activateControl(control, isTrustedClick);
+              }
+            }
+          }
+          break;
+        }
+      }
+      cur = cur.parentNode;
+    }
+  }
+  global.__capsurf_activate_clicked_element = activateClickedElement;
+  if (typeof window !== "undefined") window.__capsurf_activate_clicked_element = activateClickedElement;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_activate_clicked_element = activateClickedElement;
+
   function dispatchMouseEvent(type, x, y, button, buttons, clickCount) {
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
     const target = _hitTestElement(x, y);
@@ -10801,41 +10917,7 @@ const CSS_TYPED_OM_GLOBALS = {
         });
         _dispatchTrusted(target, clickEv);
         if (!clickEv.defaultPrevented) {
-          // Run default activation behavior for submit buttons / anchors if not prevented
-          let cur = target;
-          for (let d = 0; cur && d < 32; d++) {
-            const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
-            if (cTag === "button") {
-              const bType = String(cur.getAttribute ? (cur.getAttribute("type") || "submit") : "submit").toLowerCase();
-              if (bType === "submit") {
-                const form = typeof findAssociatedForm === "function" ? findAssociatedForm(cur) : cur.form;
-                if (form && typeof submitForm === "function") {
-                  submitForm(form, cur);
-                }
-              }
-              break;
-            }
-            if (cTag === "input") {
-              const iType = String(cur.getAttribute ? (cur.getAttribute("type") || "text") : "text").toLowerCase();
-              if (iType === "submit" || iType === "image") {
-                const form = typeof findAssociatedForm === "function" ? findAssociatedForm(cur) : cur.form;
-                if (form && typeof submitForm === "function") {
-                  submitForm(form, cur);
-                }
-                break;
-              }
-            }
-            if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
-              const href = cur.getAttribute("href");
-              const loc = (typeof location !== "undefined") ? location : global.location;
-              if (loc && href) {
-                if (href.startsWith("#")) loc.hash = href;
-                else loc.href = cur.href || href;
-              }
-              break;
-            }
-            cur = cur.parentElement || cur.parentNode;
-          }
+          activateClickedElement(target, true, x, y, detail);
         }
       }
       return { handled: true };

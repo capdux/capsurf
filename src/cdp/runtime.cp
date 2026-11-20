@@ -139,6 +139,9 @@ pub struct RuntimeHandler {
                 }
             }
             
+            if (res_len == 0) {
+                return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+            }
             return CdpResponse.ok(req.id, out_buf[0..res_len]);
         }
 
@@ -250,6 +253,9 @@ pub struct RuntimeHandler {
                 }
             }
 
+            if (eval_len == 0) {
+                return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+            }
             return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }
 
