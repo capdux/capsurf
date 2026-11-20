@@ -4644,3 +4644,7 @@
   - Fixed `CanvasRenderingContext2D.prototype.fill` / `stroke` calling `ensureBitmap(this)` after reading `_bitmapWidth`/`_bitmapHeight` in `src/js/shim/canvas2d.js:1255,1387`.
   - Fixed `PointerEvent.prototype.getCoalescedEvents` reading `this.isTrusted` instead of `es.isTrusted` in `src/js/shim/events/event.js:1018-1022`.
   - Bundled runtime (`1,590,234` bytes / 133 chunks), built `bin_19233/main` (6.75s); `e2e/tldraw-app-shell.e2e.test.ts` **6/6 PASS** (13 assertions, 14.06s).
+
+### Phase 221: TTY Whitebox Expansion + `screencast-wheel-coalescing` 3/3 PASS (77 Assertions)
+- **Slot A (`8dfd3333`)**: Added `test/tty/test_tty_render_and_selection_edge.cp` covering `parseCell`/`applyTtyNavParams`, `ttyUaStylesheet` buffer bounds, `renderDocumentToPng` negative/scroll clipping, `SelectionSpan` clamping, and malformed UTF-8/wide-char rasterization (**1/1 PASS**, 1250ms). Total whitebox now **113/113 (100% PASS)**.
+- **Slot B (`1efe1c7d`)**: Implemented `dispatchWheelEvent` with per-axis `overscrollBehavior` in `src/js/shim/window.js` (re-bundled `runtime.js`/`runtime_source.cp`), `MouseWheel` scroll sync in `src/cdp/input.cp`, persistent `owner_session_buf` & scroll-offset dirty check in `src/cdp/screencast.cp`, owner validation in `src/cdp/page.cp`, top-level `sessionId` parsing fix in `src/cdp/types.cp`, `PendingWheelBatch` coalescing in `src/cdp/server.cp`, and `connection().send()` in `e2e/harness.ts`. Built `bin_19233/main` (5.84s); `e2e/demo/screencast-wheel-coalescing.e2e.test.ts` **3/3 PASS** (77 assertions, exit 0).

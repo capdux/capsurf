@@ -192,9 +192,12 @@ pub struct CdpRequest {
             while (s_idx < trimmed.len && (trimmed[s_idx] == ' ' || trimmed[s_idx] == ':' || trimmed[s_idx] == '\t' || trimmed[s_idx] == '\r' || trimmed[s_idx] == '\n')) : (s_idx += 1) {}
             if (s_idx < trimmed.len) {
                 if (trimmed[s_idx] == '"') {
-                    if (s := extractJsonString(trimmed, "sessionId")) {
-                        sid_val = s;
+                    s_idx += 1;
+                    const s_start = s_idx;
+                    while (s_idx < trimmed.len && trimmed[s_idx] != '"') : (s_idx += 1) {
+                        if (trimmed[s_idx] == '\\' && s_idx + 1 < trimmed.len) s_idx += 1;
                     }
+                    sid_val = trimmed[s_start..s_idx];
                 } else if (trimmed[s_idx] == 'n') {
                     sid_val = "";
                 } else {

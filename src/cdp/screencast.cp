@@ -27,11 +27,15 @@ pub struct ScreencastState {
     last_acked_seq: u32 = 0,
     pending_ack_session_id: u32 = 0,
     owner_session_id: []const u8 = "",
+    owner_session_buf: [128]u8 = [0; 128],
+    owner_session_len: usize = 0,
     last_frame_hash: u64 = 0,
     has_last_frame_hash: bool = false,
     last_frame_sent_ms: i64 = 0,
     last_viewport_w: u32 = 0,
     last_viewport_h: u32 = 0,
+    last_scroll_x: i64 = 0,
+    last_scroll_y: i64 = 0,
     partial_raster: bool = true,
     partial_frames_rendered: u64 = 0,
 
@@ -47,11 +51,14 @@ pub struct ScreencastState {
         _.last_acked_seq = 0;
         _.pending_ack_session_id = 0;
         _.owner_session_id = "";
+        _.owner_session_len = 0;
         _.last_frame_hash = 0;
         _.has_last_frame_hash = false;
         _.last_frame_sent_ms = 0;
         _.last_viewport_w = 0;
         _.last_viewport_h = 0;
+        _.last_scroll_x = 0;
+        _.last_scroll_y = 0;
         _.partial_raster = true;
         _.partial_frames_rendered = 0;
     }
@@ -97,8 +104,8 @@ pub struct ScreencastHandler {
         return _.state.active;
     }
 
-    fn getOwnerSession(): []const u8 {
-        return _.state.owner_session_id;
+    fn getOwnerSession(*_): []const u8 {
+        return _.state.owner_session_buf[0.._.state.owner_session_len];
     }
 
     fn canSendFrame(): bool {
@@ -189,7 +196,12 @@ pub struct ScreencastHandler {
         _.state.max_height = max_h;
         _.state.every_nth_frame = every_nth;
         _.state.min_frame_interval_ms = min_interval;
-        _.state.owner_session_id = owner_session;
+        const olen = @min(owner_session.len, _.state.owner_session_buf.len);
+        if (olen > 0) {
+            @memcpy(_.state.owner_session_buf[0..olen], owner_session[0..olen]);
+        }
+        _.state.owner_session_len = olen;
+        _.state.owner_session_id = _.state.owner_session_buf[0..olen];
         _.state.frame_seq = 0;
         _.state.last_acked_seq = 0;
         _.state.pending_ack_session_id = 0;
@@ -217,14 +229,16 @@ pub struct ScreencastHandler {
         return (now_ms - _.state.last_frame_sent_ms) >= @as(i64, @intCast(_.state.min_frame_interval_ms));
     }
 
-    fn shouldSkipIdleFrame(frame_hash: u64, vw: u32, vh: u32): bool {
+    fn shouldSkipIdleFrame(frame_hash: u64, vw: u32, vh: u32, sx: i64, sy: i64): bool {
         return _.state.has_last_frame_hash &&
             _.state.last_frame_hash == frame_hash &&
             _.state.last_viewport_w == vw &&
-            _.state.last_viewport_h == vh;
+            _.state.last_viewport_h == vh &&
+            _.state.last_scroll_x == sx &&
+            _.state.last_scroll_y == sy;
     }
 
-    fn recordSentFrame(*_, frame_hash: u64, vw: u32, vh: u32, now_ms: i64) {
+    fn recordSentFrame(*_, frame_hash: u64, vw: u32, vh: u32, sx: i64, sy: i64, now_ms: i64) {
         if (_.state.has_last_frame_hash && _.state.partial_raster &&
             _.state.last_viewport_w == vw && _.state.last_viewport_h == vh) {
             _.state.partial_frames_rendered += 1;
@@ -234,12 +248,16 @@ pub struct ScreencastHandler {
         _.state.last_frame_sent_ms = now_ms;
         _.state.last_viewport_w = vw;
         _.state.last_viewport_h = vh;
+        _.state.last_scroll_x = sx;
+        _.state.last_scroll_y = sy;
     }
 
     fn stopScreencast(*_): bool {
         if (!_.state.active) return false;
         _.state.active = false;
         _.state.pending_ack_session_id = 0;
+        _.state.owner_session_len = 0;
+        _.state.owner_session_id = "";
         return true;
     }
 

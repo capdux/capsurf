@@ -11843,6 +11843,82 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof window !== "undefined") window.__capsurf_dispatch_mouse_event = dispatchMouseEvent;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_mouse_event = dispatchMouseEvent;
 
+  function dispatchWheelEvent(x, y, deltaX, deltaY, modifiers) {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const target = _hitTestElement(x, y) || (doc && (doc.body || doc.documentElement));
+    if (!target) return [global.scrollX || 0, global.scrollY || 0];
+    const mods = Number(modifiers) || 0;
+    const dx = Number(deltaX) || 0;
+    const dy = Number(deltaY) || 0;
+    const WheelCtor = typeof WheelEvent === "function" ? WheelEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
+    const ev = new WheelCtor("wheel", {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: x,
+      clientY: y,
+      deltaX: dx,
+      deltaY: dy,
+      deltaZ: 0,
+      deltaMode: 0,
+      altKey: (mods & 1) !== 0,
+      ctrlKey: (mods & 2) !== 0,
+      metaKey: (mods & 4) !== 0,
+      shiftKey: (mods & 8) !== 0,
+    });
+    _dispatchTrusted(target, ev);
+    if (!ev.defaultPrevented) {
+      let remX = dx;
+      let remY = dy;
+      let cur = target;
+      let safety = 0;
+      while (cur && safety < 64) {
+        safety++;
+        if (cur === doc || cur === doc.documentElement || cur === doc.body) {
+          break;
+        }
+        if (cur.nodeType === 1) {
+          const cs = (typeof global.getComputedStyle === "function") ? global.getComputedStyle(cur) : cur.style;
+          const ox = (cs && (cs.overflowX || cs.overflow)) || "";
+          const oy = (cs && (cs.overflowY || cs.overflow)) || "";
+          if ((ox === "auto" || ox === "scroll") && remX !== 0) {
+            const maxX = Math.max(0, (cur.scrollWidth || 0) - (cur.clientWidth || 0));
+            const curX = cur.scrollLeft || 0;
+            const nextX = Math.max(0, Math.min(maxX, curX + remX));
+            const consumedX = nextX - curX;
+            if (consumedX !== 0) {
+              cur.scrollLeft = nextX;
+              remX -= consumedX;
+            }
+          }
+          if ((oy === "auto" || oy === "scroll") && remY !== 0) {
+            const maxY = Math.max(0, (cur.scrollHeight || 0) - (cur.clientHeight || 0));
+            const curY = cur.scrollTop || 0;
+            const nextY = Math.max(0, Math.min(maxY, curY + remY));
+            const consumedY = nextY - curY;
+            if (consumedY !== 0) {
+              cur.scrollTop = nextY;
+              remY -= consumedY;
+            }
+          }
+          const obx = (cs && (cs.overscrollBehaviorX || cs.overscrollBehavior)) || "auto";
+          const oby = (cs && (cs.overscrollBehaviorY || cs.overscrollBehavior)) || "auto";
+          if (obx === "contain" || obx === "none") remX = 0;
+          if (oby === "contain" || oby === "none") remY = 0;
+          if (remX === 0 && remY === 0) break;
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      if ((remX !== 0 || remY !== 0) && typeof global.scrollBy === "function") {
+        global.scrollBy(remX, remY);
+      }
+    }
+    return [global.scrollX || 0, global.scrollY || 0];
+  }
+  global.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
+  if (typeof window !== "undefined") window.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
+
   // HTML Named Access on Window (live, connected-only, no Proxy prototype so QuickJS throws ReferenceError for absent bare globals)
   try {
     const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;

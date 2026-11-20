@@ -340,10 +340,40 @@ pub struct InputHandler {
             };
             * = mouse_ev;
 
-            // Handle mouseWheel: scroll_x / scroll_y
+            // Handle mouseWheel: dispatch WheelEvent + scroll chaining + overscroll-behavior
             if (ev_type == .MouseWheel) {
-                session.scroll_x += delta_x;
-                session.scroll_y += delta_y;
+                if (session.has_document) {
+                    let wh_buf: [512]u8 = [0; 512];
+                    const wh_js = std.fmt.bufPrint(
+                        &wh_buf,
+                        "(() => {{ if (typeof __capsurf_dispatch_wheel_event === 'function') {{ const r = __capsurf_dispatch_wheel_event({d:.4}, {d:.4}, {d:.4}, {d:.4}, {d}); if (r) return r[0] + ',' + r[1]; }} return ''; }})()",
+                        .{ x, y, delta_x, delta_y, modifiers },
+                    ) catch null;
+                    if (wjs := wh_js) {
+                        const wval = session.ctx.eval(wjs);
+                        if (!jsIsException(wval)) {
+                            const ws = session.ctx.toCString(wval);
+                            if (ws.len > 0) {
+                                let it = std.mem.splitScalar(u8, ws, ',');
+                                if (sx_str := it.next()) {
+                                    if (sx_val := std.fmt.parseFloat(f32, sx_str) catch null) {
+                                        session.scroll_x = sx_val;
+                                    }
+                                }
+                                if (sy_str := it.next()) {
+                                    if (sy_val := std.fmt.parseFloat(f32, sy_str) catch null) {
+                                        session.scroll_y = sy_val;
+                                    }
+                                }
+                            }
+                        }
+                        session.ctx.freeValue(wval);
+                        session.ctx.drainJobs();
+                    }
+                } else {
+                    session.scroll_x += delta_x;
+                    session.scroll_y += delta_y;
+                }
             }
 
             // Hit test and dispatch mouse / range drag events

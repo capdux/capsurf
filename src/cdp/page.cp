@@ -653,17 +653,25 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.stopScreencast")) {
-            * = session.screencast_handler.stopScreencast();
-            if (session.has_document) {
-                const dv = session.ctx.eval("(function(){if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(false,0);})()");
-                session.ctx.freeValue(dv);
+            const caller_sid = if (req.session_id.len > 0) req.session_id else session.target_id;
+            const owner_sid = session.screencast_handler.getOwnerSession();
+            if (owner_sid.len == 0 || std.mem.eql(u8, caller_sid, owner_sid)) {
+                * = session.screencast_handler.stopScreencast();
+                if (session.has_document) {
+                    const dv = session.ctx.eval("(function(){if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(false,0);})()");
+                    session.ctx.freeValue(dv);
+                }
             }
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "Page.screencastFrameAck")) {
-            const sid = extractAckSessionId(req.params_raw) ?? 0;
-            * = session.screencast_handler.screencastFrameAck(sid);
+            const caller_sid = if (req.session_id.len > 0) req.session_id else session.target_id;
+            const owner_sid = session.screencast_handler.getOwnerSession();
+            if (owner_sid.len == 0 || std.mem.eql(u8, caller_sid, owner_sid)) {
+                const sid = extractAckSessionId(req.params_raw) ?? 0;
+                * = session.screencast_handler.screencastFrameAck(sid);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

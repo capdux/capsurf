@@ -1721,3 +1721,7 @@
 ### Phase 220: `tldraw-app-shell` 6/6 Closure (`IndexedDB` TDZ, `Path2D` Bitmap Init, `getCoalescedEvents`)
 - `makeIDBDatabase` defined a getter `get objectStoreNames() { ... db._stores ... }` inside the object literal passed to `Object.assign`, triggering a TDZ `ReferenceError` before `db` was initialized and stalling `onupgradeneeded`/`onsuccess`. Moving it to `Object.defineProperty(db, ...)` after initialization resolves the 120s hang to 1.44s.
 - Calling `ensureBitmap(this)` before reading `_bitmapWidth`/`_bitmapHeight` in `fill()` and `stroke()` fixes first-draw `Path2D` clipping to `0x0`.
+
+### Phase 221: Screencast Wheel Coalescing & Ownership Transfer (`server.cp`, `types.cp`, `window.js`)
+- `CdpRequest.parse` previously let nested `params.sessionId` shadow top-level `sessionId`; slicing directly from `findTopLevelJsonKey(trimmed, "sessionId")` fixes `Page.screencastFrameAck` owner routing.
+- `CdpServer` now batches consecutive `Input.dispatchMouseEvent` (`mouseWheel`) requests from the active screencast owner within a 1ms `poll` window via `PendingWheelBatch`, while `dispatchWheelEvent` handles per-axis `overscrollBehaviorX`/`overscrollBehaviorY`.

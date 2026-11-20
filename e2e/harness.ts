@@ -115,9 +115,12 @@ export class CDPClient {
     return flatSession;
   }
 
-  connection(): { session: (sessionId: string) => any } {
+  connection(): { send: (method: string, params?: Record<string, any>) => Promise<any>; session: (sessionId: string) => any } {
     const self = this;
     return {
+      send(method: string, params: Record<string, any> = {}) {
+        return self.send(method, params);
+      },
       session(sessionId: string) {
         if (!sessionId) return null;
         let s = self.sessions.get(sessionId);

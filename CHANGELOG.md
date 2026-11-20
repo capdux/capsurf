@@ -2331,3 +2331,7 @@
 ### Phase 220
 - Added `test/render/test_rasterizer_and_clip_edge.cp`.
 - Fixed `IndexedDB` `objectStoreNames` TDZ in `src/js/shim/window.js`, `CanvasRenderingContext2D` `fill`/`stroke` `ensureBitmap` order in `src/js/shim/canvas2d.js`, and `PointerEvent.getCoalescedEvents` `isTrusted` check in `src/js/shim/events/event.js` (re-bundled `runtime.js`/`runtime_source.cp`).
+
+### Phase 221
+- Added `test/tty/test_tty_render_and_selection_edge.cp`.
+- Implemented screencast wheel coalescing, per-axis `overscrollBehavior`, and screencast owner transfer/validation across `src/cdp/{types,screencast,page,input,server}.cp`, `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`), and `e2e/harness.ts`.

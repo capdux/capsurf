@@ -3,7 +3,7 @@
 // Lightweight, native HTTP & RFC 6455 WebSocket server compliant with Puppeteer, Playwright & AI Agents.
 // Uses direct POSIX C-FFI sockets for maximum concurrency, zero-GC, and zero Zig version fragility.
 
-import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
@@ -65,6 +65,61 @@ pub struct PendingSlowEval {
     payload_len: usize = 0,
     session_id_buf: [64]u8 = [0; 64],
     session_id_len: usize = 0,
+}
+
+pub struct PendingWheelReply {
+    req_id: i64 = 0,
+    raw_id_buf: [32]u8 = [0; 32],
+    raw_id_len: usize = 0,
+}
+
+pub struct PendingWheelBatch {
+    active: bool = false,
+    x: f64 = 0.0,
+    y: f64 = 0.0,
+    delta_x: f64 = 0.0,
+    delta_y: f64 = 0.0,
+    modifiers: i64 = 0,
+    button_buf: [16]u8 = [0; 16],
+    button_len: usize = 0,
+    buttons: i64 = 0,
+    session_id_buf: [64]u8 = [0; 64],
+    session_id_len: usize = 0,
+    replies: [64]PendingWheelReply = [PendingWheelReply{}; 64],
+    reply_count: usize = 0,
+
+    fn reset(*_) {
+        _.active = false;
+        _.x = 0.0;
+        _.y = 0.0;
+        _.delta_x = 0.0;
+        _.delta_y = 0.0;
+        _.modifiers = 0;
+        _.button_len = 0;
+        _.buttons = 0;
+        _.session_id_len = 0;
+        _.reply_count = 0;
+    }
+
+    fn matches(x: f64, y: f64, modifiers: i64, btn: []const u8, buttons: i64, sid: []const u8): bool {
+        if (!_.active) return false;
+        if (_.reply_count >= _.replies.len) return false;
+        if (_.x != x || _.y != y || _.modifiers != modifiers || _.buttons != buttons) return false;
+        if (!std.mem.eql(u8, _.button_buf[0.._.button_len], btn)) return false;
+        if (!std.mem.eql(u8, _.session_id_buf[0.._.session_id_len], sid)) return false;
+        return true;
+    }
+
+    fn addReply(*_, req_id: i64, raw_id: []const u8) {
+        if (_.reply_count >= _.replies.len) return;
+        _.replies[_.reply_count].req_id = req_id;
+        const rlen = @min(raw_id.len, _.replies[_.reply_count].raw_id_buf.len);
+        if (rlen > 0) {
+            @memcpy(_.replies[_.reply_count].raw_id_buf[0..rlen], raw_id[0..rlen]);
+        }
+        _.replies[_.reply_count].raw_id_len = rlen;
+        _.reply_count += 1;
+    }
 }
 
 fn parsePositiveDecimal(s: []const u8): i64 {
@@ -809,8 +864,10 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         const png_bytes = _.session.captureScreencastFrame(st.max_width, st.max_height) catch return false;
         defer _.session.allocator.free(png_bytes);
 
+        const sx_i: i64 = @as(i64, @intFromFloat(sx));
+        const sy_i: i64 = @as(i64, @intFromFloat(sy));
         const frame_hash = ScreencastHandler.computeFrameHash(png_bytes);
-        if (_.session.screencast_handler.shouldSkipIdleFrame(frame_hash, vw, vh)) {
+        if (_.session.screencast_handler.shouldSkipIdleFrame(frame_hash, vw, vh, sx_i, sy_i)) {
             if (_.session.frames_rendered > 0) _.session.frames_rendered -= 1;
             return false;
         }
@@ -831,7 +888,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 evts[0].session_id = owner;
             }
             _.emitCdpEvents(client_fd, &evts, 1)?;
-            _.session.screencast_handler.recordSentFrame(frame_hash, vw, vh, now_ms);
+            _.session.screencast_handler.recordSentFrame(frame_hash, vw, vh, sx_i, sy_i, now_ms);
             return true;
         }
         return false;
@@ -866,6 +923,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             pending_evals[pei] = PendingSlowEval{};
         }
         let pending_eval_count: usize = 0;
+        let pending_wheel = std.heap.c_allocator.create(PendingWheelBatch) catch return;
+        defer std.heap.c_allocator.destroy(pending_wheel);
+        pending_wheel.* = PendingWheelBatch{};
 
         while (_.running) {
             const loop_now_ms = serverNowMs();
@@ -914,12 +974,16 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
 
             let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
-            const poll_ms: i32 = if (_.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15) 5 else 15;
+            const base_poll_ms: i32 = if (_.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15) 5 else 15;
+            const poll_ms: i32 = if (pending_wheel.active) 1 else base_poll_ms;
             const pr = poll(&pfd, 1, poll_ms);
             if (pr < 0) {
                 break;
             }
             if (pr == 0) {
+                if (pending_wheel.active) {
+                    _.flushPendingWheelBatch(client_fd, pending_wheel) catch break;
+                }
                 const tick_now_ms = serverNowMs();
                 if (_.session.has_document) {
                     _.session.pumpTimers();
@@ -942,6 +1006,49 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 if (payload.len == 0) continue;
                 last_client_activity_ms = serverNowMs();
                 const cdp_req = CdpRequest.parse(payload);
+
+                if (_.session.screencast_handler.isActive() && std.mem.eql(u8, cdp_req.method, "Input.dispatchMouseEvent")) {
+                    const mtype = extractJsonString(cdp_req.params_raw, "type") ?? "";
+                    if (std.mem.eql(u8, mtype, "mouseWheel")) {
+                        const caller_sid = if (cdp_req.session_id.len > 0) cdp_req.session_id else _.session.target_id;
+                        const owner_sid = _.session.screencast_handler.getOwnerSession();
+                        if (owner_sid.len > 0 && std.mem.eql(u8, caller_sid, owner_sid)) {
+                            const wx = extractJsonFloat(cdp_req.params_raw, "x") ?? 0.0;
+                            const wy = extractJsonFloat(cdp_req.params_raw, "y") ?? 0.0;
+                            const wdx = extractJsonFloat(cdp_req.params_raw, "deltaX") ?? 0.0;
+                            const wdy = extractJsonFloat(cdp_req.params_raw, "deltaY") ?? 0.0;
+                            const wmods = extractJsonInt(cdp_req.params_raw, "modifiers") ?? 0;
+                            const wbtn = extractJsonString(cdp_req.params_raw, "button") ?? "none";
+                            const wbtns = extractJsonInt(cdp_req.params_raw, "buttons") ?? 0;
+
+                            if (pending_wheel.active && !pending_wheel.matches(wx, wy, wmods, wbtn, wbtns, cdp_req.session_id)) {
+                                _.flushPendingWheelBatch(client_fd, pending_wheel) catch break;
+                            }
+                            if (!pending_wheel.active) {
+                                pending_wheel.reset();
+                                pending_wheel.active = true;
+                                pending_wheel.x = wx;
+                                pending_wheel.y = wy;
+                                pending_wheel.modifiers = wmods;
+                                pending_wheel.buttons = wbtns;
+                                const blen = @min(wbtn.len, pending_wheel.button_buf.len);
+                                if (blen > 0) @memcpy(pending_wheel.button_buf[0..blen], wbtn[0..blen]);
+                                pending_wheel.button_len = blen;
+                                const slen = @min(cdp_req.session_id.len, pending_wheel.session_id_buf.len);
+                                if (slen > 0) @memcpy(pending_wheel.session_id_buf[0..slen], cdp_req.session_id[0..slen]);
+                                pending_wheel.session_id_len = slen;
+                            }
+                            pending_wheel.delta_x += wdx;
+                            pending_wheel.delta_y += wdy;
+                            pending_wheel.addReply(cdp_req.id, cdp_req.raw_id);
+                            continue;
+                        }
+                    }
+                }
+
+                if (pending_wheel.active) {
+                    _.flushPendingWheelBatch(client_fd, pending_wheel) catch break;
+                }
 
                 // Intercept slow Page.navigate to keep navigate window non-blocking
                 if (std.mem.eql(u8, cdp_req.method, "Page.navigate") && cdp_req.session_id.len > 0 && payload.len <= pending_nav_payload_buf.len) {
@@ -1014,6 +1121,59 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 break;
             }
         }
+    }
+
+    fn flushPendingWheelBatch(*_, client_fd: i32, batch: *PendingWheelBatch)! {
+        if (!batch.active) return;
+        const reply_count = batch.reply_count;
+        let params_buf: [512]u8 = [0; 512];
+        const params_raw = std.fmt.bufPrint(
+            &params_buf,
+            "{{\"type\":\"mouseWheel\",\"x\":{d:.4},\"y\":{d:.4},\"deltaX\":{d:.4},\"deltaY\":{d:.4},\"modifiers\":{d},\"button\":\"{s}\",\"buttons\":{d}}}",
+            .{
+                batch.x,
+                batch.y,
+                batch.delta_x,
+                batch.delta_y,
+                batch.modifiers,
+                batch.button_buf[0..batch.button_len],
+                batch.buttons,
+            },
+        ) catch "{}";
+        const sid = batch.session_id_buf[0..batch.session_id_len];
+        const res_buf = std.heap.c_allocator.alloc(u8, 4096) catch return;
+        defer std.heap.c_allocator.free(res_buf);
+        let events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        let event_count: usize = 0;
+        const synth_req = CdpRequest{
+            id: 0,
+            method: "Input.dispatchMouseEvent",
+            params_raw: params_raw,
+            session_id: sid,
+        };
+        * = CdpDispatcher.dispatch(_.session, synth_req, res_buf, &events, &event_count);
+        let ei: usize = 0;
+        while (ei < event_count) : (ei += 1) {
+            if (events[ei].session_id.len == 0 && sid.len > 0 &&
+                !std.mem.startsWith(u8, sid, "capsurf-cdp-session-")) {
+                events[ei].session_id = sid;
+            }
+        }
+        _.emitCdpEvents(client_fd, &events, event_count)?;
+
+        let ri: usize = 0;
+        while (ri < reply_count) : (ri += 1) {
+            let reply_buf: [256]u8 = [0; 256];
+            let msg_slice: []const u8 = "";
+            if (batch.replies[ri].raw_id_len > 0) {
+                const rid = batch.replies[ri].raw_id_buf[0..batch.replies[ri].raw_id_len];
+                msg_slice = std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"result\":{{}}}}", .{rid}) catch continue;
+            } else {
+                msg_slice = std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"result\":{{}}}}", .{batch.replies[ri].req_id}) catch continue;
+            }
+            writeWsTextFrame(client_fd, msg_slice)?;
+        }
+        batch.reset();
     }
 
     fn dispatchCdpCommand(*_, client_fd: i32, req: CdpRequest)! {
