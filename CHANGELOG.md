@@ -2139,3 +2139,6 @@
 ## Phase 159: `module-query-variant` 1/1 & `modulepreload-integrity` 2/2 — 10/10 PASS
 - **`src/cdp/{session,session_hooks}.cp`**：
   - 实装 ES 模块 SRI 拒绝表、`modulepreload` integrity pin 同步及动态 `import()`/`loadModuleGraph` 统一真实 SRI 校验（4 门禁全 0，**10/10 PASS**）。
+
+## Phase 160: `large-script-bundles` 2/2 PASS & Wasm-Bake Architecture Classification
+- 零修改验收 `e2e/large-script-bundles.e2e.test.ts` (**2/2 PASS**)，并归档 `wasm-bake-demo`/`inline-wasm-bake` 为 Boa-Wasm/V8 架构专属。

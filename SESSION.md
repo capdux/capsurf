@@ -4317,3 +4317,8 @@
   - `src/cdp/session.cp` & `session_hooks.cp` 4 门禁全 0；
   - `module-query-variant` (**1/1**)、`modulepreload-integrity` (**2/2**)、回归 `inserted-script-module` (**7/7**)：**10/10 PASS**！
 - **清理旧子智能体**: 销毁 `d1a8e3b5-d64a-40f0-af9b-8820ec8583ff`。
+
+## [2026-11-21 00:05:00] 2 分钟验收 `large-script-bundles` 2/2 PASS & Wasm-Bake 归档 (Subagent 555f4ed9 结单，Phase 160)
+- **直接验收**：`e2e/large-script-bundles.e2e.test.ts` (**2/2 PASS**，classic & module 解析器脚本预算全通)。
+- **架构专属归档**：`wasm-bake-demo` 与 `inline-wasm-bake` 依赖 Boa-Wasm/V8 `WebAssembly` 与 `__KS_ADD_WASM_B64__` 烘焙机制，归档不纳入 QuickJS 独立进程回归。
+- **清理旧子智能体**: 销毁 `555f4ed9-7c71-4bb5-b911-12dc09f2339b`。
