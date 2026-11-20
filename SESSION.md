@@ -4541,3 +4541,7 @@
 ### Phase 200: Pure-CP DOM HTMLCanvasElement Whitebox Tests (Slot A)
 - **Subagent**: `2e720db1` (killed after completion)
 - **Result**: `test/dom/test_canvas_element.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 953ms; covering `300x150` defaults/clamping, `getContext("2d")` caching, resize reset, `toDataURL` PNG base64 magic header, and multi-canvas isolation/`deinit`).
+
+### Phase 201: Pure-CP HTML5 Edge Recovery & TagSpans Whitebox Tests (Slot A)
+- **Subagent**: `c31fd0dc` (killed after completion)
+- **Result**: `test/html/test_html_parser_edge_cases.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1046ms; covering void elements, implicit `html/head/body/tbody`, raw-text `<script>/<style>` lookalikes, and `htmlTagSpans`/`removeHtmlTagSpans`).

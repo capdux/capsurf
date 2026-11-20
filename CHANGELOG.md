@@ -2262,3 +2262,6 @@
 
 ### Phase 200
 - Added `test/dom/test_canvas_element.cp` covering canvas dimension clamping, 2D context lifecycle, `toDataURL` PNG base64 encoding, and multi-instance isolation.
+
+### Phase 201
+- Added `test/html/test_html_parser_edge_cases.cp` covering HTML5 unclosed/void/implicit-table recovery, raw-text script/style spans, and `tag_spans.cp` scanning.
