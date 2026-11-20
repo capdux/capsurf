@@ -1605,7 +1605,8 @@ pub struct CdpPageSession {
         _.wrappers_reclaimed = 0;
         if (_.has_document) {
             _.ctx.deinit();
-            _.rt.runGC();
+            _.rt.deinit();
+            _.rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
             JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(_));
         } else {

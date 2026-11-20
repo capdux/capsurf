@@ -4665,3 +4665,10 @@
   - Added `Element.prototype.scrollTo/scroll/scrollBy` in `src/js/shim/element/element.js:1871-1897` (re-bundled `runtime.js`/`runtime_source.cp`).
   - Tuned `>= 14px` scaled text `scaled_h` (`0.75`) and `M/m` glyph row 2 (`k`) in `src/render/painter.cp`.
   - Built `bin_19233/main`; `e2e/demo/screencast-partial-frames.e2e.test.ts` **11/11 PASS** (158 assertions, exit 0). Screencast 4-pack now **35/35 PASS (582 assertions)**.
+
+### Phase 225: Render Regression + CSS Transform Whitebox + `detached-node-reclaim` 6/6 PASS
+- **Slot A (`98a86695`)**: Verified `test/render/` **8/8 PASS** (zero regression); added `test/css/test_transform_and_overflow_edge.cp` covering `transform`, `overflow`, and `position: fixed` (**4/4 PASS**). Total whitebox now **117/117 (100% PASS)**.
+- **Slot B (`06fc2ec2`)**:
+  - Reinitialized `_.rt` (`_.ctx.deinit(); _.rt.deinit(); _.rt = JsRuntime.init(...)`) on `navigate` in `src/cdp/session.cp:1606-1612` to eliminate cross-page JS heap residue/OOM.
+  - Changed `nodeListenersMap` from `Map(_nid)` to `WeakMap(target)` in `src/js/shim/events/dispatch.js:4-15` (re-bundled `runtime.js`/`runtime_source.cp`) so detached nodes with self-capturing listeners are reclaimed by GC.
+  - Built `bin_19233/main` (6.19s); `e2e/detached-node-reclaim.e2e.test.ts` **6/6 PASS** (8 assertions, 71.21s, exit 0).

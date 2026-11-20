@@ -1814,16 +1814,15 @@
   // src/js/shim/events/dispatch.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/events/dispatch.ts
 
-  const nodeListenersMap = new Map();
+  const nodeListenersMap = new WeakMap();
   const hydratedHandlersMap = new WeakMap();
 
   function getListeners(target) {
-    if (!target) return null;
-    const key = (target._nid !== undefined) ? target._nid : target;
-    let map = nodeListenersMap.get(key);
+    if (!target || typeof target !== "object") return null;
+    let map = nodeListenersMap.get(target);
     if (!map) {
       map = new Map();
-      nodeListenersMap.set(key, map);
+      nodeListenersMap.set(target, map);
     }
     return map;
   }

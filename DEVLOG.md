@@ -1736,3 +1736,7 @@
 ### Phase 224: Screencast Partial-Frames 11/11 Closure
 - Cross-test `partialRaster` / viewport pollution in shared CDP sessions is eliminated by resetting `screencast_handler.state` in `resetSession`, `Target.createTarget`, and `e2e/harness.ts` (`Kitesurf.setPartialRaster({ enabled: true })`).
 - Aligning `Page.captureScreenshot` (`scroll_x`/`scroll_y` sync + JPEG `compress_lvl=1`) with `captureScreencastFrame` ensures byte-identical JPEG comparisons.
+
+### Phase 225: Per-Navigation `JsRuntime` Reset & `WeakMap` Listener Storage (`detached-node-reclaim` 6/6)
+- Reusing a single `512MB` `JsRuntime` across `navigate` calls allowed `__pressure()` allocations from earlier tests to trigger `InternalError: out of memory` in subsequent tests; resetting `_.rt` on `navigate` isolates each page cleanly.
+- Storing event listeners in a `WeakMap` keyed by the target wrapper (instead of a global `Map` keyed by `_nid`) breaks closure reference cycles on detached DOM nodes.

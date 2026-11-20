@@ -2347,3 +2347,7 @@
 ### Phase 224
 - Added `test/render/test_checkbox_and_scroll_paint.cp`.
 - Reset screencast state across session/target/harness boundaries (`src/cdp/session.cp`, `src/cdp/target.cp`, `e2e/harness.ts`), synced scroll & JPEG compression in `Page.captureScreenshot` (`src/cdp/page.cp`), added `Element.prototype.scrollTo/scroll/scrollBy` (`src/js/shim/element/element.js` + `runtime.js`/`runtime_source.cp`), and tuned scaled text `0.75` cap-height & `M/m` glyph in `src/render/painter.cp`.
+
+### Phase 225
+- Added `test/css/test_transform_and_overflow_edge.cp`.
+- Reinitialized `JsRuntime` on navigation in `src/cdp/session.cp` and switched `nodeListenersMap` to `WeakMap` in `src/js/shim/events/dispatch.js` (+ `runtime.js`/`runtime_source.cp`).
