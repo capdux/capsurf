@@ -443,6 +443,9 @@ fn originSliceOf(url: []const u8): []const u8 {
     if (std.mem.eql(u8, mode, "dyn_import")) {
         let out_buf: [32768]u8 = undefined;
         if (body := MockFixtures.handleFixtureRequest(cur_url, "", "", &out_buf, null, "")) {
+            if (integrity.len > 0 && !verifySriIntegrity(integrity, body)) {
+                return jsNull();
+            }
             return JS_NewStringLen(ctx, body.ptr, body.len);
         }
         return jsNull();
@@ -1109,19 +1112,25 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "  var INSERTED_SCRIPT_CAP = 1024; var insertedExtCount = 0; var moduleInflight = Object.create(null);\n" ++
     "  function fireScriptEvent(node, evName) { var evt = new Event(evName, { bubbles: false, cancelable: false }); var prop = evName === 'load' ? 'onload' : 'onerror'; if (typeof node[prop] === 'function') { try { node[prop].call(node, evt); } catch (e) {} } if (typeof node.dispatchEvent === 'function') { try { node.dispatchEvent(evt); } catch (e) {} } }\n" ++
     "  function findSyntaxErrorLine(code, err) { if (err && typeof err.lineNumber === 'number' && err.lineNumber > 0) return err.lineNumber; if (err && typeof err.stack === 'string') { var m = err.stack.match(/:(\\d+)(?::\\d+)?/); if (m) return parseInt(m[1], 10); } var lines = String(code || '').split('\\n'); for (var i = 1; i <= lines.length; i++) { try { new Function(lines.slice(0, i).join('\\n')); } catch (e2) { if (i === lines.length) return i; var rest = lines.slice(0, i).join('\\n'); if (rest.indexOf(')') !== -1 && lines[i - 1].indexOf(')') !== -1) return i; } } return lines.length || 1; }\n" ++
+    "  function getModulePreloadPin(absUrl) { return (g.__capsurf_modulepreload_pins && typeof g.__capsurf_modulepreload_pins[absUrl] === 'string') ? g.__capsurf_modulepreload_pins[absUrl] : ''; }\n" ++
     "  g.__capsurf_dyn_import = function(spec, baseUrl) {\n" ++
     "    var s = String(spec || '');\n" ++
     "    if (s.indexOf('file://') === 0) return Promise.reject(new TypeError('Refused private import: ' + s));\n" ++
     "    var absU = resolveUrlAbs(s, baseUrl);\n" ++
     "    var docCsp = String(g.__capsurf_doc_csp || '');\n" ++
     "    var docOrigin = String(g.__capsurf_doc_origin || pageOrigin);\n" ++
+    "    var pin = getModulePreloadPin(absU);\n" ++
     "    if (docCsp.length > 0 && typeof g.__capsurf_script_gate === 'function') {\n" ++
-    "      var gated = g.__capsurf_script_gate('dyn_import', docOrigin, docCsp, absU, '', '', '1');\n" ++
+    "      var gated = g.__capsurf_script_gate('dyn_import', docOrigin, docCsp, absU, '', pin, '1');\n" ++
     "      if (gated === null || gated === undefined) return Promise.reject(new TypeError('Refused by CSP: ' + absU));\n" ++
-    "      return Promise.resolve({});\n" ++
+    "    } else if (pin.length > 0 && typeof g.__capsurf_script_gate === 'function') {\n" ++
+    "      var gatedPin = g.__capsurf_script_gate('dyn_import', docOrigin, '', absU, '', pin, '1');\n" ++
+    "      if (gatedPin === null || gatedPin === undefined) return Promise.reject(new TypeError('Failed integrity check for module: ' + absU));\n" ++
     "    }\n" ++
-    "    if (typeof g.__capsurf_fixture_fetch === 'function') { var b = g.__capsurf_fixture_fetch(absU, '{}'); if (b === null || b === undefined) return Promise.reject(new TypeError('Failed to fetch module: ' + absU)); return Promise.resolve({}); }\n" ++
-    "    return Promise.reject(new TypeError('Module not found: ' + s));\n" ++
+    "    return loadModuleGraph(absU, Object.create(null)).then(function(res) {\n" ++
+    "      if (!res || !res.ok) return Promise.reject(new TypeError('Failed to fetch module: ' + absU));\n" ++
+    "      return res.exports || {};\n" ++
+    "    });\n" ++
     "  };\n" ++
     "  function decodeDataScriptUrl(src) { var comma = src.indexOf(','); if (comma === -1) return ''; var meta = src.slice(5, comma); var payload = src.slice(comma + 1); if (/;base64/i.test(meta)) { try { return atob(payload); } catch (e) { return ''; } } try { return decodeURIComponent(payload); } catch (e) { return payload; } }\n" ++
     "  function evalClassicCode(node, code, isNativeBake) {\n" ++
@@ -1153,6 +1162,12 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    var raw = g.__capsurf_fixture_fetch(absUrl, getSessionExtraHeadersJson());\n" ++
     "    if (raw === null || raw === undefined) return Promise.resolve({ ok: false, reason: '404' });\n" ++
     "    var code = String(raw);\n" ++
+    "    var preloadPin = getModulePreloadPin(absUrl);\n" ++
+    "    if (preloadPin.length > 0 && typeof g.__capsurf_script_gate === 'function') {\n" ++
+    "      var docOriginPin = String(g.__capsurf_doc_origin || pageOrigin);\n" ++
+    "      var pinOk = g.__capsurf_script_gate('dyn_import', docOriginPin, '', absUrl, '', preloadPin, '1');\n" ++
+    "      if (pinOk === null || pinOk === undefined) return Promise.resolve({ ok: false, reason: 'integrity' });\n" ++
+    "    }\n" ++
     "    if (code.indexOf('/*__KS_OVER_BUDGET__*/') !== -1 || code.length > 8 * 1024 * 1024) return Promise.resolve({ ok: false, reason: 'budget' });\n" ++
     "    var staticImports = []; var m;\n" ++
     "    var reImportNamed = /^\\s*import\\s*\\{([^}]*)\\}\\s*from\\s*['\"]([^'\"]+)['\"]\\s*;?/gm;\n" ++
@@ -1227,9 +1242,14 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    if (isModule) {\n" ++
     "      var entry = moduleInflight[absUrl];\n" ++
     "      if (!entry) {\n" ++
-    "        var p;\n" ++
-    "        if (integrityAttr.length > 0 && integrityAttr.indexOf('sha256-AAAA') === 0) { p = Promise.resolve({ ok: false, reason: 'integrity' }); }\n" ++
-    "        else { var delayMs = 0; var msMatch = absUrl.match(/[?&]ms=(\\d+)/); if (msMatch) delayMs = Math.min(2000, parseInt(msMatch[1], 10) || 0); p = new Promise(function(resolve) { var run = function() { loadModuleGraph(absUrl, Object.create(null)).then(resolve); }; if (delayMs > 0) setTimeout(run, delayMs); else Promise.resolve().then(run); }); }\n" ++
+    "        var p = null;\n" ++
+    "        var effIntegrity = integrityAttr || getModulePreloadPin(absUrl);\n" ++
+    "        if (effIntegrity.length > 0 && typeof g.__capsurf_script_gate === 'function') {\n" ++
+    "          var docOriginMod = String(g.__capsurf_doc_origin || pageOrigin);\n" ++
+    "          var modGateOk = g.__capsurf_script_gate('dyn_import', docOriginMod, '', absUrl, '', effIntegrity, '1');\n" ++
+    "          if (modGateOk === null || modGateOk === undefined) { p = Promise.resolve({ ok: false, reason: 'integrity' }); }\n" ++
+    "        }\n" ++
+    "        if (!p) { var delayMs = 0; var msMatch = absUrl.match(/[?&]ms=(\\d+)/); if (msMatch) delayMs = Math.min(2000, parseInt(msMatch[1], 10) || 0); p = new Promise(function(resolve) { var run = function() { loadModuleGraph(absUrl, Object.create(null)).then(resolve); }; if (delayMs > 0) setTimeout(run, delayMs); else Promise.resolve().then(run); }); }\n" ++
     "        entry = { promise: p, integrity: integrityAttr }; moduleInflight[absUrl] = entry;\n" ++
     "      }\n" ++
     "      entry.promise.then(function(res) { if (res && res.ok) fireScriptEvent(node, 'load'); else fireScriptEvent(node, 'error'); });\n" ++

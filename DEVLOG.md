@@ -1652,3 +1652,6 @@
 
 ## Phase 157 `BoxShadow` 与 `cap:css` 符号冲突根除方案 (`src/css/cascade.cp`)
 1. **命名空间隔离**：将 `cascade.cp` 中用户侧 `BoxShadow` 结构体更名为 `CssBoxShadow`，避免在统一转译命名空间与 `cap:css/engine/properties.cp` 的 `BoxShadow` 发生字段类型冲突（`E0207`）。
+
+## Phase 159 模块 SRI 拒绝表与 `modulepreload` Pin 校验方案 (`src/cdp/`)
+1. **静态/动态统一 Pin 与拒绝表 (`session.cp`, `session_hooks.cp`)**：`<script type="module">` SRI 失败即写入 `rejected_modules` 阻止后续同 URL 重载；`<link rel="modulepreload" integrity>` 同步至 `__capsurf_modulepreload_pins`，供 `sessionModuleLoader` 与 `__capsurf_dyn_import`/`loadModuleGraph` 统一调用 `verifySriIntegrity` 校验。

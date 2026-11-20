@@ -2135,3 +2135,7 @@
 
 ## Phase 158: `raf-overrun-frame-gap` 1/1 PASS & HTTP Echo/Wheel Localization
 - 零修改验收 `e2e/raf-overrun-frame-gap.e2e.test.ts` (**1/1 PASS**)，并定位 `fixture-script-escaping` (`server.cp:543`) 与 `screencast-wheel-coalescing` (`input.cp:331`, `screencast.cp:92`)。
+
+## Phase 159: `module-query-variant` 1/1 & `modulepreload-integrity` 2/2 — 10/10 PASS
+- **`src/cdp/{session,session_hooks}.cp`**：
+  - 实装 ES 模块 SRI 拒绝表、`modulepreload` integrity pin 同步及动态 `import()`/`loadModuleGraph` 统一真实 SRI 校验（4 门禁全 0，**10/10 PASS**）。

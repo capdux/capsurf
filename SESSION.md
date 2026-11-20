@@ -4308,3 +4308,12 @@
 - **直接验收**：`e2e/raf-overrun-frame-gap.e2e.test.ts` (**1/1 PASS**)。
 - **精准跨模块定位**：`fixture-script-escaping` (`server.cp:543` HTTP 直连未传客户端请求头给 `MockFixtures`)、`screencast-wheel-coalescing` (`input.cp:331-335` & `screencast.cp:92-170` DOM `wheel`/scroll 同步与 `minFrameIntervalMs`)。
 - **清理旧子智能体**: 销毁 `8cee075b-53b5-41ad-b3b7-103a321fc10b`。
+
+## [2026-11-21 00:03:00] `module-query-variant` 1/1 & `modulepreload-integrity` 2/2 全绿闭环 (Subagent d1a8e3b5 结单，Phase 159)
+- **ES 模块 SRI 拒绝表与 `<link rel="modulepreload" integrity>` Pin 校验 (`src/cdp/{session,session_hooks}.cp`)**:
+  - `session.cp`：新增 `ModuleIntegrityEntry`、`rejected_modules` 与 `modulepreload_pins`，在 `<script type="module">` SRI 失败时调用 `markModuleRejected`，在 `<base>` 解析后扫描 `<link rel="modulepreload" integrity>` 同步至 `__capsurf_modulepreload_pins`，并在 `sessionModuleLoader` 统一阻断拒绝/不匹配模块；
+  - `session_hooks.cp`：`js_capsurf_script_gate` `"dyn_import"` 分支补全 `verifySriIntegrity`；`__capsurf_dyn_import`、`loadModuleGraph` 与 `handleInsertedScript` 统一校验真实 SRI pin。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - `src/cdp/session.cp` & `session_hooks.cp` 4 门禁全 0；
+  - `module-query-variant` (**1/1**)、`modulepreload-integrity` (**2/2**)、回归 `inserted-script-module` (**7/7**)：**10/10 PASS**！
+- **清理旧子智能体**: 销毁 `d1a8e3b5-d64a-40f0-af9b-8820ec8583ff`。

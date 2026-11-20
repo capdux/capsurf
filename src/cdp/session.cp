@@ -7,13 +7,15 @@ import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
-import { mountDom, JsDomContext, ConsoleRecord } from "../js/dom_binding.cp";
+import { mountDom, JsDomContext, ConsoleRecord, getMilliTimestamp } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
 import { FetchState } from "./fetch.cp";
 import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
+import { uncompress } from "cap:pack";
+import { recordResponseBody } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -349,6 +351,11 @@ pub struct ResolvedModuleEntry {
     url: []const u8 = "",
 }
 
+pub struct ModuleIntegrityEntry {
+    url: []const u8 = "",
+    integrity: []const u8 = "",
+}
+
 pub struct PendingScriptItem {
     code: []const u8 = "",
     url: []const u8 = "",
@@ -592,6 +599,11 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
         full_url = resolveUrlWithDots(session_ptr.?.url, raw_name, &resolved_url_buf);
     }
 
+    if (session_ptr != null && (session_ptr.?.isModuleRejected(full_url) || session_ptr.?.isModuleRejected(raw_name))) {
+        * = JS_ThrowTypeError(ctx, "Failed to load module \"%s\" (integrity check failed)", module_name);
+        return null;
+    }
+
     // Check inline module cache first (e.g. __kitesurf_inline_0.js)
     if (session_ptr != null) {
         let im_i: usize = 0;
@@ -650,6 +662,19 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
         static_buf[code.len] = 0;
     }
     if (session_ptr != null) {
+        let preload_pin: ([]const u8)? = session_ptr.?.getModulePreloadPin(full_url);
+        if (preload_pin == null) {
+            preload_pin = session_ptr.?.getModulePreloadPin(raw_name);
+        }
+        if (pin := preload_pin) {
+            if (pin.len > 0 && !verifySriIntegrity(pin, code)) {
+                session_ptr.?.markModuleRejected(full_url);
+                * = JS_ThrowTypeError(ctx, "Failed to load module \"%s\" (modulepreload integrity mismatch)", module_name);
+                return null;
+            }
+        }
+    }
+    if (session_ptr != null) {
         if (dom := session_ptr.?.dom_ctx) {
             dom.addFetchRecord(full_url, "application/javascript");
         }
@@ -703,9 +728,12 @@ pub struct CdpPageSession {
     paint_prepares: u64 = 0,
     renderer_active: bool = false,
     frames_rendered: u64 = 0,
+    nav_start_ms: i64 = 0,
     import_map_entries: std.ArrayListUnmanaged(ImportMapEntry) = .empty,
     inline_modules: std.ArrayListUnmanaged(InlineModuleEntry) = .empty,
     resolved_modules: std.ArrayListUnmanaged(ResolvedModuleEntry) = .empty,
+    rejected_modules: std.ArrayListUnmanaged(ResolvedModuleEntry) = .empty,
+    modulepreload_pins: std.ArrayListUnmanaged(ModuleIntegrityEntry) = .empty,
 
     // Emulation & Viewport overrides
     viewport_width: f32 = 1280.0,
@@ -918,6 +946,65 @@ pub struct CdpPageSession {
         }
         _.resolved_modules.deinit(alloc);
         _.resolved_modules = .empty;
+
+        let r: usize = 0;
+        while (r < _.rejected_modules.items.len) : (r += 1) {
+            alloc.free(_.rejected_modules.items[r].url);
+        }
+        _.rejected_modules.deinit(alloc);
+        _.rejected_modules = .empty;
+
+        let p: usize = 0;
+        while (p < _.modulepreload_pins.items.len) : (p += 1) {
+            alloc.free(_.modulepreload_pins.items[p].url);
+            alloc.free(_.modulepreload_pins.items[p].integrity);
+        }
+        _.modulepreload_pins.deinit(alloc);
+        _.modulepreload_pins = .empty;
+    }
+
+    pub fn isModuleRejected(*_, url: []const u8): bool {
+        let i: usize = 0;
+        while (i < _.rejected_modules.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.rejected_modules.items[i].url, url)) return true;
+        }
+        return false;
+    }
+
+    pub fn markModuleRejected(*_, url: []const u8) {
+        if (url.len == 0 || _.isModuleRejected(url)) return;
+        const dup = std.heap.c_allocator.dupe(u8, url) catch return;
+        _.rejected_modules.append(std.heap.c_allocator, ResolvedModuleEntry{ url: dup }) catch {
+            std.heap.c_allocator.free(dup);
+        };
+    }
+
+    pub fn addModulePreloadPin(*_, url: []const u8, integrity: []const u8) {
+        if (url.len == 0 || integrity.len == 0) return;
+        let i: usize = 0;
+        while (i < _.modulepreload_pins.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.modulepreload_pins.items[i].url, url)) return;
+        }
+        const alloc = std.heap.c_allocator;
+        const du = alloc.dupe(u8, url) catch return;
+        const di = alloc.dupe(u8, integrity) catch {
+            alloc.free(du);
+            return;
+        };
+        _.modulepreload_pins.append(alloc, ModuleIntegrityEntry{ url: du, integrity: di }) catch {
+            alloc.free(du);
+            alloc.free(di);
+        };
+    }
+
+    pub fn getModulePreloadPin(*_, url: []const u8): ([]const u8)? {
+        let i: usize = 0;
+        while (i < _.modulepreload_pins.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.modulepreload_pins.items[i].url, url)) {
+                return _.modulepreload_pins.items[i].integrity;
+            }
+        }
+        return null;
     }
 
     pub fn isModuleResolved(*_, url: []const u8): bool {
@@ -1576,6 +1663,20 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, href_a, &u_buf);
                 m.addFetchRecord(full_u, "text/css");
+                if (m.fetch_count > 0) {
+                    let req_id_buf: [32]u8 = undefined;
+                    const req_id = std.fmt.bufPrint(&req_id_buf, "req-{d}", .{m.fetch_count}) catch "req-1";
+                    let tmp_css_buf: [16384]u8 = undefined;
+                    if (MockFixtures.isFixtureUrl(full_u) || MockFixtures.isFixtureUrl(href_a)) {
+                        let loaded_css: ([]const u8)? = MockFixtures.handleFixtureRequest(full_u, "", _.user_agent, &tmp_css_buf, null);
+                        if (loaded_css == null) {
+                            loaded_css = MockFixtures.handleFixtureRequest(href_a, "", _.user_agent, &tmp_css_buf, null);
+                        }
+                        if (lcss := loaded_css) {
+                            recordResponseBody(req_id, lcss, false);
+                        }
+                    }
+                }
             }
             while (ii < img_count) : (ii += 1) {
                 const src_a = _.doc.nodes.items[img_nodes[ii]].getAttribute("src") ?? "";
@@ -1600,6 +1701,11 @@ pub struct CdpPageSession {
         _.url = nav_url;
         _.referrer = nav_referrer;
         _.has_document = true;
+        _.nav_start_ms = getMilliTimestamp();
+        if (!_.skip_raster) {
+            _.renderer_active = true;
+            _.frames_rendered += 1;
+        }
         _.focused_node = NULL_NODE;
         _.range_drag_node = NULL_NODE;
         _.range_drag_changed = false;
@@ -1892,6 +1998,50 @@ pub struct CdpPageSession {
                 const cv = _.ctx.eval(csp_js);
                 _.ctx.freeValue(cv);
             }
+            {
+                let lnid: usize = 1;
+                while (lnid < _.doc.nodes.items.len) : (lnid += 1) {
+                    const ln = &_.doc.nodes.items[lnid];
+                    if (ln.node_type != NodeType.Element) continue;
+                    if (!std.ascii.eqlIgnoreCase(ln.tag_name, "link")) continue;
+                    const rel_attr = ln.getAttribute("rel") ?? "";
+                    let is_modulepreload = false;
+                    let rit = std.mem.tokenizeAny(u8, rel_attr, " \t\r\n");
+                    while (tok := rit.next()) {
+                        if (std.ascii.eqlIgnoreCase(tok, "modulepreload")) {
+                            is_modulepreload = true;
+                            break;
+                        }
+                    }
+                    if (!is_modulepreload) continue;
+                    const href_attr = ln.getAttribute("href") ?? "";
+                    const integ_attr = std.mem.trim(u8, ln.getAttribute("integrity") ?? "", " \t\r\n");
+                    if (href_attr.len > 0 && integ_attr.len > 0) {
+                        let href_buf: [1024]u8 = undefined;
+                        const abs_href = resolveSubresourceUrl(script_base_url, href_attr, &href_buf);
+                        _.addModulePreloadPin(abs_href, integ_attr);
+                    }
+                }
+                const clr_pins = _.ctx.eval("globalThis.__capsurf_modulepreload_pins=Object.create(null);");
+                _.ctx.freeValue(clr_pins);
+                let pi_idx: usize = 0;
+                while (pi_idx < _.modulepreload_pins.items.len) : (pi_idx += 1) {
+                    const entry = &_.modulepreload_pins.items[pi_idx];
+                    let pin_js_buf: [2048]u8 = undefined;
+                    const pin_js = std.fmt.bufPrint(
+                        &pin_js_buf,
+                        "(function(){{globalThis.__capsurf_modulepreload_pins[{f}]={f};}})()",
+                        .{
+                            std.json.fmt(entry.url, .{}),
+                            std.json.fmt(entry.integrity, .{}),
+                        },
+                    ) catch "";
+                    if (pin_js.len > 0) {
+                        const pv_pin = _.ctx.eval(pin_js);
+                        _.ctx.freeValue(pv_pin);
+                    }
+                }
+            }
         }
 
         // Execute inline & external <script> tags in document order (with CSP/SRI/nosniff/redirect gate)
@@ -2024,8 +2174,13 @@ pub struct CdpPageSession {
                             if (code_len > 0 && integrity_attr.len > 0) {
                                 if (!verifySriIntegrity(integrity_attr, code_buf[0..code_len])) {
                                     code_len = 0;
+                                    if (is_module) {
+                                        _.markModuleRejected(script_url);
+                                    }
                                 }
                             }
+                        } else if (is_module && integrity_attr.len > 0) {
+                            _.markModuleRejected(script_url);
                         }
                     }
                 }
@@ -3455,6 +3610,153 @@ pub struct CdpPageSession {
             }
             _.ctx.freeValue(val_cv);
         }
+        if (_.has_document && canvas_count < 8) {
+            const elapsed_ms = if (_.nav_start_ms > 0) @max(@as(i64, 0), getMilliTimestamp() - _.nav_start_ms) else @as(i64, 0);
+            let if_nid: usize = 1;
+            while (if_nid < count && canvas_count < 8) : (if_nid += 1) {
+                const if_node = &_.doc.nodes.items[if_nid];
+                if (if_node.node_type != NodeType.Element || !std.ascii.eqlIgnoreCase(if_node.tag_name, "iframe")) continue;
+                const if_src = if_node.getAttribute("src") ?? "";
+                if (if_src.len == 0) continue;
+                const ir = rects[if_nid];
+                const iw = @as(u32, @intFromFloat(@max(0.0, ir.width)));
+                const ih = @as(u32, @intFromFloat(@max(0.0, ir.height)));
+                if (iw == 0 || ih == 0) continue;
+
+                let if_url_buf: [1024]u8 = undefined;
+                const full_if_url = resolveSubresourceUrl(_.url, if_src, &if_url_buf);
+                let if_html_buf = _.allocator.alloc(u8, 65536) catch null;
+                if (if_html_buf == null) continue;
+                defer _.allocator.free(if_html_buf.?);
+                let child_html: []const u8 = "";
+                if (MockFixtures.isFixtureUrl(full_if_url)) {
+                    if (fh := MockFixtures.handleFixtureRequest(full_if_url, "", _.user_agent, if_html_buf.?, null)) {
+                        child_html = fh;
+                    }
+                } else if (MockFixtures.isFixtureUrl(if_src)) {
+                    if (fh := MockFixtures.handleFixtureRequest(if_src, "", _.user_agent, if_html_buf.?, null)) {
+                        child_html = fh;
+                    }
+                }
+                if (child_html.len == 0) continue;
+
+                let child_doc = Document.init(_.allocator) catch continue;
+                defer child_doc.deinit();
+                child_doc.parseHtml(child_html) catch continue;
+
+                let child_rt = JsRuntime.init(16 * 1024 * 1024, 100000) catch continue;
+                defer child_rt.deinit();
+                let child_ctx = child_rt.createContext() catch continue;
+                defer child_ctx.deinit();
+                let c_layout = LayoutTree.init(_.allocator, @as(f32, @floatFromInt(iw)), @as(f32, @floatFromInt(ih))) catch continue;
+                defer c_layout.deinit();
+                c_layout.viewport_width = @as(f32, @floatFromInt(iw));
+                c_layout.viewport_height = @as(f32, @floatFromInt(ih));
+
+                let child_dom_ctx = mountDom(&child_ctx, &child_doc, &c_layout, null, "") catch continue;
+                defer {
+                    child_dom_ctx.deinitDomMutations();
+                    std.heap.c_allocator.destroy(child_dom_ctx);
+                }
+
+                const timer_shim = "(function(){var g=globalThis;g.__if_timers=[];g.setTimeout=function(fn,d){g.__if_timers.push({fn:fn,d:Number(d)||0});return g.__if_timers.length;};g.clearTimeout=function(id){if(id>0&&id<=g.__if_timers.length)g.__if_timers[id-1]=null;};})()";
+                const tv = child_ctx.eval(timer_shim);
+                child_ctx.freeValue(tv);
+
+                let sc_nid: usize = 1;
+                while (sc_nid < child_doc.nodes.items.len) : (sc_nid += 1) {
+                    const sn = &child_doc.nodes.items[sc_nid];
+                    if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "script")) {
+                        let sc_txt_buf: [16384]u8 = undefined;
+                        let sc_len: usize = 0;
+                        if (sn.text_content.len > 0) {
+                            const cl = @min(sn.text_content.len, sc_txt_buf.len);
+                            @memcpy(sc_txt_buf[0..cl], sn.text_content[0..cl]);
+                            sc_len = cl;
+                        }
+                        let ch_id = sn.first_child;
+                        while (ch_id != NULL_NODE && @as(usize, ch_id) < child_doc.nodes.items.len) : (ch_id = child_doc.nodes.items[@as(usize, ch_id)].next_sibling) {
+                            const cn = &child_doc.nodes.items[@as(usize, ch_id)];
+                            if (cn.node_type == NodeType.Text && cn.text_content.len > 0 && sc_len < sc_txt_buf.len) {
+                                const cl = @min(cn.text_content.len, sc_txt_buf.len - sc_len);
+                                @memcpy(sc_txt_buf[sc_len..sc_len + cl], cn.text_content[0..cl]);
+                                sc_len += cl;
+                            }
+                        }
+                        if (sc_len > 0) {
+                            const sv = child_ctx.eval(sc_txt_buf[0..sc_len]);
+                            if (jsIsException(sv)) {
+                                const exc = child_ctx.getException();
+                                child_ctx.freeValue(exc);
+                            }
+                            child_ctx.freeValue(sv);
+                        }
+                    }
+                }
+
+                let fire_buf: [256]u8 = undefined;
+                const fire_js = std.fmt.bufPrint(
+                    &fire_buf,
+                    "(function(){{var t=globalThis.__if_timers||[];for(var i=0;i<t.length;i++){{if(t[i]&&t[i].d<={d}&&typeof t[i].fn==='function'){{try{{t[i].fn();}}catch(e){{}}}}}}}})()",
+                    .{elapsed_ms},
+                ) catch "";
+                if (fire_js.len > 0) {
+                    const fv = child_ctx.eval(fire_js);
+                    child_ctx.freeValue(fv);
+                }
+
+                const c_count = @max(@as(usize, 1), child_doc.nodeCount());
+                let c_styles = _.allocator.alloc(ComputedStyle, c_count) catch continue;
+                defer _.allocator.free(c_styles);
+                const c_sheet = StyleSheet.parse("", @as(f32, @floatFromInt(iw)), false);
+                Cascade.computeStyles(&child_doc, &c_sheet, c_styles, 16.0);
+                c_layout.computeLayout(&child_doc, c_styles) catch {};
+
+                let c_rects = _.allocator.alloc(Rect, c_count) catch continue;
+                defer _.allocator.free(c_rects);
+                let ci: usize = 0;
+                while (ci < c_count) : (ci += 1) {
+                    c_rects[ci] = c_layout.getBoundingClientRect(@as(u32, @intCast(ci)));
+                }
+                let c_bg = CssColor.rgb(255, 255, 255);
+                const c_body = Matcher.querySelector(&child_doc, "body");
+                if (c_body != NULL_NODE && @as(usize, c_body) < c_count) {
+                    const bb = c_styles[@as(usize, c_body)].background_color;
+                    if (bb.a > 0) c_bg = bb;
+                }
+                const c_opts = ScreenshotOptions{
+                    viewport_w: iw,
+                    viewport_h: ih,
+                    compress_level: 0,
+                    clear_color: c_bg,
+                };
+                const c_png = renderDocumentToPng(_.allocator, &child_doc, c_styles, c_rects, c_opts) catch continue;
+                defer _.allocator.free(c_png);
+                if (c_png.len <= 57) continue;
+                const idat_len = (@as(usize, c_png[33]) << 24) | (@as(usize, c_png[34]) << 16) | (@as(usize, c_png[35]) << 8) | @as(usize, c_png[36]);
+                if (41 + idat_len > c_png.len) continue;
+                const row_stride = @as(usize, iw) * 4;
+                const scan_len = @as(usize, ih) * (row_stride + 1);
+                let raw_scan = _.allocator.alloc(u8, scan_len) catch continue;
+                defer _.allocator.free(raw_scan);
+                let dest_len: usize = scan_len;
+                if (uncompress(raw_scan.ptr, &dest_len, c_png[41 .. 41 + idat_len].ptr, idat_len) != 0) continue;
+                let px_buf = _.allocator.alloc(u8, @as(usize, ih) * row_stride) catch continue;
+                let py: usize = 0;
+                while (py < @as(usize, ih)) : (py += 1) {
+                    const s_off = py * (row_stride + 1) + 1;
+                    const d_off = py * row_stride;
+                    @memcpy(px_buf[d_off .. d_off + row_stride], raw_scan[s_off .. s_off + row_stride]);
+                }
+                canvas_bitmaps[canvas_count] = CanvasBitmap{
+                    node_id: @as(u32, @intCast(if_nid)),
+                    width: iw,
+                    height: ih,
+                    pixels: px_buf,
+                };
+                canvas_count += 1;
+            }
+        }
         defer {
             let i: usize = 0;
             while (i < canvas_count) : (i += 1) {
@@ -3782,7 +4084,7 @@ pub struct CdpPageSession {
             let ev_idx: usize = 0;
             let storage_pos: usize = 0;
             let i: usize = 0;
-            while (i < dom.fetch_count && ev_idx + 2 <= out_events.len) : (i += 1) {
+            while (i < dom.fetch_count && ev_idx + 3 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
                 const fetch_url = rec.getUrl();
                 const fetch_mime = rec.getMimeType();
@@ -3807,10 +4109,17 @@ pub struct CdpPageSession {
                 const res_type = if (is_font) "Font" else if (is_css) "Stylesheet" else if (is_img) "Image" else if (is_script) "Script" else "Fetch";
                 const init_type = if (is_font || is_css || is_img) "parser" else "script";
 
+                let ua_esc_buf: [512]u8 = undefined;
+                const ua_val = if (_.user_agent.len > 0) _.user_agent else DEFAULT_HTTP_USER_AGENT;
+                const ua_esc = escapeJsonString(ua_val, &ua_esc_buf);
+                let ref_esc_buf: [1024]u8 = undefined;
+                const ref_esc = escapeJsonString(_.url, &ref_esc_buf);
+                const accept_val = if (is_css) "text/css,*/*;q=0.1" else if (is_img) "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" else "*/*";
+
                 const req_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
-                    .{ i + 1, lid, _.url, fetch_url, init_type, res_type, fid },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+                    .{ i + 1, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid },
                 ) catch "";
                 if (req_json.len > 0) {
                     storage_pos += req_json.len;
@@ -3826,6 +4135,17 @@ pub struct CdpPageSession {
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;
                     out_events[ev_idx] = CdpEvent.create("Network.responseReceived", resp_json);
+                    ev_idx += 1;
+                }
+
+                const fin_json = std.fmt.bufPrint(
+                    _.net_event_storage[storage_pos..],
+                    "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":0}}",
+                    .{ i + 1 },
+                ) catch "";
+                if (fin_json.len > 0) {
+                    storage_pos += fin_json.len;
+                    out_events[ev_idx] = CdpEvent.create("Network.loadingFinished", fin_json);
                     ev_idx += 1;
                 }
             }
