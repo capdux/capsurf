@@ -4505,3 +4505,7 @@
 ### Phase 191: Pure-CP Net Redirect, Referrer & Forbidden Headers Whitebox Tests (Slot A)
 - **Subagent**: `a2fcadcf` (killed after completion)
 - **Result**: `test/net/test_redirect_referrer.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 5/5 PASS in 859ms; covering `redirect_walk.cp`, `referrer_policy.cp`, `forbidden_headers.cp`).
+
+### Phase 192: Pure-CP Eval ScriptBundle, LearnedScripts & Outbound Whitebox Tests (Slot A)
+- **Subagent**: `3ea7cba1` (killed after completion)
+- **Result**: `test/eval/test_script_bundle_and_outbound.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 1/1 PASS in 1784ms; covering `script_bundle.cp`, `learned_scripts.cp`, `external_outbound.cp`, `denied_outbound.cp`).

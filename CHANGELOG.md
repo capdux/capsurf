@@ -2235,3 +2235,6 @@
 
 ### Phase 191
 - Added `test/net/test_redirect_referrer.cp` covering redirect status/method downgrade, cross-origin sensitive header stripping, max-hops/loop stop reasons, referrer policy determination, and forbidden header filtering.
+
+### Phase 192
+- Added `test/eval/test_script_bundle_and_outbound.cp` covering script categorization/VLQ/bundle counts, learned-script promotion/eviction/stale blacklisting, and external/denied outbound policies.
