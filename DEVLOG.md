@@ -1385,4 +1385,8 @@
    - 在 `_loadLinkSheet()` 区分同源、跨域 `crossorigin` + ACAO、跨域无 ACAO 与重定向后跨域，对 opaque 样式表在 `cssRules`/`insertRule` 抛 `SecurityError` 同时保留 `_cascadeCssText` 参与 `getComputedStyle` 级联。
 2. **Flat CDP Session 与 `waitForSelector` (`e2e/harness.ts`)**：
    - 支持顶层 `sessionId` 多路复用与 `CDPClient.connection().session(sessionId)` 句柄，补齐 `Page.waitForSelector` 轮询，一举收口 7 大套件（25/26 PASS）。
+
+## Phase 96 XHTML 嗅探、CDATA 样式解包与 RawText 状态保持技术方案
+1. **XHTML 嗅探与 CDATA 解包 (`tokenizer.cp`, `tree_builder.cp`)**：
+   - `sniffXhtml` 跳过前导 BOM、XML 声明、注释与 DOCTYPE 后精确校验根标签名 `html`；在 XHTML 模式下解包 `<![CDATA[...]]>` 为字符流，并在 `TreeBuilder.processText` 持久保留 `text_tokenizer_state` 防止 RawText/ScriptData 中途退回 Data 态。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

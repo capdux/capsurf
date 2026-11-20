@@ -43,6 +43,7 @@ pub struct TreeBuilder {
     doc: *Document,
     mode: InsertionMode = InsertionMode.Initial,
     orig_mode: InsertionMode = InsertionMode.Initial,
+    text_tokenizer_state: NextTokenizerState = NextTokenizerState.Data,
 
     open_elements: [128]NodeId = [NULL_NODE; 128],
     open_elements_len: usize = 0,
@@ -64,6 +65,7 @@ pub struct TreeBuilder {
             doc: doc,
             mode: InsertionMode.Initial,
             orig_mode: InsertionMode.Initial,
+            text_tokenizer_state: NextTokenizerState.Data,
             open_elements: [NULL_NODE; 128],
             open_elements_len: 0,
             active_formatting: [FormattingEntry{}; 128],
@@ -914,16 +916,19 @@ pub struct TreeBuilder {
                         _.insertElement(tag_tok);
                         _.orig_mode = InsertionMode.InHead;
                         _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.RcData;
                         return NextTokenizerState.RcData;
                     } else if (tag_tok.tag == HtmlTag.Style) {
                         _.insertElement(tag_tok);
                         _.orig_mode = InsertionMode.InHead;
                         _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.RawText;
                         return NextTokenizerState.RawText;
                     } else if (tag_tok.tag == HtmlTag.Script) {
                         _.insertElement(tag_tok);
                         _.orig_mode = InsertionMode.InHead;
                         _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.ScriptData;
                         return NextTokenizerState.ScriptData;
                     } else if (tag_tok.tag == HtmlTag.Base ||
                                tag_tok.tag == HtmlTag.Link ||
@@ -1089,11 +1094,13 @@ pub struct TreeBuilder {
                         _.insertElement(tag_tok);
                         _.orig_mode = InsertionMode.InBody;
                         _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.RawText;
                         return NextTokenizerState.RawText;
                     } else if (tag == HtmlTag.Script) {
                         _.insertElement(tag_tok);
                         _.orig_mode = InsertionMode.InBody;
                         _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.ScriptData;
                         return NextTokenizerState.ScriptData;
                     } else if (tag == HtmlTag.Plaintext) {
                         _.insertElement(tag_tok);
@@ -1185,23 +1192,25 @@ pub struct TreeBuilder {
         switch (tok) {
             .Characters => |text| {
                 _.insertCharacter(text);
-                return NextTokenizerState.Data;
+                return _.text_tokenizer_state;
             },
             .Tag => |*tag_tok| {
                 if (tag_tok.kind == TagKind.End) {
                     _.popElement();
                     _.mode = _.orig_mode;
+                    _.text_tokenizer_state = NextTokenizerState.Data;
                     return NextTokenizerState.Data;
                 }
             },
             .Eof => {
                 _.popElement();
                 _.mode = _.orig_mode;
+                _.text_tokenizer_state = NextTokenizerState.Data;
                 return NextTokenizerState.Data;
             },
             * => {},
         }
-        return NextTokenizerState.Data;
+        return _.text_tokenizer_state;
     }
 
     fn processInTable(*_, tok: Token): NextTokenizerState {

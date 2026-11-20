@@ -3672,3 +3672,15 @@
   - 销毁 `a8f3cbb5-e8cd-4b27-a031-4d5fd4c29adc`；
   - 派发 **Subagent 64**: JS Metrics & Routes Closer（`e2e/shim/cloudflare-test.ts` + `src/js/shim/*`，`bin_19232` / `19232`）
     - 攻坚目标：一次性收割 6 大已定位套件（`engine-routes` 17/17、`stylo-layout-misc-values`、`element-measurement`、`root-element-metrics`、`scrollable-overflow-origin`、`theme-flip-repaint`）。
+
+## [2026-11-20 18:45:30] XHTML 嗅探、CDATA 样式解包与 TreeBuilder RawText 状态修复闭环 (Subagent d7fca33f 结单，Phase 96)
+- **HTML5/XHTML 词法与建树修复 (`src/html/tokenizer.cp`, `src/html/tree_builder.cp`)**:
+  - `tokenizer.cp`: 新增 `Tokenizer.sniffXhtml`（跳过 BOM/PI/注释/DOCTYPE 精准匹配根 `<html>`），支持 XHTML `<![CDATA[ ... ]]>` 解包为纯文本 Token 并加固 RawText/ScriptData 结束标签边界；
+  - `tree_builder.cp`: 新增 `text_tokenizer_state` 修复多段字符（CDATA/实体解码后）过早退出 RawText/RcData/ScriptData 的 Bug。
+- **门禁与测试验证（无锁 `-d -o` 构建）**:
+  - `tokenizer.cp` / `tree_builder.cp` 4 门禁全 0；
+  - `html-parser` (2/2 PASS)、`xhtml-doctype-parser-routing` (2/5 PASS + CDATA 样式 4 项断言全绿)，并精准定位 `img-dimensions` / `img-data-url-load` / `source-dimensions` 的 `html-classes.js` 行号收尾点。
+- **全新子智能体调度（路 1 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `d7fca33f-6c39-4f5b-804f-b1b4a7d90294`；
+  - 派发 **Subagent 65**: Font & Pseudo CSS Specialist（`src/css/*`、`src/layout/*`、`src/render/*`，`bin_19231` / `19231`）
+    - 攻坚目标：`e2e/cross-origin-font-cors.e2e.test.ts`、`e2e/author-webfont.e2e.test.ts`、`e2e/pseudo-computed-style.e2e.test.ts`、`e2e/pseudo-text-font-arrival.e2e.test.ts`、`e2e/font-face-unicode-range-gating.e2e.test.ts`。

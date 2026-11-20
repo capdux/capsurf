@@ -1773,4 +1773,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`runtime-wait-for-selector` (1)、`inline-span-white-space` (1)、`intrinsic-sizing` (4)、`webkit-box-line-clamp` (1)、`private-network` (3)、`session-outbound` (7)、`cors-stylesheets` (7)、`runtime-get-heap-usage` (1/2) 共 **25/26 PASS**。
+
+## Phase 96: XHTML Sniffing, CDATA Stylesheet Unwrapping & RawText Tokenizer State Preservation (Closed)
+- **`src/html/tokenizer.cp` & `src/html/tree_builder.cp`**：
+  - 实装 `Tokenizer.sniffXhtml`（跳过 BOM/PI/注释/DOCTYPE 精准判定 XHTML）与 XHTML `<![CDATA[...]]>` 解包；修复 `processText` 保存 `text_tokenizer_state` 避免多段字符提前退出 RawText/ScriptData。
+- **测试与门禁验证**：
+  - 静态门禁：`tokenizer.cp`、`tree_builder.cp` 4 门禁全 0；
+  - E2E 测试：`html-parser` (2/2) + `xhtml-doctype-parser-routing` (2/5 + CDATA 样式断言) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
