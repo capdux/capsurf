@@ -2415,3 +2415,7 @@
 ### Phase 240
 - Added `test/eval/test_worker_and_csp_redirect_edge.cp`.
 - Added `bridge.healedAtEntry` to `Kitesurf.getMemoryStats` in `src/cdp/session.cp` and `src/cdp/protocol_extensions.cp`.
+
+### Phase 241
+- Added `test/css/test_box_shadow_and_border_radius_edge.cp`.
+- Implemented `Kitesurf.sceneFrame` binary frame emission, heartbeat, idle-skip, and terminal wheel coalescing across `src/cdp/{scene_stream,kitesurf_facade,dispatch,server}.cp` and `src/js/shim/{window.js,element/element.js}` (+ `runtime.js`/`runtime_source.cp`).

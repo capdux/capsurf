@@ -1523,6 +1523,9 @@ function installElementExtensions(proto) {
         }
       }
       if (this._attributesMap) this._attributesMap._sync();
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
+        globalThis.__capsurf_notifyCssStyleChange(this);
+      }
     },
     configurable: true,
   });

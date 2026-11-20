@@ -35,6 +35,7 @@ pub struct KitesurfFacade {
         *_,
         method: []const u8,
         params_json: []const u8,
+        req_session_id: []const u8,
         session: *CdpPageSession,
         out_buf: []u8,
     ): ([]const u8)? {
@@ -105,13 +106,59 @@ pub struct KitesurfFacade {
         // 2. Check Scene Stream commands
         if (std.mem.eql(u8, method, "Kitesurf.startSceneStream") ||
             std.mem.eql(u8, method, "CapSurf.startSceneStream")) {
+            let w: u32 = 800;
+            if (wi := extractJsonInt(params_json, "width")) {
+                if (wi > 0) w = @as(u32, @intCast(wi));
+            }
+            let h: u32 = 600;
+            if (hi := extractJsonInt(params_json, "height")) {
+                if (hi > 0) h = @as(u32, @intCast(hi));
+            }
+            let fps: u32 = 60;
+            if (fi := extractJsonInt(params_json, "fps")) {
+                if (fi > 0) fps = @as(u32, @intCast(fi));
+            }
+            const text_mode = extractJsonBool(params_json, "text") ?? false;
+            const term_mode = extractJsonBool(params_json, "terminal") ?? false;
+            const allow_partial = extractJsonBool(params_json, "allowPartial") ?? false;
+            let cell_w: u32 = 8;
+            if (cw := extractJsonInt(params_json, "cellW")) {
+                if (cw > 0) cell_w = @as(u32, @intCast(cw));
+            }
+            let cell_h: u32 = 17;
+            if (ch := extractJsonInt(params_json, "cellH")) {
+                if (ch > 0) cell_h = @as(u32, @intCast(ch));
+            }
+
             let cfg = SceneStreamConfig{
-                target_id: "capsurf-target-001",
-                width: 1280,
-                height: 720,
-                fps: 60,
+                target_id: session.target_id,
+                width: w,
+                height: h,
+                fps: fps,
+                text: text_mode,
+                terminal: term_mode,
+                cell_w: cell_w,
+                cell_h: cell_h,
+                allow_partial: allow_partial,
             };
-            _.stream_mgr.startStream(cfg);
+            const owner_sid = if (req_session_id.len > 0) req_session_id else session.target_id;
+            * = _.stream_mgr.startStream(cfg, owner_sid, getMilliTimestamp());
+            if (session.has_document) {
+                let drv_interval: u32 = 16;
+                if (st := _.stream_mgr.getPrimaryStream()) {
+                    drv_interval = st.min_frame_interval_ms;
+                }
+                let drv_buf: [160]u8 = [0; 160];
+                const drv_js = std.fmt.bufPrint(
+                    &drv_buf,
+                    "(function(){{if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(true,{d});}})()",
+                    .{drv_interval},
+                ) catch "";
+                if (drv_js.len > 0) {
+                    const dv = session.ctx.eval(drv_js);
+                    session.ctx.freeValue(dv);
+                }
+            }
             let ok_res = "{}";
             @memcpy(out_buf[0..ok_res.len], ok_res);
             return out_buf[0..ok_res.len];
@@ -119,7 +166,11 @@ pub struct KitesurfFacade {
 
         if (std.mem.eql(u8, method, "Kitesurf.stopSceneStream") ||
             std.mem.eql(u8, method, "CapSurf.stopSceneStream")) {
-            _.stream_mgr.stopStream("capsurf-target-001");
+            * = _.stream_mgr.stopStream(session.target_id);
+            if (session.has_document && !session.screencast_handler.isActive()) {
+                const dv = session.ctx.eval("(function(){if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(false,16);})()");
+                session.ctx.freeValue(dv);
+            }
             let ok_res = "{}";
             @memcpy(out_buf[0..ok_res.len], ok_res);
             return out_buf[0..ok_res.len];
@@ -127,7 +178,12 @@ pub struct KitesurfFacade {
 
         if (std.mem.eql(u8, method, "Kitesurf.sceneFrameAck") ||
             std.mem.eql(u8, method, "CapSurf.sceneFrameAck")) {
-            _.stream_mgr.ackFrame("capsurf-target-001", 1, true);
+            let ack_seq: u32 = 0;
+            if (si := extractJsonInt(params_json, "seq")) {
+                if (si >= 0) ack_seq = @as(u32, @intCast(si));
+            }
+            const painted = extractJsonBool(params_json, "painted") ?? true;
+            * = _.stream_mgr.ackFrame(session.target_id, ack_seq, painted);
             let ok_res = "{}";
             @memcpy(out_buf[0..ok_res.len], ok_res);
             return out_buf[0..ok_res.len];

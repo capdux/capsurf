@@ -13,6 +13,7 @@ import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
 import { Base64 } from "cap:encoding";
 import { ScreencastHandler, formatScreencastFrameParams } from "./screencast.cp";
+import { SceneStreamManager, MSG_SCENE, SCENE_ENVELOPE_HEADER_BYTES } from "./scene_stream.cp";
 
 pub @c {
     struct SockAddrIn {
@@ -1079,6 +1080,114 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         return false;
     }
 
+    static fn pumpSceneStreamFrameForSession(
+        client_fd: i32,
+        sess: *CdpPageSession,
+        now_ms: i64,
+        raf_already_pumped: bool,
+    ): bool! {
+        const stream_opt = sess.facade.stream_mgr.getPrimaryStream();
+        if (stream_opt == null) return false;
+        let stream = stream_opt.?;
+        if (!stream.active) return false;
+
+        let sent_scene = false;
+        if (sess.has_document && stream.canSendFrame() && stream.isIntervalElapsed(now_ms)) {
+            if (!raf_already_pumped) {
+                let raf_buf: [128]u8 = [0; 128];
+                const raf_js = std.fmt.bufPrint(
+                    &raf_buf,
+                    "(function(){{if(typeof __capsurf_pump_raf==='function')return __capsurf_pump_raf({d});return 0;}})()",
+                    .{now_ms},
+                ) catch "";
+                if (raf_js.len > 0) {
+                    const rv = sess.ctx.eval(raf_js);
+                    sess.ctx.freeValue(rv);
+                    sess.ctx.drainJobs();
+                }
+            }
+
+            let sx: f32 = 0.0;
+            let sy: f32 = 0.0;
+            let cw: f32 = 0.0;
+            let ch: f32 = 0.0;
+            sess.updateLayoutMetrics(&sx, &sy, &cw, &ch);
+
+            const vw: u32 = if (sess.viewport_width > 0.0) @as(u32, @intFromFloat(sess.viewport_width)) else stream.config.width;
+            const vh: u32 = if (sess.viewport_height > 0.0) @as(u32, @intFromFloat(sess.viewport_height)) else stream.config.height;
+
+            const png_bytes = sess.captureScreencastFrame(stream.config.width, stream.config.height) catch "";
+            if (png_bytes.len > 0) {
+                defer sess.allocator.free(png_bytes);
+                const sx_i: i64 = @as(i64, @intFromFloat(sx));
+                const sy_i: i64 = @as(i64, @intFromFloat(sy));
+                const frame_hash = ScreencastHandler.computeFrameHash(png_bytes);
+                if (!stream.shouldSkipIdleFrame(frame_hash, vw, vh, sx_i, sy_i, sess.focused_node)) {
+                    const seq = sess.facade.stream_mgr.nextFrameSeq(sess.target_id);
+                    const env_buf = std.heap.c_allocator.alloc(u8, SCENE_ENVELOPE_HEADER_BYTES + png_bytes.len) catch return false;
+                    defer std.heap.c_allocator.free(env_buf);
+                    if (env_bytes := SceneStreamManager.buildSceneEnvelope(MSG_SCENE, seq, stream.config.width, stream.config.height, png_bytes, env_buf)) {
+                        const b64_str = Base64.encodeAlloc(sess.allocator, env_bytes) catch return false;
+                        defer sess.allocator.free(b64_str);
+                        const params_buf = std.heap.c_allocator.alloc(u8, b64_str.len + 64) catch return false;
+                        defer std.heap.c_allocator.free(params_buf);
+                        if (params_json := std.fmt.bufPrint(params_buf, "{{\"data\":\"{s}\"}}", .{b64_str}) catch null) {
+                            let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                            evts[0] = CdpEvent.create("Kitesurf.sceneFrame", params_json);
+                            const owner = stream.getOwnerSession();
+                            if (owner.len > 0 && !std.mem.eql(u8, owner, sess.target_id)) {
+                                evts[0].session_id = owner;
+                            }
+                            emitCdpEventsToFd(client_fd, &evts, 1)?;
+                            stream.recordSentFrame(frame_hash, vw, vh, sx_i, sy_i, sess.focused_node, now_ms);
+                            sent_scene = true;
+                        }
+                    }
+                } else {
+                    if (sess.frames_rendered > 0) sess.frames_rendered -= 1;
+                }
+            }
+        }
+
+        if (!sent_scene && stream.shouldSendHeartbeat(now_ms)) {
+            const hb_json = "{\"t\":\"sceneAlive\"}";
+            let hb_env_buf: [64]u8 = [0; 64];
+            if (env_bytes := SceneStreamManager.buildInfoEnvelope(hb_json, &hb_env_buf)) {
+                const b64_str = Base64.encodeAlloc(sess.allocator, env_bytes) catch return false;
+                defer sess.allocator.free(b64_str);
+                let params_buf: [256]u8 = [0; 256];
+                if (params_json := std.fmt.bufPrint(&params_buf, "{{\"data\":\"{s}\"}}", .{b64_str}) catch null) {
+                    let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                    evts[0] = CdpEvent.create("Kitesurf.sceneFrame", params_json);
+                    const owner = stream.getOwnerSession();
+                    if (owner.len > 0 && !std.mem.eql(u8, owner, sess.target_id)) {
+                        evts[0].session_id = owner;
+                    }
+                    emitCdpEventsToFd(client_fd, &evts, 1)?;
+                    stream.last_activity_ms = now_ms;
+                    return true;
+                }
+            }
+        }
+
+        return sent_scene;
+    }
+
+    fn pumpAllSceneStreams(*_, client_fd: i32, now_ms: i64, main_raf_pumped: bool)! {
+        if (_.session.facade.stream_mgr.isActive()) {
+            * = CdpServer.pumpSceneStreamFrameForSession(client_fd, _.session, now_ms, main_raf_pumped) catch false;
+        }
+        let ti: usize = 0;
+        while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+            if (_.tab_sessions[ti].active && _.tab_sessions[ti].page_session != null) {
+                const tab_sess = _.tab_sessions[ti].page_session.?;
+                if (tab_sess.facade.stream_mgr.isActive()) {
+                    * = CdpServer.pumpSceneStreamFrameForSession(client_fd, tab_sess, now_ms, false) catch false;
+                }
+            }
+        }
+    }
+
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64, initial_url: []const u8)! {
         _.deinitTabSessions();
         defer _.deinitTabSessions();
@@ -1161,7 +1270,27 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
 
             let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
-            const base_poll_ms: i32 = if (_.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15) 5 else 15;
+            let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15;
+            if (!fast_poll) {
+                if (st := _.session.facade.stream_mgr.getPrimaryStream()) {
+                    if (st.min_frame_interval_ms <= 16) fast_poll = true;
+                }
+            }
+            if (!fast_poll) {
+                let ti_p: usize = 0;
+                while (ti_p < MAX_TAB_SESSIONS) : (ti_p += 1) {
+                    if (_.tab_sessions[ti_p].active && _.tab_sessions[ti_p].page_session != null) {
+                        const tab_sess_p = _.tab_sessions[ti_p].page_session.?;
+                        if (st := tab_sess_p.facade.stream_mgr.getPrimaryStream()) {
+                            if (st.min_frame_interval_ms <= 16) {
+                                fast_poll = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            const base_poll_ms: i32 = if (fast_poll) 5 else 15;
             const poll_ms: i32 = if (pending_wheel.active) 1 else base_poll_ms;
             const pr = poll(&pfd, 1, poll_ms);
             if (pr < 0) {
@@ -1195,9 +1324,11 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         }
                     }
                 }
+                let did_pump_main_sc = false;
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
-                    * = _.pumpScreencastFrame(client_fd, tick_now_ms) catch false;
+                    did_pump_main_sc = _.pumpScreencastFrame(client_fd, tick_now_ms) catch false;
                 }
+                _.pumpAllSceneStreams(client_fd, tick_now_ms, did_pump_main_sc) catch break;
                 continue;
             }
             if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) {
@@ -1209,12 +1340,30 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 last_client_activity_ms = serverNowMs();
                 const cdp_req = CdpRequest.parse(payload);
 
-                if (_.session.screencast_handler.isActive() && std.mem.eql(u8, cdp_req.method, "Input.dispatchMouseEvent")) {
-                    const mtype = extractJsonString(cdp_req.params_raw, "type") ?? "";
-                    if (std.mem.eql(u8, mtype, "mouseWheel")) {
-                        const caller_sid = if (cdp_req.session_id.len > 0) cdp_req.session_id else _.session.target_id;
-                        const owner_sid = _.session.screencast_handler.getOwnerSession();
-                        if (owner_sid.len > 0 && std.mem.eql(u8, caller_sid, owner_sid)) {
+                if (std.mem.eql(u8, cdp_req.method, "Input.dispatchMouseEvent")) {
+                    const target_sess = _.resolveSessionForRequest(cdp_req);
+                    const sc_active = target_sess.screencast_handler.isActive();
+                    const st_term_active = target_sess.facade.stream_mgr.isTerminalActive();
+                    if (sc_active || st_term_active) {
+                        const mtype = extractJsonString(cdp_req.params_raw, "type") ?? "";
+                        if (std.mem.eql(u8, mtype, "mouseWheel")) {
+                            const caller_sid = if (cdp_req.session_id.len > 0) cdp_req.session_id else target_sess.target_id;
+                            let owner_match = false;
+                            if (sc_active) {
+                                const owner_sid = target_sess.screencast_handler.getOwnerSession();
+                                if (owner_sid.len > 0 && std.mem.eql(u8, caller_sid, owner_sid)) {
+                                    owner_match = true;
+                                }
+                            }
+                            if (!owner_match && st_term_active) {
+                                if (st := target_sess.facade.stream_mgr.getPrimaryStream()) {
+                                    const st_owner = st.getOwnerSession();
+                                    if (st_owner.len == 0 || std.mem.eql(u8, caller_sid, st_owner)) {
+                                        owner_match = true;
+                                    }
+                                }
+                            }
+                            if (owner_match) {
                             const wx = extractJsonFloat(cdp_req.params_raw, "x") ?? 0.0;
                             const wy = extractJsonFloat(cdp_req.params_raw, "y") ?? 0.0;
                             const wdx = extractJsonFloat(cdp_req.params_raw, "deltaX") ?? 0.0;
@@ -1244,6 +1393,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                             pending_wheel.delta_y += wdy;
                             pending_wheel.addReply(cdp_req.id, cdp_req.raw_id);
                             continue;
+                            }
                         }
                     }
                 }
@@ -1315,11 +1465,13 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     writeWsCloseFrame(client_fd, 1000, "Browser.close") catch {};
                     break;
                 }
+                const post_now_ms = serverNowMs();
+                let did_post_sc = false;
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
                     _.session.pumpTimers();
-                    const post_now_ms = serverNowMs();
-                    * = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
+                    did_post_sc = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
                 }
+                _.pumpAllSceneStreams(client_fd, post_now_ms, did_post_sc) catch break;
             } else {
                 break;
             }

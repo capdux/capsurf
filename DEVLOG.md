@@ -1797,3 +1797,7 @@
 ### Phase 240: `getMemoryStats.bridge` & Single-Engine ECMA-262 Boundaries
 - Added `"bridge":{"healedAtEntry":0}` to `formatMemoryStatsJson` and fallback `getMemoryStats`, unblocking `bridge-heal-at-entry` (1/1 PASS).
 - Documented single-engine QuickJS ECMA-262 boundaries for `boa-object-from-page:215` and `bridge-defineproperty:88`.
+
+### Phase 241: `Kitesurf.sceneFrame` Binary Stream & Terminal Coalescing (`scene-stream-idle-frames` 5/5)
+- `CdpServer.pumpAllSceneStreams` emits `Kitesurf.sceneFrame` (`MSG_INFO=2` heartbeats, `MSG_SCENE=3` frames with 11B header) while sharing the single-tick rAF driver with `Page.screencastFrame`.
+- `Element.prototype.className` setter now calls `__capsurf_notifyCssStyleChange(this)` so class-toggled CSS animations trigger immediately.

@@ -10217,6 +10217,9 @@
           }
         }
         if (this._attributesMap) this._attributesMap._sync();
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
+          globalThis.__capsurf_notifyCssStyleChange(this);
+        }
       },
       configurable: true,
     });
@@ -39721,6 +39724,16 @@
             }
           } else if (keyStr === "Tab") {
             navigateTabFocus(isShift);
+          } else if (keyStr === "ArrowDown") {
+            if (typeof global.scrollBy === "function") global.scrollBy(0, 40);
+          } else if (keyStr === "ArrowUp") {
+            if (typeof global.scrollBy === "function") global.scrollBy(0, -40);
+          } else if (keyStr === "PageDown") {
+            const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+            if (typeof global.scrollBy === "function") global.scrollBy(0, Math.round(vh * 0.85));
+          } else if (keyStr === "PageUp") {
+            const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+            if (typeof global.scrollBy === "function") global.scrollBy(0, -Math.round(vh * 0.85));
           } else if (keyStr === "Enter") {
             const active = doc ? doc.activeElement : null;
             if (active) {
