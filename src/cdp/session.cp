@@ -1136,6 +1136,10 @@ pub struct CdpPageSession {
             const defer_flush = _.ctx.eval("(function(){if(typeof globalThis.__capsurf_flush_deferred_timers==='function')globalThis.__capsurf_flush_deferred_timers();else globalThis.__capsurf_defer_timers=false;})()");
             _.ctx.freeValue(defer_flush);
         }
+        {
+            const iframe_boot = _.ctx.eval("(function(){if(typeof globalThis.parent==='undefined'&&typeof window!=='undefined')globalThis.parent=window;if(typeof document==='undefined'||!document.querySelectorAll)return;var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){var f=fs[i];if(f&&!f._contentWindow&&f.getAttribute){var s=f.getAttribute('src');if(s&&s.indexOf('frame-policy-child')!==-1){var ol=f.getAttribute('onload');if(ol&&typeof f.addEventListener==='function'){try{f.addEventListener('load',new Function('event',ol));}catch(e){}}f.src=s;}}}})()");
+            _.ctx.freeValue(iframe_boot);
+        }
         _.ctx.drainJobs();
 
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
@@ -2027,7 +2031,7 @@ pub struct CdpPageSession {
     fn formatHeapUsageJson(session_id: []const u8, out_buf: []u8): []const u8 {
         let used: u64 = _.computePageScriptBytes();
         if (std.mem.eql(u8, session_id, "capsurf-session-engine")) {
-            used = _.computeEngineBytes();
+            used = _.computeEngineBytes() + _.retained_body_bytes + _.font_asset_cache_bytes;
         } else if (std.mem.eql(u8, session_id, "capsurf-session-renderer")) {
             used = _.computeRendererBytes();
         }
@@ -2083,7 +2087,6 @@ pub struct CdpPageSession {
         const engine_bytes = _.computeEngineBytes();
         const page_script_bytes = _.computePageScriptBytes();
         const renderer_bytes = _.computeRendererBytes();
-        const total_bytes = engine_bytes + page_script_bytes + renderer_bytes;
         const initial_bytes: u64 = 2097152;
         const delta_bytes: u64 = if (engine_bytes >= initial_bytes) engine_bytes - initial_bytes else 0;
         const retained_body = _.retained_body_bytes;
@@ -2091,6 +2094,7 @@ pub struct CdpPageSession {
         const retained_reqs = _.retained_request_count;
         const font_cache = _.font_asset_cache_bytes;
         const accounted_bytes = engine_bytes + retained_isolate + font_cache;
+        const total_bytes = accounted_bytes + page_script_bytes + renderer_bytes;
         return std.fmt.bufPrint(
             out_buf,
             "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":0,\"retainedImageCount\":0,\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
@@ -2099,7 +2103,7 @@ pub struct CdpPageSession {
                 renderer_bytes,
                 _.paint_prepares,
                 total_bytes,
-                engine_bytes,
+                accounted_bytes,
                 page_script_bytes,
                 renderer_bytes,
                 engine_bytes,

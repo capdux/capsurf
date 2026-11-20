@@ -3738,3 +3738,17 @@
   - 全部 5 个 `.cp` 文件 4 门禁全 0；
   - `author-webfont` (2/2 PASS)、`cross-origin-font-cors` (2/2 PASS)、`font-face-unicode-range-gating` (1/3 PASS)；定位 `pseudo-computed-style` 缺 `Element.prototype.insertAdjacentHTML`（已交路 2）。
 - **清理旧子智能体**: 销毁 `9b218229-ab7c-47a8-9c11-58aebd0b6113`。
+
+## [2026-11-20 19:08:20] 堆内存守恒、DOM ShadowRoot 序列化与 CSP frame-ancestors/XFO 嵌入策略 11/15 闭环 (Subagent 01656d31 结单，Phase 101)
+- **CDP 内存统计守恒与 ShadowRoot/SVG 序列化 (`src/cdp/{session,dom,page}.cp`)**:
+  - `session.cp`: `total.engineBytes` 对齐 `accounted_bytes`，`capsurf-session-engine` 对齐 `Runtime.getHeapUsage`；
+  - `dom.cp`: `serializeCdpNode` 保留 SVG 大小写并支持 `shadowRoots` 序列化（剔除内部 `attributeNamespaces`），`DOM.describeNode` 完整输出属性，`DOM.enable` 自动观测文档；
+- **CSP `frame-ancestors` / `X-Frame-Options` 嵌入策略与跨域 302 Set-Cookie (`src/net/{mock_fixtures,http_loader}.cp`)**:
+  - 实装 `isFrameEmbeddingAllowed`（CSP `frame-ancestors` 优先、忽略 `Report-Only`、严格解析 `X-Frame-Options`）与 `/frame-policy-*`、`/allow-headers` 路由；导航跟跳 `/loud-redirect` 正确持久化 302 `Set-Cookie`。
+- **门禁与 E2E 验证**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `runtime-get-heap-usage` (2/2)、`dom-attribute-namespace-wire` (4/4)、`frame-policy` (4/4)、`cross-origin-redirect-shell` (1/3)：**11/15 PASS**！
+- **全新子智能体调度（路 3 无缝补位，全线 `-m -d -o` 模块级增量构建）**:
+  - 销毁 `01656d31-fe99-4802-b08f-3b01a61ad93c`；
+  - 派发 **Subagent 70**: CDP & Net Precision Closer（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`，`-m -d -o`）
+    - 攻坚目标：5 项已定位纯 CP 收尾（`engine-routes` 17/17、`font-face-unicode-range-gating` 3/3、`pseudo-text-font-arrival`、`fetch-interception` Test 7、`DOM.getOuterHTML` + `Runtime.bindingCalled` 转义）。

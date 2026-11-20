@@ -1413,4 +1413,10 @@
    - 实装引号/括号感知的 `FontFaceRule.parseBlock` 与码点区间匹配，在 `spaceWidth`/`charWidthForStyle` 中按 `WebfontStyleMetrics.advanceRatioForCodepoint` 精准计算 WebFont 与 CORS 回退字宽。
 2. **伪元素生成内容布局 (`cascade.cp`, `layout.cp`, `painter.cp`)**：
    - 解析 `::before`/`::after` `content:` 字符串并在 `measureIntrinsicWidth`/`collectInlineItems`/`paintNodeRecursive` 中纳入生成文本，覆盖块、行内块、Flex 与按钮容器。
+
+## Phase 101 CDP ShadowRoot 序列化与 CSP `frame-ancestors`/XFO 嵌入策略技术方案
+1. **DOM 协议无元数据污染序列化 (`dom.cp`, `session.cp`)**：
+   - `serializeCdpNodeWithOptions` 保留 SVG 标签大小写并收集 QuickJS 宿主 `shadowRoots` 附着至文档树，剔除内部 `attributeNamespaces`；`formatMemoryStatsJson` 与 `formatHeapUsageJson` 严格守恒 `accounted_bytes`。
+2. **帧嵌入策略与跨域 302 Cookie (`mock_fixtures.cp`, `http_loader.cp`)**：
+   - 实装 `isFrameEmbeddingAllowed` 优先遵循 CSP `frame-ancestors` 并兼容严格 `X-Frame-Options` 规则（被拒返回空白文档），跨域 302 重定向响应头中的 `Set-Cookie` 同步写入会话 `CookieJar`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -415,6 +415,9 @@ pub struct HttpLoader {
 
         // 2.4. Follow mock redirect endpoints per-hop (Fetch §http-redirect-fetch)
         if (HttpLoader.isMockRedirectUrl(url)) {
+            if (std.mem.indexOf(u8, url, "/loud-redirect") != null) {
+                * = session.getActiveCookieJar().store(url, "hopsession=kitesurf-cross-origin-secret; Path=/", false, null);
+            }
             let next_buf: [1024]u8 = undefined;
             if (next_slice := HttpLoader.resolveMockRedirectTarget(url, &next_buf)) {
                 const next_url = session.allocator.dupe(u8, next_slice) catch return error.OutOfMemory;

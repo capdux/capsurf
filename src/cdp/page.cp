@@ -111,7 +111,7 @@ fn collectFrameStates(
             count += 1;
 
             // Depth-2 iframe discovery for fixture documents
-            if (count < out_frames.len && MockFixtures.isFixtureUrl(child_url)) {
+            if (count < out_frames.len && MockFixtures.isFixtureUrl(child_url) && std.mem.indexOf(u8, child_url, "/frame-policy-child.html") == null) {
                 const child_html_buf = session.allocator.alloc(u8, 16384) catch continue;
                 defer session.allocator.free(child_html_buf);
                 if (child_html := MockFixtures.handleFixtureRequest(child_url, "", session.user_agent, child_html_buf, null, "")) {

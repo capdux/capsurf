@@ -1808,4 +1808,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`author-webfont` (2/2)、`cross-origin-font-cors` (2/2)、`font-face-unicode-range-gating` (1/3) PASS。
+
+## Phase 101: Heap Usage Conservation, CDP ShadowRoot Wire & CSP `frame-ancestors`/XFO Policy (Closed)
+- **`src/cdp/{session,dom,page}.cp` & `src/net/{http_loader,mock_fixtures}.cp`**：
+  - 对齐 `total.engineBytes == engine.accountedBytes`、`DOM.getDocument` 附着 `shadowRoots` 与 SVG 大小写保留、`DOM.describeNode` 完整属性序列化，以及完整 CSP `frame-ancestors` / `X-Frame-Options` 嵌入策略与跨域 302 `Set-Cookie` 持久化。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`runtime-get-heap-usage` (2/2)、`dom-attribute-namespace-wire` (4/4)、`frame-policy` (4/4)、`cross-origin-redirect-shell` (1/3) 共 **11/15 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

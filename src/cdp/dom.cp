@@ -28,7 +28,47 @@ pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnman
     list.append(allocator, '"')?;
 }
 
+pub struct ShadowRootEntry {
+    nid: NodeId = NULL_NODE,
+    json: []const u8 = "",
+}
+
+fn isNodeInSvg(doc: *const Document, nid: NodeId): bool {
+    let cur = nid;
+    let guard: usize = 0;
+    while (cur != NULL_NODE && @as(usize, cur) < doc.nodes.items.len && guard < 128) : (guard += 1) {
+        const n = &doc.nodes.items[@as(usize, cur)];
+        if (n.node_type == .Element && std.ascii.eqlIgnoreCase(n.tag_name, "svg")) {
+            return true;
+        }
+        cur = n.parent;
+    }
+    return false;
+}
+
+fn findShadowRootJson(entries: []const ShadowRootEntry, nid: NodeId): ([]const u8)? {
+    let i: usize = 0;
+    while (i < entries.len) : (i += 1) {
+        if (entries[i].nid == nid) return entries[i].json;
+    }
+    return null;
+}
+
 pub fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: NodeId, depth: i64, list: *std.ArrayListUnmanaged(u8))! {
+    const empty_sr: []const ShadowRootEntry = [];
+    const in_svg = isNodeInSvg(doc, nid);
+    return serializeCdpNodeWithOptions(allocator, doc, nid, depth, in_svg, empty_sr, list);
+}
+
+pub fn serializeCdpNodeWithOptions(
+    allocator: std.mem.Allocator,
+    doc: *const Document,
+    nid: NodeId,
+    depth: i64,
+    in_svg: bool,
+    shadow_roots: []const ShadowRootEntry,
+    list: *std.ArrayListUnmanaged(u8),
+)! {
     if (nid == NULL_NODE || @as(usize, nid) >= doc.nodes.items.len) return;
     const node = &doc.nodes.items[@as(usize, nid)];
 
@@ -43,20 +83,23 @@ pub fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid:
     const header = std.fmt.bufPrint(&buf, "{{\"nodeId\":{d},\"backendNodeId\":{d},", .{ nid, nid }) catch return;
     list.appendSlice(allocator, header)?;
 
+    let child_in_svg = in_svg;
     switch (node.node_type) {
         .Document => {
             list.appendSlice(allocator, "\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",")?;
         },
         .Element => {
             const tag = node.tag_name;
+            const elem_in_svg = in_svg || std.ascii.eqlIgnoreCase(tag, "svg");
+            child_in_svg = elem_in_svg;
             let upper_buf: [64]u8 = [0; 64];
             let upper_len: usize = 0;
             while (upper_len < tag.len && upper_len < upper_buf.len) : (upper_len += 1) {
                 upper_buf[upper_len] = std.ascii.toUpper(tag[upper_len]);
             }
-            const upper_tag = upper_buf[0..upper_len];
+            const node_name = if (elem_in_svg) tag else upper_buf[0..upper_len];
             let el_buf: [256]u8 = undefined;
-            const el_header = std.fmt.bufPrint(&el_buf, "\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",", .{ upper_tag, tag }) catch return;
+            const el_header = std.fmt.bufPrint(&el_buf, "\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",", .{ node_name, tag }) catch return;
             list.appendSlice(allocator, el_header)?;
 
             list.appendSlice(allocator, "\"attributes\":[")?;
@@ -120,10 +163,18 @@ pub fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid:
         while (kid != NULL_NODE && @as(usize, kid) < doc.nodes.items.len) {
             if (!first_kid) list.append(allocator, ',')?;
             first_kid = false;
-            serializeCdpNode(allocator, doc, kid, next_depth, list)?;
+            serializeCdpNodeWithOptions(allocator, doc, kid, next_depth, child_in_svg, shadow_roots, list)?;
             kid = doc.nodes.items[@as(usize, kid)].next_sibling;
         }
         list.append(allocator, ']')?;
+    }
+
+    if (depth != 0) {
+        if (sr_json := findShadowRootJson(shadow_roots, nid)) {
+            list.appendSlice(allocator, ",\"shadowRoots\":[")?;
+            list.appendSlice(allocator, sr_json)?;
+            list.append(allocator, ']')?;
+        }
     }
 
     list.append(allocator, '}')?;
@@ -317,6 +368,9 @@ pub struct DomHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
         if (std.mem.eql(u8, req.method, "DOM.enable")) {
             session.dom_enabled = true;
+            if (!session.dom_document_sent) {
+                session.markDocumentObserved(-1);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -343,6 +397,63 @@ pub struct DomHandler {
             const depth = extractJsonInt(req.params_raw, "depth") ?? -1;
             let list = std.ArrayListUnmanaged(u8).empty;
             defer list.deinit(session.allocator);
+
+            let sr_entries: [32]ShadowRootEntry = [ShadowRootEntry{}; 32];
+            let sr_count: usize = 0;
+            let sr_raw_owned: ([]u8)? = null;
+            defer if (sr_raw_owned != null) session.allocator.free(sr_raw_owned.?);
+
+            if (depth != 0 && session.has_document) {
+                const sr_script =
+                    "(function(){" ++
+                    "if(typeof document==='undefined'||!document.querySelectorAll)return '';" ++
+                    "var nextId=900000;" ++
+                    "function ser(n,inSvg){" ++
+                    "if(!n)return null;" ++
+                    "var nt=n.nodeType||1;" ++
+                    "var nid=(typeof n._nid==='number'&&n._nid>0)?n._nid:(nextId++);" ++
+                    "var obj={nodeId:nid,backendNodeId:nid,nodeType:nt,nodeName:n.nodeName||'',localName:n.localName||'',nodeValue:n.nodeValue||''};" ++
+                    "if(nt===1){" ++
+                    "var tag=n.localName||String(n.tagName||'').toLowerCase();" ++
+                    "var svgNow=inSvg||tag==='svg';" ++
+                    "obj.nodeName=svgNow?tag:String(n.tagName||tag).toUpperCase();" ++
+                    "obj.localName=tag;obj.nodeValue='';" ++
+                    "var attrs=[];var rawAttrs=n.attributes||[];" ++
+                    "for(var i=0;i<rawAttrs.length;i++){var a=rawAttrs[i];if(a&&typeof a.name==='string'){attrs.push(a.name,String(a.value==null?'':a.value));}}" ++
+                    "obj.attributes=attrs;" ++
+                    "}else if(nt===11){obj.nodeName='#document-fragment';obj.localName='';obj.nodeValue='';if(n.mode)obj.shadowRootType=n.mode;}" ++
+                    "var kids=n.childNodes||[];obj.childNodeCount=kids.length;" ++
+                    "if(kids.length>0){obj.children=[];var svgChild=inSvg||(nt===1&&(n.localName||String(n.tagName||'').toLowerCase())==='svg');for(var j=0;j<kids.length;j++){var c=ser(kids[j],svgChild);if(c)obj.children.push(c);}}" ++
+                    "if(nt===1&&n.shadowRoot){var sr=ser(n.shadowRoot,false);if(sr)obj.shadowRoots=[sr];}" ++
+                    "return obj;}" ++
+                    "var all=document.querySelectorAll('*');var out='';" ++
+                    "for(var k=0;k<all.length;k++){var el=all[k];if(el&&el.shadowRoot&&typeof el._nid==='number'&&el._nid>0){var sr=ser(el.shadowRoot,false);if(sr)out+=el._nid+'\\x1e'+JSON.stringify(sr)+'\\x1f';}}" ++
+                    "return out;})()";
+                const sr_val = session.ctx.eval(sr_script);
+                defer session.ctx.freeValue(sr_val);
+                const sr_slice = session.ctx.toCString(sr_val);
+                if (sr_slice.len > 0) {
+                    const duped = session.allocator.dupe(u8, sr_slice) catch null;
+                    if (duped != null) {
+                        sr_raw_owned = duped;
+                        let rec_it = std.mem.splitScalar(u8, duped.?, 0x1f);
+                        while (rec := rec_it.next()) {
+                            if (rec.len == 0 || sr_count >= sr_entries.len) continue;
+                            if (sep := std.mem.indexOfScalar(u8, rec, 0x1e)) {
+                                const parsed_nid = std.fmt.parseInt(u32, rec[0..sep], 10) catch 0;
+                                if (parsed_nid > 0 && sep + 1 < rec.len) {
+                                    sr_entries[sr_count] = ShadowRootEntry{
+                                        nid: parsed_nid,
+                                        json: rec[sep + 1 ..],
+                                    };
+                                    sr_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             const cnt: u32 = if (root_node != NULL_NODE) 1 else 0;
             let root_buf: [256]u8 = undefined;
             const root_s = std.fmt.bufPrint(
@@ -353,7 +464,7 @@ pub struct DomHandler {
             list.appendSlice(session.allocator, root_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             if (depth != 0 && root_node != NULL_NODE) {
                 list.appendSlice(session.allocator, ",\"children\":[") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
-                serializeCdpNode(session.allocator, &session.doc, root_node, depth, &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                serializeCdpNodeWithOptions(session.allocator, &session.doc, root_node, depth, false, sr_entries[0..sr_count], &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 list.appendSlice(session.allocator, "]") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             }
             list.appendSlice(session.allocator, "}}") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
@@ -628,13 +739,30 @@ pub struct DomHandler {
         }
 
         if (std.mem.eql(u8, req.method, "DOM.describeNode")) {
-            const node_id_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
-            const node_id: NodeId = @as(NodeId, @intCast(node_id_val));
-            const tag = if (node_id > 0 && node_id < session.doc.nodeCount()) session.doc.getTagName(node_id) else "";
+            let node_id_val: i64 = 0;
+            if (n_id := extractJsonInt(req.params_raw, "nodeId")) {
+                node_id_val = n_id;
+            } else if (b_id := extractJsonInt(req.params_raw, "backendNodeId")) {
+                node_id_val = b_id;
+            } else if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                const resolved = resolveNodeIdFromObjectId(session, obj_id);
+                if (resolved > 0) node_id_val = @as(i64, resolved);
+            }
+            const depth = extractJsonInt(req.params_raw, "depth") ?? 0;
+            if (node_id_val > 0 && @as(usize, @intCast(node_id_val)) < session.doc.nodes.items.len) {
+                const node_id: NodeId = @as(NodeId, @intCast(node_id_val));
+                let list = std.ArrayListUnmanaged(u8).empty;
+                defer list.deinit(session.allocator);
+                list.appendSlice(session.allocator, "{\"node\":") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                serializeCdpNode(session.allocator, &session.doc, node_id, depth, &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                list.append(session.allocator, '}') catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                const res = std.fmt.bufPrint(out_buf, "{s}", .{list.items}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, res);
+            }
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\"}}}}",
-                .{ node_id, node_id, tag, tag },
+                "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"\",\"localName\":\"\",\"nodeValue\":\"\"}}}}",
+                .{ node_id_val, node_id_val },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }

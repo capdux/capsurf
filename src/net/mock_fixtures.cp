@@ -814,6 +814,109 @@ pub struct MockFixtures {
             }
         }
 
+        if (std.mem.indexOf(u8, url, "/allow-headers") != null) {
+            const body = "ok";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
+        if (std.mem.indexOf(u8, url, "/frame-policy-host.html") != null) {
+            let child_buf: [2048]u8 = undefined;
+            let child_url: []const u8 = "/__fixtures/frame-policy-child.html";
+            if (raw_child := MockFixtures.extractQueryParam(url, "child")) {
+                child_url = MockFixtures.decodeUri(raw_child, &child_buf);
+            }
+            let is_dynamic = false;
+            if (raw_dyn := MockFixtures.extractQueryParam(url, "dynamic")) {
+                if (std.mem.eql(u8, raw_dyn, "1")) {
+                    is_dynamic = true;
+                }
+            }
+            if (is_dynamic) {
+                let esc_js_buf: [4096]u8 = undefined;
+                const esc_js = MockFixtures.escapeJson(child_url, &esc_js_buf);
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>frame policy host</title></head>\n<body style=\"margin:0\">\n<script>\nwindow.__msgs = [];\nwindow.__frameLoaded = false;\naddEventListener(\"message\", (e) => window.__msgs.push({{ data: e.data, origin: e.origin }}));\n</script>\n<script>\nconst f = document.createElement(\"iframe\");\nf.id = \"f\";\nf.src = \"{s}\";\nf.style.cssText = \"border:0;width:200px;height:120px\";\nf.addEventListener(\"load\", () => {{ window.__frameLoaded = true; }});\ndocument.body.appendChild(f);\n</script>\n</body></html>",
+                    .{ esc_js },
+                ) catch return null;
+                return res;
+            } else {
+                let esc_attr_buf: [4096]u8 = undefined;
+                const esc_attr = escapeHtmlAttr(child_url, &esc_attr_buf);
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>frame policy host</title></head>\n<body style=\"margin:0\">\n<script>\nwindow.__msgs = [];\nwindow.__frameLoaded = false;\naddEventListener(\"message\", (e) => window.__msgs.push({{ data: e.data, origin: e.origin }}));\n</script>\n<iframe id=\"f\" onload=\"window.__frameLoaded = true\" src=\"{s}\" style=\"border:0;width:200px;height:120px\"></iframe>\n</body></html>",
+                    .{ esc_attr },
+                ) catch return null;
+                return res;
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/frame-policy-hits") != null) {
+            let marker_buf: [128]u8 = undefined;
+            let marker: []const u8 = "";
+            if (raw_marker := MockFixtures.extractQueryParam(url, "marker")) {
+                marker = MockFixtures.decodeUri(raw_marker, &marker_buf);
+            }
+            const hits = getFramePolicyHits(marker);
+            const res = std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch return null;
+            return res;
+        }
+
+        if (std.mem.indexOf(u8, url, "/frame-policy-child.html") != null) {
+            let marker_buf: [128]u8 = undefined;
+            let marker: []const u8 = "child";
+            if (raw_marker := MockFixtures.extractQueryParam(url, "marker")) {
+                marker = MockFixtures.decodeUri(raw_marker, &marker_buf);
+            }
+            incrementFramePolicyHits(marker);
+
+            let csp_buf: [512]u8 = undefined;
+            let csp_opt: ([]const u8)? = null;
+            if (raw_csp := MockFixtures.extractQueryParam(url, "csp")) {
+                csp_opt = MockFixtures.decodeUri(raw_csp, &csp_buf);
+            }
+            let xfo_buf: [512]u8 = undefined;
+            let xfo_opt: ([]const u8)? = null;
+            if (raw_xfo := MockFixtures.extractQueryParam(url, "xfo")) {
+                xfo_opt = MockFixtures.decodeUri(raw_xfo, &xfo_buf);
+            }
+
+            const ancestor_origin = if (origin.len > 0) origin else "https://ks.invalid";
+            if (!isFrameEmbeddingAllowed(url, ancestor_origin, csp_opt, xfo_opt)) {
+                const blank = "<!doctype html><html><head></head><body></body></html>";
+                const len = @min(blank.len, out_buf.len);
+                @memcpy(out_buf[0..len], blank[0..len]);
+                return out_buf[0..len];
+            }
+
+            let no_script = false;
+            if (raw_script := MockFixtures.extractQueryParam(url, "script")) {
+                if (std.mem.eql(u8, raw_script, "0")) {
+                    no_script = true;
+                }
+            }
+            let esc_marker_buf: [256]u8 = undefined;
+            const esc_marker = MockFixtures.escapeJson(marker, &esc_marker_buf);
+            if (no_script) {
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>frame policy child</title></head>\n<body><p id=\"secret\">protected {s}</p>\n</body></html>",
+                    .{ marker },
+                ) catch return null;
+                return res;
+            } else {
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>frame policy child</title></head>\n<body><p id=\"secret\">protected {s}</p>\n<script>parent.postMessage(\"ran:{s}\", \"*\")</script>\n</body></html>",
+                    .{ marker, esc_marker },
+                ) catch return null;
+                return res;
+            }
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {
@@ -849,4 +952,164 @@ pub fn handleFixtureRequest(
     strip_credentials: bool = false,
 ): ([]const u8)? {
     return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar, extra_headers, req_ctx, strip_credentials);
+}
+
+struct FramePolicyHitSlot {
+    marker_buf: [64]u8 = [0; 64],
+    marker_len: usize = 0,
+    hits: u32 = 0,
+}
+
+let g_frame_policy_hits: [64]FramePolicyHitSlot = [FramePolicyHitSlot{}; 64];
+let g_frame_policy_hit_count: usize = 0;
+
+fn incrementFramePolicyHits(marker: []const u8) {
+    let i: usize = 0;
+    while (i < g_frame_policy_hit_count) : (i += 1) {
+        let slot = &g_frame_policy_hits[i];
+        if (std.mem.eql(u8, slot.marker_buf[0..slot.marker_len], marker)) {
+            slot.hits += 1;
+            return;
+        }
+    }
+    if (g_frame_policy_hit_count < g_frame_policy_hits.len) {
+        let slot = &g_frame_policy_hits[g_frame_policy_hit_count];
+        const n = @min(marker.len, slot.marker_buf.len);
+        @memcpy(slot.marker_buf[0..n], marker[0..n]);
+        slot.marker_len = n;
+        slot.hits = 1;
+        g_frame_policy_hit_count += 1;
+    }
+}
+
+fn getFramePolicyHits(marker: []const u8): u32 {
+    let i: usize = 0;
+    while (i < g_frame_policy_hit_count) : (i += 1) {
+        const slot = &g_frame_policy_hits[i];
+        if (std.mem.eql(u8, slot.marker_buf[0..slot.marker_len], marker)) {
+            return slot.hits;
+        }
+    }
+    return 0;
+}
+
+fn escapeHtmlAttr(src: []const u8, dst: []u8): []const u8 {
+    let pos: usize = 0;
+    let i: usize = 0;
+    while (i < src.len) : (i += 1) {
+        const c = src[i];
+        if (c == '"') {
+            if (pos + 6 > dst.len) break;
+            @memcpy(dst[pos .. pos + 6], "&quot;");
+            pos += 6;
+        } else if (c == '<') {
+            if (pos + 4 > dst.len) break;
+            @memcpy(dst[pos .. pos + 4], "&lt;");
+            pos += 4;
+        } else if (c == '>') {
+            if (pos + 4 > dst.len) break;
+            @memcpy(dst[pos .. pos + 4], "&gt;");
+            pos += 4;
+        } else {
+            if (pos + 1 > dst.len) break;
+            dst[pos] = c;
+            pos += 1;
+        }
+    }
+    return dst[0..pos];
+}
+
+fn extractOriginSlice(url: []const u8): []const u8 {
+    const scheme_pos = std.mem.indexOf(u8, url, "://");
+    if (scheme_pos == null) return "";
+    const host_start = scheme_pos.? + 3;
+    const slash_pos = std.mem.indexOfScalarPos(u8, url, host_start, '/');
+    if (slash_pos != null) return url[0..slash_pos.?];
+    const q_pos = std.mem.indexOfScalarPos(u8, url, host_start, '?');
+    if (q_pos != null) return url[0..q_pos.?];
+    return url;
+}
+
+fn trimAsciiWs(s: []const u8): []const u8 {
+    return std.mem.trim(u8, s, " \t\r\n");
+}
+
+fn isFrameEmbeddingAllowed(
+    child_url: []const u8,
+    ancestor_origin: []const u8,
+    csp_opt: ([]const u8)?,
+    xfo_opt: ([]const u8)?,
+): bool {
+    const child_origin = extractOriginSlice(child_url);
+    const same_origin = (child_origin.len > 0 && ancestor_origin.len > 0 && std.ascii.eqlIgnoreCase(child_origin, ancestor_origin));
+
+    // 1. CSP frame-ancestors takes precedence over X-Frame-Options
+    if (csp := csp_opt) {
+        let dir_it = std.mem.splitScalar(u8, csp, ';');
+        while (raw_dir := dir_it.next()) {
+            const dir = trimAsciiWs(raw_dir);
+            if (dir.len < 15) continue;
+            if (std.ascii.eqlIgnoreCase(dir[0..15], "frame-ancestors") &&
+                (dir.len == 15 || dir[15] == ' ' || dir[15] == '\t')) {
+                const rest = if (dir.len > 15) trimAsciiWs(dir[15..]) else "";
+                if (rest.len == 0) return false;
+                let tok_it = std.mem.tokenizeAny(u8, rest, " \t\r\n");
+                let matched = false;
+                while (tok := tok_it.next()) {
+                    if (std.ascii.eqlIgnoreCase(tok, "'none'")) {
+                        return false;
+                    } else if (std.mem.eql(u8, tok, "*")) {
+                        if (std.mem.startsWith(u8, ancestor_origin, "http://") || std.mem.startsWith(u8, ancestor_origin, "https://")) {
+                            matched = true;
+                        }
+                    } else if (std.ascii.eqlIgnoreCase(tok, "'self'")) {
+                        if (same_origin) matched = true;
+                    } else if (std.ascii.eqlIgnoreCase(tok, ancestor_origin)) {
+                        matched = true;
+                    } else if (tok.len > 1 && tok[tok.len - 1] == ':') {
+                        if (ancestor_origin.len >= tok.len && std.ascii.eqlIgnoreCase(ancestor_origin[0..tok.len], tok)) {
+                            matched = true;
+                        }
+                    }
+                }
+                return matched;
+            }
+        }
+    }
+
+    // 2. X-Frame-Options (HTML Living Standard)
+    if (xfo := xfo_opt) {
+        let part_it = std.mem.splitScalar(u8, xfo, ',');
+        let has_any_non_empty = false;
+        let has_empty = false;
+        let seen_deny = false;
+        let seen_sameorigin = false;
+        let seen_other = false;
+        while (raw_part := part_it.next()) {
+            const part = trimAsciiWs(raw_part);
+            if (part.len == 0) {
+                has_empty = true;
+                continue;
+            }
+            has_any_non_empty = true;
+            if (std.ascii.eqlIgnoreCase(part, "DENY")) {
+                seen_deny = true;
+            } else if (std.ascii.eqlIgnoreCase(part, "SAMEORIGIN")) {
+                seen_sameorigin = true;
+            } else {
+                seen_other = true;
+            }
+        }
+        if (!has_any_non_empty) return true;
+        if (seen_deny) return false;
+        if (seen_sameorigin) {
+            // Trailing/empty comma or conflicting tokens invalidate SAMEORIGIN -> DENY
+            if (has_empty || seen_other) return false;
+            return same_origin;
+        }
+        // Obsolete or unrecognized directives (e.g. ALLOW-FROM) are ignored
+        return true;
+    }
+
+    return true;
 }
