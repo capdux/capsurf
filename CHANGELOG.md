@@ -2394,3 +2394,7 @@
 ### Phase 235
 - Added `test/dom/test_node_traversal_and_clone_edge.cp`.
 - Implemented `data:` ES module resolution, `__capsurf_eval_module_script`, iframe `<template>` inertness + meta CSP + `load` event, `Page.setDocumentContent` URL normalization, and TodoMVC TTY UA stylesheet (`src/cdp/{page,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`, `src/tty/nav_params.cp`, `src/js/shim/{selector.js,window.js,element/html-classes.js}` + `runtime.js`/`runtime_source.cp`).
+
+### Phase 236
+- Added `test/tty/test_tty_todomvc_ua_css.cp` and updated `test/tty/test_nav_params.cp` for `ks_tty_css=0` reset semantics.
+- Fixed child-frame `DOM.documentUpdated` session routing (`src/cdp/dom.cp:476`), wired `domDebug.renderRbiResources` (`src/js/dom_binding.cp`), and added `/font-key-images.html` fixtures (`src/net/mock_fixtures.cp`, `src/render/painter.cp`).

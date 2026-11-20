@@ -1779,3 +1779,7 @@
 ### Phase 235: Iframe Source Pipeline (`7/7`) & TodoMVC TTY UA CSS (`1/1`)
 - `executeIframeInlineScripts` now skips `<template>` subtrees, enforces `<meta http-equiv="Content-Security-Policy">` via `__capsurf_script_gate`, evaluates `type="module"` via `__capsurf_eval_module_script`, and dispatches `load` on `contentWindow` and `<iframe>`.
 - `ttyUaStylesheet` + CSS4 `i` flag + `ch`/`lh` unit resolution + `!important` tracking bring `tty-todomvc-controls` to green.
+
+### Phase 236: `DOM.documentUpdated` Session Routing & `renderRbiResources` Scope Isolation
+- `DOM.enable` now tags `DOM.documentUpdated` with `req.session_id` so `_createFlatSession` (`parent.onSession`) delivers it to the child session.
+- `__capsurf_get_canvas_bitmaps` invokes `domDebug.renderRbiResources` when present and isolates per-document overrides via per-navigation JS context rebuild.

@@ -2097,8 +2097,11 @@ fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
         std.base64.standard.Decoder.decode(out_buf[0..req_len], b64) catch return null;
         return out_buf[0..req_len];
     }
-    if (std.mem.indexOf(u8, t, "slow-red.png") != null || std.mem.indexOf(u8, t, "slow-headers-red.png") != null) {
+    if (std.mem.indexOf(u8, t, "slow-red.png") != null || std.mem.indexOf(u8, t, "slow-headers-red.png") != null || std.mem.indexOf(u8, t, "font-key-red.png") != null) {
         return readFixtureFileLocal("solid-red.png", out_buf);
+    }
+    if (std.mem.indexOf(u8, t, "font-key-orange.png") != null) {
+        return readFixtureFileLocal("tiny.png", out_buf);
     }
     if (fix_pos := std.mem.indexOf(u8, t, "/__fixtures/")) {
         let rest = t[fix_pos + 12 ..];

@@ -1560,6 +1560,23 @@ pub struct MockFixtures {
             return out_buf[0..html_body.len];
         }
 
+        // 2.22. /font-key-images.html, /font-key-red.png, /font-key-orange.png
+        if (std.mem.indexOf(u8, url, "/font-key-images.html") != null) {
+            const html_body =
+                "<!doctype html><body style=\"margin:0;background:#fff\">\n" ++
+                "<img id=\"a\" src=\"/__fixtures/font-key-red.png\" style=\"display:block;width:100px;height:100px\">\n" ++
+                "<img id=\"b\" src=\"/__fixtures/font-key-orange.png\" style=\"display:block;width:100px;height:100px\">\n";
+            if (html_body.len > out_buf.len) return null;
+            @memcpy(out_buf[0..html_body.len], html_body);
+            return out_buf[0..html_body.len];
+        }
+        if (std.mem.indexOf(u8, url, "/font-key-red.png") != null) {
+            return MockFixtures.readPageFile("solid-red.png", out_buf);
+        }
+        if (std.mem.indexOf(u8, url, "/font-key-orange.png") != null) {
+            return MockFixtures.readPageFile("tiny.png", out_buf);
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {

@@ -2613,11 +2613,76 @@ pub fn mountDom(
         "    return 0;" +
         "  };" +
         "  const _origGetBitmaps = globalThis.__capsurf_get_canvas_bitmaps;" +
+        "  function _bytesToB64(bytes) {" +
+        "    let bin = '';" +
+        "    const chunk = 8192;" +
+        "    for (let i = 0; i < bytes.length; i += chunk) {" +
+        "      const end = i + chunk < bytes.length ? i + chunk : bytes.length;" +
+        "      let s = '';" +
+        "      for (let j = i; j < end; j++) s += String.fromCharCode(bytes[j]);" +
+        "      bin += s;" +
+        "    }" +
+        "    return btoa(bin);" +
+        "  }" +
         "  globalThis.__capsurf_get_canvas_bitmaps = function () {" +
-        "    const base = typeof _origGetBitmaps === 'function' ? _origGetBitmaps() : '';" +
-        "    if (_iframeBitmaps.size === 0) return base;" +
-        "    const extra = Array.from(_iframeBitmaps.values()).join(';');" +
-        "    return base ? (base + ';' + extra) : extra;" +
+        "    let res = typeof _origGetBitmaps === 'function' ? _origGetBitmaps() : '';" +
+        "    if (_iframeBitmaps.size > 0) {" +
+        "      const extra = Array.from(_iframeBitmaps.values()).join(';');" +
+        "      res = res ? (res + ';' + extra) : extra;" +
+        "    }" +
+        "    try {" +
+        "      const curKs = globalThis[ksSym];" +
+        "      const rbiFn = curKs && curKs.domDebug && typeof curKs.domDebug.renderRbiResources === 'function' ? curKs.domDebug.renderRbiResources : null;" +
+        "      if (rbiFn && typeof document !== 'undefined' && document.querySelectorAll) {" +
+        "        const imgs = [];" +
+        "        const allImgs = document.querySelectorAll('img[src]');" +
+        "        for (let i = 0; i < allImgs.length; i++) {" +
+        "          const im = allImgs[i];" +
+        "          if (im && typeof im._nid === 'number' && im._nid > 0) imgs.push(im);" +
+        "        }" +
+        "        if (imgs.length > 0) {" +
+        "          const hashes = new Uint8Array(imgs.length * 8);" +
+        "          for (let i = 0; i < imgs.length; i++) {" +
+        "            const nid = imgs[i]._nid >>> 0;" +
+        "            hashes[i * 8] = nid & 0xff;" +
+        "            hashes[i * 8 + 1] = (nid >>> 8) & 0xff;" +
+        "            hashes[i * 8 + 2] = (nid >>> 16) & 0xff;" +
+        "            hashes[i * 8 + 3] = (nid >>> 24) & 0xff;" +
+        "          }" +
+        "          const out = rbiFn(new Uint8Array(0), new Uint8Array(0), hashes);" +
+        "          if (out && out.length >= 4) {" +
+        "            const view = new DataView(out.buffer, out.byteOffset, out.byteLength);" +
+        "            const count = view.getUint32(0, true);" +
+        "            let pos = 4;" +
+        "            const rbiList = [];" +
+        "            for (let i = 0; i < count && pos + 13 <= out.length; i++) {" +
+        "              const kind = out[pos];" +
+        "              const payloadLen = view.getUint32(pos + 9, true);" +
+        "              if (kind === 2 && pos + 22 <= out.length) {" +
+        "                const w = view.getUint32(pos + 13, true);" +
+        "                const h = view.getUint32(pos + 17, true);" +
+        "                const need = w * h * 4;" +
+        "                const rgbaOff = pos + 22;" +
+        "                if (w > 0 && h > 0 && rgbaOff + need <= out.length) {" +
+        "                  const targetNid = (out[pos + 1] | (out[pos + 2] << 8) | (out[pos + 3] << 16) | (out[pos + 4] << 24)) >>> 0;" +
+        "                  const nid = targetNid > 0 ? targetNid : (i < imgs.length ? imgs[i]._nid : 0);" +
+        "                  if (nid > 0) {" +
+        "                    const b64 = _bytesToB64(out.subarray(rgbaOff, rgbaOff + need));" +
+        "                    rbiList.push(nid + ':' + w + ':' + h + ':' + b64);" +
+        "                  }" +
+        "                }" +
+        "              }" +
+        "              pos += 13 + payloadLen;" +
+        "            }" +
+        "            if (rbiList.length > 0) {" +
+        "              const extraRbi = rbiList.join(';');" +
+        "              res = res ? (res + ';' + extraRbi) : extraRbi;" +
+        "            }" +
+        "          }" +
+        "        }" +
+        "      }" +
+        "    } catch (e) {}" +
+        "    return res;" +
         "  };" +
         // 2. UA <select> dropdown overlay
         "  let _openSelect = null;" +

@@ -99,7 +99,7 @@ fn testApplyTtyNavParamsParsingAndClamping() {
     // Invalid / zero values must not clobber valid state
     const q3 = "?ks_tty_css=0&ks_color_scheme=sepia&ks_tty_cell=0x99";
     check("q3 seen", applyTtyNavParams(q3, &state));
-    check("tty_ua_css preserved on 0", state.tty_ua_css.? == 2);
+    check("tty_ua_css reset on 0", state.tty_ua_css.? == 0);
     check("dark_color_scheme preserved on unknown", state.dark_color_scheme.? == false);
     check("tty_cell_w preserved on invalid", state.tty_cell_w.? == 8);
     check("tty_cell_h preserved on invalid", state.tty_cell_h.? == 17);
@@ -109,7 +109,7 @@ fn testApplyTtyNavParamsParsingAndClamping() {
     const q4 = "ks_tty_css&foo&ks_color_scheme=dark&ks_tty_css=abc";
     check("q4 seen", applyTtyNavParams(q4, &state2));
     check("q4 dark_color_scheme == true", state2.dark_color_scheme.? == true);
-    check("q4 tty_ua_css remains null on non-numeric", state2.tty_ua_css == null);
+    check("q4 tty_ua_css reset to 0 on non-numeric", state2.tty_ua_css.? == 0);
 }
 
 fn testStylesheetGenerationAndBuffers() {

@@ -473,7 +473,7 @@ pub struct DomHandler {
             if (req.session_id.len > 0 && session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
                 if (event_count.* < out_events.len) {
                     let ev = CdpEvent.create("DOM.documentUpdated", "{}");
-                    ev.session_id = "default";
+                    ev.session_id = req.session_id;
                     out_events[event_count.*] = ev;
                     event_count.* += 1;
                 }

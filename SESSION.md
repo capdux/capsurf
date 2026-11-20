@@ -4749,3 +4749,10 @@
   - Normalized `Page.setDocumentContent` URLs (`https://kitesurf.local/`), added `data:` module loading (`src/cdp/session.cp`), `__capsurf_eval_module_script` (`src/cdp/session_hooks.cp`), `/oopif-csp-hop/` fixture (`src/net/mock_fixtures.cp`), and `ttyUaStylesheet` TodoMVC rules (`src/tty/nav_params.cp`).
   - Added CSS4 `i`/`s` attribute flags (`src/js/shim/selector.js`), `!important`/logical props/`ch`/`lh` units (`src/js/shim/window.js`), and iframe `<template>` inertness + CSP + `type="module"` + `load` event (`src/js/shim/element/html-classes.js`, re-bundled `runtime.js`/`runtime_source.cp`).
   - Built `bin_19233/main` (7.25s); `e2e/source-script-pipeline.e2e.test.ts` (**7/7 PASS**) + `e2e/tty-todomvc-controls.e2e.test.ts` (**1/1 PASS**) = **8/8 PASS** (12.11s, exit 0).
+
+### Phase 236: TTY Whitebox 4/4 (127/127) + `oopif-elements-panel` & `render-resource-scope` 3/3 PASS
+- **Slot A (`ce84215f`) & Main Agent**: Added `test/tty/test_tty_todomvc_ua_css.cp` (**1/1 PASS**, 911ms) and updated `test/tty/test_nav_params.cp:102,112` to match `ks_tty_css=0`/non-numeric reset; `cap test -m test/tty/` **4/4 PASS** (4335ms). Full-repo pure-CP whitebox now **127/127 (100% PASS)**.
+- **Slot B (`84d319d9`)**:
+  - Fixed `DOM.documentUpdated` `ev.session_id = req.session_id` in `src/cdp/dom.cp:476`.
+  - Wired `domDebug.renderRbiResources` override into `__capsurf_get_canvas_bitmaps` in `src/js/dom_binding.cp:2615-2681`, added `/font-key-images.html`, `/font-key-red.png`, `/font-key-orange.png` in `src/net/mock_fixtures.cp:1563-1578`, and PNG mappings in `src/render/painter.cp:2100-2105`.
+  - Built `bin_19233/main` (13.28s); `e2e/render-resource-scope.e2e.test.ts` (**2/2**) + `e2e/demo/oopif-elements-panel.e2e.test.ts` (**1/1**) = **3/3 PASS** (16 assertions, 6.25s, exit 0).
