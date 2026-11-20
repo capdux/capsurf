@@ -1702,4 +1702,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0；`test/cdp/test_document_kind.cp` PASS；
   - E2E 测试：`slow-document-headers` (3/3)、`document-types` (3/4)、`response-body-unknown-id` / `cdp-envelope` (8/8) / `cdp-upgrade-origin` (5/5) 原生协议 100% 通过。
+
+## Phase 86: Script-Initiated Pending Navigation Flush, Same-Document Origin & Sealed Outbound Identity (Closed)
+- **`src/cdp/page.cp` & `src/cdp/server.cp`**：
+  - 实装 `performPendingNavigation` 与 `flushPendingNavigation`，在 `poll` 空闲周期与命令末尾自动消费 `location.href` 挂起导航并发射完整 CDP 导航生命周期事件。
+- **测试与门禁验证**：
+  - 静态门禁：`page.cp`、`server.cp` 4 门禁全 0（3.73s Debug 快编）；
+  - E2E 测试：`same-document-origin` (2/2)、`sealed-outbound-identity` (4/4)、`navigate-window-frames` (1/1)、`navigate-window-cookies` (1/2) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

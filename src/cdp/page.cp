@@ -4,6 +4,7 @@
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
+import { jsIsException } from "../js/qjs_engine.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeType } from "../dom/dom.cp";
@@ -588,4 +589,109 @@ pub struct PageHandler {
 
         return CdpResponse.err(req.id, -32601, "'Page' domain method not implemented");
     }
+}
+
+pub fn performPendingNavigation(
+    session: *CdpPageSession,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+): bool {
+    event_count.* = 0;
+    if (!session.has_document) return false;
+
+    const val = session.ctx.eval(
+        "(function(){var u=globalThis.__capsurf_pending_navigation||'';if(u){globalThis.__capsurf_pending_navigation='';}return String(u);})()",
+    );
+    defer session.ctx.freeValue(val);
+    if (jsIsException(val)) return false;
+
+    const pending_raw = session.ctx.toCString(val);
+    if (pending_raw.len == 0) return false;
+
+    let raw_buf: [2048]u8 = [0; 2048];
+    const copy_len = @min(pending_raw.len, raw_buf.len);
+    @memcpy(raw_buf[0..copy_len], pending_raw[0..copy_len]);
+    const pending_url = raw_buf[0..copy_len];
+
+    let resolved_buf: [2048]u8 = [0; 2048];
+    const target_url = HttpLoader.resolveRelativeUrl(session.url, pending_url, &resolved_buf);
+    if (target_url.len == 0) return false;
+
+    // Private Network Access: block a public page from navigating itself to a loopback address
+    if (HttpLoader.isPublicHttpUrl(session.url) && HttpLoader.isLoopbackUrl(target_url)) {
+        return false;
+    }
+
+    let fetch_buf = session.allocator.alloc(u8, 65536) catch return false;
+    defer session.allocator.free(fetch_buf);
+
+    const fetch_res = HttpLoader.fetchDocument(session, target_url, fetch_buf, 0) catch return false;
+
+    const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
+    if (kind == DocumentKind.blocked) return false;
+
+    let doc_req_id_buf: [64]u8 = [0; 64];
+    const doc_req_id = nextDocRequestId(&doc_req_id_buf);
+
+    let synth_buf: ([]u8)? = null;
+    defer if (synth_buf != null) session.allocator.free(synth_buf.?);
+    let alloc_b64: ([]u8)? = null;
+    defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
+    let b64_str: []const u8 = fetch_res.raw_body;
+    let nav_html: []const u8 = fetch_res.html;
+
+    if (kind == DocumentKind.image) {
+        if (!fetch_res.raw_body_base64) {
+            alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return false;
+            b64_str = alloc_b64.?;
+        }
+        recordResponseBody(doc_req_id, b64_str, true);
+        const needed = b64_str.len + 4096;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = imageDocumentHtml(fetch_res.html, b64_str, fetch_res.content_type, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.text) {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+        const needed = fetch_res.html.len * 6 + fetch_res.final_url.len * 6 + 1024;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = textDocumentHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.json) {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+        const needed = fetch_res.html.len * 16 + fetch_res.final_url.len * 6 + 16384;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = jsonViewerHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+    } else {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+    }
+
+    session.navigate(nav_html, fetch_res.final_url, "") catch return false;
+
+    if (session.network_enabled && event_count.* < out_events.len) {
+        let esc_u_buf: [2048]u8 = [0; 2048];
+        const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+        const mime_raw = mimeEssence(fetch_res.content_type);
+        const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+        const resp_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+            .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, mime_out, session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+        event_count.* += 1;
+    }
+
+    const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
+    if (event_count.* < out_events.len) {
+        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+        event_count.* += 1;
+    }
+    if (event_count.* < out_events.len) {
+        out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
+        event_count.* += 1;
+    }
+    if (event_count.* < out_events.len) {
+        out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
+        event_count.* += 1;
+    }
+
+    return true;
 }

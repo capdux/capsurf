@@ -7,6 +7,7 @@ import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonS
 import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
+import { performPendingNavigation } from "./page.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 
 pub @c {
@@ -352,6 +353,40 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
+    fn emitCdpEvents(*_, client_fd: i32, events: *[MAX_CDP_EVENTS]CdpEvent, event_count: usize)! {
+        let i: usize = 0;
+        while (i < event_count) : (i += 1) {
+            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
+            if (evt_needed <= 4096) {
+                let evt_buf: [4096]u8 = [0; 4096];
+                const evt_msg = std.fmt.bufPrint(
+                    &evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)?;
+            } else {
+                const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
+                defer std.heap.c_allocator.free(dyn_evt_buf);
+                const evt_msg = std.fmt.bufPrint(
+                    dyn_evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)?;
+            }
+        }
+    }
+
+    fn flushPendingNavigation(*_, client_fd: i32)! {
+        if (!_.session.has_document) return;
+        let nav_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        let nav_event_count: usize = 0;
+        if (performPendingNavigation(_.session, &nav_events, &nav_event_count)) {
+            _.emitCdpEvents(client_fd, &nav_events, nav_event_count)?;
+        }
+    }
+
     fn runWebSocketSession(*_, client_fd: i32)! {
         _.session.resetSession();
         defer _.session.resetSession();
@@ -364,9 +399,12 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 break;
             }
             if (pr == 0) {
-                if (_.session.has_document && _.session.dom_document_sent) {
+                if (_.session.has_document) {
                     _.session.pumpTimers();
-                    _.flushDomEvents(client_fd) catch break;
+                    _.flushPendingNavigation(client_fd) catch break;
+                    if (_.session.dom_document_sent) {
+                        _.flushDomEvents(client_fd) catch break;
+                    }
                 }
                 continue;
             }
@@ -480,6 +518,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         // Flush any queued native DOM mutation events
         _.flushDomEvents(client_fd)?;
+        // Check if JS evaluation triggered a location.href navigation
+        _.flushPendingNavigation(client_fd)?;
     }
 }
 

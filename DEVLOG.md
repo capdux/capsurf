@@ -1327,4 +1327,8 @@
    - 在 `Page.navigate` 接入 `documentKind(content_type, content_disposition)`，对图片/纯文本/JSON 合成标准包装文档，对 PDF/octet-stream/attachment 发射 `Network.loadingFailed` 并返回 `net::ERR_ABORTED`；实装 `StoredResponseBody` 缓存支持 `Network.getResponseBody`。
 2. **WebSocket 握手 Origin 校验与事件时序 (`server.cp`)**：
    - 严格放行无 Origin / 同源 Host / `devtools://devtools`，其余或 `null` Origin 拒绝返回 403；在 `dispatchCdpCommand` 中先发事件帧再发响应帧消除客户端竞态。
+
+## Phase 86 脚本挂起导航消费与 WebSocket 主动推送技术方案
+1. **挂起导航异步消费 (`page.cp`, `server.cp`)**：
+   - 在 `performPendingNavigation` 读取并清空 `globalThis.__capsurf_pending_navigation`，完整复用相对 URL 解析、Private Network Access、`HttpLoader.fetchDocument` 与 `documentKind` 管线；在 `server.cp` 的 `poll` 空闲 tick 与 `dispatchCdpCommand` 末尾自动冲刷事件帧，解决脚本发起 `location.href` 跳转时 `waitForNavigation` 超时问题。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

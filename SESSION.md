@@ -3525,3 +3525,12 @@
   - 全部 6 个修改 `.cp` 文件 4 门禁全 0；`test/cdp/test_document_kind.cp` PASS；
   - `slow-document-headers` (3/3 PASS)、`document-types` (3/4 PASS，余 1 行 `painter.cp` PNG 复用)、`response-body-unknown-id` (1/2) 及 `cdp-envelope` (8/8) / `cdp-upgrade-origin` (5/5) 原生服务端直测 100% 匹配（余 `e2e/harness.ts` `engine.fetch` 适配器收尾）。
 - **清理旧子智能体**: 销毁 `30210673-4ae2-46ee-9f2b-1b1d31dbee59`。
+
+## [2026-11-20 17:52:40] 脚本导航异步事件推流、同文档源与出站身份隔离闭环 (Subagent 17e124ae 结单，Phase 86)
+- **脚本挂起导航消费与 WebSocket 主动推送 (`src/cdp/page.cp`, `src/cdp/server.cp`)**:
+  - `page.cp`: 新增 `performPendingNavigation` 消费 `globalThis.__capsurf_pending_navigation`，执行相对 URL 解析、Private Network Access 校验、`documentKind` 分类并推送全套 `Network.responseReceived`/`Page.frameNavigated`/`domContentEventFired`/`loadEventFired` 事件；
+  - `server.cp`: 在 `poll` 空闲周期与 `dispatchCdpCommand` 末尾自动冲刷 `flushPendingNavigation`。
+- **门禁与测试验证（3.73s Debug 快编）**:
+  - `page.cp` / `server.cp` 4 门禁全 0；
+  - `same-document-origin` (2/2 PASS)、`sealed-outbound-identity` (4/4 PASS)、`navigate-window-frames` (1/1 PASS)、`navigate-window-cookies` (1/2 PASS)；`session-outbound` 6 项失败明确定位在 `src/js/shim/window.js:fetchFn`。
+- **清理旧子智能体**: 销毁 `17e124ae-6ac3-4444-a1a1-33a063e925be`。
