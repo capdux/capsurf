@@ -470,6 +470,60 @@ function installShim(global) {
     const origQSA = docProto.querySelectorAll;
     docProto.querySelectorAll = wrapQuerySelectorAll(origQSA);
 
+    // Upgrade document.body / document.head / document.documentElement so HTMLBodyElement/HTMLElement
+    // prototype getters (e.g. innerText) are always available even before querySelector is called.
+    const docElemProps = ["body", "head", "documentElement"];
+    for (let dpIdx = 0; dpIdx < docElemProps.length; dpIdx++) {
+      const propName = docElemProps[dpIdx];
+      const ownDesc = Object.getOwnPropertyDescriptor(docProto, propName);
+      if (ownDesc && typeof ownDesc.get === "function") {
+        const origGet = ownDesc.get;
+        const origSet = ownDesc.set;
+        Object.defineProperty(docProto, propName, {
+          get: function () {
+            return upgradeElement(origGet.call(this));
+          },
+          set: origSet,
+          configurable: true,
+          enumerable: ownDesc.enumerable !== false,
+        });
+      }
+    }
+
+    // Include document.doctype in document.firstChild and document.childNodes per DOM spec
+    const origDocFirstChildDesc = Object.getOwnPropertyDescriptor(docProto, "firstChild")
+      || Object.getOwnPropertyDescriptor(Node.prototype, "firstChild");
+    const origDocFirstChildGet = origDocFirstChildDesc && origDocFirstChildDesc.get;
+    Object.defineProperty(docProto, "firstChild", {
+      get: function () {
+        const orig = origDocFirstChildGet ? origDocFirstChildGet.call(this) : null;
+        const dt = this.doctype;
+        if (dt && (!orig || orig.nodeType !== 10)) {
+          return dt;
+        }
+        return orig;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    const origDocChildNodesDesc = Object.getOwnPropertyDescriptor(docProto, "childNodes")
+      || Object.getOwnPropertyDescriptor(Node.prototype, "childNodes");
+    const origDocChildNodesGet = origDocChildNodesDesc && origDocChildNodesDesc.get;
+    Object.defineProperty(docProto, "childNodes", {
+      get: function () {
+        const orig = origDocChildNodesGet ? origDocChildNodesGet.call(this) : null;
+        const arr = orig ? Array.from(orig) : [];
+        const dt = this.doctype;
+        if (dt && (arr.length === 0 || arr[0].nodeType !== 10)) {
+          arr.unshift(dt);
+        }
+        return new NodeList(arr);
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
     if (docProto.createElement) {
       const origCreateElement = docProto.createElement;
       docProto.createElement = function (tagName) {
@@ -1682,9 +1736,9 @@ function installShim(global) {
                     try { node.ownerDocument = doc; } catch (e2) {}
                   }
                 };
-                const cachedBody = doc.body;
-                const cachedHead = doc.head;
-                const cachedDocEl = doc.documentElement;
+                const cachedBody = doc.body ? upgradeElement(doc.body) : null;
+                const cachedHead = doc.head ? upgradeElement(doc.head) : null;
+                const cachedDocEl = doc.documentElement ? upgradeElement(doc.documentElement) : null;
                 if (cachedDocEl) {
                   setDocOwner(cachedDocEl);
                   Object.defineProperty(doc, "documentElement", { value: cachedDocEl, configurable: true });

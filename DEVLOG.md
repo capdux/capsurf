@@ -1439,4 +1439,14 @@
    - 将未命中初始文档码点的 `@font-face` 暂存至 `deferred_fonts`，在 `pollNetworkEvents` 中随 DOM/文本变更按需触发 `addFetchRecord`；对跨源覆写 `<img>` 统计真实 `retainedImageCount`/`Bytes` 并并入 `accountedBytes`。
 2. **双层 URL 编码与 `DOM.getOuterHTML` (`server.cp`, `dom.cp`)**：
    - `/?url=` 重定向先内层编码 `initialUrl=` 再外层编码 `wss=` 参数；`DOM.getOuterHTML` 支持 `nodeId == 0` 与 `includeDoctype: true` 恢复前置注释与标准 DOCTYPE。
+
+## Phase 106 CSS Transitions/Animations 引擎、Canvas2D 跨源 Taint 与 Fetch Redirect Shell 技术方案
+1. **CSS Transitions & `@keyframes` 运行时 (`animations.js`, `window.js`, `element.js`)**：
+   - 在 `classList`/`setAttribute` 变更时捕获前后计算样式快照，按真实时钟驱动 `transitionrun`/`start`/`end`/`cancel` 与 `animation*` 可信事件，支持负 delay、`transition-property: all` 与 retarget 取消。
+2. **Canvas2D 图像字节与跨源 Taint (`canvas2d.js`, `html-classes.js`)**：
+   - 通过规范节点 ID 校验防止伪造源对象，实时判定 `src`/`srcset`/`<picture>` 与 `<base>` 同源性，跨源时阻断像素写入并置 `_originClean = false` 触发 `SecurityError`。
+
+## Phase 107 原生 UTF-8 码点解码与彩色 Emoji 光栅化技术方案
+1. **UTF-8 多字节与彩色 Emoji 矢量绘制 (`src/render/painter.cp`)**：
+   - 将文本绘制管线从单字节 ASCII 升级为内联 UTF-8 多字节码点解码，识别 Unicode `Emoji_Presentation=Yes` 与 `U+FE0F` 变体选择符并通过 `drawColorEmojiClipped` 原生绘制 RGBA 彩色字形。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

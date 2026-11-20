@@ -89,6 +89,28 @@ pub struct ScreenshotOptions {
     clip_h: u32 = 0;
 }
 
+fn hasEmojiVariationSelector(bytes: []const u8, next_idx: usize): bool {
+    if (next_idx + 2 >= bytes.len) return false;
+    return bytes[next_idx] == 0xEF && bytes[next_idx + 1] == 0xB8 && bytes[next_idx + 2] == 0x8F;
+}
+
+fn isDefaultEmojiPresentation(cp: u32): bool {
+    // SMP emoji blocks
+    if (cp >= 0x1F000 && cp <= 0x1FAFF) return true;
+    // BMP Emoji_Presentation=Yes codepoints (including U+2705 ✅, U+274C ❌)
+    if (cp == 0x231A || cp == 0x231B) return true;
+    if ((cp >= 0x23E9 && cp <= 0x23EC) || cp == 0x23F0 || cp == 0x23F3) return true;
+    if (cp == 0x25FD || cp == 0x25FE) return true;
+    if (cp == 0x2614 || cp == 0x2615 || (cp >= 0x2648 && cp <= 0x2653)) return true;
+    if (cp == 0x267F || cp == 0x2693 || cp == 0x26A1 || cp == 0x26AA || cp == 0x26AB) return true;
+    if (cp == 0x26BD || cp == 0x26BE || cp == 0x26C4 || cp == 0x26C5 || cp == 0x26CE) return true;
+    if (cp == 0x26D4 || cp == 0x26EA || cp == 0x26F2 || cp == 0x26F3 || cp == 0x26F5 || cp == 0x26FA || cp == 0x26FD) return true;
+    if (cp == 0x2705 || cp == 0x270A || cp == 0x270B || cp == 0x2728 || cp == 0x274C || cp == 0x274E) return true;
+    if ((cp >= 0x2753 && cp <= 0x2755) || cp == 0x2757 || (cp >= 0x2795 && cp <= 0x2797) || cp == 0x27B0 || cp == 0x27BF) return true;
+    if (cp == 0x2B1B || cp == 0x2B1C || cp == 0x2B50 || cp == 0x2B55) return true;
+    return false;
+}
+
 fn isInsideCornerBox(cx: f32, cy: f32, r: f32, cs: CornerShape): bool {
     if (r <= 0.0 || cx >= r || cy >= r) return true;
     const u = (r - cx) / r;
@@ -553,6 +575,132 @@ pub struct Canvas {
         }
     }
 
+    fn drawColorEmojiClipped(*_, x: f32, y: f32, size: f32, codepoint: u32, alpha: u8, clip: ClipRect?) {
+        if (alpha == 0 || size <= 0.0) return;
+        const x0 = @as(i32, @intFromFloat(@floor(x)));
+        const y0 = @as(i32, @intFromFloat(@floor(y)));
+        const side = @max(8, @as(i32, @intFromFloat(@ceil(size))));
+        const fside: f32 = @floatFromInt(side);
+
+        if (codepoint == 0x2705) {
+            // U+2705 ✅: Green rounded square with white check mark
+            const bg = CssColor.rgba(46, 184, 92, alpha);
+            const fg = CssColor.rgba(255, 255, 255, alpha);
+            const pad = fside * 0.08;
+            const rad = fside * 0.18;
+            let dy: i32 = 0;
+            while (dy < side) : (dy += 1) {
+                const py = y0 + dy;
+                if (c := clip) {
+                    if (py < c.y0 || py >= c.y1) continue;
+                }
+                const fy: f32 = @as(f32, @floatFromInt(dy)) + 0.5;
+                if (fy < pad || fy > fside - pad) continue;
+                const ny = (fy - pad) / @max(1.0, fside - 2.0 * pad);
+                let dx: i32 = 0;
+                while (dx < side) : (dx += 1) {
+                    const px = x0 + dx;
+                    if (c := clip) {
+                        if (px < c.x0 || px >= c.x1) continue;
+                    }
+                    const fx: f32 = @as(f32, @floatFromInt(dx)) + 0.5;
+                    if (fx < pad || fx > fside - pad) continue;
+                    // Rounded corner test
+                    const lx = fx - pad;
+                    const rx = (fside - pad) - fx;
+                    const ty = fy - pad;
+                    const by = (fside - pad) - fy;
+                    const cx = @min(lx, rx);
+                    const cy = @min(ty, by);
+                    if (cx < rad && cy < rad) {
+                        const ux = rad - cx;
+                        const uy = rad - cy;
+                        if (ux * ux + uy * uy > rad * rad) continue;
+                    }
+                    const nx = (fx - pad) / @max(1.0, fside - 2.0 * pad);
+                    // Check mark stroke: segment1 (0.22,0.52)->(0.42,0.72), segment2 (0.42,0.72)->(0.78,0.28)
+                    let is_check = false;
+                    if (nx >= 0.20 && nx <= 0.44) {
+                        const ty1 = 0.52 + (nx - 0.22);
+                        if (@abs(ny - ty1) <= 0.085) is_check = true;
+                    }
+                    if (!is_check && nx >= 0.40 && nx <= 0.80) {
+                        const ty2 = 0.72 - (nx - 0.42) * 1.22;
+                        if (@abs(ny - ty2) <= 0.085) is_check = true;
+                    }
+                    _.blendPixel(px, py, if (is_check) fg else bg);
+                }
+            }
+            return;
+        }
+
+        if (codepoint == 0x274C) {
+            // U+274C ❌: Bold red cross mark
+            const red = CssColor.rgba(229, 57, 53, alpha);
+            const pad = fside * 0.12;
+            const span = @max(1.0, fside - 2.0 * pad);
+            let dy: i32 = 0;
+            while (dy < side) : (dy += 1) {
+                const py = y0 + dy;
+                if (c := clip) {
+                    if (py < c.y0 || py >= c.y1) continue;
+                }
+                const fy: f32 = @as(f32, @floatFromInt(dy)) + 0.5;
+                if (fy < pad || fy > fside - pad) continue;
+                const ny = (fy - pad) / span;
+                let dx: i32 = 0;
+                while (dx < side) : (dx += 1) {
+                    const px = x0 + dx;
+                    if (c := clip) {
+                        if (px < c.x0 || px >= c.x1) continue;
+                    }
+                    const fx: f32 = @as(f32, @floatFromInt(dx)) + 0.5;
+                    if (fx < pad || fx > fside - pad) continue;
+                    const nx = (fx - pad) / span;
+                    if (@abs(nx - ny) <= 0.14 || @abs(nx + ny - 1.0) <= 0.14) {
+                        _.blendPixel(px, py, red);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Generic color emoji fallback (saturated disc)
+        const palette = codepoint % 5;
+        const fill = if (palette == 0)
+            CssColor.rgba(255, 202, 40, alpha)
+        else if (palette == 1)
+            CssColor.rgba(66, 165, 245, alpha)
+        else if (palette == 2)
+            CssColor.rgba(102, 187, 106, alpha)
+        else if (palette == 3)
+            CssColor.rgba(239, 83, 80, alpha)
+        else
+            CssColor.rgba(171, 71, 188, alpha);
+        const half = fside * 0.5;
+        const r = fside * 0.42;
+        const r2 = r * r;
+        let dy: i32 = 0;
+        while (dy < side) : (dy += 1) {
+            const py = y0 + dy;
+            if (c := clip) {
+                if (py < c.y0 || py >= c.y1) continue;
+            }
+            const oy = (@as(f32, @floatFromInt(dy)) + 0.5) - half;
+            let dx: i32 = 0;
+            while (dx < side) : (dx += 1) {
+                const px = x0 + dx;
+                if (c := clip) {
+                    if (px < c.x0 || px >= c.x1) continue;
+                }
+                const ox = (@as(f32, @floatFromInt(dx)) + 0.5) - half;
+                if (ox * ox + oy * oy <= r2) {
+                    _.blendPixel(px, py, fill);
+                }
+            }
+        }
+    }
+
     fn drawTextClipped(*_, x: f32, y: f32, text: []const u8, color: CssColor, clip: ClipRect?) {
         if (color.a == 0 || text.len == 0) {
             return;
@@ -560,28 +708,65 @@ pub struct Canvas {
         let cursor_x = @as(i32, @intFromFloat(x));
         const base_y = @as(i32, @intFromFloat(y));
 
-        for (ch of text) {
-            if (ch == '\n' || ch == '\r') continue;
-            if (ch > 32 && ch < 127) {
-                const glyph = getAsciiGlyph8x8(ch);
-                let row: usize = 0;
-                while (row < 8) : (row += 1) {
-                    const bits = glyph[row];
-                    let col: usize = 0;
-                    while (col < 8) : (col += 1) {
-                        const shift: u3 = @intCast(7 - col);
-                        if (((bits >> shift) & 1) == 1) {
-                            const px = cursor_x + @as(i32, @intCast(col));
-                            const py = base_y + @as(i32, @intCast(row)) + 2;
-                            if (c := clip) {
-                                if (px < c.x0 || px >= c.x1 || py < c.y0 || py >= c.y1) continue;
-                            }
-                            _.blendPixel(px, py, color);
-                        }
+        let ti: usize = 0;
+        while (ti < text.len) {
+            const b0 = text[ti];
+            let codepoint: u32 = @as(u32, b0);
+            let step: usize = 1;
+            if (b0 >= 0x80) {
+                if ((b0 & 0xE0) == 0xC0 && ti + 1 < text.len) {
+                    const b1 = text[ti + 1];
+                    if ((b1 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x1F) << 6) | @as(u32, b1 & 0x3F);
+                        step = 2;
+                    }
+                } else if ((b0 & 0xF0) == 0xE0 && ti + 2 < text.len) {
+                    const b1 = text[ti + 1];
+                    const b2 = text[ti + 2];
+                    if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x0F) << 12) | (@as(u32, b1 & 0x3F) << 6) | @as(u32, b2 & 0x3F);
+                        step = 3;
+                    }
+                } else if ((b0 & 0xF8) == 0xF0 && ti + 3 < text.len) {
+                    const b1 = text[ti + 1];
+                    const b2 = text[ti + 2];
+                    const b3 = text[ti + 3];
+                    if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x07) << 18) | (@as(u32, b1 & 0x3F) << 12) | (@as(u32, b2 & 0x3F) << 6) | @as(u32, b3 & 0x3F);
+                        step = 4;
                     }
                 }
             }
-            cursor_x += 8;
+            ti += step;
+            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E) continue;
+            if (codepoint < 128) {
+                const ch: u8 = @intCast(codepoint);
+                if (ch > 32 && ch < 127) {
+                    const glyph = getAsciiGlyph8x8(ch);
+                    let row: usize = 0;
+                    while (row < 8) : (row += 1) {
+                        const bits = glyph[row];
+                        let col: usize = 0;
+                        while (col < 8) : (col += 1) {
+                            const shift: u3 = @intCast(7 - col);
+                            if (((bits >> shift) & 1) == 1) {
+                                const px = cursor_x + @as(i32, @intCast(col));
+                                const py = base_y + @as(i32, @intCast(row)) + 2;
+                                if (c := clip) {
+                                    if (px < c.x0 || px >= c.x1 || py < c.y0 || py >= c.y1) continue;
+                                }
+                                _.blendPixel(px, py, color);
+                            }
+                        }
+                    }
+                }
+                cursor_x += 8;
+            } else if (isDefaultEmojiPresentation(codepoint) || hasEmojiVariationSelector(text, ti)) {
+                _.drawColorEmojiClipped(@floatFromInt(cursor_x), y, 10.0, codepoint, color.a, clip);
+                cursor_x += 11;
+            } else {
+                cursor_x += 8;
+            }
         }
     }
 
@@ -598,41 +783,77 @@ pub struct Canvas {
         let cursor_x = x;
 
         let ti: usize = 0;
-        while (ti < text.len) : (ti += 1) {
-            const ch = text[ti];
-            if (ch == '\n' || ch == '\r') continue;
-            if (ch > 32 && ch < 127) {
-                const glyph = getAsciiGlyph8x8(ch);
-                let row: usize = 0;
-                while (row < 8) : (row += 1) {
-                    const bits = glyph[row];
-                    if (bits == 0) continue;
-                    const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
-                    const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row + 1)) * scale))));
-                    let col: usize = 0;
-                    while (col < 8) : (col += 1) {
-                        const shift: u3 = @intCast(7 - col);
-                        if (((bits >> shift) & 1) == 1) {
-                            const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
-                            const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
-                            let py = gy0;
-                            while (py < gy1) : (py += 1) {
-                                if (c := clip) {
-                                    if (py < c.y0 || py >= c.y1) continue;
-                                }
-                                let px = gx0;
-                                while (px < gx1) : (px += 1) {
+        while (ti < text.len) {
+            const b0 = text[ti];
+            let codepoint: u32 = @as(u32, b0);
+            let step: usize = 1;
+            if (b0 >= 0x80) {
+                if ((b0 & 0xE0) == 0xC0 && ti + 1 < text.len) {
+                    const b1 = text[ti + 1];
+                    if ((b1 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x1F) << 6) | @as(u32, b1 & 0x3F);
+                        step = 2;
+                    }
+                } else if ((b0 & 0xF0) == 0xE0 && ti + 2 < text.len) {
+                    const b1 = text[ti + 1];
+                    const b2 = text[ti + 2];
+                    if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x0F) << 12) | (@as(u32, b1 & 0x3F) << 6) | @as(u32, b2 & 0x3F);
+                        step = 3;
+                    }
+                } else if ((b0 & 0xF8) == 0xF0 && ti + 3 < text.len) {
+                    const b1 = text[ti + 1];
+                    const b2 = text[ti + 2];
+                    const b3 = text[ti + 3];
+                    if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80) {
+                        codepoint = (@as(u32, b0 & 0x07) << 18) | (@as(u32, b1 & 0x3F) << 12) | (@as(u32, b2 & 0x3F) << 6) | @as(u32, b3 & 0x3F);
+                        step = 4;
+                    }
+                }
+            }
+            ti += step;
+            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E) continue;
+            if (codepoint < 128) {
+                const ch: u8 = @intCast(codepoint);
+                if (ch > 32 && ch < 127) {
+                    const glyph = getAsciiGlyph8x8(ch);
+                    let row: usize = 0;
+                    while (row < 8) : (row += 1) {
+                        const bits = glyph[row];
+                        if (bits == 0) continue;
+                        const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
+                        const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row + 1)) * scale))));
+                        let col: usize = 0;
+                        while (col < 8) : (col += 1) {
+                            const shift: u3 = @intCast(7 - col);
+                            if (((bits >> shift) & 1) == 1) {
+                                const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
+                                const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                                let py = gy0;
+                                while (py < gy1) : (py += 1) {
                                     if (c := clip) {
-                                        if (px < c.x0 || px >= c.x1) continue;
+                                        if (py < c.y0 || py >= c.y1) continue;
                                     }
-                                    _.blendPixel(px, py, color);
+                                    let px = gx0;
+                                    while (px < gx1) : (px += 1) {
+                                        if (c := clip) {
+                                            if (px < c.x0 || px >= c.x1) continue;
+                                        }
+                                        _.blendPixel(px, py, color);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                cursor_x += step_x;
+            } else if (isDefaultEmojiPresentation(codepoint) || hasEmojiVariationSelector(text, ti)) {
+                const emoji_sz = @max(8.0, pixel_size);
+                _.drawColorEmojiClipped(cursor_x, y, emoji_sz, codepoint, color.a, clip);
+                cursor_x += emoji_sz * 1.1;
+            } else {
+                cursor_x += step_x;
             }
-            cursor_x += step_x;
         }
     }
 

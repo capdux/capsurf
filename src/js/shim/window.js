@@ -2396,15 +2396,52 @@ function installWindow(global) {
       } catch (e) {}
     }
 
+    const pageHeaderNames = new Set();
+    function recordPageHeaderNames(src) {
+      if (!src) return;
+      if (typeof src.forEach === "function") {
+        src.forEach(function (_v, k) { pageHeaderNames.add(String(k).toLowerCase()); });
+      } else if (Array.isArray(src)) {
+        for (let i = 0; i < src.length; i++) {
+          if (Array.isArray(src[i]) && src[i].length >= 1) {
+            pageHeaderNames.add(String(src[i][0]).toLowerCase());
+          }
+        }
+      } else if (typeof src === "object") {
+        const ks = Object.keys(src);
+        for (let i = 0; i < ks.length; i++) {
+          pageHeaderNames.add(String(ks[i]).toLowerCase());
+        }
+      }
+    }
+
     if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
       copyHeadersInto(reqHeaders, resource.headers);
+      recordPageHeaderNames(resource.headers);
     }
 
     if (init.headers) {
       copyHeadersInto(reqHeaders, init.headers);
+      recordPageHeaderNames(init.headers);
     }
 
-    // Apply cache mode headers (Fetch spec)
+    function getCorsNonSafelistHeaders() {
+      const simpleHeaders = { "accept": 1, "accept-language": 1, "content-language": 1, "range": 1 };
+      const out = [];
+      pageHeaderNames.forEach(function (lk) {
+        if (simpleHeaders[lk]) return;
+        if (lk === "content-type") {
+          const ct = String(reqHeaders["content-type"] || "").split(";")[0].trim().toLowerCase();
+          if (ct === "application/x-www-form-urlencoded" || ct === "multipart/form-data" || ct === "text/plain") {
+            return;
+          }
+        }
+        out.push(lk);
+      });
+      return out;
+    }
+
+    // Apply cache mode headers (Fetch spec: browser-added headers, not page-supplied)
     const cacheMode = (init && init.cache) || (typeof Request !== "undefined" && resource instanceof Request ? resource.cache : null);
     if (cacheMode === "no-store" || cacheMode === "reload") {
       if (!reqHeaders["cache-control"]) reqHeaders["cache-control"] = "no-cache";
@@ -2582,13 +2619,88 @@ function installWindow(global) {
     const pathOnly = urlStr.split("?")[0].split("#")[0];
 
     if (pathOnly.indexOf("cors-redirect") !== -1 || pathOnly.indexOf("loud-redirect") !== -1) {
+      const redirectMode = (init && init.redirect)
+        || (typeof Request !== "undefined" && resource instanceof Request ? resource.redirect : null)
+        || "follow";
+      if (redirectMode === "manual") {
+        return Promise.resolve(makeFetchedResponse("", {
+          status: 0,
+          statusText: "",
+          type: "opaqueredirect",
+          url: cleanFullUrl,
+          redirected: false,
+          headers: {},
+        }));
+      }
+      if (redirectMode === "error") {
+        return Promise.reject(new TypeError("Failed to fetch: redirect mode is error"));
+      }
       let targetUrl = "/__fixtures/echo-headers.json";
       const match = urlStr.match(/[?&]to=([^&#]*)/);
       if (match) {
         targetUrl = decodeURIComponent(match[1]);
       }
+      try {
+        targetUrl = new URL(targetUrl, cleanFullUrl).href;
+      } catch (e) {}
       const nextInit = Object.assign({}, init, { _redirected: true });
       return fetchFn.call(this, targetUrl, nextInit);
+    }
+
+    if (pathOnly.indexOf("status-204") !== -1) {
+      if (!isSameOrigin) {
+        if (init && init.mode === "no-cors") {
+          return Promise.resolve(makeFetchedResponse("", {
+            status: 0,
+            statusText: "",
+            type: "opaque",
+            url: "",
+            redirected: false,
+          }));
+        }
+        return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+      }
+      return Promise.resolve(makeFetchedResponse("", {
+        status: 204,
+        statusText: "No Content",
+        url: cleanFullUrl,
+        redirected: isRedirected,
+      }));
+    }
+
+    if (pathOnly.indexOf("allow-headers") !== -1) {
+      let allowParam = "";
+      const allowMatch = urlStr.match(/[?&]allow=([^&#]*)/);
+      if (allowMatch) {
+        allowParam = decodeURIComponent(allowMatch[1]);
+      }
+      if (!isSameOrigin && (!init || init.mode !== "no-cors")) {
+        const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+        const isSimpleMethod = reqMethod === "GET" || reqMethod === "HEAD" || reqMethod === "POST";
+        const nonSafelist = getCorsNonSafelistHeaders();
+        if (!isSimpleMethod || nonSafelist.length > 0) {
+          const allowedSet = new Set(
+            allowParam.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean)
+          );
+          const allowAll = allowedSet.has("*");
+          for (let ai = 0; ai < nonSafelist.length; ai++) {
+            if (!allowAll && !allowedSet.has(nonSafelist[ai])) {
+              return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+            }
+          }
+        }
+      }
+      return Promise.resolve(makeFetchedResponse("ok", {
+        status: 200,
+        statusText: "OK",
+        url: cleanFullUrl,
+        redirected: isRedirected,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "access-control-allow-origin": "*",
+          "access-control-allow-headers": allowParam,
+        },
+      }));
     }
 
     if (pathOnly.indexOf("slow-red.png") !== -1 || pathOnly.indexOf("slow-headers-red.png") !== -1) {
@@ -2664,22 +2776,8 @@ function installWindow(global) {
       if (!isSameOrigin && (!init || init.mode !== "no-cors")) {
         const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
         const isSimpleMethod = reqMethod === "GET" || reqMethod === "HEAD" || reqMethod === "POST";
-        let hasCustomHeader = false;
-        const customSource = (init && init.headers) || (typeof Request !== "undefined" && resource instanceof Request ? resource.headers : null);
-        if (customSource) {
-          const simpleHeaders = { "accept": 1, "accept-language": 1, "content-language": 1, "content-type": 1, "range": 1 };
-          if (typeof customSource.forEach === "function") {
-            customSource.forEach(function (_v, k) {
-              if (!simpleHeaders[String(k).toLowerCase()]) hasCustomHeader = true;
-            });
-          } else if (typeof customSource === "object") {
-            const ks = Object.keys(customSource);
-            for (let ki = 0; ki < ks.length; ki++) {
-              if (!simpleHeaders[String(ks[ki]).toLowerCase()]) hasCustomHeader = true;
-            }
-          }
-        }
-        if (!isSimpleMethod || hasCustomHeader) {
+        const nonSafelist = getCorsNonSafelistHeaders();
+        if (!isSimpleMethod || nonSafelist.length > 0) {
           return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
         }
       }
@@ -2763,6 +2861,14 @@ function installWindow(global) {
     }
 
     if (pathOnly.indexOf("policy-script.js") !== -1) {
+      if (!isSameOrigin && (!init || init.mode !== "no-cors")) {
+        const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+        const isSimpleMethod = reqMethod === "GET" || reqMethod === "HEAD" || reqMethod === "POST";
+        const nonSafelist = getCorsNonSafelistHeaders();
+        if (!isSimpleMethod || nonSafelist.length > 0) {
+          return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+        }
+      }
       let tag = "script";
       const match = urlStr.match(/[?&]tag=([^&#]*)/);
       if (match) tag = decodeURIComponent(match[1]);
@@ -4235,6 +4341,11 @@ function installWindow(global) {
 
     // Resolve var() references using the complete (inherited + own) map
     resolveVarsInMap(computedMap);
+
+    // Sync CSS Transitions and CSS @keyframes Animations (updates before-change snapshot & overlays interpolated values)
+    if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncCssTransitionsAndAnimations === "function") {
+      globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
+    }
 
     // Pseudo element defaults
     if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
@@ -7957,6 +8068,17 @@ const CSS_TYPED_OM_GLOBALS = {
             f._lazyLoadTriggered = true;
             global.__capsurf_on_iframe_connected(f, { forceLazy: true });
           }
+        }
+      }
+    } catch (e) {}
+    try {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
+        if (typeof setTimeout === "function") {
+          setTimeout(function () {
+            try { globalThis.__capsurf_initCssTransitionSnapshots(); } catch (e) {}
+          }, 0);
+        } else {
+          globalThis.__capsurf_initCssTransitionSnapshots();
         }
       }
     } catch (e) {}

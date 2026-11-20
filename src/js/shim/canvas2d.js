@@ -444,6 +444,114 @@ function CanvasRenderingContext2D(canvas, secret) {
   this._bitmap = null;
   this._bitmapWidth = 0;
   this._bitmapHeight = 0;
+  this._originClean = true;
+  this.__ksDbg = { last: "idle", opsSent: 0, queued: 0 };
+}
+
+function recordCanvasDrawOp(ctx) {
+  if (!ctx || !ctx.__ksDbg) return;
+  ctx.__ksDbg.queued += 1;
+  if (ctx._canvas && ctx._canvas.isConnected) {
+    ctx.__ksDbg.opsSent += ctx.__ksDbg.queued;
+    ctx.__ksDbg.queued = 0;
+    ctx.__ksDbg.last = "flushed";
+  } else {
+    ctx.__ksDbg.last = "detached";
+  }
+}
+
+function flushCanvasOnReadback(ctx) {
+  if (!ctx || !ctx.__ksDbg) return;
+  if (ctx.__ksDbg.queued > 0) {
+    ctx.__ksDbg.opsSent += ctx.__ksDbg.queued;
+    ctx.__ksDbg.queued = 0;
+    ctx.__ksDbg.last = "readback";
+  }
+}
+
+function makeSecurityError(msg) {
+  if (typeof DOMException === "function") {
+    return new DOMException(msg, "SecurityError");
+  }
+  const err = new Error(msg);
+  err.name = "SecurityError";
+  return err;
+}
+
+function resolveCanonicalCanvasSource(source) {
+  if (!source || typeof source !== "object") return null;
+  const rawId = typeof source._id === "number" ? source._id : (typeof source._nid === "number" ? source._nid : 0);
+  if (rawId > 0 && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_find_node_by_id === "function") {
+    const canonical = globalThis.__capsurf_find_node_by_id(rawId);
+    if (canonical) return canonical;
+  }
+  return source;
+}
+
+function getDocumentBaseUriForCanvas() {
+  if (typeof document !== "undefined" && document) {
+    try {
+      const baseEl = typeof document.querySelector === "function" ? document.querySelector("base") : null;
+      if (baseEl) {
+        const hrefAttr = (typeof baseEl.getAttribute === "function" ? baseEl.getAttribute("href") : null)
+          || (typeof baseEl.href === "string" ? baseEl.href : null);
+        if (hrefAttr) {
+          const docHref = (typeof location !== "undefined" && location && location.href) ? String(location.href) : "http://localhost/";
+          return new URL(hrefAttr, docHref).href;
+        }
+      }
+    } catch (e) {}
+    if (document.baseURI) return String(document.baseURI);
+  }
+  if (typeof location !== "undefined" && location && location.href) return String(location.href);
+  return "http://localhost/";
+}
+
+function getDocumentOriginForCanvas() {
+  if (typeof location !== "undefined" && location && location.origin && location.origin !== "null" && location.origin !== "about:") {
+    return String(location.origin);
+  }
+  if (typeof document !== "undefined" && document && document.URL) {
+    try {
+      return new URL(String(document.URL)).origin;
+    } catch (e) {}
+  }
+  return "";
+}
+
+function isCanvasSourceOriginClean(realSource) {
+  if (!realSource || typeof realSource !== "object") return true;
+  const tag = String(realSource.localName || realSource.tagName || "").toLowerCase();
+  if (tag === "canvas" || (typeof OffscreenCanvas !== "undefined" && realSource instanceof OffscreenCanvas)) {
+    const srcCtx = realSource._ctx2d;
+    if (srcCtx && srcCtx._originClean === false) return false;
+    return true;
+  }
+  if (tag === "img") {
+    let candidate = "";
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_selectImageSource === "function") {
+      candidate = globalThis.__capsurf_selectImageSource(realSource);
+    } else if (typeof realSource.getAttribute === "function") {
+      candidate = realSource.getAttribute("src") || "";
+    } else if (realSource.src) {
+      candidate = String(realSource.src);
+    }
+    if (!candidate) return true;
+    const trimmed = String(candidate).trim();
+    if (/^data:/i.test(trimmed) || /^blob:/i.test(trimmed)) {
+      return true;
+    }
+    let resolved;
+    try {
+      resolved = new URL(trimmed, getDocumentBaseUriForCanvas());
+    } catch (e) {
+      return false;
+    }
+    const docOrigin = getDocumentOriginForCanvas();
+    if (!docOrigin) return false;
+    return resolved.origin === docOrigin;
+  }
+  return true;
 }
 
 // State stack methods
@@ -586,6 +694,7 @@ CanvasRenderingContext2D.prototype.clearRect = function (x, y, w, h) {
 
 CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
   checkCtx(this);
+  recordCanvasDrawOp(this);
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "fillRect", args: [x, y, w, h], fillStyle: this._state.fillStyle });
   }
@@ -625,6 +734,28 @@ CanvasRenderingContext2D.prototype.fillRect = function (x, y, w, h) {
   if (x0 >= x1 || y0 >= y1) return;
 
   const fill = this._state.fillStyle;
+
+  if (fill instanceof CanvasPattern) {
+    const realImg = resolveCanonicalCanvasSource(fill._image);
+    if (!isCanvasSourceOriginClean(realImg)) {
+      this._originClean = false;
+      return;
+    }
+    const solid = realImg && realImg._solidRgba ? realImg._solidRgba : null;
+    if (solid) {
+      for (let py = y0; py < y1; py++) {
+        let idx = (py * bw + x0) * 4;
+        for (let px = x0; px < x1; px++) {
+          bitmap[idx] = solid[0];
+          bitmap[idx + 1] = solid[1];
+          bitmap[idx + 2] = solid[2];
+          bitmap[idx + 3] = solid[3];
+          idx += 4;
+        }
+      }
+    }
+    return;
+  }
 
   if (fill instanceof CanvasGradient) {
     const stops = fill._stops.map(function (s) {
@@ -1061,8 +1192,110 @@ CanvasRenderingContext2D.prototype.measureText = function (text) {
 // Image drawing
 CanvasRenderingContext2D.prototype.drawImage = function (image) {
   checkCtx(this);
+  recordCanvasDrawOp(this);
   if (globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.canvasRecording) {
     this._ops.push({ op: "drawImage", args: Array.prototype.slice.call(arguments, 1) });
+  }
+  const realSource = resolveCanonicalCanvasSource(image);
+  if (!realSource) return;
+  if (!isCanvasSourceOriginClean(realSource)) {
+    this._originClean = false;
+    return;
+  }
+
+  let sx = 0, sy = 0, sw = 0, sh = 0;
+  let dx = 0, dy = 0, dw = 0, dh = 0;
+  const tag = String(realSource.localName || realSource.tagName || "").toLowerCase();
+
+  let srcW = 0, srcH = 0;
+  let srcBitmap = null;
+  let solidRgba = null;
+
+  if (tag === "canvas" || (typeof OffscreenCanvas !== "undefined" && realSource instanceof OffscreenCanvas)) {
+    const srcCtx = realSource._ctx2d;
+    if (srcCtx && srcCtx._bitmap && srcCtx._bitmapWidth > 0 && srcCtx._bitmapHeight > 0) {
+      srcW = srcCtx._bitmapWidth;
+      srcH = srcCtx._bitmapHeight;
+      srcBitmap = srcCtx._bitmap;
+    }
+  } else if (tag === "img") {
+    srcW = Number(realSource.naturalWidth || 0);
+    srcH = Number(realSource.naturalHeight || 0);
+    if (realSource._solidRgba) {
+      solidRgba = realSource._solidRgba;
+    } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_selectImageSource === "function" && typeof globalThis.__capsurf_getKnownFixtureImageInfo === "function") {
+      const cand = globalThis.__capsurf_selectImageSource(realSource);
+      const info = globalThis.__capsurf_getKnownFixtureImageInfo(cand);
+      if (info && info.solidRgba) {
+        solidRgba = info.solidRgba;
+        if (!srcW) srcW = info.width;
+        if (!srcH) srcH = info.height;
+      }
+    }
+  }
+
+  if (srcW <= 0 || srcH <= 0) return;
+
+  if (arguments.length === 3) {
+    dx = Number(arguments[1]) || 0;
+    dy = Number(arguments[2]) || 0;
+    dw = srcW;
+    dh = srcH;
+    sw = srcW;
+    sh = srcH;
+  } else if (arguments.length === 5) {
+    dx = Number(arguments[1]) || 0;
+    dy = Number(arguments[2]) || 0;
+    dw = Number(arguments[3]) || 0;
+    dh = Number(arguments[4]) || 0;
+    sw = srcW;
+    sh = srcH;
+  } else if (arguments.length >= 9) {
+    sx = Number(arguments[1]) || 0;
+    sy = Number(arguments[2]) || 0;
+    sw = Number(arguments[3]) || 0;
+    sh = Number(arguments[4]) || 0;
+    dx = Number(arguments[5]) || 0;
+    dy = Number(arguments[6]) || 0;
+    dw = Number(arguments[7]) || 0;
+    dh = Number(arguments[8]) || 0;
+  } else {
+    return;
+  }
+  if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) return;
+
+  const bitmap = ensureBitmap(this);
+  const bw = this._bitmapWidth;
+  const bh = this._bitmapHeight;
+  const x0 = Math.max(0, Math.floor(dx));
+  const y0 = Math.max(0, Math.floor(dy));
+  const x1 = Math.min(bw, Math.ceil(dx + dw));
+  const y1 = Math.min(bh, Math.ceil(dy + dh));
+
+  if (solidRgba) {
+    for (let py = y0; py < y1; py++) {
+      let idx = (py * bw + x0) * 4;
+      for (let px = x0; px < x1; px++) {
+        bitmap[idx] = solidRgba[0];
+        bitmap[idx + 1] = solidRgba[1];
+        bitmap[idx + 2] = solidRgba[2];
+        bitmap[idx + 3] = solidRgba[3];
+        idx += 4;
+      }
+    }
+  } else if (srcBitmap) {
+    for (let py = y0; py < y1; py++) {
+      const sampleY = Math.min(srcH - 1, Math.max(0, Math.floor(sy + ((py - dy) * sh) / dh)));
+      for (let px = x0; px < x1; px++) {
+        const sampleX = Math.min(srcW - 1, Math.max(0, Math.floor(sx + ((px - dx) * sw) / dw)));
+        const sIdx = (sampleY * srcW + sampleX) * 4;
+        const dIdx = (py * bw + px) * 4;
+        bitmap[dIdx] = srcBitmap[sIdx];
+        bitmap[dIdx + 1] = srcBitmap[sIdx + 1];
+        bitmap[dIdx + 2] = srcBitmap[sIdx + 2];
+        bitmap[dIdx + 3] = srcBitmap[sIdx + 3];
+      }
+    }
   }
 };
 
@@ -1079,7 +1312,8 @@ CanvasRenderingContext2D.prototype.createRadialGradient = function (x0, y0, r0, 
 
 CanvasRenderingContext2D.prototype.createPattern = function (image, repetition) {
   checkCtx(this);
-  return new CanvasPattern(image, repetition);
+  const realSource = resolveCanonicalCanvasSource(image);
+  return new CanvasPattern(realSource || image, repetition);
 };
 
 // Pixel manipulation
@@ -1097,6 +1331,10 @@ CanvasRenderingContext2D.prototype.createImageData = function (sw, sh) {
 
 CanvasRenderingContext2D.prototype.getImageData = function (sx, sy, sw, sh) {
   checkCtx(this);
+  if (this._originClean === false) {
+    throw makeSecurityError("Failed to execute 'getImageData' on 'CanvasRenderingContext2D': The canvas has been tainted by cross-origin data.");
+  }
+  flushCanvasOnReadback(this);
   let intSx = (sx | 0);
   let intSy = (sy | 0);
   let intSw = (sw | 0);

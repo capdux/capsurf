@@ -551,19 +551,55 @@ markNative(Request.prototype.arrayBuffer, "arrayBuffer");
 
 function Response(body, init) {
   init = init || {};
-  this.status = init.status !== undefined ? Number(init.status) : 200;
-  this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
-  this.ok = this.status >= 200 && this.status < 300;
-  this.type = init.type !== undefined ? String(init.type) : "default";
-  this.url = init.url !== undefined ? String(init.url) : "";
-  this.redirected = Boolean(init.redirected);
-  this.headers = new Headers(init.headers);
+  this._status = init.status !== undefined ? Number(init.status) : 200;
+  this._statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
+  this._ok = this._status >= 200 && this._status < 300;
+  this._type = init.type !== undefined ? String(init.type) : "default";
+  this._url = init.url !== undefined ? String(init.url) : "";
+  this._redirected = Boolean(init.redirected);
+  this._headers = new Headers(init.headers);
   if (init._immutableHeaders) {
-    this.headers._guard = "immutable";
+    this._headers._guard = "immutable";
   }
-  this._rawMimeType = extractMimeFromHeaders(this.headers);
+  this._rawMimeType = extractMimeFromHeaders(this._headers);
   this._body = body !== undefined ? body : "";
 }
+
+Object.defineProperty(Response.prototype, "status", {
+  get: function () { return this._status; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "statusText", {
+  get: function () { return this._statusText; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "ok", {
+  get: function () { return this._ok; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "type", {
+  get: function () { return this._type; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "url", {
+  get: function () { return this._url; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "redirected", {
+  get: function () { return this._redirected; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "headers", {
+  get: function () { return this._headers; },
+  configurable: true,
+  enumerable: true,
+});
 
 Response.prototype.blob = function () {
   const mime = this._rawMimeType || "";

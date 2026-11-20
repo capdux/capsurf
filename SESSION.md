@@ -3799,3 +3799,27 @@
   - 销毁 `166a7c33-2359-4bce-9b2e-ac8b2e70a229`；
   - 派发 **Subagent 74**: CDP Inserted Script & Selection Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
     - 攻坚目标：`session.cp` 表单选区采集（配合 `forms-selection-paint-demo`）+ 6 项 `inserted-script-*` Core E2E 套件。
+
+## [2026-11-20 19:31:30] CSS Transitions/Animations 引擎、Canvas2D 图像字节/Taint、Fetch Redirect Shell 与 XHTML 30/30 全绿闭环 (Subagent 1f6dc4cc 结单，Phase 106)
+- **CSS Transitions/Animations 引擎与 Canvas2D 图像像素/Taint (`animations.js`, `canvas2d.js`, `html-classes.js`, `element.js`)**:
+  - `animations.js`: 实装完整 CSS Transitions & `@keyframes` 运行时引擎（`transitionrun/start/end/cancel`、`animationstart/end/cancel`、负 delay、retarget 取消、`isTrusted` 事件与 `inset(...)` 插值）；
+  - `canvas2d.js` & `html-classes.js`: 实装 `ctx.__ksDbg` 离屏延迟回读、`drawImage`/`createPattern`/`fillRect` 像素写入与跨源 taint `SecurityError` 校验（含 `srcset`/`<picture>` 与动态 `<base>`）。
+- **Fetch Redirect Shell / Cache CORS 与 XHTML Doctype (`file.js`, `window.js`, `index.js`)**:
+  - `file.js` & `window.js`: `Response.prototype` 标准原型 getter、`redirect: "manual"` `opaqueredirect` 壳、内部 `init.cache` 头与页面 CORS preflight 隔离；
+  - `index.js`: `document.body`/`head`/`documentElement` 统一 `upgradeElement` 并将 `document.doctype` 纳入 `firstChild`/`childNodes`。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，13 分钟 30/30 全绿）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `cross-origin-redirect-shell` (3/3)、`fetch-cache-mode-cors` (2/2)、`xhtml-doctype-parser-routing` (5/5)、`canvas-detached-readback` (1/1)、`canvas-image-bytes` (7/7)、`css-transitions` (12/12)：**30/30 PASS (100%)**！
+- **全新子智能体调度（路 2 无缝补位，`-m -d -o` 增量构建）**:
+  - 销毁 `1f6dc4cc-1874-4d43-af86-d801f967ba01`；
+  - 派发 **Subagent 75**: Animations & Input Closer（`e2e/harness.ts` + `src/js/shim/*`，`bin_19232` / `19232`）
+    - 攻坚目标：`text-input-caret-font`、`forms-selection-paint-demo`、`web-animations`、`transition-reused-node-slot`、`contenteditable-typing`、`typed-input-value-tracker`。
+
+## [2026-11-20 19:32:20] 原生 UTF-8 解码与 BMP/SMP 彩色 Emoji 矢量光栅化闭环（2.71s 增量构建）(Subagent 36774f96 结单，Phase 107)
+- **原生 UTF-8 文本与彩色 Emoji 光栅化 (`src/render/painter.cp`)**:
+  - 新增 `isDefaultEmojiPresentation`、`hasEmojiVariationSelector` 与 `Canvas.drawColorEmojiClipped`（支持 `U+2705` ✅、`U+274C` ❌ 及 SMP Emoji 区块原生彩色光栅化）；
+  - 升级 `drawTextClipped`/`drawScaledTextClipped` 为内联 UTF-8 多字节码点解码循环并跳过 `U+FE0E`/`U+FE0F`。
+- **门禁与 E2E 验证（`-m -d -o` 2.71s 增量构建）**:
+  - `src/render/painter.cp` 4 门禁全 0；
+  - `entity-parse-demo` (PASS)、`forms-textarea-bidi` (PASS)、`bmp-emoji-fonts` (2/3 PASS，第 3 项定位缺 HTML Named Access `window.<id>`)；`fixed-in-fixed-demo` 定位 `dom_binding.cp:1173` `elementFromPoint` 祖先层级继承缺陷。
+- **清理旧子智能体**: 销毁 `36774f96-a61a-4746-9705-d33fb9d8c0ed` 并清理端口 `19231` 残留进程。

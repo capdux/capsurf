@@ -745,6 +745,9 @@ function installElementExtensions(proto) {
             } else {
               self.className = val;
             }
+            if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
+              globalThis.__capsurf_notifyCssStyleChange(self);
+            }
           }
         );
       }
@@ -978,6 +981,9 @@ function installElementExtensions(proto) {
     }
     if (typeof notifyCustomElementAttributeChanged === "function") {
       notifyCustomElementAttributeChanged(this, key, oldVal, val, null);
+    }
+    if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
+      globalThis.__capsurf_notifyCssStyleChange(this);
     }
   };
   markNative(proto.setAttribute, "setAttribute");

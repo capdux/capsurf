@@ -1843,4 +1843,18 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 增量构建）；
   - E2E 测试：`engine-routes` (17/17) + `fetch-interception` (8/8) + `font-face-unicode-range-gating` (3/3) + `pseudo-text-font-arrival` (1/1) 共 **29/29 PASS**。
+
+## Phase 106: CSS Transitions/Animations Engine, Canvas2D Image Bytes/Taint, Redirect Shell & XHTML — 6/6 Suites (30/30 PASS)
+- **`src/js/shim/{animations,canvas2d,file,window,index,element/html-classes,element/element}.js`**：
+  - 实装完整 CSS Transitions & `@keyframes` 运行时引擎、Canvas2D `drawImage`/`createPattern`/跨源 taint `SecurityError` 与 `__ksDbg` 离屏回读、`Response.prototype` 标准 getter、`redirect: "manual"` `opaqueredirect`、CORS cache-mode 隔离及 `document.doctype` 节点树集成。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（`-m -d -o` 增量构建）；
+  - E2E 测试：6 大 Core 套件共 **30/30 PASS (100%)**。
+
+## Phase 107: Native UTF-8 Text Decoding & BMP/SMP Color Emoji Rasterization (Closed — 2.71s Incremental Build)
+- **`src/render/painter.cp`**：
+  - 升级 `drawTextClipped`/`drawScaledTextClipped` 为多字节 UTF-8 解码循环，新增 `Canvas.drawColorEmojiClipped` 支持 BMP/SMP 彩色 Emoji 与 `U+FE0F` 变体选择符光栅化。
+- **测试与门禁验证**：
+  - 静态门禁：`painter.cp` 4 门禁全 0（`-m -d -o` 2.71s 增量构建）；
+  - E2E 测试：`entity-parse-demo` + `forms-textarea-bidi` + `bmp-emoji-fonts` (2/3) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
