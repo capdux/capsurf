@@ -4402,3 +4402,7 @@
 ## [2026-11-21 00:43:30] 1 分 20 秒新增并全绿通过纯 CP CJK/Emoji 光栅化白盒单测 `test/render/test_painter_cjk_emoji.cp` (Subagent b2b1f6cb 结单，Phase 173)
 - **新增白盒测试 (`test/render/test_painter_cjk_emoji.cp`)**: 覆盖 CJK 汉字/假名/韩文点阵、`drawGlyph8x8ScaledClipped` 缩放裁剪、BMP/SMP 彩色 Emoji (`U+2705`/`U+274C`/`U+1F600`) 及 `alpha=0` 空绘制保护（3/3 PASS, 940ms, 4 门禁全 0）。
 - **清理旧子智能体**: 销毁 `b2b1f6cb-771a-4631-bd9d-ad749f0eed4b`。
+
+## [2026-11-21 00:46:00] 1 分 45 秒新增并全绿通过纯 CP PagedMedia 白盒单测 `test/css/test_paged_media.cp` (Subagent ef8f1269 结单，Phase 174)
+- **新增白盒测试 (`test/css/test_paged_media.cp`)**: 覆盖 `BreakValue`/`BreakInsideValue`、`PageMarginRule` 单位换算与简写/长写、`@page` + `break-*` 级联、`isValidUtf8` 与 ISO-8859-15/Latin-1 转码（**4/4 PASS**, 1174ms, 4 门禁全 0；`test/css/` 达 **4/4 PASS**）。
+- **清理旧子智能体**: 销毁 `ef8f1269-ccb5-4189-aef7-1b739afc13fc`。

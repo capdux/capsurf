@@ -2180,3 +2180,6 @@
 
 ## Phase 173: Pure-CP CJK & SMP Color Emoji Rasterization Whitebox Suite `test/render/test_painter_cjk_emoji.cp` (3/3 PASS)
 - 新增 `test/render/test_painter_cjk_emoji.cp`，覆盖 CJK 点阵、缩放裁剪与 BMP/SMP 彩色 Emoji 光栅化（`cap test -m` **3/3 PASS**, 940ms）。
+
+## Phase 174: Pure-CP PagedMedia & Legacy Charset Whitebox Suite `test/css/test_paged_media.cp` (4/4 PASS)
+- 新增 `test/css/test_paged_media.cp`，覆盖 `@page`、`break-*` 级联与 ISO-8859-15 UTF-8 转码（`cap test -m` **4/4 PASS**, 1174ms）。
