@@ -67,8 +67,10 @@ pub struct KitesurfFacade {
             if (std.mem.indexOf(u8, params_json, "rejectResourceTypes") != null &&
                 (std.mem.indexOf(u8, params_json, "websocket") != null ||
                  std.mem.indexOf(u8, params_json, "WebSocket") != null)) {
+                session.outbound_reject_websocket = true;
                 * = session.ctx.eval("globalThis.__capsurf_outbound_reject_websocket = true;");
             } else {
+                session.outbound_reject_websocket = false;
                 * = session.ctx.eval("globalThis.__capsurf_outbound_reject_websocket = false;");
             }
         }

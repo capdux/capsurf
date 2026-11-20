@@ -726,6 +726,67 @@ pub struct MockFixtures {
             return out_buf[0..len];
         }
 
+        if (std.mem.indexOf(u8, url, "/chatty-xhr.html") != null) {
+            let fetch_count: u64 = 50;
+            let bytes_val: u64 = 200000;
+            let conc_val: u64 = 4;
+            if (n_str := MockFixtures.extractQueryParam(url, "n")) {
+                const parsed_n = std.fmt.parseInt(u64, n_str, 10) catch 50;
+                fetch_count = @min(@max(parsed_n, @as(u64, 1)), @as(u64, 2000));
+            }
+            if (b_str := MockFixtures.extractQueryParam(url, "bytes")) {
+                const parsed_b = std.fmt.parseInt(u64, b_str, 10) catch 200000;
+                bytes_val = @min(@max(parsed_b, @as(u64, 1)), @as(u64, 4 * 1024 * 1024));
+            }
+            if (c_str := MockFixtures.extractQueryParam(url, "conc")) {
+                const parsed_c = std.fmt.parseInt(u64, c_str, 10) catch 4;
+                conc_val = @min(@max(parsed_c, @as(u64, 1)), @as(u64, 16));
+            }
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n" ++
+                "<html><head><meta charset=\"utf-8\"><title>chatty-xhr</title></head>\n" ++
+                "<body><h1 id=\"h\">chatty</h1>\n" ++
+                "<script>\n" ++
+                "window.__done = false;\n" ++
+                "window.__fetched = 0;\n" ++
+                "window.__failed = 0;\n" ++
+                "(function () {{\n" ++
+                "  var FETCH_COUNT = {d}, BYTES = {d}, LANES = {d};\n" ++
+                "  var issued = 0;\n" ++
+                "  function next() {{\n" ++
+                "    if (issued >= FETCH_COUNT) return Promise.resolve();\n" ++
+                "    var seed = issued++;\n" ++
+                "    return fetch(\"/__fixtures/chatty-json?bytes=\" + BYTES + \"&seed=\" + seed)\n" ++
+                "      .then(function (res) {{ return res.text(); }})\n" ++
+                "      .then(function () {{ window.__fetched++; }})\n" ++
+                "      .catch(function () {{ window.__failed++; }})\n" ++
+                "      .then(next);\n" ++
+                "  }}\n" ++
+                "  var lanes = [];\n" ++
+                "  for (var lane = 0; lane < LANES; lane++) lanes.push(next());\n" ++
+                "  Promise.all(lanes).then(function () {{\n" ++
+                "    window.__done = true;\n" ++
+                "    document.getElementById(\"h\").textContent = \"done \" + window.__fetched;\n" ++
+                "    var marker = document.createElement(\"div\");\n" ++
+                "    marker.id = \"done\";\n" ++
+                "    document.body.appendChild(marker);\n" ++
+                "  }});\n" ++
+                "}})();\n" ++
+                "</script>\n" ++
+                "</body></html>",
+                .{ fetch_count, bytes_val, conc_val },
+            ) catch return null;
+            return res;
+        }
+
+        if (std.mem.indexOf(u8, url, "/chatty-json") != null) {
+            const body = "{\"ok\":true,\"data\":\"chatty\"}";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
         if (std.mem.indexOf(u8, url, "/slow-document.html") != null) {
             const body = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Slow document</title></head><body><h1>Slow document</h1></body></html>";
             const len = @min(body.len, out_buf.len);

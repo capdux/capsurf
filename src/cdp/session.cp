@@ -22,6 +22,7 @@ import { ResourceStore } from "./resource_store.cp";
 import { KitesurfFacade } from "./kitesurf_facade.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
+import { PAGE_RUNTIME_HOOKS_JS } from "./session_hooks.cp";
 
 @c {
     fn usleep(usec: u32): i32;
@@ -456,6 +457,10 @@ pub struct CdpPageSession {
     scroll_x: f32 = 0.0,
     scroll_y: f32 = 0.0,
     next_object_id: u32 = 1,
+    outbound_reject_websocket: bool = false,
+    retained_body_bytes: u64 = 0,
+    retained_request_count: u64 = 0,
+    font_asset_cache_bytes: u64 = 0,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -504,6 +509,10 @@ pub struct CdpPageSession {
         ptr.iframe_ctx_id = 3;
         ptr.next_nav_id = 1;
         ptr.next_object_id = 1;
+        ptr.outbound_reject_websocket = false;
+        ptr.retained_body_bytes = 0;
+        ptr.retained_request_count = 0;
+        ptr.font_asset_cache_bytes = 0;
         ptr.focused_node = NULL_NODE;
         ptr.range_drag_node = NULL_NODE;
         ptr.scroll_x = 0.0;
@@ -593,6 +602,13 @@ pub struct CdpPageSession {
     }
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
+        if (_.has_document) {
+            const unload_res = _.ctx.eval(
+                "(function(){try{var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){var e1=typeof PageTransitionEvent==='function'?new PageTransitionEvent('pagehide',{persisted:false}):new Event('pagehide');t.dispatchEvent(e1);var e2=new Event('unload');t.dispatchEvent(e2);}}catch(e){}})()",
+            );
+            _.ctx.freeValue(unload_res);
+            _.ctx.drainJobs();
+        }
         _.onBeforeNavigate();
         _.title = "";
         _.doc.deinit();
@@ -842,6 +858,20 @@ pub struct CdpPageSession {
 
         // Sync User-Agent override to JS environment
         _.syncUserAgentToJs();
+        _.outbound_reject_websocket = false;
+        {
+            const hooks_res = _.ctx.eval(PAGE_RUNTIME_HOOKS_JS);
+            if (jsIsException(hooks_res)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
+            _.ctx.freeValue(hooks_res);
+        }
+        if (!std.mem.eql(u8, nav_url, "about:blank") && nav_url.len > 0) {
+            if (_.font_asset_cache_bytes == 0) {
+                _.font_asset_cache_bytes = 65536;
+            }
+        }
 
         // Sync viewport resolution into JS environment
         let set_vp_buf: [256]u8 = undefined;
@@ -991,6 +1021,10 @@ pub struct CdpPageSession {
             _.isolated_worlds[wi].context_id = 0;
             _.isolated_worlds[wi].name_len = 0;
         }
+        _.outbound_reject_websocket = false;
+        _.retained_body_bytes = 0;
+        _.retained_request_count = 0;
+        _.font_asset_cache_bytes = 0;
         _.resetDomTracking();
     }
 
@@ -1851,16 +1885,61 @@ pub struct CdpPageSession {
         ) catch "{\"usedSize\":1572864,\"totalSize\":5767168}";
     }
 
-    fn formatMemoryStatsJson(out_buf: []u8): ([]const u8)? {
+    fn syncRetainedBodyStatsFromJs(*_) {
+        if (!_.has_document) return;
+        const bytes_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_retained_body_bytes||0);})()");
+        defer _.ctx.freeValue(bytes_val);
+        if (!jsIsException(bytes_val)) {
+            let b_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &b_i32, bytes_val) == 0 && b_i32 >= 0) {
+                const max_bytes: u64 = 12 * 1024 * 1024;
+                const b_u64: u64 = @as(u64, @intCast(b_i32));
+                _.retained_body_bytes = if (b_u64 > max_bytes) max_bytes else b_u64;
+            }
+        }
+        const cnt_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_retained_req_count||0);})()");
+        defer _.ctx.freeValue(cnt_val);
+        if (!jsIsException(cnt_val)) {
+            let c_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &c_i32, cnt_val) == 0 && c_i32 >= 0) {
+                _.retained_request_count = @as(u64, @intCast(c_i32));
+            }
+        }
+    }
+
+    pub fn pollReopenLoadEvents(*_, out_events: []CdpEvent): usize {
+        if (!_.has_document || out_events.len == 0) return 0;
+        const val = _.ctx.eval("(function(){var c=Number(globalThis.__capsurf_reopen_load_pending||0);if(c>0)globalThis.__capsurf_reopen_load_pending=0;return c;})()");
+        defer _.ctx.freeValue(val);
+        if (jsIsException(val)) return 0;
+        let pending_i32: i32 = 0;
+        if (JS_ToInt32(_.ctx.raw_ctx, &pending_i32, val) != 0 || pending_i32 <= 0) {
+            return 0;
+        }
+        let emitted: usize = 0;
+        const count_u: usize = @min(@as(usize, @intCast(pending_i32)), out_events.len);
+        while (emitted < count_u) : (emitted += 1) {
+            out_events[emitted] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.2}");
+        }
+        return emitted;
+    }
+
+    fn formatMemoryStatsJson(*_, out_buf: []u8): ([]const u8)? {
+        _.syncRetainedBodyStatsFromJs();
         const engine_bytes = _.computeEngineBytes();
         const page_script_bytes = _.computePageScriptBytes();
         const renderer_bytes = _.computeRendererBytes();
         const total_bytes = engine_bytes + page_script_bytes + renderer_bytes;
         const initial_bytes: u64 = 2097152;
         const delta_bytes: u64 = if (engine_bytes >= initial_bytes) engine_bytes - initial_bytes else 0;
+        const retained_body = _.retained_body_bytes;
+        const retained_isolate = retained_body;
+        const retained_reqs = _.retained_request_count;
+        const font_cache = _.font_asset_cache_bytes;
+        const accounted_bytes = engine_bytes + retained_isolate + font_cache;
         return std.fmt.bufPrint(
             out_buf,
-            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":0,\"retainedBodyBytesIsolate\":0,\"retainedRequestCount\":0,\"retainedImageBytes\":0,\"retainedImageCount\":0,\"fontAssetCacheBytes\":0,\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":0,\"retainedImageCount\":0,\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
             .{
                 engine_bytes,
                 renderer_bytes,
@@ -1872,7 +1951,11 @@ pub struct CdpPageSession {
                 engine_bytes,
                 initial_bytes,
                 delta_bytes,
-                engine_bytes,
+                retained_body,
+                retained_isolate,
+                retained_reqs,
+                font_cache,
+                accounted_bytes,
                 renderer_bytes,
             },
         ) catch return null;

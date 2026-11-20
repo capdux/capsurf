@@ -8,6 +8,7 @@ import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
 import { performPendingNavigation } from "./page.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
 
@@ -284,7 +285,58 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     }
 
     fn handleHttpRequest(*_, client_fd: i32, req: []const u8)! {
-        if (std.mem.startsWith(u8, req, "GET /json/version")) {
+        // Parse request line: METHOD TARGET HTTP/1.x
+        let req_line = req;
+        if (crlf := std.mem.indexOf(u8, req, "\r\n")) {
+            req_line = req[0..crlf];
+        }
+        let target: []const u8 = "/";
+        if (sp1 := std.mem.indexOfScalar(u8, req_line, ' ')) {
+            const after_m = req_line[sp1 + 1..];
+            if (sp2 := std.mem.indexOfScalar(u8, after_m, ' ')) {
+                target = after_m[0..sp2];
+            } else {
+                target = after_m;
+            }
+        }
+        let path = target;
+        let query: []const u8 = "";
+        if (q_idx := std.mem.indexOfScalar(u8, target, '?')) {
+            path = target[0..q_idx];
+            query = target[q_idx + 1..];
+        }
+
+        // Determine host, proto & inspector base from headers (fallback to 127.0.0.1:<port> & ws)
+        let host_buf: [256]u8 = [0; 256];
+        const default_host = std.fmt.bufPrint(&host_buf, "127.0.0.1:{d}", .{_.getPort()}) catch "127.0.0.1";
+        let req_host = CdpServer.extractHttpHeader(req, "X-Forwarded-Host") ?? (CdpServer.extractHttpHeader(req, "Host") ?? default_host);
+        if (req_host.len == 0) req_host = default_host;
+        let http_scheme: []const u8 = "http";
+        let ws_scheme: []const u8 = "ws";
+        if (proto := CdpServer.extractHttpHeader(req, "X-Forwarded-Proto")) {
+            if (std.ascii.eqlIgnoreCase(proto, "https")) {
+                http_scheme = "https";
+                ws_scheme = "wss";
+            }
+        }
+        const inspector_base = CdpServer.extractHttpHeader(req, "X-Inspector-Base") ?? "https://example.com/devtools";
+        const no_inspector = inspector_base.len == 0 || std.ascii.eqlIgnoreCase(inspector_base, "none");
+        const path_only_inspector = !no_inspector && inspector_base[0] == '/';
+
+        // 1. /health
+        if (std.mem.eql(u8, path, "/health")) {
+            sendHttpResponse(client_fd, "200 OK", "text/plain; charset=utf-8", "kitesurf: OK\n")?;
+            return;
+        }
+
+        // 2. /json/protocol (must be matched before /json)
+        if (std.mem.eql(u8, path, "/json/protocol") || std.mem.eql(u8, path, "/json/protocol/")) {
+            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", "{}")?;
+            return;
+        }
+
+        // 3. /json/version and /json/version/
+        if (std.mem.eql(u8, path, "/json/version") || std.mem.eql(u8, path, "/json/version/")) {
             let body_buf: [1024]u8 = [0; 1024];
             const body = std.fmt.bufPrint(
                 &body_buf,
@@ -293,34 +345,43 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 "  \"Protocol-Version\": \"1.3\",\n" ++
                 "  \"User-Agent\": \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CapSurf/1.0\",\n" ++
                 "  \"V8-Version\": \"QuickJS-NG\",\n" ++
-                "  \"webSocketDebuggerUrl\": \"ws://127.0.0.1:{d}/devtools/browser/capsurf-browser-001\"\n" ++
+                "  \"webSocketDebuggerUrl\": \"{s}://{s}/devtools/browser\"\n" ++
                 "}}",
-                .{ _.getPort() },
+                .{ ws_scheme, req_host },
             ) catch "{}";
-            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)? ;
+            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)?;
             return;
         }
 
-        if (std.mem.startsWith(u8, req, "GET /json") or std.mem.startsWith(u8, req, "GET /json/list")) {
-            let body_buf: [1024]u8 = [0; 1024];
+        // 4. /json, /json/list, /json/list/
+        if (std.mem.eql(u8, path, "/json") || std.mem.eql(u8, path, "/json/list") || std.mem.eql(u8, path, "/json/list/")) {
+            let fe_buf: [1024]u8 = [0; 1024];
+            let fe_url: []const u8 = "";
+            if (no_inspector) {
+                fe_url = std.fmt.bufPrint(&fe_buf, "devtools://devtools/bundled/inspector.html?{s}={s}/devtools/page/kitesurf", .{ ws_scheme, req_host }) catch "";
+            } else {
+                fe_url = std.fmt.bufPrint(&fe_buf, "{s}?{s}={s}/devtools/page/kitesurf", .{ inspector_base, ws_scheme, req_host }) catch "";
+            }
+            let body_buf: [2048]u8 = [0; 2048];
             const body = std.fmt.bufPrint(
                 &body_buf,
                 "[{{\n" ++
                 "  \"description\": \"\",\n" ++
-                "  \"devtoolsFrontendUrl\": \"\",\n" ++
-                "  \"id\": \"capsurf-target-001\",\n" ++
+                "  \"devtoolsFrontendUrl\": \"{s}\",\n" ++
+                "  \"id\": \"kitesurf\",\n" ++
                 "  \"title\": \"{s}\",\n" ++
                 "  \"type\": \"page\",\n" ++
                 "  \"url\": \"{s}\",\n" ++
-                "  \"webSocketDebuggerUrl\": \"ws://127.0.0.1:{d}/devtools/page/capsurf-target-001\"\n" ++
+                "  \"webSocketDebuggerUrl\": \"{s}://{s}/devtools/page/kitesurf\"\n" ++
                 "}}]",
-                .{ _.session.title, _.session.url, _.getPort() },
+                .{ fe_url, _.session.title, _.session.url, ws_scheme, req_host },
             ) catch "[]";
-            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)? ;
+            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)?;
             return;
         }
 
-        if (std.mem.startsWith(u8, req, "GET /json/new") or std.mem.startsWith(u8, req, "PUT /json/new")) {
+        // 5. /json/new
+        if (std.mem.startsWith(u8, path, "/json/new")) {
             let body_buf: [1024]u8 = [0; 1024];
             const body = std.fmt.bufPrint(
                 &body_buf,
@@ -331,20 +392,84 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 "  \"title\": \"{s}\",\n" ++
                 "  \"type\": \"page\",\n" ++
                 "  \"url\": \"{s}\",\n" ++
-                "  \"webSocketDebuggerUrl\": \"ws://127.0.0.1:{d}/devtools/page/capsurf-target-001\"\n" ++
+                "  \"webSocketDebuggerUrl\": \"{s}://{s}/devtools/page/capsurf-target-001\"\n" ++
                 "}}",
-                .{ _.session.title, _.session.url, _.getPort() },
+                .{ _.session.title, _.session.url, ws_scheme, req_host },
             ) catch "{}";
-            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)? ;
+            sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", body)?;
             return;
         }
 
-        if (std.mem.startsWith(u8, req, "GET /json/activate") or std.mem.startsWith(u8, req, "GET /json/close")) {
-            sendHttpResponse(client_fd, "200 OK", "text/plain", "Target handled")? ;
+        if (std.mem.startsWith(u8, path, "/json/activate") || std.mem.startsWith(u8, path, "/json/close")) {
+            sendHttpResponse(client_fd, "200 OK", "text/plain", "Target handled")?;
             return;
         }
 
-        sendHttpResponse(client_fd, "404 Not Found", "text/plain", "Not Found")? ;
+        // 6. /?inspect=1 or /?url=...
+        if (std.mem.eql(u8, path, "/") && query.len > 0) {
+            const has_inspect = std.mem.indexOf(u8, query, "inspect=1") != null;
+            const url_param = MockFixtures.extractQueryParam(target, "url");
+            if (has_inspect || url_param != null) {
+                if (no_inspector) {
+                    sendHttpResponse(client_fd, "501 Not Implemented", "text/plain", "Inspector base URL not configured")?;
+                    return;
+                }
+                let base_buf: [512]u8 = [0; 512];
+                const resolved_base = if (path_only_inspector)
+                    (std.fmt.bufPrint(&base_buf, "{s}://{s}{s}", .{ http_scheme, req_host, inspector_base }) catch inspector_base)
+                else
+                    inspector_base;
+                let loc_buf: [2048]u8 = [0; 2048];
+                let loc: []const u8 = "";
+                if (url_param != null && url_param.?.len > 0) {
+                    loc = std.fmt.bufPrint(
+                        &loc_buf,
+                        "{s}?{s}={s}%2Fdevtools%2Fpage%2Fkitesurf%3FinitialUrl%3D{s}",
+                        .{ resolved_base, ws_scheme, req_host, url_param.? },
+                    ) catch "";
+                } else {
+                    loc = std.fmt.bufPrint(
+                        &loc_buf,
+                        "{s}?{s}={s}%2Fdevtools%2Fpage%2Fkitesurf",
+                        .{ resolved_base, ws_scheme, req_host },
+                    ) catch "";
+                }
+                if (loc.len > 0) {
+                    sendHttpRedirect(client_fd, loc)?;
+                    return;
+                }
+            }
+        }
+
+        // 7. Non-upgrade /__fixtures/* requests
+        if (std.mem.startsWith(u8, path, "/__fixtures/")) {
+            const key = path[12..];
+            if (key.len == 0 ||
+                std.mem.eql(u8, key, "__proto__") ||
+                std.mem.eql(u8, key, "constructor") ||
+                std.mem.eql(u8, key, "toString") ||
+                std.mem.eql(u8, key, "valueOf") ||
+                std.mem.eql(u8, key, "hasOwnProperty") ||
+                std.mem.indexOf(u8, key, "..") != null)
+            {
+                sendHttpResponse(client_fd, "404 Not Found", "text/plain", "not found")?;
+                return;
+            }
+            const fix_buf = std.heap.c_allocator.alloc(u8, 65536) catch {
+                sendHttpResponse(client_fd, "500 Internal Server Error", "text/plain", "oom")?;
+                return;
+            };
+            defer std.heap.c_allocator.free(fix_buf);
+            if (body := MockFixtures.handleFixtureRequest(target, "", _.session.user_agent, fix_buf, null)) {
+                const ct = MockFixtures.getContentType(path);
+                sendHttpResponse(client_fd, "200 OK", ct, body)?;
+                return;
+            }
+            sendHttpResponse(client_fd, "404 Not Found", "text/plain", "not found")?;
+            return;
+        }
+
+        sendHttpResponse(client_fd, "404 Not Found", "text/plain", "not found")?;
     }
 
     static fn extractHttpHeader(req: []const u8, name: []const u8): ([]const u8)? {
@@ -463,6 +588,15 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
+    fn flushReopenLoadEvents(*_, client_fd: i32)! {
+        if (!_.session.has_document) return;
+        let reopen_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const reopen_count = _.session.pollReopenLoadEvents(&reopen_events);
+        if (reopen_count > 0) {
+            _.emitCdpEvents(client_fd, &reopen_events, reopen_count)?;
+        }
+    }
+
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {
         _.session.resetSession();
         defer _.session.resetSession();
@@ -525,6 +659,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             if (pr == 0) {
                 if (_.session.has_document) {
                     _.session.pumpTimers();
+                    _.flushReopenLoadEvents(client_fd) catch break;
                     _.flushPendingNavigation(client_fd) catch break;
                     if (_.session.dom_document_sent) {
                         _.flushDomEvents(client_fd) catch break;
@@ -707,18 +842,34 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 }
 
 fn sendHttpResponse(client_fd: i32, status: []const u8, content_type: []const u8, body: []const u8)! {
-    let resp_buf: [4096]u8 = [0; 4096];
-    const resp = std.fmt.bufPrint(
-        &resp_buf,
+    let hdr_buf: [1024]u8 = [0; 1024];
+    const hdr = std.fmt.bufPrint(
+        &hdr_buf,
         "HTTP/1.1 {s}\r\n" ++
         "Content-Type: {s}\r\n" ++
         "Content-Length: {d}\r\n" ++
-        "Connection: close\r\n\r\n" ++
-        "{s}",
-        .{ status, content_type, body.len, body },
+        "Connection: close\r\n\r\n",
+        .{ status, content_type, body.len },
     ) catch return error.BufPrintFailed;
 
-    socketWriteAll(client_fd, resp)? ;
+    socketWriteAll(client_fd, hdr)?;
+    if (body.len > 0) {
+        socketWriteAll(client_fd, body)?;
+    }
+}
+
+fn sendHttpRedirect(client_fd: i32, location: []const u8)! {
+    let resp_buf: [2560]u8 = [0; 2560];
+    const resp = std.fmt.bufPrint(
+        &resp_buf,
+        "HTTP/1.1 302 Found\r\n" ++
+        "Location: {s}\r\n" ++
+        "Content-Length: 0\r\n" ++
+        "Connection: close\r\n\r\n",
+        .{location},
+    ) catch return error.BufPrintFailed;
+
+    socketWriteAll(client_fd, resp)?;
 }
 
 fn computeSecWebSocketAccept(key: []const u8, out_buf: []u8)!usize {

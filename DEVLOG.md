@@ -1373,4 +1373,10 @@
    - 在 `BgGradient.sampleAt` 按视口裁剪区域直接逐像素计算周期坐标并叠加多图层 `background-clip`，支持 `background-clip: text` 与 `-webkit-text-fill-color` 独立于 `text-decoration` 颜色渲染。
 2. **CSS Text 3 §4.2 Tab 停靠位 (`layout.cp`)**：
    - 区分等宽与比例字体的空格宽度，在行内换行阶段按实时 `line_x` 计算 8-space tab stop 推进（余量 `< 0.5 * space_w` 进位至下一停靠点）。
+
+## Phase 94 引擎内存会计、后台重开生命周期与 WebSocket 出站过滤技术方案
+1. **Unload 源隔离与重开生命周期 (`session_hooks.cp`, `session.cp`, `runtime.cp`, `server.cp`)**：
+   - 导航切换文档前先派发 `pagehide`/`unload` 并排空微任务确保 Cookie 写入旧源；通过 `__capsurf_reopen_load_pending` 在 `consoleAPICalled` 之后与 `poll` 空闲 tick 精确发射 `Page.loadEventFired`。
+2. **有界内存统计与 HTTP 路由 (`session.cp`, `server.cp`, `mock_fixtures.cp`)**：
+   - 对 `/__fixtures/chatty-json` 实施 12MB FIFO 淘汰记录 `retainedBodyBytes`；在 `handleHttpRequest` 完整实装 `/health`、`/json/*`、`/?inspect=1`/`/?url=` 与代理头解析。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -3639,3 +3639,16 @@
   - 销毁 `4fa3f427-7bfd-41f9-aaeb-fd75cf86eccf`；
   - 派发 **Subagent 61**: CSS Layout Metrics Specialist（`src/css/`、`src/layout/`、`src/render/`，`bin_19231` / `19231`）
     - 攻坚目标：`e2e/anonymous-block-style-flush.e2e.test.ts`、`e2e/ancestor-dir-lang-restyle.e2e.test.ts`、`e2e/element-measurement.e2e.test.ts`、`e2e/root-element-metrics.e2e.test.ts`、`e2e/stylo-layout-misc-values.e2e.test.ts`。
+
+## [2026-11-20 18:33:00] 引擎内存会计、后台重开生命周期、Unload Cookie 源与 WebSocket 出站过滤闭环 (Subagent 31682e10 结单，Phase 94)
+- **页面运行时钩子、Unload 生命周期与内存会计 (`src/cdp/{session_hooks,session,runtime,server,kitesurf_facade}.cp`, `src/net/mock_fixtures.cp`)**:
+  - 新增 `session_hooks.cp`：实装 `document.open/write/close` 重放 `Page.loadEventFired`、12MB 上限 FIFO `retainedBodyBytes` 统计、WebSocket 出站过滤与真实 `pageOrigin`/`pageUA` 闭包封印；
+  - `session.cp`：导航卸载旧文档前派发 `pagehide`/`unload` 并 `drainJobs()` 确保 Cookie 落原文档域；`runtime.cp`/`server.cp` 保证 `consoleAPICalled` 严格早于 `Page.loadEventFired` 并在 `poll` 空闲周期刷出重开事件；
+  - `server.cp`：补齐 `/health`、`/json/*`、`/?inspect=1`、`/?url=`（302/501）、`/__fixtures/*` 路由及 `X-Forwarded-Host`/`Proto`/`X-Inspector-Base` 支持。
+- **门禁与 E2E 验证（5.55s 无锁 `-d -o` 构建）**:
+  - 全部 6 个 `.cp` 文件 4 门禁全 0；
+  - `engine-memory-accounting` (1/1)、`background-reopen-lifecycle` (2/2)、`unload-cookie-origin` (1/1)、`websocket-outbound` (2/2) **全绿 PASS**；`engine-routes` 6/17 PASS（剩余 11 项仅缺 `e2e/shim/cloudflare-test.ts` 透传头与 env 绑定）。
+- **全新子智能体调度（路 3 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `31682e10-1af0-43e5-b0e2-7b993a03d3fe`；
+  - 派发 **Subagent 62**: CDP Interception & Script Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
+    - 攻坚目标：`gradient-tile-count`（补 `Kitesurf.getRendererInfo` `rendererWasmBytes`）、`current-script-microtask`、`expose-function`、`fetch-interception`、`fetch-slot-order`。

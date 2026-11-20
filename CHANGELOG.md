@@ -1759,4 +1759,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0（4.67s 无锁 `-d -o` 构建）；
   - E2E 测试：`tabs-tab-stops` (4/4) + `text-fill-color` (1/1) + `gradient-tile-count` (1/2) + `theme-flip-repaint` (1/2) PASS。
+
+## Phase 94: Engine Memory Accounting, Reopen Lifecycle, Unload Cookie Origin & WebSocket Outbound Filtering (Closed)
+- **`src/cdp/{session_hooks,session,runtime,server,kitesurf_facade}.cp` & `src/net/mock_fixtures.cp`**：
+  - 新增 `session_hooks.cp` 实装 `document.open/write/close` 重放、`retainedBodyBytes` 12MB FIFO 统计与 WebSocket 出站拦截；`navigate` 卸载前派发 `pagehide`/`unload`；`server.cp` 补齐全部 HTTP 引擎路由与代理头处理。
+- **测试与门禁验证**：
+  - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0（5.55s 无锁 `-d -o` 构建）；
+  - E2E 测试：`engine-memory-accounting` (1/1)、`background-reopen-lifecycle` (2/2)、`unload-cookie-origin` (1/1)、`websocket-outbound` (2/2) 全绿，`engine-routes` 6/17 PASS（服务端 17/17 就绪）。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
