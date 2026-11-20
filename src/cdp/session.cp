@@ -708,6 +708,7 @@ pub struct CdpPageSession {
     device_scale_factor: f32 = 1.0,
     is_mobile: bool = false,
     dark_color_scheme: bool = false,
+    emulated_media_print: bool = false,
     nav_tty_stripped: bool = false,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
     js_user_agent: []const u8 = "",
@@ -1299,7 +1300,7 @@ pub struct CdpPageSession {
         let sheet_ptr = std.heap.c_allocator.create(StyleSheet) catch null;
         defer if (sheet_ptr != null) std.heap.c_allocator.destroy(sheet_ptr.?);
         if (sheet_ptr != null) {
-            sheet_ptr.?.* = StyleSheet.parse(full_css, _.viewport_width, false);
+            sheet_ptr.?.* = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
             const count = @max(@as(usize, 1), _.doc.nodeCount());
             let styles = _.allocator.alloc(ComputedStyle, count) catch null;
             defer if (styles != null) _.allocator.free(styles.?);
@@ -3068,7 +3069,7 @@ pub struct CdpPageSession {
             }
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
         let styles = _.allocator.alloc(ComputedStyle, count) catch return;
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
@@ -3348,7 +3349,7 @@ pub struct CdpPageSession {
             }
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
         let styles = _.allocator.alloc(ComputedStyle, count)?;
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);

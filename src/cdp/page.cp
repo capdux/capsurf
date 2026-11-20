@@ -452,7 +452,10 @@ pub struct PageHandler {
                     }
                 }
                 const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-                const sheet = StyleSheet.parse(full_css, session.viewport_width, false);
+                if (opts.prefer_css_page_size) {
+                    applyCssPageSize(full_css, &opts);
+                }
+                const sheet = StyleSheet.parse(full_css, session.viewport_width, session.emulated_media_print);
                 styles_opt = session.allocator.alloc(ComputedStyle, count) catch null;
                 if (styles_opt != null) {
                     const styles = styles_opt.?;
@@ -650,7 +653,8 @@ pub struct PageHandler {
             }
 
             // Allocate buffer for document fetching
-            let fetch_buf = session.allocator.alloc(u8, 65536) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const fetch_cap = @max(@as(usize, 262144), url.len + 4096);
+            let fetch_buf = session.allocator.alloc(u8, fetch_cap) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(fetch_buf);
 
             const fetch_res = HttpLoader.fetchDocument(session, url, fetch_buf, 0) catch |e| {
@@ -1168,4 +1172,55 @@ pub fn performPendingNavigation(
     }
 
     return true;
+}
+
+fn findIgnoreCase(haystack: []const u8, needle: []const u8): usize? {
+    if (needle.len == 0) return 0;
+    if (haystack.len < needle.len) return null;
+    let i: usize = 0;
+    while (i + needle.len <= haystack.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(haystack[i .. i + needle.len], needle)) {
+            return i;
+        }
+    }
+    return null;
+}
+
+fn applyCssPageSize(css: []const u8, opts: *PdfOptions) {
+    let pos: usize = 0;
+    while (pos < css.len) {
+        const rel_idx = findIgnoreCase(css[pos..], "@page") orelse break;
+        const at_idx = pos + rel_idx;
+        const ob = std.mem.indexOfScalarPos(u8, css, at_idx + 5, '{') orelse break;
+        const cb = std.mem.indexOfScalarPos(u8, css, ob + 1, '}') orelse break;
+        const body = css[ob + 1 .. cb];
+        if (sz_idx := findIgnoreCase(body, "size")) {
+            if (colon := std.mem.indexOfScalarPos(u8, body, sz_idx + 4, ':')) {
+                const end = std.mem.indexOfScalarPos(u8, body, colon + 1, ';') ?? body.len;
+                const val = std.mem.trim(u8, body[colon + 1 .. end], " \t\r\n");
+                if (findIgnoreCase(val, "a4") != null) {
+                    opts.paper_width_in = 8.2677165;
+                    opts.paper_height_in = 11.692913;
+                } else if (findIgnoreCase(val, "a3") != null) {
+                    opts.paper_width_in = 11.692913;
+                    opts.paper_height_in = 16.535433;
+                } else if (findIgnoreCase(val, "a5") != null) {
+                    opts.paper_width_in = 5.8267717;
+                    opts.paper_height_in = 8.2677165;
+                } else if (findIgnoreCase(val, "letter") != null) {
+                    opts.paper_width_in = 8.5;
+                    opts.paper_height_in = 11.0;
+                } else if (findIgnoreCase(val, "legal") != null) {
+                    opts.paper_width_in = 8.5;
+                    opts.paper_height_in = 14.0;
+                }
+                if (findIgnoreCase(val, "landscape") != null) {
+                    opts.landscape = true;
+                } else if (findIgnoreCase(val, "portrait") != null) {
+                    opts.landscape = false;
+                }
+            }
+        }
+        pos = cb + 1;
+    }
 }

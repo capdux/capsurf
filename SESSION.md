@@ -4215,6 +4215,15 @@
   - `detached-node-reclaim` 首项 PASS，并精准定位 `collections.js:915-941` (`NamedNodeMap._sync` 复用 `Attr`) 与 `session.cp:3271-3313` (`getMemoryStats` `domNodes`/`wrappers`)。
 - **清理旧子智能体**: 销毁 `ee0cb741-f2ec-4836-b86d-3bcd6e2f6064`。
 
+## [2026-11-20 23:38:00] `print-media-emulation-probe` 1/1 & `runtime-compile-script-demo` 2/2 全绿闭环 (Subagent 2aaea2d5 结单，Phase 149)
+- **`@media print`、`@page size` 与 `Runtime.compileScript`/`Debugger.scriptParsed` (`src/cdp/{emulation,session,css,page,debugger,runtime}.cp`)**:
+  - `emulation.cp` & `session.cp` & `css.cp` & `page.cp`：新增 `Emulation.setEmulatedMedia` 联动 `session.emulated_media_print` 与 `StyleSheet.parse`、`applyCssPageSize` 支持 `@page { size: A4 landscape; }`，并将 `fetch_buf` 扩容至 `>=256KB` 支撑 91KB `data:` URL；
+  - `debugger.cp` & `runtime.cp`：实装真实 `Runtime.compileScript`（`JS_Eval(..., 32)`、`exceptionDetails`、`cs:N` 持久化）、`Debugger.scriptParsed` 推送/重放与 `Runtime.runScript`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - 全部 6 个 `.cp` 文件 4 门禁全 0；
+  - `print-media-emulation-probe` (**1/1**)、`runtime-compile-script-demo` (**2/2**)：**3/3 PASS**！`layer-budget` 91KB 导航与截图已通，定位唯一剩余缺口至 `src/js/dom_binding.cp:1811` `matched_ids: [256]NodeId`。
+- **清理旧子智能体**: 销毁 `2aaea2d5-93e4-451f-8a0b-729c4d9e7085`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

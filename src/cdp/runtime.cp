@@ -3,8 +3,10 @@
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { emitPendingNavigationEvents } from "./input.cp";
+import { JS_Eval, jsIsException } from "../js/qjs_engine.cp";
+import { makeCompiledScriptMeta, emitScriptParsedEvent } from "./debugger.cp";
 
 pub struct RuntimeHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
@@ -72,15 +74,88 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.compileScript")) {
-            const persist = extractJsonBool(req.params_raw, "persistScript") ?? true;
+            const raw_expr = extractJsonString(req.params_raw, "expression") ?? "";
+            let expr_buf = session.allocator.alloc(u8, @max(raw_expr.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(expr_buf);
+            const expr_len = unescapeJsonString(raw_expr, expr_buf).len;
+            expr_buf[expr_len] = 0;
+            const expr = expr_buf[0..expr_len];
+
+            const raw_url = extractJsonString(req.params_raw, "sourceURL") ?? "";
+            let url_buf: [1024]u8 = [0; 1024];
+            const url_slice = unescapeJsonString(raw_url, url_buf[0 .. url_buf.len - 1]);
+            url_buf[url_slice.len] = 0;
+            const fname: [*c]const u8 = if (url_slice.len > 0) @ptrCast(&url_buf) else "<compileScript>";
+
+            const persist = extractJsonBool(req.params_raw, "persistScript") ?? false;
+
+            const compiled = JS_Eval(session.ctx.raw_ctx, expr_buf.ptr, expr_len, fname, 32);
+            if (jsIsException(compiled)) {
+                const exc = session.ctx.getException();
+                const exc_str = session.ctx.toCString(exc);
+                defer std.heap.page_allocator.free(exc_str);
+                session.ctx.freeValue(exc);
+                let esc_buf: [1024]u8 = [0; 1024];
+                const esc_msg = escapeJsonString(exc_str, &esc_buf);
+                const err_res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"Error\",\"description\":\"{s}\"}}}}}}",
+                    .{esc_msg},
+                ) catch "{\"exceptionDetails\":{\"text\":\"Uncaught\",\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"Error\",\"description\":\"SyntaxError\"}}}";
+                return CdpResponse.ok(req.id, err_res);
+            }
+            session.ctx.freeValue(compiled);
+
             if (!persist) {
                 return CdpResponse.ok(req.id, "{}");
             }
-            return CdpResponse.ok(req.id, "{\"scriptId\":\"capsurf-script-001\"}");
+
+            let sid_buf: [32]u8 = [0; 32];
+            const sid_num = session.debugger_state.next_script_id;
+            session.debugger_state.next_script_id += 1;
+            const sid = std.fmt.bufPrint(&sid_buf, "cs:{d}", .{sid_num}) catch "cs:1";
+
+            let hash_buf: [8]u8 = [0; 8];
+            const meta = makeCompiledScriptMeta(sid, expr, url_slice, false, &hash_buf);
+            * = session.debugger_state.addScript(meta);
+
+            if (session.debugger_state.enabled && event_count.* < out_events.len) {
+                if (stored := session.debugger_state.getScript(sid)) {
+                    out_events[event_count.*] = emitScriptParsedEvent(&session.debugger_state.event_buf, stored, session.frame_id);
+                    event_count.* += 1;
+                }
+            }
+
+            const res = std.fmt.bufPrint(out_buf, "{{\"scriptId\":\"{s}\"}}", .{sid}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.runScript")) {
-            return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+            const raw_sid = extractJsonString(req.params_raw, "scriptId") ?? "";
+            let sid_buf: [128]u8 = [0; 128];
+            const sid = unescapeJsonString(raw_sid, &sid_buf);
+            const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+            const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
+
+            const script_meta = session.debugger_state.getScript(sid);
+            if (script_meta == null) {
+                return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"},\"exceptionDetails\":{\"text\":\"Uncaught\",\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"Error\",\"description\":\"Error: Cannot find script with specified id\"}}}");
+            }
+
+            const eval_len = session.evaluateInContext(null, script_meta.?.source, return_by_value, await_promise, out_buf);
+
+            let polled_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_count = session.pollConsoleEvents(&polled_evts);
+            let p_i: usize = 0;
+            while (p_i < polled_count && event_count.* < out_events.len) : (p_i += 1) {
+                out_events[event_count.*] = polled_evts[p_i];
+                event_count.* += 1;
+            }
+
+            if (eval_len == 0) {
+                return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+            }
+            return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.queryObjects")) {

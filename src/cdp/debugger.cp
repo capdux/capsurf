@@ -33,6 +33,7 @@ pub struct DebuggerState {
     enabled: bool = false,
     scripts: [32]CompiledScriptMeta = [CompiledScriptMeta{}; 32],
     script_count: usize = 0,
+    next_script_id: u64 = 1,
     skip_all_pauses: bool = false,
     breakpoints_active: bool = true,
     pause_on_exceptions: []const u8 = "none",
@@ -41,7 +42,12 @@ pub struct DebuggerState {
 
     fn addScript(*_, meta: CompiledScriptMeta): bool {
         if (_.script_count >= _.scripts.len) return false;
-        _.scripts[_.script_count] = meta;
+        const idx = _.script_count;
+        _.scripts[idx] = meta;
+        _.scripts[idx].scriptId = std.heap.c_allocator.dupe(u8, meta.scriptId) catch return false;
+        _.scripts[idx].url = std.heap.c_allocator.dupe(u8, meta.url) catch return false;
+        _.scripts[idx].source = std.heap.c_allocator.dupe(u8, meta.source) catch return false;
+        _.scripts[idx].hash = std.heap.c_allocator.dupe(u8, meta.hash) catch return false;
         _.script_count += 1;
         return true;
     }

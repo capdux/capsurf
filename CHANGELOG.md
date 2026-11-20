@@ -2090,6 +2090,11 @@
 - **`e2e/harness.ts` & `e2e/detached-node-reclaim.e2e.test.ts`**：
   - 支持 3 参 `(name, { timeout }, fn)` 测试签名与 `./harness` `expect` 统一导入，精准定位 `NamedNodeMap._sync` `Attr` 复用与 `getMemoryStats` `domNodes`/`wrappers` 缺口。
 
+## Phase 149: `print-media-emulation-probe` 1/1, `runtime-compile-script-demo` 2/2 & `Emulation.setEmulatedMedia`
+- **`src/cdp/{emulation,session,css,page,debugger,runtime}.cp`**：
+  - 实装 `Emulation.setEmulatedMedia`、`@page { size: ... }`、>=256KB `fetch_buf`、`Runtime.compileScript`/`runScript` 与 `Debugger.scriptParsed` 重放（4 门禁全 0）。
+- **测试验证**：`print-media-emulation-probe` (1/1)、`runtime-compile-script-demo` (2/2) PASS；定位 `layer-budget` `dom_binding.cp:1811` `[256]NodeId` 上限。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。

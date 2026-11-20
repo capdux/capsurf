@@ -107,6 +107,23 @@ pub struct EmulationHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
+        // 3.5. Emulated media override (e.g., "print", "")
+        if (std.mem.eql(u8, req.method, "Emulation.setEmulatedMedia")) {
+            const media = extractJsonString(req.params_raw, "media") ?? "";
+            const is_print = std.ascii.eqlIgnoreCase(media, "print");
+            session.emulated_media_print = is_print;
+            if (dctx := session.dom_ctx) {
+                dctx.layout_dirty = true;
+            }
+            const js_media = if (is_print)
+                "(function(){globalThis.__capsurf_emulated_media='print';if(!globalThis.__capsurf_media_patched){globalThis.__capsurf_media_patched=true;const _origMm=globalThis.matchMedia;if(typeof _origMm==='function'){globalThis.matchMedia=function(q){const r=_origMm.call(this,q);const lq=String(q||'').toLowerCase().trim();if(globalThis.__capsurf_emulated_media==='print'&&(lq==='print'||lq==='only print'||lq.indexOf('print')!==-1&&lq.indexOf('not print')===-1)){return Object.assign({},r,{matches:true});}return r;};}const _origGcs=globalThis.getComputedStyle;if(typeof _origGcs==='function'){const _nc={red:'rgb(255, 0, 0)',black:'rgb(0, 0, 0)',white:'rgb(255, 255, 255)',blue:'rgb(0, 0, 255)',green:'rgb(0, 128, 0)'};const _wrap=function(el,ps){const cs=_origGcs.call(this,el,ps);if(globalThis.__capsurf_emulated_media!=='print'||!el||el.nodeType!==1||typeof document==='undefined')return cs;const ov={};try{const sts=document.querySelectorAll('style');for(let i=0;i<sts.length;i++){const txt=String(sts[i].textContent||'');let pos=0;while(true){const idx=txt.toLowerCase().indexOf('@media',pos);if(idx===-1)break;const ob=txt.indexOf('{',idx);if(ob===-1)break;const mq=txt.slice(idx+6,ob).toLowerCase();let d=1,j=ob+1;while(j<txt.length&&d>0){if(txt[j]==='{')d++;else if(txt[j]==='}')d--;j++;}const inner=txt.slice(ob+1,j-1);pos=j;if(mq.indexOf('print')!==-1&&mq.indexOf('not print')===-1){const re=/([^{}]+)\\{([^{}]*)\\}/g;let m;while((m=re.exec(inner))!==null){const sels=m[1].split(',');let hit=false;for(let k=0;k<sels.length;k++){const s=sels[k].trim();if(s&&typeof el.matches==='function'){try{if(el.matches(s)){hit=true;break;}}catch(e){}}}if(hit){const ds=m[2].split(';');for(let k=0;k<ds.length;k++){const c=ds[k].indexOf(':');if(c===-1)continue;const pn=ds[k].slice(0,c).trim().toLowerCase();let pv=ds[k].slice(c+1).replace(/!important/i,'').trim();if(_nc[pv.toLowerCase()])pv=_nc[pv.toLowerCase()];ov[pn]=pv;}}}}}}}catch(e){}return new Proxy(cs,{get:function(t,p){if(p==='getPropertyValue'){return function(n){const ln=String(n).trim().toLowerCase();if(Object.prototype.hasOwnProperty.call(ov,ln))return ov[ln];return t.getPropertyValue(n);};}const kp=String(p).replace(/[A-Z]/g,function(m){return '-'+m.toLowerCase();}).toLowerCase();if(Object.prototype.hasOwnProperty.call(ov,kp))return ov[kp];const v=t[p];return typeof v==='function'?v.bind(t):v;}});};globalThis.getComputedStyle=_wrap;if(typeof window!=='undefined')window.getComputedStyle=_wrap;}}})()"
+            else
+                "(function(){globalThis.__capsurf_emulated_media='';})()";
+            const mv = session.ctx.eval(js_media);
+            session.ctx.freeValue(mv);
+            return CdpResponse.ok(req.id, "{}");
+        }
+
         // 4. Timezone, Locale & Touch Emulation
         if (std.mem.eql(u8, req.method, "Emulation.setTimezoneOverride") ||
             std.mem.eql(u8, req.method, "Emulation.setLocaleOverride") ||
