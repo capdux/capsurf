@@ -1449,6 +1449,66 @@ pub struct MockFixtures {
             return out_buf[0..pos];
         }
 
+        // 2.19. /oopif-child-solid.html?c=HEX
+        if (std.mem.indexOf(u8, url, "/oopif-child-solid.html") != null) {
+            let hex: []const u8 = "000000";
+            if (raw_c := MockFixtures.extractQueryParam(url, "c")) {
+                if (raw_c.len == 6) {
+                    let valid = true;
+                    let hi: usize = 0;
+                    while (hi < 6) : (hi += 1) {
+                        const ch = raw_c[hi];
+                        const is_hex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+                        if (!is_hex) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (valid) hex = raw_c;
+                }
+            }
+            const body_s = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>solid {s}</title></head>\n<body style=\"margin:0;background:#{s}\">\n<script>window.__c=\"{s}\"</script>\n<div style=\"width:100vw;height:100vh;background:#{s}\"></div>\n</body>\n</html>",
+                .{ hex, hex, hex, hex },
+            ) catch return null;
+            return out_buf[0..body_s.len];
+        }
+
+        // 2.20. /oopif-host-many.html?k=N
+        if (std.mem.indexOf(u8, url, "/oopif-host-many.html") != null) {
+            const colors: [8][]const u8 = [
+                "ff0000", "00ff00", "0000ff", "ffff00",
+                "ff00ff", "00ffff", "800000", "008080",
+            ];
+            let k_val: usize = 4;
+            if (raw_k := MockFixtures.extractQueryParam(url, "k")) {
+                const parsed_k = std.fmt.parseInt(usize, raw_k, 10) catch 4;
+                k_val = if (parsed_k < 1) @as(usize, 1) else if (parsed_k > colors.len) colors.len else parsed_k;
+            }
+            let pos: usize = 0;
+            const head_s = std.fmt.bufPrint(
+                out_buf[pos..],
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>oopif-host-many {d}</title></head>\n<body style=\"margin:0;background:#ffffff\">\n",
+                .{ k_val },
+            ) catch return null;
+            pos += head_s.len;
+            let idx: usize = 0;
+            while (idx < k_val) : (idx += 1) {
+                const tag_s = std.fmt.bufPrint(
+                    out_buf[pos..],
+                    "<iframe src=\"http://127.0.0.1:8787/__fixtures/oopif-child-solid.html?c={s}\" width=\"100\" height=\"100\" style=\"border:0;display:block;margin:0\"></iframe>\n",
+                    .{ colors[idx] },
+                ) catch return null;
+                pos += tag_s.len;
+            }
+            const tail_s = "</body>\n</html>";
+            if (pos + tail_s.len > out_buf.len) return null;
+            @memcpy(out_buf[pos .. pos + tail_s.len], tail_s);
+            pos += tail_s.len;
+            return out_buf[0..pos];
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {

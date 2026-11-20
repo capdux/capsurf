@@ -26,6 +26,7 @@ import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isInlineEventHandlerAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
 import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
+import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
 
 @c {
     fn usleep(usec: u32): i32;
@@ -4011,6 +4012,8 @@ pub struct CdpPageSession {
         }
         if (_.has_document && canvas_count < 8) {
             const elapsed_ms = if (_.nav_start_ms > 0) @max(@as(i64, 0), getMilliTimestamp() - _.nav_start_ms) else @as(i64, 0);
+            const main_origin = extractOriginFromUrl(_.url);
+            let oopif_rendered: usize = 0;
             let if_nid: usize = 1;
             while (if_nid < count && canvas_count < 8) : (if_nid += 1) {
                 const if_node = &_.doc.nodes.items[if_nid];
@@ -4024,6 +4027,12 @@ pub struct CdpPageSession {
 
                 let if_url_buf: [1024]u8 = undefined;
                 const full_if_url = resolveSubresourceUrl(_.url, if_src, &if_url_buf);
+                const if_origin = extractOriginFromUrl(full_if_url);
+                const is_oopif = main_origin.len > 0 && if_origin.len > 0 && !std.mem.eql(u8, main_origin, if_origin);
+                if (is_oopif) {
+                    if (oopif_rendered >= MAX_CONCURRENT_OOPIF) continue;
+                    oopif_rendered += 1;
+                }
                 let if_html_buf = _.allocator.alloc(u8, 65536) catch null;
                 if (if_html_buf == null) continue;
                 defer _.allocator.free(if_html_buf.?);

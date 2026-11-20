@@ -1703,3 +1703,7 @@
 ### Phase 215: `ScriptBodyOut` Slice Out-Param & OOPIF Frame/DOM Alignment
 - Wrapped `[]const u8` out-parameters in `ScriptBodyOut { value: []const u8 = "" }` because `cpc` strips `&` on local/field slice references.
 - Aligned `TargetRegistry.registerIframeTarget` `targetId` with `frame_id` (`capsurf-child-*`), added `exec_context_id` lifecycle tracking for `executionContextDestroyed`, and added `nodeId >= 1000000` child-frame DOM inspection in `src/cdp/dom.cp`.
+
+### Phase 216: HTML5 `AfterHead` `<script>` Fix & OOPIF Concurrent Budget
+- `<script>` between `</head>` and `<body style="margin:0;padding:0">` previously triggered implicit `<body>` creation in `TreeBuilder.processAfterHead`, leaving a default `8px` margin on the first `body` node (`TL @(25,25)` 8px shift). Setting `orig_mode = .AfterHead` per HTML5 spec fixes it cleanly.
+- `captureScreenshotClipped` now counts cross-origin iframes via `extractOriginFromUrl` and caps painted OOPIFs at `MAX_CONCURRENT_OOPIF` (`1`).

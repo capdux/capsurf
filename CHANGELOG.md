@@ -2309,3 +2309,8 @@
 - Fixed `ScriptFetchCallback` slice out-parameter lowering in `src/eval/prefetch_scripts.cp` (`ScriptBodyOut`), `src/eval/external_outbound.cp`, and added `testPrefetchSingleAndAll` in `test/eval/test_prefetch_scripts_and_wasm.cp`.
 - Implemented OOPIF child-frame `isDefault: false`, `Runtime.executionContextDestroyed`, `DOM.getFrameOwner`, `frameId`/`documentURL`, and child-frame `DOM.getDocument`/`getOuterHTML`/`getAttributes` in `src/cdp/{page,session,runtime,target,dispatch,dom}.cp`.
 - Updated `GEMINI.md` section `11.6` with port zombie pre-check and slice out-param patterns.
+
+### Phase 216
+- Fixed `TreeBuilder.processAfterHead` in `src/html/tree_builder.cp` to handle head-like tags (`<script>`, `<style>`, etc.) between `</head>` and `<body>` without inserting an implicit `<body>`.
+- Added `/oopif-child-solid.html` and `/oopif-host-many.html` dynamic fixtures in `src/net/mock_fixtures.cp`.
+- Enforced `MAX_CONCURRENT_OOPIF` budget for cross-origin iframe rendering in `src/cdp/session.cp`.

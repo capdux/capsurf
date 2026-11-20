@@ -974,6 +974,31 @@ pub struct TreeBuilder {
                         _.insertElement(tag_tok);
                         _.mode = InsertionMode.InFrameset;
                         return NextTokenizerState.Data;
+                    } else if (tag_tok.tag == HtmlTag.Title) {
+                        _.insertElement(tag_tok);
+                        _.orig_mode = InsertionMode.AfterHead;
+                        _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.RcData;
+                        return NextTokenizerState.RcData;
+                    } else if (tag_tok.tag == HtmlTag.Style) {
+                        _.insertElement(tag_tok);
+                        _.orig_mode = InsertionMode.AfterHead;
+                        _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.RawText;
+                        return NextTokenizerState.RawText;
+                    } else if (tag_tok.tag == HtmlTag.Script) {
+                        _.insertElement(tag_tok);
+                        _.orig_mode = InsertionMode.AfterHead;
+                        _.mode = InsertionMode.Text;
+                        _.text_tokenizer_state = NextTokenizerState.ScriptData;
+                        return NextTokenizerState.ScriptData;
+                    } else if (tag_tok.tag == HtmlTag.Base ||
+                               tag_tok.tag == HtmlTag.Link ||
+                               tag_tok.tag == HtmlTag.Meta) {
+                        const nid = _.insertElement(tag_tok);
+                        _.popElement();
+                        * = nid;
+                        return NextTokenizerState.Data;
                     }
                 }
             },

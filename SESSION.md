@@ -4612,3 +4612,7 @@
   - Fixed `src/cdp/{page,session,runtime,target,dispatch,dom}.cp` for child-frame `isDefault: false`, `Runtime.executionContextDestroyed`, destroyed `contextId` error reporting, `DOM.Node.frameId`/`documentURL`, child-frame `DOM.getDocument`/`getOuterHTML`/`getAttributes`, and `DOM.getFrameOwner`.
   - Built `bin_19233/main` (6.43s). E2E on port `19233`: `oopif-detach-teardown` + `oopif-elements-panel` **2/2 PASS** (18 assertions, exit 0).
 - **GEMINI.md**: Added rules #4 (E2E port zombie pre-check) & #5 (Slot A non-CDP fast path + `ScriptBodyOut` slice out-param pattern) under `11.6`.
+
+### Phase 216: CDP Whitebox 3-Failure Diagnosis + OOPIF `quads-paint` & `prespawn` 4/4 PASS
+- **Slot A (`b481a14d`, killed)**: Pinpointed exact `src/cdp/` root causes for all 3 remaining `test/cdp/` failures: `session.cp:3411-3488` & `dom.cp:668-715` (`DOM.getBoxModel` returning border-box instead of content-box), and `input.cp:354-371` / `402-438` (`onclick` double/triple firing on `MousePressed`/`MouseReleased`).
+- **Slot B (`c0d72838`, killed)**: Fixed `src/html/tree_builder.cp:973-1002` (`processAfterHead` handling `<script>`/`<style>`/`<title>`/`<base>`/`<link>`/`<meta>` before `<body>` to eliminate the 8px offset), added `/oopif-child-solid.html` & `/oopif-host-many.html` to `src/net/mock_fixtures.cp:1451-1508`, and enforced `MAX_CONCURRENT_OOPIF` in `src/cdp/session.cp:4013-4035`. Built `bin_19233/main` (8.41s); `oopif-quads-paint` + `oopif-prespawn` **4/4 PASS** (16 assertions, exit 0).
