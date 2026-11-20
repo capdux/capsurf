@@ -4322,3 +4322,8 @@
 - **直接验收**：`e2e/large-script-bundles.e2e.test.ts` (**2/2 PASS**，classic & module 解析器脚本预算全通)。
 - **架构专属归档**：`wasm-bake-demo` 与 `inline-wasm-bake` 依赖 Boa-Wasm/V8 `WebAssembly` 与 `__KS_ADD_WASM_B64__` 烘焙机制，归档不纳入 QuickJS 独立进程回归。
 - **清理旧子智能体**: 销毁 `555f4ed9-7c71-4bb5-b911-12dc09f2339b`。
+
+## [2026-11-21 00:08:30] 2 分钟验收 `loaded-worker-env` 1/1 PASS & `ttyCellWidth`/多Tab 定位 (Subagent 84f637e9 结单，Phase 161)
+- **直接验收**：`e2e/loaded-worker-env.e2e.test.ts` (**1/1 PASS**)。
+- **精准跨模块定位**：`terminal-selection-after-navigation` (`page.cp:209-223` & `session_hooks.cp:970-977` 注入 `tty_cell_w` -> `ttyCellWidth`)、`script-navigation-tab` (`target.cp:613-685` 多 Tab 独立 `CdpPageSession`)。
+- **清理旧子智能体**: 销毁 `84f637e9-e9bc-4e04-8299-b87d7692865d`。

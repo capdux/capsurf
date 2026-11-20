@@ -2142,3 +2142,6 @@
 
 ## Phase 160: `large-script-bundles` 2/2 PASS & Wasm-Bake Architecture Classification
 - 零修改验收 `e2e/large-script-bundles.e2e.test.ts` (**2/2 PASS**)，并归档 `wasm-bake-demo`/`inline-wasm-bake` 为 Boa-Wasm/V8 架构专属。
+
+## Phase 161: `loaded-worker-env` 1/1 PASS & `ttyCellWidth`/Multi-Tab Localization
+- 零修改验收 `e2e/loaded-worker-env.e2e.test.ts` (**1/1 PASS**)，并精准定位 `terminal-selection-after-navigation` (`page.cp:209`, `session_hooks.cp:970`) 与 `script-navigation-tab` (`target.cp:613`)。
