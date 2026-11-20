@@ -1028,7 +1028,11 @@ pub const PROP_BOX_ORIENT: usize = 81;
 pub const PROP_LINE_CLAMP: usize = 82;
 pub const PROP_CONTAINER_TYPE: usize = 83;
 pub const PROP_CONTAINER_NAME: usize = 84;
-pub const TOTAL_PROP_SLOTS: usize = 85;
+pub const PROP_TEXT_FILL_COLOR: usize = 85;
+pub const PROP_TEXT_DECORATION: usize = 86;
+pub const PROP_BG_CLIP: usize = 87;
+pub const PROP_BG_SIZE: usize = 88;
+pub const TOTAL_PROP_SLOTS: usize = 89;
 
 pub enum ContainerType {
     Normal,
@@ -1350,6 +1354,332 @@ pub struct ConicGradient {
     }
 }
 
+pub enum BgGradientKind {
+    None,
+    Linear,
+    Radial,
+}
+
+pub struct BgGradientStop {
+    color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    pos_val: f32 = 0.0;
+    is_px: bool = false;
+    has_pos: bool = false;
+}
+
+fn parseGradColor(tok: []const u8): CssColor? {
+    const s = std.mem.trim(u8, tok, " \t\r\n");
+    if (s.len == 0) return null;
+    if (std.ascii.eqlIgnoreCase(s, "transparent")) {
+        return CssColor.rgba(0, 0, 0, 0);
+    }
+    return CssColor.parse(s);
+}
+
+fn parseGradPxToken(tok: []const u8): f32? {
+    const s = std.mem.trim(u8, tok, " \t\r\n");
+    if (s.len == 0) return null;
+    if (std.mem.eql(u8, s, "0")) return 0.0;
+    if (std.ascii.endsWithIgnoreCase(s, "px") && s.len > 2) {
+        return std.fmt.parseFloat(f32, s[0 .. s.len - 2]) catch null;
+    }
+    return std.fmt.parseFloat(f32, s) catch null;
+}
+
+pub struct BgGradient {
+    kind: BgGradientKind = BgGradientKind.None;
+    angle_deg: f32 = 180.0;
+    stops: [16]BgGradientStop = [BgGradientStop{}; 16];
+    stop_count: usize = 0;
+    tile_w: f32 = 0.0;
+    tile_h: f32 = 0.0;
+    pos_x: f32 = 0.0;
+    pos_y: f32 = 0.0;
+    clip_text: bool = false;
+
+    fn hasGradient(): bool {
+        return _.kind != BgGradientKind.None && _.stop_count > 0;
+    }
+
+    fn sampleAt(
+        box_x: f32,
+        box_y: f32,
+        box_w: f32,
+        box_h: f32,
+        px: f32,
+        py: f32,
+    ): CssColor {
+        if (_.kind == BgGradientKind.None || _.stop_count == 0) {
+            return CssColor.rgba(0, 0, 0, 0);
+        }
+        if (_.stop_count == 1) {
+            return _.stops[0].color;
+        }
+        const tw = if (_.tile_w > 0.0) _.tile_w else box_w;
+        const th = if (_.tile_h > 0.0) _.tile_h else box_h;
+        if (tw <= 0.0 || th <= 0.0) {
+            return CssColor.rgba(0, 0, 0, 0);
+        }
+
+        let lx = px - box_x - _.pos_x;
+        let ly = py - box_y - _.pos_y;
+        if (_.tile_w > 0.0) {
+            lx = lx - @floor(lx / tw) * tw;
+        }
+        if (_.tile_h > 0.0) {
+            ly = ly - @floor(ly / th) * th;
+        }
+
+        let sample_pos: f32 = 0.0;
+        let axis_len: f32 = 1.0;
+
+        if (_.kind == BgGradientKind.Radial) {
+            const cx = tw * 0.5;
+            const cy = th * 0.5;
+            const dx = lx - cx;
+            const dy = ly - cy;
+            sample_pos = @sqrt(dx * dx + dy * dy);
+            axis_len = @sqrt(cx * cx + cy * cy);
+        } else {
+            const rad = _.angle_deg * std.math.pi / 180.0;
+            const dx = @sin(rad);
+            const dy = 0.0 - @cos(rad);
+            axis_len = @abs(tw * dx) + @abs(th * dy);
+            if (axis_len <= 0.0001) axis_len = 1.0;
+            sample_pos = (lx - tw * 0.5) * dx + (ly - th * 0.5) * dy + axis_len * 0.5;
+        }
+
+        let resolved_pos: [16]f32 = [0.0; 16];
+        let si: usize = 0;
+        while (si < _.stop_count) : (si += 1) {
+            const st = _.stops[si];
+            if (st.has_pos) {
+                resolved_pos[si] = if (st.is_px) st.pos_val else ((st.pos_val / 100.0) * axis_len);
+            } else if (_.stop_count == 1) {
+                resolved_pos[si] = 0.0;
+            } else {
+                resolved_pos[si] = (@as(f32, @floatFromInt(si)) / @as(f32, @floatFromInt(_.stop_count - 1))) * axis_len;
+            }
+        }
+
+        if (sample_pos <= resolved_pos[0]) {
+            return _.stops[0].color;
+        }
+        if (sample_pos >= resolved_pos[_.stop_count - 1]) {
+            return _.stops[_.stop_count - 1].color;
+        }
+
+        let i: usize = 1;
+        while (i < _.stop_count) : (i += 1) {
+            if (sample_pos <= resolved_pos[i]) {
+                const c0 = _.stops[i - 1].color;
+                const c1 = _.stops[i].color;
+                const span = resolved_pos[i] - resolved_pos[i - 1];
+                if (span <= 0.0001) {
+                    return c1;
+                }
+                const t = (sample_pos - resolved_pos[i - 1]) / span;
+                return c0.mix(c1, @as(f64, t));
+            }
+        }
+        return _.stops[_.stop_count - 1].color;
+    }
+
+    static fn parse(val_str: []const u8): BgGradient? {
+        let kind = BgGradientKind.None;
+        let g_pos: usize = 0;
+        let prefix_len: usize = 0;
+
+        if (pos := std.mem.indexOf(u8, val_str, "radial-gradient")) {
+            kind = BgGradientKind.Radial;
+            g_pos = pos;
+            prefix_len = 15;
+        } else if (pos_l := std.mem.indexOf(u8, val_str, "linear-gradient")) {
+            kind = BgGradientKind.Linear;
+            g_pos = pos_l;
+            prefix_len = 15;
+        } else {
+            return null;
+        }
+
+        const paren_opt = std.mem.indexOfScalarPos(u8, val_str, g_pos + prefix_len, '(');
+        if (paren_opt == null) return null;
+        const paren_open = paren_opt.?;
+        const args_start = paren_open + 1;
+
+        let paren_depth: usize = 1;
+        let i = args_start;
+        let args_end: usize = 0;
+        while (i < val_str.len) : (i += 1) {
+            if (val_str[i] == '(') {
+                paren_depth += 1;
+            } else if (val_str[i] == ')') {
+                paren_depth -= 1;
+                if (paren_depth == 0) {
+                    args_end = i;
+                    break;
+                }
+            }
+        }
+        if (args_end <= args_start) return null;
+
+        const args_content = val_str[args_start..args_end];
+        let items: [16][]const u8 = [""; 16];
+        let item_count: usize = 0;
+        let item_start: usize = 0;
+        let pdepth: usize = 0;
+        let idx: usize = 0;
+        while (idx <= args_content.len) : (idx += 1) {
+            const is_end = (idx == args_content.len);
+            const c: u8 = if (is_end) 0 else args_content[idx];
+            if (!is_end && c == '(') {
+                pdepth += 1;
+            } else if (!is_end && c == ')') {
+                if (pdepth > 0) pdepth -= 1;
+            } else if (is_end || (c == ',' && pdepth == 0)) {
+                const item = std.mem.trim(u8, args_content[item_start..idx], " \t\r\n");
+                if (item.len > 0 && item_count < 16) {
+                    items[item_count] = item;
+                    item_count += 1;
+                }
+                item_start = idx + 1;
+            }
+        }
+        if (item_count == 0) return null;
+
+        let bg = BgGradient{
+            kind: kind,
+            angle_deg: 180.0,
+        };
+
+        let start_idx: usize = 0;
+        if (kind == BgGradientKind.Linear) {
+            const it0 = items[0];
+            if (std.ascii.startsWithIgnoreCase(it0, "to ")) {
+                start_idx = 1;
+                const has_top = std.mem.indexOf(u8, it0, "top") != null;
+                const has_bottom = std.mem.indexOf(u8, it0, "bottom") != null;
+                const has_left = std.mem.indexOf(u8, it0, "left") != null;
+                const has_right = std.mem.indexOf(u8, it0, "right") != null;
+                if (has_top && has_right) {
+                    bg.angle_deg = 45.0;
+                } else if (has_bottom && has_right) {
+                    bg.angle_deg = 135.0;
+                } else if (has_bottom && has_left) {
+                    bg.angle_deg = 225.0;
+                } else if (has_top && has_left) {
+                    bg.angle_deg = 315.0;
+                } else if (has_top) {
+                    bg.angle_deg = 0.0;
+                } else if (has_right) {
+                    bg.angle_deg = 90.0;
+                } else if (has_bottom) {
+                    bg.angle_deg = 180.0;
+                } else if (has_left) {
+                    bg.angle_deg = 270.0;
+                }
+            } else if (std.ascii.endsWithIgnoreCase(it0, "deg") && it0.len > 3) {
+                if (deg := std.fmt.parseFloat(f32, it0[0 .. it0.len - 3]) catch null) {
+                    bg.angle_deg = deg;
+                    start_idx = 1;
+                }
+            }
+        } else if (kind == BgGradientKind.Radial) {
+            const it0 = items[0];
+            if (std.ascii.startsWithIgnoreCase(it0, "circle") ||
+                std.ascii.startsWithIgnoreCase(it0, "ellipse") ||
+                std.ascii.startsWithIgnoreCase(it0, "at ") ||
+                std.ascii.startsWithIgnoreCase(it0, "closest-") ||
+                std.ascii.startsWithIgnoreCase(it0, "farthest-")) {
+                start_idx = 1;
+            }
+        }
+
+        let stop_idx: usize = 0;
+        let k = start_idx;
+        while (k < item_count && stop_idx < 16) : (k += 1) {
+            const stop_str = items[k];
+            let pos: usize = 0;
+            let color_opt: CssColor? = null;
+            let has_pos = false;
+            let pos_val: f32 = 0.0;
+            let is_px = false;
+
+            while (tok := nextCssValueToken(stop_str, &pos)) {
+                if (color_opt == null) {
+                    if (c := parseGradColor(tok)) {
+                        color_opt = c;
+                        continue;
+                    }
+                }
+                if (tok.len > 2 && std.ascii.endsWithIgnoreCase(tok, "px")) {
+                    if (v := std.fmt.parseFloat(f32, tok[0 .. tok.len - 2]) catch null) {
+                        pos_val = v;
+                        is_px = true;
+                        has_pos = true;
+                    }
+                } else if (tok.len > 1 && tok[tok.len - 1] == '%') {
+                    if (v := std.fmt.parseFloat(f32, tok[0 .. tok.len - 1]) catch null) {
+                        pos_val = v;
+                        is_px = false;
+                        has_pos = true;
+                    }
+                } else if (std.mem.eql(u8, tok, "0")) {
+                    pos_val = 0.0;
+                    is_px = true;
+                    has_pos = true;
+                }
+            }
+            if (c := color_opt) {
+                bg.stops[stop_idx] = BgGradientStop{
+                    color: c,
+                    pos_val: pos_val,
+                    is_px: is_px,
+                    has_pos: has_pos,
+                };
+                stop_idx += 1;
+            }
+        }
+        if (stop_idx == 0) return null;
+        bg.stop_count = stop_idx;
+
+        // Parse trailing shorthand `pos_x pos_y / tile_w tile_h` after `)`
+        if (args_end + 1 < val_str.len) {
+            const tail = std.mem.trim(u8, val_str[args_end + 1 ..], " \t\r\n");
+            if (slash := std.mem.indexOfScalar(u8, tail, '/')) {
+                const pos_part = std.mem.trim(u8, tail[0..slash], " \t\r\n");
+                let pit = std.mem.tokenizeAny(u8, pos_part, " \t\r\n");
+                if (p0 := pit.next()) {
+                    if (v := parseGradPxToken(p0)) bg.pos_x = v;
+                }
+                if (p1 := pit.next()) {
+                    if (v := parseGradPxToken(p1)) bg.pos_y = v;
+                }
+
+                const size_part = std.mem.trim(u8, tail[slash + 1 ..], " \t\r\n");
+                let sit = std.mem.tokenizeAny(u8, size_part, " \t\r\n");
+                if (s0 := sit.next()) {
+                    if (v := parseGradPxToken(s0)) {
+                        if (v > 0.0) {
+                            bg.tile_w = v;
+                            bg.tile_h = v;
+                        }
+                    }
+                }
+                if (s1 := sit.next()) {
+                    if (v := parseGradPxToken(s1)) {
+                        if (v > 0.0) {
+                            bg.tile_h = v;
+                        }
+                    }
+                }
+            }
+        }
+
+        return bg;
+    }
+}
+
 /// Resolved visual style ready for the 2D software rasterizer (`src/render/painter.cp`)
 pub struct ResolvedPaintStyle {
     bg_color: CssColor = CssColor.rgba(0, 0, 0, 0);
@@ -1363,6 +1693,11 @@ pub struct ResolvedPaintStyle {
     border_bottom_width: f32 = 0.0;
     border_left_width: f32 = 0.0;
     text_color: CssColor = CssColor.rgb(0, 0, 0);
+    text_fill_color: CssColor = CssColor.rgb(0, 0, 0);
+    has_text_fill_color: bool = false;
+    text_decoration_underline: bool = false;
+    text_decoration_line_through: bool = false;
+    text_decoration_overline: bool = false;
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
     border_width: f32 = 0.0;
@@ -1381,6 +1716,7 @@ pub struct ResolvedPaintStyle {
     box_shadow: BoxShadow = BoxShadow{};
     font_size_px: f32 = 16.0;
     conic_gradient: ConicGradient = ConicGradient{};
+    bg_gradient: BgGradient = BgGradient{};
 }
 
 /// Paren-aware CSS value tokenizer: splits on whitespace at parenthesis depth 0.
@@ -1527,6 +1863,11 @@ pub struct ComputedStyle {
     font_family_len: usize = 0,
     font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
+    text_fill_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_text_fill_color: bool = false;
+    text_decoration_underline: bool = false;
+    text_decoration_line_through: bool = false;
+    text_decoration_overline: bool = false;
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
@@ -1535,6 +1876,10 @@ pub struct ComputedStyle {
     opacity: f32 = 1.0;
     z_index: i32 = 0;
     conic_gradient: ConicGradient = ConicGradient{};
+    bg_gradient: BgGradient = BgGradient{};
+    bg_gradient_layer_idx: usize = 0;
+    bg_clip_is_text: [4]bool = [false; 4];
+    bg_clip_count: usize = 0;
     bg_image_url_buf: [256]u8 = [0; 256];
     bg_image_url_len: usize = 0;
     container_type: ContainerType = ContainerType.Normal;
@@ -1809,6 +2154,8 @@ pub struct ComputedStyle {
                 _.line_height_px = p.line_height_px;
             }
             _.color = p.color;
+            _.text_fill_color = p.text_fill_color;
+            _.has_text_fill_color = p.has_text_fill_color;
             _.accent_color = p.accent_color;
             _.has_accent_color = p.has_accent_color;
             if (p.has_fill_current_color) {
@@ -1884,6 +2231,7 @@ pub struct ComputedStyle {
     ): ResolvedPaintStyle {
         let bg = if (_.has_fill_current_color) _.color else _.background_color;
         let txt = _.color;
+        let txt_fill = if (_.has_text_fill_color) _.text_fill_color else _.color;
         // Per CSS spec, if border-color is not explicitly set, it defaults to `currentColor` (`_.color`)
         let bdr = if (_.has_explicit_border_color) _.border_color else _.color;
         let bdr_t = if (_.has_border_top_color) _.border_top_color else bdr;
@@ -1900,9 +2248,16 @@ pub struct ComputedStyle {
 
         const op = std.math.clamp(_.opacity, 0.0, 1.0);
         let cg = _.conic_gradient;
+        let bg_grad = _.bg_gradient;
+        if (bg_grad.kind != BgGradientKind.None && _.bg_clip_count > 0) {
+            bg_grad.clip_text = _.bg_clip_is_text[_.bg_gradient_layer_idx % _.bg_clip_count];
+        } else {
+            bg_grad.clip_text = false;
+        }
         if (op < 1.0) {
             bg.a = @intFromFloat(@as(f32, @floatFromInt(bg.a)) * op);
             txt.a = @intFromFloat(@as(f32, @floatFromInt(txt.a)) * op);
+            txt_fill.a = @intFromFloat(@as(f32, @floatFromInt(txt_fill.a)) * op);
             bdr.a = @intFromFloat(@as(f32, @floatFromInt(bdr.a)) * op);
             bdr_t.a = @intFromFloat(@as(f32, @floatFromInt(bdr_t.a)) * op);
             bdr_r.a = @intFromFloat(@as(f32, @floatFromInt(bdr_r.a)) * op);
@@ -1916,6 +2271,12 @@ pub struct ComputedStyle {
                 let si: usize = 0;
                 while (si < cg.stop_count) : (si += 1) {
                     cg.stops[si].color.a = @intFromFloat(@as(f32, @floatFromInt(cg.stops[si].color.a)) * op);
+                }
+            }
+            if (bg_grad.kind != BgGradientKind.None) {
+                let gi: usize = 0;
+                while (gi < bg_grad.stop_count) : (gi += 1) {
+                    bg_grad.stops[gi].color.a = @intFromFloat(@as(f32, @floatFromInt(bg_grad.stops[gi].color.a)) * op);
                 }
             }
         }
@@ -1939,6 +2300,11 @@ pub struct ComputedStyle {
             border_bottom_width: _.border_bottom_width,
             border_left_width: _.border_left_width,
             text_color: txt,
+            text_fill_color: txt_fill,
+            has_text_fill_color: _.has_text_fill_color,
+            text_decoration_underline: _.text_decoration_underline,
+            text_decoration_line_through: _.text_decoration_line_through,
+            text_decoration_overline: _.text_decoration_overline,
             accent_color: _.accent_color,
             has_accent_color: _.has_accent_color,
             border_width: bw_px,
@@ -1957,6 +2323,7 @@ pub struct ComputedStyle {
             box_shadow: shadow,
             font_size_px: _.font_size_px,
             conic_gradient: cg,
+            bg_gradient: bg_grad,
         };
     }
 
@@ -3290,26 +3657,161 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "-webkit-text-fill-color") || std.ascii.eqlIgnoreCase(name, "text-fill-color")) {
+            const tfv = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(tfv, "currentcolor")) {
+                if (_.tryClaimSlot(PROP_TEXT_FILL_COLOR, weight)) {
+                    _.has_text_fill_color = false;
+                }
+            } else if (c := parseGradColor(tfv)) {
+                if (_.tryClaimSlot(PROP_TEXT_FILL_COLOR, weight)) {
+                    _.text_fill_color = c;
+                    _.has_text_fill_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "text-decoration") || std.ascii.eqlIgnoreCase(name, "text-decoration-line")) {
+            if (_.tryClaimSlot(PROP_TEXT_DECORATION, weight)) {
+                let ul = false;
+                let lt = false;
+                let ol = false;
+                let dit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+                while (dtok := dit.next()) {
+                    if (std.ascii.eqlIgnoreCase(dtok, "underline")) ul = true;
+                    if (std.ascii.eqlIgnoreCase(dtok, "line-through")) lt = true;
+                    if (std.ascii.eqlIgnoreCase(dtok, "overline")) ol = true;
+                    if (std.ascii.eqlIgnoreCase(dtok, "none")) {
+                        ul = false;
+                        lt = false;
+                        ol = false;
+                    }
+                }
+                _.text_decoration_underline = ul;
+                _.text_decoration_line_through = lt;
+                _.text_decoration_overline = ol;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "background-clip") || std.ascii.eqlIgnoreCase(name, "-webkit-background-clip")) {
+            if (_.tryClaimSlot(PROP_BG_CLIP, weight)) {
+                _.bg_clip_count = 0;
+                let cit = std.mem.splitScalar(u8, val, ',');
+                while (seg := cit.next()) {
+                    if (_.bg_clip_count >= 4) break;
+                    const t = std.mem.trim(u8, seg, " \t\r\n");
+                    _.bg_clip_is_text[_.bg_clip_count] = std.ascii.eqlIgnoreCase(t, "text");
+                    _.bg_clip_count += 1;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "background-size")) {
+            if (_.tryClaimSlot(PROP_BG_SIZE, weight)) {
+                let sit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+                if (s0 := sit.next()) {
+                    if (v0 := parseGradPxToken(s0)) {
+                        if (v0 > 0.0) {
+                            _.bg_gradient.tile_w = v0;
+                            _.bg_gradient.tile_h = v0;
+                        }
+                    }
+                }
+                if (s1 := sit.next()) {
+                    if (v1 := parseGradPxToken(s1)) {
+                        if (v1 > 0.0) {
+                            _.bg_gradient.tile_h = v1;
+                        }
+                    }
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "background-image")) {
             const trimmed_bg = std.mem.trim(u8, val, " \t\r\n");
             if (std.ascii.eqlIgnoreCase(trimmed_bg, "none")) {
                 if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
                     _.bg_image_url_len = 0;
                     _.conic_gradient = ConicGradient{};
+                    _.bg_gradient = BgGradient{};
+                    _.bg_gradient_layer_idx = 0;
                 }
-            } else if (cg := ConicGradient.parse(val)) {
-                if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
-                    _.conic_gradient = cg;
-                    _.bg_image_url_len = 0;
+            } else {
+                // Split top-level comma-separated background-image layers
+                let layer_idx: usize = 0;
+                let seg_start: usize = 0;
+                let pdepth: usize = 0;
+                let idx: usize = 0;
+                let found_grad = false;
+                let found_conic = false;
+                let found_url = false;
+                let parsed_bg = BgGradient{};
+                let parsed_bg_layer: usize = 0;
+                let parsed_cg = ConicGradient{};
+                let parsed_url: []const u8 = "";
+
+                while (idx <= trimmed_bg.len) : (idx += 1) {
+                    const is_end = (idx == trimmed_bg.len);
+                    const c: u8 = if (is_end) 0 else trimmed_bg[idx];
+                    if (!is_end && c == '(') {
+                        pdepth += 1;
+                    } else if (!is_end && c == ')') {
+                        if (pdepth > 0) pdepth -= 1;
+                    } else if (is_end || (c == ',' && pdepth == 0)) {
+                        const layer = std.mem.trim(u8, trimmed_bg[seg_start..idx], " \t\r\n");
+                        if (layer.len > 0 && !std.ascii.eqlIgnoreCase(layer, "none")) {
+                            if (!found_conic) {
+                                if (cg := ConicGradient.parse(layer)) {
+                                    parsed_cg = cg;
+                                    found_conic = true;
+                                }
+                            }
+                            if (!found_grad) {
+                                if (bg := BgGradient.parse(layer)) {
+                                    parsed_bg = bg;
+                                    parsed_bg_layer = layer_idx;
+                                    found_grad = true;
+                                }
+                            }
+                            if (!found_url) {
+                                if (u_pos := std.mem.indexOf(u8, layer, "url(")) {
+                                    if (end_p := std.mem.indexOfScalarPos(u8, layer, u_pos + 4, ')')) {
+                                        const raw_u = std.mem.trim(u8, layer[u_pos + 4 .. end_p], " \t\r\n\"'");
+                                        if (raw_u.len > 0) {
+                                            parsed_url = raw_u;
+                                            found_url = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        layer_idx += 1;
+                        seg_start = idx + 1;
+                    }
                 }
-            } else if (u_pos := std.mem.indexOf(u8, trimmed_bg, "url(")) {
-                if (end_p := std.mem.indexOfScalarPos(u8, trimmed_bg, u_pos + 4, ')')) {
-                    const raw_u = std.mem.trim(u8, trimmed_bg[u_pos + 4 .. end_p], " \t\r\n\"'");
-                    if (raw_u.len > 0 && _.tryClaimSlot(PROP_BG_IMAGE, weight)) {
-                        const clen = @min(raw_u.len, _.bg_image_url_buf.len);
-                        @memcpy(_.bg_image_url_buf[0..clen], raw_u[0..clen]);
-                        _.bg_image_url_len = clen;
-                        _.conic_gradient = ConicGradient{};
+                if (found_conic || found_grad || found_url) {
+                    if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                        if (found_conic) {
+                            _.conic_gradient = parsed_cg;
+                            _.bg_gradient = BgGradient{};
+                            _.bg_image_url_len = 0;
+                        } else if (found_grad) {
+                            // Preserve previously set background-size if gradient itself didn't specify one
+                            if (parsed_bg.tile_w <= 0.0 && _.bg_gradient.tile_w > 0.0) {
+                                parsed_bg.tile_w = _.bg_gradient.tile_w;
+                                parsed_bg.tile_h = _.bg_gradient.tile_h;
+                            }
+                            _.bg_gradient = parsed_bg;
+                            _.bg_gradient_layer_idx = parsed_bg_layer;
+                            _.conic_gradient = ConicGradient{};
+                            _.bg_image_url_len = 0;
+                        } else if (found_url) {
+                            const clen = @min(parsed_url.len, _.bg_image_url_buf.len);
+                            @memcpy(_.bg_image_url_buf[0..clen], parsed_url[0..clen]);
+                            _.bg_image_url_len = clen;
+                            _.conic_gradient = ConicGradient{};
+                            _.bg_gradient = BgGradient{};
+                        }
                     }
                 }
             }
@@ -3395,9 +3897,18 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "background-color") || std.ascii.eqlIgnoreCase(name, "background")) {
-            if (cg := ConicGradient.parse(val)) {
-                if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
-                    _.conic_gradient = cg;
+            if (std.ascii.eqlIgnoreCase(name, "background")) {
+                if (cg := ConicGradient.parse(val)) {
+                    if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                        _.conic_gradient = cg;
+                        _.bg_gradient = BgGradient{};
+                    }
+                } else if (bg := BgGradient.parse(val)) {
+                    if (_.tryClaimSlot(PROP_BG_IMAGE, weight)) {
+                        _.bg_gradient = bg;
+                        _.bg_gradient_layer_idx = 0;
+                        _.conic_gradient = ConicGradient{};
+                    }
                 }
             }
             if (c := Cascade.parseColorTokenFromShorthand(val)) {
@@ -3763,8 +4274,8 @@ pub struct Cascade {
                 }
             }
         }
-        let it = std.mem.tokenizeAny(u8, s, " \t\r\n");
-        while (tok := it.next()) {
+        let pos: usize = 0;
+        while (tok := nextCssValueToken(s, &pos)) {
             if (std.ascii.eqlIgnoreCase(tok, "solid") ||
                 std.ascii.eqlIgnoreCase(tok, "dashed") ||
                 std.ascii.eqlIgnoreCase(tok, "dotted") ||
@@ -3774,6 +4285,12 @@ pub struct Cascade {
                 std.ascii.eqlIgnoreCase(tok, "thin") ||
                 std.ascii.eqlIgnoreCase(tok, "medium") ||
                 std.ascii.eqlIgnoreCase(tok, "thick")) {
+                continue;
+            }
+            if (std.ascii.startsWithIgnoreCase(tok, "linear-gradient(") ||
+                std.ascii.startsWithIgnoreCase(tok, "radial-gradient(") ||
+                std.ascii.startsWithIgnoreCase(tok, "conic-gradient(") ||
+                std.ascii.startsWithIgnoreCase(tok, "url(")) {
                 continue;
             }
             if (c := CssColor.parse(tok)) {

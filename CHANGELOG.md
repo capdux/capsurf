@@ -1752,4 +1752,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（4.34s 无锁 `-d -o` 构建）；
   - E2E 测试：`detached-handler-identity` (1/1) + `iframe-load-order` (10/10) + `written-script-order` (7/7) + `iframe-referrer` (6/7) + `iframe-srcdoc` (4) PASS。
+
+## Phase 93: CSS Gradient Tiling, `background-clip: text`, `-webkit-text-fill-color` & Tab Stops (Closed)
+- **`src/css/cascade.cp` & `src/render/painter.cp` & `src/layout/layout.cp`**：
+  - 实装 `linear-gradient`/`radial-gradient` 零额外内存视口平铺采样、`-webkit-text-fill-color`、多图层 `background-clip: text` 字形渐变裁剪、`text-decoration` 独立颜色、嵌套 `<svg>` 渲染及 CSS Text 3 §4.2 Tab 停靠位算法。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0（4.67s 无锁 `-d -o` 构建）；
+  - E2E 测试：`tabs-tab-stops` (4/4) + `text-fill-color` (1/1) + `gradient-tile-count` (1/2) + `theme-flip-repaint` (1/2) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

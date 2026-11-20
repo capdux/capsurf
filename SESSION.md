@@ -3625,3 +3625,17 @@
   - 销毁 `546f9f0e-e168-4bcc-b89c-06b9e97f95e9`；
   - 派发 **Subagent 60**: Harness & Fetch/CSSOM Closer（`src/js/shim/*` + `e2e/harness.ts`，`bin_19232` / `19232`）
     - 攻坚目标：`runtime-get-heap-usage`、`runtime-wait-for-selector`、`inline-span-white-space`、`intrinsic-sizing`、`webkit-box-line-clamp`、`private-network`、`session-outbound`、`cors-stylesheets`。
+
+## [2026-11-20 18:31:30] CSS 渐变平铺、background-clip: text、-webkit-text-fill-color 与 Tab 停靠位闭环 (Subagent 4fa3f427 结单，Phase 93)
+- **CSS 渐变平铺与 `-webkit-text-fill-color` / `background-clip: text` (`src/css/cascade.cp`, `src/render/painter.cp`)**:
+  - `cascade.cp`: 新增 `BgGradient`（`linear-gradient`/`radial-gradient` + `background-size` 平铺尺寸解析与逐像素采样）、`-webkit-text-fill-color`、`text-decoration`、多图层 `background-image`/`background-clip`；
+  - `painter.cp`: 实装零额外 tile 内存视口裁剪渐变平铺、`drawScaledTextWithGradientClipped` 字形渐变裁剪及嵌套 `<svg>` 递归渲染。
+- **CSS Text 3 §4.2 Tab 停靠位与 `inline-block` shrink-to-fit (`src/layout/layout.cp`)**:
+  - 实装 `advanceTabStop`（8-space tab stop 与 `<0.5 * space_w` 进位）、等宽/比例字宽区分与 `pre-wrap` 断行。
+- **门禁与 E2E 验证（4.67s 无锁 `-d -o` 构建，Native 1.95s）**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 4 门禁全 0；
+  - `tabs-tab-stops` (4/4 PASS)、`text-fill-color` (1/1 PASS)、`gradient-tile-count` (1/2 PASS + 全部像素断言 PASS)、`theme-flip-repaint` (1/2 PASS)；定位 `scrollable-overflow-origin` 与 `gradient-tile-count` Test 2 跨模块收尾点。
+- **全新子智能体调度（路 1 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `4fa3f427-7bfd-41f9-aaeb-fd75cf86eccf`；
+  - 派发 **Subagent 61**: CSS Layout Metrics Specialist（`src/css/`、`src/layout/`、`src/render/`，`bin_19231` / `19231`）
+    - 攻坚目标：`e2e/anonymous-block-style-flush.e2e.test.ts`、`e2e/ancestor-dir-lang-restyle.e2e.test.ts`、`e2e/element-measurement.e2e.test.ts`、`e2e/root-element-metrics.e2e.test.ts`、`e2e/stylo-layout-misc-values.e2e.test.ts`。

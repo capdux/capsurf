@@ -1367,4 +1367,10 @@
    - 实装 `URL.createObjectURL`/`revokeObjectURL` 注册表、`srcdoc` 优先级与 `_navSeq` 防竞态、`loading="lazy"` 延后加载与 `computeIframeReferrer` 策略裁剪；修复 `parser.js` `<!doctype html>` 大小写匹配。
 2. **`document.write` 解析器脚本队列 (`index.js`, `window.js`)**：
    - 嵌套 `document.write` 脚本前插至兄弟脚本队列头部，并在 `__capsurf_dispatch_lifecycle` 中等待写入队列排空后再派发 `DOMContentLoaded` 与 `load`。
+
+## Phase 93 CSS 渐变平铺、`background-clip: text` 与 Tab 停靠位技术方案
+1. **零额外内存渐变平铺与字形渐变 (`cascade.cp`, `painter.cp`)**：
+   - 在 `BgGradient.sampleAt` 按视口裁剪区域直接逐像素计算周期坐标并叠加多图层 `background-clip`，支持 `background-clip: text` 与 `-webkit-text-fill-color` 独立于 `text-decoration` 颜色渲染。
+2. **CSS Text 3 §4.2 Tab 停靠位 (`layout.cp`)**：
+   - 区分等宽与比例字体的空格宽度，在行内换行阶段按实时 `line_x` 计算 8-space tab stop 推进（余量 `< 0.5 * space_w` 进位至下一停靠点）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -199,6 +199,8 @@ pub struct InlineItem {
     has_trailing_space: bool = false;
     is_space_only: bool = false;
     trailing_space_w: f32 = 0.0;
+    text_slice: []const u8 = "";
+    has_tabs: bool = false;
 }
 
 pub struct LayoutTree {
@@ -861,8 +863,8 @@ pub struct LayoutTree {
                 }
             }
             raw_is_border_box = (style.box_sizing == BoxSizing.BorderBox);
-        } else if (style.display.isInlineFlex() || is_abs_or_fixed) {
-            // Shrink-to-fit auto width (CSS 2.1 §10.3.7 / CSS Flexbox §9)
+        } else if (style.display.isInlineFlex() || style.display.isInlineBlock() || is_abs_or_fixed) {
+            // Shrink-to-fit auto width (CSS 2.1 §10.3.7 / §10.3.9 / CSS Flexbox §9)
             const avail = if (parent_w > mh) (parent_w - mh) else 0.0;
             const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
             const max_o = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
@@ -871,7 +873,7 @@ pub struct LayoutTree {
             raw_w = @min(@max(min_c, avail), max_c);
             raw_is_border_box = true;
         } else {
-            if (style.display.isInlineBlock() || style.display.isInline() || style.float_mode != FloatMode.None) {
+            if (style.display.isInline() || style.float_mode != FloatMode.None) {
                 raw_w = 0.0;
             } else {
                 // Default block width fills available parent content area minus horizontal margins
@@ -1503,6 +1505,51 @@ pub struct LayoutTree {
         }
     }
 
+    static fn isMonospaceFont(st: *const ComputedStyle): bool {
+        return st.hasFontFamily("monospace");
+    }
+
+    static fn spaceWidth(st: *const ComputedStyle): f32 {
+        const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
+        return base_sz * 0.28;
+    }
+
+    static fn charWidthForStyle(ch: u8, st: *const ComputedStyle): f32 {
+        const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
+        return LayoutTree.estimateCharWidth(ch, base_sz);
+    }
+
+    static fn advanceTabStop(cur_x: f32, space_w: f32): f32 {
+        const tab_stop = space_w * 8.0;
+        if (tab_stop <= 0.0001) return space_w;
+        const stops_passed = @floor(cur_x / tab_stop);
+        let next_stop = (stops_passed + 1.0) * tab_stop;
+        if (next_stop - cur_x < space_w * 0.5) {
+            next_stop += tab_stop;
+        }
+        return next_stop - cur_x;
+    }
+
+    static fn measureTextSegmentWithTabs(seg: []const u8, st: *const ComputedStyle, start_x: f32): f32 {
+        const sp_w = LayoutTree.spaceWidth(st);
+        let cur_x = start_x;
+        let ti: usize = 0;
+        while (ti < seg.len) : (ti += 1) {
+            const ch = seg[ti];
+            if (ch == '\r') continue;
+            if (ch == '\t') {
+                cur_x += LayoutTree.advanceTabStop(cur_x, sp_w);
+            } else if (ch == ' ') {
+                cur_x += sp_w;
+            } else {
+                cur_x += LayoutTree.charWidthForStyle(ch, st);
+            }
+        }
+        return cur_x - start_x;
+    }
+
     static fn estimateCharWidth(ch: u8, font_size_px: f32): f32 {
         if (ch == ' ' || ch == '\t') return font_size_px * 0.28;
         if (ch == 'i' || ch == 'l' || ch == 'I' || ch == 'j' || ch == 't' || ch == 'f' || ch == 'r' || ch == '.' || ch == ',' || ch == ':' || ch == ';' || ch == '!') {
@@ -1609,8 +1656,7 @@ pub struct LayoutTree {
         const node = &doc.nodes.items[@as(usize, node_id)];
         if (node.node_type == NodeType.Text) {
             const st = &styles[@as(usize, style_parent_id)];
-            const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
-            const space_w = base_sz * 0.28;
+            const space_w = LayoutTree.spaceWidth(st);
             const preserve_sp = st.white_space.preservesSpaces();
             const preserve_nl = st.white_space.preservesNewlines();
             let ti: usize = 0;
@@ -1624,7 +1670,11 @@ pub struct LayoutTree {
                     trailing_ws_w.* = 0.0;
                 } else if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
                     if (preserve_sp) {
-                        if (ch != '\r') {
+                        if (ch == '\t') {
+                            cur_w.* += LayoutTree.advanceTabStop(cur_w.*, space_w);
+                            trailing_ws_w.* = 0.0;
+                            prev_ws.* = false;
+                        } else if (ch != '\r') {
                             cur_w.* += space_w;
                             trailing_ws_w.* = 0.0;
                             prev_ws.* = false;
@@ -1637,7 +1687,7 @@ pub struct LayoutTree {
                         }
                     }
                 } else {
-                    cur_w.* += LayoutTree.estimateCharWidth(ch, base_sz);
+                    cur_w.* += LayoutTree.charWidthForStyle(ch, st);
                     trailing_ws_w.* = 0.0;
                     prev_ws.* = false;
                 }
@@ -2651,23 +2701,26 @@ pub struct LayoutTree {
     ) {
         if (seg.len == 0) return;
         const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
-        const space_w = base_sz * 0.28;
+        const space_w = LayoutTree.spaceWidth(st);
         const preserve_sp = st.white_space.preservesSpaces();
         const allows_wrap = st.white_space.allowsWrap();
 
         if (preserve_sp) {
-            let tw: f32 = 0.0;
+            let has_tabs = false;
+            let has_non_space = false;
             let ti: usize = 0;
             while (ti < seg.len) : (ti += 1) {
-                const ch = seg[ti];
-                if (ch == '\r') continue;
-                if (ch == ' ' || ch == '\t') {
-                    tw += space_w;
-                } else {
-                    tw += LayoutTree.estimateCharWidth(ch, base_sz);
+                if (seg[ti] == '\t') {
+                    has_tabs = true;
+                    has_non_space = true;
+                } else if (seg[ti] != ' ' && seg[ti] != '\r') {
+                    has_non_space = true;
                 }
             }
-            const wlines = if (allows_wrap && content_w > 0.0 && tw > content_w) LayoutTree.estimateTextWrappedLines(seg, content_w, base_sz) else @as(usize, 1);
+            const tw = LayoutTree.measureTextSegmentWithTabs(seg, st, 0.0);
+            const ends_with_space = (seg.len > 0 && seg[seg.len - 1] == ' ');
+            const starts_with_space = (seg.len > 0 && seg[0] == ' ');
+            const wlines = if (allows_wrap && content_w > 0.0 && tw > content_w && !has_tabs) LayoutTree.estimateTextWrappedLines(seg, content_w, base_sz) else @as(usize, 1);
             items.append(_.allocator, InlineItem {
                 kind: InlineItemKind.Text,
                 node_id: node_id,
@@ -2675,6 +2728,12 @@ pub struct LayoutTree {
                 width: tw,
                 height: st.naturalLineHeight(),
                 wrapped_lines: wlines,
+                has_leading_space: allows_wrap && starts_with_space,
+                has_trailing_space: allows_wrap && ends_with_space,
+                is_space_only: allows_wrap && !has_non_space,
+                trailing_space_w: if (allows_wrap && ends_with_space) space_w else 0.0,
+                text_slice: seg,
+                has_tabs: has_tabs,
             }) catch {};
             prev_ws.* = false;
             return;
@@ -2706,7 +2765,7 @@ pub struct LayoutTree {
                 has_trail_sp = false;
                 trail_sp_w = 0.0;
                 in_ws = false;
-                tw += LayoutTree.estimateCharWidth(ch, base_sz);
+                tw += LayoutTree.charWidthForStyle(ch, st);
             }
         }
         prev_ws.* = in_ws;
@@ -3288,6 +3347,9 @@ pub struct LayoutTree {
                     it.line_x = line_x;
                     idx += 1;
                 } else {
+                    if (it.kind == InlineItemKind.Text && it.has_tabs && it.text_slice.len > 0) {
+                        it.width = LayoutTree.measureTextSegmentWithTabs(it.text_slice, &styles[@as(usize, it.style_node_id)], line_x);
+                    }
                     const allows_wrap = pstyle_blk.white_space.allowsWrap();
                     if (allows_wrap && line_has_inflow && content_w > 0.0 && line_x > 0.0 && !it.is_space_only && line_x + it.width > content_w) {
                         let break_at = idx;

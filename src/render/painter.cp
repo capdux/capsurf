@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind } from "../css/cascade.cp";
 import { Rect } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -394,7 +394,8 @@ pub struct Canvas {
             style.border_top_color.r != style.border_bottom_color.r || style.border_top_color.g != style.border_bottom_color.g || style.border_top_color.b != style.border_bottom_color.b ||
             style.border_top_color.r != style.border_left_color.r || style.border_top_color.g != style.border_left_color.g || style.border_top_color.b != style.border_left_color.b);
 
-        const has_gradient = style.conic_gradient.has_gradient;
+        const has_conic = style.conic_gradient.has_gradient;
+        const has_bg_grad = (style.bg_gradient.kind != BgGradientKind.None && style.bg_gradient.stop_count > 0 && !style.bg_gradient.clip_text);
 
         if (has_custom_shape || non_uniform_r || non_uniform_b) {
             const pad_cx = rect.x + bl + @max(0.0, rect.width - bl - br) * 0.5;
@@ -408,7 +409,7 @@ pub struct Canvas {
                     if (!isInsideOuterShape(px_f, py_f, rect.x, rect.y, rect.width, rect.height, r_tl, r_tr, r_br, r_bl, style.corner_shape_tl, style.corner_shape_tr, style.corner_shape_br, style.corner_shape_bl)) {
                         continue;
                     }
-                    let final_color = if (has_gradient)
+                    let final_color = if (has_conic)
                         style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
                     else
                         style.bg_color;
@@ -438,9 +439,45 @@ pub struct Canvas {
                             if (s < best_score) { best_score = s; side_col = style.border_right_color; }
                         }
                         final_color = side_col;
+                        if (final_color.a > 0) {
+                            _.blendPixel(px, py, final_color);
+                        }
+                    } else {
+                        if (final_color.a > 0) {
+                            _.blendPixel(px, py, final_color);
+                        }
+                        if (has_bg_grad) {
+                            const gc = style.bg_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f);
+                            if (gc.a > 0) {
+                                _.blendPixel(px, py, gc);
+                            }
+                        }
                     }
-                    if (final_color.a > 0) {
-                        _.blendPixel(px, py, final_color);
+                }
+            }
+            return;
+        }
+
+        // Fast path: axis-aligned rectangle with no border and no rounded corners
+        if (r_tl <= 0.0 && style.border_width <= 0.0) {
+            let py = y0;
+            while (py < y1) : (py += 1) {
+                const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+                let px = x0;
+                while (px < x1) : (px += 1) {
+                    const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+                    const base_c = if (has_conic)
+                        style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
+                    else
+                        style.bg_color;
+                    if (base_c.a > 0) {
+                        _.blendPixel(px, py, base_c);
+                    }
+                    if (has_bg_grad) {
+                        const gc = style.bg_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f);
+                        if (gc.a > 0) {
+                            _.blendPixel(px, py, gc);
+                        }
                     }
                 }
             }
@@ -465,18 +502,29 @@ pub struct Canvas {
 
                 if (out_dist < 0.5) {
                     const edge_cov = std.math.clamp(0.5 - out_dist, 0.0, 1.0);
-                    let final_color = if (has_gradient)
-                        style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
-                    else
-                        style.bg_color;
-
                     const neg_bw = 0.0 - style.border_width;
                     if (style.border_width > 0.0 && out_dist >= neg_bw) {
-                        final_color = style.border_color;
-                    }
-                    if (final_color.a > 0) {
-                        const blended_a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(final_color.a)) * edge_cov));
-                        _.blendPixel(px, py, CssColor.rgba(final_color.r, final_color.g, final_color.b, blended_a));
+                        const bc = style.border_color;
+                        if (bc.a > 0) {
+                            const blended_a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(bc.a)) * edge_cov));
+                            _.blendPixel(px, py, CssColor.rgba(bc.r, bc.g, bc.b, blended_a));
+                        }
+                    } else {
+                        const base_c = if (has_conic)
+                            style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
+                        else
+                            style.bg_color;
+                        if (base_c.a > 0) {
+                            const blended_a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(base_c.a)) * edge_cov));
+                            _.blendPixel(px, py, CssColor.rgba(base_c.r, base_c.g, base_c.b, blended_a));
+                        }
+                        if (has_bg_grad) {
+                            const gc = style.bg_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f);
+                            if (gc.a > 0) {
+                                const blended_a = @as(u8, @intFromFloat(@as(f32, @floatFromInt(gc.a)) * edge_cov));
+                                _.blendPixel(px, py, CssColor.rgba(gc.r, gc.g, gc.b, blended_a));
+                            }
+                        }
                     }
                 }
             }
@@ -578,6 +626,67 @@ pub struct Canvas {
                                         if (px < c.x0 || px >= c.x1) continue;
                                     }
                                     _.blendPixel(px, py, color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            cursor_x += step_x;
+        }
+    }
+
+    fn drawScaledTextWithGradientClipped(
+        *_,
+        x: f32,
+        y: f32,
+        text: []const u8,
+        pixel_size: f32,
+        box_rect: Rect,
+        grad: *const ResolvedPaintStyle,
+        clip: ClipRect?,
+    ) {
+        if (text.len == 0 || pixel_size <= 0.0) {
+            return;
+        }
+        const scale = @max(1.0, pixel_size / 8.0);
+        const step_x = 8.0 * scale;
+        let cursor_x = x;
+
+        let ti: usize = 0;
+        while (ti < text.len) : (ti += 1) {
+            const ch = text[ti];
+            if (ch == '\n' || ch == '\r') continue;
+            if (ch > 32 && ch < 127) {
+                const glyph = getAsciiGlyph8x8(ch);
+                let row: usize = 0;
+                while (row < 8) : (row += 1) {
+                    const bits = glyph[row];
+                    if (bits == 0) continue;
+                    const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
+                    const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row + 1)) * scale))));
+                    let col: usize = 0;
+                    while (col < 8) : (col += 1) {
+                        const shift: u3 = @intCast(7 - col);
+                        if (((bits >> shift) & 1) == 1) {
+                            const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
+                            const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                            let py = gy0;
+                            while (py < gy1) : (py += 1) {
+                                if (c := clip) {
+                                    if (py < c.y0 || py >= c.y1) continue;
+                                }
+                                const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+                                let px = gx0;
+                                while (px < gx1) : (px += 1) {
+                                    if (c := clip) {
+                                        if (px < c.x0 || px >= c.x1) continue;
+                                    }
+                                    const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+                                    const gc = grad.bg_gradient.sampleAt(box_rect.x, box_rect.y, box_rect.width, box_rect.height, px_f, py_f);
+                                    if (gc.a > 0) {
+                                        _.blendPixel(px, py, gc);
+                                    }
                                 }
                             }
                         }
@@ -1408,6 +1517,28 @@ fn paintSvgChildrenDirect(
             }
         } else if (cnode.hasTag("g")) {
             paintSvgChildrenDirect(canvas, doc, styles_opt, child, origin_x, origin_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
+        } else if (cnode.hasTag("svg")) {
+            let sx_attr: f32 = 0.0;
+            let sy_attr: f32 = 0.0;
+            let sw_attr: f32 = box_w;
+            let sh_attr: f32 = box_h;
+            if (a := cnode.getAttribute("x")) {
+                if (v := parseSvgNum(a)) sx_attr = v;
+            }
+            if (a := cnode.getAttribute("y")) {
+                if (v := parseSvgNum(a)) sy_attr = v;
+            }
+            if (a := cnode.getAttribute("width")) {
+                if (v := parseSvgNum(a)) sw_attr = v;
+            }
+            if (a := cnode.getAttribute("height")) {
+                if (v := parseSvgNum(a)) sh_attr = v;
+            }
+            const nx = origin_x + (sx_attr - min_x) * scale;
+            const ny = origin_y + (sy_attr - min_y) * scale;
+            const nw = sw_attr * scale;
+            const nh = sh_attr * scale;
+            paintSvgContainerRef(canvas, doc, styles_opt, child, nx, ny, nw, nh, fill_c, current_color, clip, depth + 1);
         } else if (cnode.hasTag("use")) {
             let href_opt = cnode.getAttribute("href");
             if (href_opt == null) {
@@ -1994,6 +2125,13 @@ fn paintNodeRecursive(
                 paint_style.conic_gradient.stops[si].color = scaleColorAlpha(paint_style.conic_gradient.stops[si].color, group_opacity);
             }
         }
+        if (paint_style.bg_gradient.kind != BgGradientKind.None) {
+            let gi: usize = 0;
+            while (gi < paint_style.bg_gradient.stop_count) : (gi += 1) {
+                paint_style.bg_gradient.stops[gi].color = scaleColorAlpha(paint_style.bg_gradient.stops[gi].color, group_opacity);
+            }
+        }
+        paint_style.text_fill_color = scaleColorAlpha(paint_style.text_fill_color, group_opacity);
     }
 
     // Choose active clip based on CSS positioning containing-block rules:
@@ -2333,17 +2471,58 @@ fn paintNodeRecursive(
                     }
                 }
             }
-            const raw_color = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) styles[@as(usize, parent_id)].color else CssColor.rgb(0, 0, 0);
-            const txt_color = if (group_opacity < 1.0) scaleColorAlpha(raw_color, group_opacity) else raw_color;
-            const fsz = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) styles[@as(usize, parent_id)].font_size_px else 16.0;
+            const has_parent_st = (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len);
+            const p_style_opt: (*const ComputedStyle)? = if (has_parent_st) &styles[@as(usize, parent_id)] else null;
+            let raw_color = CssColor.rgb(0, 0, 0);
+            let raw_fill = CssColor.rgb(0, 0, 0);
+            let fsz: f32 = 16.0;
+            if (ps := p_style_opt) {
+                raw_color = ps.color;
+                raw_fill = if (ps.has_text_fill_color) ps.text_fill_color else ps.color;
+                fsz = ps.font_size_px;
+            }
+            const txt_color = if (group_opacity < 1.0) scaleColorAlpha(raw_fill, group_opacity) else raw_fill;
+            const deco_color = if (group_opacity < 1.0) scaleColorAlpha(raw_color, group_opacity) else raw_color;
             const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
-            if (trimmed.len > 0 && txt_color.a > 0) {
-                if (fsz >= 14.0) {
-                    const scaled_h = fsz * 0.65;
-                    const draw_y = r.y + @max(0.0, (r.height - scaled_h) * 0.5);
-                    canvas.drawScaledTextClipped(r.x, draw_y, trimmed, scaled_h, txt_color, active_clip);
-                } else {
-                    canvas.drawTextClipped(r.x + 1.0, r.y + 2.0, trimmed, txt_color, active_clip);
+            if (trimmed.len > 0) {
+                const scaled_h = if (fsz >= 14.0) (fsz * 0.65) else 8.0;
+                const draw_y = if (fsz >= 14.0) (r.y + @max(0.0, (r.height - scaled_h) * 0.5)) else (r.y + 2.0);
+                let painted_grad_text = false;
+                if (ps := p_style_opt) {
+                    let p_rect = r;
+                    if (@as(usize, parent_id) < rects.len) {
+                        p_rect = rects[@as(usize, parent_id)];
+                        if (ps.position != Position.Fixed) {
+                            p_rect.x -= eff_scroll_dx;
+                            p_rect.y -= eff_scroll_dy;
+                        }
+                    }
+                    let p_paint = ps.extractPaintStyle(p_rect.width, 16.0, vw, vh);
+                    if (p_paint.bg_gradient.kind != BgGradientKind.None && p_paint.bg_gradient.stop_count > 0 && p_paint.bg_gradient.clip_text) {
+                        if (group_opacity < 1.0) {
+                            let gi: usize = 0;
+                            while (gi < p_paint.bg_gradient.stop_count) : (gi += 1) {
+                                p_paint.bg_gradient.stops[gi].color = scaleColorAlpha(p_paint.bg_gradient.stops[gi].color, group_opacity);
+                            }
+                        }
+                        canvas.drawScaledTextWithGradientClipped(r.x, draw_y, trimmed, scaled_h, p_rect, &p_paint, active_clip);
+                        painted_grad_text = true;
+                    }
+                }
+                if (!painted_grad_text && txt_color.a > 0) {
+                    if (fsz >= 14.0) {
+                        canvas.drawScaledTextClipped(r.x, draw_y, trimmed, scaled_h, txt_color, active_clip);
+                    } else {
+                        canvas.drawTextClipped(r.x + 1.0, r.y + 2.0, trimmed, txt_color, active_clip);
+                    }
+                }
+                if (ps := p_style_opt) {
+                    if (ps.text_decoration_underline && deco_color.a > 0) {
+                        const ul_h = @max(1.0, fsz * 0.08);
+                        const ul_y = draw_y + scaled_h + @max(1.0, fsz * 0.05);
+                        const ul_w = @max(r.width, @as(f32, @floatFromInt(trimmed.len)) * scaled_h);
+                        canvas.fillRectClipped(r.x, ul_y, ul_w, ul_h, deco_color, active_clip);
+                    }
                 }
             }
         }
