@@ -273,18 +273,47 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         sendHttpResponse(client_fd, "404 Not Found", "text/plain", "Not Found")? ;
     }
 
-    fn handleWebSocketUpgrade(*_, client_fd: i32, req: []const u8)! {
-        const marker = "sec-websocket-key";
-        const pos = findHeaderCaseInsensitive(req, marker) orelse return error.MissingWsKey;
-        let idx = pos + marker.len;
-        while (idx < req.len and req[idx] != ':') : (idx += 1) {}
-        if (idx < req.len and req[idx] == ':') {
-            idx += 1;
+    static fn extractHttpHeader(req: []const u8, name: []const u8): ([]const u8)? {
+        let it = std.mem.splitSequence(u8, req, "\r\n");
+        * = it.next(); // skip request line
+        while (line := it.next()) {
+            if (line.len == 0) break;
+            if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+                const hdr_name = std.mem.trim(u8, line[0..colon], " \t");
+                if (std.ascii.eqlIgnoreCase(hdr_name, name)) {
+                    return std.mem.trim(u8, line[colon + 1..], " \t");
+                }
+            }
         }
-        while (idx < req.len and (req[idx] == ' ' or req[idx] == '\t')) : (idx += 1) {}
-        const key_start = idx;
-        while (idx < req.len and req[idx] != '\r' and req[idx] != '\n') : (idx += 1) {}
-        const key = std.mem.trim(u8, req[key_start..idx], " \t\r\n");
+        return null;
+    }
+
+    static fn isAllowedWsOrigin(req: []const u8): bool {
+        const origin_opt = CdpServer.extractHttpHeader(req, "Origin");
+        if (origin_opt == null) return true;
+        const origin = origin_opt.?;
+        if (origin.len == 0) return true;
+        if (std.ascii.eqlIgnoreCase(origin, "devtools://devtools")) return true;
+        if (host := CdpServer.extractHttpHeader(req, "Host")) {
+            let http_buf: [256]u8 = [0; 256];
+            if (http_origin := std.fmt.bufPrint(&http_buf, "http://{s}", .{host}) catch null) {
+                if (std.ascii.eqlIgnoreCase(origin, http_origin)) return true;
+            }
+            let https_buf: [256]u8 = [0; 256];
+            if (https_origin := std.fmt.bufPrint(&https_buf, "https://{s}", .{host}) catch null) {
+                if (std.ascii.eqlIgnoreCase(origin, https_origin)) return true;
+            }
+        }
+        return false;
+    }
+
+    fn handleWebSocketUpgrade(*_, client_fd: i32, req: []const u8)! {
+        if (!CdpServer.isAllowedWsOrigin(req)) {
+            sendHttpResponse(client_fd, "403 Forbidden", "text/plain", "Forbidden")?;
+            return;
+        }
+
+        const key = CdpServer.extractHttpHeader(req, "Sec-WebSocket-Key") ?? "";
 
         let accept_buf: [64]u8 = [0; 64];
         const accept_len = computeSecWebSocketAccept(key, &accept_buf) catch return error.AcceptFailed;
@@ -368,6 +397,30 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const resp = CdpDispatcher.dispatch(_.session, req, res_buf, &events, &event_count);
 
+        // Emit triggered events before the command response (matches Chrome CDP ordering)
+        let i: usize = 0;
+        while (i < event_count) : (i += 1) {
+            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
+            if (evt_needed <= 4096) {
+                let evt_buf: [4096]u8 = [0; 4096];
+                const evt_msg = std.fmt.bufPrint(
+                    &evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)? ;
+            } else {
+                const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
+                defer std.heap.c_allocator.free(dyn_evt_buf);
+                const evt_msg = std.fmt.bufPrint(
+                    dyn_evt_buf,
+                    "{{\"method\":\"{s}\",\"params\":{s}}}",
+                    .{ events[i].method, events[i].params_json },
+                ) catch continue;
+                writeWsTextFrame(client_fd, evt_msg)? ;
+            }
+        }
+
         if (resp.isOk()) {
             const needed_len = resp.result_json.len + resp.raw_id.len + 32;
             if (needed_len <= 4096) {
@@ -423,30 +476,6 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 ) catch return;
             }
             writeWsTextFrame(client_fd, msg)? ;
-        }
-
-        // Emit any triggered asynchronous events
-        let i: usize = 0;
-        while (i < event_count) : (i += 1) {
-            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
-            if (evt_needed <= 4096) {
-                let evt_buf: [4096]u8 = [0; 4096];
-                const evt_msg = std.fmt.bufPrint(
-                    &evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
-                writeWsTextFrame(client_fd, evt_msg)? ;
-            } else {
-                const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
-                defer std.heap.c_allocator.free(dyn_evt_buf);
-                const evt_msg = std.fmt.bufPrint(
-                    dyn_evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
-                writeWsTextFrame(client_fd, evt_msg)? ;
-            }
         }
 
         // Flush any queued native DOM mutation events

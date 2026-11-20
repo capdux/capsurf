@@ -7,6 +7,105 @@ import { CdpPageSession } from "./session.cp";
 import { CookieEntry, entryToCdp, parseUrlParts } from "../net/cookies.cp";
 import { markFreshExtraHeaders } from "../net/http_loader.cp";
 
+pub struct StoredResponseBody {
+    request_id_buf: [64]u8 = [0; 64],
+    request_id_len: usize = 0,
+    body: []u8 = [],
+    base64_encoded: bool = false,
+    used: bool = false,
+}
+
+const MAX_STORED_BODIES: usize = 64;
+let g_stored_bodies: [MAX_STORED_BODIES]StoredResponseBody = [StoredResponseBody{}; MAX_STORED_BODIES];
+let g_stored_body_cursor: usize = 0;
+let g_doc_req_seq: u64 = 0;
+
+pub fn nextDocRequestId(out_buf: []u8): []const u8 {
+    g_doc_req_seq += 1;
+    return std.fmt.bufPrint(out_buf, "doc-req-{d}", .{g_doc_req_seq}) catch "doc-req-1";
+}
+
+pub fn recordResponseBody(request_id: []const u8, body: []const u8, base64_encoded: bool) {
+    if (request_id.len == 0) return;
+    let slot = &g_stored_bodies[g_stored_body_cursor % MAX_STORED_BODIES];
+    g_stored_body_cursor += 1;
+    if (slot.used && slot.body.len > 0) {
+        std.heap.c_allocator.free(slot.body);
+        slot.body = [];
+    }
+    const id_len = @min(request_id.len, slot.request_id_buf.len);
+    @memcpy(slot.request_id_buf[0..id_len], request_id[0..id_len]);
+    slot.request_id_len = id_len;
+    slot.base64_encoded = base64_encoded;
+    if (body.len > 0) {
+        const dup = std.heap.c_allocator.alloc(u8, body.len) catch {
+            slot.body = [];
+            slot.used = true;
+            return;
+        };
+        @memcpy(dup, body);
+        slot.body = dup;
+    } else {
+        slot.body = [];
+    }
+    slot.used = true;
+}
+
+pub fn findResponseBody(request_id: []const u8): (*const StoredResponseBody)? {
+    if (request_id.len == 0) return null;
+    let i: usize = 0;
+    while (i < MAX_STORED_BODIES) : (i += 1) {
+        const slot = &g_stored_bodies[i];
+        if (slot.used && std.mem.eql(u8, slot.request_id_buf[0..slot.request_id_len], request_id)) {
+            return slot;
+        }
+    }
+    return null;
+}
+
+fn jsonEscapeBody(src: []const u8, allocator: std.mem.Allocator): ([]u8)! {
+    let extra: usize = 0;
+    let i: usize = 0;
+    while (i < src.len) : (i += 1) {
+        const c = src[i];
+        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t') {
+            extra += 1;
+        } else if (c < 0x20) {
+            extra += 5;
+        }
+    }
+    let out = allocator.alloc(u8, src.len + extra) catch return error.OutOfMemory;
+    let pos: usize = 0;
+    i = 0;
+    while (i < src.len) : (i += 1) {
+        const c = src[i];
+        if (c == '"') {
+            out[pos] = '\\'; out[pos + 1] = '"'; pos += 2;
+        } else if (c == '\\') {
+            out[pos] = '\\'; out[pos + 1] = '\\'; pos += 2;
+        } else if (c == '\n') {
+            out[pos] = '\\'; out[pos + 1] = 'n'; pos += 2;
+        } else if (c == '\r') {
+            out[pos] = '\\'; out[pos + 1] = 'r'; pos += 2;
+        } else if (c == '\t') {
+            out[pos] = '\\'; out[pos + 1] = 't'; pos += 2;
+        } else if (c < 0x20) {
+            const hex = "0123456789abcdef";
+            out[pos] = '\\';
+            out[pos + 1] = 'u';
+            out[pos + 2] = '0';
+            out[pos + 3] = '0';
+            out[pos + 4] = hex[(c >> 4) & 0x0F];
+            out[pos + 5] = hex[c & 0x0F];
+            pos += 6;
+        } else {
+            out[pos] = c;
+            pos += 1;
+        }
+    }
+    return out[0..pos];
+}
+
 fn sanitizeAcceptEncoding(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
     const search_key = "accept-encoding";
     let found_idx: usize? = null;
@@ -406,7 +505,37 @@ pub struct NetworkHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Network.getResponseBody")) {
-            return CdpResponse.ok(req.id, "{\"body\":\"\",\"base64Encoded\":false}");
+            const req_id = extractJsonString(req.params_raw, "requestId") ?? "";
+            const rec_opt = findResponseBody(req_id);
+            if (rec_opt == null) {
+                return CdpResponse.err(req.id, -32000, "No resource with given identifier found");
+            }
+            const rec = rec_opt.?;
+            const prefix = "{\"body\":\"";
+            const suffix = if (rec.base64_encoded) "\",\"base64Encoded\":true}" else "\",\"base64Encoded\":false}";
+
+            let body_escaped: []const u8 = rec.body;
+            let allocated_escaped: ([]u8)? = null;
+            if (!rec.base64_encoded) {
+                const esc = jsonEscapeBody(rec.body, session.allocator) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                allocated_escaped = esc;
+                body_escaped = esc;
+            }
+            defer if (allocated_escaped != null) session.allocator.free(allocated_escaped.?);
+
+            const total_len = prefix.len + body_escaped.len + suffix.len;
+            if (out_buf.len >= total_len) {
+                @memcpy(out_buf[0..prefix.len], prefix);
+                @memcpy(out_buf[prefix.len .. prefix.len + body_escaped.len], body_escaped);
+                @memcpy(out_buf[prefix.len + body_escaped.len .. total_len], suffix);
+                return CdpResponse.ok(req.id, out_buf[0..total_len]);
+            } else {
+                let res_mem = session.allocator.alloc(u8, total_len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                @memcpy(res_mem[0..prefix.len], prefix);
+                @memcpy(res_mem[prefix.len .. prefix.len + body_escaped.len], body_escaped);
+                @memcpy(res_mem[prefix.len + body_escaped.len .. total_len], suffix);
+                return CdpResponse.ok(req.id, res_mem);
+            }
         }
 
         // 7. Generic fallback for any other Network or Storage domain methods

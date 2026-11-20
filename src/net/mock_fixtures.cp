@@ -159,6 +159,13 @@ pub struct MockFixtures {
         return "application/octet-stream";
     }
 
+    static fn getContentDisposition(url: []const u8): ([]const u8)? {
+        if (std.mem.indexOf(u8, url, "/attachment.html") != null) {
+            return "attachment; filename=\"download.html\"";
+        }
+        return null;
+    }
+
     /// Helper to read file from disk into buffer or allocated memory.
     static fn readFileContent(path: []const u8, out_buf: []u8): ([]const u8)? {
         let path_z: [512]u8 = [0; 512];
@@ -714,6 +721,20 @@ pub struct MockFixtures {
                 }
             }
             const body = "globalThis.__ks_corp_ran = (globalThis.__ks_corp_ran || 0) + 1;";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
+        if (std.mem.indexOf(u8, url, "/slow-document.html") != null) {
+            const body = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Slow document</title></head><body><h1>Slow document</h1></body></html>";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
+        if (std.mem.indexOf(u8, url, "/attachment.html") != null) {
+            const body = "<!doctype html><html><head><meta charset=\"utf-8\"><title>attachment</title></head><body>attachment</body></html>";
             const len = @min(body.len, out_buf.len);
             @memcpy(out_buf[0..len], body[0..len]);
             return out_buf[0..len];

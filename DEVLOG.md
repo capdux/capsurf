@@ -1321,4 +1321,10 @@
    - 在 `fetchDocumentWithContext` 逐跳解析 301/302/303/307/308 与 mock 重定向，跨源跳剥离 `Authorization`/`Cookie` 并将上一跳 `initiator_origin` 传入 `CookieJar` 执行 RFC 6265bis `SameSite.Strict`/`Lax` 判定。
 2. **Private Network Access 与多级 Iframe 帧树 (`page.cp`)**：
    - 拦截公网页面跳转 loopback 返回 `net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS`；使用堆分配 `collectFrameStates` 扫描 1~2 级 `<iframe>` 最终 URL 与 `securityOrigin` 并发射 `Runtime.executionContextCreated`。
+
+## Phase 85 文档 MIME 合成管线、`Network.getResponseBody` 与 WebSocket Origin 安全技术方案
+1. **文档分类与响应体缓存 (`document_kind.cp`, `page.cp`, `network.cp`)**：
+   - 在 `Page.navigate` 接入 `documentKind(content_type, content_disposition)`，对图片/纯文本/JSON 合成标准包装文档，对 PDF/octet-stream/attachment 发射 `Network.loadingFailed` 并返回 `net::ERR_ABORTED`；实装 `StoredResponseBody` 缓存支持 `Network.getResponseBody`。
+2. **WebSocket 握手 Origin 校验与事件时序 (`server.cp`)**：
+   - 严格放行无 Origin / 同源 Host / `devtools://devtools`，其余或 `null` Origin 拒绝返回 403；在 `dispatchCdpCommand` 中先发事件帧再发响应帧消除客户端竞态。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

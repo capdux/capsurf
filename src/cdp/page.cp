@@ -9,6 +9,15 @@ import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeType } from "../dom/dom.cp";
 import { Base64 } from "cap:encoding";
 import {
+    DocumentKind,
+    documentKind,
+    mimeEssence,
+    imageDocumentHtml,
+    textDocumentHtml,
+    jsonViewerHtml,
+} from "./document_kind.cp";
+import { nextDocRequestId, recordResponseBody } from "./network.cp";
+import {
     FrameState,
     MainFrameArgs,
     ChildFrameArgs,
@@ -313,15 +322,89 @@ pub struct PageHandler {
                 return CdpResponse.err(req.id, -32000, "Navigation failed");
             };
 
-            session.navigate(fetch_res.html, fetch_res.final_url, referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            let doc_req_id_buf: [64]u8 = [0; 64];
+            const doc_req_id = nextDocRequestId(&doc_req_id_buf);
+
+            const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
+            if (kind == DocumentKind.blocked) {
+                if (session.network_enabled && event_count.* < out_events.len) {
+                    const fail_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":false}}",
+                        .{ doc_req_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Network.loadingFailed", fail_json);
+                    event_count.* += 1;
+                }
+                const abort_res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_ABORTED\"}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, abort_res);
+            }
+
+            let synth_buf: ([]u8)? = null;
+            defer if (synth_buf != null) session.allocator.free(synth_buf.?);
+            let alloc_b64: ([]u8)? = null;
+            defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
+            let b64_str: []const u8 = fetch_res.raw_body;
+            let nav_html: []const u8 = fetch_res.html;
+
+            if (kind == DocumentKind.image) {
+                if (!fetch_res.raw_body_base64) {
+                    alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
+                    b64_str = alloc_b64.?;
+                }
+                recordResponseBody(doc_req_id, b64_str, true);
+                const needed = b64_str.len + 4096;
+                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                nav_html = imageDocumentHtml(fetch_res.html, b64_str, fetch_res.content_type, fetch_res.final_url, synth_buf.?);
+            } else if (kind == DocumentKind.text) {
+                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+                const needed = fetch_res.html.len * 6 + fetch_res.final_url.len * 6 + 1024;
+                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                nav_html = textDocumentHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+            } else if (kind == DocumentKind.json) {
+                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+                const needed = fetch_res.html.len * 16 + fetch_res.final_url.len * 6 + 16384;
+                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                nav_html = jsonViewerHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+            } else {
+                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+            }
+
+            session.navigate(nav_html, fetch_res.final_url, referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+
+            if (session.network_enabled && event_count.* < out_events.len) {
+                let esc_u_buf: [2048]u8 = [0; 2048];
+                const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+                const mime_raw = mimeEssence(fetch_res.content_type);
+                const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+                const resp_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                    .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, mime_out, session.frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+                event_count.* += 1;
+            }
 
             // Format dynamic Page.frameNavigated event
             const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
 
-            out_events[0] = CdpEvent.create("Page.frameNavigated", fn_json);
-            out_events[1] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
-            out_events[2] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
-            event_count.* = 3;
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
+                event_count.* += 1;
+            }
 
             // Emit child/grandchild frame execution context and frameStoppedLoading events
             const nav_frames = session.allocator.alloc(FrameState, 8) catch null;

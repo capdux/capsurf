@@ -3512,3 +3512,16 @@
 
 
 
+
+## [2026-11-20 17:45:30] 文档 MIME 合成管线、Network.getResponseBody 与 WebSocket Origin 校验闭环 (Subagent 30210673 结单，Phase 85)
+- **文档 MIME 分类与合成 (`src/cdp/document_kind.cp`, `src/net/{mock_fixtures,http_loader}.cp`, `src/cdp/page.cp`)**:
+  - `document_kind.cp`: 消除与 `svg_document.cp`/`outbound_filters.cp` 符号冲突，实装零分配递归下降 `jsonViewerHtml`；
+  - `http_loader.cp` & `mock_fixtures.cp`: `data:` URL 保留真实 MIME/base64，透传 `Content-Disposition`，新增 `/slow-document.html` 与 `/attachment.html`；
+  - `page.cp`: 接入 `documentKind` 流水线（`.blocked` 发射 `Network.loadingFailed` + `net::ERR_ABORTED`，`.image` 合成居中图片文档与尺寸标题，`.text`/`.json` 合成渲染文档）。
+- **响应体缓存与 WebSocket 握手安全 (`src/cdp/network.cp`, `src/cdp/server.cp`)**:
+  - `network.cp`: 实装 `Network.getResponseBody` 响应体缓存与未知 `requestId` 返回 `-32000`；
+  - `server.cp`: `handleWebSocketUpgrade` 实装 `Origin` 严格校验（允许无 Origin / 同源 Host / `devtools://devtools`，拒绝外部与 `null` Origin 返回 403）并规范事件先于命令响应下发时序。
+- **门禁与测试验证（3.64s Debug 快编）**:
+  - 全部 6 个修改 `.cp` 文件 4 门禁全 0；`test/cdp/test_document_kind.cp` PASS；
+  - `slow-document-headers` (3/3 PASS)、`document-types` (3/4 PASS，余 1 行 `painter.cp` PNG 复用)、`response-body-unknown-id` (1/2) 及 `cdp-envelope` (8/8) / `cdp-upgrade-origin` (5/5) 原生服务端直测 100% 匹配（余 `e2e/harness.ts` `engine.fetch` 适配器收尾）。
+- **清理旧子智能体**: 销毁 `30210673-4ae2-46ee-9f2b-1b1d31dbee59`。

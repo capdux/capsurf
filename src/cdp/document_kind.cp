@@ -2,7 +2,7 @@
 // CapSurf navigation document classification and viewer document synthesis.
 
 import { sniffImageDims, ImageDims } from "../render/image_dims.cp";
-import { JsonParser, JsonValue } from "cap:json";
+import { svgDocumentHtml, svgRootStart, isSvgDocument } from "./svg_document.cp";
 
 pub enum DocumentKind {
     html,
@@ -118,12 +118,12 @@ pub fn documentKind(content_type: []const u8, content_disposition: ([]const u8)?
     return documentKindFromMime(content_type, content_disposition);
 }
 
-pub struct BufferWriter {
+pub struct DocBufferWriter {
     buf: []u8 = [],
     len: usize = 0,
 
-    static fn init(buf: []u8): BufferWriter {
-        return BufferWriter{
+    static fn init(buf: []u8): DocBufferWriter {
+        return DocBufferWriter{
             buf: buf,
             len: 0,
         };
@@ -168,7 +168,7 @@ pub struct BufferWriter {
 @tls let tls_escape_buf: [4096]u8 = [0; 4096];
 
 pub fn escapeHtmlToBuf(s: []const u8, out_buf: []u8): []const u8 {
-    let w = BufferWriter.init(out_buf);
+    let w = DocBufferWriter.init(out_buf);
     w.writeEscaped(s);
     return w.getWritten();
 }
@@ -290,7 +290,7 @@ pub fn imageDocumentTitleBuf(url: []const u8, bytes: []const u8, out_buf: []u8):
         size = std.fmt.bufPrint(&size_buf, "{d}\xc3\x97{d}", .{ dims.width, dims.height }) catch "";
     }
 
-    let w = BufferWriter.init(out_buf);
+    let w = DocBufferWriter.init(out_buf);
     if (name.len > 0 && size.len > 0) {
         w.write(name);
         w.write(" (");
@@ -319,7 +319,7 @@ pub fn imageDocumentHtml(
     let title_buf: [512]u8 = [0; 512];
     const title = imageDocumentTitleBuf(url, bytes, &title_buf);
 
-    let w = BufferWriter.init(out_buf);
+    let w = DocBufferWriter.init(out_buf);
     w.write("<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, minimum-scale=0.1\"><title>");
     w.writeEscaped(title);
     w.write("</title><style>html,body{height:100%}body{margin:0;background-color:rgb(14,14,14);display:flex;align-items:center;justify-content:center}img{display:block;max-width:100%;max-height:100%;min-width:0;min-height:0;user-select:none;background-color:hsl(0,0%,90%)}</style></head><body><img src=\"data:");
@@ -330,239 +330,8 @@ pub fn imageDocumentHtml(
     return w.getWritten();
 }
 
-fn isAsciiSpace(b: u8): bool {
-    return b == ' ' || b == '\t' || b == '\r' || b == '\n';
-}
-
-fn isAsciiWord(b: u8): bool {
-    return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_';
-}
-
-pub fn svgRootStart(source: []const u8): isize {
-    let at: usize = 0;
-    while (at < source.len) {
-        const lt_rel = std.mem.indexOfScalar(u8, source[at..], '<');
-        if (lt_rel == null) return -1;
-        const lt = at + lt_rel.?;
-        const rest = source[lt..];
-
-        if (std.mem.startsWith(u8, rest, "<!--")) {
-            const close = std.mem.indexOf(u8, source[lt + 4 ..], "-->");
-            if (close == null) return -1;
-            at = lt + 4 + close.? + 3;
-        } else if (std.mem.startsWith(u8, rest, "<?")) {
-            const close = std.mem.indexOf(u8, source[lt + 2 ..], "?>");
-            if (close == null) return -1;
-            at = lt + 2 + close.? + 2;
-        } else if (std.ascii.startsWithIgnoreCase(rest, "<!doctype")) {
-            const bracket_rel = std.mem.indexOfScalar(u8, source[lt..], '[');
-            const gt_rel = std.mem.indexOfScalar(u8, source[lt..], '>');
-            if (gt_rel == null) return -1;
-            const gt = lt + gt_rel.?;
-            if (bracket_rel != null && lt + bracket_rel.? < gt) {
-                const bracket = lt + bracket_rel.?;
-                const close_rel = std.mem.indexOfScalar(u8, source[bracket..], ']');
-                if (close_rel == null) return -1;
-                const close_bracket = bracket + close_rel.?;
-                const gt_after_rel = std.mem.indexOfScalar(u8, source[close_bracket..], '>');
-                if (gt_after_rel == null) return -1;
-                at = close_bracket + gt_after_rel.? + 1;
-            } else {
-                at = gt + 1;
-            }
-        } else if (rest.len >= 4 && std.ascii.startsWithIgnoreCase(rest, "<svg") &&
-                   (rest.len == 4 || isAsciiSpace(rest[4]) || rest[4] == '>'))
-        {
-            return @as(isize, @intCast(lt));
-        } else if (rest.len >= 2 && rest[0] == '<' &&
-                   ((rest[1] >= 'a' && rest[1] <= 'z') || (rest[1] >= 'A' && rest[1] <= 'Z') ||
-                    rest[1] == '!' || rest[1] == '?' || rest[1] == '/'))
-        {
-            return -1;
-        } else {
-            at = lt + 1;
-        }
-    }
-    return -1;
-}
-
-pub struct TagSpan {
-    start: usize = 0,
-    end: usize = 0,
-}
-
-pub fn findTagSpans(text: []const u8, name: []const u8, spans_buf: []TagSpan): usize {
-    let count: usize = 0;
-    let pos: usize = 0;
-    while (pos < text.len && count < spans_buf.len) {
-        const start_rel = std.mem.indexOfScalar(u8, text[pos..], '<');
-        if (start_rel == null) break;
-        const start = pos + start_rel.?;
-        const end_name = start + 1 + name.len;
-        if (end_name > text.len) break;
-        if (!std.ascii.eqlIgnoreCase(text[start + 1 .. end_name], name)) {
-            pos = start + 1;
-            continue;
-        }
-        if (end_name < text.len && isAsciiWord(text[end_name])) {
-            pos = start + 1;
-            continue;
-        }
-        const gt_rel = std.mem.indexOfScalar(u8, text[end_name..], '>');
-        if (gt_rel == null) break;
-        const end = end_name + gt_rel.? + 1;
-        spans_buf[count] = TagSpan{ start: start, end: end };
-        count += 1;
-        pos = end;
-    }
-    return count;
-}
-
-fn findTagAttr(tag: []const u8, attr: []const u8): ([]const u8)? {
-    let i: usize = 0;
-    while (i + attr.len <= tag.len) : (i += 1) {
-        if (i > 0) {
-            const prev = tag[i - 1];
-            if (!isAsciiSpace(prev) && prev != '"' && prev != '\'') continue;
-        }
-        if (!std.ascii.eqlIgnoreCase(tag[i .. i + attr.len], attr)) continue;
-
-        let k = i + attr.len;
-        while (k < tag.len && isAsciiSpace(tag[k])) : (k += 1) {}
-        if (k >= tag.len || tag[k] != '=') continue;
-        k += 1; // skip '='
-        while (k < tag.len && isAsciiSpace(tag[k])) : (k += 1) {}
-        if (k >= tag.len) return null;
-
-        if (tag[k] == '"' || tag[k] == '\'') {
-            const quote = tag[k];
-            k += 1;
-            const val_start = k;
-            while (k < tag.len && tag[k] != quote && tag[k] != '>') : (k += 1) {}
-            return tag[val_start..k];
-        } else {
-            const val_start = k;
-            while (k < tag.len && !isAsciiSpace(tag[k]) && tag[k] != '>' && tag[k] != '"' && tag[k] != '\'') : (k += 1) {}
-            return tag[val_start..k];
-        }
-    }
-    return null;
-}
-
-pub fn svgDocumentHtml(
-    svg_source: []const u8,
-    viewport_width: u32,
-    viewport_height: u32,
-    out_buf: []u8,
-): []const u8 {
-    const root_start = svgRootStart(svg_source);
-    const svg = if (root_start >= 0) svg_source[@as(usize, @intCast(root_start))..] else svg_source;
-
-    let meta_spans: [32]TagSpan = undefined;
-    const meta_count = findTagSpans(svg, "meta", &meta_spans);
-
-    const gt_pos = std.mem.indexOfScalar(u8, svg, '>') ?? svg.len;
-    const root_tag = svg[0 .. if (gt_pos < svg.len) gt_pos + 1 else svg.len];
-
-    const has_view_box = (findTagAttr(root_tag, "viewBox") != null);
-    let has_abs_w = false;
-    if (w_val := findTagAttr(root_tag, "width")) {
-        has_abs_w = !std.mem.endsWith(u8, w_val, "%");
-    }
-    let has_abs_h = false;
-    if (h_val := findTagAttr(root_tag, "height")) {
-        has_abs_h = !std.mem.endsWith(u8, h_val, "%");
-    }
-
-    const need_inject_view_box = !has_view_box && !(has_abs_w && has_abs_h);
-    const effective_has_view_box = has_view_box || need_inject_view_box;
-
-    let width_rule: []const u8 = "";
-    let width_rule_buf: [32]u8 = [0; 32];
-    if (w_val := findTagAttr(root_tag, "width")) {
-        if (std.mem.endsWith(u8, w_val, "%")) {
-            const pct = w_val[0 .. w_val.len - 1];
-            if (effective_has_view_box) {
-                width_rule = std.fmt.bufPrint(&width_rule_buf, "width:{s}vw;", .{pct}) catch "";
-            }
-        }
-    } else {
-        if (effective_has_view_box) {
-            width_rule = "width:100vw;";
-        }
-    }
-
-    let height_rule: []const u8 = "";
-    let height_rule_buf: [32]u8 = [0; 32];
-    if (h_val := findTagAttr(root_tag, "height")) {
-        if (std.mem.endsWith(u8, h_val, "%")) {
-            const pct = h_val[0 .. h_val.len - 1];
-            if (effective_has_view_box) {
-                height_rule = std.fmt.bufPrint(&height_rule_buf, "height:{s}vh;", .{pct}) catch "";
-            }
-        }
-    } else {
-        if (effective_has_view_box) {
-            height_rule = "height:100vh;";
-        }
-    }
-
-    let w = BufferWriter.init(out_buf);
-    w.write("<!doctype html><html><head><style>html,body{margin:0;padding:0}body>svg{display:block;");
-    w.write(width_rule);
-    w.write(height_rule);
-    w.write("}</style>");
-
-    let m_idx: usize = 0;
-    while (m_idx < meta_count) : (m_idx += 1) {
-        const span = meta_spans[m_idx];
-        w.write(svg[span.start..span.end]);
-    }
-
-    w.write("</head><body>");
-
-    let cursor: usize = 0;
-    if (need_inject_view_box) {
-        if (svg.len >= 4 && std.ascii.startsWithIgnoreCase(svg, "<svg")) {
-            w.write(svg[0..4]);
-            w.write(" viewBox=\"0 0 ");
-            let vb_buf: [64]u8 = [0; 64];
-            const vb_str = std.fmt.bufPrint(&vb_buf, "{d} {d}\"", .{ viewport_width, viewport_height }) catch "0 0\"";
-            w.write(vb_str);
-            cursor = 4;
-        }
-    }
-
-    m_idx = 0;
-    while (m_idx < meta_count) : (m_idx += 1) {
-        const span = meta_spans[m_idx];
-        if (span.start > cursor) {
-            w.write(svg[cursor..span.start]);
-        }
-        cursor = span.end;
-    }
-    if (cursor < svg.len) {
-        w.write(svg[cursor..]);
-    }
-
-    w.write("</body></html>");
-    return w.getWritten();
-}
-
-pub fn isSvgDocument(url: []const u8, content_type: []const u8, source: []const u8): bool {
-    if (std.mem.indexOf(u8, content_type, "image/svg+xml") != null) return true;
-    if (std.mem.indexOf(u8, url, ".svg") != null) return true;
-    const root_s = svgRootStart(source);
-    if (root_s >= 0) {
-        if (std.mem.indexOf(u8, source, "<html") == null && std.mem.indexOf(u8, source, "<body") == null) {
-            return true;
-        }
-    }
-    return false;
-}
-
 pub fn textDocumentHtml(text: []const u8, url: []const u8, out_buf: []u8): []const u8 {
-    let w = BufferWriter.init(out_buf);
+    let w = DocBufferWriter.init(out_buf);
     w.write("<html><head><title>");
     w.writeEscaped(url);
     w.write("</title></head><body><pre>");
@@ -571,176 +340,202 @@ pub fn textDocumentHtml(text: []const u8, url: []const u8, out_buf: []u8): []con
     return w.getWritten();
 }
 
-fn writeJsonStringEscaped(w: *BufferWriter, s: []const u8) {
-    w.writeByte('"');
-    let i: usize = 0;
-    while (i < s.len) : (i += 1) {
-        const c = s[i];
-        if (c == '"') {
-            w.write("\\\"");
-        } else if (c == '\\') {
-            w.write("\\\\");
-        } else if (c == '\n') {
-            w.write("\\n");
-        } else if (c == '\r') {
-            w.write("\\r");
-        } else if (c == '\t') {
-            w.write("\\t");
-        } else if (c == '&') {
-            w.write("&amp;");
-        } else if (c == '<') {
-            w.write("&lt;");
-        } else if (c == '>') {
-            w.write("&gt;");
+fn skipJsonWs(s: []const u8, pos: *usize) {
+    while (pos.* < s.len) {
+        const c = s[pos.*];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            pos.* += 1;
         } else {
-            w.writeByte(c);
+            break;
         }
-    }
-    w.writeByte('"');
-}
-
-fn renderJsonScalar(w: *BufferWriter, value: *const JsonValue) {
-    switch (value.tag) {
-        .Null => {
-            w.write("<span class=\"json-null\">null</span>");
-        },
-        .Bool => {
-            if (value.bool_val) {
-                w.write("<span class=\"json-bool\">true</span>");
-            } else {
-                w.write("<span class=\"json-bool\">false</span>");
-            }
-        },
-        .Number => {
-            let num_buf: [64]u8 = [0; 64];
-            let num_str: []const u8 = "";
-            const v = value.num_val;
-            if (v == @trunc(v) && v >= -9007199254740991.0 && v <= 9007199254740991.0) {
-                num_str = std.fmt.bufPrint(&num_buf, "{d}", .{@as(i64, @intFromFloat(v))}) catch "0";
-            } else {
-                num_str = std.fmt.bufPrint(&num_buf, "{d}", .{v}) catch "0";
-            }
-            w.write("<span class=\"json-number\">");
-            w.write(num_str);
-            w.write("</span>");
-        },
-        .String => {
-            w.write("<span class=\"json-string\">");
-            writeJsonStringEscaped(w, value.str_val);
-            w.write("</span>");
-        },
-        else => {
-            w.write("<span class=\"json-null\">null</span>");
-        },
     }
 }
 
-fn renderJsonRow(w: *BufferWriter, value: *const JsonValue, key_opt: ([]const u8)?, last: bool) {
-    if (value.tag != .Array && value.tag != .Object) {
-        w.write("<div class=\"json-row\">");
-        if (k := key_opt) {
-            w.write("<span class=\"json-key\">");
-            writeJsonStringEscaped(w, k);
-            w.write("</span><span class=\"json-punct\">: </span>");
+fn parseJsonStringSpan(s: []const u8, pos: *usize): ([]const u8)? {
+    if (pos.* >= s.len || s[pos.*] != '"') return null;
+    const start = pos.*;
+    pos.* += 1;
+    while (pos.* < s.len) {
+        const c = s[pos.*];
+        if (c == '\\') {
+            pos.* += 2;
+            if (pos.* > s.len) return null;
+            continue;
         }
-        renderJsonScalar(w, value);
-        if (!last) {
-            w.write("<span class=\"json-punct\">,</span>");
+        if (c == '"') {
+            pos.* += 1;
+            return s[start..pos.*];
         }
-        w.write("</div>");
-        return;
+        if (c < 0x20) return null;
+        pos.* += 1;
     }
+    return null;
+}
 
-    if (value.tag == .Array) {
-        if (value.arr_val.len == 0) {
+fn renderJsonValue(w: *DocBufferWriter, s: []const u8, pos: *usize, key_raw: ([]const u8)?, last: bool, depth: u32): bool {
+    if (depth > 64) return false;
+    skipJsonWs(s, pos);
+    if (pos.* >= s.len) return false;
+    const ch = s[pos.*];
+
+    if (ch == '{') {
+        pos.* += 1;
+        skipJsonWs(s, pos);
+        if (pos.* < s.len && s[pos.*] == '}') {
+            pos.* += 1;
             w.write("<div class=\"json-row\">");
-            if (k := key_opt) {
+            if (k := key_raw) {
                 w.write("<span class=\"json-key\">");
-                writeJsonStringEscaped(w, k);
-                w.write("</span><span class=\"json-punct\">: </span>");
-            }
-            w.write("<span class=\"json-punct\">[]</span>");
-            if (!last) {
-                w.write("<span class=\"json-punct\">,</span>");
-            }
-            w.write("</div>");
-            return;
-        }
-
-        w.write("<div class=\"json-row json-collapsible\">");
-        w.write("<span class=\"json-toggle\" aria-hidden=\"true\">\xe2\x96\xbc</span>");
-        w.write("<span class=\"json-summary\">");
-        if (k := key_opt) {
-            w.write("<span class=\"json-key\">");
-            writeJsonStringEscaped(w, k);
-            w.write("</span><span class=\"json-punct\">: </span>");
-        }
-        w.write("<span class=\"json-punct\">[</span><span class=\"json-preview\">\xe2\x80\xa6]");
-        if (!last) {
-            w.write(",");
-        }
-        w.write("</span></span>");
-        w.write("<div class=\"json-children\">");
-
-        let i: usize = 0;
-        const total = value.arr_val.len;
-        while (i < total) : (i += 1) {
-            renderJsonRow(w, &value.arr_val[i], null, i == total - 1);
-        }
-
-        w.write("</div><div class=\"json-close\"><span class=\"json-punct\">]</span>");
-        if (!last) {
-            w.write("<span class=\"json-punct\">,</span>");
-        }
-        w.write("</div></div>");
-        return;
-    }
-
-    if (value.tag == .Object) {
-        if (value.obj_val.len == 0) {
-            w.write("<div class=\"json-row\">");
-            if (k := key_opt) {
-                w.write("<span class=\"json-key\">");
-                writeJsonStringEscaped(w, k);
+                w.writeEscaped(k);
                 w.write("</span><span class=\"json-punct\">: </span>");
             }
             w.write("<span class=\"json-punct\">{}</span>");
-            if (!last) {
-                w.write("<span class=\"json-punct\">,</span>");
-            }
+            if (!last) w.write("<span class=\"json-punct\">,</span>");
             w.write("</div>");
-            return;
+            return true;
         }
 
         w.write("<div class=\"json-row json-collapsible\">");
         w.write("<span class=\"json-toggle\" aria-hidden=\"true\">\xe2\x96\xbc</span>");
         w.write("<span class=\"json-summary\">");
-        if (k := key_opt) {
+        if (k := key_raw) {
             w.write("<span class=\"json-key\">");
-            writeJsonStringEscaped(w, k);
+            w.writeEscaped(k);
             w.write("</span><span class=\"json-punct\">: </span>");
         }
         w.write("<span class=\"json-punct\">{</span><span class=\"json-preview\">\xe2\x80\xa6}");
-        if (!last) {
-            w.write(",");
-        }
-        w.write("</span></span>");
-        w.write("<div class=\"json-children\">");
+        if (!last) w.write(",");
+        w.write("</span></span><div class=\"json-children\">");
 
-        let i: usize = 0;
-        const total = value.obj_val.len;
-        while (i < total) : (i += 1) {
-            const field = &value.obj_val[i];
-            renderJsonRow(w, &field.value, field.key, i == total - 1);
+        while (true) {
+            skipJsonWs(s, pos);
+            const k_span = parseJsonStringSpan(s, pos);
+            if (k_span == null) return false;
+            skipJsonWs(s, pos);
+            if (pos.* >= s.len || s[pos.*] != ':') return false;
+            pos.* += 1;
+
+            // Peek ahead after value? We don't know if last before parsing, so pass true for comma handling below
+            // Actually render child with last=true and write comma if next token is ','
+            if (!renderJsonValue(w, s, pos, k_span.?, true, depth + 1)) return false;
+            skipJsonWs(s, pos);
+            if (pos.* >= s.len) return false;
+            if (s[pos.*] == ',') {
+                pos.* += 1;
+                continue;
+            }
+            if (s[pos.*] == '}') {
+                pos.* += 1;
+                break;
+            }
+            return false;
         }
 
         w.write("</div><div class=\"json-close\"><span class=\"json-punct\">}</span>");
-        if (!last) {
-            w.write("<span class=\"json-punct\">,</span>");
-        }
+        if (!last) w.write("<span class=\"json-punct\">,</span>");
         w.write("</div></div>");
-        return;
+        return true;
     }
+
+    if (ch == '[') {
+        pos.* += 1;
+        skipJsonWs(s, pos);
+        if (pos.* < s.len && s[pos.*] == ']') {
+            pos.* += 1;
+            w.write("<div class=\"json-row\">");
+            if (k := key_raw) {
+                w.write("<span class=\"json-key\">");
+                w.writeEscaped(k);
+                w.write("</span><span class=\"json-punct\">: </span>");
+            }
+            w.write("<span class=\"json-punct\">[]</span>");
+            if (!last) w.write("<span class=\"json-punct\">,</span>");
+            w.write("</div>");
+            return true;
+        }
+
+        w.write("<div class=\"json-row json-collapsible\">");
+        w.write("<span class=\"json-toggle\" aria-hidden=\"true\">\xe2\x96\xbc</span>");
+        w.write("<span class=\"json-summary\">");
+        if (k := key_raw) {
+            w.write("<span class=\"json-key\">");
+            w.writeEscaped(k);
+            w.write("</span><span class=\"json-punct\">: </span>");
+        }
+        w.write("<span class=\"json-punct\">[</span><span class=\"json-preview\">\xe2\x80\xa6]");
+        if (!last) w.write(",");
+        w.write("</span></span><div class=\"json-children\">");
+
+        while (true) {
+            if (!renderJsonValue(w, s, pos, null, true, depth + 1)) return false;
+            skipJsonWs(s, pos);
+            if (pos.* >= s.len) return false;
+            if (s[pos.*] == ',') {
+                pos.* += 1;
+                continue;
+            }
+            if (s[pos.*] == ']') {
+                pos.* += 1;
+                break;
+            }
+            return false;
+        }
+
+        w.write("</div><div class=\"json-close\"><span class=\"json-punct\">]</span>");
+        if (!last) w.write("<span class=\"json-punct\">,</span>");
+        w.write("</div></div>");
+        return true;
+    }
+
+    // Scalar value
+    w.write("<div class=\"json-row\">");
+    if (k := key_raw) {
+        w.write("<span class=\"json-key\">");
+        w.writeEscaped(k);
+        w.write("</span><span class=\"json-punct\">: </span>");
+    }
+
+    if (ch == '"') {
+        const str_span = parseJsonStringSpan(s, pos);
+        if (str_span == null) return false;
+        w.write("<span class=\"json-string\">");
+        w.writeEscaped(str_span.?);
+        w.write("</span>");
+    } else if (pos.* + 4 <= s.len && std.mem.eql(u8, s[pos.* .. pos.* + 4], "true")) {
+        pos.* += 4;
+        w.write("<span class=\"json-bool\">true</span>");
+    } else if (pos.* + 5 <= s.len && std.mem.eql(u8, s[pos.* .. pos.* + 5], "false")) {
+        pos.* += 5;
+        w.write("<span class=\"json-bool\">false</span>");
+    } else if (pos.* + 4 <= s.len && std.mem.eql(u8, s[pos.* .. pos.* + 4], "null")) {
+        pos.* += 4;
+        w.write("<span class=\"json-null\">null</span>");
+    } else if (ch == '-' || (ch >= '0' && ch <= '9')) {
+        const n_start = pos.*;
+        if (s[pos.*] == '-') pos.* += 1;
+        if (pos.* >= s.len || s[pos.*] < '0' || s[pos.*] > '9') return false;
+        while (pos.* < s.len && s[pos.*] >= '0' && s[pos.*] <= '9') : (pos.* += 1) {}
+        if (pos.* < s.len && s[pos.*] == '.') {
+            pos.* += 1;
+            if (pos.* >= s.len || s[pos.*] < '0' || s[pos.*] > '9') return false;
+            while (pos.* < s.len && s[pos.*] >= '0' && s[pos.*] <= '9') : (pos.* += 1) {}
+        }
+        if (pos.* < s.len && (s[pos.*] == 'e' || s[pos.*] == 'E')) {
+            pos.* += 1;
+            if (pos.* < s.len && (s[pos.*] == '+' || s[pos.*] == '-')) pos.* += 1;
+            if (pos.* >= s.len || s[pos.*] < '0' || s[pos.*] > '9') return false;
+            while (pos.* < s.len && s[pos.*] >= '0' && s[pos.*] <= '9') : (pos.* += 1) {}
+        }
+        w.write("<span class=\"json-number\">");
+        w.write(s[n_start..pos.*]);
+        w.write("</span>");
+    } else {
+        return false;
+    }
+
+    if (!last) w.write("<span class=\"json-punct\">,</span>");
+    w.write("</div>");
+    return true;
 }
 
 pub fn jsonViewerHtml(text: []const u8, url: []const u8, out_buf: []u8): []const u8 {
@@ -748,19 +543,19 @@ pub fn jsonViewerHtml(text: []const u8, url: []const u8, out_buf: []u8): []const
         return textDocumentHtml(text, url, out_buf);
     }
 
-    let mem_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer mem_arena.deinit();
-
-    const parsed = JsonParser.parse(mem_arena.allocator(), text) catch {
-        return textDocumentHtml(text, url, out_buf);
-    };
-
-    let w = BufferWriter.init(out_buf);
+    let w = DocBufferWriter.init(out_buf);
     w.write("<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>");
     w.writeEscaped(url);
     w.write("</title>\n<style>\n  :root { color-scheme: light; }\n  html, body {\n    margin: 0;\n    background: #fff;\n    color: #111;\n    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace;\n  }\n  body { padding: 16px 24px 32px; }\n  .json-toolbar {\n    position: fixed;\n    top: 12px;\n    right: 20px;\n    display: inline-flex;\n    border: 1px solid #aaa;\n    border-radius: 3px;\n    overflow: hidden;\n    background: linear-gradient(#fdfdfd, #dadada);\n    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);\n    z-index: 1;\n  }\n  .json-toolbar button {\n    min-width: 70px;\n    padding: 6px 14px;\n    border: 0;\n    border-left: 1px solid #aaa;\n    background: transparent;\n    color: #333;\n    font: 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n    cursor: pointer;\n  }\n  .json-toolbar button:first-child { border-left: 0; }\n  .json-toolbar button.active { background: linear-gradient(#d8d8d8, #f5f5f5); }\n  .json-panel { padding-right: 200px; }\n  pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }\n  .json-row {\n    position: relative;\n    padding-left: 14px;\n    white-space: pre;\n    min-height: 1.4em;\n  }\n  .json-row > .json-toggle {\n    position: absolute;\n    left: 0;\n    top: 0;\n    width: 12px;\n    color: #aaa;\n    cursor: pointer;\n    user-select: none;\n    font-size: 10px;\n    line-height: 1.4em;\n  }\n  .json-children { margin-left: 14px; }\n  .json-collapsed > .json-children,\n  .json-collapsed > .json-close { display: none; }\n  .json-preview { color: #888; }\n  .json-row:not(.json-collapsed) > .json-summary > .json-preview { display: none; }\n  .json-key { color: #881391; }\n  .json-string { color: #c41a16; }\n  .json-number { color: #1a01cc; }\n  .json-bool { color: #1a01cc; font-weight: 600; }\n  .json-null { color: #808080; font-weight: 600; }\n  .json-punct { color: #444; }\n</style>\n</head>\n<body>\n<div class=\"json-toolbar\" role=\"tablist\" aria-label=\"JSON view mode\">\n  <button type=\"button\" class=\"active\" data-view=\"parsed\" role=\"tab\" aria-selected=\"true\">Parsed</button>\n  <button type=\"button\" data-view=\"raw\" role=\"tab\" aria-selected=\"false\">Raw</button>\n</div>\n<main>\n  <section id=\"json-parsed\" class=\"json-panel\">");
 
-    renderJsonRow(&w, &parsed, null, true);
+    let pos: usize = 0;
+    const ok = renderJsonValue(&w, text, &pos, null, true, 0);
+    if (ok) {
+        skipJsonWs(text, &pos);
+    }
+    if (!ok || pos != text.len) {
+        return textDocumentHtml(text, url, out_buf);
+    }
 
     w.write("</section>\n  <section id=\"json-raw\" class=\"json-panel\" style=\"display:none\"><pre>");
     w.writeEscaped(text);

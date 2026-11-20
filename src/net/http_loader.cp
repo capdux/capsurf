@@ -42,6 +42,9 @@ pub struct HttpLoaderResult {
     final_url: []const u8 = "",
     html: []const u8 = "",
     content_type: []const u8 = "",
+    content_disposition: ([]const u8)? = null,
+    raw_body: []const u8 = "",
+    raw_body_base64: bool = false,
 }
 
 let g_fresh_extra_headers: bool = false;
@@ -374,16 +377,37 @@ pub struct HttpLoader {
                 status_code: 200,
                 final_url: "about:blank",
                 html: empty_doc,
+                content_type: "text/html",
+                raw_body: empty_doc,
+                raw_body_base64: false,
             };
         }
 
         // 2. Check for data: URLs
         if (std.mem.startsWith(u8, url, "data:")) {
+            const comma_pos_opt = std.mem.indexOfScalar(u8, url, ',');
+            if (comma_pos_opt == null) return error.InvalidDataUrl;
+            const comma_pos = comma_pos_opt.?;
+            if (comma_pos < 5) return error.InvalidDataUrl;
+            const header = url[5..comma_pos];
+            const payload = url[comma_pos + 1..];
+            let is_base64 = false;
+            let mime = header;
+            if (b64_pos := std.mem.indexOf(u8, header, ";base64")) {
+                is_base64 = true;
+                mime = header[0..b64_pos];
+            }
+            if (mime.len == 0) {
+                mime = "text/plain;charset=US-ASCII";
+            }
             if (decoded := HttpLoader.decodeDataUrl(url, out_buf)) {
                 return HttpLoaderResult{
                     status_code: 200,
                     final_url: url,
                     html: decoded,
+                    content_type: mime,
+                    raw_body: if (is_base64) payload else decoded,
+                    raw_body_base64: is_base64,
                 };
             }
             return error.InvalidDataUrl;
@@ -417,6 +441,9 @@ pub struct HttpLoader {
                     final_url: url,
                     html: fixture_res,
                     content_type: MockFixtures.getContentType(url),
+                    content_disposition: MockFixtures.getContentDisposition(url),
+                    raw_body: fixture_res,
+                    raw_body_base64: false,
                 };
             }
         }
@@ -550,15 +577,21 @@ pub struct HttpLoader {
         const header_end = std.mem.indexOf(u8, raw_resp, "\r\n\r\n");
         const headers_part = if (header_end != null) raw_resp[0..header_end.?] else raw_resp;
 
-        // Parse Set-Cookie lines and store into cookie_jar
+        // Parse Set-Cookie, Content-Type, Content-Disposition lines
+        let resp_content_type: []const u8 = "";
+        let resp_content_disp: ([]const u8)? = null;
         let line_it = std.mem.splitSequence(u8, headers_part, "\r\n");
         while (line := line_it.next()) {
-            if (std.mem.startsWith(u8, line, "Set-Cookie:") || std.mem.startsWith(u8, line, "set-cookie:")) {
+            if (line.len >= 11 && std.ascii.eqlIgnoreCase(line[0..11], "Set-Cookie:")) {
                 const sc_val = std.mem.trim(u8, line[11..], " \t");
                 const sc_dupe = session.allocator.dupe(u8, sc_val) catch "";
                 if (sc_dupe.len > 0) {
                     * = session.getActiveCookieJar().setFromHeader(url, sc_dupe, null);
                 }
+            } else if (line.len >= 13 && std.ascii.eqlIgnoreCase(line[0..13], "Content-Type:")) {
+                resp_content_type = std.mem.trim(u8, line[13..], " \t");
+            } else if (line.len >= 20 && std.ascii.eqlIgnoreCase(line[0..20], "Content-Disposition:")) {
+                resp_content_disp = std.mem.trim(u8, line[20..], " \t");
             }
         }
 
@@ -587,6 +620,10 @@ pub struct HttpLoader {
             status_code: status,
             final_url: url,
             html: body,
+            content_type: resp_content_type,
+            content_disposition: resp_content_disp,
+            raw_body: body,
+            raw_body_base64: false,
         };
     }
 }

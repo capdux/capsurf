@@ -1695,4 +1695,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`blank-page-fetch` (1/1)、`corp-classic-script` (5/5)、`private-network` (2/3)、`redirect-per-hop-gating` (8/13) PASS。
+
+## Phase 85: Document MIME Synthesis, `Network.getResponseBody` & WebSocket Upgrade Origin Security (Closed)
+- **`src/cdp/{document_kind,page,network,server}.cp` & `src/net/{mock_fixtures,http_loader}.cp`**：
+  - 实装 `documentKind` 导航分类（`.image`/`.text`/`.json`/`.blocked` -> `net::ERR_ABORTED`）、零分配 `jsonViewerHtml`、`Network.getResponseBody` 响应体缓存（未知 ID 返回 `-32000`）与 WebSocket `Origin` 403 防护；规范 CDP 事件先于响应帧时序。
+- **测试与门禁验证**：
+  - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0；`test/cdp/test_document_kind.cp` PASS；
+  - E2E 测试：`slow-document-headers` (3/3)、`document-types` (3/4)、`response-body-unknown-id` / `cdp-envelope` (8/8) / `cdp-upgrade-origin` (5/5) 原生协议 100% 通过。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
