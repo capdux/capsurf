@@ -1871,4 +1871,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`text-input-caret-font` (1/1)、`forms-selection-paint-demo` (1/1)、`bmp-emoji-fonts` (3/3)、`transition-reused-node-slot` (1/1)、`typed-input-value-tracker` (1/1) 全绿，`web-animations` (6/8+fix) 与 `contenteditable-typing` (3/4+fix) 待上游 `utf.cp` 解封复测。
+
+## Phase 110: Dynamic Inserted-Script Engine (Classic/Module/Bake), WebMCP Push, Form Selection Capture & 256MiB Heap — 7/7 Suites (26/26 PASS)
+- **`src/cdp/{session,session_hooks,server,webmcp,dom}.cp` & `src/net/mock_fixtures.cp`**：
+  - 实装完整动态插入 `<script>` 引擎（1024 上限、CORP/ACAO、ES Module 依赖图与 `integrity`、8MiB 预算、Speculative Prefetch 与 Learned Script 驱逐）、`WebMCP.toolsAdded` 推流、表单 `selection_spans` 采集、16KB 顺序 Console 缓冲及 256MiB `JsRuntime` 堆上限。
+- **测试与门禁验证**：
+  - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 3.69s 增量构建）；
+  - E2E 测试：7 大套件共 **26/26 PASS (78 expect calls, 100%)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

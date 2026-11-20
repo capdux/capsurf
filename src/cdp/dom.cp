@@ -4,6 +4,7 @@
 
 import { CdpRequest, CdpResponse, CdpBoxModel, extractJsonString, extractJsonInt } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
+import { clearLearnedScripts } from "./session_hooks.cp";
 import { NodeId, NULL_NODE, Document } from "../dom/dom.cp";
 
 pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnmanaged(u8), str: []const u8)! {
@@ -375,6 +376,10 @@ pub struct DomHandler {
         }
 
         if (std.mem.eql(u8, req.method, "DOM.disable")) {
+            if (!session.dom_enabled) {
+                session.fetch_enabled = false;
+                clearLearnedScripts();
+            }
             session.setDomDisabled();
             return CdpResponse.ok(req.id, "{}");
         }

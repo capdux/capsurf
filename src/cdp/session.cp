@@ -22,7 +22,7 @@ import { ResourceStore } from "./resource_store.cp";
 import { KitesurfFacade } from "./kitesurf_facade.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
-import { PAGE_RUNTIME_HOOKS_JS } from "./session_hooks.cp";
+import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, registerSessionHooksNative, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
 
 @c {
     fn usleep(usec: u32): i32;
@@ -458,7 +458,7 @@ pub struct CdpPageSession {
     net_event_storage: [32768]u8 = [0; 32768],
 
     // Runtime & Log domain flags
-    runtime_enabled: bool = false,
+    runtime_enabled: bool = true,
     log_enabled: bool = false,
     binding_names: [2048]u8 = [0; 2048],
     binding_name_lens: [16]usize = [0; 16],
@@ -471,8 +471,11 @@ pub struct CdpPageSession {
     facade: KitesurfFacade = KitesurfFacade{},
 
     // Dedicated buffers for event formatting
-    console_event_buf: [1024]u8 = [0; 1024],
-    log_event_buf: [1024]u8 = [0; 1024],
+    console_event_storage: [16384]u8 = [0; 16384],
+    log_event_storage: [16384]u8 = [0; 16384],
+    webmcp_event_buf: [4096]u8 = [0; 4096],
+    webmcp_enabled: bool = false,
+    nav_seq: u64 = 0,
     rt_ctx_event_buf: [512]u8 = [0; 512],
     page_frame_event_buf: [2048]u8 = [0; 2048],
     binding_event_buf: [1024]u8 = [0; 1024],
@@ -539,7 +542,7 @@ pub struct CdpPageSession {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
         const document = Document.init(allocator) catch return error.DocInitFailed;
         const layout_tree = LayoutTree.init(allocator, 1280.0, 720.0) catch return error.LayoutInitFailed;
-        const js_rt = JsRuntime.init(64 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
+        const js_rt = JsRuntime.init(256 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
         const jar = CookieJar.init(allocator);
 
         @memset(std.mem.asBytes(ptr), 0);
@@ -570,7 +573,7 @@ pub struct CdpPageSession {
         ptr.fetch_state = FetchState{};
         ptr.target_registry = TargetRegistry.init();
         ptr.network_enabled = false;
-        ptr.runtime_enabled = false;
+        ptr.runtime_enabled = true;
         ptr.log_enabled = false;
         ptr.dedicated_workers = DedicatedWorkerPool.init();
         ptr.debugger_state = DebuggerState{};
@@ -1076,6 +1079,46 @@ pub struct CdpPageSession {
         // Sync User-Agent override to JS environment
         _.syncUserAgentToJs();
         _.outbound_reject_websocket = false;
+        _.nav_seq += 1;
+        registerSessionHooksNative(_.ctx.raw_ctx);
+        {
+            const active_bctx = if (_.current_browser_context_id_len > 0)
+                _.current_browser_context_id_buf[0.._.current_browser_context_id_len]
+            else
+                "default";
+            let nav_origin: []const u8 = "";
+            if (scheme_idx := std.mem.indexOf(u8, nav_url, "://")) {
+                const after_scheme = scheme_idx + 3;
+                if (slash_idx := std.mem.indexOfScalarPos(u8, nav_url, after_scheme, '/')) {
+                    nav_origin = nav_url[0..slash_idx];
+                } else if (q_idx := std.mem.indexOfScalarPos(u8, nav_url, after_scheme, '?')) {
+                    nav_origin = nav_url[0..q_idx];
+                } else {
+                    nav_origin = nav_url;
+                }
+            }
+            if (!_.fetch_enabled && nav_origin.len > 0) {
+                runSpeculativePrefetchForNav(active_bctx, nav_origin, _.nav_seq);
+            }
+            let bctx_esc_buf: [128]u8 = undefined;
+            const bctx_esc = escapeJsonString(active_bctx, &bctx_esc_buf);
+            let eh_esc_buf: [1024]u8 = undefined;
+            const eh_esc = escapeJsonString(_.extra_headers, &eh_esc_buf);
+            let meta_js_buf: [1536]u8 = undefined;
+            const meta_js = std.fmt.bufPrint(
+                &meta_js_buf,
+                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";}})()",
+                .{ bctx_esc, _.nav_seq, eh_esc },
+            ) catch "";
+            if (meta_js.len > 0) {
+                const mv = _.ctx.eval(meta_js);
+                if (jsIsException(mv)) {
+                    const exc = _.ctx.getException();
+                    _.ctx.freeValue(exc);
+                }
+                _.ctx.freeValue(mv);
+            }
+        }
         {
             const hooks_res = _.ctx.eval(PAGE_RUNTIME_HOOKS_JS);
             if (jsIsException(hooks_res)) {
@@ -1083,6 +1126,12 @@ pub struct CdpPageSession {
                 _.ctx.freeValue(exc);
             }
             _.ctx.freeValue(hooks_res);
+            const ins_hooks_res = _.ctx.eval(PAGE_INSERTED_SCRIPT_HOOKS_JS);
+            if (jsIsException(ins_hooks_res)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
+            _.ctx.freeValue(ins_hooks_res);
         }
         _.reinstallBindings();
         if (ext_css_buf != null && ext_css_len > 0) {
@@ -1269,7 +1318,7 @@ pub struct CdpPageSession {
             _.tracked_style_hashes[ti] = 0;
             _.tracked_style_lens[ti] = 0;
         }
-        _.runtime_enabled = false;
+        _.runtime_enabled = true;
         _.log_enabled = false;
         _.binding_count = 0;
         _.network_enabled = false;
@@ -1292,6 +1341,8 @@ pub struct CdpPageSession {
         _.retained_image_count_js = 0;
         _.font_asset_cache_bytes = 0;
         _.deferred_font_count = 0;
+        _.webmcp_enabled = false;
+        clearLearnedScripts();
         _.resetDomTracking();
     }
 
@@ -2412,7 +2463,7 @@ pub struct CdpPageSession {
         let selection_spans: [64]SelectionSpan = [SelectionSpan{}; 64];
         let selection_count: usize = 0;
         if (_.has_document) {
-            const js_sel = "(function() { try { const sel = (typeof getSelection === 'function') ? getSelection() : null; if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return ''; const r = sel.getRangeAt(0); if (!r || r.collapsed) return ''; const root = document.body || document.documentElement; if (!root) return ''; const texts = []; function collect(n) { if (!n) return; if (n.nodeType === 3) { texts.push(n); return; } const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) collect(cs[i]); } collect(root); function firstTextIn(n) { if (!n) return -1; if (n.nodeType === 3) return texts.indexOf(n); const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) { const idx = firstTextIn(cs[i]); if (idx !== -1) return idx; } return -1; } function nextTextAfter(n) { let cur = n; while (cur && cur !== root) { let sib = cur.nextSibling; while (sib) { const idx = firstTextIn(sib); if (idx !== -1) return idx; sib = sib.nextSibling; } cur = cur.parentNode; } return texts.length; } function resolvePoint(node, offset) { if (!node) return [0, 0]; if (node.nodeType === 3) { const ti = texts.indexOf(node); if (ti === -1) return [texts.length, 0]; const len = (node.nodeValue || node.textContent || '').length; return [ti, Math.max(0, Math.min(offset, len))]; } const cs = node.childNodes || []; if (offset < cs.length) { const ti = firstTextIn(cs[offset]); if (ti !== -1) return [ti, 0]; return [nextTextAfter(cs[offset]), 0]; } return [nextTextAfter(node), 0]; } let p1 = resolvePoint(r.startContainer, r.startOffset); let p2 = resolvePoint(r.endContainer, r.endOffset); if (p1[0] > p2[0] || (p1[0] === p2[0] && p1[1] > p2[1])) { const tmp = p1; p1 = p2; p2 = tmp; } const out = []; for (let i = p1[0]; i <= p2[0] && i < texts.length; i++) { const tn = texts[i]; const nid = (typeof tn._nid === 'number') ? tn._nid : 0; if (nid <= 0) continue; const len = (tn.nodeValue || tn.textContent || '').length; const s = (i === p1[0]) ? p1[1] : 0; const e = (i === p2[0]) ? p2[1] : len; if (e > s) out.push(nid + ':' + s + ':' + e); } return out.join(';'); } catch (e) { return ''; } })();";
+            const js_sel = "(function() { try { const out = []; const sel = (typeof getSelection === 'function') ? getSelection() : null; if (sel && sel.rangeCount > 0 && !sel.isCollapsed) { const r = sel.getRangeAt(0); if (r && !r.collapsed) { const root = document.body || document.documentElement; if (root) { const texts = []; function collect(n) { if (!n) return; if (n.nodeType === 3) { texts.push(n); return; } const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) collect(cs[i]); } collect(root); function firstTextIn(n) { if (!n) return -1; if (n.nodeType === 3) return texts.indexOf(n); const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) { const idx = firstTextIn(cs[i]); if (idx !== -1) return idx; } return -1; } function nextTextAfter(n) { let cur = n; while (cur && cur !== root) { let sib = cur.nextSibling; while (sib) { const idx = firstTextIn(sib); if (idx !== -1) return idx; sib = sib.nextSibling; } cur = cur.parentNode; } return texts.length; } function resolvePoint(node, offset) { if (!node) return [0, 0]; if (node.nodeType === 3) { const ti = texts.indexOf(node); if (ti === -1) return [texts.length, 0]; const len = (node.nodeValue || node.textContent || '').length; return [ti, Math.max(0, Math.min(offset, len))]; } const cs = node.childNodes || []; if (offset < cs.length) { const ti = firstTextIn(cs[offset]); if (ti !== -1) return [ti, 0]; return [nextTextAfter(cs[offset]), 0]; } return [nextTextAfter(node), 0]; } let p1 = resolvePoint(r.startContainer, r.startOffset); let p2 = resolvePoint(r.endContainer, r.endOffset); if (p1[0] > p2[0] || (p1[0] === p2[0] && p1[1] > p2[1])) { const tmp = p1; p1 = p2; p2 = tmp; } for (let i = p1[0]; i <= p2[0] && i < texts.length; i++) { const tn = texts[i]; const nid = (typeof tn._nid === 'number') ? tn._nid : 0; if (nid <= 0) continue; const len = (tn.nodeValue || tn.textContent || '').length; const s = (i === p1[0]) ? p1[1] : 0; const e = (i === p2[0]) ? p2[1] : len; if (e > s) out.push(nid + ':' + s + ':' + e); } } } } const inputs = document.querySelectorAll('input, textarea'); for (let i = 0; i < inputs.length && out.length < 64; i++) { const el = inputs[i]; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) continue; const ss = (typeof el.selectionStart === 'number') ? el.selectionStart : 0; const se = (typeof el.selectionEnd === 'number') ? el.selectionEnd : 0; if (se > ss) out.push(nid + ':' + ss + ':' + se); } return out.join(';'); } catch (e) { return ''; } })();";
             const val_sel = _.ctx.eval(js_sel);
             const cstr_sel = _.ctx.toCString(val_sel);
             if (cstr_sel.len > 0) {
@@ -2735,27 +2786,30 @@ pub struct CdpPageSession {
             if (dom.console_count == 0) return 0;
 
             let ev_idx: usize = 0;
+            let rt_pos: usize = 0;
+            let log_pos: usize = 0;
             let i: usize = 0;
             while (i < dom.console_count && ev_idx < out_events.len) : (i += 1) {
                 let rec = &dom.console_records[i];
                 const lvl = rec.getLevel();
                 const txt = rec.getText();
 
-                if (_.runtime_enabled && ev_idx < out_events.len) {
+                if (_.runtime_enabled && ev_idx < out_events.len && rt_pos < _.console_event_storage.len) {
                     const args_slice = rec.getArgsJson();
                     const args_json = if (args_slice.len > 0) args_slice else "[{\"type\":\"string\",\"value\":\"\"}]";
                     const rt_json = std.fmt.bufPrint(
-                        &_.console_event_buf,
+                        _.console_event_storage[rt_pos..],
                         "{{\"type\":\"{s}\",\"args\":{s},\"executionContextId\":1,\"timestamp\":{d}}}",
                         .{ lvl, args_json, rec.timestamp },
                     ) catch "";
                     if (rt_json.len > 0) {
+                        rt_pos += rt_json.len;
                         out_events[ev_idx] = CdpEvent.create("Runtime.consoleAPICalled", rt_json);
                         ev_idx += 1;
                     }
                 }
 
-                if (_.log_enabled && ev_idx < out_events.len) {
+                if (_.log_enabled && ev_idx < out_events.len && log_pos < _.log_event_storage.len) {
                     const log_lvl = if (std.mem.eql(u8, lvl, "error"))
                         "error"
                     else if (std.mem.eql(u8, lvl, "warn"))
@@ -2764,11 +2818,12 @@ pub struct CdpPageSession {
                         "info";
 
                     const log_json = std.fmt.bufPrint(
-                        &_.log_event_buf,
+                        _.log_event_storage[log_pos..],
                         "{{\"entry\":{{\"source\":\"javascript\",\"level\":\"{s}\",\"text\":\"{s}\",\"timestamp\":{d}}}}}",
                         .{ log_lvl, txt, rec.timestamp },
                     ) catch "";
                     if (log_json.len > 0) {
+                        log_pos += log_json.len;
                         out_events[ev_idx] = CdpEvent.create("Log.entryAdded", log_json);
                         ev_idx += 1;
                     }
@@ -2778,6 +2833,27 @@ pub struct CdpPageSession {
             return ev_idx;
         }
         return 0;
+    }
+
+    fn pollWebMcpEvents(*_, out_events: []CdpEvent): usize {
+        if (!_.has_document || !_.webmcp_enabled || out_events.len == 0) return 0;
+        const js_pull = "(function(){if(!Array.isArray(globalThis.__capsurf_pending_webmcp_tools)||globalThis.__capsurf_pending_webmcp_tools.length===0)return '';var arr=globalThis.__capsurf_pending_webmcp_tools;globalThis.__capsurf_pending_webmcp_tools=[];return JSON.stringify(arr);})()";
+        const val = _.ctx.eval(js_pull);
+        defer _.ctx.freeValue(val);
+        if (jsIsException(val)) {
+            const exc = _.ctx.getException();
+            _.ctx.freeValue(exc);
+            return 0;
+        }
+        const tools_json = _.ctx.toCString(val);
+        if (tools_json.len < 3) return 0;
+        const params = std.fmt.bufPrint(
+            &_.webmcp_event_buf,
+            "{{\"tools\":{s}}}",
+            .{ tools_json },
+        ) catch return 0;
+        out_events[0] = CdpEvent.create("WebMCP.toolsAdded", params);
+        return 1;
     }
 
     fn hasBinding(name: []const u8): bool {

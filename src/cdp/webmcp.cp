@@ -848,11 +848,13 @@ pub struct WebMcpHandler {
 
         if (std.mem.eql(u8, req.method, "WebMCP.enable")) {
             g_webmcp_state.enable();
+            session.webmcp_enabled = true;
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "WebMCP.disable")) {
             g_webmcp_state.disable();
+            session.webmcp_enabled = false;
             return CdpResponse.ok(req.id, "{}");
         }
 

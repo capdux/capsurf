@@ -653,12 +653,21 @@ pub struct MockFixtures {
             if (raw_body := MockFixtures.extractQueryParam(url, "body")) {
                 body_val = MockFixtures.decodeUri(raw_body, &decoded_buf);
             }
+            let csp_meta_buf: [1024]u8 = undefined;
+            let csp_meta: []const u8 = "";
+            if (raw_csp := MockFixtures.extractQueryParam(url, "csp")) {
+                let csp_dec_buf: [512]u8 = undefined;
+                let csp_esc_buf: [768]u8 = undefined;
+                const csp_val = MockFixtures.decodeUri(raw_csp, &csp_dec_buf);
+                const csp_esc = escapeHtmlAttr(csp_val, &csp_esc_buf);
+                csp_meta = std.fmt.bufPrint(&csp_meta_buf, "<meta http-equiv=\"Content-Security-Policy\" content=\"{s}\">", .{ csp_esc }) catch "";
+            }
             const title_val = if (body_val.len == 0) "policy" else "policy-doc";
             const actual_body = if (body_val.len == 0) "policy doc" else body_val;
             const res = std.fmt.bufPrint(
                 out_buf,
-                "<!doctype html><html><head><meta charset=\"utf-8\"><title>{s}</title></head><body>{s}</body></html>",
-                .{ title_val, actual_body },
+                "<!doctype html><html><head><meta charset=\"utf-8\">{s}<title>{s}</title></head><body>{s}</body></html>",
+                .{ csp_meta, title_val, actual_body },
             ) catch return null;
             return res;
         }
@@ -989,6 +998,128 @@ pub struct MockFixtures {
             }
         }
 
+        // 2.9. /inserted-bake.js
+        if (std.mem.indexOf(u8, url, "/inserted-bake.js") != null) {
+            const len = @min(INSERTED_BAKE_JS.len, out_buf.len);
+            @memcpy(out_buf[0..len], INSERTED_BAKE_JS[0..len]);
+            return out_buf[0..len];
+        }
+
+        // 2.10. /inserted-probe-hits/:key
+        if (pos := std.mem.indexOf(u8, url, "/inserted-probe-hits/")) {
+            let key = url[pos + 21 ..];
+            if (q := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q];
+            if (h := std.mem.indexOfScalar(u8, key, '#')) key = key[0..h];
+            const hits = getInsertedProbeHits(key);
+            const res = std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch return null;
+            return res;
+        }
+
+        // 2.11. /inserted-probe-headers/:key
+        if (pos := std.mem.indexOf(u8, url, "/inserted-probe-headers/")) {
+            let key = url[pos + 24 ..];
+            if (q := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q];
+            if (h := std.mem.indexOfScalar(u8, key, '#')) key = key[0..h];
+            return formatInsertedProbeHeadersJson(key, out_buf);
+        }
+
+        // 2.12. /inserted-probe/:mode/:key.js
+        if (pos := std.mem.indexOf(u8, url, "/inserted-probe/")) {
+            let rest = url[pos + 16 ..];
+            if (q := std.mem.indexOfScalar(u8, rest, '?')) rest = rest[0..q];
+            if (h := std.mem.indexOfScalar(u8, rest, '#')) rest = rest[0..h];
+            if (slash := std.mem.indexOfScalar(u8, rest, '/')) {
+                const mode = rest[0..slash];
+                let file_part = rest[slash + 1 ..];
+                if (std.mem.endsWith(u8, file_part, ".js")) {
+                    file_part = file_part[0 .. file_part.len - 3];
+                }
+                let secret_buf: [128]u8 = [0; 128];
+                const secret_opt = extractExtraHeaderIgnoreCase(extra_headers, "x-probe-secret", &secret_buf);
+                const hit = recordInsertedProbeHit(file_part, secret_opt);
+                if (hit > 1 && std.mem.eql(u8, mode, "gone")) {
+                    return null;
+                }
+                if (std.mem.eql(u8, mode, "volatile")) {
+                    const res = std.fmt.bufPrint(out_buf, "{s}\n// hit {d}\n", .{ INSERTED_BAKE_JS, hit }) catch return null;
+                    return res;
+                }
+                if (hit > 1 && std.mem.eql(u8, mode, "hostile")) {
+                    const len = @min(HOSTILE_PROBE_JS.len, out_buf.len);
+                    @memcpy(out_buf[0..len], HOSTILE_PROBE_JS[0..len]);
+                    return out_buf[0..len];
+                }
+                const len = @min(INSERTED_BAKE_JS.len, out_buf.len);
+                @memcpy(out_buf[0..len], INSERTED_BAKE_JS[0..len]);
+                return out_buf[0..len];
+            }
+        }
+
+        // 2.13. /inserted-module/:file
+        if (pos := std.mem.indexOf(u8, url, "/inserted-module/")) {
+            let file = url[pos + 17 ..];
+            if (q := std.mem.indexOfScalar(u8, file, '?')) file = file[0..q];
+            if (h := std.mem.indexOfScalar(u8, file, '#')) file = file[0..h];
+            if (std.mem.eql(u8, file, "tool.js")) {
+                const body = "import { label } from \"./dep.js\";\ndocument.modelContext.registerTool({\n  name: \"inserted_tool\",\n  description: \"Registered by an inserted module\",\n  execute: () => label,\n});\nglobalThis.__insertedModule = (globalThis.__insertedModule || []).concat([\"tool\"]);\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "dep.js")) {
+                const body = "export const label = \"from-dep\";\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "throws.js")) {
+                const body = "globalThis.__insertedModule = (globalThis.__insertedModule || []).concat([\"throws\"]);\nthrow new Error(\"inserted module threw\");\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "throws-after-lazy-404.js")) {
+                const body = "globalThis.__insertedModule = (globalThis.__insertedModule || []).concat([\"lazy\"]);\nawait import(\"./lazy-missing.js\").catch(() => {});\nthrow new Error(\"inserted module threw after a lazy 404\");\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "syntax.js")) {
+                const body = "globalThis.__insertedModule = [\"unreachable\"];\nexport const = ;\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "broken.js")) {
+                const body = "import \"./missing.js\";\nglobalThis.__insertedModule = (globalThis.__insertedModule || []).concat([\"broken\"]);\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            if (std.mem.eql(u8, file, "big.js")) {
+                const body = "/*__KS_OVER_BUDGET__*/\nglobalThis.__insertedModule = [\"big\"];\n";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+            return null;
+        }
+
+        // 2.14. /written-script.js
+        if (std.mem.indexOf(u8, url, "/written-script.js") != null) {
+            let tag: []const u8 = "";
+            let tag_buf: [128]u8 = undefined;
+            if (raw_tag := MockFixtures.extractQueryParam(url, "tag")) {
+                tag = MockFixtures.decodeUri(raw_tag, &tag_buf);
+            }
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "globalThis.__written = (globalThis.__written || []).concat([\"{s}\"]);\n",
+                .{ tag },
+            ) catch return null;
+            return res;
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {
@@ -1030,6 +1161,168 @@ struct FramePolicyHitSlot {
     marker_buf: [64]u8 = [0; 64],
     marker_len: usize = 0,
     hits: u32 = 0,
+}
+
+const INSERTED_BAKE_JS: []const u8 =
+    "\"use strict\";\n" ++
+    "window.__insertedStrict = [this != null, (function () { return this; })() === undefined];\n" ++
+    "var insertedHello = function () { return \"hi\"; };\n" ++
+    "window.__insertedRuns = (window.__insertedRuns || 0) + 1;\n" ++
+    "window.__insertedNative = typeof Error.captureStackTrace === \"function\";\n" ++
+    "window.__insertedCurrentSrc = document.currentScript ? document.currentScript.getAttribute(\"src\") : null;\n" ++
+    "// padding to cross the engine's minimum learned-script size. padding to cross the engine's minimum learned-script size.\n";
+
+const HOSTILE_PROBE_JS: []const u8 =
+    "window.__insertedNative = typeof Error.captureStackTrace === \"function\";\n" ++
+    "window.__insertedRuns = 1;\n" ++
+    "window.__hostileResult = \"pending\";\n" ++
+    "import(\"file:///bundle/internal-state.js\").then(function (ns) {\n" ++
+    "  window.__hostileResult = typeof ns.getInternalState;\n" ++
+    "}, function () { window.__hostileResult = \"refused\"; });\n";
+
+struct ProbeHeaderRecord {
+    present: bool = false,
+    val_buf: [64]u8 = [0; 64],
+    val_len: usize = 0,
+}
+
+struct InsertedProbeSlot {
+    key_buf: [64]u8 = [0; 64],
+    key_len: usize = 0,
+    hits: u32 = 0,
+    headers: [16]ProbeHeaderRecord = [ProbeHeaderRecord{}; 16],
+    header_count: usize = 0,
+}
+
+let g_inserted_probes: [64]InsertedProbeSlot = [InsertedProbeSlot{}; 64];
+let g_inserted_probe_count: usize = 0;
+
+fn extractExtraHeaderIgnoreCase(extra_json: []const u8, header_name: []const u8, out_buf: []u8): ([]const u8)? {
+    if (extra_json.len < 2) return null;
+    let i: usize = 0;
+    while (i < extra_json.len) : (i += 1) {
+        if (extra_json[i] != '"') continue;
+        const ks = i + 1;
+        let ke = ks;
+        while (ke < extra_json.len && extra_json[ke] != '"') : (ke += 1) {
+            if (extra_json[ke] == '\\' && ke + 1 < extra_json.len) ke += 1;
+        }
+        if (ke >= extra_json.len) break;
+        const key_slice = extra_json[ks..ke];
+        let p = ke + 1;
+        while (p < extra_json.len && (extra_json[p] == ' ' || extra_json[p] == '\t' || extra_json[p] == '\r' || extra_json[p] == '\n')) : (p += 1) {}
+        if (p < extra_json.len && extra_json[p] == ':') {
+            p += 1;
+            while (p < extra_json.len && (extra_json[p] == ' ' || extra_json[p] == '\t' || extra_json[p] == '\r' || extra_json[p] == '\n')) : (p += 1) {}
+            if (p < extra_json.len && extra_json[p] == '"') {
+                const vs = p + 1;
+                let ve = vs;
+                while (ve < extra_json.len && extra_json[ve] != '"') : (ve += 1) {
+                    if (extra_json[ve] == '\\' && ve + 1 < extra_json.len) ve += 1;
+                }
+                if (ve < extra_json.len) {
+                    if (std.ascii.eqlIgnoreCase(key_slice, header_name)) {
+                        const raw_v = extra_json[vs..ve];
+                        const n = @min(raw_v.len, out_buf.len);
+                        @memcpy(out_buf[0..n], raw_v[0..n]);
+                        return out_buf[0..n];
+                    }
+                    i = ve;
+                    continue;
+                }
+            }
+        }
+        i = ke;
+    }
+    return null;
+}
+
+fn recordInsertedProbeHit(key: []const u8, secret_opt: ([]const u8)?): u32 {
+    let idx: (usize)? = null;
+    let i: usize = 0;
+    while (i < g_inserted_probe_count) : (i += 1) {
+        if (std.mem.eql(u8, g_inserted_probes[i].key_buf[0..g_inserted_probes[i].key_len], key)) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx == null) {
+        if (g_inserted_probe_count >= g_inserted_probes.len) {
+            // Reuse slot 0 if full
+            idx = 0;
+            g_inserted_probes[0] = InsertedProbeSlot{};
+        } else {
+            idx = g_inserted_probe_count;
+            g_inserted_probe_count += 1;
+        }
+        const n = @min(key.len, g_inserted_probes[idx.?].key_buf.len);
+        @memcpy(g_inserted_probes[idx.?].key_buf[0..n], key[0..n]);
+        g_inserted_probes[idx.?].key_len = n;
+    }
+    let slot = &g_inserted_probes[idx.?];
+    slot.hits += 1;
+    if (slot.header_count < slot.headers.len) {
+        let rec = &slot.headers[slot.header_count];
+        if (sv := secret_opt) {
+            rec.present = true;
+            const vn = @min(sv.len, rec.val_buf.len);
+            @memcpy(rec.val_buf[0..vn], sv[0..vn]);
+            rec.val_len = vn;
+        } else {
+            rec.present = false;
+            rec.val_len = 0;
+        }
+        slot.header_count += 1;
+    }
+    return slot.hits;
+}
+
+fn getInsertedProbeHits(key: []const u8): u32 {
+    let i: usize = 0;
+    while (i < g_inserted_probe_count) : (i += 1) {
+        if (std.mem.eql(u8, g_inserted_probes[i].key_buf[0..g_inserted_probes[i].key_len], key)) {
+            return g_inserted_probes[i].hits;
+        }
+    }
+    return 0;
+}
+
+fn formatInsertedProbeHeadersJson(key: []const u8, out_buf: []u8): ([]const u8)? {
+    let pos: usize = 0;
+    const pre = "{\"headers\":[";
+    if (pre.len > out_buf.len) return null;
+    @memcpy(out_buf[0..pre.len], pre);
+    pos += pre.len;
+
+    let i: usize = 0;
+    while (i < g_inserted_probe_count) : (i += 1) {
+        if (std.mem.eql(u8, g_inserted_probes[i].key_buf[0..g_inserted_probes[i].key_len], key)) {
+            const slot = &g_inserted_probes[i];
+            let j: usize = 0;
+            while (j < slot.header_count) : (j += 1) {
+                if (j > 0) {
+                    if (pos >= out_buf.len) break;
+                    out_buf[pos] = ',';
+                    pos += 1;
+                }
+                const rec = &slot.headers[j];
+                if (rec.present) {
+                    const part = std.fmt.bufPrint(out_buf[pos..], "\"{s}\"", .{ rec.val_buf[0..rec.val_len] }) catch break;
+                    pos += part.len;
+                } else {
+                    const part = std.fmt.bufPrint(out_buf[pos..], "null", .{}) catch break;
+                    pos += part.len;
+                }
+            }
+            break;
+        }
+    }
+
+    if (pos + 2 > out_buf.len) return null;
+    out_buf[pos] = ']';
+    out_buf[pos + 1] = '}';
+    pos += 2;
+    return out_buf[0..pos];
 }
 
 let g_frame_policy_hits: [64]FramePolicyHitSlot = [FramePolicyHitSlot{}; 64];

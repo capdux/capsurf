@@ -607,6 +607,16 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         if (reopen_count > 0) {
             _.emitCdpEvents(client_fd, &reopen_events, reopen_count)?;
         }
+        let console_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const console_count = _.session.pollConsoleEvents(&console_events);
+        if (console_count > 0) {
+            _.emitCdpEvents(client_fd, &console_events, console_count)?;
+        }
+        let webmcp_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const webmcp_count = _.session.pollWebMcpEvents(&webmcp_events);
+        if (webmcp_count > 0) {
+            _.emitCdpEvents(client_fd, &webmcp_events, webmcp_count)?;
+        }
     }
 
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {

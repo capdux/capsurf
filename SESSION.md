@@ -3845,3 +3845,16 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - `text-input-caret-font` (1/1)、`forms-selection-paint-demo` (1/1)、`bmp-emoji-fonts` (3/3)、`transition-reused-node-slot` (1/1)、`typed-input-value-tracker` (1/1) 全绿；`web-animations` (6/8 + 2 处已修) 与 `contenteditable-typing` (3/4 + 1 处已修) 待上游 `lib/string/utf.cp` `Dec` 关键字冲突修复后复测。
 - **清理旧子智能体**: 销毁 `27c1e183-fcc3-455f-9671-adf211d4a399`。
+
+## [2026-11-20 19:50:15] 动态插入脚本全栈引擎、WebMCP 事件推流、表单选区采集与 256MiB 堆上限 26/26 全绿闭环 (Subagent 33aaee93 结单，Phase 110)
+- **动态 `<script>` 引擎、Speculative Prefetch 与 WebMCP (`src/cdp/{session,session_hooks,server,webmcp,dom}.cp`, `src/net/mock_fixtures.cp`)**:
+  - `session.cp`: 补齐 `input/textarea` 选区采集、16KB 顺序 Console/Log 缓冲区、`WebMCP.toolsAdded` 事件轮询，并将 `JsRuntime` 上限升至 `256 MiB` 根除连续多导航 OOM；
+  - `session_hooks.cp` & `mock_fixtures.cp`: 实装 `__capsurf_fixture_fetch`/`__capsurf_learned_script`/`__capsurf_eval_global_script` 与完整动态插入脚本引擎（1024 上限、跨源 CORP/ACAO、ES Module 依赖图与 `integrity`、8MiB 预算、learned/speculative prefetch 驱逐）；
+  - `webmcp.cp` & `dom.cp` & `server.cp`: 联动 `WebMCP.enable/disable`、多用例边界清理与 `poll` 周期事件刷出。
+- **门禁与 E2E 验证（`-m -d -o` 3.69s 增量构建）**:
+  - 全部 6 个 `.cp` 文件 4 门禁全 0；
+  - `forms-selection-paint-demo` (1/1)、`inserted-script-bake` (9/9)、`inserted-script-cap` (1/1)、`inserted-script-cors` (3/3)、`inserted-script-cross-origin` (1/1)、`inserted-script-globals` (4/4)、`inserted-script-module` (7/7)：**26/26 PASS (78 expect() calls, 100%)**！
+- **全新子智能体调度（路 3 无缝补位，`-m -d -o` 增量构建）**:
+  - 销毁 `33aaee93-1fa6-469f-8051-cb5d9bb06dcd`；
+  - 派发 **Subagent 79**: CDP WebMCP & Script Policy Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
+    - 攻坚目标：`e2e/webmcp.e2e.test.ts`、`e2e/viewport-drain.e2e.test.ts`、`e2e/demo/font-heavy.e2e.test.ts`、`e2e/script-redirect-policy.e2e.test.ts`、`e2e/script-gate.e2e.test.ts`。

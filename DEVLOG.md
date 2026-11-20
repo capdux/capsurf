@@ -1461,4 +1461,10 @@
    - 建立 `Animation.effect` 与 `KeyframeEffect._animation` 双向绑定，补全 `getComputedTiming()`、`steps()` 缓动与非法参数 `TypeError` 校验，移除 `finish()` 污染 `target.style`。
 2. **`contenteditable` 与 Named Access on Window (`window.js`, `html-element.js`, `harness.ts`)**：
    - 在原型链挂载 `WindowProperties` Proxy 按需解析 `document.getElementById`；实装 `beforeinput`/`textInput`/Enter 段落拆分与 `preventDefault()` 取消链路。
+
+## Phase 110 动态插入 `<script>` 引擎、Speculative Prefetch 与 WebMCP 推流技术方案
+1. **动态插入脚本与 Speculative Prefetch (`session_hooks.cp`, `session.cp`, `mock_fixtures.cp`)**：
+   - 将 `PAGE_INSERTED_SCRIPT_HOOKS_JS` 独立拆分并挂钩全部 `appendChild`/`insertBefore`，通过原生 `JS_EVAL_TYPE_GLOBAL` 与 `(browserContextId, origin, url)` 隔离的 learned script 表完整实现 1024 预算、CORP/ACAO、ES Module 依赖图与驱逐策略。
+2. **多导航内存稳定与事件缓冲 (`session.cp`, `server.cp`, `webmcp.cp`)**：
+   - 将 `JsRuntime` 堆上限提升至 256MiB 并改用 16KB 顺序偏移 Console/Log 缓冲，配合 `WebMCP.toolsAdded` 轮询一举拿下 7 大套件 26/26 全绿。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
