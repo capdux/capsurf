@@ -2265,3 +2265,6 @@
 
 ### Phase 201
 - Added `test/html/test_html_parser_edge_cases.cp` covering HTML5 unclosed/void/implicit-table recovery, raw-text script/style spans, and `tag_spans.cp` scanning.
+
+### Phase 202
+- Added `test/eval/test_font_shaping.cp` covering supported font format magic detection, font byte shaping/truncation, 4-slot concurrent transform budget, and oversize/invalid input guards.
