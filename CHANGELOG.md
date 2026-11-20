@@ -2186,3 +2186,6 @@
 
 ## Phase 175: In-Memory `indexedDB`, `Path2D` Scanline Fill & `Mouse.click` `_skipSyntheticClick`
 - **`e2e/harness.ts` & `src/js/shim/{window,canvas2d}.js` & `src/js/runtime{,_source.cp}`**：实装内存 `indexedDB`、`Path2D` SVG 路径解析与 `ctx.fill(Path2D)`、以及 `Mouse.click()` 重复点击去重（4 门禁全 0）。
+
+## Phase 176: Pure-CP Color4, Calc & `light-dark()` Whitebox Suite `test/css/test_color_and_units.cp` (4/4 PASS)
+- 新增 `test/css/test_color_and_units.cp`，覆盖 CSS Color 4 (`oklab`/`oklch`/`hwb`)、`calc`/`min`/`max`/`clamp`、`var()` 与 `light-dark()`（`cap test -m` **4/4 PASS**, 1437ms）。

@@ -4414,3 +4414,7 @@
   - `canvas2d.js:187-386,1140-1320`：实装 SVG Path 解析 `Path2D` 与 `nonzero`/`evenodd` 扫描线填充，保留默认 `_currentPath`。
 - **门禁校验**: `node --check` + `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 验收 `tldraw-app-shell` 6/6）。
 - **清理旧子智能体**: 销毁 `961d0e7f-484b-4cae-9fd1-6e9a0ef85166`。
+
+## [2026-11-21 00:49:30] 2 分 20 秒新增并全绿通过纯 CP Color/Calc/LightDark 白盒单测 `test/css/test_color_and_units.cp` (Subagent ca1c2174 结单，Phase 176)
+- **新增白盒测试 (`test/css/test_color_and_units.cp`)**: 覆盖 `CssColor.parse` (hex/rgba/hsl/hwb/oklab/oklch/rebeccapurple/withAlpha/mix)、`CssCalc.evalPx` (`calc`/`min`/`max`/`clamp`)、`var()` 继承回退与 `color-scheme`/`light-dark()`（**4/4 PASS**, 1437ms, 4 门禁全 0；`test/css/` 达 **5/5 PASS**）。
+- **清理旧子智能体**: 销毁 `ca1c2174-0864-4dae-8b59-fc9f0deeb62a`。
