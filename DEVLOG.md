@@ -1747,3 +1747,7 @@
 ### Phase 227-228: Whitebox 117/117, `Text`/`Comment` Shim Fixes & OOPIF 3-Pack 6/6
 - `collectElementOwnDeclarations` falling back to `sn.innerText` on empty `<style>` caused infinite recursion via `getElDisplayForInnerText` -> `getComputedStyle`; restricting to `sn.textContent || ""` eliminates the crash.
 - Updating `TargetRegistry.registerIframeTarget` in-place when an iframe navigates from `about:blank` to its real URL and emitting `executionContextCreated` with `nextContextId()` resolves `oopif-late-spawn` and `oopif-heap-usage`.
+
+### Phase 229: OOPIF Flat-Session Event Routing & Dynamic `src` Navigation
+- `_createFlatSession` in `e2e/harness.ts` now subscribes via `parent.onSession(sessionId, ...)` so `childSession` receives `Runtime.executionContextCreated` and `Network.*` events tagged with its `sessionId`.
+- `setAttribute("src", ...)` on an already-connected `<iframe>` triggers `__capsurf_navigate_iframe`, unblocking late-spawned cross-origin iframes.

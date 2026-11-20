@@ -888,7 +888,8 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      if (typeof g.__capsurf_fixture_fetch === 'function' &&\n" ++
     "          (urlStr.indexOf('/__fixtures/inserted-probe-hits/') !== -1 ||\n" ++
     "           urlStr.indexOf('/__fixtures/inserted-probe-headers/') !== -1 ||\n" ++
-    "           urlStr.indexOf('/__fixtures/oopif-csp-hits/') !== -1)) {\n" ++
+    "           urlStr.indexOf('/__fixtures/oopif-csp-hits/') !== -1 ||\n" ++
+    "           urlStr.indexOf('/__fixtures/oopif-kind-hits') !== -1)) {\n" ++
     "        var absU = resolveUrlAbs(urlStr);\n" ++
     "        var bodyStr = g.__capsurf_fixture_fetch(absU, '{}');\n" ++
     "        var ok = (bodyStr !== null && bodyStr !== undefined);\n" ++

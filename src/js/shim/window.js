@@ -2961,7 +2961,8 @@ function installWindow(global) {
       }));
     }
 
-    const loc = (this && this.location) ? this.location : (global.location || (typeof window !== "undefined" ? window.location : null));
+    const activeWin = (typeof activeWindowStack !== "undefined" && activeWindowStack.length > 0) ? activeWindowStack[activeWindowStack.length - 1] : null;
+    const loc = (this && this.location) ? this.location : ((activeWin && activeWin.location) ? activeWin.location : (global.location || (typeof window !== "undefined" ? window.location : null)));
     let originVal = (loc && loc.origin) ? String(loc.origin) : "null";
     if (!originVal || originVal === "about:" || originVal === "" || (loc && loc.href === "about:blank")) {
       originVal = "null";

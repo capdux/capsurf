@@ -2361,3 +2361,6 @@
 - Fixed empty `<style>` `innerText` recursion (`src/js/shim/window.js`), `#text`/`#comment` prototype & `data` setter (`src/js/shim/{index.js,node-base.js,element/element.js}`), and `MutationObserver` `transientTargets` flush (`src/js/shim/mutations/observer.js` + `runtime.js`/`runtime_source.cp`).
 - Implemented `emitNewChildFrameEvents` context emission, `TargetRegistry.registerIframeTarget` URL updates, `documentKindStats`, and `Kitesurf.evalDocumentKind` across `src/cdp/{page,target,session,kitesurf_facade,protocol_extensions}.cp`.
 - Updated `GEMINI.md` section `11.6` with rule #6.
+
+### Phase 229
+- Implemented flat-session child event routing (`e2e/harness.ts`), iframe `Runtime.enable`/`Network.enable` session routing (`src/cdp/{runtime,network,session,dispatch,page,session_hooks}.cp`), `activeWindowStack` fetch origin & `setAttribute("src")` iframe navigation (`src/js/shim/{window.js,element/element.js,element/html-classes.js}` + `runtime.js`/`runtime_source.cp`), and `/oopif-kind-*` mock fixtures (`src/net/mock_fixtures.cp`).

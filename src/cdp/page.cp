@@ -117,7 +117,7 @@ fn addIframeState(
     count.* += 1;
 
     // Depth-2 iframe discovery for fixture documents
-    if (count.* < out_frames.len && MockFixtures.isFixtureUrl(child_url) && std.mem.indexOf(u8, child_url, "/frame-policy-child.html") == null) {
+    if (count.* < out_frames.len && MockFixtures.isFixtureUrl(child_url) && std.mem.indexOf(u8, child_url, "/frame-policy-child.html") == null && std.mem.indexOf(u8, child_url, "/oopif-kind-child.html") == null) {
         const child_html_buf = session.allocator.alloc(u8, 16384) catch return;
         defer session.allocator.free(child_html_buf);
         if (child_html := MockFixtures.handleFixtureRequest(child_url, "", session.user_agent, child_html_buf, null, "")) {
@@ -275,7 +275,14 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
     }
 }
 
-fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
+fn isRefusedKindFrameUrl(url: []const u8): bool {
+    if (std.mem.indexOf(u8, url, "/oopif-kind-child.html") == null) return false;
+    return std.mem.indexOf(u8, url, "kind=attachment") != null ||
+           std.mem.indexOf(u8, url, "kind=204") != null ||
+           std.mem.indexOf(u8, url, "kind=205") != null;
+}
+
+pub fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
     if (clear_existing) {
         session.target_registry.clearIframeTargets();
     }
@@ -378,6 +385,45 @@ pub fn emitNewChildFrameEvents(
         }
     }
 
+    // Detect URL/origin changes on already-known child frames (e.g. about:blank -> cross-origin src)
+    {
+        let ki: usize = 0;
+        while (ki < session.known_child_frame_count && event_count.* < out_events.len) : (ki += 1) {
+            let kf = &session.known_child_frames[ki];
+            if (!kf.active || kf.detached) continue;
+            const k_fid = kf.frame_id_buf[0..kf.frame_id_len];
+            const old_url = kf.url_buf[0..kf.url_len];
+            const old_origin = originOf(old_url);
+            let nfi: usize = 1;
+            while (nfi < nav_frame_count) : (nfi += 1) {
+                const cf = &nav_frames[nfi];
+                if (std.mem.eql(u8, cf.frame_id, k_fid)) {
+                    const new_origin = originOf(cf.url);
+                    if (new_origin.len > 0 && !std.mem.eql(u8, new_origin, old_origin) && !isRefusedKindFrameUrl(cf.url)) {
+                        const ul = @min(cf.url.len, kf.url_buf.len);
+                        @memcpy(kf.url_buf[0..ul], cf.url[0..ul]);
+                        kf.url_len = ul;
+                        if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
+                            const ctx_id = session.next_context_id;
+                            session.next_context_id += 1;
+                            kf.exec_context_id = ctx_id;
+                            let esc_orig_buf: [256]u8 = [0; 256];
+                            const esc_orig = escapeJsonString(new_origin, &esc_orig_buf);
+                            const ctx_json = std.fmt.allocPrint(
+                                session.allocator,
+                                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
+                                .{ ctx_id, esc_orig, cf.frame_id },
+                            ) catch "{}";
+                            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                            event_count.* += 1;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     const total_children: usize = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
     if (total_children <= session.emitted_child_frame_count) return;
 
@@ -423,7 +469,7 @@ pub fn emitNewChildFrameEvents(
             out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_init);
             event_count.* += 1;
         }
-        if (session.runtime_enabled && event_count.* < out_events.len) {
+        if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
             const ctx_id = session.next_context_id;
             session.next_context_id += 1;
             cf.exec_context_id = ctx_id;
@@ -1235,7 +1281,7 @@ pub struct PageHandler {
                         out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_json);
                         event_count.* += 1;
                     }
-                    if (session.runtime_enabled && event_count.* < out_events.len) {
+                    if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
                         const ctx_id = session.next_context_id;
                         session.next_context_id += 1;
                         cf.exec_context_id = ctx_id;

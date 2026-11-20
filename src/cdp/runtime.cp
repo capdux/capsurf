@@ -15,6 +15,25 @@ pub struct RuntimeHandler {
 
         if (std.mem.eql(u8, req.method, "Runtime.enable")) {
             session.runtime_enabled = true;
+            if (req.session_id.len > 0 && !std.mem.eql(u8, req.session_id, "capsurf-session-001")) {
+                if (iframe_fid := session.target_registry.findFrameIdBySessionId(req.session_id)) {
+                    * = session.ensureIframeContext();
+                    const cid = session.iframe_ctx_id;
+                    const origin_str = if (session.iframe_origin_len > 0)
+                        session.iframe_origin_buf[0..session.iframe_origin_len]
+                    else
+                        "about:blank";
+                    const ctx_json = std.fmt.bufPrint(
+                        &session.iframe_ctx_event_buf,
+                        "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-{d}\",\"auxData\":{{\"isDefault\":false,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
+                        .{ cid, origin_str, cid, iframe_fid },
+                    ) catch "{}";
+                    out_events[0] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                    event_count.* = 1;
+                    session.pending_iframe_ctx_event = false;
+                    return CdpResponse.ok(req.id, "{}");
+                }
+            }
             let origin = session.url;
             if (origin.len == 0) origin = "about:blank";
 

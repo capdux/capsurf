@@ -79,7 +79,7 @@ export class CDPClient {
       on: (event: string, handler: (params: any) => void) => {
         if (!sessionListeners.has(event)) sessionListeners.set(event, []);
         sessionListeners.get(event)!.push(handler);
-        parent.on(event, handler);
+        parent.onSession(sessionId, event, handler);
         return flatSession;
       },
       once: (event: string, handler: (params: any) => void) => {
@@ -95,14 +95,15 @@ export class CDPClient {
           const idx = list.indexOf(handler);
           if (idx !== -1) list.splice(idx, 1);
         }
-        parent.off(event, handler);
+        parent.offSession(sessionId, event, handler);
         return flatSession;
       },
       detach: async () => {
         for (const [ev, list] of sessionListeners) {
-          for (const h of list) parent.off(ev, h);
+          for (const h of list) parent.offSession(sessionId, ev, h);
         }
         sessionListeners.clear();
+        parent.clearSessionListeners(sessionId);
         parent.sessions.delete(sessionId);
         try {
           await parent.send("Target.detachFromTarget", { sessionId });

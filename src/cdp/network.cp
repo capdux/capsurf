@@ -230,6 +230,13 @@ pub struct NetworkHandler {
             const max_buf = extractJsonInt(req.params_raw, "maxTotalBufferSize");
             * = max_buf;
             session.network_enabled = true;
+            if (req.session_id.len > 0 && !std.mem.eql(u8, req.session_id, "capsurf-session-001")) {
+                if (session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                    const slen = @min(req.session_id.len, session.child_network_session_id_buf.len);
+                    @memcpy(session.child_network_session_id_buf[0..slen], req.session_id[0..slen]);
+                    session.child_network_session_id_len = slen;
+                }
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

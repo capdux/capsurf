@@ -5,7 +5,7 @@
 import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { DomHandler } from "./dom.cp";
-import { PageHandler } from "./page.cp";
+import { PageHandler, syncIframeTargets, emitNewChildFrameEvents } from "./page.cp";
 import { RuntimeHandler } from "./runtime.cp";
 import { TargetHandler } from "./target.cp";
 import { InputHandler } from "./input.cp";
@@ -87,9 +87,17 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "Target.")) {
+            if (std.mem.eql(u8, req.method, "Target.getTargets") && session.has_document) {
+                session.pumpTimers();
+                session.ctx.drainJobs();
+                syncIframeTargets(session, false);
+            }
             let tgt_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             let tgt_cnt: usize = 0;
             const resp = TargetHandler.handle(session, req, out_buf, &tgt_evts, &tgt_cnt);
+            if (std.mem.eql(u8, req.method, "Target.getTargets") && session.has_document) {
+                emitNewChildFrameEvents(session, &tgt_evts, &tgt_cnt);
+            }
             let i: usize = 0;
             while (i < tgt_cnt && i < out_events.len) : (i += 1) {
                 out_events[i] = tgt_evts[i];

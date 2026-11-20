@@ -138,6 +138,13 @@ pub struct MockFixtures {
         if (std.mem.indexOf(u8, path_or_url, "/slow-css") != null) {
             return "text/css; charset=utf-8";
         }
+        if (std.mem.indexOf(u8, path_or_url, "/oopif-kind-child.html") != null) {
+            if (raw_kind := MockFixtures.extractQueryParam(path_or_url, "kind")) {
+                if (std.mem.eql(u8, raw_kind, "json")) return "application/json";
+                if (std.mem.eql(u8, raw_kind, "text")) return "text/plain; charset=utf-8";
+            }
+            return "text/html";
+        }
         if (std.ascii.endsWithIgnoreCase(clean, ".html") || std.ascii.eqlIgnoreCase(clean, "html")) {
             return "text/html";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".svg") || std.ascii.eqlIgnoreCase(clean, "svg")) {
@@ -169,6 +176,13 @@ pub struct MockFixtures {
     static fn getContentDisposition(url: []const u8): ([]const u8)? {
         if (std.mem.indexOf(u8, url, "/attachment.html") != null) {
             return "attachment; filename=\"download.html\"";
+        }
+        if (std.mem.indexOf(u8, url, "/oopif-kind-child.html") != null) {
+            if (raw_kind := MockFixtures.extractQueryParam(url, "kind")) {
+                if (std.mem.eql(u8, raw_kind, "attachment")) {
+                    return "attachment; filename=child.html";
+                }
+            }
         }
         return null;
     }
@@ -1507,6 +1521,45 @@ pub struct MockFixtures {
             @memcpy(out_buf[pos .. pos + tail_s.len], tail_s);
             pos += tail_s.len;
             return out_buf[0..pos];
+        }
+
+        // 2.21. /oopif-kind-host.html, /oopif-kind-hits, /oopif-kind-child.html
+        if (std.mem.indexOf(u8, url, "/oopif-kind-host.html") != null) {
+            const kind = MockFixtures.extractQueryParam(url, "kind") ?? "html";
+            const run = MockFixtures.extractQueryParam(url, "run") ?? "";
+            return std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>kind host</title></head>\n<body style=\"margin:0;background:#ffffff\">\n<iframe src=\"http://127.0.0.1:8787/__fixtures/oopif-kind-child.html?kind={s}&run={s}\" width=\"200\" height=\"200\" style=\"border:0;display:block;margin:0\"></iframe>\n</body>\n</html>",
+                .{ kind, run },
+            ) catch return null;
+        }
+        if (std.mem.indexOf(u8, url, "/oopif-kind-hits") != null) {
+            const kind = MockFixtures.extractQueryParam(url, "kind") ?? "html";
+            const run = MockFixtures.extractQueryParam(url, "run") ?? "";
+            let hit_key_buf: [160]u8 = undefined;
+            const hit_key = std.fmt.bufPrint(&hit_key_buf, "oopif-kind:{s}:{s}", .{ kind, run }) catch "oopif-kind";
+            const hits = getFramePolicyHits(hit_key);
+            return std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch return null;
+        }
+        if (std.mem.indexOf(u8, url, "/oopif-kind-child.html") != null) {
+            const kind = MockFixtures.extractQueryParam(url, "kind") ?? "html";
+            const run = MockFixtures.extractQueryParam(url, "run") ?? "";
+            let hit_key_buf: [160]u8 = undefined;
+            const hit_key = std.fmt.bufPrint(&hit_key_buf, "oopif-kind:{s}:{s}", .{ kind, run }) catch "oopif-kind";
+            incrementFramePolicyHits(hit_key);
+            if (std.mem.eql(u8, kind, "204") || std.mem.eql(u8, kind, "205")) {
+                return "";
+            }
+            if (std.mem.eql(u8, kind, "json")) {
+                const json_body = "{\"body\":\"<script>document.documentElement.setAttribute('data-executed','1')</script>\"}";
+                if (json_body.len > out_buf.len) return null;
+                @memcpy(out_buf[0..json_body.len], json_body);
+                return out_buf[0..json_body.len];
+            }
+            const html_body = "<script>document.documentElement.setAttribute('data-executed','1')</script>";
+            if (html_body.len > out_buf.len) return null;
+            @memcpy(out_buf[0..html_body.len], html_body);
+            return out_buf[0..html_body.len];
         }
 
         // 3. Static fixture files from e2e/page/

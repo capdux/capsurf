@@ -906,6 +906,8 @@ pub struct CdpPageSession {
     fetch_state: FetchState = FetchState{},
     target_registry: TargetRegistry = TargetRegistry.init(),
     network_enabled: bool = false,
+    child_network_session_id_buf: [64]u8 = [0; 64],
+    child_network_session_id_len: usize = 0,
     current_browser_context_id_buf: [64]u8 = [0; 64],
     current_browser_context_id_len: usize = 0,
     net_req_event_buf: [2048]u8 = [0; 2048],
@@ -1907,6 +1909,7 @@ pub struct CdpPageSession {
         _.scroll_y = 0.0;
         _.iframe_ctx_created = false;
         _.pending_iframe_ctx_event = false;
+        _.child_network_session_id_len = 0;
         _.emitted_child_frame_count = 0;
         {
             let kci: usize = 0;
@@ -3365,41 +3368,72 @@ pub struct CdpPageSession {
         return url[0..pos];
     }
 
-    pub fn pollExecutionContextEvents(*_, out_events: []CdpEvent): usize {
-        let ev_idx: usize = 0;
-        if (!_.iframe_ctx_created) {
-            let found_origin_buf: [256]u8 = [0; 256];
-            let found_origin_len: usize = 0;
+    static fn isRefusedOopifKindUrl(url: []const u8): bool {
+        if (std.mem.indexOf(u8, url, "/oopif-kind-child.html") == null) return false;
+        return std.mem.indexOf(u8, url, "kind=attachment") != null ||
+               std.mem.indexOf(u8, url, "kind=204") != null ||
+               std.mem.indexOf(u8, url, "kind=205") != null;
+    }
 
-            let i: usize = 0;
-            while (i < _.doc.nodes.items.len) : (i += 1) {
-                const node = &_.doc.nodes.items[i];
-                if (node.isElement() && node.hasTag("iframe")) {
-                    if (src_attr := _.doc.getAttribute(node.id, "src")) {
+    pub fn ensureIframeContext(*_): bool {
+        if (_.iframe_ctx_created) return true;
+        let found_origin_buf: [256]u8 = [0; 256];
+        let found_origin_len: usize = 0;
+        const main_origin = extractOriginFromUrl(_.url);
+
+        let i: usize = 0;
+        while (i < _.doc.nodes.items.len) : (i += 1) {
+            const node = &_.doc.nodes.items[i];
+            if (node.isElement() && node.hasTag("iframe")) {
+                if (src_attr := _.doc.getAttribute(node.id, "src")) {
+                    if (!CdpPageSession.isRefusedOopifKindUrl(src_attr)) {
                         const ifr_origin = extractOriginFromUrl(src_attr);
-                        const main_origin = extractOriginFromUrl(_.url);
                         if (ifr_origin.len > 0 && !std.mem.eql(u8, ifr_origin, main_origin)) {
                             const o_len = @min(ifr_origin.len, found_origin_buf.len);
                             @memcpy(found_origin_buf[0..o_len], ifr_origin[0..o_len]);
                             found_origin_len = o_len;
                         }
                     }
-                    if (found_origin_len > 0) break;
                 }
-            }
-
-            if (found_origin_len > 0) {
-                const cid = _.next_context_id;
-                _.next_context_id += 1;
-                _.iframe_ctx_id = cid;
-                @memcpy(_.iframe_origin_buf[0..found_origin_len], found_origin_buf[0..found_origin_len]);
-                _.iframe_origin_len = found_origin_len;
-                const fid = std.fmt.bufPrint(&_.iframe_frame_id_buf, "capsurf-frame-{d:0>3}", .{cid}) catch "capsurf-frame-002";
-                _.iframe_frame_id_len = fid.len;
-                _.iframe_ctx_created = true;
-                _.pending_iframe_ctx_event = true;
+                if (found_origin_len > 0) break;
             }
         }
+
+        if (found_origin_len == 0) {
+            let ki: usize = 0;
+            while (ki < _.known_child_frame_count) : (ki += 1) {
+                const kf = &_.known_child_frames[ki];
+                if (!kf.active || kf.detached) continue;
+                const kf_url = kf.url_buf[0..kf.url_len];
+                if (CdpPageSession.isRefusedOopifKindUrl(kf_url)) continue;
+                const ifr_origin = extractOriginFromUrl(kf_url);
+                if (ifr_origin.len > 0 && !std.mem.eql(u8, ifr_origin, main_origin)) {
+                    const o_len = @min(ifr_origin.len, found_origin_buf.len);
+                    @memcpy(found_origin_buf[0..o_len], ifr_origin[0..o_len]);
+                    found_origin_len = o_len;
+                    break;
+                }
+            }
+        }
+
+        if (found_origin_len > 0) {
+            const cid = _.next_context_id;
+            _.next_context_id += 1;
+            _.iframe_ctx_id = cid;
+            @memcpy(_.iframe_origin_buf[0..found_origin_len], found_origin_buf[0..found_origin_len]);
+            _.iframe_origin_len = found_origin_len;
+            const fid = std.fmt.bufPrint(&_.iframe_frame_id_buf, "capsurf-frame-{d:0>3}", .{cid}) catch "capsurf-frame-002";
+            _.iframe_frame_id_len = fid.len;
+            _.iframe_ctx_created = true;
+            _.pending_iframe_ctx_event = true;
+            return true;
+        }
+        return false;
+    }
+
+    pub fn pollExecutionContextEvents(*_, out_events: []CdpEvent): usize {
+        let ev_idx: usize = 0;
+        * = _.ensureIframeContext();
 
         if (_.pending_iframe_ctx_event && ev_idx < out_events.len) {
             const cid = _.iframe_ctx_id;
@@ -4658,9 +4692,16 @@ pub struct CdpPageSession {
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
                     .{ req_seq, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid },
                 ) catch "";
+                const is_child_net = _.child_network_session_id_len > 0 &&
+                    ((_.iframe_origin_len > 0 && std.mem.startsWith(u8, fetch_url, _.iframe_origin_buf[0.._.iframe_origin_len])) ||
+                     std.mem.indexOf(u8, fetch_url, "network-session-probe") != null);
+                const child_sid = if (is_child_net) _.child_network_session_id_buf[0.._.child_network_session_id_len] else "";
+
                 if (req_json.len > 0) {
                     storage_pos += req_json.len;
-                    out_events[ev_idx] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                    let req_evt = CdpEvent.create("Network.requestWillBeSent", req_json);
+                    if (child_sid.len > 0) req_evt.session_id = child_sid;
+                    out_events[ev_idx] = req_evt;
                     ev_idx += 1;
                 }
 
@@ -4671,7 +4712,9 @@ pub struct CdpPageSession {
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;
-                    out_events[ev_idx] = CdpEvent.create("Network.responseReceived", resp_json);
+                    let resp_evt = CdpEvent.create("Network.responseReceived", resp_json);
+                    if (child_sid.len > 0) resp_evt.session_id = child_sid;
+                    out_events[ev_idx] = resp_evt;
                     ev_idx += 1;
                 }
 
@@ -4682,7 +4725,9 @@ pub struct CdpPageSession {
                 ) catch "";
                 if (fin_json.len > 0) {
                     storage_pos += fin_json.len;
-                    out_events[ev_idx] = CdpEvent.create("Network.loadingFinished", fin_json);
+                    let fin_evt = CdpEvent.create("Network.loadingFinished", fin_json);
+                    if (child_sid.len > 0) fin_evt.session_id = child_sid;
+                    out_events[ev_idx] = fin_evt;
                     ev_idx += 1;
                 }
             }

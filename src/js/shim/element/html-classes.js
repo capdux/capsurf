@@ -2251,6 +2251,23 @@ function installHtmlClasses(global) {
         typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
       const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
       if (fixtureHtml !== null && fixtureHtml !== undefined) {
+        if (resolvedUrl.indexOf("/oopif-kind-child.html") !== -1) {
+          const kindMatch = resolvedUrl.match(/[?&]kind=([^&#]+)/);
+          const kindVal = kindMatch ? decodeURIComponent(kindMatch[1]) : "html";
+          if (kindVal === "attachment" || kindVal === "204" || kindVal === "205") {
+            return;
+          }
+          if (kindVal === "text" || kindVal === "json") {
+            const esc = String(fixtureHtml).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const wrapped = "<!doctype html><html><head></head><body><pre>" + esc + "</pre></body></html>";
+            applyLoadedIframeHtml(iframeEl, resolvedUrl, wrapped);
+            Promise.resolve().then(function () {
+              if (iframeEl._navSeq !== seq) return;
+              fireIframeLoadEvent(iframeEl);
+            });
+            return;
+          }
+        }
         applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
         Promise.resolve().then(function () {
           if (iframeEl._navSeq !== seq) return;

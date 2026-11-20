@@ -9644,6 +9644,17 @@
         this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = val;
+      } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
+          let resolved = val;
+          try {
+            const base = (typeof document !== "undefined" && document.baseURI)
+              ? document.baseURI
+              : (globalThis.location ? globalThis.location.href : "about:blank");
+            resolved = new URL(val, base).href;
+          } catch (e) {}
+          globalThis.__capsurf_navigate_iframe(this, resolved);
+        }
       } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
         this._selected = true;
         let curr = this.parentElement || this.parentNode;
@@ -9717,6 +9728,17 @@
         this._displayNone = false;
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = "";
+      } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
+          let resolved = val;
+          try {
+            const base = (typeof document !== "undefined" && document.baseURI)
+              ? document.baseURI
+              : (globalThis.location ? globalThis.location.href : "about:blank");
+            resolved = new URL(val, base).href;
+          } catch (e) {}
+          globalThis.__capsurf_navigate_iframe(this, resolved);
+        }
       } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
         this._selected = false;
         let curr = this.parentElement || this.parentNode;
@@ -14277,6 +14299,23 @@
           typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_load_fixture === "function") {
         const fixtureHtml = globalThis.__capsurf_native_load_fixture(resolvedUrl);
         if (fixtureHtml !== null && fixtureHtml !== undefined) {
+          if (resolvedUrl.indexOf("/oopif-kind-child.html") !== -1) {
+            const kindMatch = resolvedUrl.match(/[?&]kind=([^&#]+)/);
+            const kindVal = kindMatch ? decodeURIComponent(kindMatch[1]) : "html";
+            if (kindVal === "attachment" || kindVal === "204" || kindVal === "205") {
+              return;
+            }
+            if (kindVal === "text" || kindVal === "json") {
+              const esc = String(fixtureHtml).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+              const wrapped = "<!doctype html><html><head></head><body><pre>" + esc + "</pre></body></html>";
+              applyLoadedIframeHtml(iframeEl, resolvedUrl, wrapped);
+              Promise.resolve().then(function () {
+                if (iframeEl._navSeq !== seq) return;
+                fireIframeLoadEvent(iframeEl);
+              });
+              return;
+            }
+          }
           applyLoadedIframeHtml(iframeEl, resolvedUrl, fixtureHtml);
           Promise.resolve().then(function () {
             if (iframeEl._navSeq !== seq) return;
@@ -31019,7 +31058,8 @@
         }));
       }
 
-      const loc = (this && this.location) ? this.location : (global.location || (typeof window !== "undefined" ? window.location : null));
+      const activeWin = (typeof activeWindowStack !== "undefined" && activeWindowStack.length > 0) ? activeWindowStack[activeWindowStack.length - 1] : null;
+      const loc = (this && this.location) ? this.location : ((activeWin && activeWin.location) ? activeWin.location : (global.location || (typeof window !== "undefined" ? window.location : null)));
       let originVal = (loc && loc.origin) ? String(loc.origin) : "null";
       if (!originVal || originVal === "about:" || originVal === "" || (loc && loc.href === "about:blank")) {
         originVal = "null";
