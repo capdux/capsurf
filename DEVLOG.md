@@ -1675,3 +1675,6 @@
 
 ## Phase 177 `textContent` Setter 变更记录与瞬态目标清理方案
 1. **标准 `childList` 派发与引用隔离 (`node-base.js`, `observer.js`)**：`textContent` 赋值时将旧子节点 `parentNode` 置 `null` 并通知观测者；对 `subtree: true` 的瞬态移除节点仅在当前微任务周期保留并于投递前/断开时清空。
+
+## Phase 180 `800x600` 默认视口隔离与 TTY 整格滚动链方案 (`e2e/harness.ts`)
+1. **整格滚动量化 (`Mouse.wheel`)**：读取 `kitesurf.internals.ttyCellHeight/Width`，通过 `Math.trunc(movement / cell) * cell` 截断内层容器消费量，将未消费增量完整冒泡至根文档滚动。

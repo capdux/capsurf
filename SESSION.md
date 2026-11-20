@@ -4433,3 +4433,9 @@
 ## [2026-11-21 00:56:00] 2 分 20 秒新增并全绿通过纯 CP Selectors 白盒单测 `test/css/test_selectors_nth_has.cp` (Subagent eb24d97d 结单，Phase 179)
 - **新增白盒测试 (`test/css/test_selectors_nth_has.cp`)**: 覆盖结构伪类 (`:root`/`:first-child`/`:last-child`/`:only-child`/`:nth-child`/`:nth-last-child`/`:empty`)、逻辑伪类 (`:has`/`:is`/`:where`/`:not` 特异性)、属性选择器 (`=`/`~=`/`|=`/`^=`/`*=`/`$=`/`i`) 及组合子（`>`/`+`/`~`/空格）（**4/4 PASS**, 956ms, 4 门禁全 0；`test/css/` 达 **7/7 PASS**）。
 - **清理旧子智能体**: 销毁 `eb24d97d-cc20-4234-a547-f59bfb33e910`。
+
+## [2026-11-21 00:57:00] 统一 `800x600` 默认视口重置与 `Mouse.wheel` TTY 整格量化 (Subagent bcb4f899 结单，Phase 180)
+- **默认视口与 `wheelDelta` 整格量化 (`e2e/harness.ts:673-726,2600,2725,2857`)**:
+  - 将 `--window-size`、`isIntersectingViewport` 兜底与 `test()` 前置清理统一为 Puppeteer 标准 `800x600`（防止 `setViewport` 跨用例污染）；
+  - 在 `Mouse.wheel` 实现 `wheelDelta(before, delta, maxScroll, cell)` 读取 `ttyCellWidth`/`ttyCellHeight` 按整格截断并向 `window.scrollBy` 冒泡剩余增量（并记录 `src/cdp/input.cp:331-335` 对应改造点）。
+- **清理旧子智能体**: 销毁 `bcb4f899-1759-4a8c-9151-c95311606e56`。

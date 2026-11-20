@@ -2198,3 +2198,6 @@
 
 ## Phase 179: Pure-CP Selectors (`:nth-child`/`:has`/`:is`/`:where`) Whitebox Suite `test/css/test_selectors_nth_has.cp` (4/4 PASS)
 - 新增 `test/css/test_selectors_nth_has.cp`，覆盖结构伪类、`:has`/`:is`/`:where` 逻辑伪类、属性选择器与组合子（`cap test -m` **4/4 PASS**, 956ms）。
+
+## Phase 180: Puppeteer `800x600` Default Viewport Reset & `Mouse.wheel` TTY Cell Grid Quantization
+- **`e2e/harness.ts`**：统一默认视口至 `800x600` 并在用例间自动重置，同时在 `Mouse.wheel` 实现 `ttyCellWidth`/`ttyCellHeight` 整格量化与滚动链冒泡。
