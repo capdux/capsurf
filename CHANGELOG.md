@@ -1674,4 +1674,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：11/12 Core 套件共 **17/17 PASS**。
+
+## Phase 82: Full CSS 2.1 IFC Inline Layout Engine, `vertical-align`, `group_opacity` & `visibility: hidden` — 5 Suites (100% Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/render/painter.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `VerticalAlignKind`、自然字体度量与 `line-height` 继承规则、完整 IFC 行内流引擎（strut/half-leading/基线传递/`<br>`/`float` 协同）、`group_opacity` 累积透明度合成、`visibility: hidden` 子树重现、`<li>` outside marker 及零重叠缩放文本光栅化。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：5 大 Inline Core 套件共 **47/47 PASS (102 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

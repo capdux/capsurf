@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility } from "../css/cascade.cp";
 import { Rect } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -552,13 +552,13 @@ pub struct Canvas {
                     const bits = glyph[row];
                     if (bits == 0) continue;
                     const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
-                    const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@ceil(y + @as(f32, @floatFromInt(row + 1)) * scale))));
+                    const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row + 1)) * scale))));
                     let col: usize = 0;
                     while (col < 8) : (col += 1) {
                         const shift: u3 = @intCast(7 - col);
                         if (((bits >> shift) & 1) == 1) {
                             const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
-                            const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@ceil(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                            const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
                             let py = gy0;
                             while (py < gy1) : (py += 1) {
                                 if (c := clip) {
@@ -1589,6 +1589,30 @@ fn paintImgSvg(
     );
 }
 
+fn scaleColorAlpha(c: CssColor, factor: f32): CssColor {
+    const na: u8 = @intFromFloat(@as(f32, @floatFromInt(c.a)) * factor);
+    return CssColor.rgba(c.r, c.g, c.b, na);
+}
+
+fn findFirstTextRectY(doc: *const Document, rects: []const Rect, node_id: NodeId): f32? {
+    let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Text) {
+            const trimmed = std.mem.trim(u8, cn.text_content, " \t\r\n");
+            if (trimmed.len > 0 && @as(usize, ch) < rects.len && rects[@as(usize, ch)].visible) {
+                return rects[@as(usize, ch)].y;
+            }
+        } else if (cn.node_type == NodeType.Element) {
+            if (y := findFirstTextRectY(doc, rects, ch)) {
+                return y;
+            }
+        }
+        ch = cn.next_sibling;
+    }
+    return null;
+}
+
 fn paintNodeRecursive(
     canvas: *Canvas,
     doc: *const Document,
@@ -1600,14 +1624,27 @@ fn paintNodeRecursive(
     opts: *const ScreenshotOptions,
     clip: ClipRect?,
     abs_clip: ClipRect?,
+    group_opacity: f32,
 ) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
         return;
     }
+    if (group_opacity <= 0.0) {
+        return;
+    }
     const node = &doc.nodes.items[@as(usize, node_id)];
     let r = rects[@as(usize, node_id)];
-    if (!r.visible) {
-        if (node.node_type == NodeType.Text && opts.selection_spans.len > 0 && node.text_content.len > 0) {
+    const style = &styles[@as(usize, node_id)];
+    if (node.node_type == NodeType.Element && style.display.isNone()) {
+        return;
+    }
+    const own_op = if (node.node_type == NodeType.Element) std.math.clamp(style.opacity, 0.0, 1.0) else 1.0;
+    const eff_op = group_opacity * own_op;
+    if (eff_op <= 0.0) {
+        return;
+    }
+    if (node.node_type == NodeType.Text && !r.visible) {
+        if (opts.selection_spans.len > 0 && node.text_content.len > 0) {
             // Text nodes may not have standalone layout boxes; resolve position from nearest visible ancestor
             let anc = node.parent;
             while (anc != NULL_NODE && @as(usize, anc) < rects.len) {
@@ -1653,8 +1690,27 @@ fn paintNodeRecursive(
         return;
     }
 
-    const style = &styles[@as(usize, node_id)];
-    const paint_style = style.extractPaintStyle(r.width, 16.0, vw, vh);
+    const is_self_visible = (node.node_type != NodeType.Element) || (style.visibility == Visibility.Visible && r.visible);
+    let paint_style = style.extractPaintStyle(r.width, 16.0, vw, vh);
+    if (group_opacity < 1.0) {
+        paint_style.bg_color = scaleColorAlpha(paint_style.bg_color, group_opacity);
+        paint_style.text_color = scaleColorAlpha(paint_style.text_color, group_opacity);
+        paint_style.border_color = scaleColorAlpha(paint_style.border_color, group_opacity);
+        paint_style.border_top_color = scaleColorAlpha(paint_style.border_top_color, group_opacity);
+        paint_style.border_right_color = scaleColorAlpha(paint_style.border_right_color, group_opacity);
+        paint_style.border_bottom_color = scaleColorAlpha(paint_style.border_bottom_color, group_opacity);
+        paint_style.border_left_color = scaleColorAlpha(paint_style.border_left_color, group_opacity);
+        paint_style.outline_color = scaleColorAlpha(paint_style.outline_color, group_opacity);
+        if (paint_style.box_shadow.has_shadow) {
+            paint_style.box_shadow.color = scaleColorAlpha(paint_style.box_shadow.color, group_opacity);
+        }
+        if (paint_style.conic_gradient.has_gradient) {
+            let si: usize = 0;
+            while (si < paint_style.conic_gradient.stop_count) : (si += 1) {
+                paint_style.conic_gradient.stops[si].color = scaleColorAlpha(paint_style.conic_gradient.stops[si].color, group_opacity);
+            }
+        }
+    }
 
     // Choose active clip based on CSS positioning containing-block rules:
     // - position: fixed escapes all ancestor overflow clips (uses viewport).
@@ -1689,7 +1745,7 @@ fn paintNodeRecursive(
     }
 
     // Paint outline BEFORE clip-path layer is pushed (so outline survives empty clip-path, while legacy clip wraps it)
-    if (node.node_type == NodeType.Element && paint_style.outline_width > 0.0 && paint_style.outline_color.a > 0) {
+    if (is_self_visible && node.node_type == NodeType.Element && paint_style.outline_width > 0.0 && paint_style.outline_color.a > 0) {
         canvas.paintOutlineClipped(r, paint_style, box_outer_clip);
     }
 
@@ -1747,7 +1803,35 @@ fn paintNodeRecursive(
     }
     const child_abs_clip: ClipRect? = if (style.position != Position.Static) child_clip else abs_clip;
 
-    if (node.node_type == NodeType.Element) {
+    if (node.node_type == NodeType.Element && is_self_visible) {
+        if (node.hasTag("li") && node.parent != NULL_NODE && @as(usize, node.parent) < doc.nodes.items.len) {
+            const pnode = &doc.nodes.items[@as(usize, node.parent)];
+            if (pnode.hasTag("ol") || pnode.hasTag("ul")) {
+                let marker_y = r.y;
+                if (fy := findFirstTextRectY(doc, rects, node_id)) {
+                    marker_y = fy;
+                }
+                const marker_x = @max(2.0, r.x - 24.0);
+                let marker_buf: [16]u8 = undefined;
+                let marker_str: []const u8 = "*";
+                if (pnode.hasTag("ol")) {
+                    let idx: usize = 1;
+                    let sib = pnode.first_child;
+                    while (sib != NULL_NODE && sib != node_id && @as(usize, sib) < doc.nodes.items.len) {
+                        const sn = &doc.nodes.items[@as(usize, sib)];
+                        if (sn.hasTag("li")) idx += 1;
+                        sib = sn.next_sibling;
+                    }
+                    marker_str = std.fmt.bufPrint(&marker_buf, "{d}.", .{idx}) catch "1.";
+                }
+                const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+                if (fsz >= 14.0) {
+                    canvas.drawScaledTextClipped(marker_x, marker_y + 2.0, marker_str, fsz * 0.65, paint_style.text_color, active_clip);
+                } else {
+                    canvas.drawTextClipped(marker_x, marker_y + 2.0, marker_str, paint_style.text_color, active_clip);
+                }
+            }
+        }
         if (node.hasTag("use")) {
             let href_opt = node.getAttribute("href");
             if (href_opt == null) {
@@ -1928,28 +2012,42 @@ fn paintNodeRecursive(
             return;
         }
     } else if (node.node_type == NodeType.Text && node.text_content.len > 0) {
-        let si: usize = 0;
-        while (si < opts.selection_spans.len) : (si += 1) {
-            const sp = opts.selection_spans[si];
-            if (sp.node_id == node_id && sp.end_offset > sp.start_offset) {
-                const clamped_start = @min(sp.start_offset, node.text_content.len);
-                const clamped_end = @min(sp.end_offset, node.text_content.len);
-                if (clamped_end > clamped_start) {
-                    const hx = r.x + 2.0 + @as(f32, @floatFromInt(clamped_start)) * 8.0;
-                    const hw = @as(f32, @floatFromInt(clamped_end - clamped_start)) * 8.0;
-                    const hh = @max(r.height, 14.0);
-                    canvas.fillRectClipped(hx, r.y, hw, hh, CssColor.rgba(51, 144, 255, 90), active_clip);
+        const parent_id = node.parent;
+        const parent_vis = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) (styles[@as(usize, parent_id)].visibility == Visibility.Visible) else true;
+        if (parent_vis && r.visible) {
+            let si: usize = 0;
+            while (si < opts.selection_spans.len) : (si += 1) {
+                const sp = opts.selection_spans[si];
+                if (sp.node_id == node_id && sp.end_offset > sp.start_offset) {
+                    const clamped_start = @min(sp.start_offset, node.text_content.len);
+                    const clamped_end = @min(sp.end_offset, node.text_content.len);
+                    if (clamped_end > clamped_start) {
+                        const hx = r.x + 2.0 + @as(f32, @floatFromInt(clamped_start)) * 8.0;
+                        const hw = @as(f32, @floatFromInt(clamped_end - clamped_start)) * 8.0;
+                        const hh = @max(r.height, 14.0);
+                        canvas.fillRectClipped(hx, r.y, hw, hh, CssColor.rgba(51, 144, 255, 90), active_clip);
+                    }
+                }
+            }
+            const raw_color = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) styles[@as(usize, parent_id)].color else CssColor.rgb(0, 0, 0);
+            const txt_color = if (group_opacity < 1.0) scaleColorAlpha(raw_color, group_opacity) else raw_color;
+            const fsz = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) styles[@as(usize, parent_id)].font_size_px else 16.0;
+            const trimmed = std.mem.trim(u8, node.text_content, " \t\r\n");
+            if (trimmed.len > 0 && txt_color.a > 0) {
+                if (fsz >= 14.0) {
+                    const scaled_h = fsz * 0.65;
+                    const draw_y = r.y + @max(0.0, (r.height - scaled_h) * 0.5);
+                    canvas.drawScaledTextClipped(r.x, draw_y, trimmed, scaled_h, txt_color, active_clip);
+                } else {
+                    canvas.drawTextClipped(r.x + 1.0, r.y + 2.0, trimmed, txt_color, active_clip);
                 }
             }
         }
-        const parent_id = node.parent;
-        const parent_color = if (parent_id != NULL_NODE) styles[@as(usize, parent_id)].color else CssColor.rgb(0, 0, 0);
-        canvas.drawTextClipped(r.x + 2.0, r.y + 2.0, node.text_content, parent_color, active_clip);
     }
 
     let child = node.first_child;
     while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip);
+        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, eff_op);
         child = doc.nodes.items[@as(usize, child)].next_sibling;
     }
 }
@@ -1971,7 +2069,7 @@ pub fn renderDocumentToPng(
     // 从文档根元素开始前序遍历绘制整棵 DOM 树
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null);
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 1.0);
     }
 
     // 如果指定了 clip 裁剪区域，提取子区域编码

@@ -1368,6 +1368,25 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     return createJsElement(ctx, el.dom_ctx, node.first_child);
 }
 
+@c fn js_element_get_first_element_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = @ptrCast(@alignCast(ptr.?));
+    const doc = el.dom_ctx.doc;
+    if (el.node_id == NULL_NODE || @as(usize, el.node_id) >= doc.nodes.items.len) return jsNull();
+    let ch = doc.nodes.items[@as(usize, el.node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Element) {
+            return createJsElement(ctx, el.dom_ctx, ch);
+        }
+        ch = cn.next_sibling;
+    }
+    return jsNull();
+}
+
 @c fn js_element_get_last_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
@@ -1940,6 +1959,7 @@ pub fn mountDom(
     defineGetterSetter(raw_ctx, el_proto, "parentElement", js_element_get_parent_element, null);
     defineGetterSetter(raw_ctx, el_proto, "parentNode", js_element_get_parent_node, js_element_set_parent_node);
     defineGetterSetter(raw_ctx, el_proto, "firstChild", js_element_get_first_child, null);
+    defineGetterSetter(raw_ctx, el_proto, "firstElementChild", js_element_get_first_element_child, null);
     defineGetterSetter(raw_ctx, el_proto, "lastChild", js_element_get_last_child, null);
     defineGetterSetter(raw_ctx, el_proto, "previousSibling", js_element_get_previous_sibling, null);
     defineGetterSetter(raw_ctx, el_proto, "nextSibling", js_element_get_next_sibling, null);
@@ -2133,6 +2153,11 @@ pub fn mountDom(
         "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');" +
         "    return fn.call(target || globalThis);" +
         "  };" +
+        "  if (typeof document !== 'undefined' && !document.fonts) {" +
+        "    const _readyP = Promise.resolve();" +
+        "    const _fontsObj = { status: 'loaded', size: 0, ready: _readyP, check: function () { return true; }, load: function () { return Promise.resolve([]); }, forEach: function () {} };" +
+        "    try { Object.defineProperty(document, 'fonts', { get: function () { return _fontsObj; }, configurable: true }); } catch (e) {}" +
+        "  }" +
         "  if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.scrollIntoView === 'function') {" +
         "    const _origSiv = Element.prototype.scrollIntoView;" +
         "    Element.prototype.scrollIntoView = function (arg) {" +

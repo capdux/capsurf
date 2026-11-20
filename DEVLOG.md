@@ -1303,4 +1303,10 @@
    - 完整集成 `CSS.<unit>()`、`attributeStyleMap`/`computedStyleMap()`、`DOMMatrixReadOnly`/`DOMMatrix` 与 `Highlight`/`CSS.highlights`，并通过 `WeakMap` 私有态与原型 brand check 满足 WebIDL 规范。
 2. **零 Own-Property 泄露封装 (`element.js`, `node-base.js`, `index.js`, `constants.js`)**：
    - 将 `_nid`/`_styleProxy`/`_attrs`/`_shadowRoot` 等内部字段全面迁入 `WeakMap` + 原型访问器，使 `Object.keys(el)` 与 `DOMException` 属性描述符完全符合浏览器标准。
+
+## Phase 82 完整 IFC 行内格式化上下文引擎、基线偏移与累积透明度技术方案
+1. **CSS 2.1 §9.4.2 IFC 引擎 (`cascade.cp`, `layout.cp`)**：
+   - 精确区分 `line-height: normal`/0/无单位乘数/长度，并实装 `collectInlineItems`/`flushInlineLine`/`computeVerticalAlignShift` 统一处理行内文本、`<br>`、atomic inline、strut、half-leading 与 `inline-block` 末行基线传递。
+2. **累积透明度与 `visibility` 继承光栅化 (`painter.cp`)**：
+   - 在 `paintNodeRecursive` 向下透传 `group_opacity`，修复缩放字形重叠双重混合；`visibility: hidden` 仅跳过自身绘制而继续递归子节点，完整支持 `visibility: visible` 后代重现。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

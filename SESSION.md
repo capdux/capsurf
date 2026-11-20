@@ -3441,6 +3441,22 @@
   - 11/12 Core 套件（`crypto-key-usages-array`、`css-highlight-api`、`css-typed-om` (4/4)、`custom-element-import-node`、`data-transfer-items-add`、`document-created-legacy-members`、`document-title-svg` (2/2)、`dom-rect`、`domexception-binding-shape` (2/2)、`dommatrix-transform-string` (2/2)、`element-own-properties`）：**17/17 PASS**！`document-types` 归档为原生 CDP 导航 MIME 合成待跟进项。
 - **清理旧子智能体**: 销毁 `19f5f301-b053-4e21-933a-01a413e6b479`。
 
+## [2026-11-20 16:48:00] 完整 IFC 行内格式化上下文引擎、基线偏移、透明度合成与 visibility 47/47 全绿闭环 (Subagent 89428d1f 结单，Phase 82)
+- **CSS 2.1 §9.4.2 完整 IFC 行内布局与 `vertical-align` (`src/css/cascade.cp`, `src/layout/layout.cp`)**:
+  - `cascade.cp`: 新增 `VerticalAlignKind` 与 `PROP_VERTICAL_ALIGN`（80 槽位），精确区分 `line-height: normal`/0/无单位乘数/长度继承，实装自然字体度量 `naturalAscent`/`naturalDescent`/`resolvedLineHeight`；
+  - `layout.cp`: 实装 `collectInlineItems`/`flushInlineLine`/`computeInlineWrapperRect`/`computeVerticalAlignShift`，完整支持 parent font strut、half-leading、`vertical-align`、`inline-block` 末行基线传递、`<br>` 换行、`float: right` 保留相对偏移及 Flex `align-items: stretch` 确定高度透传。
+- **累积透明度、`visibility: hidden` 穿透与列表标记 (`src/render/painter.cp`, `src/js/dom_binding.cp`)**:
+  - `painter.cp`: 引入 `group_opacity` 累积合成、`visibility: hidden` 允许 `visibility: visible` 后代重现、`<li>` outside marker 及零重叠缩放文本绘制；
+  - `dom_binding.cp`: 补齐 `el_proto.firstElementChild` 原生 getter 与 `document.fonts` 兜底对象。
+- **门禁与 E2E 验证**:
+  - 全部 4 个修改 `.cp` 文件 4 门禁全 0；
+  - `inline-box-baseline-shift` (5/5) + `inline-metrics-regressions` (33/33) + `inline-opacity` (1/1) + `inline-positioning-regressions` (7/7) + `inline-visibility-hidden` (1/1)：**47/47 PASS (102 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `89428d1f-5599-420b-8c67-c8cf41e2dd19`；
+  - 派发全新子智能体 **Subagent 48**: Inline WhiteSpace & Sizing Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/inline-span-white-space.e2e.test.ts`、`e2e/inline-svg-vertical-align.e2e.test.ts`、`e2e/white-space-pre-line.e2e.test.ts`、`e2e/intrinsic-sizing.e2e.test.ts`、`e2e/webkit-box-line-clamp.e2e.test.ts`。
+
+
 
 
 

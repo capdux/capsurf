@@ -402,6 +402,14 @@ pub struct Display {
     fn isInlineBlock(): bool {
         return !_.is_keyword && _.pair.outside == DisplayOutside.Inline && _.pair.inside == DisplayInside.FlowRoot;
     }
+
+    fn isInlineFlex(): bool {
+        return !_.is_keyword && _.pair.outside == DisplayOutside.Inline && _.pair.inside == DisplayInside.Flex;
+    }
+
+    fn isInlineTable(): bool {
+        return !_.is_keyword && _.pair.outside == DisplayOutside.Inline && _.pair.inside == DisplayInside.Table;
+    }
 }
 
 pub enum Visibility {
@@ -446,6 +454,19 @@ pub enum Position {
         if (std.ascii.eqlIgnoreCase(s, "sticky")) return Position.Sticky;
         return null;
     }
+}
+
+pub enum VerticalAlignKind {
+    Baseline,
+    Top,
+    Bottom,
+    Middle,
+    TextTop,
+    TextBottom,
+    Super,
+    Sub,
+    Length,
+    Percent,
 }
 
 pub enum FlexDirection {
@@ -895,7 +916,8 @@ pub const PROP_GRID_COL_START: usize = 75;
 pub const PROP_GRID_COL_END: usize = 76;
 pub const PROP_GRID_ROW_START: usize = 77;
 pub const PROP_GRID_ROW_END: usize = 78;
-pub const TOTAL_PROP_SLOTS: usize = 79;
+pub const PROP_VERTICAL_ALIGN: usize = 79;
+pub const TOTAL_PROP_SLOTS: usize = 80;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1359,6 +1381,11 @@ pub struct ComputedStyle {
 
     font_size_px: f32 = 16.0;
     line_height_px: f32 = 0.0;
+    has_line_height: bool = false;
+    line_height_is_number: bool = false;
+    line_height_number: f32 = 0.0;
+    vertical_align_kind: VerticalAlignKind = VerticalAlignKind.Baseline;
+    vertical_align_length: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     font_family_buf: [64]u8 = [0; 64],
     font_family_len: usize = 0,
     font_weight: f32 = 400.0,
@@ -1407,6 +1434,31 @@ pub struct ComputedStyle {
 
     fn syncOverflowVisible(*_) {
         _.overflow_visible = (_.overflow_x == OverflowMode.Visible && _.overflow_y == OverflowMode.Visible);
+    }
+
+    fn naturalAscent(): f32 {
+        const fs = if (_.font_size_px > 0.0) _.font_size_px else 16.0;
+        return @round(fs * (17.0 / 16.0));
+    }
+
+    fn naturalDescent(): f32 {
+        const fs = if (_.font_size_px > 0.0) _.font_size_px else 16.0;
+        return @round(fs * (5.0 / 16.0));
+    }
+
+    fn naturalLineHeight(): f32 {
+        return _.naturalAscent() + _.naturalDescent();
+    }
+
+    fn resolvedLineHeight(): f32 {
+        if (!_.has_line_height) {
+            return _.naturalLineHeight();
+        }
+        if (_.line_height_is_number) {
+            const fs = if (_.font_size_px > 0.0) _.font_size_px else 16.0;
+            return fs * _.line_height_number;
+        }
+        return _.line_height_px;
     }
 
     /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
@@ -1566,6 +1618,9 @@ pub struct ComputedStyle {
             * => {},
         }
 
+        if (node.hasTag("br")) {
+            _.display = Display.inlineFlow();
+        }
         if (tag == .Svg || node.hasTag("svg")) {
             _.display = Display.inlineFlow();
             _.overflow_x = OverflowMode.Hidden;
@@ -1577,6 +1632,14 @@ pub struct ComputedStyle {
             _.visibility = p.visibility;
             if (tag != .H1 && tag != .H2 && tag != .H3 && tag != .H4 && tag != .H5 && tag != .H6) {
                 _.font_size_px = p.font_size_px;
+            }
+            _.has_line_height = p.has_line_height;
+            _.line_height_is_number = p.line_height_is_number;
+            _.line_height_number = p.line_height_number;
+            if (p.line_height_is_number) {
+                _.line_height_px = _.font_size_px * p.line_height_number;
+            } else {
+                _.line_height_px = p.line_height_px;
             }
             _.color = p.color;
             _.accent_color = p.accent_color;
@@ -2851,9 +2914,22 @@ pub struct ComputedStyle {
                             if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
                             found_size = true;
                         }
-                        if (lh_l := CssLength.parse(lh_str)) {
+                        if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, lh_str, " \t\r\n"), "normal")) {
+                            if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                                _.has_line_height = false;
+                                _.line_height_is_number = false;
+                                _.line_height_number = 0.0;
+                                _.line_height_px = 0.0;
+                            }
+                        } else if (lh_l := CssLength.parse(lh_str)) {
                             let lh_px: f32 = 0.0;
-                            if (lh_l.unit == CssUnit.Unitless || lh_l.unit == CssUnit.Em) {
+                            let is_num = false;
+                            let num_v: f32 = 0.0;
+                            if (lh_l.unit == CssUnit.Unitless) {
+                                is_num = true;
+                                num_v = @floatCast(lh_l.value);
+                                lh_px = _.font_size_px * num_v;
+                            } else if (lh_l.unit == CssUnit.Em) {
                                 const mult: f32 = @floatCast(lh_l.value);
                                 lh_px = _.font_size_px * mult;
                             } else if (lh_l.unit == CssUnit.Percent) {
@@ -2862,7 +2938,12 @@ pub struct ComputedStyle {
                             } else {
                                 lh_px = @floatCast(lh_l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
                             }
-                            if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) _.line_height_px = lh_px;
+                            if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                                _.has_line_height = true;
+                                _.line_height_is_number = is_num;
+                                _.line_height_number = num_v;
+                                _.line_height_px = lh_px;
+                            }
                         }
                     } else if (l := CssLength.parse(tok)) {
                         if (l.unit != CssUnit.Unitless) {
@@ -2877,6 +2958,12 @@ pub struct ComputedStyle {
                                 fs = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
                             }
                             if (_.tryClaimSlot(PROP_FONT_SIZE, weight)) _.font_size_px = fs;
+                            if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                                _.has_line_height = false;
+                                _.line_height_is_number = false;
+                                _.line_height_number = 0.0;
+                                _.line_height_px = 0.0;
+                            }
                             found_size = true;
                         }
                     }
@@ -2913,9 +3000,23 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "line-height")) {
-            if (l := CssLength.parse(val)) {
+            const trimmed_lh = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed_lh, "normal")) {
+                if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                    _.has_line_height = false;
+                    _.line_height_is_number = false;
+                    _.line_height_number = 0.0;
+                    _.line_height_px = 0.0;
+                }
+            } else if (l := CssLength.parse(trimmed_lh)) {
                 let lh_px: f32 = 0.0;
-                if (l.unit == CssUnit.Unitless || l.unit == CssUnit.Em) {
+                let is_num = false;
+                let num_v: f32 = 0.0;
+                if (l.unit == CssUnit.Unitless) {
+                    is_num = true;
+                    num_v = @floatCast(l.value);
+                    lh_px = _.font_size_px * num_v;
+                } else if (l.unit == CssUnit.Em) {
                     const mult: f32 = @floatCast(l.value);
                     lh_px = _.font_size_px * mult;
                 } else if (l.unit == CssUnit.Percent) {
@@ -2925,11 +3026,64 @@ pub struct ComputedStyle {
                     lh_px = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
                 }
                 if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                    _.has_line_height = true;
+                    _.line_height_is_number = is_num;
+                    _.line_height_number = num_v;
                     _.line_height_px = lh_px;
                 }
-            } else if (lpa := LengthPercentageOrAuto.parse(val)) {
+            } else if (lpa := LengthPercentageOrAuto.parse(trimmed_lh)) {
                 if (_.tryClaimSlot(PROP_LINE_HEIGHT, weight)) {
+                    _.has_line_height = true;
+                    _.line_height_is_number = false;
+                    _.line_height_number = 0.0;
                     _.line_height_px = lpa.resolvePx(_.font_size_px, _.font_size_px, root_font_px, 1280.0, 800.0);
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "vertical-align")) {
+            const trimmed_va = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed_va, "baseline")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Baseline;
+                    _.vertical_align_length = LengthPercentageOrAuto.zeroPx();
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "top")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Top;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "bottom")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Bottom;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "middle")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Middle;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "text-top")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.TextTop;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "text-bottom")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.TextBottom;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "super")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Super;
+                }
+            } else if (std.ascii.eqlIgnoreCase(trimmed_va, "sub")) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    _.vertical_align_kind = VerticalAlignKind.Sub;
+                }
+            } else if (lpa := LengthPercentageOrAuto.parse(trimmed_va)) {
+                if (_.tryClaimSlot(PROP_VERTICAL_ALIGN, weight)) {
+                    if (lpa.length.unit == CssUnit.Percent) {
+                        _.vertical_align_kind = VerticalAlignKind.Percent;
+                    } else {
+                        _.vertical_align_kind = VerticalAlignKind.Length;
+                    }
+                    _.vertical_align_length = lpa;
                 }
             }
             return;
