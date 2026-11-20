@@ -544,6 +544,14 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const idle_ms = extractQueryInt(req, "ksIdleMs");
         const max_session_ms = extractQueryInt(req, "ksMaxSessionMs");
+        const skip_hdr = CdpServer.extractHttpHeader(req, "x-kitesurf-skip-raster");
+        if (skip_hdr != null && std.mem.eql(u8, std.mem.trim(u8, skip_hdr.?, " \t\r\n"), "1")) {
+            _.session.skip_raster = true;
+        } else {
+            _.session.skip_raster = false;
+        }
+        _.session.outbound_reject_pattern_count = 0;
+        _.session.outbound_reject_websocket = false;
 
         // Enter WebSocket Frame Processing Loop
         _.runWebSocketSession(client_fd, idle_ms, max_session_ms)? ;
@@ -793,26 +801,11 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         // Emit triggered events before the command response (matches Chrome CDP ordering)
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
-            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
-            if (evt_needed <= 4096) {
-                let evt_buf: [4096]u8 = [0; 4096];
-                const evt_msg = std.fmt.bufPrint(
-                    &evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
-                writeWsTextFrame(client_fd, evt_msg)? ;
-            } else {
-                const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
-                defer std.heap.c_allocator.free(dyn_evt_buf);
-                const evt_msg = std.fmt.bufPrint(
-                    dyn_evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
-                writeWsTextFrame(client_fd, evt_msg)? ;
+            if (events[i].session_id.len == 0 && req.session_id.len > 0) {
+                events[i].session_id = req.session_id;
             }
         }
+        _.emitCdpEvents(client_fd, &events, event_count)? ;
 
         if (resp.isOk()) {
             const needed_len = resp.result_json.len + resp.raw_id.len + 32;

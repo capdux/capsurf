@@ -1937,4 +1937,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`mouse-input-fields` (4/4)、`forms-post-submit-demo` (7/7)、`forms-file-input-demo` (2/2)、`legacy-charset-url-encoding` (9/9)、`media-text-tracks` (1/1)、`no-cors-opaque` (5/5)、`link-onload-media` (1/2+fix) PASS。
+
+## Phase 120: CDP PDF Pagination/@page Margins, External Stylesheet Events & Memory/Layout Telemetry — 7/9 Suites (16/18 PASS)
+- **`src/cdp/{css,kitesurf_facade,page,server,session,session_hooks,target}.cp` & `src/net/mock_fixtures.cp` & `e2e/demo/css-external-sheets-demo.e2e.test.ts`**：
+  - 接通 `Page.printToPDF` 分页与 `@page` 边距、外部样式表 `CSS.styleSheetAdded`/`getStyleSheetText` 与跨域阻断、`Kitesurf.getMemoryStats`（`wasmDeltaBytes`/`retainedImageCount`/`layout` resolves）及 `/__fixtures/image-heavy.html`。
+- **测试与门禁验证**：
+  - 静态门禁：全部 8 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`pdf-break-properties` (2/2)、`pdf-page-margins` (1/1)、`viewport-drain` (2/2)、`opaque-sheet-text` (4/4)、`css-external-sheets-demo` (1/1)、`layout-resolve-pollers` (3/3)、`img-srcset-reload-complete` (2/2)、`gateway-font-shaping` (1/2) — **16/18 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

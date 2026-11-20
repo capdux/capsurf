@@ -3947,3 +3947,13 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - `mouse-input-fields` (**4/4**)、`forms-post-submit-demo` (**7/7**)、`forms-file-input-demo` (**2/2**)、`legacy-charset-url-encoding` (**9/9**)、`media-text-tracks` (**1/1**)、`no-cors-opaque` (**5/5**)、`link-onload-media`（1/2，第 2 项补丁已打包，待复测）：**29/30 PASS**！
 - **清理旧子智能体**: 销毁 `5b93a933-4f4c-4bfb-b1fe-d57d3b03cfa5`。
+
+## [2026-11-20 22:05:00] PDF 分页/`@page` 边距、CDP 外部样式表与字体/布局遥测闭环 (Subagent 1492b12f 结单，Phase 120)
+- **CDP PDF/CSS/Telemetry 与 Fixture 扩展 (`src/cdp/{css,kitesurf_facade,page,server,session,session_hooks,target}.cp`, `src/net/mock_fixtures.cp`, `e2e/demo/css-external-sheets-demo.e2e.test.ts`)**:
+  - `src/cdp/page.cp`：`Page.printToPDF` 接通 `computePdfPagination` + `renderPdfAlloc`（保留 document-scoped drain）并放行 `MockFixtures.isFixtureUrl` 的 PNA 检查；
+  - `src/cdp/css.cp` & `server.cp`：新增 `getExternalStylesheetMeta`，`CSS.enable` 为 `<link rel="stylesheet">` 发射带真实 `length`/`endLine`/`endColumn` 的 `CSS.styleSheetAdded` 并透传 `sessionId`，修复 `HttpLoaderResult` 字段与 `outbound_reject_*` 状态残留；
+  - `src/cdp/{session,session_hooks,target,kitesurf_facade}.cp` & `src/net/mock_fixtures.cp`：补全 `Kitesurf.getMemoryStats`（`wasmDeltaBytes`、`retainedImageCount`、`layout: { mutationResolves, animationResolves }`）、`WrappedRO` 跳过 `@keyframes` 动画宽度节点、`Object.prototype.then` 探测与导航清理，以及 `/__fixtures/image-heavy.html`。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建 4.70s，port `19233`）**:
+  - 全部 8 个 `.cp` 文件 4 门禁全 0；
+  - `pdf-break-properties` (**2/2**)、`pdf-page-margins` (**1/1**)、`viewport-drain` (**2/2**)、`opaque-sheet-text` (**4/4**)、`css-external-sheets-demo` (**1/1**)、`layout-resolve-pollers` (**3/3**)、`img-srcset-reload-complete` (**2/2**)、`gateway-font-shaping` (**1/2**)、`pixel-free-shaping-fonts` (0/1，待 `harness.ts` `browserFactory` 透传 `options.headers` 与独立 WS 连接)：**16/18 PASS**！
+- **清理旧子智能体**: 销毁 `1492b12f-b526-42e9-86e9-e965506e719e`。

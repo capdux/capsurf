@@ -3,7 +3,7 @@
 // https://opensource.org/licenses/Apache-2.0
 
 import { expect, test } from "../harness";
-import expectedSheetBody from "../../fixtures-worker/assets/external-sheet.css?raw";
+import expectedSheetBody from "../page/external-sheet.css?raw";
 
 test("exposes linked stylesheet text and matched rules", async ({ page }) => {
   const SHEET_URL = "https://ks.invalid/__fixtures/external-sheet.css";

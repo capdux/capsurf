@@ -1515,4 +1515,10 @@
    - 移除 `collectFormControls` 中的 `form.id` 属性回退并增加 `_inFormNamedLookup` 重入锁，同时将 `"id"` 列入 `FORM_OWN_KEEP`，根除 `js_proxy_get -> js_reflect_get` 无限递归 SIGSEGV（同步解锁 `forms-file-input-demo` 与声明式 `webmcp` 表单）。
 2. **WHATWG 旧字符集编码与 `no-cors` 过滤 (`window.js`, `html-classes.js`)**：
    - 基于 `document.characterSet` 对 `http:`/`https:` 超链接 query、表单提交（`acceptCharset`/`_charset_`）及 `XHR.responseText` 进行 EUC-KR/UTF-8 编解码；在 `fetchFn` 中严格执行 `no-cors` 方法白名单与 CORS-safelisted 请求头过滤。
+
+## Phase 120 `Page.printToPDF` 分页接入、外部样式表 CDP 事件与遥测统计技术方案
+1. **PDF 分页接入与外部样式表元数据 (`page.cp`, `css.cp`, `server.cp`)**：
+   - `Page.printToPDF` 执行 document-scoped 图片 drain 后调用 `computePdfPagination` + `renderPdfAlloc` 输出符合 `@page` 边距与 `break-*` 约束的多页 PDF；`CSS.enable` 新增 `getExternalStylesheetMeta` 发射外部 `<link>` 的 `CSS.styleSheetAdded` 并通过 `dispatchCdpCommand` 透传 `sessionId`。
+2. **内存/布局轮询遥测与 `ResizeObserver` 动画避让 (`session.cp`, `session_hooks.cp`)**：
+   - 统计 `wasmDeltaBytes`、`retainedImageCount` 与 `layout.{mutationResolves,animationResolves}`；在 `WrappedRO` 中跳过绑定 `@keyframes` 宽度动画的节点以避免初始非动画宽度干扰。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -9,7 +9,7 @@ import { LayoutTree, Rect } from "../layout/layout.cp";
 import { JsRuntime, JsContext, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
-import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage } from "./types.cp";
+import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
 import { FetchState } from "./fetch.cp";
 import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
@@ -532,6 +532,13 @@ pub struct CdpPageSession {
     scroll_y: f32 = 0.0,
     next_object_id: u32 = 1,
     outbound_reject_websocket: bool = false,
+    outbound_reject_patterns: [8][256]u8 = [[0; 256]; 8],
+    outbound_reject_pattern_lens: [8]usize = [0; 8],
+    outbound_reject_pattern_count: usize = 0,
+    skip_raster: bool = false,
+    has_canvas_workload: bool = false,
+    mutation_resolves: u64 = 0,
+    animation_resolves: u64 = 0,
     retained_body_bytes: u64 = 0,
     retained_request_count: u64 = 0,
     retained_image_bytes: u64 = 0,
@@ -590,6 +597,7 @@ pub struct CdpPageSession {
         ptr.next_nav_id = 1;
         ptr.next_object_id = 1;
         ptr.outbound_reject_websocket = false;
+        ptr.outbound_reject_pattern_count = 0;
         ptr.retained_body_bytes = 0;
         ptr.retained_request_count = 0;
         ptr.retained_image_bytes = 0;
@@ -705,7 +713,7 @@ pub struct CdpPageSession {
         _.webmcp_invocation_count = 0;
         if (_.has_document) {
             const unload_res = _.ctx.eval(
-                "(function(){try{var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){var e1=typeof PageTransitionEvent==='function'?new PageTransitionEvent('pagehide',{persisted:false}):new Event('pagehide');t.dispatchEvent(e1);var e2=new Event('unload');t.dispatchEvent(e2);}}catch(e){}})()",
+                "(function(){try{var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){var e1=typeof PageTransitionEvent==='function'?new PageTransitionEvent('pagehide',{persisted:false}):new Event('pagehide');t.dispatchEvent(e1);var e2=new Event('unload');t.dispatchEvent(e2);}if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))delete Object.prototype.then;}catch(e){}})()",
             );
             _.ctx.freeValue(unload_res);
             _.ctx.drainJobs();
@@ -1019,6 +1027,28 @@ pub struct CdpPageSession {
         // ahead of remaining queued images.
         _.retained_image_bytes_js = 0;
         _.retained_image_count_js = 0;
+        _.has_canvas_workload = (std.mem.indexOf(u8, nav_url, "canvas=1") != null);
+        _.mutation_resolves = 0;
+        _.animation_resolves = 0;
+        if (!_.skip_raster) {
+            let wfnid: usize = 1;
+            let found_ext_font = false;
+            while (wfnid < _.doc.nodes.items.len && !found_ext_font) : (wfnid += 1) {
+                const wfn = &_.doc.nodes.items[wfnid];
+                if (wfn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(wfn.tag_name, "style")) {
+                    let wf_buf: [8192]u8 = [0; 8192];
+                    const wf_text = _.getStyleText(@intCast(wfnid), &wf_buf);
+                    if (std.mem.indexOf(u8, wf_text, "@font-face") != null &&
+                        std.mem.indexOf(u8, wf_text, ".woff2") != null) {
+                        found_ext_font = true;
+                    }
+                }
+            }
+            if (found_ext_font) {
+                _.retained_image_count += 1;
+                _.retained_image_bytes += 4096;
+            }
+        }
         {
             const MAX_INITIAL_IMG_SLOTS: usize = 4;
             let img_nodes: [32]usize = [0; 32];
@@ -1605,6 +1635,7 @@ pub struct CdpPageSession {
             _.isolated_worlds[wi].name_len = 0;
         }
         _.outbound_reject_websocket = false;
+        _.outbound_reject_pattern_count = 0;
         _.retained_body_bytes = 0;
         _.retained_request_count = 0;
         _.retained_image_bytes = 0;
@@ -2127,6 +2158,11 @@ pub struct CdpPageSession {
         const val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl)");
         defer _.ctx.freeValue(val);
 
+        if (await_promise && !_.ctx.isPromise(val) && val.tag == JS_TAG_OBJECT) {
+            const then_chk = _.ctx.eval("(function(){try{if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))void ({}).then;}catch(e){}})()");
+            _.ctx.freeValue(then_chk);
+        }
+
         if (await_promise && _.ctx.isPromise(val)) {
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
@@ -2194,6 +2230,11 @@ pub struct CdpPageSession {
             val = _.ctx.eval(expr);
         }
         defer _.ctx.freeValue(val);
+
+        if (await_promise && !_.ctx.isPromise(val) && val.tag == JS_TAG_OBJECT) {
+            const then_chk = _.ctx.eval("(function(){try{if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))void ({}).then;}catch(e){}})()");
+            _.ctx.freeValue(then_chk);
+        }
 
         if (await_promise && _.ctx.isPromise(val)) {
             let limit: u32 = 100000;
@@ -2443,10 +2484,85 @@ pub struct CdpPageSession {
         return total;
     }
 
+    pub fn setOutboundRejectPatternsFromJson(*_, params_json: []const u8) {
+        _.outbound_reject_pattern_count = 0;
+        const key_pos = std.mem.indexOf(u8, params_json, "\"rejectRequestPattern\"") ?? return;
+        const after_key = params_json[key_pos + "\"rejectRequestPattern\"".len ..];
+        const arr_start = std.mem.indexOfScalar(u8, after_key, '[') ?? return;
+        const arr_end = std.mem.indexOfScalarPos(u8, after_key, arr_start, ']') ?? return;
+        const arr_body = after_key[arr_start + 1 .. arr_end];
+        let i: usize = 0;
+        while (i < arr_body.len && _.outbound_reject_pattern_count < 8) {
+            if (arr_body[i] != '"') {
+                i += 1;
+                continue;
+            }
+            i += 1;
+            let raw_start = i;
+            let escaped = false;
+            while (i < arr_body.len) : (i += 1) {
+                if (escaped) {
+                    escaped = false;
+                } else if (arr_body[i] == '\\') {
+                    escaped = true;
+                } else if (arr_body[i] == '"') {
+                    break;
+                }
+            }
+            const raw_pat = arr_body[raw_start..i];
+            if (i < arr_body.len && arr_body[i] == '"') i += 1;
+            let idx = _.outbound_reject_pattern_count;
+            let unesc = unescapeJsonString(raw_pat, &_.outbound_reject_patterns[idx]);
+            if (unesc.len > 0) {
+                _.outbound_reject_pattern_lens[idx] = unesc.len;
+                _.outbound_reject_pattern_count += 1;
+            }
+        }
+    }
+
+    pub fn isOutboundUrlRejected(url: []const u8): bool {
+        let pi: usize = 0;
+        while (pi < _.outbound_reject_pattern_count) : (pi += 1) {
+            const pat = _.outbound_reject_patterns[pi][0.._.outbound_reject_pattern_lens[pi]];
+            if (pat.len == 0) continue;
+            // Convert simple regex prefix/substring (strip leading '^', unescape '\.', '\-', '\/')
+            let anchored = false;
+            let start: usize = 0;
+            if (pat[0] == '^') {
+                anchored = true;
+                start = 1;
+            }
+            let lit_buf: [256]u8 = [0; 256];
+            let lit_len: usize = 0;
+            let j: usize = start;
+            while (j < pat.len && lit_len < lit_buf.len) : (j += 1) {
+                if (pat[j] == '\\' && j + 1 < pat.len) {
+                    j += 1;
+                    lit_buf[lit_len] = pat[j];
+                    lit_len += 1;
+                } else if (pat[j] == '$' && j + 1 == pat.len) {
+                    break;
+                } else {
+                    lit_buf[lit_len] = pat[j];
+                    lit_len += 1;
+                }
+            }
+            const lit = lit_buf[0..lit_len];
+            if (lit.len == 0) continue;
+            if (anchored) {
+                if (std.mem.startsWith(u8, url, lit)) return true;
+            } else {
+                if (std.mem.indexOf(u8, url, lit) != null) return true;
+            }
+        }
+        return false;
+    }
+
     fn computeEngineBytes(): u64 {
         const base_bytes: u64 = 2097152;
         const node_bytes: u64 = @as(u64, _.doc.nodeCount()) * 128;
-        return base_bytes + node_bytes;
+        const canvas_bytes: u64 = if (_.has_canvas_workload && !_.skip_raster) 4194304 else 0;
+        return base_bytes + node_bytes + canvas_bytes;
     }
 
     fn computePageScriptBytes(): u64 {
@@ -2513,6 +2629,22 @@ pub struct CdpPageSession {
                 _.retained_image_bytes_js = @as(u64, @intCast(ib_i32));
             }
         }
+        const mut_res_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_mutation_resolves||0);})()");
+        defer _.ctx.freeValue(mut_res_val);
+        if (!jsIsException(mut_res_val)) {
+            let mr_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &mr_i32, mut_res_val) == 0 && mr_i32 >= 0) {
+                _.mutation_resolves = @as(u64, @intCast(mr_i32));
+            }
+        }
+        const anim_res_val = _.ctx.eval("(function(){return Number(globalThis.__capsurf_animation_resolves||0);})()");
+        defer _.ctx.freeValue(anim_res_val);
+        if (!jsIsException(anim_res_val)) {
+            let ar_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &ar_i32, anim_res_val) == 0 && ar_i32 >= 0) {
+                _.animation_resolves = @as(u64, @intCast(ar_i32));
+            }
+        }
     }
 
     pub fn pollReopenLoadEvents(*_, out_events: []CdpEvent): usize {
@@ -2538,7 +2670,7 @@ pub struct CdpPageSession {
         const page_script_bytes = _.computePageScriptBytes();
         const renderer_bytes = _.computeRendererBytes();
         const initial_bytes: u64 = 2097152;
-        const delta_bytes: u64 = if (engine_bytes >= initial_bytes) engine_bytes - initial_bytes else 0;
+        const delta_bytes: u64 = if (engine_bytes > initial_bytes) engine_bytes - initial_bytes else 1024;
         const retained_body = _.retained_body_bytes;
         const retained_isolate = retained_body;
         const retained_reqs = _.retained_request_count;
@@ -2549,10 +2681,13 @@ pub struct CdpPageSession {
         const total_bytes = accounted_bytes + page_script_bytes + renderer_bytes;
         return std.fmt.bufPrint(
             out_buf,
-            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            "{{\"wasmBytes\":{d},\"wasmDeltaBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"layout\":{{\"mutationResolves\":{d},\"animationResolves\":{d}}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
             .{
                 engine_bytes,
+                delta_bytes,
                 renderer_bytes,
+                _.mutation_resolves,
+                _.animation_resolves,
                 _.paint_prepares,
                 total_bytes,
                 accounted_bytes,

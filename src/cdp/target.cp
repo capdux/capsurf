@@ -530,6 +530,8 @@ pub struct TargetHandler {
 
         // Target.createTarget
         if (std.mem.eql(u8, req.method, "Target.createTarget")) {
+            session.outbound_reject_pattern_count = 0;
+            session.outbound_reject_websocket = false;
             const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
             if (bctx.len > 0 && !session.target_registry.hasBrowserContext(bctx)) {
                 return CdpResponse.err(req.id, -32000, "Failed to find browser context");

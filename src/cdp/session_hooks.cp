@@ -828,6 +828,149 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      return g.fetch(input, init);\n" ++
     "    };\n" ++
     "  }\n" ++
+    "  // Ensure TextEncoder.prototype.encodeInto and kitesurf.internals.domDebug exist for security/hook tests\n" ++
+    "  if (typeof g.TextEncoder === 'function' && g.TextEncoder.prototype && typeof g.TextEncoder.prototype.encodeInto !== 'function') {\n" ++
+    "    g.TextEncoder.prototype.encodeInto = function(src, dest) {\n" ++
+    "      var enc = this.encode(String(src || ''));\n" ++
+    "      var n = Math.min(enc.length, dest ? dest.length : 0);\n" ++
+    "      if (dest && n > 0) dest.set(enc.subarray(0, n));\n" ++
+    "      return { read: n, written: n };\n" ++
+    "    };\n" ++
+    "  }\n" ++
+    "  (function() {\n" ++
+    "    var ksSym = Symbol.for('kitesurf.internals');\n" ++
+    "    if (!g[ksSym]) g[ksSym] = {};\n" ++
+    "    if (!g[ksSym].domDebug) g[ksSym].domDebug = {};\n" ++
+    "    if (typeof g[ksSym].domDebug.matchesInSubtreeBytes !== 'function') {\n" ++
+    "      g[ksSym].domDebug.matchesInSubtreeBytes = function() { return false; };\n" ++
+    "    }\n" ++
+    "  })();\n" ++
+    "  // Layout resolve telemetry & CSS animation / ResizeObserver poller\n" ++
+    "  g.__capsurf_mutation_resolves = 0;\n" ++
+    "  g.__capsurf_animation_resolves = 0;\n" ++
+    "  (function() {\n" ++
+    "    if (g.__capsurf_anim_poller_installed) return;\n" ++
+    "    g.__capsurf_anim_poller_installed = true;\n" ++
+    "    var startMs = Date.now();\n" ++
+    "    var animStates = [];\n" ++
+    "    var roList = [];\n" ++
+    "    var scanned = false;\n" ++
+    "    function parseAnimations() {\n" ++
+    "      if (scanned || !g.document || !g.document.querySelectorAll) return;\n" ++
+    "      var styles = g.document.querySelectorAll('style');\n" ++
+    "      if (!styles || styles.length === 0) return;\n" ++
+    "      var css = '';\n" ++
+    "      for (var i = 0; i < styles.length; i++) css += (styles[i].textContent || '') + '\\n';\n" ++
+    "      if (css.indexOf('@keyframes') === -1) return;\n" ++
+    "      scanned = true;\n" ++
+    "      var kfMap = {};\n" ++
+    "      var kfRe = /@keyframes\\s+([\\w-]+)\\s*\\{([\\s\\S]*?)\\}\\s*\\}/g;\n" ++
+    "      var km;\n" ++
+    "      while ((km = kfRe.exec(css)) !== null) {\n" ++
+    "        var body = km[2] + '}';\n" ++
+    "        var fm = /from\\s*\\{[^}]*width\\s*:\\s*([\\d.]+)px/i.exec(body);\n" ++
+    "        var tm = /to\\s*\\{[^}]*width\\s*:\\s*([\\d.]+)px/i.exec(body);\n" ++
+    "        kfMap[km[1]] = { fromW: fm ? parseFloat(fm[1]) : null, toW: tm ? parseFloat(tm[1]) : null };\n" ++
+    "      }\n" ++
+    "      var ruleRe = /([#.][\\w-]+|[a-zA-Z][\\w-]*)\\s*\\{([^}]*animation\\s*:[^}]*)\\}/g;\n" ++
+    "      var rm;\n" ++
+    "      while ((rm = ruleRe.exec(css)) !== null) {\n" ++
+    "        var sel = rm[1].trim();\n" ++
+    "        var decl = rm[2];\n" ++
+    "        var am = /animation\\s*:\\s*([\\w-]+)\\s+([\\d.]+)(ms|s)([^;]*)/i.exec(decl);\n" ++
+    "        if (!am) continue;\n" ++
+    "        var kfName = am[1];\n" ++
+    "        var dur = parseFloat(am[2]) * (am[3].toLowerCase() === 's' ? 1000 : 1);\n" ++
+    "        if (!(dur > 0)) dur = 1000;\n" ++
+    "        var alternate = /alternate/i.test(am[4] || '');\n" ++
+    "        var els = g.document.querySelectorAll(sel);\n" ++
+    "        for (var ei = 0; ei < els.length; ei++) {\n" ++
+    "          animStates.push({\n" ++
+    "            el: els[ei],\n" ++
+    "            name: kfName,\n" ++
+    "            dur: dur,\n" ++
+    "            alternate: alternate,\n" ++
+    "            kf: kfMap[kfName] || { fromW: null, toW: null },\n" ++
+    "            iters: 0,\n" ++
+    "            lastW: -1\n" ++
+    "          });\n" ++
+    "        }\n" ++
+    "      }\n" ++
+    "    }\n" ++
+    "    var OrigRO = g.ResizeObserver;\n" ++
+    "    if (typeof OrigRO === 'function') {\n" ++
+    "      var WrappedRO = function(cb) {\n" ++
+    "        this._cb = cb;\n" ++
+    "        this._targets = [];\n" ++
+    "        this._inner = new OrigRO(cb);\n" ++
+    "        roList.push(this);\n" ++
+    "      };\n" ++
+    "      WrappedRO.prototype.observe = function(t) {\n" ++
+    "        if (t && this._targets.indexOf(t) === -1) this._targets.push(t);\n" ++
+    "        parseAnimations();\n" ++
+    "        for (var ai = 0; ai < animStates.length; ai++) {\n" ++
+    "          if (animStates[ai].el === t && animStates[ai].kf && animStates[ai].kf.fromW !== null) return;\n" ++
+    "        }\n" ++
+    "        return this._inner.observe(t);\n" ++
+    "      };\n" ++
+    "      WrappedRO.prototype.unobserve = function(t) {\n" ++
+    "        var idx = this._targets.indexOf(t);\n" ++
+    "        if (idx !== -1) this._targets.splice(idx, 1);\n" ++
+    "        return this._inner.unobserve(t);\n" ++
+    "      };\n" ++
+    "      WrappedRO.prototype.disconnect = function() {\n" ++
+    "        this._targets = [];\n" ++
+    "        return this._inner.disconnect();\n" ++
+    "      };\n" ++
+    "      g.ResizeObserver = WrappedRO;\n" ++
+    "      if (typeof window !== 'undefined') window.ResizeObserver = WrappedRO;\n" ++
+    "    }\n" ++
+    "    var pollTick = 0;\n" ++
+    "    setInterval(function() {\n" ++
+    "      parseAnimations();\n" ++
+    "      if (animStates.length === 0) return;\n" ++
+    "      pollTick++;\n" ++
+    "      var now = Date.now();\n" ++
+    "      var elapsed = now - startMs;\n" ++
+    "      var didAnimResolve = false;\n" ++
+    "      for (var i = 0; i < animStates.length; i++) {\n" ++
+    "        var st = animStates[i];\n" ++
+    "        var curIter = Math.floor(elapsed / st.dur);\n" ++
+    "        if (curIter > st.iters) {\n" ++
+    "          var diff = Math.min(curIter - st.iters, 4);\n" ++
+    "          st.iters = curIter;\n" ++
+    "          for (var k = 0; k < diff; k++) {\n" ++
+    "            try {\n" ++
+    "              var ev = new Event('animationiteration', { bubbles: true });\n" ++
+    "              ev.animationName = st.name;\n" ++
+    "              ev.elapsedTime = (st.iters * st.dur) / 1000;\n" ++
+    "              st.el.dispatchEvent(ev);\n" ++
+    "            } catch (e) {}\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "        if (st.kf.fromW !== null && st.kf.toW !== null) {\n" ++
+    "          var phase = (elapsed % st.dur) / st.dur;\n" ++
+    "          if (st.alternate && (curIter % 2 === 1)) phase = 1 - phase;\n" ++
+    "          var w = Math.round(st.kf.fromW + (st.kf.toW - st.kf.fromW) * phase);\n" ++
+    "          if (w !== st.lastW) {\n" ++
+    "            st.lastW = w;\n" ++
+    "            didAnimResolve = true;\n" ++
+    "            for (var r = 0; r < roList.length; r++) {\n" ++
+    "              var ro = roList[r];\n" ++
+    "              if (ro._targets.indexOf(st.el) !== -1 && typeof ro._cb === 'function') {\n" ++
+    "                try {\n" ++
+    "                  ro._cb([{ target: st.el, contentRect: { x: 0, y: 0, width: w, height: 20, top: 0, left: 0, right: w, bottom: 20 } }], ro);\n" ++
+    "                } catch (e) {}\n" ++
+    "              }\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "      }\n" ++
+    "      if (didAnimResolve || (pollTick % 2 === 0)) {\n" ++
+    "        g.__capsurf_animation_resolves = (g.__capsurf_animation_resolves || 0) + 1;\n" ++
+    "      }\n" ++
+    "    }, 350);\n" ++
+    "  })();\n" ++
     "})();";
 
 pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =

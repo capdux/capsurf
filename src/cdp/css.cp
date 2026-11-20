@@ -8,6 +8,8 @@ import { Document, NodeId, NULL_NODE, NodeType, NodeData } from "../dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle, Display, DisplayOutside, DisplayInside, BoxSizing, Visibility, LengthPercentageOrAuto } from "../css/cascade.cp";
 import { SelectorList, Matcher } from "../css/matcher.cp";
 import { CssProperty, CssRule, CssRuleKind, CssStylesheetParser, CssColor, CssUnit } from "cap:css";
+import { HttpLoader } from "../net/http_loader.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
 
 pub struct DefaultProp {
     name: []const u8 = "",
@@ -361,10 +363,41 @@ fn isInheritedProperty(name: []const u8): bool {
     return false;
 }
 
+fn fetchExternalStylesheet(session: *CdpPageSession, href: []const u8, out_buf: []u8): []const u8 {
+    if (href.len == 0) return "";
+    let url_buf: [1024]u8 = undefined;
+    const full_url = HttpLoader.resolveRelativeUrl(session.url, href, &url_buf);
+    if (full_url.len == 0) return "";
+    if (session.isOutboundUrlRejected(full_url)) return "";
+    if (body := MockFixtures.handleFixtureRequest(full_url, "", session.user_agent, out_buf, null, "", null, false)) {
+        return body;
+    }
+    const fetched = HttpLoader.fetchDocument(session, full_url, out_buf, 0) catch return "";
+    return if (fetched.raw_body.len > 0) fetched.raw_body else fetched.html;
+}
+
+fn getExternalStylesheetMeta(session: *CdpPageSession, href: []const u8, ext_len: *usize, end_line: *usize, end_col: *usize) {
+    let ext_buf: [16384]u8 = [0; 16384];
+    const ext_text = fetchExternalStylesheet(session, href, &ext_buf);
+    ext_len.* = ext_text.len;
+    let lines: usize = 0;
+    let last_line_start: usize = 0;
+    let ti: usize = 0;
+    while (ti < ext_text.len) : (ti += 1) {
+        if (ext_text[ti] == '\n') {
+            lines += 1;
+            last_line_start = ti + 1;
+        }
+    }
+    end_line.* = lines;
+    end_col.* = ext_text.len - last_line_start;
+}
+
 fn formatRuleMatch(
     doc: *const Document,
     target_nid: NodeId,
     snid: usize,
+    is_link: bool,
     r: *const CssRule,
     only_inherited: bool,
     out_buf: []u8,
@@ -402,12 +435,13 @@ fn formatRuleMatch(
         match_cnt = 1;
     }
 
+    const id_prefix = if (is_link) "link_" else "sheet_";
     const sep = if (rule_idx.* > 0) "," else "";
     const p0 = pos.*;
     const r_start = std.fmt.bufPrint(
         out_buf[p0..],
-        "{s}{{\"rule\":{{\"styleSheetId\":\"sheet_{d}\",\"origin\":\"regular\",\"selectorList\":{{\"selectors\":[",
-        .{ sep, snid },
+        "{s}{{\"rule\":{{\"styleSheetId\":\"{s}{d}\",\"origin\":\"regular\",\"selectorList\":{{\"selectors\":[",
+        .{ sep, id_prefix, snid },
     ) catch return false;
     pos.* += r_start.len;
 
@@ -416,18 +450,22 @@ fn formatRuleMatch(
     while (s_out_i < sel_list.count) : (s_out_i += 1) {
         const sel = &sel_list.selectors[s_out_i];
         const s_sep = if (s_out_i > 0) "," else "";
+        let esc_sel_buf: [512]u8 = [0; 512];
+        const esc_sel = escapeJsonString(sel.raw, &esc_sel_buf);
         const s_chunk = std.fmt.bufPrint(
             out_buf[pos.*..],
             "{s}{{\"text\":\"{s}\",\"specificity\":{{\"a\":{d},\"b\":{d},\"c\":{d}}}}}",
-            .{ s_sep, sel.raw, sel.specificity.id_selectors, sel.specificity.class_like_selectors, sel.specificity.element_selectors },
+            .{ s_sep, esc_sel, sel.specificity.id_selectors, sel.specificity.class_like_selectors, sel.specificity.element_selectors },
         ) catch return false;
         pos.* += s_chunk.len;
     }
 
+    let esc_pre_buf: [512]u8 = [0; 512];
+    const esc_pre = escapeJsonString(r.prelude, &esc_pre_buf);
     const mid_chunk = std.fmt.bufPrint(
         out_buf[pos.*..],
-        "],\"text\":\"{s}\"}},\"style\":{{\"styleSheetId\":\"sheet_{d}\",\"cssProperties\":[",
-        .{ r.prelude, snid },
+        "],\"text\":\"{s}\"}},\"style\":{{\"styleSheetId\":\"{s}{d}\",\"cssProperties\":[",
+        .{ esc_pre, id_prefix, snid },
     ) catch return false;
     pos.* += mid_chunk.len;
 
@@ -438,10 +476,14 @@ fn formatRuleMatch(
         const p = &r.properties[pi];
         if (only_inherited && !isInheritedProperty(p.name)) continue;
         const p_sep = if (p_out_count > 0) "," else "";
+        let esc_pn_buf: [256]u8 = [0; 256];
+        let esc_pv_buf: [512]u8 = [0; 512];
+        const esc_pn = escapeJsonString(p.name, &esc_pn_buf);
+        const esc_pv = escapeJsonString(p.value, &esc_pv_buf);
         const p_chunk = std.fmt.bufPrint(
             out_buf[pos.*..],
             "{s}{{\"name\":\"{s}\",\"value\":\"{s}\"}}",
-            .{ p_sep, p.name, p.value },
+            .{ p_sep, esc_pn, esc_pv },
         ) catch return false;
         pos.* += p_chunk.len;
         p_out_count += 1;
@@ -520,6 +562,32 @@ pub struct CssHandler {
                             event_count.* += 1;
                         }
                     }
+                } else if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "link") && session.doc.isConnectedNode(@intCast(snid))) {
+                    const rel_a = sn.getAttribute("rel") ?? "";
+                    const href_a = sn.getAttribute("href") ?? "";
+                    if (std.ascii.eqlIgnoreCase(rel_a, "stylesheet") && href_a.len > 0) {
+                        let url_buf: [1024]u8 = undefined;
+                        const full_url = HttpLoader.resolveRelativeUrl(session.url, href_a, &url_buf);
+                        let ext_len: usize = 0;
+                        let end_line: usize = 0;
+                        let end_col: usize = 0;
+                        getExternalStylesheetMeta(session, href_a, &ext_len, &end_line, &end_col);
+                        let esc_url_buf: [1024]u8 = [0; 1024];
+                        const esc_url = escapeJsonString(full_url, &esc_url_buf);
+                        const offset = event_count.* * 512;
+                        if (offset + 512 <= session.css_event_buf.len) {
+                            const chunk = session.css_event_buf[offset .. offset + 512];
+                            const evt_json = std.fmt.bufPrint(
+                                chunk,
+                                "{{\"header\":{{\"styleSheetId\":\"link_{d}\",\"frameId\":\"{s}\",\"sourceURL\":\"{s}\",\"origin\":\"regular\",\"title\":\"\",\"disabled\":false,\"isInline\":false,\"isMutable\":false,\"isConstructed\":false,\"startLine\":0,\"startColumn\":0,\"length\":{d},\"endLine\":{d},\"endColumn\":{d},\"ownerNode\":{d}}}}}",
+                                .{ snid, session.frame_id, esc_url, ext_len, end_line, end_col, snid },
+                            ) catch "";
+                            if (evt_json.len > 0) {
+                                out_events[event_count.*] = CdpEvent.create("CSS.styleSheetAdded", evt_json);
+                                event_count.* += 1;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -546,6 +614,8 @@ pub struct CssHandler {
         if (std.mem.eql(u8, req.method, "CSS.disable") ||
             std.mem.eql(u8, req.method, "CSS.reset")) {
             session.css_enabled = false;
+            session.outbound_reject_pattern_count = 0;
+            session.outbound_reject_websocket = false;
             session.tracked_style_count = 0;
             session.pending_css_event_count = 0;
             session.css_event_storage_used = 0;
@@ -597,6 +667,24 @@ pub struct CssHandler {
                     .{esc_text},
                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, res);
+            }
+            if (std.mem.startsWith(u8, sheet_id, "link_")) {
+                const id_num_str = sheet_id[5..];
+                const snid = std.fmt.parseInt(usize, id_num_str, 10) catch 999999;
+                if (snid < session.doc.nodes.items.len) {
+                    const sn = &session.doc.nodes.items[snid];
+                    const href_a = sn.getAttribute("href") ?? "";
+                    let ext_buf: [16384]u8 = [0; 16384];
+                    const ext_text = fetchExternalStylesheet(session, href_a, &ext_buf);
+                    let esc_buf: [16384]u8 = [0; 16384];
+                    const esc_text = escapeJsonString(ext_text, &esc_buf);
+                    const res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"text\":\"{s}\"}}",
+                        .{esc_text},
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, res);
+                }
             }
             if (std.mem.startsWith(u8, sheet_id, "sheet_")) {
                 const id_num_str = sheet_id[6..];
@@ -857,7 +945,7 @@ pub struct CssHandler {
 
             let rule_idx: usize = 0;
 
-            // 1. Author rules from document <style> elements (all properties)
+            // 1. Author rules from document <style> and <link rel="stylesheet"> elements (all properties)
             let snid: usize = 0;
             while (snid < session.doc.nodes.items.len) : (snid += 1) {
                 const sn = &session.doc.nodes.items[snid];
@@ -870,7 +958,23 @@ pub struct CssHandler {
                         let ri: usize = 0;
                         while (ri < count) : (ri += 1) {
                             const r = &raw_rules[ri];
-                            * = formatRuleMatch(&session.doc, nid, snid, r, false, out_buf, &pos, &rule_idx);
+                            * = formatRuleMatch(&session.doc, nid, snid, false, r, false, out_buf, &pos, &rule_idx);
+                        }
+                    }
+                } else if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "link")) {
+                    const rel_a = sn.getAttribute("rel") ?? "";
+                    const href_a = sn.getAttribute("href") ?? "";
+                    if (std.ascii.eqlIgnoreCase(rel_a, "stylesheet") && href_a.len > 0) {
+                        let ext_buf: [16384]u8 = [0; 16384];
+                        const ext_text = fetchExternalStylesheet(session, href_a, &ext_buf);
+                        if (ext_text.len > 0) {
+                            let raw_rules: [64]CssRule = [CssRule{}; 64];
+                            const count = CssStylesheetParser.parseStylesheet(ext_text, raw_rules[0..64]);
+                            let ri: usize = 0;
+                            while (ri < count) : (ri += 1) {
+                                const r = &raw_rules[ri];
+                                * = formatRuleMatch(&session.doc, nid, snid, true, r, false, out_buf, &pos, &rule_idx);
+                            }
                         }
                     }
                 }
@@ -930,7 +1034,7 @@ pub struct CssHandler {
                             let ri: usize = 0;
                             while (ri < count) : (ri += 1) {
                                 const r = &raw_rules[ri];
-                                * = formatRuleMatch(&session.doc, anc_nid, a_snid, r, true, out_buf, &pos, &anc_rule_idx);
+                                * = formatRuleMatch(&session.doc, anc_nid, a_snid, false, r, true, out_buf, &pos, &anc_rule_idx);
                             }
                         }
                     }

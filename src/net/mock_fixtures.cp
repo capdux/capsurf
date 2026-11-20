@@ -648,6 +648,72 @@ pub struct MockFixtures {
             }
         }
 
+        if (std.mem.indexOf(u8, url, "/cors-sheet-acao.css") != null || std.mem.indexOf(u8, url, "/cors-sheet-bare.css") != null) {
+            if (content := MockFixtures.readPageFile("cors-sheet-echo-origin.css", out_buf)) {
+                return content;
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/cors-sheet-private-marker.css") != null) {
+            if (content := MockFixtures.readPageFile("cors-sheet-private-marker.css", out_buf)) {
+                return content;
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/image-heavy.html") != null) {
+            let n_val: usize = 12;
+            if (raw_n := MockFixtures.extractQueryParam(url, "n")) {
+                const parsed_n = std.fmt.parseInt(usize, raw_n, 10) catch 12;
+                n_val = @max(@as(usize, 1), @min(parsed_n, @as(usize, 64)));
+            }
+            let side_val: usize = 512;
+            if (raw_side := MockFixtures.extractQueryParam(url, "side")) {
+                const parsed_s = std.fmt.parseInt(usize, raw_side, 10) catch 512;
+                side_val = @max(@as(usize, 8), @min(parsed_s, @as(usize, 2048)));
+            }
+            let pos: usize = 0;
+            const head_s = std.fmt.bufPrint(
+                out_buf[pos..],
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>image-heavy fixture ({d} x {d}px)</title>\n<style>img {{ display: block; margin: 4px; max-width: 100%; }}</style></head>\n<body>\n<h1>image-heavy: {d} unique {d}x{d} images</h1>\n",
+                .{ n_val, side_val, n_val, side_val, side_val },
+            ) catch return null;
+            pos += head_s.len;
+            let seed: usize = 0;
+            while (seed < n_val) : (seed += 1) {
+                const img_s = std.fmt.bufPrint(
+                    out_buf[pos..],
+                    "<img id=\"i{d}\" src=\"/__fixtures/big-image.png?seed={d}&side={d}\">\n",
+                    .{ seed, seed, side_val },
+                ) catch break;
+                pos += img_s.len;
+            }
+            const tail_s = "</body>\n</html>";
+            if (pos + tail_s.len <= out_buf.len) {
+                @memcpy(out_buf[pos .. pos + tail_s.len], tail_s);
+                pos += tail_s.len;
+            }
+            return out_buf[0..pos];
+        }
+
+        if (std.mem.indexOf(u8, url, "/big-image.png") != null) {
+            // Minimal valid 1x1 red PNG
+            const png_bytes: [69]u8 = [
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+                0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+                0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+                0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+                0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D,
+                0xB0, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+                0x44, 0xAE, 0x42, 0x60, 0x82,
+            ];
+            if (png_bytes.len <= out_buf.len) {
+                @memcpy(out_buf[0..png_bytes.len], &png_bytes);
+                return out_buf[0..png_bytes.len];
+            }
+        }
+
         if (std.mem.indexOf(u8, url, "/policy-doc.html") != null) {
             let body_val: []const u8 = "";
             let decoded_buf: [32768]u8 = undefined;

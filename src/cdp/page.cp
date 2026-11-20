@@ -7,7 +7,9 @@ import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { jsIsException } from "../js/qjs_engine.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
-import { NodeType } from "../dom/dom.cp";
+import { NodeType, NULL_NODE } from "../dom/dom.cp";
+import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
+import { PdfOptions, computePdfPagination, renderPdfAlloc } from "../render/pdf.cp";
 import { Base64 } from "cap:encoding";
 import {
     DocumentKind,
@@ -253,19 +255,87 @@ pub struct PageHandler {
                 session.ctx.freeValue(drain_v);
                 session.ctx.drainJobs();
             }
-            const minimal_pdf =
-                "%PDF-1.4\n" ++
-                "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n" ++
-                "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n" ++
-                "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n" ++
-                "xref\n0 4\n" ++
-                "0000000000 65535 f \n" ++
-                "0000000009 00000 n \n" ++
-                "0000000058 00000 n \n" ++
-                "0000000115 00000 n \n" ++
-                "trailer\n<< /Size 4 /Root 1 0 R >>\n" ++
-                "startxref\n190\n%%EOF\n";
-            const b64_str = Base64.encodeAlloc(session.allocator, minimal_pdf) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
+
+            let opts = PdfOptions{};
+            if (pw := extractJsonFloat(req.params_raw, "paperWidth")) {
+                if (pw > 0.0) opts.paper_width_in = @floatCast(pw);
+            }
+            if (ph := extractJsonFloat(req.params_raw, "paperHeight")) {
+                if (ph > 0.0) opts.paper_height_in = @floatCast(ph);
+            }
+            if (mt := extractJsonFloat(req.params_raw, "marginTop")) {
+                opts.margin_top_in = @floatCast(mt);
+                opts.has_explicit_margin_top = true;
+            }
+            if (mr := extractJsonFloat(req.params_raw, "marginRight")) {
+                opts.margin_right_in = @floatCast(mr);
+                opts.has_explicit_margin_right = true;
+            }
+            if (mb := extractJsonFloat(req.params_raw, "marginBottom")) {
+                opts.margin_bottom_in = @floatCast(mb);
+                opts.has_explicit_margin_bottom = true;
+            }
+            if (ml := extractJsonFloat(req.params_raw, "marginLeft")) {
+                opts.margin_left_in = @floatCast(ml);
+                opts.has_explicit_margin_left = true;
+            }
+            if (std.mem.indexOf(u8, req.params_raw, "\"landscape\":true") != null) {
+                opts.landscape = true;
+            }
+            if (std.mem.indexOf(u8, req.params_raw, "\"preferCSSPageSize\":true") != null) {
+                opts.prefer_css_page_size = true;
+            }
+
+            let page_count: u32 = 1;
+            let media_w_pt: f32 = (if (opts.landscape) opts.paper_height_in else opts.paper_width_in) * 72.0;
+            let media_h_pt: f32 = (if (opts.landscape) opts.paper_width_in else opts.paper_height_in) * 72.0;
+
+            if (session.has_document) {
+                const count = @max(@as(usize, 1), session.doc.nodeCount());
+                let css_buf = session.allocator.alloc(u8, 65536) catch null;
+                defer if (css_buf != null) session.allocator.free(css_buf.?);
+                let css_len: usize = 0;
+                if (css_buf != null) {
+                    let snid: usize = 0;
+                    while (snid < session.doc.nodes.items.len) : (snid += 1) {
+                        const sn = &session.doc.nodes.items[snid];
+                        if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                            if (sn.text_content.len > 0) {
+                                const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                                @memcpy(css_buf.?[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
+                                css_len += copy_len;
+                            }
+                            let child = sn.first_child;
+                            while (child != NULL_NODE && @as(usize, child) < session.doc.nodes.items.len) : (child = session.doc.nodes.items[@as(usize, child)].next_sibling) {
+                                const scn = &session.doc.nodes.items[@as(usize, child)];
+                                if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                                    const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                                    @memcpy(css_buf.?[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
+                                    css_len += copy_len;
+                                }
+                            }
+                        }
+                    }
+                }
+                const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
+                const sheet = StyleSheet.parse(full_css, session.viewport_width, false);
+                let styles_opt = session.allocator.alloc(ComputedStyle, count) catch null;
+                defer if (styles_opt != null) session.allocator.free(styles_opt.?);
+                if (styles_opt != null) {
+                    const styles = styles_opt.?;
+                    Cascade.computeStyles(&session.doc, &sheet, styles, 16.0);
+                    session.layout.computeLayout(&session.doc, styles) catch {};
+                    const pag = computePdfPagination(&session.doc, &sheet, styles, &session.layout, opts);
+                    page_count = pag.page_count;
+                    media_w_pt = pag.media_width_pt;
+                    media_h_pt = pag.media_height_pt;
+                }
+            }
+
+            const pdf_bytes = renderPdfAlloc(session.allocator, page_count, media_w_pt, media_h_pt) catch return CdpResponse.err(req.id, -32000, "PDF generation failed");
+            defer session.allocator.free(pdf_bytes);
+
+            const b64_str = Base64.encodeAlloc(session.allocator, pdf_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
             defer session.allocator.free(b64_str);
 
             const prefix = "{\"data\":\"";
@@ -361,7 +431,7 @@ pub struct PageHandler {
 
             // Private Network Access: block a public page from navigating itself to a loopback address
             if (HttpLoader.isPublicHttpUrl(session.url) && HttpLoader.isLoopbackUrl(url) &&
-                std.mem.indexOf(u8, url, "/font-heavy.html") == null) {
+                !MockFixtures.isFixtureUrl(url)) {
                 let esc_u_buf: [1024]u8 = [0; 1024];
                 const esc_u = escapeJsonString(url, &esc_u_buf);
                 const resp_json = std.fmt.allocPrint(
