@@ -1652,4 +1652,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 9 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：5 大 Core 套件共 **9/9 PASS (28 expect calls, 9.27s)**。
+
+## Phase 79: Flex Wrap, BFC Float Containment, Clip Regions & Corner-Shape Rasterization — 5 Suites (100% Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/render/painter.cp`**：
+  - 实装 `display: flow-root`、BFC 浮动高度包含（CSS 2.1 §10.6.7）、`flex-wrap` 多行折行、旧版 `clip: rect(...)` 与 `clip-path: inset(...)` 分层裁剪、`outline`、`box-shadow` spread 及 `corner-shape`（`round`/`bevel`/`scoop`/`squircle`/`notch`）光栅化。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 4 门禁全 0；
+  - E2E 测试：5 大 Core 套件共 **12/12 PASS (40 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

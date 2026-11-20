@@ -14,6 +14,7 @@ import {
     BoxSizing,
     Position,
     FlexDirection,
+    FlexWrap,
     JustifyContent,
     AlignItems,
     BorderCollapse,
@@ -1633,8 +1634,10 @@ pub struct LayoutTree {
         let tbox = &_.boxes.items[@as(usize, table_id)];
         const h_decor = tbox.paddingHorizontal() + tbox.borderHorizontal();
         const v_decor = tbox.paddingVertical() + tbox.borderVertical();
-        tbox.content_width = if (dims[0] > h_decor) (dims[0] - h_decor) else 0.0;
-        tbox.content_height = if (dims[1] > v_decor) (dims[1] - v_decor) else 0.0;
+        const core_w = if (dims[0] > h_decor) (dims[0] - h_decor) else 0.0;
+        const core_h = if (dims[1] > v_decor) (dims[1] - v_decor) else 0.0;
+        tbox.content_width = if (!tstyle.width.is_auto && !tstyle.width.is_none) @max(tbox.content_width, core_w) else core_w;
+        tbox.content_height = if (!tbox.height_is_auto) @max(tbox.content_height, core_h) else core_h;
     }
 
     fn layoutTableCore(
@@ -2376,10 +2379,20 @@ pub struct LayoutTree {
             child = cnode.next_sibling;
         }
 
-        const effective_bottom = @max(cursor_y, @max(float_left_bottom, float_right_bottom));
+        const establishes_bfc = pstyle_blk.display.isFlowRoot() ||
+            !pstyle_blk.overflow_visible ||
+            pstyle_blk.display.isInlineBlock() ||
+            pstyle_blk.float_mode != FloatMode.None ||
+            pstyle_blk.position == Position.Absolute ||
+            pstyle_blk.position == Position.Fixed ||
+            pstyle_blk.display.isTableCell() ||
+            pstyle_blk.display.isTableCaption();
+        const scroll_bottom = @max(cursor_y, @max(float_left_bottom, float_right_bottom));
+        const effective_bottom = if (establishes_bfc) scroll_bottom else cursor_y;
+        const scroll_h = if (scroll_bottom > content_y) (scroll_bottom - content_y) else 0.0;
         const auto_h = if (effective_bottom > content_y) (effective_bottom - content_y) else 0.0;
         const auto_w = if (max_child_right > content_x) (max_child_right - content_x) else 0.0;
-        _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, auto_h);
+        _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, scroll_h);
         _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, auto_w);
 
         // If parent has auto height, expand content_height to fit child stream
@@ -2585,147 +2598,197 @@ pub struct LayoutTree {
             return;
         }
 
-        // Sum up base main sizes and gaps
-        let total_base_main: f32 = 0.0;
-        let total_grow: f32 = 0.0;
-        let total_shrink: f32 = 0.0;
+        // Split items into flex lines (single line for nowrap, multi-line for wrap/wrap-reverse)
+        const cross_gap = if (is_row) pstyle.row_gap else pstyle.column_gap;
+        const can_wrap = (pstyle.flex_wrap != FlexWrap.NoWrap) && (main_size > 0.0) && (item_count > 1);
+        let line_starts: [32]usize = [0; 32];
+        let line_ends: [32]usize = [0; 32];
+        let line_count: usize = 0;
 
-        let idx: usize = 0;
-        while (idx < item_count) : (idx += 1) {
-            total_base_main += items[idx].base_main;
-            total_grow += items[idx].grow;
-            total_shrink += items[idx].shrink;
-        }
-
-        const gaps_count_f: f32 = @floatFromInt(item_count - 1);
-        const total_gaps: f32 = gaps_count_f * gap;
-        const free_space = if (is_auto_main) 0.0 else (main_size - total_base_main - total_gaps);
-
-        // Distribute flex-grow or flex-shrink
-        if (!is_auto_main && free_space > 0.0 && total_grow > 0.0) {
-            let i: usize = 0;
-            while (i < item_count) : (i += 1) {
-                const ratio = items[i].grow / total_grow;
-                items[i].target_main = items[i].base_main + free_space * ratio;
-            }
-        } else if (!is_auto_main && free_space < 0.0 && total_shrink > 0.0) {
-            let i: usize = 0;
-            while (i < item_count) : (i += 1) {
-                const ratio = items[i].shrink / total_shrink;
-                const shrunk = items[i].base_main + free_space * ratio;
-                items[i].target_main = if (shrunk > 0.0) shrunk else 0.0;
-            }
-        }
-
-        // Enforce min main size constraints
-        let mi: usize = 0;
-        while (mi < item_count) : (mi += 1) {
-            const cid = items[mi].node_id;
-            const cs = &styles[@as(usize, cid)];
-            if (is_row) {
-                if (!cs.min_width.is_auto && !cs.min_width.is_none) {
-                    const min_w = cs.min_width.resolvePx(container_w, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                    if (items[mi].target_main < min_w) items[mi].target_main = min_w;
+        if (!can_wrap) {
+            line_starts[0] = 0;
+            line_ends[0] = item_count;
+            line_count = 1;
+        } else {
+            let cur_i: usize = 0;
+            while (cur_i < item_count && line_count < 32) {
+                const start_i = cur_i;
+                let line_sum = items[cur_i].base_main;
+                cur_i += 1;
+                while (cur_i < item_count) {
+                    const next_sum = line_sum + gap + items[cur_i].base_main;
+                    if (next_sum > main_size + 0.01) break;
+                    line_sum = next_sum;
+                    cur_i += 1;
                 }
-            } else {
-                if (!cs.min_height.is_auto && !cs.min_height.is_none) {
-                    const min_h = cs.min_height.resolvePx(container_h, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                    if (items[mi].target_main < min_h) items[mi].target_main = min_h;
-                }
+                line_starts[line_count] = start_i;
+                line_ends[line_count] = cur_i;
+                line_count += 1;
             }
         }
 
-        // Justify-content offsets
-        let used_main: f32 = total_gaps;
-        let j: usize = 0;
-        while (j < item_count) : (j += 1) {
-            used_main += items[j].target_main;
-        }
-        const remaining_main = if (main_size > used_main) (main_size - used_main) else 0.0;
+        let current_cross: f32 = 0.0;
+        let max_used_main: f32 = 0.0;
+        let li: usize = 0;
+        while (li < line_count) : (li += 1) {
+            const l_start = line_starts[li];
+            const l_end = line_ends[li];
+            const l_count = l_end - l_start;
+            if (l_count == 0) continue;
 
-        const count_f: f32 = @floatFromInt(item_count);
-        const count_plus_1: f32 = @floatFromInt(item_count + 1);
-        let count_minus_1: f32 = 1.0;
-        if (item_count > 1) {
-            count_minus_1 = @floatFromInt(item_count - 1);
-        }
+            let total_base_main: f32 = 0.0;
+            let total_grow: f32 = 0.0;
+            let total_shrink: f32 = 0.0;
 
-        const start_offset: f32 = switch (pstyle.justify_content) {
-            .FlexStart => 0.0,
-            .FlexEnd => remaining_main,
-            .Center => remaining_main / 2.0,
-            .SpaceAround => (remaining_main / count_f) / 2.0,
-            .SpaceEvenly => remaining_main / count_plus_1,
-            .SpaceBetween => 0.0,
-        };
+            let idx: usize = l_start;
+            while (idx < l_end) : (idx += 1) {
+                total_base_main += items[idx].base_main;
+                total_grow += items[idx].grow;
+                total_shrink += items[idx].shrink;
+            }
 
-        let space_between_step = gap;
-        if (item_count > 1) {
-            space_between_step = gap + remaining_main / count_minus_1;
-        }
+            const gaps_count_f: f32 = @floatFromInt(l_count - 1);
+            const total_gaps: f32 = gaps_count_f * gap;
+            const line_auto_main = is_auto_main && (line_count == 1);
+            const free_space = if (line_auto_main) 0.0 else (main_size - total_base_main - total_gaps);
 
-        const between_step: f32 = switch (pstyle.justify_content) {
-            .SpaceBetween => space_between_step,
-            .SpaceAround => gap + remaining_main / count_f,
-            .SpaceEvenly => gap + remaining_main / count_plus_1,
-            * => gap,
-        };
-
-        // Position each flex item and layout its children
-        let current_main = start_offset;
-        let max_item_cross: f32 = 0.0;
-
-        let k: usize = 0;
-        while (k < item_count) : (k += 1) {
-            let itm = &items[k];
-            const cid = itm.node_id;
-            const cbox = &_.boxes.items[@as(usize, cid)];
-
-            const cross_item_size = if (is_row) cbox.borderBoxHeight() else cbox.borderBoxWidth();
-            let cross_pos: f32 = 0.0;
-            if (cross_size > cross_item_size) {
-                if (pstyle.align_items == .FlexEnd) {
-                    cross_pos = cross_size - cross_item_size;
-                } else if (pstyle.align_items == .Center) {
-                    cross_pos = (cross_size - cross_item_size) / 2.0;
+            // Distribute flex-grow or flex-shrink
+            if (!line_auto_main && free_space > 0.0 && total_grow > 0.0) {
+                let i: usize = l_start;
+                while (i < l_end) : (i += 1) {
+                    const ratio = items[i].grow / total_grow;
+                    items[i].target_main = items[i].base_main + free_space * ratio;
+                }
+            } else if (!line_auto_main && free_space < 0.0 && total_shrink > 0.0) {
+                let i: usize = l_start;
+                while (i < l_end) : (i += 1) {
+                    const ratio = items[i].shrink / total_shrink;
+                    const shrunk = items[i].base_main + free_space * ratio;
+                    items[i].target_main = if (shrunk > 0.0) shrunk else 0.0;
                 }
             }
 
-            if (pstyle.align_items == .Stretch && cross_size > 0.0) {
-                itm.target_cross = cross_size;
-            }
-
-            const item_x = if (is_row) (content_x + current_main) else (content_x + cross_pos);
-            const item_y = if (is_row) (content_y + cross_pos) else (content_y + current_main);
-
-            // Pass resolved main dimension as available content size
-            if (is_row) {
-                const h_decor = cbox.paddingHorizontal() + cbox.borderHorizontal();
-                _.boxes.items[@as(usize, cid)].content_width = if (itm.target_main > h_decor) (itm.target_main - h_decor) else 0.0;
-            } else {
-                const v_decor = cbox.paddingVertical() + cbox.borderVertical();
-                if (!is_auto_main && itm.target_main > v_decor) {
-                    _.boxes.items[@as(usize, cid)].content_height = itm.target_main - v_decor;
+            // Enforce min main size constraints
+            let mi: usize = l_start;
+            while (mi < l_end) : (mi += 1) {
+                const cid = items[mi].node_id;
+                const cs = &styles[@as(usize, cid)];
+                if (is_row) {
+                    if (!cs.min_width.is_auto && !cs.min_width.is_none) {
+                        const min_w = cs.min_width.resolvePx(container_w, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        if (items[mi].target_main < min_w) items[mi].target_main = min_w;
+                    }
+                } else {
+                    if (!cs.min_height.is_auto && !cs.min_height.is_none) {
+                        const min_h = cs.min_height.resolvePx(container_h, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        if (items[mi].target_main < min_h) items[mi].target_main = min_h;
+                    }
                 }
             }
 
-            const item_avail_w = if (is_row) itm.target_main else container_w;
-            const item_avail_h = if (is_row) (if (container_h > 0.0) container_h else 0.0) else itm.target_main;
+            // Justify-content offsets
+            let used_main: f32 = total_gaps;
+            let j: usize = l_start;
+            while (j < l_end) : (j += 1) {
+                used_main += items[j].target_main;
+            }
+            const remaining_main = if (main_size > used_main) (main_size - used_main) else 0.0;
 
-            _.layoutNode(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h);
-
-            const rendered_cross = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxHeight() else _.boxes.items[@as(usize, cid)].borderBoxWidth();
-            if (rendered_cross > max_item_cross) {
-                max_item_cross = rendered_cross;
+            const count_f: f32 = @floatFromInt(l_count);
+            const count_plus_1: f32 = @floatFromInt(l_count + 1);
+            let count_minus_1: f32 = 1.0;
+            if (l_count > 1) {
+                count_minus_1 = @floatFromInt(l_count - 1);
             }
 
-            const actual_main = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxWidth() else _.boxes.items[@as(usize, cid)].borderBoxHeight();
-            const step_main = if (actual_main > itm.target_main) actual_main else itm.target_main;
-            current_main += step_main + between_step;
+            const start_offset: f32 = switch (pstyle.justify_content) {
+                .FlexStart => 0.0,
+                .FlexEnd => remaining_main,
+                .Center => remaining_main / 2.0,
+                .SpaceAround => (remaining_main / count_f) / 2.0,
+                .SpaceEvenly => remaining_main / count_plus_1,
+                .SpaceBetween => 0.0,
+            };
+
+            let space_between_step = gap;
+            if (l_count > 1) {
+                space_between_step = gap + remaining_main / count_minus_1;
+            }
+
+            const between_step: f32 = switch (pstyle.justify_content) {
+                .SpaceBetween => space_between_step,
+                .SpaceAround => gap + remaining_main / count_f,
+                .SpaceEvenly => gap + remaining_main / count_plus_1,
+                * => gap,
+            };
+
+            // Position each flex item in this line and layout its children
+            let current_main = start_offset;
+            let line_max_cross: f32 = 0.0;
+            const line_cross_avail = if (line_count == 1) cross_size else 0.0;
+
+            let k: usize = l_start;
+            while (k < l_end) : (k += 1) {
+                let itm = &items[k];
+                const cid = itm.node_id;
+                const cbox = &_.boxes.items[@as(usize, cid)];
+
+                const cross_item_size = if (is_row) cbox.borderBoxHeight() else cbox.borderBoxWidth();
+                let cross_pos: f32 = current_cross;
+                if (line_cross_avail > cross_item_size) {
+                    if (pstyle.align_items == .FlexEnd) {
+                        cross_pos = current_cross + (line_cross_avail - cross_item_size);
+                    } else if (pstyle.align_items == .Center) {
+                        cross_pos = current_cross + (line_cross_avail - cross_item_size) / 2.0;
+                    }
+                }
+
+                if (pstyle.align_items == .Stretch && line_cross_avail > 0.0) {
+                    itm.target_cross = line_cross_avail;
+                }
+
+                const item_x = if (is_row) (content_x + current_main) else (content_x + cross_pos);
+                const item_y = if (is_row) (content_y + cross_pos) else (content_y + current_main);
+
+                // Pass resolved main dimension as available content size
+                if (is_row) {
+                    const h_decor = cbox.paddingHorizontal() + cbox.borderHorizontal();
+                    _.boxes.items[@as(usize, cid)].content_width = if (itm.target_main > h_decor) (itm.target_main - h_decor) else 0.0;
+                } else {
+                    const v_decor = cbox.paddingVertical() + cbox.borderVertical();
+                    if (!line_auto_main && itm.target_main > v_decor) {
+                        _.boxes.items[@as(usize, cid)].content_height = itm.target_main - v_decor;
+                    }
+                }
+
+                const item_avail_w = if (is_row) itm.target_main else container_w;
+                const item_avail_h = if (is_row) (if (container_h > 0.0) container_h else 0.0) else itm.target_main;
+
+                _.layoutNode(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h);
+
+                const rendered_cross = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxHeight() else _.boxes.items[@as(usize, cid)].borderBoxWidth();
+                if (rendered_cross > line_max_cross) {
+                    line_max_cross = rendered_cross;
+                }
+
+                const actual_main = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxWidth() else _.boxes.items[@as(usize, cid)].borderBoxHeight();
+                const step_main = if (actual_main > itm.target_main) actual_main else itm.target_main;
+                current_main += step_main + between_step;
+            }
+
+            const line_used_main = if (l_count > 0) (current_main - between_step) else 0.0;
+            if (line_used_main > max_used_main) {
+                max_used_main = line_used_main;
+            }
+            current_cross += line_max_cross;
+            if (li + 1 < line_count) {
+                current_cross += cross_gap;
+            }
         }
 
         // Expand container auto dimension on cross-axis or main-axis if auto
-        const used_main_total = if (item_count > 0) (current_main - between_step) else 0.0;
+        const used_main_total = max_used_main;
+        const max_item_cross = current_cross;
         if (is_row) {
             _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, used_main_total);
             _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, max_item_cross);

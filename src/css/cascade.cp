@@ -113,6 +113,64 @@ pub enum ClearMode {
     }
 }
 
+pub enum FlexWrap {
+    NoWrap,
+    Wrap,
+    WrapReverse,
+
+    static fn parse(raw: []const u8): FlexWrap? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "nowrap")) return FlexWrap.NoWrap;
+        if (std.ascii.eqlIgnoreCase(s, "wrap")) return FlexWrap.Wrap;
+        if (std.ascii.eqlIgnoreCase(s, "wrap-reverse")) return FlexWrap.WrapReverse;
+        return null;
+    }
+}
+
+pub enum CornerShape {
+    Round,
+    Bevel,
+    Scoop,
+    Squircle,
+    Notch,
+
+    static fn parse(raw: []const u8): CornerShape? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "round")) return CornerShape.Round;
+        if (std.ascii.eqlIgnoreCase(s, "bevel")) return CornerShape.Bevel;
+        if (std.ascii.eqlIgnoreCase(s, "scoop")) return CornerShape.Scoop;
+        if (std.ascii.eqlIgnoreCase(s, "squircle")) return CornerShape.Squircle;
+        if (std.ascii.eqlIgnoreCase(s, "notch")) return CornerShape.Notch;
+        return null;
+    }
+}
+
+pub struct LegacyClipRect {
+    has_clip: bool = false;
+    top: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
+    right: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
+    bottom: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
+    left: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
+}
+
+pub struct ClipPathInset {
+    has_clip: bool = false;
+    top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    right: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    bottom: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    left: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+}
+
+pub struct BoxShadow {
+    has_shadow: bool = false;
+    inset: bool = false;
+    offset_x: f32 = 0.0;
+    offset_y: f32 = 0.0;
+    blur: f32 = 0.0;
+    spread: f32 = 0.0;
+    color: CssColor = CssColor.rgba(0, 0, 0, 255);
+}
+
 pub struct DisplayPair {
     outside: DisplayOutside = DisplayOutside.Block;
     inside: DisplayInside = DisplayInside.Flow;
@@ -128,6 +186,13 @@ pub struct Display {
         return Display {
             is_keyword: false,
             pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.Flow },
+        };
+    }
+
+    static fn flowRoot(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.FlowRoot },
         };
     }
 
@@ -254,7 +319,8 @@ pub struct Display {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "none")) return Display.none();
         if (std.ascii.eqlIgnoreCase(s, "contents")) return Display.contents();
-        if (std.ascii.eqlIgnoreCase(s, "block") || std.ascii.eqlIgnoreCase(s, "flow-root")) return Display.block();
+        if (std.ascii.eqlIgnoreCase(s, "block")) return Display.block();
+        if (std.ascii.eqlIgnoreCase(s, "flow-root")) return Display.flowRoot();
         if (std.ascii.eqlIgnoreCase(s, "inline")) return Display.inlineFlow();
         if (std.ascii.eqlIgnoreCase(s, "inline-block")) return Display.inlineBlock();
         if (std.ascii.eqlIgnoreCase(s, "flex") || std.ascii.eqlIgnoreCase(s, "-webkit-flex")) return Display.flex();
@@ -283,6 +349,10 @@ pub struct Display {
 
     fn isFlex(): bool {
         return !_.is_keyword && _.pair.inside == DisplayInside.Flex;
+    }
+
+    fn isFlowRoot(): bool {
+        return !_.is_keyword && _.pair.inside == DisplayInside.FlowRoot;
     }
 
     fn isGrid(): bool {
@@ -698,7 +768,24 @@ pub const PROP_TABLE_LAYOUT: usize = 52;
 pub const PROP_FLOAT: usize = 53;
 pub const PROP_CLEAR: usize = 54;
 pub const PROP_ACCENT_COLOR: usize = 55;
-pub const TOTAL_PROP_SLOTS: usize = 56;
+pub const PROP_FLEX_WRAP: usize = 56;
+pub const PROP_CLIP: usize = 57;
+pub const PROP_CLIP_PATH: usize = 58;
+pub const PROP_OUTLINE_WIDTH: usize = 59;
+pub const PROP_OUTLINE_COLOR: usize = 60;
+pub const PROP_OUTLINE_STYLE: usize = 61;
+pub const PROP_OUTLINE_OFFSET: usize = 62;
+pub const PROP_BORDER_TOP_COLOR: usize = 63;
+pub const PROP_BORDER_RIGHT_COLOR: usize = 64;
+pub const PROP_BORDER_BOTTOM_COLOR: usize = 65;
+pub const PROP_BORDER_LEFT_COLOR: usize = 66;
+pub const PROP_BORDER_TL_RADIUS: usize = 67;
+pub const PROP_BORDER_TR_RADIUS: usize = 68;
+pub const PROP_BORDER_BR_RADIUS: usize = 69;
+pub const PROP_BORDER_BL_RADIUS: usize = 70;
+pub const PROP_CORNER_SHAPE: usize = 71;
+pub const PROP_BOX_SHADOW: usize = 72;
+pub const TOTAL_PROP_SLOTS: usize = 73;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1002,13 +1089,57 @@ pub struct ConicGradient {
 pub struct ResolvedPaintStyle {
     bg_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     border_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_top_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_right_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_bottom_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_left_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_top_width: f32 = 0.0;
+    border_right_width: f32 = 0.0;
+    border_bottom_width: f32 = 0.0;
+    border_left_width: f32 = 0.0;
     text_color: CssColor = CssColor.rgb(0, 0, 0);
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
     border_width: f32 = 0.0;
     border_radius: f32 = 0.0;
+    border_tl_radius: f32 = 0.0;
+    border_tr_radius: f32 = 0.0;
+    border_br_radius: f32 = 0.0;
+    border_bl_radius: f32 = 0.0;
+    corner_shape_tl: CornerShape = CornerShape.Round;
+    corner_shape_tr: CornerShape = CornerShape.Round;
+    corner_shape_br: CornerShape = CornerShape.Round;
+    corner_shape_bl: CornerShape = CornerShape.Round;
+    outline_width: f32 = 0.0;
+    outline_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    outline_offset: f32 = 0.0;
+    box_shadow: BoxShadow = BoxShadow{};
     font_size_px: f32 = 16.0;
     conic_gradient: ConicGradient = ConicGradient{};
+}
+
+/// Paren-aware CSS value tokenizer: splits on whitespace at parenthesis depth 0.
+fn nextCssValueToken(s: []const u8, pos: *usize): ([]const u8)? {
+    let i = pos.*;
+    while (i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) : (i += 1) {}
+    if (i >= s.len) {
+        pos.* = i;
+        return null;
+    }
+    const start = i;
+    let depth: i32 = 0;
+    while (i < s.len) : (i += 1) {
+        const c = s[i];
+        if (c == '(') {
+            depth += 1;
+        } else if (c == ')') {
+            if (depth > 0) depth -= 1;
+        } else if (depth == 0 && (c == ' ' || c == '\t' || c == '\r' || c == '\n')) {
+            break;
+        }
+    }
+    pos.* = i;
+    return s[start..i];
 }
 
 fn canonicalizeCssPropertyName(name: []const u8): []const u8 {
@@ -1062,7 +1193,33 @@ pub struct ComputedStyle {
     border_left_width: f32 = 0.0;
     border_color: CssColor = CssColor.rgb(0, 0, 0);
     has_explicit_border_color: bool = false;
+    border_top_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_right_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_bottom_color: CssColor = CssColor.rgb(0, 0, 0);
+    border_left_color: CssColor = CssColor.rgb(0, 0, 0);
+    has_border_top_color: bool = false;
+    has_border_right_color: bool = false;
+    has_border_bottom_color: bool = false;
+    has_border_left_color: bool = false;
     border_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    border_tl_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    border_tr_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    border_br_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    border_bl_radius: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    corner_shape_tl: CornerShape = CornerShape.Round;
+    corner_shape_tr: CornerShape = CornerShape.Round;
+    corner_shape_br: CornerShape = CornerShape.Round;
+    corner_shape_bl: CornerShape = CornerShape.Round;
+
+    outline_width: f32 = 0.0;
+    outline_color: CssColor = CssColor.rgb(0, 0, 0);
+    has_explicit_outline_color: bool = false;
+    outline_style_none: bool = true;
+    outline_offset: f32 = 0.0;
+
+    legacy_clip: LegacyClipRect = LegacyClipRect{};
+    clip_path_inset: ClipPathInset = ClipPathInset{};
+    box_shadow: BoxShadow = BoxShadow{};
 
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
     right: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
@@ -1070,6 +1227,7 @@ pub struct ComputedStyle {
     left: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
 
     flex_direction: FlexDirection = FlexDirection.Row;
+    flex_wrap: FlexWrap = FlexWrap.NoWrap;
     justify_content: JustifyContent = JustifyContent.FlexStart;
     align_items: AlignItems = AlignItems.Stretch;
     flex_grow: f32 = 0.0;
@@ -1360,6 +1518,17 @@ pub struct ComputedStyle {
         let txt = _.color;
         // Per CSS spec, if border-color is not explicitly set, it defaults to `currentColor` (`_.color`)
         let bdr = if (_.has_explicit_border_color) _.border_color else _.color;
+        let bdr_t = if (_.has_border_top_color) _.border_top_color else bdr;
+        let bdr_r = if (_.has_border_right_color) _.border_right_color else bdr;
+        let bdr_b = if (_.has_border_bottom_color) _.border_bottom_color else bdr;
+        let bdr_l = if (_.has_border_left_color) _.border_left_color else bdr;
+        let out_col = if (_.outline_style_none || _.outline_width <= 0.0)
+            CssColor.rgba(0, 0, 0, 0)
+        else if (_.has_explicit_outline_color)
+            _.outline_color
+        else
+            _.color;
+        let shadow = _.box_shadow;
 
         const op = std.math.clamp(_.opacity, 0.0, 1.0);
         let cg = _.conic_gradient;
@@ -1367,6 +1536,14 @@ pub struct ComputedStyle {
             bg.a = @intFromFloat(@as(f32, @floatFromInt(bg.a)) * op);
             txt.a = @intFromFloat(@as(f32, @floatFromInt(txt.a)) * op);
             bdr.a = @intFromFloat(@as(f32, @floatFromInt(bdr.a)) * op);
+            bdr_t.a = @intFromFloat(@as(f32, @floatFromInt(bdr_t.a)) * op);
+            bdr_r.a = @intFromFloat(@as(f32, @floatFromInt(bdr_r.a)) * op);
+            bdr_b.a = @intFromFloat(@as(f32, @floatFromInt(bdr_b.a)) * op);
+            bdr_l.a = @intFromFloat(@as(f32, @floatFromInt(bdr_l.a)) * op);
+            out_col.a = @intFromFloat(@as(f32, @floatFromInt(out_col.a)) * op);
+            if (shadow.has_shadow) {
+                shadow.color.a = @intFromFloat(@as(f32, @floatFromInt(shadow.color.a)) * op);
+            }
             if (cg.has_gradient) {
                 let si: usize = 0;
                 while (si < cg.stop_count) : (si += 1) {
@@ -1376,16 +1553,40 @@ pub struct ComputedStyle {
         }
 
         const radius_px = _.border_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
+        const tl_r = _.border_tl_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
+        const tr_r = _.border_tr_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
+        const br_r = _.border_br_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
+        const bl_r = _.border_bl_radius.resolvePx(box_width, _.font_size_px, root_font_px, viewport_w, viewport_h);
         const bw_px = @max(@max(_.border_top_width, _.border_right_width), @max(_.border_bottom_width, _.border_left_width));
 
         return ResolvedPaintStyle {
             bg_color: bg,
             border_color: bdr,
+            border_top_color: bdr_t,
+            border_right_color: bdr_r,
+            border_bottom_color: bdr_b,
+            border_left_color: bdr_l,
+            border_top_width: _.border_top_width,
+            border_right_width: _.border_right_width,
+            border_bottom_width: _.border_bottom_width,
+            border_left_width: _.border_left_width,
             text_color: txt,
             accent_color: _.accent_color,
             has_accent_color: _.has_accent_color,
             border_width: bw_px,
             border_radius: radius_px,
+            border_tl_radius: tl_r,
+            border_tr_radius: tr_r,
+            border_br_radius: br_r,
+            border_bl_radius: bl_r,
+            corner_shape_tl: _.corner_shape_tl,
+            corner_shape_tr: _.corner_shape_tr,
+            corner_shape_br: _.corner_shape_br,
+            corner_shape_bl: _.corner_shape_bl,
+            outline_width: if (_.outline_style_none) 0.0 else _.outline_width,
+            outline_color: out_col,
+            outline_offset: _.outline_offset,
+            box_shadow: shadow,
             font_size_px: _.font_size_px,
             conic_gradient: cg,
         };
@@ -1656,19 +1857,43 @@ pub struct ComputedStyle {
         }
 
         // Border width & color shorthand & longhands
-        if (std.ascii.eqlIgnoreCase(name, "border") || std.ascii.eqlIgnoreCase(name, "border-width")) {
+        if (std.ascii.eqlIgnoreCase(name, "border")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = bw;
             if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = bw;
-            if (std.ascii.eqlIgnoreCase(name, "border")) {
-                if (c := Cascade.parseColorTokenFromShorthand(val)) {
-                    if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
-                        _.border_color = c;
-                        _.has_explicit_border_color = true;
-                    }
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
+                    _.border_color = c;
+                    _.has_explicit_border_color = true;
                 }
+                if (_.tryClaimSlot(PROP_BORDER_TOP_COLOR, weight)) { _.border_top_color = c; _.has_border_top_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT_COLOR, weight)) { _.border_right_color = c; _.has_border_right_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM_COLOR, weight)) { _.border_bottom_color = c; _.has_border_bottom_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_LEFT_COLOR, weight)) { _.border_left_color = c; _.has_border_left_color = true; }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-width")) {
+            let bws: [4]f32 = [0.0; 4];
+            let cnt: usize = 0;
+            let pos: usize = 0;
+            while (cnt < 4) {
+                const tok_opt = nextCssValueToken(val, &pos);
+                if (tok_opt == null) break;
+                bws[cnt] = Cascade.parseBorderWidthToken(tok_opt.?, root_font_px);
+                cnt += 1;
+            }
+            if (cnt > 0) {
+                const t_w = bws[0];
+                const r_w = if (cnt >= 2) bws[1] else bws[0];
+                const b_w = if (cnt >= 3) bws[2] else bws[0];
+                const l_w = if (cnt >= 4) bws[3] else r_w;
+                if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = t_w;
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = r_w;
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = b_w;
+                if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = l_w;
             }
             return;
         }
@@ -1676,9 +1901,9 @@ pub struct ComputedStyle {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = bw;
             if (c := Cascade.parseColorTokenFromShorthand(val)) {
-                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
-                    _.border_color = c;
-                    _.has_explicit_border_color = true;
+                if (_.tryClaimSlot(PROP_BORDER_TOP_COLOR, weight)) {
+                    _.border_top_color = c;
+                    _.has_border_top_color = true;
                 }
             }
             return;
@@ -1686,33 +1911,357 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "border-right") || std.ascii.eqlIgnoreCase(name, "border-right-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = bw;
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT_COLOR, weight)) {
+                    _.border_right_color = c;
+                    _.has_border_right_color = true;
+                }
+            }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "border-bottom") || std.ascii.eqlIgnoreCase(name, "border-bottom-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = bw;
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM_COLOR, weight)) {
+                    _.border_bottom_color = c;
+                    _.has_border_bottom_color = true;
+                }
+            }
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "border-left") || std.ascii.eqlIgnoreCase(name, "border-left-width")) {
             const bw = Cascade.parseBorderWidthToken(val, root_font_px);
             if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = bw;
-            return;
-        }
-        if (std.ascii.eqlIgnoreCase(name, "border-color") || std.ascii.eqlIgnoreCase(name, "border-top-color")) {
             if (c := Cascade.parseColorTokenFromShorthand(val)) {
-                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
-                    _.border_color = c;
-                    _.has_explicit_border_color = true;
+                if (_.tryClaimSlot(PROP_BORDER_LEFT_COLOR, weight)) {
+                    _.border_left_color = c;
+                    _.has_border_left_color = true;
                 }
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "border-radius") || std.ascii.eqlIgnoreCase(name, "border-top-left-radius")) {
+        if (std.ascii.eqlIgnoreCase(name, "border-color")) {
+            let cols: [4]CssColor = [CssColor.rgb(0, 0, 0); 4];
+            let cnt: usize = 0;
+            let pos: usize = 0;
+            while (cnt < 4) {
+                const tok_opt = nextCssValueToken(val, &pos);
+                if (tok_opt == null) break;
+                if (c := CssColor.parse(tok_opt.?)) {
+                    cols[cnt] = c;
+                    cnt += 1;
+                }
+            }
+            if (cnt > 0) {
+                const tc = cols[0];
+                const rc = if (cnt >= 2) cols[1] else cols[0];
+                const bc = if (cnt >= 3) cols[2] else cols[0];
+                const lc = if (cnt >= 4) cols[3] else rc;
+                if (_.tryClaimSlot(PROP_BORDER_COLOR, weight)) {
+                    _.border_color = tc;
+                    _.has_explicit_border_color = true;
+                }
+                if (_.tryClaimSlot(PROP_BORDER_TOP_COLOR, weight)) { _.border_top_color = tc; _.has_border_top_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT_COLOR, weight)) { _.border_right_color = rc; _.has_border_right_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM_COLOR, weight)) { _.border_bottom_color = bc; _.has_border_bottom_color = true; }
+                if (_.tryClaimSlot(PROP_BORDER_LEFT_COLOR, weight)) { _.border_left_color = lc; _.has_border_left_color = true; }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-top-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_TOP_COLOR, weight)) {
+                    _.border_top_color = c;
+                    _.has_border_top_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-right-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT_COLOR, weight)) {
+                    _.border_right_color = c;
+                    _.has_border_right_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-bottom-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM_COLOR, weight)) {
+                    _.border_bottom_color = c;
+                    _.has_border_bottom_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-left-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BORDER_LEFT_COLOR, weight)) {
+                    _.border_left_color = c;
+                    _.has_border_left_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-radius")) {
+            // Take the horizontal radii part (before optional '/')
+            const slash_idx = std.mem.indexOfScalar(u8, val, '/');
+            const part = if (slash_idx != null) val[0..slash_idx.?] else val;
+            let rads: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.zeroPx(); 4];
+            let cnt: usize = 0;
+            let it = std.mem.tokenizeAny(u8, part, " \t\r\n");
+            while (cnt < 4) {
+                const tok_opt = it.next();
+                if (tok_opt == null) break;
+                if (lpa := LengthPercentageOrAuto.parse(tok_opt.?)) {
+                    rads[cnt] = lpa;
+                    cnt += 1;
+                }
+            }
+            if (cnt > 0) {
+                const tl = rads[0];
+                const tr = if (cnt >= 2) rads[1] else rads[0];
+                const br = if (cnt >= 3) rads[2] else rads[0];
+                const bl = if (cnt >= 4) rads[3] else tr;
+                if (_.tryClaimSlot(PROP_BORDER_RADIUS, weight)) _.border_radius = tl;
+                if (_.tryClaimSlot(PROP_BORDER_TL_RADIUS, weight)) _.border_tl_radius = tl;
+                if (_.tryClaimSlot(PROP_BORDER_TR_RADIUS, weight)) _.border_tr_radius = tr;
+                if (_.tryClaimSlot(PROP_BORDER_BR_RADIUS, weight)) _.border_br_radius = br;
+                if (_.tryClaimSlot(PROP_BORDER_BL_RADIUS, weight)) _.border_bl_radius = bl;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-top-left-radius")) {
             let it = std.mem.tokenizeAny(u8, val, " \t\r\n/");
-            if (first_tok := it.next()) {
-                if (lpa := LengthPercentageOrAuto.parse(first_tok)) {
-                    if (_.tryClaimSlot(PROP_BORDER_RADIUS, weight)) {
-                        _.border_radius = lpa;
+            if (t := it.next()) {
+                if (lpa := LengthPercentageOrAuto.parse(t)) {
+                    if (_.tryClaimSlot(PROP_BORDER_TL_RADIUS, weight)) _.border_tl_radius = lpa;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-top-right-radius")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n/");
+            if (t := it.next()) {
+                if (lpa := LengthPercentageOrAuto.parse(t)) {
+                    if (_.tryClaimSlot(PROP_BORDER_TR_RADIUS, weight)) _.border_tr_radius = lpa;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-bottom-right-radius")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n/");
+            if (t := it.next()) {
+                if (lpa := LengthPercentageOrAuto.parse(t)) {
+                    if (_.tryClaimSlot(PROP_BORDER_BR_RADIUS, weight)) _.border_br_radius = lpa;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-bottom-left-radius")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n/");
+            if (t := it.next()) {
+                if (lpa := LengthPercentageOrAuto.parse(t)) {
+                    if (_.tryClaimSlot(PROP_BORDER_BL_RADIUS, weight)) _.border_bl_radius = lpa;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "corner-shape")) {
+            let shapes: [4]CornerShape = [CornerShape.Round; 4];
+            let cnt: usize = 0;
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            while (cnt < 4) {
+                const tok_opt = it.next();
+                if (tok_opt == null) break;
+                if (cs := CornerShape.parse(tok_opt.?)) {
+                    shapes[cnt] = cs;
+                    cnt += 1;
+                }
+            }
+            if (cnt > 0 && _.tryClaimSlot(PROP_CORNER_SHAPE, weight)) {
+                _.corner_shape_tl = shapes[0];
+                _.corner_shape_tr = if (cnt >= 2) shapes[1] else shapes[0];
+                _.corner_shape_br = if (cnt >= 3) shapes[2] else shapes[0];
+                _.corner_shape_bl = if (cnt >= 4) shapes[3] else _.corner_shape_tr;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "box-shadow")) {
+            if (_.tryClaimSlot(PROP_BOX_SHADOW, weight)) {
+                const trimmed = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(trimmed, "none") || trimmed.len == 0) {
+                    _.box_shadow = BoxShadow{};
+                } else {
+                    let sh = BoxShadow{ has_shadow: true };
+                    let nums: [4]f32 = [0.0; 4];
+                    let n_cnt: usize = 0;
+                    let pos: usize = 0;
+                    while (true) {
+                        const tok_opt = nextCssValueToken(trimmed, &pos);
+                        if (tok_opt == null) break;
+                        const tok = tok_opt.?;
+                        if (std.ascii.eqlIgnoreCase(tok, "inset")) {
+                            sh.inset = true;
+                        } else if (c := CssColor.parse(tok)) {
+                            sh.color = c;
+                        } else if (l := CssLength.parse(tok)) {
+                            if (n_cnt < 4) {
+                                nums[n_cnt] = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                                n_cnt += 1;
+                            }
+                        }
+                    }
+                    if (n_cnt >= 2) {
+                        sh.offset_x = nums[0];
+                        sh.offset_y = nums[1];
+                        if (n_cnt >= 3) sh.blur = nums[2];
+                        if (n_cnt >= 4) sh.spread = nums[3];
+                        _.box_shadow = sh;
+                    }
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "outline")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed, "none")) {
+                if (_.tryClaimSlot(PROP_OUTLINE_STYLE, weight)) _.outline_style_none = true;
+                if (_.tryClaimSlot(PROP_OUTLINE_WIDTH, weight)) _.outline_width = 0.0;
+                return;
+            }
+            let pos: usize = 0;
+            let saw_style = false;
+            let saw_width = false;
+            while (true) {
+                const tok_opt = nextCssValueToken(trimmed, &pos);
+                if (tok_opt == null) break;
+                const tok = tok_opt.?;
+                if (std.ascii.eqlIgnoreCase(tok, "none") || std.ascii.eqlIgnoreCase(tok, "hidden")) {
+                    if (_.tryClaimSlot(PROP_OUTLINE_STYLE, weight)) _.outline_style_none = true;
+                    saw_style = true;
+                } else if (std.ascii.eqlIgnoreCase(tok, "solid") || std.ascii.eqlIgnoreCase(tok, "dashed") || std.ascii.eqlIgnoreCase(tok, "dotted") || std.ascii.eqlIgnoreCase(tok, "double") || std.ascii.eqlIgnoreCase(tok, "auto") || std.ascii.eqlIgnoreCase(tok, "groove") || std.ascii.eqlIgnoreCase(tok, "ridge") || std.ascii.eqlIgnoreCase(tok, "inset") || std.ascii.eqlIgnoreCase(tok, "outset")) {
+                    if (_.tryClaimSlot(PROP_OUTLINE_STYLE, weight)) _.outline_style_none = false;
+                    saw_style = true;
+                } else if (c := CssColor.parse(tok)) {
+                    if (_.tryClaimSlot(PROP_OUTLINE_COLOR, weight)) {
+                        _.outline_color = c;
+                        _.has_explicit_outline_color = true;
+                    }
+                } else {
+                    const ow = Cascade.parseBorderWidthToken(tok, root_font_px);
+                    if (ow > 0.0 || std.mem.eql(u8, tok, "0") || std.ascii.eqlIgnoreCase(tok, "0px")) {
+                        if (_.tryClaimSlot(PROP_OUTLINE_WIDTH, weight)) _.outline_width = ow;
+                        saw_width = true;
+                    }
+                }
+            }
+            if (saw_style && !_.outline_style_none && !saw_width) {
+                if (_.tryClaimSlot(PROP_OUTLINE_WIDTH, weight)) _.outline_width = 3.0;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "outline-width")) {
+            const ow = Cascade.parseBorderWidthToken(val, root_font_px);
+            if (_.tryClaimSlot(PROP_OUTLINE_WIDTH, weight)) _.outline_width = ow;
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "outline-style")) {
+            const s = std.mem.trim(u8, val, " \t\r\n");
+            if (_.tryClaimSlot(PROP_OUTLINE_STYLE, weight)) {
+                _.outline_style_none = std.ascii.eqlIgnoreCase(s, "none") || std.ascii.eqlIgnoreCase(s, "hidden");
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "outline-color")) {
+            if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_OUTLINE_COLOR, weight)) {
+                    _.outline_color = c;
+                    _.has_explicit_outline_color = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "outline-offset")) {
+            if (l := CssLength.parse(val)) {
+                if (_.tryClaimSlot(PROP_OUTLINE_OFFSET, weight)) {
+                    _.outline_offset = @floatCast(l.toPx(@as(f64, root_font_px), 1280.0, 800.0));
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "clip")) {
+            if (_.tryClaimSlot(PROP_CLIP, weight)) {
+                const s = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(s, "auto") || std.ascii.eqlIgnoreCase(s, "none")) {
+                    _.legacy_clip = LegacyClipRect{};
+                } else if (std.ascii.startsWithIgnoreCase(s, "rect(")) {
+                    if (close_idx := std.mem.lastIndexOfScalar(u8, s, ')')) {
+                        if (close_idx > 5) {
+                            const inner = s[5..close_idx];
+                            let args: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 4];
+                            let cnt: usize = 0;
+                            let it = std.mem.tokenizeAny(u8, inner, ", \t\r\n");
+                            while (cnt < 4) {
+                                const tok_opt = it.next();
+                                if (tok_opt == null) break;
+                                if (lpa := LengthPercentageOrAuto.parse(tok_opt.?)) {
+                                    args[cnt] = lpa;
+                                    cnt += 1;
+                                }
+                            }
+                            if (cnt == 4) {
+                                _.legacy_clip = LegacyClipRect {
+                                    has_clip: true,
+                                    top: args[0],
+                                    right: args[1],
+                                    bottom: args[2],
+                                    left: args[3],
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "clip-path")) {
+            if (_.tryClaimSlot(PROP_CLIP_PATH, weight)) {
+                const s = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(s, "none")) {
+                    _.clip_path_inset = ClipPathInset{};
+                } else if (std.ascii.startsWithIgnoreCase(s, "inset(")) {
+                    if (close_idx := std.mem.lastIndexOfScalar(u8, s, ')')) {
+                        if (close_idx > 6) {
+                            const inner = s[6..close_idx];
+                            let args: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.zeroPx(); 4];
+                            let cnt: usize = 0;
+                            let it = std.mem.tokenizeAny(u8, inner, " \t\r\n");
+                            while (cnt < 4) {
+                                const tok_opt = it.next();
+                                if (tok_opt == null) break;
+                                if (std.ascii.eqlIgnoreCase(tok_opt.?, "round")) break;
+                                if (lpa := LengthPercentageOrAuto.parse(tok_opt.?)) {
+                                    args[cnt] = lpa;
+                                    cnt += 1;
+                                }
+                            }
+                            if (cnt > 0) {
+                                const t = args[0];
+                                const r = if (cnt >= 2) args[1] else args[0];
+                                const b = if (cnt >= 3) args[2] else args[0];
+                                const l = if (cnt >= 4) args[3] else r;
+                                _.clip_path_inset = ClipPathInset {
+                                    has_clip: true,
+                                    top: t,
+                                    right: r,
+                                    bottom: b,
+                                    left: l,
+                                };
+                            }
+                        }
                     }
                 }
             }
@@ -1758,6 +2307,23 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "flex-direction")) {
             if (fd := FlexDirection.parse(val)) {
                 if (_.tryClaimSlot(PROP_FLEX_DIRECTION, weight)) _.flex_direction = fd;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "flex-wrap") || std.ascii.eqlIgnoreCase(name, "-webkit-flex-wrap")) {
+            if (fw := FlexWrap.parse(val)) {
+                if (_.tryClaimSlot(PROP_FLEX_WRAP, weight)) _.flex_wrap = fw;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "flex-flow")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            while (tok := it.next()) {
+                if (fd := FlexDirection.parse(tok)) {
+                    if (_.tryClaimSlot(PROP_FLEX_DIRECTION, weight)) _.flex_direction = fd;
+                } else if (fw := FlexWrap.parse(tok)) {
+                    if (_.tryClaimSlot(PROP_FLEX_WRAP, weight)) _.flex_wrap = fw;
+                }
             }
             return;
         }

@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape } from "../css/cascade.cp";
 import { Rect } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -81,6 +81,133 @@ pub struct ScreenshotOptions {
     clip_h: u32 = 0;
 }
 
+fn isInsideCornerBox(cx: f32, cy: f32, r: f32, cs: CornerShape): bool {
+    if (r <= 0.0 || cx >= r || cy >= r) return true;
+    const u = (r - cx) / r;
+    const v = (r - cy) / r;
+    return switch (cs) {
+        .Round => (u * u + v * v) <= 1.0,
+        .Bevel => (u + v) <= 1.0,
+        .Scoop => (cx / r) * (cx / r) + (cy / r) * (cy / r) >= 1.0,
+        .Squircle => (u * u * u * u + v * v * v * v) <= 1.0,
+        .Notch => false,
+    };
+}
+
+fn isInsideOuterShape(
+    px: f32,
+    py: f32,
+    rx: f32,
+    ry: f32,
+    rw: f32,
+    rh: f32,
+    r_tl: f32,
+    r_tr: f32,
+    r_br: f32,
+    r_bl: f32,
+    cs_tl: CornerShape,
+    cs_tr: CornerShape,
+    cs_br: CornerShape,
+    cs_bl: CornerShape,
+): bool {
+    if (px < rx || px > rx + rw || py < ry || py > ry + rh) return false;
+    // Top-left
+    if (!isInsideCornerBox(px - rx, py - ry, r_tl, cs_tl)) return false;
+    // Top-right
+    if (!isInsideCornerBox((rx + rw) - px, py - ry, r_tr, cs_tr)) return false;
+    // Bottom-right
+    if (!isInsideCornerBox((rx + rw) - px, (ry + rh) - py, r_br, cs_br)) return false;
+    // Bottom-left
+    if (!isInsideCornerBox(px - rx, (ry + rh) - py, r_bl, cs_bl)) return false;
+    return true;
+}
+
+fn isInsideInnerCorner(cx: f32, cy: f32, r: f32, bx: f32, by: f32, cs: CornerShape): bool {
+    if (r <= 0.0) return true;
+    switch (cs) {
+        .Round => {
+            const irx = if (r > bx) (r - bx) else 0.0;
+            const iry = if (r > by) (r - by) else 0.0;
+            if (irx <= 0.0 || iry <= 0.0) return true;
+            const icx = cx - bx;
+            const icy = cy - by;
+            if (icx >= irx || icy >= iry) return true;
+            const u = (irx - icx) / irx;
+            const v = (iry - icy) / iry;
+            return (u * u + v * v) <= 1.0;
+        },
+        .Squircle => {
+            const irx = if (r > bx) (r - bx) else 0.0;
+            const iry = if (r > by) (r - by) else 0.0;
+            if (irx <= 0.0 || iry <= 0.0) return true;
+            const icx = cx - bx;
+            const icy = cy - by;
+            if (icx >= irx || icy >= iry) return true;
+            const u = (irx - icx) / irx;
+            const v = (iry - icy) / iry;
+            return (u * u * u * u + v * v * v * v) <= 1.0;
+        },
+        .Bevel => {
+            const offset = @sqrt((bx / r) * (bx / r) + (by / r) * (by / r));
+            return (cx / r + cy / r) >= (1.0 + offset);
+        },
+        .Scoop => {
+            const sx = cx / (r + bx);
+            const sy = cy / (r + by);
+            return (sx * sx + sy * sy) >= 1.0;
+        },
+        .Notch => {
+            return !(cx < r + bx && cy < r + by);
+        },
+    }
+}
+
+fn isInsideInnerShape(
+    px: f32,
+    py: f32,
+    rx: f32,
+    ry: f32,
+    rw: f32,
+    rh: f32,
+    bt: f32,
+    br: f32,
+    bb: f32,
+    bl: f32,
+    r_tl: f32,
+    r_tr: f32,
+    r_br: f32,
+    r_bl: f32,
+    cs_tl: CornerShape,
+    cs_tr: CornerShape,
+    cs_br: CornerShape,
+    cs_bl: CornerShape,
+): bool {
+    if (px < rx + bl || px > rx + rw - br || py < ry + bt || py > ry + rh - bb) return false;
+    if (!isInsideInnerCorner(px - rx, py - ry, r_tl, bl, bt, cs_tl)) return false;
+    if (!isInsideInnerCorner((rx + rw) - px, py - ry, r_tr, br, bt, cs_tr)) return false;
+    if (!isInsideInnerCorner((rx + rw) - px, (ry + rh) - py, r_br, br, bb, cs_br)) return false;
+    if (!isInsideInnerCorner(px - rx, (ry + rh) - py, r_bl, bl, bb, cs_bl)) return false;
+    return true;
+}
+
+fn scaleCornerRadii(rw: f32, rh: f32, r_tl: *f32, r_tr: *f32, r_br: *f32, r_bl: *f32) {
+    let f: f32 = 1.0;
+    const sum_t = r_tl.* + r_tr.*;
+    if (sum_t > rw && sum_t > 0.0) f = @min(f, rw / sum_t);
+    const sum_b = r_bl.* + r_br.*;
+    if (sum_b > rw && sum_b > 0.0) f = @min(f, rw / sum_b);
+    const sum_l = r_tl.* + r_bl.*;
+    if (sum_l > rh && sum_l > 0.0) f = @min(f, rh / sum_l);
+    const sum_r = r_tr.* + r_br.*;
+    if (sum_r > rh && sum_r > 0.0) f = @min(f, rh / sum_r);
+    if (f < 1.0) {
+        r_tl.* *= f;
+        r_tr.* *= f;
+        r_br.* *= f;
+        r_bl.* *= f;
+    }
+}
+
 pub struct Canvas {
     width: u32;
     height: u32;
@@ -142,9 +269,83 @@ pub struct Canvas {
         _.paintBoxClipped(rect, style, null);
     }
 
+    fn paintOutsetShadow(*_, rect: Rect, style: ResolvedPaintStyle, clip: ClipRect?) {
+        const sh = style.box_shadow;
+        if (!sh.has_shadow || sh.inset || sh.color.a == 0 || !rect.visible || rect.width <= 0.0 || rect.height <= 0.0) {
+            return;
+        }
+        const sx = rect.x + sh.offset_x - sh.spread;
+        const sy = rect.y + sh.offset_y - sh.spread;
+        const sw = rect.width + sh.spread * 2.0;
+        const sh_h = rect.height + sh.spread * 2.0;
+        if (sw <= 0.0 || sh_h <= 0.0) return;
+
+        let x0 = @max(0, @as(i32, @intFromFloat(@floor(sx))));
+        let y0 = @max(0, @as(i32, @intFromFloat(@floor(sy))));
+        let x1 = @min(@as(i32, _.width), @as(i32, @intFromFloat(@ceil(sx + sw))));
+        let y1 = @min(@as(i32, _.height), @as(i32, @intFromFloat(@ceil(sy + sh_h))));
+        if (c := clip) {
+            x0 = @max(x0, c.x0);
+            y0 = @max(y0, c.y0);
+            x1 = @min(x1, c.x1);
+            y1 = @min(y1, c.y1);
+        }
+        if (x0 >= x1 || y0 >= y1) return;
+
+        let br_tl = if (style.border_tl_radius > 0.0) style.border_tl_radius else style.border_radius;
+        let br_tr = if (style.border_tr_radius > 0.0 || style.border_tl_radius > 0.0 || style.border_br_radius > 0.0 || style.border_bl_radius > 0.0) style.border_tr_radius else style.border_radius;
+        let br_br = if (style.border_tr_radius > 0.0 || style.border_tl_radius > 0.0 || style.border_br_radius > 0.0 || style.border_bl_radius > 0.0) style.border_br_radius else style.border_radius;
+        let br_bl = if (style.border_tr_radius > 0.0 || style.border_tl_radius > 0.0 || style.border_br_radius > 0.0 || style.border_bl_radius > 0.0) style.border_bl_radius else style.border_radius;
+        scaleCornerRadii(rect.width, rect.height, &br_tl, &br_tr, &br_br, &br_bl);
+
+        const bevel_factor: f32 = 0.5857864;
+        let sr_tl: f32 = if (br_tl <= 0.0) 0.0 else if (style.corner_shape_tl == CornerShape.Bevel && sh.spread > 0.0) (br_tl + sh.spread * bevel_factor) else @max(0.0, br_tl + sh.spread);
+        let sr_tr: f32 = if (br_tr <= 0.0) 0.0 else if (style.corner_shape_tr == CornerShape.Bevel && sh.spread > 0.0) (br_tr + sh.spread * bevel_factor) else @max(0.0, br_tr + sh.spread);
+        let sr_br: f32 = if (br_br <= 0.0) 0.0 else if (style.corner_shape_br == CornerShape.Bevel && sh.spread > 0.0) (br_br + sh.spread * bevel_factor) else @max(0.0, br_br + sh.spread);
+        let sr_bl: f32 = if (br_bl <= 0.0) 0.0 else if (style.corner_shape_bl == CornerShape.Bevel && sh.spread > 0.0) (br_bl + sh.spread * bevel_factor) else @max(0.0, br_bl + sh.spread);
+        scaleCornerRadii(sw, sh_h, &sr_tl, &sr_tr, &sr_br, &sr_bl);
+
+        let py = y0;
+        while (py < y1) : (py += 1) {
+            const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+            let px = x0;
+            while (px < x1) : (px += 1) {
+                const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+                if (isInsideOuterShape(px_f, py_f, sx, sy, sw, sh_h, sr_tl, sr_tr, sr_br, sr_bl, style.corner_shape_tl, style.corner_shape_tr, style.corner_shape_br, style.corner_shape_bl)) {
+                    _.blendPixel(px, py, sh.color);
+                }
+            }
+        }
+    }
+
+    fn paintOutlineClipped(*_, rect: Rect, style: ResolvedPaintStyle, clip: ClipRect?) {
+        if (!rect.visible || style.outline_width <= 0.0 || style.outline_color.a == 0) return;
+        const ow = style.outline_width;
+        const off = style.outline_offset;
+        const ox = rect.x - off - ow;
+        const oy = rect.y - off - ow;
+        const o_w = rect.width + 2.0 * (off + ow);
+        const o_h = rect.height + 2.0 * (off + ow);
+        const ix0 = rect.x - off;
+        const iy0 = rect.y - off;
+        const ix1 = rect.x + rect.width + off;
+        const iy1 = rect.y + rect.height + off;
+
+        // Top, bottom, left, right strips of the outline ring
+        _.fillRectClipped(ox, oy, o_w, ow, style.outline_color, clip);
+        _.fillRectClipped(ox, iy1, o_w, ow, style.outline_color, clip);
+        _.fillRectClipped(ox, iy0, ow, iy1 - iy0, style.outline_color, clip);
+        _.fillRectClipped(ix1, iy0, ow, iy1 - iy0, style.outline_color, clip);
+    }
+
     fn paintBoxClipped(*_, rect: Rect, style: ResolvedPaintStyle, clip: ClipRect?) {
         if (!rect.visible || rect.width <= 0.0 || rect.height <= 0.0) {
             return;
+        }
+
+        // Paint outset box-shadow behind the element box
+        if (style.box_shadow.has_shadow && !style.box_shadow.inset) {
+            _.paintOutsetShadow(rect, style, clip);
         }
 
         let x0 = @max(0, @as(i32, @intFromFloat(@floor(rect.x))));
@@ -162,13 +363,87 @@ pub struct Canvas {
             return;
         }
 
+        const has_per_corner_r = (style.border_tl_radius > 0.0 || style.border_tr_radius > 0.0 || style.border_br_radius > 0.0 || style.border_bl_radius > 0.0);
+        let r_tl = if (has_per_corner_r) style.border_tl_radius else style.border_radius;
+        let r_tr = if (has_per_corner_r) style.border_tr_radius else style.border_radius;
+        let r_br = if (has_per_corner_r) style.border_br_radius else style.border_radius;
+        let r_bl = if (has_per_corner_r) style.border_bl_radius else style.border_radius;
+        scaleCornerRadii(rect.width, rect.height, &r_tl, &r_tr, &r_br, &r_bl);
+
+        const has_custom_shape = (style.corner_shape_tl != CornerShape.Round ||
+            style.corner_shape_tr != CornerShape.Round ||
+            style.corner_shape_br != CornerShape.Round ||
+            style.corner_shape_bl != CornerShape.Round);
+        const has_per_side_border = (style.border_top_width > 0.0 || style.border_right_width > 0.0 || style.border_bottom_width > 0.0 || style.border_left_width > 0.0);
+        const bt = if (has_per_side_border) style.border_top_width else style.border_width;
+        const br = if (has_per_side_border) style.border_right_width else style.border_width;
+        const bb = if (has_per_side_border) style.border_bottom_width else style.border_width;
+        const bl = if (has_per_side_border) style.border_left_width else style.border_width;
+        const has_any_border = (bt > 0.0 || br > 0.0 || bb > 0.0 || bl > 0.0);
+        const non_uniform_r = (r_tl != r_tr || r_tl != r_br || r_tl != r_bl);
+        const non_uniform_b = (bt != br || bt != bb || bt != bl ||
+            style.border_top_color.r != style.border_right_color.r || style.border_top_color.g != style.border_right_color.g || style.border_top_color.b != style.border_right_color.b ||
+            style.border_top_color.r != style.border_bottom_color.r || style.border_top_color.g != style.border_bottom_color.g || style.border_top_color.b != style.border_bottom_color.b ||
+            style.border_top_color.r != style.border_left_color.r || style.border_top_color.g != style.border_left_color.g || style.border_top_color.b != style.border_left_color.b);
+
+        const has_gradient = style.conic_gradient.has_gradient;
+
+        if (has_custom_shape || non_uniform_r || non_uniform_b) {
+            const pad_cx = rect.x + bl + @max(0.0, rect.width - bl - br) * 0.5;
+            const pad_cy = rect.y + bt + @max(0.0, rect.height - bt - bb) * 0.5;
+            let py = y0;
+            while (py < y1) : (py += 1) {
+                const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+                let px = x0;
+                while (px < x1) : (px += 1) {
+                    const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+                    if (!isInsideOuterShape(px_f, py_f, rect.x, rect.y, rect.width, rect.height, r_tl, r_tr, r_br, r_bl, style.corner_shape_tl, style.corner_shape_tr, style.corner_shape_br, style.corner_shape_bl)) {
+                        continue;
+                    }
+                    let final_color = if (has_gradient)
+                        style.conic_gradient.sampleAt(rect.x, rect.y, rect.width, rect.height, px_f, py_f)
+                    else
+                        style.bg_color;
+
+                    if (has_any_border && !isInsideInnerShape(px_f, py_f, rect.x, rect.y, rect.width, rect.height, bt, br, bb, bl, r_tl, r_tr, r_br, r_bl, style.corner_shape_tl, style.corner_shape_tr, style.corner_shape_br, style.corner_shape_bl)) {
+                        const dx_l = px_f - rect.x;
+                        const dx_r = (rect.x + rect.width) - px_f;
+                        const dy_t = py_f - rect.y;
+                        const dy_b = (rect.y + rect.height) - py_f;
+
+                        let best_score: f32 = 1.0e9;
+                        let side_col = style.border_color;
+                        if (bt > 0.0 && (py_f < pad_cy || dy_t < bt)) {
+                            const s = dy_t / bt;
+                            if (s < best_score) { best_score = s; side_col = style.border_top_color; }
+                        }
+                        if (bb > 0.0 && (py_f >= pad_cy || dy_b < bb)) {
+                            const s = dy_b / bb;
+                            if (s < best_score) { best_score = s; side_col = style.border_bottom_color; }
+                        }
+                        if (bl > 0.0 && (px_f < pad_cx || dx_l < bl)) {
+                            const s = dx_l / bl;
+                            if (s < best_score) { best_score = s; side_col = style.border_left_color; }
+                        }
+                        if (br > 0.0 && (px_f >= pad_cx || dx_r < br)) {
+                            const s = dx_r / br;
+                            if (s < best_score) { best_score = s; side_col = style.border_right_color; }
+                        }
+                        final_color = side_col;
+                    }
+                    if (final_color.a > 0) {
+                        _.blendPixel(px, py, final_color);
+                    }
+                }
+            }
+            return;
+        }
+
         const cx = rect.x + rect.width * 0.5;
         const cy = rect.y + rect.height * 0.5;
         const half_w = rect.width * 0.5;
         const half_h = rect.height * 0.5;
-        const r = @min(style.border_radius, @min(half_w, half_h));
-
-        const has_gradient = style.conic_gradient.has_gradient;
+        const r = @min(r_tl, @min(half_w, half_h));
 
         let py = y0;
         while (py < y1) : (py += 1) {
@@ -1386,12 +1661,57 @@ fn paintNodeRecursive(
     // - position: absolute uses the clip established by its positioned containing block,
     //   escaping any static overflow:hidden ancestors in between.
     // - in-flow / relative uses the normal ancestor overflow clip.
-    const active_clip: ClipRect? = if (style.position == Position.Fixed)
+    const base_clip: ClipRect? = if (style.position == Position.Fixed)
         null
     else if (style.position == Position.Absolute)
         abs_clip
     else
         clip;
+
+    // Legacy `clip: rect(t, r, b, l)` applies to abs/fixed elements and wraps both outline and box
+    let box_outer_clip = base_clip;
+    if (node.node_type == NodeType.Element && style.legacy_clip.has_clip && (style.position == Position.Absolute || style.position == Position.Fixed)) {
+        const lc = style.legacy_clip;
+        const t_px = if (lc.top.is_auto) 0.0 else lc.top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+        const r_px = if (lc.right.is_auto) r.width else lc.right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+        const b_px = if (lc.bottom.is_auto) r.height else lc.bottom.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+        const l_px = if (lc.left.is_auto) 0.0 else lc.left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+        const lx0 = @as(i32, @intFromFloat(@round(r.x + l_px)));
+        const ly0 = @as(i32, @intFromFloat(@round(r.y + t_px)));
+        const lx1 = @as(i32, @intFromFloat(@round(r.x + r_px)));
+        const ly1 = @as(i32, @intFromFloat(@round(r.y + b_px)));
+        const leg_rect = ClipRect{ x0: lx0, y0: ly0, x1: lx1, y1: ly1 };
+        if (cc := box_outer_clip) {
+            box_outer_clip = cc.intersect(leg_rect);
+        } else {
+            box_outer_clip = leg_rect;
+        }
+    }
+
+    // Paint outline BEFORE clip-path layer is pushed (so outline survives empty clip-path, while legacy clip wraps it)
+    if (node.node_type == NodeType.Element && paint_style.outline_width > 0.0 && paint_style.outline_color.a > 0) {
+        canvas.paintOutlineClipped(r, paint_style, box_outer_clip);
+    }
+
+    // Modern `clip-path: inset(t, r, b, l)` clips the box and its children
+    let active_clip = box_outer_clip;
+    if (node.node_type == NodeType.Element && style.clip_path_inset.has_clip) {
+        const cp = style.clip_path_inset;
+        const t_px = cp.top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+        const r_px = cp.right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+        const b_px = cp.bottom.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+        const l_px = cp.left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+        const cx0 = @as(i32, @intFromFloat(@round(r.x + l_px)));
+        const cy0 = @as(i32, @intFromFloat(@round(r.y + t_px)));
+        const cx1 = @as(i32, @intFromFloat(@round(r.x + r.width - r_px)));
+        const cy1 = @as(i32, @intFromFloat(@round(r.y + r.height - b_px)));
+        const cp_rect = ClipRect{ x0: cx0, y0: cy0, x1: cx1, y1: cy1 };
+        if (cc := active_clip) {
+            active_clip = cc.intersect(cp_rect);
+        } else {
+            active_clip = cp_rect;
+        }
+    }
 
     let effective_paint_style = paint_style;
     if (node.hasTag("svg") && style.has_fill_current_color) {

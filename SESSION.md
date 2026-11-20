@@ -3404,6 +3404,18 @@
   - 派发全新子智能体 **Subagent 44**: Flex Float & Clip Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/flex-svg-intrinsic.e2e.test.ts`、`e2e/flex-wrap-stretch-fit.e2e.test.ts`、`e2e/float-containment.e2e.test.ts`、`e2e/clip-regions.e2e.test.ts`、`e2e/corner-shape-paint.e2e.test.ts`。
 
+## [2026-11-20 16:22:30] Flex 多行折行、BFC 浮动包含、Clip 裁剪与 Corner-Shape 光栅化 12/12 全绿闭环 (Subagent 9c755a3b 结单，Phase 79)
+- **CSS 级联与 BFC/Flex 布局 (`src/css/cascade.cp`, `src/layout/layout.cp`)**:
+  - `cascade.cp`: 新增 `Display.flowRoot()`、`FlexWrap`/`flex-flow`、`LegacyClipRect` (`clip: rect(...)`)、`ClipPathInset` (`clip-path: inset(...)`)、`outline*`、`border-width/color/radius` 1~4 值、`CornerShape` (`round`/`bevel`/`scoop`/`squircle`/`notch`) 与 `BoxShadow`；
+  - `layout.cp`: 严格按 CSS 2.1 §10.6.7 实现 BFC 浮动高度包含；实装 `flex-wrap: wrap/wrap-reverse` 多行折行计算；修复显式高度空 `display: table` 尺寸保留。
+- **Corner-Shape 几何光栅化与分层裁剪 (`src/render/painter.cp`)**:
+  - 实装 `round`/`bevel`/`scoop`/`squircle`($p=4$)/`notch` 完整几何光栅化与四象限防串色边框、`paintOutsetShadow` 与 `paintOutlineClipped`；按规范分层应用旧版 `clip: rect(...)` 与 `clip-path: inset(...)`。
+- **门禁与 E2E 验证**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 全部通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `flex-svg-intrinsic` (3/3) + `flex-wrap-stretch-fit` (2/2) + `float-containment` (1/1) + `clip-regions` (2/2) + `corner-shape-paint` (4/4)：**12/12 PASS (40 expect() calls)**！
+- **清理旧子智能体**: 销毁 `9c755a3b-5c4f-4ac4-8863-efc3908858be`。
+
+
 
 
 

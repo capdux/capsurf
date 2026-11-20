@@ -1285,4 +1285,10 @@
    - 在 `sessionModuleLoader` 中通过 `JS_GetImportMeta` 注入标准 `url` 与 `resolve`；将 `paint_prepares` 绑定至真实 `computeLayout` 执行，选区移动不置脏 `layout_dirty`。
 2. **原生 `--*`/`var()`、渐变与文本裁剪 (`cascade.cp`, `painter.cp`, `dom_binding.cp`)**：
    - 在 `ComputedStyle` 维护 `CustomProp` 继承链与嵌套 `var()` 求值，打通 SVG presentation attributes 的 `var(--...)` 与 `url(#grad)`；在 `Canvas.drawTextClipped` 应用活动裁剪框杜绝 `overflow: hidden` 文本溢出。
+
+## Phase 79 Flex 多行折行、BFC 浮动包含、Clip 裁剪与 Corner-Shape 光栅化技术方案
+1. **BFC 浮动包含与 Flex 多行折行 (`layout.cp`, `cascade.cp`)**：
+   - 仅在容器建立 BFC（`flow-root` / 非 `overflow: visible` / `inline-block` / 浮动 / 绝对固定 / 单元格）时计入浮动子元素底部高度；在 `layoutFlexContainer` 中按主轴可用宽度实装 `flex-wrap: wrap/wrap-reverse` 分行累加。
+2. **Corner-Shape 几何与分层裁剪 (`painter.cp`)**：
+   - 实装 `round`/`bevel`/`scoop`/`squircle`($p=4$)/`notch` 内外轮廓判定与防串色四象限边框；在绘制管线中区分 `clip: rect(...)`（裁剪 outline+盒体）与 `clip-path: inset(...)`（仅裁剪盒体与子树）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
