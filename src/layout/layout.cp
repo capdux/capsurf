@@ -8,6 +8,7 @@ import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
 import { sniffPng } from "../render/image_dims.cp";
 import {
     ComputedStyle,
+    CssUnit,
     Display,
     Visibility,
     BoxSizing,
@@ -69,6 +70,21 @@ pub struct LayoutBox {
 
     content_width: f32 = 0.0;
     content_height: f32 = 0.0;
+
+    // Scroll & positioning metadata for sticky/fixed viewport resolution and hit testing
+    position: Position = Position.Static;
+    overflow_visible: bool = true;
+    height_is_auto: bool = true;
+    sticky_top: f32 = 0.0;
+    sticky_bottom: f32 = 0.0;
+    sticky_left: f32 = 0.0;
+    sticky_right: f32 = 0.0;
+    has_sticky_top: bool = false;
+    has_sticky_bottom: bool = false;
+    has_sticky_left: bool = false;
+    has_sticky_right: bool = false;
+    scroll_content_width: f32 = 0.0;
+    scroll_content_height: f32 = 0.0;
 
     fn paddingHorizontal(): f32 {
         return _.padding_left + _.padding_right;
@@ -650,12 +666,32 @@ pub struct LayoutTree {
         style: *const ComputedStyle,
         parent_w: f32,
         parent_h: f32,
+        parent_h_definite: bool,
     ) {
         let box = &_.boxes.items[@as(usize, node_id)];
         const font_px = style.font_size_px;
         const root_px = _.root_font_px;
         const vw = _.viewport_width;
         const vh = _.viewport_height;
+
+        box.position = style.position;
+        box.overflow_visible = style.overflow_visible;
+        box.has_sticky_top = (style.position == Position.Sticky) && !style.top.is_auto && !style.top.is_none;
+        box.has_sticky_bottom = (style.position == Position.Sticky) && !style.bottom.is_auto && !style.bottom.is_none;
+        box.has_sticky_left = (style.position == Position.Sticky) && !style.left.is_auto && !style.left.is_none;
+        box.has_sticky_right = (style.position == Position.Sticky) && !style.right.is_auto && !style.right.is_none;
+        if (box.has_sticky_top) {
+            box.sticky_top = style.top.resolvePx(parent_h, font_px, root_px, vw, vh);
+        }
+        if (box.has_sticky_bottom) {
+            box.sticky_bottom = style.bottom.resolvePx(parent_h, font_px, root_px, vw, vh);
+        }
+        if (box.has_sticky_left) {
+            box.sticky_left = style.left.resolvePx(parent_w, font_px, root_px, vw, vh);
+        }
+        if (box.has_sticky_right) {
+            box.sticky_right = style.right.resolvePx(parent_w, font_px, root_px, vw, vh);
+        }
 
         box.margin_top = style.margin_top.resolvePx(parent_w, font_px, root_px, vw, vh);
         box.margin_right = style.margin_right.resolvePx(parent_w, font_px, root_px, vw, vh);
@@ -741,7 +777,11 @@ pub struct LayoutTree {
         }
 
         // Content height calculation
-        if (!style.height.is_auto && !style.height.is_none) {
+        // CSS Sizing: percentage height against an indefinite (auto) parent height behaves as auto
+        const height_is_indefinite_pct = (!style.height.is_auto && !style.height.is_none && style.height.length.unit == CssUnit.Percent && !parent_h_definite);
+        const effective_height_auto = style.height.is_auto || style.height.is_none || height_is_indefinite_pct;
+        box.height_is_auto = effective_height_auto;
+        if (!effective_height_auto) {
             const raw_h = style.height.resolvePx(parent_h, font_px, root_px, vw, vh);
             if (style.box_sizing == BoxSizing.BorderBox) {
                 const v_decor = box.paddingVertical() + box.borderVertical();
@@ -799,6 +839,22 @@ pub struct LayoutTree {
         avail_w: f32,
         avail_h: f32,
     ) {
+        _.layoutNodeEx(doc, styles, node_id, origin_x, origin_y, avail_w, avail_h, origin_x, origin_y, true);
+    }
+
+    fn layoutNodeEx(
+        *_,
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        node_id: NodeId,
+        origin_x: f32,
+        origin_y: f32,
+        avail_w: f32,
+        avail_h: f32,
+        static_x: f32,
+        static_y: f32,
+        parent_h_definite: bool,
+    ) {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.boxes.items.len) {
             return;
         }
@@ -810,12 +866,33 @@ pub struct LayoutTree {
             return;
         }
 
-        _.resolveBoxMetrics(doc, node_id, style, avail_w, avail_h);
+        _.resolveBoxMetrics(doc, node_id, style, avail_w, avail_h, parent_h_definite);
         const box = &_.boxes.items[@as(usize, node_id)];
 
-        // Compute screen coordinates for this element's border box
-        const border_box_x = origin_x + box.margin_left;
-        const border_box_y = origin_y + box.margin_top;
+        // Compute screen coordinates for this element's border box.
+        // For out-of-flow absolute/fixed boxes, apply known left/top or fall back to static position
+        // BEFORE laying out children so descendant static positions follow positioned ancestors.
+        let border_box_x = origin_x + box.margin_left;
+        let border_box_y = origin_y + box.margin_top;
+        if (style.position == Position.Absolute || style.position == Position.Fixed) {
+            if (!style.left.is_auto && !style.left.is_none) {
+                border_box_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_left;
+            } else if (!style.right.is_auto && !style.right.is_none) {
+                const r_px = style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                border_box_x = origin_x + avail_w - r_px - box.borderBoxWidth() - box.margin_right;
+            } else {
+                border_box_x = static_x + box.margin_left;
+            }
+
+            if (!style.top.is_auto && !style.top.is_none) {
+                border_box_y = origin_y + style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_top;
+            } else if (!style.bottom.is_auto && !style.bottom.is_none) {
+                const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                border_box_y = origin_y + avail_h - b_px - box.borderBoxHeight() - box.margin_bottom;
+            } else {
+                border_box_y = static_y + box.margin_top;
+            }
+        }
 
         // Content box origin for children
         const content_x = border_box_x + box.border_left + box.padding_left;
@@ -978,12 +1055,16 @@ pub struct LayoutTree {
             } else if (!style.right.is_auto && !style.right.is_none) {
                 const r_px = style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                 rect_x = origin_x + avail_w - r_px - final_w - final_box.margin_right;
+            } else {
+                rect_x = static_x + final_box.margin_left;
             }
             if (!style.top.is_auto && !style.top.is_none) {
                 rect_y = origin_y + style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_top;
             } else if (!style.bottom.is_auto && !style.bottom.is_none) {
                 const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                 rect_y = origin_y + avail_h - b_px - final_h - final_box.margin_bottom;
+            } else {
+                rect_y = static_y + final_box.margin_top;
             }
         }
 
@@ -1295,6 +1376,12 @@ pub struct LayoutTree {
         let cursor_y = content_y;
         let max_child_right = content_x;
 
+        const pstyle_blk = &styles[@as(usize, parent_id)];
+        const parent_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
+            !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
+            !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
+        const child_h_definite = !parent_box.height_is_auto || parent_pinned_v;
+
         let child = doc.nodes.items[@as(usize, parent_id)].first_child;
         while (child != NULL_NODE) {
             const cnode = &doc.nodes.items[@as(usize, child)];
@@ -1304,9 +1391,9 @@ pub struct LayoutTree {
                     const is_out_of_flow = (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed);
                     if (is_out_of_flow) {
                         if (cstyle.position == Position.Fixed) {
-                            _.layoutNode(doc, styles, child, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                            _.layoutNodeEx(doc, styles, child, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, cursor_y, true);
                         } else {
-                            _.layoutNode(doc, styles, child, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                            _.layoutNodeEx(doc, styles, child, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, cursor_y, true);
                         }
                     } else {
                         let child_x = content_x;
@@ -1322,7 +1409,7 @@ pub struct LayoutTree {
                                 }
                             }
                         }
-                        _.layoutNode(doc, styles, child, child_x, cursor_y, content_w, content_h);
+                        _.layoutNodeEx(doc, styles, child, child_x, cursor_y, content_w, content_h, child_x, cursor_y, child_h_definite);
                         const cbox = &_.boxes.items[@as(usize, child)];
                         cursor_y += cbox.outerHeight();
                         if (cnode.hasTag("svg") && cstyle.display.isInline() && cbox.outerHeight() > 0.0) {
@@ -1341,12 +1428,13 @@ pub struct LayoutTree {
             child = cnode.next_sibling;
         }
 
+        const auto_h = if (cursor_y > content_y) (cursor_y - content_y) else 0.0;
+        const auto_w = if (max_child_right > content_x) (max_child_right - content_x) else 0.0;
+        _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, auto_h);
+        _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, auto_w);
+
         // If parent has auto height, expand content_height to fit child stream
-        const pstyle_blk = &styles[@as(usize, parent_id)];
-        const is_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
-            !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
-            !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
-        if (pstyle_blk.height.is_auto && !is_pinned_v) {
+        if (_.boxes.items[@as(usize, parent_id)].height_is_auto && !parent_pinned_v) {
             let is_p_rep = false;
             if (parent_id != NULL_NODE && @as(usize, parent_id) < doc.nodes.items.len) {
                 const pnode = &doc.nodes.items[@as(usize, parent_id)];
@@ -1355,8 +1443,7 @@ pub struct LayoutTree {
                 }
             }
             if (!is_p_rep) {
-                const auto_h = cursor_y - content_y;
-                _.boxes.items[@as(usize, parent_id)].content_height = if (auto_h > 0.0) auto_h else 0.0;
+                _.boxes.items[@as(usize, parent_id)].content_height = auto_h;
             }
         }
     }
@@ -1460,7 +1547,7 @@ pub struct LayoutTree {
         const container_h = pbox.content_height;
 
         const is_row = pstyle.flex_direction.isRow();
-        const is_auto_main = if (is_row) pstyle.width.is_auto else pstyle.height.is_auto;
+        const is_auto_main = if (is_row) pstyle.width.is_auto else pbox.height_is_auto;
         const main_size = if (is_row) container_w else container_h;
         const cross_size = if (is_row) container_h else container_w;
         const gap = if (is_row) pstyle.column_gap else pstyle.row_gap;
@@ -1484,7 +1571,7 @@ pub struct LayoutTree {
                         abs_count += 1;
                     }
                 } else if (item_count < 32) {
-                    _.resolveBoxMetrics(doc, child, cstyle, container_w, container_h);
+                    _.resolveBoxMetrics(doc, child, cstyle, container_w, container_h, !pbox.height_is_auto);
                     const cbox = &_.boxes.items[@as(usize, child)];
 
                     let base_m: f32 = 0.0;
@@ -1541,9 +1628,9 @@ pub struct LayoutTree {
             while (ai < abs_count) : (ai += 1) {
                 const aid = abs_children[ai];
                 if (styles[@as(usize, aid)].position == Position.Fixed) {
-                    _.layoutNode(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                    _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
                 } else {
-                    _.layoutNode(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                    _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);
                 }
             }
             return;
@@ -1689,22 +1776,26 @@ pub struct LayoutTree {
         }
 
         // Expand container auto dimension on cross-axis or main-axis if auto
+        const used_main_total = if (item_count > 0) (current_main - between_step) else 0.0;
         if (is_row) {
-            if (styles[@as(usize, parent_id)].height.is_auto) {
+            _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, used_main_total);
+            _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, max_item_cross);
+            if (_.boxes.items[@as(usize, parent_id)].height_is_auto) {
                 if (max_item_cross > _.boxes.items[@as(usize, parent_id)].content_height) {
                     _.boxes.items[@as(usize, parent_id)].content_height = max_item_cross;
                 }
             }
         } else {
+            _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, max_item_cross);
+            _.boxes.items[@as(usize, parent_id)].scroll_content_height = @max(_.boxes.items[@as(usize, parent_id)].content_height, used_main_total);
             if (styles[@as(usize, parent_id)].width.is_auto) {
                 if (max_item_cross > _.boxes.items[@as(usize, parent_id)].content_width) {
                     _.boxes.items[@as(usize, parent_id)].content_width = max_item_cross;
                 }
             }
-            if (styles[@as(usize, parent_id)].height.is_auto) {
-                const used_h = if (item_count > 0) (current_main - between_step) else 0.0;
-                if (used_h > _.boxes.items[@as(usize, parent_id)].content_height) {
-                    _.boxes.items[@as(usize, parent_id)].content_height = used_h;
+            if (_.boxes.items[@as(usize, parent_id)].height_is_auto) {
+                if (used_main_total > _.boxes.items[@as(usize, parent_id)].content_height) {
+                    _.boxes.items[@as(usize, parent_id)].content_height = used_main_total;
                 }
             }
         }
@@ -1715,9 +1806,9 @@ pub struct LayoutTree {
             while (ai < abs_count) : (ai += 1) {
                 const aid = abs_children[ai];
                 if (styles[@as(usize, aid)].position == Position.Fixed) {
-                    _.layoutNode(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                    _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
                 } else {
-                    _.layoutNode(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                    _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);
                 }
             }
         }

@@ -47,10 +47,12 @@ import {
     JS_ToCStringLen2,
     JS_FreeCString,
     JS_ToInt32,
+    JS_ToFloat64,
 } from "./qjs_engine.cp";
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
+import { StyleSheet, Cascade, ComputedStyle, Position } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -128,6 +130,7 @@ pub struct FetchRecord {
 pub struct JsDomContext {
     doc: *Document,
     layout: (*LayoutTree)? = null,
+    layout_dirty: bool = false,
     cookie_jar: (*CookieJar)? = null,
     extra_headers: []const u8 = "",
     element_class_id: u32 = 0,
@@ -330,6 +333,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const attr_name_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_name) catch attr_name;
     const attr_val_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_val) catch attr_val;
     el.dom_ctx.doc.setAttribute(el.node_id, attr_name_dup, attr_val_dup);
+    el.dom_ctx.layout_dirty = true;
     if (std.ascii.eqlIgnoreCase(attr_name, "style")) {
         if (lt := el.dom_ctx.layout) {
             if (@as(usize, el.node_id) < lt.boxes.items.len) {
@@ -350,6 +354,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const attr_name = jsToSlice(ctx, argv[0]);
     defer std.heap.page_allocator.free(attr_name);
     * = el.dom_ctx.doc.removeAttribute(el.node_id, attr_name);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 
@@ -443,6 +448,286 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return JS_DupValue(ctx, argv[1]);
 }
 
+struct ViewportRectInfo {
+    rect: Rect = Rect.zero(),
+    win_x: f32 = 0.0,
+    win_y: f32 = 0.0,
+    anc_scroll_x: f32 = 0.0,
+    anc_scroll_y: f32 = 0.0,
+}
+
+fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
+    if (!dom_ctx.layout_dirty) return;
+    dom_ctx.layout_dirty = false;
+    if (lt := dom_ctx.layout) {
+        const doc = dom_ctx.doc;
+        const count = @max(@as(usize, 1), doc.nodeCount());
+        let css_buf = std.heap.page_allocator.alloc(u8, 65536) catch null;
+        defer if (css_buf != null) std.heap.page_allocator.free(css_buf.?);
+        let css_len: usize = 0;
+        if (css_buf != null) {
+            const base_css = "* { box-sizing: border-box; }\n";
+            @memcpy(css_buf.?[0..base_css.len], base_css);
+            css_len = base_css.len;
+            let snid: usize = 0;
+            while (snid < doc.nodes.items.len) : (snid += 1) {
+                const sn = &doc.nodes.items[snid];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    if (sn.text_content.len > 0) {
+                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                        @memcpy(css_buf.?[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
+                        css_len += copy_len;
+                    }
+                    let child = sn.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const scn = &doc.nodes.items[@as(usize, child)];
+                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                            @memcpy(css_buf.?[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
+        }
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "* { box-sizing: border-box; }";
+        const sheet = StyleSheet.parse(full_css, lt.viewport_width, false);
+        let styles = std.heap.page_allocator.alloc(ComputedStyle, count) catch return;
+        defer std.heap.page_allocator.free(styles);
+        Cascade.computeStyles(doc, &sheet, styles, 16.0);
+        lt.computeLayout(doc, styles) catch {};
+    }
+}
+
+fn getJsNumberProp(ctx: *JSContext, obj: JSValue, prop: [*c]const u8): f32 {
+    const val = JS_GetPropertyStr(ctx, obj, prop);
+    defer JS_FreeValue(ctx, val);
+    if (val.tag == JS_TAG_UNDEFINED || val.tag == JS_TAG_NULL) return 0.0;
+    let num: f64 = 0.0;
+    if (JS_ToFloat64(ctx, &num, val) == 0 && !std.math.isNan(num) && !std.math.isInf(num)) {
+        return @floatCast(num);
+    }
+    return 0.0;
+}
+
+fn getNodeScrollOffsets(ctx: *JSContext, cache: JSValue, dom_ctx: *JsDomContext, node_id: NodeId, out_sx: *f32, out_sy: *f32) {
+    out_sx.* = 0.0;
+    out_sy.* = 0.0;
+    if (!jsIsObject(cache)) return;
+    let key_buf: [64]u8 = undefined;
+    const key = std.fmt.bufPrint(&key_buf, "w{d}:{d}", .{ @intFromPtr(dom_ctx), node_id }) catch return;
+    if (key.len == 0) return;
+    let key_z: [65]u8 = undefined;
+    @memcpy(key_z[0..key.len], key);
+    key_z[key.len] = 0;
+    const el_val = JS_GetPropertyStr(ctx, cache, @ptrCast(&key_z));
+    defer JS_FreeValue(ctx, el_val);
+    if (!jsIsObject(el_val)) return;
+    out_sx.* = getJsNumberProp(ctx, el_val, "_scrollLeft");
+    out_sy.* = getJsNumberProp(ctx, el_val, "_scrollTop");
+}
+
+fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree, node_id: NodeId, ignore_sticky: bool): ViewportRectInfo {
+    let info = ViewportRectInfo{};
+    if (node_id == NULL_NODE || @as(usize, node_id) >= lt.boxes.items.len) return info;
+
+    const doc = dom_ctx.doc;
+    const global_obj = JS_GetGlobalObject(ctx);
+    defer JS_FreeValue(ctx, global_obj);
+
+    let win_x = getJsNumberProp(ctx, global_obj, "scrollX");
+    if (win_x == 0.0) win_x = getJsNumberProp(ctx, global_obj, "pageXOffset");
+    let win_y = getJsNumberProp(ctx, global_obj, "scrollY");
+    if (win_y == 0.0) win_y = getJsNumberProp(ctx, global_obj, "pageYOffset");
+    info.win_x = win_x;
+    info.win_y = win_y;
+
+    const cache = JS_GetPropertyStr(ctx, global_obj, "__capsurf_wrappers");
+    defer JS_FreeValue(ctx, cache);
+
+    // Collect ancestor chain from root element down to node_id
+    let rev_chain: [64]NodeId = [NULL_NODE; 64];
+    let depth: usize = 0;
+    let cur = node_id;
+    while (cur != NULL_NODE && @as(usize, cur) < doc.nodes.items.len && depth < 64) {
+        if (doc.nodes.items[@as(usize, cur)].node_type == NodeType.Element) {
+            rev_chain[depth] = cur;
+            depth += 1;
+        }
+        cur = doc.nodes.items[@as(usize, cur)].parent;
+    }
+    if (depth == 0) {
+        info.rect = lt.getBoundingClientRect(node_id);
+        return info;
+    }
+
+    let chain: [64]NodeId = [NULL_NODE; 64];
+    let node_sx: [64]f32 = [0.0; 64];
+    let node_sy: [64]f32 = [0.0; 64];
+    let vp_x: [64]f32 = [0.0; 64];
+    let vp_y: [64]f32 = [0.0; 64];
+
+    let ci: usize = 0;
+    while (ci < depth) : (ci += 1) {
+        const nid = rev_chain[depth - 1 - ci];
+        chain[ci] = nid;
+        getNodeScrollOffsets(ctx, cache, dom_ctx, nid, &node_sx[ci], &node_sy[ci]);
+    }
+
+    let cum_scroll_x: f32 = win_x;
+    let cum_scroll_y: f32 = win_y;
+    let cum_sticky_x: f32 = 0.0;
+    let cum_sticky_y: f32 = 0.0;
+    let anc_scroll_x: f32 = 0.0;
+    let anc_scroll_y: f32 = 0.0;
+
+    let i: usize = 0;
+    while (i < depth) : (i += 1) {
+        const nid = chain[i];
+        const box = &lt.boxes.items[@as(usize, nid)];
+        const node = &doc.nodes.items[@as(usize, nid)];
+        let vx: f32 = box.rect.x;
+        let vy: f32 = box.rect.y;
+
+        if (box.position == Position.Fixed) {
+            // Fixed boxes escape ancestor scroll and sticky offsets
+            vx = box.rect.x;
+            vy = box.rect.y;
+            cum_scroll_x = 0.0;
+            cum_scroll_y = 0.0;
+            cum_sticky_x = 0.0;
+            cum_sticky_y = 0.0;
+        } else {
+            const base_x = box.rect.x + cum_sticky_x - cum_scroll_x;
+            const base_y = box.rect.y + cum_sticky_y - cum_scroll_y;
+            let sticky_dx: f32 = 0.0;
+            let sticky_dy: f32 = 0.0;
+
+            if (box.position == Position.Sticky && !ignore_sticky) {
+                // Find nearest non-root scrollport ancestor (html/body overflow propagates to viewport)
+                let sp_left: f32 = 0.0;
+                let sp_top: f32 = 0.0;
+                let sp_right: f32 = lt.viewport_width;
+                let sp_bottom: f32 = lt.viewport_height;
+
+                let k: usize = i;
+                while (k > 0) {
+                    k -= 1;
+                    const anc_nid = chain[k];
+                    const anc_node = &doc.nodes.items[@as(usize, anc_nid)];
+                    const anc_box = &lt.boxes.items[@as(usize, anc_nid)];
+                    if (!anc_node.hasTag("html") && !anc_node.hasTag("body") && !anc_box.overflow_visible) {
+                        sp_left = vp_x[k] + anc_box.border_left;
+                        sp_top = vp_y[k] + anc_box.border_top;
+                        sp_right = vp_x[k] + anc_box.rect.width - anc_box.border_right;
+                        sp_bottom = vp_y[k] + anc_box.rect.height - anc_box.border_bottom;
+                        break;
+                    }
+                }
+
+                // Determine sticky containing block bounds in viewport coordinates
+                let cb_left: f32 = -1000000.0;
+                let cb_top: f32 = -1000000.0;
+                let cb_right: f32 = 1000000.0;
+                let cb_bottom: f32 = 1000000.0;
+
+                if (i > 0) {
+                    const p_idx = i - 1;
+                    const p_nid = chain[p_idx];
+                    const p_node = &doc.nodes.items[@as(usize, p_nid)];
+                    const p_box = &lt.boxes.items[@as(usize, p_nid)];
+                    if (p_node.hasTag("html") || p_node.hasTag("body")) {
+                        cb_left = p_box.rect.x + p_box.border_left + p_box.padding_left - win_x;
+                        cb_top = p_box.rect.y + p_box.border_top + p_box.padding_top - win_y;
+                        cb_right = cb_left + @max(p_box.content_width, p_box.scroll_content_width);
+                        cb_bottom = cb_top + @max(p_box.content_height, p_box.scroll_content_height);
+                    } else if (!p_box.overflow_visible) {
+                        cb_left = vp_x[p_idx] + p_box.border_left + p_box.padding_left - node_sx[p_idx];
+                        cb_top = vp_y[p_idx] + p_box.border_top + p_box.padding_top - node_sy[p_idx];
+                        cb_right = cb_left + @max(p_box.content_width, p_box.scroll_content_width);
+                        cb_bottom = cb_top + @max(p_box.content_height, p_box.scroll_content_height);
+                    } else {
+                        cb_left = vp_x[p_idx] + p_box.border_left + p_box.padding_left;
+                        cb_top = vp_y[p_idx] + p_box.border_top + p_box.padding_top;
+                        cb_right = cb_left + p_box.content_width;
+                        cb_bottom = cb_top + p_box.content_height;
+                    }
+                }
+
+                if (box.has_sticky_top) {
+                    const min_y = sp_top + box.sticky_top;
+                    const max_y = cb_bottom - box.rect.height;
+                    if (base_y < min_y) {
+                        const target_y = @min(min_y, max_y);
+                        if (target_y > base_y) {
+                            sticky_dy = target_y - base_y;
+                        }
+                    }
+                }
+                if (box.has_sticky_bottom) {
+                    const max_y = sp_bottom - box.sticky_bottom - box.rect.height;
+                    const min_y = cb_top;
+                    if (base_y > max_y) {
+                        const target_y = @max(max_y, min_y);
+                        if (target_y < base_y) {
+                            sticky_dy = target_y - base_y;
+                        }
+                    }
+                }
+                if (box.has_sticky_left) {
+                    const min_x = sp_left + box.sticky_left;
+                    const max_x = cb_right - box.rect.width;
+                    if (base_x < min_x) {
+                        const target_x = @min(min_x, max_x);
+                        if (target_x > base_x) {
+                            sticky_dx = target_x - base_x;
+                        }
+                    }
+                }
+                if (box.has_sticky_right) {
+                    const max_x = sp_right - box.sticky_right - box.rect.width;
+                    const min_x = cb_left;
+                    if (base_x > max_x) {
+                        const target_x = @max(max_x, min_x);
+                        if (target_x < base_x) {
+                            sticky_dx = target_x - base_x;
+                        }
+                    }
+                }
+            }
+
+            vx = base_x + sticky_dx;
+            vy = base_y + sticky_dy;
+            cum_sticky_x += sticky_dx;
+            cum_sticky_y += sticky_dy;
+        }
+
+        vp_x[i] = vx;
+        vp_y[i] = vy;
+
+        if (i + 1 < depth) {
+            if (!node.hasTag("html") && !node.hasTag("body")) {
+                cum_scroll_x += node_sx[i];
+                cum_scroll_y += node_sy[i];
+                anc_scroll_x += node_sx[i];
+                anc_scroll_y += node_sy[i];
+            }
+        }
+    }
+
+    const last_box = &lt.boxes.items[@as(usize, node_id)];
+    info.rect = Rect {
+        x: vp_x[depth - 1],
+        y: vp_y[depth - 1],
+        width: last_box.rect.width,
+        height: last_box.rect.height,
+        visible: last_box.rect.visible,
+    };
+    info.anc_scroll_x = anc_scroll_x;
+    info.anc_scroll_y = anc_scroll_y;
+    return info;
+}
+
 @c fn js_element_get_bounding_client_rect(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
@@ -461,9 +746,25 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
         * = JS_SetPropertyStr(ctx, obj, "bottom", jsFloat(0.0));
         return obj;
     }
+    ensureLayoutUpToDate(el.dom_ctx);
     let rect = Rect.zero();
     if (lt := el.dom_ctx.layout) {
-        rect = lt.getBoundingClientRect(el.node_id);
+        const global_obj = JS_GetGlobalObject(ctx);
+        const ignore_val = JS_GetPropertyStr(ctx, global_obj, "__capsurf_ignore_sticky");
+        const ignore_sticky = jsToBool(ctx, ignore_val);
+        JS_FreeValue(ctx, ignore_val);
+        JS_FreeValue(ctx, global_obj);
+
+        const info = computeViewportRect(ctx, el.dom_ctx, lt, el.node_id, ignore_sticky);
+        // runtime.js subtracts (win_x + anc_scroll_x, win_y + anc_scroll_y) from the returned rect,
+        // so return pre-compensated coordinates so the final JS rect equals info.rect exactly.
+        rect = Rect {
+            x: info.rect.x + info.win_x + info.anc_scroll_x,
+            y: info.rect.y + info.win_y + info.anc_scroll_y,
+            width: info.rect.width,
+            height: info.rect.height,
+            visible: info.rect.visible,
+        };
     }
     const obj = JS_NewObject(ctx);
     * = JS_SetPropertyStr(ctx, obj, "x", jsFloat(@floatCast(rect.x)));
@@ -475,6 +776,87 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     * = JS_SetPropertyStr(ctx, obj, "right", jsFloat(@floatCast(rect.right())));
     * = JS_SetPropertyStr(ctx, obj, "bottom", jsFloat(@floatCast(rect.bottom())));
     return obj;
+}
+
+@c fn js_document_element_from_point(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsNull();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaque_ptr.?));
+
+    let px_f64: f64 = 0.0;
+    let py_f64: f64 = 0.0;
+    if (JS_ToFloat64(ctx, &px_f64, argv[0]) != 0 || JS_ToFloat64(ctx, &py_f64, argv[1]) != 0) {
+        return jsNull();
+    }
+    if (std.math.isNan(px_f64) || std.math.isNan(py_f64)) return jsNull();
+    const px: f32 = @floatCast(px_f64);
+    const py: f32 = @floatCast(py_f64);
+
+    ensureLayoutUpToDate(dom_ctx);
+    if (lt := dom_ctx.layout) {
+        if (px < 0.0 || py < 0.0 || px >= lt.viewport_width || py >= lt.viewport_height) {
+            return jsNull();
+        }
+        const doc = dom_ctx.doc;
+        let best_node: NodeId = NULL_NODE;
+        let best_layer: i32 = -1;
+
+        let nid: usize = 1;
+        while (nid < doc.nodes.items.len && nid < lt.boxes.items.len) : (nid += 1) {
+            const node = &doc.nodes.items[nid];
+            if (node.node_type != NodeType.Element) continue;
+            if (node.hasTag("head") || node.hasTag("style") || node.hasTag("script") || node.hasTag("title") || node.hasTag("meta") || node.hasTag("link")) continue;
+            const node_id: NodeId = @intCast(nid);
+            const box = &lt.boxes.items[nid];
+            if (!box.rect.visible || box.rect.width <= 0.0 || box.rect.height <= 0.0) continue;
+
+            const info = computeViewportRect(ctx, dom_ctx, lt, node_id, false);
+            const r = info.rect;
+            if (px < r.x || px >= r.x + r.width || py < r.y || py >= r.y + r.height) continue;
+
+            // Check ancestor overflow clipping (fixed escapes all ancestor clips)
+            let clipped = false;
+            if (box.position != Position.Fixed) {
+                let anc = node.parent;
+                let guard: usize = 0;
+                while (anc != NULL_NODE && @as(usize, anc) < doc.nodes.items.len && @as(usize, anc) < lt.boxes.items.len && guard < 64) : (guard += 1) {
+                    const anc_node = &doc.nodes.items[@as(usize, anc)];
+                    const anc_box = &lt.boxes.items[@as(usize, anc)];
+                    if (anc_node.node_type == NodeType.Element && !anc_node.hasTag("html") && !anc_node.hasTag("body") && !anc_box.overflow_visible) {
+                        const ar = computeViewportRect(ctx, dom_ctx, lt, anc, false).rect;
+                        if (px < ar.x || px >= ar.x + ar.width || py < ar.y || py >= ar.y + ar.height) {
+                            clipped = true;
+                            break;
+                        }
+                    }
+                    anc = anc_node.parent;
+                }
+            }
+            if (clipped) continue;
+
+            // Layer priority: fixed/absolute/sticky > in-flow; later in tree order wins within same layer
+            const layer: i32 = if (box.position == Position.Fixed)
+                @as(i32, 3)
+            else if (box.position == Position.Absolute)
+                @as(i32, 2)
+            else if (box.position == Position.Sticky || box.position == Position.Relative)
+                @as(i32, 1)
+            else
+                @as(i32, 0);
+
+            if (layer >= best_layer) {
+                best_layer = layer;
+                best_node = node_id;
+            }
+        }
+
+        if (best_node != NULL_NODE) {
+            return createJsElement(ctx, dom_ctx, best_node);
+        }
+    }
+    return jsNull();
 }
 
 @c fn js_element_get_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -1378,6 +1760,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, doc_proto, "getElementById", js_document_get_element_by_id, 1);
     defineMethod(raw_ctx, doc_proto, "createElement", js_document_create_element, 1);
     defineMethod(raw_ctx, doc_proto, "getElementsByName", js_document_get_elements_by_name, 1);
+    defineMethod(raw_ctx, doc_proto, "elementFromPoint", js_document_element_from_point, 2);
     defineGetterSetter(raw_ctx, doc_proto, "head", js_document_get_head, null);
     defineGetterSetter(raw_ctx, doc_proto, "implementation", js_document_get_implementation, null);
     defineGetterSetter(raw_ctx, doc_proto, "body", js_document_get_body, null);
@@ -1557,6 +1940,14 @@ pub fn mountDom(
         "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');" +
         "    return fn.call(target || globalThis);" +
         "  };" +
+        "  if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.scrollIntoView === 'function') {" +
+        "    const _origSiv = Element.prototype.scrollIntoView;" +
+        "    Element.prototype.scrollIntoView = function (arg) {" +
+        "      globalThis.__capsurf_ignore_sticky = true;" +
+        "      try { return _origSiv.call(this, arg); }" +
+        "      finally { globalThis.__capsurf_ignore_sticky = false; }" +
+        "    };" +
+        "  }" +
         "})();";
     const helper_val = ctx.eval(helper_script);
     ctx.freeValue(helper_val);

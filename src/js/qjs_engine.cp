@@ -89,6 +89,7 @@ pub @c {
     fn JS_ToBool(ctx: *JSContext, val: JSValue): i32;
     fn JS_ToInt32(ctx: *JSContext, pres: *i32, val: JSValue): i32;
     fn JS_ToInt64(ctx: *JSContext, pres: *i64, val: JSValue): i32;
+    fn JS_ToFloat64(ctx: *JSContext, pres: *f64, val: JSValue): i32;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;

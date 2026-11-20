@@ -1221,4 +1221,10 @@
    - 将 `Text`/`Comment` 全部字符修改统一收口至 `replaceData`，并在 `insertBefore`/`removeChild`/`splitText` 触发 `_liveRanges` 回调，确保所有活跃 `Range` 的 `startOffset`/`endOffset` 与容器节点在 DOM 变更时严格同步。
 2. **Shadow DOM 方向性双树算法 (`element.js`, `cssom.js`)**：
    - 区分 `:dir()` 选择器（仅沿 light tree 查找，`<bdi>`/`dir="auto"` 不穿透 ShadowRoot）与 `getComputedStyle(el).direction`（沿 flat tree 经 `<slot>` 向上继承，`<slot dir="auto">` 扫描 assigned nodes）。
+
+## Phase 68 CSS Sticky/Fixed 定位引擎、原生 `elementFromPoint` 与百分比高度退化技术方案
+1. **定位静态位置回退与百分比高度规则 (`cascade.cp`, `layout.cp`)**：
+   - 将 `Position.Sticky` 从 `Fixed` 独立分离；在 `layoutNodeEx` 传递 `static_x/y` 与 `parent_h_definite`，实现 `abspos`/`fixed` 自动回退流内静态位置与非确定父高度（`auto` 或仅 `min-height`）下百分比高度退化为 `auto` 按子内容撑开。
+2. **动态视口坐标与 `document.elementFromPoint` (`dom_binding.cp`)**：
+   - 在 `getBoundingClientRect` 与 `elementFromPoint` 入口通过 `ensureLayoutUpToDate` 自动刷新脏布局，并由 `computeViewportRect` 结合 `window.scrollX/Y` 与祖先滚动偏移实时计算 `fixed` 逃逸与 `sticky` 双向/嵌套 scrollport 夹紧坐标。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

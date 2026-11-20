@@ -175,13 +175,15 @@ pub enum Position {
     Relative,
     Absolute,
     Fixed,
+    Sticky,
 
     static fn parse(raw: []const u8): Position? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "static")) return Position.Static;
         if (std.ascii.eqlIgnoreCase(s, "relative")) return Position.Relative;
         if (std.ascii.eqlIgnoreCase(s, "absolute")) return Position.Absolute;
-        if (std.ascii.eqlIgnoreCase(s, "fixed") || std.ascii.eqlIgnoreCase(s, "sticky")) return Position.Fixed;
+        if (std.ascii.eqlIgnoreCase(s, "fixed")) return Position.Fixed;
+        if (std.ascii.eqlIgnoreCase(s, "sticky")) return Position.Sticky;
         return null;
     }
 }
@@ -1639,7 +1641,7 @@ pub struct ComputedStyle {
                 const v = std.mem.trim(u8, val, " \t\r\n");
                 if (std.ascii.eqlIgnoreCase(v, "visible")) {
                     _.overflow_visible = true;
-                } else if (std.ascii.eqlIgnoreCase(v, "hidden") || std.ascii.eqlIgnoreCase(v, "clip")) {
+                } else if (std.ascii.eqlIgnoreCase(v, "hidden") || std.ascii.eqlIgnoreCase(v, "clip") || std.ascii.eqlIgnoreCase(v, "auto") || std.ascii.eqlIgnoreCase(v, "scroll")) {
                     _.overflow_visible = false;
                 }
             }

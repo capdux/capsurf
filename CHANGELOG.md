@@ -1563,4 +1563,13 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`dom-eval-demo` + `dom-primitives-demo` + `range-live-mutation-demo` + `shadow-dir-directionality` 共 **4/4 PASS (228 expect calls)**。
+
+## Phase 68: CSS Sticky/Fixed Positioning, Native `elementFromPoint` & Definite Percentage Height (100% Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp`**：
+  - `Position` 新增 `Sticky`；`overflow: auto/scroll` 建立裁剪；实现 `abspos`/`fixed` 静态位置回退、嵌套 `fixed` 偏移跟随及非确定父高度下百分比高度退化为 `auto`。
+- **`src/js/qjs_engine.cp` & `src/js/dom_binding.cp` & `e2e/harness.ts`**：
+  - 实现 `layout_dirty` 自动刷新、`computeViewportRect`（`fixed` 逃逸与 `sticky` 嵌套 scrollport 夹紧）及原生 `document.elementFromPoint(x, y)`；`harness.ts` 兼容 `test.for` 3 参数重载。
+- **测试与门禁验证**：
+  - 静态门禁：全部修改 `.cp` 4 门禁全 0；
+  - E2E 测试：`positioned-root-hoist` (9) + `rehomed-fixed-paint-parent` (2) + `size-container-abspos` (1) + `sticky-position` (5) + 回归 (1) 共 **18 pass, 0 fail (53 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -3256,6 +3256,22 @@
   - `dom-eval-demo` + `dom-primitives-demo` + `range-live-mutation-demo` (16/16) + `shadow-dir-directionality` (9/9)：**4/5 PASS（228 expect() calls）**；`dom-innerhtml-rebuild-demo` 已明确定位需原生 CDP DOM 增量事件通道，排入后续 CP 专场。
 - **清理旧子智能体**: 销毁 `e2153913-e20a-45b7-871b-58350b559b30`。
 
+## [2026-11-20 14:55:00] CSS Sticky/Fixed 定位引擎、elementFromPoint 与包含块提升全绿闭环 (Subagent f7674bb4 结单，Phase 68)
+- **CSS Sticky/Fixed 定位与包含块尺寸推导 (`src/css/cascade.cp`, `src/layout/layout.cp`)**:
+  - `cascade.cp`: `Position` 新增 `Sticky` 变体区分 `fixed` 与 `sticky`；`overflow: auto/scroll` 置 `overflow_visible = false`。
+  - `layout.cp`: `LayoutBox` 新增定位与滚动元数据；`layoutNodeEx` 实现 `abspos`/`fixed` 静态位置回退、预偏移嵌套 `fixed` 跟随与 CSS Sizing 百分比高度退化规则（非确定父高度下退化为 `auto`）。
+- **原生 `document.elementFromPoint`、动态视口坐标与布局脏刷新 (`src/js/qjs_engine.cp`, `src/js/dom_binding.cp`, `e2e/harness.ts`)**:
+  - `dom_binding.cp`: 新增 `layout_dirty` 自动刷新、`computeViewportRect`（精确计算 `fixed` 逃逸滚动与 `sticky` 双向/嵌套 scrollport 夹紧）及原生 `document.elementFromPoint(x, y)` 分层命中；`scrollIntoView` 对 `sticky` 元素按流内原始位置滚动。
+  - `e2e/harness.ts`: 兼容 Vitest `test.for(cases)(name, { timeout }, fn)` 3 参数重载。
+- **门禁与 E2E 回归验证**:
+  - 全部修改 `.cp` 文件 4 门禁全 0；
+  - `positioned-root-hoist` (9/9) + `rehomed-fixed-paint-parent` (2/2) + `size-container-abspos` (1/1) + `sticky-position` (5/5) + `abspos-escapes-overflow-clip` (1/1)：**18 pass, 0 fail (53 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `f7674bb4-cb4f-4c4d-83b7-e028406a4230`；
+  - 派发全新子智能体 **Subagent 34**: Table Layout Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/table-anonymous-boxes.e2e.test.ts`、`e2e/table-caption-sizing.e2e.test.ts`、`e2e/table-collapsed-border-spans.e2e.test.ts`、`e2e/replaced-display-table.e2e.test.ts`。
+
+
 
 
 

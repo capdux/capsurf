@@ -1772,9 +1772,24 @@ test.concurrent = function (name: string, fn: TestFn, timeout = 120000) {
 };
 
 test.for = function <T>(cases: readonly T[]) {
-  return function (name: string, fn: (item: T, fixtures: any) => Promise<any> | any, timeout = 120000) {
+  return function (
+    name: string,
+    fnOrOpts: ((item: T, fixtures: any) => Promise<any> | any) | { timeout?: number },
+    fnOrTimeout?: ((item: T, fixtures: any) => Promise<any> | any) | number,
+  ) {
+    let fn: (item: T, fixtures: any) => Promise<any> | any;
+    let timeout = 120000;
+    if (typeof fnOrOpts === "function") {
+      fn = fnOrOpts;
+      if (typeof fnOrTimeout === "number") timeout = fnOrTimeout;
+    } else {
+      fn = fnOrTimeout as (item: T, fixtures: any) => Promise<any> | any;
+      if (fnOrOpts && typeof fnOrOpts.timeout === "number") timeout = fnOrOpts.timeout;
+    }
     for (const item of cases) {
-      const formattedName = name.replace(/%s|%d/g, String(item));
+      let argIdx = 0;
+      const args = Array.isArray(item) ? item : [item];
+      const formattedName = name.replace(/%s|%d/g, () => String(args[argIdx++] ?? item));
       test(formattedName, (fixtures) => fn(item, fixtures), timeout);
     }
   };
