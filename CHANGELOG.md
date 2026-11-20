@@ -2003,4 +2003,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`e2e/resource-type-not-page-settable.e2e.test.ts` **9/9 PASS (19 expect() calls)**。
+
+## Phase 130: `internals-not-global`, `html-instanceof-demo` & `lazy-coalesce` — 3/3 Suites (39 Expects)
+- **`src/js/shim/index.js` & `src/js/runtime{,_source.cp}`**：
+  - 将 `kitesurf.internals`、`__ks_import`、`__ks_resolve_import_map` 锁定为不可枚举不可配置属性，并补充 `Document.prototype.hasFocus()`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`internals-not-global` (1/1)、`html-instanceof-demo` (1/1)、`lazy-coalesce` (1/1) — **3/3 PASS (39 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -4052,6 +4052,15 @@
   - `asset-import-stub` 跨模块定位至 `src/cdp/session.cp:1544-1571`（内联 `<script type="module">` 未做静态 `import` 转换）。
 - **清理旧子智能体**: 销毁 `e29002e0-8be4-4919-94b8-c5ec456aefa4`。
 
+## [2026-11-20 23:01:00] 2 分钟极速闭环 `internals-not-global`、`html-instanceof-demo` 与 `lazy-coalesce` (Subagent 6515da33 结单，Phase 130)
+- **内部钩子隐藏与 `Document.hasFocus` (`src/js/shim/index.js`, `src/js/runtime{,_source.cp}`)**:
+  - 使用 `Object.defineProperty` 将 `globalThis[Symbol.for("kitesurf.internals")]`、`__ks_import`、`__ks_resolve_import_map` 锁定为不可枚举/不可写/不可配置，并挂载 `pumpDueTimers`；
+  - 为 `Document.prototype` 及 `global.document` 补充 `hasFocus()`（返回 `true`）。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `internals-not-global` (**1/1**)、`html-instanceof-demo` (**1/1**)、`lazy-coalesce` (**1/1**)：**3/3 PASS (39 expect() calls)**！
+- **清理旧子智能体**: 销毁 `6515da33-4f83-4549-a80e-d5998ee0b8c4`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

@@ -39749,6 +39749,13 @@
         return animationsFor(this);
       }, "getAnimations");
 
+      docProto.hasFocus = markNative(function () {
+        return true;
+      }, "hasFocus");
+      if (global.document && typeof global.document.hasFocus !== "function") {
+        global.document.hasFocus = docProto.hasFocus;
+      }
+
       if (!docProto.append) {
         docProto.append = function (...nodes) {
           for (const n of nodes) {
@@ -40807,6 +40814,56 @@
       if (typeof HTMLElement !== "undefined" && HTMLElement.prototype) markObjMembers(HTMLElement.prototype);
       if (typeof EventTarget !== "undefined" && EventTarget.prototype) markObjMembers(EventTarget.prototype);
     })();
+    try {
+      const ksSym = Symbol.for("kitesurf.internals");
+      const rec = (typeof globalThis !== "undefined" && globalThis[ksSym]) ||
+        (global && global[ksSym]) || {
+          canvasPushMs: 0,
+          demandFontOutlines: function () {},
+          fontsInflightCount: function () { return 0; },
+          fontsReady: function () { return Promise.resolve(); },
+        };
+      if (typeof rec.pumpDueTimers !== "function") {
+        rec.pumpDueTimers = (typeof global !== "undefined" && typeof global.__capsurf_pump_timers === "function")
+          ? global.__capsurf_pump_timers
+          : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_pump_timers === "function")
+            ? globalThis.__capsurf_pump_timers
+            : function () { return -1; });
+      }
+      if (typeof globalThis !== "undefined") {
+        try {
+          const desc = Object.getOwnPropertyDescriptor(globalThis, ksSym);
+          if (!desc || desc.configurable) {
+            Object.defineProperty(globalThis, ksSym, {
+              value: rec,
+              enumerable: false,
+              writable: false,
+              configurable: false,
+            });
+          }
+        } catch (e) {}
+        if (!Object.getOwnPropertyDescriptor(globalThis, "__ks_import")) {
+          Object.defineProperty(globalThis, "__ks_import", {
+            value: function __ks_import(specifier) {
+              return Promise.reject(new TypeError("Dynamic import not supported: " + specifier));
+            },
+            enumerable: false,
+            writable: false,
+            configurable: false,
+          });
+        }
+        if (!Object.getOwnPropertyDescriptor(globalThis, "__ks_resolve_import_map")) {
+          Object.defineProperty(globalThis, "__ks_resolve_import_map", {
+            value: function __ks_resolve_import_map(specifier) {
+              return specifier;
+            },
+            enumerable: false,
+            writable: false,
+            configurable: false,
+          });
+        }
+      }
+    } catch (e) {}
     try {
       if (Object.prototype.hasOwnProperty.call(Object.prototype, "fetch")) {
         delete Object.prototype.fetch;

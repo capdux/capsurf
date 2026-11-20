@@ -1567,4 +1567,8 @@
    - 将 `Request` 实例字段转为私有存储并在 `Request.prototype` 定义可配置 getter，确保页面篡改或反射探测原型描述符时符合 Fetch WebIDL 规范。
 2. **`isConnected` ShadowRoot 边界修复 (`src/js/shim/node-base.js`, `index.js`)**：
    - 仅当 `curr.nodeType === 11 && curr.host` 时沿 ShadowRoot 宿主向上追溯，避免 `<a>`/`<area>`/`<link>` 的字符串 `.host` 阻断连通性判断。
+
+## Phase 130 内部钩子不可枚举隔离与 `Document.hasFocus` 方案 (`src/js/shim/index.js`)
+1. **引擎内部钩子收口**：通过 `Object.defineProperty(..., { enumerable: false, writable: false, configurable: false })` 锁定 `Symbol.for("kitesurf.internals")` 及动态导入辅助符号，防止页面全局扫描泄漏。
+2. **`Document.prototype.hasFocus`**：为 `Document` 原型及实例补充 `hasFocus()`，解决 `html-instanceof-demo` 在焦点判别后置校验抛 `TypeError` 的问题。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
