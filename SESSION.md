@@ -3311,6 +3311,21 @@
   - 派发全新子智能体 **Subagent 37**: Boa Remaining Sweep Specialist（JS 垫片隔离，端口 `19232`）
     - 攻坚目标：清扫剩余 10 项 `e2e/boa-*.e2e.test.ts` 核心测试。
 
+## [2026-11-20 15:18:00] 原生 CDP DOM 增量事件推送通道与 WebSocket 15ms 定时器泵全绿闭环 (Subagent 7bda6006 结单，Phase 72)
+- **原生 DOM 变更录制与 O(1) 已知节点追踪 (`src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/dom.cp`)**:
+  - `dom_binding.cp`: 新增 `DomMutationKind`/`DomMutationRecord` 队列，覆盖全部 12 处原生属性/子节点/文本/`innerHTML` 修改入口，并修复文本节点 `textContent` 就地更新；
+  - `session.cp` & `dom.cp`: 实装 `known_dom_nodes` 追踪表与 `drainDomMutationEvents`，按序输出 `DOM.attributeModified`/`Removed`、`DOM.characterDataModified`、`DOM.childNodeInserted`/`Removed` 及 `innerHTML` 重建时的 `DOM.childNodeCountUpdated` + `DOM.setChildNodes`；完善 `serializeCdpNode` 序列化全部属性。
+- **WebSocket 异步事件泵 (`src/cdp/server.cp`)**:
+  - 引入 POSIX `poll(&pfd, 1, 15)`，在命令后与 15ms 空闲 tick 自动驱动 `session.pumpTimers()` 并即时推送异步 `setTimeout` 触发的 CDP DOM 变更事件。
+- **门禁与 E2E 验证**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `dom-innerhtml-rebuild-demo` + `dom-mutation-events-demo`：**2/2 PASS (33 expect() calls, 3.13s)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `7bda6006-c4a2-4607-8758-647b51ce287a`；
+  - 派发全新子智能体 **Subagent 38**: Selection & Form Paint Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/demo/selection-paint-bridge.e2e.test.ts`、`e2e/demo/forms-range-demo.e2e.test.ts`、`e2e/demo/forms-textarea-default-paint.e2e.test.ts`、`e2e/demo/forms-value-repaint-demo.e2e.test.ts`。
+
+
 
 
 

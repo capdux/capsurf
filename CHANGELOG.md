@@ -1597,4 +1597,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：11 项 `e2e/boa-*.e2e.test.ts` 套件共 **17/17 PASS (28 expect calls)**。
+
+## Phase 72: Native CDP DOM Mutation Event Push & WebSocket Poll Timer Pump (100% Closed)
+- **`src/js/dom_binding.cp` & `src/cdp/{session,dom,server}.cp`**：
+  - 实装 `DomMutationRecord` 变更录制、`known_dom_nodes` O(1) 已知节点追踪与 `drainDomMutationEvents`，推送 `DOM.attributeModified`/`Removed`、`characterDataModified`、`childNodeInserted`/`Removed`、`childNodeCountUpdated` 与 `setChildNodes`；
+  - 在 `server.cp` 引入 POSIX `poll` 15ms 空闲泵，异步定时器触发的 DOM 变更可实时经 WebSocket 推流。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`dom-innerhtml-rebuild-demo` + `dom-mutation-events-demo` 共 **2/2 PASS (33 expect calls, 3.13s)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

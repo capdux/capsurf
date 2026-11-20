@@ -381,6 +381,11 @@ pub struct CdpPageSession {
     tracked_style_lens: [32]usize = [0; 32],
     tracked_style_count: usize = 0,
 
+    // DOM domain mutation tracking
+    dom_enabled: bool = false,
+    dom_document_sent: bool = false,
+    known_dom_nodes: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8).empty,
+
     pending_css_events: [16]CdpEvent = [CdpEvent{}; 16],
     pending_css_event_count: usize = 0,
     css_event_storage: [8192]u8 = [0; 8192],
@@ -467,6 +472,9 @@ pub struct CdpPageSession {
             tracked_style_hashes: [0; 32],
             tracked_style_lens: [0; 32],
             tracked_style_count: 0,
+            dom_enabled: false,
+            dom_document_sent: false,
+            known_dom_nodes: std.ArrayListUnmanaged(u8).empty,
             pending_css_events: [CdpEvent{}; 16],
             pending_css_event_count: 0,
             css_event_storage: [0; 8192],
@@ -526,9 +534,12 @@ pub struct CdpPageSession {
             _.raw_html = "";
         }
         if (_.dom_ctx != null) {
+            _.dom_ctx.?.deinitDomMutations();
             std.heap.c_allocator.destroy(_.dom_ctx.?);
             _.dom_ctx = null;
         }
+        _.known_dom_nodes.deinit(std.heap.c_allocator);
+        _.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
         _.cookie_jar.deinit();
         _.ctx.deinit();
         _.rt.deinit();
@@ -653,9 +664,12 @@ pub struct CdpPageSession {
 
         // Mount to JS Context
         if (_.dom_ctx != null) {
+            _.dom_ctx.?.deinitDomMutations();
             std.heap.c_allocator.destroy(_.dom_ctx.?);
             _.dom_ctx = null;
         }
+        _.known_dom_nodes.deinit(std.heap.c_allocator);
+        _.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
         if (_.has_document) {
             _.ctx.deinit();
             _.rt.runGC();
@@ -950,6 +964,74 @@ pub struct CdpPageSession {
         _.log_enabled = false;
         _.network_enabled = false;
         _.fetch_enabled = false;
+        _.dom_enabled = false;
+        _.resetDomTracking();
+    }
+
+    pub fn resetDomTracking(*_) {
+        _.dom_document_sent = false;
+        _.known_dom_nodes.clearRetainingCapacity();
+        if (_.dom_ctx != null) {
+            _.dom_ctx.?.dom_events_enabled = false;
+            _.dom_ctx.?.clearDomMutations();
+        }
+    }
+
+    pub fn setDomDisabled(*_) {
+        _.dom_enabled = false;
+        _.resetDomTracking();
+    }
+
+    pub fn isDomNodeKnown(*_, nid: NodeId): bool {
+        const idx = @as(usize, nid);
+        if (idx >= _.known_dom_nodes.items.len) return false;
+        return _.known_dom_nodes.items[idx] != 0;
+    }
+
+    pub fn setDomNodeKnown(*_, nid: NodeId, known: bool) {
+        const idx = @as(usize, nid);
+        if (idx >= _.known_dom_nodes.items.len) {
+            if (!known) return;
+            const old_len = _.known_dom_nodes.items.len;
+            const new_len = idx + 1;
+            _.known_dom_nodes.resize(std.heap.c_allocator, new_len) catch return;
+            let k = old_len;
+            while (k < new_len) : (k += 1) {
+                _.known_dom_nodes.items[k] = 0;
+            }
+        }
+        _.known_dom_nodes.items[idx] = if (known) 1 else 0;
+    }
+
+    pub fn markDomSubtreeKnown(*_, nid: NodeId, depth: i64, known: bool) {
+        if (nid == NULL_NODE || @as(usize, nid) >= _.doc.nodes.items.len) return;
+        _.setDomNodeKnown(nid, known);
+        if (depth == 0) return;
+        const next_depth = if (depth > 0) depth - 1 else -1;
+        let child = _.doc.nodes.items[@as(usize, nid)].first_child;
+        while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) {
+            _.markDomSubtreeKnown(child, next_depth, known);
+            child = _.doc.nodes.items[@as(usize, child)].next_sibling;
+        }
+    }
+
+    pub fn markDocumentObserved(*_, depth: i64) {
+        _.known_dom_nodes.clearRetainingCapacity();
+        if (_.doc.root_element != NULL_NODE) {
+            _.markDomSubtreeKnown(_.doc.root_element, depth, true);
+        }
+        _.dom_document_sent = true;
+        if (_.dom_ctx != null) {
+            _.dom_ctx.?.clearDomMutations();
+            _.dom_ctx.?.dom_events_enabled = true;
+        }
+    }
+
+    pub fn pumpTimers(*_) {
+        if (!_.has_document) return;
+        const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
+        _.ctx.freeValue(pump_res);
+        _.ctx.drainJobs();
     }
 
     pub fn getStyleText(*_, node_id: NodeId, out_buf: []u8): []const u8 {
@@ -1008,6 +1090,7 @@ pub struct CdpPageSession {
     }
 
     pub fn onBeforeNavigate(*_) {
+        _.resetDomTracking();
         if (!_.css_enabled) return;
         let i: usize = 0;
         while (i < _.tracked_style_count) : (i += 1) {

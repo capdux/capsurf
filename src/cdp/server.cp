@@ -6,6 +6,7 @@
 import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
+import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 
 pub @c {
@@ -16,6 +17,12 @@ pub @c {
         sin_zero: [8]u8;
     }
 
+    struct PollFd {
+        fd: i32;
+        events: i16;
+        revents: i16;
+    }
+
     fn socket(domain: i32, @"type": i32, protocol: i32): i32;
     fn bind(fd: i32, addr: *const SockAddrIn, len: u32): i32;
     fn listen(fd: i32, backlog: i32): i32;
@@ -23,6 +30,7 @@ pub @c {
     fn connect(fd: i32, addr: *const SockAddrIn, len: u32): i32;
     fn send(fd: i32, buf: [*]const u8, len: usize, flags: i32): isize;
     fn recv(fd: i32, buf: [*]u8, len: usize, flags: i32): isize;
+    fn poll(fds: *PollFd, nfds: u64, timeout: i32): i32;
     fn open(pathname: [*c]const u8, flags: i32): i32;
     fn read(fd: i32, buf: [*]u8, count: usize): isize;
     fn close(fd: i32): i32;
@@ -30,6 +38,11 @@ pub @c {
     fn shutdown(fd: i32, how: i32): i32;
     fn setsockopt(fd: i32, level: i32, optname: i32, optval: *const i32, optlen: u32): i32;
 }
+
+pub const POLLIN: i16 = 1;
+pub const POLLERR: i16 = 8;
+pub const POLLHUP: i16 = 16;
+pub const POLLNVAL: i16 = 32;
 
 pub const AF_INET: i32 = 2;
 pub const SOCK_STREAM: i32 = 1;
@@ -293,12 +306,44 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         _.runWebSocketSession(client_fd)? ;
     }
 
+    fn flushDomEvents(*_, client_fd: i32)! {
+        if (!_.session.dom_document_sent) return;
+        let msgs = std.ArrayListUnmanaged(ByteSlice).empty;
+        defer {
+            let mi: usize = 0;
+            while (mi < msgs.items.len) : (mi += 1) {
+                std.heap.c_allocator.free(msgs.items[mi]);
+            }
+            msgs.deinit(std.heap.c_allocator);
+        }
+        drainDomMutationEvents(_.session, &msgs);
+        let mi: usize = 0;
+        while (mi < msgs.items.len) : (mi += 1) {
+            writeWsTextFrame(client_fd, msgs.items[mi])?;
+        }
+    }
+
     fn runWebSocketSession(*_, client_fd: i32)! {
         _.session.resetSession();
         defer _.session.resetSession();
         let frame_payload: [65536]u8 = [0; 65536];
 
         while (_.running) {
+            let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
+            const pr = poll(&pfd, 1, 15);
+            if (pr < 0) {
+                break;
+            }
+            if (pr == 0) {
+                if (_.session.has_document && _.session.dom_document_sent) {
+                    _.session.pumpTimers();
+                    _.flushDomEvents(client_fd) catch break;
+                }
+                continue;
+            }
+            if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) {
+                break;
+            }
             const frame_opt = readWsTextFrame(client_fd, &frame_payload) catch break;
             if (payload := frame_opt) {
                 if (payload.len == 0) continue;
@@ -403,6 +448,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 writeWsTextFrame(client_fd, evt_msg)? ;
             }
         }
+
+        // Flush any queued native DOM mutation events
+        _.flushDomEvents(client_fd)?;
     }
 }
 

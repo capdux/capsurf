@@ -6,29 +6,29 @@ import { CdpRequest, CdpResponse, CdpBoxModel, extractJsonString, extractJsonInt
 import { CdpPageSession } from "./session.cp";
 import { NodeId, NULL_NODE, Document } from "../dom/dom.cp";
 
-fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnmanaged(u8), str: []const u8) !void {
-    try list.append(allocator, '"');
+pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnmanaged(u8), str: []const u8)! {
+    list.append(allocator, '"')?;
     let i: usize = 0;
     while (i < str.len) : (i += 1) {
         const c = str[i];
         if (c == '"') {
-            try list.appendSlice(allocator, "\\\"");
+            list.appendSlice(allocator, "\\\"")?;
         } else if (c == '\\') {
-            try list.appendSlice(allocator, "\\\\");
+            list.appendSlice(allocator, "\\\\")?;
         } else if (c == '\n') {
-            try list.appendSlice(allocator, "\\n");
+            list.appendSlice(allocator, "\\n")?;
         } else if (c == '\r') {
-            try list.appendSlice(allocator, "\\r");
+            list.appendSlice(allocator, "\\r")?;
         } else if (c == '\t') {
-            try list.appendSlice(allocator, "\\t");
+            list.appendSlice(allocator, "\\t")?;
         } else {
-            try list.append(allocator, c);
+            list.append(allocator, c)?;
         }
     }
-    try list.append(allocator, '"');
+    list.append(allocator, '"')?;
 }
 
-fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: NodeId, depth: i64, list: *std.ArrayListUnmanaged(u8)) !void {
+pub fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: NodeId, depth: i64, list: *std.ArrayListUnmanaged(u8))! {
     if (nid == NULL_NODE || @as(usize, nid) >= doc.nodes.items.len) return;
     const node = &doc.nodes.items[@as(usize, nid)];
 
@@ -41,11 +41,11 @@ fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: Nod
 
     let buf: [256]u8 = undefined;
     const header = std.fmt.bufPrint(&buf, "{{\"nodeId\":{d},\"backendNodeId\":{d},", .{ nid, nid }) catch return;
-    try list.appendSlice(allocator, header);
+    list.appendSlice(allocator, header)?;
 
     switch (node.node_type) {
         .Document => {
-            try list.appendSlice(allocator, "\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",");
+            list.appendSlice(allocator, "\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",")?;
         },
         .Element => {
             const tag = node.tag_name;
@@ -57,63 +57,219 @@ fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: Nod
             const upper_tag = upper_buf[0..upper_len];
             let el_buf: [256]u8 = undefined;
             const el_header = std.fmt.bufPrint(&el_buf, "\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",", .{ upper_tag, tag }) catch return;
-            try list.appendSlice(allocator, el_header);
+            list.appendSlice(allocator, el_header)?;
 
-            try list.appendSlice(allocator, "\"attributes\":[");
+            list.appendSlice(allocator, "\"attributes\":[")?;
             let attr_first = true;
-            if (node.id_attr.len > 0) {
-                let id_b: [128]u8 = undefined;
-                const id_s = std.fmt.bufPrint(&id_b, "\"id\",\"{s}\"", .{node.id_attr}) catch "";
-                try list.appendSlice(allocator, id_s);
+            let has_id = false;
+            let has_class = false;
+            let has_style = false;
+            let ai: usize = 0;
+            while (ai < node.attr_count) : (ai += 1) {
+                const attr = node.attrs[ai];
+                if (std.ascii.eqlIgnoreCase(attr.name, "id")) has_id = true;
+                if (std.ascii.eqlIgnoreCase(attr.name, "class")) has_class = true;
+                if (std.ascii.eqlIgnoreCase(attr.name, "style")) has_style = true;
+                if (!attr_first) list.append(allocator, ',')?;
+                appendJsonEscaped(allocator, list, attr.name)?;
+                list.append(allocator, ',')?;
+                appendJsonEscaped(allocator, list, attr.value)?;
                 attr_first = false;
             }
-            if (node.class_attr.len > 0) {
-                if (!attr_first) try list.append(allocator, ',');
-                let cls_b: [128]u8 = undefined;
-                const cls_s = std.fmt.bufPrint(&cls_b, "\"class\",\"{s}\"", .{node.class_attr}) catch "";
-                try list.appendSlice(allocator, cls_s);
+            if (!has_id && node.id_attr.len > 0) {
+                if (!attr_first) list.append(allocator, ',')?;
+                list.appendSlice(allocator, "\"id\",")?;
+                appendJsonEscaped(allocator, list, node.id_attr)?;
                 attr_first = false;
             }
-            if (node.inline_style.len > 0) {
-                if (!attr_first) try list.append(allocator, ',');
-                let sty_b: [512]u8 = undefined;
-                const sty_s = std.fmt.bufPrint(&sty_b, "\"style\",\"{s}\"", .{node.inline_style}) catch "";
-                try list.appendSlice(allocator, sty_s);
+            if (!has_class && node.class_attr.len > 0) {
+                if (!attr_first) list.append(allocator, ',')?;
+                list.appendSlice(allocator, "\"class\",")?;
+                appendJsonEscaped(allocator, list, node.class_attr)?;
                 attr_first = false;
             }
-            try list.appendSlice(allocator, "],");
+            if (!has_style && node.inline_style.len > 0) {
+                if (!attr_first) list.append(allocator, ',')?;
+                list.appendSlice(allocator, "\"style\",")?;
+                appendJsonEscaped(allocator, list, node.inline_style)?;
+                attr_first = false;
+            }
+            list.appendSlice(allocator, "],")?;
         },
         .Text => {
-            try list.appendSlice(allocator, "\"nodeType\":3,\"nodeName\":\"#text\",\"localName\":\"\",\"nodeValue\":");
-            try appendJsonEscaped(allocator, list, node.text_content);
-            try list.append(allocator, ',');
+            list.appendSlice(allocator, "\"nodeType\":3,\"nodeName\":\"#text\",\"localName\":\"\",\"nodeValue\":")?;
+            appendJsonEscaped(allocator, list, node.text_content)?;
+            list.append(allocator, ',')?;
         },
         .Comment => {
-            try list.appendSlice(allocator, "\"nodeType\":8,\"nodeName\":\"#comment\",\"localName\":\"\",\"nodeValue\":");
-            try appendJsonEscaped(allocator, list, node.text_content);
-            try list.append(allocator, ',');
+            list.appendSlice(allocator, "\"nodeType\":8,\"nodeName\":\"#comment\",\"localName\":\"\",\"nodeValue\":")?;
+            appendJsonEscaped(allocator, list, node.text_content)?;
+            list.append(allocator, ',')?;
         },
     }
 
     let cnt_buf: [64]u8 = undefined;
     const cnt_s = std.fmt.bufPrint(&cnt_buf, "\"childNodeCount\":{d}", .{child_count}) catch return;
-    try list.appendSlice(allocator, cnt_s);
+    list.appendSlice(allocator, cnt_s)?;
 
     if (depth != 0 && child_count > 0) {
-        try list.appendSlice(allocator, ",\"children\":[");
+        list.appendSlice(allocator, ",\"children\":[")?;
         let first_kid = true;
         let kid = node.first_child;
         const next_depth = if (depth > 0) depth - 1 else -1;
         while (kid != NULL_NODE && @as(usize, kid) < doc.nodes.items.len) {
-            if (!first_kid) try list.append(allocator, ',');
+            if (!first_kid) list.append(allocator, ',')?;
             first_kid = false;
-            try serializeCdpNode(allocator, doc, kid, next_depth, list);
+            serializeCdpNode(allocator, doc, kid, next_depth, list)?;
             kid = doc.nodes.items[@as(usize, kid)].next_sibling;
         }
-        try list.append(allocator, ']');
+        list.append(allocator, ']')?;
     }
 
-    try list.append(allocator, '}');
+    list.append(allocator, '}')?;
+}
+
+pub type ByteSlice = []u8;
+
+pub fn drainDomMutationEvents(session: *CdpPageSession, out_msgs: *std.ArrayListUnmanaged(ByteSlice)) {
+    if (session.dom_ctx == null) return;
+    let dom_ctx = session.dom_ctx.?;
+    if (!session.dom_document_sent) {
+        dom_ctx.clearDomMutations();
+        return;
+    }
+    const alloc = std.heap.c_allocator;
+    let i: usize = 0;
+    while (i < dom_ctx.dom_mutations.items.len) : (i += 1) {
+        const rec = &dom_ctx.dom_mutations.items[i];
+        switch (rec.kind) {
+            .AttrModified => {
+                if (!session.isDomNodeKnown(rec.node_id)) continue;
+                let msg = std.ArrayListUnmanaged(u8).empty;
+                let hdr_buf: [128]u8 = undefined;
+                const hdr = std.fmt.bufPrint(&hdr_buf, "{{\"method\":\"DOM.attributeModified\",\"params\":{{\"nodeId\":{d},\"name\":", .{rec.node_id}) catch continue;
+                msg.appendSlice(alloc, hdr) catch { msg.deinit(alloc); continue; };
+                appendJsonEscaped(alloc, &msg, rec.getName()) catch { msg.deinit(alloc); continue; };
+                msg.appendSlice(alloc, ",\"value\":") catch { msg.deinit(alloc); continue; };
+                appendJsonEscaped(alloc, &msg, rec.getValue()) catch { msg.deinit(alloc); continue; };
+                msg.appendSlice(alloc, "}}") catch { msg.deinit(alloc); continue; };
+                const slice = msg.toOwnedSlice(alloc) catch { msg.deinit(alloc); continue; };
+                out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+            },
+            .AttrRemoved => {
+                if (!session.isDomNodeKnown(rec.node_id)) continue;
+                let msg = std.ArrayListUnmanaged(u8).empty;
+                let hdr_buf: [128]u8 = undefined;
+                const hdr = std.fmt.bufPrint(&hdr_buf, "{{\"method\":\"DOM.attributeRemoved\",\"params\":{{\"nodeId\":{d},\"name\":", .{rec.node_id}) catch continue;
+                msg.appendSlice(alloc, hdr) catch { msg.deinit(alloc); continue; };
+                appendJsonEscaped(alloc, &msg, rec.getName()) catch { msg.deinit(alloc); continue; };
+                msg.appendSlice(alloc, "}}") catch { msg.deinit(alloc); continue; };
+                const slice = msg.toOwnedSlice(alloc) catch { msg.deinit(alloc); continue; };
+                out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+            },
+            .CharDataModified => {
+                if (!session.isDomNodeKnown(rec.node_id)) continue;
+                let msg = std.ArrayListUnmanaged(u8).empty;
+                let hdr_buf: [128]u8 = undefined;
+                const hdr = std.fmt.bufPrint(&hdr_buf, "{{\"method\":\"DOM.characterDataModified\",\"params\":{{\"nodeId\":{d},\"characterData\":", .{rec.node_id}) catch continue;
+                msg.appendSlice(alloc, hdr) catch { msg.deinit(alloc); continue; };
+                appendJsonEscaped(alloc, &msg, rec.getValue()) catch { msg.deinit(alloc); continue; };
+                msg.appendSlice(alloc, "}}") catch { msg.deinit(alloc); continue; };
+                const slice = msg.toOwnedSlice(alloc) catch { msg.deinit(alloc); continue; };
+                out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+            },
+            .ChildInserted => {
+                if (!session.isDomNodeKnown(rec.parent_id)) continue;
+                if (rec.node_id == NULL_NODE || @as(usize, rec.node_id) >= session.doc.nodes.items.len) continue;
+                let msg = std.ArrayListUnmanaged(u8).empty;
+                let hdr_buf: [160]u8 = undefined;
+                const hdr = std.fmt.bufPrint(
+                    &hdr_buf,
+                    "{{\"method\":\"DOM.childNodeInserted\",\"params\":{{\"parentNodeId\":{d},\"previousNodeId\":{d},\"node\":",
+                    .{ rec.parent_id, rec.prev_node_id },
+                ) catch continue;
+                msg.appendSlice(alloc, hdr) catch { msg.deinit(alloc); continue; };
+                serializeCdpNode(alloc, &session.doc, rec.node_id, -1, &msg) catch { msg.deinit(alloc); continue; };
+                msg.appendSlice(alloc, "}}") catch { msg.deinit(alloc); continue; };
+                session.markDomSubtreeKnown(rec.node_id, -1, true);
+                const slice = msg.toOwnedSlice(alloc) catch { msg.deinit(alloc); continue; };
+                out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+            },
+            .ChildRemoved => {
+                if (!session.isDomNodeKnown(rec.parent_id)) continue;
+                if (!session.isDomNodeKnown(rec.node_id)) continue;
+                session.markDomSubtreeKnown(rec.node_id, -1, false);
+                let msg = std.ArrayListUnmanaged(u8).empty;
+                let hdr_buf: [160]u8 = undefined;
+                const hdr = std.fmt.bufPrint(
+                    &hdr_buf,
+                    "{{\"method\":\"DOM.childNodeRemoved\",\"params\":{{\"parentNodeId\":{d},\"nodeId\":{d}}}}}",
+                    .{ rec.parent_id, rec.node_id },
+                ) catch continue;
+                msg.appendSlice(alloc, hdr) catch { msg.deinit(alloc); continue; };
+                const slice = msg.toOwnedSlice(alloc) catch { msg.deinit(alloc); continue; };
+                out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+            },
+            .InnerHtmlRebuilt => {
+                if (!session.isDomNodeKnown(rec.node_id)) continue;
+                if (rec.node_id == NULL_NODE || @as(usize, rec.node_id) >= session.doc.nodes.items.len) continue;
+                const parent_node = &session.doc.nodes.items[@as(usize, rec.node_id)];
+                let child_count: u32 = 0;
+                let ch = parent_node.first_child;
+                while (ch != NULL_NODE && @as(usize, ch) < session.doc.nodes.items.len) {
+                    child_count += 1;
+                    ch = session.doc.nodes.items[@as(usize, ch)].next_sibling;
+                }
+
+                // 1. DOM.childNodeCountUpdated
+                {
+                    let cnt_msg = std.ArrayListUnmanaged(u8).empty;
+                    let cnt_buf: [160]u8 = undefined;
+                    const cnt_s = std.fmt.bufPrint(
+                        &cnt_buf,
+                        "{{\"method\":\"DOM.childNodeCountUpdated\",\"params\":{{\"nodeId\":{d},\"childNodeCount\":{d}}}}}",
+                        .{ rec.node_id, child_count },
+                    ) catch "";
+                    if (cnt_s.len > 0) {
+                        cnt_msg.appendSlice(alloc, cnt_s) catch { cnt_msg.deinit(alloc); };
+                        if (cnt_msg.items.len > 0) {
+                            const slice = cnt_msg.toOwnedSlice(alloc) catch { cnt_msg.deinit(alloc); continue; };
+                            out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+                        }
+                    }
+                }
+
+                // 2. DOM.setChildNodes
+                {
+                    let set_msg = std.ArrayListUnmanaged(u8).empty;
+                    let set_buf: [160]u8 = undefined;
+                    const set_hdr = std.fmt.bufPrint(
+                        &set_buf,
+                        "{{\"method\":\"DOM.setChildNodes\",\"params\":{{\"parentId\":{d},\"nodes\":[",
+                        .{rec.node_id},
+                    ) catch continue;
+                    set_msg.appendSlice(alloc, set_hdr) catch { set_msg.deinit(alloc); continue; };
+                    let first_kid = true;
+                    let kid = parent_node.first_child;
+                    while (kid != NULL_NODE && @as(usize, kid) < session.doc.nodes.items.len) {
+                        if (!first_kid) {
+                            set_msg.append(alloc, ',') catch { set_msg.deinit(alloc); break; };
+                        }
+                        first_kid = false;
+                        serializeCdpNode(alloc, &session.doc, kid, -1, &set_msg) catch { set_msg.deinit(alloc); break; };
+                        session.markDomSubtreeKnown(kid, -1, true);
+                        kid = session.doc.nodes.items[@as(usize, kid)].next_sibling;
+                    }
+                    if (set_msg.items.len > 0) {
+                        set_msg.appendSlice(alloc, "]}}") catch { set_msg.deinit(alloc); continue; };
+                        const slice = set_msg.toOwnedSlice(alloc) catch { set_msg.deinit(alloc); continue; };
+                        out_msgs.append(alloc, slice) catch { alloc.free(slice); };
+                    }
+                }
+            },
+        }
+    }
+    dom_ctx.clearDomMutations();
 }
 
 fn resolveNodeIdFromObjectId(session: *CdpPageSession, object_id: []const u8): NodeId {
@@ -159,9 +315,17 @@ fn resolveNodeIdFromObjectId(session: *CdpPageSession, object_id: []const u8): N
 
 pub struct DomHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
-        if (std.mem.eql(u8, req.method, "DOM.enable") ||
-            std.mem.eql(u8, req.method, "DOM.disable") ||
-            std.mem.eql(u8, req.method, "DOM.hideHighlight") ||
+        if (std.mem.eql(u8, req.method, "DOM.enable")) {
+            session.dom_enabled = true;
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.disable")) {
+            session.setDomDisabled();
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.hideHighlight") ||
             std.mem.eql(u8, req.method, "DOM.highlightNode") ||
             std.mem.eql(u8, req.method, "DOM.focus") ||
             std.mem.eql(u8, req.method, "DOM.setInspectedNode") ||
@@ -193,6 +357,7 @@ pub struct DomHandler {
                 list.appendSlice(session.allocator, "]") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             }
             list.appendSlice(session.allocator, "}}") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            session.markDocumentObserved(depth);
             const res = std.fmt.bufPrint(out_buf, "{s}", .{list.items}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }

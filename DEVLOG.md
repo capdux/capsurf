@@ -1243,4 +1243,10 @@
 ## Phase 71 Boa JS 运行时与 WebIDL 访问器规范清扫技术方案
 1. **`Error.prototype.stack` 与 `GlobalEventHandlers` 规范化 (`constants.js`, `html-classes.js`, `xpath.js`)**：
    - 包装 `Error.prototype.stack` getter 确保首行符合 V8/Chromium `Name: message` 格式；在 `HTMLElement.prototype` 统一定义 `GlobalEventHandlers` 访问器并校验非法 receiver 抛出 `TypeError("Illegal invocation")`，一举打通 11 项 `e2e/boa-*.e2e.test.ts` 运行时兼容性套件。
+
+## Phase 72 原生 CDP DOM 增量事件推送与 WebSocket 15ms 定时器泵技术方案
+1. **增量变更队列与已知节点追踪 (`dom_binding.cp`, `session.cp`, `dom.cp`)**：
+   - 在 `JsDomContext` 录制全部原生属性、子节点、文本与 `innerHTML` 变更，结合 `CdpPageSession.known_dom_nodes` 过滤离屏未观测节点，按 W3C CDP 协议输出精确 `previousNodeId` 链及 `childNodeCountUpdated` + `setChildNodes`。
+2. **非阻塞 15ms 定时器泵 (`server.cp`)**：
+   - 使用 POSIX `poll(&pfd, 1, 15)` 替代纯阻塞读取，在空闲 tick 自动调用 `session.pumpTimers()` 并即时刷出 WebSocket 事件帧，彻底打通异步 `setTimeout` DOM 变更推流。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -99,6 +99,35 @@ pub struct ConsoleRecord {
 
 pub const MAX_CONSOLE_RECORDS: usize = 16;
 pub const MAX_FETCH_RECORDS: usize = 16;
+pub const MAX_DOM_MUTATIONS: usize = 1024;
+
+pub enum DomMutationKind {
+    AttrModified,
+    AttrRemoved,
+    CharDataModified,
+    ChildInserted,
+    ChildRemoved,
+    InnerHtmlRebuilt,
+}
+
+pub struct DomMutationRecord {
+    kind: DomMutationKind = .AttrModified,
+    node_id: NodeId = NULL_NODE,
+    parent_id: NodeId = NULL_NODE,
+    prev_node_id: NodeId = NULL_NODE,
+    name_buf: [128]u8 = [0; 128],
+    name_len: usize = 0,
+    val_buf: [512]u8 = [0; 512],
+    val_len: usize = 0,
+
+    fn getName(): []const u8 {
+        return _.name_buf[0.._.name_len];
+    }
+
+    fn getValue(): []const u8 {
+        return _.val_buf[0.._.val_len];
+    }
+}
 
 pub struct FetchRecord {
     url_buf: [512]u8 = [0; 512],
@@ -143,6 +172,89 @@ pub struct JsDomContext {
     frame_id_len: usize = 0,
     loader_id_buf: [64]u8 = [0; 64],
     loader_id_len: usize = 0,
+    dom_events_enabled: bool = false,
+    dom_mutations: std.ArrayListUnmanaged(DomMutationRecord) = std.ArrayListUnmanaged(DomMutationRecord).empty,
+
+    fn recordDomMutation(*_, rec: DomMutationRecord) {
+        if (!_.dom_events_enabled) return;
+        if (_.dom_mutations.items.len >= MAX_DOM_MUTATIONS) return;
+        _.dom_mutations.append(std.heap.c_allocator, rec) catch {};
+    }
+
+    fn recordAttrModified(*_, node_id: NodeId, name: []const u8, value: []const u8) {
+        if (!_.dom_events_enabled) return;
+        let rec = DomMutationRecord{
+            kind: .AttrModified,
+            node_id: node_id,
+        };
+        const n_len = @min(name.len, rec.name_buf.len);
+        @memcpy(rec.name_buf[0..n_len], name[0..n_len]);
+        rec.name_len = n_len;
+        const v_len = @min(value.len, rec.val_buf.len);
+        @memcpy(rec.val_buf[0..v_len], value[0..v_len]);
+        rec.val_len = v_len;
+        _.recordDomMutation(rec);
+    }
+
+    fn recordAttrRemoved(*_, node_id: NodeId, name: []const u8) {
+        if (!_.dom_events_enabled) return;
+        let rec = DomMutationRecord{
+            kind: .AttrRemoved,
+            node_id: node_id,
+        };
+        const n_len = @min(name.len, rec.name_buf.len);
+        @memcpy(rec.name_buf[0..n_len], name[0..n_len]);
+        rec.name_len = n_len;
+        _.recordDomMutation(rec);
+    }
+
+    fn recordCharDataModified(*_, node_id: NodeId, data: []const u8) {
+        if (!_.dom_events_enabled) return;
+        let rec = DomMutationRecord{
+            kind: .CharDataModified,
+            node_id: node_id,
+        };
+        const v_len = @min(data.len, rec.val_buf.len);
+        @memcpy(rec.val_buf[0..v_len], data[0..v_len]);
+        rec.val_len = v_len;
+        _.recordDomMutation(rec);
+    }
+
+    fn recordChildInserted(*_, parent_id: NodeId, prev_node_id: NodeId, node_id: NodeId) {
+        if (!_.dom_events_enabled) return;
+        _.recordDomMutation(DomMutationRecord{
+            kind: .ChildInserted,
+            node_id: node_id,
+            parent_id: parent_id,
+            prev_node_id: prev_node_id,
+        });
+    }
+
+    fn recordChildRemoved(*_, parent_id: NodeId, node_id: NodeId) {
+        if (!_.dom_events_enabled) return;
+        _.recordDomMutation(DomMutationRecord{
+            kind: .ChildRemoved,
+            node_id: node_id,
+            parent_id: parent_id,
+        });
+    }
+
+    fn recordInnerHtmlRebuilt(*_, node_id: NodeId) {
+        if (!_.dom_events_enabled) return;
+        _.recordDomMutation(DomMutationRecord{
+            kind: .InnerHtmlRebuilt,
+            node_id: node_id,
+        });
+    }
+
+    fn clearDomMutations(*_) {
+        _.dom_mutations.clearRetainingCapacity();
+    }
+
+    fn deinitDomMutations(*_) {
+        _.dom_mutations.deinit(std.heap.c_allocator);
+        _.dom_mutations = std.ArrayListUnmanaged(DomMutationRecord).empty;
+    }
 
     fn addFetchRecord(*_, url: []const u8, mime_type: []const u8) {
         if (_.fetch_count >= MAX_FETCH_RECORDS) return;
@@ -333,6 +445,7 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const attr_name_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_name) catch attr_name;
     const attr_val_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_val) catch attr_val;
     el.dom_ctx.doc.setAttribute(el.node_id, attr_name_dup, attr_val_dup);
+    el.dom_ctx.recordAttrModified(el.node_id, attr_name_dup, attr_val_dup);
     el.dom_ctx.layout_dirty = true;
     if (std.ascii.eqlIgnoreCase(attr_name, "style")) {
         if (lt := el.dom_ctx.layout) {
@@ -353,7 +466,9 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const el: *JsElement = @ptrCast(@alignCast(ptr.?));
     const attr_name = jsToSlice(ctx, argv[0]);
     defer std.heap.page_allocator.free(attr_name);
-    * = el.dom_ctx.doc.removeAttribute(el.node_id, attr_name);
+    if (el.dom_ctx.doc.removeAttribute(el.node_id, attr_name)) {
+        el.dom_ctx.recordAttrRemoved(el.node_id, attr_name);
+    }
     el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
@@ -396,7 +511,18 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const child_ptr = JS_GetOpaque(argv[0], g_element_class_id);
     if (child_ptr == null) return jsUndefined();
     const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
+    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].parent;
+        if (old_parent != NULL_NODE) {
+            el.dom_ctx.recordChildRemoved(old_parent, child_el.node_id);
+        }
+    }
     el.dom_ctx.doc.appendChild(el.node_id, child_el.node_id);
+    let prev_id: NodeId = NULL_NODE;
+    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].prev_sibling;
+    }
+    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_el.node_id);
     return JS_DupValue(ctx, argv[0]);
 }
 
@@ -417,7 +543,18 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
             ref_node_id = ref_el.node_id;
         }
     }
+    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].parent;
+        if (old_parent != NULL_NODE) {
+            el.dom_ctx.recordChildRemoved(old_parent, child_el.node_id);
+        }
+    }
     el.dom_ctx.doc.insertBefore(el.node_id, child_el.node_id, ref_node_id);
+    let prev_id: NodeId = NULL_NODE;
+    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].prev_sibling;
+    }
+    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_el.node_id);
     return JS_DupValue(ctx, argv[0]);
 }
 
@@ -429,7 +566,13 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const child_ptr = JS_GetOpaque(argv[0], g_element_class_id);
     if (child_ptr == null) return jsUndefined();
     const child_el: *JsElement = @ptrCast(@alignCast(child_ptr.?));
+    let parent_id: NodeId = el.node_id;
+    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const p = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].parent;
+        if (p != NULL_NODE) parent_id = p;
+    }
     el.dom_ctx.doc.removeChild(child_el.node_id);
+    el.dom_ctx.recordChildRemoved(parent_id, child_el.node_id);
     return JS_DupValue(ctx, argv[0]);
 }
 
@@ -444,7 +587,19 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const old_ptr = JS_GetOpaque(argv[1], g_element_class_id);
     if (old_ptr == null) return jsUndefined();
     const old_el: *JsElement = @ptrCast(@alignCast(old_ptr.?));
+    if (@as(usize, new_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, new_el.node_id)].parent;
+        if (old_parent != NULL_NODE) {
+            el.dom_ctx.recordChildRemoved(old_parent, new_el.node_id);
+        }
+    }
+    el.dom_ctx.recordChildRemoved(el.node_id, old_el.node_id);
     el.dom_ctx.doc.replaceChild(el.node_id, new_el.node_id, old_el.node_id);
+    let prev_id: NodeId = NULL_NODE;
+    if (@as(usize, new_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, new_el.node_id)].prev_sibling;
+    }
+    el.dom_ctx.recordChildInserted(el.node_id, prev_id, new_el.node_id);
     return JS_DupValue(ctx, argv[1]);
 }
 
@@ -879,6 +1034,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     defer std.heap.page_allocator.free(new_id);
     const new_id_dup = el.dom_ctx.doc.allocator.dupe(u8, new_id) catch new_id;
     el.dom_ctx.doc.setAttribute(el.node_id, "id", new_id_dup);
+    el.dom_ctx.recordAttrModified(el.node_id, "id", new_id_dup);
     return jsUndefined();
 }
 
@@ -902,6 +1058,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     defer std.heap.page_allocator.free(new_cls);
     const new_cls_dup = el.dom_ctx.doc.allocator.dupe(u8, new_cls) catch new_cls;
     el.dom_ctx.doc.setAttribute(el.node_id, "class", new_cls_dup);
+    el.dom_ctx.recordAttrModified(el.node_id, "class", new_cls_dup);
     return jsUndefined();
 }
 
@@ -957,7 +1114,16 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const new_text = jsToSlice(ctx, argv[0]);
     defer std.heap.page_allocator.free(new_text);
     const new_text_dup = el.dom_ctx.doc.allocator.dupe(u8, new_text) catch new_text;
+    if (@as(usize, el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const ntype = el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)].node_type;
+        if (ntype == NodeType.Text || ntype == NodeType.Comment) {
+            el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)].text_content = new_text_dup;
+            el.dom_ctx.recordCharDataModified(el.node_id, new_text_dup);
+            return jsUndefined();
+        }
+    }
     setNodeText(el.dom_ctx.doc, el.node_id, new_text_dup);
+    el.dom_ctx.recordInnerHtmlRebuilt(el.node_id);
     return jsUndefined();
 }
 
@@ -980,6 +1146,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const html = jsToSlice(ctx, argv[0]);
     defer std.heap.page_allocator.free(html);
     el.dom_ctx.doc.setInnerHtml(el.node_id, html) catch return jsUndefined();
+    el.dom_ctx.recordInnerHtmlRebuilt(el.node_id);
     return jsUndefined();
 }
 
@@ -1076,6 +1243,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const val_dup = el.dom_ctx.doc.allocator.dupe(u8, val) catch val;
 
     el.dom_ctx.doc.setAttributeNS(el.node_id, ns_dup, qname_dup, val_dup);
+    el.dom_ctx.recordAttrModified(el.node_id, qname_dup, val_dup);
     return jsUndefined();
 }
 
@@ -1098,7 +1266,9 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const local_name = jsToSlice(ctx, argv[1]);
     defer std.heap.page_allocator.free(local_name);
 
-    * = el.dom_ctx.doc.removeAttributeNS(el.node_id, ns, local_name);
+    if (el.dom_ctx.doc.removeAttributeNS(el.node_id, ns, local_name)) {
+        el.dom_ctx.recordAttrRemoved(el.node_id, local_name);
+    }
     return jsUndefined();
 }
 
