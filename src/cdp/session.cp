@@ -826,6 +826,7 @@ fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): 
 pub struct KnownChildFrame {
     active: bool = false,
     detached: bool = false,
+    exec_context_id: i64 = 0,
     frame_id_buf: [32]u8 = [0; 32],
     frame_id_len: usize = 0,
     url_buf: [512]u8 = [0; 512],
@@ -2735,6 +2736,20 @@ pub struct CdpPageSession {
         if (cid == 1) return true;
         if (_.iframe_ctx_created && _.iframe_ctx_id == cid) return true;
         if (_.isIsolatedWorldId(cid)) return true;
+        let ki: usize = 0;
+        while (ki < _.known_child_frame_count) : (ki += 1) {
+            const kf = &_.known_child_frames[ki];
+            if (kf.active && !kf.detached && kf.exec_context_id == cid) return true;
+        }
+        return false;
+    }
+
+    pub fn isDestroyedChildContextId(*_, cid: i64): bool {
+        let ki: usize = 0;
+        while (ki < _.known_child_frame_count) : (ki += 1) {
+            const kf = &_.known_child_frames[ki];
+            if (kf.active && kf.detached && kf.exec_context_id == cid) return true;
+        }
         return false;
     }
 

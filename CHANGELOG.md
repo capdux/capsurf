@@ -2304,3 +2304,8 @@
 - Added `test/css/test_font_face_and_ua.cp` and `test/html/test_parser_and_tree_builder.cp`.
 - Fixed `HtmlTag.fromStr` length buckets for `"noembed"` and `"plaintext"` in `src/html/tags.cp`.
 - Implemented `JS_SetModuleLoaderFunc2` import attributes (`with { type: "json" }` / `"css"` rejection) and `Kitesurf.getMemoryStats` (`domNodes` + `wrappers` weak-ref tracking) in `src/cdp/session.cp` and `src/js/dom_binding.cp`.
+
+### Phase 215
+- Fixed `ScriptFetchCallback` slice out-parameter lowering in `src/eval/prefetch_scripts.cp` (`ScriptBodyOut`), `src/eval/external_outbound.cp`, and added `testPrefetchSingleAndAll` in `test/eval/test_prefetch_scripts_and_wasm.cp`.
+- Implemented OOPIF child-frame `isDefault: false`, `Runtime.executionContextDestroyed`, `DOM.getFrameOwner`, `frameId`/`documentURL`, and child-frame `DOM.getDocument`/`getOuterHTML`/`getAttributes` in `src/cdp/{page,session,runtime,target,dispatch,dom}.cp`.
+- Updated `GEMINI.md` section `11.6` with port zombie pre-check and slice out-param patterns.

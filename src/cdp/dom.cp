@@ -2,10 +2,10 @@
 // CDP DOM Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/dom.ts
 
-import { CdpRequest, CdpResponse, CdpBoxModel, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, CdpBoxModel, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { clearLearnedScripts } from "./session_hooks.cp";
-import { NodeId, NULL_NODE, Document } from "../dom/dom.cp";
+import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 
 pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnmanaged(u8), str: []const u8)! {
     list.append(allocator, '"')?;
@@ -42,6 +42,11 @@ pub struct ShadowRootEntry {
     json: []const u8 = "",
 }
 
+pub struct IframeFrameEntry {
+    nid: NodeId = NULL_NODE,
+    frame_id: []const u8 = "",
+}
+
 fn isNodeInSvg(doc: *const Document, nid: NodeId): bool {
     let cur = nid;
     let guard: usize = 0;
@@ -63,10 +68,64 @@ fn findShadowRootJson(entries: []const ShadowRootEntry, nid: NodeId): ([]const u
     return null;
 }
 
+fn findIframeFrameId(entries: []const IframeFrameEntry, nid: NodeId): ([]const u8)? {
+    let i: usize = 0;
+    while (i < entries.len) : (i += 1) {
+        if (entries[i].nid == nid && entries[i].frame_id.len > 0) return entries[i].frame_id;
+    }
+    return null;
+}
+
+fn collectDocIframeEntries(session: *CdpPageSession, out_entries: *[32]IframeFrameEntry): usize {
+    let count: usize = 0;
+    let active_kfs: [48]usize = [0; 48];
+    let active_kf_count: usize = 0;
+    let ki: usize = 0;
+    while (ki < session.known_child_frame_count && active_kf_count < active_kfs.len) : (ki += 1) {
+        const kf = &session.known_child_frames[ki];
+        if (kf.active && !kf.detached && kf.frame_id_len > 0) {
+            active_kfs[active_kf_count] = ki;
+            active_kf_count += 1;
+        }
+    }
+    let iframe_seq: usize = 0;
+    let ni: usize = 1;
+    while (ni < session.doc.nodes.items.len && count < out_entries.len) : (ni += 1) {
+        const n = &session.doc.nodes.items[ni];
+        if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "iframe")) {
+            let matched_fid: []const u8 = "";
+            if (n.id_attr.len > 0) {
+                let ak: usize = 0;
+                while (ak < active_kf_count) : (ak += 1) {
+                    const kf = &session.known_child_frames[active_kfs[ak]];
+                    if (kf.owner_id_len > 0 && std.mem.eql(u8, kf.owner_id_buf[0..kf.owner_id_len], n.id_attr)) {
+                        matched_fid = kf.frame_id_buf[0..kf.frame_id_len];
+                        break;
+                    }
+                }
+            }
+            if (matched_fid.len == 0 && iframe_seq < active_kf_count) {
+                const kf = &session.known_child_frames[active_kfs[iframe_seq]];
+                matched_fid = kf.frame_id_buf[0..kf.frame_id_len];
+            }
+            if (matched_fid.len > 0) {
+                out_entries[count] = IframeFrameEntry{
+                    nid: @as(NodeId, @intCast(ni)),
+                    frame_id: matched_fid,
+                };
+                count += 1;
+            }
+            iframe_seq += 1;
+        }
+    }
+    return count;
+}
+
 pub fn serializeCdpNode(allocator: std.mem.Allocator, doc: *const Document, nid: NodeId, depth: i64, list: *std.ArrayListUnmanaged(u8))! {
     const empty_sr: []const ShadowRootEntry = [];
+    const empty_ifr: []const IframeFrameEntry = [];
     const in_svg = isNodeInSvg(doc, nid);
-    return serializeCdpNodeWithOptions(allocator, doc, nid, depth, in_svg, empty_sr, list);
+    return serializeCdpNodeWithOptions(allocator, doc, nid, depth, in_svg, empty_sr, empty_ifr, list);
 }
 
 pub fn serializeCdpNodeWithOptions(
@@ -76,6 +135,7 @@ pub fn serializeCdpNodeWithOptions(
     depth: i64,
     in_svg: bool,
     shadow_roots: []const ShadowRootEntry,
+    iframe_frames: []const IframeFrameEntry,
     list: *std.ArrayListUnmanaged(u8),
 )! {
     if (nid == NULL_NODE || @as(usize, nid) >= doc.nodes.items.len) return;
@@ -147,6 +207,13 @@ pub fn serializeCdpNodeWithOptions(
                 attr_first = false;
             }
             list.appendSlice(allocator, "],")?;
+            if (std.ascii.eqlIgnoreCase(tag, "iframe")) {
+                if (fid := findIframeFrameId(iframe_frames, nid)) {
+                    list.appendSlice(allocator, "\"frameId\":")?;
+                    appendJsonEscaped(allocator, list, fid)?;
+                    list.append(allocator, ',')?;
+                }
+            }
         },
         .Text => {
             list.appendSlice(allocator, "\"nodeType\":3,\"nodeName\":\"#text\",\"localName\":\"\",\"nodeValue\":")?;
@@ -172,7 +239,7 @@ pub fn serializeCdpNodeWithOptions(
         while (kid != NULL_NODE && @as(usize, kid) < doc.nodes.items.len) {
             if (!first_kid) list.append(allocator, ',')?;
             first_kid = false;
-            serializeCdpNodeWithOptions(allocator, doc, kid, next_depth, child_in_svg, shadow_roots, list)?;
+            serializeCdpNodeWithOptions(allocator, doc, kid, next_depth, child_in_svg, shadow_roots, iframe_frames, list)?;
             kid = doc.nodes.items[@as(usize, kid)].next_sibling;
         }
         list.append(allocator, ']')?;
@@ -374,11 +441,25 @@ fn resolveNodeIdFromObjectId(session: *CdpPageSession, object_id: []const u8): N
 }
 
 pub struct DomHandler {
-    pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
+    pub static fn handle(
+        session: *CdpPageSession,
+        req: CdpRequest,
+        out_buf: []u8,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
+        event_count: *usize,
+    ): CdpResponse {
         if (std.mem.eql(u8, req.method, "DOM.enable")) {
             session.dom_enabled = true;
             if (!session.dom_document_sent) {
                 session.markDocumentObserved(-1);
+            }
+            if (req.session_id.len > 0 && session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                if (event_count.* < out_events.len) {
+                    let ev = CdpEvent.create("DOM.documentUpdated", "{}");
+                    ev.session_id = "default";
+                    out_events[event_count.*] = ev;
+                    event_count.* += 1;
+                }
             }
             return CdpResponse.ok(req.id, "{}");
         }
@@ -406,8 +487,53 @@ pub struct DomHandler {
         }
 
         if (std.mem.eql(u8, req.method, "DOM.getDocument")) {
-            const root_node = session.doc.root_element;
             const depth = extractJsonInt(req.params_raw, "depth") ?? -1;
+            if (req.session_id.len > 0 && session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                const child_dom_script =
+                    "(function(){" ++
+                    "if(typeof document==='undefined'||!document.querySelectorAll)return '';" ++
+                    "var ifr=document.querySelector('iframe');" ++
+                    "var cwin=(ifr&&ifr.contentWindow)?ifr.contentWindow:null;" ++
+                    "var cdoc=(ifr&&ifr.contentDocument)?ifr.contentDocument:((cwin&&cwin.document)?cwin.document:null);" ++
+                    "if(!cdoc)return '';" ++
+                    "var curl=String((cdoc&&cdoc.URL)||(cwin&&cwin.location&&cwin.location.href)||(ifr&&ifr.getAttribute&&ifr.getAttribute('src'))||'');" ++
+                    "var map=globalThis.__capsurf_child_dom_nodes=globalThis.__capsurf_child_dom_nodes||{};" ++
+                    "var nextId=1000001;" ++
+                    "function ser(n,inSvg){" ++
+                    "if(!n)return null;" ++
+                    "var nt=n.nodeType||1;" ++
+                    "var nid=nextId++;" ++
+                    "map[nid]=n;" ++
+                    "var obj={nodeId:nid,backendNodeId:nid,nodeType:nt,nodeName:n.nodeName||'',localName:n.localName||'',nodeValue:n.nodeValue||''};" ++
+                    "if(nt===1){" ++
+                    "var tag=n.localName||String(n.tagName||'').toLowerCase();" ++
+                    "var svgNow=inSvg||tag==='svg';" ++
+                    "obj.nodeName=svgNow?tag:String(n.tagName||tag).toUpperCase();" ++
+                    "obj.localName=tag;obj.nodeValue='';" ++
+                    "var attrs=[];" ++
+                    "if(n.attributes&&typeof n.attributes.length==='number'){for(var i=0;i<n.attributes.length;i++){var a=n.attributes[i];if(a&&typeof a.name==='string'){attrs.push(a.name,String(a.value==null?'':a.value));}}}" ++
+                    "else if(typeof n.getAttributeNames==='function'){var ns=n.getAttributeNames();for(var i=0;i<ns.length;i++)attrs.push(ns[i],String(n.getAttribute(ns[i])||''));}" ++
+                    "else if(n._attributes&&typeof n._attributes==='object'){var ks=Object.keys(n._attributes);for(var i=0;i<ks.length;i++)attrs.push(ks[i],String(n._attributes[ks[i]]||''));}" ++
+                    "if(attrs.indexOf('style')===-1&&typeof n.getAttribute==='function'){var st=n.getAttribute('style');if(st)attrs.push('style',String(st));}" ++
+                    "if(attrs.indexOf('style')===-1&&n.style&&n.style.cssText){attrs.push('style',String(n.style.cssText));}" ++
+                    "obj.attributes=attrs;" ++
+                    "}else if(nt===9){obj.nodeName='#document';obj.localName='';obj.nodeValue='';obj.documentURL=curl;}" ++
+                    "var kids=n.childNodes||[];obj.childNodeCount=kids.length;" ++
+                    "if(kids.length>0){obj.children=[];var svgChild=inSvg||(nt===1&&(n.localName||String(n.tagName||'').toLowerCase())==='svg');for(var j=0;j<kids.length;j++){var c=ser(kids[j],svgChild);if(c)obj.children.push(c);}}" ++
+                    "return obj;}" ++
+                    "var rootObj=ser(cdoc,false);" ++
+                    "if(!rootObj)return '';" ++
+                    "return JSON.stringify({root:rootObj});})()";
+                const cd_val = session.ctx.eval(child_dom_script);
+                defer session.ctx.freeValue(cd_val);
+                const cd_slice = session.ctx.toCString(cd_val);
+                if (cd_slice.len > 0) {
+                    const res = std.fmt.bufPrint(out_buf, "{s}", .{cd_slice}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, res);
+                }
+            }
+
+            const root_node = session.doc.root_element;
             let list = std.ArrayListUnmanaged(u8).empty;
             defer list.deinit(session.allocator);
 
@@ -431,8 +557,12 @@ pub struct DomHandler {
                     "var svgNow=inSvg||tag==='svg';" ++
                     "obj.nodeName=svgNow?tag:String(n.tagName||tag).toUpperCase();" ++
                     "obj.localName=tag;obj.nodeValue='';" ++
-                    "var attrs=[];var rawAttrs=n.attributes||[];" ++
-                    "for(var i=0;i<rawAttrs.length;i++){var a=rawAttrs[i];if(a&&typeof a.name==='string'){attrs.push(a.name,String(a.value==null?'':a.value));}}" ++
+                    "var attrs=[];" ++
+                    "if(n.attributes&&typeof n.attributes.length==='number'){for(var i=0;i<n.attributes.length;i++){var a=n.attributes[i];if(a&&typeof a.name==='string'){attrs.push(a.name,String(a.value==null?'':a.value));}}}" ++
+                    "else if(typeof n.getAttributeNames==='function'){var ns=n.getAttributeNames();for(var i=0;i<ns.length;i++)attrs.push(ns[i],String(n.getAttribute(ns[i])||''));}" ++
+                    "else if(n._attributes&&typeof n._attributes==='object'){var ks=Object.keys(n._attributes);for(var i=0;i<ks.length;i++)attrs.push(ks[i],String(n._attributes[ks[i]]||''));}" ++
+                    "if(attrs.indexOf('style')===-1&&typeof n.getAttribute==='function'){var st=n.getAttribute('style');if(st)attrs.push('style',String(st));}" ++
+                    "if(attrs.indexOf('style')===-1&&n.style&&n.style.cssText){attrs.push('style',String(n.style.cssText));}" ++
                     "obj.attributes=attrs;" ++
                     "}else if(nt===11){obj.nodeName='#document-fragment';obj.localName='';obj.nodeValue='';if(n.mode)obj.shadowRootType=n.mode;}" ++
                     "var kids=n.childNodes||[];obj.childNodeCount=kids.length;" ++
@@ -467,17 +597,24 @@ pub struct DomHandler {
                 }
             }
 
+            let iframe_entries: [32]IframeFrameEntry = [IframeFrameEntry{}; 32];
+            const iframe_count = collectDocIframeEntries(session, &iframe_entries);
+
             const cnt: u32 = if (root_node != NULL_NODE) 1 else 0;
             let root_buf: [256]u8 = undefined;
             const root_s = std.fmt.bufPrint(
                 &root_buf,
-                "{{\"root\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",\"childNodeCount\":{d}",
-                .{ root_node, root_node, cnt },
+                "{{\"root\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",\"documentURL\":",
+                .{ root_node, root_node },
             ) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             list.appendSlice(session.allocator, root_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            appendJsonEscaped(session.allocator, &list, session.url) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            let cnt_buf: [64]u8 = undefined;
+            const cnt_s = std.fmt.bufPrint(&cnt_buf, ",\"childNodeCount\":{d}", .{cnt}) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+            list.appendSlice(session.allocator, cnt_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             if (depth != 0 && root_node != NULL_NODE) {
                 list.appendSlice(session.allocator, ",\"children\":[") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
-                serializeCdpNodeWithOptions(session.allocator, &session.doc, root_node, depth, false, sr_entries[0..sr_count], &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                serializeCdpNodeWithOptions(session.allocator, &session.doc, root_node, depth, false, sr_entries[0..sr_count], iframe_entries[0..iframe_count], &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 list.appendSlice(session.allocator, "]") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
             }
             list.appendSlice(session.allocator, "}}") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
@@ -697,6 +834,23 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.getOuterHTML")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            if (nid_val >= 1000000 && req.session_id.len > 0 && session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                let js_buf: [512]u8 = [0; 512];
+                const js_expr = std.fmt.bufPrint(
+                    &js_buf,
+                    "(function(){{var m=globalThis.__capsurf_child_dom_nodes;var n=m?m[{d}]:null;if(!n)return '';var h=n.outerHTML;if(typeof h!=='string'){{var t=String(n.localName||n.tagName||'div').toLowerCase();var st=(n.getAttribute&&n.getAttribute('style'))||(n.style&&n.style.cssText)||'';h='<'+t+(st?' style=\"'+st+'\"':'')+'>'+(n.innerHTML||'')+'</'+t+'>';}}return JSON.stringify({{outerHTML:h}});}})()",
+                    .{nid_val},
+                ) catch "";
+                if (js_expr.len > 0) {
+                    const v = session.ctx.eval(js_expr);
+                    defer session.ctx.freeValue(v);
+                    const s = session.ctx.toCString(v);
+                    if (s.len > 0) {
+                        const res = std.fmt.bufPrint(out_buf, "{s}", .{s}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                        return CdpResponse.ok(req.id, res);
+                    }
+                }
+            }
             const nid = @as(NodeId, @intCast(if (nid_val < 0) 0 else nid_val));
             const include_doctype = std.mem.indexOf(u8, req.params_raw, "\"includeDoctype\":true") != null ||
                 std.mem.indexOf(u8, req.params_raw, "\"includeDoctype\": true") != null;
@@ -780,6 +934,23 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.getAttributes")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            if (nid_val >= 1000000 && req.session_id.len > 0 && session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
+                let js_buf: [1536]u8 = [0; 1536];
+                const js_expr = std.fmt.bufPrint(
+                    &js_buf,
+                    "(function(){{var m=globalThis.__capsurf_child_dom_nodes;var n=m?m[{d}]:null;if(!n)return '';var a=[];if(n.attributes&&typeof n.attributes.length==='number'){{for(var i=0;i<n.attributes.length;i++){{var x=n.attributes[i];if(x&&typeof x.name==='string')a.push(x.name,String(x.value==null?'':x.value));}}}}else if(typeof n.getAttributeNames==='function'){{var ns=n.getAttributeNames();for(var i=0;i<ns.length;i++)a.push(ns[i],String(n.getAttribute(ns[i])||''));}}else if(n._attributes&&typeof n._attributes==='object'){{var ks=Object.keys(n._attributes);for(var i=0;i<ks.length;i++)a.push(ks[i],String(n._attributes[ks[i]]||''));}}if(a.indexOf('style')===-1&&typeof n.getAttribute==='function'){{var st=n.getAttribute('style');if(st)a.push('style',String(st));}}if(a.indexOf('style')===-1&&n.style&&n.style.cssText)a.push('style',String(n.style.cssText));return JSON.stringify({{attributes:a}});}})()",
+                    .{nid_val},
+                ) catch "";
+                if (js_expr.len > 0) {
+                    const v = session.ctx.eval(js_expr);
+                    defer session.ctx.freeValue(v);
+                    const s = session.ctx.toCString(v);
+                    if (s.len > 0) {
+                        const res = std.fmt.bufPrint(out_buf, "{s}", .{s}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                        return CdpResponse.ok(req.id, res);
+                    }
+                }
+            }
             const nid = @as(NodeId, @intCast(nid_val));
             let attr_buf: [1024]u8 = [0; 1024];
             let cur: usize = 0;
@@ -844,6 +1015,28 @@ pub struct DomHandler {
                 .{ node_id_val, node_id_val },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
+        }
+
+        if (std.mem.eql(u8, req.method, "DOM.getFrameOwner")) {
+            const fid = extractJsonString(req.params_raw, "frameId") ?? "";
+            if (fid.len == 0) {
+                return CdpResponse.err(req.id, -32602, "frameId is required");
+            }
+            let iframe_entries: [32]IframeFrameEntry = [IframeFrameEntry{}; 32];
+            const iframe_count = collectDocIframeEntries(session, &iframe_entries);
+            let fi: usize = 0;
+            while (fi < iframe_count) : (fi += 1) {
+                if (std.mem.eql(u8, iframe_entries[fi].frame_id, fid)) {
+                    const owner_nid = iframe_entries[fi].nid;
+                    const res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"backendNodeId\":{d},\"nodeId\":{d}}}",
+                        .{ owner_nid, owner_nid },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, res);
+                }
+            }
+            return CdpResponse.err(req.id, -32000, "Frame with the given id was not found.");
         }
 
         return CdpResponse.err(req.id, -32601, "'DOM' domain method not implemented");

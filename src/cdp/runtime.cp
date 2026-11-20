@@ -251,6 +251,14 @@ pub struct RuntimeHandler {
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
             const context_id = extractJsonInt(req.params_raw, "contextId");
             if (context_id != null && !session.isValidContextId(context_id.?)) {
+                if (session.isDestroyedChildContextId(context_id.?)) {
+                    const err_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"Error\",\"description\":\"Error: unknown or destroyed execution context {d}\"}}}}}}",
+                        .{context_id.?},
+                    ) catch return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
+                    return CdpResponse.ok(req.id, err_res);
+                }
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
             }
 

@@ -4603,3 +4603,12 @@
 - **Slot B (`be0aa311`, killed)**:
   - Upgraded `src/cdp/session.cp` to `JS_SetModuleLoaderFunc2` with `with { type: "json" }`, `type: "css"` rejection, `import.meta.resolve` bare-specifier error, and `Kitesurf.getMemoryStats` `domNodes` + `wrappers: { demoted, revived, reclaimed }` + `WeakRef` reclaim/revive in `src/js/dom_binding.cp`.
   - Built `bin_19233/main` in 5.43s. E2E on port `19233`: `module-registry` 0/1 (only trailing `registryTla` `await fetch` pending), `detached-node-reclaim` 2/6 PASS (up from 0), `detached-owned-caches` 0/5 (`getMemoryStats` unblocked; blocked on `getAttributeNode`/`style.sheet`/`track.track`).
+
+### Phase 215: CDP Whitebox 24/27 Sweep + `prefetch_scripts.cp` Fix + OOPIF `detach-teardown` & `elements-panel` 2/2 PASS
+- **Slot A (`ec96d23e`, `1cb8a03f`, killed)**:
+  - Swept all 27 files in `test/cdp/*.cp`: **24/27 PASS** (124.44s); remaining 3 failures (`test_cdp.cp`, `test_playwright_e2e.cp:249`, `test_screenshot_input.cp:129`) pinpointed.
+  - Fixed `src/eval/prefetch_scripts.cp` (`ScriptBodyOut` wrapper for `&body_out` + `if (cfg := _.outbound_config)`) and `src/eval/external_outbound.cp:96`; added `testPrefetchSingleAndAll` to `test/eval/test_prefetch_scripts_and_wasm.cp` (**1/1 PASS**, 971ms).
+- **Slot B (`44899007`, killed)**:
+  - Fixed `src/cdp/{page,session,runtime,target,dispatch,dom}.cp` for child-frame `isDefault: false`, `Runtime.executionContextDestroyed`, destroyed `contextId` error reporting, `DOM.Node.frameId`/`documentURL`, child-frame `DOM.getDocument`/`getOuterHTML`/`getAttributes`, and `DOM.getFrameOwner`.
+  - Built `bin_19233/main` (6.43s). E2E on port `19233`: `oopif-detach-teardown` + `oopif-elements-panel` **2/2 PASS** (18 assertions, exit 0).
+- **GEMINI.md**: Added rules #4 (E2E port zombie pre-check) & #5 (Slot A non-CDP fast path + `ScriptBodyOut` slice out-param pattern) under `11.6`.

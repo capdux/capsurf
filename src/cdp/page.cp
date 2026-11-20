@@ -241,6 +241,9 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
         let ki: usize = 0;
         while (ki < session.known_child_frame_count) : (ki += 1) {
             if (session.known_child_frames[ki].active && std.mem.eql(u8, session.known_child_frames[ki].frame_id_buf[0..session.known_child_frames[ki].frame_id_len], cf.frame_id)) {
+                if (cf.exec_context_id > 0) {
+                    session.known_child_frames[ki].exec_context_id = cf.exec_context_id;
+                }
                 found = true;
                 break;
             }
@@ -249,6 +252,7 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
             let k = &session.known_child_frames[session.known_child_frame_count];
             k.active = true;
             k.detached = false;
+            k.exec_context_id = cf.exec_context_id;
             const fl = @min(cf.frame_id.len, k.frame_id_buf.len);
             @memcpy(k.frame_id_buf[0..fl], cf.frame_id[0..fl]);
             k.frame_id_len = fl;
@@ -361,6 +365,15 @@ pub fn emitNewChildFrameEvents(
                 ) catch "{}";
                 out_events[event_count.*] = CdpEvent.create("Page.frameDetached", det_json);
                 event_count.* += 1;
+                if (kf.exec_context_id > 0 && session.runtime_enabled && event_count.* < out_events.len) {
+                    const des_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"executionContextId\":{d}}}",
+                        .{ kf.exec_context_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Runtime.executionContextDestroyed", des_json);
+                    event_count.* += 1;
+                }
             }
         }
     }
@@ -371,7 +384,7 @@ pub fn emitNewChildFrameEvents(
     let frame_info_buf: [2048]u8 = [0; 2048];
     let fi: usize = @as(usize, 1) + session.emitted_child_frame_count;
     while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
-        const cf = &nav_frames[fi];
+        let cf = &nav_frames[fi];
         const parent_fid = cf.parent_frame_id ?? session.frame_id;
         if (event_count.* < out_events.len) {
             const att_json = std.fmt.allocPrint(
@@ -413,12 +426,13 @@ pub fn emitNewChildFrameEvents(
         if (session.runtime_enabled && event_count.* < out_events.len) {
             const ctx_id = session.next_context_id;
             session.next_context_id += 1;
+            cf.exec_context_id = ctx_id;
             const cf_origin = originOf(cf.url);
             let esc_orig_buf: [256]u8 = [0; 256];
             const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
             const ctx_json = std.fmt.allocPrint(
                 session.allocator,
-                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"frameId\":\"{s}\"}}}}}}",
+                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
                 .{ ctx_id, esc_orig, cf.frame_id },
             ) catch "{}";
             out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
@@ -1166,7 +1180,7 @@ pub struct PageHandler {
                 let frame_info_buf: [2048]u8 = [0; 2048];
                 let fi: usize = 1;
                 while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
-                    const cf = &nav_slice[fi];
+                    let cf = &nav_slice[fi];
                     const parent_fid = cf.parent_frame_id ?? session.frame_id;
                     if (event_count.* < out_events.len) {
                         const att_json = std.fmt.allocPrint(
@@ -1208,12 +1222,13 @@ pub struct PageHandler {
                     if (session.runtime_enabled && event_count.* < out_events.len) {
                         const ctx_id = session.next_context_id;
                         session.next_context_id += 1;
+                        cf.exec_context_id = ctx_id;
                         const cf_origin = originOf(cf.url);
                         let esc_orig_buf: [256]u8 = [0; 256];
                         const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
                         const ctx_json = std.fmt.allocPrint(
                             session.allocator,
-                            "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"frameId\":\"{s}\"}}}}}}",
+                            "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
                             .{ ctx_id, esc_orig, cf.frame_id },
                         ) catch "{}";
                         out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);

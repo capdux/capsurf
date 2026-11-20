@@ -64,11 +64,15 @@ pub struct ScriptPrefetchEntry {
     url_buf: [1024]u8 = [0; 1024],
 }
 
+pub struct ScriptBodyOut {
+    value: []const u8 = "",
+}
+
 pub type ScriptFetchCallback = *const fn(
     url: []const u8,
     credentials_mode: CredentialsMode,
     user_data: *!?,
-    out_body: *[]const u8,
+    out_body: *ScriptBodyOut,
     out_status: *u32,
 ): bool;
 
@@ -254,7 +258,7 @@ pub struct PrefetchScriptManager {
         }
 
         if (f := _.custom_fetch) {
-            let body_out: []const u8 = "";
+            let body_out = ScriptBodyOut{};
             let status_out: u32 = 0;
             const ok = f(
                 resolved,
@@ -263,7 +267,7 @@ pub struct PrefetchScriptManager {
                 &body_out,
                 &status_out,
             );
-            _.scripts[index].body = body_out;
+            _.scripts[index].body = body_out.value;
             _.scripts[index].status = status_out;
             if (!ok) {
                 if (_.scripts[index].status == 0) {
@@ -275,13 +279,13 @@ pub struct PrefetchScriptManager {
             return true;
         }
 
-        if (_.outbound_config != null) {
+        if (cfg := _.outbound_config) {
             const req = ExternalOutboundRequest{
                 url: resolved,
                 method: "GET",
                 redirect: "follow",
             };
-            const resp = directExternalFetch(&_.outbound_config, &req);
+            const resp = directExternalFetch(&cfg, &req);
             _.scripts[index].status = resp.status;
             _.scripts[index].body = resp.body;
 

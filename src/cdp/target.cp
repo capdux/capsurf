@@ -477,12 +477,17 @@ pub struct TargetRegistry {
         const tid = _.createTargetWithType(url, "iframe", bctx);
         if (tid.len > 0) {
             if (idx := _.findTargetIndex(tid)) {
+                if (frame_id.len > 0 && frame_id.len <= _.targets[idx].target_id_buf.len) {
+                    @memcpy(_.targets[idx].target_id_buf[0..frame_id.len], frame_id);
+                    _.targets[idx].target_id_len = frame_id.len;
+                }
                 const f_len = @min(frame_id.len, _.targets[idx].frame_id_buf.len);
                 @memcpy(_.targets[idx].frame_id_buf[0..f_len], frame_id[0..f_len]);
                 _.targets[idx].frame_id_len = f_len;
                 const op_len = @min(opener_frame_id.len, _.targets[idx].opener_frame_id_buf.len);
                 @memcpy(_.targets[idx].opener_frame_id_buf[0..op_len], opener_frame_id[0..op_len]);
                 _.targets[idx].opener_frame_id_len = op_len;
+                return _.targets[idx].targetId();
             }
         }
         return tid;

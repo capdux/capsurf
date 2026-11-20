@@ -93,7 +93,8 @@ pub fn directExternalFetch(
     config: *const HostOutboundConfig?,
     req: *const ExternalOutboundRequest,
 ): ExternalOutboundResponse {
-    if (cfg := config) {
+    if (config != null) {
+        const cfg = config.?;
         if (f := cfg.custom_fetch) {
             return f(req, cfg.user_data);
         }

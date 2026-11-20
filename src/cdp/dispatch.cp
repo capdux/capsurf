@@ -51,7 +51,15 @@ pub struct CdpDispatcher {
 
         // 2. Route by domain prefix
         if (std.mem.startsWith(u8, req.method, "DOM.")) {
-            return DomHandler.handle(session, req, out_buf);
+            let dom_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            let dom_cnt: usize = 0;
+            const resp = DomHandler.handle(session, req, out_buf, &dom_evts, &dom_cnt);
+            let i: usize = 0;
+            while (i < dom_cnt && i < out_events.len) : (i += 1) {
+                out_events[i] = dom_evts[i];
+            }
+            event_count.* = @min(dom_cnt, out_events.len);
+            return resp;
         }
 
         if (std.mem.startsWith(u8, req.method, "Page.")) {

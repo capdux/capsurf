@@ -1699,3 +1699,7 @@
 ### Phase 214: `JS_SetModuleLoaderFunc2` & WeakRef Wrapper Reclaim (`session.cp`, `dom_binding.cp`)
 - Migrated QuickJS-NG module loader to `JS_SetModuleLoaderFunc2` with `sessionModuleCheckAttrs` so `with { type: "json" }` parses via `JS_ParseJSON` + `JS_NewCModule` and `type: "css"` throws `TypeError`.
 - Added `__capsurf_weak_wrappers` WeakRef demotion/revival/reclaim sweep in `session.cp` and `dom_binding.cp` (`createJsElement` derefs weak wrappers to preserve identity and expandos).
+
+### Phase 215: `ScriptBodyOut` Slice Out-Param & OOPIF Frame/DOM Alignment
+- Wrapped `[]const u8` out-parameters in `ScriptBodyOut { value: []const u8 = "" }` because `cpc` strips `&` on local/field slice references.
+- Aligned `TargetRegistry.registerIframeTarget` `targetId` with `frame_id` (`capsurf-child-*`), added `exec_context_id` lifecycle tracking for `executionContextDestroyed`, and added `nodeId >= 1000000` child-frame DOM inspection in `src/cdp/dom.cp`.

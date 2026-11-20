@@ -12,6 +12,7 @@ import {
     classifyScriptOrigin,
     credentialsModeToString,
     ScriptPrefetchEntry,
+    ScriptBodyOut,
     PrefetchScriptManager,
 } from "../../src/eval/prefetch_scripts.cp";
 
@@ -212,10 +213,105 @@ fn testWasmScanningDedupAndOverflow() {
     assertTrue(std.mem.eql(u8, b64_out[1], "AGFzbQEAAAABAg=="), "second inline literal");
 }
 
+fn mockScriptFetch(
+    url: []const u8,
+    credentials_mode: CredentialsMode,
+    user_data: *!?,
+    out_body: *ScriptBodyOut,
+    out_status: *u32,
+): bool {
+    * = credentials_mode;
+    * = user_data;
+    if (std.mem.indexOf(u8, url, "fail.js") != null) {
+        out_status.* = 404;
+        out_body.value = "not found";
+        return false;
+    }
+    if (std.mem.indexOf(u8, url, "zero.js") != null) {
+        out_status.* = 0;
+        out_body.value = "";
+        return false;
+    }
+    out_status.* = 200;
+    out_body.value = "console.log('ok');";
+    return true;
+}
+
+// 5. prefetch_scripts.cp: direct prefetchSingle & prefetchAll with custom_fetch, CSP, and timeout
+fn testPrefetchSingleAndAll() {
+    let mgr = PrefetchScriptManager.init("https://example.com/app/index.html", "");
+    mgr.setFetchCallback(&mockScriptFetch, null);
+    mgr.setCspPolicy("script-src https://example.com");
+
+    assertTrue(mgr.addScript("/ok.js", false, "", "", ""), "add ok.js");
+    assertTrue(mgr.addScript("/fail.js", false, "anonymous", "", ""), "add fail.js");
+    assertTrue(mgr.addScript("/zero.js", false, "", "", ""), "add zero.js");
+    assertTrue(mgr.addScript("https://evil.example.net/bad.js", false, "", "", ""), "add evil.js");
+
+    const now = getSystemMilliTimestamp();
+    assertTrue(mgr.prefetchSingle(0, now), "prefetchSingle ok.js succeeds");
+    if (s0 := mgr.getScript(0)) {
+        assertTrue(s0.status == 200, "ok.js status 200");
+        assertTrue(std.mem.eql(u8, s0.body, "console.log('ok');"), "ok.js body populated via *[]const u8");
+        assertTrue(!s0.blocked, "ok.js not blocked");
+    } else {
+        assertTrue(false, "expected s0");
+    }
+
+    assertTrue(!mgr.prefetchSingle(1, now), "prefetchSingle fail.js returns false");
+    if (s1 := mgr.getScript(1)) {
+        assertTrue(s1.status == 404, "fail.js preserves 404 status");
+        assertTrue(std.mem.eql(u8, s1.body, "not found"), "fail.js body populated");
+        assertTrue(std.mem.eql(u8, s1.reason, "fetch failed"), "fail.js reason");
+    } else {
+        assertTrue(false, "expected s1");
+    }
+
+    assertTrue(!mgr.prefetchSingle(2, now), "prefetchSingle zero.js returns false");
+    if (s2 := mgr.getScript(2)) {
+        assertTrue(s2.status == 500, "zero.js defaults status 0 to 500");
+    } else {
+        assertTrue(false, "expected s2");
+    }
+
+    assertTrue(!mgr.prefetchSingle(3, now), "prefetchSingle evil.js blocked by CSP");
+    if (s3 := mgr.getScript(3)) {
+        assertTrue(s3.blocked, "evil.js blocked");
+        assertTrue(s3.status == 403, "evil.js status 403");
+    } else {
+        assertTrue(false, "expected s3");
+    }
+
+    assertTrue(!mgr.prefetchSingle(99, now), "out-of-bounds prefetchSingle returns false");
+    assertTrue(!mgr.prefetchSingle(0, 0.0), "timed out prefetchSingle returns false");
+
+    // prefetchAll across multiple scripts
+    let all_mgr = PrefetchScriptManager.init("https://example.com/page.html", "");
+    all_mgr.setConcurrency(2);
+    all_mgr.setFetchCallback(&mockScriptFetch, null);
+    assertTrue(all_mgr.addScript("/a.js", false, "", "", ""), "add a.js");
+    assertTrue(all_mgr.addScript("/fail.js", false, "", "", ""), "add fail.js");
+    assertTrue(all_mgr.addScript("/b.js", false, "", "", ""), "add b.js");
+    const ok_count = all_mgr.prefetchAll();
+    assertTrue(ok_count == 2, "prefetchAll returns 2 successes");
+
+    if (a0 := all_mgr.getScript(0)) {
+        assertTrue(a0.status == 200 && std.mem.eql(u8, a0.body, "console.log('ok');"), "a.js fetched");
+    } else {
+        assertTrue(false, "expected a0");
+    }
+    if (a2 := all_mgr.getScript(2)) {
+        assertTrue(a2.status == 200 && std.mem.eql(u8, a2.body, "console.log('ok');"), "b.js fetched");
+    } else {
+        assertTrue(false, "expected a2");
+    }
+}
+
 pub fn main() {
     testScriptUrlResolutionAndPreservation();
     testScriptBudgetAndConcurrencyCaps();
     testWasmValidationAndManifestLookup();
     testWasmScanningDedupAndOverflow();
+    testPrefetchSingleAndAll();
     std.debug.print("ALL PREFETCH SCRIPTS AND WASM TESTS PASSED!\n", .{});
 }
