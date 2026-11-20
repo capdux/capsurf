@@ -1989,4 +1989,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`label-activation-trust` (2/2)、`webmcp` (第 1–9、11 项 PASS)。
+
+## Phase 128: `webmcp` 12/12 (100%, 131 Expects) & RBI Scene Classification
+- **`src/cdp/session_hooks.cp`**：
+  - 修复 `enable(silent=true)` 提前扫描声明式表单吞掉 `WebMCP.toolsAdded` 的缺陷，并统一使用 `__capsurf_dispatchTrustedEvent` 与 `attachSubmitRespondWith` 保证 `isTrusted` 与 `respondWith` 生效。
+- **测试与门禁验证**：
+  - 静态门禁：`src/cdp/session_hooks.cp` 4 门禁全 0；
+  - E2E 测试：`e2e/webmcp.e2e.test.ts` **12/12 PASS (131 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

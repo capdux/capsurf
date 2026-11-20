@@ -1555,4 +1555,10 @@
    - `createCDPSession()` 对 `WebMCP.*` 仅注册 `onSession(sessionId, ...)` 通道而不向全局 `page.cdp.on` 重复注册，彻底消除多会话下同一工具的重复通知。
 2. **原生父节点与控件升级 (`src/js/shim/window.js`)**：
    - 在 `activateClickedElement` 向上查找 `<label>` 及解析 `label.control` 时统一调用 `__capsurf_upgradeElement`，确保未经 JS 查询过的 DOM 元素也能正确激活表单控件。
+
+## Phase 128 WebMCP 12/12 全绿技术方案 (`src/cdp/session_hooks.cp`)
+1. **静默启用与声明式表单状态隔离**：
+   - 仅在非静默启用时扫描并填充 `declarativeMap`，确保页面初始化后通过 `scanDecl()` 首次上报 `WebMCP.toolsAdded`。
+2. **表单事件 `isTrusted` 与 `respondWith` 统一拦截**：
+   - 绕过会重置 `_isTrusted` 的普通 `c.dispatchEvent`，改由 `__capsurf_dispatchTrustedEvent` 派发并同时包裹 `form.dispatchEvent` 挂载 `attachSubmitRespondWith(form, ev)`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -1630,31 +1630,45 @@ pub const PAGE_WEBMCP_HOOKS_JS: []const u8 =
     "  } catch (e) {\n" ++
     "    g.document.modelContext = mc;\n" ++
     "  }\n" ++
+    "  function attachSubmitRespondWith(form, ev) {\n" ++
+    "    var inv = formActiveInv.get(form);\n" ++
+    "    if (!inv) return;\n" ++
+    "    if (ev.agentInvoked === undefined) ev.agentInvoked = false;\n" ++
+    "    if (typeof ev.respondWith !== 'function') {\n" ++
+    "      ev.respondWith = function(p) {\n" ++
+    "        Promise.resolve(p).then(function(out) {\n" ++
+    "          if (inv.responded) return;\n" ++
+    "          inv.responded = true;\n" ++
+    "          formActive.delete(form);\n" ++
+    "          formActiveInv.delete(form);\n" ++
+    "          pushEvent('WebMCP.toolResponded', { invocationId: inv.id, status: 'Completed', output: out });\n" ++
+    "        }, function(err) {\n" ++
+    "          if (inv.responded) return;\n" ++
+    "          inv.responded = true;\n" ++
+    "          formActive.delete(form);\n" ++
+    "          formActiveInv.delete(form);\n" ++
+    "          pushEvent('WebMCP.toolResponded', { invocationId: inv.id, status: 'Error', errorText: String(err && err.message || err) });\n" ++
+    "        });\n" ++
+    "      };\n" ++
+    "    }\n" ++
+    "  }\n" ++
+    "  if (typeof g.__capsurf_dispatchTrustedEvent === 'function' && !g.__capsurf_wm_dte_hooked) {\n" ++
+    "    g.__capsurf_wm_dte_hooked = true;\n" ++
+    "    var wmOrigDte = g.__capsurf_dispatchTrustedEvent;\n" ++
+    "    g.__capsurf_dispatchTrustedEvent = function(target, ev) {\n" ++
+    "      if (target && ev && ev.type === 'submit' && formActive.get(target) && formActiveInv.get(target)) {\n" ++
+    "        attachSubmitRespondWith(target, ev);\n" ++
+    "      }\n" ++
+    "      return wmOrigDte.apply(this, arguments);\n" ++
+    "    };\n" ++
+    "  }\n" ++
     "  function attachDeclarativeSubmitHook(form) {\n" ++
     "    if (formHooked.get(form)) return;\n" ++
     "    formHooked.set(form, true);\n" ++
     "    var origDispatch = form.dispatchEvent;\n" ++
     "    form.dispatchEvent = function(ev) {\n" ++
     "      if (ev && ev.type === 'submit' && formActive.get(form) && formActiveInv.get(form)) {\n" ++
-    "        var inv = formActiveInv.get(form);\n" ++
-    "        if (ev.agentInvoked === undefined) ev.agentInvoked = false;\n" ++
-    "        if (typeof ev.respondWith !== 'function') {\n" ++
-    "          ev.respondWith = function(p) {\n" ++
-    "            Promise.resolve(p).then(function(out) {\n" ++
-    "              if (inv.responded) return;\n" ++
-    "              inv.responded = true;\n" ++
-    "              formActive.delete(form);\n" ++
-    "              formActiveInv.delete(form);\n" ++
-    "              pushEvent('WebMCP.toolResponded', { invocationId: inv.id, status: 'Completed', output: out });\n" ++
-    "            }, function(err) {\n" ++
-    "              if (inv.responded) return;\n" ++
-    "              inv.responded = true;\n" ++
-    "              formActive.delete(form);\n" ++
-    "              formActiveInv.delete(form);\n" ++
-    "              pushEvent('WebMCP.toolResponded', { invocationId: inv.id, status: 'Error', errorText: String(err && err.message || err) });\n" ++
-    "            });\n" ++
-    "          };\n" ++
-    "        }\n" ++
+    "        attachSubmitRespondWith(form, ev);\n" ++
     "      }\n" ++
     "      return origDispatch.apply(this, arguments);\n" ++
     "    };\n" ++
@@ -1663,8 +1677,8 @@ pub const PAGE_WEBMCP_HOOKS_JS: []const u8 =
     "    enable: function(sessionKey, silent) {\n" ++
     "      var sk = sessionKey || 'default';\n" ++
     "      enabledSessions[sk] = true;\n" ++
-    "      scanDeclarativeTools(false);\n" ++
     "      if (silent) return;\n" ++
+    "      scanDeclarativeTools(false);\n" ++
     "      if (replayedSessions[sk]) return;\n" ++
     "      replayedSessions[sk] = true;\n" ++
     "      var all = [];\n" ++
@@ -1744,9 +1758,14 @@ pub const PAGE_WEBMCP_HOOKS_JS: []const u8 =
     "            c.value = String(parsed[nm]);\n" ++
     "            try {\n" ++
     "              var ie = new g.InputEvent('input', { bubbles: true, data: String(parsed[nm]), inputType: 'insertText' });\n" ++
-    "              try { Object.defineProperty(ie, 'isTrusted', { value: true, configurable: true }); } catch (e) {}\n" ++
-    "              c.dispatchEvent(ie);\n" ++
-    "              c.dispatchEvent(new Event('change', { bubbles: true }));\n" ++
+    "              var ce = new Event('change', { bubbles: true });\n" ++
+    "              if (!Object.prototype.hasOwnProperty.call(c, 'dispatchEvent') && typeof g.__capsurf_dispatchTrustedEvent === 'function') {\n" ++
+    "                g.__capsurf_dispatchTrustedEvent(c, ie);\n" ++
+    "                g.__capsurf_dispatchTrustedEvent(c, ce);\n" ++
+    "              } else {\n" ++
+    "                c.dispatchEvent(ie);\n" ++
+    "                c.dispatchEvent(ce);\n" ++
+    "              }\n" ++
     "            } catch (e) {}\n" ++
     "          }\n" ++
     "        }\n" ++
@@ -1755,10 +1774,13 @@ pub const PAGE_WEBMCP_HOOKS_JS: []const u8 =
     "        if (decl.autosubmit) {\n" ++
     "          var subBtn = form.querySelector ? (form.querySelector('button[type=\"submit\"]') || form.querySelector('button')) : null;\n" ++
     "          var se = new Event('submit', { bubbles: true, cancelable: true });\n" ++
-    "          try { Object.defineProperty(se, 'isTrusted', { value: true, configurable: true }); } catch (e) {}\n" ++
     "          se.agentInvoked = true;\n" ++
     "          se.submitter = subBtn;\n" ++
-    "          form.dispatchEvent(se);\n" ++
+    "          if (typeof g.__capsurf_dispatchTrustedEvent === 'function') {\n" ++
+    "            g.__capsurf_dispatchTrustedEvent(form, se);\n" ++
+    "          } else {\n" ++
+    "            form.dispatchEvent(se);\n" ++
+    "          }\n" ++
     "        }\n" ++
     "      });\n" ++
     "    },\n" ++

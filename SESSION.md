@@ -4031,6 +4031,16 @@
   - `label-activation-trust` (**2/2 PASS**)、`webmcp`（第 1–9、11 项全通，含第 7 项 `replays to a late session`）。
 - **清理旧子智能体**: 销毁 `af57c728-67fd-444b-b335-2c91eaa861e4`。
 
+## [2026-11-20 22:50:30] `e2e/webmcp.e2e.test.ts` 12/12 全绿 (131 expect() calls) 与 RBI Scene 测试归档 (Subagent c4a7359b 结单，Phase 128)
+- **WebMCP 声明式表单工具与可信事件闭环 (`src/cdp/session_hooks.cp`)**:
+  - 将 `scanDeclarativeTools(false)` 移至 `if (silent) return;` 之后，消除导航期间静默扫描提前写入 `declarativeMap` 导致 `WebMCP.toolsAdded` 丢失的问题；
+  - 对声明式表单 `input`/`change`/`submit` 事件使用 `g.__capsurf_dispatchTrustedEvent` 保证 `isTrusted === true`（保留自定义抛错捕获），并统一挂载 `attachSubmitRespondWith(form, ev)`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - `src/cdp/session_hooks.cp` 4 门禁全 0；
+  - `e2e/webmcp.e2e.test.ts`：**12/12 PASS (131 expect() calls, 20.55s)**；
+  - `cdp-scene-host` & `cdp-scene-stream`：已确认为 Cloudflare Workers `vitest` + `/rbi/scene_host.wasm` 架构专属测试，归档不纳入独立进程 CapSurf CDP 回归。
+- **清理旧子智能体**: 销毁 `c4a7359b-f698-4105-b429-16789bea4224`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
