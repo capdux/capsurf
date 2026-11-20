@@ -4517,3 +4517,7 @@
 ### Phase 194: Pure-CP CSS AttrEvaluator, Vars & Calc Whitebox Tests (Slot A)
 - **Subagent**: `98c78a0a` (killed after completion)
 - **Result**: `test/css/test_attr_evaluator_and_vars.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1188ms; covering `attr_evaluator.cp`, `var()` inheritance/chain/cycle-guard, `calc()`, and `!important` specificity/inline precedence).
+
+### Phase 195: Pure-CP Render PNG & PaintStyle Whitebox Tests (Slot A)
+- **Subagent**: `1ddfd23e` (killed after completion)
+- **Result**: `test/render/test_png_encoder.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1008ms; covering PNG chunks, 2x2/4x4 RGBA encode/decode roundtrip, 0x0/short-buffer boundaries, and `ComputedStyle.extractPaintStyle`).

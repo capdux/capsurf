@@ -2244,3 +2244,6 @@
 
 ### Phase 194
 - Added `test/css/test_attr_evaluator_and_vars.cp` covering CSS `attr()` parsing/type-tainting, custom property inheritance/cycle guard, `calc()` evaluation, and `!important` cascade precedence.
+
+### Phase 195
+- Added `test/render/test_png_encoder.cp` covering PNG signature/IHDR/IDAT/IEND chunks, RGBA roundtrips, boundary guards, and `ComputedStyle.extractPaintStyle`.
