@@ -4380,3 +4380,9 @@
 
 ## [2026-11-21 00:34:00] 验收 `input-reply-origin` 1/1 PASS & 归档 `wasm-panic-unwind`
 - **直接验收**：`e2e/input-reply-origin.e2e.test.ts` (**1/1 PASS**, 4 expect() calls, 1.48s)；`e2e/wasm-panic-unwind.e2e.test.ts` 属 Boa-Wasm/Rust panic 架构专属归档。
+
+## [2026-11-21 00:35:00] 1 分 40 秒实装 `window.scheduler.postTask` & `scheduler.yield()` (`test/js/` 100% 全绿) (Subagent 89c8346f 结单，Phase 170)
+- **Prioritized Task Scheduling API (`src/js/shim/window.js`, `src/js/runtime{,_source.cp}`)**:
+  - 实现 `Scheduler` 类与 `global/window/globalThis.scheduler`，支持 `postTask(cb, { priority, delay, signal })` 优先级队列（`user-blocking > user-visible > background`）、`AbortSignal` 取消、延迟调度与 `scheduler.yield()`。
+- **门禁与白盒验证**: `src/js/runtime_source.cp` 4 门禁全 0；`cap test -m test/js/test_js_dom.cp` **9/9 PASS**（`test/js/` 全目录 **2/2 100% PASS**）。
+- **清理旧子智能体**: 销毁 `89c8346f-3f35-4f86-9ee4-f43c751610d0`。

@@ -1662,3 +1662,6 @@
 
 ## Phase 167 解析器 `<script>` `_nid` 定位与 `load`/`error` 生命周期方案 (`src/cdp/session.cp`)
 1. **稳定 `_nid` 定位与 `<template>` 隔离**：`PendingScriptItem` 记录 `script_nid` 并在扫描时沿 `parent` 跳过 `<template>` 后代，防止 `onload` 动态插入 `<script>` 导致索引错位，同时在获取/SRI 失败与执行成功后精确派发 `error`/`load` 事件。
+
+## Phase 170 `window.scheduler.postTask` 优先级调度方案 (`src/js/shim/window.js`)
+1. **三级优先级与中止信号**：维护 `user-blocking`/`user-visible`/`background` 三级队列，支持 `delay` 定时器与 `AbortSignal` 预先/中途取消并按 `signal.reason` reject Promise。

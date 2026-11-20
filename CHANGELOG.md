@@ -2168,3 +2168,6 @@
 
 ## Phase 169: `input-reply-origin` 1/1 PASS & `wasm-panic-unwind` Classification
 - 零修改验收 `e2e/input-reply-origin.e2e.test.ts` (**1/1 PASS**)，归档 `wasm-panic-unwind` 为 Boa-Wasm/Rust panic 架构专属。
+
+## Phase 170: `window.scheduler.postTask` & `scheduler.yield()` (`test/js/` 100% PASS)
+- **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：实装 `Scheduler`、`postTask` 优先级/中止/延迟调度与 `scheduler.yield()`，`test/js/test_js_dom.cp` 达 **9/9 PASS**。

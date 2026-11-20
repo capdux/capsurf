@@ -1903,6 +1903,185 @@ function installWindow(global) {
     globalThis.AbortController = AbortController;
   }
 
+  // 5.1c Prioritized Task Scheduling API (window.scheduler / Scheduler)
+  const _schedulerToken = {};
+  const _schedulerQueues = {
+    "user-blocking": [],
+    "user-visible": [],
+    "background": [],
+  };
+  const _schedulerPriorityOrder = ["user-blocking", "user-visible", "background"];
+  let _schedulerTimerId = 0;
+
+  function _hasPendingSchedulerTasks() {
+    return (
+      _schedulerQueues["user-blocking"].length > 0 ||
+      _schedulerQueues["user-visible"].length > 0 ||
+      _schedulerQueues["background"].length > 0
+    );
+  }
+
+  function _drainSchedulerTask() {
+    _schedulerTimerId = 0;
+    let nextTask = null;
+    for (let i = 0; i < _schedulerPriorityOrder.length; i++) {
+      const q = _schedulerQueues[_schedulerPriorityOrder[i]];
+      while (q.length > 0) {
+        const candidate = q.shift();
+        if (!candidate.aborted) {
+          nextTask = candidate;
+          break;
+        }
+      }
+      if (nextTask) break;
+    }
+    if (_hasPendingSchedulerTasks()) {
+      _scheduleSchedulerDrain();
+    }
+    if (!nextTask) return;
+
+    if (nextTask.signal && nextTask.onAbort && typeof nextTask.signal.removeEventListener === "function") {
+      try {
+        nextTask.signal.removeEventListener("abort", nextTask.onAbort);
+      } catch (e) {}
+    }
+
+    if (nextTask.signal && nextTask.signal.aborted) {
+      const reason = nextTask.signal.reason !== undefined
+        ? nextTask.signal.reason
+        : new DOMException("The task was aborted.", "AbortError");
+      nextTask.reject(reason);
+      return;
+    }
+
+    try {
+      const res = nextTask.cb();
+      nextTask.resolve(res);
+    } catch (err) {
+      nextTask.reject(err);
+    }
+  }
+
+  function _scheduleSchedulerDrain() {
+    if (_schedulerTimerId) return;
+    if (!_hasPendingSchedulerTasks()) return;
+    _schedulerTimerId = global.setTimeout(_drainSchedulerTask, 0);
+  }
+
+  function Scheduler(token) {
+    if (token !== _schedulerToken) {
+      throw new TypeError("Illegal constructor");
+    }
+  }
+
+  Scheduler.prototype.postTask = function (callback, options) {
+    return new Promise(function (resolve, reject) {
+      if (typeof callback !== "function") {
+        throw new TypeError("Failed to execute 'postTask' on 'Scheduler': parameter 1 is not of type 'Function'.");
+      }
+      if (options !== undefined && options !== null && typeof options !== "object") {
+        throw new TypeError("Failed to execute 'postTask' on 'Scheduler': parameter 2 ('options') is not an object.");
+      }
+      const opts = options || {};
+      const signal = opts.signal;
+      if (signal !== undefined && signal !== null) {
+        if (typeof signal !== "object" || !("aborted" in signal)) {
+          throw new TypeError("Failed to execute 'postTask' on 'Scheduler': Failed to read the 'signal' property from 'SchedulerPostTaskOptions': Failed to convert value to 'AbortSignal'.");
+        }
+      }
+
+      let priority = opts.priority;
+      if (priority !== undefined) {
+        priority = String(priority);
+        if (priority !== "user-blocking" && priority !== "user-visible" && priority !== "background") {
+          throw new TypeError("Failed to execute 'postTask' on 'Scheduler': The provided value '" + priority + "' is not a valid enum value of type TaskPriority.");
+        }
+      } else if (signal && typeof signal.priority === "string" &&
+        (signal.priority === "user-blocking" || signal.priority === "user-visible" || signal.priority === "background")) {
+        priority = signal.priority;
+      } else {
+        priority = "user-visible";
+      }
+
+      let delay = 0;
+      if (opts.delay !== undefined) {
+        delay = Number(opts.delay);
+        if (!Number.isFinite(delay) || delay < 0) {
+          throw new TypeError("Failed to execute 'postTask' on 'Scheduler': 'delay' must be a non-negative number.");
+        }
+      }
+
+      if (signal && signal.aborted) {
+        const reason = signal.reason !== undefined
+          ? signal.reason
+          : new DOMException("The task was aborted.", "AbortError");
+        reject(reason);
+        return;
+      }
+
+      const task = {
+        cb: callback,
+        resolve: resolve,
+        reject: reject,
+        aborted: false,
+        delayTimerId: 0,
+        signal: signal || null,
+        onAbort: null,
+      };
+
+      if (signal && typeof signal.addEventListener === "function") {
+        task.onAbort = function () {
+          if (task.aborted) return;
+          task.aborted = true;
+          if (task.delayTimerId) {
+            global.clearTimeout(task.delayTimerId);
+            task.delayTimerId = 0;
+          }
+          if (typeof signal.removeEventListener === "function") {
+            try { signal.removeEventListener("abort", task.onAbort); } catch (e) {}
+          }
+          const reason = signal.reason !== undefined
+            ? signal.reason
+            : new DOMException("The task was aborted.", "AbortError");
+          reject(reason);
+        };
+        signal.addEventListener("abort", task.onAbort, { once: true });
+      }
+
+      if (delay > 0) {
+        task.delayTimerId = global.setTimeout(function () {
+          task.delayTimerId = 0;
+          if (task.aborted) return;
+          _schedulerQueues[priority].push(task);
+          _scheduleSchedulerDrain();
+        }, delay);
+      } else {
+        _schedulerQueues[priority].push(task);
+        _scheduleSchedulerDrain();
+      }
+    });
+  };
+
+  Scheduler.prototype.yield = function () {
+    return this.postTask(function () {}, { priority: "user-visible" });
+  };
+
+  markNative(Scheduler, "Scheduler");
+  markNative(Scheduler.prototype.postTask, "postTask");
+  markNative(Scheduler.prototype.yield, "yield");
+
+  const scheduler = new Scheduler(_schedulerToken);
+  global.Scheduler = Scheduler;
+  global.scheduler = scheduler;
+  if (typeof window !== "undefined") {
+    window.Scheduler = Scheduler;
+    window.scheduler = scheduler;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.Scheduler = Scheduler;
+    globalThis.scheduler = scheduler;
+  }
+
   // 5.2 Structured Clone & MessagePort & MessageChannel
   const _detachedBuffers = typeof WeakSet !== "undefined" ? new WeakSet() : null;
 
