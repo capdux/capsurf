@@ -4797,3 +4797,7 @@
 - **Slot A (`74684a71`)**: Added `test/css/test_specificity_and_important_edge.cp` (**6/6 PASS**, 1134ms). Full-repo pure-CP whitebox now **136/136 (100% PASS)**.
 - **Slot B (`63c2c173`)**: Added `concimport-chunk-<N>.js` dynamic fixture route to `src/net/mock_fixtures.cp:1603-1626`. Built `bin_19233/main` (6.61s); `e2e/demo/boa-concurrent-import-demo.e2e.test.ts` **1/1 PASS** (2.42s, exit 0); confirmed `boa-code-stats` relies on Boa-Wasm `boa_engine::ks_code_stats()`.
 - **Main Agent (`task-685`)**: Confirmed `cdp-scene-host` / `cdp-scene-stream` depend on Cloudflare Workers `upgradedSocket(engine.fetch("https://ks.invalid/devtools/browser"))` and `wasm-crash-surface` on Boa-Wasm.
+
+### Phase 246: ReleaseFast Modular Build (`bin/main`, 18MB) + 12-Suite Cross-Domain E2E 77/77 PASS (457 Assertions)
+- Built modular ReleaseFast binary via `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp` (80.18s) and synced to `bin/main` (18MB).
+- Ran 12-suite cross-domain E2E regression (`smoke`, `tldraw-app-shell`, `dedicated-worker`, `scene-stream-idle-frames`, `scene-stream-partials`, `script-gate`, `source-script-pipeline`, `screencast-raf-pacing`, `oopif-elements-panel`, `script-navigation-tab`, `event-handler-idl`, `render-resource-scope`) against `./bin/main`: **77 pass, 0 fail, 457 expect() calls** in 142.12s.

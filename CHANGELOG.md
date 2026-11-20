@@ -2434,3 +2434,6 @@
 ### Phase 245
 - Added `test/css/test_specificity_and_important_edge.cp`.
 - Added `concimport-chunk-<N>.js` dynamic route in `src/net/mock_fixtures.cp`.
+
+### Phase 246
+- Built modular ReleaseFast binary (`cap build -m -r -o bin_rel src/main.cp`, synced to `bin/main`, 18MB) and verified 12-suite cross-domain E2E regression (77/77 PASS, 457 assertions).
