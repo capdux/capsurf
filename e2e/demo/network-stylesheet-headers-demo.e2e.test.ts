@@ -3,7 +3,7 @@
 // https://opensource.org/licenses/Apache-2.0
 
 import { expect, test } from "../harness";
-import expectedCss from "../../fixtures-worker/assets/external-sheet.css?raw";
+import expectedCss from "../page/external-sheet.css?raw";
 
 test("network-stylesheet-headers-demo", async ({ page }) => {
   const FIXTURE_URL = "http://127.0.0.1:8787/__fixtures/external-sheet.html";

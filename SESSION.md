@@ -4195,6 +4195,15 @@
 - **精准跨模块定位（留交 Slot B）**：`e2e/demo/page-renderer-relaunch.e2e.test.ts` 仅缺 `src/cdp/kitesurf_facade.cp:150-168` & `protocol_extensions.cp:79-89` 的 `Kitesurf.disposeRenderer` (`{"disposed":true}`)。
 - **清理旧子智能体**: 销毁 `bb618ccd-b511-4e00-81a1-f6ae96d2e591`。
 
+## [2026-11-20 23:33:30] Slot C (`e6710724`) 40 秒摸底定位 `test()` 3 参签名与 `frameDetached`
+- 精准定位 `detached-node-reclaim` & `detached-owned-caches` 在 `e2e/harness.ts:2775-2776` 缺少 `test(name, { timeout }, fn)` 3 参支持，以及 `iframe-dom-reclaim` 缺 `/__fixtures/iframe-many.html` 与 `Page.frameDetached`。
+- **清理旧子智能体**: 销毁 `e6710724-3c08-4c55-b5aa-aa158b79f01f`。
+
+## [2026-11-20 23:34:00] `screencast-placeholder-demo` 1/1 PASS & 样式表头/视口联动定位 (Subagent b5f8e14d 结单，Phase 146)
+- **验收与路径修复**：`e2e/demo/screencast-placeholder-demo.e2e.test.ts` (**1/1 PASS**，1124ms)；修正 `e2e/demo/network-stylesheet-headers-demo.e2e.test.ts:6` 相对路径为 `../page/external-sheet.css?raw`。
+- **精准跨模块定位（留交 Slot B）**：`network-stylesheet-headers-demo` (`session.cp:1569,3771-3828` `loadingFinished`/`request.headers`/`recordResponseBody`)、`screencast-viewport-demo` (`screencast.cp:88-145` `maxWidth`/`maxHeight` 联动重算布局)。
+- **清理旧子智能体**: 销毁 `b5f8e14d-25bf-4af0-b9fb-ee7df1b86ca6`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
