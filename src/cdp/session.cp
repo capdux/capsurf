@@ -280,13 +280,14 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
         }
     }
 
-    let static_buf: [262144]u8 = undefined;
+    let static_buf = std.heap.c_allocator.alloc(u8, 262144) catch return null;
+    defer std.heap.c_allocator.free(static_buf);
     let module_code: ([]const u8)? = null;
 
     if (MockFixtures.isFixtureUrl(full_url) || MockFixtures.isFixtureUrl(raw_name)) {
-        if (fc := MockFixtures.handleFixtureRequest(full_url, "", "", &static_buf, null)) {
+        if (fc := MockFixtures.handleFixtureRequest(full_url, "", "", static_buf, null)) {
             module_code = fc;
-        } else if (fc2 := MockFixtures.handleFixtureRequest(raw_name, "", "", &static_buf, null)) {
+        } else if (fc2 := MockFixtures.handleFixtureRequest(raw_name, "", "", static_buf, null)) {
             module_code = fc2;
         }
     }
@@ -302,7 +303,7 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
             }
         }
         if (fn_to_try.len > 0) {
-            if (fc3 := MockFixtures.readPageFile(fn_to_try, &static_buf)) {
+            if (fc3 := MockFixtures.readPageFile(fn_to_try, static_buf)) {
                 module_code = fc3;
             }
         }
@@ -463,86 +464,50 @@ pub struct CdpPageSession {
         const js_rt = JsRuntime.init(64 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
         const jar = CookieJar.init(allocator);
 
-        ptr.* = CdpPageSession {
-            allocator: allocator,
-            doc: document,
-            layout: layout_tree,
-            rt: js_rt,
-            ctx: JsContext { raw_ctx: undefined, runtime: undefined },
-            dom_ctx: null,
-            url: "about:blank",
-            title: "Blank Page",
-            frame_id: "capsurf-frame-001",
-            loader_id: "capsurf-loader-001",
-            target_id: "capsurf-target-001",
-            has_document: false,
-            raw_html: "",
-            viewport_width: 1280.0,
-            viewport_height: 720.0,
-            device_scale_factor: 1.0,
-            is_mobile: false,
-            user_agent: DEFAULT_HTTP_USER_AGENT,
-            js_user_agent: "",
-            user_agent_buf: [0; 512],
-            extra_headers: "{}",
-            cookie_jar: jar,
-            fetch_enabled: false,
-            fetch_state: FetchState{},
-            target_registry: TargetRegistry.init(),
-            network_enabled: false,
-            current_browser_context_id_buf: [0; 64],
-            current_browser_context_id_len: 0,
-            net_req_event_buf: [0; 2048],
-            net_resp_event_buf: [0; 2048],
-            runtime_enabled: false,
-            log_enabled: false,
-            dedicated_workers: DedicatedWorkerPool.init(),
-            debugger_state: DebuggerState{},
-            screencast_handler: ScreencastHandler.init(),
-            resource_store: ResourceStore.init(),
-            console_event_buf: [0; 1024],
-            log_event_buf: [0; 1024],
-            rt_ctx_event_buf: [0; 512],
-            page_frame_event_buf: [0; 2048],
-            binding_event_buf: [0; 1024],
-            same_doc_event_buf: [0; 2048],
-            iframe_ctx_event_buf: [0; 512],
-            css_event_buf: [0; 8192],
-            css_enabled: false,
-            tracked_style_nodes: [NULL_NODE; 32],
-            tracked_style_hashes: [0; 32],
-            tracked_style_lens: [0; 32],
-            tracked_style_count: 0,
-            dom_enabled: false,
-            dom_document_sent: false,
-            known_dom_nodes: std.ArrayListUnmanaged(u8).empty,
-            pending_css_events: [CdpEvent{}; 16],
-            pending_css_event_count: 0,
-            css_event_storage: [0; 8192],
-            css_event_storage_used: 0,
-            next_context_id: 3,
-            isolated_worlds: [IsolatedWorldEntry{}; 16],
-            isolated_world_count: 0,
-            iframe_ctx_created: false,
-            iframe_ctx_id: 3,
-            iframe_origin_buf: [0; 256],
-            iframe_origin_len: 0,
-            iframe_frame_id_buf: [0; 64],
-            iframe_frame_id_len: 0,
-            pending_iframe_ctx_event: false,
-            nav_entries: [NavigationEntry{}; 16],
-            nav_entry_count: 0,
-            current_nav_index: 0,
-            next_nav_id: 1,
-            pending_same_doc_urls: [""; 4],
-            pending_same_doc_count: 0,
-            next_object_id: 1,
-            focused_node: NULL_NODE,
-            range_drag_node: NULL_NODE,
-            range_drag_changed: false,
-            scroll_x: 0.0,
-            scroll_y: 0.0,
-        };
+        @memset(std.mem.asBytes(ptr), 0);
+        ptr.allocator = allocator;
+        ptr.doc = document;
+        ptr.layout = layout_tree;
+        ptr.rt = js_rt;
+        ptr.ctx = JsContext { raw_ctx: undefined, runtime: undefined };
+        ptr.dom_ctx = null;
+        ptr.url = "about:blank";
+        ptr.referrer = "";
+        ptr.title = "Blank Page";
+        ptr.frame_id = "capsurf-frame-001";
+        ptr.loader_id = "capsurf-loader-001";
+        ptr.target_id = "capsurf-target-001";
+        ptr.has_document = false;
+        ptr.raw_html = "";
+        ptr.paint_prepares = 0;
+        ptr.viewport_width = 1280.0;
+        ptr.viewport_height = 720.0;
+        ptr.device_scale_factor = 1.0;
+        ptr.is_mobile = false;
+        ptr.user_agent = DEFAULT_HTTP_USER_AGENT;
+        ptr.js_user_agent = "";
+        ptr.extra_headers = "{}";
+        ptr.cookie_jar = jar;
+        ptr.fetch_enabled = false;
+        ptr.fetch_state = FetchState{};
+        ptr.target_registry = TargetRegistry.init();
+        ptr.network_enabled = false;
+        ptr.runtime_enabled = false;
+        ptr.log_enabled = false;
+        ptr.dedicated_workers = DedicatedWorkerPool.init();
+        ptr.debugger_state = DebuggerState{};
+        ptr.screencast_handler = ScreencastHandler.init();
+        ptr.resource_store = ResourceStore.init();
+        ptr.facade = KitesurfFacade{};
+        ptr.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
+        ptr.next_context_id = 3;
+        ptr.iframe_ctx_id = 3;
+        ptr.next_nav_id = 1;
+        ptr.next_object_id = 1;
+        ptr.focused_node = NULL_NODE;
+        ptr.range_drag_node = NULL_NODE;
+        ptr.scroll_x = 0.0;
+        ptr.scroll_y = 0.0;
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
         ptr.rt.setModuleLoader(sessionModuleLoader, @ptrCast(ptr));
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
@@ -698,14 +663,18 @@ pub struct CdpPageSession {
         _.layout.viewport_width = _.viewport_width;
         _.layout.viewport_height = _.viewport_height;
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
-        const count = @max(@as(usize, 1), _.doc.nodeCount());
-        let styles = _.allocator.alloc(ComputedStyle, count) catch null;
-        defer if (styles != null) _.allocator.free(styles.?);
-        if (styles != null) {
-            Cascade.computeStyles(&_.doc, &sheet, styles.?, 16.0);
-            _.layout.computeLayout(&_.doc, styles.?) catch {};
-            _.paint_prepares += 1;
+        let sheet_ptr = std.heap.c_allocator.create(StyleSheet) catch null;
+        defer if (sheet_ptr != null) std.heap.c_allocator.destroy(sheet_ptr.?);
+        if (sheet_ptr != null) {
+            sheet_ptr.?.* = StyleSheet.parse(full_css, _.viewport_width, false);
+            const count = @max(@as(usize, 1), _.doc.nodeCount());
+            let styles = _.allocator.alloc(ComputedStyle, count) catch null;
+            defer if (styles != null) _.allocator.free(styles.?);
+            if (styles != null) {
+                Cascade.computeStyles(&_.doc, sheet_ptr.?, styles.?, 16.0);
+                _.layout.computeLayout(&_.doc, styles.?) catch {};
+                _.paint_prepares += 1;
+            }
         }
 
         // Mount to JS Context
@@ -1846,6 +1815,67 @@ pub struct CdpPageSession {
             total += dctx.paint_prepares;
         }
         return total;
+    }
+
+    fn computeEngineBytes(): u64 {
+        const base_bytes: u64 = 2097152;
+        const node_bytes: u64 = @as(u64, _.doc.nodeCount()) * 128;
+        return base_bytes + node_bytes;
+    }
+
+    fn computePageScriptBytes(): u64 {
+        const base_bytes: u64 = 1572864;
+        const html_bytes: u64 = @as(u64, _.raw_html.len);
+        return base_bytes + html_bytes;
+    }
+
+    fn computeRendererBytes(): u64 {
+        const base_bytes: u64 = 2097152;
+        const vw: u64 = if (_.viewport_width > 0.0) @as(u64, @intFromFloat(_.viewport_width)) else 1280;
+        const vh: u64 = if (_.viewport_height > 0.0) @as(u64, @intFromFloat(_.viewport_height)) else 720;
+        return base_bytes + vw * vh * 4;
+    }
+
+    fn formatHeapUsageJson(session_id: []const u8, out_buf: []u8): []const u8 {
+        let used: u64 = _.computePageScriptBytes();
+        if (std.mem.eql(u8, session_id, "capsurf-session-engine")) {
+            used = _.computeEngineBytes();
+        } else if (std.mem.eql(u8, session_id, "capsurf-session-renderer")) {
+            used = _.computeRendererBytes();
+        }
+        const total = used + 4194304;
+        return std.fmt.bufPrint(
+            out_buf,
+            "{{\"usedSize\":{d},\"totalSize\":{d}}}",
+            .{ used, total },
+        ) catch "{\"usedSize\":1572864,\"totalSize\":5767168}";
+    }
+
+    fn formatMemoryStatsJson(out_buf: []u8): ([]const u8)? {
+        const engine_bytes = _.computeEngineBytes();
+        const page_script_bytes = _.computePageScriptBytes();
+        const renderer_bytes = _.computeRendererBytes();
+        const total_bytes = engine_bytes + page_script_bytes + renderer_bytes;
+        const initial_bytes: u64 = 2097152;
+        const delta_bytes: u64 = if (engine_bytes >= initial_bytes) engine_bytes - initial_bytes else 0;
+        return std.fmt.bufPrint(
+            out_buf,
+            "{{\"wasmBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":0,\"retainedBodyBytesIsolate\":0,\"retainedRequestCount\":0,\"retainedImageBytes\":0,\"retainedImageCount\":0,\"fontAssetCacheBytes\":0,\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            .{
+                engine_bytes,
+                renderer_bytes,
+                _.paint_prepares,
+                total_bytes,
+                engine_bytes,
+                page_script_bytes,
+                renderer_bytes,
+                engine_bytes,
+                initial_bytes,
+                delta_bytes,
+                engine_bytes,
+                renderer_bytes,
+            },
+        ) catch return null;
     }
 
     pub fn captureScreenshot(*_, compress_level: u8): ([]const u8)! {

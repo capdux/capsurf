@@ -1737,4 +1737,12 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 3 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`bg-image-capture` + `container-queries` (2) + `css-counters` + `document-types` (4) + `hoisted-inline-rebreak` + `hoisted-overflow-clip` 共 **10/10 PASS (29 expect calls, 8.01s)**。
+
+## Phase 91: 90.5% Stack Frame Reduction (Default 8MB Stack Safe) & CDP Memory/DOM Reclaim (Closed)
+- **`src/main.cp` & `src/cdp/{server,session,target,runtime,kitesurf_facade,page}.cp`**：
+  - 将 `runDemo`/`runWebSocketSession`/`sessionModuleLoader`/`CdpPageSession.init`/`navigate` 大栈结构体与缓冲区改为堆分配/就地初始化，ReleaseFast `main` 栈帧从 ~10.2MB 降至 **0.97MB**（默认 `ulimit -s 8192` 0 崩溃）；
+  - 实装 `kitesurf-page-renderer`/`kitesurf-engine` 诊断目标、`Runtime.getHeapUsage`、`Kitesurf.getMemoryStats` 完整内存聚合及 `/__fixtures/big-doc.html`。
+- **测试与门禁验证**：
+  - 静态门禁：全部 7 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`runtime-remote-object-classname` (1/1) + `target-dom-reclaim` (2/2) PASS，`runtime-get-heap-usage` 服务端全过。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

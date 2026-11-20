@@ -131,6 +131,11 @@ pub struct KitesurfFacade {
             return out_buf[0..ok_res.len];
         }
 
+        if (std.mem.eql(u8, method, "Kitesurf.getMemoryStats") ||
+            std.mem.eql(u8, method, "CapSurf.getMemoryStats")) {
+            return session.formatMemoryStatsJson(out_buf);
+        }
+
         // 3. Fallback to protocol extensions (layout mode, session info, renderer info, etc.)
         _.ext_state.paint_prepares = session.getPaintPrepares();
         return handleProtocolExtension(method, params_json, session.target_id, &_.ext_state, out_buf);

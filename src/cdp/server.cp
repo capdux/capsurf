@@ -466,7 +466,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {
         _.session.resetSession();
         defer _.session.resetSession();
-        let frame_payload: [65536]u8 = [0; 65536];
+        let frame_payload = std.heap.c_allocator.alloc(u8, 65536) catch return;
+        defer std.heap.c_allocator.free(frame_payload);
+        @memset(frame_payload, 0);
 
         const session_start_ms = serverNowMs();
         let last_client_activity_ms = session_start_ms;
@@ -474,13 +476,20 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         // Pending slow-navigation state for non-blocking navigate window
         let pending_nav_active = false;
         let pending_nav_deadline_ms: i64 = 0;
-        let pending_nav_payload_buf: [4096]u8 = [0; 4096];
+        let pending_nav_payload_buf = std.heap.c_allocator.alloc(u8, 4096) catch return;
+        defer std.heap.c_allocator.free(pending_nav_payload_buf);
+        @memset(pending_nav_payload_buf, 0);
         let pending_nav_payload_len: usize = 0;
         let pending_nav_sid_buf: [64]u8 = [0; 64];
         let pending_nav_sid_len: usize = 0;
         let pending_nav_tid_buf: [64]u8 = [0; 64];
         let pending_nav_tid_len: usize = 0;
-        let pending_evals: [8]PendingSlowEval = [PendingSlowEval{}; 8];
+        let pending_evals = std.heap.c_allocator.alloc(PendingSlowEval, 8) catch return;
+        defer std.heap.c_allocator.free(pending_evals);
+        let pei: usize = 0;
+        while (pei < pending_evals.len) : (pei += 1) {
+            pending_evals[pei] = PendingSlowEval{};
+        }
         let pending_eval_count: usize = 0;
 
         while (_.running) {
@@ -526,7 +535,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) {
                 break;
             }
-            const frame_opt = readWsTextFrame(client_fd, &frame_payload) catch break;
+            const frame_opt = readWsTextFrame(client_fd, frame_payload) catch break;
             if (payload := frame_opt) {
                 if (payload.len == 0) continue;
                 last_client_activity_ms = serverNowMs();

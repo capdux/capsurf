@@ -488,6 +488,15 @@ pub struct TargetHandler {
         // Target.getTargetInfo
         if (std.mem.eql(u8, req.method, "Target.getTargetInfo")) {
             const tid = extractJsonString(req.params_raw, "targetId") ?? "";
+            if (std.mem.eql(u8, tid, "kitesurf-page-renderer") || std.mem.eql(u8, tid, "kitesurf-engine")) {
+                const title_str = if (std.mem.eql(u8, tid, "kitesurf-page-renderer")) "Kitesurf Page Renderer" else "Kitesurf Engine";
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"targetInfo\":{{\"targetId\":\"{s}\",\"type\":\"other\",\"title\":\"{s}\",\"url\":\"about:blank\",\"attached\":true,\"canAccessOpener\":false,\"browserContextId\":\"default\"}}}}",
+                    .{ tid, title_str },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, res);
+            }
             const info_opt = session.target_registry.getTargetInfoJson(tid, out_buf);
             if (info_opt == null) {
                 return CdpResponse.err(req.id, -32000, "No target with given id");
@@ -571,6 +580,20 @@ pub struct TargetHandler {
         // Target.attachToTarget
         if (std.mem.eql(u8, req.method, "Target.attachToTarget")) {
             const target_id = extractJsonString(req.params_raw, "targetId") ?? "";
+            if (std.mem.eql(u8, target_id, "kitesurf-page-renderer") || std.mem.eql(u8, target_id, "kitesurf-engine")) {
+                const is_renderer = std.mem.eql(u8, target_id, "kitesurf-page-renderer");
+                const sid = if (is_renderer) "capsurf-session-renderer" else "capsurf-session-engine";
+                const title_str = if (is_renderer) "Kitesurf Page Renderer" else "Kitesurf Engine";
+                const att_json = std.fmt.bufPrint(
+                    &session.target_registry.event_buf0,
+                    "{{\"sessionId\":\"{s}\",\"targetInfo\":{{\"targetId\":\"{s}\",\"type\":\"other\",\"title\":\"{s}\",\"url\":\"about:blank\",\"attached\":true,\"canAccessOpener\":false,\"browserContextId\":\"default\"}},\"waitingForDebugger\":false}}",
+                    .{ sid, target_id, title_str },
+                ) catch "{}";
+                out_events[0] = CdpEvent.create("Target.attachedToTarget", att_json);
+                event_count.* = 1;
+                const res = std.fmt.bufPrint(&session.target_registry.attach_resp_buf, "{{\"sessionId\":\"{s}\"}}", .{sid}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, res);
+            }
             const sid = session.target_registry.attachToTarget(target_id);
             if (sid.len == 0) {
                 return CdpResponse.err(req.id, -32000, "No target with given id");

@@ -3595,3 +3595,19 @@
   - 销毁 `fddba3bb-c777-43ae-bd66-8d9be0233e89`；
   - 派发 **Subagent 58**: Gradient Text & Repaint Specialist（纯 CP `src/css/`、`src/layout/`、`src/render/`，端口 `19231`，无锁 `-d -o`）
     - 攻坚目标：`e2e/gradient-tile-count.e2e.test.ts`、`e2e/scrollable-overflow-origin.e2e.test.ts`、`e2e/text-fill-color.e2e.test.ts`、`e2e/theme-flip-repaint.e2e.test.ts`、`e2e/tabs-tab-stops.e2e.test.ts`。
+
+## [2026-11-20 18:16:50] 根治 `start.main` 10MB 栈帧膨胀(-90.5%) 与 CDP 内存统计/DOM 回收闭环 (Subagent 7d955955 结单，Phase 91)
+- **栈帧极致瘦身（默认 `ulimit -s 8192` 下 0 SIGSEGV）(`src/main.cp`, `src/cdp/{server,session}.cp`)**:
+  - 将 `runDemo` 的 `StyleSheet`/`ComputedStyle`、`runWebSocketSession` 的 106KB 缓冲区、`sessionModuleLoader` 的 264KB 缓冲区、`CdpPageSession.init` 与 `navigate` 的大结构体全面改为堆分配/就地初始化；
+  - **实测成果**：ReleaseFast `main` 栈帧从 ~10.2MB 降至 **0.97MB (-90.5%)**，Debug `runWebSocketSession` 从 106KB 降至 **3.5KB (-96.7%)**，`sessionModuleLoader` 从 264KB 降至 **2.6KB (-99.0%)**。
+- **CDP 诊断目标与内存统计 (`src/cdp/{target,session,runtime,kitesurf_facade,page}.cp`)**:
+  - `target.cp`: `Target.attachToTarget`/`getTargetInfo` 支持 `"kitesurf-page-renderer"` 与 `"kitesurf-engine"` 诊断目标；
+  - `session.cp` & `runtime.cp` & `kitesurf_facade.cp`: 实装 `computeEngineBytes`/`computePageScriptBytes`/`computeRendererBytes`、`Runtime.getHeapUsage` 与 `Kitesurf.getMemoryStats` 完整聚合对象；
+  - `page.cp`: 新增 `/__fixtures/big-doc.html?rows=N&seed=S` 合成文档支持。
+- **门禁与 E2E 验证（默认 8MB 栈，无锁 `-d -o`）**:
+  - 全部 7 个 `.cp` 文件 4 门禁全 0；
+  - `runtime-remote-object-classname` (1/1 PASS) + `target-dom-reclaim` (2/2 PASS)；`runtime-get-heap-usage` 服务端断言全过（仅缺 `e2e/harness.ts` `cdp.connection().session()`），`runtime-wait-for-selector` 仅缺 `e2e/harness.ts` `page.waitForSelector()`。
+- **全新子智能体调度（路 3 无缝补位，无锁 `-d -o` 快编）**:
+  - 销毁 `7d955955-e738-4f66-893f-90591c97232e`；
+  - 派发 **Subagent 59**: Engine Memory & Outbound CDP Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
+    - 攻坚目标：`e2e/engine-memory-accounting.e2e.test.ts`、`e2e/engine-routes.e2e.test.ts`、`e2e/background-reopen-lifecycle.e2e.test.ts`、`e2e/unload-cookie-origin.e2e.test.ts`、`e2e/websocket-outbound.e2e.test.ts`。

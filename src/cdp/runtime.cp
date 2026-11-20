@@ -57,7 +57,8 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.getHeapUsage")) {
-            return CdpResponse.ok(req.id, "{\"usedSize\":1048576,\"totalSize\":4194304}");
+            const res = session.formatHeapUsageJson(req.session_id, out_buf);
+            return CdpResponse.ok(req.id, res);
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.compileScript")) {

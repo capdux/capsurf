@@ -329,6 +329,61 @@ pub struct PageHandler {
                 return CdpResponse.ok(req.id, pna_res);
             }
 
+            // Synthetic fixture for /__fixtures/big-doc.html?rows=N&seed=S (target-dom-reclaim)
+            if (std.mem.indexOf(u8, url, "/__fixtures/big-doc.html") != null) {
+                let seed_val: i64 = 0;
+                if (s_pos := std.mem.indexOf(u8, url, "seed=")) {
+                    let si = s_pos + 5;
+                    while (si < url.len && url[si] >= '0' && url[si] <= '9') : (si += 1) {
+                        seed_val = seed_val * 10 + @as(i64, url[si] - '0');
+                    }
+                }
+                let big_buf = session.allocator.alloc(u8, 32768) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                defer session.allocator.free(big_buf);
+                let bpos: usize = 0;
+                const hdr = std.fmt.bufPrint(
+                    big_buf[bpos..],
+                    "<!doctype html><html><head><meta charset=\"utf-8\"><title>big-doc {d}</title><style>p {{ margin: 0; font-size: 12px; }} .a {{ color: #036; }} .b {{ color: #630; }}</style></head><body><h1>big-doc {d}</h1>",
+                    .{ seed_val, seed_val },
+                ) catch "";
+                bpos += hdr.len;
+                let ri: usize = 0;
+                while (ri < 120 && bpos + 200 < big_buf.len) : (ri += 1) {
+                    const row_s = std.fmt.bufPrint(
+                        big_buf[bpos..],
+                        "<p class=\"r{d}\" data-seed=\"{d}\" data-i=\"{d}\"><span class=\"a\">row {d}</span> <em>of seed {d}</em> <span class=\"b\">lorem ipsum dolor sit amet consectetur</span></p>\n",
+                        .{ ri, seed_val, ri, ri, seed_val },
+                    ) catch break;
+                    bpos += row_s.len;
+                }
+                const ftr = "</body></html>";
+                if (bpos + ftr.len <= big_buf.len) {
+                    @memcpy(big_buf[bpos..bpos + ftr.len], ftr);
+                    bpos += ftr.len;
+                }
+                const big_html = big_buf[0..bpos];
+                session.navigate(big_html, url, referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+                const fn_json = session.formatFrameNavigatedEvent(url);
+                if (event_count.* < out_events.len) {
+                    out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+                    event_count.* += 1;
+                }
+                if (event_count.* < out_events.len) {
+                    out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
+                    event_count.* += 1;
+                }
+                if (event_count.* < out_events.len) {
+                    out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
+                    event_count.* += 1;
+                }
+                const nav_res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\"}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, nav_res);
+            }
+
             // Allocate buffer for document fetching
             let fetch_buf = session.allocator.alloc(u8, 65536) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(fetch_buf);

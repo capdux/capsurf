@@ -1355,4 +1355,10 @@
    - 基于 `cap:pack` `uncompress` 实现完整 PNG 行滤波还原（None/Sub/Up/Average/Paeth）支持 RGB/RGBA/Grayscale；直接对结构体字段切片 `buf[0..len]` 替代按值接收者 `_` 辅助方法，彻底根除悬垂切片。
 2. **`@container` 3-Pass 与 `JS_FreeCString` 误释放修复 (`cascade.cp`, `dom_binding.cp`)**：
    - 将 `ContainerRuleEntry` 内部规则改为 `nested_body` 堆解析降低栈帧；修复 `js_get_computed_prop` 对 `page_allocator.dupe` 切片误调 `JS_FreeCString` 导致的 Debug 段错误，并在含 `@container` 文档首次查询时执行 3-pass 重排。
+
+## Phase 91 `start.main` 栈帧 90.5% 瘦身与 CDP 内存统计架构方案
+1. **默认 8MB 栈安全重构 (`main.cp`, `server.cp`, `session.cp`)**：
+   - 使用 `objdump` 定位栈帧热点，将 `StyleSheet`/`ComputedStyle`/264KB 模块加载缓冲/106KB WebSocket 帧缓冲全部转为堆分配 + `defer` 释放，并将 `CdpPageSession.init` 改为 `@memset` 就地构造，将 ReleaseFast `main` 栈帧从 ~10.2MB 压至 0.97MB。
+2. **多域内存聚合统计 (`session.cp`, `target.cp`, `runtime.cp`, `kitesurf_facade.cp`)**：
+   - 基于实时 DOM 节点、HTML 字节与视口构建 `engine`/`pageScript`/`renderer` 严格守恒内存统计，支持诊断目标 attach 与 `Runtime.getHeapUsage` 按会话分域返回。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

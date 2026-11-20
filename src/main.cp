@@ -30,7 +30,7 @@ fn printUsage() {
     );
 }
 
-fn runDemo() {
+pub fn runDemo() {
     std.debug.print("==================================================================\n", .{});
     std.debug.print(" CapSurf: Million-Agent Native Headless Browser in CP (Self-Check)\n", .{});
     std.debug.print("==================================================================\n", .{});
@@ -64,9 +64,18 @@ fn runDemo() {
         "#app { display: flex; flex-direction: row; padding: 10px; width: 600px; height: 100px; }\n" ++
         "#btn-run { width: 120px; height: 40px; }\n";
 
-    const sheet = StyleSheet.parse(css_text, 800.0, false);
-    let styles: [16]ComputedStyle = [ComputedStyle{}; 16];
-    Cascade.computeStyles(&doc, &sheet, styles[0..doc.nodeCount()], 16.0);
+    let sheet_ptr = std.heap.page_allocator.create(StyleSheet) catch unreachable;
+    defer std.heap.page_allocator.destroy(sheet_ptr);
+    sheet_ptr.* = StyleSheet.parse(css_text, 800.0, false);
+
+    const style_count = @max(@as(usize, 1), doc.nodeCount());
+    let styles = std.heap.page_allocator.alloc(ComputedStyle, style_count) catch unreachable;
+    defer std.heap.page_allocator.free(styles);
+    let si: usize = 0;
+    while (si < styles.len) : (si += 1) {
+        styles[si] = ComputedStyle{};
+    }
+    Cascade.computeStyles(&doc, sheet_ptr, styles[0..doc.nodeCount()], 16.0);
 
     let layout = LayoutTree.init(std.heap.page_allocator, 800.0, 600.0) catch unreachable;
     defer layout.deinit();
