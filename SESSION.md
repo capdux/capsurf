@@ -4788,3 +4788,7 @@
 ### Phase 243: Render RGBA DirtyRect Whitebox (134/134) + `BroadcastChannel` (`bridge-inherit-v8` 7/8 PASS)
 - **Slot A (`e1d58c44`)**: Verified `test/render/` **10/10 PASS** (11.81s); added `test/render/test_rgba_dirty_rect_encode_edge.cp` (**3/3 PASS**, 1288ms). Total whitebox **134/134 (100% PASS)**.
 - **Slot B (`2bdd21eb`)**: Implemented standard `BroadcastChannel` (`EventTarget` subclass, `origin + name` routing, `_structuredClone` payload + `enqueueMessageTask`, `close()`) in `src/js/shim/window.js` (re-bundled `runtime.js`/`runtime_source.cp`). Built `bin_19233/main`; `e2e/bridge-inherit-v8.e2e.test.ts` **7/8 PASS** (33 assertions; sole remaining failure at line 313 is standard ECMA-262 arrow/async/method lacking `.prototype`).
+
+### Phase 244: DOM Namespace/Slot Whitebox (135/135) + Boa 3-Pack Boundary Verification
+- **Slot A (`dfb695d9`)**: Added `test/dom/test_shadow_dom_and_slot_edge.cp` covering `setAttributeNS`/`getAttributeNS`/`removeAttributeNS` namespace isolation, `<slot>`/`<template>` inertness, cross-document `copySubtreeFrom` Arena isolation, and `ElementHandle` boundaries (**1/1 PASS**, 912ms). Full-repo pure-CP whitebox now **135/135 (100% PASS)**.
+- **Slot B (`b40581f0`)**: Verified `boa-bridged-intrinsic-proto` (2 fail), `boa-ctx-reentry` (6 fail), and `boa-interner-reclaim` (3 fail) require Kitesurf dual-engine V8+Boa internal handles (`RefCell<Context>` reentry, `Interner` truncation, cross-realm V8/Boa intrinsic proxies) inapplicable to single-engine QuickJS-NG.

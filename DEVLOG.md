@@ -1808,3 +1808,6 @@
 
 ### Phase 243: `BroadcastChannel` & RGBA Dirty-Rect Whitebox
 - Added `BroadcastChannel` to `src/js/shim/window.js` using `_structuredClone` and `enqueueMessageTask` across same-origin channels, passing all `structuredClone` boundary checks in `bridge-inherit-v8`.
+
+### Phase 244: DOM Arena/Namespace Whitebox & Single-Engine Boa Boundary Audit
+- Confirmed `boa-bridged-intrinsic-proto`, `boa-ctx-reentry`, and `boa-interner-reclaim` rely exclusively on Kitesurf dual-engine V8+Boa internals.

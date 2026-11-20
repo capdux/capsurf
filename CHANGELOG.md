@@ -2427,3 +2427,6 @@
 ### Phase 243
 - Added `test/render/test_rgba_dirty_rect_encode_edge.cp`.
 - Implemented `BroadcastChannel` in `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 244
+- Added `test/dom/test_shadow_dom_and_slot_edge.cp`.
