@@ -2339,3 +2339,7 @@
 ### Phase 222
 - Added `test/net/test_mock_fixtures_edge.cp`.
 - Optimized `captureScreencastFrame` viewport scaling & compression in `src/cdp/session.cp`, added `pumpTimers()` on `pr > 0` in `src/cdp/server.cp`, and added 32-task timer batching + `_rafDriverGraceMs` in `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 223
+- Added `test/js/test_qjs_eval_and_error_edge.cp`.
+- Added native checkbox checked painting and `viewport_scroll_x`/`viewport_scroll_y` in `src/render/painter.cp`, live CSS animation sampling overlay in `src/cdp/session.cp`, and animation interpolation/direction fixes in `src/js/shim/animations.js` (+ `runtime.js`/`runtime_source.cp`).

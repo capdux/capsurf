@@ -81,6 +81,7 @@ pub struct FormControlValue {
     max_val: f32 = 100.0,
     has_min: bool = false,
     has_max: bool = false,
+    checked: bool = false,
 }
 
 pub struct ScrollOffset {
@@ -105,6 +106,8 @@ pub struct ScreenshotOptions {
     clip_y: i32 = 0;
     clip_w: u32 = 0;
     clip_h: u32 = 0;
+    viewport_scroll_x: f32 = 0.0;
+    viewport_scroll_y: f32 = 0.0;
 }
 
 fn hasEmojiVariationSelector(bytes: []const u8, next_idx: usize): bool {
@@ -3036,6 +3039,56 @@ fn paintNodeRecursive(
             }
         }
 
+        const is_checkbox = is_input && std.ascii.eqlIgnoreCase(node.getAttribute("type") ?? "", "checkbox");
+        if (is_checkbox) {
+            let is_checked = node.hasAttribute("checked");
+            if (lf := found_live_form) {
+                is_checked = lf.checked;
+            }
+            if (r.width > 0.0 && r.height > 0.0) {
+                if (is_checked) {
+                    const accent = if (paint_style.has_accent_color) paint_style.accent_color else CssColor.rgb(0, 117, 255);
+                    const chk_style = ResolvedPaintStyle{
+                        bg_color: accent,
+                        border_color: accent,
+                        text_color: CssColor.rgb(255, 255, 255),
+                        border_width: 1.0,
+                        border_radius: 2.0,
+                    };
+                    canvas.paintBoxClipped(r, chk_style, active_clip);
+                    const white = CssColor.rgb(255, 255, 255);
+                    const stroke_t = @max(1.5, @min(r.width, r.height) * 0.14);
+                    // Draw checkmark in two segments: (0.22,0.52)->(0.42,0.72) and (0.42,0.72)->(0.78,0.28)
+                    const steps1: usize = 8;
+                    let si: usize = 0;
+                    while (si <= steps1) : (si += 1) {
+                        const t = @as(f32, @floatFromInt(si)) / @as(f32, @floatFromInt(steps1));
+                        const cx = r.x + r.width * (0.22 + 0.20 * t);
+                        const cy = r.y + r.height * (0.52 + 0.20 * t);
+                        canvas.fillRectClipped(cx - stroke_t * 0.5, cy - stroke_t * 0.5, stroke_t, stroke_t, white, active_clip);
+                    }
+                    const steps2: usize = 12;
+                    si = 0;
+                    while (si <= steps2) : (si += 1) {
+                        const t = @as(f32, @floatFromInt(si)) / @as(f32, @floatFromInt(steps2));
+                        const cx = r.x + r.width * (0.42 + 0.36 * t);
+                        const cy = r.y + r.height * (0.72 - 0.44 * t);
+                        canvas.fillRectClipped(cx - stroke_t * 0.5, cy - stroke_t * 0.5, stroke_t, stroke_t, white, active_clip);
+                    }
+                } else {
+                    const unchk_style = ResolvedPaintStyle{
+                        bg_color: CssColor.rgb(255, 255, 255),
+                        border_color: CssColor.rgb(118, 118, 118),
+                        text_color: CssColor.rgb(0, 0, 0),
+                        border_width: 1.0,
+                        border_radius: 2.0,
+                    };
+                    canvas.paintBoxClipped(r, unchk_style, active_clip);
+                }
+            }
+            return;
+        }
+
         const is_range = is_input && std.ascii.eqlIgnoreCase(node.getAttribute("type") ?? "", "range");
         if (is_range) {
             let min_v: f32 = 0.0;
@@ -3339,7 +3392,9 @@ pub fn renderDocumentToPng(
     // 从文档根元素开始前序遍历绘制整棵 DOM 树
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 0.0, 0.0, 0.0, 0.0, 1.0, false);
+        const vsx = opts.viewport_scroll_x;
+        const vsy = opts.viewport_scroll_y;
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, vsx, vsy, vsx, vsy, 1.0, false);
     }
 
     // 如果指定了 clip 裁剪区域，提取子区域编码

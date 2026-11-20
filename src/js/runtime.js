@@ -26836,10 +26836,11 @@
     }
     const n1 = String(fromVal == null ? "" : fromVal).trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
     const n2 = String(toVal == null ? "" : toVal).trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
-    if (n1 && n2 && n1[2] === n2[2]) {
+    if (n1 && n2 && (n1[2] === n2[2] || (parseFloat(n1[1]) === 0 && n1[2] === "") || (parseFloat(n2[1]) === 0 && n2[2] === ""))) {
+      const unit = n1[2] || n2[2];
       const v = parseFloat(n1[1]) + (parseFloat(n2[1]) - parseFloat(n1[1])) * p;
       const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(6)));
-      return formatted + n1[2];
+      return formatted + unit;
     }
     return String(p < 0.5 ? fromVal : toVal);
   }
@@ -27283,6 +27284,7 @@
     const _CapturedAnimationEvent = typeof AnimationEvent === "function" ? AnimationEvent : null;
 
     const _cssAnimStateMap = new WeakMap();
+    const _activeCssAnimElements = new Set();
     const _pendingStyleCheckElements = new Set();
     let _pendingStyleCheckScheduled = false;
     let _snapshotsInitialized = false;
@@ -27592,7 +27594,7 @@
       return interpolateAnimValue(tr.prop, tr.fromVal, tr.toVal, easedT);
     }
 
-    function evalCssAnimationStyles(anim, frames, now) {
+    function evalCssAnimationStyles(anim, frames, now, baseStyles) {
       const out = {};
       if (!frames || frames.length === 0) return out;
       const activeMs = (now - anim.startTime) - anim.delayMs;
@@ -27602,38 +27604,70 @@
 
       let progress;
       if (activeMs <= 0) {
-        progress = 0;
+        progress = (anim.direction === "reverse" || anim.direction === "alternate-reverse") ? 1 : 0;
       } else if (activeMs >= totalMs) {
-        progress = 1;
+        const lastIter = Math.max(0, Math.ceil(anim.iterations) - 1);
+        const rev = anim.direction === "reverse" ||
+          (anim.direction === "alternate" && (lastIter % 2) === 1) ||
+          (anim.direction === "alternate-reverse" && (lastIter % 2) === 0);
+        progress = rev ? 0 : 1;
       } else {
+        const iterIdx = Math.floor(activeMs / anim.durationMs);
         progress = (activeMs % anim.durationMs) / anim.durationMs;
+        if (
+          anim.direction === "reverse" ||
+          (anim.direction === "alternate" && (iterIdx % 2) === 1) ||
+          (anim.direction === "alternate-reverse" && (iterIdx % 2) === 0)
+        ) {
+          progress = 1 - progress;
+        }
       }
       const easedP = evaluateAnimationEasing(anim.easing, progress);
 
-      let idx = 0;
-      for (let i = 0; i < frames.length - 1; i++) {
-        if (easedP >= frames[i].offset && easedP <= frames[i + 1].offset) {
-          idx = i;
-          break;
-        }
-        if (easedP > frames[i + 1].offset) idx = i;
-      }
-      const f0 = frames[idx];
-      const f1 = frames[idx + 1] || f0;
-      const span = f1.offset - f0.offset;
-      const segT = span > 0 ? Math.max(0, Math.min(1, (easedP - f0.offset) / span)) : (easedP >= f1.offset ? 1 : 0);
-
       const allProps = new Set();
-      for (const k in f0.props) allProps.add(k);
-      for (const k in f1.props) allProps.add(k);
+      for (let i = 0; i < frames.length; i++) {
+        for (const k in frames[i].props) allProps.add(k);
+      }
+
       allProps.forEach(function (prop) {
-        if (f0.props[prop] !== undefined && f1.props[prop] !== undefined) {
-          out[prop] = interpolateAnimValue(prop, f0.props[prop], f1.props[prop], segT);
-        } else if (f1.props[prop] !== undefined) {
-          out[prop] = f1.props[prop];
-        } else if (f0.props[prop] !== undefined) {
-          out[prop] = f0.props[prop];
+        // Collect keyframes that define this property
+        const propFrames = [];
+        for (let i = 0; i < frames.length; i++) {
+          if (frames[i].props[prop] !== undefined) {
+            propFrames.push({ offset: frames[i].offset, val: frames[i].props[prop] });
+          }
         }
+        if (propFrames.length === 0) return;
+        let baseVal = baseStyles && typeof baseStyles.get === "function" ? baseStyles.get(prop) : undefined;
+        if (baseVal === undefined && prop === "background-color" && baseStyles && typeof baseStyles.get === "function") {
+          const bg = baseStyles.get("background");
+          if (bg !== undefined && parseAnimColor(bg)) {
+            baseVal = bg;
+          }
+        }
+        if (propFrames[0].offset > 0 && baseVal !== undefined) {
+          propFrames.unshift({ offset: 0, val: baseVal });
+        }
+        if (propFrames[propFrames.length - 1].offset < 1 && baseVal !== undefined) {
+          propFrames.push({ offset: 1, val: baseVal });
+        }
+        if (propFrames.length === 1) {
+          out[prop] = propFrames[0].val;
+          return;
+        }
+        let idx = 0;
+        for (let i = 0; i < propFrames.length - 1; i++) {
+          if (easedP >= propFrames[i].offset && easedP <= propFrames[i + 1].offset) {
+            idx = i;
+            break;
+          }
+          if (easedP > propFrames[i + 1].offset) idx = i;
+        }
+        const f0 = propFrames[idx];
+        const f1 = propFrames[idx + 1] || f0;
+        const span = f1.offset - f0.offset;
+        const segT = span > 0 ? Math.max(0, Math.min(1, (easedP - f0.offset) / span)) : (easedP >= f1.offset ? 1 : 0);
+        out[prop] = interpolateAnimValue(prop, f0.val, f1.val, segT);
       });
       return out;
     }
@@ -27823,13 +27857,19 @@
         st.animations.forEach(function (animRec, animName) {
           const frames = keyframesMap.get(animName);
           if (!frames) return;
-          const vals = evalCssAnimationStyles(animRec, frames, now);
+          const vals = evalCssAnimationStyles(animRec, frames, now, st.lastStyle);
           for (const k in vals) {
             if (Object.prototype.hasOwnProperty.call(vals, k)) {
               computedMap.set(k, vals[k]);
             }
           }
         });
+      }
+
+      if (st.transitions.size > 0 || st.animations.size > 0) {
+        _activeCssAnimElements.add(element);
+      } else {
+        _activeCssAnimElements.delete(element);
       }
     }
 
@@ -27892,10 +27932,63 @@
       } catch (e) {}
     }
 
+    function sampleActiveAnimations() {
+      if (!_snapshotsInitialized) {
+        initCssTransitionSnapshots();
+      }
+      if (_activeCssAnimElements.size === 0) return "";
+      const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      let keyframesMap = null;
+      const lines = [];
+      _activeCssAnimElements.forEach(function (el) {
+        if (!el || typeof el._nid !== "number" || el._nid <= 0) {
+          _activeCssAnimElements.delete(el);
+          return;
+        }
+        const st = _cssAnimStateMap.get(el);
+        if (!st || (st.transitions.size === 0 && st.animations.size === 0)) {
+          _activeCssAnimElements.delete(el);
+          return;
+        }
+        const decls = [];
+        st.transitions.forEach(function (tr, prop) {
+          const activeMs = (now - tr.startTime) - tr.delayMs;
+          if (activeMs >= tr.durationMs) {
+            decls.push(prop + ":" + tr.toVal);
+          } else {
+            decls.push(prop + ":" + evalTransitionValue(tr, now));
+          }
+        });
+        if (st.animations.size > 0) {
+          if (!keyframesMap) {
+            const styleNodes = (typeof document !== "undefined" && document && typeof document.querySelectorAll === "function")
+              ? document.querySelectorAll("style")
+              : [];
+            keyframesMap = extractKeyframesMap(styleNodes);
+          }
+          st.animations.forEach(function (animRec, animName) {
+            const frames = keyframesMap.get(animName);
+            if (!frames) return;
+            const vals = evalCssAnimationStyles(animRec, frames, now, st.lastStyle);
+            for (const k in vals) {
+              if (Object.prototype.hasOwnProperty.call(vals, k)) {
+                decls.push(k + ":" + vals[k]);
+              }
+            }
+          });
+        }
+        if (decls.length > 0) {
+          lines.push(el._nid + "|" + decls.join(";"));
+        }
+      });
+      return lines.join("\n");
+    }
+
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_syncCssTransitionsAndAnimations = syncCssTransitionsAndAnimations;
       globalThis.__capsurf_notifyCssStyleChange = notifyCssStyleChange;
       globalThis.__capsurf_initCssTransitionSnapshots = initCssTransitionSnapshots;
+      globalThis.__capsurf_sample_active_animations = sampleActiveAnimations;
     }
   })();
 

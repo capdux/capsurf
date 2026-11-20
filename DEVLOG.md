@@ -1729,3 +1729,6 @@
 ### Phase 222: Screencast rAF Pacing & Viewport-Aware Frame Compression
 - `captureScreencastFrame` previously forced `1280x720` uncompressed (`compress_level=0`, ~3.68MB) PNGs even for small viewports; clamping to viewport size and using `compress_level=1` restores 60fps rAF pacing.
 - Batching up to 32 due tasks in `__capsurf_pump_timers` and using `_rafDriverGraceMs = Math.max(150, _rafDriverIntervalMs * 2)` prevents fallback timer double-firing at 16ms intervals.
+
+### Phase 223: Native Checkbox Paint, Viewport Scroll & Live CSS Animation Sampling
+- `captureScreenshotClipped` now samples `__capsurf_sample_active_animations()` before `Cascade.computeStyles` and temporarily overlays interpolated declarations onto `NodeData.inline_style` (restored via `defer`), allowing CSS transitions and `@keyframes` animations to stream live frames during screencast.

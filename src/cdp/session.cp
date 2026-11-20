@@ -3961,6 +3961,60 @@ pub struct CdpPageSession {
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
+
+        let anim_nids: [64]u32 = [0; 64];
+        let anim_orig_styles: [64][]const u8 = [""; 64];
+        let anim_alloc_bufs: [64]([]u8)? = [null; 64];
+        let anim_override_count: usize = 0;
+        if (_.has_document) {
+            const js_anim = "(function(){return (typeof globalThis.__capsurf_sample_active_animations==='function')?globalThis.__capsurf_sample_active_animations():'';})()";
+            const val_anim = _.ctx.eval(js_anim);
+            const cstr_anim = _.ctx.toCString(val_anim);
+            if (cstr_anim.len > 0) {
+                let anim_lines = std.mem.splitScalar(u8, cstr_anim, '\n');
+                while (line := anim_lines.next()) {
+                    if (line.len == 0 || anim_override_count >= 64) continue;
+                    if (bar_idx := std.mem.indexOfScalar(u8, line, '|')) {
+                        const nid_s = line[0..bar_idx];
+                        const decls_s = line[bar_idx + 1 ..];
+                        const anid = std.fmt.parseInt(u32, nid_s, 10) catch 0;
+                        if (anid > 0 && @as(usize, anid) < _.doc.nodes.items.len && decls_s.len > 0) {
+                            const orig = _.doc.nodes.items[@as(usize, anid)].inline_style;
+                            const need_len = if (orig.len > 0) orig.len + 1 + decls_s.len else decls_s.len;
+                            if (maybe_buf := _.allocator.alloc(u8, need_len) catch null) {
+                                let buf = maybe_buf;
+                                if (orig.len > 0) {
+                                    @memcpy(buf[0..orig.len], orig);
+                                    buf[orig.len] = ';';
+                                    @memcpy(buf[orig.len + 1 .. need_len], decls_s);
+                                } else {
+                                    @memcpy(buf[0..need_len], decls_s);
+                                }
+                                anim_nids[anim_override_count] = anid;
+                                anim_orig_styles[anim_override_count] = orig;
+                                anim_alloc_bufs[anim_override_count] = buf;
+                                anim_override_count += 1;
+                                _.doc.nodes.items[@as(usize, anid)].inline_style = buf;
+                            }
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val_anim);
+        }
+        defer {
+            let ai: usize = 0;
+            while (ai < anim_override_count) : (ai += 1) {
+                const anid = anim_nids[ai];
+                if (@as(usize, anid) < _.doc.nodes.items.len) {
+                    _.doc.nodes.items[@as(usize, anid)].inline_style = anim_orig_styles[ai];
+                }
+                if (b := anim_alloc_bufs[ai]) {
+                    _.allocator.free(b);
+                }
+            }
+        }
+
         let styles = _.allocator.alloc(ComputedStyle, count)?;
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
@@ -4278,7 +4332,7 @@ pub struct CdpPageSession {
         let form_value_count: usize = 0;
         let form_val_allocs: [64]([]u8)? = [null; 64];
         if (_.has_document) {
-            const js_fv = "(function() { try { const list = document.querySelectorAll('input, textarea'); const out = []; for (let i = 0; i < list.length && out.length < 64; i++) { const el = list[i]; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) continue; const v = (el.value !== undefined && el.value !== null) ? String(el.value) : ''; let hex = ''; for (let j = 0; j < v.length && j < 512; j++) { const c = v.charCodeAt(j) & 0xff; hex += (c < 16 ? '0' : '') + c.toString(16); } const mn = (el.min !== undefined && el.min !== '') ? String(el.min) : ''; const mx = (el.max !== undefined && el.max !== '') ? String(el.max) : ''; out.push(nid + ':' + mn + ':' + mx + ':' + hex); } return out.join(';'); } catch (e) { return ''; } })();";
+            const js_fv = "(function() { try { const list = document.querySelectorAll('input, textarea'); const out = []; for (let i = 0; i < list.length && out.length < 64; i++) { const el = list[i]; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) continue; const v = (el.value !== undefined && el.value !== null) ? String(el.value) : ''; let hex = ''; for (let j = 0; j < v.length && j < 512; j++) { const c = v.charCodeAt(j) & 0xff; hex += (c < 16 ? '0' : '') + c.toString(16); } const mn = (el.min !== undefined && el.min !== '') ? String(el.min) : ''; const mx = (el.max !== undefined && el.max !== '') ? String(el.max) : ''; const chk = el.checked ? '1' : '0'; out.push(nid + ':' + mn + ':' + mx + ':' + chk + ':' + hex); } return out.join(';'); } catch (e) { return ''; } })();";
             const val_fv = _.ctx.eval(js_fv);
             const cstr_fv = _.ctx.toCString(val_fv);
             if (cstr_fv.len > 0) {
@@ -4289,50 +4343,54 @@ pub struct CdpPageSession {
                     if (nid_str := fields.next()) {
                         if (min_str := fields.next()) {
                             if (max_str := fields.next()) {
-                                if (hex_str := fields.next()) {
-                                    const fnid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
-                                    if (fnid > 0) {
-                                        let decoded_slice: []const u8 = "";
-                                        const byte_len = hex_str.len / 2;
-                                        if (byte_len > 0) {
-                                            const maybe_buf = _.allocator.alloc(u8, byte_len) catch null;
-                                            if (maybe_buf != null) {
-                                                let buf = maybe_buf.?;
-                                                let bi: usize = 0;
-                                                while (bi < byte_len) : (bi += 1) {
-                                                    const hi = std.fmt.charToDigit(hex_str[bi * 2], 16) catch 0;
-                                                    const lo = std.fmt.charToDigit(hex_str[bi * 2 + 1], 16) catch 0;
-                                                    buf[bi] = (hi << 4) | lo;
+                                if (chk_str := fields.next()) {
+                                    if (hex_str := fields.next()) {
+                                        const fnid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
+                                        if (fnid > 0) {
+                                            let decoded_slice: []const u8 = "";
+                                            const byte_len = hex_str.len / 2;
+                                            if (byte_len > 0) {
+                                                const maybe_buf = _.allocator.alloc(u8, byte_len) catch null;
+                                                if (maybe_buf != null) {
+                                                    let buf = maybe_buf.?;
+                                                    let bi: usize = 0;
+                                                    while (bi < byte_len) : (bi += 1) {
+                                                        const hi = std.fmt.charToDigit(hex_str[bi * 2], 16) catch 0;
+                                                        const lo = std.fmt.charToDigit(hex_str[bi * 2 + 1], 16) catch 0;
+                                                        buf[bi] = (hi << 4) | lo;
+                                                    }
+                                                    form_val_allocs[form_value_count] = buf;
+                                                    decoded_slice = buf;
                                                 }
-                                                form_val_allocs[form_value_count] = buf;
-                                                decoded_slice = buf;
                                             }
-                                        }
-                                        let has_min = false;
-                                        let min_v: f32 = 0.0;
-                                        if (min_str.len > 0) {
-                                            if (mv := std.fmt.parseFloat(f32, min_str) catch null) {
-                                                has_min = true;
-                                                min_v = mv;
+                                            let has_min = false;
+                                            let min_v: f32 = 0.0;
+                                            if (min_str.len > 0) {
+                                                if (mv := std.fmt.parseFloat(f32, min_str) catch null) {
+                                                    has_min = true;
+                                                    min_v = mv;
+                                                }
                                             }
-                                        }
-                                        let has_max = false;
-                                        let max_v: f32 = 100.0;
-                                        if (max_str.len > 0) {
-                                            if (xv := std.fmt.parseFloat(f32, max_str) catch null) {
-                                                has_max = true;
-                                                max_v = xv;
+                                            let has_max = false;
+                                            let max_v: f32 = 100.0;
+                                            if (max_str.len > 0) {
+                                                if (xv := std.fmt.parseFloat(f32, max_str) catch null) {
+                                                    has_max = true;
+                                                    max_v = xv;
+                                                }
                                             }
+                                            const is_chk = std.mem.eql(u8, chk_str, "1");
+                                            form_values[form_value_count] = FormControlValue{
+                                                node_id: fnid,
+                                                value: decoded_slice,
+                                                min_val: min_v,
+                                                max_val: max_v,
+                                                has_min: has_min,
+                                                has_max: has_max,
+                                                checked: is_chk,
+                                            };
+                                            form_value_count += 1;
                                         }
-                                        form_values[form_value_count] = FormControlValue{
-                                            node_id: fnid,
-                                            value: decoded_slice,
-                                            min_val: min_v,
-                                            max_val: max_v,
-                                            has_min: has_min,
-                                            has_max: has_max,
-                                        };
-                                        form_value_count += 1;
                                     }
                                 }
                             }
@@ -4399,6 +4457,8 @@ pub struct CdpPageSession {
             clip_y: clip_y,
             clip_w: clip_w,
             clip_h: clip_h,
+            viewport_scroll_x: _.scroll_x,
+            viewport_scroll_y: _.scroll_y,
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
