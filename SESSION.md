@@ -4497,3 +4497,7 @@
 ## [2026-11-21 01:15:30] 2 分钟新增并全绿通过纯 CP Tokenizer/Entities 白盒单测 `test/html/test_tokenizer_entities.cp` (Subagent 461cacab 结单，Phase 189)
 - **新增白盒测试 (`test/html/test_tokenizer_entities.cp`)**: 覆盖命名字符实体解码、十/十六进制数值实体 (`&#x1F600;`/`&#128;`/`&#0;`)、DOCTYPE/注释/属性切分及 RawText/ScriptData 模式（**4/4 PASS**, 933ms, 4 门禁全 0；`test/html/` 达 **5/5 PASS**）。
 - **清理旧子智能体**: 销毁 `461cacab-f5eb-45f4-954e-88a0ecd3903c`。
+
+### Phase 190: Pure-CP Arena DOM Mutations & Clone Whitebox Tests (Slot A)
+- **Subagent**: `dead6ef0` (killed after completion)
+- **Result**: `test/dom/test_arena_mutations_and_clone.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 1/1 PASS in 1345ms; 4 test functions covering Arena sentinel, insert/remove/replace, shallow/deep `cloneNode`, attributes & `NULL_NODE` boundaries).

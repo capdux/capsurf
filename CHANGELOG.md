@@ -2229,3 +2229,6 @@
 
 ## Phase 189: Pure-CP HTML5 Tokenizer & Entities Whitebox Suite `test/html/test_tokenizer_entities.cp` (4/4 PASS)
 - 新增 `test/html/test_tokenizer_entities.cp`，覆盖命名/数值字符实体、DOCTYPE/属性与 RawText/ScriptData 切分（`cap test -m` **4/4 PASS**, 933ms）。
+
+### Phase 190
+- Added `test/dom/test_arena_mutations_and_clone.cp` covering Arena DOM sentinel, node creation, insert/remove/replace mutations, shallow/deep `cloneNode`, attributes, and `NULL_NODE`/OOB boundary guards.
