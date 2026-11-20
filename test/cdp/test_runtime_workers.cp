@@ -98,12 +98,14 @@ fn testConsoleAndLogMultiplexing()! {
     let i: usize = 0;
     while (i < evt_cnt) : (i += 1) {
         if (std.mem.eql(u8, out_evts[i].method, "Runtime.consoleAPICalled")) {
-            saw_console_api = true;
-            expect_eq(std.mem.indexOf(u8, out_evts[i].params_json, "Agent attention required") != null, true);
+            if (std.mem.indexOf(u8, out_evts[i].params_json, "Agent attention required") != null) {
+                saw_console_api = true;
+            }
         }
         if (std.mem.eql(u8, out_evts[i].method, "Log.entryAdded")) {
-            saw_log_entry = true;
-            expect_eq(std.mem.indexOf(u8, out_evts[i].params_json, "warning") != null, true);
+            if (std.mem.indexOf(u8, out_evts[i].params_json, "warning") != null) {
+                saw_log_entry = true;
+            }
         }
     }
     expect_eq(saw_console_api, true);

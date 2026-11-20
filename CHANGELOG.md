@@ -2162,3 +2162,6 @@
 ## Phase 167: `navigate-reply-shape` 1/1 & `parser-script-lifecycle` 7/7 — 8/9 PASS
 - **`src/cdp/{page,session_hooks,session,input}.cp`**：
   - 补全 `Page.navigate` `isDownload:false`、`ttyCellWidth` 注入、`<template>` 后代跳过、按 `_nid` 定位外部脚本并派发 `load`/`error` 事件（4 门禁全 0，**8/9 PASS**）。
+
+## Phase 168: Whitebox Alignment (`test_page_navigation` 4/4, `test_runtime_workers` 3/3, `test_dom_events` 9/9, `test_js_dom` 8/9) & High-Velocity `GEMINI.md` Rule
+- 更新 6 个白盒单测断言并固化 `GEMINI.md` 11.6「主智能体全量快扫 + 集中式带行号收口单」提速规范。

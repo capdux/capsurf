@@ -55,8 +55,18 @@ struct CdpTestClient {
     }
 
     fn readRaw(*_, buf: []u8): []const u8! {
-        const n = socketRead(_.fd, buf)? ;
-        return buf[0..n];
+        let total: usize = 0;
+        while (total < buf.len) {
+            const n = socketRead(_.fd, buf[total..]) catch break;
+            if (n == 0) break;
+            total += n;
+            if (hdr_end := std.mem.indexOf(u8, buf[0..total], "\r\n\r\n")) {
+                if (std.mem.startsWith(u8, buf[0..total], "HTTP/1.1 101")) break;
+                const body = buf[hdr_end + 4 .. total];
+                if (body.len > 0 && (body[body.len - 1] == '}' || body[body.len - 1] == ']')) break;
+            }
+        }
+        return buf[0..total];
     }
 
     fn sendClientWsFrame(*_, text: []const u8)! {
@@ -136,7 +146,7 @@ fn runHttpDiscoveryTest()! {
     const res2 = client2.readRaw(&buf2) catch unreachable;
 
     expect_eq(std.mem.indexOf(u8, res2, "200 OK") != null, true);
-    expect_eq(std.mem.indexOf(u8, res2, "capsurf-target-001") != null, true);
+    expect_eq(std.mem.indexOf(u8, res2, "\"id\": \"kitesurf\"") != null, true);
     expect_eq(std.mem.indexOf(u8, res2, "\"type\": \"page\"") != null, true);
 
     // 3. GET /json/new
@@ -207,79 +217,90 @@ fn runWebSocketCdpTest()! {
         "</div>\"}}";
     client.sendClientWsFrame(cmd_nav) catch unreachable;
 
-    const frame_opt2 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 2: {s}\n", .{frame_opt2 ?? "NULL"});
-    expect_eq(frame_opt2 != null, true);
-    if (f2 := frame_opt2) {
-        expect_eq(std.mem.indexOf(u8, f2, "\"id\":102") != null, true);
-        expect_eq(std.mem.indexOf(u8, f2, "frameId") != null, true);
+    // Read Page.navigate response + lifecycle events until all expected ones arrive
+    let got_nav_resp = false;
+    let got_frame_nav = false;
+    let got_dcl = false;
+    let got_load = false;
+    let nav_attempt: usize = 0;
+    while (nav_attempt < 16 && !(got_nav_resp && got_frame_nav && got_dcl && got_load)) : (nav_attempt += 1) {
+        const frame_opt = client.readClientWsFrame(&ws_buf) catch unreachable;
+        expect_eq(frame_opt != null, true);
+        if (fr := frame_opt) {
+            if (std.mem.indexOf(u8, fr, "\"id\":102") != null) {
+                expect_eq(std.mem.indexOf(u8, fr, "frameId") != null, true);
+                got_nav_resp = true;
+            }
+            if (std.mem.indexOf(u8, fr, "Page.frameNavigated") != null) got_frame_nav = true;
+            if (std.mem.indexOf(u8, fr, "Page.domContentEventFired") != null) got_dcl = true;
+            if (std.mem.indexOf(u8, fr, "Page.loadEventFired") != null) got_load = true;
+        }
     }
-
-    // Read emitted events: Page.frameNavigated, Page.domContentEventFired & Page.loadEventFired
-    const frame_evt1 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Event 1: {s}\n", .{frame_evt1 ?? "NULL"});
-    expect_eq(frame_evt1 != null, true);
-    if (fe1 := frame_evt1) {
-        expect_eq(std.mem.indexOf(u8, fe1, "Page.frameNavigated") != null, true);
-    }
-
-    const frame_evt2 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Event 2: {s}\n", .{frame_evt2 ?? "NULL"});
-    expect_eq(frame_evt2 != null, true);
-    if (fe2 := frame_evt2) {
-        expect_eq(std.mem.indexOf(u8, fe2, "Page.domContentEventFired") != null, true);
-    }
-
-    const frame_evt3 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Event 3: {s}\n", .{frame_evt3 ?? "NULL"});
-    expect_eq(frame_evt3 != null, true);
-    if (fe3 := frame_evt3) {
-        expect_eq(std.mem.indexOf(u8, fe3, "Page.loadEventFired") != null, true);
-    }
+    expect_eq(got_nav_resp, true);
+    expect_eq(got_frame_nav, true);
+    expect_eq(got_dcl, true);
+    expect_eq(got_load, true);
 
     // 4. CDP Command: DOM.querySelector
     const cmd_qs = "{\"id\":103,\"method\":\"DOM.querySelector\",\"params\":{\"selector\":\"#card\"}}";
     client.sendClientWsFrame(cmd_qs) catch unreachable;
 
-    const frame_opt3 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 3: {s}\n", .{frame_opt3 ?? "NULL"});
-    expect_eq(frame_opt3 != null, true);
     let card_node_id: i64 = 0;
-    if (f3 := frame_opt3) {
-        expect_eq(std.mem.indexOf(u8, f3, "\"id\":103") != null, true);
-        if (nid := extractJsonInt(f3, "nodeId")) {
-            card_node_id = nid;
+    let qs_attempt: usize = 0;
+    while (qs_attempt < 8) : (qs_attempt += 1) {
+        const frame_opt3 = client.readClientWsFrame(&ws_buf) catch unreachable;
+        expect_eq(frame_opt3 != null, true);
+        if (f3 := frame_opt3) {
+            if (std.mem.indexOf(u8, f3, "\"id\":103") != null) {
+                if (nid := extractJsonInt(f3, "nodeId")) {
+                    card_node_id = nid;
+                }
+                break;
+            }
         }
-        expect_eq(card_node_id > 0, true);
     }
+    expect_eq(card_node_id > 0, true);
 
     // 5. CDP Command: DOM.getBoxModel (Validates Screen Pixel Coordinates & Quads)
     let cmd_bm_buf: [256]u8 = [0; 256];
     const cmd_bm = std.fmt.bufPrint(&cmd_bm_buf, "{{\"id\":104,\"method\":\"DOM.getBoxModel\",\"params\":{{\"nodeId\":{d}}}}}", .{card_node_id}) catch "";
     client.sendClientWsFrame(cmd_bm) catch unreachable;
 
-    const frame_opt4 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 4: {s}\n", .{frame_opt4 ?? "NULL"});
-    expect_eq(frame_opt4 != null, true);
-    if (f4 := frame_opt4) {
-        expect_eq(std.mem.indexOf(u8, f4, "\"id\":104") != null, true);
-        // Card width is 400.0, height is 200.0
-        expect_eq(std.mem.indexOf(u8, f4, "\"width\":400") != null, true);
-        expect_eq(std.mem.indexOf(u8, f4, "\"height\":200") != null, true);
-        expect_eq(std.mem.indexOf(u8, f4, "\"border\":[") != null, true);
+    let got_bm = false;
+    let bm_attempt: usize = 0;
+    while (bm_attempt < 8) : (bm_attempt += 1) {
+        const frame_opt4 = client.readClientWsFrame(&ws_buf) catch unreachable;
+        expect_eq(frame_opt4 != null, true);
+        if (f4 := frame_opt4) {
+            if (std.mem.indexOf(u8, f4, "\"id\":104") != null) {
+                expect_eq(std.mem.indexOf(u8, f4, "\"width\":400") != null, true);
+                expect_eq(std.mem.indexOf(u8, f4, "\"height\":200") != null, true);
+                expect_eq(std.mem.indexOf(u8, f4, "\"border\":[") != null, true);
+                got_bm = true;
+                break;
+            }
+        }
     }
+    expect_eq(got_bm, true);
 
     // 6. CDP Command: Runtime.evaluate (JavaScript expression evaluation)
     const cmd_eval = "{\"id\":105,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"'Cap' + 'Surf' + ' ' + (2000 + 26)\"}}";
     client.sendClientWsFrame(cmd_eval) catch unreachable;
 
-    const frame_opt5 = client.readClientWsFrame(&ws_buf) catch unreachable;
-    std.debug.print("[DEBUG] Frame 5: {s}\n", .{frame_opt5 ?? "NULL"});
-    expect_eq(frame_opt5 != null, true);
-    if (f5 := frame_opt5) {
-        expect_eq(std.mem.indexOf(u8, f5, "\"id\":105") != null, true);
-        expect_eq(std.mem.indexOf(u8, f5, "CapSurf 2026") != null, true);
+    let got_eval = false;
+    let eval_attempt: usize = 0;
+    while (eval_attempt < 8) : (eval_attempt += 1) {
+        const frame_opt5 = client.readClientWsFrame(&ws_buf) catch unreachable;
+        expect_eq(frame_opt5 != null, true);
+        if (f5 := frame_opt5) {
+            if (std.mem.indexOf(u8, f5, "\"id\":105") != null) {
+                expect_eq(std.mem.indexOf(u8, f5, "CapSurf 2026") != null, true);
+                got_eval = true;
+                break;
+            }
+        }
     }
+    expect_eq(got_eval, true);
 }
 
 fn main() {

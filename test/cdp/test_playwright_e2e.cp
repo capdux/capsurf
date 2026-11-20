@@ -60,8 +60,18 @@ struct E2eClient {
     }
 
     fn readRaw(*_, buf: []u8): []const u8! {
-        const n = socketRead(_.fd, buf)? ;
-        return buf[0..n];
+        let total: usize = 0;
+        while (total < buf.len) {
+            const n = socketRead(_.fd, buf[total..]) catch break;
+            if (n == 0) break;
+            total += n;
+            if (hdr_end := std.mem.indexOf(u8, buf[0..total], "\r\n\r\n")) {
+                if (std.mem.startsWith(u8, buf[0..total], "HTTP/1.1 101")) break;
+                const body = buf[hdr_end + 4 .. total];
+                if (body.len > 0 && (body[body.len - 1] == '}' || body[body.len - 1] == ']')) break;
+            }
+        }
+        return buf[0..total];
     }
 
     fn sendWs(*_, text: []const u8)! {
@@ -195,13 +205,13 @@ fn testPlaywrightE2eFlow()! {
         "</div></body></html>\"}}";
     ws_client.sendWs(nav_cmd) catch unreachable;
 
-    // Read Page.navigate response and 3 lifecycle events
+    // Read Page.navigate response and lifecycle events
     let got_nav_resp = false;
     let got_frame_nav = false;
     let got_dcl = false;
     let got_load = false;
     attempt = 0;
-    while (attempt < 4) : (attempt += 1) {
+    while (attempt < 16 && !(got_nav_resp && got_frame_nav && got_dcl && got_load)) : (attempt += 1) {
         const frame = (ws_client.readWs(&ws_buf) catch unreachable).?;
         if (std.mem.indexOf(u8, frame, "\"id\":5") != null) got_nav_resp = true;
         if (std.mem.indexOf(u8, frame, "Page.frameNavigated") != null) got_frame_nav = true;
@@ -215,34 +225,71 @@ fn testPlaywrightE2eFlow()! {
 
     // 6. DOM Query & Geometry Inspection
     ws_client.sendWs("{\"id\":6,\"method\":\"DOM.querySelector\",\"params\":{\"nodeId\":1,\"selector\":\"#login-btn\"}}") catch unreachable;
-    const query_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
-    std.debug.print("[E2E Query Resp]: {s}\n", .{query_resp});
-    expect_eq(std.mem.indexOf(u8, query_resp, "\"id\":6") != null, true);
-    const target_nid = extractJsonInt(query_resp, "nodeId") ?? 0;
-    std.debug.print("[E2E Target NID]: {d}\n", .{target_nid});
+    let target_nid: i64 = 0;
+    attempt = 0;
+    while (attempt < 8) : (attempt += 1) {
+        const query_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
+        if (std.mem.indexOf(u8, query_resp, "\"id\":6") != null) {
+            if (nid := extractJsonInt(query_resp, "nodeId")) {
+                target_nid = nid;
+            }
+            break;
+        }
+    }
     expect_eq(target_nid > 0, true);
 
     let box_cmd_buf: [128]u8 = undefined;
     const box_cmd = std.fmt.bufPrint(&box_cmd_buf, "{{\"id\":7,\"method\":\"DOM.getBoxModel\",\"params\":{{\"nodeId\":{d}}}}}", .{target_nid}) catch "";
     ws_client.sendWs(box_cmd) catch unreachable;
-    const box_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
-    expect_eq(std.mem.indexOf(u8, box_resp, "\"width\":100") != null, true);
-    expect_eq(std.mem.indexOf(u8, box_resp, "\"height\":35") != null, true);
+    let got_box = false;
+    attempt = 0;
+    while (attempt < 8) : (attempt += 1) {
+        const box_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
+        if (std.mem.indexOf(u8, box_resp, "\"id\":7") != null) {
+            expect_eq(std.mem.indexOf(u8, box_resp, "\"width\":100") != null, true);
+            expect_eq(std.mem.indexOf(u8, box_resp, "\"height\":35") != null, true);
+            got_box = true;
+            break;
+        }
+    }
+    expect_eq(got_box, true);
 
     // 7. Interactive Click & JS Evaluation Check
     ws_client.sendWs("{\"id\":8,\"method\":\"Input.dispatchMouseEvent\",\"params\":{\"type\":\"mousePressed\",\"x\":25,\"y\":25,\"button\":\"left\"}}") catch unreachable;
-    * = (ws_client.readWs(&ws_buf) catch unreachable).?;
+    attempt = 0;
+    while (attempt < 8) : (attempt += 1) {
+        const click_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
+        if (std.mem.indexOf(u8, click_resp, "\"id\":8") != null) break;
+    }
 
     ws_client.sendWs("{\"id\":9,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"document.querySelector('#login-btn').getAttribute('data-action');\"}}") catch unreachable;
-    const eval_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
-    expect_eq(std.mem.indexOf(u8, eval_resp, "\"value\":\"login\"") != null, true);
+    let got_eval = false;
+    attempt = 0;
+    while (attempt < 8) : (attempt += 1) {
+        const eval_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
+        if (std.mem.indexOf(u8, eval_resp, "\"id\":9") != null) {
+            expect_eq(std.mem.indexOf(u8, eval_resp, "\"value\":\"login\"") != null, true);
+            got_eval = true;
+            break;
+        }
+    }
+    expect_eq(got_eval, true);
 
     // 8. Visual Screenshot Capture Check
     ws_client.sendWs("{\"id\":10,\"method\":\"Page.captureScreenshot\",\"params\":{\"format\":\"png\"}}") catch unreachable;
-    const shot_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
-    expect_eq(std.mem.indexOf(u8, shot_resp, "\"data\":") != null, true);
-    // Base64 PNG header begins with iVBORw0KGgo
-    expect_eq(std.mem.indexOf(u8, shot_resp, "iVBORw0KGgo") != null, true);
+    let got_shot = false;
+    attempt = 0;
+    while (attempt < 8) : (attempt += 1) {
+        const shot_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
+        if (std.mem.indexOf(u8, shot_resp, "\"id\":10") != null) {
+            expect_eq(std.mem.indexOf(u8, shot_resp, "\"data\":") != null, true);
+            // Base64 PNG header begins with iVBORw0KGgo
+            expect_eq(std.mem.indexOf(u8, shot_resp, "iVBORw0KGgo") != null, true);
+            got_shot = true;
+            break;
+        }
+    }
+    expect_eq(got_shot, true);
 }
 
 fn main() {

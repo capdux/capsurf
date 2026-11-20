@@ -4371,3 +4371,9 @@
   - 全部 4 个 `.cp` 文件 4 门禁全 0；
   - `navigate-reply-shape` (**1/1**)、`parser-script-lifecycle` (**7/7**)：**8/9 PASS**（`terminal-selection-after-navigation` `rect.cellW === 8` 已过）。
 - **清理旧子智能体**: 销毁 `b1ad9666-483b-4f70-b5b6-e640894bec11`。
+
+## [2026-11-21 00:32:00] 白盒单测对齐 (`test_page_navigation` 4/4, `test_runtime_workers` 3/3, `test_dom_events` 9/9, `test_js_dom` 8/9) & 固化终极提速规则 (Subagent a0a835ca & 7ebb6c98 结单，Phase 168)
+- **白盒单测同步 (`test/{cdp,js}/*.cp`)**: `test_page_navigation.cp` (**4/4**)、`test_runtime_workers.cp` (**3/3**)、`test_dom_events.cp` (**9/9**)、`test_js_dom.cp` (**8/9**，仅缺 `window.scheduler.postTask`)、`test_cdp.cp` (**1/2**)。
+- **Isolate 架构定位 (`Slot A 7ebb6c98`)**: 精准定位 `isolate-kill` (`target.cp:267` + `worker_budget.cp`) 与 `isolate-wall-cap` / `navigate-isolate-death` (`server.cp` `?ksWallCapMs` + `qjs_engine.cp` 墙钟)。
+- **规则固化 (`GEMINI.md` 11.6)**: 正式写入「主智能体一次性批量快扫全量测试 + 热文件集中式带行号高密收口单（1 次编译）」终极提速规则。
+- **清理旧子智能体**: 销毁 `a0a835ca-390b-49b4-9466-fcaff10f73f7` 与 `7ebb6c98-c8a8-4734-9762-86c0df7ae8d7`。

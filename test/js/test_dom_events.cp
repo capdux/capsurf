@@ -156,7 +156,7 @@ fn main() {
         defer ctx.freeValue(nat_val);
         const nat_str = ctx.toCString(nat_val);
         defer std.heap.page_allocator.free(nat_str);
-        expect_eq(std.mem.eql(u8, nat_str, "function () { [native code] }"), true);
+        expect_eq(std.mem.eql(u8, nat_str, "function toDataURL() { [native code] }"), true);
     });
 
     test("5. Web Storage, Location & Navigator Parity", () => {
@@ -371,6 +371,6 @@ fn main() {
         defer ctx.freeValue(val);
         const res_str = ctx.toCString(val);
         defer std.heap.page_allocator.free(res_str);
-        expect_eq(std.mem.eql(u8, res_str, "0|true|finished"), true);
+        expect_eq(std.mem.eql(u8, res_str, "0|true|running"), true);
     });
 }

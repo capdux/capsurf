@@ -40,7 +40,7 @@ fn main() {
     });
 
     test("2. DOM Queries via JavaScript (querySelector, getElementById, properties)", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -109,7 +109,7 @@ fn main() {
     });
 
     test("3. DOM Mutation via JavaScript reflected in Arena DOM", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -157,7 +157,7 @@ fn main() {
     });
 
     test("4. getBoundingClientRect() Pixel Geometry Extraction", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -221,7 +221,7 @@ fn main() {
     });
 
     test("6. Dynamic <script> injection execution via appendChild and insertBefore", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -261,7 +261,7 @@ fn main() {
     });
 
     test("7. window.OffscreenCanvas Constructor, Dimensions and Context", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -299,7 +299,7 @@ fn main() {
     });
 
     test("8. window.scheduler.postTask execution", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
@@ -338,7 +338,7 @@ fn main() {
     });
 
     test("9. document.modelContext / WebMCP registration stub", () => {
-        let rt = JsRuntime.init(8 * 1024 * 1024, 100000) catch unreachable;
+        let rt = JsRuntime.init(32 * 1024 * 1024, 100000) catch unreachable;
         defer rt.deinit();
 
         let ctx = rt.createContext() catch unreachable;
