@@ -135,6 +135,9 @@ pub struct MockFixtures {
         if (std.mem.indexOf(u8, path_or_url, "euckr-child.html") != null) {
             return "text/html; charset=euc-kr";
         }
+        if (std.mem.indexOf(u8, path_or_url, "/slow-css") != null) {
+            return "text/css; charset=utf-8";
+        }
         if (std.ascii.endsWithIgnoreCase(clean, ".html") || std.ascii.eqlIgnoreCase(clean, "html")) {
             return "text/html";
         } else if (std.ascii.endsWithIgnoreCase(clean, ".svg") || std.ascii.eqlIgnoreCase(clean, "svg")) {
@@ -1372,6 +1375,78 @@ pub struct MockFixtures {
             const len = @min(body.len, out_buf.len);
             @memcpy(out_buf[0..len], body[0..len]);
             return out_buf[0..len];
+        }
+
+        // 2.16. /slow-css
+        if (std.mem.indexOf(u8, url, "/slow-css") != null) {
+            const body = "#measured { width: 111px; height: 30px; }";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
+        // 2.17. /iframe-many.html?k=N&seed=S
+        if (std.mem.indexOf(u8, url, "/iframe-many.html") != null) {
+            let k_val: usize = 10;
+            if (raw_k := MockFixtures.extractQueryParam(url, "k")) {
+                const parsed_k = std.fmt.parseInt(usize, raw_k, 10) catch 10;
+                k_val = if (parsed_k < 1) @as(usize, 1) else if (parsed_k > 40) @as(usize, 40) else parsed_k;
+            }
+            let seed_val: i64 = 0;
+            if (raw_seed := MockFixtures.extractQueryParam(url, "seed")) {
+                seed_val = std.fmt.parseInt(i64, raw_seed, 10) catch 0;
+            }
+            let pos: usize = 0;
+            const head_s = std.fmt.bufPrint(
+                out_buf[pos..],
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>iframe-many {d}</title></head>\n<body style=\"margin:0\">",
+                .{ seed_val },
+            ) catch return null;
+            pos += head_s.len;
+            let idx: usize = 0;
+            while (idx < k_val) : (idx += 1) {
+                const child_seed = seed_val * 1000 + @as(i64, @intCast(idx));
+                const tag_s = std.fmt.bufPrint(
+                    out_buf[pos..],
+                    "<iframe src=\"/__fixtures/iframe-churn-child.html?seed={d}\" width=\"120\" height=\"80\" style=\"border:0\"></iframe>",
+                    .{ child_seed },
+                ) catch return null;
+                pos += tag_s.len;
+            }
+            const tail_s = "</body>\n</html>";
+            if (pos + tail_s.len > out_buf.len) return null;
+            @memcpy(out_buf[pos .. pos + tail_s.len], tail_s);
+            pos += tail_s.len;
+            return out_buf[0..pos];
+        }
+
+        // 2.18. /iframe-churn-child.html?seed=S
+        if (std.mem.indexOf(u8, url, "/iframe-churn-child.html") != null) {
+            let seed_val: i64 = 0;
+            if (raw_seed := MockFixtures.extractQueryParam(url, "seed")) {
+                seed_val = std.fmt.parseInt(i64, raw_seed, 10) catch 0;
+            }
+            let pos: usize = 0;
+            const head_s = std.fmt.bufPrint(
+                out_buf[pos..],
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>churn child {d}</title></head>\n<body style=\"margin:0;background:#0a0\">\n<div id=\"s\">{d}</div>\n",
+                .{ seed_val, seed_val },
+            ) catch return null;
+            pos += head_s.len;
+            let row: usize = 0;
+            while (row < 40 && pos + 128 < out_buf.len) : (row += 1) {
+                const row_s = std.fmt.bufPrint(
+                    out_buf[pos..],
+                    "<p class=\"r{d}\" data-seed=\"{d}\">row {d} of seed {d}</p>\n",
+                    .{ row, seed_val, row, seed_val },
+                ) catch break;
+                pos += row_s.len;
+            }
+            const tail_s = "</body>\n</html>";
+            if (pos + tail_s.len > out_buf.len) return null;
+            @memcpy(out_buf[pos .. pos + tail_s.len], tail_s);
+            pos += tail_s.len;
+            return out_buf[0..pos];
         }
 
         // 3. Static fixture files from e2e/page/

@@ -2277,3 +2277,6 @@
 
 ### Phase 205
 - Added `test/eval/test_oopif_render_and_page_renderer.cp` covering OOPIF viewport clamping, 16-slot coordinator reuse, and PageRenderer lazy/dispose/close state transitions.
+
+### Phase 206
+- Updated `src/cdp/page.cp`, `src/cdp/session.cp`, `src/cdp/target.cp`, `src/net/mock_fixtures.cp`, and `src/js/shim/window.js` (re-bundled to `runtime.js` / `runtime_source.cp`) to close `navigate-style-script-order`, `iframe-dom-reclaim`, and `post-load-settle`.

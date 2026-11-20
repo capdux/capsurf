@@ -169,8 +169,11 @@ fn collectFrameStates(
                 const owner_id = cols.next() ?? "";
                 addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id);
             }
+            appendDetachedKnownFrames(session, out_frames, url_storage, id_storage, &count);
             return count;
         }
+        appendDetachedKnownFrames(session, out_frames, url_storage, id_storage, &count);
+        return count;
     }
 
     let i: usize = 0;
@@ -183,18 +186,100 @@ fn collectFrameStates(
             addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id);
         }
     }
+    appendDetachedKnownFrames(session, out_frames, url_storage, id_storage, &count);
     return count;
+}
+
+fn appendDetachedKnownFrames(
+    session: *CdpPageSession,
+    out_frames: []FrameState,
+    url_storage: []u8,
+    id_storage: []u8,
+    count: *usize,
+) {
+    let ki: usize = 0;
+    while (ki < session.known_child_frame_count && count.* < out_frames.len) : (ki += 1) {
+        const kf = &session.known_child_frames[ki];
+        if (!kf.active || !kf.detached) continue;
+        const fidx = count.*;
+        const k_fid = kf.frame_id_buf[0..kf.frame_id_len];
+        let dup = false;
+        let ei: usize = 1;
+        while (ei < count.*) : (ei += 1) {
+            if (std.mem.eql(u8, out_frames[ei].frame_id, k_fid)) {
+                dup = true;
+                break;
+            }
+        }
+        if (dup) continue;
+        const f_dst = id_storage[fidx * 32 .. (fidx + 1) * 32];
+        const flen = @min(k_fid.len, f_dst.len);
+        @memcpy(f_dst[0..flen], k_fid[0..flen]);
+        const k_url = kf.url_buf[0..kf.url_len];
+        const u_dst = url_storage[fidx * 512 .. (fidx + 1) * 512];
+        const ulen = @min(k_url.len, u_dst.len);
+        @memcpy(u_dst[0..ulen], k_url[0..ulen]);
+        const pfid = if (kf.parent_frame_id_len > 0) kf.parent_frame_id_buf[0..kf.parent_frame_id_len] else session.frame_id;
+        out_frames[fidx] = makeChildFrameState(ChildFrameArgs{
+            frame_id: f_dst[0..flen],
+            parent_frame_id: pfid,
+            loader_id: session.loader_id,
+            url: u_dst[0..ulen],
+            name: kf.name_buf[0..kf.name_len],
+            owner_element_id: kf.owner_id_buf[0..kf.owner_id_len],
+            is_cross_origin: kf.is_cross_origin,
+        });
+        count.* += 1;
+    }
+}
+
+fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameState) {
+    let fi: usize = 1;
+    while (fi < frames.len) : (fi += 1) {
+        const cf = &frames[fi];
+        let found = false;
+        let ki: usize = 0;
+        while (ki < session.known_child_frame_count) : (ki += 1) {
+            if (session.known_child_frames[ki].active && std.mem.eql(u8, session.known_child_frames[ki].frame_id_buf[0..session.known_child_frames[ki].frame_id_len], cf.frame_id)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found && session.known_child_frame_count < session.known_child_frames.len) {
+            let k = &session.known_child_frames[session.known_child_frame_count];
+            k.active = true;
+            k.detached = false;
+            const fl = @min(cf.frame_id.len, k.frame_id_buf.len);
+            @memcpy(k.frame_id_buf[0..fl], cf.frame_id[0..fl]);
+            k.frame_id_len = fl;
+            const ul = @min(cf.url.len, k.url_buf.len);
+            @memcpy(k.url_buf[0..ul], cf.url[0..ul]);
+            k.url_len = ul;
+            const nl = @min(cf.name.len, k.name_buf.len);
+            @memcpy(k.name_buf[0..nl], cf.name[0..nl]);
+            k.name_len = nl;
+            const ol = @min(cf.owner_element_id.len, k.owner_id_buf.len);
+            @memcpy(k.owner_id_buf[0..ol], cf.owner_element_id[0..ol]);
+            k.owner_id_len = ol;
+            const pf = cf.parent_frame_id ?? session.frame_id;
+            const pfl = @min(pf.len, k.parent_frame_id_buf.len);
+            @memcpy(k.parent_frame_id_buf[0..pfl], pf[0..pfl]);
+            k.parent_frame_id_len = pfl;
+            k.is_cross_origin = cf.is_cross_origin;
+            session.known_child_frame_count += 1;
+        }
+    }
 }
 
 fn syncIframeTargets(session: *CdpPageSession, clear_existing: bool) {
     if (clear_existing) {
         session.target_registry.clearIframeTargets();
     }
-    const f_arr = session.allocator.alloc(FrameState, 8) catch return;
+    const f_arr = session.allocator.alloc(FrameState, 48) catch return;
     defer session.allocator.free(f_arr);
-    const url_storage = session.allocator.alloc(u8, 8 * 512) catch return;
+    const url_storage = session.allocator.alloc(u8, 48 * 512) catch return;
     defer session.allocator.free(url_storage);
-    const id_storage = session.allocator.alloc(u8, 8 * 32) catch return;
+    const id_storage = session.allocator.alloc(u8, 48 * 32) catch return;
     defer session.allocator.free(id_storage);
 
     const f_count = collectFrameStates(session, f_arr, url_storage, id_storage);
@@ -213,12 +298,12 @@ pub fn emitNewChildFrameEvents(
     event_count: *usize,
 ) {
     if (!session.has_document) return;
-    const nav_frames = session.allocator.alloc(FrameState, 8) catch return;
-    const nav_urls = session.allocator.alloc(u8, 8 * 512) catch {
+    const nav_frames = session.allocator.alloc(FrameState, 48) catch return;
+    const nav_urls = session.allocator.alloc(u8, 48 * 512) catch {
         session.allocator.free(nav_frames);
         return;
     };
-    const nav_ids = session.allocator.alloc(u8, 8 * 32) catch {
+    const nav_ids = session.allocator.alloc(u8, 48 * 32) catch {
         session.allocator.free(nav_frames);
         session.allocator.free(nav_urls);
         return;
@@ -228,6 +313,58 @@ pub fn emitNewChildFrameEvents(
     defer session.allocator.free(nav_ids);
 
     const nav_frame_count = collectFrameStates(session, nav_frames, nav_urls, nav_ids);
+
+    // Detect detached child frames (known attached frames whose owner element is no longer in DOM)
+    {
+        const dom_urls_js = "(function(){try{if(typeof document==='undefined'||!document.querySelectorAll)return '';var fs=document.querySelectorAll('iframe');var out=[];for(var i=0;i<fs.length;i++){var f=fs[i];var id=(f.getAttribute&&f.getAttribute('id'))||'';out.push(id);}return out.join('|');}catch(e){return '';}})()";
+        const dv = session.ctx.eval(dom_urls_js);
+        defer session.ctx.freeValue(dv);
+        const dcstr = session.ctx.toCString(dv);
+        let dom_count: usize = 0;
+        if (dcstr.len > 0) {
+            dom_count = 1;
+            let ci: usize = 0;
+            while (ci < dcstr.len) : (ci += 1) {
+                if (dcstr[ci] == '|') dom_count += 1;
+            }
+        } else {
+            const cnt_v = session.ctx.eval("(function(){try{return document.querySelectorAll('iframe').length;}catch(e){return 0;}})()");
+            const cnt_i = session.ctx.toInt64(cnt_v) catch 0;
+            session.ctx.freeValue(cnt_v);
+            if (cnt_i > 0) dom_count = @as(usize, @intCast(cnt_i));
+        }
+        let ki: usize = 0;
+        while (ki < session.known_child_frame_count && event_count.* < out_events.len) : (ki += 1) {
+            let kf = &session.known_child_frames[ki];
+            if (!kf.active || kf.detached) continue;
+            let still_present = false;
+            if (dom_count > 0) {
+                const k_oid = kf.owner_id_buf[0..kf.owner_id_len];
+                if (k_oid.len > 0 && dcstr.len > 0) {
+                    let drows2 = std.mem.splitScalar(u8, dcstr, '|');
+                    while (drow := drows2.next()) {
+                        if (std.mem.eql(u8, drow, k_oid)) {
+                            still_present = true;
+                            break;
+                        }
+                    }
+                } else if (ki < dom_count) {
+                    still_present = true;
+                }
+            }
+            if (!still_present) {
+                kf.detached = true;
+                const det_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"reason\":\"remove\"}}",
+                    .{ kf.frame_id_buf[0..kf.frame_id_len] },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameDetached", det_json);
+                event_count.* += 1;
+            }
+        }
+    }
+
     const total_children: usize = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
     if (total_children <= session.emitted_child_frame_count) return;
 
@@ -316,6 +453,7 @@ pub fn emitNewChildFrameEvents(
         }
     }
     session.emitted_child_frame_count = total_children;
+    recordAttachedChildFrames(session, nav_frames[0..nav_frame_count]);
     syncIframeTargets(session, true);
 }
 
@@ -1000,9 +1138,9 @@ pub struct PageHandler {
             }
 
             // Emit child/grandchild frame execution context and frameStoppedLoading events
-            const nav_frames = session.allocator.alloc(FrameState, 8) catch null;
-            const nav_urls = session.allocator.alloc(u8, 8 * 512) catch null;
-            const nav_ids = session.allocator.alloc(u8, 8 * 32) catch null;
+            const nav_frames = session.allocator.alloc(FrameState, 48) catch null;
+            const nav_urls = session.allocator.alloc(u8, 48 * 512) catch null;
+            const nav_ids = session.allocator.alloc(u8, 48 * 32) catch null;
             defer if (nav_frames != null) session.allocator.free(nav_frames.?);
             defer if (nav_urls != null) session.allocator.free(nav_urls.?);
             defer if (nav_ids != null) session.allocator.free(nav_ids.?);
@@ -1076,6 +1214,7 @@ pub struct PageHandler {
                     }
                 }
                 session.emitted_child_frame_count = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
+                recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
             }
 
             if (session.css_enabled) {
@@ -1139,13 +1278,13 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.getFrameTree")) {
-            const f_arr = session.allocator.alloc(FrameState, 8) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const f_arr = session.allocator.alloc(FrameState, 48) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(f_arr);
-            const url_storage = session.allocator.alloc(u8, 8 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const url_storage = session.allocator.alloc(u8, 48 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(url_storage);
-            const id_storage = session.allocator.alloc(u8, 8 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const id_storage = session.allocator.alloc(u8, 48 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(id_storage);
-            const tree_buf = session.allocator.alloc(u8, 8192) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const tree_buf = session.allocator.alloc(u8, 32768) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(tree_buf);
 
             const f_count = collectFrameStates(session, f_arr, url_storage, id_storage);
@@ -1169,13 +1308,13 @@ pub struct PageHandler {
 
         if (std.mem.eql(u8, req.method, "Page.getFrameResourceTree") ||
             std.mem.eql(u8, req.method, "Page.getResourceTree")) {
-            const f_arr = session.allocator.alloc(FrameState, 8) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const f_arr = session.allocator.alloc(FrameState, 48) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(f_arr);
-            const url_storage = session.allocator.alloc(u8, 8 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const url_storage = session.allocator.alloc(u8, 48 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(url_storage);
-            const id_storage = session.allocator.alloc(u8, 8 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const id_storage = session.allocator.alloc(u8, 48 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(id_storage);
-            const tree_buf = session.allocator.alloc(u8, 8192) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            const tree_buf = session.allocator.alloc(u8, 32768) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(tree_buf);
 
             const f_count = collectFrameStates(session, f_arr, url_storage, id_storage);

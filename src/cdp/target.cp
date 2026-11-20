@@ -71,7 +71,7 @@ pub struct TargetItem {
 }
 
 pub struct TargetRegistry {
-    targets: [16]TargetItem = [TargetItem{}; 16],
+    targets: [48]TargetItem = [TargetItem{}; 48],
     contexts: [8]BrowserContextState = [BrowserContextState{}; 8],
     next_target_id: u32 = 2,
     next_context_id: u32 = 1,
@@ -88,7 +88,7 @@ pub struct TargetRegistry {
 
     static fn init(): TargetRegistry {
         let reg = TargetRegistry {
-            targets: [TargetItem{}; 16],
+            targets: [TargetItem{}; 48],
             contexts: [BrowserContextState{}; 8],
             next_target_id: 2,
             next_context_id: 1,

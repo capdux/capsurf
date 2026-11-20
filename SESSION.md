@@ -4561,3 +4561,8 @@
 ### Phase 205: Pure-CP OOPIF & PageRenderer Whitebox Tests (Slot A)
 - **Subagent**: `db495e73` (killed after completion)
 - **Result**: `test/eval/test_oopif_render_and_page_renderer.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 862ms; covering `clampFrameViewport`, `OopifRenderCoordinator` 16-slot reuse, `PageRendererManager` DPR/laziness/`dispose`/`close` lifecycle).
+
+### Phase 206: CDP NavOrder, FrameDetached & PostLoad Settle Closure (Slot B)
+- **Subagent**: `bfbee30d` (killed after completion)
+- **Fixes**: `src/cdp/{page,session,target}.cp`, `src/net/mock_fixtures.cp`, `src/js/shim/window.js` (`isExecutingTask` guard in `drainOneTask`/`scheduleTaskDrain` preventing 0ms self-rescheduling timers from exhausting `microtaskDrainBudget` / QuickJS interrupt limit).
+- **Results (`bin_19233/main`, port `19233`)**: `e2e/demo/navigate-style-script-order.e2e.test.ts` **3/3 PASS**, `e2e/iframe-dom-reclaim.e2e.test.ts` **2/2 PASS (1 upstream skip)**, `e2e/post-load-settle.e2e.test.ts` **7/7 PASS**.

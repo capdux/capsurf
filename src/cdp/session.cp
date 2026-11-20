@@ -711,6 +711,38 @@ fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): 
     return rel;
 }
 
+pub struct KnownChildFrame {
+    active: bool = false,
+    detached: bool = false,
+    frame_id_buf: [32]u8 = [0; 32],
+    frame_id_len: usize = 0,
+    url_buf: [512]u8 = [0; 512],
+    url_len: usize = 0,
+    name_buf: [64]u8 = [0; 64],
+    name_len: usize = 0,
+    owner_id_buf: [64]u8 = [0; 64],
+    owner_id_len: usize = 0,
+    parent_frame_id_buf: [32]u8 = [0; 32],
+    parent_frame_id_len: usize = 0,
+    is_cross_origin: bool = false,
+
+    fn frameId(): []const u8 {
+        return _.frame_id_buf[0.._.frame_id_len];
+    }
+    fn url(): []const u8 {
+        return _.url_buf[0.._.url_len];
+    }
+    fn name(): []const u8 {
+        return _.name_buf[0.._.name_len];
+    }
+    fn ownerId(): []const u8 {
+        return _.owner_id_buf[0.._.owner_id_len];
+    }
+    fn parentFrameId(): []const u8 {
+        return _.parent_frame_id_buf[0.._.parent_frame_id_len];
+    }
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -821,6 +853,8 @@ pub struct CdpPageSession {
     iframe_frame_id_len: usize = 0,
     pending_iframe_ctx_event: bool = false,
     emitted_child_frame_count: usize = 0,
+    known_child_frames: [48]KnownChildFrame = [KnownChildFrame{}; 48],
+    known_child_frame_count: usize = 0,
     net_req_seq: u64 = 0,
 
     // Navigation History state
@@ -1740,6 +1774,14 @@ pub struct CdpPageSession {
         _.iframe_ctx_created = false;
         _.pending_iframe_ctx_event = false;
         _.emitted_child_frame_count = 0;
+        {
+            let kci: usize = 0;
+            while (kci < _.known_child_frames.len) : (kci += 1) {
+                _.known_child_frames[kci].active = false;
+                _.known_child_frames[kci].detached = false;
+            }
+            _.known_child_frame_count = 0;
+        }
         _.net_req_seq = 0;
         _.rotateIsolatedWorldsOnNavigate();
 
@@ -1919,7 +1961,7 @@ pub struct CdpPageSession {
         }
 
         // Sync viewport resolution into JS environment
-        let set_vp_buf: [256]u8 = undefined;
+        let set_vp_buf: [512]u8 = undefined;
         const set_vp_script = std.fmt.bufPrint(
             &set_vp_buf,
             "(function(){{const w={d};const h={d};if(typeof window!=='undefined'){{window.innerWidth=w;window.innerHeight=h;}}if(typeof global!=='undefined'){{global.innerWidth=w;global.innerHeight=h;}}if(typeof globalThis!=='undefined'){{globalThis.innerWidth=w;globalThis.innerHeight=h;}}}})()",
@@ -2381,6 +2423,13 @@ pub struct CdpPageSession {
             }
         }
 
+        let pre_zt: i64 = 0;
+        {
+            const pre_zt_v = _.ctx.eval("(function(){return (typeof globalThis.__ks_zeroTurns==='number')?globalThis.__ks_zeroTurns:0;})()");
+            pre_zt = _.ctx.toInt64(pre_zt_v) catch 0;
+            _.ctx.freeValue(pre_zt_v);
+        }
+
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, async scripts, load on window)
         if (async_scripts.items.len > 0) {
             const dcl_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){var ss=document.querySelectorAll?document.querySelectorAll('script'):[];for(var i=0;i<ss.length;i++)ss[i]._alreadyStarted=true;document._readyState='interactive';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));if(document.dispatchEvent)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:false}));}})()");
@@ -2403,6 +2452,45 @@ pub struct CdpPageSession {
         } else {
             const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
             _.ctx.freeValue(lc_res);
+        }
+        // Post-load settle loop: pump 0ms timers in bounded passes (max 4) via globalThis.setTimeout
+        // so settle-probe.html accounts for settle turns, stopping early if no due 0ms timers or no DOM mutations.
+        {
+            const settle_mo_init = _.ctx.eval("(function(){globalThis.__capsurf_settle_muts=0;if(typeof document==='undefined'||typeof MutationObserver==='undefined')return;try{var mo=new MutationObserver(function(recs){globalThis.__capsurf_settle_muts+=(recs?recs.length:1);});mo.observe(document.documentElement||document,{subtree:true,childList:true,attributes:true,characterData:true});globalThis.__capsurf_settle_mo=mo;}catch(e){}})()");
+            _.ctx.freeValue(settle_mo_init);
+
+            let settle_pass: usize = 0;
+            while (settle_pass < 4) : (settle_pass += 1) {
+                const cur_zt_v = _.ctx.eval("(function(){globalThis.__capsurf_settle_muts=0;return (typeof globalThis.__ks_zeroTurns==='number')?globalThis.__ks_zeroTurns:0;})()");
+                const cur_zt = _.ctx.toInt64(cur_zt_v) catch 0;
+                _.ctx.freeValue(cur_zt_v);
+
+                const pump_v = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
+                const next_ms = _.ctx.toInt64(pump_v) catch -1;
+                _.ctx.freeValue(pump_v);
+                if (next_ms != 0) break;
+
+                _.ctx.drainJobs();
+
+                const mut_v = _.ctx.eval("(function(){try{var c=globalThis.__capsurf_settle_muts|0;if(globalThis.__capsurf_settle_mo)c+=globalThis.__capsurf_settle_mo.takeRecords().length;globalThis.__capsurf_settle_muts=0;return c;}catch(e){}return 0;})()");
+                let mut_cnt: i32 = 0;
+                * = JS_ToInt32(_.ctx.raw_ctx, &mut_cnt, mut_v);
+                _.ctx.freeValue(mut_v);
+
+                if (settle_pass == 0) {
+                    if (cur_zt <= pre_zt && mut_cnt <= 0) break;
+                } else {
+                    if (mut_cnt <= 0) break;
+                }
+
+                const mark_v = _.ctx.eval("(function(){if(typeof globalThis.setTimeout==='function'){globalThis.setTimeout(function(){},0);}})()");
+                _.ctx.freeValue(mark_v);
+                _.pumpTimers();
+                _.ctx.drainJobs();
+                if (mut_cnt <= 0) break;
+            }
+            const settle_mo_cleanup = _.ctx.eval("(function(){try{if(globalThis.__capsurf_settle_mo){globalThis.__capsurf_settle_mo.disconnect();delete globalThis.__capsurf_settle_mo;}delete globalThis.__capsurf_settle_muts;}catch(e){}})()");
+            _.ctx.freeValue(settle_mo_cleanup);
         }
         if (_.webmcp_enabled) {
             const wm_scan = _.ctx.eval("(function(){if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.scanDecl();})()");

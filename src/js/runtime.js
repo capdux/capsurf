@@ -29806,7 +29806,16 @@
       taskQueue.splice(low, 0, item);
     }
 
-    function scheduleTaskDrain() {
+    let microtaskDrainBudget = 0;
+    let isExecutingTask = false;
+
+    function scheduleTaskDrain(fromDrain) {
+      if (isExecutingTask) return;
+      if (!fromDrain) {
+        microtaskDrainBudget = 0;
+      } else if (microtaskDrainBudget >= 32) {
+        return;
+      }
       if (isDrainingTasks) return;
       if (messageTaskQueue.length > 0) {
         isDrainingTasks = true;
@@ -29829,14 +29838,18 @@
 
     function drainOneTask() {
       isDrainingTasks = false;
+      microtaskDrainBudget++;
       if (messageTaskQueue.length > 0) {
         const msgTask = messageTaskQueue.shift();
+        isExecutingTask = true;
         try {
           msgTask();
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
+        } finally {
+          isExecutingTask = false;
         }
-        scheduleTaskDrain();
+        scheduleTaskDrain(true);
         return;
       }
       while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
@@ -29855,6 +29868,7 @@
         activeTimers.delete(item.id);
       }
 
+      isExecutingTask = true;
       try {
         if (typeof item.cb === "function") {
           item.cb.apply(global, item.args);
@@ -29863,6 +29877,8 @@
         }
       } catch (e) {
         if (typeof console !== "undefined" && console.error) console.error(e);
+      } finally {
+        isExecutingTask = false;
       }
 
       if (item.isInterval && activeTimers.has(item.id)) {
@@ -29874,7 +29890,7 @@
       while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
         taskQueue.shift();
       }
-      scheduleTaskDrain();
+      scheduleTaskDrain(true);
     }
 
     global.__capsurf_pump_timers = function () {
