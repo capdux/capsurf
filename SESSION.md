@@ -4586,3 +4586,7 @@
 ### Phase 211: Pure-CP Eval PageScript, Tail & RPC Session Whitebox Tests (Slot A)
 - **Subagent**: `fff1166f` (killed after completion)
 - **Result**: `test/eval/test_page_script_and_tail.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 889ms; covering `pageScriptCacheKey`/`hostnameOf`/`originOf`, `formatRemoteObject`/`formatConsoleLogEntry`, `PageScriptTail` 100-cap/kill-marker/`formatOtelRecord`, and `PageScriptRpcSession` 64-inflight/timeout/teardown).
+
+### Phase 212: Pure-CP Eval EngineErrors, IsolateId & PageIsolateEntry Whitebox Tests (Slot A)
+- **Subagent**: `c7426186` (killed after completion)
+- **Result**: `test/eval/test_engine_errors_and_isolate_id.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 929ms; covering `classifyOrigin`/`parseKsErrLine` field bounds, RFC 4122 UUIDv4 `engineIsolateId` uniqueness/foreign check, and `pageIsolateEntry` JS identifier/buffer guards).

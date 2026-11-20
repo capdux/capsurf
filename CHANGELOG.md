@@ -2292,3 +2292,6 @@
 
 ### Phase 211
 - Added `test/eval/test_page_script_and_tail.cp` covering page script cache keys/formatting, tail log truncation/OTel serialization, and RPC session inflight/timeout/teardown tracking.
+
+### Phase 212
+- Added `test/eval/test_engine_errors_and_isolate_id.cp` covering error origin classification/parsing, isolate UUIDv4 identity lifecycle, and page isolate entry source validation.
