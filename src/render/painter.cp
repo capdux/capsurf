@@ -3166,6 +3166,22 @@ fn paintNodeRecursive(
                 canvas.drawTextClipped(r.x + pad_l + 1.0, r.y + pad_t + 2.0, before_pseudo_txt, paint_style.text_color, active_clip);
             }
         }
+        if (style.has_after_content && style.after_content_len > 0 && paint_style.text_color.a > 0) {
+            const after_pseudo_txt = style.after_content_buf[0..style.after_content_len];
+            const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+            const pad_r = style.padding_right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+            const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+            const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+            const after_w = LayoutTree.measureTextSegmentWithTabs(after_pseudo_txt, style, 0.0);
+            const draw_x = @max(r.x + pad_l, r.x + r.width - pad_r - after_w);
+            if (fsz >= 14.0) {
+                const scaled_h = fsz * 0.65;
+                const draw_y = r.y + pad_t + @max(0.0, (r.height - pad_t - scaled_h) * 0.5);
+                canvas.drawScaledTextClipped(draw_x, draw_y, after_pseudo_txt, scaled_h, paint_style.text_color, active_clip);
+            } else {
+                canvas.drawTextClipped(draw_x + 1.0, r.y + pad_t + 2.0, after_pseudo_txt, paint_style.text_color, active_clip);
+            }
+        }
 
         if (node_id == opts.focused_node && is_form_text) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);

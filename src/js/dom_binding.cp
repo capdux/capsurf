@@ -120,11 +120,11 @@ pub struct DomMutationRecord {
     val_buf: [512]u8 = [0; 512],
     val_len: usize = 0,
 
-    fn getName(): []const u8 {
+    fn getName(*_): []const u8 {
         return _.name_buf[0.._.name_len];
     }
 
-    fn getValue(): []const u8 {
+    fn getValue(*_): []const u8 {
         return _.val_buf[0.._.val_len];
     }
 }

@@ -149,9 +149,46 @@ fn testPseudoBefore(alloc: std.mem.Allocator)! {
     std.debug.print("PASS 3: ::before pseudo-element layout (ctrl={d:.2}, block={d:.2}, ib={d:.2}, flex={d:.2}, btn={d:.2})\n", .{ ctrl_w, blk_w, ib_w, flex_w, btn_w });
 }
 
+fn testNestedInlinePseudo(alloc: std.mem.Allocator)! {
+    const css =
+        ".icon:before { content: \"XY\"; font-size: 40px; color: red; }\n" +
+        ".both::before { content: \"A\"; }\n" +
+        ".both::after { content: \"B\"; }\n";
+
+    let doc = Document.init(alloc)?;
+    defer doc.deinit();
+    doc.parseHtml(
+        "<html><body>" +
+        "<div><span id=\"sp\"><i id=\"ic\" class=\"icon\"></i></span>tail</div>" +
+        "<div><span id=\"sp2\"><i id=\"ic2\" class=\"both\"></i></span>tail</div>" +
+        "</body></html>"
+    )?;
+
+    const sheet = StyleSheet.parse(css, 800.0, false);
+    const count = doc.nodeCount();
+    let styles: []ComputedStyle = alloc.alloc(ComputedStyle, count)?;
+    defer alloc.free(styles);
+    Cascade.computeStyles(&doc, &sheet, styles, 16.0);
+
+    let layout = LayoutTree.init(alloc, 800.0, 600.0)?;
+    defer layout.deinit();
+    layout.computeLayout(&doc, styles)?;
+
+    const ic_r = layout.getBoundingClientRect(doc.getElementById("ic"));
+    const sp_r = layout.getBoundingClientRect(doc.getElementById("sp"));
+    const ic2_r = layout.getBoundingClientRect(doc.getElementById("ic2"));
+    const sp2_r = layout.getBoundingClientRect(doc.getElementById("sp2"));
+
+    assertTrue(ic_r.width > 5.0 && ic_r.height > 5.0, "nested inline :before must have non-zero size");
+    assertTrue(sp_r.width >= ic_r.width, "parent inline span must enclose nested :before");
+    assertTrue(ic2_r.width > 5.0 && sp2_r.width >= ic2_r.width, "nested inline ::before + ::after must have non-zero size");
+    std.debug.print("PASS 4: nested inline :before/::after layout (ic={d:.2}x{d:.2}, sp={d:.2}, ic2={d:.2})\n", .{ ic_r.width, ic_r.height, sp_r.width, ic2_r.width });
+}
+
 pub fn main()! {
     const alloc: std.mem.Allocator = std.heap.page_allocator;
     testWebfontCors(alloc)?;
     testUnicodeRange(alloc)?;
     testPseudoBefore(alloc)?;
+    testNestedInlinePseudo(alloc)?;
 }

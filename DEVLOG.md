@@ -1609,6 +1609,10 @@
 ## Phase 142 延迟定时器占位 ID 取消方案 (`src/js/shim/window.js`)
 1. **同步取消 `__capsurf_deferred_timers`**：`session_hooks.cp` 在 `__capsurf_defer_timers` 期间返回 `900000 + idx` 占位 ID；在 `window.js` `clearTimeout` 中同步识别 `> 900000` 并清空对应槽位数组，确保后续 flush 不再执行已取消回调。
 
+## Phase 144 `DomMutationRecord` 接收者生命周期与嵌套行内伪元素方案
+1. **指针接收者防悬垂 (`src/js/dom_binding.cp`)**：`DomMutationRecord.getName()`/`getValue()` 必须使用 `*_` 指针接收者返回指向原结构体内部缓冲的切片，严禁按值拷贝后返回栈临时切片。
+2. **伪元素单双冒号兼容与并集包围 (`cascade.cp`, `layout.cp`, `painter.cp`)**：统一兼容 `:before`/`:after` 与 `::before`/`::after`，在 `flushInlineLine` 对同时存在前后伪元素的行内节点取矩形并集，并完整绘制 `has_after_content`。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。

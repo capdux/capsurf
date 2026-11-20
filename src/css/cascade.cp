@@ -4618,6 +4618,34 @@ pub struct Cascade {
         return null;
     }
 
+    static fn findBeforePseudo(raw_sel: []const u8): usize? {
+        if (p := std.mem.indexOf(u8, raw_sel, "::before")) return p;
+        let i: usize = 0;
+        while (i < raw_sel.len) : (i += 1) {
+            if (raw_sel[i] == ':') {
+                if (i + 8 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 8], "::before")) return i;
+                if (i + 7 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 7], ":before")) {
+                    if (i + 7 == raw_sel.len || raw_sel[i + 7] == ' ' || raw_sel[i + 7] == '\t') return i;
+                }
+            }
+        }
+        return null;
+    }
+
+    static fn findAfterPseudo(raw_sel: []const u8): usize? {
+        if (p := std.mem.indexOf(u8, raw_sel, "::after")) return p;
+        let i: usize = 0;
+        while (i < raw_sel.len) : (i += 1) {
+            if (raw_sel[i] == ':') {
+                if (i + 7 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 7], "::after")) return i;
+                if (i + 6 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 6], ":after")) {
+                    if (i + 6 == raw_sel.len || raw_sel[i + 6] == ' ' || raw_sel[i + 6] == '\t') return i;
+                }
+            }
+        }
+        return null;
+    }
+
     static fn findPlaceholderPseudo(raw_sel: []const u8): usize? {
         if (p := std.mem.indexOf(u8, raw_sel, "::placeholder")) return p;
         if (p := std.mem.indexOf(u8, raw_sel, "::-webkit-input-placeholder")) return p;
@@ -4816,7 +4844,7 @@ pub struct Cascade {
                             }
                             matched_placeholder_pseudo = true;
                         }
-                    } else if (bp := std.mem.indexOf(u8, raw_sel, "::before")) {
+                    } else if (bp := Cascade.findBeforePseudo(raw_sel)) {
                         if (!matched_before_pseudo) {
                             const base_raw = std.mem.trim(u8, raw_sel[0..bp], " \t\r\n");
                             const base_sel_str = if (base_raw.len > 0) base_raw else "*";
@@ -4825,7 +4853,7 @@ pub struct Cascade {
                                 matched_before_pseudo = true;
                             }
                         }
-                    } else if (ap := std.mem.indexOf(u8, raw_sel, "::after")) {
+                    } else if (ap := Cascade.findAfterPseudo(raw_sel)) {
                         if (!matched_after_pseudo) {
                             const base_raw = std.mem.trim(u8, raw_sel[0..ap], " \t\r\n");
                             const base_sel_str = if (base_raw.len > 0) base_raw else "*";
@@ -4834,7 +4862,7 @@ pub struct Cascade {
                                 matched_after_pseudo = true;
                             }
                         }
-                    } else if (std.mem.indexOf(u8, raw_sel, "::") == null) {
+                    } else if (std.mem.indexOf(u8, raw_sel, "::") == null && Cascade.findBeforePseudo(raw_sel) == null && Cascade.findAfterPseudo(raw_sel) == null) {
                         has_non_pseudo_sel = true;
                     }
                 }

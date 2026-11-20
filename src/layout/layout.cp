@@ -3148,13 +3148,30 @@ pub struct LayoutTree {
                 const t_nat = tst.naturalLineHeight();
                 const text_y = line_y + baseline_y - t_asc;
                 const vis = (tst.visibility == Visibility.Visible);
-                _.boxes.items[@as(usize, it.node_id)].rect = Rect {
+                const new_rect = Rect {
                     x: content_x + it.line_x,
                     y: text_y,
                     width: it.width,
                     height: if (it.wrapped_lines > 1) (@as(f32, @floatFromInt(it.wrapped_lines)) * single_line_h) else t_nat,
                     visible: vis,
                 };
+                const is_elem_pseudo = (doc.nodes.items[@as(usize, it.node_id)].node_type == NodeType.Element);
+                if (is_elem_pseudo && (_.boxes.items[@as(usize, it.node_id)].rect.width > 0.0 || _.boxes.items[@as(usize, it.node_id)].rect.height > 0.0)) {
+                    const prev_r = _.boxes.items[@as(usize, it.node_id)].rect;
+                    const ux0 = @min(prev_r.x, new_rect.x);
+                    const uy0 = @min(prev_r.y, new_rect.y);
+                    const ux1 = @max(prev_r.x + prev_r.width, new_rect.x + new_rect.width);
+                    const uy1 = @max(prev_r.y + prev_r.height, new_rect.y + new_rect.height);
+                    _.boxes.items[@as(usize, it.node_id)].rect = Rect {
+                        x: ux0,
+                        y: uy0,
+                        width: ux1 - ux0,
+                        height: uy1 - uy0,
+                        visible: vis || prev_r.visible,
+                    };
+                } else {
+                    _.boxes.items[@as(usize, it.node_id)].rect = new_rect;
+                }
                 const tr = content_x + it.line_x + it.width;
                 if (tr > max_child_right.*) max_child_right.* = tr;
             } else if (it.kind == InlineItemKind.Atomic) {

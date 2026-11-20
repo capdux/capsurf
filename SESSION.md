@@ -4175,6 +4175,17 @@
 - **精准跨模块定位（留交 Slot B）**：`e2e/demo/absolute-path-transitive-demo.e2e.test.ts` 模块加载/执行均通过，仅缺 `src/cdp/session.cp:558-661` `sessionModuleLoader` 补充 `addFetchRecord(..., "application/javascript")` 与 `:3798` `"Script"` 归类。
 - **清理旧子智能体**: 销毁 `07a248cf-7d9b-4cfc-bfdd-c9b23b7d60f0`。
 
+## [2026-11-20 23:31:00] 修复 `DomMutationRecord` 栈悬垂与嵌套行内 `:before`/`::after` 全链路闭环 (Subagent 3abd3cf2 结单，Phase 144)
+- **栈悬垂修复与伪元素级联/布局/绘制 (`src/js/dom_binding.cp`, `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`, `test/css/test_font_face_pseudo.cp`)**:
+  - `dom_binding.cp:123-129`：`DomMutationRecord.getName()`/`getValue()` 改用指针接收者 `*_`，彻底消除栈悬垂切片；
+  - `cascade.cp`：新增 `findBeforePseudo`/`findAfterPseudo` 兼容单冒号 `:before`/`:after` 与双冒号；
+  - `layout.cp` & `painter.cp`：`flushInlineLine` 对 `::before`+`::after` 盒模型执行并集（union）包围，补充 `has_after_content` 文本绘制；
+  - `test/css/test_font_face_pseudo.cp`：新增 `testNestedInlinePseudo`（PASS 1~4 全通）。
+- **门禁与 E2E 验证（`-m -d -o`，port `19231`）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `dom-mutation-events-demo` (**PASS**)、`pseudo-computed-style` (**PASS**)、`pseudo-text-font-arrival` (**PASS**)、`navigate-style-script-order` 用例 3 `nested-inline-pseudo-elements` (**PASS**)。
+- **清理旧子智能体**: 销毁 `3abd3cf2-02b0-437b-8861-5e18b2551951`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
