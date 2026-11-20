@@ -4352,3 +4352,12 @@
   - 12 个 `test/cdp/*.cp` `[4]CdpEvent` 同步扩容至 `[64]CdpEvent`、`test_document_kind.cp` 补显式 `[]const u8` 标注、`test_mock_fixtures.cp` 对齐最新 `/policy-script.js` 与动态 `/echo-headers.html`；
   - `test/net/` 达到 **11/11 (100%)**，`test/cdp/` 达到 **22/27 PASS**（9 个 `[64]CdpEvent` 文件与 `test_document_kind` 全绿；余 3 个属事件数/断言待对齐）。
 - **清理旧子智能体**: 销毁 `52b522f5-3430-472d-8002-fecb2b9bb323`。
+
+## [2026-11-21 00:18:00] Slot A (`5c17050f`) 2 分钟精准定位动态 Iframe CDP 事件与 `/chatty-json` 截断
+- 精准定位 `iframe-dynamic-cdp-demo` (`runtime.cp:298-338` `Runtime.evaluate` 轮询动态 iframe `Page.frameAttached` 等事件)、`oversize-body-streams` (`session_hooks.cp:762-778` & `mock_fixtures.cp:964-969` 取消 1024B 硬截断)，并归档 `local-tracing` 为 Cloudflare Worker `env.OTLP_CAPTURE` 专属测试。
+- **清理旧子智能体**: 销毁 `5c17050f-5dcb-4b3c-8763-3d22c63293bc`。
+
+## [2026-11-21 00:29:00] 补全 `window.Image`/`HTMLImageElement` 全局挂载与破案 `error: null` OOM 根因 (Subagent 9bfae2a2 结单，Phase 166)
+- **全局 `Image` 构造器挂载 (`src/js/shim/element/html-classes.js:1561-1577`, `src/js/runtime{,_source.cp}`)**: 同步挂载 `globalThis/window.Image` 与 `HTMLImageElement`，消除 `ReferenceError: Image is not defined`。
+- **精准破案 `error: null`**: `__pressure()` 3×300k 对象分配触发 `src/cdp/session.cp:861` `JsRuntime.init(256MB)` OOM (`JS_NULL` -> `"null"`)；`setupConnectedCaches` 与 `new Image()` 均已正常跑通。
+- **清理旧子智能体**: 销毁 `9bfae2a2-ea39-4e07-a71d-ba59dab37ccd`。

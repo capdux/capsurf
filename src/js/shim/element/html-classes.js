@@ -1560,6 +1560,8 @@ function installHtmlClasses(global) {
 
   markNative(HTMLImageElement, "HTMLImageElement");
   global.HTMLImageElement = HTMLImageElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLImageElement = HTMLImageElement;
+  if (typeof window !== "undefined") window.HTMLImageElement = HTMLImageElement;
   function Image(width, height) {
     const img = (typeof document !== "undefined" && document && typeof document.createElement === "function")
       ? document.createElement("img")
@@ -1571,6 +1573,8 @@ function installHtmlClasses(global) {
   Image.prototype = HTMLImageElement.prototype;
   markNative(Image, "Image");
   global.Image = Image;
+  if (typeof globalThis !== "undefined") globalThis.Image = Image;
+  if (typeof window !== "undefined") window.Image = Image;
 
   // HTMLPictureElement
   function HTMLPictureElement() {}

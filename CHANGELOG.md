@@ -2155,3 +2155,6 @@
 
 ## Phase 165: Whitebox Unit Test Batch Recovery (`test/net` 11/11, `test/cdp` 22/27)
 - 更新 12 个 `test/cdp/*.cp` 至 `[64]CdpEvent`、修复 `test_document_kind.cp` 与 `test_mock_fixtures.cp`，`test/net/` 达 **11/11 (100%)**、`test/cdp/` 达 **22/27 PASS**。
+
+## Phase 166: Expose Global `window.Image` / `HTMLImageElement` & Diagnose 256MB QuickJS OOM
+- **`src/js/shim/element/html-classes.js` & `src/js/runtime{,_source.cp}`**：补全 `globalThis`/`window.Image` 与 `HTMLImageElement`，精准定位 `__pressure()` `error: null` 源自 `session.cp:861` 256MB 堆上限。
