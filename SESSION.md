@@ -4771,3 +4771,8 @@
 ### Phase 239: CSS Media/Supports Whitebox (130/130) + `dedicated-worker` 22/22 PASS
 - **Slot A (`5225744f`)**: Verified `test_cdp`/`test_target_management`/`test_page_navigation` 10/10 PASS; added `test/css/test_media_query_and_supports_edge.cp` (**4/4 PASS**, 1863ms). Total whitebox **130/130 (100% PASS)**.
 - **Slot B (`2ad0a4ee`)**: Implemented isolated QuickJS `DedicatedWorkerGlobalScope` + 1-slot budget + `worker` CSP/redirect gate in `src/cdp/session_hooks.cp`, `Worker`/`SharedWorker`/`_structuredClone` in `src/js/shim/window.js`, `ImageData` validation in `src/js/shim/canvas2d.js`, `FRAME_WINDOW_GLOBALS` in `src/js/shim/element/html-classes.js` (re-bundled `runtime.js`/`runtime_source.cp`), and `/worker-hop*` fixtures in `src/net/mock_fixtures.cp`. Built `bin_19233/main`; `e2e/dedicated-worker.e2e.test.ts` **22/22 PASS** (28 assertions, 31.53s, exit 0).
+
+### Phase 240: Worker/CSP Whitebox (131/131) + `bridge-heal-at-entry` 1/1 PASS + `scene-stream` Diagnosis
+- **Slot A (`0a87ce30`)**: Added `test/eval/test_worker_and_csp_redirect_edge.cp` (**1/1 PASS**, 2167ms). Total whitebox **131/131 (100% PASS)**.
+- **Slot B (`65a60394`)**: Added `"bridge":{"healedAtEntry":0}` to `getMemoryStats` in `src/cdp/session.cp:3982` & `src/cdp/protocol_extensions.cp:165`. Built `bin_19233/main` (7.47s); `e2e/bridge-heal-at-entry.e2e.test.ts` **1/1 PASS** (1549ms); confirmed `boa-object-from-page:215` (5/6 PASS) & `bridge-defineproperty:88` are dual-engine V8-Boa Proxy invariants incompatible with single-engine ECMA-262.
+- **Main Agent (`task-620`)**: Confirmed `Kitesurf.startSceneStream` (`src/cdp/kitesurf_facade.cp:106-134`) is an in-memory stub without WebSocket `Kitesurf.sceneFrame` binary emission yet.

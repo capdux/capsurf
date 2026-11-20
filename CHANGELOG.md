@@ -2411,3 +2411,7 @@
 ### Phase 239
 - Added `test/css/test_media_query_and_supports_edge.cp`.
 - Implemented `DedicatedWorkerGlobalScope`, `Worker`/`SharedWorker`, `MAX_WORKER_SLOTS = 1`, `worker` CSP/redirect gate, `ArrayBuffer` transfer, `SharedArrayBuffer` `DataCloneError`, and `ImageData` validation across `src/cdp/session_hooks.cp`, `src/net/mock_fixtures.cp`, `src/js/shim/{window.js,canvas2d.js,element/html-classes.js}` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 240
+- Added `test/eval/test_worker_and_csp_redirect_edge.cp`.
+- Added `bridge.healedAtEntry` to `Kitesurf.getMemoryStats` in `src/cdp/session.cp` and `src/cdp/protocol_extensions.cp`.

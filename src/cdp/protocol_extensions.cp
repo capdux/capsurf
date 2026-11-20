@@ -162,7 +162,7 @@ pub fn handleProtocolExtension(
     if (std.mem.eql(u8, cap_method, "getMemoryStats")) {
         const res = std.fmt.bufPrint(
             out_buf,
-            "{{\"wasmBytes\":0,\"frameWasmBytes\":0,\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}}}}",
+            "{{\"wasmBytes\":0,\"frameWasmBytes\":0,\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"bridge\":{{\"healedAtEntry\":0}},\"paint\":{{\"prepares\":{d}}}}}",
             .{state.paint_prepares},
         ) catch return null;
         return res;

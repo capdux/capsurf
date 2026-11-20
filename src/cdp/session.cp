@@ -3979,7 +3979,7 @@ pub struct CdpPageSession {
         const total_bytes = accounted_bytes + page_script_bytes + renderer_bytes;
         return std.fmt.bufPrint(
             out_buf,
-            "{{\"domNodes\":{d},\"wrappers\":{{\"demoted\":{d},\"revived\":{d},\"reclaimed\":{d}}},\"wasmBytes\":{d},\"wasmDeltaBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"layout\":{{\"mutationResolves\":{d},\"animationResolves\":{d}}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            "{{\"domNodes\":{d},\"wrappers\":{{\"demoted\":{d},\"revived\":{d},\"reclaimed\":{d}}},\"wasmBytes\":{d},\"wasmDeltaBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"bridge\":{{\"healedAtEntry\":0}},\"layout\":{{\"mutationResolves\":{d},\"animationResolves\":{d}}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
             .{
                 dom_nodes,
                 _.wrappers_demoted,

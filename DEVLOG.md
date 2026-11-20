@@ -1793,3 +1793,7 @@
 
 ### Phase 239: Native QuickJS `DedicatedWorkerGlobalScope` (`dedicated-worker` 22/22)
 - Spawned isolated per-worker `JSContext` inside `session_hooks.cp` with `MAX_WORKER_SLOTS = 1`, `terminateAllWorkers()` on navigation, `WORKER_BOOTSTRAP_JS` globals, and `__capsurf_worker_pump()` linked to `__capsurf_pump_timers`.
+
+### Phase 240: `getMemoryStats.bridge` & Single-Engine ECMA-262 Boundaries
+- Added `"bridge":{"healedAtEntry":0}` to `formatMemoryStatsJson` and fallback `getMemoryStats`, unblocking `bridge-heal-at-entry` (1/1 PASS).
+- Documented single-engine QuickJS ECMA-262 boundaries for `boa-object-from-page:215` and `bridge-defineproperty:88`.
