@@ -1191,4 +1191,10 @@
    - 先 flatten `options` 再判定 `callback` 为空，接入 `AbortSignal` 取消监听；区分函数监听与 `{ handleEvent }` 对象监听，确保每次派发仅读取一次 `handleEvent` getter 并正确绑定 `this`，同时在派发周期维护 `window.event`。
 2. **`HTMLElement` 继承树与 `FormDataEvent` (`html-classes.js`, `index.js`, `form-data.js`)**：
    - 将原生 `Element`/`Document`/`Window` 包装为可 `instanceof` 的标准构造函数，统一全部表单与通用 HTML 元素继承自 `HTMLElement.prototype`；在 `FormData` 构造中派发防重入 `"formdata"` 事件并遵循 `<fieldset disabled>` 首个 `<legend>` 豁免规则。
+
+## Phase 63 SVG 绘制保真度、虚线描边与固有纵横比推导技术方案
+1. **SVG 固有纵横比与替换元素布局 (`src/layout/layout.cp`)**：
+   - 通过 `extractSvgRootTag` 避免误匹配内部 `<rect>` 的 `width`/`height`；引入 `is_ratio_only` 区分仅含 `viewBox` 的 SVG 与默认 `300x150` 替换元素，完整实现 CSS 2.1 §10.3.2 自动宽度铺满包含块及单边高/宽反推。
+2. **虚线描边与全图元统一光栅化 (`src/render/painter.cp`)**：
+   - 新增 `parseSvgDashArray` 与 `paintSvgSegmentClipped` 实现规范虚线描边（奇数数组倍增与 `stroke-dashoffset` 相位偏移），并新增缩放 ASCII 点阵 `<text>` 渲染，使 `<svg>` 内各类图元均在 `viewBox` 变换与裁剪框下精准绘制。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -3188,6 +3188,23 @@
   - 派发全新子智能体 **Subagent 28**: DOM Mutation & Forms Specialist（纯 JS 垫片隔离，端口 `19232`）
     - 攻坚目标：`e2e/demo/dom-mutation-events-demo.e2e.test.ts`、`e2e/demo/forms-activation-demo.e2e.test.ts`、`e2e/demo/forms-file-input-demo.e2e.test.ts`、`e2e/demo/forms-selection-demo.e2e.test.ts`。
 
+## [2026-11-20 14:29:00] SVG 绘制保真度、虚线描边与固有纵横比尺寸推导闭环 (Subagent f0fcde9c 结单，Phase 63)
+- **SVG 纵横比尺寸推导与 inline 替换元素布局 (`src/css/cascade.cp`, `src/layout/layout.cp`)**:
+  - `cascade.cp`: `<svg>` UA 默认样式设为 `display: inline` 且保持 `overflow_visible = false`。
+  - `layout.cp`: `ReplacedSize` 增加 `is_ratio_only` 标识；新增 `extractSvgRootTag` 与 `extractSvgViewBox` 仅从 `<svg>` 根标签提取属性；完善单边 `width`/`height` + `viewBox` 纵横比推导与 `auto width` 填满包含块（CSS 2.1 §10.3.2 / SVG 2）；补齐 `line`/`circle`/`ellipse`/`polygon`/`polyline`/`text` 子盒布局与 inline 基线 descender 间隙。
+- **SVG 全图形光栅化与 `stroke-dasharray` 虚线描边 (`src/render/painter.cp`)**:
+  - 新增 `Canvas.drawScaledTextClipped` 与完整 ASCII 点阵字模，支持 `<text>` 缩放渲染；
+  - 新增 `parseSvgDashArray`、`paintSvgSegmentClipped`、`paintSvgLineClipped`，支持 `stroke`/`stroke-width`/`stroke-dasharray`（含奇数倍增）/`stroke-dashoffset`；
+  - 统一升级 `<svg>` 子树按 `viewBox` 坐标变换渲染 `<rect>`/`<line>`/`<circle>`/`<ellipse>`/`<path>`/`<text>`/`<g>`/`<use>`。
+- **门禁与 E2E 回归验证**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 全部通过 `cpc_brief.py` 4 门禁（全 0）；
+  - Core E2E：`svg-dash-stroke` + `svg-paint-fidelity` + `svg-ratio-sizing` **3/3 PASS (13 expect() calls)**，且 3 个 SVG Demo 回归全部 PASS！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `f0fcde9c-ff6f-4417-b253-7b3e2a7acfde`；
+  - 派发全新子智能体 **Subagent 29**: SVG Shape & Clip Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/svg-shape-client-rect.e2e.test.ts`、`e2e/svg-sprite-icons.e2e.test.ts`、`e2e/svg-text-escape.e2e.test.ts`、`e2e/abspos-escapes-overflow-clip.e2e.test.ts`。
+
+
 
 
 

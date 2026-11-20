@@ -1020,6 +1020,7 @@ pub struct ComputedStyle {
         }
 
         if (tag == .Svg || node.hasTag("svg")) {
+            _.display = Display.inlineFlow();
             _.overflow_visible = false;
         }
 

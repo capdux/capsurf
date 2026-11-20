@@ -206,6 +206,53 @@ pub struct Canvas {
         }
     }
 
+    fn drawScaledTextClipped(*_, x: f32, y: f32, text: []const u8, pixel_size: f32, color: CssColor, clip: ClipRect?) {
+        if (color.a == 0 || text.len == 0 || pixel_size <= 0.0) {
+            return;
+        }
+        const scale = @max(1.0, pixel_size / 8.0);
+        const step_x = 8.0 * scale;
+        let cursor_x = x;
+
+        let ti: usize = 0;
+        while (ti < text.len) : (ti += 1) {
+            const ch = text[ti];
+            if (ch == '\n' || ch == '\r') continue;
+            if (ch > 32 && ch < 127) {
+                const glyph = getAsciiGlyph8x8(ch);
+                let row: usize = 0;
+                while (row < 8) : (row += 1) {
+                    const bits = glyph[row];
+                    if (bits == 0) continue;
+                    const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
+                    const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@ceil(y + @as(f32, @floatFromInt(row + 1)) * scale))));
+                    let col: usize = 0;
+                    while (col < 8) : (col += 1) {
+                        const shift: u3 = @intCast(7 - col);
+                        if (((bits >> shift) & 1) == 1) {
+                            const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
+                            const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@ceil(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                            let py = gy0;
+                            while (py < gy1) : (py += 1) {
+                                if (c := clip) {
+                                    if (py < c.y0 || py >= c.y1) continue;
+                                }
+                                let px = gx0;
+                                while (px < gx1) : (px += 1) {
+                                    if (c := clip) {
+                                        if (px < c.x0 || px >= c.x1) continue;
+                                    }
+                                    _.blendPixel(px, py, color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            cursor_x += step_x;
+        }
+    }
+
     fn blitRgba(*_, dst_x: i32, dst_y: i32, src_pixels: []const u8, src_w: u32, src_h: u32) {
         let sy: u32 = 0;
         while (sy < src_h) : (sy += 1) {
@@ -494,7 +541,13 @@ fn paintSvgPath(
     }
 }
 
-fn resolveSvgElementFill(node: *const NodeData, inherited_fill: CssColor, current_color: CssColor): CssColor {
+fn resolveSvgElementFill(
+    node: *const NodeData,
+    node_id: NodeId,
+    styles_opt: ([]const ComputedStyle)?,
+    inherited_fill: CssColor,
+    current_color: CssColor,
+): CssColor {
     if (fa := node.getAttribute("fill")) {
         const t = std.mem.trim(u8, fa, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(t, "none")) {
@@ -507,12 +560,216 @@ fn resolveSvgElementFill(node: *const NodeData, inherited_fill: CssColor, curren
             return c;
         }
     }
+    if (styles := styles_opt) {
+        if (@as(usize, node_id) < styles.len) {
+            const st = &styles[@as(usize, node_id)];
+            if (st.has_fill_current_color) {
+                return st.color;
+            }
+            if (st.background_color.a > 0 && !node.hasTag("svg")) {
+                return st.background_color;
+            }
+        }
+    }
     return inherited_fill;
+}
+
+fn resolveSvgElementStroke(
+    node: *const NodeData,
+    current_color: CssColor,
+): CssColor {
+    if (sa := node.getAttribute("stroke")) {
+        const t = std.mem.trim(u8, sa, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(t, "none")) {
+            return CssColor.rgba(0, 0, 0, 0);
+        }
+        if (std.ascii.eqlIgnoreCase(t, "currentcolor")) {
+            return current_color;
+        }
+        if (c := CssColor.parse(t)) {
+            return c;
+        }
+    }
+    return CssColor.rgba(0, 0, 0, 0);
+}
+
+fn parseSvgDashArray(attr: []const u8, scale: f32, out_dashes: *[64]f32): usize {
+    const t = std.mem.trim(u8, attr, " \t\r\n");
+    if (t.len == 0 || std.ascii.eqlIgnoreCase(t, "none")) return 0;
+
+    let count: usize = 0;
+    let it = std.mem.tokenizeAny(u8, t, " ,\t\r\n");
+    while (tok := it.next()) {
+        if (count >= 32) break;
+        if (v := parseSvgNum(tok)) {
+            if (v >= 0.0) {
+                out_dashes[count] = v * scale;
+                count += 1;
+            }
+        }
+    }
+    if (count == 0) return 0;
+    // SVG spec: if odd number of entries, duplicate the list to make it even
+    if ((count & 1) == 1) {
+        let i: usize = 0;
+        while (i < count && count + i < 64) : (i += 1) {
+            out_dashes[count + i] = out_dashes[i];
+        }
+        count = count * 2;
+    }
+    return count;
+}
+
+fn paintSvgSegmentClipped(
+    canvas: *Canvas,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    stroke_w: f32,
+    color: CssColor,
+    clip: ClipRect?,
+) {
+    if (color.a == 0 || stroke_w <= 0.0) return;
+    const half_w = stroke_w * 0.5;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len_sq = dx * dx + dy * dy;
+
+    const min_x = @min(x1, x2) - half_w - 1.0;
+    const max_x = @max(x1, x2) + half_w + 1.0;
+    const min_y = @min(y1, y2) - half_w - 1.0;
+    const max_y = @max(y1, y2) + half_w + 1.0;
+
+    let ix0 = @max(0, @as(i32, @intFromFloat(@floor(min_x))));
+    let iy0 = @max(0, @as(i32, @intFromFloat(@floor(min_y))));
+    let ix1 = @min(@as(i32, canvas.width), @as(i32, @intFromFloat(@ceil(max_x))));
+    let iy1 = @min(@as(i32, canvas.height), @as(i32, @intFromFloat(@ceil(max_y))));
+
+    if (c := clip) {
+        ix0 = @max(ix0, c.x0);
+        iy0 = @max(iy0, c.y0);
+        ix1 = @min(ix1, c.x1);
+        iy1 = @min(iy1, c.y1);
+    }
+    if (ix0 >= ix1 || iy0 >= iy1) return;
+
+    const seg_len = @sqrt(len_sq);
+    const ux = if (seg_len > 0.0001) (dx / seg_len) else 1.0;
+    const uy = if (seg_len > 0.0001) (dy / seg_len) else 0.0;
+
+    let py = iy0;
+    while (py < iy1) : (py += 1) {
+        const py_f = @as(f32, @floatFromInt(py)) + 0.5;
+        let px = ix0;
+        while (px < ix1) : (px += 1) {
+            const px_f = @as(f32, @floatFromInt(px)) + 0.5;
+            const rx = px_f - x1;
+            const ry = py_f - y1;
+            // Butt cap projection along segment
+            const along = rx * ux + ry * uy;
+            if (along < 0.0 || along > seg_len) continue;
+            const perp = @abs(rx * (0.0 - uy) + ry * ux);
+            if (perp <= half_w) {
+                canvas.blendPixel(px, py, color);
+            }
+        }
+    }
+}
+
+fn paintSvgLineClipped(
+    canvas: *Canvas,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    stroke_w: f32,
+    color: CssColor,
+    dashes: *const [64]f32,
+    dash_count: usize,
+    dash_offset: f32,
+    clip: ClipRect?,
+) {
+    if (color.a == 0 || stroke_w <= 0.0) return;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const total_len = @sqrt(dx * dx + dy * dy);
+    if (total_len <= 0.0001) return;
+
+    if (dash_count == 0) {
+        paintSvgSegmentClipped(canvas, x1, y1, x2, y2, stroke_w, color, clip);
+        return;
+    }
+
+    let pattern_len: f32 = 0.0;
+    let pi: usize = 0;
+    while (pi < dash_count) : (pi += 1) {
+        pattern_len += dashes[pi];
+    }
+    if (pattern_len <= 0.0001) {
+        paintSvgSegmentClipped(canvas, x1, y1, x2, y2, stroke_w, color, clip);
+        return;
+    }
+
+    const ux = dx / total_len;
+    const uy = dy / total_len;
+
+    // Normalize dash_offset into [0, pattern_len)
+    let off = @mod(dash_offset, pattern_len);
+    if (off < 0.0) off += pattern_len;
+
+    let dash_idx: usize = 0;
+    let rem = dashes[0];
+    while (off > 0.0 && off >= rem) {
+        off -= rem;
+        dash_idx = (dash_idx + 1) % dash_count;
+        rem = dashes[dash_idx];
+    }
+    rem -= off;
+
+    let t: f32 = 0.0;
+    let iter_guard: usize = 0;
+    while (t < total_len && iter_guard < 4096) : (iter_guard += 1) {
+        const step = @min(rem, total_len - t);
+        const is_dash = (dash_idx & 1) == 0;
+        if (is_dash && step > 0.0001) {
+            const sx1 = x1 + ux * t;
+            const sy1 = y1 + uy * t;
+            const sx2 = x1 + ux * (t + step);
+            const sy2 = y1 + uy * (t + step);
+            paintSvgSegmentClipped(canvas, sx1, sy1, sx2, sy2, stroke_w, color, clip);
+        }
+        t += step;
+        dash_idx = (dash_idx + 1) % dash_count;
+        rem = dashes[dash_idx];
+    }
+}
+
+fn collectNodeTextContent(doc: *const Document, node_id: NodeId, out_buf: []u8): []const u8 {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return out_buf[0..0];
+    let len: usize = 0;
+    const node = &doc.nodes.items[@as(usize, node_id)];
+    if (node.text_content.len > 0) {
+        const take = @min(node.text_content.len, out_buf.len - len);
+        @memcpy(out_buf[len .. len + take], node.text_content[0..take]);
+        len += take;
+    }
+    let ch = node.first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len && len < out_buf.len) : (ch = doc.nodes.items[@as(usize, ch)].next_sibling) {
+        const cnode = &doc.nodes.items[@as(usize, ch)];
+        if (cnode.node_type == NodeType.Text && cnode.text_content.len > 0) {
+            const take = @min(cnode.text_content.len, out_buf.len - len);
+            @memcpy(out_buf[len .. len + take], cnode.text_content[0..take]);
+            len += take;
+        }
+    }
+    return out_buf[0..len];
 }
 
 fn paintSvgChildrenDirect(
     canvas: *Canvas,
     doc: *const Document,
+    styles_opt: ([]const ComputedStyle)?,
     parent_id: NodeId,
     origin_x: f32,
     origin_y: f32,
@@ -531,7 +788,24 @@ fn paintSvgChildrenDirect(
     while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
         const cnode = &doc.nodes.items[@as(usize, child)];
         if (!cnode.isElement()) continue;
-        const fill_c = resolveSvgElementFill(cnode, inherited_fill, current_color);
+        if (cnode.hasTag("defs") || cnode.hasTag("symbol") || cnode.hasTag("style") || cnode.hasTag("metadata") || cnode.hasTag("title") || cnode.hasTag("desc")) {
+            continue;
+        }
+        const fill_c = resolveSvgElementFill(cnode, child, styles_opt, inherited_fill, current_color);
+        const stroke_c = resolveSvgElementStroke(cnode, current_color);
+        let stroke_w: f32 = 1.0 * scale;
+        if (swa := cnode.getAttribute("stroke-width")) {
+            if (v := parseSvgNum(swa)) stroke_w = v * scale;
+        }
+        let dashes: [64]f32 = [0.0; 64];
+        let dash_count: usize = 0;
+        if (da := cnode.getAttribute("stroke-dasharray")) {
+            dash_count = parseSvgDashArray(da, scale, &dashes);
+        }
+        let dash_offset: f32 = 0.0;
+        if (doa := cnode.getAttribute("stroke-dashoffset")) {
+            if (v := parseSvgNum(doa)) dash_offset = v * scale;
+        }
 
         if (cnode.hasTag("rect")) {
             let rx: f32 = 0.0;
@@ -550,18 +824,79 @@ fn paintSvgChildrenDirect(
             if (a := cnode.getAttribute("height")) {
                 if (v := parseSvgNum(a)) rh = v;
             }
-            if (rw > 0.0 && rh > 0.0 && fill_c.a > 0) {
-                const rr = Rect {
-                    x: origin_x + (rx - min_x) * scale,
-                    y: origin_y + (ry - min_y) * scale,
-                    width: rw * scale,
-                    height: rh * scale,
-                    visible: true,
-                };
-                const ps = ResolvedPaintStyle {
-                    bg_color: fill_c,
-                };
-                canvas.paintBoxClipped(rr, ps, clip);
+            if (rw > 0.0 && rh > 0.0) {
+                const sx = origin_x + (rx - min_x) * scale;
+                const sy = origin_y + (ry - min_y) * scale;
+                const sw = rw * scale;
+                const sh = rh * scale;
+                if (fill_c.a > 0) {
+                    const rr = Rect {
+                        x: sx,
+                        y: sy,
+                        width: sw,
+                        height: sh,
+                        visible: true,
+                    };
+                    const ps = ResolvedPaintStyle {
+                        bg_color: fill_c,
+                    };
+                    canvas.paintBoxClipped(rr, ps, clip);
+                }
+                if (stroke_c.a > 0 && stroke_w > 0.0) {
+                    paintSvgLineClipped(canvas, sx, sy, sx + sw, sy, stroke_w, stroke_c, &dashes, dash_count, dash_offset, clip);
+                    paintSvgLineClipped(canvas, sx + sw, sy, sx + sw, sy + sh, stroke_w, stroke_c, &dashes, dash_count, dash_offset, clip);
+                    paintSvgLineClipped(canvas, sx + sw, sy + sh, sx, sy + sh, stroke_w, stroke_c, &dashes, dash_count, dash_offset, clip);
+                    paintSvgLineClipped(canvas, sx, sy + sh, sx, sy, stroke_w, stroke_c, &dashes, dash_count, dash_offset, clip);
+                }
+            }
+        } else if (cnode.hasTag("line")) {
+            let lx1: f32 = 0.0;
+            let ly1: f32 = 0.0;
+            let lx2: f32 = 0.0;
+            let ly2: f32 = 0.0;
+            if (a := cnode.getAttribute("x1")) {
+                if (v := parseSvgNum(a)) lx1 = v;
+            }
+            if (a := cnode.getAttribute("y1")) {
+                if (v := parseSvgNum(a)) ly1 = v;
+            }
+            if (a := cnode.getAttribute("x2")) {
+                if (v := parseSvgNum(a)) lx2 = v;
+            }
+            if (a := cnode.getAttribute("y2")) {
+                if (v := parseSvgNum(a)) ly2 = v;
+            }
+            const sx1 = origin_x + (lx1 - min_x) * scale;
+            const sy1 = origin_y + (ly1 - min_y) * scale;
+            const sx2 = origin_x + (lx2 - min_x) * scale;
+            const sy2 = origin_y + (ly2 - min_y) * scale;
+            if (stroke_c.a > 0 && stroke_w > 0.0) {
+                paintSvgLineClipped(canvas, sx1, sy1, sx2, sy2, stroke_w, stroke_c, &dashes, dash_count, dash_offset, clip);
+            }
+        } else if (cnode.hasTag("text")) {
+            let tx: f32 = 0.0;
+            let ty: f32 = 0.0;
+            let font_sz: f32 = 16.0;
+            if (a := cnode.getAttribute("x")) {
+                if (v := parseSvgNum(a)) tx = v;
+            }
+            if (a := cnode.getAttribute("y")) {
+                if (v := parseSvgNum(a)) ty = v;
+            }
+            if (a := cnode.getAttribute("font-size")) {
+                if (v := parseSvgNum(a)) {
+                    if (v > 0.0) font_sz = v;
+                }
+            }
+            let txt_buf: [512]u8 = undefined;
+            const txt = collectNodeTextContent(doc, child, &txt_buf);
+            if (txt.len > 0 && fill_c.a > 0) {
+                const screen_font_px = font_sz * scale;
+                const sx = origin_x + (tx - min_x) * scale;
+                const sy_baseline = origin_y + (ty - min_y) * scale;
+                // SVG text y is baseline; top of glyph sits ~0.8 * font_size above baseline
+                const sy_top = sy_baseline - screen_font_px * 0.8;
+                canvas.drawScaledTextClipped(sx, sy_top, txt, screen_font_px * 0.8, fill_c, clip);
             }
         } else if (cnode.hasTag("path")) {
             if (d_attr := cnode.getAttribute("d")) {
@@ -580,7 +915,7 @@ fn paintSvgChildrenDirect(
             if (a := cnode.getAttribute("r")) {
                 if (v := parseSvgNum(a)) cr = v;
             }
-            if (cr > 0.0 && fill_c.a > 0) {
+            if (cr > 0.0 && (fill_c.a > 0 || stroke_c.a > 0)) {
                 const sr = cr * scale;
                 const rr = Rect {
                     x: origin_x + (cx - cr - min_x) * scale,
@@ -592,11 +927,46 @@ fn paintSvgChildrenDirect(
                 const ps = ResolvedPaintStyle {
                     bg_color: fill_c,
                     border_radius: sr,
+                    border_width: if (stroke_c.a > 0) stroke_w else 0.0,
+                    border_color: stroke_c,
+                };
+                canvas.paintBoxClipped(rr, ps, clip);
+            }
+        } else if (cnode.hasTag("ellipse")) {
+            let cx: f32 = 0.0;
+            let cy: f32 = 0.0;
+            let rx: f32 = 0.0;
+            let ry: f32 = 0.0;
+            if (a := cnode.getAttribute("cx")) {
+                if (v := parseSvgNum(a)) cx = v;
+            }
+            if (a := cnode.getAttribute("cy")) {
+                if (v := parseSvgNum(a)) cy = v;
+            }
+            if (a := cnode.getAttribute("rx")) {
+                if (v := parseSvgNum(a)) rx = v;
+            }
+            if (a := cnode.getAttribute("ry")) {
+                if (v := parseSvgNum(a)) ry = v;
+            }
+            if (rx > 0.0 && ry > 0.0 && fill_c.a > 0) {
+                const srx = rx * scale;
+                const sry = ry * scale;
+                const rr = Rect {
+                    x: origin_x + (cx - rx - min_x) * scale,
+                    y: origin_y + (cy - ry - min_y) * scale,
+                    width: srx * 2.0,
+                    height: sry * 2.0,
+                    visible: true,
+                };
+                const ps = ResolvedPaintStyle {
+                    bg_color: fill_c,
+                    border_radius: @min(srx, sry),
                 };
                 canvas.paintBoxClipped(rr, ps, clip);
             }
         } else if (cnode.hasTag("g")) {
-            paintSvgChildrenDirect(canvas, doc, child, origin_x, origin_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
+            paintSvgChildrenDirect(canvas, doc, styles_opt, child, origin_x, origin_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
         } else if (cnode.hasTag("use")) {
             let href_opt = cnode.getAttribute("href");
             if (href_opt == null) {
@@ -607,7 +977,7 @@ fn paintSvgChildrenDirect(
                 if (t.len > 1 && t[0] == '#') {
                     const target_id = findNodeById(doc, t[1..]);
                     if (target_id != NULL_NODE) {
-                        paintSvgContainerRef(canvas, doc, target_id, origin_x, origin_y, box_w, box_h, fill_c, current_color, clip, depth + 1);
+                        paintSvgContainerRef(canvas, doc, styles_opt, target_id, origin_x, origin_y, box_w, box_h, fill_c, current_color, clip, depth + 1);
                     }
                 }
             }
@@ -618,6 +988,7 @@ fn paintSvgChildrenDirect(
 fn paintSvgContainerRef(
     canvas: *Canvas,
     doc: *const Document,
+    styles_opt: ([]const ComputedStyle)?,
     container_id: NodeId,
     box_x: f32,
     box_y: f32,
@@ -671,8 +1042,8 @@ fn paintSvgContainerRef(
         offset_y = (box_h - vb_h * scale) * 0.5;
     }
 
-    const fill_c = resolveSvgElementFill(cnode, inherited_fill, current_color);
-    paintSvgChildrenDirect(canvas, doc, container_id, box_x + offset_x, box_y + offset_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
+    const fill_c = resolveSvgElementFill(cnode, container_id, styles_opt, inherited_fill, current_color);
+    paintSvgChildrenDirect(canvas, doc, styles_opt, container_id, box_x + offset_x, box_y + offset_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
 }
 
 fn readLocalFilePath(path: []const u8, out_buf: []u8): ([]const u8)? {
@@ -772,6 +1143,7 @@ fn paintImgSvg(
     paintSvgContainerRef(
         canvas,
         &svg_doc,
+        null,
         svg_root,
         img_rect.x,
         img_rect.y,
@@ -843,11 +1215,27 @@ fn paintNodeRecursive(
                                 use_fill = CssColor.rgb(0, 0, 0);
                             }
                         }
-                        use_fill = resolveSvgElementFill(node, use_fill, style.color);
-                        paintSvgContainerRef(canvas, doc, target_id, r.x, r.y, r.width, r.height, use_fill, style.color, clip, 0);
+                        use_fill = resolveSvgElementFill(node, node_id, styles, use_fill, style.color);
+                        paintSvgContainerRef(canvas, doc, styles, target_id, r.x, r.y, r.width, r.height, use_fill, style.color, clip, 0);
                     }
                 }
             }
+        } else if (node.hasTag("svg")) {
+            canvas.paintBoxClipped(r, effective_paint_style, clip);
+            if (!style.overflow_visible) {
+                const svg_clip = ClipRect.fromRect(r);
+                if (cc := child_clip) {
+                    child_clip = cc.intersect(svg_clip);
+                } else {
+                    child_clip = svg_clip;
+                }
+            }
+            let svg_fill = CssColor.rgb(0, 0, 0);
+            if (style.has_fill_current_color) {
+                svg_fill = style.color;
+            }
+            paintSvgContainerRef(canvas, doc, styles, node_id, r.x, r.y, r.width, r.height, svg_fill, style.color, child_clip, 0);
+            return;
         } else if (node.hasTag("path")) {
             if (d_attr := node.getAttribute("d")) {
                 let path_fill = effective_paint_style.bg_color;
@@ -968,6 +1356,29 @@ fn getAsciiGlyph8x8(ch: u8): []const u8 {
         'A', 'a' => "\x18\x3C\x66\x66\x7E\x66\x66\x00",
         'B', 'b' => "\x7C\x66\x66\x7C\x66\x66\x7C\x00",
         'C', 'c' => "\x3C\x66\x60\x60\x60\x66\x3C\x00",
+        'D', 'd' => "\x78\x6C\x66\x66\x66\x6C\x78\x00",
+        'E', 'e' => "\x7E\x60\x60\x78\x60\x60\x7E\x00",
+        'F', 'f' => "\x7E\x60\x60\x78\x60\x60\x60\x00",
+        'G', 'g' => "\x3C\x66\x60\x6E\x66\x66\x3E\x00",
+        'H', 'h' => "\x66\x66\x66\x7E\x66\x66\x66\x00",
+        'I', 'i' => "\x3C\x18\x18\x18\x18\x18\x3C\x00",
+        'J', 'j' => "\x1E\x0C\x0C\x0C\x6C\x6C\x38\x00",
+        'K', 'k' => "\x66\x6C\x78\x70\x78\x6C\x66\x00",
+        'L', 'l' => "\x60\x60\x60\x60\x60\x60\x7E\x00",
+        'M', 'm' => "\x63\x77\x7F\x6B\x63\x63\x63\x00",
+        'N', 'n' => "\x66\x76\x7E\x7E\x6E\x66\x66\x00",
+        'O', 'o' => "\x3C\x66\x66\x66\x66\x66\x3C\x00",
+        'P', 'p' => "\x7C\x66\x66\x7C\x60\x60\x60\x00",
+        'Q', 'q' => "\x3C\x66\x66\x66\x6A\x6C\x36\x00",
+        'R', 'r' => "\x7C\x66\x66\x7C\x6C\x66\x66\x00",
+        'S', 's' => "\x3C\x66\x60\x3C\x06\x66\x3C\x00",
+        'T', 't' => "\x7E\x18\x18\x18\x18\x18\x18\x00",
+        'U', 'u' => "\x66\x66\x66\x66\x66\x66\x3C\x00",
+        'V', 'v' => "\x66\x66\x66\x66\x66\x3C\x18\x00",
+        'W', 'w' => "\x63\x63\x63\x6B\x7F\x77\x63\x00",
+        'X', 'x' => "\x66\x66\x3C\x18\x3C\x66\x66\x00",
+        'Y', 'y' => "\x66\x66\x66\x3C\x18\x18\x18\x00",
+        'Z', 'z' => "\x7E\x06\x0C\x18\x30\x60\x7E\x00",
         '0'...'9' => "\x3C\x66\x6E\x76\x66\x66\x3C\x00",
         * => "\x7E\x42\x42\x7E\x42\x42\x7E\x00",
     };

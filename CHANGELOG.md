@@ -1515,4 +1515,13 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`event-listener-fixes-demo` + `forms-instanceof-demo` + `forms-misc-demo` 共 **3 pass, 0 fail (35 expect calls)**。
+
+## Phase 63: SVG Paint Fidelity, Dashed Strokes & Intrinsic Aspect Ratio Sizing (100% Closed)
+- **`src/css/cascade.cp` & `src/layout/layout.cp`**：
+  - `<svg>` UA 默认 `display: inline`；`ReplacedSize` 新增 `is_ratio_only`，实现仅从 `<svg>` 根标签提取 `width`/`height`/`viewBox` 与单边纵横比推导（CSS 2.1 §10.3.2 / SVG 2），补齐 `line`/`circle`/`ellipse`/`polygon`/`polyline`/`text` 子盒布局。
+- **`src/render/painter.cp`**：
+  - 实装 `stroke-dasharray`（含奇数倍增）与 `stroke-dashoffset` 虚线描边、`Canvas.drawScaledTextClipped` 完整 ASCII 点阵 `<text>` 缩放渲染，以及 `<svg>` 全图元按 `viewBox` 统一光栅化。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`svg-dash-stroke` + `svg-paint-fidelity` + `svg-ratio-sizing` **3/3 PASS (13 expect calls)**，SVG Demo 3/3 回归全绿。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

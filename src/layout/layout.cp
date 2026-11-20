@@ -125,6 +125,7 @@ pub struct ReplacedSize {
     width: f32 = 300.0;
     height: f32 = 150.0;
     is_authored: bool = false;
+    is_ratio_only: bool = false;
 }
 
 pub struct LayoutTree {
@@ -248,6 +249,85 @@ pub struct LayoutTree {
         return res;
     }
 
+    static fn extractSvgRootTag(src: []const u8): ([]const u8)? {
+        let i: usize = 0;
+        let start: usize = 0;
+        let found_start = false;
+        while (i < src.len) : (i += 1) {
+            if (i + 4 <= src.len && std.ascii.eqlIgnoreCase(src[i .. i + 4], "<svg")) {
+                start = i;
+                found_start = true;
+                break;
+            }
+            if (i + 6 <= src.len && std.ascii.eqlIgnoreCase(src[i .. i + 6], "%3Csvg")) {
+                start = i;
+                found_start = true;
+                break;
+            }
+        }
+        if (!found_start) return null;
+        let j = start + 4;
+        while (j < src.len) : (j += 1) {
+            if (src[j] == '>') {
+                return src[start .. j + 1];
+            }
+            if (j + 3 <= src.len && std.ascii.eqlIgnoreCase(src[j .. j + 3], "%3E")) {
+                return src[start .. j + 3];
+            }
+        }
+        return src[start..];
+    }
+
+    static fn extractSvgViewBox(tag_slice: []const u8): ([2]f32)? {
+        let cur: usize = 0;
+        while (cur + 7 <= tag_slice.len) : (cur += 1) {
+            if (!std.ascii.eqlIgnoreCase(tag_slice[cur .. cur + 7], "viewbox")) continue;
+            let pos = cur + 7;
+            while (pos < tag_slice.len && (tag_slice[pos] == ' ' || tag_slice[pos] == '\t' || tag_slice[pos] == '\r' || tag_slice[pos] == '\n')) : (pos += 1) {}
+            if (pos < tag_slice.len && tag_slice[pos] == '=') {
+                pos += 1;
+            } else if (pos + 3 <= tag_slice.len && std.ascii.eqlIgnoreCase(tag_slice[pos .. pos + 3], "%3D")) {
+                pos += 3;
+            } else {
+                continue;
+            }
+            if (pos < tag_slice.len && (tag_slice[pos] == '"' || tag_slice[pos] == '\'')) {
+                pos += 1;
+            } else if (pos + 3 <= tag_slice.len && (std.ascii.eqlIgnoreCase(tag_slice[pos .. pos + 3], "%22") || std.ascii.eqlIgnoreCase(tag_slice[pos .. pos + 3], "%27"))) {
+                pos += 3;
+            }
+            let nums: [4]f32 = [0.0, 0.0, 0.0, 0.0];
+            let count: usize = 0;
+            while (pos < tag_slice.len && count < 4) {
+                while (pos < tag_slice.len) {
+                    const ch = tag_slice[pos];
+                    if (ch == ' ' || ch == '\t' || ch == ',' || ch == '+' || ch == '\r' || ch == '\n') {
+                        pos += 1;
+                    } else if (pos + 3 <= tag_slice.len && (std.ascii.eqlIgnoreCase(tag_slice[pos .. pos + 3], "%20") || std.ascii.eqlIgnoreCase(tag_slice[pos .. pos + 3], "%2C"))) {
+                        pos += 3;
+                    } else {
+                        break;
+                    }
+                }
+                const nstart = pos;
+                if (pos < tag_slice.len && (tag_slice[pos] == '-' || tag_slice[pos] == '+')) pos += 1;
+                while (pos < tag_slice.len && (std.ascii.isDigit(tag_slice[pos]) || tag_slice[pos] == '.')) : (pos += 1) {}
+                if (pos == nstart) break;
+                if (v := std.fmt.parseFloat(f32, tag_slice[nstart..pos]) catch null) {
+                    nums[count] = v;
+                    count += 1;
+                } else {
+                    break;
+                }
+            }
+            if (count == 4 && nums[2] > 0.0 && nums[3] > 0.0) {
+                const res: [2]f32 = [nums[2], nums[3]];
+                return res;
+            }
+        }
+        return null;
+    }
+
     static fn extractSvgDim(src: []const u8, name: []const u8): f32? {
         let cur_start: usize = 0;
         while (cur_start < src.len) {
@@ -337,20 +417,56 @@ pub struct LayoutTree {
                     has_h = true;
                 }
             }
+            let is_ratio_only = false;
             if (!has_w || !has_h) {
                 if (src_attr := node.getAttribute("src")) {
-                    if (!has_w) {
-                        if (pw := LayoutTree.extractPngDim(src_attr, "width")) {
-                            nat_w = pw;
-                        } else if (sw := LayoutTree.extractSvgDim(src_attr, "width")) {
-                            nat_w = sw;
+                    const is_svg_data = std.mem.indexOf(u8, src_attr, "image/svg+xml") != null;
+                    if (is_svg_data) {
+                        if (root_tag := LayoutTree.extractSvgRootTag(src_attr)) {
+                            let svg_has_w = has_w;
+                            let svg_has_h = has_h;
+                            if (!svg_has_w) {
+                                if (sw := LayoutTree.extractSvgDim(root_tag, "width")) {
+                                    nat_w = sw;
+                                    svg_has_w = true;
+                                    is_auth = true;
+                                }
+                            }
+                            if (!svg_has_h) {
+                                if (sh := LayoutTree.extractSvgDim(root_tag, "height")) {
+                                    nat_h = sh;
+                                    svg_has_h = true;
+                                    is_auth = true;
+                                }
+                            }
+                            if (!svg_has_w || !svg_has_h) {
+                                if (vb := LayoutTree.extractSvgViewBox(root_tag)) {
+                                    if (!svg_has_w && !svg_has_h) {
+                                        nat_w = vb[0];
+                                        nat_h = vb[1];
+                                        is_ratio_only = true;
+                                    } else if (svg_has_w && !svg_has_h) {
+                                        nat_h = nat_w * (vb[1] / vb[0]);
+                                    } else if (!svg_has_w && svg_has_h) {
+                                        nat_w = nat_h * (vb[0] / vb[1]);
+                                    }
+                                }
+                            }
                         }
-                    }
-                    if (!has_h) {
-                        if (ph := LayoutTree.extractPngDim(src_attr, "height")) {
-                            nat_h = ph;
-                        } else if (sh := LayoutTree.extractSvgDim(src_attr, "height")) {
-                            nat_h = sh;
+                    } else {
+                        if (!has_w) {
+                            if (pw := LayoutTree.extractPngDim(src_attr, "width")) {
+                                nat_w = pw;
+                            } else if (sw := LayoutTree.extractSvgDim(src_attr, "width")) {
+                                nat_w = sw;
+                            }
+                        }
+                        if (!has_h) {
+                            if (ph := LayoutTree.extractPngDim(src_attr, "height")) {
+                                nat_h = ph;
+                            } else if (sh := LayoutTree.extractSvgDim(src_attr, "height")) {
+                                nat_h = sh;
+                            }
                         }
                     }
                 }
@@ -359,11 +475,13 @@ pub struct LayoutTree {
                 width: nat_w,
                 height: nat_h,
                 is_authored: is_auth,
+                is_ratio_only: is_ratio_only,
             };
         } else if (node.hasTag("svg")) {
             let nat_w: f32 = 300.0;
             let nat_h: f32 = 150.0;
             let is_auth = false;
+            let is_ratio_only = false;
             let has_w = false;
             let has_h = false;
             if (w_attr := node.getAttribute("width")) {
@@ -389,20 +507,27 @@ pub struct LayoutTree {
                     let it = std.mem.tokenizeAny(u8, vb_attr, " ,");
                     * = it.next();
                     * = it.next();
+                    let vb_w: f32 = 0.0;
+                    let vb_h: f32 = 0.0;
                     if (w_str := it.next()) {
                         if (w_val := LayoutTree.parseDimStr(w_str)) {
-                            if (!has_w && w_val > 0.0) {
-                                nat_w = w_val;
-                                is_auth = true;
-                            }
+                            if (w_val > 0.0) vb_w = w_val;
                         }
                     }
                     if (h_str := it.next()) {
                         if (h_val := LayoutTree.parseDimStr(h_str)) {
-                            if (!has_h && h_val > 0.0) {
-                                nat_h = h_val;
-                                is_auth = true;
-                            }
+                            if (h_val > 0.0) vb_h = h_val;
+                        }
+                    }
+                    if (vb_w > 0.0 && vb_h > 0.0) {
+                        if (!has_w && !has_h) {
+                            nat_w = vb_w;
+                            nat_h = vb_h;
+                            is_ratio_only = true;
+                        } else if (has_w && !has_h) {
+                            nat_h = nat_w * (vb_h / vb_w);
+                        } else if (!has_w && has_h) {
+                            nat_w = nat_h * (vb_w / vb_h);
                         }
                     }
                 }
@@ -411,6 +536,7 @@ pub struct LayoutTree {
                 width: nat_w,
                 height: nat_h,
                 is_authored: is_auth,
+                is_ratio_only: is_ratio_only,
             };
         }
         return null;
@@ -520,7 +646,14 @@ pub struct LayoutTree {
         if (!style.width.is_auto && !style.width.is_none) {
             raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
         } else if (rep := replaced_opt) {
-            if (rep.is_authored) {
+            if (rep.is_ratio_only) {
+                const avail = parent_w - box.marginHorizontal();
+                if (avail > 0.0) {
+                    raw_w = avail;
+                } else {
+                    raw_w = rep.width;
+                }
+            } else if (rep.is_authored) {
                 raw_w = rep.width;
             } else {
                 const avail = parent_w - box.marginHorizontal();
@@ -570,6 +703,13 @@ pub struct LayoutTree {
                 box.content_height = if (raw_h > v_decor) (raw_h - v_decor) else 0.0;
             } else {
                 box.content_height = raw_h;
+            }
+            if ((style.width.is_auto || style.width.is_none)) {
+                if (rep := replaced_opt) {
+                    if (rep.width > 0.0 && rep.height > 0.0 && box.content_height > 0.0) {
+                        box.content_width = box.content_height * (rep.width / rep.height);
+                    }
+                }
             }
         } else if (rep := replaced_opt) {
             if (rep.width > 0.0 && rep.height > 0.0) {
@@ -928,7 +1068,7 @@ pub struct LayoutTree {
                     height: screen_h,
                     visible: true,
                 };
-            } else if (cnode.hasTag("path")) {
+            } else if (cnode.hasTag("path") || cnode.hasTag("line") || cnode.hasTag("circle") || cnode.hasTag("ellipse") || cnode.hasTag("polygon") || cnode.hasTag("polyline") || cnode.hasTag("text")) {
                 _.boxes.items[@as(usize, child)].rect = Rect {
                     x: content_x + offset_x,
                     y: content_y + offset_y,
@@ -987,6 +1127,10 @@ pub struct LayoutTree {
                         _.layoutNode(doc, styles, child, child_x, cursor_y, content_w, 0.0);
                         const cbox = &_.boxes.items[@as(usize, child)];
                         cursor_y += cbox.outerHeight();
+                        if (cnode.hasTag("svg") && cstyle.display.isInline() && cbox.outerHeight() > 0.0) {
+                            const fsz = if (cstyle.font_size_px > 0.0) cstyle.font_size_px else 16.0;
+                            cursor_y += @round(fsz * 0.3125);
+                        }
                         const cr = cbox.rect.right();
                         if (cr > max_child_right) {
                             max_child_right = cr;
