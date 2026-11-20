@@ -65,69 +65,212 @@ function wrapQuerySelectorAll(origFn) {
   };
 }
 
-function matchesElementSelector(el, selector) {
+function matchesCompoundSelector(el, compound) {
+  if (!el || el.nodeType !== 1 || !compound) return false;
+  const s = compound.trim();
+  if (!s) return false;
+  if (s === "*") return true;
+
+  // Tokenize compound selector into tag, #id, .class, [attr...], :pseudo
+  let i = 0;
+  const len = s.length;
+  while (i < len) {
+    const ch = s[i];
+    if (ch === "#") {
+      i++;
+      const start = i;
+      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
+      const id = s.slice(start, i);
+      if (el.id !== id && !(typeof el.getAttribute === "function" && el.getAttribute("id") === id)) {
+        return false;
+      }
+    } else if (ch === ".") {
+      i++;
+      const start = i;
+      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
+      const cls = s.slice(start, i);
+      const hasClass = (el.classList && el.classList.contains(cls)) ||
+        (((el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "") + "").split(/\s+/).indexOf(cls) !== -1);
+      if (!hasClass) return false;
+    } else if (ch === "[") {
+      const closeIdx = s.indexOf("]", i + 1);
+      if (closeIdx === -1) return false;
+      const inside = s.slice(i + 1, closeIdx).trim();
+      i = closeIdx + 1;
+      const eqIdx = inside.indexOf("=");
+      if (eqIdx === -1) {
+        if (!(typeof el.hasAttribute === "function" && el.hasAttribute(inside))) return false;
+      } else {
+        let op = "=";
+        let attrName = inside.slice(0, eqIdx).trim();
+        const lastChar = attrName[attrName.length - 1];
+        if (lastChar === "~" || lastChar === "|" || lastChar === "^" || lastChar === "$" || lastChar === "*") {
+          op = lastChar + "=";
+          attrName = attrName.slice(0, -1).trim();
+        }
+        let expectedVal = inside.slice(eqIdx + 1).trim();
+        if ((expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
+            (expectedVal.startsWith("'") && expectedVal.endsWith("'"))) {
+          expectedVal = expectedVal.slice(1, -1);
+        }
+        const actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
+        if (actualVal === null) return false;
+        if (op === "=" && actualVal !== expectedVal) return false;
+        if (op === "~=" && actualVal.split(/\s+/).indexOf(expectedVal) === -1) return false;
+        if (op === "|=" && actualVal !== expectedVal && !actualVal.startsWith(expectedVal + "-")) return false;
+        if (op === "^=" && (!expectedVal || !actualVal.startsWith(expectedVal))) return false;
+        if (op === "$=" && (!expectedVal || !actualVal.endsWith(expectedVal))) return false;
+        if (op === "*=" && (!expectedVal || actualVal.indexOf(expectedVal) === -1)) return false;
+      }
+    } else if (ch === ":") {
+      // Pseudo-class
+      const start = i;
+      i++;
+      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
+      if (i < len && s[i] === "(") {
+        let depth = 1;
+        i++;
+        while (i < len && depth > 0) {
+          if (s[i] === "(") depth++;
+          else if (s[i] === ")") depth--;
+          i++;
+        }
+      }
+      const pseudo = s.slice(start, i).toLowerCase();
+      if (pseudo === ":checked") { if (!el.checked) return false; }
+      else if (pseudo === ":disabled") { if (!el.disabled) return false; }
+      else if (pseudo === ":enabled") { if (el.disabled) return false; }
+      else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
+      else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
+      else if (pseudo === ":empty") { if (el.firstChild) return false; }
+      else return false;
+    } else if (ch === "*") {
+      i++;
+    } else {
+      const start = i;
+      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
+      const tag = s.slice(start, i).toLowerCase();
+      const elTag = String(el.localName || el.tagName || "").toLowerCase();
+      if (elTag !== tag) return false;
+    }
+  }
+  return true;
+}
+
+function splitComplexSelector(sel) {
+  // Split into alternating [compound, combinator, compound, ...]
+  const parts = [];
+  let i = 0;
+  const len = sel.length;
+  let buf = "";
+  let inBracket = 0;
+  let inParen = 0;
+  let quote = "";
+  while (i < len) {
+    const ch = sel[i];
+    if (quote) {
+      buf += ch;
+      if (ch === quote) quote = "";
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === "[") { inBracket++; buf += ch; i++; continue; }
+    if (ch === "]") { if (inBracket > 0) inBracket--; buf += ch; i++; continue; }
+    if (ch === "(") { inParen++; buf += ch; i++; continue; }
+    if (ch === ")") { if (inParen > 0) inParen--; buf += ch; i++; continue; }
+    if (inBracket === 0 && inParen === 0 && (ch === ">" || ch === "+" || ch === "~" || /\s/.test(ch))) {
+      if (buf.trim()) parts.push(buf.trim());
+      buf = "";
+      let comb = " ";
+      while (i < len && /\s/.test(sel[i])) i++;
+      if (i < len && (sel[i] === ">" || sel[i] === "+" || sel[i] === "~")) {
+        comb = sel[i];
+        i++;
+        while (i < len && /\s/.test(sel[i])) i++;
+      }
+      if (parts.length > 0 && i < len) {
+        parts.push(comb);
+      }
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+  if (buf.trim()) parts.push(buf.trim());
+  return parts;
+}
+
+function matchesComplexSelector(el, sel, scopeRoot) {
+  const parts = splitComplexSelector(sel);
+  if (parts.length === 0) return false;
+  if (!matchesCompoundSelector(el, parts[parts.length - 1])) return false;
+  if (parts.length === 1) return true;
+
+  function matchFrom(node, idx) {
+    if (idx < 0) return true;
+    const comb = parts[idx];
+    const targetCompound = parts[idx - 1];
+    if (comb === " ") {
+      let anc = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
+      while (anc) {
+        if (scopeRoot && anc === scopeRoot) break;
+        if (matchesCompoundSelector(anc, targetCompound) && matchFrom(anc, idx - 2)) {
+          return true;
+        }
+        anc = anc.parentElement || (anc.parentNode && anc.parentNode.nodeType === 1 ? anc.parentNode : null);
+      }
+      return false;
+    }
+    if (comb === ">") {
+      const p = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
+      if (!p || (scopeRoot && p === scopeRoot)) return false;
+      return matchesCompoundSelector(p, targetCompound) && matchFrom(p, idx - 2);
+    }
+    if (comb === "+") {
+      const prev = node.previousElementSibling;
+      if (!prev) return false;
+      return matchesCompoundSelector(prev, targetCompound) && matchFrom(prev, idx - 2);
+    }
+    if (comb === "~") {
+      let prev = node.previousElementSibling;
+      while (prev) {
+        if (matchesCompoundSelector(prev, targetCompound) && matchFrom(prev, idx - 2)) {
+          return true;
+        }
+        prev = prev.previousElementSibling;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  return matchFrom(el, parts.length - 2);
+}
+
+function matchesElementSelector(el, selector, scopeRoot) {
   if (!el || el.nodeType !== 1 || !selector) return false;
   const s = selector.trim();
   if (s === "*") return true;
 
-  // If el.matches is available, try it first
-  if (typeof el.matches === "function") {
+  // Handle comma-separated selector lists
+  const list = s.split(",");
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i].trim();
+    if (item && matchesComplexSelector(el, item, scopeRoot)) return true;
+  }
+
+  // Fallback to el.matches only if element is connected to document (not inside ShadowRoot)
+  const root = typeof el.getRootNode === "function" ? el.getRootNode() : null;
+  if ((!root || !root.host) && el.isConnected && typeof el.matches === "function") {
     try {
       return el.matches(s);
     } catch (e) {}
-  }
-
-  // Tag only: e.g. "b", "p", "div"
-  if (/^[a-zA-Z0-9_-]+$/.test(s)) {
-    const elTag = String(el.localName || el.tagName || "").toLowerCase();
-    return elTag === s.toLowerCase();
-  }
-
-  // ID only: e.g. "#foo"
-  if (s.startsWith("#") && !/[\s.>:\[]/.test(s)) {
-    const id = s.slice(1);
-    return el.id === id || (typeof el.getAttribute === "function" && el.getAttribute("id") === id);
-  }
-
-  // Class only: e.g. ".foo"
-  if (s.startsWith(".") && !/[\s#>:\[]/.test(s)) {
-    const cls = s.slice(1);
-    if (el.classList && el.classList.contains(cls)) return true;
-    const cName = el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "";
-    return cName.split(/\s+/).indexOf(cls) !== -1;
-  }
-
-  // Attribute selector: e.g. [attr] or [attr="val"] or [attr=val]
-  if (s.startsWith("[") && s.endsWith("]")) {
-    const inside = s.slice(1, -1).trim();
-    const eqIdx = inside.indexOf("=");
-    if (eqIdx === -1) {
-      return typeof el.hasAttribute === "function" ? el.hasAttribute(inside) : false;
-    }
-    const attrName = inside.slice(0, eqIdx).trim();
-    let expectedVal = inside.slice(eqIdx + 1).trim();
-    if ((expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
-        (expectedVal.startsWith("'") && expectedVal.endsWith("'"))) {
-      expectedVal = expectedVal.slice(1, -1);
-    }
-    const actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
-    return actualVal === expectedVal;
-  }
-
-  // Tag + attribute: e.g. "template[shadowrootmode]"
-  const bracketIdx = s.indexOf("[");
-  if (bracketIdx !== -1 && s.endsWith("]")) {
-    const tagPart = s.slice(0, bracketIdx).trim();
-    const attrPart = s.slice(bracketIdx);
-    return matchesElementSelector(el, tagPart) && matchesElementSelector(el, attrPart);
-  }
-
-  // Tag + class: e.g. "p.x"
-  const dotIdx = s.indexOf(".");
-  if (dotIdx > 0 && !/[\s#>:\[]/.test(s)) {
-    const tagPart = s.slice(0, dotIdx);
-    const clsPart = s.slice(dotIdx);
-    return matchesElementSelector(el, tagPart) && matchesElementSelector(el, clsPart);
   }
 
   return false;

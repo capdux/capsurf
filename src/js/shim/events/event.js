@@ -341,7 +341,11 @@ Event.prototype.preventDefault = function () {
 
 Event.prototype.composedPath = function () {
   const s = _eventState.get(this);
-  return (s && s.path) ? s.path.slice() : [];
+  if (!s || !s.path || s.path.length === 0) return [];
+  if (typeof global.__capsurf_filterComposedPath === "function") {
+    return global.__capsurf_filterComposedPath(s.path, s.currentTarget);
+  }
+  return s.path.slice();
 };
 
 Event.prototype.initEvent = function (type, bubbles, cancelable) {

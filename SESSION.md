@@ -3271,6 +3271,20 @@
   - 派发全新子智能体 **Subagent 34**: Table Layout Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/table-anonymous-boxes.e2e.test.ts`、`e2e/table-caption-sizing.e2e.test.ts`、`e2e/table-collapsed-border-spans.e2e.test.ts`、`e2e/replaced-display-table.e2e.test.ts`。
 
+## [2026-11-20 15:00:00] Shadow DOM 完整封装与事件重定向、innerText/outerText 与游离节点查询闭环 (Subagent bc11f7de 结单，Phase 69)
+- **Shadow DOM 封装、插槽与样式隔离 (`src/js/shim/`)**:
+  - `html-classes.js` & `events/dispatch.js` & `events/event.js` & `window.js`: 实现 `HTMLSlotElement`、`assignedNodes`/`assignedElements`/`assignedSlot` 与微任务 `slotchange`；实现 Shadow DOM 事件传播、`retargeting` 与 `composedPath()` closed shadow 过滤；`getComputedStyle` 对 ShadowRoot 内元素限定 `<style>` 作用域；`attachShadow` 重复挂载抛出 `NotSupportedError`。
+- **WHATWG `innerText`/`outerText` 与游离节点选择器 (`html-element.js`, `html-classes.js`, `element.js`, `selector.js`, `node-base.js`, `index.js`)**:
+  - 将 `innerText`/`outerText` 收归 `HTMLElement.prototype`（SVG 保留 expando），支持 `\r\n`/`\n` 转 `<br>` 与相邻 Text 合并；`textContent` 跳过 Comment/PI；`querySelector`/`matches`/`closest` 对游离/陈旧节点与 ShadowRoot 走安全子树匹配并校验非法选择器 `SyntaxError`。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 7 大 Core DOM 测试套件（`prefixed-attribute-writes`、`raw-text-inner-html`、`shadow-dom`、`stale-node-matches`、`static-node-list-item`、`template-content-parse`、`text-setters`）：**10/10 PASS (32 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `bc11f7de-b50d-4147-85b4-5c3c3c3d5d4f`；
+  - 派发全新子智能体 **Subagent 35**: Boa Runtime Sweep Specialist（JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：批量清扫 11 项 `e2e/boa-*.e2e.test.ts` 核心 JS 运行时兼容性测试。
+
+
 
 
 

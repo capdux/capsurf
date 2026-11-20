@@ -508,6 +508,10 @@ Node.prototype.appendChild = function (child) {
     notifyMutation(rec);
   }
 
+  if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+    global.__capsurf_scheduleSlotChange(this);
+  }
+
   executeConnectedScripts(child);
   notifyConnectedCustomElements(child);
 
@@ -583,6 +587,10 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     notifyMutation(rec);
   }
 
+  if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+    global.__capsurf_scheduleSlotChange(this);
+  }
+
   executeConnectedScripts(newChild);
   notifyConnectedCustomElements(newChild);
 
@@ -626,6 +634,10 @@ Node.prototype.removeChild = function (child) {
     const rec = new MutationRecord("childList", this);
     rec.removedNodes = [child];
     notifyMutation(rec);
+  }
+
+  if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+    global.__capsurf_scheduleSlotChange(this);
   }
 
   return child;
@@ -716,6 +728,10 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
     notifyMutation(rec);
   }
 
+  if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+    global.__capsurf_scheduleSlotChange(this);
+  }
+
   executeConnectedScripts(newChild);
 
   return oldChild;
@@ -753,6 +769,7 @@ if (typeof Element !== "undefined" && Element.prototype) {
     get: function () {
       if (this._children && this._children.length > 0) {
         return this._children.map(function (c) {
+          if (!c || (c.nodeType !== 1 && c.nodeType !== 3 && c.nodeType !== 4)) return "";
           return c.textContent || "";
         }).join("");
       }
@@ -784,18 +801,78 @@ if (typeof Element !== "undefined" && Element.prototype) {
   Element.prototype.removeChild = Node.prototype.removeChild;
   Element.prototype.replaceChild = Node.prototype.replaceChild;
 
+  const RAW_TEXT_TAGS = {
+    script: 1, style: 1, xmp: 1, iframe: 1, noembed: 1, noframes: 1, plaintext: 1, noscript: 1,
+  };
+  function escapeHtmlText(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/\u00a0/g, "&nbsp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  function hasJsOnlyChild(kids) {
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (!k) continue;
+      if (k._nid === undefined) return true;
+    }
+    return false;
+  }
+
   const nativeElementInnerHtmlDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
   if (nativeElementInnerHtmlDesc && nativeElementInnerHtmlDesc.set) {
+    const origGetInnerHtml = nativeElementInnerHtmlDesc.get;
     const origSetInnerHtml = nativeElementInnerHtmlDesc.set;
     Object.defineProperty(Element.prototype, "innerHTML", {
-      get: nativeElementInnerHtmlDesc.get,
-      set: function (v) {
-        if (this._children) {
-          this._children.length = 0;
+      get: function () {
+        if (this._children && this._children.length > 0 && hasJsOnlyChild(this._children)) {
+          const parentTag = String(this.localName || this.tagName || "").toLowerCase();
+          const isRawText = Boolean(RAW_TEXT_TAGS[parentTag]);
+          let html = "";
+          for (let i = 0; i < this._children.length; i++) {
+            const k = this._children[i];
+            if (!k) continue;
+            if (k.nodeType === 1) {
+              html += k.outerHTML || "";
+            } else if (k.nodeType === 3) {
+              const txt = k.data !== undefined ? String(k.data) : String(k.textContent || "");
+              html += isRawText ? txt : escapeHtmlText(txt);
+            } else if (k.nodeType === 8) {
+              html += "<!--" + (k.data !== undefined ? String(k.data) : "") + "-->";
+            }
+          }
+          return html;
         }
+        return origGetInnerHtml ? origGetInnerHtml.call(this) : "";
+      },
+      set: function (v) {
+        let oldKids = [];
+        try {
+          oldKids = Array.from(this.childNodes || this._children || []);
+        } catch (e) {}
+        for (let i = 0; i < oldKids.length; i++) {
+          if (oldKids[i]) {
+            try { oldKids[i].parentNode = null; } catch (e) {}
+          }
+        }
+        this._children = null;
         origSetInnerHtml.call(this, v);
         if (typeof processSubtreeTemplates === "function") {
           processSubtreeTemplates(this);
+        }
+        let newKids = [];
+        try {
+          newKids = Array.from(this.childNodes || this._children || []);
+        } catch (e) {}
+        if ((oldKids.length > 0 || newKids.length > 0) && typeof notifyMutation === "function") {
+          const rec = new MutationRecord("childList", this);
+          rec.removedNodes = oldKids;
+          rec.addedNodes = newKids;
+          notifyMutation(rec);
+        }
+        if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+          global.__capsurf_scheduleSlotChange(this);
         }
       },
       configurable: true,

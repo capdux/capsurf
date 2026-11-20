@@ -254,19 +254,57 @@ function installShim(global) {
     
     // Add selector methods
     global.Element.prototype.querySelector = wrapQuerySelector(function(sel) {
-        const all = document.querySelectorAll(sel);
-        for(let i = 0; i < all.length; i++) {
-            if (this !== all[i] && this.contains(all[i])) return all[i];
+        const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+        if (!this.isConnected || (root && root !== document)) {
+            if (typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+                return findInSubtree(this, function (el) {
+                    return matchesElementSelector(el, sel, root);
+                }, true);
+            }
+            return null;
         }
-        return null;
+        try {
+            const all = document.querySelectorAll(sel);
+            for(let i = 0; i < all.length; i++) {
+                if (this !== all[i] && this.contains(all[i])) return all[i];
+            }
+            return null;
+        } catch (e) {
+            if (e && e.name === "SyntaxError") throw e;
+            if (typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+                return findInSubtree(this, function (el) {
+                    return matchesElementSelector(el, sel, root);
+                }, true);
+            }
+            return null;
+        }
     });
     global.Element.prototype.querySelectorAll = wrapQuerySelectorAll(function(sel) {
-        const all = document.querySelectorAll(sel);
-        const matches = [];
-        for(let i = 0; i < all.length; i++) {
-            if (this !== all[i] && this.contains(all[i])) matches.push(all[i]);
+        const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+        if (!this.isConnected || (root && root !== document)) {
+            if (typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+                return findInSubtree(this, function (el) {
+                    return matchesElementSelector(el, sel, root);
+                }, false) || [];
+            }
+            return [];
         }
-        return matches;
+        try {
+            const all = document.querySelectorAll(sel);
+            const matches = [];
+            for(let i = 0; i < all.length; i++) {
+                if (this !== all[i] && this.contains(all[i])) matches.push(all[i]);
+            }
+            return matches;
+        } catch (e) {
+            if (e && e.name === "SyntaxError") throw e;
+            if (typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+                return findInSubtree(this, function (el) {
+                    return matchesElementSelector(el, sel, root);
+                }, false) || [];
+            }
+            return [];
+        }
     });
 
     global.Element.prototype.toDataURL = markNative(function (type) {
@@ -309,6 +347,18 @@ function installShim(global) {
       global.__capsurf_recordCanonicalId(el);
     }
     const tag = String(el.localName || el.tagName || "").toLowerCase();
+    const ns = el.namespaceURI;
+    if (ns === "http://www.w3.org/2000/svg") {
+      if (tag === "svg" && global.SVGSVGElement) {
+        Object.setPrototypeOf(el, global.SVGSVGElement.prototype);
+      } else if (global.SVGElement) {
+        Object.setPrototypeOf(el, global.SVGElement.prototype);
+      }
+      return el;
+    }
+    if (ns && ns !== "http://www.w3.org/1999/xhtml") {
+      return el;
+    }
     switch (tag) {
       case "input": Object.setPrototypeOf(el, global.HTMLInputElement.prototype); break;
       case "textarea": Object.setPrototypeOf(el, global.HTMLTextAreaElement.prototype); break;
@@ -329,6 +379,7 @@ function installShim(global) {
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
+      case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
       case "details": Object.setPrototypeOf(el, (global.HTMLDetailsElement || global.HTMLElement).prototype); break;
       case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
       case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;

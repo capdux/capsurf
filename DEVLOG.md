@@ -1227,4 +1227,10 @@
    - 将 `Position.Sticky` 从 `Fixed` 独立分离；在 `layoutNodeEx` 传递 `static_x/y` 与 `parent_h_definite`，实现 `abspos`/`fixed` 自动回退流内静态位置与非确定父高度（`auto` 或仅 `min-height`）下百分比高度退化为 `auto` 按子内容撑开。
 2. **动态视口坐标与 `document.elementFromPoint` (`dom_binding.cp`)**：
    - 在 `getBoundingClientRect` 与 `elementFromPoint` 入口通过 `ensureLayoutUpToDate` 自动刷新脏布局，并由 `computeViewportRect` 结合 `window.scrollX/Y` 与祖先滚动偏移实时计算 `fixed` 逃逸与 `sticky` 双向/嵌套 scrollport 夹紧坐标。
+
+## Phase 69 Shadow DOM 事件重定向、插槽分发与 `innerText`/`outerText` 规范技术方案
+1. **Shadow DOM 插槽、事件重定向与作用域样式 (`html-classes.js`, `dispatch.js`, `window.js`)**：
+   - 在事件派发路径中沿 `<slot>` 穿越影子子树，按 `composed` 标志控制是否越过 ShadowRoot 边界，对 `event.target` 实施标准 retargeting 并在 `composedPath()` 中过滤 closed shadow tree；`getComputedStyle` 限定 ShadowRoot 内部 `<style>` 作用域。
+2. **`HTMLElement` 文本设置器与游离子树选择器 (`html-classes.js`, `selector.js`, `element.js`)**：
+   - 将 `innerText`/`outerText` 严格定义于 `HTMLElement.prototype` 以保留 `SVGElement` expando 语义；扩展 `matchesElementSelector` 支持组合子与逗号选择器，使游离节点与 ShadowRoot 脱离原生文档句柄仍可精确匹配。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

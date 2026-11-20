@@ -1572,4 +1572,13 @@
 - **测试与门禁验证**：
   - 静态门禁：全部修改 `.cp` 4 门禁全 0；
   - E2E 测试：`positioned-root-hoist` (9) + `rehomed-fixed-paint-parent` (2) + `size-container-abspos` (1) + `sticky-position` (5) + 回归 (1) 共 **18 pass, 0 fail (53 expect calls)**。
+
+## Phase 69: Shadow DOM Encapsulation & Retargeting, `innerText`/`outerText` & Stale Node Matching (100% Closed)
+- **`src/js/shim/element/{html-classes,html-element,element}.js` & `events/{dispatch,event}.js` & `selector.js` & `node-base.js` & `window.js` & `index.js`**：
+  - 实装 `HTMLSlotElement`、`assignedNodes`/`assignedElements`/`assignedSlot`、`slotchange` 微任务、Shadow DOM 事件 `retargeting` / `composedPath` 与 ShadowRoot 样式隔离；
+  - 将 `innerText`/`outerText` 移至 `HTMLElement.prototype` 并按 WHATWG rendered text fragment 规范实现换行转 `<br>` 与 Text 合并；
+  - 增强 `matchesElementSelector` 复合与组合子匹配，使游离/陈旧节点与 ShadowRoot 查询安全无错。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：7 大 Core DOM 套件共 **10 pass, 0 fail (32 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

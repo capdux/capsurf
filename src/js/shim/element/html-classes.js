@@ -69,6 +69,282 @@ function installHtmlClasses(global) {
 
   const HTMLElementProto = HTMLElement.prototype;
 
+  // HTML rendered text fragment helper (for innerText / outerText setters)
+  function createRenderedTextFragment(str, doc) {
+    const d = doc || global.document || (typeof document !== "undefined" ? document : null);
+    const frag = (d && typeof d.createDocumentFragment === "function")
+      ? d.createDocumentFragment()
+      : new DocumentFragment();
+    let pos = 0;
+    const len = str.length;
+    while (pos < len) {
+      const start = pos;
+      while (pos < len && str.charCodeAt(pos) !== 10 && str.charCodeAt(pos) !== 13) {
+        pos++;
+      }
+      if (pos > start) {
+        const chunk = str.slice(start, pos);
+        const textNode = (d && typeof d.createTextNode === "function")
+          ? d.createTextNode(chunk)
+          : new Text(chunk);
+        frag.appendChild(textNode);
+      }
+      while (pos < len && (str.charCodeAt(pos) === 10 || str.charCodeAt(pos) === 13)) {
+        if (str.charCodeAt(pos) === 13 && pos + 1 < len && str.charCodeAt(pos + 1) === 10) {
+          pos += 2;
+        } else {
+          pos += 1;
+        }
+        const br = (d && typeof d.createElement === "function") ? d.createElement("br") : null;
+        if (br) frag.appendChild(br);
+      }
+    }
+    return frag;
+  }
+
+  Object.defineProperty(HTMLElementProto, "innerText", {
+    get: function () {
+      return this.textContent || "";
+    },
+    set: function (v) {
+      // [LegacyNullToEmptyString]
+      const str = v === null ? "" : String(v);
+      const frag = createRenderedTextFragment(str, this.ownerDocument);
+      const existing = Array.from(this.childNodes || this._children || []);
+      for (let i = 0; i < existing.length; i++) {
+        try { this.removeChild(existing[i]); } catch (e) {}
+      }
+      if (frag.firstChild) {
+        this.appendChild(frag);
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLElementProto, "outerText", {
+    get: function () {
+      return this.innerText;
+    },
+    set: function (v) {
+      const parent = this.parentNode;
+      if (!parent) {
+        if (typeof DOMException !== "undefined") {
+          throw new DOMException("The node has no parent.", "NoModificationAllowedError");
+        }
+        const err = new Error("The node has no parent.");
+        err.name = "NoModificationAllowedError";
+        throw err;
+      }
+      const beforeKids = Array.from(parent.childNodes || parent._children || []);
+      const selfIdx = beforeKids.indexOf(this);
+      const prev = selfIdx > 0 ? beforeKids[selfIdx - 1] : this.previousSibling;
+      const next = (selfIdx >= 0 && selfIdx + 1 < beforeKids.length) ? beforeKids[selfIdx + 1] : this.nextSibling;
+      // [LegacyNullToEmptyString]
+      const str = v === null ? "" : String(v);
+      const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      const frag = createRenderedTextFragment(str, doc);
+      if (!frag.firstChild) {
+        const emptyText = (doc && typeof doc.createTextNode === "function")
+          ? doc.createTextNode("")
+          : new Text("");
+        frag.appendChild(emptyText);
+      }
+      parent.replaceChild(frag, this);
+      // Merge adjacent Text nodes per HTML spec
+      if (next && next.nodeType === 3) {
+        const afterKids1 = Array.from(parent.childNodes || parent._children || []);
+        const nextIdx = afterKids1.indexOf(next);
+        const beforeNext = nextIdx > 0 ? afterKids1[nextIdx - 1] : null;
+        if (beforeNext && beforeNext.nodeType === 3) {
+          const merged = (beforeNext.data !== undefined ? beforeNext.data : (beforeNext.textContent || "")) +
+                         (next.data !== undefined ? next.data : (next.textContent || ""));
+          beforeNext.data = merged;
+          parent.removeChild(next);
+        }
+      }
+      if (prev && prev.nodeType === 3) {
+        const afterKids2 = Array.from(parent.childNodes || parent._children || []);
+        const prevIdx = afterKids2.indexOf(prev);
+        const afterPrev = (prevIdx >= 0 && prevIdx + 1 < afterKids2.length) ? afterKids2[prevIdx + 1] : null;
+        if (afterPrev && afterPrev.nodeType === 3) {
+          const merged = (prev.data !== undefined ? prev.data : (prev.textContent || "")) +
+                         (afterPrev.data !== undefined ? afterPrev.data : (afterPrev.textContent || ""));
+          prev.data = merged;
+          parent.removeChild(afterPrev);
+        }
+      }
+    },
+    configurable: true,
+  });
+
+  // Shadow DOM Slot helpers & HTMLSlotElement
+  function collectSlotsInShadowRoot(root) {
+    const slots = [];
+    if (!root) return slots;
+    function walk(node) {
+      if (!node) return;
+      const kids = node._children || (node.childNodes ? Array.from(node.childNodes) : []);
+      for (let i = 0; i < kids.length; i++) {
+        const c = kids[i];
+        if (!c) continue;
+        if (c.nodeType === 1) {
+          const tag = String(c.localName || c.tagName || "").toLowerCase();
+          if (tag === "slot") {
+            slots.push(typeof upgradeElement === "function" ? upgradeElement(c) : c);
+          }
+          walk(c);
+        }
+      }
+    }
+    walk(root);
+    return slots;
+  }
+
+  function findAssignedSlotForNode(node, includeClosed) {
+    if (!node || (node.nodeType !== 1 && node.nodeType !== 3)) return null;
+    const parent = node.parentNode;
+    if (!parent || !parent._shadowRoot) return null;
+    const root = parent._shadowRoot;
+    if (!includeClosed && root.mode !== "open") return null;
+    const targetName = node.nodeType === 1
+      ? ((typeof node.getAttribute === "function" ? node.getAttribute("slot") : "") || "")
+      : "";
+    const slots = collectSlotsInShadowRoot(root);
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      const sName = (typeof s.getAttribute === "function" ? s.getAttribute("name") : "") || "";
+      if (sName === targetName) return s;
+    }
+    return null;
+  }
+
+  function computeAssignedNodesForSlot(slot) {
+    if (!slot || typeof slot.getRootNode !== "function") return [];
+    const root = slot.getRootNode();
+    if (!root || !root.host) return [];
+    const slotName = (typeof slot.getAttribute === "function" ? slot.getAttribute("name") : "") || "";
+    const slots = collectSlotsInShadowRoot(root);
+    let firstMatchingSlot = null;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      const sName = (typeof s.getAttribute === "function" ? s.getAttribute("name") : "") || "";
+      if (sName === slotName) {
+        firstMatchingSlot = s;
+        break;
+      }
+    }
+    if (firstMatchingSlot !== slot) return [];
+    const host = root.host;
+    const hostKids = Array.from(host.childNodes || host._children || []);
+    const assigned = [];
+    for (let i = 0; i < hostKids.length; i++) {
+      const child = hostKids[i];
+      if (!child) continue;
+      if (child.nodeType === 1) {
+        const cSlot = (typeof child.getAttribute === "function" ? child.getAttribute("slot") : "") || "";
+        if (cSlot === slotName) assigned.push(child);
+      } else if (child.nodeType === 3) {
+        if (slotName === "") assigned.push(child);
+      }
+    }
+    return assigned;
+  }
+
+  const _pendingSlotChangeHosts = new Set();
+  function scheduleSlotChange(host) {
+    if (!host || !host._shadowRoot) return;
+    if (_pendingSlotChangeHosts.has(host)) return;
+    _pendingSlotChangeHosts.add(host);
+    const root = host._shadowRoot;
+    const slots = collectSlotsInShadowRoot(root);
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (!s._lastAssignedNodes) {
+        s._lastAssignedNodes = computeAssignedNodesForSlot(s);
+      }
+    }
+    Promise.resolve().then(function () {
+      _pendingSlotChangeHosts.delete(host);
+      if (!host._shadowRoot) return;
+      const currentSlots = collectSlotsInShadowRoot(host._shadowRoot);
+      for (let i = 0; i < currentSlots.length; i++) {
+        const s = currentSlots[i];
+        const prev = s._lastAssignedNodes || [];
+        const next = computeAssignedNodesForSlot(s);
+        let changed = prev.length !== next.length;
+        if (!changed) {
+          for (let j = 0; j < next.length; j++) {
+            if (prev[j] !== next[j]) {
+              changed = true;
+              break;
+            }
+          }
+        }
+        s._lastAssignedNodes = next;
+        if (changed && typeof s.dispatchEvent === "function") {
+          try {
+            s.dispatchEvent(new Event("slotchange", { bubbles: true, cancelable: false, composed: false }));
+          } catch (e) {}
+        }
+      }
+    });
+  }
+
+  global.__capsurf_findAssignedSlot = findAssignedSlotForNode;
+  global.__capsurf_scheduleSlotChange = scheduleSlotChange;
+
+  function HTMLSlotElement() {
+    HTMLElement.call(this);
+  }
+  HTMLSlotElement.prototype = Object.create(HTMLElementProto);
+  HTMLSlotElement.prototype.constructor = HTMLSlotElement;
+  Object.defineProperty(HTMLSlotElement.prototype, Symbol.toStringTag, {
+    value: "HTMLSlotElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLSlotElement.prototype, "name", {
+    get: function () { return (typeof this.getAttribute === "function" ? this.getAttribute("name") : "") || ""; },
+    set: function (v) { if (typeof this.setAttribute === "function") this.setAttribute("name", String(v)); },
+    configurable: true,
+  });
+  HTMLSlotElement.prototype.assignedNodes = function (options) {
+    const assigned = computeAssignedNodesForSlot(this);
+    this._lastAssignedNodes = assigned;
+    if (options && options.flatten && assigned.length === 0) {
+      return Array.from(this.childNodes || this._children || []);
+    }
+    return assigned;
+  };
+  HTMLSlotElement.prototype.assignedElements = function (options) {
+    const nodes = this.assignedNodes(options);
+    const els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i] && nodes[i].nodeType === 1) els.push(nodes[i]);
+    }
+    return els;
+  };
+  markNative(HTMLSlotElement, "HTMLSlotElement");
+  markNative(HTMLSlotElement.prototype.assignedNodes, "assignedNodes");
+  markNative(HTMLSlotElement.prototype.assignedElements, "assignedElements");
+  global.HTMLSlotElement = HTMLSlotElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLSlotElement = HTMLSlotElement;
+  if (typeof window !== "undefined") window.HTMLSlotElement = HTMLSlotElement;
+
+  Object.defineProperty(ElementProto, "assignedSlot", {
+    get: function () {
+      return findAssignedSlotForNode(this, false);
+    },
+    configurable: true,
+  });
+  if (typeof Text !== "undefined" && Text.prototype) {
+    Object.defineProperty(Text.prototype, "assignedSlot", {
+      get: function () {
+        return findAssignedSlotForNode(this, false);
+      },
+      configurable: true,
+    });
+  }
+
   function installHyperlinkDecomposition(proto) {
     Object.defineProperty(proto, "href", {
       get: function () {

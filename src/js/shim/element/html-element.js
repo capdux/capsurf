@@ -91,15 +91,9 @@ function installHtmlElementExtensions(proto) {
     configurable: true,
   });
 
-  Object.defineProperty(proto, "innerText", {
-    get: function () { return this.textContent || ""; },
-    set: function (v) { this.textContent = String(v); },
-    configurable: true,
-  });
-
   if (!proto.click) {
     proto.click = function () {
-      const evt = new MouseEvent("click", { bubbles: true, cancelable: true });
+      const evt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
       this.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         const tag = String(this.tagName || this.localName || "").toLowerCase();

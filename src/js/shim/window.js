@@ -2804,11 +2804,13 @@ function installWindow(global) {
 
     const computedMap = new Map();
     const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-    if (doc) {
+    const rootNode = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+    const styleScope = (rootNode && rootNode.nodeType === 11 && rootNode.host) ? rootNode : doc;
+    if (styleScope) {
       let styleNodes = [];
       try {
-        if (typeof doc.querySelectorAll === "function") {
-          const list = doc.querySelectorAll("style");
+        if (typeof styleScope.querySelectorAll === "function") {
+          const list = styleScope.querySelectorAll("style");
           for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
         }
       } catch (e) {}
@@ -2825,9 +2827,13 @@ function installWindow(global) {
             }
           }
         }
-        if (doc.head) scanStyles(doc.head);
-        if (doc.body) scanStyles(doc.body);
-        if (doc.documentElement) scanStyles(doc.documentElement);
+        if (styleScope.nodeType === 11) {
+          scanStyles(styleScope);
+        } else {
+          if (styleScope.head) scanStyles(styleScope.head);
+          if (styleScope.body) scanStyles(styleScope.body);
+          if (styleScope.documentElement) scanStyles(styleScope.documentElement);
+        }
       }
 
       for (let i = 0; i < styleNodes.length; i++) {

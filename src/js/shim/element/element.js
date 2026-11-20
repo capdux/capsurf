@@ -1353,8 +1353,13 @@ function installElementExtensions(proto) {
   // matches & closest
   const origProtoMatches = typeof proto.matches === "function" ? proto.matches : null;
   proto.matches = function (selector) {
-    if (!selector || typeof selector !== "string") return false;
-    const s = selector.trim();
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'matches' on 'Element': 1 argument required, but only 0 present.");
+    }
+    if (typeof validateSelector === "function") {
+      validateSelector(selector);
+    }
+    const s = String(selector).trim();
     const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);
     if (dirMatch) {
       const targetDir = dirMatch[1].toLowerCase();
@@ -1366,7 +1371,9 @@ function installElementExtensions(proto) {
     if (origProtoMatches) {
       try {
         return origProtoMatches.call(this, selector);
-      } catch (e) {}
+      } catch (e) {
+        if (e && e.name === "SyntaxError") throw e;
+      }
     }
     if (s === ":checked") return Boolean(this.checked);
     if (s === ":disabled") return Boolean(this.disabled);
@@ -1384,9 +1391,13 @@ function installElementExtensions(proto) {
     if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
     if (s.toLowerCase() === this.localName) return true;
     if (typeof document !== "undefined" && document.querySelectorAll) {
-      const matches = document.querySelectorAll(s);
-      for (let i = 0; i < matches.length; i++) {
-        if (matches[i] === this) return true;
+      try {
+        const matches = document.querySelectorAll(s);
+        for (let i = 0; i < matches.length; i++) {
+          if (matches[i] === this) return true;
+        }
+      } catch (e) {
+        if (e && e.name === "SyntaxError") throw e;
       }
     }
     return false;
@@ -1395,6 +1406,12 @@ function installElementExtensions(proto) {
 
   if (!proto.closest) {
     proto.closest = function (selector) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'closest' on 'Element': 1 argument required, but only 0 present.");
+      }
+      if (typeof validateSelector === "function") {
+        validateSelector(selector);
+      }
       let curr = this;
       while (curr && curr.nodeType === ELEMENT_NODE) {
         if (curr.matches && curr.matches(selector)) return curr;
@@ -1545,6 +1562,57 @@ function installElementExtensions(proto) {
       return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
     }
     const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+    if (this._shadowRoot) {
+      if (this._inShadowRect) {
+        const hw = r.width || 800;
+        const hx = r.x || 0;
+        const hy = r.y || 0;
+        return { x: hx, y: hy, left: hx, top: hy, width: hw, height: 0, right: hx + hw, bottom: hy };
+      }
+      let explicitH = 0;
+      if (this.style && this.style.height) explicitH = parseFloat(this.style.height) || 0;
+      if (!explicitH && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const hcs = window.getComputedStyle(this);
+          if (hcs && hcs.height && hcs.height !== "auto") explicitH = parseFloat(hcs.height) || 0;
+        } catch (e) {}
+      }
+      if (!explicitH) {
+        this._inShadowRect = true;
+        let shadowH = 0;
+        try {
+          const sKids = Array.from(this._shadowRoot.childNodes || this._shadowRoot._children || []);
+          for (let i = 0; i < sKids.length; i++) {
+            const sk = sKids[i];
+            if (sk && sk.nodeType === 1) {
+              const stag = String(sk.localName || sk.tagName || "").toLowerCase();
+              if (stag === "style" || stag === "script") continue;
+              const sr = typeof sk.getBoundingClientRect === "function" ? sk.getBoundingClientRect() : null;
+              if (sr && sr.height > 0) {
+                shadowH += sr.height;
+              } else if (sk.textContent && sk.textContent.trim().length > 0) {
+                shadowH += 16;
+              }
+            }
+          }
+        } finally {
+          this._inShadowRect = false;
+        }
+        const hostW = r.width || 800;
+        const hostX = r.x || 0;
+        const hostY = r.y || 0;
+        return {
+          x: hostX,
+          y: hostY,
+          left: hostX,
+          top: hostY,
+          width: hostW,
+          height: shadowH,
+          right: hostX + hostW,
+          bottom: hostY + shadowH,
+        };
+      }
+    }
     if (r.width === 0 && r.height === 0 && r.x === 0 && r.y === 0) {
       const tag = String(this.tagName || this.localName || "").toUpperCase();
       if (tag === "IMG") {
@@ -1558,6 +1626,15 @@ function installElementExtensions(proto) {
       if (this.style) {
         if (this.style.width) childW = parseFloat(this.style.width) || 0;
         if (this.style.height) childH = parseFloat(this.style.height) || 0;
+      }
+      if ((!childW || !childH) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(this);
+          if (cs) {
+            if (!childW && cs.width && cs.width !== "auto") childW = parseFloat(cs.width) || 0;
+            if (!childH && cs.height && cs.height !== "auto") childH = parseFloat(cs.height) || 0;
+          }
+        } catch (e) {}
       }
       const parent = getScrollParent(this);
       if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
@@ -1972,10 +2049,10 @@ function installElementExtensions(proto) {
     }
     if (this._shadowRoot) {
       if (typeof DOMException !== "undefined") {
-        throw new DOMException("Shadow root cannot be created on a host which already hosts a shadow tree", "InvalidStateError");
+        throw new DOMException("Shadow root cannot be created on a host which already hosts a shadow tree", "NotSupportedError");
       }
       const err = new Error("Shadow root cannot be created on a host which already hosts a shadow tree");
-      err.name = "InvalidStateError";
+      err.name = "NotSupportedError";
       throw err;
     }
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
