@@ -5,15 +5,126 @@
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { HttpLoader } from "../net/http_loader.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
+import { NodeType } from "../dom/dom.cp";
 import { Base64 } from "cap:encoding";
 import {
     FrameState,
     MainFrameArgs,
+    ChildFrameArgs,
     makeMainFrameState,
+    makeChildFrameState,
+    originOf,
     buildFrameTree,
     buildFrameResourceTree
 } from "./frames.cp";
 import { extractAckSessionId } from "./screencast.cp";
+
+fn resolveIframeFinalUrl(base_url: []const u8, src: []const u8, out_buf: []u8): []const u8 {
+    let cur_buf: [1024]u8 = undefined;
+    let cur = HttpLoader.resolveRelativeUrl(base_url, src, &cur_buf);
+    let hop: usize = 0;
+    while (hop < 5) : (hop += 1) {
+        if (!HttpLoader.isMockRedirectUrl(cur)) break;
+        let next_buf: [1024]u8 = undefined;
+        if (next_url := HttpLoader.resolveMockRedirectTarget(cur, &next_buf)) {
+            const n = @min(next_url.len, cur_buf.len);
+            @memcpy(cur_buf[0..n], next_url[0..n]);
+            cur = cur_buf[0..n];
+        } else {
+            break;
+        }
+    }
+    const out_n = @min(cur.len, out_buf.len);
+    @memcpy(out_buf[0..out_n], cur[0..out_n]);
+    return out_buf[0..out_n];
+}
+
+fn findNestedIframeSrc(html: []const u8): ([]const u8)? {
+    let pos: usize = 0;
+    while (pos < html.len) {
+        const tag_pos = std.mem.indexOfPos(u8, html, pos, "<iframe") ?? return null;
+        const close_pos = std.mem.indexOfScalarPos(u8, html, tag_pos, '>') ?? return null;
+        const tag = html[tag_pos..close_pos];
+        if (src_pos := std.mem.indexOf(u8, tag, "src=")) {
+            const after = tag[src_pos + 4..];
+            if (after.len >= 2 && (after[0] == '"' || after[0] == '\'')) {
+                const quote = after[0];
+                if (end_q := std.mem.indexOfScalarPos(u8, after, 1, quote)) {
+                    return after[1..end_q];
+                }
+            }
+        }
+        pos = close_pos + 1;
+    }
+    return null;
+}
+
+fn collectFrameStates(
+    session: *CdpPageSession,
+    out_frames: []FrameState,
+    url_storage: []u8,
+    id_storage: []u8,
+): usize {
+    if (out_frames.len == 0) return 0;
+    out_frames[0] = makeMainFrameState(MainFrameArgs{
+        frame_id: session.frame_id,
+        loader_id: session.loader_id,
+        url: session.url,
+    });
+    let count: usize = 1;
+    let child_seq: usize = 0;
+
+    let i: usize = 0;
+    while (i < session.doc.nodes.items.len && count < out_frames.len) : (i += 1) {
+        const n = &session.doc.nodes.items[i];
+        if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "iframe")) {
+            const src_opt = n.getAttribute("src");
+            if (src_opt == null || src_opt.?.len == 0) continue;
+            child_seq += 1;
+            const child_idx = count;
+            const child_url = resolveIframeFinalUrl(session.url, src_opt.?, url_storage[child_idx * 512 .. (child_idx + 1) * 512]);
+            const child_id = std.fmt.bufPrint(id_storage[child_idx * 32 .. (child_idx + 1) * 32], "capsurf-child-{d}", .{ child_seq }) catch "capsurf-child-1";
+            const owner_id = n.getAttribute("id") ?? "";
+            const frame_name = n.getAttribute("name") ?? "";
+            const is_xo = !HttpLoader.isSameOrigin(session.url, child_url);
+
+            out_frames[child_idx] = makeChildFrameState(ChildFrameArgs{
+                frame_id: child_id,
+                parent_frame_id: session.frame_id,
+                loader_id: session.loader_id,
+                url: child_url,
+                name: frame_name,
+                owner_element_id: owner_id,
+                is_cross_origin: is_xo,
+            });
+            count += 1;
+
+            // Depth-2 iframe discovery for fixture documents
+            if (count < out_frames.len && MockFixtures.isFixtureUrl(child_url)) {
+                const child_html_buf = session.allocator.alloc(u8, 16384) catch continue;
+                defer session.allocator.free(child_html_buf);
+                if (child_html := MockFixtures.handleFixtureRequest(child_url, "", session.user_agent, child_html_buf, null, "")) {
+                    if (nested_src := findNestedIframeSrc(child_html)) {
+                        const gc_idx = count;
+                        const gc_url = resolveIframeFinalUrl(child_url, nested_src, url_storage[gc_idx * 512 .. (gc_idx + 1) * 512]);
+                        const gc_id = std.fmt.bufPrint(id_storage[gc_idx * 32 .. (gc_idx + 1) * 32], "capsurf-child-{d}-1", .{ child_seq }) catch "capsurf-child-1-1";
+                        const gc_xo = !HttpLoader.isSameOrigin(child_url, gc_url);
+                        out_frames[gc_idx] = makeChildFrameState(ChildFrameArgs{
+                            frame_id: gc_id,
+                            parent_frame_id: child_id,
+                            loader_id: session.loader_id,
+                            url: gc_url,
+                            is_cross_origin: gc_xo,
+                        });
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    return count;
+}
 
 pub struct PageHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
@@ -169,6 +280,25 @@ pub struct PageHandler {
             const url = extractJsonString(req.params_raw, "url") ?? "about:blank";
             const referrer = extractJsonString(req.params_raw, "referrer") ?? "";
 
+            // Private Network Access: block a public page from navigating itself to a loopback address
+            if (HttpLoader.isPublicHttpUrl(session.url) && HttpLoader.isLoopbackUrl(url)) {
+                let esc_u_buf: [1024]u8 = [0; 1024];
+                const esc_u = escapeJsonString(url, &esc_u_buf);
+                const resp_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"requestId\":\"pna-block-001\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":403,\"statusText\":\"Forbidden\",\"headers\":{{}},\"mimeType\":\"text/plain\"}},\"frameId\":\"{s}\"}}",
+                    .{ session.loader_id, esc_u, session.frame_id },
+                ) catch "{}";
+                out_events[0] = CdpEvent.create("Network.responseReceived", resp_json);
+                event_count.* = 1;
+                const pna_res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS\"}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, pna_res);
+            }
+
             // Allocate buffer for document fetching
             let fetch_buf = session.allocator.alloc(u8, 65536) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(fetch_buf);
@@ -192,6 +322,44 @@ pub struct PageHandler {
             out_events[1] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
             out_events[2] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
             event_count.* = 3;
+
+            // Emit child/grandchild frame execution context and frameStoppedLoading events
+            const nav_frames = session.allocator.alloc(FrameState, 8) catch null;
+            const nav_urls = session.allocator.alloc(u8, 8 * 512) catch null;
+            const nav_ids = session.allocator.alloc(u8, 8 * 32) catch null;
+            defer if (nav_frames != null) session.allocator.free(nav_frames.?);
+            defer if (nav_urls != null) session.allocator.free(nav_urls.?);
+            defer if (nav_ids != null) session.allocator.free(nav_ids.?);
+            if (nav_frames != null && nav_urls != null && nav_ids != null) {
+                const nav_frame_count = collectFrameStates(session, nav_frames.?, nav_urls.?, nav_ids.?);
+                let fi: usize = 1;
+                while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
+                    const cf = &nav_frames.?[fi];
+                    if (session.runtime_enabled && event_count.* < out_events.len) {
+                        const ctx_id = session.next_context_id;
+                        session.next_context_id += 1;
+                        const cf_origin = originOf(cf.url);
+                        let esc_orig_buf: [256]u8 = [0; 256];
+                        const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
+                        const ctx_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"frameId\":\"{s}\"}}}}}}",
+                            .{ ctx_id, esc_orig, cf.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                        event_count.* += 1;
+                    }
+                    if (event_count.* < out_events.len) {
+                        const stop_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frameId\":\"{s}\"}}",
+                            .{ cf.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+                        event_count.* += 1;
+                    }
+                }
+            }
 
             if (session.css_enabled) {
                 let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
@@ -244,14 +412,17 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.getFrameTree")) {
-            let main_f = makeMainFrameState(MainFrameArgs{
-                frame_id: session.frame_id,
-                loader_id: session.loader_id,
-                url: session.url,
-            });
-            let f_arr: [1]FrameState = [main_f];
-            let tree_buf: [4096]u8 = undefined;
-            const tree_json = buildFrameTree(f_arr[0..1], tree_buf[0..]);
+            const f_arr = session.allocator.alloc(FrameState, 8) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(f_arr);
+            const url_storage = session.allocator.alloc(u8, 8 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(url_storage);
+            const id_storage = session.allocator.alloc(u8, 8 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(id_storage);
+            const tree_buf = session.allocator.alloc(u8, 8192) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(tree_buf);
+
+            const f_count = collectFrameStates(session, f_arr, url_storage, id_storage);
+            const tree_json = buildFrameTree(f_arr[0..f_count], tree_buf);
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"frameTree\":{s}}}",
@@ -262,14 +433,17 @@ pub struct PageHandler {
 
         if (std.mem.eql(u8, req.method, "Page.getFrameResourceTree") ||
             std.mem.eql(u8, req.method, "Page.getResourceTree")) {
-            let main_f = makeMainFrameState(MainFrameArgs{
-                frame_id: session.frame_id,
-                loader_id: session.loader_id,
-                url: session.url,
-            });
-            let f_arr: [1]FrameState = [main_f];
-            let tree_buf: [4096]u8 = undefined;
-            const tree_json = buildFrameResourceTree(f_arr[0..1], tree_buf[0..]);
+            const f_arr = session.allocator.alloc(FrameState, 8) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(f_arr);
+            const url_storage = session.allocator.alloc(u8, 8 * 512) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(url_storage);
+            const id_storage = session.allocator.alloc(u8, 8 * 32) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(id_storage);
+            const tree_buf = session.allocator.alloc(u8, 8192) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+            defer session.allocator.free(tree_buf);
+
+            const f_count = collectFrameStates(session, f_arr, url_storage, id_storage);
+            const tree_json = buildFrameResourceTree(f_arr[0..f_count], tree_buf);
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"frameTree\":{s}}}",

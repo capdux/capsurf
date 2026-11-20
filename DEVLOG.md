@@ -1315,4 +1315,10 @@
    - 在 `collectInlineItems` 中维护 `prev_ws` 跨节点空白状态机，实现词边界断行与行首行尾空白裁剪；在 `measureIntrinsicWidth`/`measureMinContentWidth` 实装 `min-content`/`max-content`/`fit-content`/`stretch` 及循环百分比视作 `auto`。
 2. **`-webkit-line-clamp` 与 `<svg>` `vertical-align: middle` (`cascade.cp`, `layout.cp`, `cdp/css.cp`)**：
    - 对 `display: -webkit-box` + `-webkit-box-orient: vertical` + `-webkit-line-clamp: N` 自动收敛计算 `display` 为 `flow-root` 并按行数截断盒高；修正 `.Middle` 偏移公式符号并使用直接父行内元素 `xHeightRatio()`。
+
+## Phase 84 网络安全策略（CORP / Private Network Access / SameSite 逐跳重定向）技术方案
+1. **逐跳重定向凭据剥离与 SameSite (`cookies.cp`, `http_loader.cp`, `mock_fixtures.cp`)**：
+   - 在 `fetchDocumentWithContext` 逐跳解析 301/302/303/307/308 与 mock 重定向，跨源跳剥离 `Authorization`/`Cookie` 并将上一跳 `initiator_origin` 传入 `CookieJar` 执行 RFC 6265bis `SameSite.Strict`/`Lax` 判定。
+2. **Private Network Access 与多级 Iframe 帧树 (`page.cp`)**：
+   - 拦截公网页面跳转 loopback 返回 `net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS`；使用堆分配 `collectFrameStates` 扫描 1~2 级 `<iframe>` 最终 URL 与 `securityOrigin` 并发射 `Runtime.executionContextCreated`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

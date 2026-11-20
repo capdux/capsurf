@@ -5,6 +5,7 @@
 import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CookieEntry, entryToCdp, parseUrlParts } from "../net/cookies.cp";
+import { markFreshExtraHeaders } from "../net/http_loader.cp";
 
 fn sanitizeAcceptEncoding(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
     const search_key = "accept-encoding";
@@ -104,6 +105,7 @@ pub struct NetworkHandler {
                 raw_to_save = headers_str;
             }
             session.extra_headers = sanitizeAcceptEncoding(session.allocator, raw_to_save);
+            markFreshExtraHeaders();
             if (session.dom_ctx != null) {
                 session.dom_ctx.?.extra_headers = session.extra_headers;
             }

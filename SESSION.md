@@ -3469,6 +3469,23 @@
   - 派发全新子智能体 **Subagent 49**: Container & Counter Layout Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/container-queries.e2e.test.ts`、`e2e/css-counters.e2e.test.ts`、`e2e/bg-image-capture.e2e.test.ts`、`e2e/hoisted-inline-rebreak.e2e.test.ts`、`e2e/hoisted-overflow-clip.e2e.test.ts`。
 
+## [2026-11-20 17:28:40] 3 路并发扩容 + 3.5s Debug 快编提速 14.3× + 网络策略/CORP/SameSite 逐跳门禁闭环 (Subagent ecd4af67 结单，Phase 84)
+- **构建提速机制落地（采纳 `cp agy` 建议）**:
+  - 实测 `rm -f bin/main && cap build -B --debug src/main.cp` 从 50.22s 降至 **3.51s（14.3× 提速）**，配合 `cp bin/main bin/main_<port>` + `CAPSURF_BIN` 彻底消除多路并发 `FileBusy`。
+- **网络策略、CORP、Private Network Access 与 RFC 6265bis SameSite 逐跳门禁 (`src/net/{cookies,mock_fixtures,http_loader}.cp`, `src/cdp/{network,page}.cp`)**:
+  - `cookies.cp`: 补齐 RFC 6265bis `SameSite.Strict`/`Lax` 跨站校验；
+  - `mock_fixtures.cp`: 新增 `/corp-script-page.html`、`/corp-script.js` 与跨源凭据剥离；
+  - `http_loader.cp` & `network.cp`: 实现 301/302/303/307/308 与 mock 重定向逐跳跟随（跨源剥离 `Authorization`/`Cookie`，同源保留）；
+  - `page.cp`: 实现公网访问 loopback 的 Private Network Access 403 拦截与 depth-1/depth-2 `<iframe>` 重定向后 `Page.getFrameTree`/`Runtime.executionContextCreated` 事件。
+- **门禁与 E2E 验证**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `blank-page-fetch` (1/1 PASS)、`corp-classic-script` (5/5 PASS)、`private-network` (2/3 PASS)、`redirect-per-hop-gating` (8/13 PASS，原 2/13 → 8/13)。
+- **全新子智能体调度（路 3 无缝补位，启用 3.5s Debug 快编）**:
+  - 销毁 `ecd4af67-ddc7-4dc4-ab17-e1c585478d36`；
+  - 派发 **Subagent 51**: Net MIME & CDP Protocol Specialist（`src/net/*` + `src/cdp/{page,network,target,server}.cp`，端口 `19233`，3.5s Debug 快编）
+    - 攻坚目标：`e2e/document-types.e2e.test.ts`、`e2e/response-body-unknown-id.e2e.test.ts`、`e2e/slow-document-headers.e2e.test.ts`、`e2e/cdp-envelope.e2e.test.ts`、`e2e/cdp-upgrade-origin.e2e.test.ts`。
+
+
 
 
 

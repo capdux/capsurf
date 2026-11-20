@@ -509,6 +509,25 @@ pub struct CookieJar {
             if (ck.secure && !parts.trustworthy) continue;
             if (!pathMatches(ck.path, parts.path)) continue;
 
+            // RFC 6265bis SameSite enforcement
+            if (ctx != null && ctx.?.initiator_origin.len > 0) {
+                let s1_buf: [256]u8 = [0; 256];
+                let s2_buf: [256]u8 = [0; 256];
+                const s1 = schemefulSite(ctx.?.initiator_origin, s1_buf[0..256]);
+                const s2 = schemefulSite(url_str, s2_buf[0..256]);
+                const is_same_site = (s1 != null && s2 != null && std.mem.eql(u8, s1.?, s2.?));
+                if (!is_same_site) {
+                    if (ck.same_site == SameSite.Strict) continue;
+                    if (ck.same_site == SameSite.Lax || ck.same_site == null) {
+                        const is_safe_method = std.ascii.eqlIgnoreCase(ctx.?.method, "GET") ||
+                            std.ascii.eqlIgnoreCase(ctx.?.method, "HEAD") ||
+                            std.ascii.eqlIgnoreCase(ctx.?.method, "OPTIONS") ||
+                            std.ascii.eqlIgnoreCase(ctx.?.method, "TRACE");
+                        if (!ctx.?.top_level || !is_safe_method) continue;
+                    }
+                }
+            }
+
             if (match_count < matched.len) {
                 matched[match_count] = ck;
                 match_count += 1;

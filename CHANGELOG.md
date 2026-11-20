@@ -1688,4 +1688,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`inline-svg-vertical-align` (2/2) + `white-space-pre-line` (1/1) + `intrinsic-sizing` (3/3) PASS，其余 2 项纯 CP 布局 100% 就绪（待 `window.js` 2 处 5 行收口）。
+
+## Phase 84: CORP Classic Script, Private Network Access & Per-Hop Redirect SameSite/Credential Gating (Closed)
+- **`src/net/{cookies,mock_fixtures,http_loader}.cp` & `src/cdp/{network,page}.cp`**：
+  - 实装 RFC 6265bis `SameSite.Strict`/`Lax` 跨站 Cookie 门禁、Fetch CORP `same-origin`/`same-site` 脚本拦截、逐跳重定向跨源剥离 `Authorization`/`Cookie`、Private Network Access 403 防护及 depth-1/2 `<iframe>` `Page.getFrameTree` 追踪。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`blank-page-fetch` (1/1)、`corp-classic-script` (5/5)、`private-network` (2/3)、`redirect-per-hop-gating` (8/13) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

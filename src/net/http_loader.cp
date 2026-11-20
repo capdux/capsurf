@@ -6,6 +6,7 @@ import { Base64 } from "cap:encoding";
 
 import { CdpPageSession } from "../cdp/session.cp";
 import { BlockableRequest, ResourceType, RequestBlocker } from "./request_blocker.cp";
+import { RequestContext } from "./cookies.cp";
 import { InterceptVerdict } from "../cdp/fetch.cp";
 import { MockFixtures } from "./mock_fixtures.cp";
 import {
@@ -41,6 +42,18 @@ pub struct HttpLoaderResult {
     final_url: []const u8 = "",
     html: []const u8 = "",
     content_type: []const u8 = "",
+}
+
+let g_fresh_extra_headers: bool = false;
+
+pub fn markFreshExtraHeaders() {
+    g_fresh_extra_headers = true;
+}
+
+pub fn consumeFreshExtraHeaders(): bool {
+    const v = g_fresh_extra_headers;
+    g_fresh_extra_headers = false;
+    return v;
 }
 
 pub struct HttpLoader {
@@ -228,12 +241,127 @@ pub struct HttpLoader {
         return received;
     }
 
+    /// Extract scheme://host[:port] origin from an HTTP(S) URL.
+    pub static fn extractOrigin(url: []const u8): []const u8 {
+        let scheme_len: usize = 0;
+        if (std.mem.startsWith(u8, url, "https://")) {
+            scheme_len = 8;
+        } else if (std.mem.startsWith(u8, url, "http://")) {
+            scheme_len = 7;
+        } else {
+            return "";
+        }
+        const rest = url[scheme_len..];
+        let auth_end: usize = 0;
+        while (auth_end < rest.len) : (auth_end += 1) {
+            const ch = rest[auth_end];
+            if (ch == '/' || ch == '?' || ch == '#') break;
+        }
+        if (auth_end == 0) return "";
+        return url[0 .. scheme_len + auth_end];
+    }
+
+    pub static fn isSameOrigin(a: []const u8, b: []const u8): bool {
+        const oa = HttpLoader.extractOrigin(a);
+        const ob = HttpLoader.extractOrigin(b);
+        if (oa.len == 0 || ob.len == 0) return false;
+        return std.ascii.eqlIgnoreCase(oa, ob);
+    }
+
+    pub static fn isLoopbackHost(host: []const u8): bool {
+        if (std.ascii.eqlIgnoreCase(host, "localhost") || std.ascii.endsWithIgnoreCase(host, ".localhost")) return true;
+        if (std.mem.eql(u8, host, "::1") || std.mem.eql(u8, host, "[::1]")) return true;
+        if (std.mem.startsWith(u8, host, "127.")) return true;
+        return false;
+    }
+
+    pub static fn isLoopbackUrl(url: []const u8): bool {
+        if (parsed := HttpLoader.parseHttpUrl(url)) {
+            return HttpLoader.isLoopbackHost(parsed.host);
+        }
+        return false;
+    }
+
+    pub static fn isPublicHttpUrl(url: []const u8): bool {
+        if (parsed := HttpLoader.parseHttpUrl(url)) {
+            return !HttpLoader.isLoopbackHost(parsed.host);
+        }
+        return false;
+    }
+
+    pub static fn resolveRelativeUrl(base_url: []const u8, target: []const u8, out_buf: []u8): []const u8 {
+        if (std.mem.startsWith(u8, target, "http://") || std.mem.startsWith(u8, target, "https://")) {
+            const n = @min(target.len, out_buf.len);
+            @memcpy(out_buf[0..n], target[0..n]);
+            return out_buf[0..n];
+        }
+        const origin = HttpLoader.extractOrigin(base_url);
+        if (origin.len == 0) {
+            const n = @min(target.len, out_buf.len);
+            @memcpy(out_buf[0..n], target[0..n]);
+            return out_buf[0..n];
+        }
+        if (std.mem.startsWith(u8, target, "/")) {
+            return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, target }) catch target;
+        }
+        let base_dir = origin;
+        if (last_slash := std.mem.lastIndexOfScalar(u8, base_url, '/')) {
+            if (last_slash >= origin.len) {
+                base_dir = base_url[0..last_slash];
+            }
+        }
+        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ base_dir, target }) catch target;
+    }
+
+    pub static fn isMockRedirectUrl(url: []const u8): bool {
+        let path_only = url;
+        if (q_idx := std.mem.indexOfScalar(u8, path_only, '?')) {
+            path_only = path_only[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, path_only, '#')) {
+            path_only = path_only[0..h_idx];
+        }
+        return std.mem.endsWith(u8, path_only, "/loud-redirect") ||
+            std.mem.endsWith(u8, path_only, "/cors-redirect") ||
+            std.mem.endsWith(u8, path_only, "/invalid-location-redirect");
+    }
+
+    pub static fn resolveMockRedirectTarget(url: []const u8, out_buf: []u8): ([]const u8)? {
+        if (!HttpLoader.isMockRedirectUrl(url)) return null;
+        let target_raw: []const u8 = "/__fixtures/echo-headers.json";
+        let decoded_buf: [1024]u8 = undefined;
+        if (raw_to := MockFixtures.extractQueryParam(url, "to")) {
+            target_raw = MockFixtures.decodeUri(raw_to, &decoded_buf);
+        }
+        return HttpLoader.resolveRelativeUrl(url, target_raw, out_buf);
+    }
+
     /// Perform HTTP/HTTPS fetch pipeline with cookie injection, interception, and Set-Cookie storage
     pub static fn fetchDocument(
         session: *CdpPageSession,
         url: []const u8,
         out_buf: []u8,
         redirect_depth: usize,
+    ): (HttpLoaderResult)! {
+        const fresh_headers = consumeFreshExtraHeaders();
+        let init_origin: []const u8 = "";
+        let strip_creds = false;
+        if (!fresh_headers && HttpLoader.extractOrigin(session.url).len > 0) {
+            init_origin = session.url;
+            if (!HttpLoader.isSameOrigin(session.url, url)) {
+                strip_creds = true;
+            }
+        }
+        return HttpLoader.fetchDocumentWithContext(session, url, out_buf, redirect_depth, init_origin, strip_creds);
+    }
+
+    pub static fn fetchDocumentWithContext(
+        session: *CdpPageSession,
+        url: []const u8,
+        out_buf: []u8,
+        redirect_depth: usize,
+        initiator_url: []const u8,
+        strip_credentials: bool,
     ): (HttpLoaderResult)! {
         if (redirect_depth > 5) {
             return error.TooManyRedirects;
@@ -261,12 +389,29 @@ pub struct HttpLoader {
             return error.InvalidDataUrl;
         }
 
+        // 2.4. Follow mock redirect endpoints per-hop (Fetch §http-redirect-fetch)
+        if (HttpLoader.isMockRedirectUrl(url)) {
+            let next_buf: [1024]u8 = undefined;
+            if (next_slice := HttpLoader.resolveMockRedirectTarget(url, &next_buf)) {
+                const next_url = session.allocator.dupe(u8, next_slice) catch return error.OutOfMemory;
+                const cross_origin = !HttpLoader.isSameOrigin(url, next_url);
+                const next_strip = strip_credentials || cross_origin;
+                return HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip);
+            }
+        }
+
         // 2.5. Check for test fixtures (e.g. echo-headers, static pages, dynamic endpoints)
         if (MockFixtures.isFixtureUrl(url)) {
             const ua = session.user_agent;
             const extra = session.extra_headers;
             const active_jar = session.getActiveCookieJar();
-            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", ua, out_buf, active_jar, extra)) {
+            let req_ctx = RequestContext {
+                initiator_origin: initiator_url,
+                top_level: true,
+                method: "GET",
+            };
+            const ctx_ptr: (*const RequestContext)? = if (initiator_url.len > 0) &req_ctx else null;
+            if (fixture_res := MockFixtures.handleFixtureRequest(url, "", ua, out_buf, active_jar, extra, ctx_ptr, strip_credentials)) {
                 return HttpLoaderResult{
                     status_code: 200,
                     final_url: url,
@@ -423,7 +568,11 @@ pub struct HttpLoader {
             while (line := loc_it.next()) {
                 if (std.mem.startsWith(u8, line, "Location:") || std.mem.startsWith(u8, line, "location:")) {
                     const loc_val = std.mem.trim(u8, line[9..], " \t");
-                    return fetchDocument(session, loc_val, out_buf, redirect_depth + 1);
+                    let next_buf: [1024]u8 = undefined;
+                    const resolved = HttpLoader.resolveRelativeUrl(url, loc_val, &next_buf);
+                    const next_url = session.allocator.dupe(u8, resolved) catch loc_val;
+                    const next_strip = strip_credentials || !HttpLoader.isSameOrigin(url, next_url);
+                    return HttpLoader.fetchDocumentWithContext(session, next_url, out_buf, redirect_depth + 1, url, next_strip);
                 }
             }
         }

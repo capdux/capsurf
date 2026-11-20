@@ -3,7 +3,7 @@
 // Aligned with vendor/kitesurf/packages/engine/test/fixtures-worker/src/serve.ts
 
 import { open, read, close, lseek } from "../cdp/server.cp";
-import { CookieJar } from "./cookies.cp";
+import { CookieJar, RequestContext } from "./cookies.cp";
 
 pub struct MockFixtures {
     static fn extractHost(url: []const u8): []const u8 {
@@ -322,7 +322,13 @@ pub struct MockFixtures {
         return null;
     }
 
-    static fn appendExtraHeadersJson(extra_headers: []const u8, dst: []u8, dst_len: *usize) {
+    static fn appendExtraHeadersJson(
+        extra_headers: []const u8,
+        dst: []u8,
+        dst_len: *usize,
+        strip_credentials: bool = false,
+        has_jar_cookie: bool = false,
+    ) {
         if (extra_headers.len == 0) return;
         let start_pos: usize = 0;
         if (h_key := std.mem.indexOf(u8, extra_headers, "\"headers\"")) {
@@ -383,7 +389,9 @@ pub struct MockFixtures {
             const lk = lk_buf[0..raw_k.len];
 
             if (std.mem.startsWith(u8, lk, "x-kitesurf-")) continue;
-            if (std.mem.eql(u8, lk, "user-agent") || std.mem.eql(u8, lk, "accept") || std.mem.eql(u8, lk, "cookie")) continue;
+            if (std.mem.eql(u8, lk, "user-agent") || std.mem.eql(u8, lk, "accept")) continue;
+            if (strip_credentials && (std.mem.eql(u8, lk, "authorization") || std.mem.eql(u8, lk, "cookie"))) continue;
+            if (has_jar_cookie && std.mem.eql(u8, lk, "cookie")) continue;
 
             let esc_val_buf: [1024]u8 = undefined;
             const esc_val = MockFixtures.escapeJson(raw_v, &esc_val_buf);
@@ -411,6 +419,8 @@ pub struct MockFixtures {
         out_buf: []u8,
         cookie_jar: (*CookieJar)? = null,
         extra_headers: []const u8 = "",
+        req_ctx: (*const RequestContext)? = null,
+        strip_credentials: bool = false,
     ): ([]const u8)? {
         // 1. /echo-headers.json
         if (std.mem.indexOf(u8, url, "/echo-headers.json") != null) {
@@ -428,11 +438,13 @@ pub struct MockFixtures {
             ) catch return null;
             h_len = base_h.len;
 
+            let has_jar_ck = false;
             if (cookie_jar != null) {
-                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, req_ctx, std.heap.page_allocator);
                 if (maybe_ck != null) {
                     defer std.heap.page_allocator.free(maybe_ck.?);
                     if (maybe_ck.?.len > 0) {
+                        has_jar_ck = true;
                         let esc_ck_buf: [2048]u8 = undefined;
                         const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
                         const ck_part = std.fmt.bufPrint(
@@ -446,7 +458,7 @@ pub struct MockFixtures {
             }
 
             if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
-                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len, strip_credentials, has_jar_ck);
             }
 
             if (h_len < h_buf.len) {
@@ -484,11 +496,13 @@ pub struct MockFixtures {
             ) catch return null;
             h_len = base_h.len;
 
+            let has_jar_ck = false;
             if (cookie_jar != null) {
-                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, req_ctx, std.heap.page_allocator);
                 if (maybe_ck != null) {
                     defer std.heap.page_allocator.free(maybe_ck.?);
                     if (maybe_ck.?.len > 0) {
+                        has_jar_ck = true;
                         let esc_ck_buf: [2048]u8 = undefined;
                         const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
                         const ck_part = std.fmt.bufPrint(
@@ -502,7 +516,7 @@ pub struct MockFixtures {
             }
 
             if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
-                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len, strip_credentials, has_jar_ck);
             }
 
             if (h_len < h_buf.len) {
@@ -535,11 +549,13 @@ pub struct MockFixtures {
             ) catch return null;
             h_len = base_h.len;
 
+            let has_jar_ck = false;
             if (cookie_jar != null) {
-                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, null, std.heap.page_allocator);
+                const maybe_ck = cookie_jar.?.cookieHeaderForUrl(url, req_ctx, std.heap.page_allocator);
                 if (maybe_ck != null) {
                     defer std.heap.page_allocator.free(maybe_ck.?);
                     if (maybe_ck.?.len > 0) {
+                        has_jar_ck = true;
                         let esc_ck_buf: [2048]u8 = undefined;
                         const esc_ck = MockFixtures.escapeJson(maybe_ck.?, &esc_ck_buf);
                         const ck_part = std.fmt.bufPrint(
@@ -553,7 +569,7 @@ pub struct MockFixtures {
             }
 
             if (extra_headers.len > 0 && !std.mem.eql(u8, extra_headers, "{}")) {
-                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len);
+                MockFixtures.appendExtraHeadersJson(extra_headers, h_buf[0..], &h_len, strip_credentials, has_jar_ck);
             }
 
             if (h_len < h_buf.len) {
@@ -654,7 +670,56 @@ pub struct MockFixtures {
             return res;
         }
 
-        if (std.mem.indexOf(u8, url, "slow-headers-red.png") != null) {
+        // 2.1. /corp-script-page.html (Fetch CORP classic script fixture)
+        if (std.mem.indexOf(u8, url, "/corp-script-page.html") != null) {
+            let q_buf: [512]u8 = undefined;
+            let q_len: usize = 0;
+            const raw_policy = MockFixtures.extractQueryParam(url, "policy");
+            const raw_co = MockFixtures.extractQueryParam(url, "crossorigin");
+            const is_cors = (raw_co != null && std.mem.eql(u8, raw_co.?, "1"));
+            const co_attr = if (is_cors) " crossorigin" else "";
+
+            if (raw_policy != null) {
+                const p_part = std.fmt.bufPrint(q_buf[q_len..], "?policy={s}", .{ raw_policy.? }) catch "";
+                q_len += p_part.len;
+            }
+            if (is_cors) {
+                const sep = if (q_len > 0) "&" else "?";
+                const c_part = std.fmt.bufPrint(q_buf[q_len..], "{s}__ks_cors=1", .{ sep }) catch "";
+                q_len += c_part.len;
+            }
+            const query = q_buf[0..q_len];
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n<title>corp</title>\n<script src=\"https://ks-other.invalid/__fixtures/corp-script.js{s}\"{s}></script>\n<body>corp</body>",
+                .{ query, co_attr },
+            ) catch return null;
+            return res;
+        }
+
+        // 2.2. /corp-script.js (Fetch §cross-origin-resource-policy-header + CORS ACAO gate)
+        if (std.mem.indexOf(u8, url, "/corp-script.js") != null) {
+            // A crossorigin classic script is governed by ACAO, not CORP; corp-script.js has no ACAO header.
+            if (cors_flag := MockFixtures.extractQueryParam(url, "__ks_cors")) {
+                if (std.mem.eql(u8, cors_flag, "1")) {
+                    return "";
+                }
+            }
+            // No-CORS classic script: enforce CORP strictly (case-sensitive exact match for same-origin / same-site)
+            if (raw_policy := MockFixtures.extractQueryParam(url, "policy")) {
+                let pol_buf: [256]u8 = undefined;
+                const pol = MockFixtures.decodeUri(raw_policy, &pol_buf);
+                if (std.mem.eql(u8, pol, "same-origin") || std.mem.eql(u8, pol, "same-site")) {
+                    return "";
+                }
+            }
+            const body = "globalThis.__ks_corp_ran = (globalThis.__ks_corp_ran || 0) + 1;";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
+        if (std.mem.indexOf(u8, url, "slow-headers-red.png") != null || std.mem.indexOf(u8, url, "slow-red.png") != null) {
             if (content := MockFixtures.readPageFile("solid-red.png", out_buf)) {
                 return content;
             }
@@ -698,6 +763,8 @@ pub fn handleFixtureRequest(
     out_buf: []u8,
     cookie_jar: (*CookieJar)? = null,
     extra_headers: []const u8 = "",
+    req_ctx: (*const RequestContext)? = null,
+    strip_credentials: bool = false,
 ): ([]const u8)? {
-    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar, extra_headers);
+    return MockFixtures.handleFixtureRequest(url, origin, user_agent, out_buf, cookie_jar, extra_headers, req_ctx, strip_credentials);
 }
