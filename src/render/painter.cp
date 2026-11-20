@@ -3,6 +3,24 @@
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
 import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind, FloatMode } from "../css/cascade.cp";
+import {
+    Direction,
+    UnicodeBidi,
+    CP_LRE,
+    CP_RLE,
+    CP_PDF,
+    CP_LRO,
+    CP_RLO,
+    CP_LRI,
+    CP_RLI,
+    CP_FSI,
+    CP_PDI,
+    decodeUtf8Next,
+    isBidiFormatControl,
+    textHasBidiSignal,
+    resolveParagraphFirstStrong,
+    reorderVisual
+} from "../css/bidi.cp";
 import { Rect, LayoutTree } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -738,7 +756,7 @@ pub struct Canvas {
                 }
             }
             ti += step;
-            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E) continue;
+            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E || isBidiFormatControl(codepoint)) continue;
             if (codepoint < 128) {
                 const ch: u8 = @intCast(codepoint);
                 if (ch > 32 && ch < 127) {
@@ -812,7 +830,7 @@ pub struct Canvas {
                 }
             }
             ti += step;
-            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E) continue;
+            if (codepoint == '\n' || codepoint == '\r' || codepoint == 0xFE0F || codepoint == 0xFE0E || isBidiFormatControl(codepoint)) continue;
             if (codepoint < 128) {
                 const ch: u8 = @intCast(codepoint);
                 if (ch > 32 && ch < 127) {
@@ -2231,6 +2249,363 @@ fn findFirstTextRectY(doc: *const Document, rects: []const Rect, node_id: NodeId
     return null;
 }
 
+struct BidiCharItem {
+    cp: u32 = 0,
+    color: CssColor = CssColor.rgb(0, 0, 0),
+    font_size: f32 = 16.0,
+    visible: bool = true,
+}
+
+fn isBlockOrOutOfFlowForBidi(node: *const NodeData, st: *const ComputedStyle): bool {
+    if (st.display.isNone()) return true;
+    if (st.position == Position.Absolute || st.position == Position.Fixed) return true;
+    if (st.float_mode != FloatMode.None) return true;
+    if (!st.display.isInline()) return true;
+    if (st.display.isInlineBlock() || st.display.isTable()) return true;
+    if (node.hasTag("img") || node.hasTag("svg") || node.hasTag("canvas") || node.hasTag("input") || node.hasTag("textarea") || node.hasTag("select") || node.hasTag("button") || node.hasTag("iframe")) return true;
+    return false;
+}
+
+fn subtreeHasInlineBidiSignal(doc: *const Document, styles: []const ComputedStyle, node_id: NodeId, depth: usize): bool {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || depth > 48) return false;
+    let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Text) {
+            if (textHasBidiSignal(cn.text_content)) return true;
+        } else if (cn.node_type == NodeType.Element) {
+            const cst = &styles[@as(usize, ch)];
+            if (!isBlockOrOutOfFlowForBidi(cn, cst)) {
+                if (cst.direction == Direction.Rtl || cst.unicode_bidi != UnicodeBidi.Normal || cst.is_dir_auto) {
+                    return true;
+                }
+                if (subtreeHasInlineBidiSignal(doc, styles, ch, depth + 1)) return true;
+            }
+        }
+        ch = cn.next_sibling;
+    }
+    return false;
+}
+
+fn hasDirectInlineText(doc: *const Document, styles: []const ComputedStyle, node_id: NodeId, depth: usize): bool {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || depth > 48) return false;
+    let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
+            return true;
+        } else if (cn.node_type == NodeType.Element) {
+            const cst = &styles[@as(usize, ch)];
+            if (!isBlockOrOutOfFlowForBidi(cn, cst)) {
+                if (hasDirectInlineText(doc, styles, ch, depth + 1)) return true;
+            }
+        }
+        ch = cn.next_sibling;
+    }
+    return false;
+}
+
+fn needsBidiParagraphPaint(doc: *const Document, styles: []const ComputedStyle, block_id: NodeId): bool {
+    const node = &doc.nodes.items[@as(usize, block_id)];
+    if (node.node_type != NodeType.Element) return false;
+    const st = &styles[@as(usize, block_id)];
+    if (st.display.isNone() || st.display.isInline()) return false;
+    if (node.hasTag("svg") || node.hasTag("input") || node.hasTag("textarea") || node.hasTag("script") || node.hasTag("style")) return false;
+    if (!hasDirectInlineText(doc, styles, block_id, 0)) return false;
+    if (st.direction == Direction.Rtl || st.unicode_bidi != UnicodeBidi.Normal || st.is_dir_auto) {
+        return true;
+    }
+    return subtreeHasInlineBidiSignal(doc, styles, block_id, 0);
+}
+
+fn findFirstVisibleTextRect(doc: *const Document, styles: []const ComputedStyle, rects: []const Rect, node_id: NodeId, depth: usize): Rect? {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || depth > 48) return null;
+    let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Text) {
+            if (@as(usize, ch) < rects.len && rects[@as(usize, ch)].visible && rects[@as(usize, ch)].width > 0.0) {
+                return rects[@as(usize, ch)];
+            }
+        } else if (cn.node_type == NodeType.Element) {
+            const cst = &styles[@as(usize, ch)];
+            if (!isBlockOrOutOfFlowForBidi(cn, cst)) {
+                if (found := findFirstVisibleTextRect(doc, styles, rects, ch, depth + 1)) {
+                    return found;
+                }
+            }
+        }
+        ch = cn.next_sibling;
+    }
+    return null;
+}
+
+fn pushBidiItem(buf: []BidiCharItem, count: *usize, item: BidiCharItem) {
+    if (count.* < buf.len) {
+        buf[count.*] = item;
+        count.* += 1;
+    }
+}
+
+fn collectInlineBidiItems(
+    doc: *const Document,
+    styles: []const ComputedStyle,
+    node_id: NodeId,
+    parent_style_id: NodeId,
+    group_opacity: f32,
+    buf: []BidiCharItem,
+    count: *usize,
+    depth: usize,
+) {
+    if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || depth > 48) return;
+    let ch = doc.nodes.items[@as(usize, node_id)].first_child;
+    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+        const cn = &doc.nodes.items[@as(usize, ch)];
+        if (cn.node_type == NodeType.Text) {
+            const ps = &styles[@as(usize, parent_style_id)];
+            const raw_fill = if (ps.has_text_fill_color) ps.text_fill_color else ps.color;
+            const col = if (group_opacity < 1.0) scaleColorAlpha(raw_fill, group_opacity) else raw_fill;
+            const vis = (ps.visibility == Visibility.Visible);
+            const fsz = if (ps.font_size_px > 0.0) ps.font_size_px else 16.0;
+            let ti: usize = 0;
+            while (ti < cn.text_content.len) {
+                const cp = decodeUtf8Next(cn.text_content, &ti);
+                pushBidiItem(buf, count, BidiCharItem {
+                    cp: cp,
+                    color: col,
+                    font_size: fsz,
+                    visible: vis,
+                });
+            }
+        } else if (cn.node_type == NodeType.Element) {
+            const cst = &styles[@as(usize, ch)];
+            if (isBlockOrOutOfFlowForBidi(cn, cst)) {
+                ch = cn.next_sibling;
+                continue;
+            }
+            const ub = cst.unicode_bidi;
+            const is_rtl = cst.direction.isRtl();
+            // Open directional formatting codes per CSS Writing Modes / HTML rendering spec
+            if (ub == UnicodeBidi.Isolate) {
+                const open_cp = if (cst.is_dir_auto) CP_FSI else if (is_rtl) CP_RLI else CP_LRI;
+                pushBidiItem(buf, count, BidiCharItem { cp: open_cp, visible: false });
+            } else if (ub == UnicodeBidi.IsolateOverride) {
+                const iso_cp = if (is_rtl) CP_RLI else CP_LRI;
+                const ov_cp = if (is_rtl) CP_RLO else CP_LRO;
+                pushBidiItem(buf, count, BidiCharItem { cp: iso_cp, visible: false });
+                pushBidiItem(buf, count, BidiCharItem { cp: ov_cp, visible: false });
+            } else if (ub == UnicodeBidi.BidiOverride) {
+                const ov_cp = if (is_rtl) CP_RLO else CP_LRO;
+                pushBidiItem(buf, count, BidiCharItem { cp: ov_cp, visible: false });
+            } else if (ub == UnicodeBidi.Embed) {
+                const emb_cp = if (is_rtl) CP_RLE else CP_LRE;
+                pushBidiItem(buf, count, BidiCharItem { cp: emb_cp, visible: false });
+            }
+
+            collectInlineBidiItems(doc, styles, ch, ch, group_opacity, buf, count, depth + 1);
+
+            if (ub == UnicodeBidi.Isolate) {
+                pushBidiItem(buf, count, BidiCharItem { cp: CP_PDI, visible: false });
+            } else if (ub == UnicodeBidi.IsolateOverride) {
+                pushBidiItem(buf, count, BidiCharItem { cp: CP_PDF, visible: false });
+                pushBidiItem(buf, count, BidiCharItem { cp: CP_PDI, visible: false });
+            } else if (ub == UnicodeBidi.BidiOverride || ub == UnicodeBidi.Embed) {
+                pushBidiItem(buf, count, BidiCharItem { cp: CP_PDF, visible: false });
+            }
+        }
+        ch = cn.next_sibling;
+    }
+}
+
+fn drawBidiParagraphLine(
+    canvas: *Canvas,
+    items: []const BidiCharItem,
+    base_rtl: bool,
+    start_x: f32,
+    draw_y: f32,
+    fsz: f32,
+    clip: ClipRect?,
+) {
+    if (items.len == 0) return;
+    let cps: [1024]u32 = [0; 1024];
+    let order: [1024]usize = [0; 1024];
+    const n = @min(items.len, @as(usize, 1024));
+    let i: usize = 0;
+    while (i < n) : (i += 1) {
+        cps[i] = items[i].cp;
+    }
+    const vis_n = reorderVisual(cps[0..n], base_rtl, order[0..n]);
+
+    const use_scaled = (fsz >= 14.0);
+    const scaled_h = if (use_scaled) (fsz * 0.65) else 8.0;
+    const scale = @max(1.0, scaled_h / 8.0);
+    const step_x = if (use_scaled) (8.0 * scale) else 8.0;
+    let cursor_x = start_x;
+
+    let k: usize = 0;
+    while (k < vis_n) : (k += 1) {
+        const it = items[order[k]];
+        const cp = it.cp;
+        if (cp == '\n' || cp == '\r' || cp == 0xFE0F || cp == 0xFE0E || isBidiFormatControl(cp)) {
+            continue;
+        }
+        if (cp < 128) {
+            const ch: u8 = @intCast(cp);
+            if (it.visible && it.color.a > 0 && ch > 32 && ch < 127) {
+                const glyph = getAsciiGlyph8x8(ch);
+                if (use_scaled) {
+                    let row: usize = 0;
+                    while (row < 8) : (row += 1) {
+                        const bits = glyph[row];
+                        if (bits == 0) continue;
+                        const gy0 = @as(i32, @intFromFloat(@floor(draw_y + @as(f32, @floatFromInt(row)) * scale)));
+                        const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(draw_y + @as(f32, @floatFromInt(row + 1)) * scale))));
+                        let col: usize = 0;
+                        while (col < 8) : (col += 1) {
+                            const shift: u3 = @intCast(7 - col);
+                            if (((bits >> shift) & 1) == 1) {
+                                const gx0 = @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col)) * scale)));
+                                const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(cursor_x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                                let py = gy0;
+                                while (py < gy1) : (py += 1) {
+                                    if (c := clip) {
+                                        if (py < c.y0 || py >= c.y1) continue;
+                                    }
+                                    let px = gx0;
+                                    while (px < gx1) : (px += 1) {
+                                        if (c := clip) {
+                                            if (px < c.x0 || px >= c.x1) continue;
+                                        }
+                                        canvas.blendPixel(px, py, it.color);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    const base_x = @as(i32, @intFromFloat(cursor_x));
+                    const base_y = @as(i32, @intFromFloat(draw_y));
+                    let row: usize = 0;
+                    while (row < 8) : (row += 1) {
+                        const bits = glyph[row];
+                        let col: usize = 0;
+                        while (col < 8) : (col += 1) {
+                            const shift: u3 = @intCast(7 - col);
+                            if (((bits >> shift) & 1) == 1) {
+                                const px = base_x + @as(i32, @intCast(col));
+                                const py = base_y + @as(i32, @intCast(row)) + 2;
+                                if (c := clip) {
+                                    if (px < c.x0 || px >= c.x1 || py < c.y0 || py >= c.y1) continue;
+                                }
+                                canvas.blendPixel(px, py, it.color);
+                            }
+                        }
+                    }
+                }
+            }
+            cursor_x += step_x;
+        } else {
+            cursor_x += step_x;
+        }
+    }
+}
+
+fn paintBlockBidiParagraphs(
+    canvas: *Canvas,
+    doc: *const Document,
+    styles: []const ComputedStyle,
+    rects: []const Rect,
+    block_id: NodeId,
+    block_rect: Rect,
+    eff_scroll_dx: f32,
+    eff_scroll_dy: f32,
+    vw: f32,
+    vh: f32,
+    clip: ClipRect?,
+    group_opacity: f32,
+) {
+    const st = &styles[@as(usize, block_id)];
+    let items: [1024]BidiCharItem = [BidiCharItem{}; 1024];
+    let count: usize = 0;
+    collectInlineBidiItems(doc, styles, block_id, block_id, group_opacity, items[0..], &count, 0);
+    if (count == 0) return;
+
+    const fsz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+    const scaled_h = if (fsz >= 14.0) (fsz * 0.65) else 8.0;
+    const pad_l = st.padding_left.resolvePx(block_rect.width, fsz, 16.0, vw, vh);
+    const pad_t = st.padding_top.resolvePx(block_rect.height, fsz, 16.0, vw, vh);
+    const content_x = block_rect.x + st.border_left_width + pad_l;
+    const content_y = block_rect.y + st.border_top_width + pad_t;
+    const line_h = st.resolvedLineHeight();
+    const nat_h = st.naturalLineHeight();
+
+    if (st.white_space.preservesNewlines()) {
+        // Split into hard-break paragraphs on '\n'
+        let line_idx: usize = 0;
+        let start: usize = 0;
+        let i: usize = 0;
+        while (i <= count) : (i += 1) {
+            const is_break = (i == count) || (items[i].cp == '\n');
+            if (is_break) {
+                const seg = items[start..i];
+                let base_rtl = st.direction.isRtl();
+                if (st.unicode_bidi == UnicodeBidi.Plaintext) {
+                    let line_cps: [1024]u32 = [0; 1024];
+                    let ci: usize = 0;
+                    while (ci < seg.len) : (ci += 1) {
+                        line_cps[ci] = seg[ci].cp;
+                    }
+                    base_rtl = resolveParagraphFirstStrong(line_cps[0..seg.len]).isRtl();
+                }
+                const ly = content_y + @as(f32, @floatFromInt(line_idx)) * line_h;
+                const draw_y = if (fsz >= 14.0) (ly + @max(0.0, (nat_h - scaled_h) * 0.5)) else (ly + 2.0);
+                const draw_x = if (fsz >= 14.0) content_x else (content_x + 1.0);
+                drawBidiParagraphLine(canvas, seg, base_rtl, draw_x, draw_y, fsz, clip);
+                line_idx += 1;
+                start = i + 1;
+            }
+        }
+        return;
+    }
+
+    // Non-pre single inline paragraph: trim outer ASCII whitespace to match standard painter
+    let trim_s: usize = 0;
+    while (trim_s < count) : (trim_s += 1) {
+        const cp = items[trim_s].cp;
+        if (cp != ' ' && cp != '\t' && cp != '\r' && cp != '\n') break;
+    }
+    let trim_e: usize = count;
+    while (trim_e > trim_s) {
+        const cp = items[trim_e - 1].cp;
+        if (cp != ' ' && cp != '\t' && cp != '\r' && cp != '\n') break;
+        trim_e -= 1;
+    }
+    if (trim_s >= trim_e) return;
+
+    const seg = items[trim_s..trim_e];
+    let base_rtl = st.direction.isRtl();
+    if (st.unicode_bidi == UnicodeBidi.Plaintext) {
+        let line_cps: [1024]u32 = [0; 1024];
+        let ci: usize = 0;
+        while (ci < seg.len) : (ci += 1) {
+            line_cps[ci] = seg[ci].cp;
+        }
+        base_rtl = resolveParagraphFirstStrong(line_cps[0..seg.len]).isRtl();
+    }
+
+    let start_x = content_x;
+    let start_y = content_y;
+    let text_h = nat_h;
+    if (tr := findFirstVisibleTextRect(doc, styles, rects, block_id, 0)) {
+        start_x = tr.x - eff_scroll_dx;
+        start_y = tr.y - eff_scroll_dy;
+        text_h = tr.height;
+    }
+    const draw_y = if (fsz >= 14.0) (start_y + @max(0.0, (text_h - scaled_h) * 0.5)) else (start_y + 2.0);
+    const draw_x = if (fsz >= 14.0) start_x else (start_x + 1.0);
+    drawBidiParagraphLine(canvas, seg, base_rtl, draw_x, draw_y, fsz, clip);
+}
+
 fn paintNodeRecursive(
     canvas: *Canvas,
     doc: *const Document,
@@ -2247,6 +2622,7 @@ fn paintNodeRecursive(
     abs_scroll_dx: f32,
     abs_scroll_dy: f32,
     group_opacity: f32,
+    skip_inline_text: bool,
 ) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
         return;
@@ -2741,7 +3117,7 @@ fn paintNodeRecursive(
         if (is_textarea) {
             return;
         }
-    } else if (node.node_type == NodeType.Text && node.text_content.len > 0) {
+    } else if (!skip_inline_text && node.node_type == NodeType.Text && node.text_content.len > 0) {
         const parent_id = node.parent;
         const parent_vis = if (parent_id != NULL_NODE && @as(usize, parent_id) < styles.len) (styles[@as(usize, parent_id)].visibility == Visibility.Visible) else true;
         if (parent_vis && r.visible) {
@@ -2831,9 +3207,20 @@ fn paintNodeRecursive(
         }
     }
 
+    let child_skip_inline = skip_inline_text;
+    if (node.node_type == NodeType.Element) {
+        if (isBlockOrOutOfFlowForBidi(node, style)) {
+            child_skip_inline = false;
+            if (needsBidiParagraphPaint(doc, styles, node_id)) {
+                paintBlockBidiParagraphs(canvas, doc, styles, rects, node_id, r, eff_scroll_dx, eff_scroll_dy, vw, vh, child_clip, eff_op);
+                child_skip_inline = true;
+            }
+        }
+    }
+
     let child = node.first_child;
     while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op);
+        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
         child = doc.nodes.items[@as(usize, child)].next_sibling;
     }
 }
@@ -2855,7 +3242,7 @@ pub fn renderDocumentToPng(
     // 从文档根元素开始前序遍历绘制整棵 DOM 树
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 0.0, 0.0, 0.0, 0.0, 1.0);
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, 0.0, 0.0, 0.0, 0.0, 1.0, false);
     }
 
     // 如果指定了 clip 裁剪区域，提取子区域编码
@@ -2928,7 +3315,32 @@ fn getAsciiGlyph8x8(ch: u8): []const u8 {
         'X', 'x' => "\x66\x66\x3C\x18\x3C\x66\x66\x00",
         'Y', 'y' => "\x66\x66\x66\x3C\x18\x18\x18\x00",
         'Z', 'z' => "\x7E\x06\x0C\x18\x30\x60\x7E\x00",
-        '0'...'9' => "\x3C\x66\x6E\x76\x66\x66\x3C\x00",
+        '0' => "\x3C\x66\x6E\x76\x66\x66\x3C\x00",
+        '1' => "\x18\x38\x18\x18\x18\x18\x7E\x00",
+        '2' => "\x3C\x66\x06\x1C\x30\x60\x7E\x00",
+        '3' => "\x3C\x66\x06\x1C\x06\x66\x3C\x00",
+        '4' => "\x0C\x1C\x3C\x6C\x7E\x0C\x0C\x00",
+        '5' => "\x7E\x60\x7C\x06\x06\x66\x3C\x00",
+        '6' => "\x3C\x60\x7C\x66\x66\x66\x3C\x00",
+        '7' => "\x7E\x06\x0C\x18\x30\x30\x30\x00",
+        '8' => "\x3C\x66\x66\x3C\x66\x66\x3C\x00",
+        '9' => "\x3C\x66\x66\x3E\x06\x0C\x38\x00",
+        '!' => "\x18\x18\x18\x18\x18\x00\x18\x00",
+        '@' => "\x3C\x66\x6E\x6A\x6E\x60\x3C\x00",
+        '#' => "\x24\x24\x7E\x24\x7E\x24\x24\x00",
+        '$' => "\x18\x3E\x60\x3C\x06\x7C\x18\x00",
+        '%' => "\x62\x64\x08\x10\x26\x46\x00\x00",
+        '(' => "\x0C\x18\x30\x30\x30\x18\x0C\x00",
+        ')' => "\x30\x18\x0C\x0C\x0C\x18\x30\x00",
+        '+' => "\x00\x18\x18\x7E\x18\x18\x00\x00",
+        '-' => "\x00\x00\x00\x7E\x00\x00\x00\x00",
+        '.' => "\x00\x00\x00\x00\x00\x18\x18\x00",
+        ',' => "\x00\x00\x00\x00\x00\x18\x18\x30",
+        ':' => "\x00\x18\x18\x00\x18\x18\x00\x00",
+        ';' => "\x00\x18\x18\x00\x18\x18\x30\x00",
+        '?' => "\x3C\x66\x06\x1C\x18\x00\x18\x00",
+        '/' => "\x02\x04\x08\x10\x20\x40\x00\x00",
+        '=' => "\x00\x00\x7E\x00\x7E\x00\x00\x00",
         * => "\x7E\x42\x42\x7E\x42\x42\x7E\x00",
     };
 }

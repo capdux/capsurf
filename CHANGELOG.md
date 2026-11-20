@@ -1923,4 +1923,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 9 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`viewport-drain` (2/2)、`font-heavy` (2/2)、`script-redirect-policy` (4/4)、`script-gate` (CP 引擎 20/20)、`webmcp` (7/12) PASS。
+
+## Phase 118: Pure-CP Zero-Alloc UAX #9 BiDi Engine, Inline BiDi Isolation & Inset Shadow/WebFont Verification (Closed)
+- **`src/css/bidi.cp`（新增）、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`**：
+  - 实装纯 CP 零堆分配 UAX #9 双向文本算法、HTML `dir`/`<bdi>`/`<bdo>`/`<pre dir="auto">` 级联规则、零宽 BiDi 控制符 0 宽度跳过及块级内联 BiDi 视觉重排绘制。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`inset-box-shadow` (1/1)、`webfont-link` (1/1)、`author-webfont-custody` (1/1)、`inline-bidi-direction` (1/1)、`inline-bidi-isolation` (1/1) — **5/6 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

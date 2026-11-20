@@ -1503,4 +1503,10 @@
    - Parser `<script>` 与运行时动态 `<script>`/`import()` 共用 `js_capsurf_script_gate` 与 `csp.cp` 原生校验，完整支持 SHA-256/384/512 SRI、`script-src-attr`、`strict-dynamic` 及重定向后忽略 source path 规范；同时修复 >4096B 动态脚本缓冲区缺失 `\0` 终止符导致的 QuickJS UTF-8 误报。
 2. **WebMCP 按 Session 路由与 `@font-face` 惰性门禁 (`webmcp.cp`, `server.cp`, `session.cp`)**：
    - 扩展 `dispatch.cp` 多事件缓冲并在 `server.cp` 透传 `sessionId` 实现多 CDP 会话隔离；在 `@font-face` 阶段校验页面实际使用字体族避免未用字体急切抓取。
+
+## Phase 118 纯 CP 零堆分配 UAX #9 BiDi 引擎技术方案
+1. **零堆分配 UAX #9 与 `dir="auto"` (`bidi.cp`, `cascade.cp`)**：
+   - 使用栈上定长状态机实现 UAX #9 显式隔离/嵌入/覆盖（X1–X8）、BD13 隔离运行序列及 W/N/I/L 视觉重排，并按 HTML 规范跳过含显式 `dir` 后代与 `<bdi>`/`<script>`/`<style>`/`<textarea>` 解析 `dir="auto"` 首强字符。
+2. **零宽控制符与跨行内段落 BiDi 重排 (`layout.cp`, `painter.cp`)**：
+   - 在排版度量与光栅化时对 `U+200E/200F/202A..202E/2066..2069` 按 0 宽跳过；对含 BiDi 需求的块级容器收集跨 `<span>`/`<bdi>`/`<bdo>` 内联段落，注入隔离/覆盖控制码后按视觉序绘制。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

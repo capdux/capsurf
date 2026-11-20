@@ -3922,3 +3922,17 @@
   - 全部 9 个 `.cp` 文件 4 门禁全 0；
   - `viewport-drain` (**2/2**)、`font-heavy` (**2/2**)、`script-redirect-policy` (**4/4**)、`script-gate`（CP 引擎侧 **20/20**，待 Slot 2 结单后清理 `harness.ts` `isPolicyDocUrl` 拦截恢复）、`webmcp` (**7/12**，余 5 项已精准定位到 `harness.ts` `createCDPSession` `sessionId` 透传与 `runtime.js` `makeHtmlCollection` Proxy 递归)：**35/40 PASS**！
 - **清理旧子智能体**: 销毁 `77612de8-d4e6-413e-b53a-25248990c885`。
+
+## [2026-11-20 21:00:01] 用户指令：并发子智能体上限调整为 2 路
+- **用户指令**: 「配额不足, 后续按2个子智能体工作」
+- **执行策略**: 当前运行中的 3 个子智能体自然完结；首个结单销毁后不再补发第 3 路，后续严格维持最多 **2 路并发**（按需在 CSS/Layout/Render、JS Shim/Harness、CDP/Net 三层间轮转排期）。
+
+## [2026-11-20 21:04:00] 纯 CP 零堆分配 UAX #9 双向文本引擎 (BiDi) 与内阴影/WebFont 闭环 (Subagent 2856cab6 结单，Phase 118)
+- **UAX #9 BiDi 引擎与级联/排版/绘制打通 (`src/css/bidi.cp`, `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`)**:
+  - 新增 `src/css/bidi.cp`：纯 CP 零堆分配 UAX #9 双向文本算法（X1–X8 显式嵌入/隔离/覆盖、BD13 隔离运行序列、W1–W7、N1–N2、I1–I2、L1–L2 视觉重排）、HTML `dir="auto"` 首强字符扫描与 `<pre dir="auto">` 逐段首强解析；
+  - `src/css/cascade.cp`：新增 `PROP_DIRECTION`、`PROP_UNICODE_BIDI`，支持 HTML `dir`/`<bdi>`/`<bdo>` 呈现默认规则与 CSS `direction`/`unicode-bidi`；
+  - `src/layout/layout.cp` & `src/render/painter.cp`：零宽 BiDi 控制符按 0 宽度跳过、补全 `0-9` 与标点互异 8x8 位图字形，新增块级内联 BiDi 段落绘制路径（跨行内元素注入 `LRI`/`RLI`/`FSI`/`RLO`/`LRO`/`PDI`/`PDF` 并按视觉序重排绘制）。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，port `19231`）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `inset-box-shadow` (1/1)、`webfont-link` (1/1)、`author-webfont-custody` (1/1)、`inline-bidi-direction` (1/1)、`inline-bidi-isolation` (1/1)：**5/6 PASS**（`css-external-sheets-demo` 缺口已定位至测试文件相对路径与 `src/cdp/css.cp`）。
+- **并发收缩**: 销毁 `2856cab6-5581-4f8a-a07d-5f7daf96df5c`，按用户指令不再补发第 3 路，当前稳定运行 **2 路并发子智能体**（`5b93a933` + `c06f54c4`）。

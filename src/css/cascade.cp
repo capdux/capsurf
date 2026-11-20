@@ -13,6 +13,7 @@ import { UaStylesheet } from "./ua_stylesheet.cp";
 import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue } from "./font_face.cp";
 import { parseAttrExpr, evaluateCssAttr } from "./attr_evaluator.cp";
 import { BreakValue, BreakInsideValue, PageMarginRule, isValidUtf8, decodeLegacyCssToUtf8 } from "./paged_media.cp";
+import { Direction, UnicodeBidi, resolveFirstStrongDirection } from "./bidi.cp";
 import {
     CssColor,
     CssUnit,
@@ -1045,7 +1046,9 @@ pub const PROP_COLOR_SCHEME: usize = 95;
 pub const PROP_BREAK_BEFORE: usize = 96;
 pub const PROP_BREAK_AFTER: usize = 97;
 pub const PROP_BREAK_INSIDE: usize = 98;
-pub const TOTAL_PROP_SLOTS: usize = 99;
+pub const PROP_DIRECTION: usize = 99;
+pub const PROP_UNICODE_BIDI: usize = 100;
+pub const TOTAL_PROP_SLOTS: usize = 101;
 
 pub enum ColorScheme {
     Normal,
@@ -1939,6 +1942,9 @@ pub struct ComputedStyle {
     vertical_align_kind: VerticalAlignKind = VerticalAlignKind.Baseline;
     vertical_align_length: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     white_space: WhiteSpace = WhiteSpace.Normal;
+    direction: Direction = Direction.Ltr;
+    unicode_bidi: UnicodeBidi = UnicodeBidi.Normal;
+    is_dir_auto: bool = false;
     box_orient: BoxOrient = BoxOrient.Horizontal;
     webkit_line_clamp: u32 = 0;
     is_line_clamped: bool = false;
@@ -2251,6 +2257,7 @@ pub struct ComputedStyle {
 
         if (p := parent_style) {
             _.visibility = p.visibility;
+            _.direction = p.direction;
             if (!node.hasTag("pre")) {
                 _.white_space = p.white_space;
             }
@@ -3759,6 +3766,23 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "direction")) {
+            if (dir_v := Direction.parse(val)) {
+                if (_.tryClaimSlot(PROP_DIRECTION, weight)) {
+                    _.direction = dir_v;
+                    _.is_dir_auto = false;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "unicode-bidi")) {
+            if (ub := UnicodeBidi.parse(val)) {
+                if (_.tryClaimSlot(PROP_UNICODE_BIDI, weight)) {
+                    _.unicode_bidi = ub;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "-webkit-box-orient") || std.ascii.eqlIgnoreCase(name, "box-orient")) {
             if (bo := BoxOrient.parse(val)) {
                 if (_.tryClaimSlot(PROP_BOX_ORIENT, weight)) {
@@ -4705,6 +4729,40 @@ pub struct Cascade {
 
             let source_order: u32 = 1;
             const node_id_u32: NodeId = @intCast(nid);
+
+            // 0a. HTML BiDi presentational hints (`dir` attribute, <bdi>, <bdo>)
+            if (node.node_type == NodeType.Element) {
+                const is_bdi = node.hasTag("bdi");
+                const is_bdo = node.hasTag("bdo");
+                if (dir_attr := node.getAttribute("dir")) {
+                    const ds = std.mem.trim(u8, dir_attr, " \t\r\n");
+                    if (std.ascii.eqlIgnoreCase(ds, "ltr")) {
+                        style.direction = Direction.Ltr;
+                        style.is_dir_auto = false;
+                        style.unicode_bidi = if (is_bdo) UnicodeBidi.IsolateOverride else UnicodeBidi.Isolate;
+                    } else if (std.ascii.eqlIgnoreCase(ds, "rtl")) {
+                        style.direction = Direction.Rtl;
+                        style.is_dir_auto = false;
+                        style.unicode_bidi = if (is_bdo) UnicodeBidi.IsolateOverride else UnicodeBidi.Isolate;
+                    } else if (std.ascii.eqlIgnoreCase(ds, "auto")) {
+                        style.is_dir_auto = true;
+                        style.direction = resolveFirstStrongDirection(doc, node_id_u32);
+                        if (node.hasTag("pre") || node.hasTag("textarea")) {
+                            style.unicode_bidi = UnicodeBidi.Plaintext;
+                        } else {
+                            style.unicode_bidi = UnicodeBidi.Isolate;
+                        }
+                    } else if (is_bdi) {
+                        style.is_dir_auto = true;
+                        style.direction = resolveFirstStrongDirection(doc, node_id_u32);
+                        style.unicode_bidi = UnicodeBidi.Isolate;
+                    }
+                } else if (is_bdi) {
+                    style.is_dir_auto = true;
+                    style.direction = resolveFirstStrongDirection(doc, node_id_u32);
+                    style.unicode_bidi = UnicodeBidi.Isolate;
+                }
+            }
 
             // 0. Presentation attributes for SVG (e.g. fill)
             if (fill_attr := node.getAttribute("fill")) {

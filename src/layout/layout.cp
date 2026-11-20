@@ -5,6 +5,7 @@
 // powering element.getBoundingClientRect() and AI Agent vision/action automation.
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
+import { decodeUtf8Next, isBidiFormatControl } from "../css/bidi.cp";
 import { sniffPng } from "../render/image_dims.cp";
 import {
     ComputedStyle,
@@ -1589,15 +1590,22 @@ pub struct LayoutTree {
         const sp_w = LayoutTree.spaceWidth(st);
         let cur_x = start_x;
         let ti: usize = 0;
-        while (ti < seg.len) : (ti += 1) {
-            const ch = seg[ti];
-            if (ch == '\r') continue;
-            if (ch == '\t') {
+        while (ti < seg.len) {
+            const b0 = seg[ti];
+            if (b0 >= 0x80) {
+                const cp = decodeUtf8Next(seg, &ti);
+                if (isBidiFormatControl(cp)) continue;
+                cur_x += LayoutTree.charWidthForStyle('M', st);
+                continue;
+            }
+            ti += 1;
+            if (b0 == '\r') continue;
+            if (b0 == '\t') {
                 cur_x += LayoutTree.advanceTabStop(cur_x, sp_w);
-            } else if (ch == ' ') {
+            } else if (b0 == ' ') {
                 cur_x += sp_w;
             } else {
-                cur_x += LayoutTree.charWidthForStyle(ch, st);
+                cur_x += LayoutTree.charWidthForStyle(b0, st);
             }
         }
         return cur_x - start_x;
@@ -2837,8 +2845,20 @@ pub struct LayoutTree {
         let trail_sp_w: f32 = 0.0;
         let in_ws = prev_ws.*;
         let ti: usize = 0;
-        while (ti < seg.len) : (ti += 1) {
-            const ch = seg[ti];
+        while (ti < seg.len) {
+            const b0 = seg[ti];
+            if (b0 >= 0x80) {
+                const cp = decodeUtf8Next(seg, &ti);
+                if (isBidiFormatControl(cp)) continue;
+                has_non_ws = true;
+                has_trail_sp = false;
+                trail_sp_w = 0.0;
+                in_ws = false;
+                tw += LayoutTree.charWidthForStyle('M', st);
+                continue;
+            }
+            ti += 1;
+            const ch = b0;
             const is_ws = (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n');
             if (is_ws) {
                 if (!in_ws) {
