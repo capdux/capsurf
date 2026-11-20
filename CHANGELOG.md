@@ -2177,3 +2177,6 @@
 
 ## Phase 172: `PointerEvent.getCoalescedEvents()` & Pointer/Mouse Boundary Event Ordering
 - **`src/js/shim/{events/event,window}.js` & `src/js/runtime{,_source.cp}`**：实装 `getCoalescedEvents()` 与先于 `mouse*` 的 `pointerout`/`pointerleave`/`pointerover`/`pointerenter` 边界事件（4 门禁全 0）。
+
+## Phase 173: Pure-CP CJK & SMP Color Emoji Rasterization Whitebox Suite `test/render/test_painter_cjk_emoji.cp` (3/3 PASS)
+- 新增 `test/render/test_painter_cjk_emoji.cp`，覆盖 CJK 点阵、缩放裁剪与 BMP/SMP 彩色 Emoji 光栅化（`cap test -m` **3/3 PASS**, 940ms）。

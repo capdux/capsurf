@@ -4398,3 +4398,7 @@
   - `window.js:10917-11011,11232-11239`：新增 `_dispatchPointerAndMouseBoundary`，在 `mouseMoved` 命中节点变更时按最近公共祖先顺序先于 `mouse*` 派发 `pointerout`/`pointerleave`/`pointerover`/`pointerenter`。
 - **门禁与定位**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0；精准定位 `tldraw-app-shell` 用例 5 重复点击源自 `e2e/harness.ts:327` 未透传 `_skipSyntheticClick`。
 - **清理旧子智能体**: 销毁 `3e2c4733-0ffa-4518-a4fa-278b11244023`。
+
+## [2026-11-21 00:43:30] 1 分 20 秒新增并全绿通过纯 CP CJK/Emoji 光栅化白盒单测 `test/render/test_painter_cjk_emoji.cp` (Subagent b2b1f6cb 结单，Phase 173)
+- **新增白盒测试 (`test/render/test_painter_cjk_emoji.cp`)**: 覆盖 CJK 汉字/假名/韩文点阵、`drawGlyph8x8ScaledClipped` 缩放裁剪、BMP/SMP 彩色 Emoji (`U+2705`/`U+274C`/`U+1F600`) 及 `alpha=0` 空绘制保护（3/3 PASS, 940ms, 4 门禁全 0）。
+- **清理旧子智能体**: 销毁 `b2b1f6cb-771a-4631-bd9d-ad749f0eed4b`。
