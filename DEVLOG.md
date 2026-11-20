@@ -1811,3 +1811,6 @@
 
 ### Phase 244: DOM Arena/Namespace Whitebox & Single-Engine Boa Boundary Audit
 - Confirmed `boa-bridged-intrinsic-proto`, `boa-ctx-reentry`, and `boa-interner-reclaim` rely exclusively on Kitesurf dual-engine V8+Boa internals.
+
+### Phase 245: Concurrent Dynamic ES Module Imports (`boa-concurrent-import-demo` 1/1)
+- Implemented `concimport-chunk-<N>.js` in `MockFixtures.handleFixtureRequest`, allowing 18-way concurrent `Promise.all(import(...))` to resolve cleanly in QuickJS-NG.

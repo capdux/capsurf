@@ -1600,6 +1600,31 @@ pub struct MockFixtures {
             return std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch null;
         }
 
+        // 2.10 Concurrent dynamic import chunk fixtures (concimport-chunk-<N>.js)
+        if (cc_idx := std.mem.indexOf(u8, url, "concimport-chunk-")) {
+            let rest = url[cc_idx + "concimport-chunk-".len ..];
+            if (q_idx := std.mem.indexOfScalar(u8, rest, '?')) rest = rest[0..q_idx];
+            if (std.mem.endsWith(u8, rest, ".js")) {
+                const num_str = rest[0 .. rest.len - 3];
+                if (num_str.len > 0) {
+                    let all_digits = true;
+                    for (ch of num_str) {
+                        if (ch < '0' || ch > '9') {
+                            all_digits = false;
+                            break;
+                        }
+                    }
+                    if (all_digits) {
+                        return std.fmt.bufPrint(
+                            out_buf,
+                            "export const value = {s};\nexport function compute(a, b) {{ return a + b + {s}; }}\n",
+                            .{ num_str, num_str },
+                        ) catch null;
+                    }
+                }
+            }
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {

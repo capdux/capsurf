@@ -4792,3 +4792,8 @@
 ### Phase 244: DOM Namespace/Slot Whitebox (135/135) + Boa 3-Pack Boundary Verification
 - **Slot A (`dfb695d9`)**: Added `test/dom/test_shadow_dom_and_slot_edge.cp` covering `setAttributeNS`/`getAttributeNS`/`removeAttributeNS` namespace isolation, `<slot>`/`<template>` inertness, cross-document `copySubtreeFrom` Arena isolation, and `ElementHandle` boundaries (**1/1 PASS**, 912ms). Full-repo pure-CP whitebox now **135/135 (100% PASS)**.
 - **Slot B (`b40581f0`)**: Verified `boa-bridged-intrinsic-proto` (2 fail), `boa-ctx-reentry` (6 fail), and `boa-interner-reclaim` (3 fail) require Kitesurf dual-engine V8+Boa internal handles (`RefCell<Context>` reentry, `Interner` truncation, cross-realm V8/Boa intrinsic proxies) inapplicable to single-engine QuickJS-NG.
+
+### Phase 245: CSS Specificity Whitebox (136/136) + `boa-concurrent-import-demo` 1/1 PASS
+- **Slot A (`74684a71`)**: Added `test/css/test_specificity_and_important_edge.cp` (**6/6 PASS**, 1134ms). Full-repo pure-CP whitebox now **136/136 (100% PASS)**.
+- **Slot B (`63c2c173`)**: Added `concimport-chunk-<N>.js` dynamic fixture route to `src/net/mock_fixtures.cp:1603-1626`. Built `bin_19233/main` (6.61s); `e2e/demo/boa-concurrent-import-demo.e2e.test.ts` **1/1 PASS** (2.42s, exit 0); confirmed `boa-code-stats` relies on Boa-Wasm `boa_engine::ks_code_stats()`.
+- **Main Agent (`task-685`)**: Confirmed `cdp-scene-host` / `cdp-scene-stream` depend on Cloudflare Workers `upgradedSocket(engine.fetch("https://ks.invalid/devtools/browser"))` and `wasm-crash-surface` on Boa-Wasm.
