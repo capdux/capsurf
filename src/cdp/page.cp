@@ -162,7 +162,27 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.createIsolatedWorld")) {
-            return CdpResponse.ok(req.id, "{\"executionContextId\":1}");
+            const world_name = extractJsonString(req.params_raw, "worldName") ?? "";
+            const frame_id = extractJsonString(req.params_raw, "frameId") ?? session.frame_id;
+            let created_new = false;
+            const cid = session.createIsolatedWorld(world_name, &created_new);
+            if (created_new && event_count.* < out_events.len) {
+                const raw_orig = originOf(session.url);
+                const main_orig = if (raw_orig.len > 0) raw_orig else (if (session.url.len > 0) session.url else "about:blank");
+                let esc_orig_buf: [256]u8 = [0; 256];
+                const esc_orig = escapeJsonString(main_orig, &esc_orig_buf);
+                let esc_name_buf: [256]u8 = [0; 256];
+                const esc_name = escapeJsonString(world_name, &esc_name_buf);
+                const ctx_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"{s}\",\"uniqueId\":\"ctx-{d}\",\"auxData\":{{\"isDefault\":false,\"type\":\"isolated\",\"frameId\":\"{s}\"}}}}}}",
+                    .{ cid, esc_orig, esc_name, cid, frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                event_count.* += 1;
+            }
+            const res = std.fmt.bufPrint(out_buf, "{{\"executionContextId\":{d}}}", .{cid}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
         }
 
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
@@ -397,6 +417,38 @@ pub struct PageHandler {
             if (event_count.* < out_events.len) {
                 out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
                 event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextsCleared", "{}");
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const raw_main_orig = originOf(fetch_res.final_url);
+                const main_orig = if (raw_main_orig.len > 0) raw_main_orig else (if (fetch_res.final_url.len > 0) fetch_res.final_url else "about:blank");
+                const main_ctx_json = session.formatExecutionContextEvent(main_orig);
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", main_ctx_json);
+                event_count.* += 1;
+            }
+            {
+                const raw_iso_orig = originOf(fetch_res.final_url);
+                const iso_orig = if (raw_iso_orig.len > 0) raw_iso_orig else (if (fetch_res.final_url.len > 0) fetch_res.final_url else "about:blank");
+                let esc_iso_orig_buf: [256]u8 = [0; 256];
+                const esc_iso_orig = escapeJsonString(iso_orig, &esc_iso_orig_buf);
+                let wi: usize = 0;
+                while (wi < session.isolated_world_count && event_count.* < out_events.len) : (wi += 1) {
+                    if (session.isolated_worlds[wi].active) {
+                        let esc_wname_buf: [256]u8 = [0; 256];
+                        const esc_wname = escapeJsonString(session.isolated_worlds[wi].name(), &esc_wname_buf);
+                        const wcid = session.isolated_worlds[wi].context_id;
+                        const iso_ctx_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"{s}\",\"uniqueId\":\"ctx-{d}\",\"auxData\":{{\"isDefault\":false,\"type\":\"isolated\",\"frameId\":\"{s}\"}}}}}}",
+                            .{ wcid, esc_iso_orig, esc_wname, wcid, session.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", iso_ctx_json);
+                        event_count.* += 1;
+                    }
+                }
             }
             if (event_count.* < out_events.len) {
                 out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");

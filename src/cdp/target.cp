@@ -396,6 +396,17 @@ pub struct TargetRegistry {
         return null;
     }
 
+    fn findTargetIdBySessionId(*_, session_id: []const u8): ([]const u8)? {
+        if (session_id.len == 0) return null;
+        let i: usize = 0;
+        while (i < _.targets.len) : (i += 1) {
+            if (_.targets[i].active && _.targets[i].attached && std.mem.eql(u8, _.targets[i].sessionId(), session_id)) {
+                return _.targets[i].targetId();
+            }
+        }
+        return null;
+    }
+
     fn hasBrowserContext(*_, ctx_id: []const u8): bool {
         if (ctx_id.len == 0 || std.mem.eql(u8, ctx_id, "default")) return true;
         let i: usize = 0;

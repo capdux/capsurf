@@ -82,6 +82,10 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.callFunctionOn")) {
+            const exec_ctx_id = extractJsonInt(req.params_raw, "executionContextId");
+            if (exec_ctx_id != null && !session.isValidContextId(exec_ctx_id.?)) {
+                return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
+            }
             const object_id = extractJsonString(req.params_raw, "objectId") ?? "";
             const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
             let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
@@ -152,6 +156,9 @@ pub struct RuntimeHandler {
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
             const context_id = extractJsonInt(req.params_raw, "contextId");
+            if (context_id != null && !session.isValidContextId(context_id.?)) {
+                return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
+            }
 
             let eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
 

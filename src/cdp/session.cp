@@ -11,7 +11,7 @@ import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage } from "./types.cp";
 import { FetchState } from "./fetch.cp";
-import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, renderDocumentToPng } from "../render/painter.cp";
+import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { TargetRegistry } from "./target.cp";
@@ -31,6 +31,17 @@ pub struct NavigationEntry {
     id: i32 = 0,
     url: []const u8 = "",
     title: []const u8 = "",
+}
+
+pub struct IsolatedWorldEntry {
+    name_buf: [128]u8 = [0; 128],
+    name_len: usize = 0,
+    context_id: i64 = 0,
+    active: bool = false,
+
+    fn name(*_): []const u8 {
+        return _.name_buf[0.._.name_len];
+    }
 }
 
 pub fn hashStyleBytes(bytes: []const u8): u64 {
@@ -418,9 +429,11 @@ pub struct CdpPageSession {
     css_event_storage_used: usize = 0,
 
     // Execution context tracking
-    next_context_id: i64 = 2,
+    next_context_id: i64 = 3,
+    isolated_worlds: [16]IsolatedWorldEntry = [IsolatedWorldEntry{}; 16],
+    isolated_world_count: usize = 0,
     iframe_ctx_created: bool = false,
-    iframe_ctx_id: i64 = 2,
+    iframe_ctx_id: i64 = 3,
     iframe_origin_buf: [256]u8 = [0; 256],
     iframe_origin_len: usize = 0,
     iframe_frame_id_buf: [64]u8 = [0; 64],
@@ -507,9 +520,11 @@ pub struct CdpPageSession {
             pending_css_event_count: 0,
             css_event_storage: [0; 8192],
             css_event_storage_used: 0,
-            next_context_id: 2,
+            next_context_id: 3,
+            isolated_worlds: [IsolatedWorldEntry{}; 16],
+            isolated_world_count: 0,
             iframe_ctx_created: false,
-            iframe_ctx_id: 2,
+            iframe_ctx_id: 3,
             iframe_origin_buf: [0; 256],
             iframe_origin_len: 0,
             iframe_frame_id_buf: [0; 64],
@@ -796,6 +811,7 @@ pub struct CdpPageSession {
         _.scroll_y = 0.0;
         _.iframe_ctx_created = false;
         _.pending_iframe_ctx_event = false;
+        _.rotateIsolatedWorldsOnNavigate();
 
         // Set document url and referrer in JS environment
         let set_url_alloc: ([]u8)? = null;
@@ -998,7 +1014,75 @@ pub struct CdpPageSession {
         _.network_enabled = false;
         _.fetch_enabled = false;
         _.dom_enabled = false;
+        _.next_context_id = 3;
+        _.isolated_world_count = 0;
+        let wi: usize = 0;
+        while (wi < _.isolated_worlds.len) : (wi += 1) {
+            _.isolated_worlds[wi].active = false;
+            _.isolated_worlds[wi].context_id = 0;
+            _.isolated_worlds[wi].name_len = 0;
+        }
         _.resetDomTracking();
+    }
+
+    pub fn createIsolatedWorld(*_, world_name: []const u8, created_new: *bool): i64 {
+        let i: usize = 0;
+        while (i < _.isolated_world_count) : (i += 1) {
+            if (std.mem.eql(u8, _.isolated_worlds[i].name(), world_name)) {
+                if (_.isolated_worlds[i].active) {
+                    created_new.* = false;
+                    return _.isolated_worlds[i].context_id;
+                }
+                const cid = _.next_context_id;
+                _.next_context_id += 1;
+                _.isolated_worlds[i].context_id = cid;
+                _.isolated_worlds[i].active = true;
+                created_new.* = true;
+                return cid;
+            }
+        }
+        if (_.isolated_world_count < _.isolated_worlds.len) {
+            const idx = _.isolated_world_count;
+            const cid = _.next_context_id;
+            _.next_context_id += 1;
+            const copy_len = @min(world_name.len, _.isolated_worlds[idx].name_buf.len);
+            @memcpy(_.isolated_worlds[idx].name_buf[0..copy_len], world_name[0..copy_len]);
+            _.isolated_worlds[idx].name_len = copy_len;
+            _.isolated_worlds[idx].context_id = cid;
+            _.isolated_worlds[idx].active = true;
+            _.isolated_world_count += 1;
+            created_new.* = true;
+            return cid;
+        }
+        created_new.* = false;
+        return 1;
+    }
+
+    pub fn rotateIsolatedWorldsOnNavigate(*_) {
+        let i: usize = 0;
+        while (i < _.isolated_world_count) : (i += 1) {
+            const cid = _.next_context_id;
+            _.next_context_id += 1;
+            _.isolated_worlds[i].context_id = cid;
+            _.isolated_worlds[i].active = true;
+        }
+    }
+
+    pub fn isIsolatedWorldId(*_, cid: i64): bool {
+        let i: usize = 0;
+        while (i < _.isolated_world_count) : (i += 1) {
+            if (_.isolated_worlds[i].active && _.isolated_worlds[i].context_id == cid) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn isValidContextId(*_, cid: i64): bool {
+        if (cid == 1) return true;
+        if (_.iframe_ctx_created && _.iframe_ctx_id == cid) return true;
+        if (_.isIsolatedWorldId(cid)) return true;
+        return false;
     }
 
     pub fn resetDomTracking(*_) {
@@ -1506,7 +1590,7 @@ pub struct CdpPageSession {
         _.ctx.freeValue(sync_named_val);
 
         let val: JSValue = undefined;
-        if (context_id != null && context_id.? > 1) {
+        if (context_id != null && context_id.? > 1 && !_.isIsolatedWorldId(context_id.?)) {
             const expr_val = _.ctx.newString(expr);
             defer _.ctx.freeValue(expr_val);
             _.ctx.setPropertyStr("__capsurf_eval_expr", expr_val);
@@ -1805,6 +1889,25 @@ pub struct CdpPageSession {
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
 
         _.layout.computeLayout(&_.doc, styles) catch {};
+        if (sheet.container_rule_count > 0) {
+            let box_w = _.allocator.alloc(f32, count) catch null;
+            let box_h = _.allocator.alloc(f32, count) catch null;
+            defer if (box_w != null) _.allocator.free(box_w.?);
+            defer if (box_h != null) _.allocator.free(box_h.?);
+            if (box_w != null && box_h != null) {
+                let cq_pass: usize = 0;
+                while (cq_pass < 3) : (cq_pass += 1) {
+                    let bi: usize = 0;
+                    while (bi < count) : (bi += 1) {
+                        const br = _.layout.getBoundingClientRect(@as(u32, @intCast(bi)));
+                        box_w.?[bi] = br.width;
+                        box_h.?[bi] = br.height;
+                    }
+                    Cascade.computeStylesWithContainers(&_.doc, &sheet, styles, box_w.?, box_h.?, 16.0);
+                    _.layout.computeLayout(&_.doc, styles) catch {};
+                }
+            }
+        }
         _.paint_prepares += 1;
 
         let rects = _.allocator.alloc(Rect, count)?;
@@ -2016,6 +2119,39 @@ pub struct CdpPageSession {
             }
         }
 
+        let scroll_offsets: [64]ScrollOffset = [ScrollOffset{}; 64];
+        let scroll_offset_count: usize = 0;
+        if (_.has_document) {
+            const js_sc = "(function() { try { const cache = globalThis.__capsurf_wrappers; if (!cache) return ''; const out = []; const keys = Object.keys(cache); for (let i = 0; i < keys.length && out.length < 64; i++) { const el = cache[keys[i]]; if (!el || typeof el._nid !== 'number' || el._nid <= 0) continue; const st = Number(el._scrollTop) || 0; const sl = Number(el._scrollLeft) || 0; if (st !== 0 || sl !== 0) out.push(el._nid + ':' + sl + ':' + st); } return out.join(';'); } catch (e) { return ''; } })();";
+            const val_sc = _.ctx.eval(js_sc);
+            const cstr_sc = _.ctx.toCString(val_sc);
+            if (cstr_sc.len > 0) {
+                let sc_entries = std.mem.splitAny(u8, cstr_sc, ";");
+                while (sc_entry := sc_entries.next()) {
+                    if (sc_entry.len == 0 || scroll_offset_count >= 64) continue;
+                    let fields = std.mem.splitAny(u8, sc_entry, ":");
+                    if (nid_str := fields.next()) {
+                        if (sl_str := fields.next()) {
+                            if (st_str := fields.next()) {
+                                const snid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
+                                const sl_v = std.fmt.parseFloat(f32, sl_str) catch 0.0;
+                                const st_v = std.fmt.parseFloat(f32, st_str) catch 0.0;
+                                if (snid > 0 && (sl_v != 0.0 || st_v != 0.0)) {
+                                    scroll_offsets[scroll_offset_count] = ScrollOffset{
+                                        node_id: snid,
+                                        scroll_left: sl_v,
+                                        scroll_top: st_v,
+                                    };
+                                    scroll_offset_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val_sc);
+        }
+
         const opts = ScreenshotOptions{
             viewport_w: vw,
             viewport_h: vh,
@@ -2026,6 +2162,7 @@ pub struct CdpPageSession {
             canvas_bitmaps: canvas_bitmaps[0..canvas_count],
             selection_spans: selection_spans[0..selection_count],
             form_values: form_values[0..form_value_count],
+            scroll_offsets: scroll_offsets[0..scroll_offset_count],
             clip_x: clip_x,
             clip_y: clip_y,
             clip_w: clip_w,

@@ -1337,4 +1337,10 @@
    - 在引导期捕获 `Map.prototype.forEach` 与 `Reflect.apply` 直接读取内部 `Headers._map` 并执行 WHATWG Forbidden Request-Header 过滤；统一将所有 `HTML*Element` 构造器原型链接至 `HTMLElement -> Element`。
 2. **`HTMLFormElement` 命名属性代理与 `execCommand` (`form.js`, `index.js`)**：
    - 基于 Proxy 实装 `[LegacyOverrideBuiltIns]`（索引优先、命名控件覆盖自身属性、保留 DOM 树方法）并在 `Document.prototype` 实装 `execCommand`/`queryCommand*` 富文本命令集。
+
+## Phase 88 Isolated Worlds 生命周期、非阻塞慢导航与 Session Deadlines 技术方案
+1. **Isolated Worlds 与上下文淘汰 (`session.cp`, `page.cp`, `runtime.cp`)**：
+   - `CdpPageSession` 维护 `isolated_worlds` 注册表，跨导航时递增分配新 id 并淘汰旧 id，`Runtime.evaluate`/`callFunctionOn` 严格校验并抛出 Chrome 标准 `-32000` 错误。
+2. **非阻塞慢导航与会话超时 (`server.cp`)**：
+   - 在 `runWebSocketSession` 事件循环中支持 `slow-script` 挂起导航期间响应 `Target.closeTarget` 立即中止并拒绝挂起求值；追踪会话启动与客户端帧时间戳实现 `ksIdleMs`/`ksMaxSessionMs`（页面 JS 定时器不续期）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

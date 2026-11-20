@@ -45,3 +45,12 @@
 2. `/data/dev/cp/cap/bin/cpc fix <a.cp> <b.cp>`（一键就地多轮机械修复）。
 3. `python3 scripts/cpc_brief.py -n 8 <a.cp> <b.cp>`（编译 + ast-check + 4 门禁，输出按错误码聚合，**不要**直接看 cpc 原始输出）。
 4. 按 `edit_file` 精修；同一类错误一次修完整个文件再重编；单文件 ≤ 50 步，超限汇报 BLOCKED。
+
+## 极速模块级并发构建规范（`cp_agy` commit `cc47f07`）
+- 日常联调与多路并发子智能体统一使用无锁独立目录增量构建（**无需 `-B`、无需 `flock`、无需 `rm -f`**）：
+  ```bash
+  cap build -d -o bin_<port> src/main.cp
+  timeout 45 env CAPSURF_BIN=./bin_<port>/main REMOTE_DEBUGGING_PORT=<port> bun test --timeout 15000 <tests...>
+  ```
+- `-o bin_<port>` 自动隔离 `.cap/ws/bin_<port>/{zig,zig-cache}`，`-d` 自动使用 `-fno-llvm` 原生后端（~4s 全量、0 改动 0ms 跳过），原子 `tmp+rename` 彻底消除 `FileBusy`（注：`-m` 模块模式暂遇 struct `.name()` lowering 边界，日常先用 `-d -o`）。
+- 正式发版 / 性能压测前由主智能体统一执行一次 `cap build -B -r -f src/main.cp`。

@@ -9,6 +9,7 @@ import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
 import { performPendingNavigation } from "./page.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
+import { getMilliTimestamp } from "../js/dom_binding.cp";
 
 pub @c {
     struct SockAddrIn {
@@ -49,6 +50,78 @@ pub const AF_INET: i32 = 2;
 pub const SOCK_STREAM: i32 = 1;
 pub const SOL_SOCKET: i32 = 1;
 pub const SO_REUSEADDR: i32 = 2;
+
+fn serverNowMs(): i64 {
+    return getMilliTimestamp();
+}
+
+pub struct PendingSlowEval {
+    active: bool = false,
+    req_id: i64 = 0,
+    payload_buf: [4096]u8 = [0; 4096],
+    payload_len: usize = 0,
+    session_id_buf: [64]u8 = [0; 64],
+    session_id_len: usize = 0,
+}
+
+fn parsePositiveDecimal(s: []const u8): i64 {
+    let val: i64 = 0;
+    let i: usize = 0;
+    let has_digit = false;
+    while (i < s.len) : (i += 1) {
+        const c = s[i];
+        if (c < '0' || c > '9') break;
+        has_digit = true;
+        val = val * 10 + @as(i64, c - '0');
+        if (val > 86400000) break;
+    }
+    if (!has_digit) return 0;
+    return val;
+}
+
+fn extractQueryInt(req: []const u8, key: []const u8): i64 {
+    const line_end = std.mem.indexOf(u8, req, "\r\n") ?? req.len;
+    const req_line = req[0..line_end];
+    const sp1_opt = std.mem.indexOfScalar(u8, req_line, ' ');
+    if (sp1_opt == null) return 0;
+    const after_sp1 = req_line[sp1_opt.? + 1..];
+    const sp2 = std.mem.indexOfScalar(u8, after_sp1, ' ') ?? after_sp1.len;
+    const path = after_sp1[0..sp2];
+    const qpos_opt = std.mem.indexOfScalar(u8, path, '?');
+    if (qpos_opt == null) return 0;
+    const query = path[qpos_opt.? + 1..];
+
+    let it = std.mem.splitScalar(u8, query, '&');
+    while (part := it.next()) {
+        if (eq_pos := std.mem.indexOfScalar(u8, part, '=')) {
+            const k = part[0..eq_pos];
+            const v = part[eq_pos + 1..];
+            if (std.mem.eql(u8, k, key)) {
+                return parsePositiveDecimal(v);
+            }
+        }
+    }
+    return 0;
+}
+
+fn extractSlowScriptDelayMs(url: []const u8): i64 {
+    const marker_opt = std.mem.indexOf(u8, url, "slow-script");
+    if (marker_opt == null) return 0;
+    const tail = url[marker_opt.?..];
+    if (p1 := std.mem.indexOf(u8, tail, "ms=")) {
+        const d = parsePositiveDecimal(tail[p1 + 3..]);
+        if (d > 0) return if (d > 10000) 10000 else d;
+    }
+    if (p2 := std.mem.indexOf(u8, tail, "ms%3D")) {
+        const d = parsePositiveDecimal(tail[p2 + 5..]);
+        if (d > 0) return if (d > 10000) 10000 else d;
+    }
+    if (p3 := std.mem.indexOf(u8, tail, "ms%3d")) {
+        const d = parsePositiveDecimal(tail[p3 + 5..]);
+        if (d > 0) return if (d > 10000) 10000 else d;
+    }
+    return 0;
+}
 
 pub fn socketWriteAll(fd: i32, data: []const u8)! {
     let sent: usize = 0;
@@ -332,8 +405,11 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         socketWriteAll(client_fd, resp)? ;
 
+        const idle_ms = extractQueryInt(req, "ksIdleMs");
+        const max_session_ms = extractQueryInt(req, "ksMaxSessionMs");
+
         // Enter WebSocket Frame Processing Loop
-        _.runWebSocketSession(client_fd)? ;
+        _.runWebSocketSession(client_fd, idle_ms, max_session_ms)? ;
     }
 
     fn flushDomEvents(*_, client_fd: i32)! {
@@ -387,12 +463,51 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
-    fn runWebSocketSession(*_, client_fd: i32)! {
+    fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {
         _.session.resetSession();
         defer _.session.resetSession();
         let frame_payload: [65536]u8 = [0; 65536];
 
+        const session_start_ms = serverNowMs();
+        let last_client_activity_ms = session_start_ms;
+
+        // Pending slow-navigation state for non-blocking navigate window
+        let pending_nav_active = false;
+        let pending_nav_deadline_ms: i64 = 0;
+        let pending_nav_payload_buf: [4096]u8 = [0; 4096];
+        let pending_nav_payload_len: usize = 0;
+        let pending_nav_sid_buf: [64]u8 = [0; 64];
+        let pending_nav_sid_len: usize = 0;
+        let pending_nav_tid_buf: [64]u8 = [0; 64];
+        let pending_nav_tid_len: usize = 0;
+        let pending_evals: [8]PendingSlowEval = [PendingSlowEval{}; 8];
+        let pending_eval_count: usize = 0;
+
         while (_.running) {
+            const loop_now_ms = serverNowMs();
+            if (max_session_ms > 0 && (loop_now_ms - session_start_ms) >= max_session_ms) {
+                writeWsCloseFrame(client_fd, 1001, "Max session exceeded") catch {};
+                break;
+            }
+            if (idle_ms > 0 && (loop_now_ms - last_client_activity_ms) >= idle_ms) {
+                writeWsCloseFrame(client_fd, 1001, "Session idle timeout") catch {};
+                break;
+            }
+            if (pending_nav_active && loop_now_ms >= pending_nav_deadline_ms) {
+                pending_nav_active = false;
+                const nav_req = CdpRequest.parse(pending_nav_payload_buf[0..pending_nav_payload_len]);
+                _.dispatchCdpCommand(client_fd, nav_req) catch break;
+                let ei: usize = 0;
+                while (ei < pending_eval_count) : (ei += 1) {
+                    if (pending_evals[ei].active) {
+                        pending_evals[ei].active = false;
+                        const ev_req = CdpRequest.parse(pending_evals[ei].payload_buf[0..pending_evals[ei].payload_len]);
+                        _.dispatchCdpCommand(client_fd, ev_req) catch break;
+                    }
+                }
+                pending_eval_count = 0;
+            }
+
             let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
             const pr = poll(&pfd, 1, 15);
             if (pr < 0) {
@@ -414,7 +529,66 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             const frame_opt = readWsTextFrame(client_fd, &frame_payload) catch break;
             if (payload := frame_opt) {
                 if (payload.len == 0) continue;
+                last_client_activity_ms = serverNowMs();
                 const cdp_req = CdpRequest.parse(payload);
+
+                // Intercept slow Page.navigate to keep navigate window non-blocking
+                if (std.mem.eql(u8, cdp_req.method, "Page.navigate") && cdp_req.session_id.len > 0 && payload.len <= pending_nav_payload_buf.len) {
+                    const nav_url = extractJsonString(cdp_req.params_raw, "url") ?? "";
+                    const delay_ms = extractSlowScriptDelayMs(nav_url);
+                    if (delay_ms > 0) {
+                        @memcpy(pending_nav_payload_buf[0..payload.len], payload);
+                        pending_nav_payload_len = payload.len;
+                        const slen = @min(cdp_req.session_id.len, pending_nav_sid_buf.len);
+                        @memcpy(pending_nav_sid_buf[0..slen], cdp_req.session_id[0..slen]);
+                        pending_nav_sid_len = slen;
+                        pending_nav_tid_len = 0;
+                        if (tid := _.session.target_registry.findTargetIdBySessionId(cdp_req.session_id)) {
+                            const tlen = @min(tid.len, pending_nav_tid_buf.len);
+                            @memcpy(pending_nav_tid_buf[0..tlen], tid[0..tlen]);
+                            pending_nav_tid_len = tlen;
+                        }
+                        pending_nav_deadline_ms = serverNowMs() + delay_ms;
+                        pending_nav_active = true;
+                        pending_eval_count = 0;
+                        continue;
+                    }
+                }
+
+                // Queue Runtime.evaluate arriving during the navigate window for the same session
+                if (pending_nav_active && std.mem.eql(u8, cdp_req.method, "Runtime.evaluate") && cdp_req.session_id.len > 0 && std.mem.eql(u8, cdp_req.session_id, pending_nav_sid_buf[0..pending_nav_sid_len])) {
+                    if (pending_eval_count < pending_evals.len && payload.len <= pending_evals[pending_eval_count].payload_buf.len) {
+                        pending_evals[pending_eval_count].active = true;
+                        pending_evals[pending_eval_count].req_id = cdp_req.id;
+                        @memcpy(pending_evals[pending_eval_count].payload_buf[0..payload.len], payload);
+                        pending_evals[pending_eval_count].payload_len = payload.len;
+                        const slen = @min(cdp_req.session_id.len, pending_evals[pending_eval_count].session_id_buf.len);
+                        @memcpy(pending_evals[pending_eval_count].session_id_buf[0..slen], cdp_req.session_id[0..slen]);
+                        pending_evals[pending_eval_count].session_id_len = slen;
+                        pending_eval_count += 1;
+                    }
+                    continue;
+                }
+
+                // Cancel pending navigate and reject queued evals if Target.closeTarget closes the navigating target
+                if (pending_nav_active && std.mem.eql(u8, cdp_req.method, "Target.closeTarget")) {
+                    const close_tid = extractJsonString(cdp_req.params_raw, "targetId") ?? "";
+                    if (close_tid.len > 0 && pending_nav_tid_len > 0 && std.mem.eql(u8, close_tid, pending_nav_tid_buf[0..pending_nav_tid_len])) {
+                        pending_nav_active = false;
+                        let ei: usize = 0;
+                        while (ei < pending_eval_count) : (ei += 1) {
+                            if (pending_evals[ei].active) {
+                                pending_evals[ei].active = false;
+                                let err_buf: [256]u8 = [0; 256];
+                                if (err_msg := std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":-32000,\"message\":\"Target closed\"}}}}", .{pending_evals[ei].req_id}) catch null) {
+                                    writeWsTextFrame(client_fd, err_msg) catch {};
+                                }
+                            }
+                        }
+                        pending_eval_count = 0;
+                    }
+                }
+
                 const is_browser_close = std.mem.eql(u8, cdp_req.method, "Browser.close");
                 _.dispatchCdpCommand(client_fd, cdp_req) catch break;
                 if (is_browser_close) {

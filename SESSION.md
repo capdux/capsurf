@@ -3544,3 +3544,25 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - 9/10 Core 套件（`exec-command`、`fetch-init-headers`、`forbidden-request-headers`、`form-data-blob-entries`、`form-named-properties` (6/6)、`header-intrinsic-tamper` (4/4)、`hostile-global-timers`、`html-element-chain`、`idl-interface-shape`）：**19/19 PASS**！`idl-conformance` 因 monorepo 相对路径与 Vitest `toMatchFileSnapshot` 归档。
 - **清理旧子智能体**: 销毁 `84825930-064b-4018-874b-ea4f528a6126`。
+
+## [2026-11-20 18:03:00] 收到并确认上游 `cp_agy` 工具链广播 (`syntax-tooling-20261120-cap-cpc-fast-modular`)
+- **广播来源**: `cp_agy`（commit `cc47f07`）
+- **核心升级**:
+  1. 全工程递归 mtime 感知（`src/**/*.cp` + `cap.json`），日常联调无需 `-B`；
+  2. `cap build -d/--debug` 在 x86_64-linux 自动启用 Zig `-fno-llvm` 原生后端；
+  3. 原子 `tmp+rename` 覆写二进制，彻底消除 `FileBusy`；
+  4. `-o <dir>` 自动按输出目录隔离 `.cap/ws/<name>/{zig,zig-cache}`，3 路并发子智能体彻底告别 `flock` 排队（直接 `cap build -m -d -o bin_<port> src/main.cp`）；
+  5. `-m/--modular` 模块级 FNV-1a 增量发射（改 1 文件仅重转译 1 模块）。
+- **状态**: 已验收适配并执行 `ack` 确认，同步更新至 `CP_PITFALLS.md`。
+
+## [2026-11-20 18:06:30] IsolatedWorld 上下文生命周期、跨导航/慢导航取消求值与 Session Deadlines 闭环 (Subagent 6a8fbb14 结单，Phase 88)
+- **IsolatedWorld 与执行上下文生命周期 (`src/cdp/{session,page,runtime,target}.cp`)**:
+  - `session.cp` & `page.cp`: 新增 `IsolatedWorldEntry` 与 `Page.createIsolatedWorld`（同文档去重、跨导航轮换新递增 id），`Page.navigate` 规范发射 `Runtime.executionContextsCleared` -> `Created`（主 frame 默认上下文 id=1 + 孤立世界）；
+  - `runtime.cp`: `Runtime.evaluate`/`callFunctionOn` 对已淘汰或无效上下文 id 返回 `-32000: "Cannot find context with specified id"`。
+- **非阻塞慢导航取消与 Session Deadlines (`src/cdp/server.cp`)**:
+  - 实装 `ksIdleMs`/`ksMaxSessionMs` 空闲与墙钟超时，超时发送 RFC 6455 Close Frame（`code=1001`）；
+  - 实装 `slow-script` 非阻塞导航窗口与期间 `Target.closeTarget` 取消挂起求值。
+- **门禁与测试验证（3.96s Debug 快编）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `browser-close` (1/1)、`context-lifecycle` (3/3)、`eval-across-navigation` (1/1)、`eval-during-navigate` (4/4) 共 **9/9 PASS**；`session-deadlines` 3 个场景原生 WS 直连全过（定位 `e2e/shim/cloudflare-test.ts:39` 遗漏 `${u.search}`）。
+- **清理旧子智能体**: 销毁 `6a8fbb14-3c4c-403a-a627-c02e18395751`。

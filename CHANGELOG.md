@@ -1716,4 +1716,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：9/10 Core 套件共 **19/19 PASS**。
+
+## Phase 88: Isolated Worlds Lifecycle, Non-Blocking Slow Navigate Cancel & Session Deadlines (Closed)
+- **`src/cdp/{session,page,runtime,target,server}.cp`**：
+  - 实装 `Page.createIsolatedWorld`（去重与跨导航 id 轮换）、`Runtime.executionContextsCleared`/`Created`、淘汰上下文 `-32000` 校验、`slow-script` 非阻塞导航窗口取消挂起求值及 `ksIdleMs`/`ksMaxSessionMs` RFC 6455 Close 1001 超时。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（3.96s Debug 快编）；
+  - E2E 测试：`browser-close` (1/1) + `context-lifecycle` (3/3) + `eval-across-navigation` (1/1) + `eval-during-navigate` (4/4) 共 **9/9 PASS**，`session-deadlines` 原生 WS 3/3 验证通过。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
