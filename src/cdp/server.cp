@@ -1114,6 +1114,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     break;
                 }
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
+                    _.session.pumpTimers();
                     const post_now_ms = serverNowMs();
                     * = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
                 }

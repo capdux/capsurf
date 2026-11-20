@@ -4431,7 +4431,11 @@ pub struct CdpPageSession {
             _.ctx.freeValue(val);
         }
 
-        const png = _.captureScreenshotClipped(0, 0, 0, max_w, max_h);
+        const vw: u32 = if (_.viewport_width > 0.0) @as(u32, @intFromFloat(_.viewport_width)) else 1280;
+        const vh: u32 = if (_.viewport_height > 0.0) @as(u32, @intFromFloat(_.viewport_height)) else 720;
+        const cw: u32 = if (max_w > 0 && vw > max_w) max_w else 0;
+        const ch: u32 = if (max_h > 0 && vh > max_h) max_h else 0;
+        const png = _.captureScreenshotClipped(1, 0, 0, cw, ch);
 
         let ri: usize = 0;
         while (ri < saved_count) : (ri += 1) {

@@ -1725,3 +1725,7 @@
 ### Phase 221: Screencast Wheel Coalescing & Ownership Transfer (`server.cp`, `types.cp`, `window.js`)
 - `CdpRequest.parse` previously let nested `params.sessionId` shadow top-level `sessionId`; slicing directly from `findTopLevelJsonKey(trimmed, "sessionId")` fixes `Page.screencastFrameAck` owner routing.
 - `CdpServer` now batches consecutive `Input.dispatchMouseEvent` (`mouseWheel`) requests from the active screencast owner within a 1ms `poll` window via `PendingWheelBatch`, while `dispatchWheelEvent` handles per-axis `overscrollBehaviorX`/`overscrollBehaviorY`.
+
+### Phase 222: Screencast rAF Pacing & Viewport-Aware Frame Compression
+- `captureScreencastFrame` previously forced `1280x720` uncompressed (`compress_level=0`, ~3.68MB) PNGs even for small viewports; clamping to viewport size and using `compress_level=1` restores 60fps rAF pacing.
+- Batching up to 32 due tasks in `__capsurf_pump_timers` and using `_rafDriverGraceMs = Math.max(150, _rafDriverIntervalMs * 2)` prevents fallback timer double-firing at 16ms intervals.

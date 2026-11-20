@@ -2335,3 +2335,7 @@
 ### Phase 221
 - Added `test/tty/test_tty_render_and_selection_edge.cp`.
 - Implemented screencast wheel coalescing, per-axis `overscrollBehavior`, and screencast owner transfer/validation across `src/cdp/{types,screencast,page,input,server}.cp`, `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`), and `e2e/harness.ts`.
+
+### Phase 222
+- Added `test/net/test_mock_fixtures_edge.cp`.
+- Optimized `captureScreencastFrame` viewport scaling & compression in `src/cdp/session.cp`, added `pumpTimers()` on `pr > 0` in `src/cdp/server.cp`, and added 32-task timer batching + `_rafDriverGraceMs` in `src/js/shim/window.js` (+ `runtime.js`/`runtime_source.cp`).

@@ -29900,52 +29900,57 @@
     }
 
     global.__capsurf_pump_timers = function () {
-      if (messageTaskQueue.length > 0) {
-        const msgTask = messageTaskQueue.shift();
+      let pumped = 0;
+      const batchNow = nativeDateNow();
+      while (pumped < 32) {
+        if (messageTaskQueue.length > 0) {
+          const msgTask = messageTaskQueue.shift();
+          pumped++;
+          try {
+            msgTask();
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) console.error(e);
+          }
+          continue;
+        }
+        while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+          taskQueue.shift();
+        }
+        if (taskQueue.length === 0) return pumped > 0 ? 0 : -1;
+
+        const item = taskQueue[0];
+        if (item.due > batchNow) {
+          if (pumped > 0) return 0;
+          const remaining = item.due - batchNow;
+          return remaining > 0 ? remaining : 0;
+        }
+
+        taskQueue.shift();
+        if (!item.isInterval) {
+          activeTimers.delete(item.id);
+        }
+        pumped++;
+
         try {
-          msgTask();
+          if (typeof item.cb === "function") {
+            item.cb.apply(global, item.args);
+          } else if (typeof item.cb === "string") {
+            (new Function(item.cb))();
+          }
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
-        return 0;
-      }
-      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
-        taskQueue.shift();
-      }
-      if (taskQueue.length === 0) return -1;
 
-      const now = nativeDateNow();
-      const item = taskQueue[0];
-      if (item.due > now) {
-        const remaining = item.due - now;
-        return remaining > 0 ? remaining : 0;
-      }
-
-      taskQueue.shift();
-      if (!item.isInterval) {
-        activeTimers.delete(item.id);
-      }
-
-      try {
-        if (typeof item.cb === "function") {
-          item.cb.apply(global, item.args);
-        } else if (typeof item.cb === "string") {
-          (new Function(item.cb))();
+        if (item.isInterval && activeTimers.has(item.id)) {
+          item.due = nativeDateNow() + item.delay;
+          item.order = timerOrderCounter++;
+          insertTimerTask(item);
         }
-      } catch (e) {
-        if (typeof console !== "undefined" && console.error) console.error(e);
-      }
 
-      if (item.isInterval && activeTimers.has(item.id)) {
-        item.due = nativeDateNow() + item.delay;
-        item.order = timerOrderCounter++;
-        insertTimerTask(item);
+        while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
+          taskQueue.shift();
+        }
       }
-
-      while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
-        taskQueue.shift();
-      }
-
       return 0;
     };
     if (typeof globalThis !== "undefined") {
@@ -32046,9 +32051,13 @@
       }
     }
 
+    function _rafDriverGraceMs() {
+      return Math.max(150, _rafDriverIntervalMs * 2);
+    }
+
     function _scheduleRafFallbackTimer() {
       if (_rafFallbackTimerId !== 0 || _rafQueue.length === 0) return;
-      const delay = _rafDriverActive ? Math.max(16, _rafDriverIntervalMs * 2) : 16;
+      const delay = _rafDriverActive ? _rafDriverGraceMs() : 16;
       _rafFallbackTimerId = global.setTimeout(function () {
         _rafFallbackTimerId = 0;
         if (_rafDriverActive && Date.now() < _rafDriverDeadlineMs) {
@@ -32066,7 +32075,7 @@
       if (active) {
         _rafDriverActive = true;
         _rafDriverIntervalMs = Math.max(16, Number(intervalMs) || 16);
-        _rafDriverDeadlineMs = Date.now() + _rafDriverIntervalMs * 2;
+        _rafDriverDeadlineMs = Date.now() + _rafDriverGraceMs();
       } else {
         _rafDriverActive = false;
         _rafDriverIntervalMs = 0;
@@ -32085,7 +32094,7 @@
     function pumpRaf(timestampMs) {
       _clearRafFallbackTimer();
       if (_rafDriverActive) {
-        _rafDriverDeadlineMs = Date.now() + _rafDriverIntervalMs * 2;
+        _rafDriverDeadlineMs = Date.now() + _rafDriverGraceMs();
       }
       if (_rafQueue.length === 0) return 0;
       const batch = _rafQueue.splice(0, _rafQueue.length);
