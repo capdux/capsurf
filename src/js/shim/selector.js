@@ -34,6 +34,14 @@ function wrapQuerySelector(origFn) {
     if (isPurePseudoElementSelector(s)) {
       return null;
     }
+    if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+      const root = this === document ? (document.documentElement || document) : this;
+      const found = findInSubtree(root, function (el) {
+        const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
+        return matchesElementSelector(up, s, undefined, true);
+      }, true);
+      return found ? (typeof upgradeElement === "function" ? upgradeElement(found) : found) : null;
+    }
     if (origFn) {
       const res = origFn.call(this, s);
       return typeof upgradeElement === "function" ? upgradeElement(res) : res;
@@ -49,6 +57,18 @@ function wrapQuerySelectorAll(origFn) {
     validateSelector(s);
     if (isPurePseudoElementSelector(s)) {
       return new NodeList([]);
+    }
+    if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+      const root = this === document ? (document.documentElement || document) : this;
+      const matched = findInSubtree(root, function (el) {
+        const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
+        return matchesElementSelector(up, s, undefined, true);
+      }, false);
+      const out = [];
+      for (let i = 0; i < matched.length; i++) {
+        out.push(typeof upgradeElement === "function" ? upgradeElement(matched[i]) : matched[i]);
+      }
+      return new NodeList(out);
     }
     let raw = null;
     if (origFn) {
@@ -253,7 +273,7 @@ function matchesComplexSelector(el, sel, scopeRoot) {
   return matchFrom(el, parts.length - 2);
 }
 
-function matchesElementSelector(el, selector, scopeRoot) {
+function matchesElementSelector(el, selector, scopeRoot, noNativeFallback) {
   if (!el || el.nodeType !== 1 || !selector) return false;
   const s = selector.trim();
   if (s === "*") return true;
@@ -264,6 +284,8 @@ function matchesElementSelector(el, selector, scopeRoot) {
     const item = list[i].trim();
     if (item && matchesComplexSelector(el, item, scopeRoot)) return true;
   }
+
+  if (noNativeFallback) return false;
 
   // Fallback to el.matches only if element is connected to document (not inside ShadowRoot)
   const root = typeof el.getRootNode === "function" ? el.getRootNode() : null;
@@ -280,7 +302,18 @@ function findInSubtree(root, predicate, single) {
   const result = single ? null : [];
   function walk(node) {
     if (!node) return false;
-    const kids = node._children || (node.childNodes ? Array.from(node.childNodes) : []);
+    let kids = null;
+    if (node._children && node._children.length > 0) {
+      kids = node._children;
+    } else if (node.childNodes && node.childNodes.length > 0) {
+      kids = node.childNodes;
+    } else if (node.children && node.children.length > 0) {
+      kids = node.children;
+    } else if (node.firstChild) {
+      kids = [];
+      for (let c = node.firstChild; c; c = c.nextSibling) kids.push(c);
+    }
+    if (!kids) return false;
     for (let i = 0; i < kids.length; i++) {
       const child = kids[i];
       if (!child) continue;

@@ -361,6 +361,7 @@ pub fn createJsElement(ctx: *JSContext, dom_ctx: *JsDomContext, node_id: NodeId)
     };
     * = JS_SetOpaque(el_val, @ptrCast(el));
     * = JS_SetPropertyStr(ctx, el_val, "_nid", jsInt(@intCast(node_id)));
+    * = JS_SetPropertyStr(ctx, el_val, "_id", jsInt(@intCast(node_id)));
     if (key.len > 0) {
         * = JS_SetPropertyStr(ctx, cache, @ptrCast(&key_z), JS_DupValue(ctx, el_val));
     }
@@ -2399,10 +2400,221 @@ pub fn mountDom(
         " function _resolveAccent(el, cs) { const direct = cs.getPropertyValue('accent-color'); if (direct && direct.trim()) return _normColor(direct); let p = el && el.parentElement; while (p) { try { const pcs = _origGcs(p); const pv = pcs.getPropertyValue('accent-color'); if (pv && pv.trim()) return _normColor(pv); } catch (e) {} p = p.parentElement; } if (el && el.tagName && el.tagName.toLowerCase() === 'input' && String(el.getAttribute && el.getAttribute('type') || '').toLowerCase() === 'range') { try { const styles = document.querySelectorAll('style'); let found = ''; for (let i = 0; i < styles.length; i++) { const txt = styles[i].textContent || ''; const re = /([^{}]+)\\{([^{}]*)\\}/g; let m; while ((m = re.exec(txt)) !== null) { const sels = m[1].split(','); let matched = false; for (let j = 0; j < sels.length; j++) { const s = sels[j].trim(); const idx = s.indexOf('::-webkit-slider-thumb') !== -1 ? s.indexOf('::-webkit-slider-thumb') : s.indexOf('::-moz-range-thumb'); if (idx !== -1) { const baseSel = s.slice(0, idx).trim() || '*'; if (typeof el.matches === 'function' && el.matches(baseSel)) { matched = true; break; } } } if (matched) { const decls = m[2].split(';'); for (let k = 0; k < decls.length; k++) { const col = decls[k].indexOf(':'); if (col === -1) continue; const pn = decls[k].slice(0, col).trim().toLowerCase(); const pv = decls[k].slice(col + 1).replace(/!important/i, '').trim(); if (pn === 'background-color' || pn === 'background') { const nc = _normColor(pv); if (nc && nc !== 'auto') found = nc; } } } } } if (found) return found; } catch (e) {} } return 'auto'; }" +
         " function _hasContainerRules() { try { const st = document.querySelectorAll('style'); for (let i = 0; i < st.length; i++) { if ((st[i].textContent || '').indexOf('@container') !== -1) return true; } } catch (e) {} return false; }" +
         " function _cpProp(el, name) { if (!el || typeof el._nid !== 'number' || el._nid <= 0 || typeof globalThis.__capsurf_get_computed_prop !== 'function') return ''; return globalThis.__capsurf_get_computed_prop(el._nid, name) || ''; }" +
-        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } return target.getPropertyValue(name); }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } const v = target[prop]; return typeof v === 'function' ? v.bind(target) : v; } }); };" +
-        " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs; })();";
+        " function _decodeNumEnt(s) { if (!s || s.indexOf('&#') === -1) return s; return s.replace(/&#x([0-9a-fA-F]+);/g, function(_, h) { const cp = parseInt(h, 16); return isNaN(cp) ? _ : String.fromCodePoint(cp); }).replace(/&#([0-9]+);/g, function(_, d) { const cp = parseInt(d, 10); return isNaN(cp) ? _ : String.fromCodePoint(cp); }); }" +
+        " function _firstStrongDir(str) { if (!str || typeof str !== 'string') return null; str = _decodeNumEnt(str); for (let i = 0; i < str.length; i++) { const cp = str.codePointAt(i); if (cp > 0xFFFF) i++; if ((cp >= 0x0590 && cp <= 0x08FF) || (cp >= 0xFB1D && cp <= 0xFDFF) || (cp >= 0xFE70 && cp <= 0xFEFF) || (cp >= 0x10800 && cp <= 0x10FFF) || (cp >= 0x1E800 && cp <= 0x1EFFF)) return 'rtl'; if ((cp >= 0x0041 && cp <= 0x005A) || (cp >= 0x0061 && cp <= 0x007A) || (cp >= 0x00C0 && cp <= 0x02B8) || (cp >= 0x0370 && cp <= 0x058F) || (cp >= 0x0900 && cp <= 0x1FFF) || (cp >= 0x2C00 && cp <= 0x2DFF) || (cp >= 0x3040 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7AF)) return 'ltr'; } return null; }" +
+        " function _formDirAuto(el) { if (!el || el.nodeType !== 1) return null; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag !== 'input' && tag !== 'textarea') return null; const da = String((el.getAttribute && el.getAttribute('dir')) || '').trim().toLowerCase(); if (da !== 'auto') return null; let val = ''; if (tag === 'input') { val = el._valueDirty ? String(el.value || '') : String((el.getAttribute && el.getAttribute('value')) || el.value || ''); } else { val = el._valueDirty ? String(el.value || '') : String(el.value || el.textContent || ''); } return _firstStrongDir(val) || 'ltr'; }" +
+        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } return target.getPropertyValue(name); }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } const v = target[prop]; return typeof v === 'function' ? v.bind(target) : v; } }); };" +
+        " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs;" +
+        " if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.matches === 'function') { const _origMatches = Element.prototype.matches; Element.prototype.matches = function (sel) { const m = String(sel || '').trim().match(/^:dir\\(\\s*([a-zA-Z0-9_-]+)\\s*\\)$/i); if (m) { const fd = _formDirAuto(this); if (fd) { const td = m[1].toLowerCase(); return (td === 'ltr' || td === 'rtl') && fd === td; } } return _origMatches.call(this, sel); }; }" +
+        " })();";
     const accent_val = ctx.eval(accent_script);
     ctx.freeValue(accent_val);
+
+    const ua_widgets_script =
+        "(function() {" +
+        // 1. iframe bitmap bridge (kitesurf.internals.domDebug.setIframeImage)
+        "  const ksSym = Symbol.for('kitesurf.internals');" +
+        "  const ks = globalThis[ksSym] || (globalThis[ksSym] = {});" +
+        "  if (!ks.domDebug) ks.domDebug = {};" +
+        "  const _iframeBitmaps = new Map();" +
+        "  ks.domDebug.setIframeImage = function (nodeId, w, h, rgba) {" +
+        "    if (typeof nodeId !== 'number' || nodeId <= 0 || !w || !h || !rgba) return -1;" +
+        "    const bytes = (rgba instanceof Uint8Array) ? rgba : new Uint8Array(rgba.buffer || rgba);" +
+        "    const need = (w | 0) * (h | 0) * 4;" +
+        "    if (bytes.length < need) return -1;" +
+        "    let bin = '';" +
+        "    const chunk = 8192;" +
+        "    for (let i = 0; i < need; i += chunk) {" +
+        "      const end = i + chunk < need ? i + chunk : need;" +
+        "      let s = '';" +
+        "      for (let j = i; j < end; j++) s += String.fromCharCode(bytes[j]);" +
+        "      bin += s;" +
+        "    }" +
+        "    const b64 = btoa(bin);" +
+        "    _iframeBitmaps.set(nodeId, nodeId + ':' + (w | 0) + ':' + (h | 0) + ':' + b64);" +
+        "    return 0;" +
+        "  };" +
+        "  const _origGetBitmaps = globalThis.__capsurf_get_canvas_bitmaps;" +
+        "  globalThis.__capsurf_get_canvas_bitmaps = function () {" +
+        "    const base = typeof _origGetBitmaps === 'function' ? _origGetBitmaps() : '';" +
+        "    if (_iframeBitmaps.size === 0) return base;" +
+        "    const extra = Array.from(_iframeBitmaps.values()).join(';');" +
+        "    return base ? (base + ';' + extra) : extra;" +
+        "  };" +
+        // 2. UA <select> dropdown overlay
+        "  let _openSelect = null;" +
+        "  let _openOverlay = null;" +
+        "  function _closeSelectDropdown() {" +
+        "    if (_openOverlay && _openOverlay.parentNode) {" +
+        "      try { _openOverlay.parentNode.removeChild(_openOverlay); } catch (e) {}" +
+        "    }" +
+        "    _openOverlay = null;" +
+        "    _openSelect = null;" +
+        "  }" +
+        "  function _openSelectDropdown(sel) {" +
+        "    _closeSelectDropdown();" +
+        "    if (!sel || !document.body) return;" +
+        "    const r = typeof sel.getBoundingClientRect === 'function' ? sel.getBoundingClientRect() : { left: 0, bottom: 24, width: 200 };" +
+        "    const overlay = document.createElement('div');" +
+        "    overlay.setAttribute('data-kitesurf-ua', 'select-dropdown');" +
+        "    const w = Math.max(r.width || 200, 120);" +
+        "    overlay.style.cssText = 'position:fixed;left:' + (r.left || 0) + 'px;top:' + (r.bottom || 24) + 'px;width:' + w + 'px;background:#ffffff;border:1px solid #888;z-index:2147483647;display:block;';" +
+        "    const opts = sel.querySelectorAll ? sel.querySelectorAll('option') : [];" +
+        "    for (let i = 0; i < opts.length; i++) {" +
+        "      const opt = opts[i];" +
+        "      const row = document.createElement('div');" +
+        "      row.textContent = opt.textContent || '';" +
+        "      row.style.cssText = 'display:block;height:24px;line-height:24px;padding:0 6px;box-sizing:border-box;';" +
+        "      row._ksSelect = sel;" +
+        "      row._ksOption = opt;" +
+        "      overlay.appendChild(row);" +
+        "    }" +
+        "    document.body.appendChild(overlay);" +
+        "    _openSelect = sel;" +
+        "    _openOverlay = overlay;" +
+        "  }" +
+        "  function _findSelectAncestor(el) {" +
+        "    let cur = el;" +
+        "    while (cur && cur.nodeType === 1) {" +
+        "      if (String(cur.localName || cur.tagName || '').toLowerCase() === 'select') return cur;" +
+        "      cur = cur.parentNode || cur.parentElement;" +
+        "    }" +
+        "    return null;" +
+        "  }" +
+        "  function _hitOverlayRow(ev) {" +
+        "    if (!_openOverlay) return null;" +
+        "    let cur = ev && ev.target;" +
+        "    while (cur) {" +
+        "      if (cur._ksOption && cur._ksSelect === _openSelect) return cur;" +
+        "      cur = cur.parentNode || cur.parentElement;" +
+        "    }" +
+        "    if (ev && typeof ev.clientX === 'number' && typeof ev.clientY === 'number') {" +
+        "      const kids = _openOverlay.children || [];" +
+        "      for (let i = 0; i < kids.length; i++) {" +
+        "        const row = kids[i];" +
+        "        if (typeof row.getBoundingClientRect === 'function') {" +
+        "          const rr = row.getBoundingClientRect();" +
+        "          if (ev.clientX >= rr.left && ev.clientX <= rr.right && ev.clientY >= rr.top && ev.clientY <= rr.bottom) {" +
+        "            return row;" +
+        "          }" +
+        "        }" +
+        "      }" +
+        "    }" +
+        "    return null;" +
+        "  }" +
+        "  function _handleSelectEvent(ev, target) {" +
+        "    if (!ev || ev._ksSelectHandled) return;" +
+        "    const et = String(ev.type || '');" +
+        "    if (et !== 'mousedown' && et !== 'click') return;" +
+        "    ev._ksSelectHandled = true;" +
+        "    if (_openOverlay && !_openOverlay.parentNode) { _openOverlay = null; _openSelect = null; }" +
+        "    const tgt = (ev.target && ev.target.nodeType === 1) ? ev.target : target;" +
+        "    if (et === 'click' && Date.now() - _lastSelectOpenMs < 100) return;" +
+        "    if (_openOverlay) {" +
+        "      const row = _hitOverlayRow({ target: tgt, clientX: ev.clientX, clientY: ev.clientY });" +
+        "      if (row && row._ksOption) {" +
+        "        const opt = row._ksOption;" +
+        "        const sel = row._ksSelect;" +
+        "        const isDis = Boolean(opt.disabled || (opt.hasAttribute && opt.hasAttribute('disabled')));" +
+        "        if (!isDis && sel) {" +
+        "          const newVal = (opt.hasAttribute && opt.hasAttribute('value')) ? (opt.getAttribute('value') || '') : (opt.textContent || '');" +
+        "          sel.value = newVal;" +
+        "          _closeSelectDropdown();" +
+        "          try { sel.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}" +
+        "          try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}" +
+        "        }" +
+        "        return;" +
+        "      }" +
+        "      const clickedSel = _findSelectAncestor(tgt);" +
+        "      const wasSame = clickedSel && clickedSel === _openSelect;" +
+        "      _closeSelectDropdown();" +
+        "      if (clickedSel && !wasSame) { _openSelectDropdown(clickedSel); _lastSelectOpenMs = Date.now(); }" +
+        "      return;" +
+        "    }" +
+        "    const sel = _findSelectAncestor(tgt);" +
+        "    if (sel) { _openSelectDropdown(sel); _lastSelectOpenMs = Date.now(); }" +
+        "  }" +
+        "  let _lastSelectOpenMs = 0;" +
+        "  const _wrapProtos = [];" +
+        "  if (typeof EventTarget !== 'undefined' && EventTarget.prototype) _wrapProtos.push(EventTarget.prototype);" +
+        "  if (typeof Node !== 'undefined' && Node.prototype) _wrapProtos.push(Node.prototype);" +
+        "  if (typeof Element !== 'undefined' && Element.prototype) _wrapProtos.push(Element.prototype);" +
+        "  if (typeof HTMLElement !== 'undefined' && HTMLElement.prototype) _wrapProtos.push(HTMLElement.prototype);" +
+        "  if (typeof HTMLSelectElement !== 'undefined' && HTMLSelectElement.prototype) _wrapProtos.push(HTMLSelectElement.prototype);" +
+        "  for (let _pi = 0; _pi < _wrapProtos.length; _pi++) {" +
+        "    const _pr = _wrapProtos[_pi];" +
+        "    if (Object.prototype.hasOwnProperty.call(_pr, 'dispatchEvent') && typeof _pr.dispatchEvent === 'function' && !_pr.dispatchEvent._ksWrapped) {" +
+        "      const _origDispatch = _pr.dispatchEvent;" +
+        "      const _wrappedDispatch = function (ev) {" +
+        "        const ret = _origDispatch.call(this, ev);" +
+        "        if (ret && ev && !ev.defaultPrevented) { _handleSelectEvent(ev, this); }" +
+        "        return ret;" +
+        "      };" +
+        "      _wrappedDispatch._ksWrapped = true;" +
+        "      _pr.dispatchEvent = _wrappedDispatch;" +
+        "    }" +
+        "  }" +
+        // 3. HTMLImageElement srcset/src setAttribute terminal broken & cache-hit reload
+        "  if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.setAttribute === 'function') {" +
+        "    const _origSetAttr = Element.prototype.setAttribute;" +
+        "    function _parseFirstSrcsetUrl(raw) {" +
+        "      if (!raw || typeof raw !== 'string') return '';" +
+        "      const parts = raw.split(',');" +
+        "      for (let i = 0; i < parts.length; i++) {" +
+        "        const t = parts[i].trim();" +
+        "        if (!t) continue;" +
+        "        const sp = t.search(/\\s/);" +
+        "        const url = sp === -1 ? t : t.slice(0, sp);" +
+        "        if (url) return url;" +
+        "      }" +
+        "      return '';" +
+        "    }" +
+        "    function _isFetchableImgUrl(u) {" +
+        "      if (!u) return false;" +
+        "      const m = u.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);" +
+        "      if (!m) return true;" +
+        "      const sch = m[1].toLowerCase();" +
+        "      return sch === 'http' || sch === 'https' || sch === 'data' || sch === 'blob';" +
+        "    }" +
+        "    Element.prototype.setAttribute = function (name, value) {" +
+        "      const res = _origSetAttr.call(this, name, value);" +
+        "      const tag = String(this.localName || this.tagName || '').toLowerCase();" +
+        "      if (tag === 'img') {" +
+        "        const ln = String(name || '').toLowerCase();" +
+        "        if (ln === 'srcset' || ln === 'src') {" +
+        "          const self = this;" +
+        "          const srcsetRaw = this.getAttribute('srcset') || '';" +
+        "          const srcRaw = this.getAttribute('src') || '';" +
+        "          const candidate = srcsetRaw ? _parseFirstSrcsetUrl(srcsetRaw) : srcRaw;" +
+        "          if (!candidate || !_isFetchableImgUrl(candidate)) {" +
+        "            self._imgComplete = false;" +
+        "            self._imgLoadSeq = (self._imgLoadSeq || 0) + 1;" +
+        "            const seq = self._imgLoadSeq;" +
+        "            setTimeout(function () {" +
+        "              if (self._imgLoadSeq !== seq) return;" +
+        "              self._imgComplete = true;" +
+        "              self._lastCandidate = candidate;" +
+        "              self._lastDims = { width: 0, height: 0 };" +
+        "              try { self.dispatchEvent(new Event('error')); } catch (e) {}" +
+        "            }, 0);" +
+        "          } else if (self._lastCandidate && (candidate === self._lastCandidate || srcRaw === self._lastCandidate)) {" +
+        "            self._imgComplete = false;" +
+        "            self._imgLoadSeq = (self._imgLoadSeq || 0) + 1;" +
+        "            const seq = self._imgLoadSeq;" +
+        "            setTimeout(function () {" +
+        "              if (self._imgLoadSeq !== seq) return;" +
+        "              self._imgComplete = true;" +
+        "              try { self.dispatchEvent(new Event('load')); } catch (e) {}" +
+        "            }, 0);" +
+        "          }" +
+        "        }" +
+        "      }" +
+        "      return res;" +
+        "    };" +
+        "  }" +
+        "})();";
+    const ua_widgets_val = ctx.eval(ua_widgets_script);
+    ctx.freeValue(ua_widgets_val);
 
     return dom_ctx;
 }

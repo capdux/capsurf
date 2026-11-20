@@ -1467,4 +1467,10 @@
    - 将 `PAGE_INSERTED_SCRIPT_HOOKS_JS` 独立拆分并挂钩全部 `appendChild`/`insertBefore`，通过原生 `JS_EVAL_TYPE_GLOBAL` 与 `(browserContextId, origin, url)` 隔离的 learned script 表完整实现 1024 预算、CORP/ACAO、ES Module 依赖图与驱逐策略。
 2. **多导航内存稳定与事件缓冲 (`session.cp`, `server.cp`, `webmcp.cp`)**：
    - 将 `JsRuntime` 堆上限提升至 256MiB 并改用 16KB 顺序偏移 Console/Log 缓冲，配合 `WebMCP.toolsAdded` 轮询一举拿下 7 大套件 26/26 全绿。
+
+## Phase 111-112 UA 下拉浮层/Iframe 位图与鼠标悬停/动态 `:checked` 技术方案
+1. **UA `<select>` 浮层与 Iframe 位图 (`dom_binding.cp`)**：
+   - 在 `ua_widgets_script` 中挂载 `domDebug.setIframeImage` 接入 `canvas_bitmaps` 光栅化路径，并实装 `[data-kitesurf-ua="select-dropdown"]` 点击展开、选项命中与外部关闭。
+2. **鼠标悬停状态机与动态 `:checked` (`harness.ts`, `selector.js`, `canvas2d.js`)**：
+   - 跟踪 `window.__capsurf_lastHoverEl` 规范派发 `mouseout`/`mouseleave`/`mouseover`/`mouseenter` 并去重 `Mouse.click`；将含 `:checked` 选择器路由至 JS 子树匹配准确反映 `form.reset()` 与动态切换。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

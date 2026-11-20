@@ -203,8 +203,13 @@ export class CDPClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error(`WebSocket is not open (readyState=${this.ws?.readyState})`);
     }
+    const skipSyntheticClick = Boolean(params && params._skipSyntheticClick);
+    const wireParams = skipSyntheticClick ? { ...params } : params;
+    if (skipSyntheticClick) {
+      delete wireParams._skipSyntheticClick;
+    }
     const id = ++this.nextId;
-    const payload: Record<string, any> = { id, method, params };
+    const payload: Record<string, any> = { id, method, params: wireParams };
     if (sessionId) {
       payload.sessionId = sessionId;
     }
@@ -217,7 +222,7 @@ export class CDPClient {
         this.sessions.set(res.sessionId, this._createFlatSession(res.sessionId));
       }
     }
-    if (method === "Input.dispatchMouseEvent" && params && params.type === "mouseReleased" && sharedPage && typeof params.x === "number" && typeof params.y === "number") {
+    if (!skipSyntheticClick && method === "Input.dispatchMouseEvent" && params && params.type === "mouseReleased" && sharedPage && typeof params.x === "number" && typeof params.y === "number") {
       try {
         await sharedPage.evaluate((cx: number, cy: number) => {
           const el: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
@@ -328,6 +333,50 @@ export class Mouse {
         params.browserContextId = this.page.browserContextId;
       }
       await this.page.cdp.send("Input.dispatchMouseEvent", params);
+      try {
+        await this.page.evaluate((cx: number, cy: number, btns: number) => {
+          try {
+            const nextEl: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
+            const prevEl: any = (window as any).__capsurf_lastHoverEl || null;
+            const EvCls = typeof MouseEvent !== "undefined" ? MouseEvent : ((globalThis as any).__NativeEvent || Event);
+            if (nextEl !== prevEl) {
+              const chain = (el: any): any[] => {
+                const list: any[] = [];
+                let cur = el;
+                while (cur && cur.nodeType === 1) {
+                  list.push(cur);
+                  cur = cur.parentElement || cur.parentNode;
+                }
+                return list;
+              };
+              const prevChain = chain(prevEl);
+              const nextChain = chain(nextEl);
+              const prevSet = new Set(prevChain);
+              const nextSet = new Set(nextChain);
+              if (prevEl && prevEl.isConnected !== false) {
+                prevEl.dispatchEvent(new EvCls("mouseout", { bubbles: true, cancelable: true, clientX: cx, clientY: cy, buttons: btns, relatedTarget: nextEl }));
+                for (let k = 0; k < prevChain.length; k++) {
+                  if (!nextSet.has(prevChain[k])) {
+                    prevChain[k].dispatchEvent(new EvCls("mouseleave", { bubbles: false, cancelable: false, clientX: cx, clientY: cy, buttons: btns, relatedTarget: nextEl }));
+                  }
+                }
+              }
+              if (nextEl) {
+                nextEl.dispatchEvent(new EvCls("mouseover", { bubbles: true, cancelable: true, clientX: cx, clientY: cy, buttons: btns, relatedTarget: prevEl }));
+                for (let k = nextChain.length - 1; k >= 0; k--) {
+                  if (!prevSet.has(nextChain[k])) {
+                    nextChain[k].dispatchEvent(new EvCls("mouseenter", { bubbles: false, cancelable: false, clientX: cx, clientY: cy, buttons: btns, relatedTarget: prevEl }));
+                  }
+                }
+              }
+              (window as any).__capsurf_lastHoverEl = nextEl;
+            }
+            if (nextEl) {
+              nextEl.dispatchEvent(new EvCls("mousemove", { bubbles: true, cancelable: true, clientX: cx, clientY: cy, buttons: btns }));
+            }
+          } catch (e) {}
+        }, this._x, this._y, this._buttons);
+      } catch {}
     }
   }
 
@@ -349,7 +398,7 @@ export class Mouse {
     await this.page.cdp.send("Input.dispatchMouseEvent", params);
   }
 
-  async up(options: MouseOptions = {}): Promise<void> {
+  async up(options: MouseOptions & { _skipSyntheticClick?: boolean } = {}): Promise<void> {
     const button = options.button || "left";
     const flag = button === "right" ? 2 : button === "middle" ? 4 : 1;
     this._buttons &= ~flag;
@@ -361,6 +410,9 @@ export class Mouse {
       buttons: this._buttons,
       clickCount: options.clickCount || 1,
     };
+    if (options._skipSyntheticClick) {
+      params._skipSyntheticClick = true;
+    }
     if (this.page.browserContextId && this.page.browserContextId !== "default") {
       params.browserContextId = this.page.browserContextId;
     }
@@ -373,7 +425,7 @@ export class Mouse {
     if (options.delay) {
       await new Promise((r) => setTimeout(r, options.delay));
     }
-    await this.up(options);
+    await this.up({ ...options, _skipSyntheticClick: true });
 
     // Also trigger in-page DOM click & link navigation for full web compatibility
     try {

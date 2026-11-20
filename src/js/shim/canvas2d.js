@@ -1135,7 +1135,9 @@ CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
   const [startX, startY] = transformPoint(this._state.matrix, Number(x), Number(y));
   const fontMatch = (this._state.font || "").match(/(\d+)px/);
   const fontSize = fontMatch ? parseFloat(fontMatch[1]) : 10;
-  const scale = Math.max(1, Math.round(fontSize / 8));
+  const scaleY = Math.max(1, Math.round(fontSize / 8));
+  const charAdvance = Math.max(6, Math.round(fontSize * 0.55));
+  const scaleX = Math.max(1, Math.round(charAdvance / 8));
 
   const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
   const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
@@ -1155,12 +1157,12 @@ CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
       const byte = glyph[row];
       for (let col = 0; col < 8; col++) {
         if ((byte >> (7 - col)) & 1) {
-          for (let sy = 0; sy < scale; sy++) {
-            const py = topY + row * scale + sy;
+          for (let sy = 0; sy < scaleY; sy++) {
+            const py = topY + row * scaleY + sy;
             if (py < 0 || py >= bh) continue;
             if (clip && (py < clip.y0 || py >= clip.y1)) continue;
-            for (let sx = 0; sx < scale; sx++) {
-              const px = curX + col * scale + sx;
+            for (let sx = 0; sx < scaleX; sx++) {
+              const px = curX + col * scaleX + sx;
               if (px < 0 || px >= bw) continue;
               if (clip && (px < clip.x0 || px >= clip.x1)) continue;
               const idx = (py * bw + px) * 4;
@@ -1173,7 +1175,7 @@ CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
         }
       }
     }
-    curX += 8 * scale;
+    curX += charAdvance;
   }
 };
 

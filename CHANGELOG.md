@@ -1878,4 +1878,13 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 3.69s 增量构建）；
   - E2E 测试：7 大套件共 **26/26 PASS (78 expect calls, 100%)**。
+
+## Phase 111-112: UA Select Dropdown & Iframe Bitmap Paint + Web Animations/ContentEditable/Floating Popup — 13 Suites (29/30 PASS)
+- **`src/js/dom_binding.cp`**：
+  - 实装 `dir="auto"` 表单值方向性、`domDebug.setIframeImage`、`[data-kitesurf-ua="select-dropdown"]` 交互浮层与 `<img>` `srcset` 终端错误完成。
+- **`src/js/shim/{canvas2d,selector}.js` & `e2e/harness.ts`**：
+  - 修复 `fillText` 横向字宽步进、`Mouse.click` 双击与 `Mouse.move` 悬停事件链、`:checked` 动态伪类选择器路由。
+- **测试与门禁验证**：
+  - 静态门禁：`dom_binding.cp`、`runtime_source.cp` 4 门禁全 0（2.88s `-m -d -o` 增量构建）；
+  - E2E 测试：Phase 111 7/8 PASS + Phase 112 7/7 套件 **22/22 PASS (67 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

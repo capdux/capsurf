@@ -7862,6 +7862,14 @@
       if (isPurePseudoElementSelector(s)) {
         return null;
       }
+      if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+        const root = this === document ? (document.documentElement || document) : this;
+        const found = findInSubtree(root, function (el) {
+          const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
+          return matchesElementSelector(up, s, undefined, true);
+        }, true);
+        return found ? (typeof upgradeElement === "function" ? upgradeElement(found) : found) : null;
+      }
       if (origFn) {
         const res = origFn.call(this, s);
         return typeof upgradeElement === "function" ? upgradeElement(res) : res;
@@ -7877,6 +7885,18 @@
       validateSelector(s);
       if (isPurePseudoElementSelector(s)) {
         return new NodeList([]);
+      }
+      if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+        const root = this === document ? (document.documentElement || document) : this;
+        const matched = findInSubtree(root, function (el) {
+          const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
+          return matchesElementSelector(up, s, undefined, true);
+        }, false);
+        const out = [];
+        for (let i = 0; i < matched.length; i++) {
+          out.push(typeof upgradeElement === "function" ? upgradeElement(matched[i]) : matched[i]);
+        }
+        return new NodeList(out);
       }
       let raw = null;
       if (origFn) {
@@ -8081,7 +8101,7 @@
     return matchFrom(el, parts.length - 2);
   }
 
-  function matchesElementSelector(el, selector, scopeRoot) {
+  function matchesElementSelector(el, selector, scopeRoot, noNativeFallback) {
     if (!el || el.nodeType !== 1 || !selector) return false;
     const s = selector.trim();
     if (s === "*") return true;
@@ -8092,6 +8112,8 @@
       const item = list[i].trim();
       if (item && matchesComplexSelector(el, item, scopeRoot)) return true;
     }
+
+    if (noNativeFallback) return false;
 
     // Fallback to el.matches only if element is connected to document (not inside ShadowRoot)
     const root = typeof el.getRootNode === "function" ? el.getRootNode() : null;
@@ -8108,7 +8130,18 @@
     const result = single ? null : [];
     function walk(node) {
       if (!node) return false;
-      const kids = node._children || (node.childNodes ? Array.from(node.childNodes) : []);
+      let kids = null;
+      if (node._children && node._children.length > 0) {
+        kids = node._children;
+      } else if (node.childNodes && node.childNodes.length > 0) {
+        kids = node.childNodes;
+      } else if (node.children && node.children.length > 0) {
+        kids = node.children;
+      } else if (node.firstChild) {
+        kids = [];
+        for (let c = node.firstChild; c; c = c.nextSibling) kids.push(c);
+      }
+      if (!kids) return false;
       for (let i = 0; i < kids.length; i++) {
         const child = kids[i];
         if (!child) continue;
@@ -23961,7 +23994,9 @@
     const [startX, startY] = transformPoint(this._state.matrix, Number(x), Number(y));
     const fontMatch = (this._state.font || "").match(/(\d+)px/);
     const fontSize = fontMatch ? parseFloat(fontMatch[1]) : 10;
-    const scale = Math.max(1, Math.round(fontSize / 8));
+    const scaleY = Math.max(1, Math.round(fontSize / 8));
+    const charAdvance = Math.max(6, Math.round(fontSize * 0.55));
+    const scaleX = Math.max(1, Math.round(charAdvance / 8));
 
     const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
     const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
@@ -23981,12 +24016,12 @@
         const byte = glyph[row];
         for (let col = 0; col < 8; col++) {
           if ((byte >> (7 - col)) & 1) {
-            for (let sy = 0; sy < scale; sy++) {
-              const py = topY + row * scale + sy;
+            for (let sy = 0; sy < scaleY; sy++) {
+              const py = topY + row * scaleY + sy;
               if (py < 0 || py >= bh) continue;
               if (clip && (py < clip.y0 || py >= clip.y1)) continue;
-              for (let sx = 0; sx < scale; sx++) {
-                const px = curX + col * scale + sx;
+              for (let sx = 0; sx < scaleX; sx++) {
+                const px = curX + col * scaleX + sx;
                 if (px < 0 || px >= bw) continue;
                 if (clip && (px < clip.x0 || px >= clip.x1)) continue;
                 const idx = (py * bw + px) * 4;
@@ -23999,7 +24034,7 @@
           }
         }
       }
-      curX += 8 * scale;
+      curX += charAdvance;
     }
   };
 

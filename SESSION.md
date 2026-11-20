@@ -3858,3 +3858,14 @@
   - 销毁 `33aaee93-1fa6-469f-8051-cb5d9bb06dcd`；
   - 派发 **Subagent 79**: CDP WebMCP & Script Policy Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
     - 攻坚目标：`e2e/webmcp.e2e.test.ts`、`e2e/viewport-drain.e2e.test.ts`、`e2e/demo/font-heavy.e2e.test.ts`、`e2e/script-redirect-policy.e2e.test.ts`、`e2e/script-gate.e2e.test.ts`。
+
+## [2026-11-20 20:04:00] Phase 111 & Phase 112 双线大丰收：UA 下拉浮层/Iframe 位图 + 7 大 JS/Harness 套件 22/22 全绿 (Subagent 6cfdbb50 & 9dff8e43 结单)
+- **Phase 111 (`src/js/dom_binding.cp`)**:
+  - 实装元素 `_id` 映射、`<input/textarea dir="auto">` 实体方向推导、`domDebug.setIframeImage` 位图绘制桥接、`[data-kitesurf-ua="select-dropdown"]` 下拉浮层交互及 `<img>` `srcset` 终端失败处理；
+  - `hello`、`smoke` (2/2)、`forms-dir-auto-value`、`forms-select-dropdown-demo`、`iframe-bitmap-paint` (7/7)、`img-srcset-terminal-broken-completes` 全部 PASS（7/8 独立通过）。
+- **Phase 112 (`src/js/shim/{canvas2d,selector}.js`, `e2e/harness.ts`)**:
+  - `canvas2d.js`: 修复 `fillText` 横向步进 `0.55 * fontSize`；
+  - `harness.ts`: 修复 `Mouse.click`/`Mouse.up` 重复 `click` 与 `Mouse.move` 悬停事件链（`mouseout`/`mouseleave`/`mouseover`/`mouseenter`/`mousemove`）；
+  - `selector.js`: `:checked` 动态伪类路由至 JS 子树匹配并防递归；
+  - `web-animations` (8/8)、`contenteditable-typing` (4/4)、`canvas-text-upgrade` (1/1)、`floating-popup` (6/6)、`mouse-events-demo` (1/1)、`dynamic-behavior-demo` (1/1)、`forms-realworld-demo` (1/1)：**22/22 PASS (67 expect() calls, 2.88s 增量构建)**！
+- **清理旧子智能体**: 销毁 `6cfdbb50-9d45-4949-bb59-83cfedbb8a0e` 与 `9dff8e43-3d2e-4abb-a98a-5a5360aceff3`。
