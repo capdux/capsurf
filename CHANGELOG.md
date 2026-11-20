@@ -2083,6 +2083,13 @@
 ## Phase 146: `screencast-placeholder-demo` 1/1 PASS & Network/Screencast Viewport Localization
 - 验收 `screencast-placeholder-demo` (**1/1 PASS**)，修正 `network-stylesheet-headers-demo.e2e.test.ts:6` 路径并定位 `session.cp`/`screencast.cp` 跨模块缺口。
 
+## Phase 147: `classic-seed-walk` 1/1 PASS & `classic-computed-import` 4/5 Localization
+- 零修改摸底验收 `classic-seed-walk` (**1/1 PASS**) 与 `classic-computed-import` (**4/5 PASS**)，并精准定位 `loadModuleGraph` 与 `screencast.cp` `pumpRaf` 跨模块行号。
+
+## Phase 148: Harness 3-Arg `test(name, { timeout }, fn)` Support & Reclaim Baseline Localization
+- **`e2e/harness.ts` & `e2e/detached-node-reclaim.e2e.test.ts`**：
+  - 支持 3 参 `(name, { timeout }, fn)` 测试签名与 `./harness` `expect` 统一导入，精准定位 `NamedNodeMap._sync` `Attr` 复用与 `getMemoryStats` `domNodes`/`wrappers` 缺口。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。

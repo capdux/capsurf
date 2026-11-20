@@ -4204,6 +4204,17 @@
 - **精准跨模块定位（留交 Slot B）**：`network-stylesheet-headers-demo` (`session.cp:1569,3771-3828` `loadingFinished`/`request.headers`/`recordResponseBody`)、`screencast-viewport-demo` (`screencast.cp:88-145` `maxWidth`/`maxHeight` 联动重算布局)。
 - **清理旧子智能体**: 销毁 `b5f8e14d-25bf-4af0-b9fb-ee7df1b86ca6`。
 
+## [2026-11-20 23:36:00] 1 分 40 秒验收 `classic-seed-walk` 1/1 PASS & 模块事件/rAF 节拍定位 (Subagent 9c19ffdd 结单，Phase 147)
+- **零修改直接验收**：`e2e/classic-seed-walk.e2e.test.ts` (**1/1 PASS**)、`e2e/classic-computed-import.e2e.test.ts` (**4/5 PASS**)、`e2e/demo/screencast-raf-pacing.e2e.test.ts` (**2/6 PASS**)。
+- **精准跨模块定位**：`classic-computed-import` 第 5 项缺 `session_hooks.cp:1138-1141` `loadModuleGraph` 发射 `Network.requestWillBeSent`；`screencast-raf-pacing` 缺 `window.js:3571` 独立 rAF 队列与 `screencast.cp:88-160` `minFrameIntervalMs`/`pumpRaf`。
+- **清理旧子智能体**: 销毁 `9c19ffdd-e0b9-4b48-a3ae-23193ec87d3d`。
+
+## [2026-11-20 23:37:00] 修复 `test()` 3 参重载并跑通游离节点基线与内存/Attr 定位 (Subagent ee0cb741 结单，Phase 148)
+- **Harness 3 参 `test()` 支持 (`e2e/harness.ts:2775-2794`, `e2e/detached-node-reclaim.e2e.test.ts:5-7`)**：
+  - 扩展 `test(name, fnOrOpts, timeoutOrFn)` 支持 `(name, { timeout }, fn)` 3 参重载并统一 `./harness` `expect` 导入；
+  - `detached-node-reclaim` 首项 PASS，并精准定位 `collections.js:915-941` (`NamedNodeMap._sync` 复用 `Attr`) 与 `session.cp:3271-3313` (`getMemoryStats` `domNodes`/`wrappers`)。
+- **清理旧子智能体**: 销毁 `ee0cb741-f2ec-4836-b86d-3bcd6e2f6064`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

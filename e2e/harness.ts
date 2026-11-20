@@ -2772,7 +2772,24 @@ export type TestFn = (fixtures: {
   browserFactory: (options?: any) => Promise<Browser>;
 }) => Promise<any> | any;
 
-export function test(name: string, fn: TestFn, timeout = 120000) {
+export function test(
+  name: string,
+  fnOrOpts: TestFn | { timeout?: number } | number,
+  timeoutOrFn: number | TestFn = 120000,
+) {
+  let fn: TestFn;
+  let timeout = 120000;
+  if (typeof fnOrOpts === "function") {
+    fn = fnOrOpts;
+    if (typeof timeoutOrFn === "number") timeout = timeoutOrFn;
+  } else {
+    fn = timeoutOrFn as TestFn;
+    if (typeof fnOrOpts === "number") {
+      timeout = fnOrOpts;
+    } else if (fnOrOpts && typeof fnOrOpts.timeout === "number") {
+      timeout = fnOrOpts.timeout;
+    }
+  }
   bunTest(name, async () => {
     if (fn.length > 0) {
       const fixtures = await getSharedSession();

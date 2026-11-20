@@ -3,9 +3,8 @@
 // https://opensource.org/licenses/Apache-2.0
 
 import type { Page } from "@cloudflare/puppeteer";
-import { expect } from "vitest";
 
-import { test } from "./harness";
+import { expect, test } from "./harness";
 import { setContent } from "./set-content";
 import { targetIdForSession } from "./connect";
 
