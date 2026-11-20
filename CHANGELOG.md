@@ -2289,3 +2289,6 @@
 
 ### Phase 210
 - Added `test/eval/test_prefetch_scripts_and_wasm.cp` covering script prefetch origin classification/caps, Wasm header/manifest validation, and inline/URL Wasm literal scanning.
+
+### Phase 211
+- Added `test/eval/test_page_script_and_tail.cp` covering page script cache keys/formatting, tail log truncation/OTel serialization, and RPC session inflight/timeout/teardown tracking.

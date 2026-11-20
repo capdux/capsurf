@@ -4582,3 +4582,7 @@
 ### Phase 210: Pure-CP Eval PrefetchScripts & Wasm Whitebox Tests (Slot A)
 - **Subagent**: `1ce124a4` (killed after completion)
 - **Result**: `test/eval/test_prefetch_scripts_and_wasm.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering `PrefetchScriptManager` 32-script cap & origin classification, `validateWasmHeader`, `WasmBakeManifestEntry` sha256, `scanForWasmLiterals` 8-URL/512-char bounds, and `scanForInlineWasm` dedup).
+
+### Phase 211: Pure-CP Eval PageScript, Tail & RPC Session Whitebox Tests (Slot A)
+- **Subagent**: `fff1166f` (killed after completion)
+- **Result**: `test/eval/test_page_script_and_tail.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 889ms; covering `pageScriptCacheKey`/`hostnameOf`/`originOf`, `formatRemoteObject`/`formatConsoleLogEntry`, `PageScriptTail` 100-cap/kill-marker/`formatOtelRecord`, and `PageScriptRpcSession` 64-inflight/timeout/teardown).
