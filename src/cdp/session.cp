@@ -667,6 +667,8 @@ pub struct CdpPageSession {
     has_document: bool = false,
     raw_html: []const u8 = "",
     paint_prepares: u64 = 0,
+    renderer_active: bool = false,
+    frames_rendered: u64 = 0,
     import_map_entries: std.ArrayListUnmanaged(ImportMapEntry) = .empty,
     inline_modules: std.ArrayListUnmanaged(InlineModuleEntry) = .empty,
     resolved_modules: std.ArrayListUnmanaged(ResolvedModuleEntry) = .empty,
@@ -809,6 +811,8 @@ pub struct CdpPageSession {
         ptr.has_document = false;
         ptr.raw_html = "";
         ptr.paint_prepares = 0;
+        ptr.renderer_active = false;
+        ptr.frames_rendered = 0;
         ptr.viewport_width = 1280.0;
         ptr.viewport_height = 720.0;
         ptr.device_scale_factor = 1.0;
@@ -1123,6 +1127,8 @@ pub struct CdpPageSession {
     }
 
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
+        _.renderer_active = false;
+        _.frames_rendered = 0;
         if (_.has_document && _.webmcp_enabled) {
             const ret_v = _.ctx.eval("(function(){return globalThis.__capsurf_webmcp?globalThis.__capsurf_webmcp.retractAll():'';})()");
             if (!jsIsException(ret_v)) {
@@ -2205,6 +2211,8 @@ pub struct CdpPageSession {
         _.webmcp_enabled = false;
         _.webmcp_invocation_count = 0;
         _.webmcp_retract_len = 0;
+        _.renderer_active = false;
+        _.frames_rendered = 0;
         clearLearnedScripts();
         _.resetDomTracking();
     }
@@ -3276,6 +3284,8 @@ pub struct CdpPageSession {
     }
 
     pub fn captureScreenshotClipped(*_, compress_level: u8, clip_x: i32, clip_y: i32, clip_w: u32, clip_h: u32): ([]const u8)! {
+        _.renderer_active = true;
+        _.frames_rendered += 1;
         const count = @max(@as(usize, 1), _.doc.nodeCount());
         let css_buf = _.allocator.alloc(u8, 65536) catch null;
         defer if (css_buf != null) _.allocator.free(css_buf.?);

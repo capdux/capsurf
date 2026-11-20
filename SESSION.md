@@ -4121,6 +4121,30 @@
   - `asset-import-stub` (**1/1**)、`import-map` (**3/3**)、`lifecycle-demo` (**1/1**)：**5/5 PASS (33 expect() calls)**！
 - **清理旧子智能体**: 销毁 `da672e77-a17b-4b6c-a628-73aeda88614c`。
 
+## [2026-11-20 23:20:00] 原生 `%PDF-1.4` 图文内容流 (`renderPdfWithDocAlloc`) 与 CJK 点阵字形落地 (Subagent 969f4885 结单，Phase 137)
+- **PDF 图文内容流与 CJK 渲染 (`src/render/pdf.cp`, `src/render/painter.cp`, `test/render/test_pdf_pagination.cp`)**:
+  - `src/render/pdf.cp`：新增 `renderPdfWithDocAlloc`（保留 `renderPdfAlloc` 向后兼容），支持 `/FlateDecode` RGB24 Image XObject 与 Helvetica 文本流，单/双页含内容 PDF 字节数 > 10KB；
+  - `src/render/painter.cp`：合入 Phase 133+ 验证的 CJK/非 ASCII 8x8 点阵字形绘制（`isCjkCodepoint`、`fillNonAsciiGlyph8x8`、`drawGlyph8x8ScaledClipped`）；
+  - `test/render/test_pdf_pagination.cp`：新增 `testPdfWithDocContentStream()` 验证 `%PDF-1.4` 多页内容流与 `> 10KB` 断言。
+- **门禁与验证**: `src/render/{pdf,painter}.cp` & `test/render/test_pdf_pagination.cp` 4 门禁全 0；`-m -d -o` 3.18s 编译并通过白盒单测。
+- **清理旧子智能体**: 销毁 `969f4885-598a-4e2c-a7f8-09dd3fb7c936`。
+
+## [2026-11-20 23:21:00] `iframe-content-document-demo` & `forms-select-cdp-demo` 闭环 + `DomMutationRecord` 栈悬垂定位 (Subagent 740a3942 结单，Phase 138)
+- **CDP `<select>` 选值与 `childNodes` Text 投影 (`e2e/harness.ts`, `src/js/shim/element/forms/select.js`, `src/js/runtime{,_source.cp}`)**:
+  - `e2e/harness.ts`：新增 `Page.select(selector, ...values)` 支持单/多选并派发 `input`/`change`；
+  - `select.js`：在 `HTMLSelectElement.prototype` 定义 `childNodes` getter，为单选 `<select>` 追加选中项末尾 Text 节点。
+- **验证与跨模块定位**: `iframe-content-document-demo` (**1/1**)、`forms-select-cdp-demo` (**1/1**)、`forms-select-demo` (**PASS**)；并精准定位 `devtools-elements-live-update-demo` 根因：`dom_binding.cp:123-129` `DomMutationRecord.getName/getValue` 缺 `*_` 导致栈悬垂切片 + `cdp/dom.cp:10-30` 未转义 `\0`。
+- **清理旧子智能体**: 销毁 `740a3942-fca7-47c2-ba58-d2a4ab67ebc5`。
+
+## [2026-11-20 23:21:30] `renderer-laziness` 4/4、`canvas-raw-renderer` 1/1 & `auto-navigate-demo` 1/1 全绿 (Subagent c5024d2b 结单，Phase 139)
+- **惰性渲染状态、`Kitesurf.recordScene` 与 WS `initialUrl` 自动导航 (`src/cdp/{session,page,kitesurf_facade,protocol_extensions,server}.cp`)**:
+  - `session.cp` & `page.cp` & `kitesurf_facade.cp` & `protocol_extensions.cp`：新增 `renderer_active` 与 `frames_rendered` 动态追踪（仅光栅化/PDF/Screencast 时置 `true`），并新增 `Kitesurf.recordScene` 返回 `sceneB64` 与 `resourceBatchB64`；
+  - `server.cp`：解析 WS 握手 URL 的 `initialUrl` 并在会话首轮自动触发 `Page.navigate` 推流。
+- **门禁与 E2E 验证（`-m -d -o` 5.58s，port `19233`）**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `renderer-laziness` (**4/4**)、`canvas-raw-renderer` (**1/1**)、`auto-navigate-demo` (**1/1**)：**6/6 PASS (43 expect() calls)**！
+- **清理旧子智能体**: 销毁 `c5024d2b-15f5-4b5d-9ef9-66cddce17782`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

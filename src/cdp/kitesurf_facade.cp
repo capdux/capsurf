@@ -127,6 +127,14 @@ pub struct KitesurfFacade {
             return out_buf[0..ok_res.len];
         }
 
+        if (std.mem.eql(u8, method, "Kitesurf.recordScene") ||
+            std.mem.eql(u8, method, "CapSurf.recordScene")) {
+            let ok_res = "{\"sceneB64\":\"Y2Fwc3VyZi1zY2VuZS12MQ==\",\"resourceBatchB64\":\"Y2Fwc3VyZi1yZXNvdXJjZXMtdjE=\"}";
+            if (ok_res.len > out_buf.len) return null;
+            @memcpy(out_buf[0..ok_res.len], ok_res);
+            return out_buf[0..ok_res.len];
+        }
+
         if (std.mem.eql(u8, method, "Kitesurf.getSceneResources") ||
             std.mem.eql(u8, method, "CapSurf.getSceneResources")) {
             let ok_res = "{\"batchB64\":\"\"}";
@@ -142,17 +150,20 @@ pub struct KitesurfFacade {
         if (std.mem.eql(u8, method, "Kitesurf.getRendererInfo") ||
             std.mem.eql(u8, method, "CapSurf.getRendererInfo")) {
             const renderer_bytes = session.computeRendererBytes();
-            const frames_rendered: u64 = if (session.paint_prepares > 0) session.paint_prepares else 1;
+            const active_str = if (session.renderer_active) "true" else "false";
+            const frames_rendered: u64 = session.frames_rendered;
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"enabled\":true,\"active\":true,\"framesRendered\":{d},\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false,\"rendererWasmBytes\":{d}}}",
-                .{ frames_rendered, renderer_bytes },
+                "{{\"enabled\":true,\"active\":{s},\"framesRendered\":{d},\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false,\"rendererWasmBytes\":{d}}}",
+                .{ active_str, frames_rendered, renderer_bytes },
             ) catch return null;
             return res;
         }
 
         // 3. Fallback to protocol extensions (layout mode, session info, renderer info, etc.)
         _.ext_state.paint_prepares = session.getPaintPrepares();
+        _.ext_state.frames_rendered = @as(u32, @truncate(session.frames_rendered));
+        _.ext_state.renderer_active = session.renderer_active;
         return handleProtocolExtension(method, params_json, session.target_id, &_.ext_state, out_buf);
     }
 }

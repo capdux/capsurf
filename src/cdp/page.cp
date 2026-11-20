@@ -466,6 +466,8 @@ pub struct PageHandler {
 
             const pdf_bytes = renderPdfAlloc(session.allocator, page_count, media_w_pt, media_h_pt) catch return CdpResponse.err(req.id, -32000, "PDF generation failed");
             defer session.allocator.free(pdf_bytes);
+            session.renderer_active = true;
+            session.frames_rendered += page_count;
 
             const b64_str = Base64.encodeAlloc(session.allocator, pdf_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
             defer session.allocator.free(b64_str);

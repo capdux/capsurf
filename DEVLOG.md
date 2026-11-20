@@ -1599,4 +1599,12 @@
    - 使用 `JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY` 配合 `JS_SetModuleLoaderFunc` 处理模块图、`.css` 静态资源 stub 与内联虚拟 URL；对 `<script type="importmap">` 校验 CSP 与 2048-code-unit 长度上限，超限整表忽略。
 2. **HTML5 脚本阶段与 `beforeunload` 控制台保留**：
    - 将脚本队列按同步 / `defer` / `async` 分阶段调度，并在导航卸载前补充 `beforeunload` 同时跨 `dom_ctx` 重建保留已记录的 `ConsoleRecord`。
+
+## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
+1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
+2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。
+
+## Phase 138–139 `<select>` Text 投影、惰性渲染统计与 WS `initialUrl` 方案
+1. **惰性渲染器追踪与 `recordScene` (`session.cp`, `kitesurf_facade.cp`)**：仅在截图/PDF/Screencast 时置 `renderer_active = true` 并自增 `frames_rendered`；新增 `Kitesurf.recordScene` 返回合法 `sceneB64`/`resourceBatchB64`。
+2. **WS `initialUrl` 自动导航 (`server.cp`)**：`handleWebSocketUpgrade` 解码 `initialUrl` 查询参数并在会话主循环首轮派发 `Page.navigate`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

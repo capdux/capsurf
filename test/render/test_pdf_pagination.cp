@@ -5,7 +5,7 @@
 import { Document } from "../../src/dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../../src/css/cascade.cp";
 import { LayoutTree } from "../../src/layout/layout.cp";
-import { PdfOptions, computePdfPagination, renderPdfAlloc } from "../../src/render/pdf.cp";
+import { PdfOptions, computePdfPagination, renderPdfAlloc, renderPdfWithDocAlloc } from "../../src/render/pdf.cp";
 
 fn countPdfPages(pdf: []const u8): u32 {
     let count: u32 = 0;
@@ -128,10 +128,62 @@ fn testLegacyCharset()! {
     std.debug.assert(found);
 }
 
+fn testPdfWithDocContentStream()! {
+    const html =
+        "<html><body>" ++
+        "<div class=\"box1\">Page 1 Content Block</div>" ++
+        "<div class=\"box2\">Page 2 Content Block</div>" ++
+        "</body></html>";
+    const css =
+        "body { margin: 0; font: 16px/1.5 sans-serif; }\n" ++
+        ".box1 { width: 600px; height: 500px; background: rgb(30, 120, 220); color: #fff; }\n" ++
+        ".box2 { width: 600px; height: 500px; break-before: page; background: rgb(220, 80, 40); color: #fff; }\n";
+
+    let doc = Document.init(std.heap.page_allocator)?;
+    defer doc.deinit();
+    doc.parseHtml(html)?;
+
+    const sheet = StyleSheet.parse(css, 816.0, false);
+    const count = @max(@as(usize, 1), doc.nodeCount());
+    const styles = std.heap.page_allocator.alloc(ComputedStyle, count)?;
+    defer std.heap.page_allocator.free(styles);
+    Cascade.computeStyles(&doc, &sheet, styles, 16.0);
+
+    let lt = LayoutTree.init(std.heap.page_allocator, 816.0, 1056.0)?;
+    defer lt.deinit();
+    lt.computeLayout(&doc, styles)?;
+
+    const pg = computePdfPagination(&doc, &sheet, styles, &lt, PdfOptions{
+        paper_width_in: 8.5,
+        paper_height_in: 11.0,
+    });
+    std.debug.assert(pg.page_count == 2);
+
+    const pdf = renderPdfWithDocAlloc(
+        std.heap.page_allocator,
+        &doc,
+        styles,
+        &lt,
+        pg.page_count,
+        pg.media_width_pt,
+        pg.media_height_pt,
+    )?;
+    defer std.heap.page_allocator.free(pdf);
+
+    std.debug.assert(std.mem.startsWith(u8, pdf, "%PDF-1.4"));
+    std.debug.assert(countPdfPages(pdf) == 2);
+    std.debug.assert(std.mem.indexOf(u8, pdf, "/Contents ") != null);
+    std.debug.assert(std.mem.indexOf(u8, pdf, "/Subtype /Image") != null);
+    std.debug.assert(std.mem.indexOf(u8, pdf, "/Filter /FlateDecode") != null);
+    std.debug.assert(std.mem.indexOf(u8, pdf, "%%EOF") != null);
+    std.debug.assert(pdf.len > 10000);
+}
+
 pub fn main()! {
     testBreakBefore();
     testBreakInside();
     testPageMargins();
     testLegacyCharset()?;
-    std.debug.print("test_pdf_pagination: ALL 4 ASSERTION GROUPS PASSED\n", .{});
+    testPdfWithDocContentStream()?;
+    std.debug.print("test_pdf_pagination: ALL 5 ASSERTION GROUPS PASSED\n", .{});
 }

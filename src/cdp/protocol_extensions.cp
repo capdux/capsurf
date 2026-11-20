@@ -12,6 +12,7 @@ pub struct ExtensionSessionState {
     page_state_seq: u32 = 1,
     frames_rendered: u32 = 0,
     paint_prepares: u64 = 0,
+    renderer_active: bool = false,
     active_target_id: []const u8 = "capsurf-target-001",
 }
 
@@ -76,10 +77,14 @@ pub fn handleProtocolExtension(
     }
 
     if (std.mem.eql(u8, cap_method, "getRendererInfo")) {
-        let json = "{\"enabled\":true,\"active\":true,\"framesRendered\":1,\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false}";
-        if (json.len > out_buf.len) return null;
-        @memcpy(out_buf[0..json.len], json);
-        return out_buf[0..json.len];
+        const is_active = state.renderer_active || state.frames_rendered > 0;
+        const active_str = if (is_active) "true" else "false";
+        const res = std.fmt.bufPrint(
+            out_buf,
+            "{{\"enabled\":true,\"active\":{s},\"framesRendered\":{d},\"partialFramesRendered\":0,\"relaunchCount\":0,\"partialRaster\":false}}",
+            .{ active_str, state.frames_rendered },
+        ) catch return null;
+        return res;
     }
 
     if (std.mem.eql(u8, cap_method, "getPageState")) {

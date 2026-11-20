@@ -2047,4 +2047,16 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/cdp/session.cp` 4 门禁全 0；
   - E2E 测试：`asset-import-stub` (1/1)、`import-map` (3/3)、`lifecycle-demo` (1/1) — **5/5 PASS (33 expect() calls)**。
+
+## Phase 137: Native `%PDF-1.4` Content Stream (`renderPdfWithDocAlloc`) & CJK Bitmap Glyph Rasterization
+- **`src/render/{pdf,painter}.cp` & `test/render/test_pdf_pagination.cp`**：
+  - 实装 `renderPdfWithDocAlloc`（`/FlateDecode` RGB24 Image XObject + Helvetica 文本流，输出 >10KB）、CJK/非 ASCII 8x8 点阵绘制与白盒单元测试。
+
+## Phase 138: `iframe-content-document-demo`, `forms-select-cdp-demo` (2/2 PASS) & `Page.select`
+- **`e2e/harness.ts` & `src/js/shim/element/forms/select.js` & `src/js/runtime{,_source.cp}`**：
+  - 新增 `Page.select(...)` 与单选 `<select>` `childNodes` Text 投影，`iframe-content-document-demo` (1/1)、`forms-select-cdp-demo` (1/1) PASS。
+
+## Phase 139: `renderer-laziness` 4/4, `canvas-raw-renderer` 1/1 & `auto-navigate-demo` 1/1 (6/6 PASS)
+- **`src/cdp/{session,page,kitesurf_facade,protocol_extensions,server}.cp`**：
+  - 动态追踪 `renderer_active`/`frames_rendered`、新增 `Kitesurf.recordScene` 与 WS `initialUrl` 自动导航，**6/6 PASS (43 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -2205,6 +2205,45 @@ export class Page {
     }, selector, text);
   }
 
+  async select(selector: string, ...values: string[]): Promise<string[]> {
+    return this.evaluate((sel: string, vals: string[]) => {
+      const el: any = document.querySelector(sel);
+      if (!el) throw new Error(`No element found for selector: ${sel}`);
+      if (String(el.tagName || "").toLowerCase() !== "select") {
+        throw new Error(`Element is not a <select> element: ${sel}`);
+      }
+      const valSet = new Set(vals.map((v) => String(v)));
+      const opts = el.options || [];
+      const selected: string[] = [];
+      if (el.multiple) {
+        for (let i = 0; i < opts.length; i++) {
+          const match = valSet.has(String(opts[i].value));
+          opts[i].selected = match;
+          if (match) selected.push(String(opts[i].value));
+        }
+      } else {
+        let found = false;
+        for (let i = 0; i < opts.length; i++) {
+          if (valSet.has(String(opts[i].value))) {
+            el.selectedIndex = i;
+            selected.push(String(opts[i].value));
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          el.selectedIndex = -1;
+        }
+      }
+      try {
+        const EvCls = (globalThis as any).__NativeEvent || Event;
+        el.dispatchEvent?.(new EvCls("input", { bubbles: true }));
+        el.dispatchEvent?.(new EvCls("change", { bubbles: true }));
+      } catch (e) {}
+      return selected;
+    }, selector, values);
+  }
+
   async setContent(html: string): Promise<void> {
     await this.goto(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   }

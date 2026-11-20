@@ -129,6 +129,46 @@ fn isDefaultEmojiPresentation(cp: u32): bool {
     return false;
 }
 
+fn isCjkCodepoint(cp: u32): bool {
+    if (cp >= 0x2E80 && cp <= 0x9FFF) return true;
+    if (cp >= 0xF900 && cp <= 0xFAFF) return true;
+    if (cp >= 0xAC00 && cp <= 0xD7AF) return true;
+    if (cp >= 0xFF00 && cp <= 0xFFEF) return true;
+    if (cp >= 0x20000 && cp <= 0x2FA1F) return true;
+    return false;
+}
+
+/// Deterministic 8x8 glyph bitmap for non-ASCII / CJK codepoints so software rasterization
+/// renders visible, distinct stroke patterns without external font files.
+fn fillNonAsciiGlyph8x8(cp: u32, out: *[8]u8) {
+    let h: u32 = cp ^ (cp >> 16);
+    h = (h ^ (h >> 7)) *% 0x9E3779B1;
+    h = h ^ (h >> 13);
+
+    if (isCjkCodepoint(cp)) {
+        out.*[0] = 0b01111110;
+        out.*[1] = @as(u8, 0b01000010) | @as(u8, @intCast(((h >> 0) & 0x18)));
+        out.*[2] = if (((h >> 2) & 1) == 1) 0b01111110 else 0b01011010;
+        out.*[3] = @as(u8, 0b01000010) | @as(u8, @intCast(((h >> 4) & 0x3C)));
+        out.*[4] = if (((h >> 6) & 1) == 1) 0b01111110 else 0b01010110;
+        out.*[5] = @as(u8, 0b01000010) | @as(u8, @intCast(((h >> 8) & 0x3C)));
+        out.*[6] = 0b01111110;
+        out.*[7] = 0b00000000;
+        if (((h >> 10) & 1) == 1) out.*[1] = @as(u8, 0b00011000) | (out.*[1] & @as(u8, 0b01100110));
+        if (((h >> 11) & 1) == 1) out.*[6] = 0b01000010;
+        if (((h >> 12) & 1) == 1) out.*[3] |= 0b00100100;
+    } else {
+        out.*[0] = 0b00111100;
+        out.*[1] = 0b01000010;
+        out.*[2] = @as(u8, 0b01000010) | @as(u8, @intCast(((h >> 0) & 0x18)));
+        out.*[3] = 0b01111110;
+        out.*[4] = @as(u8, 0b01000010) | @as(u8, @intCast(((h >> 4) & 0x18)));
+        out.*[5] = 0b01000010;
+        out.*[6] = 0b00111100;
+        out.*[7] = 0b00000000;
+    }
+}
+
 fn isInsideCornerBox(cx: f32, cy: f32, r: f32, cs: CornerShape): bool {
     if (r <= 0.0 || cx >= r || cy >= r) return true;
     const u = (r - cx) / r;
@@ -719,6 +759,37 @@ pub struct Canvas {
         }
     }
 
+    fn drawGlyph8x8ScaledClipped(*_, x: f32, y: f32, scale: f32, glyph: []const u8, color: CssColor, clip: ClipRect?) {
+        let row: usize = 0;
+        while (row < 8 && row < glyph.len) : (row += 1) {
+            const bits = glyph[row];
+            if (bits == 0) continue;
+            const gy0 = @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row)) * scale)));
+            const gy1 = @max(gy0 + 1, @as(i32, @intFromFloat(@floor(y + @as(f32, @floatFromInt(row + 1)) * scale))));
+            let col: usize = 0;
+            while (col < 8) : (col += 1) {
+                const shift: u3 = @intCast(7 - col);
+                if (((bits >> shift) & 1) == 1) {
+                    const gx0 = @as(i32, @intFromFloat(@floor(x + @as(f32, @floatFromInt(col)) * scale)));
+                    const gx1 = @max(gx0 + 1, @as(i32, @intFromFloat(@floor(x + @as(f32, @floatFromInt(col + 1)) * scale))));
+                    let py = gy0;
+                    while (py < gy1) : (py += 1) {
+                        if (c := clip) {
+                            if (py < c.y0 || py >= c.y1) continue;
+                        }
+                        let px = gx0;
+                        while (px < gx1) : (px += 1) {
+                            if (c := clip) {
+                                if (px < c.x0 || px >= c.x1) continue;
+                            }
+                            _.blendPixel(px, py, color);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn drawTextClipped(*_, x: f32, y: f32, text: []const u8, color: CssColor, clip: ClipRect?) {
         if (color.a == 0 || text.len == 0) {
             return;
@@ -783,6 +854,11 @@ pub struct Canvas {
                 _.drawColorEmojiClipped(@floatFromInt(cursor_x), y, 10.0, codepoint, color.a, clip);
                 cursor_x += 11;
             } else {
+                if (codepoint != 0x3000 && codepoint != 0x00A0) {
+                    let gbuf: [8]u8 = [0, 0, 0, 0, 0, 0, 0, 0];
+                    fillNonAsciiGlyph8x8(codepoint, &gbuf);
+                    _.drawGlyph8x8ScaledClipped(@floatFromInt(cursor_x), @floatFromInt(base_y + 2), 1.0, gbuf[0..8], color, clip);
+                }
                 cursor_x += 8;
             }
         }
@@ -870,6 +946,11 @@ pub struct Canvas {
                 _.drawColorEmojiClipped(cursor_x, y, emoji_sz, codepoint, color.a, clip);
                 cursor_x += emoji_sz * 1.1;
             } else {
+                if (codepoint != 0x3000 && codepoint != 0x00A0) {
+                    let gbuf: [8]u8 = [0, 0, 0, 0, 0, 0, 0, 0];
+                    fillNonAsciiGlyph8x8(codepoint, &gbuf);
+                    _.drawGlyph8x8ScaledClipped(cursor_x, y, scale, gbuf[0..8], color, clip);
+                }
                 cursor_x += step_x;
             }
         }

@@ -82,6 +82,60 @@ fn parsePositiveDecimal(s: []const u8): i64 {
     return val;
 }
 
+fn hexVal(c: u8): u8? {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return null;
+}
+
+fn decodeUriComponentLen(src: []const u8, dst: []u8): usize {
+    let out_len: usize = 0;
+    let i: usize = 0;
+    while (i < src.len && out_len < dst.len) {
+        if (src[i] == '%' && i + 2 < src.len) {
+            if (hi := hexVal(src[i + 1])) {
+                if (lo := hexVal(src[i + 2])) {
+                    dst[out_len] = (hi << 4) | lo;
+                    out_len += 1;
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        dst[out_len] = if (src[i] == '+') ' ' else src[i];
+        out_len += 1;
+        i += 1;
+    }
+    return out_len;
+}
+
+fn extractQueryString(req: []const u8, key: []const u8, out_buf: []u8): ([]const u8)? {
+    const line_end = std.mem.indexOf(u8, req, "\r\n") ?? req.len;
+    const req_line = req[0..line_end];
+    const sp1_opt = std.mem.indexOfScalar(u8, req_line, ' ');
+    if (sp1_opt == null) return null;
+    const after_sp1 = req_line[sp1_opt.? + 1..];
+    const sp2 = std.mem.indexOfScalar(u8, after_sp1, ' ') ?? after_sp1.len;
+    const path = after_sp1[0..sp2];
+    const qpos_opt = std.mem.indexOfScalar(u8, path, '?');
+    if (qpos_opt == null) return null;
+    const query = path[qpos_opt.? + 1..];
+
+    let it = std.mem.splitScalar(u8, query, '&');
+    while (part := it.next()) {
+        if (eq_pos := std.mem.indexOfScalar(u8, part, '=')) {
+            const k = part[0..eq_pos];
+            const v = part[eq_pos + 1..];
+            if (std.mem.eql(u8, k, key)) {
+                const n = decodeUriComponentLen(v, out_buf);
+                return out_buf[0..n];
+            }
+        }
+    }
+    return null;
+}
+
 fn extractQueryInt(req: []const u8, key: []const u8): i64 {
     const line_end = std.mem.indexOf(u8, req, "\r\n") ?? req.len;
     const req_line = req[0..line_end];
@@ -558,6 +612,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const idle_ms = extractQueryInt(req, "ksIdleMs");
         const max_session_ms = extractQueryInt(req, "ksMaxSessionMs");
+        let initial_url_buf: [2048]u8 = [0; 2048];
+        const initial_url = extractQueryString(req, "initialUrl", &initial_url_buf) ?? "";
         const skip_hdr = CdpServer.extractHttpHeader(req, "x-kitesurf-skip-raster");
         if (skip_hdr != null && std.mem.eql(u8, std.mem.trim(u8, skip_hdr.?, " \t\r\n"), "1")) {
             _.session.skip_raster = true;
@@ -568,7 +624,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         _.session.outbound_reject_websocket = false;
 
         // Enter WebSocket Frame Processing Loop
-        _.runWebSocketSession(client_fd, idle_ms, max_session_ms)? ;
+        _.runWebSocketSession(client_fd, idle_ms, max_session_ms, initial_url)? ;
     }
 
     fn flushDomEvents(*_, client_fd: i32)! {
@@ -686,9 +742,10 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         return false;
     }
 
-    fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64)! {
+    fn runWebSocketSession(*_, client_fd: i32, idle_ms: i64, max_session_ms: i64, initial_url: []const u8)! {
         _.session.resetSession();
         defer _.session.resetSession();
+        let pending_initial_url = initial_url;
         let frame_payload = std.heap.c_allocator.alloc(u8, 65536) catch return;
         defer std.heap.c_allocator.free(frame_payload);
         @memset(frame_payload, 0);
@@ -739,6 +796,27 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     }
                 }
                 pending_eval_count = 0;
+            }
+
+            if (pending_initial_url.len > 0) {
+                const init_u = pending_initial_url;
+                pending_initial_url = "";
+                let nav_params_buf: [2304]u8 = [0; 2304];
+                if (nav_params := std.fmt.bufPrint(&nav_params_buf, "{{\"url\":\"{s}\"}}", .{init_u}) catch null) {
+                    const init_res_buf = std.heap.c_allocator.alloc(u8, 65536) catch null;
+                    if (init_res_buf != null) {
+                        defer std.heap.c_allocator.free(init_res_buf.?);
+                        let init_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        let init_event_count: usize = 0;
+                        const init_req = CdpRequest{
+                            id: 0,
+                            method: "Page.navigate",
+                            params_raw: nav_params,
+                        };
+                        * = CdpDispatcher.dispatch(_.session, init_req, init_res_buf.?, &init_events, &init_event_count);
+                        _.emitCdpEvents(client_fd, &init_events, init_event_count) catch break;
+                    }
+                }
             }
 
             let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
