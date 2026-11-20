@@ -1695,3 +1695,7 @@
 ### Phase 213: Screencast Frame-Hash & rAF Driver Baseline (`bin_19233`)
 - Fixed `src/cdp/screencast.cp:210` `*%=` syntax error (`h = h *% 1099511628211;`) unblocking full `src/cdp/` compilation and non-CDP whitebox tests that transitively import `cdp`.
 - Cleaned orphaned stale `main` processes (`2042386`, `4067317`, `884633`) occupying ports `19233`–`19235`.
+
+### Phase 214: `JS_SetModuleLoaderFunc2` & WeakRef Wrapper Reclaim (`session.cp`, `dom_binding.cp`)
+- Migrated QuickJS-NG module loader to `JS_SetModuleLoaderFunc2` with `sessionModuleCheckAttrs` so `with { type: "json" }` parses via `JS_ParseJSON` + `JS_NewCModule` and `type: "css"` throws `TypeError`.
+- Added `__capsurf_weak_wrappers` WeakRef demotion/revival/reclaim sweep in `session.cp` and `dom_binding.cp` (`createJsElement` derefs weak wrappers to preserve identity and expandos).

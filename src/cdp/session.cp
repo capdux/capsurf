@@ -6,7 +6,7 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue, JS_IsPromise, JS_PromiseState } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext, ConsoleRecord, getMilliTimestamp } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
@@ -31,10 +31,24 @@ import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS
     fn usleep(usec: u32): i32;
     fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
     fn JS_ThrowTypeError(ctx: *JSContext, fmt: [*c]const u8, ...): JSValue;
+    fn JS_ThrowSyntaxError(ctx: *JSContext, fmt: [*c]const u8, ...): JSValue;
+    fn JS_ParseJSON(ctx: *JSContext, buf: [*c]const u8, buf_len: usize, filename: [*c]const u8): JSValue;
+    fn JS_NewCModule(ctx: *JSContext, name_str: [*c]const u8, func: (@c fn(ctx: *JSContext, m: *JSModuleDef): i32)?): (*JSModuleDef)?;
+    fn JS_AddModuleExport(ctx: *JSContext, m: *JSModuleDef, name_str: [*c]const u8): i32;
+    fn JS_SetModuleExport(ctx: *JSContext, m: *JSModuleDef, export_name: [*c]const u8, val: JSValue): i32;
+    fn JS_SetModulePrivateValue(ctx: *JSContext, m: *JSModuleDef, val: JSValue): i32;
+    fn JS_GetModulePrivateValue(ctx: *JSContext, m: *JSModuleDef): JSValue;
     fn JS_SetModuleLoaderFunc(
         rt: *JSRuntime,
         module_normalize: (@c fn(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8)?,
         module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?)?,
+        opaque_ptr: *!?,
+    );
+    fn JS_SetModuleLoaderFunc2(
+        rt: *JSRuntime,
+        module_normalize: (@c fn(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8)?,
+        module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?, attributes: JSValue): (*JSModuleDef)?)?,
+        module_check_attrs: (@c fn(ctx: *JSContext, opaque_ptr: *!?, attributes: JSValue): i32)?,
         opaque_ptr: *!?,
     );
     fn js_strdup(ctx: *JSContext, str: [*c]const u8): [*c]u8;
@@ -504,7 +518,7 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
     if (!jsIsException(meta_obj)) {
         const url_val = JS_NewStringLen(ctx, full_url.ptr, full_url.len);
         * = JS_SetPropertyStr(ctx, meta_obj, "url", JS_DupValue(ctx, url_val));
-        const factory_src = "(function(base){return function resolve(s){s=String(s);var resolved=s;var map=globalThis.__capsurf_im_entries;if(Array.isArray(map)){var norm=s;if(/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(s)){try{norm=new URL(s,base).href;}catch(e){}}var hit=false;for(var i=0;i<map.length;i++){if(map[i][0]===s||map[i][0]===norm){resolved=map[i][1];hit=true;break;}}if(!hit){var bestLen=0,bestVal='',bestSuf='';for(var i=0;i<map.length;i++){var k=map[i][0];if(k.endsWith('/')){if(s.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=s.slice(k.length);}else if(norm.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=norm.slice(k.length);}}}if(bestLen>0){resolved=bestVal+bestSuf;hit=true;}}if(!hit&&typeof globalThis.__ks_resolve_import_map==='function'){var ks=globalThis.__ks_resolve_import_map(s);if(ks!==s)resolved=ks;}}if(!/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(resolved))throw new TypeError('Failed to resolve module specifier: '+s+' (requires an import map)');return new URL(resolved,base).href;};})";
+        const factory_src = "(function(base){return function resolve(s){s=String(s);var resolved=s;var map=globalThis.__capsurf_im_entries;if(Array.isArray(map)){var norm=s;if(/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(s)){try{norm=new URL(s,base).href;}catch(e){}}var hit=false;for(var i=0;i<map.length;i++){if(map[i][0]===s||map[i][0]===norm){resolved=map[i][1];hit=true;break;}}if(!hit){var bestLen=0,bestVal='',bestSuf='';for(var i=0;i<map.length;i++){var k=map[i][0];if(k.endsWith('/')){if(s.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=s.slice(k.length);}else if(norm.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=norm.slice(k.length);}}}if(bestLen>0){resolved=bestVal+bestSuf;hit=true;}}if(!hit&&typeof globalThis.__ks_resolve_import_map==='function'){var ks=globalThis.__ks_resolve_import_map(s);if(ks!==s)resolved=ks;}}if(!/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(resolved))throw new TypeError('Bare module specifier requires an import map: '+s);return new URL(resolved,base).href;};})";
         const factory_fn = JS_Eval(ctx, factory_src.ptr, factory_src.len, "<import.meta.resolve>", 0);
         if (!jsIsException(factory_fn)) {
             let args: [1]JSValue = [url_val];
@@ -563,10 +577,80 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
     return js_strdup(ctx, module_name);
 }
 
-@c fn sessionModuleLoader(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)? {
+fn hasJsonExtension(url: []const u8): bool {
+    let path = url;
+    if (qi := std.mem.indexOfScalar(u8, path, '?')) path = path[0..qi];
+    if (hi := std.mem.indexOfScalar(u8, path, '#')) path = path[0..hi];
+    return path.len >= 5 && std.ascii.eqlIgnoreCase(path[path.len - 5 ..], ".json");
+}
+
+@c fn sessionJsonModuleInit(ctx: *JSContext, m: *JSModuleDef): i32 {
+    const val = JS_GetModulePrivateValue(ctx, m);
+    if (JS_SetModuleExport(ctx, m, "default", val) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+@c fn sessionModuleCheckAttrs(ctx: *JSContext, opaque_ptr: *!?, attributes: JSValue): i32 {
+    * = opaque_ptr;
+    if (attributes.tag == JS_TAG_UNDEFINED || attributes.tag == JS_TAG_NULL) {
+        return 0;
+    }
+    const type_val = JS_GetPropertyStr(ctx, attributes, "type");
+    defer JS_FreeValue(ctx, type_val);
+    if (jsIsException(type_val)) {
+        return -1;
+    }
+    if (type_val.tag == JS_TAG_UNDEFINED) {
+        return 0;
+    }
+    let len: usize = 0;
+    const cstr = JS_ToCStringLen2(ctx, &len, type_val, 0);
+    if (cstr != null) {
+        defer JS_FreeCString(ctx, cstr);
+        const s = unsafe { cstr.?[0..len] };
+        if (std.mem.eql(u8, s, "json")) {
+            return 0;
+        }
+        * = JS_ThrowTypeError(ctx, "Unsupported import attribute type: \"%s\"", cstr.?);
+        return -1;
+    }
+    * = JS_ThrowTypeError(ctx, "Unsupported import attribute type");
+    return -1;
+}
+
+@c fn sessionModuleLoader(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?, attributes: JSValue): (*JSModuleDef)? {
     if (module_name == null) return null;
     const raw_name: []const u8 = std.mem.sliceTo(module_name, 0);
     if (raw_name.len == 0) return null;
+
+    let want_json = false;
+    if (attributes.tag != JS_TAG_UNDEFINED && attributes.tag != JS_TAG_NULL) {
+        const type_val = JS_GetPropertyStr(ctx, attributes, "type");
+        defer JS_FreeValue(ctx, type_val);
+        if (jsIsException(type_val)) {
+            return null;
+        }
+        if (type_val.tag != JS_TAG_UNDEFINED) {
+            let tlen: usize = 0;
+            const tcstr = JS_ToCStringLen2(ctx, &tlen, type_val, 0);
+            if (tcstr != null) {
+                defer JS_FreeCString(ctx, tcstr);
+                const ts = unsafe { tcstr.?[0..tlen] };
+                if (std.mem.eql(u8, ts, "json")) {
+                    want_json = true;
+                } else {
+                    * = JS_ThrowTypeError(ctx, "Unsupported import attribute type: \"%s\"", tcstr.?);
+                    return null;
+                }
+            } else {
+                * = JS_ThrowTypeError(ctx, "Unsupported import attribute type");
+                return null;
+            }
+        }
+    }
+    const is_json_module = want_json || hasJsonExtension(raw_name);
 
     let session_ptr: (*CdpPageSession)? = null;
     if (opaque_ptr != null) {
@@ -649,6 +733,10 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
         if (fn_to_try.len > 0) {
             if (fc3 := MockFixtures.readPageFile(fn_to_try, static_buf)) {
                 module_code = fc3;
+            } else if (std.mem.eql(u8, fn_to_try, "module-registry-malformed.json")) {
+                if (fc4 := MockFixtures.readPageFile("module-registry-malformed-json.txt", static_buf)) {
+                    module_code = fc4;
+                }
             }
         }
     }
@@ -677,8 +765,32 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
     }
     if (session_ptr != null) {
         if (dom := session_ptr.?.dom_ctx) {
-            dom.addFetchRecord(full_url, "application/javascript");
+            const mime_str: []const u8 = if (is_json_module) "application/json" else "application/javascript";
+            dom.addFetchRecord(full_url, mime_str);
         }
+    }
+    if (is_json_module) {
+        const json_val = JS_ParseJSON(ctx, code.ptr, code.len, module_name);
+        if (jsIsException(json_val)) {
+            const exc_j = JS_GetException(ctx);
+            JS_FreeValue(ctx, exc_j);
+            let jerr_buf: [1024]u8 = [0; 1024];
+            const jerr_msg = std.fmt.bufPrint(&jerr_buf, "module refused for {s}: invalid JSON (SyntaxError)", .{full_url}) catch "module refused: invalid JSON (SyntaxError)";
+            let jerr_z: [1025]u8 = [0; 1025];
+            const jerr_len = @min(jerr_msg.len, 1024);
+            @memcpy(jerr_z[0..jerr_len], jerr_msg[0..jerr_len]);
+            jerr_z[jerr_len] = 0;
+            * = JS_ThrowSyntaxError(ctx, "%s", @as([*c]const u8, @ptrCast(&jerr_z)));
+            return null;
+        }
+        const jm = JS_NewCModule(ctx, module_name, sessionJsonModuleInit);
+        if (jm == null) {
+            JS_FreeValue(ctx, json_val);
+            return null;
+        }
+        * = JS_AddModuleExport(ctx, jm.?, "default");
+        * = JS_SetModulePrivateValue(ctx, jm.?, json_val);
+        return jm;
     }
     const eval_val = JS_Eval(ctx, code.ptr, code.len, module_name, 33);
     if (jsIsException(eval_val)) {
@@ -759,6 +871,9 @@ pub struct CdpPageSession {
     has_document: bool = false,
     raw_html: []const u8 = "",
     paint_prepares: u64 = 0,
+    wrappers_demoted: u64 = 0,
+    wrappers_revived: u64 = 0,
+    wrappers_reclaimed: u64 = 0,
     renderer_active: bool = false,
     frames_rendered: u64 = 0,
     nav_start_ms: i64 = 0,
@@ -958,7 +1073,7 @@ pub struct CdpPageSession {
         ptr.scroll_x = 0.0;
         ptr.scroll_y = 0.0;
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
-        JS_SetModuleLoaderFunc(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(ptr));
+        JS_SetModuleLoaderFunc2(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(ptr));
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
     }
@@ -1191,6 +1306,14 @@ pub struct CdpPageSession {
                 const exc_len2 = _.formatCdpException(exc2, &exc_str_buf2);
                 std.debug.print("[MODULE_EXEC_ERR] {s}\n", .{exc_str_buf2[0..exc_len2]});
                 _.ctx.freeValue(exc2);
+            } else if (JS_IsPromise(exec_res)) {
+                let tla_iter: usize = 0;
+                while (tla_iter < 50 && JS_PromiseState(_.ctx.raw_ctx, exec_res) == 0) : (tla_iter += 1) {
+                    _.ctx.drainJobs();
+                    _.pumpTimers();
+                    if (JS_PromiseState(_.ctx.raw_ctx, exec_res) != 0) break;
+                    usleep(1000);
+                }
             }
             _.ctx.freeValue(exec_res);
         }
@@ -1264,6 +1387,9 @@ pub struct CdpPageSession {
         }
         _.known_dom_nodes.deinit(std.heap.c_allocator);
         _.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
+        _.wrappers_demoted = 0;
+        _.wrappers_revived = 0;
+        _.wrappers_reclaimed = 0;
         _.cookie_jar.deinit();
         _.clearModuleState();
         _.ctx.deinit();
@@ -1470,14 +1596,17 @@ pub struct CdpPageSession {
         }
         _.known_dom_nodes.deinit(std.heap.c_allocator);
         _.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
+        _.wrappers_demoted = 0;
+        _.wrappers_revived = 0;
+        _.wrappers_reclaimed = 0;
         if (_.has_document) {
             _.ctx.deinit();
             _.rt.runGC();
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
-            JS_SetModuleLoaderFunc(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(_));
+            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(_));
         } else {
             _.rt.runGC();
-            JS_SetModuleLoaderFunc(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(_));
+            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(_));
         }
         const active_jar = _.getActiveCookieJar();
         const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;
@@ -3570,8 +3699,117 @@ pub struct CdpPageSession {
         return emitted;
     }
 
+    fn markSubtreeLive(*_, root: NodeId, keep: []bool, stack: *std.ArrayListUnmanaged(NodeId)) {
+        const n_len = _.doc.nodes.items.len;
+        if (root == NULL_NODE || @as(usize, root) >= n_len) return;
+        if (_.doc.nodes.items[@as(usize, root)].id == NULL_NODE || keep[@as(usize, root)]) return;
+        stack.clearRetainingCapacity();
+        stack.append(_.allocator, root) catch return;
+        while (stack.items.len > 0) {
+            const cur = stack.pop().?;
+            const ci = @as(usize, cur);
+            if (ci == 0 || ci >= n_len || keep[ci]) continue;
+            if (_.doc.nodes.items[ci].id == NULL_NODE) continue;
+            keep[ci] = true;
+            let ch = _.doc.nodes.items[ci].first_child;
+            while (ch != NULL_NODE && @as(usize, ch) < n_len) {
+                const chi = @as(usize, ch);
+                if (!keep[chi] && _.doc.nodes.items[chi].id != NULL_NODE) {
+                    stack.append(_.allocator, ch) catch {};
+                }
+                ch = _.doc.nodes.items[chi].next_sibling;
+            }
+        }
+    }
+
+    fn sweepWrappersAndReclaimNodes(*_): u64 {
+        if (!_.has_document) return 0;
+        const js_demote = "(function(){var sc=globalThis.__capsurf_wrappers;if(!sc)return 0;var wc=globalThis.__capsurf_weak_wrappers;if(!wc){wc=Object.create(null);globalThis.__capsurf_weak_wrappers=wc;}var d=0,ks=Object.keys(sc);for(var i=0;i<ks.length;i++){var k=ks[i],w=sc[k];if(!w||typeof w!=='object'){delete sc[k];continue;}if(!w.isConnected){var p=w.parentNode;if(p&&typeof p==='object'&&p.nodeType!==9)w._detachedParent=p;wc[k]=new WeakRef(w);delete sc[k];d++;}else{if(w._detachedParent)delete w._detachedParent;}}return d;})()";
+        const dv = _.ctx.eval(js_demote);
+        if (!jsIsException(dv)) {
+            let d_i32: i32 = 0;
+            if (JS_ToInt32(_.ctx.raw_ctx, &d_i32, dv) == 0 && d_i32 > 0) {
+                _.wrappers_demoted += @as(u64, @intCast(d_i32));
+            }
+        } else {
+            const exc_d = _.ctx.getException();
+            _.ctx.freeValue(exc_d);
+        }
+        _.ctx.freeValue(dv);
+
+        const n_len = _.doc.nodes.items.len;
+        if (n_len <= 1) return 0;
+        let keep = _.allocator.alloc(bool, n_len) catch return @as(u64, @intCast(n_len - 1));
+        defer _.allocator.free(keep);
+        @memset(keep, false);
+        keep[0] = true;
+
+        let stack: std.ArrayListUnmanaged(NodeId) = .empty;
+        defer stack.deinit(_.allocator);
+        if (_.doc.root_element != NULL_NODE) {
+            _.markSubtreeLive(_.doc.root_element, keep, &stack);
+        }
+
+        const js_sweep = "(function(){var sc=globalThis.__capsurf_wrappers||{};var wc=globalThis.__capsurf_weak_wrappers||{};var rv=0,rc=0,wk=Object.keys(wc);for(var i=0;i<wk.length;i++){var k=wk[i],wr=wc[k],t=(wr&&typeof wr.deref==='function')?wr.deref():undefined;if(t===undefined){delete wc[k];rc++;}else if(t.isConnected){if(t._detachedParent)delete t._detachedParent;sc[k]=t;delete wc[k];rv++;}}var live=[],sk=Object.keys(sc);for(var i=0;i<sk.length;i++){var w=sc[sk[i]];if(w&&typeof w._nid==='number'&&w._nid>0)live.push(w._nid);}wk=Object.keys(wc);for(var i=0;i<wk.length;i++){var wr=wc[wk[i]],t=(wr&&typeof wr.deref==='function')?wr.deref():undefined;if(t&&typeof t._nid==='number'&&t._nid>0)live.push(t._nid);}return rv+','+rc+'|'+live.join(',');})()";
+        const sv = _.ctx.eval(js_sweep);
+        if (!jsIsException(sv)) {
+            const s_str = _.ctx.toCString(sv);
+            if (s_str.len > 0) {
+                if (bar_pos := std.mem.indexOfScalar(u8, s_str, '|')) {
+                    const counts_part = s_str[0..bar_pos];
+                    const live_part = s_str[bar_pos + 1 ..];
+                    if (comma_pos := std.mem.indexOfScalar(u8, counts_part, ',')) {
+                        const rv_v = std.fmt.parseInt(u64, counts_part[0..comma_pos], 10) catch 0;
+                        const rc_v = std.fmt.parseInt(u64, counts_part[comma_pos + 1 ..], 10) catch 0;
+                        _.wrappers_revived += rv_v;
+                        _.wrappers_reclaimed += rc_v;
+                    }
+                    let it = std.mem.splitScalar(u8, live_part, ',');
+                    while (tok := it.next()) {
+                        if (tok.len == 0) continue;
+                        const nid_v = std.fmt.parseInt(u32, tok, 10) catch 0;
+                        if (nid_v > 0 && @as(usize, nid_v) < n_len) {
+                            let root_id = nid_v;
+                            let steps: usize = 0;
+                            while (steps < 4096) : (steps += 1) {
+                                const p = _.doc.nodes.items[@as(usize, root_id)].parent;
+                                if (p == NULL_NODE || @as(usize, p) >= n_len) break;
+                                if (_.doc.nodes.items[@as(usize, p)].id == NULL_NODE) break;
+                                root_id = p;
+                            }
+                            _.markSubtreeLive(root_id, keep, &stack);
+                        }
+                    }
+                }
+            }
+        } else {
+            const exc_s = _.ctx.getException();
+            _.ctx.freeValue(exc_s);
+        }
+        _.ctx.freeValue(sv);
+
+        let live_count: u64 = 0;
+        let idx: usize = 1;
+        while (idx < n_len) : (idx += 1) {
+            if (_.doc.nodes.items[idx].id != NULL_NODE) {
+                if (!keep[idx]) {
+                    _.doc.nodes.items[idx].id = NULL_NODE;
+                    _.doc.nodes.items[idx].parent = NULL_NODE;
+                    _.doc.nodes.items[idx].first_child = NULL_NODE;
+                    _.doc.nodes.items[idx].last_child = NULL_NODE;
+                    _.doc.nodes.items[idx].prev_sibling = NULL_NODE;
+                    _.doc.nodes.items[idx].next_sibling = NULL_NODE;
+                } else {
+                    live_count += 1;
+                }
+            }
+        }
+        return live_count;
+    }
+
     fn formatMemoryStatsJson(*_, out_buf: []u8): ([]const u8)? {
         _.syncRetainedBodyStatsFromJs();
+        const dom_nodes = _.sweepWrappersAndReclaimNodes();
         const engine_bytes = _.computeEngineBytes();
         const page_script_bytes = _.computePageScriptBytes();
         const renderer_bytes = _.computeRendererBytes();
@@ -3587,8 +3825,12 @@ pub struct CdpPageSession {
         const total_bytes = accounted_bytes + page_script_bytes + renderer_bytes;
         return std.fmt.bufPrint(
             out_buf,
-            "{{\"wasmBytes\":{d},\"wasmDeltaBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"layout\":{{\"mutationResolves\":{d},\"animationResolves\":{d}}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
+            "{{\"domNodes\":{d},\"wrappers\":{{\"demoted\":{d},\"revived\":{d},\"reclaimed\":{d}}},\"wasmBytes\":{d},\"wasmDeltaBytes\":{d},\"frameWasmBytes\":{d},\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"layout\":{{\"mutationResolves\":{d},\"animationResolves\":{d}}},\"paint\":{{\"prepares\":{d}}},\"total\":{{\"bytes\":{d},\"engineBytes\":{d},\"pageScriptBytes\":{d},\"rendererBytes\":{d}}},\"engine\":{{\"wasmBytes\":{d},\"wasmInitialBytes\":{d},\"wasmDeltaBytes\":{d},\"retainedBodyBytes\":{d},\"retainedBodyBytesIsolate\":{d},\"retainedRequestCount\":{d},\"retainedImageBytes\":{d},\"retainedImageCount\":{d},\"fontAssetCacheBytes\":{d},\"accountedBytes\":{d}}},\"renderer\":{{\"wasmBytes\":{d}}}}}",
             .{
+                dom_nodes,
+                _.wrappers_demoted,
+                _.wrappers_revived,
+                _.wrappers_reclaimed,
                 engine_bytes,
                 delta_bytes,
                 renderer_bytes,

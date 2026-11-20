@@ -34,6 +34,8 @@ import {
     JS_GetOpaque,
     JS_SetPropertyStr,
     JS_GetPropertyStr,
+    JS_IsFunction,
+    JS_Call,
     JS_SetPropertyUint32,
     JS_NewObject,
     JS_NewArray,
@@ -349,6 +351,28 @@ pub fn createJsElement(ctx: *JSContext, dom_ctx: *JsDomContext, node_id: NodeId)
             return hit;
         }
         JS_FreeValue(ctx, hit);
+        const weak_cache = JS_GetPropertyStr(ctx, global_obj, "__capsurf_weak_wrappers");
+        if (jsIsObject(weak_cache)) {
+            const wref = JS_GetPropertyStr(ctx, weak_cache, @ptrCast(&key_z));
+            if (jsIsObject(wref)) {
+                const deref_fn = JS_GetPropertyStr(ctx, wref, "deref");
+                if (JS_IsFunction(ctx, deref_fn)) {
+                    let dummy_args: [1]JSValue = [jsUndefined()];
+                    const target = JS_Call(ctx, deref_fn, wref, 0, @ptrCast(&dummy_args));
+                    JS_FreeValue(ctx, deref_fn);
+                    if (jsIsObject(target)) {
+                        JS_FreeValue(ctx, wref);
+                        JS_FreeValue(ctx, weak_cache);
+                        return target;
+                    }
+                    JS_FreeValue(ctx, target);
+                } else {
+                    JS_FreeValue(ctx, deref_fn);
+                }
+            }
+            JS_FreeValue(ctx, wref);
+        }
+        JS_FreeValue(ctx, weak_cache);
     }
     const el_val = JS_NewObjectClass(ctx, dom_ctx.element_class_id);
     if (jsIsException(el_val)) {

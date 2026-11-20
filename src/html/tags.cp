@@ -398,6 +398,7 @@ pub enum HtmlTag: u8 {
                 if (std.ascii.eqlIgnoreCase(s, "address")) return .Address;
                 if (std.ascii.eqlIgnoreCase(s, "picture")) return .Picture;
                 if (std.ascii.eqlIgnoreCase(s, "marquee")) return .Marquee;
+                if (std.ascii.eqlIgnoreCase(s, "noembed")) return .Noembed;
                 return .Unknown;
             },
             8 => {
@@ -409,14 +410,16 @@ pub enum HtmlTag: u8 {
                 if (std.ascii.eqlIgnoreCase(s, "optgroup")) return .Optgroup;
                 if (std.ascii.eqlIgnoreCase(s, "progress")) return .Progress;
                 if (std.ascii.eqlIgnoreCase(s, "noscript")) return .Noscript;
-                if (std.ascii.eqlIgnoreCase(s, "noembed")) return .Noembed;
                 if (std.ascii.eqlIgnoreCase(s, "noframes")) return .Noframes;
+                return .Unknown;
+            },
+            9 => {
+                if (std.ascii.eqlIgnoreCase(s, "plaintext")) return .Plaintext;
                 return .Unknown;
             },
             10 => {
                 if (std.ascii.eqlIgnoreCase(s, "blockquote")) return .Blockquote;
                 if (std.ascii.eqlIgnoreCase(s, "figcaption")) return .Figcaption;
-                if (std.ascii.eqlIgnoreCase(s, "plaintext")) return .Plaintext;
                 return .Unknown;
             },
             * => .Unknown,

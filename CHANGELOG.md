@@ -2299,3 +2299,8 @@
 ### Phase 213
 - Added `test/dom/test_mutation_observer_edge.cp` covering `MutationObserver` / `MutationManager` queue bounds, disconnect/re-observe, and attribute/childList filtering.
 - Fixed `src/cdp/screencast.cp:210` wrapping multiply syntax (`*%`) and committed in-progress CDP screencast frame-hash/throttling/rAF-driver baseline (`src/cdp/{screencast,server,kitesurf_facade,page}.cp`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`), plus `GEMINI.md` / `CP_PITFALLS.md` updates.
+
+### Phase 214
+- Added `test/css/test_font_face_and_ua.cp` and `test/html/test_parser_and_tree_builder.cp`.
+- Fixed `HtmlTag.fromStr` length buckets for `"noembed"` and `"plaintext"` in `src/html/tags.cp`.
+- Implemented `JS_SetModuleLoaderFunc2` import attributes (`with { type: "json" }` / `"css"` rejection) and `Kitesurf.getMemoryStats` (`domNodes` + `wrappers` weak-ref tracking) in `src/cdp/session.cp` and `src/js/dom_binding.cp`.

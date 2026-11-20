@@ -4594,3 +4594,12 @@
 ### Phase 213: MutationObserver Whitebox Acceptance & Screencast Baseline (`screencast.cp` `*%=` Fix)
 - **Slot A (`2e1e98c1`, killed)**: `test/dom/test_mutation_observer_edge.cp` verified (`cpc fix` OK, `cpc_brief.py -n 8` 4 gates 0, `cap test -m` 1/1 PASS in 1722ms).
 - **Slot B (`a59e5537`, killed)**: Fixed `src/cdp/screencast.cp:210` (`*%=` -> `*%`), bundled runtime (`1590065` bytes / 133 chunks), passed `cpc fix` & `cpc_brief.py -n 8` on `src/cdp/{screencast,server,kitesurf_facade,page}.cp`, compiled `bin_19233/main` in 8.56s. Screencast E2E baseline on port `19233`: `screencast-idle-skip` 9/14 PASS, `screencast-partial-frames` 2/5 PASS, `screencast-raf-pacing` 3/6 PASS, `screencast-wheel-coalescing` 0/3 PASS (remaining gaps queued for follow-up).
+
+### Phase 214: Non-CDP Whitebox 76/76 + CSS/HTML Coverage + ModuleRegistry & MemoryStats
+- **Slot A (`abda5647`, `5a5912f8`, `f904f71f`, killed)**:
+  - Full non-CDP whitebox regression sweep: **76/76 PASS (100%)** across all 9 directories (`css` 9, `dom` 16, `eval` 16, `html` 6, `js` 3, `layout` 3, `net` 15, `render` 6, `tty` 2).
+  - Added `test/css/test_font_face_and_ua.cp` (6/6 PASS) and `test/html/test_parser_and_tree_builder.cp` (6/6 PASS).
+  - Fixed `src/html/tags.cp` length-bucket misplacement (`"noembed"` 8->7, `"plaintext"` 10->9).
+- **Slot B (`be0aa311`, killed)**:
+  - Upgraded `src/cdp/session.cp` to `JS_SetModuleLoaderFunc2` with `with { type: "json" }`, `type: "css"` rejection, `import.meta.resolve` bare-specifier error, and `Kitesurf.getMemoryStats` `domNodes` + `wrappers: { demoted, revived, reclaimed }` + `WeakRef` reclaim/revive in `src/js/dom_binding.cp`.
+  - Built `bin_19233/main` in 5.43s. E2E on port `19233`: `module-registry` 0/1 (only trailing `registryTla` `await fetch` pending), `detached-node-reclaim` 2/6 PASS (up from 0), `detached-owned-caches` 0/5 (`getMemoryStats` unblocked; blocked on `getAttributeNode`/`style.sheet`/`track.track`).
