@@ -4636,3 +4636,11 @@
 - **Slot B (`83895564`, killed)**:
   - Verified `e2e/module-registry.e2e.test.ts` **1/1 PASS** (2.59s, 3 assertions) on `bin_19233/main`.
   - Fixed duplicate mouse boundary event dispatch in `e2e/harness.ts:504-506` (`Mouse.move` fallback skipping redundant manual `mouseout/mouseleave/mouseover/mouseenter` when `__capsurf_dispatch_mouse_event` is active); `a mouse move fires pointer boundary events before mouse ones` **1/1 PASS** (3.35s).
+
+### Phase 220: Render Whitebox Expansion + `tldraw-app-shell` 6/6 PASS (14.06s)
+- **Slot A (`ca88d4e7`, killed)**: Added `test/render/test_rasterizer_and_clip_edge.cp` covering zero-size canvas/rect guards, negative/viewport clipping, `ClipRect.intersect`, alpha blending, rounded corners/borders, and truncated pixel buffer bounds (**6/6 PASS**, 1057ms). Total whitebox now **112/112 (100% PASS)**.
+- **Slot B (`ed659b02`, killed)**:
+  - Fixed `makeIDBDatabase` TDZ `ReferenceError` on `objectStoreNames` getter in `src/js/shim/window.js:1196-1230` (120s timeout -> 1.44s PASS).
+  - Fixed `CanvasRenderingContext2D.prototype.fill` / `stroke` calling `ensureBitmap(this)` after reading `_bitmapWidth`/`_bitmapHeight` in `src/js/shim/canvas2d.js:1255,1387`.
+  - Fixed `PointerEvent.prototype.getCoalescedEvents` reading `this.isTrusted` instead of `es.isTrusted` in `src/js/shim/events/event.js:1018-1022`.
+  - Bundled runtime (`1,590,234` bytes / 133 chunks), built `bin_19233/main` (6.75s); `e2e/tldraw-app-shell.e2e.test.ts` **6/6 PASS** (13 assertions, 14.06s).

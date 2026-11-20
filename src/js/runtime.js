@@ -1442,7 +1442,7 @@
     if (s.coalesced.length > 0) return s.coalesced.slice();
     const es = _eventState.get(this);
     const evType = es ? es.type : this.type;
-    const isTrusted = es ? Boolean(es.isTrusted) : Boolean(this.isTrusted);
+    const isTrusted = Boolean(this.isTrusted);
     if (isTrusted && (evType === "pointermove" || evType === "pointerrawupdate")) {
       return [this];
     }
@@ -25729,9 +25729,9 @@
     _flattenPathOps(ops, matrix, polygons, arcs);
     if (polygons.length === 0 && arcs.length === 0) return;
 
+    const bitmap = ensureBitmap(this);
     const bw = this._bitmapWidth;
     const bh = this._bitmapHeight;
-    const bitmap = ensureBitmap(this);
 
     const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
     const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
@@ -25861,9 +25861,9 @@
     const color = parseColor(this._state.strokeStyle);
     if (!color) return;
 
+    const bitmap = ensureBitmap(this);
     const bw = this._bitmapWidth;
     const bh = this._bitmapHeight;
-    const bitmap = ensureBitmap(this);
 
     const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
     const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
@@ -29106,12 +29106,6 @@
           onclose: null,
           onerror: null,
           onversionchange: null,
-          get objectStoreNames() {
-            const arr = Array.from(db._stores.keys());
-            arr.contains = function (n) { return db._stores.has(n); };
-            arr.item = function (i) { return arr[i] || null; };
-            return arr;
-          },
           createObjectStore: function (storeName, options) {
             const s = new IDBObjectStoreImpl(String(storeName), options || {});
             db._stores.set(String(storeName), s);
@@ -29124,6 +29118,16 @@
             return makeIDBTransaction(db, storeNames, mode);
           },
           close: function () {},
+        });
+        Object.defineProperty(db, "objectStoreNames", {
+          get: function () {
+            const arr = Array.from(db._stores.keys());
+            arr.contains = function (n) { return db._stores.has(n); };
+            arr.item = function (i) { return arr[i] || null; };
+            return arr;
+          },
+          enumerable: true,
+          configurable: true,
         });
         return db;
       }

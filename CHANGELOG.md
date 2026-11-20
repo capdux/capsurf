@@ -2327,3 +2327,7 @@
 ### Phase 219
 - Added `test/dom/test_inner_html_and_serialization.cp` and `test/dom/test_query_selector_edge.cp`.
 - Fixed duplicate mouse boundary event dispatch in `e2e/harness.ts` `Mouse.move` fallback.
+
+### Phase 220
+- Added `test/render/test_rasterizer_and_clip_edge.cp`.
+- Fixed `IndexedDB` `objectStoreNames` TDZ in `src/js/shim/window.js`, `CanvasRenderingContext2D` `fill`/`stroke` `ensureBitmap` order in `src/js/shim/canvas2d.js`, and `PointerEvent.getCoalescedEvents` `isTrusted` check in `src/js/shim/events/event.js` (re-bundled `runtime.js`/`runtime_source.cp`).

@@ -1252,9 +1252,9 @@ CanvasRenderingContext2D.prototype.fill = function (pathOrRule, rule) {
   _flattenPathOps(ops, matrix, polygons, arcs);
   if (polygons.length === 0 && arcs.length === 0) return;
 
+  const bitmap = ensureBitmap(this);
   const bw = this._bitmapWidth;
   const bh = this._bitmapHeight;
-  const bitmap = ensureBitmap(this);
 
   const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
   const gByte = Math.min(255, Math.max(0, Math.round(color[1])));
@@ -1384,9 +1384,9 @@ CanvasRenderingContext2D.prototype.stroke = function (path) {
   const color = parseColor(this._state.strokeStyle);
   if (!color) return;
 
+  const bitmap = ensureBitmap(this);
   const bw = this._bitmapWidth;
   const bh = this._bitmapHeight;
-  const bitmap = ensureBitmap(this);
 
   const rByte = Math.min(255, Math.max(0, Math.round(color[0])));
   const gByte = Math.min(255, Math.max(0, Math.round(color[1])));

@@ -1202,12 +1202,6 @@ function installWindow(global) {
         onclose: null,
         onerror: null,
         onversionchange: null,
-        get objectStoreNames() {
-          const arr = Array.from(db._stores.keys());
-          arr.contains = function (n) { return db._stores.has(n); };
-          arr.item = function (i) { return arr[i] || null; };
-          return arr;
-        },
         createObjectStore: function (storeName, options) {
           const s = new IDBObjectStoreImpl(String(storeName), options || {});
           db._stores.set(String(storeName), s);
@@ -1220,6 +1214,16 @@ function installWindow(global) {
           return makeIDBTransaction(db, storeNames, mode);
         },
         close: function () {},
+      });
+      Object.defineProperty(db, "objectStoreNames", {
+        get: function () {
+          const arr = Array.from(db._stores.keys());
+          arr.contains = function (n) { return db._stores.has(n); };
+          arr.item = function (i) { return arr[i] || null; };
+          return arr;
+        },
+        enumerable: true,
+        configurable: true,
       });
       return db;
     }

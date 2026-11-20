@@ -1017,7 +1017,7 @@ PointerEvent.prototype.getCoalescedEvents = function () {
   if (s.coalesced.length > 0) return s.coalesced.slice();
   const es = _eventState.get(this);
   const evType = es ? es.type : this.type;
-  const isTrusted = es ? Boolean(es.isTrusted) : Boolean(this.isTrusted);
+  const isTrusted = Boolean(this.isTrusted);
   if (isTrusted && (evType === "pointermove" || evType === "pointerrawupdate")) {
     return [this];
   }

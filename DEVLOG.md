@@ -1717,3 +1717,7 @@
 
 ### Phase 219: `e2e/harness.ts` `Mouse.move` Duplicate Boundary Event Fix
 - `Mouse.move` in `e2e/harness.ts` previously triggered `flushPendingMouseMove()` (which already dispatches `pointer*` and `mouse*` boundary events via `__capsurf_dispatch_mouse_event`) and then ran a `page.evaluate` fallback that manually fired `mouseout/mouseleave/mouseover/mouseenter` again. Short-circuiting the manual fallback when `__capsurf_dispatch_mouse_event` is present eliminates the 6 duplicate events.
+
+### Phase 220: `tldraw-app-shell` 6/6 Closure (`IndexedDB` TDZ, `Path2D` Bitmap Init, `getCoalescedEvents`)
+- `makeIDBDatabase` defined a getter `get objectStoreNames() { ... db._stores ... }` inside the object literal passed to `Object.assign`, triggering a TDZ `ReferenceError` before `db` was initialized and stalling `onupgradeneeded`/`onsuccess`. Moving it to `Object.defineProperty(db, ...)` after initialization resolves the 120s hang to 1.44s.
+- Calling `ensureBitmap(this)` before reading `_bitmapWidth`/`_bitmapHeight` in `fill()` and `stroke()` fixes first-draw `Path2D` clipping to `0x0`.
