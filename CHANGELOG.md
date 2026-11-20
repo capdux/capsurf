@@ -2034,4 +2034,10 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`clock-floor-stamp-demo` (1/1)、`img-load-events-demo` (1/1) — **2/2 PASS (13 expect() calls)**。
+
+## Phase 135: `mouse-move-debounce-probe` 1/1 PASS, Generic 16ms Mouse Move Coalescing & `browserFactory` Query
+- **`e2e/harness.ts`**：
+  - 实现通用 `_pendingMouseMove` 16ms 防抖合并与自动 flush，以及 `browserFactory(options)` 的 `options.query` 拼接。
+- **测试验证**：
+  - `e2e/demo/mouse-move-debounce-probe.e2e.test.ts`：**1/1 PASS (7 expect() calls)**，并精准定位 `auto-navigate-demo` 与 `navigate-style-script-order` 跨模块缺口。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

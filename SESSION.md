@@ -4097,6 +4097,20 @@
   - `clock-floor-stamp-demo` (**1/1**)、`img-load-events-demo` (**1/1**)：**2/2 PASS (13 expect() calls)**；`mjs-import-demo` 定位至 `session.cp:1550` 与 `session_hooks.cp:1138`（Slot B 同步处理中）。
 - **清理旧子智能体**: 销毁 `93bb2715-46e9-405b-8889-772c2296cd6f`。
 
+## [2026-11-20 23:14:00] Slot C (`cc485949`) 验收 `page-renderer-emoji` 1/1 PASS & CJK 点阵绘制落地
+- **零修改直接验收**：`e2e/demo/page-renderer-emoji.e2e.test.ts` (**1/1 PASS**)。
+- **CJK 点阵字形绘制 (`src/render/painter.cp`)**：新增 `isCjkCodepoint`、`fillNonAsciiGlyph8x8` 与 `Canvas.drawGlyph8x8ScaledClipped`（4 门禁全 0，因 `Slot B` 正在编辑 `src/cdp/session.cp`，待其结单后重编复测 `page-renderer-cjk` 一并提交）；并定位 `page-renderer-pdf` 缺口在 `src/cdp/page.cp:467`。
+- **清理旧子智能体**: 销毁 `cc485949-85b3-4468-adc9-41d947f373f3`。
+
+## [2026-11-20 23:15:00] 3 分钟极速闭环 `mouse-move-debounce-probe` 1/1 PASS 与导航/视口定位 (Subagent 878fe575 结单，Phase 135)
+- **通用 16ms 鼠标移动防抖与 `browserFactory` query 透传 (`e2e/harness.ts`)**:
+  - `e2e/harness.ts:219-297`：将 `_pendingDragMove` 扩展为通用 `_pendingMouseMove` 16ms 防抖合并（`Runtime.evaluate`/`mousePressed`/`mouseReleased` 前自动 flush，含防重入与 `input[type=range]` 兜底）；
+  - `e2e/harness.ts:2751-2759`：`browserFactory` 支持将 `options.query` 拼接至 `wsUrl`。
+- **E2E 验证与精准跨模块定位**:
+  - `e2e/demo/mouse-move-debounce-probe.e2e.test.ts`：**1/1 PASS (7 expect() calls)**（60 moves 合并为 1 次且先于 click）；
+  - 精准定位 `auto-navigate-demo` (`server.cp:535-572` `initialUrl`) 与 `navigate-style-script-order` (`page.cp:556-1045` `<link>` 阻塞 / `viewport` seed、`layout.cp:2993`/`painter.cp:3156` 嵌套行内 `::before`)。
+- **清理旧子智能体**: 销毁 `878fe575-138e-4acd-a4dd-3e63d5200def`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

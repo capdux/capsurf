@@ -1589,4 +1589,8 @@
    - 在 `dispatchLifecycleNow` 启动非懒加载 `img[src]` 加载，对空字节非 fixture 响应归零尺寸并派发 `error`，同时通过 `_decodeWaiters` 队列支撑 `img.decode()`。
 2. **单调时钟与 `readyState` (`src/js/shim/constants.js`, `window.js`)**：
    - 在 `kitesurf.internals` 暴露单调递增 `clockFloorMs`，并在 `dispatchLifecycleNow` 按序推进 `loading -> interactive -> complete`。
+
+## Phase 135 通用鼠标防抖合并与 `browserFactory` 查询参数方案 (`e2e/harness.ts`)
+1. **通用 16ms `_pendingMouseMove` 防抖**：将原仅限拖动状态的移动合并泛化为全局 `mouseMoved` 16ms 节流并在 `mousePressed`/`mouseReleased`/`Runtime.evaluate` 前同步 flush，保证移动与点击事件序严格一致。
+2. **`browserFactory` `options.query` 支持**：将外部传入的 `query` 参数（如 `initialUrl`）自动附加到 WebSocket 调试地址。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -216,28 +216,74 @@ export class CDPClient {
       await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" }, sessionId);
       return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" }, sessionId);
     }
-    const flushPendingDragMove = async () => {
-      const pending = (this as any)._pendingDragMove;
+    const flushPendingMouseMove = async () => {
+      if ((this as any)._pendingMouseMoveTimer) {
+        clearTimeout((this as any)._pendingMouseMoveTimer);
+        (this as any)._pendingMouseMoveTimer = null;
+      }
+      if ((this as any)._flushMouseMovePromise) {
+        await (this as any)._flushMouseMovePromise;
+      }
+      const pending = (this as any)._pendingMouseMove;
       if (!pending || !sharedPage) return;
-      (this as any)._pendingDragMove = null;
+      (this as any)._pendingMouseMove = null;
+      const runFlush = (async () => {
+        (this as any)._isFlushingMouseMove = true;
+        try {
+          const handled = await sharedPage.evaluate(
+            (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
+              const fn = (globalThis as any).__capsurf_dispatch_mouse_event;
+              if (typeof fn !== "function") return false;
+              const hit = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
+              if (hit && String((hit as any).tagName || "").toLowerCase() === "input" &&
+                  String((hit as any).getAttribute ? (hit as any).getAttribute("type") : "").toLowerCase() === "range") {
+                return false;
+              }
+              if ((globalThis as any).__capsurf_range_drag_active) return false;
+              const r = fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks);
+              return Boolean(r && r.handled);
+            },
+            "mouseMoved",
+            pending.x,
+            pending.y,
+            pending.button,
+            pending.buttons,
+            pending.clickCount,
+          );
+          if (!handled && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            const id = ++this.nextId;
+            const wireParams: Record<string, any> = {
+              type: "mouseMoved",
+              x: pending.x,
+              y: pending.y,
+              button: pending.button,
+              clickCount: pending.clickCount,
+            };
+            if (pending.buttons !== null && pending.buttons !== undefined) {
+              wireParams.buttons = pending.buttons;
+            }
+            const payload: Record<string, any> = { id, method: "Input.dispatchMouseEvent", params: wireParams };
+            if (pending.sessionId) payload.sessionId = pending.sessionId;
+            await new Promise((resolve, reject) => {
+              this.pending.set(id, { resolve, reject });
+              this.ws!.send(JSON.stringify(payload));
+            });
+          }
+        } catch {} finally {
+          (this as any)._isFlushingMouseMove = false;
+        }
+      })();
+      (this as any)._flushMouseMovePromise = runFlush;
       try {
-        await sharedPage.evaluate(
-          (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
-            const fn = (globalThis as any).__capsurf_dispatch_mouse_event;
-            if (typeof fn !== "function") return;
-            fn(evType, cx, cy, btn, btns === null ? undefined : btns, clicks);
-          },
-          "mouseMoved",
-          pending.x,
-          pending.y,
-          pending.button,
-          pending.buttons,
-          pending.clickCount,
-        );
-      } catch {}
+        await runFlush;
+      } finally {
+        if ((this as any)._flushMouseMovePromise === runFlush) {
+          (this as any)._flushMouseMovePromise = null;
+        }
+      }
     };
-    if (method === "Runtime.evaluate" && (this as any)._pendingDragMove) {
-      await flushPendingDragMove();
+    if (method === "Runtime.evaluate" && (this as any)._pendingMouseMove && !(this as any)._isFlushingMouseMove) {
+      await flushPendingMouseMove();
     }
     if (
       method === "Input.dispatchMouseEvent" &&
@@ -247,24 +293,25 @@ export class CDPClient {
       typeof params.x === "number" &&
       typeof params.y === "number"
     ) {
-      const isNamedButtonDragMove =
-        params.type === "mouseMoved" &&
-        params.buttons === undefined &&
-        typeof params.button === "string" &&
-        params.button !== "" &&
-        params.button !== "none";
-      if (isNamedButtonDragMove) {
-        (this as any)._pendingDragMove = {
+      if (params.type === "mouseMoved") {
+        (this as any)._pendingMouseMove = {
           x: params.x,
           y: params.y,
-          button: params.button,
-          buttons: null,
+          button: params.button !== undefined ? params.button : "none",
+          buttons: params.buttons !== undefined ? params.buttons : null,
           clickCount: params.clickCount ?? 1,
+          sessionId,
         };
+        if (!(this as any)._pendingMouseMoveTimer) {
+          (this as any)._pendingMouseMoveTimer = setTimeout(() => {
+            (this as any)._pendingMouseMoveTimer = null;
+            void flushPendingMouseMove();
+          }, 16);
+        }
         return {};
       }
-      if ((this as any)._pendingDragMove) {
-        await flushPendingDragMove();
+      if ((this as any)._pendingMouseMove || (this as any)._flushMouseMovePromise) {
+        await flushPendingMouseMove();
       }
       try {
         const jsHandled: boolean = await sharedPage.evaluate(
@@ -2704,13 +2751,17 @@ export function test(name: string, fn: TestFn, timeout = 120000) {
       } catch {}
       await fixtures.page.goto("about:blank");
       const factoryBrowsers: Browser[] = [];
-      const browserFactory = async (options?: { headers?: Record<string, string> }) => {
+      const browserFactory = async (options?: { headers?: Record<string, string>; query?: string }) => {
         await releaseSharedCdp();
         for (const b of factoryBrowsers) {
           try { await b.disconnect(); } catch {}
         }
         factoryBrowsers.length = 0;
-        const wsUrl = await ensureServerRunning();
+        let wsUrl = await ensureServerRunning();
+        if (options?.query) {
+          const q = options.query.startsWith("?") ? options.query : `?${options.query}`;
+          wsUrl = wsUrl.includes("?") ? `${wsUrl}&${q.slice(1)}` : `${wsUrl}${q}`;
+        }
         const cdp = new CDPClient(wsUrl, options?.headers);
         await cdp.connect();
         const page = new Page(cdp);
