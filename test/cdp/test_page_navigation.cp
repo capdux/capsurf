@@ -8,6 +8,7 @@ import { Base64 } from "cap:encoding";
 import { CdpPageSession } from "../../src/cdp/session.cp";
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "../../src/cdp/types.cp";
 import { CdpDispatcher } from "../../src/cdp/dispatch.cp";
+import { InterceptVerdict } from "../../src/cdp/fetch.cp";
 import { HttpLoader } from "../../src/net/http_loader.cp";
 import { Matcher } from "../../src/css/matcher.cp";
 import { NULL_NODE } from "../../src/dom/dom.cp";

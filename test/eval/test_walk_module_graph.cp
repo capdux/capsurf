@@ -2,6 +2,7 @@ import {
     ParsedImportMap,
     ImportMapBudget,
     ImportMapRule,
+    ImportMapScopeGroup,
     isUrlLikeSpecifier,
     astroIslandModuleUrls,
     extractModulePreloadSeeds,

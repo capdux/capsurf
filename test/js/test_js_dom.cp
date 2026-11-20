@@ -5,7 +5,7 @@
 import { test, expect_eq } from "cap:test";
 import { Doc, Document, NodeId, NULL_NODE } from "../../src/dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../../src/css/cascade.cp";
-import { JsRuntime, JsContext, jsToSlice, jsIsException } from "../../src/js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException } from "../../src/js/qjs_engine.cp";
 import { mountDom } from "../../src/js/dom_binding.cp";
 import { LayoutTree } from "../../src/layout/layout.cp";
 

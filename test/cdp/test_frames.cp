@@ -10,6 +10,7 @@ import {
     isLocalhost,
     inheritsCreatorOrigin,
     FrameState,
+    FrameContext,
     MainFrameArgs,
     ChildFrameArgs,
     makeMainFrameState,

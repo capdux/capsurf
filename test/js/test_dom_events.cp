@@ -3,7 +3,7 @@
 
 import { test, expect_eq } from "cap:test";
 import { Document, NodeId, NULL_NODE } from "../../src/dom/dom.cp";
-import { JsRuntime, JsContext, jsToSlice, jsIsException } from "../../src/js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSValue, jsToSlice, jsIsException } from "../../src/js/qjs_engine.cp";
 import { mountDom } from "../../src/js/dom_binding.cp";
 
 fn main() {

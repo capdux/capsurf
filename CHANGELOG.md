@@ -2145,3 +2145,6 @@
 
 ## Phase 161: `loaded-worker-env` 1/1 PASS & `ttyCellWidth`/Multi-Tab Localization
 - 零修改验收 `e2e/loaded-worker-env.e2e.test.ts` (**1/1 PASS**)，并精准定位 `terminal-selection-after-navigation` (`page.cp:209`, `session_hooks.cp:970`) 与 `script-navigation-tab` (`target.cp:613`)。
+
+## Phase 162: Full-Repo `cap test -m` Explicit Imports (`dom` 12/12, `eval` 8/8, `net` 10/11)
+- 为 10 个 `test/**/*.cp` 补齐 `-m` 显式导入（`NodeData`/`ParsedAttr`/`ImportMapScopeGroup`/`HttpLoaderResult`/`JSValue`/`FrameContext` 等），`dom`/`eval`/`html`/`render`/`css`/`layout`/`tty` 全目录 100% PASS。

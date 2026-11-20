@@ -2,7 +2,7 @@
 // CapSurf Mock Fixtures Unit Test Suite
 
 import { MockFixtures } from "../../src/net/mock_fixtures.cp";
-import { HttpLoader } from "../../src/net/http_loader.cp";
+import { HttpLoader, HttpLoaderResult } from "../../src/net/http_loader.cp";
 import { CdpPageSession } from "../../src/cdp/session.cp";
 
 fn check(cond: bool, msg: []const u8) {

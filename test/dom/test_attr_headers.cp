@@ -1,7 +1,7 @@
 // test/dom/test_attr_headers.cp
 // Tests CSS attr() evaluator and FetchOriginPolicy origin computation & headers validation.
 
-import { evaluateCssAttr, parseAttrExpr } from "../../src/css/attr_evaluator.cp";
+import { evaluateCssAttr, parseAttrExpr, ParsedAttr } from "../../src/css/attr_evaluator.cp";
 import {
     FetchOriginPolicy,
     HeadersValidator,

@@ -3,7 +3,7 @@
 // and WHATWG NamedNodeMap collection operations.
 
 import { HttpLoader } from "../../src/net/http_loader.cp";
-import { Document, ElementHandle, NodeId, NULL_NODE, Attr } from "../../src/dom/dom.cp";
+import { Document, ElementHandle, NodeId, NULL_NODE, Attr, NodeData } from "../../src/dom/dom.cp";
 import { NamedNodeMap } from "../../src/dom/collections.cp";
 
 fn check(cond: bool, msg: []const u8) {

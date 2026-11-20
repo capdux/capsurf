@@ -24,7 +24,7 @@ import {
     releaseTargetStateDom,
     createTargetDom,
 } from "../../src/cdp/dom_release.cp";
-import { Document, NULL_NODE } from "../../src/dom/dom.cp";
+import { Document, NodeId, NULL_NODE } from "../../src/dom/dom.cp";
 import { Matcher } from "../../src/css/matcher.cp";
 import { CdpEvent } from "../../src/cdp/types.cp";
 import { FrameState } from "../../src/cdp/frames.cp";

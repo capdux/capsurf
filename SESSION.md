@@ -4327,3 +4327,9 @@
 - **直接验收**：`e2e/loaded-worker-env.e2e.test.ts` (**1/1 PASS**)。
 - **精准跨模块定位**：`terminal-selection-after-navigation` (`page.cp:209-223` & `session_hooks.cp:970-977` 注入 `tty_cell_w` -> `ttyCellWidth`)、`script-navigation-tab` (`target.cp:613-685` 多 Tab 独立 `CdpPageSession`)。
 - **清理旧子智能体**: 销毁 `84f637e9-e9bc-4e04-8299-b87d7692865d`。
+
+## [2026-11-21 00:09:30] 全仓 `test/` `-m` 显式导入补全与巡检 (`dom` 12/12, `eval` 8/8, `net` 10/11) (Subagent 2afdef63 结单，Phase 162)
+- **补全 10 个测试文件 `-m` 显式导入 (`test/{dom,eval,net,js,cdp}/*.cp`)**:
+  - 补齐 `NodeData`、`ParsedAttr`、`ImportMapScopeGroup`、`CookieEntry`/`CdpCookie`、`HttpLoaderResult`、`JSValue`、`FrameContext`、`InterceptVerdict`、`NodeId`。
+- **全仓 `cap test -m` 目录巡检**: `dom/` (**12/12**)、`eval/` (**8/8**)、`html/` (**3/3**)、`render/` (**3/3**)、`css/` (**2/2**)、`layout/` (**1/1**)、`tty/` (**1/1**)、`net/` (**10/11**)、`cdp/` (**12/27**，精准定位余 12 个文件仅差 `[4]CdpEvent` -> `[64]CdpEvent`)。
+- **清理旧子智能体**: 销毁 `2afdef63-fdae-483d-aa75-ba7a135744bf`。

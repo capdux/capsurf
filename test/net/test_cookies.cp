@@ -2,7 +2,7 @@
 // CapSurf RFC 6265 CookieJar Comprehensive Test Suite (1:1 aligned with e2e/ref/cookies.test.ts)
 
 import { test, expect_eq } from "cap:test";
-import { CookieJar, entryToCdp, SameSite } from "../../src/net/cookies.cp";
+import { CookieJar, CookieEntry, CdpCookie, entryToCdp, SameSite } from "../../src/net/cookies.cp";
 
 const HTTPS = "https://app.example.com/x";
 
