@@ -4629,3 +4629,10 @@
 - **Batch Sweep (`bin_19233/main`, port `19233`)**: `oopif-postmessage` (1/1, 16 assertions), `page-renderer-parity` (1/1, 8 assertions), `screenshot-demo` (1/1, 3 assertions), `tty-wheel-grid` (1/1, 5 assertions) all PASS.
 - **Slot A (`a709c9a0`, killed)**: Added `test/css/test_selectors_and_pseudo_classes.cp` covering `:nth-child(An+B)`, `:is/:where/:not/:has`, attribute operators, combinators, and cascade specificity (**5/5 PASS**, 1289ms). Total whitebox now **109/109 (100% PASS)**.
 - **Slot B (`b4561d81`, killed)**: Added `retired_isolated_world_ids` tracking in `src/cdp/session.cp` and aligned `Runtime.evaluate` invalid `contextId` handling in `src/cdp/runtime.cp:253-263`. Built `bin_19233/main` (9.71s); `oopif-runtime-evaluate` **1/1 PASS** (3.68s), `context-lifecycle` **3/3 PASS** (8.04s); `tldraw-app-shell` 2/6 PASS (pinpointed `IndexedDB` timeout & duplicate mouse boundary events).
+
+### Phase 219: DOM Whitebox Expansion + `module-registry` 100% PASS + `harness.ts` Mouse Boundary Fix
+- **Slot A (`b3e7eeab`, `3a17fd40`, killed)**:
+  - Added `test/dom/test_inner_html_and_serialization.cp` (1/1 PASS, 751ms) and `test/dom/test_query_selector_edge.cp` (1/1 PASS, 740ms). Total whitebox now **111/111 (100% PASS)**.
+- **Slot B (`83895564`, killed)**:
+  - Verified `e2e/module-registry.e2e.test.ts` **1/1 PASS** (2.59s, 3 assertions) on `bin_19233/main`.
+  - Fixed duplicate mouse boundary event dispatch in `e2e/harness.ts:504-506` (`Mouse.move` fallback skipping redundant manual `mouseout/mouseleave/mouseover/mouseenter` when `__capsurf_dispatch_mouse_event` is active); `a mouse move fires pointer boundary events before mouse ones` **1/1 PASS** (3.35s).

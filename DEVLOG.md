@@ -1714,3 +1714,6 @@
 
 ### Phase 218: Retired Isolated World Tracking & `Runtime.evaluate` `contextId` Semantics
 - `rotateIsolatedWorldsOnNavigate` now records retired isolated world IDs in `CdpPageSession.retired_isolated_world_ids` so `Runtime.evaluate` returns `-32000 Cannot find context with specified id` for retired worlds while returning `exceptionDetails` (`Error: unknown or destroyed execution context ...`) for destroyed child frames and unknown `contextId`s.
+
+### Phase 219: `e2e/harness.ts` `Mouse.move` Duplicate Boundary Event Fix
+- `Mouse.move` in `e2e/harness.ts` previously triggered `flushPendingMouseMove()` (which already dispatches `pointer*` and `mouse*` boundary events via `__capsurf_dispatch_mouse_event`) and then ran a `page.evaluate` fallback that manually fired `mouseout/mouseleave/mouseover/mouseenter` again. Short-circuiting the manual fallback when `__capsurf_dispatch_mouse_event` is present eliminates the 6 duplicate events.

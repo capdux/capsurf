@@ -2323,3 +2323,7 @@
 ### Phase 218
 - Added `test/css/test_selectors_and_pseudo_classes.cp` covering structural/logical pseudo-classes, attribute operators, combinators, and cascade specificity.
 - Tracked `retired_isolated_world_ids` in `src/cdp/session.cp` and aligned `Runtime.evaluate` invalid vs retired `contextId` responses in `src/cdp/runtime.cp`.
+
+### Phase 219
+- Added `test/dom/test_inner_html_and_serialization.cp` and `test/dom/test_query_selector_edge.cp`.
+- Fixed duplicate mouse boundary event dispatch in `e2e/harness.ts` `Mouse.move` fallback.

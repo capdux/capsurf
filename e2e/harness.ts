@@ -501,6 +501,9 @@ export class Mouse {
       try {
         await this.page.evaluate((cx: number, cy: number, btns: number) => {
           try {
+            if (typeof (globalThis as any).__capsurf_dispatch_mouse_event === "function") {
+              return;
+            }
             const nextEl: any = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
             const prevEl: any = (window as any).__capsurf_lastHoverEl || null;
             const EvCls = typeof MouseEvent !== "undefined" ? MouseEvent : ((globalThis as any).__NativeEvent || Event);
