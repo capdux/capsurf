@@ -4533,3 +4533,7 @@
 ### Phase 198: Pure-CP DOM FormSubmission Whitebox Tests (Slot A)
 - **Subagent**: `64d84a93` (killed after completion)
 - **Result**: `test/dom/test_form_submission.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 877ms; covering GET/POST resolution, `collectFormEntries` filtering, `encodeUrlEncoded`, and `encodeMultipart`).
+
+### Phase 199: Pure-CP Net HeadersParser & MIME Whitebox Tests (Slot A)
+- **Subagent**: `6b575f59` (killed after completion)
+- **Result**: `test/net/test_headers_and_mime.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 956ms; covering `HeadersParser.parseRaw`, `HeadersValidator` CRLF/control-char guards, `MimeType.parse`/`normalizeBlobType`, and extension-to-MIME mapping).

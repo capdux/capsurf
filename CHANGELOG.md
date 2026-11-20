@@ -2256,3 +2256,6 @@
 
 ### Phase 198
 - Added `test/dom/test_form_submission.cp` covering form method/enctype resolution, control entry filtering, URL-encoded serialization, and multipart/form-data boundary formatting.
+
+### Phase 199
+- Added `test/net/test_headers_and_mime.cp` covering HTTP header parsing/folding, control-character/CRLF validation, MIME charset parsing/normalization, and extension-to-MIME mapping.
