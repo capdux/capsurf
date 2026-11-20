@@ -218,7 +218,7 @@ pub struct ClipPathInset {
     left: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 }
 
-pub struct BoxShadow {
+pub struct CssBoxShadow {
     has_shadow: bool = false;
     inset: bool = false;
     offset_x: f32 = 0.0;
@@ -1799,7 +1799,7 @@ pub struct ResolvedPaintStyle {
     outline_width: f32 = 0.0;
     outline_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     outline_offset: f32 = 0.0;
-    box_shadow: BoxShadow = BoxShadow{};
+    box_shadow: CssBoxShadow = CssBoxShadow{};
     font_size_px: f32 = 16.0;
     conic_gradient: ConicGradient = ConicGradient{};
     bg_gradient: BgGradient = BgGradient{};
@@ -1906,7 +1906,7 @@ pub struct ComputedStyle {
 
     legacy_clip: LegacyClipRect = LegacyClipRect{};
     clip_path_inset: ClipPathInset = ClipPathInset{};
-    box_shadow: BoxShadow = BoxShadow{};
+    box_shadow: CssBoxShadow = CssBoxShadow{};
 
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
     right: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
@@ -2947,9 +2947,9 @@ pub struct ComputedStyle {
             if (_.tryClaimSlot(PROP_BOX_SHADOW, weight)) {
                 const trimmed = std.mem.trim(u8, val, " \t\r\n");
                 if (std.ascii.eqlIgnoreCase(trimmed, "none") || trimmed.len == 0) {
-                    _.box_shadow = BoxShadow{};
+                    _.box_shadow = CssBoxShadow{};
                 } else {
-                    let sh = BoxShadow{ has_shadow: true };
+                    let sh = CssBoxShadow{ has_shadow: true };
                     let nums: [4]f32 = [0.0; 4];
                     let n_cnt: usize = 0;
                     let pos: usize = 0;

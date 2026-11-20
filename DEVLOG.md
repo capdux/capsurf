@@ -1649,3 +1649,6 @@
 ## Phase 156 `replaceChildren` 单条变更聚合与跨文档 DOM 节点隔离方案
 1. **变更抑制聚合 (`observer.js`, `node-base.js`)**：通过 `suppressChildListMutations(parent, fn)` 在批量移除与插入期间抑制子操作入队，结束后一次性派发单条 `childList` `MutationRecord`。
 2. **跨文档 `_nid` 隔离与断开节点序 (`node-base.js`)**：`contains` 校验双方 `ownerDocument` 一致防止跨文档 `_nid` 碰撞；`compareDocumentPosition` 使用 `_rootOrderMap` 为断开节点返回稳定的 `35`/`37` 位掩码。
+
+## Phase 157 `BoxShadow` 与 `cap:css` 符号冲突根除方案 (`src/css/cascade.cp`)
+1. **命名空间隔离**：将 `cascade.cp` 中用户侧 `BoxShadow` 结构体更名为 `CssBoxShadow`，避免在统一转译命名空间与 `cap:css/engine/properties.cp` 的 `BoxShadow` 发生字段类型冲突（`E0207`）。

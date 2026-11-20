@@ -4298,3 +4298,8 @@
   - `src/js/runtime_source.cp` 4 门禁全 0；
   - `wpt-regression-debt` (**2/2**)、`trusted-fetch-metadata` (**1/1**)：**3/3 PASS**！
 - **清理旧子智能体**: 销毁 `4e1fe19d-d288-4a42-b58c-b07f092b45d0`。
+
+## [2026-11-21 00:01:00] 根除 `BoxShadow` 与标准库 `cap:css` 命名冲突并验收 CSS/Render/DOM 白盒单测 (Subagent 628e287f 结单，Phase 157)
+- **标准库符号冲突修复 (`src/css/cascade.cp:221`)**: 将 `pub struct BoxShadow` 重命名为 `CssBoxShadow`（4 处），消除非模块化编译时与 `/data/dev/cp/lib/css/engine/properties.cp:320` 同名结构体的 `E0207` 冲突。
+- **白盒单测验证**: `src/css/cascade.cp` 4 门禁全 0；`test/css/` (`2/2`)、`test/render/` (`3/3`)、`test/dom/` (`12/12`) 全部 PASS！
+- **清理旧子智能体**: 销毁 `628e287f-048c-4977-88b0-f56387278bfa`。

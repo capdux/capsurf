@@ -2129,3 +2129,6 @@
 ## Phase 156: `wpt-regression-debt` 2/2 & `trusted-fetch-metadata` 1/1 — 3/3 PASS
 - **`src/js/shim/{mutations/observer,node-base,element/element,index}.js` & `src/js/runtime{,_source.cp}` & `e2e/trusted-fetch-metadata.e2e.test.ts`**：
   - 实装 `Element.prototype.replaceChildren`（单条 `MutationRecord` 聚合）、`relList`、`contains` 跨文档隔离及 `compareDocumentPosition` 断开序，**3/3 PASS**。
+
+## Phase 157: Resolve `BoxShadow` Symbol Clash with `cap:css` & Full CSS/Render/DOM Whitebox Pass
+- **`src/css/cascade.cp`**：将 `BoxShadow` 重命名为 `CssBoxShadow` 消除 `E0207` 冲突，`test/css/` (2/2)、`test/render/` (3/3)、`test/dom/` (12/12) 全绿 PASS。
