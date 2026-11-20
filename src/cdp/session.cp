@@ -11,7 +11,7 @@ import { mountDom, JsDomContext, ConsoleRecord, getMilliTimestamp } from "../js/
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
 import { FetchState } from "./fetch.cp";
-import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng } from "../render/painter.cp";
+import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng, renderDocumentToRgba } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
@@ -1459,6 +1459,7 @@ pub struct CdpPageSession {
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
         _.renderer_active = false;
         _.frames_rendered = 0;
+        _.facade.stream_mgr.markNeedFullFrame();
         if (_.has_document && _.webmcp_enabled) {
             const ret_v = _.ctx.eval("(function(){return globalThis.__capsurf_webmcp?globalThis.__capsurf_webmcp.retractAll():'';})()");
             if (!jsIsException(ret_v)) {
@@ -4015,6 +4016,21 @@ pub struct CdpPageSession {
     }
 
     pub fn captureScreenshotClipped(*_, compress_level: u8, clip_x: i32, clip_y: i32, clip_w: u32, clip_h: u32): ([]const u8)! {
+        return _.captureSceneInternal(compress_level, clip_x, clip_y, clip_w, clip_h, false, null, null, null);
+    }
+
+    fn captureSceneInternal(
+        *_,
+        compress_level: u8,
+        clip_x: i32,
+        clip_y: i32,
+        clip_w: u32,
+        clip_h: u32,
+        want_rgba: bool,
+        out_w: (*u32)?,
+        out_h: (*u32)?,
+        out_rects_hash: (*u64)?,
+    ): ([]const u8)! {
         _.renderer_active = true;
         _.frames_rendered += 1;
         const count = @max(@as(usize, 1), _.doc.nodeCount());
@@ -4560,7 +4576,80 @@ pub struct CdpPageSession {
             viewport_scroll_y: _.scroll_y,
         };
 
+        if (pw := out_w) pw.* = vw;
+        if (ph := out_h) ph.* = vh;
+        if (prh := out_rects_hash) {
+            let rh: u64 = (@as(u64, 0xcbf29ce4) << 32) | 0x84222325;
+            let ri: usize = 0;
+            while (ri < count) : (ri += 1) {
+                const rr = rects[ri];
+                const vals: [4]u32 = [
+                    @as(u32, @bitCast(rr.x)),
+                    @as(u32, @bitCast(rr.y)),
+                    @as(u32, @bitCast(rr.width)),
+                    @as(u32, @bitCast(rr.height)),
+                ];
+                let vi: usize = 0;
+                while (vi < 4) : (vi += 1) {
+                    rh ^= @as(u64, vals[vi]);
+                    rh = rh *% 1099511628211;
+                }
+            }
+            prh.* = rh;
+        }
+
+        if (want_rgba) {
+            return renderDocumentToRgba(_.allocator, &_.doc, styles, rects, opts);
+        }
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);
+    }
+
+    pub fn captureSceneRgbaAndRectsHash(
+        *_,
+        max_w: u32,
+        max_h: u32,
+        out_w: *u32,
+        out_h: *u32,
+        out_rects_hash: *u64,
+    ): ([]const u8)! {
+        let saved_nids: [16]u32 = [0; 16];
+        let saved_srcs: [16][]const u8 = [""; 16];
+        let saved_count: usize = 0;
+
+        if (_.has_document) {
+            const js_pending = "(function(){try{var imgs=document.querySelectorAll('img[src]');var out=[];for(var i=0;i<imgs.length&&out.length<16;i++){if(imgs[i]._imgComplete===false&&typeof imgs[i]._nid==='number'&&imgs[i]._nid>0){out.push(imgs[i]._nid);}}return out.join(',');}catch(e){return '';}})()";
+            const val = _.ctx.eval(js_pending);
+            const cstr = _.ctx.toCString(val);
+            if (cstr.len > 0) {
+                let it = std.mem.splitAny(u8, cstr, ",");
+                while (part := it.next()) {
+                    if (part.len == 0 || saved_count >= 16) continue;
+                    const nid = std.fmt.parseInt(u32, part, 10) catch 0;
+                    if (nid > 0 && @as(usize, nid) < _.doc.nodes.items.len) {
+                        if (old_src := _.doc.nodes.items[@as(usize, nid)].getAttribute("src")) {
+                            saved_nids[saved_count] = nid;
+                            saved_srcs[saved_count] = old_src;
+                            saved_count += 1;
+                            * = _.doc.setAttribute(nid, "src", "");
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val);
+        }
+
+        const vw: u32 = if (_.viewport_width > 0.0) @as(u32, @intFromFloat(_.viewport_width)) else 1280;
+        const vh: u32 = if (_.viewport_height > 0.0) @as(u32, @intFromFloat(_.viewport_height)) else 720;
+        const cw: u32 = if (max_w > 0 && vw > max_w) max_w else 0;
+        const ch: u32 = if (max_h > 0 && vh > max_h) max_h else 0;
+        const rgba = _.captureSceneInternal(1, 0, 0, cw, ch, true, out_w, out_h, out_rects_hash);
+
+        let ri: usize = 0;
+        while (ri < saved_count) : (ri += 1) {
+            * = _.doc.setAttribute(saved_nids[ri], "src", saved_srcs[ri]);
+        }
+
+        return rgba;
     }
 
     pub fn captureScreencastFrame(*_, max_w: u32, max_h: u32): ([]const u8)! {

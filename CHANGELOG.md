@@ -2419,3 +2419,7 @@
 ### Phase 241
 - Added `test/css/test_box_shadow_and_border_radius_edge.cp`.
 - Implemented `Kitesurf.sceneFrame` binary frame emission, heartbeat, idle-skip, and terminal wheel coalescing across `src/cdp/{scene_stream,kitesurf_facade,dispatch,server}.cp` and `src/js/shim/{window.js,element/element.js}` (+ `runtime.js`/`runtime_source.cp`).
+
+### Phase 242
+- Updated `test/cdp/test_scene_stream_facade.cp` and added `test/cdp/test_scene_stream_envelope_edge.cp`.
+- Implemented `MSG_PARTIAL (5)` retained-frame RGBA diffing, `renderDocumentToRgba`/`encodeRgbaRectToPng`, `/rbi/scene_host.json` + in-poll HTTP serving, and `SCENE_HOST_WASM` shim across `src/cdp/{scene_stream,session,server}.cp`, `src/render/painter.cp`, and `e2e/shim/cloudflare-test.ts`.

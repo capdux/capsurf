@@ -3429,6 +3429,70 @@ pub fn renderDocumentToPng(
     return encodeCanvasToPngWithLevel(allocator, &canvas, opts.compress_level);
 }
 
+/// 渲染整棵 DOM 树并返回原始 RGBA 像素缓冲（调用方负责释放）
+pub fn renderDocumentToRgba(
+    allocator: std.mem.Allocator,
+    doc: *const Document,
+    styles: []const ComputedStyle,
+    rects: []const Rect,
+    opts: ScreenshotOptions,
+): ([]u8)! {
+    let canvas = Canvas.init(allocator, opts.viewport_w, opts.viewport_h, opts.clear_color)?;
+    const vw: f32 = @floatFromInt(opts.viewport_w);
+    const vh: f32 = @floatFromInt(opts.viewport_h);
+
+    const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
+    if (root_id < doc.nodes.items.len) {
+        const vsx = opts.viewport_scroll_x;
+        const vsy = opts.viewport_scroll_y;
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, vsx, vsy, vsx, vsy, 1.0, false);
+    }
+
+    return canvas.pixels;
+}
+
+/// 将 RGBA 缓冲的指定矩形区域编码为 PNG 字节流
+pub fn encodeRgbaRectToPng(
+    allocator: std.mem.Allocator,
+    rgba: []const u8,
+    full_w: u32,
+    full_h: u32,
+    clip_x: i32,
+    clip_y: i32,
+    clip_w: u32,
+    clip_h: u32,
+    compress_level: u8,
+): ([]u8)! {
+    const is_full = (clip_w == 0 || clip_h == 0 || (clip_x == 0 && clip_y == 0 && clip_w == full_w && clip_h == full_h));
+    if (is_full) {
+        const raw = PngCodec.encodeRgbaWithLevel(rgba, full_w, full_h, compress_level);
+        if (raw.len == 0) return error.EncodeFailed;
+        let res = allocator.alloc(u8, raw.len)?;
+        @memcpy(res, raw);
+        return res;
+    }
+
+    let cropped = Canvas.init(allocator, clip_w, clip_h, CssColor.rgba(0, 0, 0, 0))?;
+    defer cropped.deinit();
+    let dy: u32 = 0;
+    while (dy < clip_h) : (dy += 1) {
+        const sy = clip_y + @as(i32, @intCast(dy));
+        if (sy < 0 || sy >= @as(i32, @intCast(full_h))) continue;
+        let dx: u32 = 0;
+        while (dx < clip_w) : (dx += 1) {
+            const sx = clip_x + @as(i32, @intCast(dx));
+            if (sx < 0 || sx >= @as(i32, @intCast(full_w))) continue;
+            const s_idx = (@as(usize, @intCast(sy)) * @as(usize, full_w) + @as(usize, @intCast(sx))) * 4;
+            const d_idx = (@as(usize, dy) * @as(usize, clip_w) + @as(usize, dx)) * 4;
+            cropped.pixels[d_idx] = rgba[s_idx];
+            cropped.pixels[d_idx + 1] = rgba[s_idx + 1];
+            cropped.pixels[d_idx + 2] = rgba[s_idx + 2];
+            cropped.pixels[d_idx + 3] = rgba[s_idx + 3];
+        }
+    }
+    return encodeCanvasToPngWithLevel(allocator, &cropped, compress_level);
+}
+
 /// 将 Canvas 像素按指定的 compress_level (0..=9) 编码为 PNG 字节流
 pub fn encodeCanvasToPngWithLevel(
     allocator: std.mem.Allocator,

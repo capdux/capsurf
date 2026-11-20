@@ -17,6 +17,7 @@ pub const MSG_SCENE: u8 = 3;
 pub const MSG_PARTIAL: u8 = 5;
 pub const CODEC_SCENE: u8 = 2;
 pub const SCENE_ENVELOPE_HEADER_BYTES: usize = 11;
+pub const SCENE_PARTIAL_HEADER_BYTES: usize = 31;
 
 pub struct SceneStreamConfig {
     target_id: []const u8 = "",
@@ -51,6 +52,42 @@ pub struct SceneStreamState {
     last_scroll_x: i64 = 0,
     last_scroll_y: i64 = 0,
     last_focused_node: u32 = 0,
+    last_sent_seq: u32 = 0,
+    last_rects_hash: u64 = 0,
+    last_rgba: ([]u8)? = null,
+    last_rgba_w: u32 = 0,
+    last_rgba_h: u32 = 0,
+
+    fn freeLastRgba(*_) {
+        if (buf := _.last_rgba) {
+            std.heap.c_allocator.free(buf);
+            _.last_rgba = null;
+        }
+        _.last_rgba_w = 0;
+        _.last_rgba_h = 0;
+    }
+
+    fn updateLastRgba(*_, rgba: []const u8, w: u32, h: u32) {
+        if (rgba.len == 0) {
+            _.freeLastRgba();
+            return;
+        }
+        if (existing := _.last_rgba) {
+            if (existing.len == rgba.len) {
+                @memcpy(existing, rgba);
+                _.last_rgba_w = w;
+                _.last_rgba_h = h;
+                return;
+            }
+            std.heap.c_allocator.free(existing);
+            _.last_rgba = null;
+        }
+        const copy = std.heap.c_allocator.alloc(u8, rgba.len) catch return;
+        @memcpy(copy, rgba);
+        _.last_rgba = copy;
+        _.last_rgba_w = w;
+        _.last_rgba_h = h;
+    }
 
     fn getOwnerSession(*_): []const u8 {
         return _.owner_session_buf[0.._.owner_session_len];
@@ -133,6 +170,7 @@ pub struct SceneStreamManager {
         let slot_idx: usize = 0;
         if (s := slot_opt) {
             slot_idx = s;
+            _.streams[slot_idx].freeLastRgba();
         } else {
             let free_opt: usize? = null;
             let i: usize = 0;
@@ -204,6 +242,7 @@ pub struct SceneStreamManager {
             while (i < MAX_STREAMS) : (i += 1) {
                 if (_.streams[i].active) {
                     _.streams[i].active = false;
+                    _.streams[i].freeLastRgba();
                     if (_.active_count > 0) _.active_count -= 1;
                     stopped_any = true;
                 }
@@ -213,6 +252,7 @@ pub struct SceneStreamManager {
         let slot_idx = slot_opt.?;
 
         _.streams[slot_idx].active = false;
+        _.streams[slot_idx].freeLastRgba();
         if (_.active_count > 0) {
             _.active_count -= 1;
         }
@@ -290,6 +330,44 @@ pub struct SceneStreamManager {
         out_buf[0] = MSG_INFO;
         if (json_payload.len > 0) {
             @memcpy(out_buf[SCENE_ENVELOPE_HEADER_BYTES..total], json_payload);
+        }
+        return out_buf[0..total];
+    }
+
+    fn markNeedFullFrame(*_) {
+        let i: usize = 0;
+        while (i < MAX_STREAMS) : (i += 1) {
+            if (_.streams[i].active) {
+                _.streams[i].need_full_frame = true;
+            }
+        }
+    }
+
+    static fn buildPartialEnvelope(
+        seq: u32,
+        base_seq: u32,
+        clip_x: i32,
+        clip_y: i32,
+        clip_w: u32,
+        clip_h: u32,
+        payload: []const u8,
+        out_buf: []u8,
+    ): ([]const u8)? {
+        const total = SCENE_PARTIAL_HEADER_BYTES + payload.len;
+        if (total > out_buf.len) return null;
+        out_buf[0] = MSG_PARTIAL;
+        out_buf[1] = CODEC_SCENE;
+        out_buf[2] = 0;
+        std.mem.writeInt(u32, out_buf[3..7], seq, .little);
+        std.mem.writeInt(u16, out_buf[7..9], @as(u16, @truncate(clip_w)), .little);
+        std.mem.writeInt(u16, out_buf[9..11], @as(u16, @truncate(clip_h)), .little);
+        std.mem.writeInt(i32, out_buf[11..15], clip_x, .little);
+        std.mem.writeInt(i32, out_buf[15..19], clip_y, .little);
+        std.mem.writeInt(u32, out_buf[19..23], clip_w, .little);
+        std.mem.writeInt(u32, out_buf[23..27], clip_h, .little);
+        std.mem.writeInt(u32, out_buf[27..31], base_seq, .little);
+        if (payload.len > 0) {
+            @memcpy(out_buf[SCENE_PARTIAL_HEADER_BYTES..total], payload);
         }
         return out_buf[0..total];
     }

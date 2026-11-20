@@ -13,7 +13,9 @@ import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
 import { Base64 } from "cap:encoding";
 import { ScreencastHandler, formatScreencastFrameParams } from "./screencast.cp";
-import { SceneStreamManager, MSG_SCENE, SCENE_ENVELOPE_HEADER_BYTES } from "./scene_stream.cp";
+import { SceneStreamManager, MSG_SCENE, MSG_PARTIAL, SCENE_ENVELOPE_HEADER_BYTES, SCENE_PARTIAL_HEADER_BYTES } from "./scene_stream.cp";
+import { SceneHostManifest, formatManifestJson } from "./scene_host.cp";
+import { encodeRgbaRectToPng } from "../render/painter.cp";
 
 pub @c {
     struct SockAddrIn {
@@ -582,6 +584,19 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             return;
         }
 
+        // 1b. /rbi/scene_host.json
+        if (std.mem.eql(u8, path, "/rbi/scene_host.json")) {
+            let m_buf: [512]u8 = [0; 512];
+            const manifest = SceneHostManifest{
+                sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+                total_bytes: 1024,
+                retained_frames: true,
+            };
+            const m_json = formatManifestJson(manifest, &m_buf);
+            sendHttpResponse(client_fd, "200 OK", "application/json; charset=utf-8", m_json)?;
+            return;
+        }
+
         // 2. /json/protocol (must be matched before /json)
         if (std.mem.eql(u8, path, "/json/protocol") || std.mem.eql(u8, path, "/json/protocol/")) {
             sendHttpResponse(client_fd, "200 OK", "application/json; charset=UTF-8", "{}")?;
@@ -1116,31 +1131,109 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             const vw: u32 = if (sess.viewport_width > 0.0) @as(u32, @intFromFloat(sess.viewport_width)) else stream.config.width;
             const vh: u32 = if (sess.viewport_height > 0.0) @as(u32, @intFromFloat(sess.viewport_height)) else stream.config.height;
 
-            const png_bytes = sess.captureScreencastFrame(stream.config.width, stream.config.height) catch "";
-            if (png_bytes.len > 0) {
-                defer sess.allocator.free(png_bytes);
+            let img_w: u32 = 0;
+            let img_h: u32 = 0;
+            let rects_hash: u64 = 0;
+            const cur_rgba = sess.captureSceneRgbaAndRectsHash(stream.config.width, stream.config.height, &img_w, &img_h, &rects_hash) catch "";
+            if (cur_rgba.len > 0 && img_w > 0 && img_h > 0) {
+                defer sess.allocator.free(cur_rgba);
                 const sx_i: i64 = @as(i64, @intFromFloat(sx));
                 const sy_i: i64 = @as(i64, @intFromFloat(sy));
-                const frame_hash = ScreencastHandler.computeFrameHash(png_bytes);
+                const frame_hash = ScreencastHandler.computeFrameHash(cur_rgba);
                 if (!stream.shouldSkipIdleFrame(frame_hash, vw, vh, sx_i, sy_i, sess.focused_node)) {
-                    const seq = sess.facade.stream_mgr.nextFrameSeq(sess.target_id);
-                    const env_buf = std.heap.c_allocator.alloc(u8, SCENE_ENVELOPE_HEADER_BYTES + png_bytes.len) catch return false;
-                    defer std.heap.c_allocator.free(env_buf);
-                    if (env_bytes := SceneStreamManager.buildSceneEnvelope(MSG_SCENE, seq, stream.config.width, stream.config.height, png_bytes, env_buf)) {
-                        const b64_str = Base64.encodeAlloc(sess.allocator, env_bytes) catch return false;
-                        defer sess.allocator.free(b64_str);
-                        const params_buf = std.heap.c_allocator.alloc(u8, b64_str.len + 64) catch return false;
-                        defer std.heap.c_allocator.free(params_buf);
-                        if (params_json := std.fmt.bufPrint(params_buf, "{{\"data\":\"{s}\"}}", .{b64_str}) catch null) {
-                            let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-                            evts[0] = CdpEvent.create("Kitesurf.sceneFrame", params_json);
-                            const owner = stream.getOwnerSession();
-                            if (owner.len > 0 && !std.mem.eql(u8, owner, sess.target_id)) {
-                                evts[0].session_id = owner;
+                    let use_partial = false;
+                    let clip_x: i32 = 0;
+                    let clip_y: i32 = 0;
+                    let clip_w: u32 = 0;
+                    let clip_h: u32 = 0;
+
+                    const can_partial = stream.config.allow_partial &&
+                        stream.has_last_frame &&
+                        !stream.need_full_frame &&
+                        stream.last_sent_seq > 0 &&
+                        stream.last_viewport_w == vw &&
+                        stream.last_viewport_h == vh &&
+                        stream.last_scroll_x == sx_i &&
+                        stream.last_scroll_y == sy_i &&
+                        stream.last_rects_hash == rects_hash &&
+                        stream.last_rgba_w == img_w &&
+                        stream.last_rgba_h == img_h &&
+                        stream.last_rgba != null;
+
+                    if (can_partial) {
+                        const prev_rgba = stream.last_rgba.?;
+                        if (prev_rgba.len == cur_rgba.len) {
+                            let min_x: u32 = img_w;
+                            let min_y: u32 = img_h;
+                            let max_x: u32 = 0;
+                            let max_y: u32 = 0;
+                            let py: u32 = 0;
+                            while (py < img_h) : (py += 1) {
+                                const row_off = @as(usize, py) * @as(usize, img_w) * 4;
+                                let px: u32 = 0;
+                                while (px < img_w) : (px += 1) {
+                                    const idx = row_off + @as(usize, px) * 4;
+                                    if (cur_rgba[idx] != prev_rgba[idx] ||
+                                        cur_rgba[idx + 1] != prev_rgba[idx + 1] ||
+                                        cur_rgba[idx + 2] != prev_rgba[idx + 2] ||
+                                        cur_rgba[idx + 3] != prev_rgba[idx + 3])
+                                    {
+                                        if (px < min_x) min_x = px;
+                                        if (px > max_x) max_x = px;
+                                        if (py < min_y) min_y = py;
+                                        if (py > max_y) max_y = py;
+                                    }
+                                }
                             }
-                            emitCdpEventsToFd(client_fd, &evts, 1)?;
-                            stream.recordSentFrame(frame_hash, vw, vh, sx_i, sy_i, sess.focused_node, now_ms);
-                            sent_scene = true;
+                            if (min_x <= max_x && min_y <= max_y) {
+                                const dw = max_x - min_x + 1;
+                                const dh = max_y - min_y + 1;
+                                if (dw < img_w || dh < img_h) {
+                                    use_partial = true;
+                                    clip_x = @as(i32, @intCast(min_x));
+                                    clip_y = @as(i32, @intCast(min_y));
+                                    clip_w = dw;
+                                    clip_h = dh;
+                                }
+                            }
+                        }
+                    }
+
+                    const png_bytes = if (use_partial)
+                        (encodeRgbaRectToPng(sess.allocator, cur_rgba, img_w, img_h, clip_x, clip_y, clip_w, clip_h, 1) catch "")
+                    else
+                        (encodeRgbaRectToPng(sess.allocator, cur_rgba, img_w, img_h, 0, 0, img_w, img_h, 1) catch "");
+
+                    if (png_bytes.len > 0) {
+                        defer sess.allocator.free(png_bytes);
+                        const seq = sess.facade.stream_mgr.nextFrameSeq(sess.target_id);
+                        const base_seq = stream.last_sent_seq;
+                        const hdr_bytes = if (use_partial) SCENE_PARTIAL_HEADER_BYTES else SCENE_ENVELOPE_HEADER_BYTES;
+                        const env_buf = std.heap.c_allocator.alloc(u8, hdr_bytes + png_bytes.len) catch return false;
+                        defer std.heap.c_allocator.free(env_buf);
+                        const env_opt = if (use_partial)
+                            SceneStreamManager.buildPartialEnvelope(seq, base_seq, clip_x, clip_y, clip_w, clip_h, png_bytes, env_buf)
+                        else
+                            SceneStreamManager.buildSceneEnvelope(MSG_SCENE, seq, img_w, img_h, png_bytes, env_buf);
+                        if (env_bytes := env_opt) {
+                            const b64_str = Base64.encodeAlloc(sess.allocator, env_bytes) catch return false;
+                            defer sess.allocator.free(b64_str);
+                            const params_buf = std.heap.c_allocator.alloc(u8, b64_str.len + 64) catch return false;
+                            defer std.heap.c_allocator.free(params_buf);
+                            if (params_json := std.fmt.bufPrint(params_buf, "{{\"data\":\"{s}\"}}", .{b64_str}) catch null) {
+                                let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                evts[0] = CdpEvent.create("Kitesurf.sceneFrame", params_json);
+                                const owner = stream.getOwnerSession();
+                                if (owner.len > 0 && !std.mem.eql(u8, owner, sess.target_id)) {
+                                    evts[0].session_id = owner;
+                                }
+                                emitCdpEventsToFd(client_fd, &evts, 1)?;
+                                stream.updateLastRgba(cur_rgba, img_w, img_h);
+                                stream.last_rects_hash = rects_hash;
+                                stream.last_sent_seq = seq;
+                                stream.recordSentFrame(frame_hash, vw, vh, sx_i, sy_i, sess.focused_node, now_ms);
+                                sent_scene = true;
+                            }
                         }
                     }
                 } else {
@@ -1269,7 +1362,10 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 }
             }
 
-            let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
+            let pfds: [2]PollFd = [
+                PollFd{ fd: client_fd, events: POLLIN, revents: 0 },
+                PollFd{ fd: _.listen_fd, events: POLLIN, revents: 0 },
+            ];
             let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15;
             if (!fast_poll) {
                 if (st := _.session.facade.stream_mgr.getPrimaryStream()) {
@@ -1292,9 +1388,25 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             }
             const base_poll_ms: i32 = if (fast_poll) 5 else 15;
             const poll_ms: i32 = if (pending_wheel.active) 1 else base_poll_ms;
-            const pr = poll(&pfd, 1, poll_ms);
+            const nfds: u64 = if (_.listen_fd >= 0) 2 else 1;
+            const pr = poll(&pfds[0], nfds, poll_ms);
             if (pr < 0) {
                 break;
+            }
+            if (_.listen_fd >= 0 && (pfds[1].revents & POLLIN) != 0) {
+                const extra_fd = accept(_.listen_fd, null, null);
+                if (extra_fd >= 0) {
+                    let extra_buf: [4096]u8 = [0; 4096];
+                    const en = recv(extra_fd, &extra_buf, extra_buf.len, 0);
+                    if (en > 0) {
+                        const extra_req = extra_buf[0..@as(usize, @intCast(en))];
+                        _.handleHttpRequest(extra_fd, extra_req) catch {};
+                    }
+                    * = close(extra_fd);
+                }
+                if ((pfds[0].revents & (POLLIN | POLLERR | POLLNVAL)) == 0) {
+                    continue;
+                }
             }
             if (pr == 0) {
                 if (pending_wheel.active) {
@@ -1331,7 +1443,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 _.pumpAllSceneStreams(client_fd, tick_now_ms, did_pump_main_sc) catch break;
                 continue;
             }
-            if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) {
+            if ((pfds[0].revents & (POLLERR | POLLNVAL)) != 0) {
                 break;
             }
             const frame_opt = readWsTextFrame(client_fd, frame_payload) catch break;

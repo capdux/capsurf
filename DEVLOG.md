@@ -1801,3 +1801,7 @@
 ### Phase 241: `Kitesurf.sceneFrame` Binary Stream & Terminal Coalescing (`scene-stream-idle-frames` 5/5)
 - `CdpServer.pumpAllSceneStreams` emits `Kitesurf.sceneFrame` (`MSG_INFO=2` heartbeats, `MSG_SCENE=3` frames with 11B header) while sharing the single-tick rAF driver with `Page.screencastFrame`.
 - `Element.prototype.className` setter now calls `__capsurf_notifyCssStyleChange(this)` so class-toggled CSS animations trigger immediately.
+
+### Phase 242: Retained-Frame RGBA Diffing & `MSG_PARTIAL (5)` (`scene-stream-partials` 1/1)
+- `runWebSocketSession` now polls `listen_fd` alongside the active WS fd so `engine.fetch("/rbi/scene_host.json")` is served immediately without single-thread deadlock.
+- When viewport, scroll, and layout `rects_hash` are unchanged, `pumpSceneStreamFrameForSession` diffs RGBA buffers to emit a tight 31B-header `MSG_PARTIAL (5)` PNG patch.
