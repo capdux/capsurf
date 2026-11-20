@@ -2756,6 +2756,28 @@ pub fn mountDom(
         "            }, 0);" +
         "          }" +
         "        }" +
+        "      } else if (tag === 'input') {" +
+        "        const ln = String(name || '').toLowerCase();" +
+        "        if (ln === 'checked' && (!this._checkedDirty || this._uncheckedByRadioAttr)) {" +
+        "          this._checkedDirty = false;" +
+        "          this._uncheckedByRadioAttr = false;" +
+        "          const itype = String(this.getAttribute('type') || '').toLowerCase();" +
+        "          const rname = this.getAttribute('name') || '';" +
+        "          if (itype === 'radio' && rname) {" +
+        "            const root = (this.getRootNode ? this.getRootNode() : null) || this.ownerDocument || (typeof document !== 'undefined' ? document : null);" +
+        "            if (root && root.querySelectorAll) {" +
+        "              const radios = root.querySelectorAll('input[type=\"radio\"]');" +
+        "              for (let ri = 0; ri < radios.length; ri++) {" +
+        "                const rr = radios[ri];" +
+        "                if (rr !== this && (rr.getAttribute('name') || '') === rname) {" +
+        "                  if (!rr._checkedDirty) rr._uncheckedByRadioAttr = true;" +
+        "                  rr._checkedDirty = true;" +
+        "                  rr._checked = false;" +
+        "                }" +
+        "              }" +
+        "            }" +
+        "          }" +
+        "        }" +
         "      }" +
         "      return res;" +
         "    };" +

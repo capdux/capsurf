@@ -4075,6 +4075,14 @@
   - `tty-nav-params-page-initiated` (**1/1**)、`iframe-legacy-charset` (**1/1**)、`input-navigation-reply` (**4/4**)：**6/6 PASS (18 expect() calls)**！
 - **清理旧子智能体**: 销毁 `8c63524e-7114-4871-affd-b2d8a393818d`。
 
+## [2026-11-20 23:08:30] 3 分钟极速修复 Radio `checked` 属性互斥与内存/CDP 载荷诊断 (Subagent 4f82c455 结单，Phase 132)
+- **`<input type="radio">` `setAttribute("checked")` 互斥 (`src/js/dom_binding.cp`)**:
+  - `src/js/dom_binding.cp:2759-2780`：在 `Element.prototype.setAttribute` 补齐设置 `checked` 属性时的同 `name` 单选组互斥清除逻辑，保留 `_checkedDirty` 语义。
+- **门禁与 E2E 验证（`-m -d -o` 编译 5.98s，port `19231`）**:
+  - `src/js/dom_binding.cp` 4 门禁全 0；
+  - `text-content-memory`（第 1 项 PASS；第 2 项 DOM/CSS/Radio 12 项断言全过，仅缺 `Runtime.getHeapUsage` 真实 JS/DOM delta；第 3 项及 `style-churn-memory` 精准定位至 `src/cdp/` ~50KB 大载荷 `page.evaluate`/`setContent` UTF-8 截断与 `font-key-images.html` fixture 缺口）。
+- **清理旧子智能体**: 销毁 `4f82c455-321f-4b65-be75-67f2d382b4db`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

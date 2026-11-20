@@ -1577,4 +1577,10 @@
    - 将 `applyTtyNavParamsFromUrl` 与 `stripTtyNavParams` 严格限定在外部 `Page.navigate` 入口并设置 `nav_tty_stripped`，页面内链接点击与 `location.href` 跳转不改变 `dark_color_scheme` 也不剥离 `location.search`。
 2. **输入触发导航应答 (`input.cp`, `dispatch.cp`, `runtime.cp`)**：
    - 在 `InputHandler.handle` 与 `Runtime.evaluate` 派发 `__capsurf_dispatch_mouse_event` 后立即调用 `emitPendingNavigationEvents`，在 CDP 响应前推送 `Page.frameRequestedNavigation` 与 `Page.frameStartedNavigating`。
+
+## Phase 132 Radio 属性互斥与大载荷内存诊断方案
+1. **单选组 `setAttribute("checked")` 互斥 (`src/js/dom_binding.cp`)**：
+   - 当对 `<input type="radio">` 显式调用 `setAttribute("checked", ...)` 且未标记 `_checkedDirty` 时，清除同所属表单/根范围内同 `name` 兄弟单选框的选中态。
+2. **大载荷 CDP 诊断 (`text-content-memory`, `style-churn-memory`)**：
+   - 定位到 ~50KB `page.evaluate`/`setContent` 触发 `SyntaxError: invalid UTF-8 sequence` 与 WS 断连，将在 CDP 帧/Eval 缓冲区阶段统一修复。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

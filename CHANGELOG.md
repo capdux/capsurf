@@ -2017,4 +2017,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 8 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`tty-nav-params-page-initiated` (1/1)、`iframe-legacy-charset` (1/1)、`input-navigation-reply` (4/4) — **6/6 PASS (18 expect() calls)**。
+
+## Phase 132: Radio `setAttribute("checked")` Mutual Exclusion & Large CDP Payload Root-Cause Isolation
+- **`src/js/dom_binding.cp`**：
+  - 在 `Element.prototype.setAttribute` 补齐 `<input type="radio">` 同 `name` 单选组互斥与 `_checkedDirty` 语义。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/dom_binding.cp` 4 门禁全 0；
+  - E2E 测试：`text-content-memory` 第 1 项与第 2 项 12 项 DOM/Radio 断言 PASS，并精准定位 50KB CDP 载荷截断与 `Runtime.getHeapUsage` delta 缺口。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
