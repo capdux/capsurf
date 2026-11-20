@@ -4476,3 +4476,11 @@
   - 全部 7 个 `.cp` 文件 4 门禁全 0；
   - `iframe-dynamic-cdp-demo` (**1/1**)、`oversize-body-streams` (**1/1**)、`terminal-selection-after-navigation` (**1/1**)：**3/3 PASS (21 expect() calls, 6.76s)**！
 - **清理旧子智能体**: 销毁 `fe1eaadb-d251-468d-bae4-b2194fae0e15`。
+
+## [2026-11-21 01:07:30] Slot A (`c16478e0`) 2 分钟精准定位 OOPIF Teardown & Elements Panel
+- 精准定位 `oopif-detach-teardown` (`page.cp:1060` `isDefault:false`、`runtime.cp` `executionContextDestroyed`/`frameDetached`) 与 `oopif-elements-panel` (`dom.cp:72,470` `frameId`/`documentURL`/`DOM.getFrameOwner`、`target.cp:477`)。
+- **清理旧子智能体**: 销毁 `c16478e0-de95-49e3-ab4f-a3eeaee7241e`。
+
+## [2026-11-21 01:09:30] 新增全绿纯 CP `@container` & 64 位级联权重白盒单测 `test/css/test_container_and_layers.cp` & 收缩至 2 路并发 (Subagent 84b049ce 结单，Phase 187)
+- **新增白盒测试 (`test/css/test_container_and_layers.cp`)**: 覆盖 64 位级联权重 (`!important` > style > ID > class > tag)、`@container` 窄/宽重算与块轴门控、`var()`/属性继承（**4/4 PASS**, 1470ms, 4 门禁全 0；`test/css/` 达 **8/8 PASS**）。
+- **并发收缩**: 销毁 `84b049ce-be59-4575-a7ec-2b84f8afef41` 且不再补发第 3 路，当前维持 **2 路并发子智能体**（`d227099e` + `24c8efbf`）节约配额。

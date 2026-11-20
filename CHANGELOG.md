@@ -2220,3 +2220,6 @@
 ## Phase 186: `iframe-dynamic-cdp-demo`, `oversize-body-streams` & `terminal-selection-after-navigation` — 3/3 Suites (21 Expects) + 512MB Heap
 - **`src/cdp/{network,session,page,runtime,session_hooks,input}.cp` & `src/net/mock_fixtures.cp`**：
   - 实装动态 iframe CDP 事件推流、`/chatty-json` 256KB 保留上限、`ttyCellWidth` 拖拽选区同步与 512MB QuickJS 堆上限（4 门禁全 0，**3/3 PASS, 6.76s**）。
+
+## Phase 187: Pure-CP `@container` & 64-Bit Cascade Weight Whitebox Suite `test/css/test_container_and_layers.cp` (4/4 PASS)
+- 新增 `test/css/test_container_and_layers.cp`，覆盖 64 位级联权重、`@container` 尺寸重算与属性继承（`cap test -m` **4/4 PASS**, 1470ms）。
