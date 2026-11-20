@@ -91,6 +91,55 @@ function installHtmlElementExtensions(proto) {
     configurable: true,
   });
 
+  Object.defineProperty(proto, "contentEditable", {
+    get: function () {
+      if (typeof this.hasAttribute === "function" && this.hasAttribute("contenteditable")) {
+        const raw = this.getAttribute("contenteditable");
+        const low = String(raw == null ? "" : raw).toLowerCase();
+        if (low === "" || low === "true") return "true";
+        if (low === "false") return "false";
+        if (low === "plaintext-only") return "plaintext-only";
+      }
+      return "inherit";
+    },
+    set: function (v) {
+      const low = String(v).toLowerCase();
+      if (low === "inherit") {
+        if (typeof this.removeAttribute === "function") this.removeAttribute("contenteditable");
+      } else if (low === "true" || low === "false" || low === "plaintext-only") {
+        if (typeof this.setAttribute === "function") this.setAttribute("contenteditable", low);
+      } else {
+        throw new DOMException(
+          "Failed to set the 'contentEditable' property on 'HTMLElement': The value provided ('" + v + "') is not one of 'true', 'false', 'plaintext-only', or 'inherit'.",
+          "SyntaxError"
+        );
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "isContentEditable", {
+    get: function () {
+      let cur = this;
+      while (cur) {
+        if (cur.nodeType === 1 && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
+          const raw = cur.getAttribute("contenteditable");
+          const low = String(raw == null ? "" : raw).toLowerCase();
+          if (low === "false") return false;
+          if (low === "" || low === "true" || low === "plaintext-only") return true;
+        }
+        if (cur.nodeType === 9) {
+          return String(cur.designMode || "").toLowerCase() === "on";
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (doc && String(doc.designMode || "").toLowerCase() === "on") return true;
+      return false;
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(proto, "writingSuggestions", {
     get: function () {
       let cur = this;

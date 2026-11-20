@@ -28,6 +28,9 @@ function getValueRaw(el) {
 function setValueRaw(el, newValue) {
   const str = String(newValue);
   const tag = (el && (el.tagName || el.localName) || "").toLowerCase();
+  if (tag !== "input" && tag !== "textarea") {
+    return;
+  }
   if (tag === "input") {
     const rawType = typeof el.getAttribute === "function" ? el.getAttribute("type") : "";
     const type = typeof normalizeInputType === "function" ? normalizeInputType(rawType) : (rawType || "text").toLowerCase();
@@ -47,6 +50,10 @@ function setValueRaw(el, newValue) {
 }
 
 function notifyControlValueMutation(control, cursor) {
+  const tag = (control && (control.tagName || control.localName) || "").toLowerCase();
+  if (tag !== "input" && tag !== "textarea") {
+    return;
+  }
   if (typeof control.setSelectionRange === "function") {
     control.setSelectionRange(cursor, cursor);
   }
@@ -120,7 +127,7 @@ function installSelectionMixin(Cls) {
 
   Cls.prototype.setSelectionRange = function (start, end, direction) {
     if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
-    const len = (this.value || "").length;
+    const len = String(getValueRaw(this) || "").length;
     const rawStart = start === null || start === undefined ? 0 : (Number(start) >>> 0);
     const rawEnd = end === null || end === undefined ? 0 : (Number(end) >>> 0);
     const b = Math.min(rawEnd, len);
@@ -139,7 +146,7 @@ function installSelectionMixin(Cls) {
 
   Cls.prototype.select = function () {
     if (!supportsSelection(this)) return;
-    const len = (this.value || "").length;
+    const len = String(getValueRaw(this) || "").length;
     this.setSelectionRange(0, len, "none");
   };
 

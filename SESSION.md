@@ -3835,3 +3835,13 @@
   - 全部 4 个 `.cp` 文件 4 门禁全 0；
   - `fixed-in-fixed-demo` (1/1 PASS)、`floating-popup` (3/6 PASS + 另 3 项命中 100% 精准，仅余 `harness.ts`/`input.cp` 双重 click 修复)、`keyboard-scroll` 装饰传播用例 PASS；定位 `canvas-text-upgrade` 为 `canvas2d.js:1119` 1 行步进系数。
 - **清理旧子智能体**: 销毁 `09826c61-c9fb-4a4b-8bb3-fb216b950f7e`。
+
+## [2026-11-20 19:47:00] Web Animations、ContentEditable 键盘流、Named Access 与光标/选区绘制 16/19 全绿闭环 (Subagent 27c1e183 结单，Phase 109)
+- **Web Animations 完整引擎与 `contenteditable` 编辑流水线 (`animations.js`, `html-element.js`, `selection.js`, `window.js`, `e2e/harness.ts`)**:
+  - `harness.ts`: `page.click(selector)` 为可聚焦元素补充 `el.focus()`；
+  - `animations.js`: 补齐 `KeyframeEffect` timing 校验、`steps()`、`getComputedTiming()`、`Animation.effect` 双向绑定、真实时间轴播放及 `0` 数值插值；
+  - `window.js` & `html-element.js` & `selection.js`: 实装 HTML Named Access on Window（`WindowProperties` Proxy）、`contentEditable`/`isContentEditable` 及完整键盘编辑事件链（`keydown`/`keypress`/`beforeinput`/`textInput`/Enter 段落拆分/`input`/`keyup`）。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `text-input-caret-font` (1/1)、`forms-selection-paint-demo` (1/1)、`bmp-emoji-fonts` (3/3)、`transition-reused-node-slot` (1/1)、`typed-input-value-tracker` (1/1) 全绿；`web-animations` (6/8 + 2 处已修) 与 `contenteditable-typing` (3/4 + 1 处已修) 待上游 `lib/string/utf.cp` `Dec` 关键字冲突修复后复测。
+- **清理旧子智能体**: 销毁 `27c1e183-fcc3-455f-9671-adf211d4a399`。

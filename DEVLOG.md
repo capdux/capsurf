@@ -1455,4 +1455,10 @@
    - `js_document_element_from_point` 按 `(sc_root, sc_z, sc_pos, local_z, local_pos)` + DOM 树序比较候选节点，完整支持 `pointer-events: none/auto`、`isolation: isolate` 与固定祖先逃逸裁剪；`layoutNode` 在应用 `transform: translate` 后递归 `shiftSubtree` 同步偏移后代。
 2. **Text Decoration 3 下划线传播 (`painter.cp`)**：
    - 文本渲染时向上回溯修饰源并在 atomic/out-of-flow 边界截断，独立应用 `text-decoration-color`/`thickness`/`underline-offset` 并叠加 `group_opacity`。
+
+## Phase 109 Web Animations、`contenteditable` 编辑流水线与 Named Access 技术方案
+1. **Web Animations 时间轴与 `KeyframeEffect` (`animations.js`)**：
+   - 建立 `Animation.effect` 与 `KeyframeEffect._animation` 双向绑定，补全 `getComputedTiming()`、`steps()` 缓动与非法参数 `TypeError` 校验，移除 `finish()` 污染 `target.style`。
+2. **`contenteditable` 与 Named Access on Window (`window.js`, `html-element.js`, `harness.ts`)**：
+   - 在原型链挂载 `WindowProperties` Proxy 按需解析 `document.getElementById`；实装 `beforeinput`/`textInput`/Enter 段落拆分与 `preventDefault()` 取消链路。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

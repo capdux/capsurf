@@ -4737,6 +4737,15 @@ function installWindow(global) {
         }
       }
     }
+    // Ensure standard initial computed values for opacity and color
+    if (!computedMap.has("opacity") || computedMap.get("opacity") === "") {
+      computedMap.set("opacity", "1");
+    } else {
+      computedMap.set("opacity", String(computedMap.get("opacity")));
+    }
+    if (!computedMap.has("color") || computedMap.get("color") === "") {
+      computedMap.set("color", "rgb(0, 0, 0)");
+    }
   }
 
   function getComputedStyle(element, pseudoElt) {
@@ -9137,6 +9146,202 @@ const CSS_TYPED_OM_GLOBALS = {
     }
   }
 
+  let _lastKeyDownPrevented = false;
+  let _lastKeyDownKey = "";
+
+  function isTargetContentEditable(el) {
+    if (!el) return false;
+    if (el.isContentEditable === true) return true;
+    let cur = el.nodeType === 1 ? el : el.parentNode;
+    while (cur) {
+      if (cur.nodeType === 1 && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
+        const raw = cur.getAttribute("contenteditable");
+        const low = String(raw == null ? "" : raw).toLowerCase();
+        if (low === "false") return false;
+        if (low === "" || low === "true" || low === "plaintext-only") return true;
+      }
+      if (cur.nodeType === 9) {
+        return String(cur.designMode || "").toLowerCase() === "on";
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return false;
+  }
+
+  function findEditingHost(el) {
+    let host = null;
+    let cur = el && el.nodeType === 1 ? el : (el ? el.parentNode : null);
+    while (cur && cur.nodeType === 1) {
+      if (isTargetContentEditable(cur)) {
+        host = cur;
+      } else if (host) {
+        break;
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return host;
+  }
+
+  function getSelectionInHost(doc, host) {
+    const sel = (doc && typeof doc.getSelection === "function")
+      ? doc.getSelection()
+      : (typeof global.getSelection === "function" ? global.getSelection() : null);
+    if (!sel) return { sel: null, range: null };
+    let range = null;
+    if (sel.rangeCount && sel.rangeCount > 0) {
+      try {
+        const r = sel.getRangeAt(0);
+        if (r && r.startContainer && (!host || host === r.startContainer || (typeof host.contains === "function" && host.contains(r.startContainer)))) {
+          range = r;
+        }
+      } catch (e) {}
+    }
+    return { sel: sel, range: range };
+  }
+
+  function makeStaticTargetRange(startContainer, startOffset, endContainer, endOffset) {
+    return {
+      startContainer: startContainer,
+      startOffset: startOffset,
+      endContainer: endContainer,
+      endOffset: endOffset,
+      collapsed: startContainer === endContainer && startOffset === endOffset,
+    };
+  }
+
+  function createContentEditableInputEvent(type, cancelable, inputType, data, targetRanges) {
+    let ev;
+    if (typeof InputEvent === "function") {
+      ev = new InputEvent(type, {
+        bubbles: true,
+        cancelable: cancelable,
+        composed: true,
+        inputType: inputType,
+        data: data,
+      });
+    } else {
+      ev = new Event(type, { bubbles: true, cancelable: cancelable, composed: true });
+      ev.inputType = inputType;
+      ev.data = data;
+    }
+    if (targetRanges) {
+      const frozenRanges = targetRanges.slice();
+      ev.getTargetRanges = function () { return frozenRanges.slice(); };
+    }
+    return ev;
+  }
+
+  function dispatchTextInputEvent(target, data) {
+    const ev = new Event("textInput", { bubbles: true, cancelable: true, composed: true });
+    try {
+      Object.defineProperty(ev, "data", { value: data, enumerable: true, configurable: true });
+    } catch (e) {
+      ev.data = data;
+    }
+    target.dispatchEvent(ev);
+    return !ev.defaultPrevented;
+  }
+
+  function applyContentEditableInsertText(doc, host, sel, range, text) {
+    if (!range) {
+      const tn = doc.createTextNode(text);
+      host.appendChild(tn);
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(tn, text.length); } catch (e) {}
+      }
+      return;
+    }
+    if (!range.collapsed && typeof range.deleteContents === "function") {
+      try { range.deleteContents(); } catch (e) {}
+    }
+    const sc = range.startContainer;
+    const so = range.startOffset;
+    if (sc && sc.nodeType === 3) {
+      const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+      const nextText = curText.slice(0, so) + text + curText.slice(so);
+      if (typeof sc.data === "string") sc.data = nextText;
+      else sc.textContent = nextText;
+      const newOffset = so + text.length;
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(sc, newOffset); } catch (e) {}
+      }
+    } else if (sc && sc.nodeType === 1) {
+      const tn = doc.createTextNode(text);
+      const ref = sc.childNodes && sc.childNodes[so] ? sc.childNodes[so] : null;
+      sc.insertBefore(tn, ref);
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(tn, text.length); } catch (e) {}
+      }
+    }
+  }
+
+  function applyContentEditableBackspace(doc, host, sel, range) {
+    if (!range) return;
+    if (!range.collapsed && typeof range.deleteContents === "function") {
+      try { range.deleteContents(); } catch (e) {}
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(range.startContainer, range.startOffset); } catch (e) {}
+      }
+      return;
+    }
+    const sc = range.startContainer;
+    const so = range.startOffset;
+    if (sc && sc.nodeType === 3 && so > 0) {
+      const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+      const nextText = curText.slice(0, so - 1) + curText.slice(so);
+      if (typeof sc.data === "string") sc.data = nextText;
+      else sc.textContent = nextText;
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(sc, so - 1); } catch (e) {}
+      }
+    }
+  }
+
+  function applyContentEditableInsertParagraph(doc, host, sel, range) {
+    if (!range) return;
+    if (!range.collapsed && typeof range.deleteContents === "function") {
+      try { range.deleteContents(); } catch (e) {}
+    }
+    const sc = range.startContainer;
+    const so = range.startOffset;
+    // Find nearest block child inside host (e.g. <p>, <div>)
+    let block = sc && sc.nodeType === 1 ? sc : (sc ? sc.parentNode : null);
+    while (block && block !== host && block.parentNode !== host) {
+      block = block.parentNode;
+    }
+    if (block && block !== host && block.parentNode === host && sc && sc.nodeType === 3) {
+      const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+      const beforeText = curText.slice(0, so);
+      const afterText = curText.slice(so);
+      if (typeof sc.data === "string") sc.data = beforeText;
+      else sc.textContent = beforeText;
+      const newBlock = doc.createElement(String(block.localName || block.tagName || "p").toLowerCase());
+      host.insertBefore(newBlock, block.nextSibling);
+      if (afterText.length > 0) {
+        newBlock.textContent = afterText;
+      }
+      // Move any following siblings after sc into newBlock
+      let sib = sc.nextSibling;
+      while (sib) {
+        const nextSib = sib.nextSibling;
+        newBlock.appendChild(sib);
+        sib = nextSib;
+      }
+      const caretTarget = newBlock.firstChild || newBlock;
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(caretTarget, 0); } catch (e) {}
+      }
+    } else if (sc && sc.nodeType === 3) {
+      const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+      const nextText = curText.slice(0, so) + "\n" + curText.slice(so);
+      if (typeof sc.data === "string") sc.data = nextText;
+      else sc.textContent = nextText;
+      if (sel && typeof sel.collapse === "function") {
+        try { sel.collapse(sc, so + 1); } catch (e) {}
+      }
+    }
+  }
+
   function dispatchKeyEvent(type, key, code, modifiers) {
     const isShift = (Number(modifiers || 0) & 8) !== 0;
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
@@ -9147,6 +9352,7 @@ const CSS_TYPED_OM_GLOBALS = {
     const codeStr = String(code || "");
 
     if (type === "keyup") {
+      _lastKeyDownPrevented = false;
       const evt = new KeyboardEvent("keyup", {
         key: keyStr,
         code: codeStr,
@@ -9159,7 +9365,52 @@ const CSS_TYPED_OM_GLOBALS = {
       return (active && typeof active._nid === "number") ? active._nid : 0;
     }
 
+    if (type === "keypress") {
+      if (_lastKeyDownPrevented) {
+        const active = doc ? doc.activeElement : null;
+        return (active && typeof active._nid === "number") ? active._nid : 0;
+      }
+      const isEnter = keyStr === "Enter" || keyStr === "\r" || keyStr === "\\r" || codeStr === "Enter";
+      const kpKey = isEnter ? "Enter" : keyStr;
+      const kpEvt = new KeyboardEvent("keypress", {
+        key: kpKey,
+        code: codeStr,
+        shiftKey: isShift,
+        cancelable: true,
+        bubbles: true,
+      });
+      target.dispatchEvent(kpEvt);
+      if (!kpEvt.defaultPrevented && isTargetContentEditable(target)) {
+        const host = findEditingHost(target) || target;
+        const selInfo = getSelectionInHost(doc, host);
+        const inputType = isEnter ? "insertParagraph" : "insertText";
+        const biData = isEnter ? null : kpKey;
+        const tiData = isEnter ? "\n" : kpKey;
+        const targetRanges = selInfo.range
+          ? [makeStaticTargetRange(selInfo.range.startContainer, selInfo.range.startOffset, selInfo.range.endContainer, selInfo.range.endOffset)]
+          : [];
+        const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, biData, targetRanges);
+        target.dispatchEvent(biEvt);
+        if (!biEvt.defaultPrevented) {
+          const tiAllowed = dispatchTextInputEvent(target, tiData);
+          if (tiAllowed) {
+            if (isEnter) {
+              applyContentEditableInsertParagraph(doc, host, selInfo.sel, selInfo.range);
+            } else {
+              applyContentEditableInsertText(doc, host, selInfo.sel, selInfo.range, kpKey);
+            }
+            const inEvt = createContentEditableInputEvent("input", false, inputType, biData, []);
+            target.dispatchEvent(inEvt);
+          }
+        }
+      }
+      const active = doc ? doc.activeElement : null;
+      return (active && typeof active._nid === "number") ? active._nid : 0;
+    }
+
     if (type === "keydown") {
+      _lastKeyDownPrevented = false;
+      _lastKeyDownKey = keyStr;
       const evt = new KeyboardEvent("keydown", {
         key: keyStr,
         code: codeStr,
@@ -9169,9 +9420,37 @@ const CSS_TYPED_OM_GLOBALS = {
       });
       target.dispatchEvent(evt);
       const defaultPrevented = Boolean(evt.defaultPrevented);
+      _lastKeyDownPrevented = defaultPrevented;
 
       if (!defaultPrevented) {
-        if (keyStr === "Tab") {
+        if (isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
+          const host = findEditingHost(target) || target;
+          const selInfo = getSelectionInHost(doc, host);
+          const inputType = keyStr === "Backspace" ? "deleteContentBackward" : "deleteContentForward";
+          const targetRanges = [];
+          if (selInfo.range) {
+            const r = selInfo.range;
+            if (!r.collapsed) {
+              targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset, r.endContainer, r.endOffset));
+            } else if (keyStr === "Backspace" && r.startContainer && r.startContainer.nodeType === 3 && r.startOffset > 0) {
+              targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset - 1, r.startContainer, r.startOffset));
+            } else if (keyStr === "Delete" && r.startContainer && r.startContainer.nodeType === 3) {
+              const len = String(r.startContainer.data !== undefined ? r.startContainer.data : (r.startContainer.textContent || "")).length;
+              if (r.startOffset < len) {
+                targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset, r.startContainer, r.startOffset + 1));
+              }
+            }
+          }
+          const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, null, targetRanges);
+          target.dispatchEvent(biEvt);
+          if (!biEvt.defaultPrevented) {
+            if (keyStr === "Backspace") {
+              applyContentEditableBackspace(doc, host, selInfo.sel, selInfo.range);
+            }
+            const inEvt = createContentEditableInputEvent("input", false, inputType, null, []);
+            target.dispatchEvent(inEvt);
+          }
+        } else if (keyStr === "Tab") {
           navigateTabFocus(isShift);
         } else if (keyStr === "Enter") {
           const active = doc ? doc.activeElement : null;
@@ -9391,4 +9670,52 @@ const CSS_TYPED_OM_GLOBALS = {
   global.__capsurf_eval_in_iframe = evalInIframe;
   if (typeof window !== "undefined") window.__capsurf_eval_in_iframe = evalInIframe;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_eval_in_iframe = evalInIframe;
+
+  // HTML Named Access on Window (https://html.spec.whatwg.org/multipage/nav-history-apis.html#named-access-on-the-window-object)
+  // Exposes elements with matching id (or named form/embed/img/iframe/object) on window/globalThis via WindowProperties prototype proxy.
+  try {
+    const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;
+    const origProto = Object.getPrototypeOf(winTarget);
+    if (origProto && typeof Proxy === "function" && !winTarget.__capsurf_namedAccessInstalled) {
+      let inNamedLookup = false;
+      function resolveWindowNamedProperty(prop) {
+        if (inNamedLookup || typeof prop !== "string" || prop.length === 0) return undefined;
+        if (prop[0] === "_") return undefined;
+        inNamedLookup = true;
+        try {
+          const doc = winTarget.document;
+          if (!doc || typeof doc.getElementById !== "function") return undefined;
+          const byId = doc.getElementById(prop);
+          if (byId) return byId;
+        } catch (e) {
+        } finally {
+          inNamedLookup = false;
+        }
+        return undefined;
+      }
+      const windowPropertiesProxy = new Proxy(Object.create(origProto), {
+        has: function (target, prop) {
+          if (Reflect.has(origProto, prop)) return true;
+          return resolveWindowNamedProperty(prop) !== undefined;
+        },
+        get: function (target, prop, receiver) {
+          if (Reflect.has(origProto, prop)) {
+            return Reflect.get(origProto, prop, receiver);
+          }
+          return resolveWindowNamedProperty(prop);
+        },
+        getOwnPropertyDescriptor: function (target, prop) {
+          const d = Reflect.getOwnPropertyDescriptor(origProto, prop);
+          if (d) return d;
+          const val = resolveWindowNamedProperty(prop);
+          if (val !== undefined) {
+            return { value: val, writable: true, enumerable: false, configurable: true };
+          }
+          return undefined;
+        },
+      });
+      Object.setPrototypeOf(winTarget, windowPropertiesProxy);
+      Object.defineProperty(winTarget, "__capsurf_namedAccessInstalled", { value: true, enumerable: false, configurable: true });
+    }
+  } catch (e) {}
 }

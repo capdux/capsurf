@@ -1699,6 +1699,23 @@ export class Page {
       await this.evaluate((sel: string) => {
         const el: any = document.querySelector(sel);
         if (el) {
+          const tag = String(el.tagName || el.localName || "").toLowerCase();
+          const ce = typeof el.getAttribute === "function" ? el.getAttribute("contenteditable") : null;
+          const isFocusable =
+            tag === "input" ||
+            tag === "textarea" ||
+            tag === "select" ||
+            tag === "button" ||
+            (tag === "a" && ((typeof el.hasAttribute === "function" && el.hasAttribute("href")) || Boolean(el.href))) ||
+            (typeof el.hasAttribute === "function" && el.hasAttribute("tabindex")) ||
+            Boolean(el.isContentEditable) ||
+            ce === "" ||
+            ce === "true";
+          if (isFocusable && typeof el.focus === "function" && !el.disabled) {
+            try {
+              el.focus();
+            } catch (e) {}
+          }
           try {
             const EvCls = (globalThis as any).__NativeEvent || Event;
             const ev = new EvCls("click", { bubbles: true });

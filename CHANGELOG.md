@@ -1864,4 +1864,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`fixed-in-fixed-demo` (1/1)、`floating-popup` (3/6 + 全命中精准)、`keyboard-scroll` 装饰传播用例 PASS。
+
+## Phase 109: Web Animations Engine, ContentEditable Editing Pipeline, Named Access on Window & Caret/Selection Demos (Closed)
+- **`e2e/harness.ts` & `src/js/shim/{animations,window,element/html-element,element/forms/selection}.js`**：
+  - `page.click` 聚焦可聚焦元素；实装 HTML Named Access on Window、`contentEditable`/`isContentEditable` 键盘编辑事件链及完整 `KeyframeEffect`/`Animation` 时间轴与 timing 校验。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`text-input-caret-font` (1/1)、`forms-selection-paint-demo` (1/1)、`bmp-emoji-fonts` (3/3)、`transition-reused-node-slot` (1/1)、`typed-input-value-tracker` (1/1) 全绿，`web-animations` (6/8+fix) 与 `contenteditable-typing` (3/4+fix) 待上游 `utf.cp` 解封复测。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

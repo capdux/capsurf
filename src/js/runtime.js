@@ -11205,6 +11205,55 @@
       configurable: true,
     });
 
+    Object.defineProperty(proto, "contentEditable", {
+      get: function () {
+        if (typeof this.hasAttribute === "function" && this.hasAttribute("contenteditable")) {
+          const raw = this.getAttribute("contenteditable");
+          const low = String(raw == null ? "" : raw).toLowerCase();
+          if (low === "" || low === "true") return "true";
+          if (low === "false") return "false";
+          if (low === "plaintext-only") return "plaintext-only";
+        }
+        return "inherit";
+      },
+      set: function (v) {
+        const low = String(v).toLowerCase();
+        if (low === "inherit") {
+          if (typeof this.removeAttribute === "function") this.removeAttribute("contenteditable");
+        } else if (low === "true" || low === "false" || low === "plaintext-only") {
+          if (typeof this.setAttribute === "function") this.setAttribute("contenteditable", low);
+        } else {
+          throw new DOMException(
+            "Failed to set the 'contentEditable' property on 'HTMLElement': The value provided ('" + v + "') is not one of 'true', 'false', 'plaintext-only', or 'inherit'.",
+            "SyntaxError"
+          );
+        }
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "isContentEditable", {
+      get: function () {
+        let cur = this;
+        while (cur) {
+          if (cur.nodeType === 1 && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
+            const raw = cur.getAttribute("contenteditable");
+            const low = String(raw == null ? "" : raw).toLowerCase();
+            if (low === "false") return false;
+            if (low === "" || low === "true" || low === "plaintext-only") return true;
+          }
+          if (cur.nodeType === 9) {
+            return String(cur.designMode || "").toLowerCase() === "on";
+          }
+          cur = cur.parentElement || cur.parentNode;
+        }
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (doc && String(doc.designMode || "").toLowerCase() === "on") return true;
+        return false;
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(proto, "writingSuggestions", {
       get: function () {
         let cur = this;
@@ -15021,6 +15070,9 @@
   function setValueRaw(el, newValue) {
     const str = String(newValue);
     const tag = (el && (el.tagName || el.localName) || "").toLowerCase();
+    if (tag !== "input" && tag !== "textarea") {
+      return;
+    }
     if (tag === "input") {
       const rawType = typeof el.getAttribute === "function" ? el.getAttribute("type") : "";
       const type = typeof normalizeInputType === "function" ? normalizeInputType(rawType) : (rawType || "text").toLowerCase();
@@ -15040,6 +15092,10 @@
   }
 
   function notifyControlValueMutation(control, cursor) {
+    const tag = (control && (control.tagName || control.localName) || "").toLowerCase();
+    if (tag !== "input" && tag !== "textarea") {
+      return;
+    }
     if (typeof control.setSelectionRange === "function") {
       control.setSelectionRange(cursor, cursor);
     }
@@ -15113,7 +15169,7 @@
 
     Cls.prototype.setSelectionRange = function (start, end, direction) {
       if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
-      const len = (this.value || "").length;
+      const len = String(getValueRaw(this) || "").length;
       const rawStart = start === null || start === undefined ? 0 : (Number(start) >>> 0);
       const rawEnd = end === null || end === undefined ? 0 : (Number(end) >>> 0);
       const b = Math.min(rawEnd, len);
@@ -15132,7 +15188,7 @@
 
     Cls.prototype.select = function () {
       if (!supportsSelection(this)) return;
-      const len = (this.value || "").length;
+      const len = String(getValueRaw(this) || "").length;
       this.setSelectionRange(0, len, "none");
     };
 
@@ -24451,20 +24507,65 @@
   function AnimationEffect() {}
   markNative(AnimationEffect, "AnimationEffect");
 
+  function validateEasingString(easing) {
+    if (easing === undefined || easing === null) return "linear";
+    const s = String(easing).trim().toLowerCase();
+    if (
+      s === "linear" ||
+      s === "ease" ||
+      s === "ease-in" ||
+      s === "ease-out" ||
+      s === "ease-in-out" ||
+      s === "step-start" ||
+      s === "step-end"
+    ) {
+      return s;
+    }
+    const cb = s.match(/^cubic-bezier\(\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*,\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*,\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*,\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*\)$/);
+    if (cb) {
+      const x1 = parseFloat(cb[1]);
+      const y1 = parseFloat(cb[2]);
+      const x2 = parseFloat(cb[3]);
+      const y2 = parseFloat(cb[4]);
+      if (
+        isFinite(x1) && isFinite(y1) && isFinite(x2) && isFinite(y2) &&
+        x1 >= 0 && x1 <= 1 && x2 >= 0 && x2 <= 1
+      ) {
+        return s;
+      }
+      throw new TypeError("Failed to parse easing '" + easing + "': cubic-bezier x values must be in [0, 1].");
+    }
+    const st = s.match(/^steps\(\s*(\d+)(?:\s*,\s*(start|end|jump-start|jump-end|jump-none|jump-both))?\s*\)$/);
+    if (st) {
+      const count = parseInt(st[1], 10);
+      const jump = st[2] || "end";
+      if (count > 0 && !(jump === "jump-none" && count < 2)) {
+        return s;
+      }
+    }
+    throw new TypeError("Failed to parse easing '" + easing + "': Invalid timing function.");
+  }
+
   function normalizeKeyframesInput(keyframes) {
     if (!keyframes) return [];
+    let frames;
     if (Array.isArray(keyframes)) {
-      return keyframes.map(function (kf) {
-        return kf && typeof kf === "object" ? Object.assign({}, kf) : {};
+      frames = keyframes.map(function (kf) {
+        const copy = kf && typeof kf === "object" ? Object.assign({}, kf) : {};
+        if (copy.easing !== undefined) {
+          copy.easing = validateEasingString(copy.easing);
+        }
+        return copy;
       });
-    }
-    if (typeof keyframes === "object") {
+    } else if (typeof keyframes === "object") {
       // Property-indexed keyframes: { color: ["#205080", "#d0a040"], transform: [...], easing: "..." }
       const propArrays = {};
       let maxLen = 0;
-      const sharedEasing = typeof keyframes.easing === "string" ? keyframes.easing : null;
+      const sharedEasing = keyframes.easing !== undefined ? validateEasingString(keyframes.easing) : null;
       const sharedComposite = typeof keyframes.composite === "string" ? keyframes.composite : null;
-      const offsets = Array.isArray(keyframes.offset) ? keyframes.offset : null;
+      const offsets = Array.isArray(keyframes.offset)
+        ? keyframes.offset
+        : (keyframes.offset !== undefined && keyframes.offset !== null ? [keyframes.offset] : null);
       for (const k in keyframes) {
         if (!Object.prototype.hasOwnProperty.call(keyframes, k)) continue;
         if (k === "easing" || k === "composite" || k === "offset") continue;
@@ -24478,7 +24579,7 @@
         }
       }
       if (maxLen === 0) return [];
-      const frames = [];
+      frames = [];
       for (let i = 0; i < maxLen; i++) {
         const f = {};
         if (offsets && offsets[i] != null) f.offset = Number(offsets[i]);
@@ -24492,9 +24593,27 @@
         }
         frames.push(f);
       }
-      return frames;
+    } else {
+      return [];
     }
-    return [];
+
+    // Validate explicit keyframe offsets are in [0, 1] and loosely sorted (non-decreasing)
+    let prevOffset = -Infinity;
+    for (let i = 0; i < frames.length; i++) {
+      const rawOff = frames[i].offset;
+      if (rawOff !== undefined && rawOff !== null) {
+        const off = Number(rawOff);
+        if (isNaN(off) || off < 0 || off > 1) {
+          throw new TypeError("Offsets must be in the range [0, 1].");
+        }
+        if (off < prevOffset) {
+          throw new TypeError("Keyframes with specified offsets are not loosely sorted.");
+        }
+        prevOffset = off;
+        frames[i].offset = off;
+      }
+    }
+    return frames;
   }
 
   function solveCubicBezier(x1, y1, x2, y2, t) {
@@ -24551,6 +24670,27 @@
       if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
         return solveCubicBezier(x1, y1, x2, y2, t);
       }
+    }
+    if (s === "step-start") {
+      return t >= 1 ? 1 : 1;
+    }
+    if (s === "step-end") {
+      return t >= 1 ? 1 : 0;
+    }
+    const st = s.match(/^steps\(\s*(\d+)(?:\s*,\s*(start|end|jump-start|jump-end|jump-none|jump-both))?\s*\)$/);
+    if (st) {
+      const steps = parseInt(st[1], 10);
+      const jump = st[2] || "end";
+      let currentStep = Math.floor(t * steps);
+      if (jump === "start" || jump === "jump-start" || jump === "jump-both") {
+        currentStep += 1;
+      }
+      let jumps = steps;
+      if (jump === "jump-none") jumps = steps - 1;
+      else if (jump === "jump-both") jumps = steps + 1;
+      if (currentStep < 0) currentStep = 0;
+      if (currentStep > jumps) currentStep = jumps;
+      return jumps > 0 ? currentStep / jumps : 1;
     }
     return t;
   }
@@ -24647,8 +24787,8 @@
         if (ok) return out.join(" ");
       }
     }
-    const fn1 = String(fromVal || "").trim().match(/^([a-zA-Z0-9_-]+)\(([^)]*)\)$/);
-    const fn2 = String(toVal || "").trim().match(/^([a-zA-Z0-9_-]+)\(([^)]*)\)$/);
+    const fn1 = String(fromVal == null ? "" : fromVal).trim().match(/^([a-zA-Z0-9_-]+)\(([^)]*)\)$/);
+    const fn2 = String(toVal == null ? "" : toVal).trim().match(/^([a-zA-Z0-9_-]+)\(([^)]*)\)$/);
     if (fn1 && fn2 && fn1[1].toLowerCase() === fn2[1].toLowerCase()) {
       const a1 = fn1[2].trim().split(/\s+/).filter(Boolean);
       const a2 = fn2[2].trim().split(/\s+/).filter(Boolean);
@@ -24660,40 +24800,128 @@
           const m2 = a2[i].match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
           if (!m1 || !m2 || m1[2] !== m2[2]) { allNum = false; break; }
           const v = parseFloat(m1[1]) + (parseFloat(m2[1]) - parseFloat(m1[1])) * p;
-          const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(4)));
+          const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(6)));
           parts.push(formatted + m1[2]);
         }
         if (allNum) return fn1[1].toLowerCase() + "(" + parts.join(" ") + ")";
       }
     }
-    const n1 = String(fromVal || "").trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
-    const n2 = String(toVal || "").trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
+    const n1 = String(fromVal == null ? "" : fromVal).trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
+    const n2 = String(toVal == null ? "" : toVal).trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
     if (n1 && n2 && n1[2] === n2[2]) {
       const v = parseFloat(n1[1]) + (parseFloat(n2[1]) - parseFloat(n1[1])) * p;
-      const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(4)));
+      const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(6)));
       return formatted + n1[2];
     }
-    return p < 0.5 ? fromVal : toVal;
+    return String(p < 0.5 ? fromVal : toVal);
   }
+
+  const VALID_FILL_MODES = new Set(["none", "forwards", "backwards", "both", "auto"]);
+  const VALID_DIRECTIONS = new Set(["normal", "reverse", "alternate", "alternate-reverse"]);
 
   function KeyframeEffect(target, keyframes, options) {
     AnimationEffect.call(this);
     this.target = target || null;
+    this._animation = null;
     this.keyframes = normalizeKeyframesInput(keyframes);
     const opts = typeof options === "number" ? { duration: options } : (options || {});
-    this.delay = Number(opts.delay || 0);
-    this.endDelay = Number(opts.endDelay || 0);
-    this.fill = String(opts.fill || "auto");
-    this.iterationStart = Number(opts.iterationStart || 0);
-    this.iterations = opts.iterations !== undefined ? Number(opts.iterations) : 1;
-    this.duration = opts.duration !== undefined ? (opts.duration === "auto" ? "auto" : Number(opts.duration)) : 0;
-    this.direction = String(opts.direction || "normal");
-    this.easing = String(opts.easing || "linear");
+    const delay = opts.delay !== undefined ? Number(opts.delay) : 0;
+    const endDelay = opts.endDelay !== undefined ? Number(opts.endDelay) : 0;
+    if (isNaN(delay) || isNaN(endDelay)) {
+      throw new TypeError("delay and endDelay must be finite numbers.");
+    }
+    const fill = opts.fill !== undefined ? String(opts.fill) : "auto";
+    if (!VALID_FILL_MODES.has(fill)) {
+      throw new TypeError("Failed to construct 'KeyframeEffect': The provided value '" + fill + "' is not a valid enum value of type FillMode.");
+    }
+    const direction = opts.direction !== undefined ? String(opts.direction) : "normal";
+    if (!VALID_DIRECTIONS.has(direction)) {
+      throw new TypeError("Failed to construct 'KeyframeEffect': The provided value '" + direction + "' is not a valid enum value of type PlaybackDirection.");
+    }
+    const iterationStart = opts.iterationStart !== undefined ? Number(opts.iterationStart) : 0;
+    if (isNaN(iterationStart) || iterationStart < 0) {
+      throw new TypeError("iterationStart must be a non-negative number.");
+    }
+    const iterations = opts.iterations !== undefined ? Number(opts.iterations) : 1;
+    if (isNaN(iterations) || iterations < 0) {
+      throw new TypeError("iterations must be a non-negative number.");
+    }
+    let duration;
+    if (opts.duration === undefined || opts.duration === "auto") {
+      duration = opts.duration === "auto" ? "auto" : 0;
+    } else {
+      duration = Number(opts.duration);
+      if (isNaN(duration) || duration < 0) {
+        throw new TypeError("duration must be non-negative or 'auto'.");
+      }
+    }
+    const easing = opts.easing !== undefined ? validateEasingString(opts.easing) : "linear";
+
+    this.delay = delay;
+    this.endDelay = endDelay;
+    this.fill = fill;
+    this.iterationStart = iterationStart;
+    this.iterations = iterations;
+    this.duration = duration;
+    this.direction = direction;
+    this.easing = easing;
   }
   KeyframeEffect.prototype = Object.create(AnimationEffect.prototype);
   KeyframeEffect.prototype.constructor = KeyframeEffect;
 
   KeyframeEffect.prototype.getComputedTiming = function () {
+    const iterDur = typeof this.duration === "number" ? this.duration : 0;
+    const activeDuration = this.iterations === 0 ? 0 : (this.iterations === Infinity ? (iterDur > 0 ? Infinity : 0) : iterDur * this.iterations);
+    const endTime = Math.max(0, this.delay + activeDuration + this.endDelay);
+    const anim = this._animation;
+    const localTime = (anim && anim.currentTime !== null && anim.currentTime !== undefined) ? Number(anim.currentTime) : null;
+    const effectiveFill = this.fill === "auto" ? "none" : this.fill;
+
+    let progress = null;
+    let currentIteration = null;
+
+    if (localTime !== null) {
+      const activeTime = localTime - this.delay;
+      if (activeTime < 0) {
+        // Before phase
+        if (effectiveFill === "backwards" || effectiveFill === "both") {
+          const overall = this.iterationStart;
+          currentIteration = Math.floor(overall);
+          let simple = overall - currentIteration;
+          const rev = this.direction === "reverse" ||
+            (this.direction === "alternate" && currentIteration % 2 === 1) ||
+            (this.direction === "alternate-reverse" && currentIteration % 2 === 0);
+          const directed = rev ? 1 - simple : simple;
+          progress = evaluateAnimationEasing(this.easing, directed);
+        }
+      } else if (activeDuration > 0 ? activeTime >= activeDuration : activeTime >= 0) {
+        // After phase
+        if (effectiveFill === "forwards" || effectiveFill === "both") {
+          const overall = this.iterationStart + this.iterations;
+          const isAtBoundary = overall > 0 && Math.abs(overall - Math.round(overall)) < 1e-12;
+          currentIteration = isAtBoundary ? Math.round(overall) - 1 : Math.floor(overall);
+          if (currentIteration < 0) currentIteration = 0;
+          let simple = isAtBoundary ? 1 : (overall - Math.floor(overall));
+          if (this.iterations === 0) simple = 0;
+          const rev = this.direction === "reverse" ||
+            (this.direction === "alternate" && currentIteration % 2 === 1) ||
+            (this.direction === "alternate-reverse" && currentIteration % 2 === 0);
+          const directed = rev ? 1 - simple : simple;
+          progress = evaluateAnimationEasing(this.easing, directed);
+        }
+      } else {
+        // Active phase
+        const overall = iterDur > 0 ? (activeTime / iterDur) + this.iterationStart : this.iterationStart;
+        currentIteration = Math.floor(overall);
+        const simple = overall - currentIteration;
+        const rev = this.direction === "reverse" ||
+          (this.direction === "alternate" && currentIteration % 2 === 1) ||
+          (this.direction === "alternate-reverse" && currentIteration % 2 === 0);
+        const directed = rev ? 1 - simple : simple;
+        progress = evaluateAnimationEasing(this.easing, directed);
+      }
+    }
+
     return {
       delay: this.delay,
       endDelay: this.endDelay,
@@ -24703,10 +24931,11 @@
       duration: this.duration,
       direction: this.direction,
       easing: this.easing,
-      endTime: this.delay + (typeof this.duration === "number" ? this.duration * this.iterations : 0) + this.endDelay,
-      activeDuration: typeof this.duration === "number" ? this.duration * this.iterations : 0,
-      localTime: 0,
-      progress: 1.0,
+      endTime: endTime,
+      activeDuration: activeDuration,
+      localTime: localTime,
+      currentIteration: currentIteration,
+      progress: progress,
     };
   };
 
@@ -24723,101 +24952,175 @@
   function Animation(effect, timeline) {
     EventTarget.call(this);
     this.id = "";
-    this.effect = effect || null;
+    this._effect = null;
     this.timeline = timeline || globalDocTimeline;
     this.playbackRate = 1.0;
     this.startTime = null;
-    this.currentTime = 0;
+    this._holdTime = null;
+    this._finishTimer = null;
     this.pending = false;
+    this.playState = "idle";
     this.onfinish = null;
     this.oncancel = null;
     this.onremove = null;
 
-    const isFullAnimation = Boolean(globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.animations);
-    registeredAnimations.add(this);
+    const self = this;
+    this._readyResolve = null;
+    this._finishedResolve = null;
+    this.ready = Promise.resolve(this);
+    this.finished = new Promise(function (res) { self._finishedResolve = res; });
 
-    if (!isFullAnimation) {
-      // Static headless mode: active at start, can be paused/scrubbed via currentTime
-      this.playState = "running";
-      this.currentTime = 0;
-      this.ready = Promise.resolve(this);
-      this.finished = Promise.resolve(this);
-    } else {
-      // Full interactive animation mode
-      this.playState = "idle";
-      const self = this;
-      this._readyResolve = null;
-      this._finishedResolve = null;
-      this.ready = new Promise(function (res) { self._readyResolve = res; });
-      this.finished = new Promise(function (res) { self._finishedResolve = res; });
+    if (effect) {
+      this.effect = effect;
     }
+    registeredAnimations.add(this);
   }
   Animation.prototype = Object.create(EventTarget.prototype);
   Animation.prototype.constructor = Animation;
 
-  Animation.prototype.play = function () {
-    if (!globalThis.__CAP_RENDER_CONFIG || !globalThis.__CAP_RENDER_CONFIG.animations) {
-      this.playState = "running";
-      return;
+  Object.defineProperty(Animation.prototype, "effect", {
+    get: function () {
+      return this._effect;
+    },
+    set: function (newEffect) {
+      if (this._effect && this._effect._animation === this) {
+        this._effect._animation = null;
+      }
+      this._effect = newEffect || null;
+      if (this._effect) {
+        this._effect._animation = this;
+      }
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Animation.prototype, "currentTime", {
+    get: function () {
+      if (this._holdTime !== null) {
+        return this._holdTime;
+      }
+      if (this.startTime === null || !this.timeline) {
+        return null;
+      }
+      const elapsed = (this.timeline.currentTime - this.startTime) * this.playbackRate;
+      const endTime = this._getEndTime();
+      if (this.playState === "running" && isFinite(endTime) && this.playbackRate > 0 && elapsed >= endTime) {
+        this.finish();
+        return this._holdTime;
+      }
+      return elapsed;
+    },
+    set: function (val) {
+      if (val === null || val === undefined) {
+        this._holdTime = null;
+        this.startTime = null;
+        this._clearFinishTimer();
+        return;
+      }
+      const t = Number(val);
+      if (isNaN(t)) throw new TypeError("currentTime must be a valid number or null.");
+      if (this.playState === "running") {
+        this._holdTime = null;
+        this.startTime = this.timeline.currentTime - t / (this.playbackRate || 1);
+        this._scheduleFinish();
+      } else {
+        this._holdTime = t;
+      }
+    },
+    configurable: true,
+  });
+
+  Animation.prototype._getEndTime = function () {
+    if (!this._effect) return 0;
+    const dur = typeof this._effect.duration === "number" ? this._effect.duration : 0;
+    const iters = this._effect.iterations;
+    const active = iters === 0 ? 0 : (iters === Infinity ? (dur > 0 ? Infinity : 0) : dur * iters);
+    return Math.max(0, (this._effect.delay || 0) + active + (this._effect.endDelay || 0));
+  };
+
+  Animation.prototype._clearFinishTimer = function () {
+    if (this._finishTimer !== null) {
+      try { clearTimeout(this._finishTimer); } catch (e) {}
+      this._finishTimer = null;
     }
+  };
+
+  Animation.prototype._scheduleFinish = function () {
+    this._clearFinishTimer();
+    if (this.playState !== "running" || this.playbackRate <= 0) return;
+    const endTime = this._getEndTime();
+    if (!isFinite(endTime)) return;
+    const cur = this.startTime !== null ? (this.timeline.currentTime - this.startTime) * this.playbackRate : 0;
+    const remaining = Math.max(0, (endTime - cur) / this.playbackRate);
+    const self = this;
+    if (typeof setTimeout === "function") {
+      this._finishTimer = setTimeout(function () {
+        self._finishTimer = null;
+        if (self.playState === "running") {
+          self.finish();
+        }
+      }, Math.ceil(remaining));
+    }
+  };
+
+  Animation.prototype.play = function () {
+    const prevTime = this._holdTime !== null ? this._holdTime : 0;
     this.playState = "running";
-    this.startTime = this.timeline.currentTime;
+    this._holdTime = null;
+    this.startTime = this.timeline.currentTime - prevTime / (this.playbackRate || 1);
+    registeredAnimations.add(this);
     if (this._readyResolve) {
       this._readyResolve(this);
       this._readyResolve = null;
     }
-    const self = this;
-    const dur = (this.effect && typeof this.effect.duration === "number") ? this.effect.duration : 0;
-    setTimeout(function () {
-      if (self.playState === "running") {
-        self.finish();
-      }
-    }, Math.max(0, dur));
+    this._scheduleFinish();
   };
 
   Animation.prototype.pause = function () {
-    if (this.playState !== "idle") {
+    if (this.playState === "running") {
+      const cur = this.startTime !== null ? (this.timeline.currentTime - this.startTime) * this.playbackRate : 0;
+      this._holdTime = cur;
+      this.startTime = null;
+      this._clearFinishTimer();
+      this.playState = "paused";
+    } else if (this.playState !== "idle") {
       this.playState = "paused";
     }
   };
 
   Animation.prototype.finish = function () {
+    this._clearFinishTimer();
+    const endTime = this._getEndTime();
     this.playState = "finished";
-    const dur = (this.effect && typeof this.effect.duration === "number") ? this.effect.duration : 0;
-    this.currentTime = dur;
-
-    // Apply end keyframes to target
-    if (this.effect && this.effect.target && this.effect.keyframes && this.effect.keyframes.length > 0) {
-      const endFrame = this.effect.keyframes[this.effect.keyframes.length - 1];
-      for (const k in endFrame) {
-        if (k !== "offset" && k !== "easing" && k !== "composite") {
-          try { this.effect.target.style[k] = endFrame[k]; } catch (e) {}
-        }
-      }
-    }
+    this._holdTime = isFinite(endTime) ? endTime : 0;
+    this.startTime = null;
 
     if (this._finishedResolve) {
-      this._finishedResolve(this);
+      const res = this._finishedResolve;
       this._finishedResolve = null;
+      res(this);
     }
 
     const evt = new Event("finish");
+    try {
+      evt.currentTime = this._holdTime;
+      evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
+    } catch (e) {}
     this.dispatchEvent(evt);
-    if (typeof this.onfinish === "function") {
-      try { this.onfinish.call(this, evt); } catch (e) {}
-    }
   };
 
   Animation.prototype.cancel = function () {
+    this._clearFinishTimer();
     this.playState = "idle";
-    this.currentTime = null;
+    this._holdTime = null;
     this.startTime = null;
     registeredAnimations.delete(this);
     const evt = new Event("cancel");
+    try {
+      evt.currentTime = null;
+      evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
+    } catch (e) {}
     this.dispatchEvent(evt);
-    if (typeof this.oncancel === "function") {
-      try { this.oncancel.call(this, evt); } catch (e) {}
-    }
   };
 
   Animation.prototype.reverse = function () {
@@ -24838,13 +25141,26 @@
     return anim;
   }
 
+  function isAnimationRelevant(anim) {
+    if (!anim || !anim.effect || !anim.effect.target) return false;
+    // Trigger lazy finish check if running
+    if (anim.playState === "running") {
+      void anim.currentTime;
+    }
+    if (anim.playState === "idle") return false;
+    if (anim.playState === "finished") {
+      const f = anim.effect.fill;
+      return f === "forwards" || f === "both";
+    }
+    return true;
+  }
+
   function animationsFor(root) {
     const res = [];
     for (const anim of registeredAnimations) {
-      if (anim.effect && anim.effect.target) {
-        if (!root || root === anim.effect.target || (root.contains && root.contains(anim.effect.target))) {
-          res.push(anim);
-        }
+      if (!isAnimationRelevant(anim)) continue;
+      if (!root || root === anim.effect.target || (root.contains && root.contains(anim.effect.target))) {
+        res.push(anim);
       }
     }
     return res;
@@ -24859,36 +25175,42 @@
       const effect = anim.effect;
       const frames = effect.keyframes;
       if (!frames || frames.length === 0) continue;
-      const dur = typeof effect.duration === "number" ? effect.duration : 0;
-      const delay = effect.delay || 0;
-      const localTime = anim.currentTime != null ? Number(anim.currentTime) : 0;
-      const activeTime = localTime - delay;
-      if (activeTime < 0 && effect.fill !== "backwards" && effect.fill !== "both") continue;
-      const totalDur = dur * (effect.iterations || 1);
-      if (activeTime >= totalDur && totalDur > 0 && effect.fill !== "forwards" && effect.fill !== "both") {
-        continue;
-      }
-      let overallProgress = dur > 0 ? Math.max(0, Math.min(1, (activeTime % dur === 0 && activeTime > 0 && activeTime >= totalDur) ? 1 : (activeTime % dur) / dur)) : 1;
-      if (activeTime <= 0) overallProgress = 0;
-      else if (activeTime >= totalDur && dur > 0) overallProgress = 1;
-      const effectProgress = evaluateAnimationEasing(effect.easing, overallProgress);
+      const timing = effect.getComputedTiming();
+      const effectProgress = timing.progress;
+      if (effectProgress === null || effectProgress === undefined) continue;
 
       if (frames.length === 1) {
         const f = frames[0];
         for (const k in f) {
           if (k !== "offset" && k !== "easing" && k !== "composite") {
             const kebab = k.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-            result[kebab] = f[k];
+            result[kebab] = String(f[k]);
           }
         }
         continue;
       }
 
-      // Assign computed offsets if missing
-      const offsets = frames.map(function (f, idx) {
-        if (f.offset != null && !isNaN(Number(f.offset))) return Number(f.offset);
-        return idx / (frames.length - 1);
+      // Assign computed offsets if missing (linearly distribute between specified offsets)
+      const offsets = frames.map(function (f) {
+        return (f.offset != null && !isNaN(Number(f.offset))) ? Number(f.offset) : null;
       });
+      if (offsets[0] === null) offsets[0] = 0;
+      if (offsets[offsets.length - 1] === null) offsets[offsets.length - 1] = 1;
+      let lastKnown = 0;
+      for (let i = 1; i < offsets.length; i++) {
+        if (offsets[i] !== null) {
+          const gap = i - lastKnown;
+          if (gap > 1) {
+            const startOff = offsets[lastKnown];
+            const endOff = offsets[i];
+            for (let j = 1; j < gap; j++) {
+              offsets[lastKnown + j] = startOff + (endOff - startOff) * (j / gap);
+            }
+          }
+          lastKnown = i;
+        }
+      }
+
       let idx = 0;
       for (let i = 0; i < offsets.length - 1; i++) {
         if (effectProgress >= offsets[i] && effectProgress <= offsets[i + 1]) {
@@ -24910,11 +25232,11 @@
       for (const prop of props) {
         const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
         if (f0[prop] !== undefined && f1[prop] !== undefined) {
-          result[kebab] = interpolateAnimValue(kebab, f0[prop], f1[prop], easedP);
+          result[kebab] = String(interpolateAnimValue(kebab, f0[prop], f1[prop], easedP));
         } else if (f1[prop] !== undefined) {
-          result[kebab] = f1[prop];
+          result[kebab] = String(f1[prop]);
         } else if (f0[prop] !== undefined) {
-          result[kebab] = f0[prop];
+          result[kebab] = String(f0[prop]);
         }
       }
     }
@@ -30291,6 +30613,15 @@
           }
         }
       }
+      // Ensure standard initial computed values for opacity and color
+      if (!computedMap.has("opacity") || computedMap.get("opacity") === "") {
+        computedMap.set("opacity", "1");
+      } else {
+        computedMap.set("opacity", String(computedMap.get("opacity")));
+      }
+      if (!computedMap.has("color") || computedMap.get("color") === "") {
+        computedMap.set("color", "rgb(0, 0, 0)");
+      }
     }
 
     function getComputedStyle(element, pseudoElt) {
@@ -34691,6 +35022,202 @@
       }
     }
 
+    let _lastKeyDownPrevented = false;
+    let _lastKeyDownKey = "";
+
+    function isTargetContentEditable(el) {
+      if (!el) return false;
+      if (el.isContentEditable === true) return true;
+      let cur = el.nodeType === 1 ? el : el.parentNode;
+      while (cur) {
+        if (cur.nodeType === 1 && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
+          const raw = cur.getAttribute("contenteditable");
+          const low = String(raw == null ? "" : raw).toLowerCase();
+          if (low === "false") return false;
+          if (low === "" || low === "true" || low === "plaintext-only") return true;
+        }
+        if (cur.nodeType === 9) {
+          return String(cur.designMode || "").toLowerCase() === "on";
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return false;
+    }
+
+    function findEditingHost(el) {
+      let host = null;
+      let cur = el && el.nodeType === 1 ? el : (el ? el.parentNode : null);
+      while (cur && cur.nodeType === 1) {
+        if (isTargetContentEditable(cur)) {
+          host = cur;
+        } else if (host) {
+          break;
+        }
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return host;
+    }
+
+    function getSelectionInHost(doc, host) {
+      const sel = (doc && typeof doc.getSelection === "function")
+        ? doc.getSelection()
+        : (typeof global.getSelection === "function" ? global.getSelection() : null);
+      if (!sel) return { sel: null, range: null };
+      let range = null;
+      if (sel.rangeCount && sel.rangeCount > 0) {
+        try {
+          const r = sel.getRangeAt(0);
+          if (r && r.startContainer && (!host || host === r.startContainer || (typeof host.contains === "function" && host.contains(r.startContainer)))) {
+            range = r;
+          }
+        } catch (e) {}
+      }
+      return { sel: sel, range: range };
+    }
+
+    function makeStaticTargetRange(startContainer, startOffset, endContainer, endOffset) {
+      return {
+        startContainer: startContainer,
+        startOffset: startOffset,
+        endContainer: endContainer,
+        endOffset: endOffset,
+        collapsed: startContainer === endContainer && startOffset === endOffset,
+      };
+    }
+
+    function createContentEditableInputEvent(type, cancelable, inputType, data, targetRanges) {
+      let ev;
+      if (typeof InputEvent === "function") {
+        ev = new InputEvent(type, {
+          bubbles: true,
+          cancelable: cancelable,
+          composed: true,
+          inputType: inputType,
+          data: data,
+        });
+      } else {
+        ev = new Event(type, { bubbles: true, cancelable: cancelable, composed: true });
+        ev.inputType = inputType;
+        ev.data = data;
+      }
+      if (targetRanges) {
+        const frozenRanges = targetRanges.slice();
+        ev.getTargetRanges = function () { return frozenRanges.slice(); };
+      }
+      return ev;
+    }
+
+    function dispatchTextInputEvent(target, data) {
+      const ev = new Event("textInput", { bubbles: true, cancelable: true, composed: true });
+      try {
+        Object.defineProperty(ev, "data", { value: data, enumerable: true, configurable: true });
+      } catch (e) {
+        ev.data = data;
+      }
+      target.dispatchEvent(ev);
+      return !ev.defaultPrevented;
+    }
+
+    function applyContentEditableInsertText(doc, host, sel, range, text) {
+      if (!range) {
+        const tn = doc.createTextNode(text);
+        host.appendChild(tn);
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(tn, text.length); } catch (e) {}
+        }
+        return;
+      }
+      if (!range.collapsed && typeof range.deleteContents === "function") {
+        try { range.deleteContents(); } catch (e) {}
+      }
+      const sc = range.startContainer;
+      const so = range.startOffset;
+      if (sc && sc.nodeType === 3) {
+        const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+        const nextText = curText.slice(0, so) + text + curText.slice(so);
+        if (typeof sc.data === "string") sc.data = nextText;
+        else sc.textContent = nextText;
+        const newOffset = so + text.length;
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(sc, newOffset); } catch (e) {}
+        }
+      } else if (sc && sc.nodeType === 1) {
+        const tn = doc.createTextNode(text);
+        const ref = sc.childNodes && sc.childNodes[so] ? sc.childNodes[so] : null;
+        sc.insertBefore(tn, ref);
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(tn, text.length); } catch (e) {}
+        }
+      }
+    }
+
+    function applyContentEditableBackspace(doc, host, sel, range) {
+      if (!range) return;
+      if (!range.collapsed && typeof range.deleteContents === "function") {
+        try { range.deleteContents(); } catch (e) {}
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(range.startContainer, range.startOffset); } catch (e) {}
+        }
+        return;
+      }
+      const sc = range.startContainer;
+      const so = range.startOffset;
+      if (sc && sc.nodeType === 3 && so > 0) {
+        const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+        const nextText = curText.slice(0, so - 1) + curText.slice(so);
+        if (typeof sc.data === "string") sc.data = nextText;
+        else sc.textContent = nextText;
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(sc, so - 1); } catch (e) {}
+        }
+      }
+    }
+
+    function applyContentEditableInsertParagraph(doc, host, sel, range) {
+      if (!range) return;
+      if (!range.collapsed && typeof range.deleteContents === "function") {
+        try { range.deleteContents(); } catch (e) {}
+      }
+      const sc = range.startContainer;
+      const so = range.startOffset;
+      // Find nearest block child inside host (e.g. <p>, <div>)
+      let block = sc && sc.nodeType === 1 ? sc : (sc ? sc.parentNode : null);
+      while (block && block !== host && block.parentNode !== host) {
+        block = block.parentNode;
+      }
+      if (block && block !== host && block.parentNode === host && sc && sc.nodeType === 3) {
+        const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+        const beforeText = curText.slice(0, so);
+        const afterText = curText.slice(so);
+        if (typeof sc.data === "string") sc.data = beforeText;
+        else sc.textContent = beforeText;
+        const newBlock = doc.createElement(String(block.localName || block.tagName || "p").toLowerCase());
+        host.insertBefore(newBlock, block.nextSibling);
+        if (afterText.length > 0) {
+          newBlock.textContent = afterText;
+        }
+        // Move any following siblings after sc into newBlock
+        let sib = sc.nextSibling;
+        while (sib) {
+          const nextSib = sib.nextSibling;
+          newBlock.appendChild(sib);
+          sib = nextSib;
+        }
+        const caretTarget = newBlock.firstChild || newBlock;
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(caretTarget, 0); } catch (e) {}
+        }
+      } else if (sc && sc.nodeType === 3) {
+        const curText = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+        const nextText = curText.slice(0, so) + "\n" + curText.slice(so);
+        if (typeof sc.data === "string") sc.data = nextText;
+        else sc.textContent = nextText;
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(sc, so + 1); } catch (e) {}
+        }
+      }
+    }
+
     function dispatchKeyEvent(type, key, code, modifiers) {
       const isShift = (Number(modifiers || 0) & 8) !== 0;
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
@@ -34701,6 +35228,7 @@
       const codeStr = String(code || "");
 
       if (type === "keyup") {
+        _lastKeyDownPrevented = false;
         const evt = new KeyboardEvent("keyup", {
           key: keyStr,
           code: codeStr,
@@ -34713,7 +35241,52 @@
         return (active && typeof active._nid === "number") ? active._nid : 0;
       }
 
+      if (type === "keypress") {
+        if (_lastKeyDownPrevented) {
+          const active = doc ? doc.activeElement : null;
+          return (active && typeof active._nid === "number") ? active._nid : 0;
+        }
+        const isEnter = keyStr === "Enter" || keyStr === "\r" || keyStr === "\\r" || codeStr === "Enter";
+        const kpKey = isEnter ? "Enter" : keyStr;
+        const kpEvt = new KeyboardEvent("keypress", {
+          key: kpKey,
+          code: codeStr,
+          shiftKey: isShift,
+          cancelable: true,
+          bubbles: true,
+        });
+        target.dispatchEvent(kpEvt);
+        if (!kpEvt.defaultPrevented && isTargetContentEditable(target)) {
+          const host = findEditingHost(target) || target;
+          const selInfo = getSelectionInHost(doc, host);
+          const inputType = isEnter ? "insertParagraph" : "insertText";
+          const biData = isEnter ? null : kpKey;
+          const tiData = isEnter ? "\n" : kpKey;
+          const targetRanges = selInfo.range
+            ? [makeStaticTargetRange(selInfo.range.startContainer, selInfo.range.startOffset, selInfo.range.endContainer, selInfo.range.endOffset)]
+            : [];
+          const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, biData, targetRanges);
+          target.dispatchEvent(biEvt);
+          if (!biEvt.defaultPrevented) {
+            const tiAllowed = dispatchTextInputEvent(target, tiData);
+            if (tiAllowed) {
+              if (isEnter) {
+                applyContentEditableInsertParagraph(doc, host, selInfo.sel, selInfo.range);
+              } else {
+                applyContentEditableInsertText(doc, host, selInfo.sel, selInfo.range, kpKey);
+              }
+              const inEvt = createContentEditableInputEvent("input", false, inputType, biData, []);
+              target.dispatchEvent(inEvt);
+            }
+          }
+        }
+        const active = doc ? doc.activeElement : null;
+        return (active && typeof active._nid === "number") ? active._nid : 0;
+      }
+
       if (type === "keydown") {
+        _lastKeyDownPrevented = false;
+        _lastKeyDownKey = keyStr;
         const evt = new KeyboardEvent("keydown", {
           key: keyStr,
           code: codeStr,
@@ -34723,9 +35296,37 @@
         });
         target.dispatchEvent(evt);
         const defaultPrevented = Boolean(evt.defaultPrevented);
+        _lastKeyDownPrevented = defaultPrevented;
 
         if (!defaultPrevented) {
-          if (keyStr === "Tab") {
+          if (isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
+            const host = findEditingHost(target) || target;
+            const selInfo = getSelectionInHost(doc, host);
+            const inputType = keyStr === "Backspace" ? "deleteContentBackward" : "deleteContentForward";
+            const targetRanges = [];
+            if (selInfo.range) {
+              const r = selInfo.range;
+              if (!r.collapsed) {
+                targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset, r.endContainer, r.endOffset));
+              } else if (keyStr === "Backspace" && r.startContainer && r.startContainer.nodeType === 3 && r.startOffset > 0) {
+                targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset - 1, r.startContainer, r.startOffset));
+              } else if (keyStr === "Delete" && r.startContainer && r.startContainer.nodeType === 3) {
+                const len = String(r.startContainer.data !== undefined ? r.startContainer.data : (r.startContainer.textContent || "")).length;
+                if (r.startOffset < len) {
+                  targetRanges.push(makeStaticTargetRange(r.startContainer, r.startOffset, r.startContainer, r.startOffset + 1));
+                }
+              }
+            }
+            const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, null, targetRanges);
+            target.dispatchEvent(biEvt);
+            if (!biEvt.defaultPrevented) {
+              if (keyStr === "Backspace") {
+                applyContentEditableBackspace(doc, host, selInfo.sel, selInfo.range);
+              }
+              const inEvt = createContentEditableInputEvent("input", false, inputType, null, []);
+              target.dispatchEvent(inEvt);
+            }
+          } else if (keyStr === "Tab") {
             navigateTabFocus(isShift);
           } else if (keyStr === "Enter") {
             const active = doc ? doc.activeElement : null;
@@ -34945,6 +35546,54 @@
     global.__capsurf_eval_in_iframe = evalInIframe;
     if (typeof window !== "undefined") window.__capsurf_eval_in_iframe = evalInIframe;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_eval_in_iframe = evalInIframe;
+
+    // HTML Named Access on Window (https://html.spec.whatwg.org/multipage/nav-history-apis.html#named-access-on-the-window-object)
+    // Exposes elements with matching id (or named form/embed/img/iframe/object) on window/globalThis via WindowProperties prototype proxy.
+    try {
+      const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;
+      const origProto = Object.getPrototypeOf(winTarget);
+      if (origProto && typeof Proxy === "function" && !winTarget.__capsurf_namedAccessInstalled) {
+        let inNamedLookup = false;
+        function resolveWindowNamedProperty(prop) {
+          if (inNamedLookup || typeof prop !== "string" || prop.length === 0) return undefined;
+          if (prop[0] === "_") return undefined;
+          inNamedLookup = true;
+          try {
+            const doc = winTarget.document;
+            if (!doc || typeof doc.getElementById !== "function") return undefined;
+            const byId = doc.getElementById(prop);
+            if (byId) return byId;
+          } catch (e) {
+          } finally {
+            inNamedLookup = false;
+          }
+          return undefined;
+        }
+        const windowPropertiesProxy = new Proxy(Object.create(origProto), {
+          has: function (target, prop) {
+            if (Reflect.has(origProto, prop)) return true;
+            return resolveWindowNamedProperty(prop) !== undefined;
+          },
+          get: function (target, prop, receiver) {
+            if (Reflect.has(origProto, prop)) {
+              return Reflect.get(origProto, prop, receiver);
+            }
+            return resolveWindowNamedProperty(prop);
+          },
+          getOwnPropertyDescriptor: function (target, prop) {
+            const d = Reflect.getOwnPropertyDescriptor(origProto, prop);
+            if (d) return d;
+            const val = resolveWindowNamedProperty(prop);
+            if (val !== undefined) {
+              return { value: val, writable: true, enumerable: false, configurable: true };
+            }
+            return undefined;
+          },
+        });
+        Object.setPrototypeOf(winTarget, windowPropertiesProxy);
+        Object.defineProperty(winTarget, "__capsurf_namedAccessInstalled", { value: true, enumerable: false, configurable: true });
+      }
+    } catch (e) {}
   }
 
   // =============================================================
