@@ -4386,3 +4386,8 @@
   - 实现 `Scheduler` 类与 `global/window/globalThis.scheduler`，支持 `postTask(cb, { priority, delay, signal })` 优先级队列（`user-blocking > user-visible > background`）、`AbortSignal` 取消、延迟调度与 `scheduler.yield()`。
 - **门禁与白盒验证**: `src/js/runtime_source.cp` 4 门禁全 0；`cap test -m test/js/test_js_dom.cp` **9/9 PASS**（`test/js/` 全目录 **2/2 100% PASS**）。
 - **清理旧子智能体**: 销毁 `89c8346f-3f35-4f86-9ee4-f43c751610d0`。
+
+## [2026-11-21 00:40:30] 2 分钟新增并全绿通过纯 CP BiDi 白盒单测 `test/css/test_bidi.cp` (Subagent 4f6c12a2 结单，Phase 171)
+- **新增白盒测试 (`test/css/test_bidi.cp`)**: 覆盖 UAX #9 `reorderVisual` (LTR/RTL/混排/`RLO`/`LRI..PDI`/`FSI`/`RLE`)、`dir="auto"` 首强扫描、`<bdi>`/`<bdo>` 与 CSS `direction`/`unicode-bidi` 级联（PASS 1~3 全绿）。
+- **门禁与验证**: 4 门禁全 0；`cap test -m test/css/test_bidi.cp` **1/1 PASS**（`test/css/` 达 **3/3 PASS**）。
+- **清理旧子智能体**: 销毁 `4f6c12a2-f999-4f13-8090-276358ccf75c`。

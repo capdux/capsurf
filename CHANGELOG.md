@@ -2171,3 +2171,6 @@
 
 ## Phase 170: `window.scheduler.postTask` & `scheduler.yield()` (`test/js/` 100% PASS)
 - **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：实装 `Scheduler`、`postTask` 优先级/中止/延迟调度与 `scheduler.yield()`，`test/js/test_js_dom.cp` 达 **9/9 PASS**。
+
+## Phase 171: Pure-CP UAX #9 BiDi Whitebox Suite `test/css/test_bidi.cp` (PASS 1~3)
+- 新增 `test/css/test_bidi.cp`，完整覆盖 UAX #9 视觉重排、`dir="auto"`、`<bdi>`/`<bdo>` 级联（4 门禁全 0，`cap test -m` PASS）。
