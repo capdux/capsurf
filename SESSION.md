@@ -3869,3 +3869,14 @@
   - `selector.js`: `:checked` 动态伪类路由至 JS 子树匹配并防递归；
   - `web-animations` (8/8)、`contenteditable-typing` (4/4)、`canvas-text-upgrade` (1/1)、`floating-popup` (6/6)、`mouse-events-demo` (1/1)、`dynamic-behavior-demo` (1/1)、`forms-realworld-demo` (1/1)：**22/22 PASS (67 expect() calls, 2.88s 增量构建)**！
 - **清理旧子智能体**: 销毁 `6cfdbb50-9d45-4949-bb59-83cfedbb8a0e` 与 `9dff8e43-3d2e-4abb-a98a-5a5360aceff3`。
+
+## [2026-11-20 20:19:30] CSS `light-dark()`/`color-scheme`、`<link media>`、`offsetParent/Top/Left` 与不透明图片光栅化 9/9 全绿闭环 (Subagent cdb4e03e 结单，Phase 113)
+- **CSS Color 5 `light-dark()` 与 `color-scheme` 继承 (`src/css/cascade.cp`, `src/render/style_extractor.cp`)**:
+  - 新增 `PROP_COLOR_SCHEME`、`ColorScheme` 枚举与括号深度感知 `parseLightDarkPair`，在 `computeStyles` 延迟按最终 `color_scheme` 求解 `color`/`background-color`，并更新 `resolveCssColorWithScheme`。
+- **CSSOM-View 几何、`<link media>` 与不透明图片防回溯 (`src/layout/layout.cp`, `src/js/dom_binding.cp`)**:
+  - 修复 `position: relative` 在非确定父高下百分比 `top`/`bottom` 退化为 0；
+  - 新增原生 `__capsurf_get_layout_box`、CSSOM-View `offsetParent`/`offsetTop`/`offsetLeft`、`linkMediaMatchesScreen` 与 `/__ks_resource/` 404 防回溯。
+- **门禁与 E2E 验证（`-m -d -o` 3.53s 增量构建）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `light-dark-color-scheme` (1/1)、`link-media-scope` (1/1)、`offset-geometry` (1/1)、`opaque-image-render` (6/6)：**9/9 PASS**！`layout-resolve-pollers` 定位需 `Kitesurf.getMemoryStats` 补 `layout.{mutationResolves, animationResolves}`。
+- **清理旧子智能体**: 销毁 `cdb4e03e-6ab3-4ae3-a796-336cdc47d57d`。

@@ -1079,9 +1079,13 @@ pub struct LayoutTree {
                     cb_x -= style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                 }
                 if (!style.top.is_auto && !style.top.is_none) {
-                    cb_y += style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    if (style.top.length.unit != CssUnit.Percent || parent_h_definite) {
+                        cb_y += style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    }
                 } else if (!style.bottom.is_auto && !style.bottom.is_none) {
-                    cb_y -= style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    if (style.bottom.length.unit != CssUnit.Percent || parent_h_definite) {
+                        cb_y -= style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    }
                 }
             } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
                 if (!style.left.is_auto && !style.left.is_none) {
@@ -1213,10 +1217,14 @@ pub struct LayoutTree {
                 pos_offset_x = 0.0 - r_px;
             }
             if (!style.top.is_auto && !style.top.is_none) {
-                pos_offset_y = style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                if (style.top.length.unit != CssUnit.Percent || parent_h_definite) {
+                    pos_offset_y = style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                }
             } else if (!style.bottom.is_auto && !style.bottom.is_none) {
-                const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                pos_offset_y = 0.0 - b_px;
+                if (style.bottom.length.unit != CssUnit.Percent || parent_h_definite) {
+                    const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    pos_offset_y = 0.0 - b_px;
+                }
             }
             rect_x += pos_offset_x;
             rect_y += pos_offset_y;

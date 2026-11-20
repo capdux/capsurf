@@ -1473,4 +1473,10 @@
    - 在 `ua_widgets_script` 中挂载 `domDebug.setIframeImage` 接入 `canvas_bitmaps` 光栅化路径，并实装 `[data-kitesurf-ua="select-dropdown"]` 点击展开、选项命中与外部关闭。
 2. **鼠标悬停状态机与动态 `:checked` (`harness.ts`, `selector.js`, `canvas2d.js`)**：
    - 跟踪 `window.__capsurf_lastHoverEl` 规范派发 `mouseout`/`mouseleave`/`mouseover`/`mouseenter` 并去重 `Mouse.click`；将含 `:checked` 选择器路由至 JS 子树匹配准确反映 `form.reset()` 与动态切换。
+
+## Phase 113 CSS `light-dark()`/`color-scheme` 与 CSSOM-View `offset*` 几何技术方案
+1. **`light-dark()` 延迟求解 (`cascade.cp`, `style_extractor.cp`)**：
+   - 在 `computeStyles` 完整级联并继承 `color_scheme` 后统一求解 `light-dark(a, b)`，同时在 `style_extractor.cp` 与 `dom_binding.cp` 保持绘制与 `getComputedStyle` 一致。
+2. **未滚动 `offset*` 几何与 `<link media>` (`layout.cp`, `dom_binding.cp`)**：
+   - 暴露 `__capsurf_get_layout_box` 返回未受滚动偏移影响的布局坐标支撑 `offsetParent`/`offsetTop`/`offsetLeft`；按 `linkMediaMatchesScreen` 过滤 `<link rel="stylesheet" media>`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

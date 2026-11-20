@@ -1887,4 +1887,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`dom_binding.cp`、`runtime_source.cp` 4 门禁全 0（2.88s `-m -d -o` 增量构建）；
   - E2E 测试：Phase 111 7/8 PASS + Phase 112 7/7 套件 **22/22 PASS (67 expect calls)**。
+
+## Phase 113: CSS `light-dark()`/`color-scheme`, `<link media>`, `offset*` Geometry & Opaque Image Render — 4/5 Suites (9/9 PASS)
+- **`src/css/cascade.cp` & `src/render/style_extractor.cp` & `src/layout/layout.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `light-dark()` 延迟求解与 `color-scheme` 继承、`<link media="screen|print">` 过滤、CSSOM-View `offsetParent`/`offsetTop`/`offsetLeft`（基于未滚动布局盒）、`position: relative` 非确定父高百分比退化为 0 及 `/__ks_resource/` 404 防回溯。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 3.53s 增量构建）；
+  - E2E 测试：`light-dark-color-scheme` (1) + `link-media-scope` (1) + `offset-geometry` (1) + `opaque-image-render` (6) 共 **9/9 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

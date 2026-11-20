@@ -10,6 +10,11 @@ const LengthPercentage = css.css_values.length.LengthPercentage;
 
 /// 将 cap:css 的 CssColor 联合体精确转换为 8-bit RGBA 像素颜色
 pub fn resolveCssColor(color: CapCssColor, current_color: painter.Color): painter.Color {
+    return resolveCssColorWithScheme(color, current_color, false);
+}
+
+/// 按当前元素使用的 color-scheme（light/dark）将 cap:css 的 CssColor 转换为 8-bit RGBA
+pub fn resolveCssColorWithScheme(color: CapCssColor, current_color: painter.Color, is_dark_scheme: bool): painter.Color {
     return switch (color) {
         // 1. currentColor 关键字：继承元素当前的文本 color 属性
         .current_color => current_color,
@@ -26,13 +31,13 @@ pub fn resolveCssColor(color: CapCssColor, current_color: painter.Color): painte
         // 调用 cap:css 内置的 toRGB() 统一折算为 RGBA
         .srgb, .hsl, .hwb, .lab, .lch, .oklab, .oklch => {
             if (rgb_color := color.toRGB()) {
-                return resolveCssColor(rgb_color, current_color);
+                return resolveCssColorWithScheme(rgb_color, current_color, is_dark_scheme);
             }
             return painter.Color.rgba(0, 0, 0, 255);
         },
 
-        // 4. light-dark() 现代亮暗色函数（无头默认取 light 分支）
-        .light_dark => |ld| resolveCssColor(ld.light.*, current_color),
+        // 4. light-dark() 现代亮暗色函数：根据元素 used color-scheme 选择分支
+        .light_dark => |ld| resolveCssColorWithScheme(if (is_dark_scheme) ld.dark.* else ld.light.*, current_color, is_dark_scheme),
 
         // 5. 系统颜色或未知回退为黑色
         * => painter.Color.rgba(0, 0, 0, 255),

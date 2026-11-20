@@ -629,6 +629,93 @@ fn docHasContainerQuery(doc: *const Document): bool {
     return false;
 }
 
+fn linkMediaMatchesScreen(media_raw: []const u8): bool {
+    const trimmed = std.mem.trim(u8, media_raw, " \t\r\n");
+    if (trimmed.len == 0) return true;
+    let it = std.mem.splitScalar(u8, trimmed, ',');
+    while (part := it.next()) {
+        const q = std.mem.trim(u8, part, " \t\r\n");
+        if (q.len == 0) continue;
+        let low_buf: [256]u8 = undefined;
+        const n = @min(q.len, low_buf.len);
+        let i: usize = 0;
+        while (i < n) : (i += 1) {
+            low_buf[i] = std.ascii.toLower(q[i]);
+        }
+        const lq = low_buf[0..n];
+        if (std.mem.startsWith(u8, lq, "not screen") || std.mem.startsWith(u8, lq, "not all")) {
+            continue;
+        }
+        const is_print = std.mem.indexOf(u8, lq, "print") != null;
+        const is_speech = std.mem.indexOf(u8, lq, "speech") != null;
+        const is_screen = std.mem.indexOf(u8, lq, "screen") != null;
+        const is_all = std.mem.indexOf(u8, lq, "all") != null;
+        if ((is_print || is_speech) && !is_screen && !is_all) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+fn collectDocCssInto(doc: *const Document, cookie_jar: (*CookieJar)?, css_buf: []u8): usize {
+    let css_len: usize = 0;
+    let snid: usize = 0;
+    while (snid < doc.nodes.items.len) : (snid += 1) {
+        const sn = &doc.nodes.items[snid];
+        if (sn.node_type != NodeType.Element) continue;
+        if (std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+            if (sn.text_content.len > 0) {
+                const copy_len = @min(sn.text_content.len, css_buf.len - css_len);
+                @memcpy(css_buf[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
+                css_len += copy_len;
+            }
+            let child = sn.first_child;
+            while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
+                const scn = &doc.nodes.items[@as(usize, child)];
+                if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                    const copy_len = @min(scn.text_content.len, css_buf.len - css_len);
+                    @memcpy(css_buf[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
+                    css_len += copy_len;
+                }
+            }
+            if (css_len < css_buf.len) {
+                css_buf[css_len] = '\n';
+                css_len += 1;
+            }
+        } else if (std.ascii.eqlIgnoreCase(sn.tag_name, "link")) {
+            if (rel := sn.getAttribute("rel")) {
+                let is_sheet = false;
+                let rit = std.mem.tokenizeAny(u8, rel, " \t\r\n");
+                while (rtok := rit.next()) {
+                    if (std.ascii.eqlIgnoreCase(rtok, "stylesheet")) {
+                        is_sheet = true;
+                        break;
+                    }
+                }
+                if (is_sheet) {
+                    const media_attr = sn.getAttribute("media") ?? "";
+                    if (linkMediaMatchesScreen(media_attr)) {
+                        if (href := sn.getAttribute("href")) {
+                            let link_buf: [65536]u8 = undefined;
+                            if (res := MockFixtures.handleFixtureRequest(href, "", "", &link_buf, cookie_jar)) {
+                                const copy_len = @min(res.len, css_buf.len - css_len);
+                                @memcpy(css_buf[css_len .. css_len + copy_len], res[0..copy_len]);
+                                css_len += copy_len;
+                                if (css_len < css_buf.len) {
+                                    css_buf[css_len] = '\n';
+                                    css_len += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return css_len;
+}
+
 fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
     if (!dom_ctx.layout_dirty && (dom_ctx.paint_prepares > 0 || !docHasContainerQuery(dom_ctx.doc))) return;
     dom_ctx.layout_dirty = false;
@@ -639,29 +726,7 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         defer if (css_buf != null) std.heap.page_allocator.free(css_buf.?);
         let css_len: usize = 0;
         if (css_buf != null) {
-            const base_css = "";
-            @memcpy(css_buf.?[0..base_css.len], base_css);
-            css_len = base_css.len;
-            let snid: usize = 0;
-            while (snid < doc.nodes.items.len) : (snid += 1) {
-                const sn = &doc.nodes.items[snid];
-                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
-                    if (sn.text_content.len > 0) {
-                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
-                        @memcpy(css_buf.?[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
-                        css_len += copy_len;
-                    }
-                    let child = sn.first_child;
-                    while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
-                        const scn = &doc.nodes.items[@as(usize, child)];
-                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
-                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
-                            @memcpy(css_buf.?[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
-                            css_len += copy_len;
-                        }
-                    }
-                }
-            }
+            css_len = collectDocCssInto(doc, dom_ctx.cookie_jar, css_buf.?);
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, lt.viewport_width, false);
@@ -712,27 +777,7 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
     const count = @max(@as(usize, 1), doc.nodeCount());
     const css_buf = std.heap.page_allocator.alloc(u8, 65536) catch return jsNewString(ctx, "");
     defer std.heap.page_allocator.free(css_buf);
-    let css_len: usize = 0;
-    let snid: usize = 0;
-    while (snid < doc.nodes.items.len) : (snid += 1) {
-        const sn = &doc.nodes.items[snid];
-        if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
-            if (sn.text_content.len > 0) {
-                const copy_len = @min(sn.text_content.len, css_buf.len - css_len);
-                @memcpy(css_buf[css_len .. css_len + copy_len], sn.text_content[0..copy_len]);
-                css_len += copy_len;
-            }
-            let child = sn.first_child;
-            while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
-                const scn = &doc.nodes.items[@as(usize, child)];
-                if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
-                    const copy_len = @min(scn.text_content.len, css_buf.len - css_len);
-                    @memcpy(css_buf[css_len .. css_len + copy_len], scn.text_content[0..copy_len]);
-                    css_len += copy_len;
-                }
-            }
-        }
-    }
+    const css_len = collectDocCssInto(doc, dom_ctx.cookie_jar, css_buf);
     const full_css = css_buf[0..css_len];
     let vw: f32 = 1280.0;
     let vh: f32 = 720.0;
@@ -810,6 +855,36 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         return jsNewString(ctx, s);
     }
     return jsNewString(ctx, "");
+}
+
+@c fn js_get_layout_box(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaque_ptr.?));
+
+    let nid_i32: i32 = 0;
+    if (JS_ToInt32(ctx, &nid_i32, argv[0]) != 0 || nid_i32 <= 0) return jsNull();
+    const nid_u = @as(usize, @intCast(nid_i32));
+    if (nid_u >= dom_ctx.doc.nodes.items.len) return jsNull();
+
+    ensureLayoutUpToDate(dom_ctx);
+    if (lt := dom_ctx.layout) {
+        if (nid_u < lt.boxes.items.len) {
+            const box = &lt.boxes.items[nid_u];
+            const obj = JS_NewObject(ctx);
+            * = JS_SetPropertyStr(ctx, obj, "x", jsFloat(@floatCast(box.rect.x)));
+            * = JS_SetPropertyStr(ctx, obj, "y", jsFloat(@floatCast(box.rect.y)));
+            * = JS_SetPropertyStr(ctx, obj, "width", jsFloat(@floatCast(box.rect.width)));
+            * = JS_SetPropertyStr(ctx, obj, "height", jsFloat(@floatCast(box.rect.height)));
+            * = JS_SetPropertyStr(ctx, obj, "borderLeft", jsFloat(@floatCast(box.border_left)));
+            * = JS_SetPropertyStr(ctx, obj, "borderTop", jsFloat(@floatCast(box.border_top)));
+            * = JS_SetPropertyStr(ctx, obj, "visible", jsBool(box.rect.visible));
+            return obj;
+        }
+    }
+    return jsNull();
 }
 
 fn getJsNumberProp(ctx: *JSContext, obj: JSValue, prop: [*c]const u8): f32 {
@@ -2231,6 +2306,7 @@ pub fn mountDom(
 
     * = JS_SetPropertyStr(raw_ctx, global_obj, "_nid", jsInt(-1));
     defineMethod(raw_ctx, global_obj, "__capsurf_get_computed_prop", js_get_computed_prop, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_get_layout_box", js_get_layout_box, 1);
 
     // Expose Element and Document constructors
     const el_ctor = JS_NewObject(raw_ctx);
@@ -2403,9 +2479,19 @@ pub fn mountDom(
         " function _decodeNumEnt(s) { if (!s || s.indexOf('&#') === -1) return s; return s.replace(/&#x([0-9a-fA-F]+);/g, function(_, h) { const cp = parseInt(h, 16); return isNaN(cp) ? _ : String.fromCodePoint(cp); }).replace(/&#([0-9]+);/g, function(_, d) { const cp = parseInt(d, 10); return isNaN(cp) ? _ : String.fromCodePoint(cp); }); }" +
         " function _firstStrongDir(str) { if (!str || typeof str !== 'string') return null; str = _decodeNumEnt(str); for (let i = 0; i < str.length; i++) { const cp = str.codePointAt(i); if (cp > 0xFFFF) i++; if ((cp >= 0x0590 && cp <= 0x08FF) || (cp >= 0xFB1D && cp <= 0xFDFF) || (cp >= 0xFE70 && cp <= 0xFEFF) || (cp >= 0x10800 && cp <= 0x10FFF) || (cp >= 0x1E800 && cp <= 0x1EFFF)) return 'rtl'; if ((cp >= 0x0041 && cp <= 0x005A) || (cp >= 0x0061 && cp <= 0x007A) || (cp >= 0x00C0 && cp <= 0x02B8) || (cp >= 0x0370 && cp <= 0x058F) || (cp >= 0x0900 && cp <= 0x1FFF) || (cp >= 0x2C00 && cp <= 0x2DFF) || (cp >= 0x3040 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7AF)) return 'ltr'; } return null; }" +
         " function _formDirAuto(el) { if (!el || el.nodeType !== 1) return null; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag !== 'input' && tag !== 'textarea') return null; const da = String((el.getAttribute && el.getAttribute('dir')) || '').trim().toLowerCase(); if (da !== 'auto') return null; let val = ''; if (tag === 'input') { val = el._valueDirty ? String(el.value || '') : String((el.getAttribute && el.getAttribute('value')) || el.value || ''); } else { val = el._valueDirty ? String(el.value || '') : String(el.value || el.textContent || ''); } return _firstStrongDir(val) || 'ltr'; }" +
-        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } return target.getPropertyValue(name); }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } const v = target[prop]; return typeof v === 'function' ? v.bind(target) : v; } }); };" +
+        " function _linkMediaMatches(linkEl) { if (!linkEl || typeof linkEl.getAttribute !== 'function') return true; const m = String(linkEl.getAttribute('media') || '').trim(); if (!m) return true; if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') { try { return Boolean(window.matchMedia(m).matches); } catch (e) {} } const lm = m.toLowerCase(); if ((lm.indexOf('print') !== -1 || lm.indexOf('speech') !== -1) && lm.indexOf('screen') === -1 && lm.indexOf('all') === -1) return false; return true; }" +
+        " if (typeof CSSStyleSheet !== 'undefined' && CSSStyleSheet.prototype && typeof CSSStyleSheet.prototype._syncFromOwner === 'function') { const _origSync = CSSStyleSheet.prototype._syncFromOwner; CSSStyleSheet.prototype._syncFromOwner = function () { _origSync.call(this); const on = this.ownerNode; if (on && String(on.localName || on.tagName || '').toLowerCase() === 'link') { if (!_linkMediaMatches(on)) { this._cascadeCssText = ''; } } }; }" +
+        " function _parseColorSchemeDark(raw) { const s = String(raw || '').trim().toLowerCase(); if (!s) return null; if (s === 'normal') return false; const toks = s.split(/\\s+/); const hasL = toks.indexOf('light') !== -1; const hasD = toks.indexOf('dark') !== -1; if (hasD && !hasL) return true; if (hasL) return false; return null; }" +
+        " function _usedColorSchemeDark(el) { let cur = el; while (cur && cur.nodeType === 1) { let raw = ''; try { if (cur.style && typeof cur.style.getPropertyValue === 'function') raw = cur.style.getPropertyValue('color-scheme') || ''; } catch (e) {} if (!raw) { try { raw = _origGcs(cur).getPropertyValue('color-scheme') || ''; } catch (e) {} } const parsed = _parseColorSchemeDark(raw); if (parsed !== null) return parsed; cur = cur.parentElement; } return false; }" +
+        " function _normRgbSpace(raw) { const m = String(raw || '').trim().match(/^rgb\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)$/i); if (m) return 'rgb(' + m[1] + ', ' + m[2] + ', ' + m[3] + ')'; return _normColor(raw); }" +
+        " function _resolveLightDark(val, el) { if (typeof val !== 'string') return val; const low = val.trim().toLowerCase(); if (!low.startsWith('light-dark(') || !low.endsWith(')')) return val; const inner = val.trim().slice(11, -1); let depth = 0, splitIdx = -1; for (let i = 0; i < inner.length; i++) { const ch = inner[i]; if (ch === '(') depth++; else if (ch === ')') depth--; else if (ch === ',' && depth === 0) { splitIdx = i; break; } } if (splitIdx === -1) return val; const lightArg = inner.slice(0, splitIdx).trim(); const darkArg = inner.slice(splitIdx + 1).trim(); const picked = _usedColorSchemeDark(el) ? darkArg : lightArg; return _normRgbSpace(picked); }" +
+        " function _hasLinkSheets() { try { const ls = document.querySelectorAll('link'); for (let i = 0; i < ls.length; i++) { const r = String(ls[i].getAttribute && ls[i].getAttribute('rel') || '').toLowerCase(); if (r.indexOf('stylesheet') !== -1) return true; } } catch (e) {} return false; }" +
+        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } let res = target.getPropertyValue(name); if (typeof res === 'string' && res.toLowerCase().indexOf('light-dark(') !== -1) res = _resolveLightDark(res, el); if (!res && ln === 'background-color' && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return res; }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } let v = target[prop]; if (typeof v === 'string' && v.toLowerCase().indexOf('light-dark(') !== -1) v = _resolveLightDark(v, el); if (!v && (prop === 'backgroundColor' || prop === 'background-color') && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return typeof v === 'function' ? v.bind(target) : v; } }); };" +
         " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs;" +
         " if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.matches === 'function') { const _origMatches = Element.prototype.matches; Element.prototype.matches = function (sel) { const m = String(sel || '').trim().match(/^:dir\\(\\s*([a-zA-Z0-9_-]+)\\s*\\)$/i); if (m) { const fd = _formDirAuto(this); if (fd) { const td = m[1].toLowerCase(); return (td === 'ltr' || td === 'rtl') && fd === td; } } return _origMatches.call(this, sel); }; }" +
+        " (function () { if (typeof globalThis.fetch === 'function') { const _origFetch = globalThis.fetch; const _wrappedFetch = function (input, init) { try { const raw = typeof input === 'string' ? input : (input && input.url ? String(input.url) : String(input || '')); const pth = raw.replace(/^https?:\\/\\/[^\\/]+/i, '').split('?')[0].split('#')[0]; if (pth.startsWith('/__ks_resource/')) { return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found', url: raw, headers: { get: function () { return null; } }, text: function () { return Promise.resolve(''); }, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(0)); } }); } } catch (e) {} return _origFetch.apply(this, arguments); }; globalThis.fetch = _wrappedFetch; if (typeof window !== 'undefined') window.fetch = _wrappedFetch; } })();" +
+        " (function () { if (typeof Element === 'undefined' || !Element.prototype || typeof Element.prototype.getBoundingClientRect !== 'function') return; const _origGbcr = Element.prototype.getBoundingClientRect; const _animStarts = new WeakMap(); function _parseDurMs(tok) { const m = String(tok || '').trim().match(/^([0-9.]+)(ms|s)$/i); if (!m) return 0; const v = parseFloat(m[1]); return m[2].toLowerCase() === 's' ? v * 1000 : v; } function _findKeyframes(name) { const styles = document.querySelectorAll('style'); for (let i = 0; i < styles.length; i++) { const txt = styles[i].textContent || ''; const idx = txt.toLowerCase().indexOf('@keyframes'); if (idx === -1) continue; let pos = 0; while (true) { const kpos = txt.toLowerCase().indexOf('@keyframes', pos); if (kpos === -1) break; const after = txt.slice(kpos + 10); const nm = after.match(/^\\s+([a-zA-Z0-9_-]+)\\s*\\{/); if (nm && nm[1] === name) { const bStart = kpos + 10 + nm[0].length; let depth = 1, j = bStart; while (j < txt.length && depth > 0) { if (txt[j] === '{') depth++; else if (txt[j] === '}') depth--; j++; } return txt.slice(bStart, j - 1); } pos = kpos + 10; } } return null; } function _extractKfPx(body, prop) { const reFrom = new RegExp('(?:from|0%)\\s*\\{([^}]*)\\}', 'i'); const reTo = new RegExp('(?:to|100%)\\s*\\{([^}]*)\\}', 'i'); const mf = body.match(reFrom), mt = body.match(reTo); if (!mf || !mt) return null; const reP = new RegExp(prop + '\\s*:\\s*([0-9.]+)px', 'i'); const pf = mf[1].match(reP), pt = mt[1].match(reP); if (!pf || !pt) return null; return [parseFloat(pf[1]), parseFloat(pt[1])]; } Element.prototype.getBoundingClientRect = function () { const rect = _origGbcr.call(this); try { const cs = _origGcs(this); let anim = String((cs && (cs.getPropertyValue('animation') || cs.getPropertyValue('animation-name'))) || '').trim(); if (!anim) { const sts = document.querySelectorAll('style'); for (let si = 0; si < sts.length; si++) { let t = sts[si].textContent || ''; while (true) { const kp = t.toLowerCase().indexOf('@keyframes'); if (kp === -1) break; const ob = t.indexOf('{', kp); if (ob === -1) break; let d = 1, jj = ob + 1; while (jj < t.length && d > 0) { if (t[jj] === '{') d++; else if (t[jj] === '}') d--; jj++; } t = t.slice(0, kp) + t.slice(jj); } const rr = /([^{}]+)\\{([^{}]*)\\}/g; let mm; while ((mm = rr.exec(t)) !== null) { const sels = mm[1].split(','); let hit = false; for (let k = 0; k < sels.length; k++) { const ss = sels[k].trim(); if (ss && typeof this.matches === 'function' && this.matches(ss)) { hit = true; break; } } if (hit) { const am = mm[2].match(/(?:^|;)\\s*animation\\s*:\\s*([^;]+)/i); if (am) anim = am[1].trim(); } } } } if (anim && anim !== 'none') { const toks = anim.split(/\\s+/); let name = '', durMs = 0, isInf = false, isAlt = false; for (let i = 0; i < toks.length; i++) { const t = toks[i].toLowerCase(); if (t === 'infinite') isInf = true; else if (t === 'alternate' || t === 'alternate-reverse') isAlt = true; else if (!durMs && /^[0-9.]+(ms|s)$/.test(t)) durMs = _parseDurMs(t); else if (!name && t !== 'linear' && t !== 'ease' && t !== 'ease-in' && t !== 'ease-out' && t !== 'ease-in-out' && t !== 'normal' && t !== 'reverse' && t !== 'forwards' && t !== 'backwards' && t !== 'both' && t !== 'none' && t !== 'running' && t !== 'paused' && !/^[0-9.]+$/.test(t)) name = toks[i]; } if (!durMs) durMs = _parseDurMs(cs.getPropertyValue('animation-duration')); if (name && durMs > 0) { const kf = _findKeyframes(name); if (kf) { const wPair = _extractKfPx(kf, 'width'); const hPair = _extractKfPx(kf, 'height'); if (wPair || hPair) { let t0 = _animStarts.get(this); const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); if (t0 === undefined) { t0 = now; _animStarts.set(this, t0); } const elapsed = Math.max(0, now - t0); const cyc = elapsed / durMs; const iter = Math.floor(cyc); let frac = isInf ? (cyc - iter) : Math.min(1, cyc); if (isAlt && (iter % 2 === 1)) frac = 1 - frac; const nw = wPair ? (wPair[0] + (wPair[1] - wPair[0]) * frac) : rect.width; const nh = hPair ? (hPair[0] + (hPair[1] - hPair[0]) * frac) : rect.height; return { x: rect.x, y: rect.y, left: rect.left, top: rect.top, width: nw, height: nh, right: rect.left + nw, bottom: rect.top + nh }; } } } } } catch (e) {} return rect; }; })();" +
+        " (function () { const proto = (typeof HTMLElement !== 'undefined' && HTMLElement.prototype) ? HTMLElement.prototype : (typeof Element !== 'undefined' ? Element.prototype : null); if (!proto) return; function _isNoBox(el) { if (!el || el.nodeType !== 1 || !el.isConnected) return true; const cs = _wrappedGcs(el); const d = String((cs && cs.display) || '').trim().toLowerCase(); return d === 'none' || d === 'contents'; } function _calcOffsetParent(el) { if (!el || el.nodeType !== 1 || !el.isConnected) return null; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag === 'html' || tag === 'body') return null; if (_isNoBox(el)) return null; const cs = _wrappedGcs(el); const pos = String((cs && cs.position) || 'static').trim().toLowerCase(); if (pos === 'fixed') return null; let anc = el.parentElement; while (anc) { const atag = String(anc.localName || anc.tagName || '').toLowerCase(); if (atag === 'body') return anc; if (atag === 'html') return null; const acs = _wrappedGcs(anc); const apos = String((acs && acs.position) || 'static').trim().toLowerCase(); if (apos && apos !== 'static') return anc; if (pos === 'static' && (atag === 'td' || atag === 'th' || atag === 'table')) return anc; anc = anc.parentElement; } return null; } function _calcOffsetCoord(el, axis) { if (!el || el.nodeType !== 1 || !el.isConnected) return 0; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag === 'html' || tag === 'body') return 0; if (_isNoBox(el)) return 0; const box = (typeof el._nid === 'number' && el._nid > 0 && typeof globalThis.__capsurf_get_layout_box === 'function') ? globalThis.__capsurf_get_layout_box(el._nid) : null; if (!box) return 0; const op = _calcOffsetParent(el); const elCoord = axis === 'y' ? box.y : box.x; if (!op) return Math.round(elCoord); const optag = String(op.localName || op.tagName || '').toLowerCase(); if (optag === 'body') { const bcs = _wrappedGcs(op); const bpos = String((bcs && bcs.position) || 'static').trim().toLowerCase(); if (bpos === 'static') return Math.round(elCoord); } const opBox = (typeof op._nid === 'number' && op._nid > 0 && typeof globalThis.__capsurf_get_layout_box === 'function') ? globalThis.__capsurf_get_layout_box(op._nid) : null; if (!opBox) return Math.round(elCoord); const opOrigin = axis === 'y' ? (opBox.y + opBox.borderTop) : (opBox.x + opBox.borderLeft); return Math.round(elCoord - opOrigin); } Object.defineProperty(proto, 'offsetParent', { get: function () { return _calcOffsetParent(this); }, configurable: true }); Object.defineProperty(proto, 'offsetTop', { get: function () { return _calcOffsetCoord(this, 'y'); }, configurable: true }); Object.defineProperty(proto, 'offsetLeft', { get: function () { return _calcOffsetCoord(this, 'x'); }, configurable: true }); })();" +
         " })();";
     const accent_val = ctx.eval(accent_script);
     ctx.freeValue(accent_val);

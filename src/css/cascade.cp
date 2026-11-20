@@ -1039,7 +1039,74 @@ pub const PROP_ISOLATION: usize = 91;
 pub const PROP_TEXT_DECORATION_COLOR: usize = 92;
 pub const PROP_TEXT_DECORATION_THICKNESS: usize = 93;
 pub const PROP_TEXT_UNDERLINE_OFFSET: usize = 94;
-pub const TOTAL_PROP_SLOTS: usize = 95;
+pub const PROP_COLOR_SCHEME: usize = 95;
+pub const TOTAL_PROP_SLOTS: usize = 96;
+
+pub enum ColorScheme {
+    Normal,
+    Light,
+    Dark,
+    LightDark,
+
+    static fn parse(raw: []const u8): ColorScheme? {
+        const trimmed = std.mem.trim(u8, raw, " \t\r\n");
+        if (trimmed.len == 0) return null;
+        if (std.ascii.eqlIgnoreCase(trimmed, "normal")) return ColorScheme.Normal;
+        let has_light = false;
+        let has_dark = false;
+        let it = std.mem.tokenizeAny(u8, trimmed, " \t\r\n");
+        while (tok := it.next()) {
+            if (std.ascii.eqlIgnoreCase(tok, "light")) {
+                has_light = true;
+            } else if (std.ascii.eqlIgnoreCase(tok, "dark")) {
+                has_dark = true;
+            }
+        }
+        if (has_light && has_dark) return ColorScheme.LightDark;
+        if (has_dark) return ColorScheme.Dark;
+        if (has_light) return ColorScheme.Light;
+        return null;
+    }
+
+    fn isDarkUsed(): bool {
+        return _ == ColorScheme.Dark;
+    }
+}
+
+struct LightDarkPair {
+    light: CssColor = CssColor.rgba(0, 0, 0, 0),
+    dark: CssColor = CssColor.rgba(0, 0, 0, 0),
+}
+
+fn parseLightDarkPair(raw: []const u8): LightDarkPair? {
+    const s = std.mem.trim(u8, raw, " \t\r\n");
+    if (s.len < 13) return null;
+    if (!std.ascii.startsWithIgnoreCase(s, "light-dark(") || s[s.len - 1] != '\)') return null;
+    const inner = std.mem.trim(u8, s[11 .. s.len - 1], " \t\r\n");
+    let depth: i32 = 0;
+    let split_idx: usize? = null;
+    let i: usize = 0;
+    while (i < inner.len) : (i += 1) {
+        if (inner[i] == '(') {
+            depth += 1;
+        } else if (inner[i] == '\)') {
+            depth -= 1;
+        } else if (inner[i] == ',' && depth == 0) {
+            split_idx = i;
+            break;
+        }
+    }
+    if (si := split_idx) {
+        const light_s = std.mem.trim(u8, inner[0..si], " \t\r\n");
+        const dark_s = std.mem.trim(u8, inner[si + 1 ..], " \t\r\n");
+        if (lc := CssColor.parse(light_s)) {
+            if (dc := CssColor.parse(dark_s)) {
+                return LightDarkPair{ light: lc, dark: dc };
+            }
+        }
+    }
+    return null;
+}
 
 pub enum ContainerType {
     Normal,
@@ -1917,6 +1984,14 @@ pub struct ComputedStyle {
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
 
     // Table & float properties
+    color_scheme: ColorScheme = ColorScheme.Normal;
+    has_bg_light_dark: bool = false;
+    bg_light_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    bg_dark_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_color_light_dark: bool = false;
+    color_light: CssColor = CssColor.rgb(0, 0, 0);
+    color_dark: CssColor = CssColor.rgb(0, 0, 0);
+
     border_collapse: BorderCollapse = BorderCollapse.Separate;
     border_spacing_h: f32 = 0.0;
     border_spacing_v: f32 = 0.0;
@@ -2179,6 +2254,7 @@ pub struct ComputedStyle {
                 _.line_height_px = p.line_height_px;
             }
             _.color = p.color;
+            _.color_scheme = p.color_scheme;
             _.text_fill_color = p.text_fill_color;
             _.has_text_fill_color = p.has_text_fill_color;
             _.accent_color = p.accent_color;
@@ -3692,9 +3768,25 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "color-scheme")) {
+            if (cs := ColorScheme.parse(val)) {
+                if (_.tryClaimSlot(PROP_COLOR_SCHEME, weight)) _.color_scheme = cs;
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "color")) {
-            if (c := CssColor.parse(val)) {
-                if (_.tryClaimSlot(PROP_COLOR, weight)) _.color = c;
+            if (ld := parseLightDarkPair(val)) {
+                if (_.tryClaimSlot(PROP_COLOR, weight)) {
+                    _.has_color_light_dark = true;
+                    _.color_light = ld.light;
+                    _.color_dark = ld.dark;
+                    _.color = if (_.color_scheme.isDarkUsed()) ld.dark else ld.light;
+                }
+            } else if (c := CssColor.parse(val)) {
+                if (_.tryClaimSlot(PROP_COLOR, weight)) {
+                    _.has_color_light_dark = false;
+                    _.color = c;
+                }
             }
             return;
         }
@@ -4020,8 +4112,18 @@ pub struct ComputedStyle {
                     }
                 }
             }
-            if (c := Cascade.parseColorTokenFromShorthand(val)) {
-                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) _.background_color = c;
+            if (ld := parseLightDarkPair(val)) {
+                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
+                    _.has_bg_light_dark = true;
+                    _.bg_light_color = ld.light;
+                    _.bg_dark_color = ld.dark;
+                    _.background_color = if (_.color_scheme.isDarkUsed()) ld.dark else ld.light;
+                }
+            } else if (c := Cascade.parseColorTokenFromShorthand(val)) {
+                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
+                    _.has_bg_light_dark = false;
+                    _.background_color = c;
+                }
             }
             return;
         }
@@ -4683,6 +4785,13 @@ pub struct Cascade {
                 } else {
                     style.flex_direction = if (style.box_orient == BoxOrient.Vertical) FlexDirection.Column else FlexDirection.Row;
                 }
+            }
+
+            if (style.has_bg_light_dark) {
+                style.background_color = if (style.color_scheme.isDarkUsed()) style.bg_dark_color else style.bg_light_color;
+            }
+            if (style.has_color_light_dark) {
+                style.color = if (style.color_scheme.isDarkUsed()) style.color_dark else style.color_light;
             }
 
             out_styles[nid] = style;
