@@ -1625,6 +1625,9 @@
 1. **模块网络事件与并发去重 (`session.cp`, `session_hooks.cp`)**：`sessionModuleLoader` 与 `js_capsurf_fixture_fetch` 为 `.js`/`.mjs` 记录 `addFetchRecord` 并在 `pollNetworkEvents` 归类 `"Script"`，同时在 `loadModuleGraph` 增加 `__inflight` 避免并发 `import()` 重复请求。
 2. **渲染器释放 (`kitesurf_facade.cp`, `protocol_extensions.cp`)**：`Kitesurf.disposeRenderer` 复位 `renderer_active = false` 保留单调 `frames_rendered` 计数。
 
+## Phase 152 `NamedNodeMap._sync` `Attr` 对象恒等复用方案 (`src/js/shim/collections.js`)
+1. **按名复用缓存实例**：`_sync()` 先保存 `prevByName = this._byName`，对同小写名属性直接原地更新已有 `Attr` 实例的 `_value`/`ownerElement`/`_namespaceURI` 等字段，并将已移除属性的原 `Attr.ownerElement` 置为 `null`，确保多次 `getNamedItem` 读取 `===` 恒等。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。

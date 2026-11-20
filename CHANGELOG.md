@@ -2103,6 +2103,10 @@
 - **`src/cdp/{session,session_hooks,kitesurf_facade,protocol_extensions}.cp`**：
   - 补全 ES 模块与动态 `import()` 的 `Network.requestWillBeSent` (`"Script"` 归类 + `__inflight` 并发去重) 与 `Kitesurf.disposeRenderer`（4 门禁全 0，**6/6 PASS, 40 expect() calls**）。
 
+## Phase 152: `NamedNodeMap._sync` `Attr` Identity, `script-execution-probe` & `tla-import-iife-fix-probe` — 3/3 Suites (25 Expects)
+- **`src/js/shim/collections.js` & `src/js/runtime{,_source.cp}`**：
+  - 在 `NamedNodeMap._sync` 按属性名复用已有 `Attr` 实例并清理已移除项 `ownerElement`，`attributes-live-namednodemap` (1/1)、`script-execution-probe` (1/1)、`tla-import-iife-fix-probe` (1/1) 及 `detached-owned-caches` 首项 PASS。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。

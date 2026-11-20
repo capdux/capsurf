@@ -4242,6 +4242,14 @@
   - `absolute-path-transitive-demo` (**1/1**)、`classic-computed-import` (**4/4**)、`page-renderer-relaunch` (**1/1**)：**6/6 PASS (40 expect() calls)**！
 - **清理旧子智能体**: 销毁 `abf4fde7-c470-4350-bdc2-65ee86a86136`。
 
+## [2026-11-20 23:42:30] 1 分 25 秒全绿闭环 `NamedNodeMap._sync` `Attr` 恒等性、`script-execution-probe` & `tla-import-iife-fix-probe` (Subagent 37a4b2a8 结单，Phase 152)
+- **`NamedNodeMap._sync` 实例复用 (`src/js/shim/collections.js`, `src/js/runtime{,_source.cp}`)**:
+  - `collections.js:926-959`：保留 `prevByName = this._byName`，按属性名复用已有 `Attr` 实例并原地同步属性/所有者，移除属性时将旧 `Attr.ownerElement` 置 `null`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `attributes-live-namednodemap` (**1/1**)、`script-execution-probe` (**1/1**)、`tla-import-iife-fix-probe` (**1/1**)：**3/3 PASS (25 expect() calls)**，外加 `detached-owned-caches` (`held node-owned objects`) **PASS**！
+- **清理旧子智能体**: 销毁 `37a4b2a8-8093-4412-86ef-ef2733687a95`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

@@ -3379,6 +3379,7 @@
       delete this[i];
     }
 
+    const prevByName = this._byName;
     this._list = [];
     this._byName = Object.create(null);
 
@@ -3388,10 +3389,28 @@
       const pfx = item.prefix !== undefined ? item.prefix : (colon !== -1 ? item.name.slice(0, colon) : null);
       const loc = item.localName !== undefined ? item.localName : (colon !== -1 ? item.name.slice(colon + 1) : item.name);
       const ns = item.namespaceURI !== undefined ? item.namespaceURI : null;
-      const attrNode = new Attr(item.name, item.value, this._owner, ns, loc, pfx);
+      const key = item.name.toLowerCase();
+      let attrNode = prevByName && prevByName[key];
+      if (attrNode) {
+        attrNode.name = String(item.name);
+        attrNode._value = item.value == null ? "" : String(item.value);
+        attrNode.ownerElement = this._owner;
+        attrNode._namespaceURI = ns;
+        attrNode._localName = loc;
+        attrNode._prefix = pfx;
+      } else {
+        attrNode = new Attr(item.name, item.value, this._owner, ns, loc, pfx);
+      }
       this[i] = attrNode;
       this._list.push(attrNode);
-      this._byName[item.name.toLowerCase()] = attrNode;
+      this._byName[key] = attrNode;
+    }
+    if (prevByName) {
+      for (const k in prevByName) {
+        if (!this._byName[k]) {
+          prevByName[k].ownerElement = null;
+        }
+      }
     }
     this._length = this._list.length;
   };
