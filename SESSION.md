@@ -3363,6 +3363,18 @@
   - 9/10 Core 套件（`script-nomodule`、`script-text`、`select-default-submit`、`svg-anchor-xlink-href`、`svg-animated-string`、`svg-attribute-case`、`svg-dynamic-text-upgrade`、`svg-geometry-length`、`trusted-events`）：**12/12 PASS（35 项断言）**；`svg-css-attribute-values` 定位需原生 CP SVG `var()`/`linearGradient` 渲染。
 - **清理旧子智能体**: 销毁 `9768dcdf-32b9-486e-9a61-1e908f82eb8f`。
 
+## [2026-11-20 15:58:00] 4×4 Transform 矩阵、Web Animations 补间、CSS Typed OM 与 Used Values 9/10 全绿闭环 (Subagent a9061fed 结单，Phase 76)
+- **CSSOM Used Values、4×4 齐次矩阵与 Typed OM (`src/js/shim/`)**:
+  - `cssom.js`: 升级 `serializeComputedTransform` 为完整 4×4 列主序齐次矩阵引擎（支持 Rodrigues 3D 旋转、2D 自动折叠与 Chrome `%.6g` 格式化）；
+  - `animations.js`: 实装 property-indexed keyframes、`cubic-bezier` Newton-Raphson 求值与颜色/transform/数值插值；
+  - `window.js`: 实装祖先链 `--*` 自定义属性继承、嵌套 `var()`、`calc/min/max/clamp` 求值、CSSOM Used Values（含 `min-width/height: auto`、`box-sizing`、sticky 独立轴 scrollport `inset`）及 CSS Typed OM（`CSSStyleValue`/`CSSKeywordValue`/`CSSUnitValue`/`computedStyleMap()`）；
+  - `collections.js`: 修复 `makeHtmlCollection` Proxy `ownKeys`/`getOwnPropertyDescriptor`/`deleteProperty`，根除命名属性遮蔽原型成员。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - 9/10 Core 套件（`anchor-invalid-url-protocol`、`checkbox-remove-attribute-ns`、`classic-regex-globals`、`collection-named-shadowing`、`computed-custom-property`、`computed-style-cache`、`computed-style-used-values` (9/9)、`computed-transform-matrix` (2/2)、`constraint-validity` (2/2) + `computed-style-reads` 1/2）：**22/23 PASS**！
+- **清理旧子智能体**: 销毁 `a9061fed-70e9-44dd-94fb-f1e77e2aa114`。
+
+
 
 
 

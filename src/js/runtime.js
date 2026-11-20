@@ -2595,22 +2595,22 @@
           const el = list[i];
           if (!el) continue;
           const id = el.id || (el.getAttribute && el.getAttribute("id"));
-          if (id && keys.indexOf(id) === -1) keys.push(id);
+          if (id && !(id in t) && keys.indexOf(id) === -1) keys.push(id);
           const name = el.name || (el.getAttribute && el.getAttribute("name"));
-          if (name && keys.indexOf(name) === -1) keys.push(name);
+          if (name && !(name in t) && keys.indexOf(name) === -1) keys.push(name);
         }
         return keys;
       },
       getOwnPropertyDescriptor: function (t, prop) {
-        if (prop === "length") {
-          return { value: getList().length, writable: !!t._isOptionsCollection, enumerable: false, configurable: true };
-        }
         if (typeof prop === "string" && /^\d+$/.test(prop)) {
           const i = Number(prop);
           const list = getList();
           if (i >= 0 && i < list.length) {
             return { value: list[i], writable: !!t._isOptionsCollection, enumerable: true, configurable: true };
           }
+        }
+        if (prop in t) {
+          return Reflect.getOwnPropertyDescriptor(t, prop);
         }
         if (typeof prop === "string") {
           const list = getList();
@@ -2640,6 +2640,20 @@
           }
         }
         return Reflect.getOwnPropertyDescriptor(t, prop);
+      },
+      deleteProperty: function (t, prop) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          if (Number(prop) < getList().length) return false;
+        }
+        if (prop in t) {
+          return Reflect.deleteProperty(t, prop);
+        }
+        if (typeof prop === "string") {
+          if (findNamedItemInList(getList(), prop) !== null) {
+            return false;
+          }
+        }
+        return Reflect.deleteProperty(t, prop);
       }
     });
     return proxy;
@@ -5728,20 +5742,90 @@
 
     let _capturedGetComputedStyle = null;
 
-    function serializeComputedTransform(val) {
+    function formatCssMatrixNumber(n) {
+      if (!isFinite(n) || Math.abs(n) < 1e-12) return "0";
+      const expStr = n.toExponential(5);
+      const parts = expStr.split("e");
+      const exp = parseInt(parts[1], 10);
+      if (exp < -4 || exp >= 6) {
+        const mant = parts[0].replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+        const sign = exp >= 0 ? "+" : "-";
+        const absExp = Math.abs(exp);
+        const expPad = absExp < 10 ? "0" + absExp : String(absExp);
+        return mant + "e" + sign + expPad;
+      }
+      let s = Number(n.toPrecision(6)).toString();
+      if (s === "-0") s = "0";
+      return s;
+    }
+
+    function parseTransformAngleRad(raw) {
+      const s = String(raw || "0").trim().toLowerCase();
+      const num = parseFloat(s) || 0;
+      if (s.endsWith("deg")) return num * Math.PI / 180;
+      if (s.endsWith("turn")) return num * Math.PI * 2;
+      if (s.endsWith("grad")) return num * Math.PI / 200;
+      return num; // rad
+    }
+
+    function exactCosSin(raw) {
+      const s = String(raw || "0").trim().toLowerCase();
+      if (s.endsWith("deg")) {
+        const deg = parseFloat(s) || 0;
+        const mod = ((deg % 360) + 360) % 360;
+        if (Math.abs(mod) < 1e-9 || Math.abs(mod - 360) < 1e-9) return [1, 0];
+        if (Math.abs(mod - 90) < 1e-9) return [0, 1];
+        if (Math.abs(mod - 180) < 1e-9) return [-1, 0];
+        if (Math.abs(mod - 270) < 1e-9) return [0, -1];
+      }
+      const rad = parseTransformAngleRad(raw);
+      return [Math.cos(rad), Math.sin(rad)];
+    }
+
+    function serializeComputedTransform(val, element, computedDecl) {
       if (!val || typeof val !== "string") return val;
       const trimmed = val.trim();
-      if (!trimmed || trimmed === "none" || /^matrix(?:3d)?\(/i.test(trimmed)) return trimmed;
-      let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
-      const mul = function (ma, mb, mc, md, me, mf) {
-        const na = a * ma + c * mb;
-        const nb = b * ma + d * mb;
-        const nc = a * mc + c * md;
-        const nd = b * mc + d * md;
-        const ne = a * me + c * mf + e;
-        const nf = b * me + d * mf + f;
-        a = na; b = nb; c = nc; d = nd; e = ne; f = nf;
+      if (!trimmed || trimmed === "none") return trimmed;
+
+      // If element (or an ancestor) has display: none, transform resolves to "none" when it cannot be resolved
+      const disp = computedDecl && computedDecl.getPropertyValue ? String(computedDecl.getPropertyValue("display") || "").trim().toLowerCase() : "";
+      if (disp === "none") return "none";
+
+      // Resolve element reference box width/height for percentage translations
+      let refW = 0, refH = 0;
+      if (computedDecl && computedDecl.getPropertyValue) {
+        const wStr = computedDecl.getPropertyValue("width");
+        const hStr = computedDecl.getPropertyValue("height");
+        if (wStr && wStr.endsWith("px")) refW = parseFloat(wStr) || 0;
+        if (hStr && hStr.endsWith("px")) refH = parseFloat(hStr) || 0;
+      }
+      const parseLen = function (raw, refPx) {
+        const s = String(raw || "0").trim().toLowerCase();
+        if (s.endsWith("%")) return (parseFloat(s) / 100) * refPx;
+        return parseFloat(s) || 0;
       };
+
+      // 4x4 column-major matrix (identity)
+      let M = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+      ];
+      const mul4 = function (B) {
+        const R = new Array(16);
+        for (let col = 0; col < 4; col++) {
+          for (let row = 0; row < 4; row++) {
+            R[col * 4 + row] =
+              M[0 * 4 + row] * B[col * 4 + 0] +
+              M[1 * 4 + row] * B[col * 4 + 1] +
+              M[2 * 4 + row] * B[col * 4 + 2] +
+              M[3 * 4 + row] * B[col * 4 + 3];
+          }
+        }
+        M = R;
+      };
+
       const fnRe = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
       let m;
       let matched = false;
@@ -5751,36 +5835,106 @@
         if (fn === "scale") {
           const sx = parseFloat(args[0]);
           const sy = args.length > 1 ? parseFloat(args[1]) : sx;
-          if (!isNaN(sx) && !isNaN(sy)) { mul(sx, 0, 0, sy, 0, 0); matched = true; }
+          if (!isNaN(sx) && !isNaN(sy)) {
+            mul4([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            matched = true;
+          }
         } else if (fn === "scalex") {
           const sx = parseFloat(args[0]);
-          if (!isNaN(sx)) { mul(sx, 0, 0, 1, 0, 0); matched = true; }
+          if (!isNaN(sx)) { mul4([sx, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); matched = true; }
         } else if (fn === "scaley") {
           const sy = parseFloat(args[0]);
-          if (!isNaN(sy)) { mul(1, 0, 0, sy, 0, 0); matched = true; }
+          if (!isNaN(sy)) { mul4([1, 0, 0, 0, 0, sy, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); matched = true; }
+        } else if (fn === "scalez") {
+          const sz = parseFloat(args[0]);
+          if (!isNaN(sz)) { mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1]); matched = true; }
+        } else if (fn === "scale3d" && args.length >= 3) {
+          const sx = parseFloat(args[0]), sy = parseFloat(args[1]), sz = parseFloat(args[2]);
+          if (!isNaN(sx) && !isNaN(sy) && !isNaN(sz)) {
+            mul4([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1]);
+            matched = true;
+          }
         } else if (fn === "translate") {
-          const tx = parseFloat(args[0]) || 0;
-          const ty = args.length > 1 ? (parseFloat(args[1]) || 0) : 0;
-          mul(1, 0, 0, 1, tx, ty); matched = true;
+          const tx = parseLen(args[0], refW);
+          const ty = args.length > 1 ? parseLen(args[1], refH) : 0;
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, 0, 1]);
+          matched = true;
         } else if (fn === "translatex") {
-          const tx = parseFloat(args[0]) || 0;
-          mul(1, 0, 0, 1, tx, 0); matched = true;
+          const tx = parseLen(args[0], refW);
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, 0, 0, 1]);
+          matched = true;
         } else if (fn === "translatey") {
-          const ty = parseFloat(args[0]) || 0;
-          mul(1, 0, 0, 1, 0, ty); matched = true;
-        } else if (fn === "rotate") {
-          const raw = args[0] || "0";
-          let rad = parseFloat(raw) || 0;
-          if (raw.endsWith("deg")) rad = rad * Math.PI / 180;
-          else if (raw.endsWith("turn")) rad = rad * Math.PI * 2;
-          else if (raw.endsWith("grad")) rad = rad * Math.PI / 200;
-          const cos = Math.cos(rad);
-          const sin = Math.sin(rad);
-          mul(cos, sin, -sin, cos, 0, 0); matched = true;
+          const ty = parseLen(args[0], refH);
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, ty, 0, 1]);
+          matched = true;
+        } else if (fn === "translatez") {
+          const tz = parseLen(args[0], 0);
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, tz, 1]);
+          matched = true;
+        } else if (fn === "translate3d" && args.length >= 3) {
+          const tx = parseLen(args[0], refW);
+          const ty = parseLen(args[1], refH);
+          const tz = parseLen(args[2], 0);
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1]);
+          matched = true;
+        } else if (fn === "rotate" || fn === "rotatez") {
+          const [cos, sin] = exactCosSin(args[0]);
+          mul4([cos, sin, 0, 0, -sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "rotatex") {
+          const [cos, sin] = exactCosSin(args[0]);
+          mul4([1, 0, 0, 0, 0, cos, sin, 0, 0, -sin, cos, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "rotatey") {
+          const [cos, sin] = exactCosSin(args[0]);
+          mul4([cos, 0, -sin, 0, 0, 1, 0, 0, sin, 0, cos, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "rotate3d" && args.length >= 4) {
+          let x = parseFloat(args[0]) || 0;
+          let y = parseFloat(args[1]) || 0;
+          let z = parseFloat(args[2]) || 0;
+          const len = Math.hypot(x, y, z);
+          if (len > 0) {
+            x /= len; y /= len; z /= len;
+            const [c, s] = exactCosSin(args[3]);
+            const t = 1 - c;
+            mul4([
+              t * x * x + c,       t * x * y + z * s,   t * x * z - y * s,   0,
+              t * x * y - z * s,   t * y * y + c,       t * y * z + x * s,   0,
+              t * x * z + y * s,   t * y * z - x * s,   t * z * z + c,       0,
+              0,                   0,                   0,                   1,
+            ]);
+          }
+          matched = true;
+        } else if (fn === "skew") {
+          const ax = parseTransformAngleRad(args[0]);
+          const ay = args.length > 1 ? parseTransformAngleRad(args[1]) : 0;
+          mul4([1, Math.tan(ay), 0, 0, Math.tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "skewx") {
+          const ax = parseTransformAngleRad(args[0]);
+          mul4([1, 0, 0, 0, Math.tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "skewy") {
+          const ay = parseTransformAngleRad(args[0]);
+          mul4([1, Math.tan(ay), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          matched = true;
+        } else if (fn === "perspective") {
+          const d = parseFloat(args[0]);
+          if (!isNaN(d) && d > 0) {
+            mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -1 / d, 0, 0, 0, 1]);
+            matched = true;
+          }
         } else if (fn === "matrix" && args.length >= 6) {
           const nums = args.map(parseFloat);
           if (nums.every((n) => !isNaN(n))) {
-            mul(nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]);
+            mul4([nums[0], nums[1], 0, 0, nums[2], nums[3], 0, 0, 0, 0, 1, 0, nums[4], nums[5], 0, 1]);
+            matched = true;
+          }
+        } else if (fn === "matrix3d" && args.length >= 16) {
+          const nums = args.map(parseFloat);
+          if (nums.every((n) => !isNaN(n))) {
+            mul4(nums.slice(0, 16));
             matched = true;
           }
         } else {
@@ -5788,11 +5942,19 @@
         }
       }
       if (!matched) return trimmed;
-      const fmt = (n) => {
-        if (Math.abs(n) < 1e-12) return "0";
-        return String(Number(n.toFixed(6)));
-      };
-      return "matrix(" + [a, b, c, d, e, f].map(fmt).join(", ") + ")";
+
+      const eps = 1e-12;
+      const is2D =
+        Math.abs(M[2]) < eps && Math.abs(M[3]) < eps &&
+        Math.abs(M[6]) < eps && Math.abs(M[7]) < eps &&
+        Math.abs(M[8]) < eps && Math.abs(M[9]) < eps &&
+        Math.abs(M[10] - 1) < eps && Math.abs(M[11]) < eps &&
+        Math.abs(M[14]) < eps && Math.abs(M[15] - 1) < eps;
+
+      if (is2D) {
+        return "matrix(" + [M[0], M[1], M[4], M[5], M[12], M[13]].map(formatCssMatrixNumber).join(", ") + ")";
+      }
+      return "matrix3d(" + M.map(formatCssMatrixNumber).join(", ") + ")";
     }
 
     function wrapComputedStyleDecl(decl, element) {
@@ -5809,7 +5971,7 @@
                   let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
                   if (tv) {
                     tv = resolveCssVars(element, tv);
-                    tv = serializeComputedTransform(tv);
+                    tv = serializeComputedTransform(tv, element, target);
                   }
                   return tv || "";
                 }
@@ -5832,7 +5994,7 @@
               let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
               if (tv) {
                 tv = resolveCssVars(element, tv);
-                tv = serializeComputedTransform(tv);
+                tv = serializeComputedTransform(tv, element, target);
               }
               return tv || "";
             }
@@ -22037,16 +22199,221 @@
   function AnimationEffect() {}
   markNative(AnimationEffect, "AnimationEffect");
 
+  function normalizeKeyframesInput(keyframes) {
+    if (!keyframes) return [];
+    if (Array.isArray(keyframes)) {
+      return keyframes.map(function (kf) {
+        return kf && typeof kf === "object" ? Object.assign({}, kf) : {};
+      });
+    }
+    if (typeof keyframes === "object") {
+      // Property-indexed keyframes: { color: ["#205080", "#d0a040"], transform: [...], easing: "..." }
+      const propArrays = {};
+      let maxLen = 0;
+      const sharedEasing = typeof keyframes.easing === "string" ? keyframes.easing : null;
+      const sharedComposite = typeof keyframes.composite === "string" ? keyframes.composite : null;
+      const offsets = Array.isArray(keyframes.offset) ? keyframes.offset : null;
+      for (const k in keyframes) {
+        if (!Object.prototype.hasOwnProperty.call(keyframes, k)) continue;
+        if (k === "easing" || k === "composite" || k === "offset") continue;
+        const v = keyframes[k];
+        if (Array.isArray(v)) {
+          propArrays[k] = v;
+          if (v.length > maxLen) maxLen = v.length;
+        } else if (v !== undefined) {
+          propArrays[k] = [v];
+          if (maxLen < 1) maxLen = 1;
+        }
+      }
+      if (maxLen === 0) return [];
+      const frames = [];
+      for (let i = 0; i < maxLen; i++) {
+        const f = {};
+        if (offsets && offsets[i] != null) f.offset = Number(offsets[i]);
+        else if (maxLen > 1) f.offset = i / (maxLen - 1);
+        else f.offset = 1;
+        if (sharedEasing) f.easing = sharedEasing;
+        if (sharedComposite) f.composite = sharedComposite;
+        for (const k in propArrays) {
+          const arr = propArrays[k];
+          if (i < arr.length) f[k] = arr[i];
+        }
+        frames.push(f);
+      }
+      return frames;
+    }
+    return [];
+  }
+
+  function solveCubicBezier(x1, y1, x2, y2, t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    // Solve B_x(u) = t for u in [0, 1] using Newton-Raphson + bisection fallback
+    const sampleX = function (u) {
+      const inv = 1 - u;
+      return 3 * inv * inv * u * x1 + 3 * inv * u * u * x2 + u * u * u;
+    };
+    const sampleDX = function (u) {
+      const inv = 1 - u;
+      return 3 * inv * inv * x1 + 6 * inv * u * (x2 - x1) + 3 * u * u * (1 - x2);
+    };
+    const sampleY = function (u) {
+      const inv = 1 - u;
+      return 3 * inv * inv * u * y1 + 3 * inv * u * u * y2 + u * u * u;
+    };
+    let u = t;
+    for (let i = 0; i < 8; i++) {
+      const err = sampleX(u) - t;
+      if (Math.abs(err) < 1e-10) return sampleY(u);
+      const d = sampleDX(u);
+      if (Math.abs(d) < 1e-10) break;
+      u -= err / d;
+      if (u < 0 || u > 1) break;
+    }
+    let lo = 0, hi = 1;
+    u = t;
+    for (let i = 0; i < 32; i++) {
+      const x = sampleX(u);
+      if (Math.abs(x - t) < 1e-10) break;
+      if (x < t) lo = u;
+      else hi = u;
+      u = 0.5 * (lo + hi);
+    }
+    return sampleY(u);
+  }
+
+  function evaluateAnimationEasing(easing, t) {
+    if (!easing || easing === "linear") return t;
+    const s = String(easing).trim().toLowerCase();
+    if (s === "linear") return t;
+    if (s === "ease") return solveCubicBezier(0.25, 0.1, 0.25, 1.0, t);
+    if (s === "ease-in") return solveCubicBezier(0.42, 0.0, 1.0, 1.0, t);
+    if (s === "ease-out") return solveCubicBezier(0.0, 0.0, 0.58, 1.0, t);
+    if (s === "ease-in-out") return solveCubicBezier(0.42, 0.0, 0.58, 1.0, t);
+    const cb = s.match(/^cubic-bezier\(\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\s*\)$/);
+    if (cb) {
+      const x1 = parseFloat(cb[1]);
+      const y1 = parseFloat(cb[2]);
+      const x2 = parseFloat(cb[3]);
+      const y2 = parseFloat(cb[4]);
+      if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+        return solveCubicBezier(x1, y1, x2, y2, t);
+      }
+    }
+    return t;
+  }
+
+  function parseAnimColor(str) {
+    if (typeof str !== "string") return null;
+    const s = str.trim().toLowerCase();
+    const named = {
+      black: [0, 0, 0, 1], white: [255, 255, 255, 1], red: [255, 0, 0, 1],
+      green: [0, 128, 0, 1], blue: [0, 0, 255, 1], yellow: [255, 255, 0, 1],
+      transparent: [0, 0, 0, 0],
+    };
+    if (Object.prototype.hasOwnProperty.call(named, s)) return named[s];
+    if (s.startsWith("#")) {
+      const hex = s.slice(1);
+      if (hex.length === 3) {
+        return [
+          parseInt(hex[0] + hex[0], 16),
+          parseInt(hex[1] + hex[1], 16),
+          parseInt(hex[2] + hex[2], 16),
+          1,
+        ];
+      }
+      if (hex.length === 6) {
+        return [
+          parseInt(hex.slice(0, 2), 16),
+          parseInt(hex.slice(2, 4), 16),
+          parseInt(hex.slice(4, 6), 16),
+          1,
+        ];
+      }
+      if (hex.length === 8) {
+        return [
+          parseInt(hex.slice(0, 2), 16),
+          parseInt(hex.slice(2, 4), 16),
+          parseInt(hex.slice(4, 6), 16),
+          parseInt(hex.slice(6, 8), 16) / 255,
+        ];
+      }
+    }
+    const m = s.match(/^rgba?\(\s*([0-9.]+)\s*[,\s]\s*([0-9.]+)\s*[,\s]\s*([0-9.]+)(?:\s*[,/]\s*([0-9.]+))?\s*\)$/);
+    if (m) {
+      return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), m[4] !== undefined ? parseFloat(m[4]) : 1];
+    }
+    return null;
+  }
+
+  function interpolateAnimValue(prop, fromVal, toVal, p) {
+    const k = String(prop).toLowerCase();
+    if (k === "color" || k.endsWith("color")) {
+      const c1 = parseAnimColor(fromVal);
+      const c2 = parseAnimColor(toVal);
+      if (c1 && c2) {
+        const r = Math.round(c1[0] + (c2[0] - c1[0]) * p);
+        const g = Math.round(c1[1] + (c2[1] - c1[1]) * p);
+        const b = Math.round(c1[2] + (c2[2] - c1[2]) * p);
+        const a = c1[3] + (c2[3] - c1[3]) * p;
+        if (a >= 1 - 1e-6) return "rgb(" + r + ", " + g + ", " + b + ")";
+        return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+      }
+    }
+    if (k === "transform") {
+      const f1 = String(fromVal || "").trim();
+      const f2 = String(toVal || "").trim();
+      const re = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
+      const list1 = [];
+      const list2 = [];
+      let m;
+      while ((m = re.exec(f1)) !== null) list1.push({ fn: m[1].toLowerCase(), args: m[2].split(",").map((x) => x.trim()) });
+      re.lastIndex = 0;
+      while ((m = re.exec(f2)) !== null) list2.push({ fn: m[1].toLowerCase(), args: m[2].split(",").map((x) => x.trim()) });
+      if (list1.length > 0 && list1.length === list2.length) {
+        const out = [];
+        let ok = true;
+        for (let i = 0; i < list1.length; i++) {
+          if (list1[i].fn !== list2[i].fn || list1[i].args.length !== list2[i].args.length) {
+            ok = false;
+            break;
+          }
+          const iArgs = [];
+          for (let j = 0; j < list1[i].args.length; j++) {
+            const m1 = list1[i].args[j].match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z%]*)$/i);
+            const m2 = list2[i].args[j].match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z%]*)$/i);
+            if (!m1 || !m2) { ok = false; break; }
+            const v1 = parseFloat(m1[1]);
+            const v2 = parseFloat(m2[1]);
+            const u1 = m1[2] || m2[2] || "";
+            const iv = v1 + (v2 - v1) * p;
+            iArgs.push(String(iv) + u1);
+          }
+          if (!ok) break;
+          out.push(list1[i].fn + "(" + iArgs.join(", ") + ")");
+        }
+        if (ok) return out.join(" ");
+      }
+    }
+    const n1 = String(fromVal || "").trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
+    const n2 = String(toVal || "").trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
+    if (n1 && n2 && n1[2] === n2[2]) {
+      const v = parseFloat(n1[1]) + (parseFloat(n2[1]) - parseFloat(n1[1])) * p;
+      return String(v) + n1[2];
+    }
+    return p < 0.5 ? fromVal : toVal;
+  }
+
   function KeyframeEffect(target, keyframes, options) {
     AnimationEffect.call(this);
     this.target = target || null;
-    this.keyframes = Array.isArray(keyframes) ? keyframes : [];
+    this.keyframes = normalizeKeyframesInput(keyframes);
     const opts = typeof options === "number" ? { duration: options } : (options || {});
     this.delay = Number(opts.delay || 0);
     this.endDelay = Number(opts.endDelay || 0);
     this.fill = String(opts.fill || "auto");
     this.iterationStart = Number(opts.iterationStart || 0);
-    this.iterations = Number(opts.iterations || 1);
+    this.iterations = opts.iterations !== undefined ? Number(opts.iterations) : 1;
     this.duration = opts.duration !== undefined ? (opts.duration === "auto" ? "auto" : Number(opts.duration)) : 0;
     this.direction = String(opts.direction || "normal");
     this.easing = String(opts.easing || "linear");
@@ -22095,23 +22462,14 @@
     this.onremove = null;
 
     const isFullAnimation = Boolean(globalThis.__CAP_RENDER_CONFIG && globalThis.__CAP_RENDER_CONFIG.animations);
+    registeredAnimations.add(this);
 
     if (!isFullAnimation) {
-      // Static headless mode: instant finish, zero background cpu burn
-      this.playState = "finished";
-      const dur = (effect && typeof effect.duration === "number") ? effect.duration : 0;
-      this.currentTime = dur;
+      // Static headless mode: active at start, can be paused/scrubbed via currentTime
+      this.playState = "running";
+      this.currentTime = 0;
       this.ready = Promise.resolve(this);
       this.finished = Promise.resolve(this);
-      // Apply end keyframes directly to target style
-      if (effect && effect.target && effect.keyframes && effect.keyframes.length > 0) {
-        const endFrame = effect.keyframes[effect.keyframes.length - 1];
-        for (const k in endFrame) {
-          if (k !== "offset" && k !== "easing" && k !== "composite") {
-            try { effect.target.style[k] = endFrame[k]; } catch (e) {}
-          }
-        }
-      }
     } else {
       // Full interactive animation mode
       this.playState = "idle";
@@ -22120,7 +22478,6 @@
       this._finishedResolve = null;
       this.ready = new Promise(function (res) { self._readyResolve = res; });
       this.finished = new Promise(function (res) { self._finishedResolve = res; });
-      registeredAnimations.add(this);
     }
   }
   Animation.prototype = Object.create(EventTarget.prototype);
@@ -22128,7 +22485,7 @@
 
   Animation.prototype.play = function () {
     if (!globalThis.__CAP_RENDER_CONFIG || !globalThis.__CAP_RENDER_CONFIG.animations) {
-      this.playState = "finished";
+      this.playState = "running";
       return;
     }
     this.playState = "running";
@@ -22147,7 +22504,7 @@
   };
 
   Animation.prototype.pause = function () {
-    if (this.playState === "running") {
+    if (this.playState !== "idle") {
       this.playState = "paused";
     }
   };
@@ -22183,6 +22540,7 @@
     this.playState = "idle";
     this.currentTime = null;
     this.startTime = null;
+    registeredAnimations.delete(this);
     const evt = new Event("cancel");
     this.dispatchEvent(evt);
     if (typeof this.oncancel === "function") {
@@ -22218,6 +22576,81 @@
       }
     }
     return res;
+  }
+
+  function computeAnimatedStylesForElement(element) {
+    const result = {};
+    if (!element) return result;
+    for (const anim of registeredAnimations) {
+      if (!anim || !anim.effect || anim.effect.target !== element) continue;
+      if (anim.playState === "idle") continue;
+      const effect = anim.effect;
+      const frames = effect.keyframes;
+      if (!frames || frames.length === 0) continue;
+      const dur = typeof effect.duration === "number" ? effect.duration : 0;
+      const delay = effect.delay || 0;
+      const localTime = anim.currentTime != null ? Number(anim.currentTime) : 0;
+      const activeTime = localTime - delay;
+      if (activeTime < 0 && effect.fill !== "backwards" && effect.fill !== "both") continue;
+      const totalDur = dur * (effect.iterations || 1);
+      if (activeTime >= totalDur && totalDur > 0 && effect.fill !== "forwards" && effect.fill !== "both") {
+        continue;
+      }
+      let overallProgress = dur > 0 ? Math.max(0, Math.min(1, (activeTime % dur === 0 && activeTime > 0 && activeTime >= totalDur) ? 1 : (activeTime % dur) / dur)) : 1;
+      if (activeTime <= 0) overallProgress = 0;
+      else if (activeTime >= totalDur && dur > 0) overallProgress = 1;
+      const effectProgress = evaluateAnimationEasing(effect.easing, overallProgress);
+
+      if (frames.length === 1) {
+        const f = frames[0];
+        for (const k in f) {
+          if (k !== "offset" && k !== "easing" && k !== "composite") {
+            const kebab = k.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+            result[kebab] = f[k];
+          }
+        }
+        continue;
+      }
+
+      // Assign computed offsets if missing
+      const offsets = frames.map(function (f, idx) {
+        if (f.offset != null && !isNaN(Number(f.offset))) return Number(f.offset);
+        return idx / (frames.length - 1);
+      });
+      let idx = 0;
+      for (let i = 0; i < offsets.length - 1; i++) {
+        if (effectProgress >= offsets[i] && effectProgress <= offsets[i + 1]) {
+          idx = i;
+          break;
+        }
+        if (effectProgress > offsets[i + 1]) idx = i;
+      }
+      const f0 = frames[idx];
+      const f1 = frames[idx + 1] || f0;
+      const span = offsets[idx + 1] - offsets[idx];
+      const segT = span > 0 ? Math.max(0, Math.min(1, (effectProgress - offsets[idx]) / span)) : 1;
+      const easedP = evaluateAnimationEasing(f0.easing || "linear", segT);
+
+      const props = new Set();
+      for (const k in f0) if (k !== "offset" && k !== "easing" && k !== "composite") props.add(k);
+      for (const k in f1) if (k !== "offset" && k !== "easing" && k !== "composite") props.add(k);
+
+      for (const prop of props) {
+        const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+        if (f0[prop] !== undefined && f1[prop] !== undefined) {
+          result[kebab] = interpolateAnimValue(kebab, f0[prop], f1[prop], easedP);
+        } else if (f1[prop] !== undefined) {
+          result[kebab] = f1[prop];
+        } else if (f0[prop] !== undefined) {
+          result[kebab] = f0[prop];
+        }
+      }
+    }
+    return result;
+  }
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_getAnimatedStyles = computeAnimatedStylesForElement;
   }
 
   // =============================================================
@@ -25104,6 +25537,46 @@
       return result;
     }
 
+    function splitCssTopLevelWhitespace(str) {
+      const tokens = [];
+      let depth = 0;
+      let inQuote = null;
+      let cur = "";
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (inQuote) {
+          cur += c;
+          if (c === inQuote && str[i - 1] !== "\\") inQuote = null;
+        } else if (c === '"' || c === "'") {
+          inQuote = c;
+          cur += c;
+        } else if (c === "(") {
+          depth++;
+          cur += c;
+        } else if (c === ")") {
+          depth = Math.max(0, depth - 1);
+          cur += c;
+        } else if (depth === 0 && /\s/.test(c)) {
+          if (cur) {
+            tokens.push(cur);
+            cur = "";
+          }
+        } else {
+          cur += c;
+        }
+      }
+      if (cur) tokens.push(cur);
+      return tokens;
+    }
+
+    function expandFourSides(tokens) {
+      if (tokens.length === 1) return [tokens[0], tokens[0], tokens[0], tokens[0]];
+      if (tokens.length === 2) return [tokens[0], tokens[1], tokens[0], tokens[1]];
+      if (tokens.length === 3) return [tokens[0], tokens[1], tokens[2], tokens[1]];
+      if (tokens.length >= 4) return [tokens[0], tokens[1], tokens[2], tokens[3]];
+      return null;
+    }
+
     function parseDeclarationsBlockInto(element, declBlock, computedMap) {
       const decls = splitCssDeclarations(declBlock);
       for (let i = 0; i < decls.length; i++) {
@@ -25120,6 +25593,41 @@
         val = resolveAttrExpressions(element, val);
         const key = prop.startsWith("--") ? prop : prop.toLowerCase();
         computedMap.set(key, val);
+
+        if (key === "inset") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            computedMap.set("top", sides[0]);
+            computedMap.set("right", sides[1]);
+            computedMap.set("bottom", sides[2]);
+            computedMap.set("left", sides[3]);
+          }
+        } else if (key === "margin") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            computedMap.set("margin-top", sides[0]);
+            computedMap.set("margin-right", sides[1]);
+            computedMap.set("margin-bottom", sides[2]);
+            computedMap.set("margin-left", sides[3]);
+          }
+        } else if (key === "padding") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            computedMap.set("padding-top", sides[0]);
+            computedMap.set("padding-right", sides[1]);
+            computedMap.set("padding-bottom", sides[2]);
+            computedMap.set("padding-left", sides[3]);
+          }
+        } else if (key === "overflow") {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            computedMap.set("overflow-x", parts[0]);
+            computedMap.set("overflow-y", parts[0]);
+          } else if (parts.length >= 2) {
+            computedMap.set("overflow-x", parts[0]);
+            computedMap.set("overflow-y", parts[1]);
+          }
+        }
       }
     }
 
@@ -25251,6 +25759,516 @@
       }
     }
 
+    const BLOCK_LEVEL_TAGS = new Set([
+      "html", "body", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+      "ul", "ol", "li", "dl", "dt", "dd", "section", "article", "nav",
+      "aside", "header", "footer", "main", "form", "fieldset", "blockquote",
+      "pre", "hr", "figure", "figcaption", "address", "details", "summary", "dialog",
+    ]);
+    const REPLACED_INLINE_TAGS = new Set([
+      "img", "input", "button", "select", "textarea", "canvas", "svg", "video", "audio", "iframe", "object", "embed",
+    ]);
+    const HIDDEN_BY_DEFAULT_TAGS = new Set([
+      "head", "style", "script", "meta", "link", "title", "template", "datalist", "base", "noscript",
+    ]);
+    const INHERITED_CSS_PROPS = new Set([
+      "color", "font-size", "font-family", "font-weight", "font-style",
+      "line-height", "text-align", "visibility", "direction", "white-space",
+      "letter-spacing", "word-spacing", "cursor",
+    ]);
+
+    function getDefaultDisplayForElement(element) {
+      const tag = String((element && (element.localName || element.tagName)) || "").toLowerCase();
+      if (HIDDEN_BY_DEFAULT_TAGS.has(tag)) return "none";
+      if (BLOCK_LEVEL_TAGS.has(tag)) return "block";
+      if (tag === "table") return "table";
+      if (tag === "tr") return "table-row";
+      if (tag === "td" || tag === "th") return "table-cell";
+      if (tag === "tbody") return "table-row-group";
+      if (tag === "thead") return "table-header-group";
+      if (tag === "tfoot") return "table-footer-group";
+      return "inline";
+    }
+
+    function getStyleNodesForElement(element) {
+      const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      const rootNode = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+      const styleScope = (rootNode && rootNode.nodeType === 11 && rootNode.host) ? rootNode : doc;
+      const styleNodes = [];
+      if (!styleScope) return styleNodes;
+      try {
+        if (typeof styleScope.querySelectorAll === "function") {
+          const list = styleScope.querySelectorAll("style");
+          for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
+        }
+      } catch (e) {}
+      if (styleNodes.length === 0) {
+        function scanStyles(node) {
+          if (!node) return;
+          if (node.tagName && String(node.tagName).toLowerCase() === "style") {
+            styleNodes.push(node);
+          }
+          if (node.childNodes && node.childNodes.length) {
+            for (let i = 0; i < node.childNodes.length; i++) {
+              scanStyles(node.childNodes[i]);
+            }
+          }
+        }
+        if (styleScope.nodeType === 11) {
+          scanStyles(styleScope);
+        } else {
+          if (styleScope.head) scanStyles(styleScope.head);
+          if (styleScope.body) scanStyles(styleScope.body);
+          if (styleScope.documentElement) scanStyles(styleScope.documentElement);
+        }
+      }
+      return styleNodes;
+    }
+
+    function resolveVarsInMap(computedMap) {
+      function substitute(val, depth) {
+        if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 16) return val;
+        let out = "";
+        let i = 0;
+        while (i < val.length) {
+          const idx = val.indexOf("var(", i);
+          if (idx === -1) {
+            out += val.slice(i);
+            break;
+          }
+          out += val.slice(i, idx);
+          let d = 1;
+          let j = idx + 4;
+          while (j < val.length && d > 0) {
+            if (val[j] === "(") d++;
+            else if (val[j] === ")") d--;
+            j++;
+          }
+          const inside = val.slice(idx + 4, j - 1);
+          let commaIdx = -1;
+          let pDepth = 0;
+          for (let k = 0; k < inside.length; k++) {
+            if (inside[k] === "(") pDepth++;
+            else if (inside[k] === ")") pDepth--;
+            else if (inside[k] === "," && pDepth === 0) {
+              commaIdx = k;
+              break;
+            }
+          }
+          const varName = (commaIdx === -1 ? inside : inside.slice(0, commaIdx)).trim();
+          const fallback = commaIdx === -1 ? "" : inside.slice(commaIdx + 1).trim();
+          let rep = computedMap.has(varName) ? computedMap.get(varName) : "";
+          if (!rep && fallback) rep = fallback;
+          if (rep && rep.indexOf("var(") !== -1) {
+            rep = substitute(rep, depth + 1);
+          }
+          out += rep;
+          i = j;
+        }
+        return out;
+      }
+      for (const [k, v] of computedMap.entries()) {
+        if (typeof v === "string" && v.indexOf("var(") !== -1) {
+          computedMap.set(k, substitute(v, 0));
+        }
+      }
+    }
+
+    function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
+      for (let i = 0; i < styleNodes.length; i++) {
+        const sn = styleNodes[i];
+        const text = (sn && (sn.textContent || sn.innerText)) || "";
+        if (text) {
+          parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+        }
+      }
+      if (!normalizedPseudo) {
+        const rawInline = element.getAttribute ? element.getAttribute("style") : "";
+        if (rawInline) {
+          parseDeclarationsBlockInto(element, rawInline, targetMap);
+        }
+      }
+    }
+
+    function collectRawComputedMap(element, normalizedPseudo) {
+      const styleNodes = getStyleNodesForElement(element);
+      const computedMap = new Map();
+
+      // Collect ancestors from root down to parent for inherited properties & custom properties
+      const ancestors = [];
+      let p = element.parentElement || element.parentNode;
+      while (p && p.nodeType === 1) {
+        ancestors.push(p);
+        p = p.parentElement || p.parentNode;
+      }
+      for (let i = ancestors.length - 1; i >= 0; i--) {
+        const ancMap = new Map();
+        collectElementOwnDeclarations(ancestors[i], styleNodes, "", ancMap);
+        for (const [k, v] of ancMap.entries()) {
+          if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+            computedMap.set(k, v);
+          }
+        }
+      }
+
+      // Own declarations (or pseudo-element declarations)
+      if (normalizedPseudo) {
+        const elMap = new Map();
+        collectElementOwnDeclarations(element, styleNodes, "", elMap);
+        for (const [k, v] of elMap.entries()) {
+          if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+            computedMap.set(k, v);
+          }
+        }
+      }
+      collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+
+      // Overlay active/paused Web Animations values
+      if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
+        const animStyles = globalThis.__capsurf_getAnimatedStyles(element);
+        for (const k in animStyles) {
+          if (Object.prototype.hasOwnProperty.call(animStyles, k)) {
+            computedMap.set(k, animStyles[k]);
+          }
+        }
+      }
+
+      // Resolve var() references using the complete (inherited + own) map
+      resolveVarsInMap(computedMap);
+
+      // Pseudo element defaults
+      if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
+        if (!computedMap.has("display")) {
+          computedMap.set("display", "inline");
+        }
+      }
+
+      return computedMap;
+    }
+
+    function formatCssPx(n) {
+      if (!isFinite(n) || Math.abs(n) < 1e-9) return "0px";
+      return String(Number(n.toFixed(4))) + "px";
+    }
+
+    function evalCssLengthExpr(expr, refPx, fontSizePx) {
+      if (typeof expr !== "string") return null;
+      const s = expr.trim();
+      if (!s) return null;
+      if (s === "0") return 0;
+
+      // Fast path for simple length/percentage
+      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?$/i);
+      if (simple) {
+        const num = parseFloat(simple[1]);
+        const unit = (simple[2] || "").toLowerCase();
+        if (unit === "px" || unit === "") return num;
+        if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
+        if (unit === "em") return num * (fontSizePx || 16);
+        if (unit === "rem") return num * 16;
+        if (unit === "pt") return num * (96 / 72);
+        if (unit === "vw") return (num / 100) * 800;
+        if (unit === "vh") return (num / 100) * 600;
+        return null;
+      }
+
+      // Recursive descent parser for calc(), min(), max(), clamp()
+      let pos = 0;
+      const len = s.length;
+      function skipWs() {
+        while (pos < len && /\s/.test(s[pos])) pos++;
+      }
+      function parseAddSub() {
+        let left = parseMulDiv();
+        if (left === null) return null;
+        while (true) {
+          skipWs();
+          if (pos < len && (s[pos] === "+" || s[pos] === "-")) {
+            const op = s[pos++];
+            const right = parseMulDiv();
+            if (right === null) return null;
+            left = op === "+" ? left + right : left - right;
+          } else {
+            break;
+          }
+        }
+        return left;
+      }
+      function parseMulDiv() {
+        let left = parsePrimary();
+        if (left === null) return null;
+        while (true) {
+          skipWs();
+          if (pos < len && (s[pos] === "*" || s[pos] === "/")) {
+            const op = s[pos++];
+            const right = parsePrimary();
+            if (right === null) return null;
+            left = op === "*" ? left * right : (right !== 0 ? left / right : 0);
+          } else {
+            break;
+          }
+        }
+        return left;
+      }
+      function parsePrimary() {
+        skipWs();
+        if (pos >= len) return null;
+        if (s[pos] === "(") {
+          pos++;
+          const v = parseAddSub();
+          skipWs();
+          if (s[pos] === ")") pos++;
+          return v;
+        }
+        // Function call: calc, min, max, clamp
+        const fnMatch = s.slice(pos).match(/^(calc|min|max|clamp)\s*\(/i);
+        if (fnMatch) {
+          const fnName = fnMatch[1].toLowerCase();
+          pos += fnMatch[0].length;
+          const args = [];
+          while (pos < len) {
+            const v = parseAddSub();
+            if (v === null) return null;
+            args.push(v);
+            skipWs();
+            if (s[pos] === ",") {
+              pos++;
+              continue;
+            }
+            if (s[pos] === ")") {
+              pos++;
+              break;
+            }
+            return null;
+          }
+          if (fnName === "calc") return args.length === 1 ? args[0] : null;
+          if (fnName === "min") return args.length > 0 ? Math.min.apply(null, args) : null;
+          if (fnName === "max") return args.length > 0 ? Math.max.apply(null, args) : null;
+          if (fnName === "clamp") {
+            if (args.length !== 3) return null;
+            return Math.max(args[0], Math.min(args[1], args[2]));
+          }
+        }
+        // Number + optional unit
+        const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?/i);
+        if (numMatch) {
+          pos += numMatch[0].length;
+          const num = parseFloat(numMatch[1]);
+          const unit = (numMatch[2] || "").toLowerCase();
+          if (unit === "px" || unit === "") return num;
+          if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
+          if (unit === "em") return num * (fontSizePx || 16);
+          if (unit === "rem") return num * 16;
+          if (unit === "pt") return num * (96 / 72);
+          if (unit === "vw") return (num / 100) * 800;
+          if (unit === "vh") return (num / 100) * 600;
+          return null;
+        }
+        return null;
+      }
+
+      const res = parseAddSub();
+      skipWs();
+      if (res === null || pos < len) return null;
+      return res;
+    }
+
+    function hasLayoutBox(element, rawMap) {
+      if (!element || element.nodeType !== 1) return false;
+      const ownDisp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (ownDisp === "none" || ownDisp === "contents") return false;
+      let p = element.parentElement || element.parentNode;
+      while (p && p.nodeType === 1) {
+        const pMap = collectRawComputedMap(p, "");
+        const pDisp = (pMap.get("display") || getDefaultDisplayForElement(p)).trim().toLowerCase();
+        if (pDisp === "none") return false;
+        p = p.parentElement || p.parentNode;
+      }
+      return true;
+    }
+
+    function computeElementUsedWidthPx(element, depth) {
+      if (!element || element.nodeType !== 1 || depth > 24) return 800;
+      const rawMap = collectRawComputedMap(element, "");
+      const disp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (disp === "contents") {
+        return computeElementUsedWidthPx(element.parentElement || element.parentNode, depth + 1);
+      }
+      const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+      const parentEl = element.parentElement || element.parentNode;
+      const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1) : 800;
+      const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
+      let w = null;
+      if (wRaw === "auto") {
+        const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
+        const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
+        w = Math.max(0, cbW - ml - mr);
+      } else if (wRaw === "min-content" || wRaw === "max-content") {
+        let maxChildW = 0;
+        let ch = element.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1) {
+            const cw = computeElementUsedWidthPx(ch, depth + 1);
+            if (cw > maxChildW) maxChildW = cw;
+          }
+          ch = ch.nextSibling;
+        }
+        w = maxChildW;
+      } else {
+        w = evalCssLengthExpr(wRaw, cbW, fontSize);
+        if (w === null) w = cbW;
+      }
+
+      // Clamp with max-width and min-width
+      const maxWRaw = (rawMap.get("max-width") || "").trim().toLowerCase();
+      if (maxWRaw && maxWRaw !== "none") {
+        const maxW = evalCssLengthExpr(maxWRaw, cbW, fontSize);
+        if (maxW !== null && w > maxW) w = maxW;
+      }
+      const minWRaw = (rawMap.get("min-width") || "").trim().toLowerCase();
+      if (minWRaw && minWRaw !== "auto") {
+        const minW = evalCssLengthExpr(minWRaw, cbW, fontSize);
+        if (minW !== null && w < minW) w = minW;
+      }
+      return w;
+    }
+
+    function computeElementUsedHeightPx(element, depth) {
+      if (!element || element.nodeType !== 1 || depth > 24) return 600;
+      const rawMap = collectRawComputedMap(element, "");
+      const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+      const hRaw = (rawMap.get("height") || "auto").trim().toLowerCase();
+      if (hRaw && hRaw !== "auto") {
+        const parentEl = element.parentElement || element.parentNode;
+        const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
+        const h = evalCssLengthExpr(hRaw, cbH, fontSize);
+        if (h !== null) return h;
+      }
+      return 0;
+    }
+
+    function findStickyScrollportSize(element, axis) {
+      // axis: "x" or "y". Scroll container has overflow-{axis} in {auto, scroll, hidden} (NOT clip or visible)
+      const prop = axis === "x" ? "overflow-x" : "overflow-y";
+      let p = element.parentElement || element.parentNode;
+      while (p && p.nodeType === 1) {
+        const pMap = collectRawComputedMap(p, "");
+        const ov = (pMap.get(prop) || "visible").trim().toLowerCase();
+        if (ov === "hidden" || ov === "scroll" || ov === "auto") {
+          return axis === "x" ? computeElementUsedWidthPx(p, 0) : computeElementUsedHeightPx(p, 0);
+        }
+        p = p.parentElement || p.parentNode;
+      }
+      return axis === "x" ? 800 : 600;
+    }
+
+    function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
+      if (normalizedPseudo || !element || element.nodeType !== 1) return;
+      const disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (!computedMap.has("display")) {
+        computedMap.set("display", disp);
+      }
+
+      // min-width / min-height: auto resolves to 0px outside flex/grid parent
+      const parentEl = element.parentElement || element.parentNode;
+      let parentDisp = "block";
+      if (parentEl && parentEl.nodeType === 1) {
+        const pMap = collectRawComputedMap(parentEl, "");
+        parentDisp = (pMap.get("display") || getDefaultDisplayForElement(parentEl)).trim().toLowerCase();
+      }
+      const isFlexOrGridItem =
+        parentDisp === "flex" || parentDisp === "inline-flex" ||
+        parentDisp === "grid" || parentDisp === "inline-grid";
+      if (!isFlexOrGridItem) {
+        if ((computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
+          computedMap.set("min-width", "0px");
+        }
+        if ((computedMap.get("min-height") || "").trim().toLowerCase() === "auto") {
+          computedMap.set("min-height", "0px");
+        }
+      }
+
+      if (!hasLayoutBox(element, computedMap)) {
+        return;
+      }
+
+      const tag = String(element.localName || element.tagName || "").toLowerCase();
+      const fl = (computedMap.get("float") || "none").trim().toLowerCase();
+      const pos = (computedMap.get("position") || "static").trim().toLowerCase();
+      const isNonReplacedInline =
+        disp === "inline" &&
+        !REPLACED_INLINE_TAGS.has(tag) &&
+        fl === "none" &&
+        pos !== "absolute" &&
+        pos !== "fixed";
+
+      const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+      const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
+
+      // Resolve width for elements with a box (except non-replaced inline)
+      if (!isNonReplacedInline) {
+        const wRaw = (computedMap.get("width") || "").trim().toLowerCase();
+        if (wRaw === "" && disp === "block") {
+          computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
+        } else if (wRaw !== "") {
+          const usedW = computeElementUsedWidthPx(element, 0);
+          computedMap.set("width", formatCssPx(usedW));
+        }
+
+        // Resolve padding-* percentages / calc against cbW
+        const padProps = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
+        for (let i = 0; i < padProps.length; i++) {
+          const pk = padProps[i];
+          const pv = computedMap.get(pk);
+          if (pv && (pv.indexOf("%") !== -1 || pv.indexOf("(") !== -1)) {
+            const px = evalCssLengthExpr(pv, cbW, fontSize);
+            if (px !== null) computedMap.set(pk, formatCssPx(px));
+          }
+        }
+
+        // Resolve margin-* percentages / calc against cbW (skip internal table boxes like table-row)
+        const isTableInternal =
+          disp === "table-row" || disp === "table-row-group" ||
+          disp === "table-header-group" || disp === "table-footer-group" ||
+          disp === "table-column" || disp === "table-column-group" || disp === "table-cell";
+        if (!isTableInternal) {
+          const marProps = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+          for (let i = 0; i < marProps.length; i++) {
+            const mk = marProps[i];
+            const mv = computedMap.get(mk);
+            if (mv && (mv.indexOf("%") !== -1 || mv.indexOf("(") !== -1)) {
+              const px = evalCssLengthExpr(mv, cbW, fontSize);
+              if (px !== null) computedMap.set(mk, formatCssPx(px));
+            }
+          }
+        }
+      }
+
+      // Sticky inset resolution against per-axis scrollport
+      if (pos === "sticky") {
+        const spW = findStickyScrollportSize(element, "x");
+        const spH = findStickyScrollportSize(element, "y");
+        const xProps = ["left", "right"];
+        for (let i = 0; i < xProps.length; i++) {
+          const k = xProps[i];
+          const v = computedMap.get(k);
+          if (v && v !== "auto") {
+            const px = evalCssLengthExpr(v, spW, fontSize);
+            if (px !== null) computedMap.set(k, formatCssPx(px));
+          }
+        }
+        const yProps = ["top", "bottom"];
+        for (let i = 0; i < yProps.length; i++) {
+          const k = yProps[i];
+          const v = computedMap.get(k);
+          if (v && v !== "auto") {
+            const px = evalCssLengthExpr(v, spH, fontSize);
+            if (px !== null) computedMap.set(k, formatCssPx(px));
+          }
+        }
+      }
+    }
+
     function getComputedStyle(element, pseudoElt) {
       if (!element || typeof element !== "object") {
         throw new TypeError("Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.");
@@ -25265,67 +26283,8 @@
         normalizedPseudo = p;
       }
 
-      const computedMap = new Map();
-      const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-      const rootNode = typeof element.getRootNode === "function" ? element.getRootNode() : null;
-      const styleScope = (rootNode && rootNode.nodeType === 11 && rootNode.host) ? rootNode : doc;
-      if (styleScope) {
-        let styleNodes = [];
-        try {
-          if (typeof styleScope.querySelectorAll === "function") {
-            const list = styleScope.querySelectorAll("style");
-            for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
-          }
-        } catch (e) {}
-
-        if (styleNodes.length === 0) {
-          function scanStyles(node) {
-            if (!node) return;
-            if (node.tagName && String(node.tagName).toLowerCase() === "style") {
-              styleNodes.push(node);
-            }
-            if (node.childNodes && node.childNodes.length) {
-              for (let i = 0; i < node.childNodes.length; i++) {
-                scanStyles(node.childNodes[i]);
-              }
-            }
-          }
-          if (styleScope.nodeType === 11) {
-            scanStyles(styleScope);
-          } else {
-            if (styleScope.head) scanStyles(styleScope.head);
-            if (styleScope.body) scanStyles(styleScope.body);
-            if (styleScope.documentElement) scanStyles(styleScope.documentElement);
-          }
-        }
-
-        for (let i = 0; i < styleNodes.length; i++) {
-          const sn = styleNodes[i];
-          const text = (sn && (sn.textContent || sn.innerText)) || "";
-          if (text) {
-            parseCssRulesInto(element, text, computedMap, normalizedPseudo);
-          }
-        }
-      }
-
-      // If no pseudo element, inline styles override stylesheet rules
-      if (!normalizedPseudo) {
-        const rawInline = element.getAttribute ? element.getAttribute("style") : "";
-        if (rawInline) {
-          parseDeclarationsBlockInto(element, rawInline, computedMap);
-        }
-      }
-
-      // Pseudo element inheritance / defaults
-      if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
-        if (!computedMap.has("display")) {
-          computedMap.set("display", "inline");
-        }
-        if (!computedMap.has("color")) {
-          const parentColor = element.style ? element.style.getPropertyValue("color") : "";
-          if (parentColor) computedMap.set("color", parentColor);
-        }
-      }
+      const computedMap = collectRawComputedMap(element, normalizedPseudo);
+      applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
 
       const declTarget = Object.create(CSSStyleDeclaration.prototype);
       const propList = Array.from(computedMap.keys());
@@ -25405,6 +26364,96 @@
     }
 
     markNative(getComputedStyle, "getComputedStyle");
+
+    // CSS Typed OM: CSSStyleValue, CSSKeywordValue, CSSUnitValue, StylePropertyMapReadOnly
+    function CSSStyleValue(raw) {
+      this._raw = raw == null ? "" : String(raw);
+    }
+    CSSStyleValue.prototype.toString = function () {
+      return this._raw;
+    };
+    markNative(CSSStyleValue, "CSSStyleValue");
+
+    function CSSKeywordValue(value) {
+      CSSStyleValue.call(this, value);
+      this.value = String(value);
+    }
+    CSSKeywordValue.prototype = Object.create(CSSStyleValue.prototype);
+    CSSKeywordValue.prototype.constructor = CSSKeywordValue;
+    CSSKeywordValue.prototype.toString = function () {
+      return this.value;
+    };
+    markNative(CSSKeywordValue, "CSSKeywordValue");
+
+    function CSSUnitValue(value, unit) {
+      this.value = Number(value);
+      this.unit = String(unit);
+    }
+    CSSUnitValue.prototype = Object.create(CSSStyleValue.prototype);
+    CSSUnitValue.prototype.constructor = CSSUnitValue;
+    CSSUnitValue.prototype.toString = function () {
+      if (this.unit === "percent") return String(this.value) + "%";
+      if (this.unit === "number") return String(this.value);
+      return String(this.value) + this.unit;
+    };
+    markNative(CSSUnitValue, "CSSUnitValue");
+
+    function parseTypedOMValue(rawVal) {
+      if (rawVal == null) return undefined;
+      const s = String(rawVal).trim();
+      if (!s) return undefined;
+      const m = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|px|em|rem|vw|vh|vmin|vmax|pt|cm|mm|in|deg|rad|grad|turn|s|ms|fr)?$/i);
+      if (m) {
+        const num = parseFloat(m[1]);
+        let unit = (m[2] || "").toLowerCase();
+        if (unit === "%") unit = "percent";
+        else if (unit === "") unit = "number";
+        return new CSSUnitValue(num, unit);
+      }
+      if (/^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(s)) {
+        return new CSSKeywordValue(s);
+      }
+      return new CSSStyleValue(s);
+    }
+
+    function StylePropertyMapReadOnly(element) {
+      this._element = element;
+    }
+    StylePropertyMapReadOnly.prototype.get = function (property) {
+      const rawProp = String(property || "").trim();
+      const key = rawProp.startsWith("--") ? rawProp : rawProp.toLowerCase();
+      const rawMap = collectRawComputedMap(this._element, "");
+      let val = rawMap.get(key);
+      if (val === undefined) {
+        if (key === "width" || key === "height" || key === "min-width" || key === "min-height" ||
+            key === "top" || key === "right" || key === "bottom" || key === "left") {
+          val = "auto";
+        } else if (key === "display") {
+          val = getDefaultDisplayForElement(this._element);
+        } else {
+          return undefined;
+        }
+      }
+      return parseTypedOMValue(val);
+    };
+    StylePropertyMapReadOnly.prototype.has = function (property) {
+      return this.get(property) !== undefined;
+    };
+    StylePropertyMapReadOnly.prototype.getAll = function (property) {
+      const v = this.get(property);
+      return v !== undefined ? [v] : [];
+    };
+    markNative(StylePropertyMapReadOnly, "StylePropertyMapReadOnly");
+
+    global.CSSStyleValue = CSSStyleValue;
+    global.CSSKeywordValue = CSSKeywordValue;
+    global.CSSUnitValue = CSSUnitValue;
+    global.StylePropertyMapReadOnly = StylePropertyMapReadOnly;
+    if (global.Element && global.Element.prototype) {
+      global.Element.prototype.computedStyleMap = markNative(function () {
+        return new StylePropertyMapReadOnly(this);
+      }, "computedStyleMap");
+    }
 
     global.CSSStyleDeclaration = CSSStyleDeclaration;
     global.getComputedStyle = getComputedStyle;

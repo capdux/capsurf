@@ -1628,4 +1628,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：9 大 Core 套件共 **12/12 PASS (35 expect calls)**。
+
+## Phase 76: 4×4 Transform Matrix, Web Animations Interpolation, CSS Typed OM & Used Values — 9 Suites (100% Closed)
+- **`src/js/shim/{collections,animations,cssom,window}.js`**：
+  - 实装 4×4 齐次变换矩阵与 `%.6g` 格式化、Web Animations `cubic-bezier` 补间引擎、CSS Typed OM（`computedStyleMap()`）、嵌套 `var()`/`calc/min/max/clamp` 与 CSSOM Used Values，并修复 `HTMLOptionsCollection` LegacyPlatformObject Proxy 不变量。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：9/10 Core 套件共 **22/23 PASS**（含 `computed-style-used-values` 9/9、`computed-transform-matrix` 2/2）。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

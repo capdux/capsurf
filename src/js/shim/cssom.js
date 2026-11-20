@@ -2370,20 +2370,90 @@
 
   let _capturedGetComputedStyle = null;
 
-  function serializeComputedTransform(val) {
+  function formatCssMatrixNumber(n) {
+    if (!isFinite(n) || Math.abs(n) < 1e-12) return "0";
+    const expStr = n.toExponential(5);
+    const parts = expStr.split("e");
+    const exp = parseInt(parts[1], 10);
+    if (exp < -4 || exp >= 6) {
+      const mant = parts[0].replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+      const sign = exp >= 0 ? "+" : "-";
+      const absExp = Math.abs(exp);
+      const expPad = absExp < 10 ? "0" + absExp : String(absExp);
+      return mant + "e" + sign + expPad;
+    }
+    let s = Number(n.toPrecision(6)).toString();
+    if (s === "-0") s = "0";
+    return s;
+  }
+
+  function parseTransformAngleRad(raw) {
+    const s = String(raw || "0").trim().toLowerCase();
+    const num = parseFloat(s) || 0;
+    if (s.endsWith("deg")) return num * Math.PI / 180;
+    if (s.endsWith("turn")) return num * Math.PI * 2;
+    if (s.endsWith("grad")) return num * Math.PI / 200;
+    return num; // rad
+  }
+
+  function exactCosSin(raw) {
+    const s = String(raw || "0").trim().toLowerCase();
+    if (s.endsWith("deg")) {
+      const deg = parseFloat(s) || 0;
+      const mod = ((deg % 360) + 360) % 360;
+      if (Math.abs(mod) < 1e-9 || Math.abs(mod - 360) < 1e-9) return [1, 0];
+      if (Math.abs(mod - 90) < 1e-9) return [0, 1];
+      if (Math.abs(mod - 180) < 1e-9) return [-1, 0];
+      if (Math.abs(mod - 270) < 1e-9) return [0, -1];
+    }
+    const rad = parseTransformAngleRad(raw);
+    return [Math.cos(rad), Math.sin(rad)];
+  }
+
+  function serializeComputedTransform(val, element, computedDecl) {
     if (!val || typeof val !== "string") return val;
     const trimmed = val.trim();
-    if (!trimmed || trimmed === "none" || /^matrix(?:3d)?\(/i.test(trimmed)) return trimmed;
-    let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
-    const mul = function (ma, mb, mc, md, me, mf) {
-      const na = a * ma + c * mb;
-      const nb = b * ma + d * mb;
-      const nc = a * mc + c * md;
-      const nd = b * mc + d * md;
-      const ne = a * me + c * mf + e;
-      const nf = b * me + d * mf + f;
-      a = na; b = nb; c = nc; d = nd; e = ne; f = nf;
+    if (!trimmed || trimmed === "none") return trimmed;
+
+    // If element (or an ancestor) has display: none, transform resolves to "none" when it cannot be resolved
+    const disp = computedDecl && computedDecl.getPropertyValue ? String(computedDecl.getPropertyValue("display") || "").trim().toLowerCase() : "";
+    if (disp === "none") return "none";
+
+    // Resolve element reference box width/height for percentage translations
+    let refW = 0, refH = 0;
+    if (computedDecl && computedDecl.getPropertyValue) {
+      const wStr = computedDecl.getPropertyValue("width");
+      const hStr = computedDecl.getPropertyValue("height");
+      if (wStr && wStr.endsWith("px")) refW = parseFloat(wStr) || 0;
+      if (hStr && hStr.endsWith("px")) refH = parseFloat(hStr) || 0;
+    }
+    const parseLen = function (raw, refPx) {
+      const s = String(raw || "0").trim().toLowerCase();
+      if (s.endsWith("%")) return (parseFloat(s) / 100) * refPx;
+      return parseFloat(s) || 0;
     };
+
+    // 4x4 column-major matrix (identity)
+    let M = [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    ];
+    const mul4 = function (B) {
+      const R = new Array(16);
+      for (let col = 0; col < 4; col++) {
+        for (let row = 0; row < 4; row++) {
+          R[col * 4 + row] =
+            M[0 * 4 + row] * B[col * 4 + 0] +
+            M[1 * 4 + row] * B[col * 4 + 1] +
+            M[2 * 4 + row] * B[col * 4 + 2] +
+            M[3 * 4 + row] * B[col * 4 + 3];
+        }
+      }
+      M = R;
+    };
+
     const fnRe = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
     let m;
     let matched = false;
@@ -2393,36 +2463,106 @@
       if (fn === "scale") {
         const sx = parseFloat(args[0]);
         const sy = args.length > 1 ? parseFloat(args[1]) : sx;
-        if (!isNaN(sx) && !isNaN(sy)) { mul(sx, 0, 0, sy, 0, 0); matched = true; }
+        if (!isNaN(sx) && !isNaN(sy)) {
+          mul4([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          matched = true;
+        }
       } else if (fn === "scalex") {
         const sx = parseFloat(args[0]);
-        if (!isNaN(sx)) { mul(sx, 0, 0, 1, 0, 0); matched = true; }
+        if (!isNaN(sx)) { mul4([sx, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); matched = true; }
       } else if (fn === "scaley") {
         const sy = parseFloat(args[0]);
-        if (!isNaN(sy)) { mul(1, 0, 0, sy, 0, 0); matched = true; }
+        if (!isNaN(sy)) { mul4([1, 0, 0, 0, 0, sy, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); matched = true; }
+      } else if (fn === "scalez") {
+        const sz = parseFloat(args[0]);
+        if (!isNaN(sz)) { mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1]); matched = true; }
+      } else if (fn === "scale3d" && args.length >= 3) {
+        const sx = parseFloat(args[0]), sy = parseFloat(args[1]), sz = parseFloat(args[2]);
+        if (!isNaN(sx) && !isNaN(sy) && !isNaN(sz)) {
+          mul4([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1]);
+          matched = true;
+        }
       } else if (fn === "translate") {
-        const tx = parseFloat(args[0]) || 0;
-        const ty = args.length > 1 ? (parseFloat(args[1]) || 0) : 0;
-        mul(1, 0, 0, 1, tx, ty); matched = true;
+        const tx = parseLen(args[0], refW);
+        const ty = args.length > 1 ? parseLen(args[1], refH) : 0;
+        mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, 0, 1]);
+        matched = true;
       } else if (fn === "translatex") {
-        const tx = parseFloat(args[0]) || 0;
-        mul(1, 0, 0, 1, tx, 0); matched = true;
+        const tx = parseLen(args[0], refW);
+        mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, 0, 0, 1]);
+        matched = true;
       } else if (fn === "translatey") {
-        const ty = parseFloat(args[0]) || 0;
-        mul(1, 0, 0, 1, 0, ty); matched = true;
-      } else if (fn === "rotate") {
-        const raw = args[0] || "0";
-        let rad = parseFloat(raw) || 0;
-        if (raw.endsWith("deg")) rad = rad * Math.PI / 180;
-        else if (raw.endsWith("turn")) rad = rad * Math.PI * 2;
-        else if (raw.endsWith("grad")) rad = rad * Math.PI / 200;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-        mul(cos, sin, -sin, cos, 0, 0); matched = true;
+        const ty = parseLen(args[0], refH);
+        mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, ty, 0, 1]);
+        matched = true;
+      } else if (fn === "translatez") {
+        const tz = parseLen(args[0], 0);
+        mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, tz, 1]);
+        matched = true;
+      } else if (fn === "translate3d" && args.length >= 3) {
+        const tx = parseLen(args[0], refW);
+        const ty = parseLen(args[1], refH);
+        const tz = parseLen(args[2], 0);
+        mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1]);
+        matched = true;
+      } else if (fn === "rotate" || fn === "rotatez") {
+        const [cos, sin] = exactCosSin(args[0]);
+        mul4([cos, sin, 0, 0, -sin, cos, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "rotatex") {
+        const [cos, sin] = exactCosSin(args[0]);
+        mul4([1, 0, 0, 0, 0, cos, sin, 0, 0, -sin, cos, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "rotatey") {
+        const [cos, sin] = exactCosSin(args[0]);
+        mul4([cos, 0, -sin, 0, 0, 1, 0, 0, sin, 0, cos, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "rotate3d" && args.length >= 4) {
+        let x = parseFloat(args[0]) || 0;
+        let y = parseFloat(args[1]) || 0;
+        let z = parseFloat(args[2]) || 0;
+        const len = Math.hypot(x, y, z);
+        if (len > 0) {
+          x /= len; y /= len; z /= len;
+          const [c, s] = exactCosSin(args[3]);
+          const t = 1 - c;
+          mul4([
+            t * x * x + c,       t * x * y + z * s,   t * x * z - y * s,   0,
+            t * x * y - z * s,   t * y * y + c,       t * y * z + x * s,   0,
+            t * x * z + y * s,   t * y * z - x * s,   t * z * z + c,       0,
+            0,                   0,                   0,                   1,
+          ]);
+        }
+        matched = true;
+      } else if (fn === "skew") {
+        const ax = parseTransformAngleRad(args[0]);
+        const ay = args.length > 1 ? parseTransformAngleRad(args[1]) : 0;
+        mul4([1, Math.tan(ay), 0, 0, Math.tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "skewx") {
+        const ax = parseTransformAngleRad(args[0]);
+        mul4([1, 0, 0, 0, Math.tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "skewy") {
+        const ay = parseTransformAngleRad(args[0]);
+        mul4([1, Math.tan(ay), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        matched = true;
+      } else if (fn === "perspective") {
+        const d = parseFloat(args[0]);
+        if (!isNaN(d) && d > 0) {
+          mul4([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -1 / d, 0, 0, 0, 1]);
+          matched = true;
+        }
       } else if (fn === "matrix" && args.length >= 6) {
         const nums = args.map(parseFloat);
         if (nums.every((n) => !isNaN(n))) {
-          mul(nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]);
+          mul4([nums[0], nums[1], 0, 0, nums[2], nums[3], 0, 0, 0, 0, 1, 0, nums[4], nums[5], 0, 1]);
+          matched = true;
+        }
+      } else if (fn === "matrix3d" && args.length >= 16) {
+        const nums = args.map(parseFloat);
+        if (nums.every((n) => !isNaN(n))) {
+          mul4(nums.slice(0, 16));
           matched = true;
         }
       } else {
@@ -2430,11 +2570,19 @@
       }
     }
     if (!matched) return trimmed;
-    const fmt = (n) => {
-      if (Math.abs(n) < 1e-12) return "0";
-      return String(Number(n.toFixed(6)));
-    };
-    return "matrix(" + [a, b, c, d, e, f].map(fmt).join(", ") + ")";
+
+    const eps = 1e-12;
+    const is2D =
+      Math.abs(M[2]) < eps && Math.abs(M[3]) < eps &&
+      Math.abs(M[6]) < eps && Math.abs(M[7]) < eps &&
+      Math.abs(M[8]) < eps && Math.abs(M[9]) < eps &&
+      Math.abs(M[10] - 1) < eps && Math.abs(M[11]) < eps &&
+      Math.abs(M[14]) < eps && Math.abs(M[15] - 1) < eps;
+
+    if (is2D) {
+      return "matrix(" + [M[0], M[1], M[4], M[5], M[12], M[13]].map(formatCssMatrixNumber).join(", ") + ")";
+    }
+    return "matrix3d(" + M.map(formatCssMatrixNumber).join(", ") + ")";
   }
 
   function wrapComputedStyleDecl(decl, element) {
@@ -2451,7 +2599,7 @@
                 let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
                 if (tv) {
                   tv = resolveCssVars(element, tv);
-                  tv = serializeComputedTransform(tv);
+                  tv = serializeComputedTransform(tv, element, target);
                 }
                 return tv || "";
               }
@@ -2474,7 +2622,7 @@
             let tv = (target.getPropertyValue ? (target.getPropertyValue("transform") || target.getPropertyValue("-webkit-transform")) : "") || target.transform || "";
             if (tv) {
               tv = resolveCssVars(element, tv);
-              tv = serializeComputedTransform(tv);
+              tv = serializeComputedTransform(tv, element, target);
             }
             return tv || "";
           }

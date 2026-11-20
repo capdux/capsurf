@@ -273,22 +273,22 @@ function makeHtmlCollection(getList, customTarget) {
         const el = list[i];
         if (!el) continue;
         const id = el.id || (el.getAttribute && el.getAttribute("id"));
-        if (id && keys.indexOf(id) === -1) keys.push(id);
+        if (id && !(id in t) && keys.indexOf(id) === -1) keys.push(id);
         const name = el.name || (el.getAttribute && el.getAttribute("name"));
-        if (name && keys.indexOf(name) === -1) keys.push(name);
+        if (name && !(name in t) && keys.indexOf(name) === -1) keys.push(name);
       }
       return keys;
     },
     getOwnPropertyDescriptor: function (t, prop) {
-      if (prop === "length") {
-        return { value: getList().length, writable: !!t._isOptionsCollection, enumerable: false, configurable: true };
-      }
       if (typeof prop === "string" && /^\d+$/.test(prop)) {
         const i = Number(prop);
         const list = getList();
         if (i >= 0 && i < list.length) {
           return { value: list[i], writable: !!t._isOptionsCollection, enumerable: true, configurable: true };
         }
+      }
+      if (prop in t) {
+        return Reflect.getOwnPropertyDescriptor(t, prop);
       }
       if (typeof prop === "string") {
         const list = getList();
@@ -318,6 +318,20 @@ function makeHtmlCollection(getList, customTarget) {
         }
       }
       return Reflect.getOwnPropertyDescriptor(t, prop);
+    },
+    deleteProperty: function (t, prop) {
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        if (Number(prop) < getList().length) return false;
+      }
+      if (prop in t) {
+        return Reflect.deleteProperty(t, prop);
+      }
+      if (typeof prop === "string") {
+        if (findNamedItemInList(getList(), prop) !== null) {
+          return false;
+        }
+      }
+      return Reflect.deleteProperty(t, prop);
     }
   });
   return proxy;

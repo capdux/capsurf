@@ -1267,4 +1267,10 @@
    - 将在途重入锁、可信标志与事件类型/取消状态全部收归闭包私有 `WeakSet`/`WeakMap`，并在 `dispatchTrustedEvent` 校验 `canonicalNodeIds`，彻底免疫页面覆写 `Event.prototype` 或篡改 `target._id` 的干扰。
 2. **SVG 几何长度与 `<a xlink:href>` (`html-classes.js`, `html-element.js`, `harness.ts`)**：
    - 校验 `SVG_NS` 并在 `getTotalLength()` 实现 7 类基础 SVG 图元长度公式；增强点击链路支持 SVG `<a>` `xlink:href` 导航。
+
+## Phase 76 4×4 Transform 矩阵、Web Animations 补间与 CSS Typed OM 技术方案
+1. **4×4 齐次变换矩阵与 Web Animations (`cssom.js`, `animations.js`)**：
+   - 将 `serializeComputedTransform` 升级为列主序 4×4 矩阵引擎（Rodrigues 3D 旋转 + 2D 自动折叠 + `%.6g` 格式化）；在 `KeyframeEffect` 实装 `cubic-bezier` Newton-Raphson + 二分求值与属性实时插值，接入 `getComputedStyle`。
+2. **CSSOM Used Values 与 Typed OM (`window.js`, `collections.js`)**：
+   - 补齐 `CSSStyleValue`/`CSSKeywordValue`/`CSSUnitValue`/`computedStyleMap()` 与 `calc`/`min`/`max`/`clamp` 求值，区分有/无布局盒 Used Values 解析；修正 `makeHtmlCollection` Proxy 防止命名属性遮蔽原型方法。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -2879,6 +2879,46 @@ function installWindow(global) {
     return result;
   }
 
+  function splitCssTopLevelWhitespace(str) {
+    const tokens = [];
+    let depth = 0;
+    let inQuote = null;
+    let cur = "";
+    for (let i = 0; i < str.length; i++) {
+      const c = str[i];
+      if (inQuote) {
+        cur += c;
+        if (c === inQuote && str[i - 1] !== "\\") inQuote = null;
+      } else if (c === '"' || c === "'") {
+        inQuote = c;
+        cur += c;
+      } else if (c === "(") {
+        depth++;
+        cur += c;
+      } else if (c === ")") {
+        depth = Math.max(0, depth - 1);
+        cur += c;
+      } else if (depth === 0 && /\s/.test(c)) {
+        if (cur) {
+          tokens.push(cur);
+          cur = "";
+        }
+      } else {
+        cur += c;
+      }
+    }
+    if (cur) tokens.push(cur);
+    return tokens;
+  }
+
+  function expandFourSides(tokens) {
+    if (tokens.length === 1) return [tokens[0], tokens[0], tokens[0], tokens[0]];
+    if (tokens.length === 2) return [tokens[0], tokens[1], tokens[0], tokens[1]];
+    if (tokens.length === 3) return [tokens[0], tokens[1], tokens[2], tokens[1]];
+    if (tokens.length >= 4) return [tokens[0], tokens[1], tokens[2], tokens[3]];
+    return null;
+  }
+
   function parseDeclarationsBlockInto(element, declBlock, computedMap) {
     const decls = splitCssDeclarations(declBlock);
     for (let i = 0; i < decls.length; i++) {
@@ -2895,6 +2935,41 @@ function installWindow(global) {
       val = resolveAttrExpressions(element, val);
       const key = prop.startsWith("--") ? prop : prop.toLowerCase();
       computedMap.set(key, val);
+
+      if (key === "inset") {
+        const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+        if (sides) {
+          computedMap.set("top", sides[0]);
+          computedMap.set("right", sides[1]);
+          computedMap.set("bottom", sides[2]);
+          computedMap.set("left", sides[3]);
+        }
+      } else if (key === "margin") {
+        const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+        if (sides) {
+          computedMap.set("margin-top", sides[0]);
+          computedMap.set("margin-right", sides[1]);
+          computedMap.set("margin-bottom", sides[2]);
+          computedMap.set("margin-left", sides[3]);
+        }
+      } else if (key === "padding") {
+        const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+        if (sides) {
+          computedMap.set("padding-top", sides[0]);
+          computedMap.set("padding-right", sides[1]);
+          computedMap.set("padding-bottom", sides[2]);
+          computedMap.set("padding-left", sides[3]);
+        }
+      } else if (key === "overflow") {
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          computedMap.set("overflow-x", parts[0]);
+          computedMap.set("overflow-y", parts[0]);
+        } else if (parts.length >= 2) {
+          computedMap.set("overflow-x", parts[0]);
+          computedMap.set("overflow-y", parts[1]);
+        }
+      }
     }
   }
 
@@ -3026,6 +3101,516 @@ function installWindow(global) {
     }
   }
 
+  const BLOCK_LEVEL_TAGS = new Set([
+    "html", "body", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "dl", "dt", "dd", "section", "article", "nav",
+    "aside", "header", "footer", "main", "form", "fieldset", "blockquote",
+    "pre", "hr", "figure", "figcaption", "address", "details", "summary", "dialog",
+  ]);
+  const REPLACED_INLINE_TAGS = new Set([
+    "img", "input", "button", "select", "textarea", "canvas", "svg", "video", "audio", "iframe", "object", "embed",
+  ]);
+  const HIDDEN_BY_DEFAULT_TAGS = new Set([
+    "head", "style", "script", "meta", "link", "title", "template", "datalist", "base", "noscript",
+  ]);
+  const INHERITED_CSS_PROPS = new Set([
+    "color", "font-size", "font-family", "font-weight", "font-style",
+    "line-height", "text-align", "visibility", "direction", "white-space",
+    "letter-spacing", "word-spacing", "cursor",
+  ]);
+
+  function getDefaultDisplayForElement(element) {
+    const tag = String((element && (element.localName || element.tagName)) || "").toLowerCase();
+    if (HIDDEN_BY_DEFAULT_TAGS.has(tag)) return "none";
+    if (BLOCK_LEVEL_TAGS.has(tag)) return "block";
+    if (tag === "table") return "table";
+    if (tag === "tr") return "table-row";
+    if (tag === "td" || tag === "th") return "table-cell";
+    if (tag === "tbody") return "table-row-group";
+    if (tag === "thead") return "table-header-group";
+    if (tag === "tfoot") return "table-footer-group";
+    return "inline";
+  }
+
+  function getStyleNodesForElement(element) {
+    const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+    const rootNode = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+    const styleScope = (rootNode && rootNode.nodeType === 11 && rootNode.host) ? rootNode : doc;
+    const styleNodes = [];
+    if (!styleScope) return styleNodes;
+    try {
+      if (typeof styleScope.querySelectorAll === "function") {
+        const list = styleScope.querySelectorAll("style");
+        for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
+      }
+    } catch (e) {}
+    if (styleNodes.length === 0) {
+      function scanStyles(node) {
+        if (!node) return;
+        if (node.tagName && String(node.tagName).toLowerCase() === "style") {
+          styleNodes.push(node);
+        }
+        if (node.childNodes && node.childNodes.length) {
+          for (let i = 0; i < node.childNodes.length; i++) {
+            scanStyles(node.childNodes[i]);
+          }
+        }
+      }
+      if (styleScope.nodeType === 11) {
+        scanStyles(styleScope);
+      } else {
+        if (styleScope.head) scanStyles(styleScope.head);
+        if (styleScope.body) scanStyles(styleScope.body);
+        if (styleScope.documentElement) scanStyles(styleScope.documentElement);
+      }
+    }
+    return styleNodes;
+  }
+
+  function resolveVarsInMap(computedMap) {
+    function substitute(val, depth) {
+      if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 16) return val;
+      let out = "";
+      let i = 0;
+      while (i < val.length) {
+        const idx = val.indexOf("var(", i);
+        if (idx === -1) {
+          out += val.slice(i);
+          break;
+        }
+        out += val.slice(i, idx);
+        let d = 1;
+        let j = idx + 4;
+        while (j < val.length && d > 0) {
+          if (val[j] === "(") d++;
+          else if (val[j] === ")") d--;
+          j++;
+        }
+        const inside = val.slice(idx + 4, j - 1);
+        let commaIdx = -1;
+        let pDepth = 0;
+        for (let k = 0; k < inside.length; k++) {
+          if (inside[k] === "(") pDepth++;
+          else if (inside[k] === ")") pDepth--;
+          else if (inside[k] === "," && pDepth === 0) {
+            commaIdx = k;
+            break;
+          }
+        }
+        const varName = (commaIdx === -1 ? inside : inside.slice(0, commaIdx)).trim();
+        const fallback = commaIdx === -1 ? "" : inside.slice(commaIdx + 1).trim();
+        let rep = computedMap.has(varName) ? computedMap.get(varName) : "";
+        if (!rep && fallback) rep = fallback;
+        if (rep && rep.indexOf("var(") !== -1) {
+          rep = substitute(rep, depth + 1);
+        }
+        out += rep;
+        i = j;
+      }
+      return out;
+    }
+    for (const [k, v] of computedMap.entries()) {
+      if (typeof v === "string" && v.indexOf("var(") !== -1) {
+        computedMap.set(k, substitute(v, 0));
+      }
+    }
+  }
+
+  function collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, targetMap) {
+    for (let i = 0; i < styleNodes.length; i++) {
+      const sn = styleNodes[i];
+      const text = (sn && (sn.textContent || sn.innerText)) || "";
+      if (text) {
+        parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+      }
+    }
+    if (!normalizedPseudo) {
+      const rawInline = element.getAttribute ? element.getAttribute("style") : "";
+      if (rawInline) {
+        parseDeclarationsBlockInto(element, rawInline, targetMap);
+      }
+    }
+  }
+
+  function collectRawComputedMap(element, normalizedPseudo) {
+    const styleNodes = getStyleNodesForElement(element);
+    const computedMap = new Map();
+
+    // Collect ancestors from root down to parent for inherited properties & custom properties
+    const ancestors = [];
+    let p = element.parentElement || element.parentNode;
+    while (p && p.nodeType === 1) {
+      ancestors.push(p);
+      p = p.parentElement || p.parentNode;
+    }
+    for (let i = ancestors.length - 1; i >= 0; i--) {
+      const ancMap = new Map();
+      collectElementOwnDeclarations(ancestors[i], styleNodes, "", ancMap);
+      for (const [k, v] of ancMap.entries()) {
+        if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+          computedMap.set(k, v);
+        }
+      }
+    }
+
+    // Own declarations (or pseudo-element declarations)
+    if (normalizedPseudo) {
+      const elMap = new Map();
+      collectElementOwnDeclarations(element, styleNodes, "", elMap);
+      for (const [k, v] of elMap.entries()) {
+        if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+          computedMap.set(k, v);
+        }
+      }
+    }
+    collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+
+    // Overlay active/paused Web Animations values
+    if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
+      const animStyles = globalThis.__capsurf_getAnimatedStyles(element);
+      for (const k in animStyles) {
+        if (Object.prototype.hasOwnProperty.call(animStyles, k)) {
+          computedMap.set(k, animStyles[k]);
+        }
+      }
+    }
+
+    // Resolve var() references using the complete (inherited + own) map
+    resolveVarsInMap(computedMap);
+
+    // Pseudo element defaults
+    if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
+      if (!computedMap.has("display")) {
+        computedMap.set("display", "inline");
+      }
+    }
+
+    return computedMap;
+  }
+
+  function formatCssPx(n) {
+    if (!isFinite(n) || Math.abs(n) < 1e-9) return "0px";
+    return String(Number(n.toFixed(4))) + "px";
+  }
+
+  function evalCssLengthExpr(expr, refPx, fontSizePx) {
+    if (typeof expr !== "string") return null;
+    const s = expr.trim();
+    if (!s) return null;
+    if (s === "0") return 0;
+
+    // Fast path for simple length/percentage
+    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?$/i);
+    if (simple) {
+      const num = parseFloat(simple[1]);
+      const unit = (simple[2] || "").toLowerCase();
+      if (unit === "px" || unit === "") return num;
+      if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
+      if (unit === "em") return num * (fontSizePx || 16);
+      if (unit === "rem") return num * 16;
+      if (unit === "pt") return num * (96 / 72);
+      if (unit === "vw") return (num / 100) * 800;
+      if (unit === "vh") return (num / 100) * 600;
+      return null;
+    }
+
+    // Recursive descent parser for calc(), min(), max(), clamp()
+    let pos = 0;
+    const len = s.length;
+    function skipWs() {
+      while (pos < len && /\s/.test(s[pos])) pos++;
+    }
+    function parseAddSub() {
+      let left = parseMulDiv();
+      if (left === null) return null;
+      while (true) {
+        skipWs();
+        if (pos < len && (s[pos] === "+" || s[pos] === "-")) {
+          const op = s[pos++];
+          const right = parseMulDiv();
+          if (right === null) return null;
+          left = op === "+" ? left + right : left - right;
+        } else {
+          break;
+        }
+      }
+      return left;
+    }
+    function parseMulDiv() {
+      let left = parsePrimary();
+      if (left === null) return null;
+      while (true) {
+        skipWs();
+        if (pos < len && (s[pos] === "*" || s[pos] === "/")) {
+          const op = s[pos++];
+          const right = parsePrimary();
+          if (right === null) return null;
+          left = op === "*" ? left * right : (right !== 0 ? left / right : 0);
+        } else {
+          break;
+        }
+      }
+      return left;
+    }
+    function parsePrimary() {
+      skipWs();
+      if (pos >= len) return null;
+      if (s[pos] === "(") {
+        pos++;
+        const v = parseAddSub();
+        skipWs();
+        if (s[pos] === ")") pos++;
+        return v;
+      }
+      // Function call: calc, min, max, clamp
+      const fnMatch = s.slice(pos).match(/^(calc|min|max|clamp)\s*\(/i);
+      if (fnMatch) {
+        const fnName = fnMatch[1].toLowerCase();
+        pos += fnMatch[0].length;
+        const args = [];
+        while (pos < len) {
+          const v = parseAddSub();
+          if (v === null) return null;
+          args.push(v);
+          skipWs();
+          if (s[pos] === ",") {
+            pos++;
+            continue;
+          }
+          if (s[pos] === ")") {
+            pos++;
+            break;
+          }
+          return null;
+        }
+        if (fnName === "calc") return args.length === 1 ? args[0] : null;
+        if (fnName === "min") return args.length > 0 ? Math.min.apply(null, args) : null;
+        if (fnName === "max") return args.length > 0 ? Math.max.apply(null, args) : null;
+        if (fnName === "clamp") {
+          if (args.length !== 3) return null;
+          return Math.max(args[0], Math.min(args[1], args[2]));
+        }
+      }
+      // Number + optional unit
+      const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?/i);
+      if (numMatch) {
+        pos += numMatch[0].length;
+        const num = parseFloat(numMatch[1]);
+        const unit = (numMatch[2] || "").toLowerCase();
+        if (unit === "px" || unit === "") return num;
+        if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
+        if (unit === "em") return num * (fontSizePx || 16);
+        if (unit === "rem") return num * 16;
+        if (unit === "pt") return num * (96 / 72);
+        if (unit === "vw") return (num / 100) * 800;
+        if (unit === "vh") return (num / 100) * 600;
+        return null;
+      }
+      return null;
+    }
+
+    const res = parseAddSub();
+    skipWs();
+    if (res === null || pos < len) return null;
+    return res;
+  }
+
+  function hasLayoutBox(element, rawMap) {
+    if (!element || element.nodeType !== 1) return false;
+    const ownDisp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (ownDisp === "none" || ownDisp === "contents") return false;
+    let p = element.parentElement || element.parentNode;
+    while (p && p.nodeType === 1) {
+      const pMap = collectRawComputedMap(p, "");
+      const pDisp = (pMap.get("display") || getDefaultDisplayForElement(p)).trim().toLowerCase();
+      if (pDisp === "none") return false;
+      p = p.parentElement || p.parentNode;
+    }
+    return true;
+  }
+
+  function computeElementUsedWidthPx(element, depth) {
+    if (!element || element.nodeType !== 1 || depth > 24) return 800;
+    const rawMap = collectRawComputedMap(element, "");
+    const disp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (disp === "contents") {
+      return computeElementUsedWidthPx(element.parentElement || element.parentNode, depth + 1);
+    }
+    const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+    const parentEl = element.parentElement || element.parentNode;
+    const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1) : 800;
+    const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
+    let w = null;
+    if (wRaw === "auto") {
+      const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
+      const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
+      w = Math.max(0, cbW - ml - mr);
+    } else if (wRaw === "min-content" || wRaw === "max-content") {
+      let maxChildW = 0;
+      let ch = element.firstChild;
+      while (ch) {
+        if (ch.nodeType === 1) {
+          const cw = computeElementUsedWidthPx(ch, depth + 1);
+          if (cw > maxChildW) maxChildW = cw;
+        }
+        ch = ch.nextSibling;
+      }
+      w = maxChildW;
+    } else {
+      w = evalCssLengthExpr(wRaw, cbW, fontSize);
+      if (w === null) w = cbW;
+    }
+
+    // Clamp with max-width and min-width
+    const maxWRaw = (rawMap.get("max-width") || "").trim().toLowerCase();
+    if (maxWRaw && maxWRaw !== "none") {
+      const maxW = evalCssLengthExpr(maxWRaw, cbW, fontSize);
+      if (maxW !== null && w > maxW) w = maxW;
+    }
+    const minWRaw = (rawMap.get("min-width") || "").trim().toLowerCase();
+    if (minWRaw && minWRaw !== "auto") {
+      const minW = evalCssLengthExpr(minWRaw, cbW, fontSize);
+      if (minW !== null && w < minW) w = minW;
+    }
+    return w;
+  }
+
+  function computeElementUsedHeightPx(element, depth) {
+    if (!element || element.nodeType !== 1 || depth > 24) return 600;
+    const rawMap = collectRawComputedMap(element, "");
+    const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+    const hRaw = (rawMap.get("height") || "auto").trim().toLowerCase();
+    if (hRaw && hRaw !== "auto") {
+      const parentEl = element.parentElement || element.parentNode;
+      const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
+      const h = evalCssLengthExpr(hRaw, cbH, fontSize);
+      if (h !== null) return h;
+    }
+    return 0;
+  }
+
+  function findStickyScrollportSize(element, axis) {
+    // axis: "x" or "y". Scroll container has overflow-{axis} in {auto, scroll, hidden} (NOT clip or visible)
+    const prop = axis === "x" ? "overflow-x" : "overflow-y";
+    let p = element.parentElement || element.parentNode;
+    while (p && p.nodeType === 1) {
+      const pMap = collectRawComputedMap(p, "");
+      const ov = (pMap.get(prop) || "visible").trim().toLowerCase();
+      if (ov === "hidden" || ov === "scroll" || ov === "auto") {
+        return axis === "x" ? computeElementUsedWidthPx(p, 0) : computeElementUsedHeightPx(p, 0);
+      }
+      p = p.parentElement || p.parentNode;
+    }
+    return axis === "x" ? 800 : 600;
+  }
+
+  function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
+    if (normalizedPseudo || !element || element.nodeType !== 1) return;
+    const disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (!computedMap.has("display")) {
+      computedMap.set("display", disp);
+    }
+
+    // min-width / min-height: auto resolves to 0px outside flex/grid parent
+    const parentEl = element.parentElement || element.parentNode;
+    let parentDisp = "block";
+    if (parentEl && parentEl.nodeType === 1) {
+      const pMap = collectRawComputedMap(parentEl, "");
+      parentDisp = (pMap.get("display") || getDefaultDisplayForElement(parentEl)).trim().toLowerCase();
+    }
+    const isFlexOrGridItem =
+      parentDisp === "flex" || parentDisp === "inline-flex" ||
+      parentDisp === "grid" || parentDisp === "inline-grid";
+    if (!isFlexOrGridItem) {
+      if ((computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
+        computedMap.set("min-width", "0px");
+      }
+      if ((computedMap.get("min-height") || "").trim().toLowerCase() === "auto") {
+        computedMap.set("min-height", "0px");
+      }
+    }
+
+    if (!hasLayoutBox(element, computedMap)) {
+      return;
+    }
+
+    const tag = String(element.localName || element.tagName || "").toLowerCase();
+    const fl = (computedMap.get("float") || "none").trim().toLowerCase();
+    const pos = (computedMap.get("position") || "static").trim().toLowerCase();
+    const isNonReplacedInline =
+      disp === "inline" &&
+      !REPLACED_INLINE_TAGS.has(tag) &&
+      fl === "none" &&
+      pos !== "absolute" &&
+      pos !== "fixed";
+
+    const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+    const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
+
+    // Resolve width for elements with a box (except non-replaced inline)
+    if (!isNonReplacedInline) {
+      const wRaw = (computedMap.get("width") || "").trim().toLowerCase();
+      if (wRaw === "" && disp === "block") {
+        computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
+      } else if (wRaw !== "") {
+        const usedW = computeElementUsedWidthPx(element, 0);
+        computedMap.set("width", formatCssPx(usedW));
+      }
+
+      // Resolve padding-* percentages / calc against cbW
+      const padProps = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
+      for (let i = 0; i < padProps.length; i++) {
+        const pk = padProps[i];
+        const pv = computedMap.get(pk);
+        if (pv && (pv.indexOf("%") !== -1 || pv.indexOf("(") !== -1)) {
+          const px = evalCssLengthExpr(pv, cbW, fontSize);
+          if (px !== null) computedMap.set(pk, formatCssPx(px));
+        }
+      }
+
+      // Resolve margin-* percentages / calc against cbW (skip internal table boxes like table-row)
+      const isTableInternal =
+        disp === "table-row" || disp === "table-row-group" ||
+        disp === "table-header-group" || disp === "table-footer-group" ||
+        disp === "table-column" || disp === "table-column-group" || disp === "table-cell";
+      if (!isTableInternal) {
+        const marProps = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+        for (let i = 0; i < marProps.length; i++) {
+          const mk = marProps[i];
+          const mv = computedMap.get(mk);
+          if (mv && (mv.indexOf("%") !== -1 || mv.indexOf("(") !== -1)) {
+            const px = evalCssLengthExpr(mv, cbW, fontSize);
+            if (px !== null) computedMap.set(mk, formatCssPx(px));
+          }
+        }
+      }
+    }
+
+    // Sticky inset resolution against per-axis scrollport
+    if (pos === "sticky") {
+      const spW = findStickyScrollportSize(element, "x");
+      const spH = findStickyScrollportSize(element, "y");
+      const xProps = ["left", "right"];
+      for (let i = 0; i < xProps.length; i++) {
+        const k = xProps[i];
+        const v = computedMap.get(k);
+        if (v && v !== "auto") {
+          const px = evalCssLengthExpr(v, spW, fontSize);
+          if (px !== null) computedMap.set(k, formatCssPx(px));
+        }
+      }
+      const yProps = ["top", "bottom"];
+      for (let i = 0; i < yProps.length; i++) {
+        const k = yProps[i];
+        const v = computedMap.get(k);
+        if (v && v !== "auto") {
+          const px = evalCssLengthExpr(v, spH, fontSize);
+          if (px !== null) computedMap.set(k, formatCssPx(px));
+        }
+      }
+    }
+  }
+
   function getComputedStyle(element, pseudoElt) {
     if (!element || typeof element !== "object") {
       throw new TypeError("Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.");
@@ -3040,67 +3625,8 @@ function installWindow(global) {
       normalizedPseudo = p;
     }
 
-    const computedMap = new Map();
-    const doc = element.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-    const rootNode = typeof element.getRootNode === "function" ? element.getRootNode() : null;
-    const styleScope = (rootNode && rootNode.nodeType === 11 && rootNode.host) ? rootNode : doc;
-    if (styleScope) {
-      let styleNodes = [];
-      try {
-        if (typeof styleScope.querySelectorAll === "function") {
-          const list = styleScope.querySelectorAll("style");
-          for (let i = 0; i < list.length; i++) styleNodes.push(list[i]);
-        }
-      } catch (e) {}
-
-      if (styleNodes.length === 0) {
-        function scanStyles(node) {
-          if (!node) return;
-          if (node.tagName && String(node.tagName).toLowerCase() === "style") {
-            styleNodes.push(node);
-          }
-          if (node.childNodes && node.childNodes.length) {
-            for (let i = 0; i < node.childNodes.length; i++) {
-              scanStyles(node.childNodes[i]);
-            }
-          }
-        }
-        if (styleScope.nodeType === 11) {
-          scanStyles(styleScope);
-        } else {
-          if (styleScope.head) scanStyles(styleScope.head);
-          if (styleScope.body) scanStyles(styleScope.body);
-          if (styleScope.documentElement) scanStyles(styleScope.documentElement);
-        }
-      }
-
-      for (let i = 0; i < styleNodes.length; i++) {
-        const sn = styleNodes[i];
-        const text = (sn && (sn.textContent || sn.innerText)) || "";
-        if (text) {
-          parseCssRulesInto(element, text, computedMap, normalizedPseudo);
-        }
-      }
-    }
-
-    // If no pseudo element, inline styles override stylesheet rules
-    if (!normalizedPseudo) {
-      const rawInline = element.getAttribute ? element.getAttribute("style") : "";
-      if (rawInline) {
-        parseDeclarationsBlockInto(element, rawInline, computedMap);
-      }
-    }
-
-    // Pseudo element inheritance / defaults
-    if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
-      if (!computedMap.has("display")) {
-        computedMap.set("display", "inline");
-      }
-      if (!computedMap.has("color")) {
-        const parentColor = element.style ? element.style.getPropertyValue("color") : "";
-        if (parentColor) computedMap.set("color", parentColor);
-      }
-    }
+    const computedMap = collectRawComputedMap(element, normalizedPseudo);
+    applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
 
     const declTarget = Object.create(CSSStyleDeclaration.prototype);
     const propList = Array.from(computedMap.keys());
@@ -3180,6 +3706,96 @@ function installWindow(global) {
   }
 
   markNative(getComputedStyle, "getComputedStyle");
+
+  // CSS Typed OM: CSSStyleValue, CSSKeywordValue, CSSUnitValue, StylePropertyMapReadOnly
+  function CSSStyleValue(raw) {
+    this._raw = raw == null ? "" : String(raw);
+  }
+  CSSStyleValue.prototype.toString = function () {
+    return this._raw;
+  };
+  markNative(CSSStyleValue, "CSSStyleValue");
+
+  function CSSKeywordValue(value) {
+    CSSStyleValue.call(this, value);
+    this.value = String(value);
+  }
+  CSSKeywordValue.prototype = Object.create(CSSStyleValue.prototype);
+  CSSKeywordValue.prototype.constructor = CSSKeywordValue;
+  CSSKeywordValue.prototype.toString = function () {
+    return this.value;
+  };
+  markNative(CSSKeywordValue, "CSSKeywordValue");
+
+  function CSSUnitValue(value, unit) {
+    this.value = Number(value);
+    this.unit = String(unit);
+  }
+  CSSUnitValue.prototype = Object.create(CSSStyleValue.prototype);
+  CSSUnitValue.prototype.constructor = CSSUnitValue;
+  CSSUnitValue.prototype.toString = function () {
+    if (this.unit === "percent") return String(this.value) + "%";
+    if (this.unit === "number") return String(this.value);
+    return String(this.value) + this.unit;
+  };
+  markNative(CSSUnitValue, "CSSUnitValue");
+
+  function parseTypedOMValue(rawVal) {
+    if (rawVal == null) return undefined;
+    const s = String(rawVal).trim();
+    if (!s) return undefined;
+    const m = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|px|em|rem|vw|vh|vmin|vmax|pt|cm|mm|in|deg|rad|grad|turn|s|ms|fr)?$/i);
+    if (m) {
+      const num = parseFloat(m[1]);
+      let unit = (m[2] || "").toLowerCase();
+      if (unit === "%") unit = "percent";
+      else if (unit === "") unit = "number";
+      return new CSSUnitValue(num, unit);
+    }
+    if (/^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(s)) {
+      return new CSSKeywordValue(s);
+    }
+    return new CSSStyleValue(s);
+  }
+
+  function StylePropertyMapReadOnly(element) {
+    this._element = element;
+  }
+  StylePropertyMapReadOnly.prototype.get = function (property) {
+    const rawProp = String(property || "").trim();
+    const key = rawProp.startsWith("--") ? rawProp : rawProp.toLowerCase();
+    const rawMap = collectRawComputedMap(this._element, "");
+    let val = rawMap.get(key);
+    if (val === undefined) {
+      if (key === "width" || key === "height" || key === "min-width" || key === "min-height" ||
+          key === "top" || key === "right" || key === "bottom" || key === "left") {
+        val = "auto";
+      } else if (key === "display") {
+        val = getDefaultDisplayForElement(this._element);
+      } else {
+        return undefined;
+      }
+    }
+    return parseTypedOMValue(val);
+  };
+  StylePropertyMapReadOnly.prototype.has = function (property) {
+    return this.get(property) !== undefined;
+  };
+  StylePropertyMapReadOnly.prototype.getAll = function (property) {
+    const v = this.get(property);
+    return v !== undefined ? [v] : [];
+  };
+  markNative(StylePropertyMapReadOnly, "StylePropertyMapReadOnly");
+
+  global.CSSStyleValue = CSSStyleValue;
+  global.CSSKeywordValue = CSSKeywordValue;
+  global.CSSUnitValue = CSSUnitValue;
+  global.StylePropertyMapReadOnly = StylePropertyMapReadOnly;
+  if (global.Element && global.Element.prototype) {
+    global.Element.prototype.computedStyleMap = markNative(function () {
+      return new StylePropertyMapReadOnly(this);
+    }, "computedStyleMap");
+  }
 
   global.CSSStyleDeclaration = CSSStyleDeclaration;
   global.getComputedStyle = getComputedStyle;
