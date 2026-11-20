@@ -2241,3 +2241,6 @@
 
 ### Phase 193
 - Added `test/layout/test_box_sizing_and_overflow.cp` covering box-sizing modes, display/visibility layout flow, relative/absolute positioning, auto/negative margins, and min/max-width clamping.
+
+### Phase 194
+- Added `test/css/test_attr_evaluator_and_vars.cp` covering CSS `attr()` parsing/type-tainting, custom property inheritance/cycle guard, `calc()` evaluation, and `!important` cascade precedence.

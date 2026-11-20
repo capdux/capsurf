@@ -4513,3 +4513,7 @@
 ### Phase 193: Pure-CP Layout BoxSizing & Positioning Whitebox Tests (Slot A)
 - **Subagent**: `556c4550` (killed after completion)
 - **Result**: `test/layout/test_box_sizing_and_overflow.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1446ms; covering `content-box`/`border-box`, `display:none` vs `visibility:hidden`, `relative`/`absolute`, negative margin & `min-width`/`max-width`).
+
+### Phase 194: Pure-CP CSS AttrEvaluator, Vars & Calc Whitebox Tests (Slot A)
+- **Subagent**: `98c78a0a` (killed after completion)
+- **Result**: `test/css/test_attr_evaluator_and_vars.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 1188ms; covering `attr_evaluator.cp`, `var()` inheritance/chain/cycle-guard, `calc()`, and `!important` specificity/inline precedence).
