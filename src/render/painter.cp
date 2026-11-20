@@ -49,6 +49,21 @@ pub struct CanvasBitmap {
     pixels: []const u8 = [],
 }
 
+pub struct SelectionSpan {
+    node_id: NodeId = NULL_NODE,
+    start_offset: usize = 0,
+    end_offset: usize = 0,
+}
+
+pub struct FormControlValue {
+    node_id: NodeId = NULL_NODE,
+    value: []const u8 = "",
+    min_val: f32 = 0.0,
+    max_val: f32 = 100.0,
+    has_min: bool = false,
+    has_max: bool = false,
+}
+
 pub struct ScreenshotOptions {
     viewport_w: u32 = 1280;
     viewport_h: u32 = 720;
@@ -58,6 +73,12 @@ pub struct ScreenshotOptions {
     focused_node: NodeId = NULL_NODE;
     caret_pos: usize = 0;
     canvas_bitmaps: []const CanvasBitmap = [],
+    selection_spans: []const SelectionSpan = [],
+    form_values: []const FormControlValue = [],
+    clip_x: i32 = 0;
+    clip_y: i32 = 0;
+    clip_w: u32 = 0;
+    clip_h: u32 = 0;
 }
 
 pub struct Canvas {
@@ -175,6 +196,28 @@ pub struct Canvas {
                         _.blendPixel(px, py, CssColor.rgba(final_color.r, final_color.g, final_color.b, blended_a));
                     }
                 }
+            }
+        }
+    }
+
+    fn fillRectClipped(*_, rx: f32, ry: f32, rw: f32, rh: f32, color: CssColor, clip: ClipRect?) {
+        if (color.a == 0 || rw <= 0.0 || rh <= 0.0) return;
+        let x0 = @max(0, @as(i32, @intFromFloat(@floor(rx))));
+        let y0 = @max(0, @as(i32, @intFromFloat(@floor(ry))));
+        let x1 = @min(@as(i32, _.width), @as(i32, @intFromFloat(@ceil(rx + rw))));
+        let y1 = @min(@as(i32, _.height), @as(i32, @intFromFloat(@ceil(ry + rh))));
+        if (c := clip) {
+            x0 = @max(x0, c.x0);
+            y0 = @max(y0, c.y0);
+            x1 = @min(x1, c.x1);
+            y1 = @min(y1, c.y1);
+        }
+        if (x0 >= x1 || y0 >= y1) return;
+        let py = y0;
+        while (py < y1) : (py += 1) {
+            let px = x0;
+            while (px < x1) : (px += 1) {
+                _.blendPixel(px, py, color);
             }
         }
     }
@@ -1210,12 +1253,55 @@ fn paintNodeRecursive(
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
         return;
     }
-    const r = rects[@as(usize, node_id)];
+    const node = &doc.nodes.items[@as(usize, node_id)];
+    let r = rects[@as(usize, node_id)];
     if (!r.visible) {
+        if (node.node_type == NodeType.Text && opts.selection_spans.len > 0 && node.text_content.len > 0) {
+            // Text nodes may not have standalone layout boxes; resolve position from nearest visible ancestor
+            let anc = node.parent;
+            while (anc != NULL_NODE && @as(usize, anc) < rects.len) {
+                const ar = rects[@as(usize, anc)];
+                if (ar.visible && ar.width > 0.0 && ar.height > 0.0) {
+                    // Estimate horizontal offset from preceding siblings within parent
+                    let prefix_chars: usize = 0;
+                    let sib = doc.nodes.items[@as(usize, node.parent)].first_child;
+                    while (sib != NULL_NODE && sib != node_id && @as(usize, sib) < doc.nodes.items.len) {
+                        const sn = &doc.nodes.items[@as(usize, sib)];
+                        if (sn.node_type == NodeType.Text) {
+                            prefix_chars += sn.text_content.len;
+                        } else if (sn.node_type == NodeType.Element) {
+                            let c = sn.first_child;
+                            while (c != NULL_NODE && @as(usize, c) < doc.nodes.items.len) {
+                                const cn = &doc.nodes.items[@as(usize, c)];
+                                if (cn.node_type == NodeType.Text) prefix_chars += cn.text_content.len;
+                                c = cn.next_sibling;
+                            }
+                        }
+                        sib = sn.next_sibling;
+                    }
+                    let si: usize = 0;
+                    while (si < opts.selection_spans.len) : (si += 1) {
+                        const sp = opts.selection_spans[si];
+                        if (sp.node_id == node_id && sp.end_offset > sp.start_offset) {
+                            const clamped_start = @min(sp.start_offset, node.text_content.len);
+                            const clamped_end = @min(sp.end_offset, node.text_content.len);
+                            if (clamped_end > clamped_start) {
+                                const base_x = ar.x + 2.0 + @as(f32, @floatFromInt(prefix_chars)) * 8.0;
+                                const hx = base_x + @as(f32, @floatFromInt(clamped_start)) * 8.0;
+                                const hw = @as(f32, @floatFromInt(clamped_end - clamped_start)) * 8.0;
+                                const hh = @max(ar.height, 14.0);
+                                canvas.fillRectClipped(hx, ar.y, hw, hh, CssColor.rgba(51, 144, 255, 90), clip);
+                            }
+                        }
+                    }
+                    break;
+                }
+                anc = doc.nodes.items[@as(usize, anc)].parent;
+            }
+        }
         return;
     }
 
-    const node = &doc.nodes.items[@as(usize, node_id)];
     const style = &styles[@as(usize, node_id)];
     const paint_style = style.extractPaintStyle(r.width, 16.0, vw, vh);
 
@@ -1324,11 +1410,95 @@ fn paintNodeRecursive(
         
         let display_text = node.text_content;
         const tag = node.tag_name;
-        const is_input = std.mem.eql(u8, tag, "input") || std.mem.eql(u8, tag, "textarea");
-        if (display_text.len == 0 && is_input) {
-            // Get value text from attribute
-            const val: []const u8 = node.getAttribute("value") ?? "";
-            display_text = val;
+        const is_input = std.ascii.eqlIgnoreCase(tag, "input");
+        const is_textarea = std.ascii.eqlIgnoreCase(tag, "textarea");
+        const is_form_text = is_input || is_textarea;
+
+        let found_live_form: (*const FormControlValue)? = null;
+        if (is_form_text) {
+            let fi: usize = 0;
+            while (fi < opts.form_values.len) : (fi += 1) {
+                if (opts.form_values[fi].node_id == node_id) {
+                    found_live_form = &opts.form_values[fi];
+                    break;
+                }
+            }
+        }
+
+        const is_range = is_input && std.ascii.eqlIgnoreCase(node.getAttribute("type") ?? "", "range");
+        if (is_range) {
+            let min_v: f32 = 0.0;
+            let max_v: f32 = 100.0;
+            if (min_attr := node.getAttribute("min")) {
+                min_v = std.fmt.parseFloat(f32, std.mem.trim(u8, min_attr, " \t\r\n")) catch 0.0;
+            }
+            if (max_attr := node.getAttribute("max")) {
+                max_v = std.fmt.parseFloat(f32, std.mem.trim(u8, max_attr, " \t\r\n")) catch 100.0;
+            }
+            if (lf := found_live_form) {
+                if (lf.has_min) min_v = lf.min_val;
+                if (lf.has_max) max_v = lf.max_val;
+            }
+            if (max_v <= min_v) max_v = min_v + 100.0;
+            let cur_v: f32 = (min_v + max_v) * 0.5;
+            if (lf := found_live_form) {
+                if (lf.value.len > 0) {
+                    cur_v = std.fmt.parseFloat(f32, std.mem.trim(u8, lf.value, " \t\r\n")) catch cur_v;
+                }
+            } else if (val_attr := node.getAttribute("value")) {
+                cur_v = std.fmt.parseFloat(f32, std.mem.trim(u8, val_attr, " \t\r\n")) catch cur_v;
+            }
+            const ratio = std.math.clamp((cur_v - min_v) / (max_v - min_v), 0.0, 1.0);
+            const accent = if (paint_style.has_accent_color) paint_style.accent_color else CssColor.rgb(0, 117, 255);
+            const track_h: f32 = 4.0;
+            const track_y = r.y + (r.height - track_h) * 0.5;
+            const track_w = @max(r.width, 20.0);
+            // Unfilled track
+            canvas.fillRectClipped(r.x, track_y, track_w, track_h, CssColor.rgb(200, 200, 200), active_clip);
+            // Filled track
+            const thumb_d: f32 = @min(14.0, @max(r.height - 2.0, 8.0));
+            const usable_w = @max(track_w - thumb_d, 0.0);
+            const thumb_cx = r.x + thumb_d * 0.5 + ratio * usable_w;
+            canvas.fillRectClipped(r.x, track_y, @max(thumb_cx - r.x, 0.0), track_h, accent, active_clip);
+            // Thumb
+            const thumb_rect = Rect{
+                x: thumb_cx - thumb_d * 0.5,
+                y: r.y + (r.height - thumb_d) * 0.5,
+                width: thumb_d,
+                height: thumb_d,
+                visible: true,
+            };
+            const thumb_style = ResolvedPaintStyle{
+                bg_color: accent,
+                border_color: CssColor.rgb(255, 255, 255),
+                text_color: accent,
+                border_width: 1.0,
+                border_radius: thumb_d * 0.5,
+            };
+            canvas.paintBoxClipped(thumb_rect, thumb_style, active_clip);
+            return;
+        }
+
+        if (is_form_text) {
+            if (lf := found_live_form) {
+                display_text = lf.value;
+            } else if (is_input && display_text.len == 0) {
+                if (v := node.getAttribute("value")) {
+                    display_text = v;
+                } else {
+                    display_text = "";
+                }
+            } else if (is_textarea && display_text.len == 0) {
+                let tc = node.first_child;
+                while (tc != NULL_NODE && @as(usize, tc) < doc.nodes.items.len) {
+                    const cn = &doc.nodes.items[@as(usize, tc)];
+                    if (cn.node_type == NodeType.Text && cn.text_content.len > 0) {
+                        display_text = cn.text_content;
+                        break;
+                    }
+                    tc = cn.next_sibling;
+                }
+            }
         }
 
         if (display_text.len > 0) {
@@ -1337,7 +1507,7 @@ fn paintNodeRecursive(
             canvas.drawText(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color);
         }
 
-        if (node_id == opts.focused_node && is_input) {
+        if (node_id == opts.focused_node && is_form_text) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
             const caret_x = @as(i32, @intFromFloat(r.x + pad_l + 2.0)) + @as(i32, @intCast(@min(opts.caret_pos, display_text.len) * 8));
@@ -1349,7 +1519,25 @@ fn paintNodeRecursive(
                 canvas.blendPixel(caret_x + 1, cy, paint_style.text_color);
             }
         }
+
+        if (is_textarea) {
+            return;
+        }
     } else if (node.node_type == NodeType.Text && node.text_content.len > 0) {
+        let si: usize = 0;
+        while (si < opts.selection_spans.len) : (si += 1) {
+            const sp = opts.selection_spans[si];
+            if (sp.node_id == node_id && sp.end_offset > sp.start_offset) {
+                const clamped_start = @min(sp.start_offset, node.text_content.len);
+                const clamped_end = @min(sp.end_offset, node.text_content.len);
+                if (clamped_end > clamped_start) {
+                    const hx = r.x + 2.0 + @as(f32, @floatFromInt(clamped_start)) * 8.0;
+                    const hw = @as(f32, @floatFromInt(clamped_end - clamped_start)) * 8.0;
+                    const hh = @max(r.height, 14.0);
+                    canvas.fillRectClipped(hx, r.y, hw, hh, CssColor.rgba(51, 144, 255, 90), active_clip);
+                }
+            }
+        }
         const parent_id = node.parent;
         const parent_color = if (parent_id != NULL_NODE) styles[@as(usize, parent_id)].color else CssColor.rgb(0, 0, 0);
         canvas.drawText(r.x + 2.0, r.y + 2.0, node.text_content, parent_color);
@@ -1380,6 +1568,31 @@ pub fn renderDocumentToPng(
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
         paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null);
+    }
+
+    // 如果指定了 clip 裁剪区域，提取子区域编码
+    if (opts.clip_w > 0 && opts.clip_h > 0) {
+        const cw = opts.clip_w;
+        const ch = opts.clip_h;
+        let cropped = Canvas.init(allocator, cw, ch, opts.clear_color)?;
+        defer cropped.deinit();
+        let dy: u32 = 0;
+        while (dy < ch) : (dy += 1) {
+            const sy = opts.clip_y + @as(i32, @intCast(dy));
+            if (sy < 0 || sy >= @as(i32, @intCast(canvas.height))) continue;
+            let dx: u32 = 0;
+            while (dx < cw) : (dx += 1) {
+                const sx = opts.clip_x + @as(i32, @intCast(dx));
+                if (sx < 0 || sx >= @as(i32, @intCast(canvas.width))) continue;
+                const s_idx = (@as(usize, @intCast(sy)) * @as(usize, canvas.width) + @as(usize, @intCast(sx))) * 4;
+                const d_idx = (@as(usize, dy) * @as(usize, cw) + @as(usize, dx)) * 4;
+                cropped.pixels[d_idx] = canvas.pixels[s_idx];
+                cropped.pixels[d_idx + 1] = canvas.pixels[s_idx + 1];
+                cropped.pixels[d_idx + 2] = canvas.pixels[s_idx + 2];
+                cropped.pixels[d_idx + 3] = canvas.pixels[s_idx + 3];
+            }
+        }
+        return encodeCanvasToPngWithLevel(allocator, &cropped, opts.compress_level);
     }
 
     // 直接桥接到 png.cp 的编码函数并透传指定的 compress_level

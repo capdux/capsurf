@@ -11,7 +11,7 @@ import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage } from "./types.cp";
 import { FetchState } from "./fetch.cp";
-import { ScreenshotOptions, CanvasBitmap, renderDocumentToPng } from "../render/painter.cp";
+import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, renderDocumentToPng } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { TargetRegistry } from "./target.cp";
@@ -411,6 +411,8 @@ pub struct CdpPageSession {
 
     // Focus & Scroll state
     focused_node: NodeId = NULL_NODE,
+    range_drag_node: NodeId = NULL_NODE,
+    range_drag_changed: bool = false,
     scroll_x: f32 = 0.0,
     scroll_y: f32 = 0.0,
     next_object_id: u32 = 1,
@@ -495,6 +497,8 @@ pub struct CdpPageSession {
             pending_same_doc_count: 0,
             next_object_id: 1,
             focused_node: NULL_NODE,
+            range_drag_node: NULL_NODE,
+            range_drag_changed: false,
             scroll_x: 0.0,
             scroll_y: 0.0,
         };
@@ -758,6 +762,8 @@ pub struct CdpPageSession {
         _.referrer = nav_referrer;
         _.has_document = true;
         _.focused_node = NULL_NODE;
+        _.range_drag_node = NULL_NODE;
+        _.range_drag_changed = false;
         _.doc.focused_node = NULL_NODE;
         _.scroll_x = 0.0;
         _.scroll_y = 0.0;
@@ -1687,7 +1693,46 @@ pub struct CdpPageSession {
         };
     }
 
+    pub fn ensureLayout(*_) {
+        const count = @max(@as(usize, 1), _.doc.nodeCount());
+        let css_buf = _.allocator.alloc(u8, 65536) catch null;
+        defer if (css_buf != null) _.allocator.free(css_buf.?);
+        let css_len: usize = 0;
+        if (css_buf != null) {
+            let snid: usize = 0;
+            while (snid < _.doc.nodes.items.len) : (snid += 1) {
+                const sn = &_.doc.nodes.items[snid];
+                if (sn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(sn.tag_name, "style")) {
+                    if (sn.text_content.len > 0) {
+                        const copy_len = @min(sn.text_content.len, css_buf.?.len - css_len);
+                        @memcpy(css_buf.?[css_len..css_len + copy_len], sn.text_content[0..copy_len]);
+                        css_len += copy_len;
+                    }
+                    let child = sn.first_child;
+                    while (child != NULL_NODE && @as(usize, child) < _.doc.nodes.items.len) : (child = _.doc.nodes.items[@as(usize, child)].next_sibling) {
+                        const scn = &_.doc.nodes.items[@as(usize, child)];
+                        if (scn.node_type == NodeType.Text && scn.text_content.len > 0) {
+                            const copy_len = @min(scn.text_content.len, css_buf.?.len - css_len);
+                            @memcpy(css_buf.?[css_len..css_len + copy_len], scn.text_content[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
+        }
+        const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, false);
+        let styles = _.allocator.alloc(ComputedStyle, count) catch return;
+        defer _.allocator.free(styles);
+        Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
+        _.layout.computeLayout(&_.doc, styles) catch {};
+    }
+
     pub fn captureScreenshot(*_, compress_level: u8): ([]const u8)! {
+        return _.captureScreenshotClipped(compress_level, 0, 0, 0, 0);
+    }
+
+    pub fn captureScreenshotClipped(*_, compress_level: u8, clip_x: i32, clip_y: i32, clip_w: u32, clip_h: u32): ([]const u8)! {
         const count = @max(@as(usize, 1), _.doc.nodeCount());
         let css_buf = _.allocator.alloc(u8, 65536) catch null;
         defer if (css_buf != null) _.allocator.free(css_buf.?);
@@ -1824,6 +1869,116 @@ pub struct CdpPageSession {
             }
         }
 
+        let selection_spans: [64]SelectionSpan = [SelectionSpan{}; 64];
+        let selection_count: usize = 0;
+        if (_.has_document) {
+            const js_sel = "(function() { try { const sel = (typeof getSelection === 'function') ? getSelection() : null; if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return ''; const r = sel.getRangeAt(0); if (!r || r.collapsed) return ''; const root = document.body || document.documentElement; if (!root) return ''; const texts = []; function collect(n) { if (!n) return; if (n.nodeType === 3) { texts.push(n); return; } const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) collect(cs[i]); } collect(root); function firstTextIn(n) { if (!n) return -1; if (n.nodeType === 3) return texts.indexOf(n); const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) { const idx = firstTextIn(cs[i]); if (idx !== -1) return idx; } return -1; } function nextTextAfter(n) { let cur = n; while (cur && cur !== root) { let sib = cur.nextSibling; while (sib) { const idx = firstTextIn(sib); if (idx !== -1) return idx; sib = sib.nextSibling; } cur = cur.parentNode; } return texts.length; } function resolvePoint(node, offset) { if (!node) return [0, 0]; if (node.nodeType === 3) { const ti = texts.indexOf(node); if (ti === -1) return [texts.length, 0]; const len = (node.nodeValue || node.textContent || '').length; return [ti, Math.max(0, Math.min(offset, len))]; } const cs = node.childNodes || []; if (offset < cs.length) { const ti = firstTextIn(cs[offset]); if (ti !== -1) return [ti, 0]; return [nextTextAfter(cs[offset]), 0]; } return [nextTextAfter(node), 0]; } let p1 = resolvePoint(r.startContainer, r.startOffset); let p2 = resolvePoint(r.endContainer, r.endOffset); if (p1[0] > p2[0] || (p1[0] === p2[0] && p1[1] > p2[1])) { const tmp = p1; p1 = p2; p2 = tmp; } const out = []; for (let i = p1[0]; i <= p2[0] && i < texts.length; i++) { const tn = texts[i]; const nid = (typeof tn._nid === 'number') ? tn._nid : 0; if (nid <= 0) continue; const len = (tn.nodeValue || tn.textContent || '').length; const s = (i === p1[0]) ? p1[1] : 0; const e = (i === p2[0]) ? p2[1] : len; if (e > s) out.push(nid + ':' + s + ':' + e); } return out.join(';'); } catch (e) { return ''; } })();";
+            const val_sel = _.ctx.eval(js_sel);
+            const cstr_sel = _.ctx.toCString(val_sel);
+            if (cstr_sel.len > 0) {
+                let sp_entries = std.mem.splitAny(u8, cstr_sel, ";");
+                while (sp_entry := sp_entries.next()) {
+                    if (sp_entry.len == 0 || selection_count >= 64) continue;
+                    let fields = std.mem.splitAny(u8, sp_entry, ":");
+                    if (nid_str := fields.next()) {
+                        if (s_str := fields.next()) {
+                            if (e_str := fields.next()) {
+                                const snid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
+                                const s_off = std.fmt.parseInt(usize, s_str, 10) catch 0;
+                                const e_off = std.fmt.parseInt(usize, e_str, 10) catch 0;
+                                if (snid > 0 && e_off > s_off) {
+                                    selection_spans[selection_count] = SelectionSpan{
+                                        node_id: snid,
+                                        start_offset: s_off,
+                                        end_offset: e_off,
+                                    };
+                                    selection_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val_sel);
+        }
+
+        let form_values: [64]FormControlValue = [FormControlValue{}; 64];
+        let form_value_count: usize = 0;
+        let form_val_allocs: [64]([]u8)? = [null; 64];
+        if (_.has_document) {
+            const js_fv = "(function() { try { const list = document.querySelectorAll('input, textarea'); const out = []; for (let i = 0; i < list.length && out.length < 64; i++) { const el = list[i]; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) continue; const v = (el.value !== undefined && el.value !== null) ? String(el.value) : ''; let hex = ''; for (let j = 0; j < v.length && j < 512; j++) { const c = v.charCodeAt(j) & 0xff; hex += (c < 16 ? '0' : '') + c.toString(16); } const mn = (el.min !== undefined && el.min !== '') ? String(el.min) : ''; const mx = (el.max !== undefined && el.max !== '') ? String(el.max) : ''; out.push(nid + ':' + mn + ':' + mx + ':' + hex); } return out.join(';'); } catch (e) { return ''; } })();";
+            const val_fv = _.ctx.eval(js_fv);
+            const cstr_fv = _.ctx.toCString(val_fv);
+            if (cstr_fv.len > 0) {
+                let fv_entries = std.mem.splitAny(u8, cstr_fv, ";");
+                while (fv_entry := fv_entries.next()) {
+                    if (fv_entry.len == 0 || form_value_count >= 64) continue;
+                    let fields = std.mem.splitAny(u8, fv_entry, ":");
+                    if (nid_str := fields.next()) {
+                        if (min_str := fields.next()) {
+                            if (max_str := fields.next()) {
+                                if (hex_str := fields.next()) {
+                                    const fnid = std.fmt.parseInt(u32, nid_str, 10) catch 0;
+                                    if (fnid > 0) {
+                                        let decoded_slice: []const u8 = "";
+                                        const byte_len = hex_str.len / 2;
+                                        if (byte_len > 0) {
+                                            const maybe_buf = _.allocator.alloc(u8, byte_len) catch null;
+                                            if (maybe_buf != null) {
+                                                let buf = maybe_buf.?;
+                                                let bi: usize = 0;
+                                                while (bi < byte_len) : (bi += 1) {
+                                                    const hi = std.fmt.charToDigit(hex_str[bi * 2], 16) catch 0;
+                                                    const lo = std.fmt.charToDigit(hex_str[bi * 2 + 1], 16) catch 0;
+                                                    buf[bi] = (hi << 4) | lo;
+                                                }
+                                                form_val_allocs[form_value_count] = buf;
+                                                decoded_slice = buf;
+                                            }
+                                        }
+                                        let has_min = false;
+                                        let min_v: f32 = 0.0;
+                                        if (min_str.len > 0) {
+                                            if (mv := std.fmt.parseFloat(f32, min_str) catch null) {
+                                                has_min = true;
+                                                min_v = mv;
+                                            }
+                                        }
+                                        let has_max = false;
+                                        let max_v: f32 = 100.0;
+                                        if (max_str.len > 0) {
+                                            if (xv := std.fmt.parseFloat(f32, max_str) catch null) {
+                                                has_max = true;
+                                                max_v = xv;
+                                            }
+                                        }
+                                        form_values[form_value_count] = FormControlValue{
+                                            node_id: fnid,
+                                            value: decoded_slice,
+                                            min_val: min_v,
+                                            max_val: max_v,
+                                            has_min: has_min,
+                                            has_max: has_max,
+                                        };
+                                        form_value_count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _.ctx.freeValue(val_fv);
+        }
+        defer {
+            let fi: usize = 0;
+            while (fi < form_value_count) : (fi += 1) {
+                if (b := form_val_allocs[fi]) {
+                    _.allocator.free(b);
+                }
+            }
+        }
+
         const opts = ScreenshotOptions{
             viewport_w: vw,
             viewport_h: vh,
@@ -1832,6 +1987,12 @@ pub struct CdpPageSession {
             focused_node: focused_node,
             caret_pos: caret_pos,
             canvas_bitmaps: canvas_bitmaps[0..canvas_count],
+            selection_spans: selection_spans[0..selection_count],
+            form_values: form_values[0..form_value_count],
+            clip_x: clip_x,
+            clip_y: clip_y,
+            clip_w: clip_w,
+            clip_h: clip_h,
         };
 
         return renderDocumentToPng(_.allocator, &_.doc, styles, rects, opts);

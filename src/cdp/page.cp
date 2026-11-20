@@ -2,7 +2,7 @@
 // CDP Page Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/page.ts and vendor/kitesurf/packages/engine/src/eval/outbound.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { Base64 } from "cap:encoding";
@@ -114,7 +114,30 @@ pub struct PageHandler {
                 compress_lvl = 1;
             }
 
-            const png_bytes = session.captureScreenshot(compress_lvl) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
+            let clip_x: i32 = 0;
+            let clip_y: i32 = 0;
+            let clip_w: u32 = 0;
+            let clip_h: u32 = 0;
+            if (clip_pos := std.mem.indexOf(u8, req.params_raw, "\"clip\"")) {
+                const sub = req.params_raw[clip_pos..];
+                if (brace_pos := std.mem.indexOfScalar(u8, sub, '{')) {
+                    const clip_json = sub[brace_pos..];
+                    if (cx := extractJsonFloat(clip_json, "x")) {
+                        clip_x = @as(i32, @intFromFloat(@floor(cx)));
+                    }
+                    if (cy := extractJsonFloat(clip_json, "y")) {
+                        clip_y = @as(i32, @intFromFloat(@floor(cy)));
+                    }
+                    if (cw := extractJsonFloat(clip_json, "width")) {
+                        if (cw > 0.0) clip_w = @as(u32, @intFromFloat(@ceil(cw)));
+                    }
+                    if (ch := extractJsonFloat(clip_json, "height")) {
+                        if (ch > 0.0) clip_h = @as(u32, @intFromFloat(@ceil(ch)));
+                    }
+                }
+            }
+
+            const png_bytes = session.captureScreenshotClipped(compress_lvl, clip_x, clip_y, clip_w, clip_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
             defer session.allocator.free(png_bytes);
 
             const b64_str = Base64.encodeAlloc(session.allocator, png_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");

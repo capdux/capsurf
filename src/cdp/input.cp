@@ -183,6 +183,55 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
     }
 }
 
+fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32): bool {
+    if (!session.has_document) return true;
+    let js_buf: [1024]u8 = [0; 1024];
+    const js_expr = std.fmt.bufPrint(
+        &js_buf,
+        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}) || document.body || document.documentElement; if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0 }}); const ok = el.dispatchEvent(ev); return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
+        .{ target_node, ev_name, x, y },
+    ) catch return true;
+    const val = session.ctx.eval(js_expr);
+    let not_prevented = true;
+    if (val.tag == 0 && val.u.uint64 == 0) {
+        not_prevented = false;
+    }
+    session.ctx.freeValue(val);
+    return not_prevented;
+}
+
+fn updateRangeFromX(session: *CdpPageSession, node_id: NodeId, x: f32): bool {
+    if (!session.has_document || node_id == NULL_NODE) return false;
+    const rect = session.layout.getBoundingClientRect(node_id);
+    if (rect.width <= 0.0) return false;
+    const ratio = std.math.clamp((x - rect.x) / rect.width, 0.0, 1.0);
+    let js_buf: [1280]u8 = [0; 1280];
+    const js_expr = std.fmt.bufPrint(
+        &js_buf,
+        "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (!el) return 0; const mn = (el.min !== '' && !isNaN(Number(el.min))) ? Number(el.min) : 0; const mx = (el.max !== '' && !isNaN(Number(el.max))) ? Number(el.max) : 100; const st = (el.step && el.step !== 'any' && !isNaN(Number(el.step)) && Number(el.step) > 0) ? Number(el.step) : 1; const raw = mn + {d:.6} * (mx - mn); const stepped = Math.min(mx, Math.max(mn, mn + Math.round((raw - mn) / st) * st)); const nextStr = String(stepped); const prevStr = String(el.value); if (nextStr !== prevStr) {{ el.value = nextStr; if (typeof el.dispatchEvent === 'function') el.dispatchEvent(new Event('input', {{ bubbles: true }})); return 1; }} return 0; }})()",
+        .{ node_id, ratio },
+    ) catch return false;
+    const val = session.ctx.eval(js_expr);
+    let changed = false;
+    if (val.tag == 0 && val.u.uint64 != 0) {
+        changed = true;
+    }
+    session.ctx.freeValue(val);
+    return changed;
+}
+
+fn dispatchRangeChange(session: *CdpPageSession, node_id: NodeId) {
+    if (!session.has_document || node_id == NULL_NODE) return;
+    let js_buf: [512]u8 = [0; 512];
+    const js_expr = std.fmt.bufPrint(
+        &js_buf,
+        "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el && typeof el.dispatchEvent === 'function') el.dispatchEvent(new Event('change', {{ bubbles: true }})); }})()",
+        .{node_id},
+    ) catch return;
+    const val = session.ctx.eval(js_expr);
+    session.ctx.freeValue(val);
+}
+
 pub struct InputHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
         * = out_buf;
@@ -220,12 +269,60 @@ pub struct InputHandler {
                 session.scroll_y += delta_y;
             }
 
-            // Hit test and trigger onclick if applicable
-            if (ev_type == .MouseReleased || ev_type == .MousePressed) {
+            // Hit test and dispatch mouse / range drag events
+            if (ev_type == .MousePressed) {
+                if (session.layout.boxes.items.len == 0) {
+                    session.ensureLayout();
+                }
                 const target_node = hitTest(session, x, y);
+                const not_prevented = dispatchMouseDomEvent(session, target_node, "mousedown", x, y);
                 if (target_node != NULL_NODE) {
                     session.focused_node = target_node;
+                    if (not_prevented && @as(usize, target_node) < session.doc.nodes.items.len) {
+                        const tn = &session.doc.nodes.items[@as(usize, target_node)];
+                        if (tn.hasTag("input") && std.ascii.eqlIgnoreCase(tn.getAttribute("type") ?? "", "range")) {
+                            session.range_drag_node = target_node;
+                            session.range_drag_changed = updateRangeFromX(session, target_node, x);
+                        }
+                    }
                     // Trigger onclick JS attribute or property
+                    if (onclick_code := session.doc.getAttribute(target_node, "onclick")) {
+                        if (session.has_document) {
+                            const val = session.ctx.eval(onclick_code);
+                            session.ctx.freeValue(val);
+                        }
+                    }
+                    if (session.has_document) {
+                        let expr_buf: [384]u8 = [0; 384];
+                        const expr = std.fmt.bufPrint(
+                            &expr_buf,
+                            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ if (typeof el.onclick === 'function') el.onclick(); }} }})()",
+                            .{target_node},
+                        ) catch null;
+                        if (e := expr) {
+                            const val = session.ctx.eval(e);
+                            session.ctx.freeValue(val);
+                        }
+                    }
+                }
+            } else if (ev_type == .MouseMoved) {
+                if (session.range_drag_node != NULL_NODE) {
+                    if (updateRangeFromX(session, session.range_drag_node, x)) {
+                        session.range_drag_changed = true;
+                    }
+                }
+            } else if (ev_type == .MouseReleased) {
+                const target_node = hitTest(session, x, y);
+                * = dispatchMouseDomEvent(session, target_node, "mouseup", x, y);
+                if (session.range_drag_node != NULL_NODE) {
+                    if (session.range_drag_changed) {
+                        dispatchRangeChange(session, session.range_drag_node);
+                    }
+                    session.range_drag_node = NULL_NODE;
+                    session.range_drag_changed = false;
+                }
+                if (target_node != NULL_NODE) {
+                    session.focused_node = target_node;
                     if (onclick_code := session.doc.getAttribute(target_node, "onclick")) {
                         if (session.has_document) {
                             const val = session.ctx.eval(onclick_code);

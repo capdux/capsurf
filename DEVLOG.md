@@ -1273,4 +1273,10 @@
    - 将 `serializeComputedTransform` 升级为列主序 4×4 矩阵引擎（Rodrigues 3D 旋转 + 2D 自动折叠 + `%.6g` 格式化）；在 `KeyframeEffect` 实装 `cubic-bezier` Newton-Raphson + 二分求值与属性实时插值，接入 `getComputedStyle`。
 2. **CSSOM Used Values 与 Typed OM (`window.js`, `collections.js`)**：
    - 补齐 `CSSStyleValue`/`CSSKeywordValue`/`CSSUnitValue`/`computedStyleMap()` 与 `calc`/`min`/`max`/`clamp` 求值，区分有/无布局盒 Used Values 解析；修正 `makeHtmlCollection` Proxy 防止命名属性遮蔽原型方法。
+
+## Phase 77 选区高亮光栅化、Range 滑块与表单实时重绘技术方案
+1. **截图前活跃态桥接 (`session.cp`, `painter.cp`, `page.cp`)**：
+   - 在 `captureScreenshotClipped` 前采集 `getSelection()` 文本范围与 `input`/`textarea` live `.value` 传入 `ScreenshotOptions`，实现非折叠选区高亮覆盖与表单实时重绘，并支持 CDP `clip` 局部截图编码。
+2. **`accent-color` 与 Range 滑块交互 (`cascade.cp`, `input.cp`, `dom_binding.cp`)**：
+   - 新增 `PROP_ACCENT_COLOR` 槽位及滑块伪元素回退；在 `Input.dispatchMouseEvent` 实装 `<input type="range">` 鼠标按下与拖拽步进更新及 `preventDefault()` 取消拦截。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

@@ -1635,4 +1635,12 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：9/10 Core 套件共 **22/23 PASS**（含 `computed-style-used-values` 9/9、`computed-transform-matrix` 2/2）。
+
+## Phase 77: Selection Highlight Painting, Range Slider/`accent-color`, Live Form Repaint & Screenshot Clip (100% Closed)
+- **`src/css/cascade.cp` & `src/render/painter.cp` & `src/cdp/{session,page,input}.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `PROP_ACCENT_COLOR` 与 `::-webkit-slider-thumb`/`::-moz-range-thumb` 兼容回退；
+  - 实装选区半透明蓝高亮绘制、`<input type="range">` 轨道/滑块绘制与鼠标拖拽交互、`<input>`/`<textarea>` live `.value` 重绘及 `Page.captureScreenshot` `clip` 裁剪。
+- **测试与门禁验证**：
+  - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`selection-paint-bridge` + `forms-range-demo` (3/3) + `forms-textarea-default-paint` + `forms-value-repaint-demo` 共 **6/6 PASS (31 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

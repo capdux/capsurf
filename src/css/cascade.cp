@@ -697,7 +697,8 @@ pub const PROP_CAPTION_SIDE: usize = 51;
 pub const PROP_TABLE_LAYOUT: usize = 52;
 pub const PROP_FLOAT: usize = 53;
 pub const PROP_CLEAR: usize = 54;
-pub const TOTAL_PROP_SLOTS: usize = 55;
+pub const PROP_ACCENT_COLOR: usize = 55;
+pub const TOTAL_PROP_SLOTS: usize = 56;
 
 pub struct BoxQuad {
     top: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
@@ -1002,6 +1003,8 @@ pub struct ResolvedPaintStyle {
     bg_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     border_color: CssColor = CssColor.rgb(0, 0, 0);
     text_color: CssColor = CssColor.rgb(0, 0, 0);
+    accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_accent_color: bool = false;
     border_width: f32 = 0.0;
     border_radius: f32 = 0.0;
     font_size_px: f32 = 16.0;
@@ -1079,6 +1082,8 @@ pub struct ComputedStyle {
     font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_accent_color: bool = false;
     has_fill_current_color: bool = false,
     has_fill_none: bool = false,
     opacity: f32 = 1.0;
@@ -1268,6 +1273,8 @@ pub struct ComputedStyle {
                 _.font_size_px = p.font_size_px;
             }
             _.color = p.color;
+            _.accent_color = p.accent_color;
+            _.has_accent_color = p.has_accent_color;
             if (p.has_fill_current_color) {
                 _.has_fill_current_color = true;
                 _.background_color = p.color;
@@ -1356,11 +1363,22 @@ pub struct ComputedStyle {
             bg_color: bg,
             border_color: bdr,
             text_color: txt,
+            accent_color: _.accent_color,
+            has_accent_color: _.has_accent_color,
             border_width: bw_px,
             border_radius: radius_px,
             font_size_px: _.font_size_px,
             conic_gradient: cg,
         };
+    }
+
+    fn serializeAccentColor(buf: []u8): []const u8 {
+        if (!_.has_accent_color) return "auto";
+        if (_.accent_color.a == 255) {
+            return std.fmt.bufPrint(buf, "rgb({d}, {d}, {d})", .{ _.accent_color.r, _.accent_color.g, _.accent_color.b }) catch "auto";
+        }
+        const a_f: f32 = @as(f32, @floatFromInt(_.accent_color.a)) / 255.0;
+        return std.fmt.bufPrint(buf, "rgba({d}, {d}, {d}, {d:.2})", .{ _.accent_color.r, _.accent_color.g, _.accent_color.b, a_f }) catch "auto";
     }
 
     /// Applies a single `CssProperty` with prepacked 64-bit `weight` onto this ComputedStyle.
@@ -1994,6 +2012,26 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "accent-color")) {
+            const av = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(av, "auto")) {
+                if (_.tryClaimSlot(PROP_ACCENT_COLOR, weight)) {
+                    _.has_accent_color = false;
+                    _.accent_color = CssColor.rgba(0, 0, 0, 0);
+                }
+            } else if (std.ascii.eqlIgnoreCase(av, "currentcolor")) {
+                if (_.tryClaimSlot(PROP_ACCENT_COLOR, weight)) {
+                    _.has_accent_color = true;
+                    _.accent_color = _.color;
+                }
+            } else if (c := CssColor.parse(av)) {
+                if (_.tryClaimSlot(PROP_ACCENT_COLOR, weight)) {
+                    _.has_accent_color = true;
+                    _.accent_color = c;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "opacity")) {
             const op = std.fmt.parseFloat(f32, std.mem.trim(u8, val, " \t")) catch 1.0;
             if (_.tryClaimSlot(PROP_OPACITY, weight)) _.opacity = op;
@@ -2326,9 +2364,67 @@ pub struct Cascade {
             }
 
             // 1. Match stylesheet rules in source order
+            const is_range_input = node.hasTag("input") && std.ascii.eqlIgnoreCase(node.getAttribute("type") ?? "", "range");
             let r_i: usize = 0;
             while (r_i < sheet.rule_count) : (r_i += 1) {
                 const rule = &sheet.rules[r_i];
+                let has_range_thumb_pseudo = false;
+                let has_non_pseudo_sel = false;
+                let matched_range_thumb = false;
+                let si_p: usize = 0;
+                while (si_p < rule.selectors.count) : (si_p += 1) {
+                    const raw_sel = rule.selectors.selectors[si_p].raw;
+                    let thumb_pos: usize? = std.mem.indexOf(u8, raw_sel, "::-webkit-slider-thumb");
+                    if (thumb_pos == null) {
+                        thumb_pos = std.mem.indexOf(u8, raw_sel, "::-moz-range-thumb");
+                    }
+                    if (tp := thumb_pos) {
+                        has_range_thumb_pseudo = true;
+                        if (is_range_input && !matched_range_thumb) {
+                            const base_raw = std.mem.trim(u8, raw_sel[0..tp], " \t\r\n");
+                            const base_sel_str = if (base_raw.len > 0) base_raw else "*";
+                            const base_list = SelectorList.parse(base_sel_str);
+                            if (Matcher.matchBestSpecificity(doc, node_id_u32, &base_list) != null) {
+                                matched_range_thumb = true;
+                            }
+                        }
+                    } else if (std.mem.indexOf(u8, raw_sel, "::") == null) {
+                        has_non_pseudo_sel = true;
+                    }
+                }
+                if (has_range_thumb_pseudo && !has_non_pseudo_sel) {
+                    if (matched_range_thumb) {
+                        let d_i: usize = 0;
+                        while (d_i < rule.decl_count) : (d_i += 1) {
+                            const decl = &rule.declarations[d_i];
+                            if (std.ascii.eqlIgnoreCase(decl.name, "background-color") || std.ascii.eqlIgnoreCase(decl.name, "background")) {
+                                if (c := Cascade.parseColorTokenFromShorthand(decl.value)) {
+                                    const w = Cascade.packWeight(false, false, 0, source_order);
+                                    source_order += 1;
+                                    if (style.tryClaimSlot(PROP_ACCENT_COLOR, w)) {
+                                        style.has_accent_color = true;
+                                        style.accent_color = c;
+                                    }
+                                }
+                            }
+                        }
+                        let imp_i: usize = 0;
+                        while (imp_i < rule.important_count) : (imp_i += 1) {
+                            const decl = &rule.important_declarations[imp_i];
+                            if (std.ascii.eqlIgnoreCase(decl.name, "background-color") || std.ascii.eqlIgnoreCase(decl.name, "background")) {
+                                if (c := Cascade.parseColorTokenFromShorthand(decl.value)) {
+                                    const w = Cascade.packWeight(false, false, 0, source_order);
+                                    source_order += 1;
+                                    if (style.tryClaimSlot(PROP_ACCENT_COLOR, w)) {
+                                        style.has_accent_color = true;
+                                        style.accent_color = c;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
                 if (best_spec := Matcher.matchBestSpecificity(doc, node_id_u32, &rule.selectors)) {
                     // Normal declarations
                     let d_i: usize = 0;

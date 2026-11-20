@@ -3374,6 +3374,20 @@
   - 9/10 Core 套件（`anchor-invalid-url-protocol`、`checkbox-remove-attribute-ns`、`classic-regex-globals`、`collection-named-shadowing`、`computed-custom-property`、`computed-style-cache`、`computed-style-used-values` (9/9)、`computed-transform-matrix` (2/2)、`constraint-validity` (2/2) + `computed-style-reads` 1/2）：**22/23 PASS**！
 - **清理旧子智能体**: 销毁 `a9061fed-70e9-44dd-94fb-f1e77e2aa114`。
 
+## [2026-11-20 16:03:00] 选区高亮绘制、Range 滑块与 accent-color、表单实时重绘及截图 clip 全绿闭环 (Subagent b788a42b 结单，Phase 77)
+- **选区高亮、`accent-color` 与表单实时光栅化 (`cascade.cp`, `painter.cp`, `session.cp`, `page.cp`, `input.cp`, `dom_binding.cp`)**:
+  - `cascade.cp` & `dom_binding.cp`: 新增 `PROP_ACCENT_COLOR` 槽位及 `::-webkit-slider-thumb`/`::-moz-range-thumb` 回退支持；
+  - `painter.cp` & `session.cp` & `page.cp`: 截图前采集活跃 `getSelection()` 文本范围与 `input`/`textarea` live `.value`，实装选区半透明蓝高亮、`<input type="range">` 轨道/进度/滑块绘制、`<textarea>`/`<input>` 实时重绘及 `Page.captureScreenshot` `clip` 矩形裁剪；
+  - `input.cp`: `Input.dispatchMouseEvent` 支持 `<input type="range">` 鼠标点击/拖拽更新 `.value` 并派发 `input`/`change` 事件。
+- **门禁与 E2E 验证**:
+  - 全部 6 个修改 `.cp` 文件 4 门禁全 0；
+  - `selection-paint-bridge` + `forms-range-demo` (3/3) + `forms-textarea-default-paint` + `forms-value-repaint-demo`：**6/6 PASS (31 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `b788a42b-8ae9-4d49-ada5-98ba1acf2dc6`；
+  - 派发全新子智能体 **Subagent 43**: Pure CP Kernel Gap Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/boa-import-meta-url.e2e.test.ts`、`e2e/computed-style-reads.e2e.test.ts`、`e2e/svg-css-attribute-values.e2e.test.ts`、`e2e/fixed-position-scroll.e2e.test.ts`、`e2e/fixed-position-viewport.e2e.test.ts`。
+
+
 
 
 
