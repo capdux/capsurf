@@ -2437,6 +2437,20 @@ fn paintNodeRecursive(
             canvas.drawTextClipped(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color, active_clip);
         }
 
+        if (style.has_before_content && style.before_content_len > 0 && paint_style.text_color.a > 0) {
+            const before_pseudo_txt = style.before_content_buf[0..style.before_content_len];
+            const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+            const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+            const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+            if (fsz >= 14.0) {
+                const scaled_h = fsz * 0.65;
+                const draw_y = r.y + pad_t + @max(0.0, (r.height - pad_t - scaled_h) * 0.5);
+                canvas.drawScaledTextClipped(r.x + pad_l, draw_y, before_pseudo_txt, scaled_h, paint_style.text_color, active_clip);
+            } else {
+                canvas.drawTextClipped(r.x + pad_l + 1.0, r.y + pad_t + 2.0, before_pseudo_txt, paint_style.text_color, active_clip);
+            }
+        }
+
         if (node_id == opts.focused_node && is_form_text) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);

@@ -688,6 +688,11 @@ pub struct LayoutTree {
             return std.mem.trim(u8, n.text_content, " \t\r\n").len;
         }
         let total: usize = 0;
+        if (n.node_type == NodeType.Element && @as(usize, node_id) < styles.len) {
+            const est = &styles[@as(usize, node_id)];
+            if (est.has_before_content) total += est.before_content_len;
+            if (est.has_after_content) total += est.after_content_len;
+        }
         let ch = n.first_child;
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
             const cn = &doc.nodes.items[@as(usize, ch)];
@@ -1118,18 +1123,27 @@ pub struct LayoutTree {
                     box_after.content_height = @as(f32, @floatFromInt(line_count)) * font_h;
                 }
                 if (style.width.is_auto && box_after.content_width <= 0.0) {
-                    const base_size = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
-                    let char_ratio: f32 = 0.50;
-                    if (style.hasFontFamily("Bungee") || style.hasFontFamily("bungee")) {
-                        char_ratio = 0.85;
-                    } else if (style.hasFontFamily("RangeFont") && LayoutTree.hasLatinText(doc, node_id)) {
-                        char_ratio = 0.85;
+                    const intrinsic_w = _.measureIntrinsicWidth(doc, styles, node_id, avail_w);
+                    const h_extra = box_after.marginHorizontal() + box_after.paddingHorizontal() + box_after.borderHorizontal();
+                    if (intrinsic_w > h_extra) {
+                        box_after.content_width = intrinsic_w - h_extra;
+                    } else {
+                        const base_size = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+                        let char_ratio: f32 = 0.50;
+                        const wf_r = style.webfont.advanceRatioForCodepoint(@as(u32, 'M'));
+                        if (wf_r > 0.0) {
+                            char_ratio = wf_r;
+                        } else if (style.hasFontFamily("Bungee") || style.hasFontFamily("bungee")) {
+                            char_ratio = 0.85;
+                        } else if (style.hasFontFamily("RangeFont") && LayoutTree.hasLatinText(doc, node_id)) {
+                            char_ratio = 0.85;
+                        }
+                        if (style.font_weight != 400.0) {
+                            char_ratio += (style.font_weight - 400.0) * 0.00015;
+                        }
+                        const char_w: f32 = base_size * char_ratio;
+                        box_after.content_width = @as(f32, @floatFromInt(text_len)) * char_w;
                     }
-                    if (style.font_weight != 400.0) {
-                        char_ratio += (style.font_weight - 400.0) * 0.00015;
-                    }
-                    const char_w: f32 = base_size * char_ratio;
-                    box_after.content_width = @as(f32, @floatFromInt(text_len)) * char_w;
                 }
             }
         }
@@ -1511,12 +1525,16 @@ pub struct LayoutTree {
 
     static fn spaceWidth(st: *const ComputedStyle): f32 {
         const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ' '));
+        if (wf_ratio > 0.0) return base_sz * wf_ratio;
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
         return base_sz * 0.28;
     }
 
     static fn charWidthForStyle(ch: u8, st: *const ComputedStyle): f32 {
         const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ch));
+        if (wf_ratio > 0.0) return base_sz * wf_ratio;
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
         return LayoutTree.estimateCharWidth(ch, base_sz);
     }
@@ -1722,10 +1740,20 @@ pub struct LayoutTree {
             cur_w.* += h_extra;
             trailing_ws_w.* = 0.0;
         }
+        if (st.has_before_content && st.before_content_len > 0) {
+            cur_w.* += LayoutTree.measureTextSegmentWithTabs(st.before_content_buf[0..st.before_content_len], st, cur_w.*);
+            trailing_ws_w.* = 0.0;
+            prev_ws.* = false;
+        }
         let ch = node.first_child;
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
             _.measureInlineMaxRun(doc, styles, ch, node_id, avail_w, cur_w, best_w, prev_ws, trailing_ws_w);
             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        if (st.has_after_content && st.after_content_len > 0) {
+            cur_w.* += LayoutTree.measureTextSegmentWithTabs(st.after_content_buf[0..st.after_content_len], st, cur_w.*);
+            trailing_ws_w.* = 0.0;
+            prev_ws.* = false;
         }
     }
 
@@ -1804,6 +1832,11 @@ pub struct LayoutTree {
             let cur_w: f32 = 0.0;
             let prev_ws = true;
             let trailing_ws_w: f32 = 0.0;
+            if (st.has_before_content && st.before_content_len > 0) {
+                cur_w += LayoutTree.measureTextSegmentWithTabs(st.before_content_buf[0..st.before_content_len], st, cur_w);
+                prev_ws = false;
+                trailing_ws_w = 0.0;
+            }
             let ch = node.first_child;
             while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
                 const cn = &doc.nodes.items[@as(usize, ch)];
@@ -1827,6 +1860,11 @@ pub struct LayoutTree {
                 }
                 _.measureInlineMaxRun(doc, styles, ch, node_id, avail_w, &cur_w, &best_w, &prev_ws, &trailing_ws_w);
                 ch = cn.next_sibling;
+            }
+            if (st.has_after_content && st.after_content_len > 0) {
+                cur_w += LayoutTree.measureTextSegmentWithTabs(st.after_content_buf[0..st.after_content_len], st, cur_w);
+                prev_ws = false;
+                trailing_ws_w = 0.0;
             }
             const final_cur = if (cur_w >= trailing_ws_w) (cur_w - trailing_ws_w) else cur_w;
             if (final_cur > best_w) best_w = final_cur;
@@ -1859,7 +1897,9 @@ pub struct LayoutTree {
         if (node.node_type == NodeType.Text) {
             let parent_fs: f32 = 16.0;
             let allows_wrap = true;
+            let parent_st_opt: (*const ComputedStyle)? = null;
             if (node.parent != NULL_NODE && @as(usize, node.parent) < styles.len) {
+                parent_st_opt = &styles[@as(usize, node.parent)];
                 parent_fs = styles[@as(usize, node.parent)].font_size_px;
                 allows_wrap = styles[@as(usize, node.parent)].white_space.allowsWrap();
             }
@@ -1876,7 +1916,11 @@ pub struct LayoutTree {
                     if (cur_w > max_word_w) max_word_w = cur_w;
                     cur_w = 0.0;
                 } else {
-                    cur_w += LayoutTree.estimateCharWidth(ch, parent_fs);
+                    if (pst := parent_st_opt) {
+                        cur_w += LayoutTree.charWidthForStyle(ch, pst);
+                    } else {
+                        cur_w += LayoutTree.estimateCharWidth(ch, parent_fs);
+                    }
                 }
             }
             if (cur_w > max_word_w) max_word_w = cur_w;
@@ -2880,10 +2924,16 @@ pub struct LayoutTree {
         }
         // Non-replaced display: inline wrapper
         wrappers.append(_.allocator, node_id) catch {};
+        if (cstyle.has_before_content && cstyle.before_content_len > 0) {
+            _.appendTextSegment(cstyle.before_content_buf[0..cstyle.before_content_len], node_id, node_id, cstyle, content_w, items, prev_ws);
+        }
         let ch = node.first_child;
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
             _.collectInlineItems(doc, styles, ch, node_id, content_x, cursor_y, content_w, content_h, child_h_definite, items, wrappers, prev_ws);
             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        if (cstyle.has_after_content && cstyle.after_content_len > 0) {
+            _.appendTextSegment(cstyle.after_content_buf[0..cstyle.after_content_len], node_id, node_id, cstyle, content_w, items, prev_ws);
         }
     }
 
@@ -3118,6 +3168,16 @@ pub struct LayoutTree {
         let min_y: f32 = 0.0;
         let max_x: f32 = 0.0;
         let max_y: f32 = 0.0;
+
+        if ((wstyle.has_before_content && wstyle.before_content_len > 0) || (wstyle.has_after_content && wstyle.after_content_len > 0)) {
+            if (wbox.rect.width > 0.0 || wbox.rect.height > 0.0) {
+                has_any = true;
+                min_x = wbox.rect.x;
+                min_y = wbox.rect.y;
+                max_x = wbox.rect.x + wbox.rect.width;
+                max_y = wbox.rect.y + wbox.rect.height;
+            }
+        }
 
         let ch = doc.nodes.items[@as(usize, wrapper_id)].first_child;
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {

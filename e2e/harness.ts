@@ -579,7 +579,8 @@ export class Page {
   public keyboard: Keyboard;
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
   private _url: string = "about:blank";
-  private exposedFunctions = new Map<string, string>();
+  private exposedFunctions = new Map<string, (...args: any[]) => any>();
+  private _requestInterceptionEnabled: boolean = false;
   public historyEntries: Array<{ id: number; url: string; userTypedURL: string; title: string }> = [
     { id: 1, url: "about:blank", userTypedURL: "about:blank", title: "" }
   ];
@@ -698,6 +699,7 @@ export class Page {
       this.emit("pageerror", err);
     });
     this.cdp.on("Network.requestWillBeSent", (params: any) => {
+      if (this._requestInterceptionEnabled) return;
       const req = params?.request || params;
       const pptrReq = {
         url: () => req?.url || "",
@@ -710,6 +712,160 @@ export class Page {
         continue: async (_o?: any) => {},
       };
       this.emit("request", pptrReq);
+    });
+    this.cdp.on("Fetch.requestPaused", (params: any) => {
+      if (!this._requestInterceptionEnabled) return;
+      const requestId = params?.requestId || "";
+      const req = params?.request || {};
+      let handled = false;
+      const pptrReq = {
+        url: () => req?.url || "",
+        method: () => req?.method || "GET",
+        headers: () => req?.headers || {},
+        postData: () => req?.postData || "",
+        resourceType: () => params?.resourceType ? String(params.resourceType).toLowerCase() : "other",
+        respond: async (r: { status?: number; contentType?: string; headers?: Record<string, string>; body?: string | Uint8Array }) => {
+          if (handled) return;
+          handled = true;
+          const headersObj: Record<string, string> = { ...(r.headers || {}) };
+          if (r.contentType && !headersObj["content-type"] && !headersObj["Content-Type"]) {
+            headersObj["content-type"] = r.contentType;
+          }
+          const responseHeaders = Object.entries(headersObj).map(([name, value]) => ({ name, value: String(value) }));
+          const bodyStr = typeof r.body === "string"
+            ? Buffer.from(r.body, "utf8").toString("base64")
+            : r.body
+              ? Buffer.from(r.body).toString("base64")
+              : "";
+          await this.cdp.send("Fetch.fulfillRequest", {
+            requestId,
+            responseCode: r.status ?? 200,
+            responseHeaders,
+            body: bodyStr,
+          });
+        },
+        abort: async (errorCode?: string) => {
+          if (handled) return;
+          handled = true;
+          await this.cdp.send("Fetch.failRequest", {
+            requestId,
+            errorReason: errorCode || "Failed",
+          });
+        },
+        continue: async (overrides?: { url?: string; method?: string; postData?: string; headers?: Record<string, string> }) => {
+          if (handled) return;
+          handled = true;
+          const contParams: Record<string, unknown> = { requestId };
+          if (overrides?.url) contParams.url = overrides.url;
+          if (overrides?.method) contParams.method = overrides.method;
+          if (overrides?.postData) contParams.postData = overrides.postData;
+          if (overrides?.headers) {
+            contParams.headers = Object.entries(overrides.headers).map(([name, value]) => ({ name, value: String(value) }));
+          }
+          await this.cdp.send("Fetch.continueRequest", contParams);
+        },
+      };
+      if (this.listenerCount("request") > 0) {
+        this.emit("request", pptrReq);
+      } else {
+        void pptrReq.continue();
+      }
+    });
+    this.cdp.on("Runtime.bindingCalled", (params: any) => {
+      const bindingName = params?.name;
+      const payload = params?.payload;
+      if (typeof bindingName !== "string" || typeof payload !== "string") return;
+      if (bindingName === "__capsurf_fetch_intercept") {
+        let parsed: any;
+        try {
+          parsed = JSON.parse(decodeURIComponent(payload));
+        } catch {
+          try {
+            parsed = JSON.parse(payload);
+          } catch {
+            return;
+          }
+        }
+        const seq = parsed?.seq;
+        const reqInfo = parsed?.request || {};
+        let settled = false;
+        const sendVerdict = async (verdict: Record<string, unknown>) => {
+          if (settled) return;
+          settled = true;
+          try {
+            await this.cdp.send("Runtime.evaluate", {
+              expression: `globalThis.__capsurf_fetch_intercept_resolve && globalThis.__capsurf_fetch_intercept_resolve(${JSON.stringify(seq)}, ${JSON.stringify(verdict)})`,
+            });
+          } catch {}
+        };
+        const pptrReq = {
+          url: () => reqInfo?.url || "",
+          method: () => reqInfo?.method || "GET",
+          headers: () => reqInfo?.headers || {},
+          postData: () => reqInfo?.postData || "",
+          resourceType: () => reqInfo?.resourceType || "fetch",
+          respond: async (r: { status?: number; contentType?: string; headers?: Record<string, string>; body?: string }) => {
+            await sendVerdict({
+              action: "respond",
+              status: r?.status ?? 200,
+              contentType: r?.contentType,
+              headers: r?.headers || {},
+              body: r?.body ?? "",
+            });
+          },
+          abort: async () => {
+            await sendVerdict({ action: "abort" });
+          },
+          continue: async (overrides?: { url?: string; method?: string; headers?: Record<string, string> }) => {
+            await sendVerdict({
+              action: "continue",
+              url: overrides?.url,
+              method: overrides?.method,
+              headers: overrides?.headers,
+            });
+          },
+        };
+        if (this.listenerCount("request") > 0) {
+          this.emit("request", pptrReq);
+        } else {
+          void sendVerdict({ action: "continue" });
+        }
+        return;
+      }
+      if (!bindingName.startsWith("puppeteer_")) return;
+      const fnName = bindingName.slice("puppeteer_".length);
+      const fn = this.exposedFunctions.get(fnName);
+      if (!fn) return;
+      let parsed: any;
+      try {
+        parsed = JSON.parse(decodeURIComponent(payload));
+      } catch {
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          return;
+        }
+      }
+      const seq = parsed?.seq;
+      const args = Array.isArray(parsed?.args) ? parsed.args : [];
+      Promise.resolve()
+        .then(() => fn(...args))
+        .then(
+          async (result) => {
+            try {
+              await this.cdp.send("Runtime.evaluate", {
+                expression: `globalThis.__puppeteer_callbacks && globalThis.__puppeteer_callbacks[${JSON.stringify(seq)}] && globalThis.__puppeteer_callbacks[${JSON.stringify(seq)}].resolve(${JSON.stringify(result)})`,
+              });
+            } catch {}
+          },
+          async (err) => {
+            try {
+              await this.cdp.send("Runtime.evaluate", {
+                expression: `globalThis.__puppeteer_callbacks && globalThis.__puppeteer_callbacks[${JSON.stringify(seq)}] && globalThis.__puppeteer_callbacks[${JSON.stringify(seq)}].reject(${JSON.stringify(String(err?.message || err))})`,
+              });
+            } catch {}
+          },
+        );
     });
     this.cdp.on("Network.responseReceived", (params: any) => {
       const resp = params?.response || params;
@@ -797,7 +953,49 @@ export class Page {
       type: "Document",
     });
 
-    const navParams: Record<string, unknown> = { url };
+    let targetNavUrl = url;
+    let respondedStatus: number | null = null;
+    if (this._requestInterceptionEnabled && this.listenerCount("request") > 0) {
+      const navVerdict = await new Promise<{ action: string; url?: string; status?: number; contentType?: string; body?: string }>((resolve) => {
+        let settled = false;
+        const done = (v: { action: string; url?: string; status?: number; contentType?: string; body?: string }) => {
+          if (!settled) {
+            settled = true;
+            resolve(v);
+          }
+        };
+        const navReq = {
+          url: () => url,
+          method: () => "GET",
+          headers: () => ({}),
+          postData: () => "",
+          resourceType: () => "document",
+          respond: async (r: { status?: number; contentType?: string; body?: string }) => {
+            done({ action: "respond", status: r?.status ?? 200, contentType: r?.contentType, body: r?.body ?? "" });
+          },
+          abort: async () => {
+            done({ action: "abort" });
+          },
+          continue: async (overrides?: { url?: string }) => {
+            done({ action: "continue", url: overrides?.url });
+          },
+        };
+        this.emit("request", navReq);
+      });
+      if (navVerdict.action === "abort") {
+        throw new Error("net::ERR_FAILED");
+      }
+      if (navVerdict.action === "respond") {
+        respondedStatus = navVerdict.status ?? 200;
+        const mime = navVerdict.contentType || "text/html";
+        targetNavUrl = `data:${mime};charset=utf-8,${encodeURIComponent(navVerdict.body ?? "")}`;
+      } else if (navVerdict.action === "continue" && navVerdict.url) {
+        targetNavUrl = navVerdict.url;
+        this._url = navVerdict.url;
+      }
+    }
+
+    const navParams: Record<string, unknown> = { url: targetNavUrl };
     if (options && options.referer) {
       navParams.referrer = options.referer;
     }
@@ -873,17 +1071,15 @@ export class Page {
       });
     } catch {}
 
-    for (const [name, fnSource] of this.exposedFunctions) {
+    for (const [name] of this.exposedFunctions) {
       try {
-        await this.cdp.send("Runtime.addBinding", { name });
-        await this.evaluate(`
-          window[${JSON.stringify(name)}] = function(...args) {
-            return Promise.resolve((${fnSource})(...args));
-          };
-          if (typeof globalThis !== "undefined") {
-            globalThis[${JSON.stringify(name)}] = window[${JSON.stringify(name)}];
-          }
-        `);
+        await this.installExposedFunction(name);
+      } catch {}
+    }
+
+    if (this._requestInterceptionEnabled) {
+      try {
+        await this.installFetchInterceptorBridge();
       } catch {}
     }
 
@@ -935,8 +1131,8 @@ export class Page {
 
     const navResponse = {
       ...(typeof res === "object" && res !== null ? res : {}),
-      status: () => ((res as any)?.errorText ? 500 : 200),
-      ok: () => !((res as any)?.errorText),
+      status: () => (respondedStatus !== null ? respondedStatus : ((res as any)?.errorText ? 500 : 200)),
+      ok: () => (respondedStatus !== null ? (respondedStatus >= 200 && respondedStatus < 300) : !((res as any)?.errorText)),
       url: () => this._url,
     };
 
@@ -997,8 +1193,27 @@ export class Page {
       }
 
       try {
+        const trackAsyncPromise = this.exposedFunctions.size > 0 || this._requestInterceptionEnabled;
+        const evalExpr = trackAsyncPromise
+          ? `(function() {
+              const __v = (0, eval)(${JSON.stringify(expression)});
+              if (__v && typeof __v.then === "function") {
+                globalThis.__capsurf_eval_seq = (globalThis.__capsurf_eval_seq || 0) + 1;
+                const __id = globalThis.__capsurf_eval_seq;
+                globalThis.__capsurf_eval_results = globalThis.__capsurf_eval_results || {};
+                const __slot = { state: "pending", value: undefined, error: undefined };
+                globalThis.__capsurf_eval_results[__id] = __slot;
+                __v.then(
+                  function(val) { __slot.state = "resolved"; __slot.value = val; },
+                  function(err) { __slot.state = "rejected"; __slot.error = String(err && err.stack ? err.stack : err); }
+                );
+                return { __capsurf_pending_promise_id: __id };
+              }
+              return { __capsurf_sync_value: __v };
+            })()`
+          : expression;
         const evalParams: any = {
-          expression,
+          expression: evalExpr,
           returnByValue: true,
           awaitPromise: true,
         };
@@ -1006,6 +1221,46 @@ export class Page {
           evalParams.browserContextId = this.browserContextId;
         }
         const r: any = await this.cdp.send("Runtime.evaluate", evalParams);
+
+        if (trackAsyncPromise && !r?.exceptionDetails && r?.result?.value && typeof r.result.value === "object") {
+          const valObj = r.result.value;
+          if (typeof valObj.__capsurf_pending_promise_id === "number") {
+            const pid = valObj.__capsurf_pending_promise_id;
+            const deadline = Date.now() + 10_000;
+            let resolvedSlot: any = null;
+            while (Date.now() < deadline && !settled) {
+              const pollRes: any = await this.cdp.send("Runtime.evaluate", {
+                expression: `(function() {
+                  if (typeof __capsurf_pump_timers === "function") { try { __capsurf_pump_timers(); } catch (e) {} }
+                  const m = globalThis.__capsurf_eval_results;
+                  const s = m ? m[${pid}] : null;
+                  if (!s) return { state: "missing" };
+                  if (s.state !== "pending") {
+                    delete m[${pid}];
+                    return s;
+                  }
+                  return { state: "pending" };
+                })()`,
+                returnByValue: true,
+              });
+              const st = pollRes?.result?.value;
+              if (st && st.state !== "pending") {
+                resolvedSlot = st;
+                break;
+              }
+              await new Promise((res) => setTimeout(res, 15));
+            }
+            if (resolvedSlot) {
+              if (resolvedSlot.state === "rejected") {
+                r.exceptionDetails = { exception: { description: resolvedSlot.error || "Promise rejected" } };
+              } else {
+                r.result = { type: typeof resolvedSlot.value, value: resolvedSlot.value };
+              }
+            }
+          } else if ("__capsurf_sync_value" in valObj) {
+            r.result = { type: typeof valObj.__capsurf_sync_value, value: valObj.__capsurf_sync_value };
+          }
+        }
 
         // Drain same-doc and check cross-doc navigations
         const navCheckParams: any = {
@@ -1496,18 +1751,80 @@ export class Page {
     await this.goto(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   }
 
-  async exposeFunction(name: string, fn: (...args: any[]) => any): Promise<void> {
-    this.exposedFunctions.set(name, fn.toString());
-    await this.cdp.send("Runtime.addBinding", { name });
-    const fnSource = fn.toString();
-    await this.evaluate(`
-      window[${JSON.stringify(name)}] = function(...args) {
-        return Promise.resolve((${fnSource})(...args));
+  private async installExposedFunction(name: string): Promise<void> {
+    const bindingName = `puppeteer_${name}`;
+    await this.cdp.send("Runtime.addBinding", { name: bindingName });
+    await this.evaluate(`(function() {
+      const bindingName = ${JSON.stringify(bindingName)};
+      const fnName = ${JSON.stringify(name)};
+      globalThis.__puppeteer_seq = globalThis.__puppeteer_seq || 0;
+      globalThis.__puppeteer_callbacks = globalThis.__puppeteer_callbacks || {};
+      const wrapper = function(...args) {
+        return new Promise((resolve, reject) => {
+          const seq = ++globalThis.__puppeteer_seq;
+          globalThis.__puppeteer_callbacks[seq] = {
+            resolve: (v) => { delete globalThis.__puppeteer_callbacks[seq]; resolve(v); },
+            reject: (e) => { delete globalThis.__puppeteer_callbacks[seq]; reject(new Error(e)); },
+          };
+          const binding = globalThis[bindingName];
+          if (typeof binding === "function") {
+            binding(encodeURIComponent(JSON.stringify({ seq, args })));
+          } else {
+            delete globalThis.__puppeteer_callbacks[seq];
+            reject(new Error("Binding not installed: " + bindingName));
+          }
+        });
       };
-      if (typeof globalThis !== "undefined") {
-        globalThis[${JSON.stringify(name)}] = window[${JSON.stringify(name)}];
-      }
-    `);
+      if (typeof window !== "undefined") window[fnName] = wrapper;
+      globalThis[fnName] = wrapper;
+    })()`);
+  }
+
+  private async installFetchInterceptorBridge(): Promise<void> {
+    await this.cdp.send("Runtime.addBinding", { name: "__capsurf_fetch_intercept" });
+    await this.evaluate(`(function() {
+      globalThis.__capsurf_fetch_seq = globalThis.__capsurf_fetch_seq || 0;
+      globalThis.__capsurf_fetch_pending = globalThis.__capsurf_fetch_pending || {};
+      globalThis.__capsurf_fetch_intercept_resolve = function(seq, verdict) {
+        const cb = globalThis.__capsurf_fetch_pending[seq];
+        if (cb) {
+          delete globalThis.__capsurf_fetch_pending[seq];
+          cb(verdict);
+        }
+      };
+      globalThis.__capsurf_fetch_interceptor = function(request) {
+        return new Promise(function(resolve) {
+          const seq = ++globalThis.__capsurf_fetch_seq;
+          globalThis.__capsurf_fetch_pending[seq] = resolve;
+          if (typeof globalThis.__capsurf_fetch_intercept === "function") {
+            globalThis.__capsurf_fetch_intercept(encodeURIComponent(JSON.stringify({ seq: seq, request: request })));
+          } else {
+            delete globalThis.__capsurf_fetch_pending[seq];
+            resolve({ action: "continue" });
+          }
+        });
+      };
+    })()`);
+  }
+
+  async setRequestInterception(enabled: boolean): Promise<void> {
+    this._requestInterceptionEnabled = Boolean(enabled);
+    if (this._requestInterceptionEnabled) {
+      await this.cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
+      try {
+        await this.installFetchInterceptorBridge();
+      } catch {}
+    } else {
+      await this.cdp.send("Fetch.disable", {});
+      try {
+        await this.evaluate(`delete globalThis.__capsurf_fetch_interceptor;`);
+      } catch {}
+    }
+  }
+
+  async exposeFunction(name: string, fn: (...args: any[]) => any): Promise<void> {
+    this.exposedFunctions.set(name, fn);
+    await this.installExposedFunction(name);
   }
 
   async $(selector: string): Promise<ElementHandle | null> {

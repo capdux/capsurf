@@ -3717,3 +3717,24 @@
   - 销毁 `81cba315-1b81-4905-9161-7fbb50f6a125`；
   - 派发 **Subagent 67**: Img & Harness Interception Closer（`e2e/harness.ts` + `src/js/shim/*`，`bin_19232` / `19232`）
     - 攻坚目标：`img-dimensions`、`img-data-url-load`、`source-dimensions`、`expose-function` (4/4)、`fetch-interception` (8/8) + 复测 `root-element-metrics` (7/7)。
+
+## [2026-11-20 19:05:10] 图片固有尺寸/Data URL、exposeFunction 往返与 Fetch 拦截 21/22 极速闭环（7 分钟 -m -d -o）(Subagent 13af3e42 结单，Phase 99)
+- **图片固有尺寸、Data URL 异步加载与 `HTMLSourceElement` (`src/js/shim/element/html-classes.js`)**:
+  - 完善 `sniffImageDimensionsFromDataUrl` SVG 默认 `300x150` / `viewBox` contain / 单边比例推导；`HTMLImageElement` `src` 支持 `data:` URL 异步派发 `load`/`error`；`HTMLSourceElement` `width`/`height` 按 WebIDL `unsigned long` 反射。
+- **Harness `exposeFunction` CDP 往返与 `setRequestInterception` (`e2e/harness.ts`, `src/js/shim/window.js`)**:
+  - `Page.exposeFunction` 改为真实 `puppeteer_${name}` CDP binding 往返与跨导航重装；
+  - `Page.setRequestInterception` 对接 `Fetch.enable`/`Fetch.requestPaused` 与 `page.on("request", req)`（`continue`/`respond`/`abort`），`fetchFn` 接入拦截钩子并重算同源/CORS/preflight。
+- **门禁与 E2E 验证（`-m -d -o` 模块级增量构建，仅 7 分钟）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `img-dimensions` (1/1)、`img-data-url-load` (1/1)、`source-dimensions` (1/1)、`expose-function` (4/4)、`root-element-metrics` (7/7)、`fetch-interception` (7/8)：**21/22 PASS**！
+- **清理旧子智能体**: 销毁 `13af3e42-a8f0-4c7b-a6df-af813f264a3f`。
+
+## [2026-11-20 19:06:00] 里程碑 Phase 100：CSS Fonts 4 `@font-face` 引擎、CORS WebFont 宽度整形与 `::before`/`::after` 伪元素布局闭环 (Subagent 9b218229 结单)
+- **CSS Fonts 4 核心模块与伪元素布局 (`src/css/font_face.cp`, `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`, `test/css/test_font_face_pseudo.cp`)**:
+  - 新增 `src/css/font_face.cp`：实装 `UnicodeRange`（`U+XXXX`/`U+XXXX-YYYY`/`U+XX??`）、`FontFaceRule.parseBlock`（兼容含 `;` 的 data URI 与 CORS ACAO）、`WebfontStyleMetrics` 与 `parsePseudoContentValue`；
+  - `cascade.cp` / `layout.cp` / `painter.cp`：接入 `@font-face` 字体族步进宽度比与 `::before`/`::after` 伪元素生成文本的测量、布局及光栅化绘制；
+  - 新增纯 CP 白盒单元测试 `test/css/test_font_face_pseudo.cp`（**3/3 PASS**，白盒总数达 69/69）。
+- **门禁与 E2E 验证**:
+  - 全部 5 个 `.cp` 文件 4 门禁全 0；
+  - `author-webfont` (2/2 PASS)、`cross-origin-font-cors` (2/2 PASS)、`font-face-unicode-range-gating` (1/3 PASS)；定位 `pseudo-computed-style` 缺 `Element.prototype.insertAdjacentHTML`（已交路 2）。
+- **清理旧子智能体**: 销毁 `9b218229-ab7c-47a8-9c11-58aebd0b6113`。

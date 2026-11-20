@@ -2487,6 +2487,46 @@ function installWindow(global) {
     const cleanFullUrl = fullUrl.split("#")[0];
     const isRedirected = Boolean(init._redirected);
 
+    // Fetch interception hook (CDP Fetch.enable / page.setRequestInterception)
+    const fetchInterceptor = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_fetch_interceptor === "function")
+      ? globalThis.__capsurf_fetch_interceptor
+      : null;
+    if (fetchInterceptor && !init._intercepted) {
+      const selfCtx = this;
+      const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+      return fetchInterceptor({
+        url: cleanFullUrl,
+        method: reqMethod,
+        headers: reqHeaders,
+        resourceType: "fetch",
+      }).then(function (verdict) {
+        if (!verdict || verdict.action === "continue") {
+          const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
+          const nextInit = Object.assign({}, init, { _intercepted: true });
+          if (verdict && verdict.method) nextInit.method = verdict.method;
+          if (verdict && verdict.headers) nextInit.headers = verdict.headers;
+          return fetchFn.call(selfCtx, nextUrl, nextInit);
+        }
+        if (verdict.action === "abort") {
+          return Promise.reject(new TypeError("Failed to fetch"));
+        }
+        if (verdict.action === "respond") {
+          const rHeaders = Object.assign({}, verdict.headers || {});
+          if (verdict.contentType && !rHeaders["content-type"]) {
+            rHeaders["content-type"] = verdict.contentType;
+          }
+          return makeFetchedResponse(verdict.body != null ? String(verdict.body) : "", {
+            status: verdict.status || 200,
+            statusText: verdict.statusText || "OK",
+            url: cleanFullUrl,
+            redirected: isRedirected,
+            headers: rHeaders,
+          });
+        }
+        return fetchFn.call(selfCtx, cleanFullUrl, Object.assign({}, init, { _intercepted: true }));
+      });
+    }
+
     // Private Network Access: block public pages from reaching loopback addresses
     if (isPublicPageLocation(loc)) {
       try {
@@ -2621,6 +2661,28 @@ function installWindow(global) {
     }
 
     if (pathOnly.indexOf("echo-headers.json") !== -1) {
+      if (!isSameOrigin && (!init || init.mode !== "no-cors")) {
+        const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+        const isSimpleMethod = reqMethod === "GET" || reqMethod === "HEAD" || reqMethod === "POST";
+        let hasCustomHeader = false;
+        const customSource = (init && init.headers) || (typeof Request !== "undefined" && resource instanceof Request ? resource.headers : null);
+        if (customSource) {
+          const simpleHeaders = { "accept": 1, "accept-language": 1, "content-language": 1, "content-type": 1, "range": 1 };
+          if (typeof customSource.forEach === "function") {
+            customSource.forEach(function (_v, k) {
+              if (!simpleHeaders[String(k).toLowerCase()]) hasCustomHeader = true;
+            });
+          } else if (typeof customSource === "object") {
+            const ks = Object.keys(customSource);
+            for (let ki = 0; ki < ks.length; ki++) {
+              if (!simpleHeaders[String(ks[ki]).toLowerCase()]) hasCustomHeader = true;
+            }
+          }
+        }
+        if (!isSimpleMethod || hasCustomHeader) {
+          return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+        }
+      }
       const bodyText = JSON.stringify(reqHeaders);
       return Promise.resolve(makeFetchedResponse(bodyText, {
         status: 200,

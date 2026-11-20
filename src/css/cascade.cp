@@ -10,6 +10,7 @@ import { Document, NodeData, NodeType, NodeId, NULL_NODE, StringSlice } from "..
 import { SelectorList, Matcher } from "./matcher.cp";
 import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
+import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue } from "./font_face.cp";
 import {
     CssColor,
     CssUnit,
@@ -1861,6 +1862,13 @@ pub struct ComputedStyle {
     is_line_clamped: bool = false;
     font_family_buf: [64]u8 = [0; 64],
     font_family_len: usize = 0,
+    webfont: WebfontStyleMetrics = WebfontStyleMetrics{},
+    before_content_buf: [64]u8 = [0; 64],
+    before_content_len: usize = 0,
+    has_before_content: bool = false,
+    after_content_buf: [64]u8 = [0; 64],
+    after_content_len: usize = 0,
+    has_after_content: bool = false,
     font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
     text_fill_color: CssColor = CssColor.rgba(0, 0, 0, 0);
@@ -2169,6 +2177,7 @@ pub struct ComputedStyle {
                 @memcpy(_.font_family_buf[0..copy_len], p.font_family_buf[0..copy_len]);
                 _.font_family_len = copy_len;
             }
+            _.webfont = p.webfont;
             if (tag != .B && tag != .Strong) {
                 _.font_weight = p.font_weight;
             }
@@ -2193,6 +2202,16 @@ pub struct ComputedStyle {
 
     fn getFontFamily(): []const u8 {
         return _.font_family_buf[0.._.font_family_len];
+    }
+
+    fn getBeforeContent(): []const u8 {
+        if (!_.has_before_content) return "";
+        return _.before_content_buf[0.._.before_content_len];
+    }
+
+    fn getAfterContent(): []const u8 {
+        if (!_.has_after_content) return "";
+        return _.after_content_buf[0.._.after_content_len];
     }
 
     fn hasFontFamily(name: []const u8): bool {
@@ -4093,6 +4112,8 @@ pub struct StyleSheet {
     rule_count: usize = 0;
     container_rules: [8]ContainerRuleEntry = [ContainerRuleEntry{}; 8];
     container_rule_count: usize = 0;
+    font_faces: [16]FontFaceRule = [FontFaceRule{}; 16];
+    font_face_count: usize = 0;
 
     static fn parse(css_text: []const u8, viewport_w: f32, is_dark: bool): StyleSheet {
         let sheet = StyleSheet{};
@@ -4107,10 +4128,19 @@ pub struct StyleSheet {
         const parsed_count = CssStylesheetParser.parseStylesheet(css_text, raw_rules);
 
         let i: usize = 0;
-        while (i < parsed_count && sheet.rule_count < 64) : (i += 1) {
+        while (i < parsed_count) : (i += 1) {
             const r = &raw_rules[i];
             if (r.kind == CssRuleKind.Style) {
-                StyleSheet.appendStyleRule(&sheet, r);
+                if (sheet.rule_count < 64) {
+                    StyleSheet.appendStyleRule(&sheet, r);
+                }
+            } else if (r.kind == CssRuleKind.FontFace) {
+                if (sheet.font_face_count < 16) {
+                    if (ff := FontFaceRule.parseBlock(r.nested_body)) {
+                        sheet.font_faces[sheet.font_face_count] = ff;
+                        sheet.font_face_count += 1;
+                    }
+                }
             } else if (r.kind == CssRuleKind.Media) {
                 if (r.media.matches(@as(f64, viewport_w), is_dark)) {
                     const nested_opt = std.heap.page_allocator.alloc(CssRule, 32) catch null;
@@ -4123,9 +4153,14 @@ pub struct StyleSheet {
                         }
                         const n_cnt = CssStylesheetParser.parseStylesheet(r.nested_body, nested_rules);
                         let j: usize = 0;
-                        while (j < n_cnt && sheet.rule_count < 64) : (j += 1) {
-                            if (nested_rules[j].kind == CssRuleKind.Style) {
+                        while (j < n_cnt) : (j += 1) {
+                            if (nested_rules[j].kind == CssRuleKind.Style && sheet.rule_count < 64) {
                                 StyleSheet.appendStyleRule(&sheet, &nested_rules[j]);
+                            } else if (nested_rules[j].kind == CssRuleKind.FontFace && sheet.font_face_count < 16) {
+                                if (ff := FontFaceRule.parseBlock(nested_rules[j].nested_body)) {
+                                    sheet.font_faces[sheet.font_face_count] = ff;
+                                    sheet.font_face_count += 1;
+                                }
                             }
                         }
                     }
@@ -4356,6 +4391,8 @@ pub struct Cascade {
                 let has_range_thumb_pseudo = false;
                 let has_non_pseudo_sel = false;
                 let matched_range_thumb = false;
+                let matched_before_pseudo = false;
+                let matched_after_pseudo = false;
                 let si_p: usize = 0;
                 while (si_p < rule.selectors.count) : (si_p += 1) {
                     const raw_sel = rule.selectors.selectors[si_p].raw;
@@ -4373,8 +4410,76 @@ pub struct Cascade {
                                 matched_range_thumb = true;
                             }
                         }
+                    } else if (bp := std.mem.indexOf(u8, raw_sel, "::before")) {
+                        if (!matched_before_pseudo) {
+                            const base_raw = std.mem.trim(u8, raw_sel[0..bp], " \t\r\n");
+                            const base_sel_str = if (base_raw.len > 0) base_raw else "*";
+                            const base_list = SelectorList.parse(base_sel_str);
+                            if (Matcher.matchBestSpecificity(doc, node_id_u32, &base_list) != null) {
+                                matched_before_pseudo = true;
+                            }
+                        }
+                    } else if (ap := std.mem.indexOf(u8, raw_sel, "::after")) {
+                        if (!matched_after_pseudo) {
+                            const base_raw = std.mem.trim(u8, raw_sel[0..ap], " \t\r\n");
+                            const base_sel_str = if (base_raw.len > 0) base_raw else "*";
+                            const base_list = SelectorList.parse(base_sel_str);
+                            if (Matcher.matchBestSpecificity(doc, node_id_u32, &base_list) != null) {
+                                matched_after_pseudo = true;
+                            }
+                        }
                     } else if (std.mem.indexOf(u8, raw_sel, "::") == null) {
                         has_non_pseudo_sel = true;
+                    }
+                }
+                if (matched_before_pseudo || matched_after_pseudo) {
+                    let pd_i: usize = 0;
+                    while (pd_i < rule.decl_count) : (pd_i += 1) {
+                        const decl = &rule.declarations[pd_i];
+                        if (std.ascii.eqlIgnoreCase(decl.name, "content")) {
+                            if (matched_before_pseudo) {
+                                if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
+                                    style.before_content_len = clen;
+                                    style.has_before_content = true;
+                                } else {
+                                    style.before_content_len = 0;
+                                    style.has_before_content = false;
+                                }
+                            }
+                            if (matched_after_pseudo) {
+                                if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
+                                    style.after_content_len = clen;
+                                    style.has_after_content = true;
+                                } else {
+                                    style.after_content_len = 0;
+                                    style.has_after_content = false;
+                                }
+                            }
+                        }
+                    }
+                    let pi_i: usize = 0;
+                    while (pi_i < rule.important_count) : (pi_i += 1) {
+                        const decl = &rule.important_declarations[pi_i];
+                        if (std.ascii.eqlIgnoreCase(decl.name, "content")) {
+                            if (matched_before_pseudo) {
+                                if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
+                                    style.before_content_len = clen;
+                                    style.has_before_content = true;
+                                } else {
+                                    style.before_content_len = 0;
+                                    style.has_before_content = false;
+                                }
+                            }
+                            if (matched_after_pseudo) {
+                                if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
+                                    style.after_content_len = clen;
+                                    style.has_after_content = true;
+                                } else {
+                                    style.after_content_len = 0;
+                                    style.has_after_content = false;
+                                }
+                            }
+                        }
                     }
                 }
                 if (has_range_thumb_pseudo && !has_non_pseudo_sel) {
@@ -4441,6 +4546,13 @@ pub struct Cascade {
                         style.applyProperty(&prop, w, root_font_px);
                     }
                 }
+            }
+
+            if (sheet.font_face_count > 0 && style.font_family_len > 0) {
+                style.webfont = WebfontStyleMetrics.resolveForFamily(
+                    style.font_family_buf[0..style.font_family_len],
+                    sheet.font_faces[0..sheet.font_face_count],
+                );
             }
 
             if (style.display.isWebkitBox()) {

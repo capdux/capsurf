@@ -1401,4 +1401,16 @@
    - 补齐 `offsetWidth`/`offsetHeight`/`clientTop`/`clientLeft`，`clientWidth`/`clientHeight` 扣除边框；`ResizeObserver` 计算真实 `contentRect` 并通过轻量轮询感知视口、样式、动画与 transition 尺寸变化。
 2. **根滚动溢出与 `window.scrollTo` 钳位 (`element.js`, `window.js`, `cloudflare-test.ts`)**：
    - `collectRootScrollExtents` 排除 `position: fixed` 子树并递归计入 `abspos` 溢出，普通元素采用 `relX + childW` 避免负左边距膨胀；`cloudflare-test.ts` 补齐 `X-Forwarded-Host`/`Proto` 与 inspector 绑定使 `engine-routes` 达 15/17 PASS。
+
+## Phase 99 图片固有尺寸、CDP `exposeFunction` 往返与 `setRequestInterception` 技术方案
+1. **图片固有尺寸与异步事件 (`html-classes.js`)**：
+   - `sniffImageDimensionsFromDataUrl` 遵循 CSS 替换元素规则处理 SVG 默认/viewBox/单边比例；`Image` 构造器支持 `data:` URL 解码并异步派发 `load`/`error`。
+2. **`exposeFunction` 往返与请求拦截 (`harness.ts`, `window.js`)**：
+   - 统一通过 `Runtime.addBinding("puppeteer_" + name)` + `Runtime.bindingCalled` 与 `Fetch.requestPaused` + `__capsurf_fetch_interceptor` 桥接异步往返，一举拿下 21/22 用例。
+
+## Phase 100 CSS Fonts 4 `@font-face` 引擎与 `::before`/`::after` 伪元素布局技术方案
+1. **CSS Fonts 4 与 `UnicodeRange` 步进整形 (`src/css/font_face.cp`, `cascade.cp`, `layout.cp`)**：
+   - 实装引号/括号感知的 `FontFaceRule.parseBlock` 与码点区间匹配，在 `spaceWidth`/`charWidthForStyle` 中按 `WebfontStyleMetrics.advanceRatioForCodepoint` 精准计算 WebFont 与 CORS 回退字宽。
+2. **伪元素生成内容布局 (`cascade.cp`, `layout.cp`, `painter.cp`)**：
+   - 解析 `::before`/`::after` `content:` 字符串并在 `measureIntrinsicWidth`/`collectInlineItems`/`paintNodeRecursive` 中纳入生成文本，覆盖块、行内块、Flex 与按钮容器。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

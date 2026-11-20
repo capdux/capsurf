@@ -1794,4 +1794,18 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`stylo-layout-misc-values` (1/1)、`element-measurement` (5/5)、`scrollable-overflow-origin` (1/1)、`root-element-metrics` (6/7+fix)、`engine-routes` (15/17)、`theme-flip-repaint` (1/2) PASS。
+
+## Phase 99: Image Sizing/Data-URL Load, CDP `exposeFunction` Round-Trip & `setRequestInterception` — 5/6 Suites (21/22 PASS)
+- **`src/js/shim/{element/html-classes,window}.js` & `e2e/harness.ts`**：
+  - 补齐 SVG 固有尺寸规则、`Image` `data:` URL 异步 `load`/`error`、`HTMLSourceElement` `unsigned long` 反射、`Page.exposeFunction` `puppeteer_${name}` CDP 往返及 `Page.setRequestInterception` 请求拦截。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（`-m -d -o` 模块级增量构建）；
+  - E2E 测试：`img-dimensions` (1)、`img-data-url-load` (1)、`source-dimensions` (1)、`expose-function` (4)、`root-element-metrics` (7)、`fetch-interception` (7/8) 共 **21/22 PASS**。
+
+## Phase 100: CSS Fonts 4 `@font-face` Engine, CORS WebFont Shaping & `::before`/`::after` Pseudo-Element Layout (Closed)
+- **新增 `src/css/font_face.cp` & `test/css/test_font_face_pseudo.cp`；更新 `src/css/cascade.cp` & `src/layout/layout.cp` & `src/render/painter.cp`**：
+  - 实装 `UnicodeRange`、`FontFaceRule.parseBlock`、`WebfontStyleMetrics` 与 `::before`/`::after` 伪元素文本布局与光栅化；新增纯 CP 白盒单测（3/3 PASS）。
+- **测试与门禁验证**：
+  - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`author-webfont` (2/2)、`cross-origin-font-cors` (2/2)、`font-face-unicode-range-gating` (1/3) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

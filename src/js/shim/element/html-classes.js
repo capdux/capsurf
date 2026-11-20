@@ -664,19 +664,47 @@ function installHtmlClasses(global) {
       if (meta.indexOf(";base64") !== -1) {
         try {
           svgText = typeof atob === "function" ? atob(rawData) : "";
-        } catch (e) {}
+        } catch (e) {
+          return null;
+        }
       } else {
         try { svgText = decodeURIComponent(rawData); } catch (e) {}
       }
-      const mw = /width\s*=\s*["']?(\d+)/i.exec(svgText);
-      const mh = /height\s*=\s*["']?(\d+)/i.exec(svgText);
-      if (mw && mh) {
-        return { width: parseInt(mw[1], 10), height: parseInt(mh[1], 10) };
+      const svgOpenMatch = /<svg\b[^>]*>/i.exec(svgText);
+      if (!svgOpenMatch) return null;
+      const svgTag = svgOpenMatch[0];
+      const mw = /\bwidth\s*=\s*["']?\s*(\d+(?:\.\d+)?)(?:px)?\s*["']?/i.exec(svgTag);
+      const mh = /\bheight\s*=\s*["']?\s*(\d+(?:\.\d+)?)(?:px)?\s*["']?/i.exec(svgTag);
+      const mv = /\bviewBox\s*=\s*["']?\s*[-+]?\d*\.?\d+[\s,]+[-+]?\d*\.?\d+[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)\s*["']?/i.exec(svgTag);
+      const wAttr = mw ? parseFloat(mw[1]) : NaN;
+      const hAttr = mh ? parseFloat(mh[1]) : NaN;
+      const hasW = !isNaN(wAttr) && wAttr > 0;
+      const hasH = !isNaN(hAttr) && hAttr > 0;
+      const vbW = mv ? parseFloat(mv[1]) : NaN;
+      const vbH = mv ? parseFloat(mv[2]) : NaN;
+      const hasVB = !isNaN(vbW) && vbW > 0 && !isNaN(vbH) && vbH > 0;
+      if (hasW && hasH) {
+        return { width: Math.round(wAttr), height: Math.round(hAttr) };
       }
-      const mv = /viewBox\s*=\s*["']?[^"']*?\b(\d+)\s+(\d+)\s*["']?/i.exec(svgText);
-      if (mv) {
-        return { width: parseInt(mv[1], 10), height: parseInt(mv[2], 10) };
+      if (hasW && hasVB) {
+        return { width: Math.round(wAttr), height: Math.round((wAttr * vbH) / vbW) };
       }
+      if (hasH && hasVB) {
+        return { width: Math.round((hAttr * vbW) / vbH), height: Math.round(hAttr) };
+      }
+      if (hasW) {
+        return { width: Math.round(wAttr), height: 150 };
+      }
+      if (hasH) {
+        return { width: 300, height: Math.round(hAttr) };
+      }
+      if (hasVB) {
+        if (vbW * 150 >= vbH * 300) {
+          return { width: 300, height: Math.round((300 * vbH) / vbW) };
+        }
+        return { width: Math.round((150 * vbW) / vbH), height: 150 };
+      }
+      return { width: 300, height: 150 };
     }
     return null;
   }
@@ -867,7 +895,39 @@ function installHtmlClasses(global) {
         return raw;
       }
     },
-    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+    set: function (v) {
+      const str = String(v);
+      this._lastCandidate = undefined;
+      this._lastDims = undefined;
+      nativeSetAttribute.call(this, "src", str);
+      if (str.startsWith("data:")) {
+        const self = this;
+        const dims = sniffImageDimensionsFromDataUrl(str);
+        self._imgComplete = false;
+        self._imgLoadSeq = (self._imgLoadSeq || 0) + 1;
+        const seq = self._imgLoadSeq;
+        const schedule = typeof setTimeout === "function" ? setTimeout : function (fn) { fn(); };
+        schedule(function () {
+          if (self._imgLoadSeq !== seq) return;
+          self._imgComplete = true;
+          const ok = Boolean(dims && dims.width > 0 && dims.height > 0);
+          self._lastCandidate = str;
+          self._lastDims = ok ? dims : { width: 0, height: 0 };
+          const evName = ok ? "load" : "error";
+          try {
+            const EvCls = global.__NativeEvent || global.Event;
+            const ev = typeof EvCls === "function" ? new EvCls(evName) : { type: evName, target: self, currentTarget: self };
+            if (typeof self.dispatchEvent === "function") {
+              self.dispatchEvent(ev);
+            } else if (ok && typeof self.onload === "function") {
+              self.onload.call(self, ev);
+            } else if (!ok && typeof self.onerror === "function") {
+              self.onerror.call(self, ev);
+            }
+          } catch (e) {}
+        }, 0);
+      }
+    },
     configurable: true,
     enumerable: true,
   });
@@ -943,7 +1003,10 @@ function installHtmlClasses(global) {
   });
 
   Object.defineProperty(HTMLImageElement.prototype, "complete", {
-    get: function () { return true; },
+    get: function () {
+      if (this._imgComplete !== undefined) return Boolean(this._imgComplete);
+      return true;
+    },
     configurable: true,
   });
 
@@ -964,10 +1027,25 @@ function installHtmlClasses(global) {
     let w = r.width;
     let h = r.height;
 
-    if (w === 0 && nw > 0) {
+    if (!hasStyleW) {
+      if (hasAttrW) {
+        const aw = Number(this.getAttribute("width"));
+        if (!isNaN(aw) && aw >= 0) w = aw;
+      } else if (nw > 0) {
+        w = nw;
+      }
+    } else if (w === 0 && nw > 0) {
       w = nw;
     }
-    if (h === 0 && nh > 0) {
+
+    if (!hasStyleH) {
+      if (hasAttrH) {
+        const ah = Number(this.getAttribute("height"));
+        if (!isNaN(ah) && ah >= 0) h = ah;
+      } else if (nh > 0) {
+        h = nh;
+      }
+    } else if (h === 0 && nh > 0) {
       h = nh;
     }
 
@@ -991,7 +1069,17 @@ function installHtmlClasses(global) {
 
   markNative(HTMLImageElement, "HTMLImageElement");
   global.HTMLImageElement = HTMLImageElement;
-  global.Image = HTMLImageElement;
+  function Image(width, height) {
+    const img = (typeof document !== "undefined" && document && typeof document.createElement === "function")
+      ? document.createElement("img")
+      : Object.create(HTMLImageElement.prototype);
+    if (width !== undefined) img.width = width;
+    if (height !== undefined) img.height = height;
+    return img;
+  }
+  Image.prototype = HTMLImageElement.prototype;
+  markNative(Image, "Image");
+  global.Image = Image;
 
   // HTMLPictureElement
   function HTMLPictureElement() {}
@@ -1058,15 +1146,33 @@ function installHtmlClasses(global) {
   });
 
   Object.defineProperty(HTMLSourceElement.prototype, "width", {
-    get: function () { return Number(this.getAttribute("width") || 0); },
-    set: function (v) { this.setAttribute("width", String(v)); },
+    get: function () {
+      const raw = this.getAttribute("width");
+      if (raw == null) return 0;
+      const n = parseInt(String(raw).trim(), 10);
+      return (!isNaN(n) && n >= 0 && n <= 2147483647) ? n : 0;
+    },
+    set: function (v) {
+      const n = Number(v);
+      const u = (isFinite(n) && n >= 0) ? (n >>> 0) : 0;
+      this.setAttribute("width", String(u));
+    },
     configurable: true,
     enumerable: true,
   });
 
   Object.defineProperty(HTMLSourceElement.prototype, "height", {
-    get: function () { return Number(this.getAttribute("height") || 0); },
-    set: function (v) { this.setAttribute("height", String(v)); },
+    get: function () {
+      const raw = this.getAttribute("height");
+      if (raw == null) return 0;
+      const n = parseInt(String(raw).trim(), 10);
+      return (!isNaN(n) && n >= 0 && n <= 2147483647) ? n : 0;
+    },
+    set: function (v) {
+      const n = Number(v);
+      const u = (isFinite(n) && n >= 0) ? (n >>> 0) : 0;
+      this.setAttribute("height", String(u));
+    },
     configurable: true,
     enumerable: true,
   });
