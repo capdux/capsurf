@@ -2437,3 +2437,7 @@
 
 ### Phase 246
 - Built modular ReleaseFast binary (`cap build -m -r -o bin_rel src/main.cp`, synced to `bin/main`, 18MB) and verified 12-suite cross-domain E2E regression (77/77 PASS, 457 assertions).
+
+## Phase 247 (2026-11-21)
+- Removed 392 redundant `e2e/*.e2e.test.js` copies, `e2e/run_all.js`, and `e2e/run_all.cjs`.
+- Updated `GEMINI.md` section 10 to standardize E2E execution on `bun test` over `e2e/*.e2e.test.ts` (392) and `e2e/demo/*.e2e.test.ts` (172).

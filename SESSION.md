@@ -4801,3 +4801,8 @@
 ### Phase 246: ReleaseFast Modular Build (`bin/main`, 18MB) + 12-Suite Cross-Domain E2E 77/77 PASS (457 Assertions)
 - Built modular ReleaseFast binary via `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp` (80.18s) and synced to `bin/main` (18MB).
 - Ran 12-suite cross-domain E2E regression (`smoke`, `tldraw-app-shell`, `dedicated-worker`, `scene-stream-idle-frames`, `scene-stream-partials`, `script-gate`, `source-script-pipeline`, `screencast-raf-pacing`, `oopif-elements-panel`, `script-navigation-tab`, `event-handler-idl`, `render-resource-scope`) against `./bin/main`: **77 pass, 0 fail, 457 expect() calls** in 142.12s.
+
+## Phase 247 (2026-11-21): 清理冗余 .e2e.test.js 副本与旧 Node runner
+- 用户指令：清理多余没用的 `.e2e.test.js` 副本与 `run_all`，统一使用 `bun test`。
+- 执行：删除 392 个 `e2e/*.e2e.test.js` 重复副本以及 `e2e/run_all.js`、`e2e/run_all.cjs`；保留 `e2e/harness/`（`harness.cjs`/`index.cjs`）及 `e2e/page/` 等运行时依赖；更新 `GEMINI.md` 第 10 节统一为 `bun test` 规范。
+- 验证：`CAPSURF_BIN=./bin/main bun test e2e/smoke.e2e.test.ts` 通过（2 pass, 0 fail, 2 expect() calls, 3.56s）。

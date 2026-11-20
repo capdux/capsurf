@@ -1817,3 +1817,6 @@
 
 ### Phase 246: ReleaseFast Modular Build & Cross-Domain Stability Verification
 - `cap build -m -r -o bin_rel src/main.cp` compiles all 99 modules in ReleaseFast (`73.97s` native compile), passing 77/77 continuous E2E tests (457 assertions) across DOM, CSS, Screencast, SceneStream, OOPIF, Multi-Tab, DedicatedWorker, and CSP.
+
+### Phase 247: 统一 E2E 为 bun test 驱动
+- 确认 392 个 `e2e/*.e2e.test.js` 与 `e2e/*.e2e.test.ts` 文件名 100% 一一对应，属于早期 Node runner 迁移产生的重复副本；清理后保留 `e2e/harness/`（供 `.ts` 测试通过 `e2e/harness/package.json` 加载）与 `e2e/page/` 等静态资产，消除双份维护成本。
