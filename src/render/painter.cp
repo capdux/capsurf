@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position } from "../css/cascade.cp";
 import { Rect } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
@@ -548,6 +548,20 @@ fn resolveSvgElementFill(
     inherited_fill: CssColor,
     current_color: CssColor,
 ): CssColor {
+    if (styles := styles_opt) {
+        if (@as(usize, node_id) < styles.len) {
+            const st = &styles[@as(usize, node_id)];
+            if (st.has_fill_none) {
+                return CssColor.rgba(0, 0, 0, 0);
+            }
+            if (st.has_fill_current_color) {
+                return st.color;
+            }
+            if (st.background_color.a > 0 && !node.hasTag("svg")) {
+                return st.background_color;
+            }
+        }
+    }
     if (fa := node.getAttribute("fill")) {
         const t = std.mem.trim(u8, fa, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(t, "none")) {
@@ -558,17 +572,6 @@ fn resolveSvgElementFill(
         }
         if (c := CssColor.parse(t)) {
             return c;
-        }
-    }
-    if (styles := styles_opt) {
-        if (@as(usize, node_id) < styles.len) {
-            const st = &styles[@as(usize, node_id)];
-            if (st.has_fill_current_color) {
-                return st.color;
-            }
-            if (st.background_color.a > 0 && !node.hasTag("svg")) {
-                return st.background_color;
-            }
         }
     }
     return inherited_fill;
@@ -979,6 +982,12 @@ fn paintSvgChildrenDirect(
                     if (target_id != NULL_NODE) {
                         paintSvgContainerRef(canvas, doc, styles_opt, target_id, origin_x, origin_y, box_w, box_h, fill_c, current_color, clip, depth + 1);
                     }
+                } else if (hash_pos := std.mem.indexOfScalar(u8, t, '#')) {
+                    if (hash_pos > 0 && hash_pos + 1 < t.len) {
+                        const url_part = t[0..hash_pos];
+                        const frag_id = t[hash_pos + 1 ..];
+                        paintExternalSvgUse(canvas, url_part, frag_id, origin_x, origin_y, box_w, box_h, fill_c, current_color, clip, depth + 1);
+                    }
                 }
             }
         }
@@ -1108,6 +1117,36 @@ fn loadSvgAssetForImg(src: []const u8, out_buf: []u8): ([]const u8)? {
     return null;
 }
 
+fn paintExternalSvgUse(
+    canvas: *Canvas,
+    url_part: []const u8,
+    frag_id: []const u8,
+    box_x: f32,
+    box_y: f32,
+    box_w: f32,
+    box_h: f32,
+    inherited_fill: CssColor,
+    current_color: CssColor,
+    clip: ClipRect?,
+    depth: u32,
+) {
+    if (depth > 8 || frag_id.len == 0) return;
+    let file_buf: [65536]u8 = undefined;
+    const svg_bytes_opt = loadSvgAssetForImg(url_part, &file_buf);
+    if (svg_bytes_opt == null) return;
+    const svg_bytes = svg_bytes_opt.?;
+    if (svg_bytes.len == 0) return;
+
+    let ext_doc = Document.init(canvas.allocator) catch return;
+    defer ext_doc.deinit();
+    ext_doc.parseHtml(svg_bytes) catch return;
+
+    const target_id = findNodeById(&ext_doc, frag_id);
+    if (target_id != NULL_NODE) {
+        paintSvgContainerRef(canvas, &ext_doc, null, target_id, box_x, box_y, box_w, box_h, inherited_fill, current_color, clip, depth + 1);
+    }
+}
+
 fn paintImgSvg(
     canvas: *Canvas,
     allocator: std.mem.Allocator,
@@ -1166,6 +1205,7 @@ fn paintNodeRecursive(
     vh: f32,
     opts: *const ScreenshotOptions,
     clip: ClipRect?,
+    abs_clip: ClipRect?,
 ) {
     if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) {
         return;
@@ -1178,6 +1218,18 @@ fn paintNodeRecursive(
     const node = &doc.nodes.items[@as(usize, node_id)];
     const style = &styles[@as(usize, node_id)];
     const paint_style = style.extractPaintStyle(r.width, 16.0, vw, vh);
+
+    // Choose active clip based on CSS positioning containing-block rules:
+    // - position: fixed escapes all ancestor overflow clips (uses viewport).
+    // - position: absolute uses the clip established by its positioned containing block,
+    //   escaping any static overflow:hidden ancestors in between.
+    // - in-flow / relative uses the normal ancestor overflow clip.
+    const active_clip: ClipRect? = if (style.position == Position.Fixed)
+        null
+    else if (style.position == Position.Absolute)
+        abs_clip
+    else
+        clip;
 
     let effective_paint_style = paint_style;
     if (node.hasTag("svg") && style.has_fill_current_color) {
@@ -1194,7 +1246,16 @@ fn paintNodeRecursive(
         }
     }
 
-    let child_clip = clip;
+    let child_clip = active_clip;
+    if (node.node_type == NodeType.Element && !style.overflow_visible && r.width > 0.0 && r.height > 0.0) {
+        const own_clip = ClipRect.fromRect(r);
+        if (cc := child_clip) {
+            child_clip = cc.intersect(own_clip);
+        } else {
+            child_clip = own_clip;
+        }
+    }
+    const child_abs_clip: ClipRect? = if (style.position != Position.Static) child_clip else abs_clip;
 
     if (node.node_type == NodeType.Element) {
         if (node.hasTag("use")) {
@@ -1204,32 +1265,28 @@ fn paintNodeRecursive(
             }
             if (href := href_opt) {
                 const t = std.mem.trim(u8, href, " \t\r\n");
+                let use_fill = effective_paint_style.bg_color;
+                if (use_fill.a == 0) {
+                    if (style.has_fill_current_color) {
+                        use_fill = style.color;
+                    } else {
+                        use_fill = CssColor.rgb(0, 0, 0);
+                    }
+                }
+                use_fill = resolveSvgElementFill(node, node_id, styles, use_fill, style.color);
                 if (t.len > 1 && t[0] == '#') {
                     const target_id = findNodeById(doc, t[1..]);
                     if (target_id != NULL_NODE) {
-                        let use_fill = effective_paint_style.bg_color;
-                        if (use_fill.a == 0) {
-                            if (style.has_fill_current_color) {
-                                use_fill = style.color;
-                            } else {
-                                use_fill = CssColor.rgb(0, 0, 0);
-                            }
-                        }
-                        use_fill = resolveSvgElementFill(node, node_id, styles, use_fill, style.color);
-                        paintSvgContainerRef(canvas, doc, styles, target_id, r.x, r.y, r.width, r.height, use_fill, style.color, clip, 0);
+                        paintSvgContainerRef(canvas, doc, styles, target_id, r.x, r.y, r.width, r.height, use_fill, style.color, active_clip, 0);
+                    }
+                } else if (hash_pos := std.mem.indexOfScalar(u8, t, '#')) {
+                    if (hash_pos > 0 && hash_pos + 1 < t.len) {
+                        paintExternalSvgUse(canvas, t[0..hash_pos], t[hash_pos + 1 ..], r.x, r.y, r.width, r.height, use_fill, style.color, active_clip, 0);
                     }
                 }
             }
         } else if (node.hasTag("svg")) {
-            canvas.paintBoxClipped(r, effective_paint_style, clip);
-            if (!style.overflow_visible) {
-                const svg_clip = ClipRect.fromRect(r);
-                if (cc := child_clip) {
-                    child_clip = cc.intersect(svg_clip);
-                } else {
-                    child_clip = svg_clip;
-                }
-            }
+            canvas.paintBoxClipped(r, effective_paint_style, active_clip);
             let svg_fill = CssColor.rgb(0, 0, 0);
             if (style.has_fill_current_color) {
                 svg_fill = style.color;
@@ -1240,24 +1297,15 @@ fn paintNodeRecursive(
             if (d_attr := node.getAttribute("d")) {
                 let path_fill = effective_paint_style.bg_color;
                 if (path_fill.a == 0) path_fill = CssColor.rgb(0, 0, 0);
-                paintSvgPath(canvas, d_attr, r.x, r.y, 0.0, 0.0, 1.0, path_fill, clip);
+                paintSvgPath(canvas, d_attr, r.x, r.y, 0.0, 0.0, 1.0, path_fill, active_clip);
             }
         } else {
-            canvas.paintBoxClipped(r, effective_paint_style, clip);
+            canvas.paintBoxClipped(r, effective_paint_style, active_clip);
         }
 
         if (node.hasTag("img")) {
             if (src := node.getAttribute("src")) {
-                paintImgSvg(canvas, canvas.allocator, src, r, clip);
-            }
-        }
-
-        if (node.hasTag("svg") && !style.overflow_visible) {
-            const svg_clip = ClipRect.fromRect(r);
-            if (cc := child_clip) {
-                child_clip = cc.intersect(svg_clip);
-            } else {
-                child_clip = svg_clip;
+                paintImgSvg(canvas, canvas.allocator, src, r, active_clip);
             }
         }
 
@@ -1309,7 +1357,7 @@ fn paintNodeRecursive(
 
     let child = node.first_child;
     while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip);
+        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip);
         child = doc.nodes.items[@as(usize, child)].next_sibling;
     }
 }
@@ -1331,7 +1379,7 @@ pub fn renderDocumentToPng(
     // 从文档根元素开始前序遍历绘制整棵 DOM 树
     const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
     if (root_id < doc.nodes.items.len) {
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null);
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null);
     }
 
     // 直接桥接到 png.cp 的编码函数并透传指定的 compress_level

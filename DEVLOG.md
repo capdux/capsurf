@@ -1209,4 +1209,10 @@
    - 完整实装 `AbortSignal.abort()`/`timeout()`/`any()` 与 `AbortController`；重构 `MessagePort` 异步 FIFO 队列与 `_structuredClone`，在 `postMessage` 阶段同步校验 `DataCloneError`（函数/Symbol、重复或自身 port、已分离 buffer）并执行 `ArrayBuffer` 转移分离。
 2. **内联事件水合与 Harness Keyboard (`dispatch.js`, `e2e/harness.ts`)**：
    - 水合阶段尊重已显式设置的自有属性（避免覆盖 `el.onclick = null`），并按 HTML5 规范将 `<body>` 上的 22 项 `WindowEventHandlers` 转发至 `window`；在 `e2e/harness.ts` 补齐 `page.focus` 与 `page.keyboard`。
+
+## Phase 66 SVG 图形 bbox、外部精灵图标与 abspos 双裁剪通道技术方案
+1. **SVG 图形几何与外部 `<use>` 精灵 (`layout.cp`, `painter.cp`, `cascade.cp`)**：
+   - 在 `layoutSvgChildren` 中沿子树累加 `transform="translate(tx, ty)"` 并为 `<g>` 计算子图形矩形并集；新增 `has_fill_none` 统一级联权重；在 `painter.cp` 新增 `paintExternalSvgUse` 解析外部 SVG 精灵路径的 `#symbol`。
+2. **`abspos` 包含块与双裁剪通道 (`layout.cp`, `painter.cp`)**：
+   - 在 `LayoutTree` 维护 `abs_cb_*`（最近非 `static` 祖先或初始包含块）并支持 `left+right`/`top+bottom` 推导 `auto` 尺寸；在 `paintNodeRecursive` 区分流内裁剪框 `clip` 与定位裁剪框 `abs_clip`，仅非 `static` 祖先更新 `abs_clip`，使 `position: absolute` 精准穿透静态 `overflow: hidden` 容器。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

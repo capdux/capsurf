@@ -1543,4 +1543,15 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`defer-shim-abort-timeout` + `event-handler-hydration` + `forms-activation-demo` + `mc-conformance` 共 **4 pass, 0 fail (29 expect calls, 5.17s)**。
+
+## Phase 66: SVG Shape Client Rects, External Sprite Icons & Abspos Overflow-Clip Escape (100% Closed)
+- **`src/css/cascade.cp`**：
+  - 新增 `has_fill_none`，使 SVG presentation attribute 与 `<style>` `fill` 规则统一按 CSS 级联权重裁决。
+- **`src/layout/layout.cp`**：
+  - 实装 `parseSvgTranslate` 与 `<circle>`/`<ellipse>`/`<rect>`/`<g>` 并集精确 bbox；在 `LayoutTree` 维护 `abs_cb_*` positioned containing block，支持 `inset: 0`（`left+right`/`top+bottom`）撑开 `auto` 宽高。
+- **`src/render/painter.cp`**：
+  - 新增 `paintExternalSvgUse` 支持外部 SVG 精灵图标；在 `paintNodeRecursive` 引入 `clip` / `abs_clip` 双裁剪通道，实现 `abspos` 穿透静态 `overflow: hidden` 祖先裁剪。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`svg-shape-client-rect` + `svg-sprite-icons` + `svg-text-escape` + `abspos-escapes-overflow-clip` + 3 项 SVG 回归共 **7/7 PASS (39 expect calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

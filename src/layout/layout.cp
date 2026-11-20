@@ -134,6 +134,45 @@ pub struct LayoutTree {
     viewport_width: f32 = 1280.0;
     viewport_height: f32 = 800.0;
     root_font_px: f32 = 16.0;
+    abs_cb_x: f32 = 0.0;
+    abs_cb_y: f32 = 0.0;
+    abs_cb_w: f32 = 1280.0;
+    abs_cb_h: f32 = 800.0;
+
+    static fn parseSvgTranslate(attr: []const u8): [2]f32 {
+        let tx: f32 = 0.0;
+        let ty: f32 = 0.0;
+        let pos: usize = 0;
+        while (pos < attr.len) {
+            const rem = attr[pos..];
+            const idx_opt = std.mem.indexOf(u8, rem, "translate");
+            if (idx_opt == null) break;
+            let p = pos + idx_opt.? + 9;
+            while (p < attr.len && (attr[p] == ' ' || attr[p] == '\t' || attr[p] == '\r' || attr[p] == '\n')) : (p += 1) {}
+            if (p >= attr.len || attr[p] != '(') {
+                pos = p;
+                continue;
+            }
+            p += 1;
+            const close_opt = std.mem.indexOfScalar(u8, attr[p..], ')');
+            if (close_opt == null) break;
+            const args = attr[p .. p + close_opt.?];
+            let it = std.mem.tokenizeAny(u8, args, " ,\t\r\n");
+            if (s0 := it.next()) {
+                if (v0 := std.fmt.parseFloat(f32, s0) catch null) {
+                    tx += v0;
+                }
+            }
+            if (s1 := it.next()) {
+                if (v1 := std.fmt.parseFloat(f32, s1) catch null) {
+                    ty += v1;
+                }
+            }
+            pos = p + close_opt.? + 1;
+        }
+        const res: [2]f32 = [tx, ty];
+        return res;
+    }
 
     static fn parseDimStr(s: []const u8): f32? {
         let trimmed = std.mem.trim(u8, s, " \t\r\n");
@@ -642,9 +681,15 @@ pub struct LayoutTree {
         }
 
         // Content width calculation
+        const is_abs_or_fixed = (style.position == Position.Absolute || style.position == Position.Fixed);
         let raw_w: f32 = 0.0;
         if (!style.width.is_auto && !style.width.is_none) {
             raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
+        } else if (is_abs_or_fixed && !style.left.is_auto && !style.left.is_none && !style.right.is_auto && !style.right.is_none) {
+            const l_px = style.left.resolvePx(parent_w, font_px, root_px, vw, vh);
+            const r_px = style.right.resolvePx(parent_w, font_px, root_px, vw, vh);
+            const avail = parent_w - l_px - r_px - box.marginHorizontal();
+            raw_w = if (avail > 0.0) avail else 0.0;
         } else if (rep := replaced_opt) {
             if (rep.is_ratio_only) {
                 const avail = parent_w - box.marginHorizontal();
@@ -711,6 +756,12 @@ pub struct LayoutTree {
                     }
                 }
             }
+        } else if (is_abs_or_fixed && !style.top.is_auto && !style.top.is_none && !style.bottom.is_auto && !style.bottom.is_none) {
+            const t_px = style.top.resolvePx(parent_h, font_px, root_px, vw, vh);
+            const b_px = style.bottom.resolvePx(parent_h, font_px, root_px, vw, vh);
+            const raw_h = parent_h - t_px - b_px - box.marginVertical();
+            const v_decor = box.paddingVertical() + box.borderVertical();
+            box.content_height = if (raw_h > v_decor) (raw_h - v_decor) else 0.0;
         } else if (rep := replaced_opt) {
             if (rep.width > 0.0 && rep.height > 0.0) {
                 const ratio = rep.height / rep.width;
@@ -771,41 +822,94 @@ pub struct LayoutTree {
         const content_y = border_box_y + box.border_top + box.padding_top;
 
         let is_replaced = false;
+        let is_svg_elem = false;
         if (node_id != NULL_NODE && @as(usize, node_id) < doc.nodes.items.len) {
             const node = &doc.nodes.items[@as(usize, node_id)];
-            if (node.isElement() && LayoutTree.getReplacedSize(node) != null) {
-                is_replaced = true;
+            if (node.isElement()) {
+                if (LayoutTree.getReplacedSize(node) != null) {
+                    is_replaced = true;
+                }
+                if (node.hasTag("svg")) {
+                    is_svg_elem = true;
+                }
             }
+        }
+
+        // Track positioned containing block for descendant position:absolute elements
+        const prev_abs_cb_x = _.abs_cb_x;
+        const prev_abs_cb_y = _.abs_cb_y;
+        const prev_abs_cb_w = _.abs_cb_w;
+        const prev_abs_cb_h = _.abs_cb_h;
+        if (style.position != Position.Static) {
+            let cb_x = border_box_x + box.border_left;
+            let cb_y = border_box_y + box.border_top;
+            if (style.position == Position.Relative) {
+                if (!style.left.is_auto && !style.left.is_none) {
+                    cb_x += style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                } else if (!style.right.is_auto && !style.right.is_none) {
+                    cb_x -= style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                }
+                if (!style.top.is_auto && !style.top.is_none) {
+                    cb_y += style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                } else if (!style.bottom.is_auto && !style.bottom.is_none) {
+                    cb_y -= style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                }
+            } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
+                if (!style.left.is_auto && !style.left.is_none) {
+                    cb_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_left + box.border_left;
+                } else if (!style.right.is_auto && !style.right.is_none) {
+                    const r_px = style.right.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    cb_x = origin_x + avail_w - r_px - box.borderBoxWidth() - box.margin_right + box.border_left;
+                }
+                if (!style.top.is_auto && !style.top.is_none) {
+                    cb_y = origin_y + style.top.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_top + box.border_top;
+                } else if (!style.bottom.is_auto && !style.bottom.is_none) {
+                    const b_px = style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    cb_y = origin_y + avail_h - b_px - box.borderBoxHeight() - box.margin_bottom + box.border_top;
+                }
+            }
+            _.abs_cb_x = cb_x;
+            _.abs_cb_y = cb_y;
+            _.abs_cb_w = box.content_width + box.paddingHorizontal();
+            _.abs_cb_h = box.content_height + box.paddingVertical();
+        }
+        defer {
+            _.abs_cb_x = prev_abs_cb_x;
+            _.abs_cb_y = prev_abs_cb_y;
+            _.abs_cb_w = prev_abs_cb_w;
+            _.abs_cb_h = prev_abs_cb_h;
         }
 
         if (style.display.isFlex()) {
             _.layoutFlexContainer(doc, styles, node_id, content_x, content_y);
         } else if (style.display.isGrid()) {
             _.layoutGridContainer(doc, styles, node_id, content_x, content_y);
-        } else if (!is_replaced && !(node_id < doc.nodes.items.len && doc.nodes.items[@as(usize, node_id)].hasTag("svg"))) {
+        } else if (!is_replaced && !is_svg_elem) {
             _.layoutBlockContainer(doc, styles, node_id, content_x, content_y);
         }
 
         let box_after = &_.boxes.items[@as(usize, node_id)];
-        const text_len = LayoutTree.getNodeTextLength(doc, node_id);
-        if (text_len > 0) {
-            if (style.height.is_auto && box_after.content_height <= 0.0) {
-                const font_h = if (style.line_height_px > 0.0) style.line_height_px else (if (style.font_size_px > 0.0) style.font_size_px else 16.0);
-                box_after.content_height = font_h;
-            }
-            if (style.width.is_auto && (box_after.content_width <= 0.0 || style.display.isInlineBlock() || style.display.isInline())) {
-                const base_size = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
-                let char_ratio: f32 = 0.50;
-                if (style.hasFontFamily("Bungee") || style.hasFontFamily("bungee")) {
-                    char_ratio = 0.85;
-                } else if (style.hasFontFamily("RangeFont") && LayoutTree.hasLatinText(doc, node_id)) {
-                    char_ratio = 0.85;
+        if (!is_replaced && !is_svg_elem) {
+            const text_len = LayoutTree.getNodeTextLength(doc, node_id);
+            if (text_len > 0) {
+                if (style.height.is_auto && box_after.content_height <= 0.0) {
+                    const font_h = if (style.line_height_px > 0.0) style.line_height_px else (if (style.font_size_px > 0.0) style.font_size_px else 16.0);
+                    box_after.content_height = font_h;
                 }
-                if (style.font_weight != 400.0) {
-                    char_ratio += (style.font_weight - 400.0) * 0.00015;
+                if (style.width.is_auto && (box_after.content_width <= 0.0 || style.display.isInlineBlock() || style.display.isInline())) {
+                    const base_size = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+                    let char_ratio: f32 = 0.50;
+                    if (style.hasFontFamily("Bungee") || style.hasFontFamily("bungee")) {
+                        char_ratio = 0.85;
+                    } else if (style.hasFontFamily("RangeFont") && LayoutTree.hasLatinText(doc, node_id)) {
+                        char_ratio = 0.85;
+                    }
+                    if (style.font_weight != 400.0) {
+                        char_ratio += (style.font_weight - 400.0) * 0.00015;
+                    }
+                    const char_w: f32 = base_size * char_ratio;
+                    box_after.content_width = @as(f32, @floatFromInt(text_len)) * char_w;
                 }
-                const char_w: f32 = base_size * char_ratio;
-                box_after.content_width = @as(f32, @floatFromInt(text_len)) * char_w;
             }
         }
 
@@ -966,7 +1070,7 @@ pub struct LayoutTree {
         }
 
         const clip_to_svg = !styles[@as(usize, node_id)].overflow_visible;
-        _.layoutSvgChildren(doc, styles, node_id, content_x, content_y, offset_x, offset_y, min_x, min_y, scale, svg_w, svg_h, clip_to_svg);
+        _.layoutSvgChildren(doc, styles, node_id, content_x, content_y, offset_x, offset_y, min_x, min_y, scale, svg_w, svg_h, clip_to_svg, 0.0, 0.0);
     }
 
     fn layoutSvgChildren(
@@ -984,11 +1088,21 @@ pub struct LayoutTree {
         svg_w: f32,
         svg_h: f32,
         clip_to_svg: bool,
+        tx: f32,
+        ty: f32,
     ) {
         let child = doc.nodes.items[@as(usize, parent_id)].first_child;
         while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
             const cnode = &doc.nodes.items[@as(usize, child)];
             if (!cnode.isElement()) continue;
+
+            let cur_tx = tx;
+            let cur_ty = ty;
+            if (tr_attr := cnode.getAttribute("transform")) {
+                const dt = LayoutTree.parseSvgTranslate(tr_attr);
+                cur_tx += dt[0];
+                cur_ty += dt[1];
+            }
 
             if (cnode.hasTag("rect")) {
                 let rx: f32 = 0.0;
@@ -1007,8 +1121,8 @@ pub struct LayoutTree {
                 if (h_attr := cnode.getAttribute("height")) {
                     if (v := LayoutTree.parseDimStr(h_attr)) rh = v;
                 }
-                const screen_x = content_x + offset_x + (rx - min_x) * scale;
-                const screen_y = content_y + offset_y + (ry - min_y) * scale;
+                const screen_x = content_x + offset_x + (rx + cur_tx - min_x) * scale;
+                const screen_y = content_y + offset_y + (ry + cur_ty - min_y) * scale;
                 let screen_w = rw * scale;
                 let screen_h = rh * scale;
 
@@ -1023,6 +1137,58 @@ pub struct LayoutTree {
                     }
                 }
 
+                _.boxes.items[@as(usize, child)].rect = Rect {
+                    x: screen_x,
+                    y: screen_y,
+                    width: screen_w,
+                    height: screen_h,
+                    visible: true,
+                };
+            } else if (cnode.hasTag("circle")) {
+                let cx: f32 = 0.0;
+                let cy: f32 = 0.0;
+                let cr: f32 = 0.0;
+                if (cx_attr := cnode.getAttribute("cx")) {
+                    if (v := LayoutTree.parseDimStr(cx_attr)) cx = v;
+                }
+                if (cy_attr := cnode.getAttribute("cy")) {
+                    if (v := LayoutTree.parseDimStr(cy_attr)) cy = v;
+                }
+                if (r_attr := cnode.getAttribute("r")) {
+                    if (v := LayoutTree.parseDimStr(r_attr)) cr = v;
+                }
+                const screen_x = content_x + offset_x + (cx - cr + cur_tx - min_x) * scale;
+                const screen_y = content_y + offset_y + (cy - cr + cur_ty - min_y) * scale;
+                const screen_w = (cr * 2.0) * scale;
+                const screen_h = (cr * 2.0) * scale;
+                _.boxes.items[@as(usize, child)].rect = Rect {
+                    x: screen_x,
+                    y: screen_y,
+                    width: screen_w,
+                    height: screen_h,
+                    visible: true,
+                };
+            } else if (cnode.hasTag("ellipse")) {
+                let cx: f32 = 0.0;
+                let cy: f32 = 0.0;
+                let erx: f32 = 0.0;
+                let ery: f32 = 0.0;
+                if (cx_attr := cnode.getAttribute("cx")) {
+                    if (v := LayoutTree.parseDimStr(cx_attr)) cx = v;
+                }
+                if (cy_attr := cnode.getAttribute("cy")) {
+                    if (v := LayoutTree.parseDimStr(cy_attr)) cy = v;
+                }
+                if (rx_attr := cnode.getAttribute("rx")) {
+                    if (v := LayoutTree.parseDimStr(rx_attr)) erx = v;
+                }
+                if (ry_attr := cnode.getAttribute("ry")) {
+                    if (v := LayoutTree.parseDimStr(ry_attr)) ery = v;
+                }
+                const screen_x = content_x + offset_x + (cx - erx + cur_tx - min_x) * scale;
+                const screen_y = content_y + offset_y + (cy - ery + cur_ty - min_y) * scale;
+                const screen_w = (erx * 2.0) * scale;
+                const screen_h = (ery * 2.0) * scale;
                 _.boxes.items[@as(usize, child)].rect = Rect {
                     x: screen_x,
                     y: screen_y,
@@ -1047,8 +1213,8 @@ pub struct LayoutTree {
                 if (h_attr := cnode.getAttribute("height")) {
                     if (v := LayoutTree.parseDimStr(h_attr)) uh = v;
                 }
-                const screen_x = content_x + offset_x + (ux - min_x) * scale;
-                const screen_y = content_y + offset_y + (uy - min_y) * scale;
+                const screen_x = content_x + offset_x + (ux + cur_tx - min_x) * scale;
+                const screen_y = content_y + offset_y + (uy + cur_ty - min_y) * scale;
                 let screen_w = uw * scale;
                 let screen_h = uh * scale;
                 if (clip_to_svg) {
@@ -1068,16 +1234,48 @@ pub struct LayoutTree {
                     height: screen_h,
                     visible: true,
                 };
-            } else if (cnode.hasTag("path") || cnode.hasTag("line") || cnode.hasTag("circle") || cnode.hasTag("ellipse") || cnode.hasTag("polygon") || cnode.hasTag("polyline") || cnode.hasTag("text")) {
+            } else if (cnode.hasTag("path") || cnode.hasTag("line") || cnode.hasTag("polygon") || cnode.hasTag("polyline") || cnode.hasTag("text")) {
                 _.boxes.items[@as(usize, child)].rect = Rect {
-                    x: content_x + offset_x,
-                    y: content_y + offset_y,
+                    x: content_x + offset_x + cur_tx * scale,
+                    y: content_y + offset_y + cur_ty * scale,
                     width: svg_w,
                     height: svg_h,
                     visible: true,
                 };
             } else if (cnode.hasTag("g")) {
-                _.layoutSvgChildren(doc, styles, child, content_x, content_y, offset_x, offset_y, min_x, min_y, scale, svg_w, svg_h, clip_to_svg);
+                _.layoutSvgChildren(doc, styles, child, content_x, content_y, offset_x, offset_y, min_x, min_y, scale, svg_w, svg_h, clip_to_svg, cur_tx, cur_ty);
+                let has_bounds = false;
+                let g_min_x: f32 = 0.0;
+                let g_min_y: f32 = 0.0;
+                let g_max_x: f32 = 0.0;
+                let g_max_y: f32 = 0.0;
+                let gc = cnode.first_child;
+                while (gc != NULL_NODE && @as(usize, gc) < doc.nodes.items.len) : (gc = doc.nodes.items[@as(usize, gc)].next_sibling) {
+                    const gr = _.boxes.items[@as(usize, gc)].rect;
+                    if (gr.visible && (gr.width > 0.0 || gr.height > 0.0)) {
+                        if (!has_bounds) {
+                            g_min_x = gr.x;
+                            g_min_y = gr.y;
+                            g_max_x = gr.x + gr.width;
+                            g_max_y = gr.y + gr.height;
+                            has_bounds = true;
+                        } else {
+                            g_min_x = @min(g_min_x, gr.x);
+                            g_min_y = @min(g_min_y, gr.y);
+                            g_max_x = @max(g_max_x, gr.x + gr.width);
+                            g_max_y = @max(g_max_y, gr.y + gr.height);
+                        }
+                    }
+                }
+                if (has_bounds) {
+                    _.boxes.items[@as(usize, child)].rect = Rect {
+                        x: g_min_x,
+                        y: g_min_y,
+                        width: g_max_x - g_min_x,
+                        height: g_max_y - g_min_y,
+                        visible: true,
+                    };
+                }
             }
         }
     }
@@ -1093,6 +1291,7 @@ pub struct LayoutTree {
     ) {
         const parent_box = &_.boxes.items[@as(usize, parent_id)];
         const content_w = parent_box.content_width;
+        const content_h = parent_box.content_height;
         let cursor_y = content_y;
         let max_child_right = content_x;
 
@@ -1104,12 +1303,11 @@ pub struct LayoutTree {
                 if (!cstyle.display.isNone()) {
                     const is_out_of_flow = (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed);
                     if (is_out_of_flow) {
-                        const pb_cur = &_.boxes.items[@as(usize, parent_id)];
-                        const cb_x = content_x - pb_cur.padding_left;
-                        const cb_y = content_y - pb_cur.padding_top;
-                        const cb_w = pb_cur.content_width + pb_cur.paddingHorizontal();
-                        const cb_h = pb_cur.content_height + pb_cur.paddingVertical();
-                        _.layoutNode(doc, styles, child, cb_x, cb_y, cb_w, cb_h);
+                        if (cstyle.position == Position.Fixed) {
+                            _.layoutNode(doc, styles, child, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                        } else {
+                            _.layoutNode(doc, styles, child, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                        }
                     } else {
                         let child_x = content_x;
                         if (cstyle.display.isInline()) {
@@ -1124,7 +1322,7 @@ pub struct LayoutTree {
                                 }
                             }
                         }
-                        _.layoutNode(doc, styles, child, child_x, cursor_y, content_w, 0.0);
+                        _.layoutNode(doc, styles, child, child_x, cursor_y, content_w, content_h);
                         const cbox = &_.boxes.items[@as(usize, child)];
                         cursor_y += cbox.outerHeight();
                         if (cnode.hasTag("svg") && cstyle.display.isInline() && cbox.outerHeight() > 0.0) {
@@ -1144,7 +1342,11 @@ pub struct LayoutTree {
         }
 
         // If parent has auto height, expand content_height to fit child stream
-        if (styles[@as(usize, parent_id)].height.is_auto) {
+        const pstyle_blk = &styles[@as(usize, parent_id)];
+        const is_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
+            !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
+            !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
+        if (pstyle_blk.height.is_auto && !is_pinned_v) {
             let is_p_rep = false;
             if (parent_id != NULL_NODE && @as(usize, parent_id) < doc.nodes.items.len) {
                 const pnode = &doc.nodes.items[@as(usize, parent_id)];
@@ -1334,15 +1536,15 @@ pub struct LayoutTree {
         }
 
         if (item_count == 0) {
-            // Still lay out any out-of-flow absolute/fixed children relative to padding box
-            const pb_now = &_.boxes.items[@as(usize, parent_id)];
-            const cb_x = content_x - pb_now.padding_left;
-            const cb_y = content_y - pb_now.padding_top;
-            const cb_w = pb_now.content_width + pb_now.paddingHorizontal();
-            const cb_h = pb_now.content_height + pb_now.paddingVertical();
+            // Still lay out any out-of-flow absolute/fixed children relative to their containing block
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                _.layoutNode(doc, styles, abs_children[ai], cb_x, cb_y, cb_w, cb_h);
+                const aid = abs_children[ai];
+                if (styles[@as(usize, aid)].position == Position.Fixed) {
+                    _.layoutNode(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                } else {
+                    _.layoutNode(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                }
             }
             return;
         }
@@ -1507,16 +1709,16 @@ pub struct LayoutTree {
             }
         }
 
-        // Lay out out-of-flow absolute/fixed children relative to parent's padding box
+        // Lay out out-of-flow absolute/fixed children relative to their containing block
         if (abs_count > 0) {
-            const pb_final = &_.boxes.items[@as(usize, parent_id)];
-            const cb_x = content_x - pb_final.padding_left;
-            const cb_y = content_y - pb_final.padding_top;
-            const cb_w = pb_final.content_width + pb_final.paddingHorizontal();
-            const cb_h = pb_final.content_height + pb_final.paddingVertical();
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                _.layoutNode(doc, styles, abs_children[ai], cb_x, cb_y, cb_w, cb_h);
+                const aid = abs_children[ai];
+                if (styles[@as(usize, aid)].position == Position.Fixed) {
+                    _.layoutNode(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height);
+                } else {
+                    _.layoutNode(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h);
+                }
             }
         }
     }
@@ -1527,6 +1729,10 @@ pub struct LayoutTree {
         doc: *const Document,
         styles: []const ComputedStyle,
     )! {
+        _.abs_cb_x = 0.0;
+        _.abs_cb_y = 0.0;
+        _.abs_cb_w = _.viewport_width;
+        _.abs_cb_h = _.viewport_height;
         const total = doc.nodes.items.len;
         _.boxes.clearRetainingCapacity();
         let i: usize = 0;

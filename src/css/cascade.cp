@@ -882,6 +882,7 @@ pub struct ComputedStyle {
     color: CssColor = CssColor.rgb(0, 0, 0);
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_fill_current_color: bool = false,
+    has_fill_none: bool = false,
     opacity: f32 = 1.0;
     z_index: i32 = 0;
     conic_gradient: ConicGradient = ConicGradient{};
@@ -1590,15 +1591,24 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "fill")) {
-            if (std.ascii.eqlIgnoreCase(val, "currentcolor")) {
+            const fv = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(fv, "none")) {
+                if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
+                    _.background_color = CssColor.rgba(0, 0, 0, 0);
+                    _.has_fill_current_color = false;
+                    _.has_fill_none = true;
+                }
+            } else if (std.ascii.eqlIgnoreCase(fv, "currentcolor")) {
                 if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
                     _.background_color = _.color;
                     _.has_fill_current_color = true;
+                    _.has_fill_none = false;
                 }
-            } else if (c_opt := CssColor.parse(val)) {
+            } else if (c_opt := CssColor.parse(fv)) {
                 if (_.tryClaimSlot(PROP_BG_COLOR, weight)) {
                     _.background_color = c_opt;
                     _.has_fill_current_color = false;
+                    _.has_fill_none = false;
                 }
             }
             return;

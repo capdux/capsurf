@@ -3228,6 +3228,23 @@
   - `defer-shim-abort-timeout` + `event-handler-hydration` + `forms-activation-demo` + `mc-conformance`：**4 pass, 0 fail (29 expect() calls, 5.17s)**！
 - **清理旧子智能体**: 销毁 `1ad54a66-d843-44bc-9f85-555d0514e641`。
 
+## [2026-11-20 14:41:40] SVG 图形 bbox、外部精灵图标与 abspos 穿透裁剪全绿闭环 (Subagent c7d827ad 结单，Phase 66)
+- **SVG 图形精确 bbox、CSS fill 优先级与外部精灵引用 (`src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp`)**:
+  - `cascade.cp`: 新增 `has_fill_none`，使 `fill: none` 与 `<style>` 规则按标准级联权重覆盖 SVG presentation attribute。
+  - `layout.cp`: 新增 `parseSvgTranslate` 累加 `<g transform="translate(...)">` 偏移；补齐 `<circle>`/`<ellipse>`/`<rect>` 精确 bbox 与 `<g>` 子图形并集边界框；排除 `<svg>` 与替换元素被文本估算覆盖宽高。
+  - `painter.cp`: 新增 `paintExternalSvgUse` 支持外部 SVG 精灵图标（如 `/__fixtures/icon-sprite.svg#dot`）加载与 `<symbol>` 渲染。
+- **`position: absolute/fixed` 包含块与双裁剪通道 (`src/layout/layout.cp`, `src/render/painter.cp`)**:
+  - `layout.cp`: 在 `LayoutTree` 维护 `abs_cb_x/y/w/h` positioned containing block，支持 `left+right`/`top+bottom`（如 `inset: 0`）撑开 `auto` 宽高与 `height: 100%` 传递。
+  - `painter.cp`: 在 `paintNodeRecursive` 引入双裁剪通道 `clip` 与 `abs_clip`，实现 `position: absolute` 穿透静态 `overflow: hidden` 祖先裁剪、`fixed` 脱离祖先裁剪。
+- **门禁与 E2E 回归验证**:
+  - `cascade.cp` / `layout.cp` / `painter.cp` 全部通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `svg-shape-client-rect` + `svg-sprite-icons` + `svg-text-escape` + `abspos-escapes-overflow-clip` + 3 项 SVG 回归：**7/7 PASS (39 expect() calls)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `c7d827ad-e1c0-4499-8b27-c71603837914`；
+  - 派发全新子智能体 **Subagent 32**: Positioned & Sticky Layout Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/positioned-root-hoist.e2e.test.ts`、`e2e/rehomed-fixed-paint-parent.e2e.test.ts`、`e2e/size-container-abspos.e2e.test.ts`、`e2e/sticky-position.e2e.test.ts`。
+
+
 
 
 
