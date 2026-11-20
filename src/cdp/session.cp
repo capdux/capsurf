@@ -3411,27 +3411,45 @@ pub struct CdpPageSession {
 
     pub fn getBoxModel(*_, node_id: NodeId): CdpBoxModel {
         let rect = _.layout.getBoundingClientRect(node_id);
+        let pad_l: f32 = 0.0;
+        let pad_t: f32 = 0.0;
+        let pad_r: f32 = 0.0;
+        let pad_b: f32 = 0.0;
+        let brd_l: f32 = 0.0;
+        let brd_t: f32 = 0.0;
+        let brd_r: f32 = 0.0;
+        let brd_b: f32 = 0.0;
+        let mgn_l: f32 = 0.0;
+        let mgn_t: f32 = 0.0;
+        let mgn_r: f32 = 0.0;
+        let mgn_b: f32 = 0.0;
+
         if (@as(usize, node_id) < _.doc.nodes.items.len) {
             const node = &_.doc.nodes.items[@as(usize, node_id)];
             if (node.node_type == .Element && !rect.visible) {
-                return CdpBoxModel {
-                    width: 0.0,
-                    height: 0.0,
-                    border: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
-                    content: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
-                };
+                return CdpBoxModel {};
+            }
+            if (node.node_type == .Element && @as(usize, node_id) < _.layout.boxes.items.len) {
+                const lbox = _.layout.boxes.items[@as(usize, node_id)];
+                pad_l = lbox.padding_left;
+                pad_t = lbox.padding_top;
+                pad_r = lbox.padding_right;
+                pad_b = lbox.padding_bottom;
+                brd_l = lbox.border_left;
+                brd_t = lbox.border_top;
+                brd_r = lbox.border_right;
+                brd_b = lbox.border_bottom;
+                mgn_l = lbox.margin_left;
+                mgn_t = lbox.margin_top;
+                mgn_r = lbox.margin_right;
+                mgn_b = lbox.margin_bottom;
             }
             if (node.node_type == .Text) {
                 const parent_id = node.parent;
                 if (parent_id != NULL_NODE && @as(usize, parent_id) < _.layout.boxes.items.len) {
                     const p_rect = _.layout.getBoundingClientRect(parent_id);
                     if (!p_rect.visible) {
-                        return CdpBoxModel {
-                            width: 0.0,
-                            height: 0.0,
-                            border: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
-                            content: .{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 },
-                        };
+                        return CdpBoxModel {};
                     }
                     let start_x = p_rect.x;
                     let start_y = p_rect.y;
@@ -3475,16 +3493,33 @@ pub struct CdpPageSession {
                 }
             }
         }
-        const l = rect.x;
-        const t = rect.y;
-        const r = rect.right();
-        const b = rect.bottom();
+        const bl = rect.x;
+        const bt = rect.y;
+        const br = rect.right();
+        const bb = rect.bottom();
+
+        const pl = bl + brd_l;
+        const pt = bt + brd_t;
+        const pr = @max(pl, br - brd_r);
+        const pb = @max(pt, bb - brd_b);
+
+        const cl = pl + pad_l;
+        const ct = pt + pad_t;
+        const cr = @max(cl, pr - pad_r);
+        const cb = @max(ct, pb - pad_b);
+
+        const ml = bl - mgn_l;
+        const mt = bt - mgn_t;
+        const mr = br + mgn_r;
+        const mb = bb + mgn_b;
 
         return CdpBoxModel {
-            width: rect.width,
-            height: rect.height,
-            border: .{ l, t, r, t, r, b, l, b },
-            content: .{ l, t, r, t, r, b, l, b },
+            width: @max(0.0, cr - cl),
+            height: @max(0.0, cb - ct),
+            border: .{ bl, bt, br, bt, br, bb, bl, bb },
+            content: .{ cl, ct, cr, ct, cr, cb, cl, cb },
+            padding: .{ pl, pt, pr, pt, pr, pb, pl, pb },
+            margin: .{ ml, mt, mr, mt, mr, mb, ml, mb },
         };
     }
 

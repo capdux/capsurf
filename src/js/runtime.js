@@ -1007,6 +1007,8 @@
     let charCode = 0;
     if (typeof opts.charCode === "number") {
       charCode = opts.charCode;
+    } else if (type === "keypress" && key === "Enter") {
+      charCode = 13;
     } else if (type === "keypress" && key && key.length === 1) {
       charCode = key.charCodeAt(0);
     }

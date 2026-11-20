@@ -2314,3 +2314,8 @@
 - Fixed `TreeBuilder.processAfterHead` in `src/html/tree_builder.cp` to handle head-like tags (`<script>`, `<style>`, etc.) between `</head>` and `<body>` without inserting an implicit `<body>`.
 - Added `/oopif-child-solid.html` and `/oopif-host-many.html` dynamic fixtures in `src/net/mock_fixtures.cp`.
 - Enforced `MAX_CONCURRENT_OOPIF` budget for cross-origin iframe rendering in `src/cdp/session.cp`.
+
+### Phase 217
+- Added `test/html/test_after_head_and_foreign.cp` and `test/layout/test_flex_and_table_layout.cp`.
+- Implemented distinct `content`/`padding`/`border`/`margin` quads and content-box dimensions for `DOM.getBoxModel` in `src/cdp/{types,session,dom}.cp`.
+- Deduplicated `onclick` dispatch in `src/cdp/input.cp`, synced `value` attribute in `applyInputText`, fixed `KeyboardEvent` `Enter` `charCode = 13` in `src/js/shim/events/event.js` (with `runtime.js`/`runtime_source.cp` re-bundle), and updated `test/cdp/test_screenshot_input.cp`.

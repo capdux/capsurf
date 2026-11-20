@@ -7,6 +7,22 @@ import { CdpPageSession } from "./session.cp";
 import { clearLearnedScripts } from "./session_hooks.cp";
 import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 
+fn formatQuad(quad: [8]f32, buf: []u8): []const u8 {
+    const q0 = @as(i64, @intFromFloat(@round(quad[0])));
+    const q1 = @as(i64, @intFromFloat(@round(quad[1])));
+    const q2 = @as(i64, @intFromFloat(@round(quad[2])));
+    const q3 = @as(i64, @intFromFloat(@round(quad[3])));
+    const q4 = @as(i64, @intFromFloat(@round(quad[4])));
+    const q5 = @as(i64, @intFromFloat(@round(quad[5])));
+    const q6 = @as(i64, @intFromFloat(@round(quad[6])));
+    const q7 = @as(i64, @intFromFloat(@round(quad[7])));
+    return std.fmt.bufPrint(
+        buf,
+        "[{d},{d},{d},{d},{d},{d},{d},{d}]",
+        .{ q0, q1, q2, q3, q4, q5, q6, q7 },
+    ) catch "[]";
+}
+
 pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnmanaged(u8), str: []const u8)! {
     list.append(allocator, '"')?;
     let i: usize = 0;
@@ -690,26 +706,20 @@ pub struct DomHandler {
 
             const w_int = @as(i64, @intFromFloat(@round(bm.width)));
             const h_int = @as(i64, @intFromFloat(@round(bm.height)));
-            const c0 = @as(i64, @intFromFloat(@round(bm.content[0])));
-            const c1 = @as(i64, @intFromFloat(@round(bm.content[1])));
-            const c2 = @as(i64, @intFromFloat(@round(bm.content[2])));
-            const c3 = @as(i64, @intFromFloat(@round(bm.content[3])));
-            const c4 = @as(i64, @intFromFloat(@round(bm.content[4])));
-            const c5 = @as(i64, @intFromFloat(@round(bm.content[5])));
-            const c6 = @as(i64, @intFromFloat(@round(bm.content[6])));
-            const c7 = @as(i64, @intFromFloat(@round(bm.content[7])));
 
-            let quad_buf: [256]u8 = [0; 256];
-            const q = std.fmt.bufPrint(
-                &quad_buf,
-                "[{d},{d},{d},{d},{d},{d},{d},{d}]",
-                .{ c0, c1, c2, c3, c4, c5, c6, c7 },
-            ) catch "[]";
+            let c_buf: [256]u8 = [0; 256];
+            let p_buf: [256]u8 = [0; 256];
+            let b_buf: [256]u8 = [0; 256];
+            let m_buf: [256]u8 = [0; 256];
+            const cq = formatQuad(bm.content, &c_buf);
+            const pq = formatQuad(bm.padding, &p_buf);
+            const bq = formatQuad(bm.border, &b_buf);
+            const mq = formatQuad(bm.margin, &m_buf);
 
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"model\":{{\"content\":{s},\"padding\":{s},\"border\":{s},\"margin\":{s},\"width\":{d},\"height\":{d}}}}}",
-                .{ q, q, q, q, w_int, h_int },
+                .{ cq, pq, bq, mq, w_int, h_int },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }

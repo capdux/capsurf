@@ -183,6 +183,18 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
             session.ctx.freeValue(val);
         }
     }
+
+    if (session.focused_node != NULL_NODE && @as(usize, session.focused_node) < session.doc.nodes.items.len) {
+        const old_val = session.doc.getAttribute(session.focused_node, "value") ?? "";
+        if (clean_text.len > 0) {
+            const next_val = std.fmt.allocPrint(session.doc.allocator, "{s}{s}", .{ old_val, clean_text }) catch null;
+            if (nv := next_val) {
+                session.doc.setAttribute(session.focused_node, "value", nv);
+            }
+        } else if (std.mem.eql(u8, key, "Backspace") && old_val.len > 0) {
+            session.doc.setAttribute(session.focused_node, "value", old_val[0..old_val.len - 1]);
+        }
+    }
 }
 
 fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32): bool {
@@ -350,25 +362,6 @@ pub struct InputHandler {
                             session.range_drag_changed = updateRangeFromX(session, target_node, x);
                         }
                     }
-                    // Trigger onclick JS attribute or property
-                    if (onclick_code := session.doc.getAttribute(target_node, "onclick")) {
-                        if (session.has_document) {
-                            const val = session.ctx.eval(onclick_code);
-                            session.ctx.freeValue(val);
-                        }
-                    }
-                    if (session.has_document) {
-                        let expr_buf: [384]u8 = [0; 384];
-                        const expr = std.fmt.bufPrint(
-                            &expr_buf,
-                            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ if (typeof el.onclick === 'function') el.onclick(); }} }})()",
-                            .{target_node},
-                        ) catch null;
-                        if (e := expr) {
-                            const val = session.ctx.eval(e);
-                            session.ctx.freeValue(val);
-                        }
-                    }
                 }
                 if (session.has_document && button == .Left && not_prevented && session.range_drag_node == NULL_NODE) {
                     let sel_buf: [2048]u8 = [0; 2048];
@@ -416,24 +409,6 @@ pub struct InputHandler {
                 }
                 if (target_node != NULL_NODE) {
                     session.focused_node = target_node;
-                    if (onclick_code := session.doc.getAttribute(target_node, "onclick")) {
-                        if (session.has_document) {
-                            const val = session.ctx.eval(onclick_code);
-                            session.ctx.freeValue(val);
-                        }
-                    }
-                    if (session.has_document) {
-                        let expr_buf: [384]u8 = [0; 384];
-                        const expr = std.fmt.bufPrint(
-                            &expr_buf,
-                            "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (el) {{ if (typeof el.onclick === 'function') el.onclick(); }} }})()",
-                            .{target_node},
-                        ) catch null;
-                        if (e := expr) {
-                            const val = session.ctx.eval(e);
-                            session.ctx.freeValue(val);
-                        }
-                    }
                 }
                 emitPendingNavigationEvents(session, out_events, event_count);
             }

@@ -9,6 +9,8 @@ pub struct CdpBoxModel {
     height: f32 = 0.0,
     border: [8]f32 = [0.0; 8],
     content: [8]f32 = [0.0; 8],
+    padding: [8]f32 = [0.0; 8],
+    margin: [8]f32 = [0.0; 8],
 }
 
 pub struct TargetState {

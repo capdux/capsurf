@@ -1707,3 +1707,7 @@
 ### Phase 216: HTML5 `AfterHead` `<script>` Fix & OOPIF Concurrent Budget
 - `<script>` between `</head>` and `<body style="margin:0;padding:0">` previously triggered implicit `<body>` creation in `TreeBuilder.processAfterHead`, leaving a default `8px` margin on the first `body` node (`TL @(25,25)` 8px shift). Setting `orig_mode = .AfterHead` per HTML5 spec fixes it cleanly.
 - `captureScreenshotClipped` now counts cross-origin iframes via `extractOriginFromUrl` and caps painted OOPIFs at `MAX_CONCURRENT_OOPIF` (`1`).
+
+### Phase 217: `DOM.getBoxModel` Content-Box Quads & Single-Fire `click` Semantics
+- `CdpPageSession.getBoxModel` now derives `padding` (inset by `border`) and `content` (inset by `padding`) quads plus `margin` (outset) from `LayoutBox` instead of returning border-box dimensions for all four quads.
+- `CdpInputHandler.handle` now fires `click` once on `MouseReleased` via DOM event dispatch rather than firing raw `onclick` attributes + `el.onclick()` on both `MousePressed` and `MouseReleased`.

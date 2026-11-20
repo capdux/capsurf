@@ -119,14 +119,13 @@ fn testDispatchMouseEvent()! {
     const press_resp = CdpDispatcher.dispatch(session, press_req, out_buf[0..], &out_evts, &evt_cnt);
     expect_eq(press_resp.isOk(), true);
 
-    // Verify session.focused_node is updated
+    // Verify session.focused_node is updated; click fires on mouseReleased per Web/CDP semantics
     expect_eq(session.focused_node, btn_id);
 
-    // Verify JS context state was updated
     let eval_buf: [256]u8 = undefined;
-    const eval_len = session.evaluate("globalThis.btnClicked === true && globalThis.clickCount === 1", eval_buf[0..]);
+    const eval_len = session.evaluate("globalThis.btnClicked === true", eval_buf[0..]);
     expect_eq(eval_len > 0, true);
-    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len], "\"value\":true") != null, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len], "\"value\":true") == null, true);
 
     // Dispatch mouseReleased
     const rel_params = std.fmt.bufPrint(&params_buf, "{{\"type\":\"mouseReleased\",\"x\":{d},\"y\":{d},\"button\":\"left\",\"clickCount\":1}}", .{ click_x, click_y }) catch unreachable;
@@ -138,10 +137,10 @@ fn testDispatchMouseEvent()! {
     const rel_resp = CdpDispatcher.dispatch(session, rel_req, out_buf[0..], &out_evts, &evt_cnt);
     expect_eq(rel_resp.isOk(), true);
 
-    // Verify clickCount incremented on release
-    const eval_len2 = session.evaluate("globalThis.clickCount", eval_buf[0..]);
+    // Verify onclick fired exactly once on release
+    const eval_len2 = session.evaluate("globalThis.btnClicked === true && globalThis.clickCount === 1", eval_buf[0..]);
     expect_eq(eval_len2 > 0, true);
-    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len2], "\"value\":2") != null, true);
+    expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len2], "\"value\":true") != null, true);
 
     // Test mouseWheel updates scroll_x / scroll_y
     const wheel_params = "{\"type\":\"mouseWheel\",\"x\":100,\"y\":100,\"deltaX\":15.5,\"deltaY\":42.0}";

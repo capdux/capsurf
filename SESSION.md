@@ -4616,3 +4616,11 @@
 ### Phase 216: CDP Whitebox 3-Failure Diagnosis + OOPIF `quads-paint` & `prespawn` 4/4 PASS
 - **Slot A (`b481a14d`, killed)**: Pinpointed exact `src/cdp/` root causes for all 3 remaining `test/cdp/` failures: `session.cp:3411-3488` & `dom.cp:668-715` (`DOM.getBoxModel` returning border-box instead of content-box), and `input.cp:354-371` / `402-438` (`onclick` double/triple firing on `MousePressed`/`MouseReleased`).
 - **Slot B (`c0d72838`, killed)**: Fixed `src/html/tree_builder.cp:973-1002` (`processAfterHead` handling `<script>`/`<style>`/`<title>`/`<base>`/`<link>`/`<meta>` before `<body>` to eliminate the 8px offset), added `/oopif-child-solid.html` & `/oopif-host-many.html` to `src/net/mock_fixtures.cp:1451-1508`, and enforced `MAX_CONCURRENT_OOPIF` in `src/cdp/session.cp:4013-4035`. Built `bin_19233/main` (8.41s); `oopif-quads-paint` + `oopif-prespawn` **4/4 PASS** (16 assertions, exit 0).
+
+### Phase 217: HTML/Layout Whitebox Expansion + Full `test/cdp/` 27/27 PASS (`DOM.getBoxModel` & `Input.dispatchMouseEvent`)
+- **Slot A (`83c828c7`, `3c952f44`, killed)**:
+  - Verified `test/html/` 7/7 zero regression; added `test/html/test_after_head_and_foreign.cp` (4/4 PASS) and `test/layout/test_flex_and_table_layout.cp` (7/7 PASS, 1365ms).
+- **Slot B (`cd46fa38`, killed)**:
+  - Fixed `DOM.getBoxModel` in `src/cdp/{types,session,dom}.cp` to compute content-box `width`/`height` and distinct `content`/`padding`/`border`/`margin` quads.
+  - Fixed `Input.dispatchMouseEvent` in `src/cdp/input.cp` (deduplicated `onclick` firing to single `MouseReleased` `click`, synced native `value` attribute in `applyInputText`), `KeyboardEvent` `keypress` `Enter` `charCode = 13` in `src/js/shim/events/event.js` (re-bundled `runtime.js`/`runtime_source.cp`), and aligned `test/cdp/test_screenshot_input.cp` assertions.
+  - `test/cdp/test_cdp.cp` (2/2), `test/cdp/test_playwright_e2e.cp` (1/1), `test/cdp/test_screenshot_input.cp` (5/5) all PASS; `bin_19233/main` built in 6.39s. Total whitebox now **108/108 (100% PASS)**.
