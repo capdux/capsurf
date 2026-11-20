@@ -4489,3 +4489,11 @@
 - **直接验收**：`e2e/demo/oopif-rerender.e2e.test.ts` (**1/1 PASS**)、`e2e/demo/oopif-quads-paint.e2e.test.ts` (**1/2 PASS**，仅 `TL @(25,25)` 因 `session.cp:3762-3787` 独立渲染子帧带 8px 偏移)。
 - **精准定位**：`oopif-prespawn` 缺 `mock_fixtures.cp` `oopif-host-many.html`/`oopif-child-solid.html` 与 1-frame budget。
 - **清理旧子智能体**: 销毁 `d227099e-6890-4ed3-b73a-97a5b21e756e`。
+
+## [2026-11-21 01:14:00] Slot A (`50bb3b4d`) 1 分 20 秒精准定位 OOPIF LateSpawn/Heap/WorkerBudget
+- 精准定位 `oopif-late-spawn` (`dom.cp`/`target.cp` 按 `sessionId` 路由子文档)、`oopif-heap-usage` (`runtime.cp:69` / `session.cp:3271`) 与 `oopif-worker-budget` (`mock_fixtures.cp` `/oopif-host-many.html` + `worker_budget.cp` 接入)。
+- **清理旧子智能体**: 销毁 `50bb3b4d-630b-4558-bdfd-889902279202`。
+
+## [2026-11-21 01:15:30] 2 分钟新增并全绿通过纯 CP Tokenizer/Entities 白盒单测 `test/html/test_tokenizer_entities.cp` (Subagent 461cacab 结单，Phase 189)
+- **新增白盒测试 (`test/html/test_tokenizer_entities.cp`)**: 覆盖命名字符实体解码、十/十六进制数值实体 (`&#x1F600;`/`&#128;`/`&#0;`)、DOCTYPE/注释/属性切分及 RawText/ScriptData 模式（**4/4 PASS**, 933ms, 4 门禁全 0；`test/html/` 达 **5/5 PASS**）。
+- **清理旧子智能体**: 销毁 `461cacab-f5eb-45f4-954e-88a0ecd3903c`。

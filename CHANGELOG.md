@@ -2226,3 +2226,6 @@
 
 ## Phase 188: `oopif-rerender` 1/1 PASS & `oopif-quads-paint` 8px Offset Localization
 - 零修改验收 `e2e/demo/oopif-rerender.e2e.test.ts` (**1/1 PASS**) 与 `oopif-quads-paint` 跨域像素绕过用例，并定位 `TL @(25,25)` 偏移与 `oopif-prespawn` fixture 缺口。
+
+## Phase 189: Pure-CP HTML5 Tokenizer & Entities Whitebox Suite `test/html/test_tokenizer_entities.cp` (4/4 PASS)
+- 新增 `test/html/test_tokenizer_entities.cp`，覆盖命名/数值字符实体、DOCTYPE/属性与 RawText/ScriptData 切分（`cap test -m` **4/4 PASS**, 933ms）。
