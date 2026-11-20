@@ -2238,3 +2238,6 @@
 
 ### Phase 192
 - Added `test/eval/test_script_bundle_and_outbound.cp` covering script categorization/VLQ/bundle counts, learned-script promotion/eviction/stale blacklisting, and external/denied outbound policies.
+
+### Phase 193
+- Added `test/layout/test_box_sizing_and_overflow.cp` covering box-sizing modes, display/visibility layout flow, relative/absolute positioning, auto/negative margins, and min/max-width clamping.
