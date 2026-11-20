@@ -6697,7 +6697,7 @@
       let curr = this;
       while (curr) {
         if (curr.nodeType === DOCUMENT_NODE) return true;
-        if (curr.host) {
+        if (curr.nodeType === DOCUMENT_FRAGMENT_NODE && curr.host) {
           curr = curr.host;
           continue;
         }
@@ -6714,7 +6714,7 @@
     while ((p = n.parentNode)) n = p;
 
     if (options && options.composed) {
-      while (n && n.host) {
+      while (n && n.nodeType === DOCUMENT_FRAGMENT_NODE && n.host) {
         let hop = n.host;
         let hp;
         while ((hp = hop.parentNode)) hop = hp;
@@ -7064,6 +7064,42 @@
             }
           }
         }
+      }
+    } else if (tag === "link") {
+      const nativeGetAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.getAttribute)
+        ? Element.prototype.getAttribute
+        : (node.getAttribute ? node.getAttribute.bind(node) : null);
+      const relRaw = (nativeGetAttr ? nativeGetAttr.call(node, "rel") : node.rel) || "";
+      const rels = String(relRaw).trim().toLowerCase().split(/\s+/);
+      const href = (nativeGetAttr ? nativeGetAttr.call(node, "href") : node.href) || "";
+      if (rels.indexOf("stylesheet") !== -1 && href && node._lastLinkLoadHref !== href) {
+        node._lastLinkLoadHref = href;
+        Promise.resolve().then(function () {
+          if (!node.isConnected) return;
+          let isErr = false;
+          try {
+            const sh = node.sheet;
+            if (sh && typeof sh._syncFromOwner === "function") {
+              sh._syncFromOwner();
+              const nativeHasAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute)
+                ? Element.prototype.hasAttribute
+                : (node.hasAttribute ? node.hasAttribute.bind(node) : null);
+              const hasCo = nativeHasAttr ? nativeHasAttr.call(node, "crossorigin") : false;
+              if (hasCo && !sh._originClean) {
+                isErr = true;
+              }
+            }
+          } catch (e) {}
+          const evName = isErr ? "error" : "load";
+          const evt = new Event(evName, { bubbles: false, cancelable: false });
+          const handlerProp = isErr ? "onerror" : "onload";
+          if (typeof node[handlerProp] === "function") {
+            try { node[handlerProp].call(node, evt); } catch (e) {}
+          }
+          if (typeof node.dispatchEvent === "function") {
+            try { node.dispatchEvent(evt); } catch (e) {}
+          }
+        });
       }
     }
     const kids = node.childNodes || node._children;
@@ -18918,35 +18954,78 @@
     const isReq = input && typeof input === "object" && input instanceof Request;
     init = init || {};
     const rawUrl = isReq ? input.url : String(input);
+    let resolvedUrl = rawUrl;
     try {
       const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
       const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
-      this.url = new URL(rawUrl, base).href;
+      resolvedUrl = new URL(rawUrl, base).href;
     } catch (e) {
-      this.url = rawUrl;
+      resolvedUrl = rawUrl;
     }
-    this.method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
-    this.headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
-    this._rawMimeType = extractMimeFromHeaders(this.headers);
+    this._url = resolvedUrl;
+    this._method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
+    this._headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
+    this._rawMimeType = extractMimeFromHeaders(this._headers);
     this._body = init.body !== undefined ? init.body : (isReq ? input._body : "");
-    this.mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
-    this.credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
-    this.cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
+    this._mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+    this._credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
+    this._cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
 
     const rp = init.referrerPolicy !== undefined ? String(init.referrerPolicy) : (isReq ? input.referrerPolicy : "");
     if (!VALID_REFERRER_POLICIES.has(rp)) {
       throw new TypeError("Failed to construct 'Request': The provided value '" + rp + "' is not a valid enum value of type ReferrerPolicy.");
     }
-    this.referrerPolicy = rp;
+    this._referrerPolicy = rp;
 
     if (init.referrer !== undefined) {
-      this.referrer = resolveRequestReferrer(init.referrer);
+      this._referrer = resolveRequestReferrer(init.referrer);
     } else if (isReq) {
-      this.referrer = input.referrer;
+      this._referrer = input.referrer;
     } else {
-      this.referrer = "about:client";
+      this._referrer = "about:client";
     }
   }
+
+  Object.defineProperty(Request.prototype, "url", {
+    get: function () { return this._url; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "method", {
+    get: function () { return this._method; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "headers", {
+    get: function () { return this._headers; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "mode", {
+    get: function () { return this._mode; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "credentials", {
+    get: function () { return this._credentials; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "cache", {
+    get: function () { return this._cache; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "referrerPolicy", {
+    get: function () { return this._referrerPolicy; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(Request.prototype, "referrer", {
+    get: function () { return this._referrer; },
+    configurable: true,
+    enumerable: true,
+  });
 
   Request.prototype.clone = function () {
     return new Request(this);
@@ -40568,19 +40647,32 @@
                       try { node.ownerDocument = doc; } catch (e2) {}
                     }
                   };
+                  const setParent = function (node, parent) {
+                    if (!node || typeof node !== "object" || !parent) return;
+                    try {
+                      if (!node.parentNode) {
+                        Object.defineProperty(node, "parentNode", { value: parent, writable: true, configurable: true });
+                      }
+                    } catch (e) {
+                      try { if (!node.parentNode) node.parentNode = parent; } catch (e2) {}
+                    }
+                  };
                   const cachedBody = doc.body ? upgradeElement(doc.body) : null;
                   const cachedHead = doc.head ? upgradeElement(doc.head) : null;
                   const cachedDocEl = doc.documentElement ? upgradeElement(doc.documentElement) : null;
                   if (cachedDocEl) {
                     setDocOwner(cachedDocEl);
+                    setParent(cachedDocEl, doc);
                     Object.defineProperty(doc, "documentElement", { value: cachedDocEl, configurable: true });
                   }
                   if (cachedHead) {
                     setDocOwner(cachedHead);
+                    setParent(cachedHead, cachedDocEl || doc);
                     Object.defineProperty(doc, "head", { value: cachedHead, configurable: true });
                   }
                   if (cachedBody) {
                     setDocOwner(cachedBody);
+                    setParent(cachedBody, cachedDocEl || doc);
                     Object.defineProperty(doc, "body", { value: cachedBody, configurable: true });
                   }
                   const origDocCreateElement = doc.createElement;

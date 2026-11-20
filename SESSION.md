@@ -4041,6 +4041,17 @@
   - `cdp-scene-host` & `cdp-scene-stream`：已确认为 Cloudflare Workers `vitest` + `/rbi/scene_host.wasm` 架构专属测试，归档不纳入独立进程 CapSurf CDP 回归。
 - **清理旧子智能体**: 销毁 `c4a7359b-f698-4105-b429-16789bea4224`。
 
+## [2026-11-20 22:58:00] `resource-type-not-page-settable` 9/9 全绿与 `Request`/`isConnected` 规范化 (Subagent e29002e0 结单，Phase 129)
+- **Request Accessor、超链接 `.host` 隔离与 `<link>` 事件 (`src/js/shim/{file,node-base,index}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `file.js:482-558`：将 `Request` 的 `url`/`method`/`headers`/`mode`/`credentials`/`cache`/`referrerPolicy`/`referrer` 迁至 `Request.prototype` accessor getter，修复原型描述符检查；
+  - `node-base.js:50-79,423-459`：修复 `isConnected`/`getRootNode` 误将超链接 `.host` 字符串当作 `ShadowRoot.host` 的 Bug，并补充 `<link rel="stylesheet">` 异步 `load`/`error` 事件派发；
+  - `index.js:1812-1838`：在 `documentElement`/`head`/`body` 升级原型后补齐 `parentNode` 链路。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `e2e/resource-type-not-page-settable.e2e.test.ts`：**9/9 PASS (19 expect() calls)**；
+  - `asset-import-stub` 跨模块定位至 `src/cdp/session.cp:1544-1571`（内联 `<script type="module">` 未做静态 `import` 转换）。
+- **清理旧子智能体**: 销毁 `e29002e0-8be4-4919-94b8-c5ec456aefa4`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

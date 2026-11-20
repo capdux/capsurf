@@ -1561,4 +1561,10 @@
    - 仅在非静默启用时扫描并填充 `declarativeMap`，确保页面初始化后通过 `scanDecl()` 首次上报 `WebMCP.toolsAdded`。
 2. **表单事件 `isTrusted` 与 `respondWith` 统一拦截**：
    - 绕过会重置 `_isTrusted` 的普通 `c.dispatchEvent`，改由 `__capsurf_dispatchTrustedEvent` 派发并同时包裹 `form.dispatchEvent` 挂载 `attachSubmitRespondWith(form, ev)`。
+
+## Phase 129 `Request` 原型访问器与 `isConnected` 超链接 `.host` 隔离方案
+1. **`Request.prototype` Accessor Getter (`src/js/shim/file.js`)**：
+   - 将 `Request` 实例字段转为私有存储并在 `Request.prototype` 定义可配置 getter，确保页面篡改或反射探测原型描述符时符合 Fetch WebIDL 规范。
+2. **`isConnected` ShadowRoot 边界修复 (`src/js/shim/node-base.js`, `index.js`)**：
+   - 仅当 `curr.nodeType === 11 && curr.host` 时沿 ShadowRoot 宿主向上追溯，避免 `<a>`/`<area>`/`<link>` 的字符串 `.host` 阻断连通性判断。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

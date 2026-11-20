@@ -483,35 +483,78 @@ function Request(input, init) {
   const isReq = input && typeof input === "object" && input instanceof Request;
   init = init || {};
   const rawUrl = isReq ? input.url : String(input);
+  let resolvedUrl = rawUrl;
   try {
     const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
     const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
-    this.url = new URL(rawUrl, base).href;
+    resolvedUrl = new URL(rawUrl, base).href;
   } catch (e) {
-    this.url = rawUrl;
+    resolvedUrl = rawUrl;
   }
-  this.method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
-  this.headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
-  this._rawMimeType = extractMimeFromHeaders(this.headers);
+  this._url = resolvedUrl;
+  this._method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
+  this._headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
+  this._rawMimeType = extractMimeFromHeaders(this._headers);
   this._body = init.body !== undefined ? init.body : (isReq ? input._body : "");
-  this.mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
-  this.credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
-  this.cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
+  this._mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+  this._credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
+  this._cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
 
   const rp = init.referrerPolicy !== undefined ? String(init.referrerPolicy) : (isReq ? input.referrerPolicy : "");
   if (!VALID_REFERRER_POLICIES.has(rp)) {
     throw new TypeError("Failed to construct 'Request': The provided value '" + rp + "' is not a valid enum value of type ReferrerPolicy.");
   }
-  this.referrerPolicy = rp;
+  this._referrerPolicy = rp;
 
   if (init.referrer !== undefined) {
-    this.referrer = resolveRequestReferrer(init.referrer);
+    this._referrer = resolveRequestReferrer(init.referrer);
   } else if (isReq) {
-    this.referrer = input.referrer;
+    this._referrer = input.referrer;
   } else {
-    this.referrer = "about:client";
+    this._referrer = "about:client";
   }
 }
+
+Object.defineProperty(Request.prototype, "url", {
+  get: function () { return this._url; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "method", {
+  get: function () { return this._method; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "headers", {
+  get: function () { return this._headers; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "mode", {
+  get: function () { return this._mode; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "credentials", {
+  get: function () { return this._credentials; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "cache", {
+  get: function () { return this._cache; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "referrerPolicy", {
+  get: function () { return this._referrerPolicy; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "referrer", {
+  get: function () { return this._referrer; },
+  configurable: true,
+  enumerable: true,
+});
 
 Request.prototype.clone = function () {
   return new Request(this);

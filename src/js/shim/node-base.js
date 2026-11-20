@@ -52,7 +52,7 @@ Object.defineProperty(Node.prototype, "isConnected", {
     let curr = this;
     while (curr) {
       if (curr.nodeType === DOCUMENT_NODE) return true;
-      if (curr.host) {
+      if (curr.nodeType === DOCUMENT_FRAGMENT_NODE && curr.host) {
         curr = curr.host;
         continue;
       }
@@ -69,7 +69,7 @@ Node.prototype.getRootNode = function (options) {
   while ((p = n.parentNode)) n = p;
 
   if (options && options.composed) {
-    while (n && n.host) {
+    while (n && n.nodeType === DOCUMENT_FRAGMENT_NODE && n.host) {
       let hop = n.host;
       let hp;
       while ((hp = hop.parentNode)) hop = hp;
@@ -419,6 +419,42 @@ function executeConnectedScripts(node) {
           }
         }
       }
+    }
+  } else if (tag === "link") {
+    const nativeGetAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.getAttribute)
+      ? Element.prototype.getAttribute
+      : (node.getAttribute ? node.getAttribute.bind(node) : null);
+    const relRaw = (nativeGetAttr ? nativeGetAttr.call(node, "rel") : node.rel) || "";
+    const rels = String(relRaw).trim().toLowerCase().split(/\s+/);
+    const href = (nativeGetAttr ? nativeGetAttr.call(node, "href") : node.href) || "";
+    if (rels.indexOf("stylesheet") !== -1 && href && node._lastLinkLoadHref !== href) {
+      node._lastLinkLoadHref = href;
+      Promise.resolve().then(function () {
+        if (!node.isConnected) return;
+        let isErr = false;
+        try {
+          const sh = node.sheet;
+          if (sh && typeof sh._syncFromOwner === "function") {
+            sh._syncFromOwner();
+            const nativeHasAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute)
+              ? Element.prototype.hasAttribute
+              : (node.hasAttribute ? node.hasAttribute.bind(node) : null);
+            const hasCo = nativeHasAttr ? nativeHasAttr.call(node, "crossorigin") : false;
+            if (hasCo && !sh._originClean) {
+              isErr = true;
+            }
+          }
+        } catch (e) {}
+        const evName = isErr ? "error" : "load";
+        const evt = new Event(evName, { bubbles: false, cancelable: false });
+        const handlerProp = isErr ? "onerror" : "onload";
+        if (typeof node[handlerProp] === "function") {
+          try { node[handlerProp].call(node, evt); } catch (e) {}
+        }
+        if (typeof node.dispatchEvent === "function") {
+          try { node.dispatchEvent(evt); } catch (e) {}
+        }
+      });
     }
   }
   const kids = node.childNodes || node._children;

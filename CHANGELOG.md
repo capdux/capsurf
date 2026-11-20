@@ -1996,4 +1996,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/cdp/session_hooks.cp` 4 门禁全 0；
   - E2E 测试：`e2e/webmcp.e2e.test.ts` **12/12 PASS (131 expect() calls)**。
+
+## Phase 129: `resource-type-not-page-settable` 9/9 (100%), Request Prototype Getters & `isConnected` Fix
+- **`src/js/shim/{file,node-base,index}.js` & `src/js/runtime{,_source.cp}`**：
+  - 实现 `Request.prototype` accessor getter、修复 `isConnected`/`getRootNode` 超链接 `.host` 误判、补充 `<link>` 异步 `load`/`error` 事件与根元素 `parentNode` 链路。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`e2e/resource-type-not-page-settable.e2e.test.ts` **9/9 PASS (19 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

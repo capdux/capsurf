@@ -1809,19 +1809,32 @@ function installShim(global) {
                     try { node.ownerDocument = doc; } catch (e2) {}
                   }
                 };
+                const setParent = function (node, parent) {
+                  if (!node || typeof node !== "object" || !parent) return;
+                  try {
+                    if (!node.parentNode) {
+                      Object.defineProperty(node, "parentNode", { value: parent, writable: true, configurable: true });
+                    }
+                  } catch (e) {
+                    try { if (!node.parentNode) node.parentNode = parent; } catch (e2) {}
+                  }
+                };
                 const cachedBody = doc.body ? upgradeElement(doc.body) : null;
                 const cachedHead = doc.head ? upgradeElement(doc.head) : null;
                 const cachedDocEl = doc.documentElement ? upgradeElement(doc.documentElement) : null;
                 if (cachedDocEl) {
                   setDocOwner(cachedDocEl);
+                  setParent(cachedDocEl, doc);
                   Object.defineProperty(doc, "documentElement", { value: cachedDocEl, configurable: true });
                 }
                 if (cachedHead) {
                   setDocOwner(cachedHead);
+                  setParent(cachedHead, cachedDocEl || doc);
                   Object.defineProperty(doc, "head", { value: cachedHead, configurable: true });
                 }
                 if (cachedBody) {
                   setDocOwner(cachedBody);
+                  setParent(cachedBody, cachedDocEl || doc);
                   Object.defineProperty(doc, "body", { value: cachedBody, configurable: true });
                 }
                 const origDocCreateElement = doc.createElement;
