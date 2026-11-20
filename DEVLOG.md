@@ -1593,4 +1593,10 @@
 ## Phase 135 通用鼠标防抖合并与 `browserFactory` 查询参数方案 (`e2e/harness.ts`)
 1. **通用 16ms `_pendingMouseMove` 防抖**：将原仅限拖动状态的移动合并泛化为全局 `mouseMoved` 16ms 节流并在 `mousePressed`/`mouseReleased`/`Runtime.evaluate` 前同步 flush，保证移动与点击事件序严格一致。
 2. **`browserFactory` `options.query` 支持**：将外部传入的 `query` 参数（如 `initialUrl`）自动附加到 WebSocket 调试地址。
+
+## Phase 136 原生 ES Module、`importmap` 与 HTML5 生命周期时序方案 (`src/cdp/session.cp`)
+1. **原生模块加载器与 `importmap` 预算门禁**：
+   - 使用 `JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY` 配合 `JS_SetModuleLoaderFunc` 处理模块图、`.css` 静态资源 stub 与内联虚拟 URL；对 `<script type="importmap">` 校验 CSP 与 2048-code-unit 长度上限，超限整表忽略。
+2. **HTML5 脚本阶段与 `beforeunload` 控制台保留**：
+   - 将脚本队列按同步 / `defer` / `async` 分阶段调度，并在导航卸载前补充 `beforeunload` 同时跨 `dom_ctx` 重建保留已记录的 `ConsoleRecord`。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

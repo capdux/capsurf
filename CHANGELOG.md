@@ -2040,4 +2040,11 @@
   - 实现通用 `_pendingMouseMove` 16ms 防抖合并与自动 flush，以及 `browserFactory(options)` 的 `options.query` 拼接。
 - **测试验证**：
   - `e2e/demo/mouse-move-debounce-probe.e2e.test.ts`：**1/1 PASS (7 expect() calls)**，并精准定位 `auto-navigate-demo` 与 `navigate-style-script-order` 跨模块缺口。
+
+## Phase 136: Native ES Modules, `importmap` 2048-Budget & HTML5 `defer`/`async`/`beforeunload` — 3/3 Suites (5/5 PASS)
+- **`src/cdp/session.cp`**：
+  - 实装原生 `JS_EVAL_TYPE_MODULE` 执行、静态资源 `.css` 空模块 stub、`<script type="importmap">` 与 2048-code-unit 预算校验、`"requires an import map"` 异常，以及完整 `defer`/`async`/`beforeunload` 生命周期。
+- **测试与门禁验证**：
+  - 静态门禁：`src/cdp/session.cp` 4 门禁全 0；
+  - E2E 测试：`asset-import-stub` (1/1)、`import-map` (3/3)、`lifecycle-demo` (1/1) — **5/5 PASS (33 expect() calls)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

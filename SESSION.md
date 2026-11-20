@@ -4111,6 +4111,16 @@
   - 精准定位 `auto-navigate-demo` (`server.cp:535-572` `initialUrl`) 与 `navigate-style-script-order` (`page.cp:556-1045` `<link>` 阻塞 / `viewport` seed、`layout.cp:2993`/`painter.cp:3156` 嵌套行内 `::before`)。
 - **清理旧子智能体**: 销毁 `878fe575-138e-4acd-a4dd-3e63d5200def`。
 
+## [2026-11-20 23:16:30] 原生 ES Module、`importmap` 2048 预算与 HTML5 `defer`/`async`/`beforeunload` 闭环 (Subagent da672e77 结单，Phase 136)
+- **原生模块图、`importmap` 与完整脚本/卸载时序 (`src/cdp/session.cp`)**:
+  - `<script type="module">` 改用原生 `JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY` 编译 + `setModuleImportMeta` + `JS_EvalFunction` 执行；`sessionModuleNormalize`/`sessionModuleLoader` 识别 `.css` 等静态资源返回 `"export default {};"` 空 stub，未命中 bare specifier 抛出 `"requires an import map"` `TypeError`；
+  - 实装 `<script type="importmap">` 解析（含 CSP 与 2048-code-unit 预算校验）、`resolved_modules` 集合与 `import.meta.resolve`；
+  - 严格拆分为 同步脚本 -> `defer` -> `readystatechange:interactive` + `DOMContentLoaded` -> `async` -> `complete` + `load` + `pageshow`；卸载补充 `beforeunload` 并保留 `ConsoleRecord`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - `src/cdp/session.cp` 4 门禁全 0；
+  - `asset-import-stub` (**1/1**)、`import-map` (**3/3**)、`lifecycle-demo` (**1/1**)：**5/5 PASS (33 expect() calls)**！
+- **清理旧子智能体**: 销毁 `da672e77-a17b-4b6c-a628-73aeda88614c`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

@@ -6,8 +6,8 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
-import { mountDom, JsDomContext } from "../js/dom_binding.cp";
+import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
+import { mountDom, JsDomContext, ConsoleRecord } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
 import { FetchState } from "./fetch.cp";
@@ -27,6 +27,15 @@ import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS
 
 @c {
     fn usleep(usec: u32): i32;
+    fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
+    fn JS_ThrowTypeError(ctx: *JSContext, fmt: [*c]const u8, ...): JSValue;
+    fn JS_SetModuleLoaderFunc(
+        rt: *JSRuntime,
+        module_normalize: (@c fn(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8)?,
+        module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?)?,
+        opaque_ptr: *!?,
+    );
+    fn js_strdup(ctx: *JSContext, str: [*c]const u8): [*c]u8;
 }
 
 pub struct NavigationEntry {
@@ -297,6 +306,226 @@ pub fn canRewriteDocumentUrl(doc_url: []const u8, target_url: []const u8): bool 
 
 pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
 
+pub struct ImportMapEntry {
+    key: []const u8 = "",
+    val: []const u8 = "",
+}
+
+pub struct InlineModuleEntry {
+    url: []const u8 = "",
+    code: []const u8 = "",
+}
+
+pub struct ResolvedModuleEntry {
+    url: []const u8 = "",
+}
+
+pub struct PendingScriptItem {
+    code: []const u8 = "",
+    url: []const u8 = "",
+    script_idx: usize = 0,
+    is_module: bool = false,
+    has_src: bool = false,
+}
+
+fn isBareSpecifier(s: []const u8): bool {
+    if (s.len == 0) return false;
+    if (std.mem.startsWith(u8, s, "/") || std.mem.startsWith(u8, s, "./") || std.mem.startsWith(u8, s, "../")) {
+        return false;
+    }
+    if (std.mem.indexOf(u8, s, "://") != null || std.mem.startsWith(u8, s, "data:") || std.mem.startsWith(u8, s, "blob:")) {
+        return false;
+    }
+    return true;
+}
+
+fn isAssetImportUrl(url: []const u8): bool {
+    let path = url;
+    if (qi := std.mem.indexOfScalar(u8, path, '?')) path = path[0..qi];
+    if (hi := std.mem.indexOfScalar(u8, path, '#')) path = path[0..hi];
+    const exts: [13][]const u8 = [
+        ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".wasm",
+    ];
+    let i: usize = 0;
+    while (i < exts.len) : (i += 1) {
+        const ext = exts[i];
+        if (path.len >= ext.len && std.ascii.eqlIgnoreCase(path[path.len - ext.len ..], ext)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn resolveUrlWithDots(base_url: []const u8, rel: []const u8, out_buf: []u8): []const u8 {
+    if (std.mem.startsWith(u8, rel, "http://") || std.mem.startsWith(u8, rel, "https://") || std.mem.startsWith(u8, rel, "data:") || std.mem.startsWith(u8, rel, "blob:")) {
+        return rel;
+    }
+    if (std.mem.startsWith(u8, rel, "/")) {
+        let origin = base_url;
+        if (idx := std.mem.indexOf(u8, base_url, "://")) {
+            const after_scheme = base_url[idx + 3 ..];
+            if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+                origin = base_url[0 .. idx + 3 + slash_pos];
+            }
+        }
+        return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, rel }) catch rel;
+    }
+    let clean_rel = rel;
+    let dir_base = base_url;
+    if (last_slash := std.mem.lastIndexOfScalar(u8, base_url, '/')) {
+        dir_base = base_url[0..last_slash];
+    }
+    while (std.mem.startsWith(u8, clean_rel, "./") || std.mem.startsWith(u8, clean_rel, "../")) {
+        if (std.mem.startsWith(u8, clean_rel, "./")) {
+            clean_rel = clean_rel[2..];
+        } else {
+            clean_rel = clean_rel[3..];
+            if (ls := std.mem.lastIndexOfScalar(u8, dir_base, '/')) {
+                if (scheme_idx := std.mem.indexOf(u8, dir_base, "://")) {
+                    if (ls > scheme_idx + 2) {
+                        dir_base = dir_base[0..ls];
+                    }
+                } else {
+                    dir_base = dir_base[0..ls];
+                }
+            }
+        }
+    }
+    if (dir_base.len > 0) {
+        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ dir_base, clean_rel }) catch rel;
+    }
+    return rel;
+}
+
+fn resolveModuleSpecifier(session: *CdpPageSession, specifier: []const u8, base_url: []const u8, record_resolved: bool, out_buf: []u8): []const u8 {
+    let norm_buf: [1024]u8 = undefined;
+    let norm_url: []const u8 = "";
+    if (!isBareSpecifier(specifier)) {
+        norm_url = resolveUrlWithDots(base_url, specifier, &norm_buf);
+    }
+
+    let matched_val: ([]const u8)? = null;
+    // 1. Exact match in import map
+    let i: usize = 0;
+    while (i < session.import_map_entries.items.len) : (i += 1) {
+        const entry = &session.import_map_entries.items[i];
+        if (std.mem.eql(u8, entry.key, specifier) || (norm_url.len > 0 && std.mem.eql(u8, entry.key, norm_url))) {
+            matched_val = entry.val;
+            break;
+        }
+    }
+
+    // 2. Prefix match (keys ending with '/')
+    let prefix_buf: [1024]u8 = undefined;
+    if (matched_val == null) {
+        let best_len: usize = 0;
+        let best_idx: usize = 0;
+        let found_prefix = false;
+        let best_suffix: []const u8 = "";
+        let pi: usize = 0;
+        while (pi < session.import_map_entries.items.len) : (pi += 1) {
+            const entry = &session.import_map_entries.items[pi];
+            if (entry.key.len > 0 && entry.key[entry.key.len - 1] == '/') {
+                if (std.mem.startsWith(u8, specifier, entry.key) && entry.key.len > best_len) {
+                    best_len = entry.key.len;
+                    best_idx = pi;
+                    best_suffix = specifier[entry.key.len..];
+                    found_prefix = true;
+                } else if (norm_url.len > 0 && std.mem.startsWith(u8, norm_url, entry.key) && entry.key.len > best_len) {
+                    best_len = entry.key.len;
+                    best_idx = pi;
+                    best_suffix = norm_url[entry.key.len..];
+                    found_prefix = true;
+                }
+            }
+        }
+        if (found_prefix) {
+            const val_prefix = session.import_map_entries.items[best_idx].val;
+            matched_val = std.fmt.bufPrint(&prefix_buf, "{s}{s}", .{ val_prefix, best_suffix }) catch null;
+        }
+    }
+
+    let final_res: []const u8 = specifier;
+    if (mv := matched_val) {
+        final_res = mv;
+    } else if (norm_url.len > 0) {
+        final_res = norm_url;
+    }
+
+    const copy_len = @min(final_res.len, out_buf.len - 1);
+    @memcpy(out_buf[0..copy_len], final_res[0..copy_len]);
+    out_buf[copy_len] = 0;
+
+    if (record_resolved && !isBareSpecifier(out_buf[0..copy_len])) {
+        session.markModuleResolved(out_buf[0..copy_len]);
+    }
+    return out_buf[0..copy_len];
+}
+
+fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
+    const meta_obj = JS_GetImportMeta(ctx, m);
+    if (!jsIsException(meta_obj)) {
+        const url_val = JS_NewStringLen(ctx, full_url.ptr, full_url.len);
+        * = JS_SetPropertyStr(ctx, meta_obj, "url", JS_DupValue(ctx, url_val));
+        const factory_src = "(function(base){return function resolve(s){s=String(s);var resolved=s;var map=globalThis.__capsurf_im_entries;if(Array.isArray(map)){var norm=s;if(/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(s)){try{norm=new URL(s,base).href;}catch(e){}}var hit=false;for(var i=0;i<map.length;i++){if(map[i][0]===s||map[i][0]===norm){resolved=map[i][1];hit=true;break;}}if(!hit){var bestLen=0,bestVal='',bestSuf='';for(var i=0;i<map.length;i++){var k=map[i][0];if(k.endsWith('/')){if(s.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=s.slice(k.length);}else if(norm.startsWith(k)&&k.length>bestLen){bestLen=k.length;bestVal=map[i][1];bestSuf=norm.slice(k.length);}}}if(bestLen>0){resolved=bestVal+bestSuf;hit=true;}}if(!hit&&typeof globalThis.__ks_resolve_import_map==='function'){var ks=globalThis.__ks_resolve_import_map(s);if(ks!==s)resolved=ks;}}if(!/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(resolved))throw new TypeError('Failed to resolve module specifier: '+s+' (requires an import map)');return new URL(resolved,base).href;};})";
+        const factory_fn = JS_Eval(ctx, factory_src.ptr, factory_src.len, "<import.meta.resolve>", 0);
+        if (!jsIsException(factory_fn)) {
+            let args: [1]JSValue = [url_val];
+            const resolve_fn = JS_Call(ctx, factory_fn, jsUndefined(), 1, @ptrCast(&args));
+            if (!jsIsException(resolve_fn)) {
+                * = JS_SetPropertyStr(ctx, meta_obj, "resolve", resolve_fn);
+            } else {
+                const exc2 = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc2);
+            }
+            JS_FreeValue(ctx, factory_fn);
+        } else {
+            const exc1 = JS_GetException(ctx);
+            JS_FreeValue(ctx, exc1);
+        }
+        JS_FreeValue(ctx, url_val);
+        JS_FreeValue(ctx, meta_obj);
+    }
+}
+
+@c fn sessionModuleNormalize(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8 {
+    if (module_name == null) return js_strdup(ctx, "");
+    const raw_name: []const u8 = std.mem.sliceTo(module_name, 0);
+    if (raw_name.len == 0) return js_strdup(ctx, module_name);
+
+    let session_ptr: (*CdpPageSession)? = null;
+    if (opaque_ptr != null) {
+        session_ptr = @ptrCast(@alignCast(opaque_ptr.?));
+    }
+
+    let base_url: []const u8 = "";
+    if (module_base_name != null) {
+        const bn = std.mem.sliceTo(module_base_name, 0);
+        if (std.mem.indexOf(u8, bn, "://") != null) {
+            base_url = bn;
+        }
+    }
+    if (base_url.len == 0 && session_ptr != null) {
+        base_url = session_ptr.?.url;
+    }
+
+    let out_buf: [1024]u8 = undefined;
+    if (session_ptr != null) {
+        const res = resolveModuleSpecifier(session_ptr.?, raw_name, base_url, true, &out_buf);
+        if (res.len < out_buf.len) {
+            out_buf[res.len] = 0;
+            return js_strdup(ctx, @ptrCast(&out_buf));
+        }
+    } else if (!isBareSpecifier(raw_name)) {
+        const res = resolveUrlWithDots(base_url, raw_name, &out_buf);
+        if (res.len < out_buf.len) {
+            out_buf[res.len] = 0;
+            return js_strdup(ctx, @ptrCast(&out_buf));
+        }
+    }
+    return js_strdup(ctx, module_name);
+}
+
 @c fn sessionModuleLoader(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)? {
     if (module_name == null) return null;
     const raw_name: []const u8 = std.mem.sliceTo(module_name, 0);
@@ -307,20 +536,48 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
         session_ptr = @ptrCast(@alignCast(opaque_ptr.?));
     }
 
+    if (isBareSpecifier(raw_name)) {
+        * = JS_ThrowTypeError(ctx, "Failed to resolve module specifier \"%s\". Relative references must start with either \"/\", \"./\", or \"../\" (requires an import map).", module_name);
+        return null;
+    }
+
+    if (isAssetImportUrl(raw_name)) {
+        const stub = "export default {};";
+        const stub_eval = JS_Eval(ctx, stub.ptr, stub.len, module_name, 33);
+        if (jsIsException(stub_eval)) {
+            const exc_s = JS_GetException(ctx);
+            JS_FreeValue(ctx, exc_s);
+            return null;
+        }
+        const ptr_s = @as(usize, @intCast(stub_eval.u.uint64));
+        const ms: *JSModuleDef = @ptrFromInt(ptr_s);
+        JS_FreeValue(ctx, stub_eval);
+        setModuleImportMeta(ctx, ms, raw_name);
+        return ms;
+    }
+
     let resolved_url_buf: [512]u8 = undefined;
     let full_url: []const u8 = raw_name;
 
-    if (session_ptr != null && session_ptr.?.url.len > 0) {
-        if (std.mem.startsWith(u8, raw_name, "./")) {
-            const rel = raw_name[2..];
-            if (last_slash := std.mem.lastIndexOfScalar(u8, session_ptr.?.url, '/')) {
-                const base = session_ptr.?.url[0..last_slash];
-                full_url = std.fmt.bufPrint(&resolved_url_buf, "{s}/{s}", .{ base, rel }) catch raw_name;
-            }
-        } else if (!std.mem.containsAtLeast(u8, raw_name, 1, "://") && !std.mem.startsWith(u8, raw_name, "/")) {
-            if (last_slash := std.mem.lastIndexOfScalar(u8, session_ptr.?.url, '/')) {
-                const base = session_ptr.?.url[0..last_slash];
-                full_url = std.fmt.bufPrint(&resolved_url_buf, "{s}/{s}", .{ base, raw_name }) catch raw_name;
+    if (session_ptr != null && session_ptr.?.url.len > 0 && isBareSpecifier(raw_name) == false && std.mem.indexOf(u8, raw_name, "://") == null) {
+        full_url = resolveUrlWithDots(session_ptr.?.url, raw_name, &resolved_url_buf);
+    }
+
+    // Check inline module cache first (e.g. __kitesurf_inline_0.js)
+    if (session_ptr != null) {
+        let im_i: usize = 0;
+        while (im_i < session_ptr.?.inline_modules.items.len) : (im_i += 1) {
+            const item = &session_ptr.?.inline_modules.items[im_i];
+            if (std.mem.eql(u8, item.url, full_url) || std.mem.eql(u8, item.url, raw_name)) {
+                const eval_im = JS_Eval(ctx, item.code.ptr, item.code.len, module_name, 33);
+                if (jsIsException(eval_im)) {
+                    return null;
+                }
+                const ptr_im = @as(usize, @intCast(eval_im.u.uint64));
+                const m_im: *JSModuleDef = @ptrFromInt(ptr_im);
+                JS_FreeValue(ctx, eval_im);
+                setModuleImportMeta(ctx, m_im, item.url);
+                return m_im;
             }
         }
     }
@@ -355,6 +612,7 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
     }
 
     if (module_code == null) {
+        * = JS_ThrowTypeError(ctx, "Failed to load module \"%s\"", module_name);
         return null;
     }
 
@@ -364,38 +622,12 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
     }
     const eval_val = JS_Eval(ctx, code.ptr, code.len, module_name, 33);
     if (jsIsException(eval_val)) {
-        const exc = JS_GetException(ctx);
-        JS_FreeValue(ctx, exc);
         return null;
     }
     const ptr_val = @as(usize, @intCast(eval_val.u.uint64));
     const m: *JSModuleDef = @ptrFromInt(ptr_val);
     JS_FreeValue(ctx, eval_val);
-
-    const meta_obj = JS_GetImportMeta(ctx, m);
-    if (!jsIsException(meta_obj)) {
-        const url_val = JS_NewStringLen(ctx, full_url.ptr, full_url.len);
-        * = JS_SetPropertyStr(ctx, meta_obj, "url", JS_DupValue(ctx, url_val));
-        const factory_src = "(function(base){return function resolve(s){s=String(s);if(!/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(s))throw new TypeError('Failed to resolve module specifier: '+s);return new URL(s,base).href;};})";
-        const factory_fn = JS_Eval(ctx, factory_src.ptr, factory_src.len, "<import.meta.resolve>", 0);
-        if (!jsIsException(factory_fn)) {
-            let args: [1]JSValue = [url_val];
-            const resolve_fn = JS_Call(ctx, factory_fn, jsUndefined(), 1, @ptrCast(&args));
-            if (!jsIsException(resolve_fn)) {
-                * = JS_SetPropertyStr(ctx, meta_obj, "resolve", resolve_fn);
-            } else {
-                const exc2 = JS_GetException(ctx);
-                JS_FreeValue(ctx, exc2);
-            }
-            JS_FreeValue(ctx, factory_fn);
-        } else {
-            const exc1 = JS_GetException(ctx);
-            JS_FreeValue(ctx, exc1);
-        }
-        JS_FreeValue(ctx, url_val);
-        JS_FreeValue(ctx, meta_obj);
-    }
-
+    setModuleImportMeta(ctx, m, full_url);
     return m;
 }
 
@@ -435,6 +667,9 @@ pub struct CdpPageSession {
     has_document: bool = false,
     raw_html: []const u8 = "",
     paint_prepares: u64 = 0,
+    import_map_entries: std.ArrayListUnmanaged(ImportMapEntry) = .empty,
+    inline_modules: std.ArrayListUnmanaged(InlineModuleEntry) = .empty,
+    resolved_modules: std.ArrayListUnmanaged(ResolvedModuleEntry) = .empty,
 
     // Emulation & Viewport overrides
     viewport_width: f32 = 1280.0,
@@ -615,9 +850,197 @@ pub struct CdpPageSession {
         ptr.scroll_x = 0.0;
         ptr.scroll_y = 0.0;
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
-        ptr.rt.setModuleLoader(sessionModuleLoader, @ptrCast(ptr));
+        JS_SetModuleLoaderFunc(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(ptr));
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
+    }
+
+    pub fn clearModuleState(*_) {
+        const alloc = std.heap.c_allocator;
+        let i: usize = 0;
+        while (i < _.import_map_entries.items.len) : (i += 1) {
+            alloc.free(_.import_map_entries.items[i].key);
+            alloc.free(_.import_map_entries.items[i].val);
+        }
+        _.import_map_entries.deinit(alloc);
+        _.import_map_entries = .empty;
+
+        let j: usize = 0;
+        while (j < _.inline_modules.items.len) : (j += 1) {
+            alloc.free(_.inline_modules.items[j].url);
+            alloc.free(_.inline_modules.items[j].code);
+        }
+        _.inline_modules.deinit(alloc);
+        _.inline_modules = .empty;
+
+        let k: usize = 0;
+        while (k < _.resolved_modules.items.len) : (k += 1) {
+            alloc.free(_.resolved_modules.items[k].url);
+        }
+        _.resolved_modules.deinit(alloc);
+        _.resolved_modules = .empty;
+    }
+
+    pub fn isModuleResolved(*_, url: []const u8): bool {
+        let i: usize = 0;
+        while (i < _.resolved_modules.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.resolved_modules.items[i].url, url)) return true;
+        }
+        return false;
+    }
+
+    pub fn markModuleResolved(*_, url: []const u8) {
+        if (url.len == 0 || _.isModuleResolved(url)) return;
+        const dup = std.heap.c_allocator.dupe(u8, url) catch return;
+        _.resolved_modules.append(std.heap.c_allocator, ResolvedModuleEntry{ url: dup }) catch {
+            std.heap.c_allocator.free(dup);
+        };
+    }
+
+    pub fn addImportMapEntry(*_, key: []const u8, val: []const u8) {
+        if (_.isModuleResolved(key)) return;
+        const alloc = std.heap.c_allocator;
+        let i: usize = 0;
+        while (i < _.import_map_entries.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.import_map_entries.items[i].key, key)) {
+                const new_val = alloc.dupe(u8, val) catch return;
+                alloc.free(_.import_map_entries.items[i].val);
+                _.import_map_entries.items[i].val = new_val;
+                return;
+            }
+        }
+        const dk = alloc.dupe(u8, key) catch return;
+        const dv = alloc.dupe(u8, val) catch {
+            alloc.free(dk);
+            return;
+        };
+        _.import_map_entries.append(alloc, ImportMapEntry{ key: dk, val: dv }) catch {
+            alloc.free(dk);
+            alloc.free(dv);
+        };
+    }
+
+    pub fn syncImportMapToJs(*_) {
+        let js_buf = std.ArrayListUnmanaged(u8).empty;
+        defer js_buf.deinit(std.heap.c_allocator);
+        const alloc = std.heap.c_allocator;
+        js_buf.appendSlice(alloc, "globalThis.__capsurf_im_entries=[") catch return;
+        let i: usize = 0;
+        while (i < _.import_map_entries.items.len) : (i += 1) {
+            if (i > 0) js_buf.append(alloc, ',') catch return;
+            let k_buf: [4096]u8 = undefined;
+            let v_buf: [4096]u8 = undefined;
+            const ek = escapeJsonString(_.import_map_entries.items[i].key, &k_buf);
+            const ev = escapeJsonString(_.import_map_entries.items[i].val, &v_buf);
+            js_buf.appendSlice(alloc, "[\"") catch return;
+            js_buf.appendSlice(alloc, ek) catch return;
+            js_buf.appendSlice(alloc, "\",\"") catch return;
+            js_buf.appendSlice(alloc, ev) catch return;
+            js_buf.appendSlice(alloc, "\"]") catch return;
+        }
+        js_buf.appendSlice(alloc, "];") catch return;
+        const v = _.ctx.eval(js_buf.items);
+        _.ctx.freeValue(v);
+    }
+
+    pub fn processImportMapScript(*_, raw_json: []const u8, base_url: []const u8) {
+        let raw_esc = std.heap.c_allocator.alloc(u8, raw_json.len * 2 + 16) catch return;
+        defer std.heap.c_allocator.free(raw_esc);
+        const esc_json = escapeJsonString(raw_json, raw_esc);
+        let base_buf: [2048]u8 = undefined;
+        const esc_base = escapeJsonString(base_url, &base_buf);
+
+        let script_buf = std.heap.c_allocator.alloc(u8, esc_json.len + esc_base.len + 1024) catch return;
+        defer std.heap.c_allocator.free(script_buf);
+        const js = std.fmt.bufPrint(
+            script_buf,
+            "(function(){{try{{var obj=JSON.parse(\"{s}\");if(!obj||typeof obj!=='object'||Array.isArray(obj))return '';var im=obj.imports;if(!im||typeof im!=='object'||Array.isArray(im))return '';var ks=Object.keys(im);var out=[];for(var i=0;i<ks.length;i++){{var k=ks[i];if(k.length>2048)return '';var v=im[k];if(typeof v!=='string')continue;if(v.length>2048)return '';var nk=k;if(/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(k)){{try{{nk=new URL(k,\"{s}\").href;}}catch(e){{continue;}}}}var nv=v;try{{nv=new URL(v,\"{s}\").href;}}catch(e){{continue;}}out.push(nk+'\\n'+nv);}}return out.join('\\n');}}catch(e){{return '';}}}})()",
+            .{ esc_json, esc_base, esc_base },
+        ) catch return;
+
+        const res_v = _.ctx.eval(js);
+        if (!jsIsException(res_v)) {
+            const res_s = _.ctx.toCString(res_v);
+            if (res_s.len > 0) {
+                let it = std.mem.splitScalar(u8, res_s, '\n');
+                while (k_line := it.next()) {
+                    if (v_line := it.next()) {
+                        if (k_line.len > 0 && v_line.len > 0) {
+                            _.addImportMapEntry(k_line, v_line);
+                        }
+                    }
+                }
+                _.syncImportMapToJs();
+            }
+        } else {
+            const exc = _.ctx.getException();
+            _.ctx.freeValue(exc);
+        }
+        _.ctx.freeValue(res_v);
+    }
+
+    pub fn executeModuleScript(*_, code: []const u8, mod_url: []const u8) {
+        let url_buf: [1024]u8 = [0; 1024];
+        const ulen = @min(mod_url.len, url_buf.len - 1);
+        @memcpy(url_buf[0..ulen], mod_url[0..ulen]);
+        url_buf[ulen] = 0;
+
+        let code_z = std.heap.c_allocator.alloc(u8, code.len + 1) catch return;
+        defer std.heap.c_allocator.free(code_z);
+        @memcpy(code_z[0..code.len], code);
+        code_z[code.len] = 0;
+
+        const clr_mod = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
+        _.ctx.freeValue(clr_mod);
+
+        _.rt.resetReductions();
+        const compiled = JS_Eval(_.ctx.raw_ctx, code_z.ptr, code.len, @ptrCast(&url_buf), 33);
+        if (jsIsException(compiled)) {
+            const exc = _.ctx.getException();
+            let exc_str_buf: [256]u8 = undefined;
+            const exc_len = _.formatCdpException(exc, &exc_str_buf);
+            std.debug.print("[MODULE_COMPILE_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
+            _.ctx.freeValue(exc);
+        } else {
+            const ptr_val = @as(usize, @intCast(compiled.u.uint64));
+            const m: *JSModuleDef = @ptrFromInt(ptr_val);
+            setModuleImportMeta(_.ctx.raw_ctx, m, mod_url);
+            const exec_res = JS_EvalFunction(_.ctx.raw_ctx, compiled);
+            if (jsIsException(exec_res)) {
+                const exc2 = _.ctx.getException();
+                let exc_str_buf2: [256]u8 = undefined;
+                const exc_len2 = _.formatCdpException(exc2, &exc_str_buf2);
+                std.debug.print("[MODULE_EXEC_ERR] {s}\n", .{exc_str_buf2[0..exc_len2]});
+                _.ctx.freeValue(exc2);
+            }
+            _.ctx.freeValue(exec_res);
+        }
+        _.ctx.drainJobs();
+    }
+
+    pub fn executeClassicScript(*_, code: []const u8, script_idx: usize) {
+        let cs_buf: [256]u8 = undefined;
+        const cs_js = std.fmt.bufPrint(
+            &cs_buf,
+            "(function(){{if(typeof document!=='undefined'){{var ss=document.querySelectorAll?document.querySelectorAll('script'):[];document._currentScript=ss[{d}]||null;}}}})()",
+            .{script_idx},
+        ) catch "";
+        if (cs_js.len > 0) {
+            const cs_v = _.ctx.eval(cs_js);
+            _.ctx.freeValue(cs_v);
+        }
+        const js_res = _.ctx.eval(code);
+        if (jsIsException(js_res)) {
+            const exc = _.ctx.getException();
+            let exc_str_buf: [256]u8 = undefined;
+            const exc_len = _.formatCdpException(exc, &exc_str_buf);
+            std.debug.print("[INLINE_SCRIPT_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
+            _.ctx.freeValue(exc);
+        }
+        _.ctx.freeValue(js_res);
+        _.ctx.drainJobs();
+        const clr_cs = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
+        _.ctx.freeValue(clr_cs);
     }
 
     pub fn deinit(*_) {
@@ -657,6 +1080,7 @@ pub struct CdpPageSession {
         _.known_dom_nodes.deinit(std.heap.c_allocator);
         _.known_dom_nodes = std.ArrayListUnmanaged(u8).empty;
         _.cookie_jar.deinit();
+        _.clearModuleState();
         _.ctx.deinit();
         _.rt.deinit();
         _.layout.deinit();
@@ -715,13 +1139,24 @@ pub struct CdpPageSession {
             _.ctx.freeValue(ret_v);
         }
         _.webmcp_invocation_count = 0;
+        let saved_unload_consoles: [16]ConsoleRecord = [ConsoleRecord{}; 16];
+        let saved_unload_console_count: usize = 0;
         if (_.has_document) {
             const unload_res = _.ctx.eval(
-                "(function(){try{var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){var e1=typeof PageTransitionEvent==='function'?new PageTransitionEvent('pagehide',{persisted:false}):new Event('pagehide');t.dispatchEvent(e1);var e2=new Event('unload');t.dispatchEvent(e2);}if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))delete Object.prototype.then;}catch(e){}})()",
+                "(function(){try{var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){var e0=new Event('beforeunload',{cancelable:true});t.dispatchEvent(e0);var e1=typeof PageTransitionEvent==='function'?new PageTransitionEvent('pagehide',{persisted:false}):new Event('pagehide');t.dispatchEvent(e1);var e2=new Event('unload');t.dispatchEvent(e2);}if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))delete Object.prototype.then;}catch(e){}})()",
             );
             _.ctx.freeValue(unload_res);
             _.ctx.drainJobs();
+            if (old_dom := _.dom_ctx) {
+                const cnt = @min(old_dom.console_count, saved_unload_consoles.len);
+                let ci: usize = 0;
+                while (ci < cnt) : (ci += 1) {
+                    saved_unload_consoles[ci] = old_dom.console_records[ci];
+                }
+                saved_unload_console_count = cnt;
+            }
         }
+        _.clearModuleState();
         _.onBeforeNavigate();
         _.title = "";
         _.doc.deinit();
@@ -852,10 +1287,10 @@ pub struct CdpPageSession {
             _.ctx.deinit();
             _.rt.runGC();
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
-            _.rt.setModuleLoader(sessionModuleLoader, @ptrCast(_));
+            JS_SetModuleLoaderFunc(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(_));
         } else {
             _.rt.runGC();
-            _.rt.setModuleLoader(sessionModuleLoader, @ptrCast(_));
+            JS_SetModuleLoaderFunc(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, @ptrCast(_));
         }
         const active_jar = _.getActiveCookieJar();
         const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;
@@ -1113,6 +1548,13 @@ pub struct CdpPageSession {
             }
         }
 
+        if (saved_unload_console_count > 0) {
+            let sci: usize = 0;
+            while (sci < saved_unload_console_count && m.console_count < m.console_records.len) : (sci += 1) {
+                m.console_records[m.console_count] = saved_unload_consoles[sci];
+                m.console_count += 1;
+            }
+        }
         _.dom_ctx = m;
         _.url = nav_url;
         _.referrer = nav_referrer;
@@ -1413,8 +1855,27 @@ pub struct CdpPageSession {
 
         // Execute inline & external <script> tags in document order (with CSP/SRI/nosniff/redirect gate)
         const initial_node_count = _.doc.nodes.items.len;
+        let defer_scripts = std.ArrayListUnmanaged(PendingScriptItem).empty;
+        defer {
+            let di: usize = 0;
+            while (di < defer_scripts.items.len) : (di += 1) {
+                std.heap.c_allocator.free(defer_scripts.items[di].code);
+                std.heap.c_allocator.free(defer_scripts.items[di].url);
+            }
+            defer_scripts.deinit(std.heap.c_allocator);
+        }
+        let async_scripts = std.ArrayListUnmanaged(PendingScriptItem).empty;
+        defer {
+            let ai: usize = 0;
+            while (ai < async_scripts.items.len) : (ai += 1) {
+                std.heap.c_allocator.free(async_scripts.items[ai].code);
+                std.heap.c_allocator.free(async_scripts.items[ai].url);
+            }
+            async_scripts.deinit(std.heap.c_allocator);
+        }
         let nid: usize = 1;
         let script_idx: usize = 0;
+        let inline_module_idx: usize = 0;
         while (nid < initial_node_count) : (nid += 1) {
             const n = &_.doc.nodes.items[nid];
             if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
@@ -1423,9 +1884,12 @@ pub struct CdpPageSession {
                 const has_nomodule = n.hasAttribute("nomodule");
                 const type_attr = n.getAttribute("type") ?? "";
                 const is_module = std.ascii.eqlIgnoreCase(type_attr, "module");
-                if (has_nomodule && !is_module) {
+                const is_importmap = std.ascii.eqlIgnoreCase(type_attr, "importmap");
+                if (has_nomodule && !is_module && !is_importmap) {
                     continue;
                 }
+                const has_defer = n.hasAttribute("defer");
+                const has_async = n.hasAttribute("async");
                 const nonce_attr = n.getAttribute("nonce") ?? "";
                 const integrity_attr = n.getAttribute("integrity") ?? "";
                 const has_crossorigin = n.hasAttribute("crossorigin");
@@ -1434,6 +1898,8 @@ pub struct CdpPageSession {
                 defer _.allocator.free(code_buf);
                 let code_len: usize = 0;
                 let has_src = false;
+                let script_url_buf: [1024]u8 = [0; 1024];
+                let script_url: []const u8 = script_base_url;
 
                 if (src_attr := n.getAttribute("src")) {
                     if (src_attr.len > 0) {
@@ -1481,6 +1947,9 @@ pub struct CdpPageSession {
                             cur_len = next_len;
                         }
                         const cur_url = cur_buf[0..cur_len];
+                        const su_len = @min(cur_url.len, script_url_buf.len - 1);
+                        @memcpy(script_url_buf[0..su_len], cur_url[0..su_len]);
+                        script_url = script_url_buf[0..su_len];
 
                         if (!blocked && isScriptNosniffBlocked(cur_url)) {
                             blocked = true;
@@ -1540,53 +2009,94 @@ pub struct CdpPageSession {
                         }
                     }
                 }
+                if (is_importmap) {
+                    if (!has_src && code_len > 0) {
+                        _.processImportMapScript(code_buf[0..code_len], script_base_url);
+                    }
+                    continue;
+                }
                 if (code_len > 0) {
                     if (code_len < code_buf.len) {
                         code_buf[code_len] = 0;
                     }
-                    let wrapped_code: []const u8 = code_buf[0..code_len];
-                    let mod_alloc: ([]u8)? = null;
-                    defer if (mod_alloc != null) _.allocator.free(mod_alloc.?);
+                    if (is_module && !has_src) {
+                        let rel_name_buf: [64]u8 = undefined;
+                        const rel_name = std.fmt.bufPrint(&rel_name_buf, "__kitesurf_inline_{d}.js", .{inline_module_idx}) catch "__kitesurf_inline_0.js";
+                        inline_module_idx += 1;
+                        let inline_url_buf: [1024]u8 = undefined;
+                        const inline_url = resolveUrlWithDots(script_base_url, rel_name, &inline_url_buf);
+                        const iu_len = @min(inline_url.len, script_url_buf.len - 1);
+                        @memcpy(script_url_buf[0..iu_len], inline_url[0..iu_len]);
+                        script_url = script_url_buf[0..iu_len];
+
+                        const alloc = std.heap.c_allocator;
+                        const dup_u = alloc.dupe(u8, script_url) catch "";
+                        const dup_c = alloc.dupe(u8, code_buf[0..code_len]) catch "";
+                        if (dup_u.len > 0 && dup_c.len > 0) {
+                            _.inline_modules.append(alloc, InlineModuleEntry{ url: dup_u, code: dup_c }) catch {
+                                alloc.free(dup_u);
+                                alloc.free(dup_c);
+                            };
+                        } else {
+                            if (dup_u.len > 0) alloc.free(dup_u);
+                            if (dup_c.len > 0) alloc.free(dup_c);
+                        }
+                    }
                     if (is_module) {
-                        const pre = "(async function(){\n";
-                        const post = "\n})()";
-                        const mb_opt = _.allocator.alloc(u8, pre.len + code_len + post.len + 1) catch null;
-                        if (mb_opt != null) {
-                            let mb = mb_opt.?;
-                            @memcpy(mb[0..pre.len], pre);
-                            @memcpy(mb[pre.len..pre.len + code_len], code_buf[0..code_len]);
-                            @memcpy(mb[pre.len + code_len..pre.len + code_len + post.len], post);
-                            mb[pre.len + code_len + post.len] = 0;
-                            wrapped_code = mb[0 .. pre.len + code_len + post.len];
-                            mod_alloc = mb;
+                        _.markModuleResolved(script_url);
+                    }
+                    if (has_async && (has_src || is_module)) {
+                        const alloc = std.heap.c_allocator;
+                        const dc = alloc.dupe(u8, code_buf[0..code_len]) catch "";
+                        const du = alloc.dupe(u8, script_url) catch "";
+                        if (dc.len > 0) {
+                            async_scripts.append(alloc, PendingScriptItem{
+                                code: dc,
+                                url: du,
+                                script_idx: cur_script_idx,
+                                is_module: is_module,
+                                has_src: has_src,
+                            }) catch {
+                                alloc.free(dc);
+                                if (du.len > 0) alloc.free(du);
+                            };
+                        } else if (du.len > 0) {
+                            alloc.free(du);
                         }
-                        const clr_mod = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
-                        _.ctx.freeValue(clr_mod);
+                    } else if (has_defer && has_src && !is_module) {
+                        const alloc = std.heap.c_allocator;
+                        const dc = alloc.dupe(u8, code_buf[0..code_len]) catch "";
+                        const du = alloc.dupe(u8, script_url) catch "";
+                        if (dc.len > 0) {
+                            defer_scripts.append(alloc, PendingScriptItem{
+                                code: dc,
+                                url: du,
+                                script_idx: cur_script_idx,
+                                is_module: is_module,
+                                has_src: has_src,
+                            }) catch {
+                                alloc.free(dc);
+                                if (du.len > 0) alloc.free(du);
+                            };
+                        } else if (du.len > 0) {
+                            alloc.free(du);
+                        }
+                    } else if (is_module) {
+                        _.executeModuleScript(code_buf[0..code_len], script_url);
                     } else {
-                        let cs_buf: [256]u8 = undefined;
-                        const cs_js = std.fmt.bufPrint(
-                            &cs_buf,
-                            "(function(){{if(typeof document!=='undefined'){{var ss=document.querySelectorAll?document.querySelectorAll('script'):[];document._currentScript=ss[{d}]||null;}}}})()",
-                            .{cur_script_idx},
-                        ) catch "";
-                        if (cs_js.len > 0) {
-                            const cs_v = _.ctx.eval(cs_js);
-                            _.ctx.freeValue(cs_v);
-                        }
+                        _.executeClassicScript(code_buf[0..code_len], cur_script_idx);
                     }
-                    const js_res = _.ctx.eval(wrapped_code);
-                    if (jsIsException(js_res)) {
-                        const exc = _.ctx.getException();
-                        let exc_str_buf: [256]u8 = undefined;
-                        const exc_len = _.formatCdpException(exc, &exc_str_buf);
-                        std.debug.print("[INLINE_SCRIPT_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
-                        _.ctx.freeValue(exc);
-                    }
-                    _.ctx.freeValue(js_res);
-                    _.ctx.drainJobs();
-                    const clr_cs = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
-                    _.ctx.freeValue(clr_cs);
                 }
+            }
+        }
+        // Execute defer scripts after parser-blocking scripts, before readystatechange:interactive
+        let d_idx: usize = 0;
+        while (d_idx < defer_scripts.items.len) : (d_idx += 1) {
+            const item = &defer_scripts.items[d_idx];
+            if (item.is_module) {
+                _.executeModuleScript(item.code, item.url);
+            } else {
+                _.executeClassicScript(item.code, item.script_idx);
             }
         }
         {
@@ -1621,9 +2131,29 @@ pub struct CdpPageSession {
             }
         }
 
-        // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, load on window)
-        const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
-        _.ctx.freeValue(lc_res);
+        // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, async scripts, load on window)
+        if (async_scripts.items.len > 0) {
+            const dcl_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){var ss=document.querySelectorAll?document.querySelectorAll('script'):[];for(var i=0;i<ss.length;i++)ss[i]._alreadyStarted=true;document._readyState='interactive';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));if(document.dispatchEvent)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:false}));}})()");
+            _.ctx.freeValue(dcl_res);
+            _.ctx.drainJobs();
+
+            let a_idx: usize = 0;
+            while (a_idx < async_scripts.items.len) : (a_idx += 1) {
+                const item = &async_scripts.items[a_idx];
+                if (item.is_module) {
+                    _.executeModuleScript(item.code, item.url);
+                } else {
+                    _.executeClassicScript(item.code, item.script_idx);
+                }
+            }
+
+            const load_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){document._readyState='complete';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));}var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){t.dispatchEvent(new Event('load',{bubbles:false,cancelable:false}));var ps=(typeof PageTransitionEvent==='function')?new PageTransitionEvent('pageshow',{bubbles:false,cancelable:false,persisted:false}):new Event('pageshow',{bubbles:false,cancelable:false});t.dispatchEvent(ps);}if(typeof document!=='undefined'&&document.querySelectorAll&&typeof globalThis.__capsurf_on_iframe_connected==='function'){var ifs=document.querySelectorAll('iframe');for(var i=0;i<ifs.length;i++){var f=ifs[i];var ld=f.getAttribute?String(f.getAttribute('loading')||'').toLowerCase():'';if(ld==='lazy'&&!f._lazyLoadTriggered){f._lazyLoadTriggered=true;globalThis.__capsurf_on_iframe_connected(f,{forceLazy:true});}}}if(typeof globalThis.__capsurf_initCssTransitionSnapshots==='function'){if(typeof setTimeout==='function')setTimeout(function(){try{globalThis.__capsurf_initCssTransitionSnapshots();}catch(e){}},0);else globalThis.__capsurf_initCssTransitionSnapshots();}})()");
+            _.ctx.freeValue(load_res);
+            _.ctx.drainJobs();
+        } else {
+            const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
+            _.ctx.freeValue(lc_res);
+        }
         if (_.webmcp_enabled) {
             const wm_scan = _.ctx.eval("(function(){if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.scanDecl();})()");
             _.ctx.freeValue(wm_scan);
