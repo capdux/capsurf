@@ -1628,6 +1628,9 @@
 ## Phase 152 `NamedNodeMap._sync` `Attr` 对象恒等复用方案 (`src/js/shim/collections.js`)
 1. **按名复用缓存实例**：`_sync()` 先保存 `prevByName = this._byName`，对同小写名属性直接原地更新已有 `Attr` 实例的 `_value`/`ownerElement`/`_namespaceURI` 等字段，并将已移除属性的原 `Attr.ownerElement` 置为 `null`，确保多次 `getNamedItem` 读取 `===` 恒等。
 
+## Phase 153 `querySelectorAll` 动态堆容量扩容方案 (`src/js/dom_binding.cp`)
+1. **突破 256 栈缓冲上限**：在 `js_document_query_selector_all` 按 `dom_ctx.doc.nodes.items.len` 申请堆缓冲并在 `defer` 自动释放，同时将 `sel_str` 释放置于独立块作用域内以规避 `E0202` 借用冲突。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。

@@ -2107,6 +2107,10 @@
 - **`src/js/shim/collections.js` & `src/js/runtime{,_source.cp}`**：
   - 在 `NamedNodeMap._sync` 按属性名复用已有 `Attr` 实例并清理已移除项 `ownerElement`，`attributes-live-namednodemap` (1/1)、`script-execution-probe` (1/1)、`tla-import-iife-fix-probe` (1/1) 及 `detached-owned-caches` 首项 PASS。
 
+## Phase 153: Dynamic `querySelectorAll` Buffer (Breaking 256-Node Limit to 1400+)
+- **`src/js/dom_binding.cp`**：
+  - 将 `js_document_query_selector_all` 的固定 `[256]NodeId` 升级为按 `nodes.items.len` 动态堆分配，DOM 白盒测试全绿且 `n=1400` `querySelectorAll` 达标。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。

@@ -1806,10 +1806,16 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const ptr = JS_GetOpaque(this_val, g_document_class_id);
     if (ptr == null) return JS_NewArray(ctx);
     const dom_ctx: *JsDomContext = @ptrCast(@alignCast(ptr.?));
-    const sel_str = jsToSlice(ctx, argv[0]);
-    defer std.heap.page_allocator.free(sel_str);
-    let matched_ids: [256]NodeId = [@as(NodeId, 0); 256];
-    const matched_count = Matcher.querySelectorAll(dom_ctx.doc, sel_str, &matched_ids);
+    const max_cap = dom_ctx.doc.nodes.items.len;
+    if (max_cap == 0) return JS_NewArray(ctx);
+    const matched_ids = std.heap.page_allocator.alloc(NodeId, max_cap) catch return JS_NewArray(ctx);
+    defer std.heap.page_allocator.free(matched_ids);
+    let matched_count: usize = 0;
+    {
+        const sel_str = jsToSlice(ctx, argv[0]);
+        defer std.heap.page_allocator.free(sel_str);
+        matched_count = Matcher.querySelectorAll(dom_ctx.doc, sel_str, matched_ids);
+    }
     const arr = JS_NewArray(ctx);
     let i: u32 = 0;
     while (i < matched_count) : (i += 1) {

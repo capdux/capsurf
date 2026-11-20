@@ -4250,6 +4250,17 @@
   - `attributes-live-namednodemap` (**1/1**)、`script-execution-probe` (**1/1**)、`tla-import-iife-fix-probe` (**1/1**)：**3/3 PASS (25 expect() calls)**，外加 `detached-owned-caches` (`held node-owned objects`) **PASS**！
 - **清理旧子智能体**: 销毁 `37a4b2a8-8093-4412-86ef-ef2733687a95`。
 
+## [2026-11-20 23:44:30] Slot A (`635d72e4`) 1 分 10 秒精准定位 ES Module Integrity Pin & Import Attributes
+- 精准定位 `module-query-variant` & `modulepreload-integrity` (`session.cp:558-660,1930-2132,2024`, `session_hooks.cp:1112-1237` `<link rel="modulepreload" integrity>` 拒绝表)、以及 `module-registry` (`session.cp:1021-1058` `with { type: "json" }` import attributes)。
+- **清理旧子智能体**: 销毁 `635d72e4-5094-492c-af81-7b2187f59214`。
+
+## [2026-11-20 23:45:30] 动态堆分配突破 `querySelectorAll` 256 节点上限至 1400+ (Subagent a1554771 结单，Phase 153)
+- **`querySelectorAll` 动态容量扩容 (`src/js/dom_binding.cp:1809-1820`)**:
+  - 将栈定长 `[256]NodeId` 替换为按 `dom_ctx.doc.nodes.items.len` 动态堆分配（`page_allocator.alloc` + `defer free`），并收窄 `sel_str` 作用域消除 `E0202` 借用冲突。
+- **门禁与验证（`-m -d -o` 6.26s，port `19231`）**:
+  - `src/js/dom_binding.cp` 4 门禁全 0；`test_dom_api_extensions.cp` 与 `test_collections_reflect.cp` PASS；`n=1400` `querySelectorAll(".sr").length === 1400`（1232ms）。
+- **清理旧子智能体**: 销毁 `a1554771-6e3b-4ec8-bc2f-5bd638e46ba7`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
