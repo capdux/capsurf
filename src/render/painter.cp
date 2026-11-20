@@ -2633,6 +2633,7 @@ fn paintNodeRecursive(
             return;
         }
 
+        let is_placeholder = false;
         if (is_form_text) {
             if (lf := found_live_form) {
                 display_text = lf.value;
@@ -2653,9 +2654,17 @@ fn paintNodeRecursive(
                     tc = cn.next_sibling;
                 }
             }
+            if (display_text.len == 0) {
+                if (ph := node.getAttribute("placeholder")) {
+                    if (ph.len > 0) {
+                        display_text = ph;
+                        is_placeholder = true;
+                    }
+                }
+            }
         }
 
-        if (is_form_text && display_text.len > 0) {
+        if (is_form_text && display_text.len > 0 && !is_placeholder) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
             const bdr_l = paint_style.border_left_width;
@@ -2683,7 +2692,8 @@ fn paintNodeRecursive(
         if (display_text.len > 0) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
-            canvas.drawTextClipped(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color, active_clip);
+            const draw_color = if (is_placeholder) (if (style.has_placeholder_color) style.placeholder_color else CssColor.rgb(117, 117, 117)) else paint_style.text_color;
+            canvas.drawTextClipped(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, draw_color, active_clip);
         }
 
         if (style.has_before_content && style.before_content_len > 0 && paint_style.text_color.a > 0) {

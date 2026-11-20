@@ -128,48 +128,60 @@ function performFormSubmission(form, submitter) {
     }
   }
 
-  if (method === "get") {
-    const controls = collectFormControls(form);
-    const queryParts = [];
-    for (let i = 0; i < controls.length; i++) {
-      const c = controls[i];
-      if (c.disabled || (typeof c.hasAttribute === "function" && c.hasAttribute("disabled"))) {
-        continue;
-      }
-      const name = c.name || (typeof c.getAttribute === "function" ? c.getAttribute("name") : "");
-      if (!name) continue;
+  const controls = collectFormControls(form);
+  const queryParts = [];
+  for (let i = 0; i < controls.length; i++) {
+    const c = controls[i];
+    if (c.disabled || (typeof c.hasAttribute === "function" && c.hasAttribute("disabled"))) {
+      continue;
+    }
+    const name = c.name || (typeof c.getAttribute === "function" ? c.getAttribute("name") : "");
+    if (!name) continue;
 
-      const tag = (c.tagName || "").toLowerCase();
-      const type = (c.type || (typeof c.getAttribute === "function" ? c.getAttribute("type") : "") || "").toLowerCase();
+    const tag = (c.tagName || "").toLowerCase();
+    const type = (c.type || (typeof c.getAttribute === "function" ? c.getAttribute("type") : "") || "").toLowerCase();
 
-      // For buttons and submit inputs: only include if it is the submitter
-      if (tag === "button" || type === "submit" || type === "image") {
-        if (c !== submitter) continue;
-      }
-
-      // Skip non-submitting input types
-      if (type === "button" || type === "reset") {
-        continue;
-      }
-
-      // Checkable inputs: only include if checked
-      if (type === "checkbox" || type === "radio") {
-        if (!c.checked) continue;
-      }
-
-      let val = c.value !== undefined ? String(c.value) : "";
-      if ((type === "checkbox" || type === "radio") && !val && (typeof c.hasAttribute === "function" && !c.hasAttribute("value"))) {
-        val = "on";
-      }
-      queryParts.push(encodeURIComponent(name) + "=" + encodeURIComponent(val));
+    // For buttons and submit inputs: only include if it is the submitter
+    if (tag === "button" || type === "submit" || type === "image") {
+      if (c !== submitter) continue;
     }
 
-    const queryString = queryParts.join("&");
+    // Skip non-submitting input types
+    if (type === "button" || type === "reset") {
+      continue;
+    }
+
+    // Checkable inputs: only include if checked
+    if (type === "checkbox" || type === "radio") {
+      if (!c.checked) continue;
+    }
+
+    let val = c.value !== undefined ? String(c.value) : "";
+    if ((type === "checkbox" || type === "radio") && !val && (typeof c.hasAttribute === "function" && !c.hasAttribute("value"))) {
+      val = "on";
+    }
+    queryParts.push(encodeURIComponent(name) + "=" + encodeURIComponent(val));
+  }
+
+  const encodedParams = queryParts.join("&");
+  if (method === "get") {
     const baseUrl = targetUrl.split("?")[0].split("#")[0];
-    const finalUrl = queryString ? (baseUrl + "?" + queryString) : baseUrl;
+    const finalUrl = encodedParams ? (baseUrl + "?" + encodedParams) : baseUrl;
+    if (typeof globalThis !== "undefined") {
+      delete globalThis.__capsurf_pending_navigation_post;
+    }
     navigateTo(finalUrl);
   } else if (method === "post") {
-    navigateTo(targetUrl.split("#")[0]);
+    const postUrl = targetUrl.split("#")[0];
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_pending_navigation_post = {
+        url: postUrl,
+        method: "POST",
+        body: encodedParams,
+        contentType: "application/x-www-form-urlencoded",
+      };
+    }
+    navigateTo(postUrl);
   }
 }
 

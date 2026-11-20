@@ -3880,3 +3880,24 @@
   - 全部 4 个 `.cp` 文件 4 门禁全 0；
   - `light-dark-color-scheme` (1/1)、`link-media-scope` (1/1)、`offset-geometry` (1/1)、`opaque-image-render` (6/6)：**9/9 PASS**！`layout-resolve-pollers` 定位需 `Kitesurf.getMemoryStats` 补 `layout.{mutationResolves, animationResolves}`。
 - **清理旧子智能体**: 销毁 `cdb4e03e-6ab3-4ae3-a796-336cdc47d57d`。
+
+## [2026-11-20 20:30:20] `::placeholder` 伪元素（含 `attr()`/`var()`）、CJK 全角 Range 测量与粗体整形闭环 (Subagent 2f143cac 结单，Phase 114)
+- **`::placeholder` 伪元素级联/绘制与字体宽度 (`cascade.cp`, `painter.cp`, `layout.cp`, `dom_binding.cp`)**:
+  - `cascade.cp`: 接入 `attr_evaluator.cp` 实装 `expandCssAttrInValue` 与 `findPlaceholderPseudo`（支持 `::placeholder`/`::-webkit-input-placeholder`/`::-moz-placeholder`、`var()` 与 `rgb(0, attr(data-g number, 0), 0)`）；
+  - `painter.cp`: 支持无值 `<input>`/`<textarea>` 绘制 placeholder（默认 `#757575`）；
+  - `layout.cp` & `dom_binding.cp`: `font-weight >= 600` 增加 `1.06` 粗体宽度系数，`Range.getClientRects` 区分 CJK 全角与半角字符宽度。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，4.10s Native）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `placeholder-pseudo-style` (2/2)、`script-inserted-text-fonts` (1/1)、`script-font-dir` (1/1)、`gateway-font-shaping` (1/2 + 字宽全过)：**5/7 PASS**！定位剩余 2 项仅需 `src/cdp/session.cp` `Kitesurf.getMemoryStats` 顶层 `wasmDeltaBytes` 与 `retainedImageCount`。
+- **清理旧子智能体**: 销毁 `2f143cac-bd8f-4572-9866-b7485f36ba0e`。
+
+## [2026-11-20 20:32:00] 8 大 Core JS/Events/Pointer/Named-Global 套件 21/21 全绿闭环 (Subagent 6a69ad24 结单，Phase 115)
+- **事件传播、独立消息队列、活体命名全局与原生函数形态 (`src/js/shim/`, `e2e/harness.ts`)**:
+  - `dispatch.js`: `load` 事件到达 `document` 后停止传播至 `window`；
+  - `constants.js` & `index.js`: `WeakMap` + `Function.prototype.toString` 补丁实现单行 Chrome `[native code]` 形态；
+  - `window.js` & `element.js` & `node-base.js`: 新增 `messageTaskQueue` 单宏任务调度、无 Proxy 原型的 `syncNamedGlobals()` 活体命名全局（支持 `iframe` 与 `id`）、完整 `pointerdown/move/up` + `setPointerCapture` + `mousedown` 焦点默认行为及 UTF-16 代理对删除；
+  - `form.js` & `harness.ts`: 补全表单 `POST` 提交与 `/__fixtures/form-echo` GET/POST 回显及自重载循环检测。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `load-event-propagation` (1/1)、`message-channel-task-queue` (1/1)、`mutation-observer-created-document` (2/2)、`no-set-immediate` (1/1)、`location-assign-navigates` (4/4)、`mousedown-focus-default-action` (4/4)、`named-global-live` (7/7)、`native-function-shape` (1/1)：**21/21 PASS (100%)**！
+- **清理旧子智能体**: 销毁 `6a69ad24-ad68-4ba0-a104-ffd86197d131`。

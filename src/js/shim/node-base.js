@@ -542,6 +542,9 @@ Node.prototype.appendChild = function (child) {
       global.__capsurf_on_iframe_connected(child);
     }
   }
+  if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
+    global.__capsurf_syncNamedGlobals();
+  }
 
   return child;
 };
@@ -627,6 +630,9 @@ Node.prototype.insertBefore = function (newChild, refChild) {
       global.__capsurf_on_iframe_connected(newChild);
     }
   }
+  if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
+    global.__capsurf_syncNamedGlobals();
+  }
 
   return newChild;
 };
@@ -672,6 +678,9 @@ Node.prototype.removeChild = function (child) {
 
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
+  }
+  if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
+    global.__capsurf_syncNamedGlobals();
   }
 
   return child;

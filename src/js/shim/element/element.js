@@ -908,41 +908,12 @@ function installElementExtensions(proto) {
     }
     if (key.toLowerCase() === "id") {
       this.id = val;
-      if (typeof val === "string" && val.length > 0 && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(val)) {
-        try {
-          const idVal = val;
-          const desc = typeof globalThis !== "undefined" ? Object.getOwnPropertyDescriptor(globalThis, idVal) : null;
-          if (!desc || desc.configurable) {
-            Object.defineProperty(globalThis, idVal, {
-              get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
-              set: function (v) {
-                Object.defineProperty(globalThis, idVal, {
-                  value: v,
-                  writable: true,
-                  enumerable: true,
-                  configurable: true,
-                });
-              },
-              configurable: true,
-              enumerable: true,
-            });
-            if (typeof window !== "undefined" && window !== globalThis) {
-              Object.defineProperty(window, idVal, {
-                get: function () { return typeof document !== "undefined" && document.getElementById ? document.getElementById(idVal) : null; },
-                set: function (v) {
-                  Object.defineProperty(window, idVal, {
-                    value: v,
-                    writable: true,
-                    enumerable: true,
-                    configurable: true,
-                  });
-                },
-                configurable: true,
-                enumerable: true,
-              });
-            }
-          }
-        } catch (e) {}
+      if (this.isConnected && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncNamedGlobals === "function") {
+        globalThis.__capsurf_syncNamedGlobals();
+      }
+    } else if (key.toLowerCase() === "name") {
+      if (this.isConnected && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncNamedGlobals === "function") {
+        globalThis.__capsurf_syncNamedGlobals();
       }
     } else if (key.toLowerCase() === "style") {
       this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
@@ -1049,6 +1020,9 @@ function installElementExtensions(proto) {
     }
     if (typeof notifyCustomElementAttributeChanged === "function") {
       notifyCustomElementAttributeChanged(this, key, oldVal, null, null);
+    }
+    if ((key === "id" || key === "name") && this.isConnected && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncNamedGlobals === "function") {
+      globalThis.__capsurf_syncNamedGlobals();
     }
   };
   markNative(proto.removeAttribute, "removeAttribute");
@@ -1386,9 +1360,35 @@ function installElementExtensions(proto) {
           }
         }
         if (this._attributesMap) this._attributesMap._sync();
+        if (this.isConnected && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncNamedGlobals === "function") {
+          globalThis.__capsurf_syncNamedGlobals();
+        }
       },
       configurable: true,
     });
+  }
+  const _pointerCaptures = new WeakMap();
+  if (!proto.setPointerCapture) {
+    proto.setPointerCapture = markNative(function (pointerId) {
+      let set = _pointerCaptures.get(this);
+      if (!set) {
+        set = new Set();
+        _pointerCaptures.set(this, set);
+      }
+      set.add(Number(pointerId));
+    }, "setPointerCapture");
+  }
+  if (!proto.releasePointerCapture) {
+    proto.releasePointerCapture = markNative(function (pointerId) {
+      const set = _pointerCaptures.get(this);
+      if (set) set.delete(Number(pointerId));
+    }, "releasePointerCapture");
+  }
+  if (!proto.hasPointerCapture) {
+    proto.hasPointerCapture = markNative(function (pointerId) {
+      const set = _pointerCaptures.get(this);
+      return Boolean(set && set.has(Number(pointerId)));
+    }, "hasPointerCapture");
   }
   const clsDesc = Object.getOwnPropertyDescriptor(proto, "className");
   const origClsGet = clsDesc ? clsDesc.get : null;

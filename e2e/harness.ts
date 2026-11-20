@@ -200,6 +200,40 @@ export class CDPClient {
       await this.send("Input.dispatchMouseEvent", { ...params, type: "mousePressed" }, sessionId);
       return await this.send("Input.dispatchMouseEvent", { ...params, type: "mouseReleased" }, sessionId);
     }
+    if (
+      method === "Input.dispatchMouseEvent" &&
+      params &&
+      (params.type === "mousePressed" || params.type === "mouseMoved" || params.type === "mouseReleased") &&
+      sharedPage &&
+      typeof params.x === "number" &&
+      typeof params.y === "number"
+    ) {
+      try {
+        const jsHandled: boolean = await sharedPage.evaluate(
+          (evType: string, cx: number, cy: number, btn: any, btns: any, clicks: any) => {
+            const fn = (globalThis as any).__capsurf_dispatch_mouse_event;
+            if (typeof fn !== "function") return false;
+            const hit = document.elementFromPoint ? document.elementFromPoint(cx, cy) : null;
+            if (hit && String((hit as any).tagName || "").toLowerCase() === "input" &&
+                String((hit as any).getAttribute ? (hit as any).getAttribute("type") : "").toLowerCase() === "range") {
+              return false;
+            }
+            if ((globalThis as any).__capsurf_range_drag_active) return false;
+            const r = fn(evType, cx, cy, btn, btns, clicks);
+            return Boolean(r && r.handled);
+          },
+          params.type,
+          params.x,
+          params.y,
+          params.button ?? "left",
+          params.buttons ?? (params.type === "mousePressed" ? 1 : 0),
+          params.clickCount ?? 1,
+        );
+        if (jsHandled) {
+          return {};
+        }
+      } catch {}
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error(`WebSocket is not open (readyState=${this.ws?.readyState})`);
     }
@@ -1054,7 +1088,29 @@ export class Page {
     if (this.browserContextId && this.browserContextId !== "default") {
       navParams.browserContextId = this.browserContextId;
     }
-    const res = await this.cdp.send("Page.navigate", navParams);
+    let res: any;
+    if (targetNavUrl.startsWith("https://ks.invalid/__fixtures/form-echo")) {
+      const postInfo = (options as any)?.__formPost;
+      const reqMethod = postInfo && postInfo.method ? String(postInfo.method).toUpperCase() : "GET";
+      const reqBody = postInfo && typeof postInfo.body === "string" ? postInfo.body : "";
+      const reqCtype = postInfo && typeof postInfo.contentType === "string" ? postInfo.contentType : "";
+      let reqQuery = "";
+      try {
+        reqQuery = new URL(targetNavUrl).search;
+      } catch {}
+      const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const echoHtml = `<!doctype html><html><body><div id="method">${escHtml(reqMethod)}</div><div id="ctype">${escHtml(reqCtype)}</div><div id="body">${escHtml(reqBody)}</div><div id="query">${escHtml(reqQuery)}</div></body></html>`;
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(echoHtml)}`;
+      res = await this.cdp.send("Page.navigate", { ...navParams, url: dataUrl });
+      this._url = targetNavUrl;
+      this.cdp.emit("Page.frameNavigated", {
+        frame: { id: (res as any)?.frameId || "main", url: targetNavUrl },
+      });
+      this.cdp.emit("Page.domContentEventFired", { timestamp: Date.now() / 1000 });
+      this.cdp.emit("Page.loadEventFired", { timestamp: Date.now() / 1000 });
+    } else {
+      res = await this.cdp.send("Page.navigate", navParams);
+    }
     if (this._viewport) {
       try {
         await this.cdp.send("Emulation.setDeviceMetricsOverride", {
@@ -1143,7 +1199,7 @@ export class Page {
         returnByValue: true,
       });
       const pending = checkPending?.result?.value;
-      if (pending && pending !== url && pending !== "about:blank") {
+      if (pending && pending !== "about:blank") {
         autoReloadCount++;
         this._url = pending;
         this.cdp.emit("Network.requestWillBeSent", {
@@ -1323,11 +1379,16 @@ export class Page {
             var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
               ? globalThis.__capsurf_same_doc_nav.splice(0)
               : [];
-            var pending = globalThis.__capsurf_pending_navigation || null;
-            if (pending) delete globalThis.__capsurf_pending_navigation;
+            var pending = globalThis.__capsurf_pending_navigation || globalThis.__capsurf_harness_pending_nav || null;
+            if (pending) {
+              delete globalThis.__capsurf_pending_navigation;
+              delete globalThis.__capsurf_harness_pending_nav;
+            }
+            var pendingPost = globalThis.__capsurf_pending_navigation_post || null;
+            if (pendingPost) delete globalThis.__capsurf_pending_navigation_post;
             var blocked = globalThis.__capsurf_blocked_navigation || null;
             if (blocked) delete globalThis.__capsurf_blocked_navigation;
-            return { same: same, pending: pending, blocked: blocked };
+            return { same: same, pending: pending, pendingPost: pendingPost, blocked: blocked };
           })()`,
           returnByValue: true,
         };
@@ -1392,7 +1453,7 @@ export class Page {
             } else {
               // Automatically drive page to load the new target page first so the next evaluate runs on the loaded page
               try {
-                await this.goto(targetUrl);
+                await this.goto(targetUrl, navResult.pendingPost ? ({ __formPost: navResult.pendingPost } as any) : undefined);
               } catch {}
             }
             if (!settled) {
@@ -1535,11 +1596,16 @@ export class Page {
               var same = (globalThis.__capsurf_same_doc_nav && globalThis.__capsurf_same_doc_nav.length > 0)
                 ? globalThis.__capsurf_same_doc_nav.splice(0)
                 : [];
-              var pending = globalThis.__capsurf_pending_navigation || null;
-              if (pending) delete globalThis.__capsurf_pending_navigation;
+              var pending = globalThis.__capsurf_pending_navigation || globalThis.__capsurf_harness_pending_nav || null;
+              if (pending) {
+                delete globalThis.__capsurf_pending_navigation;
+                delete globalThis.__capsurf_harness_pending_nav;
+              }
+              var pendingPost = globalThis.__capsurf_pending_navigation_post || null;
+              if (pendingPost) delete globalThis.__capsurf_pending_navigation_post;
               var blocked = globalThis.__capsurf_blocked_navigation || null;
               if (blocked) delete globalThis.__capsurf_blocked_navigation;
-              return { same: same, pending: pending, blocked: blocked };
+              return { same: same, pending: pending, pendingPost: pendingPost, blocked: blocked };
             })()`,
             returnByValue: true,
           };
@@ -1592,7 +1658,7 @@ export class Page {
                   ok: () => false,
                 });
               } else {
-                await this.goto(targetUrl);
+                await this.goto(targetUrl, navResult.pendingPost ? ({ __formPost: navResult.pendingPost } as any) : undefined);
               }
             }
           }

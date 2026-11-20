@@ -11,6 +11,7 @@ import { SelectorList, Matcher } from "./matcher.cp";
 import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
 import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue } from "./font_face.cp";
+import { parseAttrExpr, evaluateCssAttr } from "./attr_evaluator.cp";
 import {
     CssColor,
     CssUnit,
@@ -1776,6 +1777,8 @@ pub struct ResolvedPaintStyle {
     has_accent_color: bool = false;
     caret_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_caret_color: bool = false;
+    placeholder_color: CssColor = CssColor.rgb(117, 117, 117);
+    has_placeholder_color: bool = false;
     border_width: f32 = 0.0;
     border_radius: f32 = 0.0;
     border_tl_radius: f32 = 0.0;
@@ -1962,6 +1965,8 @@ pub struct ComputedStyle {
     has_accent_color: bool = false;
     caret_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_caret_color: bool = false;
+    placeholder_color: CssColor = CssColor.rgb(117, 117, 117);
+    has_placeholder_color: bool = false;
     has_fill_current_color: bool = false,
     has_fill_none: bool = false,
     opacity: f32 = 1.0;
@@ -4558,6 +4563,81 @@ pub struct Cascade {
         return null;
     }
 
+    static fn findPlaceholderPseudo(raw_sel: []const u8): usize? {
+        if (p := std.mem.indexOf(u8, raw_sel, "::placeholder")) return p;
+        if (p := std.mem.indexOf(u8, raw_sel, "::-webkit-input-placeholder")) return p;
+        if (p := std.mem.indexOf(u8, raw_sel, "::-moz-placeholder")) return p;
+        if (p := std.mem.indexOf(u8, raw_sel, ":-ms-input-placeholder")) return p;
+        // Case-insensitive fallback scan
+        let i: usize = 0;
+        while (i < raw_sel.len) : (i += 1) {
+            if (raw_sel[i] == ':') {
+                if (i + 13 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 13], "::placeholder")) return i;
+                if (i + 27 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 27], "::-webkit-input-placeholder")) return i;
+                if (i + 18 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 18], "::-moz-placeholder")) return i;
+                if (i + 22 <= raw_sel.len && std.ascii.eqlIgnoreCase(raw_sel[i .. i + 22], ":-ms-input-placeholder")) return i;
+            }
+        }
+        return null;
+    }
+
+    static fn expandCssAttrInValue(raw: []const u8, node: *const NodeData, out_buf: []u8): []const u8 {
+        let out_len: usize = 0;
+        let i: usize = 0;
+        let changed = false;
+        while (i < raw.len) {
+            let is_attr_start = false;
+            if (i + 5 <= raw.len && std.ascii.eqlIgnoreCase(raw[i .. i + 5], "attr(")) {
+                if (i == 0) {
+                    is_attr_start = true;
+                } else {
+                    const prev = raw[i - 1];
+                    const is_ident_prev = (prev >= 'a' && prev <= 'z') || (prev >= 'A' && prev <= 'Z') || (prev >= '0' && prev <= '9') || prev == '_' || prev == '-';
+                    if (!is_ident_prev) is_attr_start = true;
+                }
+            }
+            if (is_attr_start) {
+                let depth: usize = 0;
+                let j: usize = i + 4;
+                let close_pos: usize? = null;
+                while (j < raw.len) : (j += 1) {
+                    if (raw[j] == '(') {
+                        depth += 1;
+                    } else if (raw[j] == ')') {
+                        if (depth > 0) depth -= 1;
+                        if (depth == 0) {
+                            close_pos = j;
+                            break;
+                        }
+                    }
+                }
+                if (cp := close_pos) {
+                    const expr = raw[i .. cp + 1];
+                    const parsed = parseAttrExpr(expr);
+                    if (parsed.is_valid) {
+                        const attr_val = node.getAttribute(parsed.attr_name);
+                        const repl = evaluateCssAttr(expr, attr_val);
+                        const copy_len = @min(repl.len, out_buf.len - out_len);
+                        if (copy_len > 0) {
+                            @memcpy(out_buf[out_len .. out_len + copy_len], repl[0..copy_len]);
+                            out_len += copy_len;
+                        }
+                        changed = true;
+                        i = cp + 1;
+                        continue;
+                    }
+                }
+            }
+            if (out_len < out_buf.len) {
+                out_buf[out_len] = raw[i];
+                out_len += 1;
+            }
+            i += 1;
+        }
+        if (!changed) return raw;
+        return out_buf[0..out_len];
+    }
+
     /// Forwarder to ComputedStyle.applyProperty
     static fn applyProperty(style: *ComputedStyle, prop: *const CssProperty, weight: u64, root_font_px: f32) {
         style.applyProperty(prop, weight, root_font_px);
@@ -4608,6 +4688,8 @@ pub struct Cascade {
 
             // 1. Match stylesheet rules in source order
             const is_range_input = node.hasTag("input") && std.ascii.eqlIgnoreCase(node.getAttribute("type") ?? "", "range");
+            let placeholder_color_raw: []const u8 = "";
+            let placeholder_color_weight: u64 = 0;
             let r_i: usize = 0;
             while (r_i < sheet.rule_count) : (r_i += 1) {
                 const rule = &sheet.rules[r_i];
@@ -4616,6 +4698,8 @@ pub struct Cascade {
                 let matched_range_thumb = false;
                 let matched_before_pseudo = false;
                 let matched_after_pseudo = false;
+                let matched_placeholder_pseudo = false;
+                let placeholder_spec: u32 = 0;
                 let si_p: usize = 0;
                 while (si_p < rule.selectors.count) : (si_p += 1) {
                     const raw_sel = rule.selectors.selectors[si_p].raw;
@@ -4632,6 +4716,16 @@ pub struct Cascade {
                             if (Matcher.matchBestSpecificity(doc, node_id_u32, &base_list) != null) {
                                 matched_range_thumb = true;
                             }
+                        }
+                    } else if (pp := Cascade.findPlaceholderPseudo(raw_sel)) {
+                        const base_raw = std.mem.trim(u8, raw_sel[0..pp], " \t\r\n");
+                        const base_sel_str = if (base_raw.len > 0) base_raw else "*";
+                        const base_list = SelectorList.parse(base_sel_str);
+                        if (sp := Matcher.matchBestSpecificity(doc, node_id_u32, &base_list)) {
+                            if (!matched_placeholder_pseudo || sp > placeholder_spec) {
+                                placeholder_spec = sp;
+                            }
+                            matched_placeholder_pseudo = true;
                         }
                     } else if (bp := std.mem.indexOf(u8, raw_sel, "::before")) {
                         if (!matched_before_pseudo) {
@@ -4653,6 +4747,32 @@ pub struct Cascade {
                         }
                     } else if (std.mem.indexOf(u8, raw_sel, "::") == null) {
                         has_non_pseudo_sel = true;
+                    }
+                }
+                if (matched_placeholder_pseudo) {
+                    let pd_i: usize = 0;
+                    while (pd_i < rule.decl_count) : (pd_i += 1) {
+                        const decl = &rule.declarations[pd_i];
+                        if (std.ascii.eqlIgnoreCase(decl.name, "color")) {
+                            const w = Cascade.packWeight(false, false, placeholder_spec, source_order);
+                            source_order += 1;
+                            if (w >= placeholder_color_weight) {
+                                placeholder_color_weight = w;
+                                placeholder_color_raw = decl.value;
+                            }
+                        }
+                    }
+                    let pi_i: usize = 0;
+                    while (pi_i < rule.important_count) : (pi_i += 1) {
+                        const decl = &rule.important_declarations[pi_i];
+                        if (std.ascii.eqlIgnoreCase(decl.name, "color")) {
+                            const w = Cascade.packWeight(true, false, placeholder_spec, source_order);
+                            source_order += 1;
+                            if (w >= placeholder_color_weight) {
+                                placeholder_color_weight = w;
+                                placeholder_color_raw = decl.value;
+                            }
+                        }
                     }
                 }
                 if (matched_before_pseudo || matched_after_pseudo) {
@@ -4767,6 +4887,20 @@ pub struct Cascade {
                         const w = Cascade.packWeight(prop.important, true, 0, source_order);
                         source_order += 1;
                         style.applyProperty(&prop, w, root_font_px);
+                    }
+                }
+            }
+
+            if (placeholder_color_raw.len > 0) {
+                const ph_v1 = style.resolveVarValue(placeholder_color_raw);
+                let attr_buf: [256]u8 = [0; 256];
+                const ph_v2 = Cascade.expandCssAttrInValue(ph_v1, node, attr_buf[0..]);
+                const ph_v3 = style.resolveVarValue(ph_v2);
+                const ph_trimmed = std.mem.trim(u8, ph_v3, " \t\r\n");
+                if (ph_trimmed.len > 0) {
+                    if (ph_col := CssColor.parse(ph_trimmed)) {
+                        style.placeholder_color = ph_col;
+                        style.has_placeholder_color = true;
                     }
                 }
             }

@@ -54,9 +54,11 @@ function notifyControlValueMutation(control, cursor) {
   if (tag !== "input" && tag !== "textarea") {
     return;
   }
-  if (typeof control.setSelectionRange === "function") {
-    control.setSelectionRange(cursor, cursor);
-  }
+  const len = String(getValueRaw(control) || "").length;
+  const clamped = Math.max(0, Math.min(Number(cursor) || 0, len));
+  control._selectionStart = clamped;
+  control._selectionEnd = clamped;
+  control._selectionDirection = "none";
   try {
     const inputEvt = typeof InputEvent !== "undefined"
       ? new InputEvent("input", { bubbles: true, cancelable: false })

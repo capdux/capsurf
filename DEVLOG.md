@@ -1479,4 +1479,16 @@
    - 在 `computeStyles` 完整级联并继承 `color_scheme` 后统一求解 `light-dark(a, b)`，同时在 `style_extractor.cp` 与 `dom_binding.cp` 保持绘制与 `getComputedStyle` 一致。
 2. **未滚动 `offset*` 几何与 `<link media>` (`layout.cp`, `dom_binding.cp`)**：
    - 暴露 `__capsurf_get_layout_box` 返回未受滚动偏移影响的布局坐标支撑 `offsetParent`/`offsetTop`/`offsetLeft`；按 `linkMediaMatchesScreen` 过滤 `<link rel="stylesheet" media>`。
+
+## Phase 114 `::placeholder` 伪元素与 CJK 全角 Range 度量技术方案
+1. **`::placeholder` 伪元素与 `attr()` 内联展开 (`cascade.cp`, `painter.cp`)**：
+   - 在 `Cascade.computeStyles` 按 64 位级联权重收集 `::placeholder` 规则并依次执行 `resolveVarValue` -> `expandCssAttrInValue` -> `CssColor.parse`，在 `painter.cp` 中对空表单控件绘制 `placeholder` 文本。
+2. **粗体整形与 CJK 全角宽度 (`layout.cp`, `dom_binding.cp`)**：
+   - 对 `font-weight >= 600` 施加 `1.06` 宽度因子，并在 `Range.prototype.getClientRects` 按码点区分 CJK 全角（`1.0 * fontSize`）与 ASCII 半角（`0.5 * fontSize`）。
+
+## Phase 115 Pointer/Mouse 事件流、活体命名全局与单行 `[native code]` 技术方案
+1. **无 Proxy 活体命名全局与原生函数形态 (`window.js`, `constants.js`, `index.js`)**：
+   - 以 `syncNamedGlobals()` 替代原型 Proxy（避免 QuickJS 缺失标识符不抛 `ReferenceError`），在 DOM 增删与脚本执行前实时同步 `iframe`/`id` 且不覆盖页面自有属性；通过 `WeakMap` + `Function.prototype.toString` 规范化输出 Chrome 单行 `[native code]`。
+2. **Pointer/Mouse 规范流与独立消息队列 (`window.js`, `harness.ts`)**：
+   - 实装 `pointerdown` 取消抑制兼容鼠标事件、`mousedown` 后置默认焦点迁移与 UTF-16 代理对删除，并通过独立 `messageTaskQueue` 确保每条 `MessagePort` 宏任务后立即排空微任务。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

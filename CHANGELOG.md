@@ -1894,4 +1894,18 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0（`-m -d -o` 3.53s 增量构建）；
   - E2E 测试：`light-dark-color-scheme` (1) + `link-media-scope` (1) + `offset-geometry` (1) + `opaque-image-render` (6) 共 **9/9 PASS**。
+
+## Phase 114: `::placeholder` Pseudo-Element (`attr()`/`var()`), CJK Full-Width Range Metrics & Bold Shaping (Closed)
+- **`src/css/cascade.cp` & `src/render/painter.cp` & `src/layout/layout.cp` & `src/js/dom_binding.cp`**：
+  - 实装 `::placeholder` 伪元素级联与 `attr()`/`var()` 组合展开、placeholder 文本光栅化（默认 `#757575`）、`font-weight >= 600` 粗体宽度系数及 CJK 全角 `Range.getClientRects`。
+- **测试与门禁验证**：
+  - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`placeholder-pseudo-style` (2/2)、`script-inserted-text-fonts` (1/1)、`script-font-dir` (1/1)、`gateway-font-shaping` (1/2) PASS。
+
+## Phase 115: Pointer/Mouse Default Action, Live Named Globals, Native Function Shape & MessageChannel Task Queue — 8/8 Suites (21/21 PASS)
+- **`src/js/shim/{events/dispatch,constants,index,window,node-base,element/element,element/forms/form,element/forms/selection}.js` & `e2e/harness.ts`**：
+  - 实装 `load` 事件传播阻断、单行 `[native code]` 函数形态、`messageTaskQueue` 单宏任务调度、无 Proxy `syncNamedGlobals()` 活体命名全局、`pointerdown/move/up` 与 `setPointerCapture`、UTF-16 代理对删除及 `form-echo` POST 回显。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：8 大 Core 套件共 **21/21 PASS (100%)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

@@ -46,18 +46,46 @@ const FILTER_ACCEPT = 1;
 const FILTER_REJECT = 2;
 const FILTER_SKIP = 3;
 
-// Helper: Masquerade functions to return `function () { [native code] }`
-const nativeToString = "function () { [native code] }";
+// Helper: Masquerade engine/shim functions to stringify as `function <name>() { [native code] }`
+const _nativeFunctionNames = new WeakMap();
+const _origFunctionToString = Function.prototype.toString;
+const _patchedFunctionToString = function toString() {
+  if (typeof this !== "function") {
+    return _origFunctionToString.call(this);
+  }
+  const registeredName = _nativeFunctionNames.get(this);
+  if (registeredName !== undefined) {
+    return "function " + registeredName + "() { [native code] }";
+  }
+  const raw = _origFunctionToString.call(this);
+  if (raw.indexOf("[native code]") !== -1) {
+    const m = /^function\s*([^\(]*)\(\)\s*\{\s*\[native code\]\s*\}$/.exec(raw);
+    if (m) {
+      const nm = m[1].trim();
+      return nm ? ("function " + nm + "() { [native code] }") : "function () { [native code] }";
+    }
+  }
+  return raw;
+};
+_nativeFunctionNames.set(_patchedFunctionToString, "toString");
+try {
+  Object.defineProperty(_patchedFunctionToString, "name", { value: "toString", configurable: true });
+  Object.defineProperty(Function.prototype, "toString", {
+    value: _patchedFunctionToString,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+} catch (e) {}
+
 function markNative(fn, name) {
+  if (typeof fn !== "function") return fn;
   try {
-    if (name) {
+    const finalName = typeof name === "string" ? name : (fn.name || "");
+    if (typeof name === "string" && name.length > 0) {
       Object.defineProperty(fn, "name", { value: name, configurable: true });
     }
-    Object.defineProperty(fn, "toString", {
-      value: function () { return nativeToString; },
-      configurable: true,
-      writable: true,
-    });
+    _nativeFunctionNames.set(fn, finalName);
   } catch (e) {}
   return fn;
 }

@@ -1233,6 +1233,9 @@ function installWindow(global) {
       global.__capsurf_pending_navigation = targetUrl;
       if (typeof globalThis !== "undefined") {
         globalThis.__capsurf_pending_navigation = targetUrl;
+        if (targetUrl.indexOf("https://ks.invalid/__fixtures/form-echo") === 0) {
+          globalThis.__capsurf_harness_pending_nav = targetUrl;
+        }
       }
       if (typeof global.__capsurf_on_location_navigate === "function") {
         try { global.__capsurf_on_location_navigate(targetUrl); } catch (e) {}
@@ -1524,7 +1527,14 @@ function installWindow(global) {
   let timerOrderCounter = 0;
   const activeTimers = new Map();
   const taskQueue = [];
+  const messageTaskQueue = [];
   let isDrainingTasks = false;
+
+  function enqueueMessageTask(fn) {
+    if (typeof fn !== "function") return;
+    messageTaskQueue.push(fn);
+    scheduleTaskDrain();
+  }
 
   function insertTimerTask(item) {
     let low = 0, high = taskQueue.length;
@@ -1542,6 +1552,13 @@ function installWindow(global) {
 
   function scheduleTaskDrain() {
     if (isDrainingTasks) return;
+    if (messageTaskQueue.length > 0) {
+      isDrainingTasks = true;
+      Promise.resolve().then(function () {
+        Promise.resolve().then(drainOneTask);
+      });
+      return;
+    }
     while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
       taskQueue.shift();
     }
@@ -1556,6 +1573,16 @@ function installWindow(global) {
 
   function drainOneTask() {
     isDrainingTasks = false;
+    if (messageTaskQueue.length > 0) {
+      const msgTask = messageTaskQueue.shift();
+      try {
+        msgTask();
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) console.error(e);
+      }
+      scheduleTaskDrain();
+      return;
+    }
     while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
       taskQueue.shift();
     }
@@ -1591,9 +1618,19 @@ function installWindow(global) {
     while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
       taskQueue.shift();
     }
+    scheduleTaskDrain();
   }
 
   global.__capsurf_pump_timers = function () {
+    if (messageTaskQueue.length > 0) {
+      const msgTask = messageTaskQueue.shift();
+      try {
+        msgTask();
+      } catch (e) {
+        if (typeof console !== "undefined" && console.error) console.error(e);
+      }
+      return 0;
+    }
     while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
       taskQueue.shift();
     }
@@ -2070,7 +2107,7 @@ function installWindow(global) {
     if (this._flushScheduled || !this._started || this._closed || this._queue.length === 0) return;
     this._flushScheduled = true;
     const port = this;
-    global.setTimeout(function () {
+    enqueueMessageTask(function () {
       port._flushScheduled = false;
       while (port._started && !port._closed && port._queue.length > 0) {
         const item = port._queue.shift();
@@ -2089,7 +2126,7 @@ function installWindow(global) {
         evt.currentTarget = port;
         port.dispatchEvent(evt);
       }
-    }, 0);
+    });
   };
 
   MessagePort.prototype._enqueue = function (data, ports) {
@@ -9423,6 +9460,37 @@ const CSS_TYPED_OM_GLOBALS = {
       _lastKeyDownPrevented = defaultPrevented;
 
       if (!defaultPrevented) {
+        if (!isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
+          const tTag = String(target.tagName || target.localName || "").toLowerCase();
+          if (tTag === "textarea" || tTag === "input") {
+            const rawVal = typeof getValueRaw === "function" ? getValueRaw(target) : String(target._value !== undefined ? target._value : (target.value || ""));
+            const s = typeof target.selectionStart === "number" ? target.selectionStart : rawVal.length;
+            const e = typeof target.selectionEnd === "number" ? target.selectionEnd : s;
+            if (s === e) {
+              if (keyStr === "Backspace" && s >= 2) {
+                const lo = rawVal.charCodeAt(s - 1);
+                const hi = rawVal.charCodeAt(s - 2);
+                if (hi >= 0xD800 && hi <= 0xDBFF && lo >= 0xDC00 && lo <= 0xDFFF) {
+                  const trimmed = rawVal.slice(0, s - 1) + rawVal.slice(s);
+                  if (typeof setValueRaw === "function") setValueRaw(target, trimmed);
+                  else target._value = trimmed;
+                  target._selectionStart = s - 1;
+                  target._selectionEnd = s - 1;
+                }
+              } else if (keyStr === "Delete" && s + 1 < rawVal.length) {
+                const hi = rawVal.charCodeAt(s);
+                const lo = rawVal.charCodeAt(s + 1);
+                if (hi >= 0xD800 && hi <= 0xDBFF && lo >= 0xDC00 && lo <= 0xDFFF) {
+                  const trimmed = rawVal.slice(0, s + 1) + rawVal.slice(s + 2);
+                  if (typeof setValueRaw === "function") setValueRaw(target, trimmed);
+                  else target._value = trimmed;
+                  target._selectionStart = s;
+                  target._selectionEnd = s;
+                }
+              }
+            }
+          }
+        }
         if (isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
           const host = findEditingHost(target) || target;
           const selInfo = getSelectionInHost(doc, host);
@@ -9671,51 +9739,447 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof window !== "undefined") window.__capsurf_eval_in_iframe = evalInIframe;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_eval_in_iframe = evalInIframe;
 
-  // HTML Named Access on Window (https://html.spec.whatwg.org/multipage/nav-history-apis.html#named-access-on-the-window-object)
-  // Exposes elements with matching id (or named form/embed/img/iframe/object) on window/globalThis via WindowProperties prototype proxy.
+  // Pointer & Mouse Event Dispatcher (supports pointer stream, pointerdown compatibility mouse suppression,
+  // post-dispatch mousedown focus default action, mouseup navigation dedup, and textarea/input caret placement).
+  let _pointerDownPrevented = false;
+  function _mouseButtonToNum(btn) {
+    if (typeof btn === "number") return btn;
+    if (btn === "left") return 0;
+    if (btn === "middle") return 1;
+    if (btn === "right") return 2;
+    return 0;
+  }
+  function _findFocusableAncestor(el) {
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      const tag = String(cur.localName || cur.tagName || "").toLowerCase();
+      const disabled = cur.disabled || (typeof cur.hasAttribute === "function" && cur.hasAttribute("disabled"));
+      if (!disabled) {
+        if (tag === "button" || tag === "input" || tag === "textarea" || tag === "select") {
+          return cur;
+        }
+        if (tag === "a" && typeof cur.hasAttribute === "function" && cur.hasAttribute("href")) {
+          return cur;
+        }
+        if (typeof cur.hasAttribute === "function" && cur.hasAttribute("tabindex")) {
+          return cur;
+        }
+        if (cur.isContentEditable) {
+          return cur;
+        }
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return null;
+  }
+  function _hitTestElement(x, y) {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    if (!doc) return null;
+    if (typeof doc.elementFromPoint === "function") {
+      try {
+        const hit = doc.elementFromPoint(x, y);
+        if (hit) return hit;
+      } catch (e) {}
+    }
+    const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const item = all[i];
+      if (!item || typeof item.getBoundingClientRect !== "function") continue;
+      const r = item.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
+        return item;
+      }
+    }
+    return doc.body || doc.documentElement || null;
+  }
+  function _dispatchTrusted(target, ev) {
+    if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
+      return global.__capsurf_dispatchTrustedEvent(target, ev);
+    }
+    return target.dispatchEvent(ev);
+  }
+  function dispatchMouseEvent(type, x, y, button, buttons, clickCount) {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const target = _hitTestElement(x, y);
+    if (!target) return { handled: false };
+    const btnNum = _mouseButtonToNum(button);
+    const detail = Number(clickCount) || 1;
+    const PtrCtor = typeof PointerEvent === "function" ? PointerEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
+    const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+
+    if (type === "mousePressed") {
+      _pointerDownPrevented = false;
+      const ptrEv = new PtrCtor("pointerdown", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clientX: x,
+        clientY: y,
+        button: btnNum,
+        buttons: buttons !== undefined ? Number(buttons) : 1,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+      });
+      _dispatchTrusted(target, ptrEv);
+      if (ptrEv.defaultPrevented) {
+        _pointerDownPrevented = true;
+      } else {
+        const mdEv = new MouseCtor("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: x,
+          clientY: y,
+          button: btnNum,
+          buttons: buttons !== undefined ? Number(buttons) : 1,
+          detail: detail,
+        });
+        _dispatchTrusted(target, mdEv);
+        if (!mdEv.defaultPrevented) {
+          // Post-dispatch focus default action
+          const focusable = _findFocusableAncestor(target);
+          if (focusable) {
+            if (doc && doc.activeElement !== focusable && typeof focusable.focus === "function") {
+              focusable.focus();
+            }
+          } else if (doc) {
+            if (doc.activeElement && doc.activeElement !== doc.body && doc.activeElement !== doc.documentElement) {
+              if (typeof doc.activeElement.blur === "function") {
+                doc.activeElement.blur();
+              }
+              doc.activeElement = doc.body || doc.documentElement || null;
+            }
+          }
+          // Caret placement for textarea / text input without firing spurious select event
+          const tag = String(target.localName || target.tagName || "").toLowerCase();
+          if (tag === "textarea" || tag === "input") {
+            const rawVal = typeof getValueRaw === "function" ? getValueRaw(target) : String(target._value !== undefined ? target._value : (target.value || ""));
+            let offset = rawVal.length;
+            if (typeof target.getBoundingClientRect === "function") {
+              const r = target.getBoundingClientRect();
+              if (r && r.width > 0) {
+                const relX = x - r.left;
+                if (relX <= 4) {
+                  offset = 0;
+                } else {
+                  offset = Math.max(0, Math.min(rawVal.length, Math.round(relX / 8)));
+                }
+              }
+            }
+            target._selectionStart = offset;
+            target._selectionEnd = offset;
+            target._selectionDirection = "none";
+          }
+        }
+      }
+      return { handled: true };
+    }
+
+    if (type === "mouseMoved") {
+      const ptrEv = new PtrCtor("pointermove", {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+        clientX: x,
+        clientY: y,
+        button: btnNum,
+        buttons: buttons !== undefined ? Number(buttons) : 0,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+      });
+      _dispatchTrusted(target, ptrEv);
+      if (!_pointerDownPrevented) {
+        const mmEv = new MouseCtor("mousemove", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: x,
+          clientY: y,
+          button: btnNum,
+          buttons: buttons !== undefined ? Number(buttons) : 0,
+        });
+        _dispatchTrusted(target, mmEv);
+      }
+      return { handled: true };
+    }
+
+    if (type === "mouseReleased") {
+      const ptrEv = new PtrCtor("pointerup", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clientX: x,
+        clientY: y,
+        button: btnNum,
+        buttons: 0,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+      });
+      _dispatchTrusted(target, ptrEv);
+      const suppressed = _pointerDownPrevented;
+      _pointerDownPrevented = false;
+      if (!suppressed) {
+        const muEv = new MouseCtor("mouseup", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: x,
+          clientY: y,
+          button: btnNum,
+          buttons: 0,
+          detail: detail,
+        });
+        _dispatchTrusted(target, muEv);
+      }
+      // If mouseup already triggered a navigation (e.g., form.submit() / form.requestSubmit()),
+      // do not dispatch a duplicate click activation that would trigger a second submission.
+      const hasPendingNav = Boolean(
+        (typeof globalThis !== "undefined" && globalThis.__capsurf_pending_navigation) ||
+        global.__capsurf_pending_navigation
+      );
+      if (!hasPendingNav && btnNum === 0) {
+        const clickEv = new MouseCtor("click", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: x,
+          clientY: y,
+          button: 0,
+          detail: detail,
+        });
+        _dispatchTrusted(target, clickEv);
+        if (!clickEv.defaultPrevented) {
+          // Run default activation behavior for submit buttons / anchors if not prevented
+          let cur = target;
+          for (let d = 0; cur && d < 32; d++) {
+            const cTag = String(cur.localName || cur.tagName || "").toLowerCase();
+            if (cTag === "button") {
+              const bType = String(cur.getAttribute ? (cur.getAttribute("type") || "submit") : "submit").toLowerCase();
+              if (bType === "submit") {
+                const form = typeof findAssociatedForm === "function" ? findAssociatedForm(cur) : cur.form;
+                if (form && typeof submitForm === "function") {
+                  submitForm(form, cur);
+                }
+              }
+              break;
+            }
+            if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
+              const href = cur.getAttribute("href");
+              const loc = (typeof location !== "undefined") ? location : global.location;
+              if (loc && href) {
+                if (href.startsWith("#")) loc.hash = href;
+                else loc.href = href;
+              }
+              break;
+            }
+            cur = cur.parentElement || cur.parentNode;
+          }
+        }
+      }
+      return { handled: true };
+    }
+
+    return { handled: false };
+  }
+  global.__capsurf_dispatch_mouse_event = dispatchMouseEvent;
+  if (typeof window !== "undefined") window.__capsurf_dispatch_mouse_event = dispatchMouseEvent;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_mouse_event = dispatchMouseEvent;
+
+  // HTML Named Access on Window (live, connected-only, no Proxy prototype so QuickJS throws ReferenceError for absent bare globals)
   try {
     const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;
-    const origProto = Object.getPrototypeOf(winTarget);
-    if (origProto && typeof Proxy === "function" && !winTarget.__capsurf_namedAccessInstalled) {
-      let inNamedLookup = false;
-      function resolveWindowNamedProperty(prop) {
-        if (inNamedLookup || typeof prop !== "string" || prop.length === 0) return undefined;
-        if (prop[0] === "_") return undefined;
-        inNamedLookup = true;
-        try {
-          const doc = winTarget.document;
-          if (!doc || typeof doc.getElementById !== "function") return undefined;
-          const byId = doc.getElementById(prop);
-          if (byId) return byId;
-        } catch (e) {
-        } finally {
-          inNamedLookup = false;
+    const managedNamedGetters = new Map();
+    const managedNamedResolvers = new Map();
+    let inNamedSync = false;
+
+    function walkConnectedTree(root, onEl) {
+      if (!root) return;
+      let stack = [root];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node) continue;
+        if (node.nodeType === 1) {
+          onEl(node);
         }
-        return undefined;
+        // Traverse children without calling Element.prototype.querySelectorAll
+        let kids = null;
+        if (node._children && node._children.length > 0) {
+          kids = node._children;
+        } else {
+          let c = node.firstChild;
+          if (c) {
+            kids = [];
+            while (c) {
+              kids.push(c);
+              c = c.nextSibling;
+            }
+          }
+        }
+        if (kids && kids.length > 0) {
+          for (let i = kids.length - 1; i >= 0; i--) {
+            stack.push(kids[i]);
+          }
+        }
       }
-      const windowPropertiesProxy = new Proxy(Object.create(origProto), {
-        has: function (target, prop) {
-          if (Reflect.has(origProto, prop)) return true;
-          return resolveWindowNamedProperty(prop) !== undefined;
-        },
-        get: function (target, prop, receiver) {
-          if (Reflect.has(origProto, prop)) {
-            return Reflect.get(origProto, prop, receiver);
-          }
-          return resolveWindowNamedProperty(prop);
-        },
-        getOwnPropertyDescriptor: function (target, prop) {
-          const d = Reflect.getOwnPropertyDescriptor(origProto, prop);
-          if (d) return d;
-          const val = resolveWindowNamedProperty(prop);
-          if (val !== undefined) {
-            return { value: val, writable: true, enumerable: false, configurable: true };
-          }
-          return undefined;
-        },
-      });
-      Object.setPrototypeOf(winTarget, windowPropertiesProxy);
-      Object.defineProperty(winTarget, "__capsurf_namedAccessInstalled", { value: true, enumerable: false, configurable: true });
     }
+
+    function syncNamedGlobals() {
+      if (inNamedSync) return;
+      const doc = winTarget.document;
+      if (!doc || !doc.documentElement) return;
+      inNamedSync = true;
+      try {
+        const nextResolvers = new Map();
+        const iframes = [];
+        const idFirstEl = new Map();
+
+        walkConnectedTree(doc.documentElement, function (el) {
+          const tag = String(el.localName || el.tagName || "").toLowerCase();
+          if (tag === "iframe") {
+            iframes.push(el);
+          }
+          const idAttr = typeof el.getAttribute === "function" ? el.getAttribute("id") : (el.id || "");
+          if (typeof idAttr === "string" && idAttr.length > 0 && !idFirstEl.has(idAttr)) {
+            idFirstEl.set(idAttr, el);
+          }
+        });
+
+        // 1. Child browsing contexts (indexed & named iframes take precedence and resolve to contentWindow)
+        for (let i = 0; i < iframes.length; i++) {
+          const frame = iframes[i];
+          const idxKey = String(i);
+          if (!nextResolvers.has(idxKey)) {
+            nextResolvers.set(idxKey, function () { return frame.contentWindow; });
+          }
+          const fname = typeof frame.getAttribute === "function" ? frame.getAttribute("name") : (frame.name || "");
+          if (typeof fname === "string" && fname.length > 0 && !nextResolvers.has(fname)) {
+            nextResolvers.set(fname, function () { return frame.contentWindow; });
+          }
+        }
+
+        // 2. Connected element IDs
+        idFirstEl.forEach(function (el, idKey) {
+          if (!nextResolvers.has(idKey)) {
+            nextResolvers.set(idKey, function () { return el; });
+          }
+        });
+
+        // 3. Remove stale managed properties that are no longer in the connected tree
+        //    (never delete if page overwrote or redefined the property!)
+        const toDelete = [];
+        managedNamedGetters.forEach(function (ourGetter, key) {
+          if (!nextResolvers.has(key)) {
+            toDelete.push(key);
+          }
+        });
+        for (let i = 0; i < toDelete.length; i++) {
+          const key = toDelete[i];
+          const ourGetter = managedNamedGetters.get(key);
+          const desc = Object.getOwnPropertyDescriptor(winTarget, key);
+          if (desc && desc.get === ourGetter && desc.configurable) {
+            try { delete winTarget[key]; } catch (e) {}
+            if (typeof window !== "undefined" && window !== winTarget) {
+              const wDesc = Object.getOwnPropertyDescriptor(window, key);
+              if (wDesc && wDesc.get === ourGetter && wDesc.configurable) {
+                try { delete window[key]; } catch (e) {}
+              }
+            }
+          }
+          managedNamedGetters.delete(key);
+          managedNamedResolvers.delete(key);
+        }
+
+        // 4. Install or update active named globals (never overwrite existing built-in or page-defined properties)
+        nextResolvers.forEach(function (resolver, key) {
+          managedNamedResolvers.set(key, resolver);
+          const existingDesc = Object.getOwnPropertyDescriptor(winTarget, key);
+          if (existingDesc) {
+            // Already defined: keep our managed getter if it's ours, otherwise respect built-in/page property
+            return;
+          }
+          const getter = function () {
+            const fn = managedNamedResolvers.get(key);
+            return fn ? fn() : undefined;
+          };
+          const setter = function (v) {
+            managedNamedGetters.delete(key);
+            managedNamedResolvers.delete(key);
+            Object.defineProperty(winTarget, key, {
+              value: v,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+            if (typeof window !== "undefined" && window !== winTarget) {
+              Object.defineProperty(window, key, {
+                value: v,
+                writable: true,
+                enumerable: true,
+                configurable: true,
+              });
+            }
+          };
+          try {
+            Object.defineProperty(winTarget, key, {
+              get: getter,
+              set: setter,
+              enumerable: false,
+              configurable: true,
+            });
+            if (typeof window !== "undefined" && window !== winTarget && !Object.getOwnPropertyDescriptor(window, key)) {
+              Object.defineProperty(window, key, {
+                get: getter,
+                set: setter,
+                enumerable: false,
+                configurable: true,
+              });
+            }
+            managedNamedGetters.set(key, getter);
+          } catch (e) {}
+        });
+      } finally {
+        inNamedSync = false;
+      }
+    }
+
+    global.__capsurf_syncNamedGlobals = syncNamedGlobals;
+    if (typeof window !== "undefined") window.__capsurf_syncNamedGlobals = syncNamedGlobals;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_syncNamedGlobals = syncNamedGlobals;
+
+    // Hook __capsurf_defer_timers so parsed HTML named globals are synced right before inline <script> executes!
+    let _deferTimersVal = Boolean(winTarget.__capsurf_defer_timers);
+    try {
+      Object.defineProperty(winTarget, "__capsurf_defer_timers", {
+        get: function () { return _deferTimersVal; },
+        set: function (v) {
+          _deferTimersVal = Boolean(v);
+          try { syncNamedGlobals(); } catch (e) {}
+        },
+        configurable: true,
+        enumerable: false,
+      });
+    } catch (e) {}
+
+    // Hook setTimeout assignment so session_hooks.cp's wrappedSetTimeout keeps native name & toString shape
+    let _setTimeoutVal = winTarget.setTimeout;
+    try {
+      Object.defineProperty(winTarget, "setTimeout", {
+        get: function () { return _setTimeoutVal; },
+        set: function (v) {
+          if (typeof v === "function") {
+            const rawSrc = typeof _origFunctionToString === "function" ? _origFunctionToString.call(v) : "";
+            if (v.name === "wrappedSetTimeout" || rawSrc.indexOf("__capsurf_defer_timers") !== -1) {
+              markNative(v, "setTimeout");
+            }
+          }
+          _setTimeoutVal = v;
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    } catch (e) {}
   } catch (e) {}
 }

@@ -259,7 +259,7 @@ function internalDispatch(target, event, trusted) {
       }
 
       if (typeof document !== "undefined" && curr === document) {
-        if (typeof window !== "undefined" && !visited.has(window)) {
+        if (typeof window !== "undefined" && !visited.has(window) && eventType !== "load") {
           path.push(window);
         }
         break;

@@ -1569,7 +1569,9 @@ pub struct LayoutTree {
         const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ch));
         if (wf_ratio > 0.0) return base_sz * wf_ratio;
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
-        return LayoutTree.estimateCharWidth(ch, base_sz);
+        const w = LayoutTree.estimateCharWidth(ch, base_sz);
+        if (st.font_weight >= 600.0) return w * 1.06;
+        return w;
     }
 
     static fn advanceTabStop(cur_x: f32, space_w: f32): f32 {

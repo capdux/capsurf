@@ -1792,6 +1792,59 @@ function installShim(global) {
       });
     }
   }
+  // Mark all built-in / shim functions and prototype accessors as native so Function.prototype.toString
+  // returns Chrome-compatible `function <name>() { [native code] }`.
+  (function markAllShimBuiltinsNative() {
+    const visitedObjs = new WeakSet();
+    function markObjMembers(obj) {
+      if (!obj || (typeof obj !== "object" && typeof obj !== "function")) return;
+      if (visitedObjs.has(obj)) return;
+      visitedObjs.add(obj);
+      let keys;
+      try {
+        keys = Object.getOwnPropertyNames(obj);
+      } catch (e) {
+        return;
+      }
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
+        if (k === "prototype" || k === "__proto__" || k.startsWith("__capsurf_")) continue;
+        let desc;
+        try {
+          desc = Object.getOwnPropertyDescriptor(obj, k);
+        } catch (e) {
+          continue;
+        }
+        if (!desc) continue;
+        if (typeof desc.value === "function") {
+          if (!_nativeFunctionNames.has(desc.value)) {
+            markNative(desc.value, k);
+          }
+          if (desc.value.prototype && typeof desc.value.prototype === "object") {
+            markObjMembers(desc.value.prototype);
+          }
+        }
+        if (typeof desc.get === "function" && !_nativeFunctionNames.has(desc.get)) {
+          markNative(desc.get, "get " + k);
+        }
+        if (typeof desc.set === "function" && !_nativeFunctionNames.has(desc.set)) {
+          markNative(desc.set, "set " + k);
+        }
+      }
+    }
+    markObjMembers(global);
+    if (typeof globalThis !== "undefined" && globalThis !== global) markObjMembers(globalThis);
+    if (typeof window !== "undefined" && window !== global) markObjMembers(window);
+    if (global.document) {
+      markObjMembers(global.document);
+      const docProto = Object.getPrototypeOf(global.document);
+      if (docProto) markObjMembers(docProto);
+    }
+    if (typeof Node !== "undefined" && Node.prototype) markObjMembers(Node.prototype);
+    if (typeof Element !== "undefined" && Element.prototype) markObjMembers(Element.prototype);
+    if (typeof HTMLElement !== "undefined" && HTMLElement.prototype) markObjMembers(HTMLElement.prototype);
+    if (typeof EventTarget !== "undefined" && EventTarget.prototype) markObjMembers(EventTarget.prototype);
+  })();
 }
 
 // Auto-install on globalThis/window
