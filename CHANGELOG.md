@@ -2207,3 +2207,6 @@
 
 ## Phase 182: Dedicated `_rafQueue` & `__capsurf_pump_raf` Driver Hooks
 - **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：实装独立 `requestAnimationFrame` 帧队列、单共享 16ms 后备定时器与 `__capsurf_pump_raf`/`__capsurf_has_pending_raf` 钩子（4 门禁全 0）。
+
+## Phase 183: Pure-CP HTML5 `<template>` Isolation & SVG Self-Closing Whitebox Suite `test/html/test_svg_and_template.cp` (3/3 PASS)
+- 新增 `test/html/test_svg_and_template.cp`，覆盖 `<template>` 查询隔离、SVG 自闭合标签与 Adoption Agency 建树（`cap test -m` **3/3 PASS**, 989ms）。

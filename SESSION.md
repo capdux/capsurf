@@ -4450,3 +4450,7 @@
   - 导出 `__capsurf_pump_raf(timestampMs)` 与 `__capsurf_has_pending_raf()`，原子切出当前帧队列并取消后备器防止重复执行，为 `screencast-raf-pacing` 铺平 JS 驱动接口。
 - **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0。
 - **清理旧子智能体**: 销毁 `8e7e19d5-0228-4fe0-b186-b5cf30c611a0`。
+
+## [2026-11-21 01:02:30] 3 分钟新增并全绿通过纯 CP HTML5 `<template>`/SVG 白盒单测 `test/html/test_svg_and_template.cp` (Subagent a755e45d 结单，Phase 183)
+- **新增白盒测试 (`test/html/test_svg_and_template.cp`)**: 覆盖 `<template>` 解析与查询隔离、SVG 容器与自闭合子标签 (`<path/>`/`<rect/>`/`<circle/>`)、以及未闭合标签与 Adoption Agency 重构（**3/3 PASS**, 989ms, 4 门禁全 0；`test/html/` 达 **4/4 PASS**）。
+- **清理旧子智能体**: 销毁 `a755e45d-32f2-4da5-afc2-1df085029927`。
