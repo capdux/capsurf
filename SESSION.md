@@ -4553,3 +4553,7 @@
 ### Phase 203: Pure-CP CookieJarRegistry Whitebox Tests (Slot A)
 - **Subagent**: `f891c099` (killed after completion)
 - **Result**: `test/net/test_cookie_jar_registry.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 857ms; covering `makeKey`/`cookieKeyFor`, multi-tenant jar isolation, cross-domain/path sorting & removal, 16-entry capacity/129-byte key bounds, `purgeExpired`, and `unregisterConnection` prefix isolation).
+
+### Phase 204: Pure-CP NextRouteChunks & LimitRegistry Whitebox Tests (Slot A)
+- **Subagent**: `a16d3d9d` (killed after completion)
+- **Result**: `test/eval/test_next_route_chunks_and_limits.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering `parseBuildManifest`, `rankManifestRoutes`, non-`.js` filtering, 16/64 route bounds, `LimitRegistry` 64-slot eviction, and `(owner, target_id)` isolation).

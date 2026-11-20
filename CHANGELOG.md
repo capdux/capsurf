@@ -2271,3 +2271,6 @@
 
 ### Phase 203
 - Added `test/net/test_cookie_jar_registry.cp` covering cookie jar registry isolation, domain/path matching, capacity/key-length bounds, expiry purging, and connection-level cleanup.
+
+### Phase 204
+- Added `test/eval/test_next_route_chunks_and_limits.cp` covering Next.js build manifest parsing/ranking, chunk limits, and LimitRegistry lifecycle/eviction/isolation.
