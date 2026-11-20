@@ -1943,7 +1943,8 @@ function installHtmlClasses(global) {
     "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch",
     "History", "WebSocket", "CloseEvent", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
     "performance", "Performance", "PerformanceEntry", "PerformanceMark", "PerformanceMeasure",
-    "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation"
+    "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation",
+    "Worker", "SharedWorker", "ErrorEvent"
   ];
 
   function decorateIframeWindow(win) {
@@ -1953,6 +1954,17 @@ function installHtmlClasses(global) {
       if (win[key] === undefined && pageGlobal[key] !== undefined) {
         win[key] = pageGlobal[key];
       }
+    }
+    if (win.__capsurf_is_oopif && typeof pageGlobal.Worker === "function") {
+      const OopifWorker = function Worker(scriptURL, options) {
+        if (arguments.length === 0) return new pageGlobal.Worker();
+        const opts = (options && typeof options === "object")
+          ? Object.assign({}, options, { __capsurf_oopif: true })
+          : { __capsurf_oopif: true };
+        return new pageGlobal.Worker(scriptURL, opts);
+      };
+      OopifWorker.prototype = pageGlobal.Worker.prototype;
+      win.Worker = OopifWorker;
     }
     if (win.onhashchange === undefined) win.onhashchange = null;
     if (win.onpopstate === undefined) win.onpopstate = null;
@@ -2341,6 +2353,16 @@ function installHtmlClasses(global) {
       if (iframeEl._contentWindow) {
         iframeEl._contentWindow.document = newDoc;
         ensureIframeLocationFacade(iframeEl._contentWindow, iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl);
+        if (!opts.isSrcdoc && resolvedUrl && typeof URL === "function") {
+          try {
+            const topOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? String(window.location.origin) : "";
+            const childOrigin = new URL(resolvedUrl, (typeof location !== "undefined" ? location.href : undefined)).origin;
+            iframeEl._contentWindow.__capsurf_is_oopif = Boolean(topOrigin && childOrigin && topOrigin !== childOrigin);
+            if (iframeEl._contentWindow.__capsurf_is_oopif) {
+              decorateIframeWindow(iframeEl._contentWindow);
+            }
+          } catch (e) {}
+        }
         try {
           Object.defineProperty(newDoc, "defaultView", {
             value: iframeEl._contentWindow,

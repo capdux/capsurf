@@ -4767,3 +4767,7 @@
   - Verified `e2e/flex-svg-intrinsic.e2e.test.ts` **3/3 PASS** (5.73s) & `test/layout/` **5/5 PASS**.
   - Implemented multi-tab `CdpPageSession` isolation (`TabSessionSlot`, `MAX_TAB_SESSIONS = 16`, `resolveSessionForRequest`) in `src/cdp/server.cp`, fixed `performPendingNavigation` `freeValue` order in `src/cdp/page.cp`, and propagated `this.browserContextId` in `e2e/harness.ts`. Built `bin_19233/main` (6.12s); `e2e/script-navigation-tab.e2e.test.ts` **2/2 PASS** (6.26s) + `oopif-elements-panel` & `context-lifecycle` **4/4 PASS** (7.74s).
 - **GEMINI.md**: Added `ulimit -s 65536` requirement for whitebox tests transitively importing `src/cdp/` or `mock_fixtures.cp`.
+
+### Phase 239: CSS Media/Supports Whitebox (130/130) + `dedicated-worker` 22/22 PASS
+- **Slot A (`5225744f`)**: Verified `test_cdp`/`test_target_management`/`test_page_navigation` 10/10 PASS; added `test/css/test_media_query_and_supports_edge.cp` (**4/4 PASS**, 1863ms). Total whitebox **130/130 (100% PASS)**.
+- **Slot B (`2ad0a4ee`)**: Implemented isolated QuickJS `DedicatedWorkerGlobalScope` + 1-slot budget + `worker` CSP/redirect gate in `src/cdp/session_hooks.cp`, `Worker`/`SharedWorker`/`_structuredClone` in `src/js/shim/window.js`, `ImageData` validation in `src/js/shim/canvas2d.js`, `FRAME_WINDOW_GLOBALS` in `src/js/shim/element/html-classes.js` (re-bundled `runtime.js`/`runtime_source.cp`), and `/worker-hop*` fixtures in `src/net/mock_fixtures.cp`. Built `bin_19233/main`; `e2e/dedicated-worker.e2e.test.ts` **22/22 PASS** (28 assertions, 31.53s, exit 0).

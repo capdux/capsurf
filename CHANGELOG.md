@@ -2407,3 +2407,7 @@
 - Added `test/render/test_image_and_font_key_edge.cp` and `test/dom/test_dom_events_and_propagation_edge.cp`; exposed `pub fn loadBgPngBytes` in `src/render/painter.cp`.
 - Implemented multi-tab `CdpPageSession` isolation (`TabSessionSlot`) in `src/cdp/server.cp`, fixed `performPendingNavigation` `JSValue` free order in `src/cdp/page.cp`, and propagated `browserContextId` in `e2e/harness.ts`.
 - Added `ulimit -s 65536` whitebox rule to `GEMINI.md` section `11.7`.
+
+### Phase 239
+- Added `test/css/test_media_query_and_supports_edge.cp`.
+- Implemented `DedicatedWorkerGlobalScope`, `Worker`/`SharedWorker`, `MAX_WORKER_SLOTS = 1`, `worker` CSP/redirect gate, `ArrayBuffer` transfer, `SharedArrayBuffer` `DataCloneError`, and `ImageData` validation across `src/cdp/session_hooks.cp`, `src/net/mock_fixtures.cp`, `src/js/shim/{window.js,canvas2d.js,element/html-classes.js}` (+ `runtime.js`/`runtime_source.cp`).

@@ -1577,6 +1577,29 @@ pub struct MockFixtures {
             return MockFixtures.readPageFile("tiny.png", out_buf);
         }
 
+        // 2.9 Worker redirect hop & hit counter fixtures
+        if (wh_idx := std.mem.indexOf(u8, url, "/__fixtures/worker-hop/")) {
+            let key = url[wh_idx + "/__fixtures/worker-hop/".len ..];
+            if (q_idx := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q_idx];
+            if (std.mem.endsWith(u8, key, ".js")) key = key[0 .. key.len - 3];
+            incWorkerHopHit(key);
+            return std.fmt.bufPrint(out_buf, "postMessage(\"hop:{s}\");", .{ key }) catch null;
+        }
+        if (std.mem.indexOf(u8, url, "/__fixtures/worker-hop-back") != null) {
+            let key_buf: [64]u8 = undefined;
+            if (rk := MockFixtures.extractQueryParam(url, "key")) {
+                const bk = std.fmt.bufPrint(&key_buf, "back-{s}", .{ rk }) catch "";
+                if (bk.len > 0) incWorkerHopHit(bk);
+            }
+            return "";
+        }
+        if (whh_idx := std.mem.indexOf(u8, url, "/__fixtures/worker-hop-hits/")) {
+            let key = url[whh_idx + "/__fixtures/worker-hop-hits/".len ..];
+            if (q_idx := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q_idx];
+            const hits = getWorkerHopHits(key);
+            return std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch null;
+        }
+
         // 3. Static fixture files from e2e/page/
         const filename = MockFixtures.extractFilename(url);
         if (filename.len > 0) {
@@ -1618,6 +1641,45 @@ struct FramePolicyHitSlot {
     marker_buf: [64]u8 = [0; 64],
     marker_len: usize = 0,
     hits: u32 = 0,
+}
+
+const MAX_WORKER_HOP_SLOTS: usize = 32;
+struct WorkerHopSlot {
+    key_buf: [64]u8 = [0; 64],
+    key_len: usize = 0,
+    hits: u32 = 0,
+}
+let worker_hop_slots: [MAX_WORKER_HOP_SLOTS]WorkerHopSlot = [WorkerHopSlot{}; MAX_WORKER_HOP_SLOTS];
+let worker_hop_slot_count: usize = 0;
+
+fn incWorkerHopHit(key: []const u8) {
+    if (key.len == 0) return;
+    let i: usize = 0;
+    while (i < worker_hop_slot_count) : (i += 1) {
+        if (std.mem.eql(u8, worker_hop_slots[i].key_buf[0..worker_hop_slots[i].key_len], key)) {
+            worker_hop_slots[i].hits += 1;
+            return;
+        }
+    }
+    if (worker_hop_slot_count < MAX_WORKER_HOP_SLOTS) {
+        const idx = worker_hop_slot_count;
+        worker_hop_slot_count += 1;
+        const n = @min(key.len, worker_hop_slots[idx].key_buf.len);
+        @memcpy(worker_hop_slots[idx].key_buf[0..n], key[0..n]);
+        worker_hop_slots[idx].key_len = n;
+        worker_hop_slots[idx].hits = 1;
+    }
+}
+
+fn getWorkerHopHits(key: []const u8): u32 {
+    if (key.len == 0) return 0;
+    let i: usize = 0;
+    while (i < worker_hop_slot_count) : (i += 1) {
+        if (std.mem.eql(u8, worker_hop_slots[i].key_buf[0..worker_hop_slots[i].key_len], key)) {
+            return worker_hop_slots[i].hits;
+        }
+    }
+    return 0;
 }
 
 const INSERTED_BAKE_JS: []const u8 =

@@ -2011,6 +2011,14 @@ function installWindow(global) {
   }
 
   global.__capsurf_pump_timers = function () {
+    function withWorkerPump(pageDelay) {
+      let wd = -1;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_worker_pump === "function") {
+        wd = globalThis.__capsurf_worker_pump();
+      }
+      if (wd >= 0 && (pageDelay < 0 || wd < pageDelay)) return wd;
+      return pageDelay;
+    }
     let pumped = 0;
     const batchNow = nativeDateNow();
     while (pumped < 32) {
@@ -2027,13 +2035,13 @@ function installWindow(global) {
       while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
         taskQueue.shift();
       }
-      if (taskQueue.length === 0) return pumped > 0 ? 0 : -1;
+      if (taskQueue.length === 0) return withWorkerPump(pumped > 0 ? 0 : -1);
 
       const item = taskQueue[0];
       if (item.due > batchNow) {
-        if (pumped > 0) return 0;
+        if (pumped > 0) return withWorkerPump(0);
         const remaining = item.due - batchNow;
-        return remaining > 0 ? remaining : 0;
+        return withWorkerPump(remaining > 0 ? remaining : 0);
       }
 
       taskQueue.shift();
@@ -2062,7 +2070,7 @@ function installWindow(global) {
         taskQueue.shift();
       }
     }
-    return 0;
+    return withWorkerPump(0);
   };
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_pump_timers = global.__capsurf_pump_timers;
@@ -2565,6 +2573,9 @@ function installWindow(global) {
       if (v instanceof MessagePort) {
         throw new DOMException("MessagePort must be in transfer list to be cloned.", "DataCloneError");
       }
+      if (typeof SharedArrayBuffer !== "undefined" && v instanceof SharedArrayBuffer) {
+        throw new DOMException("SharedArrayBuffer cannot be cloned.", "DataCloneError");
+      }
       if (v instanceof ArrayBuffer) {
         if (_isDetachedBuffer(v)) {
           throw new DOMException("Cannot clone a detached ArrayBuffer.", "DataCloneError");
@@ -2575,6 +2586,9 @@ function installWindow(global) {
         return copy;
       }
       if (ArrayBuffer.isView(v)) {
+        if (typeof SharedArrayBuffer !== "undefined" && v.buffer instanceof SharedArrayBuffer) {
+          throw new DOMException("SharedArrayBuffer cannot be cloned.", "DataCloneError");
+        }
         const buf = cloneVal(v.buffer);
         if (v instanceof DataView) {
           const dv = new DataView(buf, v.byteOffset, v.byteLength);
@@ -12376,4 +12390,406 @@ const CSS_TYPED_OM_GLOBALS = {
       } catch (e) {}
     }
   } catch (e) {}
+
+  // Dedicated Worker & SharedWorker
+  (function installDedicatedWorkers() {
+    const NativeWorkerURL = URL;
+    const nativeApplyFn = Reflect.apply;
+    const nativeOriginGet = Object.getOwnPropertyDescriptor(NativeWorkerURL.prototype, "origin")?.get;
+    const liveWorkers = new Map();
+    let nextWid = 1;
+
+    function safeUrlOrigin(href) {
+      try {
+        const u = new NativeWorkerURL(href);
+        const orig = nativeOriginGet ? nativeApplyFn(nativeOriginGet, u, []) : u.origin;
+        return typeof orig === "string" ? orig : "null";
+      } catch (e) {
+        return "null";
+      }
+    }
+
+    function currentDocOrigin() {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_origin && globalThis.__capsurf_doc_origin !== "") {
+        return String(globalThis.__capsurf_doc_origin);
+      }
+      const loc = global.location || (typeof location !== "undefined" ? location : null);
+      if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
+        return String(loc.origin);
+      }
+      return "null";
+    }
+
+    function currentDocBase() {
+      const doc = global.document || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.baseURI === "string" && doc.baseURI) return doc.baseURI;
+      const loc = global.location || (typeof location !== "undefined" ? location : null);
+      if (loc && loc.href) return String(loc.href);
+      return "about:blank";
+    }
+
+    function encodeForWorker(value, transferOrOpts) {
+      let transfer = [];
+      if (transferOrOpts !== undefined && transferOrOpts !== null) {
+        if (typeof transferOrOpts !== "object") {
+          throw new TypeError("Transfer list must be an object");
+        }
+        if (typeof transferOrOpts[Symbol.iterator] === "function") {
+          transfer = Array.from(transferOrOpts);
+        } else if ("transfer" in transferOrOpts && transferOrOpts.transfer !== undefined) {
+          const list = transferOrOpts.transfer;
+          if (!list || typeof list[Symbol.iterator] !== "function") {
+            throw new TypeError("Transfer list must be iterable");
+          }
+          transfer = Array.from(list);
+        }
+      }
+      const seen = new Set();
+      for (let i = 0; i < transfer.length; i++) {
+        const it = transfer[i];
+        if ((typeof it !== "object" && typeof it !== "function") || it === null) {
+          throw new TypeError("Failed to execute 'postMessage' on 'Worker': Transfer list items must be objects");
+        }
+        if (seen.has(it)) {
+          throw new DOMException("Duplicate transferable in transfer list", "DataCloneError");
+        }
+        seen.add(it);
+        if (!(it instanceof ArrayBuffer)) {
+          throw new DOMException("CapSurf can only transfer ArrayBuffers to a worker", "DataCloneError");
+        }
+        if (_isDetachedBuffer(it)) {
+          throw new DOMException("ArrayBuffer in transfer list is already detached", "DataCloneError");
+        }
+      }
+      function enc(v) {
+        if (v === undefined) return { __t: "undef" };
+        if (v === null || typeof v === "boolean" || typeof v === "number" || typeof v === "string") return v;
+        if (typeof v === "function" || typeof v === "symbol") {
+          throw new DOMException("Failed to clone value of type " + typeof v, "DataCloneError");
+        }
+        if (typeof SharedArrayBuffer !== "undefined" && v instanceof SharedArrayBuffer) {
+          throw new DOMException("Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.", "DataCloneError");
+        }
+        if (v instanceof MessagePort) {
+          throw new DOMException("CapSurf can only transfer ArrayBuffers to a worker", "DataCloneError");
+        }
+        if (v instanceof ArrayBuffer) {
+          if (_isDetachedBuffer(v)) {
+            throw new DOMException("Cannot clone a detached ArrayBuffer.", "DataCloneError");
+          }
+          const ab = seen.has(v) ? _detachArrayBuffer(v) : v;
+          return { __t: "ab", d: Array.from(new Uint8Array(ab)) };
+        }
+        if (ArrayBuffer.isView(v)) {
+          if (typeof SharedArrayBuffer !== "undefined" && v.buffer instanceof SharedArrayBuffer) {
+            throw new DOMException("Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.", "DataCloneError");
+          }
+          return {
+            __t: "ta",
+            c: v.constructor ? v.constructor.name : "Uint8Array",
+            b: enc(v.buffer),
+            o: v.byteOffset,
+            l: v.length,
+          };
+        }
+        if (Array.isArray(v)) {
+          const arr = new Array(v.length);
+          for (let j = 0; j < v.length; j++) arr[j] = enc(v[j]);
+          return arr;
+        }
+        const out = {};
+        const keys = Object.keys(v);
+        for (let k = 0; k < keys.length; k++) {
+          out[keys[k]] = enc(v[keys[k]]);
+        }
+        return out;
+      }
+      const encoded = enc(value);
+      seen.forEach(function (ab) {
+        if (!_isDetachedBuffer(ab)) _detachArrayBuffer(ab);
+      });
+      return JSON.stringify(encoded);
+    }
+
+    function decodeFromWorker(jsonStr) {
+      if (!jsonStr) return undefined;
+      const raw = JSON.parse(jsonStr);
+      function dec(v) {
+        if (v === null || typeof v !== "object") return v;
+        if (Array.isArray(v)) {
+          const arr = new Array(v.length);
+          for (let j = 0; j < v.length; j++) arr[j] = dec(v[j]);
+          return arr;
+        }
+        if (v.__t === "undef") return undefined;
+        if (v.__t === "ab") {
+          const ab = new ArrayBuffer(v.d.length);
+          new Uint8Array(ab).set(v.d);
+          return ab;
+        }
+        if (v.__t === "ta") {
+          const buf = dec(v.b);
+          const Ctor = global[v.c] || (typeof globalThis !== "undefined" && globalThis[v.c]) || Uint8Array;
+          return new Ctor(buf, v.o, v.l);
+        }
+        const out = {};
+        const keys = Object.keys(v);
+        for (let k = 0; k < keys.length; k++) {
+          out[keys[k]] = dec(v[keys[k]]);
+        }
+        return out;
+      }
+      return dec(raw);
+    }
+
+    function decodeDataUrl(src) {
+      const comma = src.indexOf(",");
+      if (comma === -1) return "";
+      const meta = src.slice(5, comma);
+      const payload = src.slice(comma + 1);
+      if (/;base64/i.test(meta)) {
+        try { return atob(payload); } catch (e) { return ""; }
+      }
+      try { return decodeURIComponent(payload); } catch (e) { return payload; }
+    }
+
+    function dispatchWorkerEvent(ws, ev) {
+      if (ws.done && ev.type !== "error") return;
+      ws.owner.dispatchEvent(ev);
+    }
+
+    function finishWorker(ws) {
+      if (ws.done) return;
+      ws.done = true;
+      ws.queue = [];
+      liveWorkers.delete(ws.id);
+    }
+
+    global.__capsurf_worker_on_upstream = function (wid, evName, payloadJson) {
+      const ws = liveWorkers.get(wid);
+      if (!ws) return;
+      if (evName === "worker.message") {
+        const data = decodeFromWorker(payloadJson);
+        const mev = new MessageEvent("message", { data: data, origin: ws.origin });
+        if (data === undefined) {
+          Object.defineProperty(mev, "data", { value: undefined, configurable: true, enumerable: true });
+        }
+        dispatchWorkerEvent(ws, mev);
+      } else if (evName === "worker.error") {
+        let info = {};
+        try { info = JSON.parse(payloadJson || "{}"); } catch (e) {}
+        dispatchWorkerEvent(ws, new ErrorEvent("error", {
+          message: info.message || "",
+          filename: info.filename || "",
+          lineno: info.lineno || 0,
+          colno: info.colno || 0,
+          cancelable: true,
+        }));
+      } else if (evName === "worker.closed") {
+        finishWorker(ws);
+      }
+    };
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_worker_on_upstream = global.__capsurf_worker_on_upstream;
+    }
+
+    function Worker(scriptURL, options) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to construct 'Worker': 1 argument required, but only 0 present.");
+      }
+      if (!(this instanceof Worker)) {
+        throw new TypeError("Failed to construct 'Worker': Please use the 'new' operator.");
+      }
+      EventTarget.call(this);
+      const opts = (options && typeof options === "object") ? options : {};
+      if (opts.type !== undefined && String(opts.type) === "module") {
+        throw new DOMException("Failed to construct 'Worker': CapSurf does not support module workers yet.", "NotSupportedError");
+      }
+      let parsedUrl;
+      try {
+        parsedUrl = new NativeWorkerURL(String(scriptURL), currentDocBase());
+      } catch (e) {
+        throw new DOMException("Failed to construct 'Worker': The URL '" + String(scriptURL) + "' is invalid.", "SyntaxError");
+      }
+      const href = parsedUrl.href;
+      const origin = currentDocOrigin();
+      const protocol = parsedUrl.protocol;
+      const sameOrigin =
+        protocol === "data:" ||
+        (protocol === "blob:" && blobUrlRegistry.has(href)) ||
+        ((protocol === "http:" || protocol === "https:") && safeUrlOrigin(href) === origin);
+      if (!sameOrigin) {
+        throw new DOMException(
+          "Failed to construct 'Worker': Script at '" + href + "' cannot be accessed from origin '" + origin + "'.",
+          "SecurityError"
+        );
+      }
+
+      const id = nextWid++;
+      const ws = {
+        id: id,
+        owner: this,
+        origin: origin,
+        queue: [],
+        created: false,
+        done: false,
+      };
+      this._ws = ws;
+      liveWorkers.set(id, ws);
+
+      const workerName = opts.name === undefined ? "" : String(opts.name);
+      const isOopif = Boolean(
+        opts.__capsurf_oopif ||
+        (typeof globalThis !== "undefined" && globalThis.self && globalThis.self.__capsurf_is_oopif)
+      );
+      const ua = (global.navigator && global.navigator.userAgent) ? String(global.navigator.userAgent) : "";
+      const docCsp = (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_csp) ? String(globalThis.__capsurf_doc_csp) : "";
+
+      Promise.resolve().then(function () {
+        if (ws.done) return;
+        if (isOopif) {
+          finishWorker(ws);
+          dispatchWorkerEvent(ws, new ErrorEvent("error", {
+            message: "Failed to start worker: no isolate slot is free for this worker",
+            cancelable: true,
+          }));
+          return;
+        }
+        let source = null;
+        if (docCsp.length > 0 && typeof globalThis.__capsurf_script_gate === "function") {
+          const gateRes = globalThis.__capsurf_script_gate("worker", origin, docCsp, href, "", "", "0");
+          if (gateRes === null || gateRes === undefined) {
+            finishWorker(ws);
+            dispatchWorkerEvent(ws, new Event("error"));
+            return;
+          }
+          if (protocol !== "blob:" && protocol !== "data:") {
+            source = String(gateRes);
+          }
+        }
+        if (source === null) {
+          if (protocol === "blob:") {
+            const blobObj = blobUrlRegistry.get(href);
+            if (!blobObj) {
+              finishWorker(ws);
+              dispatchWorkerEvent(ws, new Event("error"));
+              return;
+            }
+            Promise.resolve(blobObj.text()).then(function (txt) {
+              startNativeWorker(txt);
+            }, function () {
+              finishWorker(ws);
+              dispatchWorkerEvent(ws, new Event("error"));
+            });
+            return;
+          } else if (protocol === "data:") {
+            source = decodeDataUrl(href);
+          } else if (typeof globalThis.__capsurf_script_gate === "function") {
+            const fetched = globalThis.__capsurf_script_gate("worker", origin, docCsp, href, "", "", "0");
+            if (fetched === null || fetched === undefined) {
+              finishWorker(ws);
+              dispatchWorkerEvent(ws, new Event("error"));
+              return;
+            }
+            source = String(fetched);
+          } else if (typeof globalThis.__capsurf_fixture_fetch === "function") {
+            const fx = globalThis.__capsurf_fixture_fetch(href, "{}");
+            if (fx === null || fx === undefined) {
+              finishWorker(ws);
+              dispatchWorkerEvent(ws, new Event("error"));
+              return;
+            }
+            source = String(fx);
+          }
+        }
+        startNativeWorker(source || "");
+      });
+
+      function startNativeWorker(src) {
+        if (ws.done) return;
+        if (typeof globalThis.__capsurf_worker_spawn !== "function") {
+          finishWorker(ws);
+          dispatchWorkerEvent(ws, new Event("error"));
+          return;
+        }
+        const status = globalThis.__capsurf_worker_spawn(id, href, workerName, src, ua, origin, Date.now());
+        if (status === "NO_SLOT") {
+          finishWorker(ws);
+          dispatchWorkerEvent(ws, new ErrorEvent("error", {
+            message: "Failed to start worker: no isolate slot is free for this worker",
+            cancelable: true,
+          }));
+          return;
+        }
+        if (status === "SYNTAX_ERROR" || status === "ERR") {
+          finishWorker(ws);
+          dispatchWorkerEvent(ws, new Event("error"));
+          return;
+        }
+        ws.created = true;
+        for (let i = 0; i < ws.queue.length; i++) {
+          globalThis.__capsurf_worker_post(id, ws.queue[i]);
+        }
+        ws.queue = [];
+        if (typeof globalThis.__capsurf_worker_pump === "function") {
+          globalThis.__capsurf_worker_pump();
+        }
+      }
+    }
+
+    Worker.prototype = Object.create(EventTarget.prototype);
+    Worker.prototype.constructor = Worker;
+    Worker.prototype.postMessage = function (message, transferOrOptions) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'postMessage' on 'Worker': 1 argument required, but only 0 present.");
+      }
+      const ws = this._ws;
+      const encoded = encodeForWorker(message, transferOrOptions);
+      if (ws.done) return;
+      if (!ws.created) {
+        ws.queue.push(encoded);
+        return;
+      }
+      if (typeof globalThis.__capsurf_worker_post === "function") {
+        globalThis.__capsurf_worker_post(ws.id, encoded);
+      }
+    };
+    Worker.prototype.terminate = function () {
+      const ws = this._ws;
+      if (ws.done) return;
+      const wasCreated = ws.created;
+      finishWorker(ws);
+      if (wasCreated && typeof globalThis.__capsurf_worker_terminate === "function") {
+        globalThis.__capsurf_worker_terminate(ws.id);
+      }
+    };
+    ["message", "messageerror", "error"].forEach(function (evType) {
+      const key = "_on" + evType;
+      Object.defineProperty(Worker.prototype, "on" + evType, {
+        configurable: true,
+        enumerable: true,
+        get: function () { return this[key] || null; },
+        set: function (fn) {
+          this[key] = typeof fn === "function" ? fn : null;
+        },
+      });
+    });
+    markNative(Worker, "Worker");
+
+    function SharedWorker() {
+      throw new DOMException("Failed to construct 'SharedWorker': SharedWorker is not supported.", "SecurityError");
+    }
+    markNative(SharedWorker, "SharedWorker");
+
+    global.Worker = Worker;
+    global.SharedWorker = SharedWorker;
+    if (typeof window !== "undefined") {
+      window.Worker = Worker;
+      window.SharedWorker = SharedWorker;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.Worker = Worker;
+      globalThis.SharedWorker = SharedWorker;
+    }
+  })();
 }

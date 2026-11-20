@@ -416,12 +416,28 @@ markNative(TextMetrics, "TextMetrics");
 
 function ImageData(w, h, data) {
   if (typeof w === "object" && w instanceof Uint8ClampedArray) {
+    if (w.length === 0 || w.length % 4 !== 0) {
+      throw new DOMException("The input data length is not a nonzero multiple of 4.", "InvalidStateError");
+    }
+    const width = Number(h) >>> 0;
+    if (width === 0 || (w.length / 4) % width !== 0) {
+      throw new DOMException("The input data length is not a multiple of (4 * width).", "IndexSizeError");
+    }
+    const height = data === undefined ? (w.length / 4 / width) : (Number(data) >>> 0);
+    if (height * width * 4 !== w.length) {
+      throw new DOMException("The input data length is not equal to (4 * width * height).", "IndexSizeError");
+    }
     this.data = w;
-    this.width = Number(h || 1);
-    this.height = Math.max(1, (this.data.length / (4 * this.width)) | 0);
+    this.width = width;
+    this.height = height;
   } else {
-    this.width = Math.max(1, Number(w || 1) | 0);
-    this.height = Math.max(1, Number(h || 1) | 0);
+    const width = Number(w) >>> 0;
+    const height = Number(h) >>> 0;
+    if (width === 0 || height === 0) {
+      throw new DOMException("The source width and height must be non-zero.", "IndexSizeError");
+    }
+    this.width = width;
+    this.height = height;
     this.data = data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(this.width * this.height * 4);
   }
   this.colorSpace = "srgb";

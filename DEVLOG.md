@@ -1790,3 +1790,6 @@
 ### Phase 237-238: Multi-Tab `CdpPageSession` Isolation (`script-navigation-tab` 2/2)
 - `CdpServer` now maintains up to 16 `TabSessionSlot` entries keyed by top-level `session_id` / non-default `browserContextId`, routing CDP commands and flushing DOM/pending-navigation events per tab without cross-tab pollution.
 - Freeing `pending_raw` `JSValue` before `session.navigate(...)` in `performPendingNavigation` prevents freeing a stale `JSValue` against the newly created `JSContext`.
+
+### Phase 239: Native QuickJS `DedicatedWorkerGlobalScope` (`dedicated-worker` 22/22)
+- Spawned isolated per-worker `JSContext` inside `session_hooks.cp` with `MAX_WORKER_SLOTS = 1`, `terminateAllWorkers()` on navigation, `WORKER_BOOTSTRAP_JS` globals, and `__capsurf_worker_pump()` linked to `__capsurf_pump_timers`.
