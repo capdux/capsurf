@@ -1975,4 +1975,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`gateway-font-shaping` (2/2)、`pixel-free-shaping-fonts` (1/1)、`label-svg-content-activation` (1/1)、`range-contextual-fragment` (1/1)、`interception-abandoned-park` (2/2) PASS。
+
+## Phase 126: Nested Iframe FrameTree & `frameAttached`/`lifecycleEvent` Sequence — 3/3 Suites (4/4 PASS)
+- **`src/cdp/page.cp`**：
+  - 在 `Page.navigate` 为子/孙 frame 补发 `Page.frameAttached`、`Page.frameStartedLoading`、`Page.frameNavigated`（含 `makeFrameInfoWithFrames`）、`Page.lifecycleEvent(init)` 与 `Page.frameStoppedLoading`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/cdp/page.cp` 4 门禁全 0；
+  - E2E 测试：`page-frame-metadata` (2/2)、`iframe-frame-tree-demo` (1/1)、`iframe-nested-frame-tree` (1/1) — **4/4 PASS (100%)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

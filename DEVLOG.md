@@ -1545,4 +1545,8 @@
    - `CDPClient` 支持自定义握手 `headers` 并通过 `releaseSharedCdp()` 隔离独立会话，使 `x-kitesurf-skip-raster: 1` 与 `disconnect()` 互不干扰；基于 `Page.getFrameTree` 构建 `Frame` 树与 `about:blank` 测试前强制重置。
 2. **原生内部挂载与 CDP 空对象 JSON 兜底 (`range.js`, `runtime.cp`, `session.cp`)**：
    - 暴露 `__capsurf_raw_setInnerHTML` 与 `_internalGetAttribute` 绕过页面覆盖钩子；`formatCdpRemoteObject` 对空/异常值兜底输出 `{"result":{"type":"undefined"}}` 消除非法的 `{"result":}` 截断。
+
+## Phase 126 嵌套 Iframe `Page.frameAttached` 与生命周期事件序列技术方案
+1. **子/孙 Frame 有序事件推流 (`src/cdp/page.cp`)**：
+   - 导入 `makeFrameInfoWithFrames`，在 `Page.navigate` 遍历并构建嵌套 frame 树时，严格按 `frameAttached -> frameStartedLoading -> frameNavigated -> lifecycleEvent(init) -> frameStoppedLoading` 时序发射，使递归深度限制与 `Target` 注册联动全绿通过。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

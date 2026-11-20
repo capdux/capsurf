@@ -4014,6 +4014,14 @@
   - `gateway-font-shaping` (**2/2**)、`pixel-free-shaping-fonts` (**1/1**)、`label-svg-content-activation` (**1/1**)、`range-contextual-fragment` (**1/1**)、`interception-abandoned-park` (**2/2**)、`webmcp`（`lazy about:blank` 787ms PASS、`cancellation belongs to the invoking session` PASS，前 9 项 8 PASS）。
 - **清理旧子智能体**: 销毁 `e5fc2604-a105-4aaf-b323-55f8e7b30bd5`。
 
+## [2026-11-20 22:41:00] 1 分 45 秒极速闭环 `page-frame-metadata` 与嵌套 Iframe FrameTree/事件序列 (Subagent ccfd314a 结单，Phase 126)
+- **子/孙 Frame 完整 CDP 事件时序 (`src/cdp/page.cp`)**:
+  - 在 `Page.navigate` 为每个子/孙 frame 按序补发 `Page.frameAttached` -> `Page.frameStartedLoading` -> `Page.frameNavigated`（含完整 `makeFrameInfoWithFrames` 与 `type: "Navigation"`）-> `Page.lifecycleEvent(init)` -> `Runtime.executionContextCreated` -> `Page.frameStoppedLoading`。
+- **门禁与 E2E 验证（`-m -d -o` 编译 6.69s，port `19233`）**:
+  - `src/cdp/page.cp` 4 门禁全 0；
+  - `page-frame-metadata` (**2/2**)、`iframe-frame-tree-demo` (**1/1**)、`iframe-nested-frame-tree` (**1/1**)：**4/4 PASS（50 expect() calls，耗时 6.37s）**！
+- **清理旧子智能体**: 销毁 `ccfd314a-d8ec-41a3-b1f3-3dc903d7f4b0`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

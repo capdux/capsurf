@@ -26,6 +26,7 @@ import {
     ChildFrameArgs,
     makeMainFrameState,
     makeChildFrameState,
+    makeFrameInfoWithFrames,
     originOf,
     buildFrameTree,
     buildFrameTreeAt,
@@ -751,10 +752,50 @@ pub struct PageHandler {
             defer if (nav_urls != null) session.allocator.free(nav_urls.?);
             defer if (nav_ids != null) session.allocator.free(nav_ids.?);
             if (nav_frames != null && nav_urls != null && nav_ids != null) {
-                const nav_frame_count = collectFrameStates(session, nav_frames.?, nav_urls.?, nav_ids.?);
+                const nav_slice = nav_frames.?;
+                const nav_frame_count = collectFrameStates(session, nav_slice, nav_urls.?, nav_ids.?);
+                let frame_info_buf: [2048]u8 = [0; 2048];
                 let fi: usize = 1;
                 while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
-                    const cf = &nav_frames.?[fi];
+                    const cf = &nav_slice[fi];
+                    const parent_fid = cf.parent_frame_id ?? session.frame_id;
+                    if (event_count.* < out_events.len) {
+                        const att_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frameId\":\"{s}\",\"parentFrameId\":\"{s}\"}}",
+                            .{ cf.frame_id, parent_fid },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.frameAttached", att_json);
+                        event_count.* += 1;
+                    }
+                    if (event_count.* < out_events.len) {
+                        const start_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frameId\":\"{s}\"}}",
+                            .{ cf.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+                        event_count.* += 1;
+                    }
+                    if (event_count.* < out_events.len) {
+                        const frame_info = makeFrameInfoWithFrames(cf, nav_slice[0..nav_frame_count], &frame_info_buf);
+                        const nav_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frame\":{s},\"type\":\"Navigation\"}}",
+                            .{ frame_info },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", nav_json);
+                        event_count.* += 1;
+                    }
+                    if (event_count.* < out_events.len) {
+                        const lc_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
+                            .{ cf.frame_id, cf.loader_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_json);
+                        event_count.* += 1;
+                    }
                     if (session.runtime_enabled && event_count.* < out_events.len) {
                         const ctx_id = session.next_context_id;
                         session.next_context_id += 1;
