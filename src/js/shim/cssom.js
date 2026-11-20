@@ -2754,6 +2754,12 @@
               }
               if (typeof val === "string") {
                 val = resolveCssVars(element, val);
+                if ((k === "color" || k.endsWith("-color")) && val.trim().toLowerCase() === "currentcolor") {
+                  val = receiver.color || "rgb(0, 0, 0)";
+                }
+                if (k === "shape-outside" || k === "clip-path" || k === "offset-path") {
+                  val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
+                }
                 val = normalizeCssColor(val);
               }
               return val || "";
@@ -2809,7 +2815,19 @@
             let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
             if (val) {
               val = resolveCssVars(element, val);
+              if (val.trim().toLowerCase() === "currentcolor") {
+                val = receiver.color || "rgb(0, 0, 0)";
+              }
               val = normalizeCssColor(val);
+            }
+            return val || "";
+          }
+
+          if (kebab === "shape-outside" || kebab === "clip-path" || kebab === "offset-path") {
+            let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
+            if (typeof val === "string" && val) {
+              val = resolveCssVars(element, val);
+              val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
             }
             return val || "";
           }

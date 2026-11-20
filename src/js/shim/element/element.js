@@ -484,8 +484,19 @@ function installElementExtensions(proto) {
       if (!this._classList) {
         const self = this;
         this._classList = new DOMTokenList(
-          function () { return self.className || ""; },
-          function (val) { self.className = val; }
+          function () {
+            const cn = self.className;
+            if (typeof cn === "string") return cn;
+            if (cn && typeof cn.baseVal === "string") return cn.baseVal;
+            return (self.getAttribute && self.getAttribute("class")) || "";
+          },
+          function (val) {
+            if (self.className && typeof self.className === "object" && "baseVal" in self.className) {
+              if (self.setAttribute) self.setAttribute("class", String(val));
+            } else {
+              self.className = val;
+            }
+          }
         );
       }
       return this._classList;
@@ -1535,17 +1546,26 @@ function installElementExtensions(proto) {
   }
 
   Object.defineProperty(proto, "scrollTop", {
-    get: function () { return this._scrollTop || 0; },
+    get: function () {
+      if (this === document.documentElement) {
+        return (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || this._scrollTop || 0;
+      }
+      return this._scrollTop || 0;
+    },
     set: function (v) {
       const num = Number(v) || 0;
       let target = Math.max(0, num);
       const sh = this.scrollHeight;
       const ch = this.clientHeight;
-      if (sh > ch && ch > 0) {
-        target = Math.min(target, sh - ch);
+      if (ch > 0) {
+        target = Math.min(target, Math.max(0, sh - ch));
       }
       const prev = this._scrollTop || 0;
       this._scrollTop = target;
+      if (this === document.documentElement && typeof window !== "undefined" && typeof window.scrollTo === "function") {
+        window.scrollTo(window.scrollX || 0, target);
+        return;
+      }
       if (prev !== target) {
         triggerScrollEvents(this);
       }
@@ -1554,17 +1574,26 @@ function installElementExtensions(proto) {
   });
 
   Object.defineProperty(proto, "scrollLeft", {
-    get: function () { return this._scrollLeft || 0; },
+    get: function () {
+      if (this === document.documentElement) {
+        return (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || this._scrollLeft || 0;
+      }
+      return this._scrollLeft || 0;
+    },
     set: function (v) {
       const num = Number(v) || 0;
       let target = Math.max(0, num);
       const sw = this.scrollWidth;
       const cw = this.clientWidth;
-      if (sw > cw && cw > 0) {
-        target = Math.min(target, sw - cw);
+      if (cw > 0) {
+        target = Math.min(target, Math.max(0, sw - cw));
       }
       const prev = this._scrollLeft || 0;
       this._scrollLeft = target;
+      if (this === document.documentElement && typeof window !== "undefined" && typeof window.scrollTo === "function") {
+        window.scrollTo(target, window.scrollY || 0);
+        return;
+      }
       if (prev !== target) {
         triggerScrollEvents(this);
       }
@@ -1716,6 +1745,28 @@ function installElementExtensions(proto) {
       }
       const parent = getScrollParent(this);
       if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
+        const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+        const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+        const pos = getComputedPosition(this);
+        if (pos === "absolute" || pos === "fixed") {
+          let absLeft = 0;
+          let absTop = 0;
+          if (this.style && this.style.left) absLeft = parseFloat(this.style.left) || 0;
+          if (this.style && this.style.top) absTop = parseFloat(this.style.top) || 0;
+          if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+            try {
+              const cs = window.getComputedStyle(this);
+              if (cs) {
+                if (!this.style?.left && cs.left && cs.left !== "auto") absLeft = parseFloat(cs.left) || 0;
+                if (!this.style?.top && cs.top && cs.top !== "auto") absTop = parseFloat(cs.top) || 0;
+              }
+            } catch (e) {}
+          }
+          if (pos === "fixed") {
+            return makeDomRect(absLeft, absTop, childW, childH);
+          }
+          return makeDomRect(absLeft - winX, absTop - winY, childW, childH);
+        }
         const pr = parent.getBoundingClientRect();
         if (!childW) childW = pr.width;
         let offsetTop = 0;
@@ -1754,13 +1805,108 @@ function installElementExtensions(proto) {
   };
   markNative(proto.getBoundingClientRect, "getBoundingClientRect");
 
+  function getBorderWidthPx(el, side) {
+    if (!el || el.nodeType !== 1 || isElementDisplayNone(el)) return 0;
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs) {
+          const bStyle = String(cs.getPropertyValue("border-" + side + "-style") || "").trim().toLowerCase();
+          if (bStyle === "none" || bStyle === "hidden") return 0;
+          const bw = String(cs.getPropertyValue("border-" + side + "-width") || "").trim().toLowerCase();
+          if (bw === "thin") return 1;
+          if (bw === "medium") return 3;
+          if (bw === "thick") return 5;
+          const n = parseFloat(bw);
+          if (!isNaN(n) && n > 0) return n;
+        }
+      } catch (e) {}
+    }
+    return 0;
+  }
+
+  function getComputedPosition(el) {
+    if (!el || el.nodeType !== 1) return "static";
+    if (el.style) {
+      const p = (typeof el.style.getPropertyValue === "function")
+        ? el.style.getPropertyValue("position")
+        : el.style.position;
+      if (p) return String(p).trim().toLowerCase();
+    }
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs) {
+          const cp = (typeof cs.getPropertyValue === "function")
+            ? cs.getPropertyValue("position")
+            : cs.position;
+          if (cp) return String(cp).trim().toLowerCase();
+        }
+      } catch (e) {}
+    }
+    return "static";
+  }
+
+  function isOverflowClipped(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs) {
+          const ox = String(cs.getPropertyValue("overflow-x") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+          const oy = String(cs.getPropertyValue("overflow-y") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+          if (ox === "hidden" || ox === "clip" || ox === "scroll" || ox === "auto" ||
+              oy === "hidden" || oy === "clip" || oy === "scroll" || oy === "auto") {
+            return true;
+          }
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  Object.defineProperty(proto, "offsetWidth", {
+    get: function () {
+      if (isElementDisplayNone(this)) return 0;
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+      return Math.round(r.width || 0);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "offsetHeight", {
+    get: function () {
+      if (isElementDisplayNone(this)) return 0;
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+      return Math.round(r.height || 0);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "clientTop", {
+    get: function () {
+      return Math.round(getBorderWidthPx(this, "top"));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "clientLeft", {
+    get: function () {
+      return Math.round(getBorderWidthPx(this, "left"));
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(proto, "clientHeight", {
     get: function () {
       if (this === document.documentElement || this === document.body) {
         return (typeof window !== "undefined" && window.innerHeight) || 720;
       }
+      if (isElementDisplayNone(this)) return 0;
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-      return Math.round(r.height);
+      const bt = getBorderWidthPx(this, "top");
+      const bb = getBorderWidthPx(this, "bottom");
+      return Math.max(0, Math.round((r.height || 0) - bt - bb));
     },
     configurable: true,
   });
@@ -1770,28 +1916,110 @@ function installElementExtensions(proto) {
       if (this === document.documentElement || this === document.body) {
         return (typeof window !== "undefined" && window.innerWidth) || 1280;
       }
+      if (isElementDisplayNone(this)) return 0;
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-      return Math.round(r.width);
+      const bl = getBorderWidthPx(this, "left");
+      const br = getBorderWidthPx(this, "right");
+      return Math.max(0, Math.round((r.width || 0) - bl - br));
     },
     configurable: true,
   });
 
+  function getDocRectForScroll(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(el) : (el.getBoundingClientRect ? el.getBoundingClientRect() : null);
+    if (r && (r.width > 0 || r.height > 0 || r.x !== 0 || r.y !== 0)) {
+      const rx = Number(r.x || 0);
+      const ry = Number(r.y || 0);
+      const rw = Number(r.width || 0);
+      const rh = Number(r.height || 0);
+      return { x: rx, y: ry, width: rw, height: rh, right: rx + rw, bottom: ry + rh };
+    }
+    let w = 0, h = 0, x = 0, y = 0;
+    if (el.style) {
+      if (el.style.width) w = parseFloat(el.style.width) || 0;
+      if (el.style.height) h = parseFloat(el.style.height) || 0;
+      if (el.style.left) x = parseFloat(el.style.left) || 0;
+      if (el.style.top) y = parseFloat(el.style.top) || 0;
+    }
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs) {
+          if (!w && cs.width && cs.width !== "auto") w = parseFloat(cs.width) || 0;
+          if (!h && cs.height && cs.height !== "auto") h = parseFloat(cs.height) || 0;
+          if (!el.style?.left && cs.left && cs.left !== "auto") x = parseFloat(cs.left) || 0;
+          if (!el.style?.top && cs.top && cs.top !== "auto") y = parseFloat(cs.top) || 0;
+        }
+      } catch (e) {}
+    }
+    if (w > 0 || h > 0) {
+      return { x: x, y: y, width: w, height: h, right: x + w, bottom: y + h };
+    }
+    return null;
+  }
+
+  function collectRootScrollExtents(rootEl, isDocEl) {
+    const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+    const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+    let originX = 0;
+    let originY = 0;
+    let maxW = vw;
+    let maxH = vh;
+
+    const rr = getDocRectForScroll(rootEl);
+    if (rr) {
+      originX = rr.x;
+      originY = rr.y;
+      if (!isDocEl) {
+        if (rr.width > 0) maxW = Math.round(rr.width);
+        if (rr.height > 0) maxH = Math.round(rr.height);
+      }
+    }
+    if (!isDocEl && maxW < vw && originX === 0) maxW = vw;
+
+    if (rootEl.style && rootEl.style.height) {
+      const ph = parseFloat(rootEl.style.height);
+      if (!isNaN(ph) && ph > maxH) maxH = ph;
+    }
+    if (rootEl.style && rootEl.style.width) {
+      const pw = parseFloat(rootEl.style.width);
+      if (!isNaN(pw) && pw > maxW) maxW = pw;
+    }
+
+    function walk(parent) {
+      const kids = parent.children || [];
+      for (let i = 0; i < kids.length; i++) {
+        const child = kids[i];
+        if (!child || child.nodeType !== 1) continue;
+        const tag = String(child.localName || child.tagName || "").toLowerCase();
+        if (tag === "head" || tag === "style" || tag === "script" || tag === "meta" || tag === "link" || tag === "title" || tag === "template") {
+          continue;
+        }
+        if (isElementDisplayNone(child)) continue;
+        if (getComputedPosition(child) === "fixed") continue;
+        const cr = getDocRectForScroll(child);
+        if (cr) {
+          const relRight = cr.right - originX;
+          const relBottom = cr.bottom - originY;
+          if (relRight > maxW) maxW = relRight;
+          if (relBottom > maxH) maxH = relBottom;
+        }
+        if (!isOverflowClipped(child)) {
+          walk(child);
+        }
+      }
+    }
+
+    walk(rootEl);
+    return { width: Math.round(maxW), height: Math.round(maxH) };
+  }
+
   Object.defineProperty(proto, "scrollHeight", {
     get: function () {
       if (this === document.documentElement || this === document.body) {
-        let maxH = (typeof window !== "undefined" && window.innerHeight) || 720;
-        if (this.style && this.style.height) {
-          const ph = parseFloat(this.style.height);
-          if (!isNaN(ph) && ph > maxH) maxH = ph;
-        }
-        const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
-        const all = this.children || [];
-        for (let i = 0; i < all.length; i++) {
-          const child = all[i];
-          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
-          if (cr && cr.bottom + winY > maxH) maxH = cr.bottom + winY;
-        }
-        return Math.round(maxH);
+        return collectRootScrollExtents(this, this === document.documentElement).height;
       }
 
       let maxBottom = this.clientHeight;
@@ -1803,6 +2031,7 @@ function installElementExtensions(proto) {
       for (let i = 0; i < all.length; i++) {
         const child = all[i];
         if (!child || child.nodeType !== 1) continue;
+        if (isElementDisplayNone(child)) continue;
         const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
         let childH = (cr && cr.height) || 0;
         if (!childH && child.style && child.style.height) {
@@ -1810,7 +2039,7 @@ function installElementExtensions(proto) {
         }
         let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y + (this._scrollTop || 0)) : accumY;
         accumY += childH;
-        const b = Math.max(relY + childH, childH);
+        const b = relY + childH;
         if (b > maxBottom) maxBottom = b;
       }
       return Math.round(maxBottom);
@@ -1821,19 +2050,7 @@ function installElementExtensions(proto) {
   Object.defineProperty(proto, "scrollWidth", {
     get: function () {
       if (this === document.documentElement || this === document.body) {
-        let maxW = (typeof window !== "undefined" && window.innerWidth) || 1280;
-        if (this.style && this.style.width) {
-          const pw = parseFloat(this.style.width);
-          if (!isNaN(pw) && pw > maxW) maxW = pw;
-        }
-        const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
-        const all = this.children || [];
-        for (let i = 0; i < all.length; i++) {
-          const child = all[i];
-          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
-          if (cr && cr.right + winX > maxW) maxW = cr.right + winX;
-        }
-        return Math.round(maxW);
+        return collectRootScrollExtents(this, this === document.documentElement).width;
       }
 
       let maxRight = this.clientWidth;
@@ -1845,6 +2062,7 @@ function installElementExtensions(proto) {
       for (let i = 0; i < all.length; i++) {
         const child = all[i];
         if (!child || child.nodeType !== 1) continue;
+        if (isElementDisplayNone(child)) continue;
         const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
         let childW = (cr && cr.width) || 0;
         if (!childW && child.style && child.style.width) {
@@ -1852,7 +2070,7 @@ function installElementExtensions(proto) {
         }
         let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x + (this._scrollLeft || 0)) : accumX;
         accumX += childW;
-        const r = Math.max(relX + childW, childW);
+        const r = relX + childW;
         if (r > maxRight) maxRight = r;
       }
       return Math.round(maxRight);

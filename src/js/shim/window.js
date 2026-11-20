@@ -3372,23 +3372,140 @@ function installWindow(global) {
   markNative(IntersectionObserver, "IntersectionObserver");
   global.IntersectionObserver = IntersectionObserver;
 
+  const activeResizeObservers = new Set();
+  let resizeObserverPollTimer = null;
+
+  function measureResizeObserverTarget(el) {
+    const rect = el && typeof el.getBoundingClientRect === "function"
+      ? el.getBoundingClientRect()
+      : { width: 0, height: 0 };
+    const borderW = Number(rect.width || 0);
+    const borderH = Number(rect.height || 0);
+    if (borderW <= 0 && borderH <= 0) {
+      return {
+        contentRect: new DOMRectReadOnly(0, 0, 0, 0),
+        borderWidth: 0,
+        borderHeight: 0,
+        contentWidth: 0,
+        contentHeight: 0,
+      };
+    }
+    let pt = 0, pr = 0, pb = 0, pl = 0;
+    let bt = 0, br = 0, bb = 0, bl = 0;
+    try {
+      const csFn = global.getComputedStyle || (typeof getComputedStyle === "function" ? getComputedStyle : null);
+      if (csFn) {
+        const cs = csFn(el);
+        if (cs && typeof cs.getPropertyValue === "function") {
+          const parsePx = function (v) {
+            const s = String(v || "").trim().toLowerCase();
+            if (s === "thin") return 1;
+            if (s === "medium") return 3;
+            if (s === "thick") return 5;
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+          };
+          pt = parsePx(cs.getPropertyValue("padding-top"));
+          pr = parsePx(cs.getPropertyValue("padding-right"));
+          pb = parsePx(cs.getPropertyValue("padding-bottom"));
+          pl = parsePx(cs.getPropertyValue("padding-left"));
+          const bts = String(cs.getPropertyValue("border-top-style") || "").trim().toLowerCase();
+          const brs = String(cs.getPropertyValue("border-right-style") || "").trim().toLowerCase();
+          const bbs = String(cs.getPropertyValue("border-bottom-style") || "").trim().toLowerCase();
+          const bls = String(cs.getPropertyValue("border-left-style") || "").trim().toLowerCase();
+          bt = (bts === "none" || bts === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-top-width"));
+          br = (brs === "none" || brs === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-right-width"));
+          bb = (bbs === "none" || bbs === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-bottom-width"));
+          bl = (bls === "none" || bls === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-left-width"));
+        }
+      }
+    } catch (e) {}
+    const contentW = Math.max(0, borderW - bl - br - pl - pr);
+    const contentH = Math.max(0, borderH - bt - bb - pt - pb);
+    return {
+      contentRect: new DOMRectReadOnly(pl, pt, contentW, contentH),
+      borderWidth: borderW,
+      borderHeight: borderH,
+      contentWidth: contentW,
+      contentHeight: contentH,
+    };
+  }
+
+  function deliverResizeObserver(obs) {
+    if (!obs || obs._disconnected || obs._targets.size === 0) return;
+    const entries = [];
+    for (const [el, last] of obs._targets.entries()) {
+      const m = measureResizeObserverTarget(el);
+      const changed = !last ||
+        Math.abs(m.contentWidth - last.width) > 0.01 ||
+        Math.abs(m.contentHeight - last.height) > 0.01;
+      if (changed) {
+        obs._targets.set(el, { width: m.contentWidth, height: m.contentHeight });
+        entries.push({
+          target: el,
+          contentRect: m.contentRect,
+          borderBoxSize: [{ inlineSize: m.borderWidth, blockSize: m.borderHeight }],
+          contentBoxSize: [{ inlineSize: m.contentWidth, blockSize: m.contentHeight }],
+          devicePixelContentBoxSize: [{ inlineSize: Math.round(m.contentWidth), blockSize: Math.round(m.contentHeight) }],
+        });
+      }
+    }
+    if (entries.length > 0) {
+      try {
+        obs.callback(entries, obs);
+      } catch (e) {}
+    }
+  }
+
+  function ensureResizeObserverPoller() {
+    if (resizeObserverPollTimer !== null) return;
+    if (activeResizeObservers.size === 0) return;
+    if (typeof setInterval === "function") {
+      resizeObserverPollTimer = setInterval(function () {
+        if (activeResizeObservers.size === 0) {
+          if (typeof clearInterval === "function") clearInterval(resizeObserverPollTimer);
+          resizeObserverPollTimer = null;
+          return;
+        }
+        for (const obs of Array.from(activeResizeObservers)) {
+          deliverResizeObserver(obs);
+        }
+      }, 100);
+    }
+  }
+
   function ResizeObserver(callback) {
     if (typeof callback !== "function") throw new TypeError("Callback required");
     this.callback = callback;
+    this._targets = new Map();
+    this._disconnected = false;
   }
-  ResizeObserver.prototype.observe = function (el) {
+  ResizeObserver.prototype.observe = markNative(function (el) {
     if (!el) return;
-    const cb = this.callback;
+    this._disconnected = false;
+    if (!this._targets.has(el)) {
+      this._targets.set(el, null);
+    }
+    activeResizeObservers.add(this);
+    ensureResizeObserverPoller();
     const obs = this;
-    const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
     Promise.resolve().then(function () {
-      try {
-        cb([{ target: el, contentRect: rect }], obs);
-      } catch (e) {}
+      deliverResizeObserver(obs);
     });
-  };
-  ResizeObserver.prototype.unobserve = markNative(function () {}, "unobserve");
-  ResizeObserver.prototype.disconnect = markNative(function () {}, "disconnect");
+  }, "observe");
+  ResizeObserver.prototype.unobserve = markNative(function (el) {
+    if (this._targets) {
+      this._targets.delete(el);
+      if (this._targets.size === 0) {
+        activeResizeObservers.delete(this);
+      }
+    }
+  }, "unobserve");
+  ResizeObserver.prototype.disconnect = markNative(function () {
+    this._disconnected = true;
+    if (this._targets) this._targets.clear();
+    activeResizeObservers.delete(this);
+  }, "disconnect");
   markNative(ResizeObserver, "ResizeObserver");
   global.ResizeObserver = ResizeObserver;
 
@@ -3671,6 +3788,45 @@ function installWindow(global) {
           computedMap.set("padding-bottom", sides[2]);
           computedMap.set("padding-left", sides[3]);
         }
+      } else if (key === "border-width") {
+        const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+        if (sides) {
+          computedMap.set("border-top-width", sides[0]);
+          computedMap.set("border-right-width", sides[1]);
+          computedMap.set("border-bottom-width", sides[2]);
+          computedMap.set("border-left-width", sides[3]);
+        }
+      } else if (key === "border-style") {
+        const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+        if (sides) {
+          computedMap.set("border-top-style", sides[0]);
+          computedMap.set("border-right-style", sides[1]);
+          computedMap.set("border-bottom-style", sides[2]);
+          computedMap.set("border-left-style", sides[3]);
+        }
+      } else if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
+        const parts = splitCssTopLevelWhitespace(val);
+        let bWidth = "";
+        let bStyle = "";
+        const styleWords = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+        for (let pi = 0; pi < parts.length; pi++) {
+          const tok = parts[pi].toLowerCase();
+          if (styleWords.has(tok)) {
+            bStyle = tok;
+          } else if (/^(?:thin|medium|thick|[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|cm|mm|in|pc)?|0)$/.test(tok)) {
+            bWidth = tok;
+          }
+        }
+        const targetSides = key === "border" ? ["top", "right", "bottom", "left"] : [key.slice(7)];
+        for (let si = 0; si < targetSides.length; si++) {
+          const side = targetSides[si];
+          if (bStyle) computedMap.set("border-" + side + "-style", bStyle);
+          if (bStyle === "none" || bStyle === "hidden") {
+            computedMap.set("border-" + side + "-width", "0px");
+          } else if (bWidth) {
+            computedMap.set("border-" + side + "-width", bWidth);
+          }
+        }
       } else if (key === "overflow") {
         const parts = splitCssTopLevelWhitespace(val);
         if (parts.length === 1) {
@@ -3712,7 +3868,12 @@ function installWindow(global) {
     if (s.startsWith(".") && !s.includes(" ") && !s.includes("#") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
       const cls = s.slice(1);
       if (el.classList && el.classList.contains(cls)) return true;
-      if (el.className && el.className.split(/\s+/).includes(cls)) return true;
+      const clsStr = typeof el.className === "string"
+        ? el.className
+        : (el.className && typeof el.className.baseVal === "string"
+          ? el.className.baseVal
+          : (el.getAttribute ? (el.getAttribute("class") || "") : ""));
+      if (clsStr && clsStr.split(/\s+/).includes(cls)) return true;
       return false;
     }
 
@@ -7777,6 +7938,13 @@ const CSS_TYPED_OM_GLOBALS = {
     }
     if (isNaN(targetX)) targetX = 0;
     if (isNaN(targetY)) targetY = 0;
+    const de = (typeof document !== "undefined" && document.documentElement) ? document.documentElement : null;
+    const vw = Number(global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 0) || 1280);
+    const vh = Number(global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 0) || 720);
+    const maxScrollX = de ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
+    const maxScrollY = de ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
+    targetX = Math.max(0, Math.min(targetX, maxScrollX));
+    targetY = Math.max(0, Math.min(targetY, maxScrollY));
     const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
     const prevY = (typeof global.scrollY !== "undefined") ? global.scrollY : 0;
     global.pageXOffset = targetX;
@@ -7794,6 +7962,10 @@ const CSS_TYPED_OM_GLOBALS = {
       window.scrollY = targetY;
       window.pageXOffset = targetX;
       window.pageYOffset = targetY;
+    }
+    if (de) {
+      de._scrollLeft = targetX;
+      de._scrollTop = targetY;
     }
     if (prevX !== targetX || prevY !== targetY) {
       triggerWindowScrollEvents();

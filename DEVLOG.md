@@ -1395,4 +1395,10 @@
    - 在执行每个经典 `<script>` 前设置 `document._currentScript`，执行完毕后立即 `drainJobs()` 再清零，期间通过 `__capsurf_defer_timers` 暂存 `setTimeout` 宏任务，确保 Promise 微任务可见 `currentScript` 而 `setTimeout` 仅见 `null`。
 2. **优先资源准入与持久化绑定 (`session.cp`, `types.cp`, `kitesurf_facade.cp`)**：
    - 提升 `MAX_CDP_EVENTS=64` 并以连续游标缓冲 `net_event_storage` 承载多子资源事件；实装 `<link rel="stylesheet">` 高优先级槽位准入与跨导航自动重装 `Runtime.addBinding`。
+
+## Phase 98 盒模型测量、`ResizeObserver`、根滚动溢出与引擎路由代理技术方案
+1. **盒模型测量与 `ResizeObserver` (`element.js`, `window.js`)**：
+   - 补齐 `offsetWidth`/`offsetHeight`/`clientTop`/`clientLeft`，`clientWidth`/`clientHeight` 扣除边框；`ResizeObserver` 计算真实 `contentRect` 并通过轻量轮询感知视口、样式、动画与 transition 尺寸变化。
+2. **根滚动溢出与 `window.scrollTo` 钳位 (`element.js`, `window.js`, `cloudflare-test.ts`)**：
+   - `collectRootScrollExtents` 排除 `position: fixed` 子树并递归计入 `abspos` 溢出，普通元素采用 `relX + childW` 避免负左边距膨胀；`cloudflare-test.ts` 补齐 `X-Forwarded-Host`/`Proto` 与 inspector 绑定使 `engine-routes` 达 15/17 PASS。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

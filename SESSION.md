@@ -3697,3 +3697,23 @@
   - 销毁 `7caf7da0-27dd-4b0e-84e8-2bb87c59548c`；
   - 派发 **Subagent 66**: CDP Heap & Policy Specialist（`src/cdp/*` + `src/net/*`，`bin_19233` / `19233`）
     - 攻坚目标：`runtime-get-heap-usage`（2 行修 `session.cp` 2/2 PASS）、`dom-attribute-namespace-wire`、`frame-policy`、`cross-origin-redirect-shell`、`fetch-cache-mode-cors`。
+
+## [2026-11-20 18:49:15] 收到并验收上游 `cp_agy` 热修复广播 (`syntax-hotfix-20261120-modular-struct-name-and-nested-repeat`)
+- **修复内容**: `cpc` 修复 `-m` 模块模式两处缺陷（struct `.name()`/`.value()` 误走枚举 `@tagName` 改写、嵌套定长数组重复字面量类型泄露）。
+- **验收结果**: 实测 `cap build -m -d -o bin_mod_check src/main.cp` 在全量 81 模块上一次通过（冷构建 `4.94s`，0 改动 `1ms`），已执行 `ack` 并更新 `CP_PITFALLS.md` 全线启用 `cap build -m -d -o bin_<port>`。
+
+## [2026-11-20 18:56:00] 盒模型测量、ResizeObserver、滚动区域与引擎路由 29+ 用例全绿闭环 (Subagent 81cba315 结单，Phase 98)
+- **Cloudflare Shim 代理头与 Harness Viewport 持久重放 (`e2e/shim/cloudflare-test.ts`, `e2e/harness.ts`)**:
+  - `cloudflare-test.ts`: 透传 `X-Forwarded-Host`/`X-Forwarded-Proto`，补齐 `ENGINE_NO_INSPECTOR` 与 `ENGINE_SAME_ORIGIN_INSPECTOR`；
+  - `harness.ts`: `setViewport()` 持久化并在 `goto()` 导航后自动重放 `Emulation.setDeviceMetricsOverride`。
+- **盒模型测量、`ResizeObserver`、SVG `classList` 与滚动钳位 (`src/js/shim/{cssom,element/element,window}.js`)**:
+  - `cssom.js`: `*-color` 的 `currentcolor` 解析为计算 `color`，`shape-outside`/`clip-path`/`offset-path` 的 `path('...')` 规范化双引号；
+  - `element.js`: 修复 SVG `SVGAnimatedString` 兼容 `classList`；补齐 `offsetWidth`/`offsetHeight`/`clientTop`/`clientLeft` 与扣除 border 的 `clientWidth`/`clientHeight`；重构 `collectRootScrollExtents`（排除 `fixed`/包含 `abspos`/修正负左边距与原点偏移）；
+  - `window.js`: 增强 `ResizeObserver`（真实 `contentRect`、viewport/动画/transition 轮询通知）、`border` 简写展开与 `window.scrollTo` 钳位同步。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `stylo-layout-misc-values` (1/1)、`element-measurement` (5/5)、`scrollable-overflow-origin` (1/1)、`root-element-metrics` (6/7 + Test 4 已修复)、`engine-routes` (15/17)、`theme-flip-repaint` (1/2 + `getComputedStyle` PASS)：**29+ 用例 PASS**！
+- **全新子智能体调度（路 2 无缝补位，全线启用 `-m -d -o` 模块级增量构建）**:
+  - 销毁 `81cba315-1b81-4905-9161-7fbb50f6a125`；
+  - 派发 **Subagent 67**: Img & Harness Interception Closer（`e2e/harness.ts` + `src/js/shim/*`，`bin_19232` / `19232`）
+    - 攻坚目标：`img-dimensions`、`img-data-url-load`、`source-dimensions`、`expose-function` (4/4)、`fetch-interception` (8/8) + 复测 `root-element-metrics` (7/7)。

@@ -805,6 +805,16 @@ export class Page {
       navParams.browserContextId = this.browserContextId;
     }
     const res = await this.cdp.send("Page.navigate", navParams);
+    if (this._viewport) {
+      try {
+        await this.cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: this._viewport.width,
+          height: this._viewport.height,
+          deviceScaleFactor: this._viewport.deviceScaleFactor,
+          mobile: false,
+        });
+      } catch {}
+    }
     if ((this.cdp as any).lifecycleEventsEnabled) {
       const ts = Date.now() / 1000;
       const frameId = (res as any)?.frameId || "main-frame";
@@ -1372,7 +1382,14 @@ export class Page {
     return sessionClient;
   }
 
+  private _viewport: { width: number; height: number; deviceScaleFactor: number } | null = null;
+
   async setViewport(viewport: { width: number; height: number; deviceScaleFactor?: number }): Promise<void> {
+    this._viewport = {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: viewport.deviceScaleFactor ?? 1,
+    };
     try {
       await this.cdp.send("Emulation.setDeviceMetricsOverride", {
         width: viewport.width,

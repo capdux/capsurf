@@ -6174,6 +6174,12 @@
                 }
                 if (typeof val === "string") {
                   val = resolveCssVars(element, val);
+                  if ((k === "color" || k.endsWith("-color")) && val.trim().toLowerCase() === "currentcolor") {
+                    val = receiver.color || "rgb(0, 0, 0)";
+                  }
+                  if (k === "shape-outside" || k === "clip-path" || k === "offset-path") {
+                    val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
+                  }
                   val = normalizeCssColor(val);
                 }
                 return val || "";
@@ -6229,7 +6235,19 @@
               let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
               if (val) {
                 val = resolveCssVars(element, val);
+                if (val.trim().toLowerCase() === "currentcolor") {
+                  val = receiver.color || "rgb(0, 0, 0)";
+                }
                 val = normalizeCssColor(val);
+              }
+              return val || "";
+            }
+
+            if (kebab === "shape-outside" || kebab === "clip-path" || kebab === "offset-path") {
+              let val = target.getPropertyValue ? target.getPropertyValue(kebab) : target[prop];
+              if (typeof val === "string" && val) {
+                val = resolveCssVars(element, val);
+                val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
               }
               return val || "";
             }
@@ -8543,8 +8561,19 @@
         if (!this._classList) {
           const self = this;
           this._classList = new DOMTokenList(
-            function () { return self.className || ""; },
-            function (val) { self.className = val; }
+            function () {
+              const cn = self.className;
+              if (typeof cn === "string") return cn;
+              if (cn && typeof cn.baseVal === "string") return cn.baseVal;
+              return (self.getAttribute && self.getAttribute("class")) || "";
+            },
+            function (val) {
+              if (self.className && typeof self.className === "object" && "baseVal" in self.className) {
+                if (self.setAttribute) self.setAttribute("class", String(val));
+              } else {
+                self.className = val;
+              }
+            }
           );
         }
         return this._classList;
@@ -9594,17 +9623,26 @@
     }
 
     Object.defineProperty(proto, "scrollTop", {
-      get: function () { return this._scrollTop || 0; },
+      get: function () {
+        if (this === document.documentElement) {
+          return (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || this._scrollTop || 0;
+        }
+        return this._scrollTop || 0;
+      },
       set: function (v) {
         const num = Number(v) || 0;
         let target = Math.max(0, num);
         const sh = this.scrollHeight;
         const ch = this.clientHeight;
-        if (sh > ch && ch > 0) {
-          target = Math.min(target, sh - ch);
+        if (ch > 0) {
+          target = Math.min(target, Math.max(0, sh - ch));
         }
         const prev = this._scrollTop || 0;
         this._scrollTop = target;
+        if (this === document.documentElement && typeof window !== "undefined" && typeof window.scrollTo === "function") {
+          window.scrollTo(window.scrollX || 0, target);
+          return;
+        }
         if (prev !== target) {
           triggerScrollEvents(this);
         }
@@ -9613,17 +9651,26 @@
     });
 
     Object.defineProperty(proto, "scrollLeft", {
-      get: function () { return this._scrollLeft || 0; },
+      get: function () {
+        if (this === document.documentElement) {
+          return (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || this._scrollLeft || 0;
+        }
+        return this._scrollLeft || 0;
+      },
       set: function (v) {
         const num = Number(v) || 0;
         let target = Math.max(0, num);
         const sw = this.scrollWidth;
         const cw = this.clientWidth;
-        if (sw > cw && cw > 0) {
-          target = Math.min(target, sw - cw);
+        if (cw > 0) {
+          target = Math.min(target, Math.max(0, sw - cw));
         }
         const prev = this._scrollLeft || 0;
         this._scrollLeft = target;
+        if (this === document.documentElement && typeof window !== "undefined" && typeof window.scrollTo === "function") {
+          window.scrollTo(target, window.scrollY || 0);
+          return;
+        }
         if (prev !== target) {
           triggerScrollEvents(this);
         }
@@ -9775,6 +9822,28 @@
         }
         const parent = getScrollParent(this);
         if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
+          const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
+          const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+          const pos = getComputedPosition(this);
+          if (pos === "absolute" || pos === "fixed") {
+            let absLeft = 0;
+            let absTop = 0;
+            if (this.style && this.style.left) absLeft = parseFloat(this.style.left) || 0;
+            if (this.style && this.style.top) absTop = parseFloat(this.style.top) || 0;
+            if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+              try {
+                const cs = window.getComputedStyle(this);
+                if (cs) {
+                  if (!this.style?.left && cs.left && cs.left !== "auto") absLeft = parseFloat(cs.left) || 0;
+                  if (!this.style?.top && cs.top && cs.top !== "auto") absTop = parseFloat(cs.top) || 0;
+                }
+              } catch (e) {}
+            }
+            if (pos === "fixed") {
+              return makeDomRect(absLeft, absTop, childW, childH);
+            }
+            return makeDomRect(absLeft - winX, absTop - winY, childW, childH);
+          }
           const pr = parent.getBoundingClientRect();
           if (!childW) childW = pr.width;
           let offsetTop = 0;
@@ -9813,13 +9882,108 @@
     };
     markNative(proto.getBoundingClientRect, "getBoundingClientRect");
 
+    function getBorderWidthPx(el, side) {
+      if (!el || el.nodeType !== 1 || isElementDisplayNone(el)) return 0;
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(el);
+          if (cs) {
+            const bStyle = String(cs.getPropertyValue("border-" + side + "-style") || "").trim().toLowerCase();
+            if (bStyle === "none" || bStyle === "hidden") return 0;
+            const bw = String(cs.getPropertyValue("border-" + side + "-width") || "").trim().toLowerCase();
+            if (bw === "thin") return 1;
+            if (bw === "medium") return 3;
+            if (bw === "thick") return 5;
+            const n = parseFloat(bw);
+            if (!isNaN(n) && n > 0) return n;
+          }
+        } catch (e) {}
+      }
+      return 0;
+    }
+
+    function getComputedPosition(el) {
+      if (!el || el.nodeType !== 1) return "static";
+      if (el.style) {
+        const p = (typeof el.style.getPropertyValue === "function")
+          ? el.style.getPropertyValue("position")
+          : el.style.position;
+        if (p) return String(p).trim().toLowerCase();
+      }
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(el);
+          if (cs) {
+            const cp = (typeof cs.getPropertyValue === "function")
+              ? cs.getPropertyValue("position")
+              : cs.position;
+            if (cp) return String(cp).trim().toLowerCase();
+          }
+        } catch (e) {}
+      }
+      return "static";
+    }
+
+    function isOverflowClipped(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(el);
+          if (cs) {
+            const ox = String(cs.getPropertyValue("overflow-x") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+            const oy = String(cs.getPropertyValue("overflow-y") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+            if (ox === "hidden" || ox === "clip" || ox === "scroll" || ox === "auto" ||
+                oy === "hidden" || oy === "clip" || oy === "scroll" || oy === "auto") {
+              return true;
+            }
+          }
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    Object.defineProperty(proto, "offsetWidth", {
+      get: function () {
+        if (isElementDisplayNone(this)) return 0;
+        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+        return Math.round(r.width || 0);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "offsetHeight", {
+      get: function () {
+        if (isElementDisplayNone(this)) return 0;
+        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
+        return Math.round(r.height || 0);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "clientTop", {
+      get: function () {
+        return Math.round(getBorderWidthPx(this, "top"));
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "clientLeft", {
+      get: function () {
+        return Math.round(getBorderWidthPx(this, "left"));
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(proto, "clientHeight", {
       get: function () {
         if (this === document.documentElement || this === document.body) {
           return (typeof window !== "undefined" && window.innerHeight) || 720;
         }
+        if (isElementDisplayNone(this)) return 0;
         const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-        return Math.round(r.height);
+        const bt = getBorderWidthPx(this, "top");
+        const bb = getBorderWidthPx(this, "bottom");
+        return Math.max(0, Math.round((r.height || 0) - bt - bb));
       },
       configurable: true,
     });
@@ -9829,28 +9993,110 @@
         if (this === document.documentElement || this === document.body) {
           return (typeof window !== "undefined" && window.innerWidth) || 1280;
         }
+        if (isElementDisplayNone(this)) return 0;
         const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-        return Math.round(r.width);
+        const bl = getBorderWidthPx(this, "left");
+        const br = getBorderWidthPx(this, "right");
+        return Math.max(0, Math.round((r.width || 0) - bl - br));
       },
       configurable: true,
     });
 
+    function getDocRectForScroll(el) {
+      if (!el || el.nodeType !== 1) return null;
+      const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(el) : (el.getBoundingClientRect ? el.getBoundingClientRect() : null);
+      if (r && (r.width > 0 || r.height > 0 || r.x !== 0 || r.y !== 0)) {
+        const rx = Number(r.x || 0);
+        const ry = Number(r.y || 0);
+        const rw = Number(r.width || 0);
+        const rh = Number(r.height || 0);
+        return { x: rx, y: ry, width: rw, height: rh, right: rx + rw, bottom: ry + rh };
+      }
+      let w = 0, h = 0, x = 0, y = 0;
+      if (el.style) {
+        if (el.style.width) w = parseFloat(el.style.width) || 0;
+        if (el.style.height) h = parseFloat(el.style.height) || 0;
+        if (el.style.left) x = parseFloat(el.style.left) || 0;
+        if (el.style.top) y = parseFloat(el.style.top) || 0;
+      }
+      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const cs = window.getComputedStyle(el);
+          if (cs) {
+            if (!w && cs.width && cs.width !== "auto") w = parseFloat(cs.width) || 0;
+            if (!h && cs.height && cs.height !== "auto") h = parseFloat(cs.height) || 0;
+            if (!el.style?.left && cs.left && cs.left !== "auto") x = parseFloat(cs.left) || 0;
+            if (!el.style?.top && cs.top && cs.top !== "auto") y = parseFloat(cs.top) || 0;
+          }
+        } catch (e) {}
+      }
+      if (w > 0 || h > 0) {
+        return { x: x, y: y, width: w, height: h, right: x + w, bottom: y + h };
+      }
+      return null;
+    }
+
+    function collectRootScrollExtents(rootEl, isDocEl) {
+      const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+      const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+      let originX = 0;
+      let originY = 0;
+      let maxW = vw;
+      let maxH = vh;
+
+      const rr = getDocRectForScroll(rootEl);
+      if (rr) {
+        originX = rr.x;
+        originY = rr.y;
+        if (!isDocEl) {
+          if (rr.width > 0) maxW = Math.round(rr.width);
+          if (rr.height > 0) maxH = Math.round(rr.height);
+        }
+      }
+      if (!isDocEl && maxW < vw && originX === 0) maxW = vw;
+
+      if (rootEl.style && rootEl.style.height) {
+        const ph = parseFloat(rootEl.style.height);
+        if (!isNaN(ph) && ph > maxH) maxH = ph;
+      }
+      if (rootEl.style && rootEl.style.width) {
+        const pw = parseFloat(rootEl.style.width);
+        if (!isNaN(pw) && pw > maxW) maxW = pw;
+      }
+
+      function walk(parent) {
+        const kids = parent.children || [];
+        for (let i = 0; i < kids.length; i++) {
+          const child = kids[i];
+          if (!child || child.nodeType !== 1) continue;
+          const tag = String(child.localName || child.tagName || "").toLowerCase();
+          if (tag === "head" || tag === "style" || tag === "script" || tag === "meta" || tag === "link" || tag === "title" || tag === "template") {
+            continue;
+          }
+          if (isElementDisplayNone(child)) continue;
+          if (getComputedPosition(child) === "fixed") continue;
+          const cr = getDocRectForScroll(child);
+          if (cr) {
+            const relRight = cr.right - originX;
+            const relBottom = cr.bottom - originY;
+            if (relRight > maxW) maxW = relRight;
+            if (relBottom > maxH) maxH = relBottom;
+          }
+          if (!isOverflowClipped(child)) {
+            walk(child);
+          }
+        }
+      }
+
+      walk(rootEl);
+      return { width: Math.round(maxW), height: Math.round(maxH) };
+    }
+
     Object.defineProperty(proto, "scrollHeight", {
       get: function () {
         if (this === document.documentElement || this === document.body) {
-          let maxH = (typeof window !== "undefined" && window.innerHeight) || 720;
-          if (this.style && this.style.height) {
-            const ph = parseFloat(this.style.height);
-            if (!isNaN(ph) && ph > maxH) maxH = ph;
-          }
-          const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
-          const all = this.children || [];
-          for (let i = 0; i < all.length; i++) {
-            const child = all[i];
-            const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
-            if (cr && cr.bottom + winY > maxH) maxH = cr.bottom + winY;
-          }
-          return Math.round(maxH);
+          return collectRootScrollExtents(this, this === document.documentElement).height;
         }
 
         let maxBottom = this.clientHeight;
@@ -9862,6 +10108,7 @@
         for (let i = 0; i < all.length; i++) {
           const child = all[i];
           if (!child || child.nodeType !== 1) continue;
+          if (isElementDisplayNone(child)) continue;
           const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
           let childH = (cr && cr.height) || 0;
           if (!childH && child.style && child.style.height) {
@@ -9869,7 +10116,7 @@
           }
           let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y + (this._scrollTop || 0)) : accumY;
           accumY += childH;
-          const b = Math.max(relY + childH, childH);
+          const b = relY + childH;
           if (b > maxBottom) maxBottom = b;
         }
         return Math.round(maxBottom);
@@ -9880,19 +10127,7 @@
     Object.defineProperty(proto, "scrollWidth", {
       get: function () {
         if (this === document.documentElement || this === document.body) {
-          let maxW = (typeof window !== "undefined" && window.innerWidth) || 1280;
-          if (this.style && this.style.width) {
-            const pw = parseFloat(this.style.width);
-            if (!isNaN(pw) && pw > maxW) maxW = pw;
-          }
-          const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
-          const all = this.children || [];
-          for (let i = 0; i < all.length; i++) {
-            const child = all[i];
-            const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
-            if (cr && cr.right + winX > maxW) maxW = cr.right + winX;
-          }
-          return Math.round(maxW);
+          return collectRootScrollExtents(this, this === document.documentElement).width;
         }
 
         let maxRight = this.clientWidth;
@@ -9904,6 +10139,7 @@
         for (let i = 0; i < all.length; i++) {
           const child = all[i];
           if (!child || child.nodeType !== 1) continue;
+          if (isElementDisplayNone(child)) continue;
           const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
           let childW = (cr && cr.width) || 0;
           if (!childW && child.style && child.style.width) {
@@ -9911,7 +10147,7 @@
           }
           let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x + (this._scrollLeft || 0)) : accumX;
           accumX += childW;
-          const r = Math.max(relX + childW, childW);
+          const r = relX + childW;
           if (r > maxRight) maxRight = r;
         }
         return Math.round(maxRight);
@@ -26876,23 +27112,140 @@
     markNative(IntersectionObserver, "IntersectionObserver");
     global.IntersectionObserver = IntersectionObserver;
 
+    const activeResizeObservers = new Set();
+    let resizeObserverPollTimer = null;
+
+    function measureResizeObserverTarget(el) {
+      const rect = el && typeof el.getBoundingClientRect === "function"
+        ? el.getBoundingClientRect()
+        : { width: 0, height: 0 };
+      const borderW = Number(rect.width || 0);
+      const borderH = Number(rect.height || 0);
+      if (borderW <= 0 && borderH <= 0) {
+        return {
+          contentRect: new DOMRectReadOnly(0, 0, 0, 0),
+          borderWidth: 0,
+          borderHeight: 0,
+          contentWidth: 0,
+          contentHeight: 0,
+        };
+      }
+      let pt = 0, pr = 0, pb = 0, pl = 0;
+      let bt = 0, br = 0, bb = 0, bl = 0;
+      try {
+        const csFn = global.getComputedStyle || (typeof getComputedStyle === "function" ? getComputedStyle : null);
+        if (csFn) {
+          const cs = csFn(el);
+          if (cs && typeof cs.getPropertyValue === "function") {
+            const parsePx = function (v) {
+              const s = String(v || "").trim().toLowerCase();
+              if (s === "thin") return 1;
+              if (s === "medium") return 3;
+              if (s === "thick") return 5;
+              const n = parseFloat(s);
+              return isNaN(n) ? 0 : n;
+            };
+            pt = parsePx(cs.getPropertyValue("padding-top"));
+            pr = parsePx(cs.getPropertyValue("padding-right"));
+            pb = parsePx(cs.getPropertyValue("padding-bottom"));
+            pl = parsePx(cs.getPropertyValue("padding-left"));
+            const bts = String(cs.getPropertyValue("border-top-style") || "").trim().toLowerCase();
+            const brs = String(cs.getPropertyValue("border-right-style") || "").trim().toLowerCase();
+            const bbs = String(cs.getPropertyValue("border-bottom-style") || "").trim().toLowerCase();
+            const bls = String(cs.getPropertyValue("border-left-style") || "").trim().toLowerCase();
+            bt = (bts === "none" || bts === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-top-width"));
+            br = (brs === "none" || brs === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-right-width"));
+            bb = (bbs === "none" || bbs === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-bottom-width"));
+            bl = (bls === "none" || bls === "hidden") ? 0 : parsePx(cs.getPropertyValue("border-left-width"));
+          }
+        }
+      } catch (e) {}
+      const contentW = Math.max(0, borderW - bl - br - pl - pr);
+      const contentH = Math.max(0, borderH - bt - bb - pt - pb);
+      return {
+        contentRect: new DOMRectReadOnly(pl, pt, contentW, contentH),
+        borderWidth: borderW,
+        borderHeight: borderH,
+        contentWidth: contentW,
+        contentHeight: contentH,
+      };
+    }
+
+    function deliverResizeObserver(obs) {
+      if (!obs || obs._disconnected || obs._targets.size === 0) return;
+      const entries = [];
+      for (const [el, last] of obs._targets.entries()) {
+        const m = measureResizeObserverTarget(el);
+        const changed = !last ||
+          Math.abs(m.contentWidth - last.width) > 0.01 ||
+          Math.abs(m.contentHeight - last.height) > 0.01;
+        if (changed) {
+          obs._targets.set(el, { width: m.contentWidth, height: m.contentHeight });
+          entries.push({
+            target: el,
+            contentRect: m.contentRect,
+            borderBoxSize: [{ inlineSize: m.borderWidth, blockSize: m.borderHeight }],
+            contentBoxSize: [{ inlineSize: m.contentWidth, blockSize: m.contentHeight }],
+            devicePixelContentBoxSize: [{ inlineSize: Math.round(m.contentWidth), blockSize: Math.round(m.contentHeight) }],
+          });
+        }
+      }
+      if (entries.length > 0) {
+        try {
+          obs.callback(entries, obs);
+        } catch (e) {}
+      }
+    }
+
+    function ensureResizeObserverPoller() {
+      if (resizeObserverPollTimer !== null) return;
+      if (activeResizeObservers.size === 0) return;
+      if (typeof setInterval === "function") {
+        resizeObserverPollTimer = setInterval(function () {
+          if (activeResizeObservers.size === 0) {
+            if (typeof clearInterval === "function") clearInterval(resizeObserverPollTimer);
+            resizeObserverPollTimer = null;
+            return;
+          }
+          for (const obs of Array.from(activeResizeObservers)) {
+            deliverResizeObserver(obs);
+          }
+        }, 100);
+      }
+    }
+
     function ResizeObserver(callback) {
       if (typeof callback !== "function") throw new TypeError("Callback required");
       this.callback = callback;
+      this._targets = new Map();
+      this._disconnected = false;
     }
-    ResizeObserver.prototype.observe = function (el) {
+    ResizeObserver.prototype.observe = markNative(function (el) {
       if (!el) return;
-      const cb = this.callback;
+      this._disconnected = false;
+      if (!this._targets.has(el)) {
+        this._targets.set(el, null);
+      }
+      activeResizeObservers.add(this);
+      ensureResizeObserverPoller();
       const obs = this;
-      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
       Promise.resolve().then(function () {
-        try {
-          cb([{ target: el, contentRect: rect }], obs);
-        } catch (e) {}
+        deliverResizeObserver(obs);
       });
-    };
-    ResizeObserver.prototype.unobserve = markNative(function () {}, "unobserve");
-    ResizeObserver.prototype.disconnect = markNative(function () {}, "disconnect");
+    }, "observe");
+    ResizeObserver.prototype.unobserve = markNative(function (el) {
+      if (this._targets) {
+        this._targets.delete(el);
+        if (this._targets.size === 0) {
+          activeResizeObservers.delete(this);
+        }
+      }
+    }, "unobserve");
+    ResizeObserver.prototype.disconnect = markNative(function () {
+      this._disconnected = true;
+      if (this._targets) this._targets.clear();
+      activeResizeObservers.delete(this);
+    }, "disconnect");
     markNative(ResizeObserver, "ResizeObserver");
     global.ResizeObserver = ResizeObserver;
 
@@ -27175,6 +27528,45 @@
             computedMap.set("padding-bottom", sides[2]);
             computedMap.set("padding-left", sides[3]);
           }
+        } else if (key === "border-width") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            computedMap.set("border-top-width", sides[0]);
+            computedMap.set("border-right-width", sides[1]);
+            computedMap.set("border-bottom-width", sides[2]);
+            computedMap.set("border-left-width", sides[3]);
+          }
+        } else if (key === "border-style") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            computedMap.set("border-top-style", sides[0]);
+            computedMap.set("border-right-style", sides[1]);
+            computedMap.set("border-bottom-style", sides[2]);
+            computedMap.set("border-left-style", sides[3]);
+          }
+        } else if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
+          const parts = splitCssTopLevelWhitespace(val);
+          let bWidth = "";
+          let bStyle = "";
+          const styleWords = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+          for (let pi = 0; pi < parts.length; pi++) {
+            const tok = parts[pi].toLowerCase();
+            if (styleWords.has(tok)) {
+              bStyle = tok;
+            } else if (/^(?:thin|medium|thick|[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|cm|mm|in|pc)?|0)$/.test(tok)) {
+              bWidth = tok;
+            }
+          }
+          const targetSides = key === "border" ? ["top", "right", "bottom", "left"] : [key.slice(7)];
+          for (let si = 0; si < targetSides.length; si++) {
+            const side = targetSides[si];
+            if (bStyle) computedMap.set("border-" + side + "-style", bStyle);
+            if (bStyle === "none" || bStyle === "hidden") {
+              computedMap.set("border-" + side + "-width", "0px");
+            } else if (bWidth) {
+              computedMap.set("border-" + side + "-width", bWidth);
+            }
+          }
         } else if (key === "overflow") {
           const parts = splitCssTopLevelWhitespace(val);
           if (parts.length === 1) {
@@ -27216,7 +27608,12 @@
       if (s.startsWith(".") && !s.includes(" ") && !s.includes("#") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
         const cls = s.slice(1);
         if (el.classList && el.classList.contains(cls)) return true;
-        if (el.className && el.className.split(/\s+/).includes(cls)) return true;
+        const clsStr = typeof el.className === "string"
+          ? el.className
+          : (el.className && typeof el.className.baseVal === "string"
+            ? el.className.baseVal
+            : (el.getAttribute ? (el.getAttribute("class") || "") : ""));
+        if (clsStr && clsStr.split(/\s+/).includes(cls)) return true;
         return false;
       }
 
@@ -31281,6 +31678,13 @@
       }
       if (isNaN(targetX)) targetX = 0;
       if (isNaN(targetY)) targetY = 0;
+      const de = (typeof document !== "undefined" && document.documentElement) ? document.documentElement : null;
+      const vw = Number(global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 0) || 1280);
+      const vh = Number(global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 0) || 720);
+      const maxScrollX = de ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
+      const maxScrollY = de ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
+      targetX = Math.max(0, Math.min(targetX, maxScrollX));
+      targetY = Math.max(0, Math.min(targetY, maxScrollY));
       const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
       const prevY = (typeof global.scrollY !== "undefined") ? global.scrollY : 0;
       global.pageXOffset = targetX;
@@ -31298,6 +31702,10 @@
         window.scrollY = targetY;
         window.pageXOffset = targetX;
         window.pageYOffset = targetY;
+      }
+      if (de) {
+        de._scrollLeft = targetX;
+        de._scrollTop = targetY;
       }
       if (prevX !== targetX || prevY !== targetY) {
         triggerWindowScrollEvents();

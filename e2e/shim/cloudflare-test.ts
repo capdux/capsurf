@@ -27,13 +27,15 @@ class WorkerdWebSocketAdapter {
   }
 }
 
-export const env = {
-  ENGINE: {
+function makeEngineFetch(extraHeaders: Record<string, string> = {}) {
+  return {
     async fetch(url: string, init: any = {}) {
       await ensureServerRunning();
       const u = new URL(url);
-      const upgrade = init?.headers?.Upgrade || init?.headers?.upgrade;
-      if (upgrade && String(upgrade).toLowerCase() === "websocket") {
+      const rawHeaders = init?.headers;
+      const headers = new Headers(rawHeaders instanceof Headers ? rawHeaders : rawHeaders || {});
+      const upgrade = headers.get("upgrade");
+      if (upgrade && upgrade.toLowerCase() === "websocket") {
         await releaseSharedCdp();
         await new Promise((r) => setTimeout(r, 20));
         const wsUrl = `ws://127.0.0.1:${DEFAULT_PORT}${u.pathname}${u.search}`;
@@ -47,8 +49,25 @@ export const env = {
         resp.webSocket = adapter;
         return resp;
       }
+      if (!headers.has("x-forwarded-host") && u.host) {
+        headers.set("X-Forwarded-Host", u.host);
+      }
+      if (!headers.has("x-forwarded-proto") && u.protocol) {
+        headers.set("X-Forwarded-Proto", u.protocol.replace(":", ""));
+      }
+      for (const [k, v] of Object.entries(extraHeaders)) {
+        if (!headers.has(k)) {
+          headers.set(k, v);
+        }
+      }
       const httpUrl = `http://127.0.0.1:${DEFAULT_PORT}${u.pathname}${u.search}`;
-      return fetch(httpUrl, init);
+      return fetch(httpUrl, { ...init, headers });
     },
-  },
+  };
+}
+
+export const env = {
+  ENGINE: makeEngineFetch(),
+  ENGINE_NO_INSPECTOR: makeEngineFetch({ "X-Inspector-Base": "none" }),
+  ENGINE_SAME_ORIGIN_INSPECTOR: makeEngineFetch({ "X-Inspector-Base": "/inspector/inspector.html" }),
 };

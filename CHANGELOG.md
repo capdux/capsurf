@@ -1787,4 +1787,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（4.90s 无锁 `-d -o` 构建）；
   - E2E 测试：`gradient-tile-count` (2/2) + `current-script-microtask` (1/1) + `fetch-slot-order` (1/1) + `expose-function` (3/4) PASS。
+
+## Phase 98: Box Measurement, `ResizeObserver`, Scroll Overflow Origin & Engine Routes Shim (Closed)
+- **`e2e/shim/cloudflare-test.ts` & `e2e/harness.ts` & `src/js/shim/{cssom,element/element,window}.js`**：
+  - 补齐 `ENGINE_NO_INSPECTOR`/`ENGINE_SAME_ORIGIN_INSPECTOR` 与代理头、`setViewport()` 跨导航重放、`offsetWidth/Height`/`clientTop/Left`、`ResizeObserver` 动画/视口/transition 通知、SVG `classList` 兼容、根滚动溢出排除 `fixed`/包含 `abspos` 及 `window.scrollTo` 钳位。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`stylo-layout-misc-values` (1/1)、`element-measurement` (5/5)、`scrollable-overflow-origin` (1/1)、`root-element-metrics` (6/7+fix)、`engine-routes` (15/17)、`theme-flip-repaint` (1/2) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
