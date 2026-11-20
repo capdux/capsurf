@@ -2946,7 +2946,8 @@
           if (prop === "getPropertyValue") {
             return function (propertyName) {
               const rawName = String(propertyName || "").trim();
-              const k = cssPropCamelToKebab(rawName);
+              if (!rawName) return "";
+              const k = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
               if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, k)) {
                 let ov = resolveCssVars(element, linkOverrides[k]);
                 if (k === "color" || k.endsWith("-color")) ov = normalizeCssColor(ov);
@@ -2958,7 +2959,7 @@
                   tv = resolveCssVars(element, tv);
                   tv = serializeComputedTransform(tv, element, target);
                 }
-                return tv || "";
+                return tv || "none";
               }
               let val = receiver[k] || (target.getPropertyValue ? target.getPropertyValue(propertyName) : "");
               if (!val && (k.startsWith("-webkit-") || k.startsWith("-moz-"))) {
@@ -2990,7 +2991,7 @@
               tv = resolveCssVars(element, tv);
               tv = serializeComputedTransform(tv, element, target);
             }
-            return tv || "";
+            return tv || "none";
           }
           const kebab = cssPropCamelToKebab(prop);
 

@@ -2095,6 +2095,10 @@
   - 实装 `Emulation.setEmulatedMedia`、`@page { size: ... }`、>=256KB `fetch_buf`、`Runtime.compileScript`/`runScript` 与 `Debugger.scriptParsed` 重放（4 门禁全 0）。
 - **测试验证**：`print-media-emulation-probe` (1/1)、`runtime-compile-script-demo` (2/2) PASS；定位 `layer-budget` `dom_binding.cp:1811` `[256]NodeId` 上限。
 
+## Phase 150: `style-media-attr-demo`, `window-computed-style-probe` & `transition-settles-demo` — 3/3 Suites (23 Expects)
+- **`src/js/shim/{window,cssom}.js` & `src/js/runtime{,_source.cp}`**：
+  - 实装 `<style media>` 媒体查询过滤、160+ `STANDARD_COMPUTED_LONGHANDS`、`NoModificationAllowedError` 只读拦截与 `getPropertyValue` 严格小写匹配，**3/3 PASS (23 expect() calls)**。
+
 ## Phase 144: `DomMutationRecord` Pointer Receiver Fix & Nested Inline `:before`/`::after` Layout/Paint
 - **`src/js/dom_binding.cp`、`src/css/cascade.cp`、`src/layout/layout.cp`、`src/render/painter.cp`、`test/css/test_font_face_pseudo.cp`**：
   - 修复 `DomMutationRecord.getName()/getValue()` `*_` 栈悬垂切片，补全单/双冒号 `:before`/`:after` 级联、并集布局包围与绘制（`testNestedInlinePseudo` PASS 1~4）。

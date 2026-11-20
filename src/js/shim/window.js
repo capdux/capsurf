@@ -4709,27 +4709,25 @@ function installWindow(global) {
     for (let i = 0; i < styleNodes.length; i++) {
       const sn = styleNodes[i];
       if (!sn) continue;
+      const mediaRaw = String(sn.getAttribute ? (sn.getAttribute("media") || "") : "").trim();
+      if (mediaRaw) {
+        const mqParts = mediaRaw.split(",");
+        let mediaOk = false;
+        for (let mi = 0; mi < mqParts.length; mi++) {
+          const mq = mqParts[mi].trim().toLowerCase();
+          if (!mq) continue;
+          if (mq === "print" || mq === "only print" || mq === "speech" || mq === "not screen" || mq === "not all") continue;
+          if (mq.indexOf("print") !== -1 && !mq.startsWith("not print") && mq.indexOf("screen") === -1 && mq.indexOf("all") === -1) continue;
+          if (evaluateMediaQuery(mq)) {
+            mediaOk = true;
+            break;
+          }
+        }
+        if (!mediaOk) continue;
+      }
       const snTag = String(sn.localName || sn.tagName || "").toLowerCase();
       let text = "";
       if (snTag === "link") {
-        const mediaRaw = String(sn.getAttribute ? (sn.getAttribute("media") || "") : "").trim().toLowerCase();
-        if (mediaRaw && mediaRaw !== "all" && mediaRaw !== "screen") {
-          const mqParts = mediaRaw.split(",");
-          let mediaOk = false;
-          for (let mi = 0; mi < mqParts.length; mi++) {
-            const mq = mqParts[mi].trim();
-            if (!mq) continue;
-            if (mq === "all" || mq === "screen" || mq === "only screen" || mq === "only all" || mq.startsWith("not print")) {
-              mediaOk = true;
-              break;
-            }
-            if (mq !== "print" && mq !== "only print" && mq !== "speech" && mq !== "not screen" && mq !== "not all" && mq.indexOf("print") === -1) {
-              mediaOk = true;
-              break;
-            }
-          }
-          if (!mediaOk) continue;
-        }
         const sheet = sn.sheet;
         if (sheet) {
           if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
@@ -5200,7 +5198,54 @@ function installWindow(global) {
     if (!computedMap.has("color") || computedMap.get("color") === "") {
       computedMap.set("color", "rgb(0, 0, 0)");
     }
+    if (!computedMap.has("transform") || computedMap.get("transform") === "") {
+      computedMap.set("transform", "none");
+    }
+    if (!computedMap.has("display") || computedMap.get("display") === "") {
+      const tag = String(element && (element.localName || element.tagName) || "").toLowerCase();
+      const inlineTags = { span: 1, a: 1, em: 1, strong: 1, b: 1, i: 1, u: 1, s: 1, small: 1, code: 1, label: 1, abbr: 1, cite: 1, q: 1, sub: 1, sup: 1, time: 1 };
+      computedMap.set("display", inlineTags[tag] ? "inline" : "block");
+    }
   }
+
+  const STANDARD_COMPUTED_LONGHANDS = [
+    "align-content", "align-items", "align-self", "animation-delay", "animation-direction",
+    "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
+    "animation-play-state", "animation-timing-function", "appearance", "aspect-ratio",
+    "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
+    "background-clip", "background-color", "background-image", "background-origin",
+    "background-position-x", "background-position-y", "background-repeat", "background-size",
+    "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
+    "border-bottom-style", "border-bottom-width", "border-collapse", "border-left-color",
+    "border-left-style", "border-left-width", "border-right-color", "border-right-style",
+    "border-right-width", "border-spacing", "border-top-color", "border-top-left-radius",
+    "border-top-right-radius", "border-top-style", "border-top-width", "bottom", "box-shadow",
+    "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
+    "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-gap",
+    "column-rule-color", "column-rule-style", "column-rule-width", "column-width", "contain",
+    "content", "counter-increment", "counter-reset", "cursor", "direction", "display",
+    "empty-cells", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
+    "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
+    "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
+    "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
+    "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
+    "grid-template-rows", "height", "hyphens", "image-rendering", "isolation",
+    "justify-content", "justify-items", "justify-self", "left", "letter-spacing",
+    "line-height", "list-style-image", "list-style-position", "list-style-type",
+    "margin-bottom", "margin-left", "margin-right", "margin-top", "max-height", "max-width",
+    "min-height", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
+    "order", "outline-color", "outline-offset", "outline-style", "outline-width",
+    "overflow-wrap", "overflow-x", "overflow-y", "padding-bottom", "padding-left",
+    "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
+    "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+    "tab-size", "table-layout", "text-align", "text-decoration-color", "text-decoration-line",
+    "text-decoration-style", "text-indent", "text-overflow", "text-shadow", "text-transform",
+    "top", "touch-action", "transform", "transform-origin", "transform-style",
+    "transition-delay", "transition-duration", "transition-property",
+    "transition-timing-function", "translate", "unicode-bidi", "user-select", "vertical-align",
+    "visibility", "white-space", "width", "will-change", "word-break", "word-spacing",
+    "writing-mode", "z-index"
+  ];
 
   function getComputedStyle(element, pseudoElt) {
     if (!element || typeof element !== "object") {
@@ -5220,7 +5265,11 @@ function installWindow(global) {
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
 
     const declTarget = Object.create(CSSStyleDeclaration.prototype);
-    const propList = Array.from(computedMap.keys());
+    const propSet = new Set(computedMap.keys());
+    for (let i = 0; i < STANDARD_COMPUTED_LONGHANDS.length; i++) {
+      propSet.add(STANDARD_COMPUTED_LONGHANDS[i]);
+    }
+    const propList = Array.from(propSet);
     declTarget.length = propList.length;
     declTarget.parentRule = null;
 
@@ -5245,8 +5294,17 @@ function installWindow(global) {
       return "";
     }, "getPropertyPriority");
 
-    declTarget.setProperty = markNative(function () {}, "setProperty");
-    declTarget.removeProperty = markNative(function () { return ""; }, "removeProperty");
+    function throwComputedReadOnly() {
+      if (typeof DOMException === "function") {
+        throw new DOMException("These styles are computed, and therefore the properties are read-only.", "NoModificationAllowedError");
+      }
+      const err = new Error("These styles are computed, and therefore the properties are read-only.");
+      err.name = "NoModificationAllowedError";
+      throw err;
+    }
+
+    declTarget.setProperty = markNative(throwComputedReadOnly, "setProperty");
+    declTarget.removeProperty = markNative(throwComputedReadOnly, "removeProperty");
 
     Object.defineProperty(declTarget, "cssText", {
       get: function () {
@@ -5279,7 +5337,7 @@ function installWindow(global) {
         return undefined;
       },
       set: function () {
-        return true;
+        throwComputedReadOnly();
       },
       has: function (target, prop) {
         if (prop in target) return true;

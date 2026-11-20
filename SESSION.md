@@ -4224,6 +4224,15 @@
   - `print-media-emulation-probe` (**1/1**)、`runtime-compile-script-demo` (**2/2**)：**3/3 PASS**！`layer-budget` 91KB 导航与截图已通，定位唯一剩余缺口至 `src/js/dom_binding.cp:1811` `matched_ids: [256]NodeId`。
 - **清理旧子智能体**: 销毁 `2aaea2d5-93e4-451f-8a0b-729c4d9e7085`。
 
+## [2026-11-20 23:40:00] `style-media-attr-demo`、`window-computed-style-probe` & `transition-settles-demo` 3/3 全绿 (Subagent 124e8a3a 结单，Phase 150)
+- **CSSOM 计算样式规范化与 `<style media>` 过滤 (`src/js/shim/{window,cssom}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `window.js:4708,5198-5345`：为 `<style>` 接入 `media` 媒体查询过滤；新增 160+ `STANDARD_COMPUTED_LONGHANDS` 使 `getComputedStyle().length > 100`，补充 `transform: "none"`/`display` 初始值，并对 `setProperty`/`removeProperty`/Proxy `set` 统一抛出 `NoModificationAllowedError`；
+  - `cssom.js:2946-2995`：`getPropertyValue` 拒绝 camelCase 传参（如 `"backgroundColor"` 返回 `""`）并兜底 `transform: "none"`。
+- **门禁与 E2E 验证（`-m -d -o`，port `19232`）**:
+  - `src/js/runtime_source.cp` 4 门禁全 0；
+  - `style-media-attr-demo` (**1/1**)、`window-computed-style-probe` (**1/1**)、`transition-settles-demo` (**1/1**)：**3/3 PASS (23 expect() calls)**！
+- **清理旧子智能体**: 销毁 `124e8a3a-5ce9-4529-b3f8-0fb6dc65f24f`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；

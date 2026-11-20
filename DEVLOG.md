@@ -1617,6 +1617,10 @@
 1. **Print Media 与 `@page` 纸张尺寸 (`emulation.cp`, `page.cp`, `css.cp`)**：通过 `session.emulated_media_print` 统一驱动 `StyleSheet.parse`、`matchMedia` 与 `getComputedStyle`，并在 `Page.printToPDF` 支持 `preferCSSPageSize` 解析。
 2. **脚本编译持久化 (`runtime.cp`, `debugger.cp`)**：使用 `JS_EVAL_FLAG_COMPILE_ONLY` 做纯编译检查，语法错误仅返回 `exceptionDetails`，成功则以 `cs:N` 持久化并在 `Debugger.enable` 时重放 `Debugger.scriptParsed`。
 
+## Phase 150 `getComputedStyle` WebIDL 规范与 `<style media>` 方案
+1. **标准 Longhand 枚举与只读拦截 (`window.js`)**：填充 160+ 标准 CSS 属性名至 `propList` 确保 `length > 100`，并对计算样式的写操作抛出 `DOMException("NoModificationAllowedError")`。
+2. **`getPropertyValue` 严格大小写与 `<style media>` (`cssom.js`, `window.js`)**：停止将 camelCase 隐式转为 kebab-case，同时在 `collectElementOwnDeclarations` 统一对 `<style>` 与 `<link>` 校验 `evaluateMediaQuery`。
+
 ## Phase 137 PDF 图文内容流与 CJK 点阵光栅化方案 (`src/render/{pdf,painter}.cp`)
 1. **PDF 内容流 (`renderPdfWithDocAlloc`)**：按页将可见元素的 `background_color`/`border_top_*` 光栅化为 RGB24 并用 `cap:pack` `compress2` 压缩为 `/FlateDecode` `/XObject /Image`，配合 `BT /F1 ... Tj ET` 文本流输出真实内容 PDF。
 2. **CJK 点阵 (`fillNonAsciiGlyph8x8`)**：为 CJK 汉字/假名/韩文提供确定性 8x8 点阵并通过 `Canvas.drawGlyph8x8ScaledClipped` 绘制。
