@@ -67,6 +67,15 @@ function FormData(form, submitter) {
             this.append(c.name, opts[j].value);
           }
         }
+      } else if (tag === "input" && type === "file") {
+        const files = c.files;
+        if (files && files.length > 0) {
+          for (let j = 0; j < files.length; j++) {
+            this.append(c.name, files[j]);
+          }
+        } else if (typeof File === "function") {
+          this.append(c.name, new File([], "", { type: "application/octet-stream" }));
+        }
       } else {
         this.append(c.name, c.value);
       }
@@ -94,8 +103,25 @@ function FormData(form, submitter) {
   }
 }
 
+function normalizeFormDataValue(value, filename) {
+  if (typeof File === "function" && value instanceof File) {
+    if (filename !== undefined) {
+      return new File([value], String(filename), { type: value.type, lastModified: value.lastModified });
+    }
+    return value;
+  }
+  if (typeof Blob === "function" && value instanceof Blob) {
+    const fname = filename !== undefined ? String(filename) : "blob";
+    if (typeof File === "function") {
+      return new File([value], fname, { type: value.type });
+    }
+    return value;
+  }
+  return String(value);
+}
+
 FormData.prototype.append = function (name, value, filename) {
-  this._entries.push([String(name), String(value)]);
+  this._entries.push([String(name), normalizeFormDataValue(value, filename)]);
 };
 
 FormData.prototype.delete = function (name) {
@@ -136,7 +162,7 @@ FormData.prototype.has = function (name) {
 
 FormData.prototype.set = function (name, value, filename) {
   const n = String(name);
-  const val = String(value);
+  const val = normalizeFormDataValue(value, filename);
   let found = false;
   const newEntries = [];
   for (let i = 0; i < this._entries.length; i++) {

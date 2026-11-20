@@ -3204,6 +3204,20 @@
   - 派发全新子智能体 **Subagent 29**: SVG Shape & Clip Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/svg-shape-client-rect.e2e.test.ts`、`e2e/svg-sprite-icons.e2e.test.ts`、`e2e/svg-text-escape.e2e.test.ts`、`e2e/abspos-escapes-overflow-clip.e2e.test.ts`。
 
+## [2026-11-20 14:30:30] 表单文本选区 API、FileList/DataTransfer 与回车隐式提交闭环 (Subagent 0dc27ba1 结单，Phase 64)
+- **表单选区 API 与 FileList/DataTransfer 实装 (`src/js/shim/`)**:
+  - `element/forms/selection.js` & `textarea.js`: 补齐 `selectionDirection`、按 WebIDL `unsigned long` (`>>> 0`) 处理负值回绕与 clamp 的 `setSelectionRange`、异步 `select` 事件去重与 `selectionchange`、`select()` 及完整 WHATWG `setRangeText`（4 种 selectionMode + `IndexSizeError`）。
+  - `file.js` & `index.js` & `element/forms/input.js` & `form-data.js`: 实装 `FileList`、`DataTransfer`、`DataTransferItem`、`DataTransferItemList`、`HTMLInputElement.prototype.files`、`C:\fakepath\` 规范与 `FormData` 保留 `File`/`Blob` 收集。
+  - `window.js`: 在 `dispatchKeyEvent` 的 `Enter` 分支补齐表单隐式提交。
+- **门禁与 E2E 验证**:
+  - `src/js/runtime_source.cp` 通过 `cpc_brief.py` 4 门禁（全 0）；
+  - `forms-selection-demo.e2e.test.ts` **100% PASS**，`forms-file-input-demo` (`forms-file-input-idl`) **PASS**；并定位 `forms-activation-demo` 仅缺 `e2e/harness.ts` 的 `page.focus()`。
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `0dc27ba1-5030-4fc8-83f4-c1c417f57cad`；
+  - 派发全新子智能体 **Subagent 30**: Harness & WebAPI Specialist（`e2e/harness.ts` + JS 垫片隔离，端口 `19232`）
+    - 攻坚目标：`e2e/demo/forms-activation-demo.e2e.test.ts`、`e2e/demo/event-handler-hydration.e2e.test.ts`、`e2e/demo/defer-shim-abort-timeout.e2e.test.ts`、`e2e/demo/mc-conformance.e2e.test.ts`。
+
+
 
 
 

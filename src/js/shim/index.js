@@ -88,12 +88,25 @@ function installShim(global) {
   global.MutationObserver = MutationObserver;
   global.MutationRecord = MutationRecord;
 
-  // 4. Expose FormData, Blob and File
+  // 4. Expose FormData, Blob, File, FileList and DataTransfer
   global.FormData = FormData;
   global.Blob = Blob;
   global.File = File;
   global.FileReader = FileReader;
-  if (typeof globalThis !== "undefined") globalThis.FileReader = FileReader;
+  if (typeof FileList !== "undefined") global.FileList = FileList;
+  if (typeof DataTransfer !== "undefined") global.DataTransfer = DataTransfer;
+  if (typeof DataTransferItem !== "undefined") global.DataTransferItem = DataTransferItem;
+  if (typeof DataTransferItemList !== "undefined") global.DataTransferItemList = DataTransferItemList;
+  if (typeof globalThis !== "undefined") {
+    globalThis.FormData = FormData;
+    globalThis.Blob = Blob;
+    globalThis.File = File;
+    globalThis.FileReader = FileReader;
+    if (typeof FileList !== "undefined") globalThis.FileList = FileList;
+    if (typeof DataTransfer !== "undefined") globalThis.DataTransfer = DataTransfer;
+    if (typeof DataTransferItem !== "undefined") globalThis.DataTransferItem = DataTransferItem;
+    if (typeof DataTransferItemList !== "undefined") globalThis.DataTransferItemList = DataTransferItemList;
+  }
   if (typeof Headers !== "undefined") global.Headers = Headers;
   if (typeof Request !== "undefined") global.Request = Request;
   if (typeof Response !== "undefined") global.Response = Response;

@@ -118,6 +118,9 @@ function installInputElement(global) {
         return attr !== null ? attr : "";
       }
       if (mode === "filename") {
+        if (this._fileList && this._fileList.length > 0 && this._fileList[0]) {
+          return "C:\\fakepath\\" + this._fileList[0].name;
+        }
         return this._valueDirty ? (this._value || "") : "";
       }
       if (this._valueDirty) return this._value;
@@ -134,6 +137,9 @@ function installInputElement(global) {
         }
         this._valueDirty = true;
         this._value = "";
+        if (this._fileList && Array.isArray(this._fileList._files)) {
+          this._fileList._files.length = 0;
+        }
         return;
       }
       if (mode === "default" || mode === "default/on") {
@@ -144,6 +150,39 @@ function installInputElement(global) {
       this._value = sanitizeForInput(this, str);
       this._selectionStart = this._value.length;
       this._selectionEnd = this._value.length;
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLInputElement.prototype, "files", {
+    get: function () {
+      if (this.type !== "file") return null;
+      if (!this._fileList) {
+        this._fileList = typeof createFileList === "function" ? createFileList([]) : [];
+      }
+      return this._fileList;
+    },
+    set: function (v) {
+      if (this.type !== "file") return;
+      if (v === null || v === undefined) return;
+      const next = [];
+      if (typeof v.length === "number") {
+        for (let i = 0; i < v.length; i++) {
+          if (v[i] !== undefined) next.push(v[i]);
+        }
+      }
+      if (!this._fileList) {
+        this._fileList = typeof createFileList === "function" ? createFileList(next) : next;
+      } else if (Array.isArray(this._fileList._files)) {
+        this._fileList._files.length = 0;
+        for (let i = 0; i < next.length; i++) {
+          this._fileList._files.push(next[i]);
+        }
+      } else {
+        this._fileList = typeof createFileList === "function" ? createFileList(next) : next;
+      }
+      this._valueDirty = true;
+      this._value = next.length > 0 && next[0] ? ("C:\\fakepath\\" + next[0].name) : "";
     },
     configurable: true,
   });

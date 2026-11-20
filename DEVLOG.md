@@ -1197,4 +1197,10 @@
    - 通过 `extractSvgRootTag` 避免误匹配内部 `<rect>` 的 `width`/`height`；引入 `is_ratio_only` 区分仅含 `viewBox` 的 SVG 与默认 `300x150` 替换元素，完整实现 CSS 2.1 §10.3.2 自动宽度铺满包含块及单边高/宽反推。
 2. **虚线描边与全图元统一光栅化 (`src/render/painter.cp`)**：
    - 新增 `parseSvgDashArray` 与 `paintSvgSegmentClipped` 实现规范虚线描边（奇数数组倍增与 `stroke-dashoffset` 相位偏移），并新增缩放 ASCII 点阵 `<text>` 渲染，使 `<svg>` 内各类图元均在 `viewBox` 变换与裁剪框下精准绘制。
+
+## Phase 64 表单文本选区 API、FileList/DataTransfer 与回车隐式提交技术方案
+1. **文本选区与 `setRangeText` (`src/js/shim/element/forms/selection.js`)**：
+   - `setSelectionRange` 按 WebIDL `unsigned long` (`>>> 0`) 规范化负值参数并限制至文本长度，通过同范围去重避免冗余 `select` 事件；实装 `setRangeText` 四种 `selectionMode`（`select`/`start`/`end`/`preserve`）与越界 `IndexSizeError`。
+2. **`FileList`、`DataTransfer` 与 `FormData` 文件条目 (`file.js`, `input.js`, `form-data.js`)**：
+   - 基于 `Proxy` 实装带索引访问与迭代器的 `FileList` 与 `DataTransfer`；`HTMLInputElement.prototype.files` 遵循 SameObject 并在 `type="file"` 时返回 `C:\fakepath\<name>`，`FormData` 直接保留 `File`/`Blob` 引用。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

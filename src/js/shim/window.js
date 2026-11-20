@@ -3711,6 +3711,44 @@ function installWindow(global) {
               if (typeof active.click === "function") {
                 active.click();
               }
+            } else if (tag === "input") {
+              const inputType = String(active.type || (active.getAttribute ? active.getAttribute("type") : "") || "text").toLowerCase();
+              const implicitSubmitTypes = new Set([
+                "text", "search", "url", "tel", "email", "password",
+                "date", "month", "week", "time", "datetime-local", "number"
+              ]);
+              if (implicitSubmitTypes.has(inputType)) {
+                const form = typeof findAssociatedForm === "function" ? findAssociatedForm(active) : active.form;
+                if (form && typeof submitForm === "function") {
+                  const controls = typeof collectFormControls === "function" ? collectFormControls(form) : (form.elements || []);
+                  let defaultBtn = null;
+                  let textFieldCount = 0;
+                  for (let i = 0; i < controls.length; i++) {
+                    const c = controls[i];
+                    if (!c) continue;
+                    const cTag = String(c.tagName || c.localName || "").toLowerCase();
+                    const cType = String(c.type || (c.getAttribute ? c.getAttribute("type") : "") || "").toLowerCase();
+                    if (!defaultBtn) {
+                      const isBtnSubmit = (cTag === "button" && (cType === "submit" || cType === "")) ||
+                                          (cTag === "input" && (cType === "submit" || cType === "image"));
+                      if (isBtnSubmit) {
+                        defaultBtn = c;
+                      }
+                    }
+                    if (cTag === "input" && implicitSubmitTypes.has(cType || "text")) {
+                      textFieldCount++;
+                    }
+                  }
+                  if (defaultBtn) {
+                    const disabled = defaultBtn.disabled || (typeof defaultBtn.hasAttribute === "function" && defaultBtn.hasAttribute("disabled"));
+                    if (!disabled) {
+                      submitForm(form, defaultBtn);
+                    }
+                  } else if (textFieldCount <= 1) {
+                    submitForm(form, null);
+                  }
+                }
+              }
             }
           }
         }

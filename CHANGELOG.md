@@ -1524,4 +1524,13 @@
 - **测试与门禁验证**：
   - 静态门禁：`cascade.cp`、`layout.cp`、`painter.cp` 100% PASS（4 门禁全 0）；
   - E2E 测试：`svg-dash-stroke` + `svg-paint-fidelity` + `svg-ratio-sizing` **3/3 PASS (13 expect calls)**，SVG Demo 3/3 回归全绿。
+
+## Phase 64: Form Text Selection API, FileList/DataTransfer & Implicit Enter Submit (100% Closed)
+- **`src/js/shim/element/forms/{selection,textarea,input}.js`**：
+  - 补齐 `selectionDirection`、`setSelectionRange`（WebIDL 无符号回绕与 `select` 事件去重）、`select()` 与 `setRangeText`（4 种模式）。
+- **`src/js/shim/file.js` & `form-data.js` & `index.js` & `window.js`**：
+  - 新增 `FileList`、`DataTransfer`、`DataTransferItem`、`DataTransferItemList`、`HTMLInputElement.prototype.files` 与 `C:\fakepath\` 规范，`FormData` 保留 `File`/`Blob` 收集；补齐 `Enter` 表单隐式提交。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`forms-selection-demo` 100% PASS、`forms-file-input-idl` PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

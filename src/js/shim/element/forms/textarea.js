@@ -175,8 +175,6 @@ function installTextAreaElement(global) {
     return this.checkValidity();
   };
 
-  HTMLTextAreaElement.prototype.select = function () {};
-
   markNative(HTMLTextAreaElement, "HTMLTextAreaElement");
   markNative(HTMLTextAreaElement.prototype.setCustomValidity, "setCustomValidity");
   markNative(HTMLTextAreaElement.prototype.checkValidity, "checkValidity");

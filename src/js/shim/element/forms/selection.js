@@ -59,6 +59,27 @@ function notifyControlValueMutation(control, cursor) {
 }
 
 function installSelectionMixin(Cls) {
+  function scheduleSelectEvents(el, rangeChanged) {
+    if (!el._selectionChangeScheduled) {
+      el._selectionChangeScheduled = true;
+      setTimeout(function () {
+        el._selectionChangeScheduled = false;
+        try {
+          el.dispatchEvent(new Event("selectionchange"));
+        } catch (e) {}
+      }, 0);
+    }
+    if (rangeChanged && !el._selectEventScheduled) {
+      el._selectEventScheduled = true;
+      setTimeout(function () {
+        el._selectEventScheduled = false;
+        try {
+          el.dispatchEvent(new Event("select", { bubbles: true, cancelable: false }));
+        } catch (e) {}
+      }, 0);
+    }
+  }
+
   Object.defineProperty(Cls.prototype, "selectionStart", {
     get: function () {
       if (!supportsSelection(this)) return null;
@@ -66,7 +87,7 @@ function installSelectionMixin(Cls) {
     },
     set: function (v) {
       if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
-      const n = Math.max(0, Number(v) >>> 0);
+      const n = Number(v) >>> 0;
       this.setSelectionRange(n, Math.max(n, this._selectionEnd || 0), this._selectionDirection);
     },
     configurable: true,
@@ -79,8 +100,20 @@ function installSelectionMixin(Cls) {
     },
     set: function (v) {
       if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
-      const n = Math.max(0, Number(v) >>> 0);
+      const n = Number(v) >>> 0;
       this.setSelectionRange(this._selectionStart || 0, n, this._selectionDirection);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(Cls.prototype, "selectionDirection", {
+    get: function () {
+      if (!supportsSelection(this)) return null;
+      return this._selectionDirection || "none";
+    },
+    set: function (v) {
+      if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
+      this.setSelectionRange(this._selectionStart || 0, this._selectionEnd || 0, String(v));
     },
     configurable: true,
   });
@@ -88,22 +121,86 @@ function installSelectionMixin(Cls) {
   Cls.prototype.setSelectionRange = function (start, end, direction) {
     if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
     const len = (this.value || "").length;
-    let b = Math.min(Math.max(0, Number(end) || 0), len);
-    let a = Math.min(Math.max(0, Number(start) || 0), b);
+    const rawStart = start === null || start === undefined ? 0 : (Number(start) >>> 0);
+    const rawEnd = end === null || end === undefined ? 0 : (Number(end) >>> 0);
+    const b = Math.min(rawEnd, len);
+    const a = Math.min(rawStart, b);
+    const dir = (direction === "forward" || direction === "backward") ? direction : "none";
+    const prevStart = this._selectionStart || 0;
+    const prevEnd = this._selectionEnd || 0;
+    const rangeChanged = (prevStart !== a || prevEnd !== b);
+
     this._selectionStart = a;
     this._selectionEnd = b;
-    this._selectionDirection = (direction === "forward" || direction === "backward") ? direction : "none";
+    this._selectionDirection = dir;
 
-    if (!this._selectionChangeScheduled) {
-      this._selectionChangeScheduled = true;
-      const self = this;
-      setTimeout(function () {
-        self._selectionChangeScheduled = false;
-        try {
-          self.dispatchEvent(new Event("selectionchange"));
-        } catch (e) {}
-      }, 0);
+    scheduleSelectEvents(this, rangeChanged);
+  };
+
+  Cls.prototype.select = function () {
+    if (!supportsSelection(this)) return;
+    const len = (this.value || "").length;
+    this.setSelectionRange(0, len, "none");
+  };
+
+  Cls.prototype.setRangeText = function (replacement, start, end, selectionMode) {
+    if (!supportsSelection(this)) throw new DOMException("InvalidStateError");
+    const repl = String(replacement);
+    const val = this.value || "";
+    const len = val.length;
+    const oldStart = this._selectionStart || 0;
+    const oldEnd = this._selectionEnd || 0;
+    const oldDir = this._selectionDirection || "none";
+
+    let s;
+    let e;
+    if (arguments.length < 2 || (start === undefined && end === undefined)) {
+      s = oldStart;
+      e = oldEnd;
+    } else {
+      s = Number(start) >>> 0;
+      e = Number(end) >>> 0;
+      if (s > e) {
+        throw new DOMException("Failed to execute 'setRangeText': The provided start value is greater than the end value.", "IndexSizeError");
+      }
+      s = Math.min(s, len);
+      e = Math.min(e, len);
     }
+
+    const mode = selectionMode === undefined ? "preserve" : String(selectionMode);
+    if (mode !== "select" && mode !== "start" && mode !== "end" && mode !== "preserve") {
+      throw new TypeError("Failed to execute 'setRangeText': Invalid selection mode '" + mode + "'.");
+    }
+
+    const newVal = val.slice(0, s) + repl + val.slice(e);
+    this.value = newVal;
+
+    let newStart = oldStart;
+    let newEnd = oldEnd;
+    if (mode === "select") {
+      newStart = s;
+      newEnd = s + repl.length;
+    } else if (mode === "start") {
+      newStart = s;
+      newEnd = s;
+    } else if (mode === "end") {
+      newStart = s + repl.length;
+      newEnd = s + repl.length;
+    } else {
+      const delta = repl.length - (e - s);
+      if (oldStart > e) newStart = oldStart + delta;
+      else if (oldStart > s) newStart = s;
+      if (oldEnd > e) newEnd = oldEnd + delta;
+      else if (oldEnd > s) newEnd = s + repl.length;
+      newStart = Math.max(0, Math.min(newStart, newVal.length));
+      newEnd = Math.max(newStart, Math.min(newEnd, newVal.length));
+    }
+
+    const rangeChanged = (oldStart !== newStart || oldEnd !== newEnd);
+    this._selectionStart = newStart;
+    this._selectionEnd = newEnd;
+    this._selectionDirection = oldDir;
+    scheduleSelectEvents(this, rangeChanged);
   };
 }
 
