@@ -714,8 +714,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
     fn pumpScreencastFrame(*_, client_fd: i32): bool! {
         if (!_.session.has_document) return false;
-        if (!_.session.screencast_handler.isActive()) return false;
-        if (_.session.screencast_handler.state.hasPendingAck()) return false;
+        if (!_.session.screencast_handler.canSendFrame()) return false;
 
         const st = _.session.screencast_handler.getState();
         const png_bytes = _.session.captureScreencastFrame(st.max_width, st.max_height) catch return false;
@@ -833,7 +832,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         _.flushDomEvents(client_fd) catch break;
                     }
                 }
-                if (_.session.has_document && _.session.screencast_handler.isActive() && !_.session.screencast_handler.state.hasPendingAck()) {
+                if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
                     if (loop_now_ms - last_screencast_ms >= 80) {
                         if (_.pumpScreencastFrame(client_fd) catch false) {
                             last_screencast_ms = loop_now_ms;

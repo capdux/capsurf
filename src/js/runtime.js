@@ -7039,8 +7039,11 @@
         }
 
         if (src) {
-          if (typeof fetch === "function") {
-            fetch(src)
+          const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
+            (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
+            (typeof fetch === "function" ? fetch : null);
+          if (typeof nativeFetch === "function") {
+            nativeFetch(src)
               .then(function (res) {
                 if (!res.ok && res.status !== 200) {
                   throw new Error("HTTP " + res.status);
@@ -13072,7 +13075,8 @@
         }, 0);
         return;
       }
-      if (typeof global.fetch !== "function") return;
+      const nativeFetch = global.__capsurf_native_fetch || global.fetch;
+      if (typeof nativeFetch !== "function") return;
       const self = img;
       if (resetComplete !== false) self._imgComplete = false;
       self._imgError = false;
@@ -13112,7 +13116,7 @@
         } catch (e) {}
       };
       try {
-        global.fetch(str).then(function (res) {
+        nativeFetch(str).then(function (res) {
           if (self._imgLoadSeq !== seq) return;
           if (!res || !res.ok) {
             dispatchImgEvent(false, null);
@@ -14047,8 +14051,9 @@
       }
 
       let loadPromise = null;
-      if (typeof fetch === "function") {
-        loadPromise = fetch(resolvedUrl).then(function (res) {
+      const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) || (typeof fetch === "function" ? fetch : null);
+      if (typeof nativeFetch === "function") {
+        loadPromise = nativeFetch(resolvedUrl).then(function (res) {
           const ct = (res && res.headers && typeof res.headers.get === "function") ? res.headers.get("content-type") : null;
           const headerCharset = (ct && typeof global.__capsurf_extractCharsetFromContentType === "function")
             ? global.__capsurf_extractCharsetFromContentType(ct)
@@ -28995,6 +29000,10 @@
       scheduleTaskDrain();
       return id;
     }, "setTimeout");
+    global.__capsurf_native_setTimeout = global.setTimeout;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_native_setTimeout = global.setTimeout;
+    }
 
     global.clearTimeout = markNative(function (id) {
       const numId = Number(id);
@@ -30314,11 +30323,13 @@
       }));
     }, "fetch");
 
+    global.__capsurf_native_fetch = fetchFn;
     global.fetch = fetchFn;
     if (typeof window !== "undefined") {
       window.fetch = fetchFn;
     }
     if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_native_fetch = fetchFn;
       globalThis.fetch = fetchFn;
     }
 
@@ -35937,8 +35948,11 @@
       } catch (e) {}
       try {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
-          if (typeof setTimeout === "function") {
-            setTimeout(function () {
+          const nativeST = (typeof global.__capsurf_native_setTimeout === "function")
+            ? global.__capsurf_native_setTimeout
+            : (typeof setTimeout === "function" ? setTimeout : null);
+          if (nativeST) {
+            nativeST(function () {
               try { globalThis.__capsurf_initCssTransitionSnapshots(); } catch (e) {}
             }, 0);
           } else {
@@ -39964,9 +39978,12 @@
             } else {
               writtenQueue.push(item);
               global.__capsurf_written_script_queue_pending = true;
-              if (item.kind === "external" && typeof fetch === "function") {
+              const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
+                (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
+                (typeof fetch === "function" ? fetch : null);
+              if (item.kind === "external" && typeof nativeFetch === "function") {
                 (function (entry) {
-                  fetch(entry.src)
+                  nativeFetch(entry.src)
                     .then(function (res) { return res.text(); })
                     .then(function (txt) {
                       entry.code = txt;

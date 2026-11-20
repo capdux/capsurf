@@ -1271,7 +1271,8 @@ function installHtmlClasses(global) {
       }, 0);
       return;
     }
-    if (typeof global.fetch !== "function") return;
+    const nativeFetch = global.__capsurf_native_fetch || global.fetch;
+    if (typeof nativeFetch !== "function") return;
     const self = img;
     if (resetComplete !== false) self._imgComplete = false;
     self._imgError = false;
@@ -1311,7 +1312,7 @@ function installHtmlClasses(global) {
       } catch (e) {}
     };
     try {
-      global.fetch(str).then(function (res) {
+      nativeFetch(str).then(function (res) {
         if (self._imgLoadSeq !== seq) return;
         if (!res || !res.ok) {
           dispatchImgEvent(false, null);
@@ -2246,8 +2247,9 @@ function installHtmlClasses(global) {
     }
 
     let loadPromise = null;
-    if (typeof fetch === "function") {
-      loadPromise = fetch(resolvedUrl).then(function (res) {
+    const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) || (typeof fetch === "function" ? fetch : null);
+    if (typeof nativeFetch === "function") {
+      loadPromise = nativeFetch(resolvedUrl).then(function (res) {
         const ct = (res && res.headers && typeof res.headers.get === "function") ? res.headers.get("content-type") : null;
         const headerCharset = (ct && typeof global.__capsurf_extractCharsetFromContentType === "function")
           ? global.__capsurf_extractCharsetFromContentType(ct)

@@ -85,6 +85,10 @@ pub struct ScreencastHandler {
         return _.state.owner_session_id;
     }
 
+    fn canSendFrame(): bool {
+        return _.state.active && _.state.inFlight() < _.max_in_flight;
+    }
+
     fn startScreencast(*_, req_params_json: []const u8, owner_session: []const u8): bool {
         let fmt: []const u8 = "jpeg";
         if (f := extractJsonString(req_params_json, "format")) {
@@ -139,9 +143,15 @@ pub struct ScreencastHandler {
             }
         }
 
+        _.max_in_flight = 1;
         if (m := extractJsonInt(req_params_json, "maxFramesInFlight")) {
             if (m >= 1 && m <= 16) {
                 _.max_in_flight = @as(u32, @intCast(m));
+            }
+        }
+        if (m2 := extractJsonInt(req_params_json, "maxInFlight")) {
+            if (m2 >= 1 && m2 <= 16) {
+                _.max_in_flight = @as(u32, @intCast(m2));
             }
         }
 

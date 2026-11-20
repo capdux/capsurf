@@ -833,9 +833,12 @@ function installShim(global) {
           } else {
             writtenQueue.push(item);
             global.__capsurf_written_script_queue_pending = true;
-            if (item.kind === "external" && typeof fetch === "function") {
+            const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
+              (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
+              (typeof fetch === "function" ? fetch : null);
+            if (item.kind === "external" && typeof nativeFetch === "function") {
               (function (entry) {
-                fetch(entry.src)
+                nativeFetch(entry.src)
                   .then(function (res) { return res.text(); })
                   .then(function (txt) {
                     entry.code = txt;

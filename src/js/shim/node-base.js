@@ -355,8 +355,11 @@ function executeConnectedScripts(node) {
       }
 
       if (src) {
-        if (typeof fetch === "function") {
-          fetch(src)
+        const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
+          (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
+          (typeof fetch === "function" ? fetch : null);
+        if (typeof nativeFetch === "function") {
+          nativeFetch(src)
             .then(function (res) {
               if (!res.ok && res.status !== 200) {
                 throw new Error("HTTP " + res.status);

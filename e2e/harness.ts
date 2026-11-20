@@ -848,6 +848,7 @@ export class Page {
   private inFlightEvaluates = new Set<{ reject: (err: any) => void }>();
   private _url: string = "about:blank";
   private exposedFunctions = new Map<string, (...args: any[]) => any>();
+  public newDocumentScripts: string[] = [];
   private _requestInterceptionEnabled: boolean = false;
   public historyEntries: Array<{ id: number; url: string; userTypedURL: string; title: string }> = [
     { id: 1, url: "about:blank", userTypedURL: "about:blank", title: "" }
@@ -1449,6 +1450,11 @@ export class Page {
     for (const [name] of this.exposedFunctions) {
       try {
         await this.installExposedFunction(name);
+      } catch {}
+    }
+    for (const script of this.newDocumentScripts) {
+      try {
+        await this.cdp.send("Runtime.evaluate", { expression: script });
       } catch {}
     }
 
@@ -2324,6 +2330,22 @@ export class Page {
     await this.installExposedFunction(name);
   }
 
+  async evaluateOnNewDocument(fnOrExpr: any, ...args: any[]): Promise<{ identifier: string }> {
+    let expression: string;
+    if (typeof fnOrExpr === "function") {
+      expression = `(${fnOrExpr.toString()})(${args.map((a) => JSON.stringify(a)).join(",")})`;
+    } else {
+      expression = String(fnOrExpr);
+    }
+    this.newDocumentScripts.push(expression);
+    try {
+      const res: any = await this.cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: expression });
+      return { identifier: res?.identifier || `script-${this.newDocumentScripts.length}` };
+    } catch {
+      return { identifier: `script-${this.newDocumentScripts.length}` };
+    }
+  }
+
   async $(selector: string): Promise<ElementHandle | null> {
     const res: any = await this.cdp.send("Runtime.evaluate", {
       expression: `document.querySelector(${JSON.stringify(selector)})`,
@@ -2794,6 +2816,7 @@ export function test(
     if (fn.length > 0) {
       const fixtures = await getSharedSession();
       fixtures.page.exposedFunctions.clear();
+      fixtures.page.newDocumentScripts = [];
       fixtures.page.removeAllListeners();
       await fixtures.page.cleanupCDPSessions();
       try {

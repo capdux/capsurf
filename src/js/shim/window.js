@@ -1693,6 +1693,10 @@ function installWindow(global) {
     scheduleTaskDrain();
     return id;
   }, "setTimeout");
+  global.__capsurf_native_setTimeout = global.setTimeout;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_native_setTimeout = global.setTimeout;
+  }
 
   global.clearTimeout = markNative(function (id) {
     const numId = Number(id);
@@ -3012,11 +3016,13 @@ function installWindow(global) {
     }));
   }, "fetch");
 
+  global.__capsurf_native_fetch = fetchFn;
   global.fetch = fetchFn;
   if (typeof window !== "undefined") {
     window.fetch = fetchFn;
   }
   if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_native_fetch = fetchFn;
     globalThis.fetch = fetchFn;
   }
 
@@ -8635,8 +8641,11 @@ const CSS_TYPED_OM_GLOBALS = {
     } catch (e) {}
     try {
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
-        if (typeof setTimeout === "function") {
-          setTimeout(function () {
+        const nativeST = (typeof global.__capsurf_native_setTimeout === "function")
+          ? global.__capsurf_native_setTimeout
+          : (typeof setTimeout === "function" ? setTimeout : null);
+        if (nativeST) {
+          nativeST(function () {
             try { globalThis.__capsurf_initCssTransitionSnapshots(); } catch (e) {}
           }, 0);
         } else {
