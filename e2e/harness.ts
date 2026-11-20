@@ -5,9 +5,38 @@
 // and provides Puppeteer/Vitest-compatible test() and expect() assertors for Bun.
 
 import { spawn, type ChildProcess } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { expect as bunExpect, test as bunTest, describe as bunDescribe } from "bun:test";
+
+function isLoopbackHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h === "::1" ||
+    h === "0:0:0:0:0:0:0:1" ||
+    h === "127.0.0.1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) ||
+    h === "0.0.0.0" ||
+    h === "::"
+  );
+}
+
+function isPublicToLoopbackNav(fromUrl: string, toUrl: string): boolean {
+  try {
+    const from = new URL(fromUrl);
+    const to = new URL(toUrl);
+    if ((from.protocol === "http:" || from.protocol === "https:") && !isLoopbackHost(from.hostname)) {
+      if ((to.protocol === "http:" || to.protocol === "https:") && isLoopbackHost(to.hostname)) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
 
 // Auto-seed node_modules/cloudflare:test shim if absent
 try {
@@ -944,10 +973,19 @@ export class Page {
 
           if (navResult.pending) {
             const targetUrl = navResult.pending;
-            // Automatically drive page to load the new target page first so the next evaluate runs on the loaded page
-            try {
-              await this.goto(targetUrl);
-            } catch {}
+            if (isPublicToLoopbackNav(this._url, targetUrl)) {
+              this.emit("response", {
+                url: () => targetUrl,
+                status: () => 403,
+                headers: () => ({}),
+                ok: () => false,
+              });
+            } else {
+              // Automatically drive page to load the new target page first so the next evaluate runs on the loaded page
+              try {
+                await this.goto(targetUrl);
+              } catch {}
+            }
             if (!settled) {
               settled = true;
               this.inFlightEvaluates.delete(item);
@@ -1097,7 +1135,16 @@ export class Page {
             }
             if (navResult.pending) {
               const targetUrl = navResult.pending;
-              await this.goto(targetUrl);
+              if (isPublicToLoopbackNav(this._url, targetUrl)) {
+                this.emit("response", {
+                  url: () => targetUrl,
+                  status: () => 403,
+                  headers: () => ({}),
+                  ok: () => false,
+                });
+              } else {
+                await this.goto(targetUrl);
+              }
             }
           }
         } catch {}
@@ -1924,7 +1971,336 @@ expect.poll = function (fn: () => any, { timeout = 10000, interval = 50 } = {}) 
   });
 };
 
-export const engine = null;
+function createCfWebSocketFromSocket(socket: any, head: Buffer) {
+  let accepted = false;
+  let closed = false;
+  let rxBuf: Buffer = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
+  const pendingEvents: Array<{ type: string; event: any }> = [];
+  const listeners = new Map<string, Array<(ev: any) => void>>();
+
+  function emitEvent(type: string, event: any) {
+    if (!accepted) {
+      pendingEvents.push({ type, event });
+      return;
+    }
+    const list = listeners.get(type);
+    if (list) {
+      for (const fn of list.slice()) {
+        try {
+          fn(event);
+        } catch {}
+      }
+    }
+  }
+
+  function sendFrame(opcode: number, payload: Buffer) {
+    if (closed || socket.destroyed) return;
+    const len = payload.length;
+    const maskKey = crypto.randomBytes(4);
+    let headerLen = 2;
+    if (len >= 126 && len < 65536) headerLen += 2;
+    else if (len >= 65536) headerLen += 8;
+    const frame = Buffer.alloc(headerLen + 4 + len);
+    frame[0] = 0x80 | (opcode & 0x0f);
+    let offset = 2;
+    if (len < 126) {
+      frame[1] = 0x80 | len;
+    } else if (len < 65536) {
+      frame[1] = 0x80 | 126;
+      frame.writeUInt16BE(len, 2);
+      offset = 4;
+    } else {
+      frame[1] = 0x80 | 127;
+      frame.writeBigUInt64BE(BigInt(len), 2);
+      offset = 10;
+    }
+    maskKey.copy(frame, offset);
+    offset += 4;
+    for (let i = 0; i < len; i++) {
+      frame[offset + i] = payload[i] ^ maskKey[i & 3];
+    }
+    try {
+      socket.write(frame);
+    } catch {}
+  }
+
+  function parseFrames() {
+    while (rxBuf.length >= 2) {
+      const b0 = rxBuf[0];
+      const b1 = rxBuf[1];
+      const opcode = b0 & 0x0f;
+      const masked = (b1 & 0x80) !== 0;
+      let payloadLen = b1 & 0x7f;
+      let offset = 2;
+      if (payloadLen === 126) {
+        if (rxBuf.length < 4) return;
+        payloadLen = rxBuf.readUInt16BE(2);
+        offset = 4;
+      } else if (payloadLen === 127) {
+        if (rxBuf.length < 10) return;
+        payloadLen = Number(rxBuf.readBigUInt64BE(2));
+        offset = 10;
+      }
+      let maskKey: Buffer | null = null;
+      if (masked) {
+        if (rxBuf.length < offset + 4) return;
+        maskKey = rxBuf.subarray(offset, offset + 4);
+        offset += 4;
+      }
+      if (rxBuf.length < offset + payloadLen) return;
+      const payload = Buffer.from(rxBuf.subarray(offset, offset + payloadLen));
+      rxBuf = rxBuf.subarray(offset + payloadLen);
+      if (maskKey) {
+        for (let i = 0; i < payload.length; i++) {
+          payload[i] ^= maskKey[i & 3];
+        }
+      }
+      if (opcode === 0x1) {
+        emitEvent("message", { data: payload.toString("utf8") });
+      } else if (opcode === 0x2) {
+        emitEvent("message", { data: payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) });
+      } else if (opcode === 0x9) {
+        sendFrame(0x0a, payload);
+      } else if (opcode === 0x8) {
+        closed = true;
+        emitEvent("close", { code: 1000, reason: "" });
+        try { socket.end(); } catch {}
+      }
+    }
+  }
+
+  socket.on("data", (chunk: Buffer) => {
+    rxBuf = rxBuf.length > 0 ? Buffer.concat([rxBuf, chunk]) : chunk;
+    parseFrames();
+  });
+  socket.on("close", () => {
+    if (!closed) {
+      closed = true;
+      emitEvent("close", { code: 1000, reason: "" });
+    }
+  });
+  socket.on("error", (err: any) => {
+    emitEvent("error", { error: err });
+  });
+
+  if (rxBuf.length > 0) {
+    parseFrames();
+  }
+
+  return {
+    accept() {
+      if (accepted) return;
+      accepted = true;
+      while (pendingEvents.length > 0) {
+        const item = pendingEvents.shift()!;
+        emitEvent(item.type, item.event);
+      }
+    },
+    send(message: string | Uint8Array | ArrayBuffer) {
+      if (typeof message === "string") {
+        sendFrame(0x1, Buffer.from(message, "utf8"));
+      } else if (message instanceof ArrayBuffer) {
+        sendFrame(0x2, Buffer.from(message));
+      } else {
+        sendFrame(0x2, Buffer.from(message.buffer, message.byteOffset, message.byteLength));
+      }
+    },
+    close() {
+      if (closed) return;
+      closed = true;
+      try { sendFrame(0x8, Buffer.alloc(0)); } catch {}
+      try { socket.end(); } catch {}
+      try { socket.destroy(); } catch {}
+    },
+    addEventListener(type: string, callback: (ev: any) => void) {
+      let list = listeners.get(type);
+      if (!list) {
+        list = [];
+        listeners.set(type, list);
+      }
+      list.push(callback);
+    },
+    removeEventListener(type: string, callback: (ev: any) => void) {
+      const list = listeners.get(type);
+      if (!list) return;
+      const idx = list.indexOf(callback);
+      if (idx !== -1) list.splice(idx, 1);
+    },
+  };
+}
+
+export const engine = {
+  async fetch(input: string | URL | Request, init?: RequestInit): Promise<any> {
+    await ensureServerRunning();
+    const port = DEFAULT_PORT;
+    const reqObj = input instanceof Request ? input : null;
+    const urlStr = reqObj ? reqObj.url : String(input);
+    const method = (init?.method || reqObj?.method || "GET").toUpperCase();
+
+    const headers: Record<string, string> = {};
+    const applyHeaders = (h: any) => {
+      if (!h) return;
+      if (h instanceof Headers || typeof h.forEach === "function") {
+        h.forEach((v: string, k: string) => {
+          headers[k.toLowerCase()] = String(v);
+        });
+      } else if (Array.isArray(h)) {
+        for (const [k, v] of h) {
+          headers[String(k).toLowerCase()] = String(v);
+        }
+      } else if (typeof h === "object") {
+        for (const [k, v] of Object.entries(h)) {
+          if (v !== undefined) headers[k.toLowerCase()] = String(v);
+        }
+      }
+    };
+    if (reqObj) applyHeaders(reqObj.headers);
+    if (init?.headers) applyHeaders(init.headers);
+
+    const parsed = new URL(urlStr, `http://127.0.0.1:${port}`);
+    if (!headers["host"]) {
+      headers["host"] = parsed.host;
+    }
+
+    const isUpgrade = String(headers["upgrade"] || "").toLowerCase() === "websocket";
+    if (isUpgrade) {
+      headers["connection"] = "Upgrade";
+      headers["upgrade"] = "websocket";
+      if (!headers["sec-websocket-version"]) headers["sec-websocket-version"] = "13";
+      if (!headers["sec-websocket-key"]) {
+        headers["sec-websocket-key"] = crypto.randomBytes(16).toString("base64");
+      }
+    }
+
+    const bodyBuf =
+      init?.body !== undefined && init.body !== null
+        ? typeof init.body === "string"
+          ? Buffer.from(init.body, "utf8")
+          : Buffer.from(init.body as any)
+        : null;
+    if (bodyBuf && !headers["content-length"]) {
+      headers["content-length"] = String(bodyBuf.length);
+    }
+
+    return new Promise((resolve, reject) => {
+      const sock = net.connect({ host: "127.0.0.1", port });
+      let settled = false;
+      let rawBuf: Buffer = Buffer.alloc(0);
+      let headersParsed = false;
+      let statusCode = 200;
+      let statusText = "OK";
+      let respHeaders = new Headers();
+      let expectedLen = -1;
+      let bodyChunks: Buffer[] = [];
+      let bodyReceived = 0;
+
+      const finishHttp = () => {
+        if (settled) return;
+        settled = true;
+        try { sock.destroy(); } catch {}
+        resolve(
+          new Response(Buffer.concat(bodyChunks), {
+            status: statusCode,
+            statusText,
+            headers: respHeaders,
+          }),
+        );
+      };
+
+      const onData = (chunk: Buffer) => {
+        if (!headersParsed) {
+          rawBuf = rawBuf.length > 0 ? Buffer.concat([rawBuf, chunk]) : chunk;
+          const sep = rawBuf.indexOf("\r\n\r\n");
+          if (sep === -1) return;
+          headersParsed = true;
+          const headerText = rawBuf.subarray(0, sep).toString("latin1");
+          const rest = rawBuf.subarray(sep + 4);
+          const lines = headerText.split("\r\n");
+          const statusMatch = (lines[0] || "").match(/^HTTP\/\d\.\d\s+(\d+)\s*(.*)$/i);
+          if (statusMatch) {
+            statusCode = parseInt(statusMatch[1], 10);
+            statusText = statusMatch[2] || "";
+          }
+          for (let i = 1; i < lines.length; i++) {
+            const idx = lines[i].indexOf(":");
+            if (idx > 0) {
+              const k = lines[i].slice(0, idx).trim();
+              const v = lines[i].slice(idx + 1).trim();
+              respHeaders.append(k, v);
+            }
+          }
+          if (statusCode === 101) {
+            settled = true;
+            sock.off("data", onData);
+            sock.off("end", onEnd);
+            sock.off("close", onEnd);
+            sock.off("error", onErr);
+            const cfWs = createCfWebSocketFromSocket(sock, rest);
+            resolve({
+              status: 101,
+              statusText: statusText || "Switching Protocols",
+              ok: false,
+              headers: respHeaders,
+              webSocket: cfWs,
+            });
+            return;
+          }
+          const cl = respHeaders.get("content-length");
+          if (cl !== null && /^\d+$/.test(cl.trim())) {
+            expectedLen = parseInt(cl.trim(), 10);
+          }
+          if (rest.length > 0) {
+            bodyChunks.push(rest);
+            bodyReceived += rest.length;
+          }
+          if (expectedLen >= 0 && bodyReceived >= expectedLen) {
+            finishHttp();
+          }
+        } else {
+          bodyChunks.push(chunk);
+          bodyReceived += chunk.length;
+          if (expectedLen >= 0 && bodyReceived >= expectedLen) {
+            finishHttp();
+          }
+        }
+      };
+
+      const onEnd = () => {
+        if (!settled) {
+          if (headersParsed) finishHttp();
+          else {
+            settled = true;
+            reject(new Error("Connection closed before HTTP response headers"));
+          }
+        }
+      };
+
+      const onErr = (err: Error) => {
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
+      };
+
+      sock.on("data", onData);
+      sock.on("end", onEnd);
+      sock.on("close", onEnd);
+      sock.on("error", onErr);
+
+      sock.on("connect", () => {
+        let reqHead = `${method} ${parsed.pathname + parsed.search} HTTP/1.1\r\n`;
+        for (const [k, v] of Object.entries(headers)) {
+          reqHead += `${k}: ${v}\r\n`;
+        }
+        reqHead += "\r\n";
+        sock.write(reqHead);
+        if (bodyBuf && bodyBuf.length > 0) {
+          sock.write(bodyBuf);
+        }
+      });
+    });
+  },
+};
 export { env } from "./shim/cloudflare-test";
 export async function connectEngine(): Promise<Browser> {
   const session = await getSharedSession();

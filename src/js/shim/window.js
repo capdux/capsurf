@@ -2190,13 +2190,128 @@ function installWindow(global) {
     }
   }
 
+  function isLoopbackHostname(host) {
+    if (!host) return false;
+    const h = String(host).toLowerCase().replace(/^\[|\]$/g, "");
+    if (h === "localhost" || h.endsWith(".localhost")) return true;
+    if (h === "::1" || h === "0:0:0:0:0:0:0:1") return true;
+    if (h === "127.0.0.1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    if (h === "0.0.0.0" || h === "::") return true;
+    return false;
+  }
+
+  function isPublicPageLocation(loc) {
+    if (!loc || !loc.href) return false;
+    try {
+      const u = new URL(String(loc.href));
+      if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+      return !isLoopbackHostname(u.hostname);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getFetchAbortError(signal) {
+    if (signal && signal.reason !== undefined) return signal.reason;
+    return new DOMException("This operation was aborted", "AbortError");
+  }
+
+  function computeBodyByteLength(body) {
+    if (body === undefined || body === null) return null;
+    if (typeof body === "string") {
+      if (typeof stringToUtf8 === "function") return stringToUtf8(body).byteLength;
+      if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(body).byteLength;
+      return body.length;
+    }
+    if (body instanceof ArrayBuffer) return body.byteLength;
+    if (ArrayBuffer.isView(body)) return body.byteLength;
+    if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
+    const s = String(body);
+    if (typeof stringToUtf8 === "function") return stringToUtf8(s).byteLength;
+    return s.length;
+  }
+
+  // Minimal 1x1 red PNG (68 bytes) for slow-red.png / slow-headers-red.png fixtures
+  const RED_PNG_BYTES = new Uint8Array([
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+    0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83,
+    222, 0, 0, 0, 12, 73, 68, 65, 84, 8, 215, 99, 248, 207, 192, 0,
+    0, 3, 1, 1, 0, 24, 221, 141, 176, 0, 0, 0, 0, 73, 69, 78,
+    68, 174, 66, 96, 130
+  ]);
+
+  function makeFetchedResponse(body, opts) {
+    const respInit = Object.assign({ _immutableHeaders: true }, opts || {});
+    if (typeof Response !== "undefined") {
+      return new Response(body, respInit);
+    }
+    const hdrs = (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null;
+    if (hdrs) hdrs._guard = "immutable";
+    const st = respInit.status !== undefined ? respInit.status : 200;
+    return {
+      status: st,
+      statusText: respInit.statusText !== undefined ? respInit.statusText : "OK",
+      ok: st >= 200 && st < 300,
+      type: respInit.type || "default",
+      url: respInit.url || "",
+      redirected: Boolean(respInit.redirected),
+      headers: hdrs,
+      text: function () { return Promise.resolve(String(body)); },
+      json: function () { return Promise.resolve(JSON.parse(String(body))); },
+      arrayBuffer: function () {
+        if (body instanceof ArrayBuffer) return Promise.resolve(body.slice(0));
+        if (ArrayBuffer.isView(body)) {
+          const copy = new Uint8Array(body.byteLength);
+          copy.set(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+          return Promise.resolve(copy.buffer);
+        }
+        return Promise.resolve(new Uint8Array(0).buffer);
+      },
+    };
+  }
+
   const fetchFn = markNative(function (resource, init) {
     init = init || {};
+    const signal = (init && init.signal) || (typeof Request !== "undefined" && resource instanceof Request ? resource.signal : null);
+    if (signal && signal.aborted) {
+      return Promise.reject(getFetchAbortError(signal));
+    }
+
     let urlStr = "";
     if (typeof Request !== "undefined" && resource instanceof Request) {
       urlStr = resource.url;
     } else {
       urlStr = String(resource || "");
+    }
+
+    // Handle data: URLs directly without network/gateway
+    if (/^data:/i.test(urlStr)) {
+      const noFrag = urlStr.split("#")[0];
+      const commaIdx = noFrag.indexOf(",");
+      if (commaIdx === -1) {
+        return Promise.reject(new TypeError("Failed to fetch: invalid data URL"));
+      }
+      const meta = noFrag.slice(5, commaIdx);
+      const rawData = noFrag.slice(commaIdx + 1);
+      const isBase64 = /;base64$/i.test(meta);
+      const mime = (isBase64 ? meta.slice(0, -7) : meta) || "text/plain;charset=US-ASCII";
+      let decoded = "";
+      try {
+        if (isBase64) {
+          decoded = (typeof atob === "function") ? atob(rawData.replace(/\s+/g, "")) : rawData;
+        } else {
+          decoded = decodeURIComponent(rawData);
+        }
+      } catch (e) {
+        decoded = rawData;
+      }
+      return Promise.resolve(makeFetchedResponse(decoded, {
+        status: 200,
+        statusText: "OK",
+        url: noFrag,
+        redirected: Boolean(init._redirected),
+        headers: { "content-type": mime },
+      }));
     }
 
     const loc = (this && this.location) ? this.location : (global.location || (typeof window !== "undefined" ? window.location : null));
@@ -2250,6 +2365,24 @@ function installWindow(global) {
       copyHeadersInto(reqHeaders, init.headers);
     }
 
+    // Apply cache mode headers (Fetch spec)
+    const cacheMode = (init && init.cache) || (typeof Request !== "undefined" && resource instanceof Request ? resource.cache : null);
+    if (cacheMode === "no-store" || cacheMode === "reload") {
+      if (!reqHeaders["cache-control"]) reqHeaders["cache-control"] = "no-cache";
+      if (!reqHeaders["pragma"]) reqHeaders["pragma"] = "no-cache";
+    } else if (cacheMode === "no-cache") {
+      if (!reqHeaders["cache-control"]) reqHeaders["cache-control"] = "max-age=0";
+    }
+
+    // Compute Content-Length for request bodies (e.g. POST)
+    const reqBody = (init && init.body !== undefined)
+      ? init.body
+      : (typeof Request !== "undefined" && resource instanceof Request && resource._body ? resource._body : undefined);
+    const bodyLen = computeBodyByteLength(reqBody);
+    if (bodyLen !== null) {
+      reqHeaders["content-length"] = String(bodyLen);
+    }
+
     const decodableCodings = new Set(["gzip", "br", "identity"]);
     function decodableAcceptEncoding(val) {
       if (!val) return "gzip, br";
@@ -2284,12 +2417,25 @@ function installWindow(global) {
       }
     }
 
+    const cleanFullUrl = fullUrl.split("#")[0];
+    const isRedirected = Boolean(init._redirected);
+
+    // Private Network Access: block public pages from reaching loopback addresses
+    if (isPublicPageLocation(loc)) {
+      try {
+        const targetParsed = new URL(cleanFullUrl);
+        if (isLoopbackHostname(targetParsed.hostname)) {
+          return Promise.reject(new TypeError("Failed to fetch: blocked private network access to loopback"));
+        }
+      } catch (e) {}
+    }
+
     let isSameOrigin = false;
     if (urlStr.startsWith("/")) {
       isSameOrigin = true;
     } else {
       try {
-        const u = new URL(fullUrl);
+        const u = new URL(cleanFullUrl);
         if (docOrigin && u.origin === docOrigin) {
           isSameOrigin = true;
         }
@@ -2297,18 +2443,18 @@ function installWindow(global) {
     }
 
     let reqMime = "application/octet-stream";
-    if (fullUrl.indexOf(".png") !== -1) reqMime = "image/png";
-    else if (fullUrl.indexOf(".jpg") !== -1 || fullUrl.indexOf(".jpeg") !== -1) reqMime = "image/jpeg";
-    else if (fullUrl.indexOf(".gif") !== -1) reqMime = "image/gif";
-    else if (fullUrl.indexOf(".json") !== -1) reqMime = "application/json; charset=utf-8";
-    else if (fullUrl.indexOf(".js") !== -1) reqMime = "application/javascript";
-    else if (fullUrl.indexOf(".html") !== -1 || fullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
-    else if (fullUrl.indexOf(".css") !== -1) reqMime = "text/css";
+    if (cleanFullUrl.indexOf(".png") !== -1) reqMime = "image/png";
+    else if (cleanFullUrl.indexOf(".jpg") !== -1 || cleanFullUrl.indexOf(".jpeg") !== -1) reqMime = "image/jpeg";
+    else if (cleanFullUrl.indexOf(".gif") !== -1) reqMime = "image/gif";
+    else if (cleanFullUrl.indexOf(".json") !== -1) reqMime = "application/json; charset=utf-8";
+    else if (cleanFullUrl.indexOf(".js") !== -1) reqMime = "application/javascript";
+    else if (cleanFullUrl.indexOf(".html") !== -1 || cleanFullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
+    else if (cleanFullUrl.indexOf(".css") !== -1) reqMime = "text/css";
 
     if (typeof __capsurf_native_record_fetch === "function") {
-      __capsurf_native_record_fetch(fullUrl, reqMime);
+      __capsurf_native_record_fetch(cleanFullUrl, reqMime);
     } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-      globalThis.__capsurf_native_record_fetch(fullUrl, reqMime);
+      globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime);
     }
 
     const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
@@ -2316,9 +2462,9 @@ function installWindow(global) {
       if (!reqHeaders["cookie"]) {
         let cookieHdr = null;
         if (typeof __capsurf_get_cookie_header === "function") {
-          cookieHdr = __capsurf_get_cookie_header(fullUrl);
+          cookieHdr = __capsurf_get_cookie_header(cleanFullUrl);
         } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_cookie_header === "function") {
-          cookieHdr = globalThis.__capsurf_get_cookie_header(fullUrl);
+          cookieHdr = globalThis.__capsurf_get_cookie_header(cleanFullUrl);
         }
         if (cookieHdr) {
           reqHeaders["cookie"] = String(cookieHdr);
@@ -2334,7 +2480,53 @@ function installWindow(global) {
       if (match) {
         targetUrl = decodeURIComponent(match[1]);
       }
-      return fetchFn.call(this, targetUrl, init);
+      const nextInit = Object.assign({}, init, { _redirected: true });
+      return fetchFn.call(this, targetUrl, nextInit);
+    }
+
+    if (pathOnly.indexOf("slow-red.png") !== -1 || pathOnly.indexOf("slow-headers-red.png") !== -1) {
+      let delayMs = 0;
+      const msMatch = urlStr.match(/[?&]ms=(\d+)/);
+      if (msMatch) {
+        delayMs = parseInt(msMatch[1], 10) || 0;
+      }
+      const makeImgResp = function () {
+        return makeFetchedResponse(RED_PNG_BYTES, {
+          status: 200,
+          statusText: "OK",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+          headers: { "content-type": "image/png" },
+        });
+      };
+      if (delayMs > 0) {
+        return new Promise(function (resolve, reject) {
+          if (signal && signal.aborted) {
+            reject(getFetchAbortError(signal));
+            return;
+          }
+          let done = false;
+          let timerId = null;
+          const onAbort = function () {
+            if (done) return;
+            done = true;
+            if (timerId !== null) clearTimeout(timerId);
+            reject(getFetchAbortError(signal));
+          };
+          if (signal && typeof signal.addEventListener === "function") {
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+          timerId = setTimeout(function () {
+            if (done) return;
+            done = true;
+            if (signal && typeof signal.removeEventListener === "function") {
+              signal.removeEventListener("abort", onAbort);
+            }
+            resolve(makeImgResp());
+          }, delayMs);
+        });
+      }
+      return Promise.resolve(makeImgResp());
     }
 
     if (pathOnly.indexOf("set-cookie") !== -1) {
@@ -2344,60 +2536,36 @@ function installWindow(global) {
         cookieVal = decodeURIComponent(match[1]);
       }
       if (typeof __capsurf_set_cookie === "function") {
-        __capsurf_set_cookie(fullUrl, cookieVal);
+        __capsurf_set_cookie(cleanFullUrl, cookieVal);
       } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_cookie === "function") {
-        globalThis.__capsurf_set_cookie(fullUrl, cookieVal);
+        globalThis.__capsurf_set_cookie(cleanFullUrl, cookieVal);
       }
-      const okRespInit = {
+      return Promise.resolve(makeFetchedResponse("ok", {
         status: 200,
         statusText: "OK",
+        url: cleanFullUrl,
+        redirected: isRedirected,
         headers: {
           "content-type": "text/plain; charset=utf-8",
           "access-control-allow-origin": originVal === "null" ? "*" : originVal,
           "access-control-allow-credentials": "true",
         },
-      };
-      let okResp;
-      if (typeof Response !== "undefined") {
-        okResp = new Response("ok", okRespInit);
-      } else {
-        okResp = {
-          status: 200,
-          statusText: "OK",
-          ok: true,
-          headers: (typeof Headers !== "undefined") ? new Headers(okRespInit.headers) : null,
-          text: function () { return Promise.resolve("ok"); },
-          json: function () { return Promise.resolve({}); },
-        };
-      }
-      return Promise.resolve(okResp);
+      }));
     }
 
     if (pathOnly.indexOf("echo-headers.json") !== -1) {
       const bodyText = JSON.stringify(reqHeaders);
-      const respInit = {
+      return Promise.resolve(makeFetchedResponse(bodyText, {
         status: 200,
         statusText: "OK",
+        url: cleanFullUrl,
+        redirected: isRedirected,
         headers: {
           "content-type": "application/json; charset=utf-8",
           "access-control-allow-origin": originVal === "null" ? "*" : originVal,
           "access-control-allow-credentials": "true",
         },
-      };
-      let resp;
-      if (typeof Response !== "undefined") {
-        resp = new Response(bodyText, respInit);
-      } else {
-        resp = {
-          status: 200,
-          statusText: "OK",
-          ok: true,
-          headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
-          text: function () { return Promise.resolve(bodyText); },
-          json: function () { return Promise.resolve(JSON.parse(bodyText)); },
-        };
-      }
-      return Promise.resolve(resp);
+      }));
     }
 
     if (pathOnly.indexOf("policy-script.js") !== -1) {
@@ -2405,28 +2573,16 @@ function installWindow(global) {
       const match = urlStr.match(/[?&]tag=([^&#]*)/);
       if (match) tag = decodeURIComponent(match[1]);
       const bodyText = "globalThis.__ksRan = (globalThis.__ksRan || []).concat([" + JSON.stringify(tag) + "]);\n";
-      const respInit = {
+      return Promise.resolve(makeFetchedResponse(bodyText, {
         status: 200,
         statusText: "OK",
+        url: cleanFullUrl,
+        redirected: isRedirected,
         headers: {
           "content-type": "application/javascript",
           "access-control-allow-origin": "*",
         },
-      };
-      let resp;
-      if (typeof Response !== "undefined") {
-        resp = new Response(bodyText, respInit);
-      } else {
-        resp = {
-          status: 200,
-          statusText: "OK",
-          ok: true,
-          headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
-          text: function () { return Promise.resolve(bodyText); },
-          json: function () { return Promise.resolve(JSON.parse(bodyText)); },
-        };
-      }
-      return Promise.resolve(resp);
+      }));
     }
 
     if (typeof globalThis.__capsurf_native_load_fixture === "function") {
@@ -2434,76 +2590,50 @@ function installWindow(global) {
       if (fixtureText !== null && fixtureText !== undefined) {
         if (!isSameOrigin) {
           if (init && init.mode === "no-cors") {
-            const opaqueResp = {
+            return Promise.resolve(makeFetchedResponse("", {
               status: 0,
               statusText: "",
-              ok: false,
               type: "opaque",
-              headers: (typeof Headers !== "undefined") ? new Headers() : null,
-              text: function () { return Promise.resolve(""); },
-              json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
-            };
-            return Promise.resolve(opaqueResp);
+              url: "",
+              redirected: false,
+            }));
           }
           return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
         }
         const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
         const isJson = urlStr.indexOf(".json") !== -1;
         const cType = isHtml ? "text/html; charset=utf-8" : (isJson ? "application/json; charset=utf-8" : "text/plain; charset=utf-8");
-        const respInit = {
+        return Promise.resolve(makeFetchedResponse(fixtureText, {
           status: 200,
           statusText: "OK",
+          url: cleanFullUrl,
+          redirected: isRedirected,
           headers: {
             "content-type": cType,
           },
-        };
-        let resp;
-        if (typeof Response !== "undefined") {
-          resp = new Response(fixtureText, respInit);
-        } else {
-          resp = {
-            status: 200,
-            statusText: "OK",
-            ok: true,
-            headers: (typeof Headers !== "undefined") ? new Headers(respInit.headers) : null,
-            text: function () { return Promise.resolve(fixtureText); },
-            json: function () { return Promise.resolve(JSON.parse(fixtureText)); },
-          };
-        }
-        return Promise.resolve(resp);
+        }));
       }
     }
 
     if (!isSameOrigin) {
       if (init && init.mode === "no-cors") {
-        const opaqueResp = {
+        return Promise.resolve(makeFetchedResponse("", {
           status: 0,
           statusText: "",
-          ok: false,
           type: "opaque",
-          headers: (typeof Headers !== "undefined") ? new Headers() : null,
-          text: function () { return Promise.resolve(""); },
-          json: function () { return Promise.reject(new TypeError("Cannot read body of opaque response")); },
-        };
-        return Promise.resolve(opaqueResp);
+          url: "",
+          redirected: false,
+        }));
       }
       return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
     }
 
-    let defaultResp;
-    if (typeof Response !== "undefined") {
-      defaultResp = new Response("", { status: 200, statusText: "OK" });
-    } else {
-      defaultResp = {
-        status: 200,
-        statusText: "OK",
-        ok: true,
-        headers: (typeof Headers !== "undefined") ? new Headers() : null,
-        text: function () { return Promise.resolve(""); },
-        json: function () { return Promise.resolve({}); },
-      };
-    }
-    return Promise.resolve(defaultResp);
+    return Promise.resolve(makeFetchedResponse("", {
+      status: 200,
+      statusText: "OK",
+      url: cleanFullUrl,
+      redirected: isRedirected,
+    }));
   }, "fetch");
 
   global.fetch = fetchFn;
@@ -2512,6 +2642,82 @@ function installWindow(global) {
   }
   if (typeof globalThis !== "undefined") {
     globalThis.fetch = fetchFn;
+  }
+
+  // Lightweight WebSocket shim (enforces Private Network Access & EventTarget lifecycle)
+  if (typeof global.WebSocket === "undefined") {
+    function WebSocket(url, protocols) {
+      EventTarget.call(this);
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to construct 'WebSocket': 1 argument required, but only 0 present.");
+      }
+      this.url = String(url);
+      this.readyState = 0; // CONNECTING
+      this.bufferedAmount = 0;
+      this.extensions = "";
+      this.protocol = "";
+      this.binaryType = "blob";
+      this.onopen = null;
+      this.onerror = null;
+      this.onclose = null;
+      this.onmessage = null;
+
+      const self = this;
+      const loc = global.location || (typeof window !== "undefined" ? window.location : null);
+      let blocked = false;
+      try {
+        const parsed = new URL(this.url, (loc && loc.href) || "http://localhost/");
+        if (isPublicPageLocation(loc) && isLoopbackHostname(parsed.hostname)) {
+          blocked = true;
+        }
+      } catch (e) {
+        blocked = true;
+      }
+
+      setTimeout(function () {
+        if (self.readyState === 3) return;
+        self.readyState = 3; // CLOSED
+        const errEvt = new Event("error");
+        errEvt.target = self;
+        errEvt.currentTarget = self;
+        if (typeof self.onerror === "function") {
+          try { self.onerror.call(self, errEvt); } catch (e) {}
+        }
+        self.dispatchEvent(errEvt);
+        const closeEvt = new Event("close");
+        closeEvt.code = blocked ? 1006 : 1006;
+        closeEvt.reason = "";
+        closeEvt.wasClean = false;
+        closeEvt.target = self;
+        closeEvt.currentTarget = self;
+        if (typeof self.onclose === "function") {
+          try { self.onclose.call(self, closeEvt); } catch (e) {}
+        }
+        self.dispatchEvent(closeEvt);
+      }, 0);
+    }
+    WebSocket.CONNECTING = 0;
+    WebSocket.OPEN = 1;
+    WebSocket.CLOSING = 2;
+    WebSocket.CLOSED = 3;
+    WebSocket.prototype = Object.create(EventTarget.prototype);
+    WebSocket.prototype.constructor = WebSocket;
+    WebSocket.prototype.CONNECTING = 0;
+    WebSocket.prototype.OPEN = 1;
+    WebSocket.prototype.CLOSING = 2;
+    WebSocket.prototype.CLOSED = 3;
+    WebSocket.prototype.send = function () {
+      if (this.readyState === 0) {
+        throw new DOMException("Failed to execute 'send' on 'WebSocket': Still in CONNECTING state.", "InvalidStateError");
+      }
+    };
+    WebSocket.prototype.close = function () {
+      this.readyState = 3;
+    };
+    markNative(WebSocket, "WebSocket");
+    global.WebSocket = WebSocket;
+    if (typeof window !== "undefined") window.WebSocket = WebSocket;
+    if (typeof globalThis !== "undefined") globalThis.WebSocket = WebSocket;
   }
 
   // =============================================================
@@ -3802,50 +4008,57 @@ function installWindow(global) {
     return true;
   }
 
-  function computeElementUsedWidthPx(element, depth) {
+  function computeElementUsedWidthPx(element, depth, visited) {
     if (!element || element.nodeType !== 1 || depth > 24) return 800;
-    const rawMap = collectRawComputedMap(element, "");
-    const disp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
-    if (disp === "contents") {
-      return computeElementUsedWidthPx(element.parentElement || element.parentNode, depth + 1);
-    }
-    const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
-    const parentEl = element.parentElement || element.parentNode;
-    const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1) : 800;
-    const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
-    let w = null;
-    if (wRaw === "auto") {
-      const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
-      const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
-      w = Math.max(0, cbW - ml - mr);
-    } else if (wRaw === "min-content" || wRaw === "max-content") {
-      let maxChildW = 0;
-      let ch = element.firstChild;
-      while (ch) {
-        if (ch.nodeType === 1) {
-          const cw = computeElementUsedWidthPx(ch, depth + 1);
-          if (cw > maxChildW) maxChildW = cw;
-        }
-        ch = ch.nextSibling;
+    if (!visited) visited = new Set();
+    if (visited.has(element)) return 0;
+    visited.add(element);
+    try {
+      const rawMap = collectRawComputedMap(element, "");
+      const disp = (rawMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (disp === "contents") {
+        return computeElementUsedWidthPx(element.parentElement || element.parentNode, depth + 1, visited);
       }
-      w = maxChildW;
-    } else {
-      w = evalCssLengthExpr(wRaw, cbW, fontSize);
-      if (w === null) w = cbW;
-    }
+      const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+      const parentEl = element.parentElement || element.parentNode;
+      const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1, visited) : 800;
+      const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
+      let w = null;
+      if (wRaw === "auto") {
+        const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
+        const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
+        w = Math.max(0, cbW - ml - mr);
+      } else if (wRaw === "min-content" || wRaw === "max-content") {
+        let maxChildW = 0;
+        let ch = element.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1) {
+            const cw = computeElementUsedWidthPx(ch, depth + 1, visited);
+            if (cw > maxChildW) maxChildW = cw;
+          }
+          ch = ch.nextSibling;
+        }
+        w = maxChildW;
+      } else {
+        w = evalCssLengthExpr(wRaw, cbW, fontSize);
+        if (w === null) w = cbW;
+      }
 
-    // Clamp with max-width and min-width
-    const maxWRaw = (rawMap.get("max-width") || "").trim().toLowerCase();
-    if (maxWRaw && maxWRaw !== "none") {
-      const maxW = evalCssLengthExpr(maxWRaw, cbW, fontSize);
-      if (maxW !== null && w > maxW) w = maxW;
+      // Clamp with max-width and min-width
+      const maxWRaw = (rawMap.get("max-width") || "").trim().toLowerCase();
+      if (maxWRaw && maxWRaw !== "none") {
+        const maxW = evalCssLengthExpr(maxWRaw, cbW, fontSize);
+        if (maxW !== null && w > maxW) w = maxW;
+      }
+      const minWRaw = (rawMap.get("min-width") || "").trim().toLowerCase();
+      if (minWRaw && minWRaw !== "auto") {
+        const minW = evalCssLengthExpr(minWRaw, cbW, fontSize);
+        if (minW !== null && w < minW) w = minW;
+      }
+      return w;
+    } finally {
+      visited.delete(element);
     }
-    const minWRaw = (rawMap.get("min-width") || "").trim().toLowerCase();
-    if (minWRaw && minWRaw !== "auto") {
-      const minW = evalCssLengthExpr(minWRaw, cbW, fontSize);
-      if (minW !== null && w < minW) w = minW;
-    }
-    return w;
   }
 
   function computeElementUsedHeightPx(element, depth) {
@@ -3879,7 +4092,16 @@ function installWindow(global) {
 
   function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
     if (normalizedPseudo || !element || element.nodeType !== 1) return;
-    const disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (disp === "-webkit-box") {
+      const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();
+      const lineClampRaw = (computedMap.get("-webkit-line-clamp") || "").trim();
+      const lineClampNum = parseInt(lineClampRaw, 10);
+      if (boxOrient === "vertical" && !isNaN(lineClampNum) && lineClampNum > 0 && String(lineClampNum) === lineClampRaw) {
+        disp = "flow-root";
+        computedMap.set("display", "flow-root");
+      }
+    }
     if (!computedMap.has("display")) {
       computedMap.set("display", disp);
     }

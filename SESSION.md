@@ -3566,3 +3566,14 @@
   - 全部 5 个 `.cp` 文件 4 门禁全 0；
   - `browser-close` (1/1)、`context-lifecycle` (3/3)、`eval-across-navigation` (1/1)、`eval-during-navigate` (4/4) 共 **9/9 PASS**；`session-deadlines` 3 个场景原生 WS 直连全过（定位 `e2e/shim/cloudflare-test.ts:39` 遗漏 `${u.search}`）。
 - **清理旧子智能体**: 销毁 `6a8fbb14-3c4c-403a-a627-c02e18395751`。
+
+## [2026-11-20 18:09:40] engine.fetch 适配器、3 项 CDP 协议测试全绿与 JS 垫片收尾 + 上游 `lib/css/color.cp` 提单 (Subagent 6f58ae63 结单，Phase 89)
+- **`e2e/harness.ts` `engine.fetch` 适配器与 3 项 CDP 协议测试全绿**:
+  - 实现基于 `node:net` 的 `engine.fetch` 适配器（支持 HTTP 转发与 RFC 6455 `101 Upgrade` / `403` 拒绝）；
+  - `e2e/cdp-envelope.e2e.test.ts` (2/2)、`e2e/cdp-upgrade-origin.e2e.test.ts` (2/2)、`e2e/response-body-unknown-id.e2e.test.ts` (2/2)：**6/6 PASS (2.09s)**！
+- **JS 运行时垫片收尾 (`src/js/shim/window.js`, `src/js/shim/file.js`)**:
+  - `window.js`: 修复 `computeElementUsedWidthPx` 指数递归爆炸（加 `visited` Set）；补齐 `-webkit-box` + `-webkit-line-clamp` `display: flow-root`；增强 `fetchFn`（Private Network Access、`AbortSignal`、`data:` URL、POST `content-length`、`init.cache`、`url`/`redirected`/`_immutableHeaders`）与 `WebSocket` 垫片；
+  - `file.js`: `Headers` 新增 `_guard === "immutable"` 校验，`Response.prototype.arrayBuffer()` 支持 `Uint8Array`/`ArrayBuffer`；重新打包 `src/js/runtime.js` 与 `src/js/runtime_source.cp`（4 门禁全 0）。
+- **跨 AGY 协同提单 (`task-capsurf-20261120-lib-css-color-tuple`)**:
+  - 发现上游 `/data/dev/cp/lib/css/color.cp` 外部修改引入 `NAMED_COLORS` 无类型数组字面量触发 Zig 元组索引编译错，已按规范向 `cp_agy` 提单等待修复后即可对剩余 5 项测试重编验收。
+- **清理旧子智能体**: 销毁 `6f58ae63-4cbc-48f2-bf1b-834dbec935ee`。

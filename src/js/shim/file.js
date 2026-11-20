@@ -314,6 +314,7 @@ function extractMimeFromHeaders(headers) {
 // Request & Response support for .blob() Content-Type passthrough
 function Headers(init) {
   this._map = new Map();
+  this._guard = "none";
   if (init === undefined) {
     return;
   }
@@ -385,6 +386,9 @@ function Headers(init) {
 }
 
 Headers.prototype.append = function (k, v) {
+  if (this._guard === "immutable") {
+    throw new TypeError("Failed to execute 'append' on 'Headers': Headers are immutable");
+  }
   const key = String(k).toLowerCase();
   const val = String(v);
   const existing = this._map.get(key);
@@ -392,6 +396,9 @@ Headers.prototype.append = function (k, v) {
 };
 
 Headers.prototype.set = function (k, v) {
+  if (this._guard === "immutable") {
+    throw new TypeError("Failed to execute 'set' on 'Headers': Headers are immutable");
+  }
   this._map.set(String(k).toLowerCase(), String(v));
 };
 
@@ -405,6 +412,9 @@ Headers.prototype.has = function (k) {
 };
 
 Headers.prototype.delete = function (k) {
+  if (this._guard === "immutable") {
+    throw new TypeError("Failed to execute 'delete' on 'Headers': Headers are immutable");
+  }
   this._map.delete(String(k).toLowerCase());
 };
 
@@ -484,7 +494,13 @@ function Response(body, init) {
   this.status = init.status !== undefined ? Number(init.status) : 200;
   this.statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
   this.ok = this.status >= 200 && this.status < 300;
+  this.type = init.type !== undefined ? String(init.type) : "default";
+  this.url = init.url !== undefined ? String(init.url) : "";
+  this.redirected = Boolean(init.redirected);
   this.headers = new Headers(init.headers);
+  if (init._immutableHeaders) {
+    this.headers._guard = "immutable";
+  }
   this._rawMimeType = extractMimeFromHeaders(this.headers);
   this._body = body !== undefined ? body : "";
 }
@@ -511,6 +527,15 @@ Response.prototype.json = function () {
 };
 
 Response.prototype.arrayBuffer = function () {
+  if (this._body instanceof ArrayBuffer) {
+    return Promise.resolve(this._body.slice(0));
+  }
+  if (ArrayBuffer.isView(this._body)) {
+    const view = new Uint8Array(this._body.buffer, this._body.byteOffset, this._body.byteLength);
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(view);
+    return Promise.resolve(copy.buffer);
+  }
   return Promise.resolve(stringToUtf8(String(this._body)).buffer);
 };
 

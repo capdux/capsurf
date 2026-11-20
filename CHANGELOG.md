@@ -1723,4 +1723,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0（3.96s Debug 快编）；
   - E2E 测试：`browser-close` (1/1) + `context-lifecycle` (3/3) + `eval-across-navigation` (1/1) + `eval-during-navigate` (4/4) 共 **9/9 PASS**，`session-deadlines` 原生 WS 3/3 验证通过。
+
+## Phase 89: Harness `engine.fetch` Adapter, CDP Protocol Suites & `fetchFn` / `computeElementUsedWidthPx` Fixes (Closed)
+- **`e2e/harness.ts` & `src/js/shim/{window,file}.js`**：
+  - 实装基于 `node:net` 的 `engine.fetch` 适配器（支持 HTTP 与 RFC 6455 101/403 握手）；修复 `computeElementUsedWidthPx` 递归去重、`-webkit-line-clamp` `flow-root`、`Headers` immutable guard 及 `fetchFn` Private Network / `AbortSignal` / `data:` URL / `cache` 头映射。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
+  - E2E 测试：`cdp-envelope` (2/2) + `cdp-upgrade-origin` (2/2) + `response-body-unknown-id` (2/2) 共 **6/6 PASS (2.09s)**（另 5 项待上游 `task-capsurf-20261120-lib-css-color-tuple` 结单后重编复测）。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

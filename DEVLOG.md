@@ -1343,4 +1343,10 @@
    - `CdpPageSession` 维护 `isolated_worlds` 注册表，跨导航时递增分配新 id 并淘汰旧 id，`Runtime.evaluate`/`callFunctionOn` 严格校验并抛出 Chrome 标准 `-32000` 错误。
 2. **非阻塞慢导航与会话超时 (`server.cp`)**：
    - 在 `runWebSocketSession` 事件循环中支持 `slow-script` 挂起导航期间响应 `Target.closeTarget` 立即中止并拒绝挂起求值；追踪会话启动与客户端帧时间戳实现 `ksIdleMs`/`ksMaxSessionMs`（页面 JS 定时器不续期）。
+
+## Phase 89 `engine.fetch` 适配器与 `fetchFn`/`computeElementUsedWidthPx` 修复技术方案
+1. **本地 `engine.fetch` RFC 6455 适配器 (`e2e/harness.ts`)**：
+   - 基于 `node:net` 转发本地 HTTP 与 WebSocket 握手请求并保留原始 `Host`/`Origin` 头，内建帧编解码器完整支持 `cdp-envelope`、`cdp-upgrade-origin` 与 `response-body-unknown-id`。
+2. **`computeElementUsedWidthPx` 线性化与 `fetchFn` 规范补全 (`window.js`, `file.js`)**：
+   - 引入 `visited` Set 打断 `min-content/max-content` 父子互调指数递归；补齐 `Headers` immutable guard、`AbortSignal`、`data:` URL 解码、POST `content-length` 与公网 loopback 阻断。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.
