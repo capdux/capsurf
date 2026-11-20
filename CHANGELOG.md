@@ -2201,3 +2201,6 @@
 
 ## Phase 180: Puppeteer `800x600` Default Viewport Reset & `Mouse.wheel` TTY Cell Grid Quantization
 - **`e2e/harness.ts`**：统一默认视口至 `800x600` 并在用例间自动重置，同时在 `Mouse.wheel` 实现 `ttyCellWidth`/`ttyCellHeight` 整格量化与滚动链冒泡。
+
+## Phase 181: Pure-CP Flex, Grid, BoxSizing & Sticky/Fixed Layout Whitebox Suite `test/layout/test_flex_grid_sticky.cp` (4/4 PASS)
+- 新增 `test/layout/test_flex_grid_sticky.cp`，覆盖 Flexbox 换行对齐、Grid 轨道、`border-box`/`content-box` 与 `sticky`/`fixed`/`display: none`（`cap test -m` **4/4 PASS**, 1229ms）。

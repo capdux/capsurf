@@ -4439,3 +4439,7 @@
   - 将 `--window-size`、`isIntersectingViewport` 兜底与 `test()` 前置清理统一为 Puppeteer 标准 `800x600`（防止 `setViewport` 跨用例污染）；
   - 在 `Mouse.wheel` 实现 `wheelDelta(before, delta, maxScroll, cell)` 读取 `ttyCellWidth`/`ttyCellHeight` 按整格截断并向 `window.scrollBy` 冒泡剩余增量（并记录 `src/cdp/input.cp:331-335` 对应改造点）。
 - **清理旧子智能体**: 销毁 `bcb4f899-1759-4a8c-9151-c95311606e56`。
+
+## [2026-11-21 00:59:00] 2 分 10 秒新增并全绿通过纯 CP Flex/Grid/Sticky 白盒单测 `test/layout/test_flex_grid_sticky.cp` (Subagent b8c99821 结单，Phase 181)
+- **新增白盒测试 (`test/layout/test_flex_grid_sticky.cp`)**: 覆盖 Flexbox (`flex-wrap`/`space-between`/`align-items`)、CSS Grid (`1fr`/跨列 `span 2`)、`box-sizing` (`content-box` vs `border-box`) 及 `sticky`/`fixed`/`display: none` 盒模型计算（**4/4 PASS**, 1229ms, 4 门禁全 0；`test/layout/` 达 **2/2 PASS**）。
+- **清理旧子智能体**: 销毁 `b8c99821-3164-4511-bd5f-1f2d3d958ba2`。
