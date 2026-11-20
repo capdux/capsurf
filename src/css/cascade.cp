@@ -1033,7 +1033,8 @@ pub const PROP_TEXT_FILL_COLOR: usize = 85;
 pub const PROP_TEXT_DECORATION: usize = 86;
 pub const PROP_BG_CLIP: usize = 87;
 pub const PROP_BG_SIZE: usize = 88;
-pub const TOTAL_PROP_SLOTS: usize = 89;
+pub const PROP_CARET_COLOR: usize = 89;
+pub const TOTAL_PROP_SLOTS: usize = 90;
 
 pub enum ContainerType {
     Normal,
@@ -1701,6 +1702,8 @@ pub struct ResolvedPaintStyle {
     text_decoration_overline: bool = false;
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
+    caret_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_caret_color: bool = false;
     border_width: f32 = 0.0;
     border_radius: f32 = 0.0;
     border_tl_radius: f32 = 0.0;
@@ -1879,6 +1882,8 @@ pub struct ComputedStyle {
     background_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     accent_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_accent_color: bool = false;
+    caret_color: CssColor = CssColor.rgba(0, 0, 0, 0);
+    has_caret_color: bool = false;
     has_fill_current_color: bool = false,
     has_fill_none: bool = false,
     opacity: f32 = 1.0;
@@ -2166,6 +2171,8 @@ pub struct ComputedStyle {
             _.has_text_fill_color = p.has_text_fill_color;
             _.accent_color = p.accent_color;
             _.has_accent_color = p.has_accent_color;
+            _.caret_color = p.caret_color;
+            _.has_caret_color = p.has_caret_color;
             if (p.has_fill_current_color) {
                 _.has_fill_current_color = true;
                 _.background_color = p.color;
@@ -2326,6 +2333,8 @@ pub struct ComputedStyle {
             text_decoration_overline: _.text_decoration_overline,
             accent_color: _.accent_color,
             has_accent_color: _.has_accent_color,
+            caret_color: _.caret_color,
+            has_caret_color: _.has_caret_color,
             border_width: bw_px,
             border_radius: radius_px,
             border_tl_radius: tl_r,
@@ -3951,6 +3960,26 @@ pub struct ComputedStyle {
                 if (_.tryClaimSlot(PROP_ACCENT_COLOR, weight)) {
                     _.has_accent_color = true;
                     _.accent_color = c;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "caret-color")) {
+            const cv = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(cv, "auto")) {
+                if (_.tryClaimSlot(PROP_CARET_COLOR, weight)) {
+                    _.has_caret_color = false;
+                    _.caret_color = CssColor.rgba(0, 0, 0, 0);
+                }
+            } else if (std.ascii.eqlIgnoreCase(cv, "currentcolor")) {
+                if (_.tryClaimSlot(PROP_CARET_COLOR, weight)) {
+                    _.has_caret_color = true;
+                    _.caret_color = _.color;
+                }
+            } else if (c := CssColor.parse(cv)) {
+                if (_.tryClaimSlot(PROP_CARET_COLOR, weight)) {
+                    _.has_caret_color = true;
+                    _.caret_color = c;
                 }
             }
             return;

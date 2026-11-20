@@ -3,7 +3,7 @@
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
 import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind } from "../css/cascade.cp";
-import { Rect } from "../layout/layout.cp";
+import { Rect, LayoutTree } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
 import { uncompress } from "cap:pack";
@@ -2132,6 +2132,9 @@ fn paintNodeRecursive(
             }
         }
         paint_style.text_fill_color = scaleColorAlpha(paint_style.text_fill_color, group_opacity);
+        if (paint_style.has_caret_color) {
+            paint_style.caret_color = scaleColorAlpha(paint_style.caret_color, group_opacity);
+        }
     }
 
     // Choose active clip based on CSS positioning containing-block rules:
@@ -2431,6 +2434,31 @@ fn paintNodeRecursive(
             }
         }
 
+        if (is_form_text && display_text.len > 0) {
+            const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+            const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+            const bdr_l = paint_style.border_left_width;
+            const bdr_t = paint_style.border_top_width;
+            const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+            const lh = if (style.has_line_height && style.line_height_px > 0.0) style.line_height_px else @max(fsz * 1.2, 14.0);
+            let si: usize = 0;
+            while (si < opts.selection_spans.len) : (si += 1) {
+                const sp = opts.selection_spans[si];
+                if (sp.node_id == node_id && sp.end_offset > sp.start_offset) {
+                    const clamped_start = @min(sp.start_offset, display_text.len);
+                    const clamped_end = @min(sp.end_offset, display_text.len);
+                    if (clamped_end > clamped_start) {
+                        const start_w = LayoutTree.measureTextSegmentWithTabs(display_text[0..clamped_start], style, 0.0);
+                        const sel_w = LayoutTree.measureTextSegmentWithTabs(display_text[clamped_start..clamped_end], style, start_w);
+                        const hx = r.x + bdr_l + pad_l + start_w;
+                        const hy = r.y + bdr_t + pad_t;
+                        const hh = @min(lh, @max(r.height - bdr_t - pad_t, 12.0));
+                        canvas.fillRectClipped(hx, hy, @max(sel_w, 2.0), hh, CssColor.rgba(51, 144, 255, 110), active_clip);
+                    }
+                }
+            }
+        }
+
         if (display_text.len > 0) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
@@ -2454,13 +2482,28 @@ fn paintNodeRecursive(
         if (node_id == opts.focused_node && is_form_text) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
-            const caret_x = @as(i32, @intFromFloat(r.x + pad_l + 2.0)) + @as(i32, @intCast(@min(opts.caret_pos, display_text.len) * 8));
-            const caret_y = @as(i32, @intFromFloat(r.y + pad_t + 2.0));
-            // drawCaret (1x10px)
-            let cy: i32 = caret_y + 1;
-            while (cy <= caret_y + 9) : (cy += 1) {
-                canvas.blendPixel(caret_x, cy, paint_style.text_color);
-                canvas.blendPixel(caret_x + 1, cy, paint_style.text_color);
+            const bdr_l = paint_style.border_left_width;
+            const bdr_t = paint_style.border_top_width;
+            const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
+            const lh = if (style.has_line_height && style.line_height_px > 0.0) style.line_height_px else @max(fsz * 1.2, 14.0);
+            const caret_idx = @min(opts.caret_pos, display_text.len);
+            let line_start: usize = 0;
+            let line_idx: usize = 0;
+            let ci: usize = 0;
+            while (ci < caret_idx) : (ci += 1) {
+                if (display_text[ci] == '\n') {
+                    line_start = ci + 1;
+                    line_idx += 1;
+                }
+            }
+            const before_caret = display_text[line_start..caret_idx];
+            const text_adv = LayoutTree.measureTextSegmentWithTabs(before_caret, style, 0.0);
+            const caret_x = @round(r.x + bdr_l + pad_l + text_adv);
+            const caret_y = @floor(r.y + bdr_t + pad_t + @as(f32, @floatFromInt(line_idx)) * lh);
+            const caret_h = @max(12.0, @round(@max(fsz, lh * 0.8)));
+            const caret_col = if (paint_style.has_caret_color) paint_style.caret_color else paint_style.text_color;
+            if (caret_col.a > 0) {
+                canvas.fillRectClipped(caret_x, caret_y, 2.0, caret_h, caret_col, active_clip);
             }
         }
 

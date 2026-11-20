@@ -1429,4 +1429,8 @@
    - 按 HTML rendered-text collection steps 实装 `innerText` getter（处理空白折叠、`<pre>`、`<table>` 与隐藏节点）；升级 `createStyleProxy` 完整支持简写展开/清除与属性双向同步。
 2. **CSS Color 4 相对色与角度求值 (`cssom.js`, `window.js`)**：
    - 支持 `rgb(none none none)` 与 `rgb(from currentColor r g b)` 向 `color(srgb ...)` 规范化序列化，并实现 `evalCssAngleDeg` 计算三角/双曲角度函数。
+
+## Phase 104 `caret-color` 级联与同源字体度量光标/表单选区光栅化技术方案
+1. **光标与选区像素对齐 (`cascade.cp`, `painter.cp`)**：
+   - 在 `painter.cp` 直接复用 `LayoutTree.measureTextSegmentWithTabs` 计算 `<input>`/`<textarea>` 光标横坐标与选区高亮区间，确保光标位置与 `#measure` 布局测量误差 `<= 0.2px`；新增 `PROP_CARET_COLOR` 独立控制光标颜色（解决 `color: transparent` 场景光标消失问题）。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

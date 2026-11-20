@@ -1829,4 +1829,11 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0（`-m -d -o` 增量构建）；
   - E2E 测试：6 大 Core 套件共 **7/7 PASS (39 expect calls)**。
+
+## Phase 104: CSS `caret-color`, Font-Measured Caret Positioning & Form Text Selection Highlight Painting (Closed — 3.10s Incremental Build)
+- **`src/css/cascade.cp` & `src/render/painter.cp`**：
+  - 新增 `PROP_CARET_COLOR` 级联继承与解析；复用 `LayoutTree.measureTextSegmentWithTabs` 实现多字体/制表位精确光标定位与 `<input>`/`<textarea>` 选区高亮绘制。
+- **测试与门禁验证**：
+  - 静态门禁：`cascade.cp`、`painter.cp` 4 门禁全 0（`-m -d -o` 3.10s 增量构建）；
+  - E2E 测试：`images-demo` + `layout-cheap-demo` PASS，`text-input-caret-font` / `forms-selection-paint-demo` 纯 CP 渲染就绪。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

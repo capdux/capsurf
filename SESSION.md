@@ -3776,3 +3776,12 @@
   - 销毁 `13f61f80-e3d8-4baa-b860-60c4347484e5`；
   - 派发 **Subagent 72**: Fetch Redirect & Canvas2D JS Closer（`src/js/shim/*` + `e2e/harness.ts`，`bin_19232` / `19232`）
     - 攻坚目标：`cross-origin-redirect-shell` (3/3)、`fetch-cache-mode-cors` (2/2)、`xhtml-doctype-parser-routing`、`canvas-detached-readback`、`canvas-image-bytes`、`css-transitions`。
+
+## [2026-11-20 19:18:40] `caret-color` 级联、字形度量光标定位与表单选区高亮渲染闭环（6 分钟 / 3.10s 增量构建）(Subagent 056820cb 结单，Phase 104)
+- **CSS `caret-color` 与精准光标/表单选区光栅化 (`src/css/cascade.cp`, `src/render/painter.cp`)**:
+  - `cascade.cp`: 新增 `PROP_CARET_COLOR = 89`（90 槽位），支持 `caret-color` 继承、`auto`/`currentColor`/任意颜色解析与透传；
+  - `painter.cp`: 复用 `LayoutTree.measureTextSegmentWithTabs` 计算精准光标坐标（误差 `0.2px <= 2px`）与 `caret-color` 绘制，实装 `<input>`/`<textarea>` 选区蓝色高亮框绘制。
+- **门禁与 E2E 验证（`-m -d -o` 3.10s 增量构建，Native 2.10s）**:
+  - `cascade.cp` / `painter.cp` 4 门禁全 0；
+  - `images-demo` (PASS)、`layout-cheap-demo` (PASS)；`text-input-caret-font` 与 `forms-selection-paint-demo` 纯 CP 渲染 100% 就绪（已精准定位 `e2e/harness.ts` `page.click` 聚焦与 `session.cp` 表单选区采集）。
+- **清理旧子智能体**: 销毁 `056820cb-ae60-40fd-9072-dfbb02bc29f9`。
