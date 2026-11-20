@@ -2073,4 +2073,7 @@
 ## Phase 142: `defer-shim-nested-modinit-demo`, `module-init-shim-demo` & `absolute-path-import-demo` — 3/3 Suites (30 Expects)
 - **`src/js/shim/window.js` & `src/js/runtime{,_source.cp}`**：
   - 在 `global.clearTimeout` 同步取消 `numId > 900000` 的 `__capsurf_deferred_timers` 占位定时器，**3/3 PASS (30 expect() calls)**。
+
+## Phase 143: `dynamic-import-bake-demo` & `puppeteer-eval` 2/2 PASS & Module Network Event Localization
+- 零修改摸底验收 `dynamic-import-bake-demo` (1/1)、`puppeteer-eval` (1/1) PASS，并精准定位 `absolute-path-transitive-demo` 至 `src/cdp/session.cp:558-661`。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

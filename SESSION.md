@@ -4170,6 +4170,11 @@
   - `defer-shim-nested-modinit-demo` (**1/1**)、`module-init-shim-demo` (**1/1**)、`absolute-path-import-demo` (**1/1**)：**3/3 PASS (30 expect() calls)**！
 - **清理旧子智能体**: 销毁 `56e6f51d-83b1-470c-94e3-03e37fde3842`。
 
+## [2026-11-20 23:29:30] 1 分钟摸底验收 `dynamic-import-bake-demo` & `puppeteer-eval` 2/2 PASS (Subagent 07a248cf 结单，Phase 143)
+- **零修改直接验收**：`e2e/demo/dynamic-import-bake-demo.e2e.test.ts` (**1/1 PASS**)、`e2e/demo/puppeteer-eval.e2e.test.ts` (**1/1 PASS**)。
+- **精准跨模块定位（留交 Slot B）**：`e2e/demo/absolute-path-transitive-demo.e2e.test.ts` 模块加载/执行均通过，仅缺 `src/cdp/session.cp:558-661` `sessionModuleLoader` 补充 `addFetchRecord(..., "application/javascript")` 与 `:3798` `"Script"` 归类。
+- **清理旧子智能体**: 销毁 `07a248cf-7d9b-4cfc-bfdd-c9b23b7d60f0`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
