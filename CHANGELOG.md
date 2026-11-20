@@ -2024,4 +2024,7 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/dom_binding.cp` 4 门禁全 0；
   - E2E 测试：`text-content-memory` 第 1 项与第 2 项 12 项 DOM/Radio 断言 PASS，并精准定位 50KB CDP 载荷截断与 `Runtime.getHeapUsage` delta 缺口。
+
+## Phase 133: `css-isolate-replies` 2/2 PASS & CDP `getRendererInfo`/`recordScene` Localization
+- 摸底直接验收 `e2e/css-isolate-replies.e2e.test.ts` (**2/2 PASS**)，并精准定位 `renderer-laziness` 与 `canvas-raw-renderer` 在 `src/cdp/kitesurf_facade.cp` 的最后缺口。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

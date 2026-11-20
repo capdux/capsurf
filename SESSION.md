@@ -4083,6 +4083,11 @@
   - `text-content-memory`（第 1 项 PASS；第 2 项 DOM/CSS/Radio 12 项断言全过，仅缺 `Runtime.getHeapUsage` 真实 JS/DOM delta；第 3 项及 `style-churn-memory` 精准定位至 `src/cdp/` ~50KB 大载荷 `page.evaluate`/`setContent` UTF-8 截断与 `font-key-images.html` fixture 缺口）。
 - **清理旧子智能体**: 销毁 `4f82c455-321f-4b65-be75-67f2d382b4db`。
 
+## [2026-11-20 23:10:00] 40 秒摸底验收 `css-isolate-replies` 2/2 PASS 与 CDP 懒加载/场景录制行号定位 (Subagent 82332e72 结单，Phase 133)
+- **直接验收**：`e2e/css-isolate-replies.e2e.test.ts` (**2/2 PASS**)。
+- **精准跨模块定位（留交 Slot B）**：`renderer-laziness` (`kitesurf_facade.cp:142-152`, `protocol_extensions.cp:78-83` 硬编码 `active:true`/`framesRendered:1`)、`canvas-raw-renderer` (Canvas2D 像素已 PASS，缺 `Kitesurf.recordScene` 返回 `sceneB64` & `resourceBatchB64`)。
+- **清理旧子智能体**: 销毁 `82332e72-66a6-4ced-8e0f-d850e70d3bc2`。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
