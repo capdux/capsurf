@@ -2274,3 +2274,6 @@
 
 ### Phase 204
 - Added `test/eval/test_next_route_chunks_and_limits.cp` covering Next.js build manifest parsing/ranking, chunk limits, and LimitRegistry lifecycle/eviction/isolation.
+
+### Phase 205
+- Added `test/eval/test_oopif_render_and_page_renderer.cp` covering OOPIF viewport clamping, 16-slot coordinator reuse, and PageRenderer lazy/dispose/close state transitions.

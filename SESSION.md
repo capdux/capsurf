@@ -4557,3 +4557,7 @@
 ### Phase 204: Pure-CP NextRouteChunks & LimitRegistry Whitebox Tests (Slot A)
 - **Subagent**: `a16d3d9d` (killed after completion)
 - **Result**: `test/eval/test_next_route_chunks_and_limits.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering `parseBuildManifest`, `rankManifestRoutes`, non-`.js` filtering, 16/64 route bounds, `LimitRegistry` 64-slot eviction, and `(owner, target_id)` isolation).
+
+### Phase 205: Pure-CP OOPIF & PageRenderer Whitebox Tests (Slot A)
+- **Subagent**: `db495e73` (killed after completion)
+- **Result**: `test/eval/test_oopif_render_and_page_renderer.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS in 862ms; covering `clampFrameViewport`, `OopifRenderCoordinator` 16-slot reuse, `PageRendererManager` DPR/laziness/`dispose`/`close` lifecycle).
