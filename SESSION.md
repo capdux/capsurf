@@ -4570,3 +4570,7 @@
 ### Phase 207: Pure-CP Net HttpLoader Whitebox Tests (Slot A)
 - **Subagent**: `bf928e20` (killed after completion)
 - **Result**: `test/net/test_http_loader.cp` PASS (`cpc fix` OK, `cpc_brief.py` 4 gates 0, `cap test -m` 4/4 PASS; covering URL/IPv6/data: parsing, relative URL & mock redirect helpers, `TooManyRedirects`/`FileTooBig` error bounds, and offline mock fixtures + CDP Fetch interception).
+
+### Phase 208: Non-CDP Pure-CP Whitebox Full Regression Sweep (Slot A)
+- **Subagent**: `6521d4bf` (killed after completion)
+- **Result**: **68/71 PASS** across 9 directories (`dom` 15/15, `css` 9/9, `layout` 3/3, `html` 6/6, `render` 6/6, `eval` 12/12, `tty` 2/2, `net` 14/15, `js` 1/3). The 3 failures (`test_http_loader`, `test_js_dom`, `test_dom_events`) all hit transient in-progress `src/cdp/screencast.cp:210` `*%=` syntax being edited concurrently by Slot B.
