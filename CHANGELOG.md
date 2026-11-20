@@ -2158,3 +2158,7 @@
 
 ## Phase 166: Expose Global `window.Image` / `HTMLImageElement` & Diagnose 256MB QuickJS OOM
 - **`src/js/shim/element/html-classes.js` & `src/js/runtime{,_source.cp}`**：补全 `globalThis`/`window.Image` 与 `HTMLImageElement`，精准定位 `__pressure()` `error: null` 源自 `session.cp:861` 256MB 堆上限。
+
+## Phase 167: `navigate-reply-shape` 1/1 & `parser-script-lifecycle` 7/7 — 8/9 PASS
+- **`src/cdp/{page,session_hooks,session,input}.cp`**：
+  - 补全 `Page.navigate` `isDownload:false`、`ttyCellWidth` 注入、`<template>` 后代跳过、按 `_nid` 定位外部脚本并派发 `load`/`error` 事件（4 门禁全 0，**8/9 PASS**）。

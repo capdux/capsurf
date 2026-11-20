@@ -360,6 +360,7 @@ pub struct PendingScriptItem {
     code: []const u8 = "",
     url: []const u8 = "",
     script_idx: usize = 0,
+    script_nid: usize = 0,
     is_module: bool = false,
     has_src: bool = false,
 }
@@ -743,6 +744,8 @@ pub struct CdpPageSession {
     dark_color_scheme: bool = false,
     emulated_media_print: bool = false,
     nav_tty_stripped: bool = false,
+    tty_cell_w: u32 = 0,
+    tty_cell_h: u32 = 0,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
     js_user_agent: []const u8 = "",
     user_agent_buf: [512]u8 = [0; 512],
@@ -882,6 +885,8 @@ pub struct CdpPageSession {
         ptr.is_mobile = false;
         ptr.dark_color_scheme = false;
         ptr.nav_tty_stripped = false;
+        ptr.tty_cell_w = 0;
+        ptr.tty_cell_h = 0;
         ptr.user_agent = DEFAULT_HTTP_USER_AGENT;
         ptr.js_user_agent = "";
         ptr.extra_headers = "{}";
@@ -1105,7 +1110,19 @@ pub struct CdpPageSession {
         _.ctx.freeValue(res_v);
     }
 
-    pub fn executeModuleScript(*_, code: []const u8, mod_url: []const u8) {
+    pub fn dispatchScriptEventByNid(*_, script_nid: usize, ev_name: []const u8) {
+        let ev_buf: [320]u8 = undefined;
+        const ev_js = std.fmt.bufPrint(
+            &ev_buf,
+            "(function(){{if(typeof document==='undefined'||!document.querySelectorAll)return;var ss=document.querySelectorAll('script');for(var i=0;i<ss.length;i++){{if(ss[i]&&ss[i]._nid==={d}){{if(typeof ss[i].dispatchEvent==='function')ss[i].dispatchEvent(new Event('{s}',{{bubbles:false,cancelable:false}}));break;}}}}}})()",
+            .{ script_nid, ev_name },
+        ) catch return;
+        const ev_v = _.ctx.eval(ev_js);
+        _.ctx.freeValue(ev_v);
+        _.ctx.drainJobs();
+    }
+
+    pub fn executeModuleScript(*_, code: []const u8, mod_url: []const u8, script_nid: usize, has_src: bool) {
         let url_buf: [1024]u8 = [0; 1024];
         const ulen = @min(mod_url.len, url_buf.len - 1);
         @memcpy(url_buf[0..ulen], mod_url[0..ulen]);
@@ -1142,14 +1159,17 @@ pub struct CdpPageSession {
             _.ctx.freeValue(exec_res);
         }
         _.ctx.drainJobs();
+        if (has_src) {
+            _.dispatchScriptEventByNid(script_nid, "load");
+        }
     }
 
-    pub fn executeClassicScript(*_, code: []const u8, script_idx: usize) {
-        let cs_buf: [256]u8 = undefined;
+    pub fn executeClassicScript(*_, code: []const u8, script_nid: usize, has_src: bool) {
+        let cs_buf: [280]u8 = undefined;
         const cs_js = std.fmt.bufPrint(
             &cs_buf,
-            "(function(){{if(typeof document!=='undefined'){{var ss=document.querySelectorAll?document.querySelectorAll('script'):[];document._currentScript=ss[{d}]||null;}}}})()",
-            .{script_idx},
+            "(function(){{if(typeof document!=='undefined'&&document.querySelectorAll){{var ss=document.querySelectorAll('script');var f=null;for(var i=0;i<ss.length;i++){{if(ss[i]&&ss[i]._nid==={d}){{f=ss[i];break;}}}}document._currentScript=f;}}}})()",
+            .{script_nid},
         ) catch "";
         if (cs_js.len > 0) {
             const cs_v = _.ctx.eval(cs_js);
@@ -1167,6 +1187,9 @@ pub struct CdpPageSession {
         _.ctx.drainJobs();
         const clr_cs = _.ctx.eval("(function(){if(typeof document!=='undefined')document._currentScript=null;})()");
         _.ctx.freeValue(clr_cs);
+        if (has_src) {
+            _.dispatchScriptEventByNid(script_nid, "load");
+        }
     }
 
     pub fn deinit(*_) {
@@ -1774,6 +1797,17 @@ pub struct CdpPageSession {
             _.ctx.freeValue(vr);
         }
 
+        if (std.mem.indexOfScalar(u8, nav_url, '#') != null) {
+            const frag_fetch_wrap =
+                "(function(){if(typeof globalThis.fetch==='function'&&!globalThis.__capsurf_frag_fetch_wrapped){globalThis.__capsurf_frag_fetch_wrapped=true;var orig=globalThis.fetch;globalThis.fetch=function(r,init){var lh=(globalThis.location&&globalThis.location.href)||'';var hi=lh.indexOf('#');if(hi!==-1&&(!init||init.referrer===undefined)&&!(typeof Request!=='undefined'&&r instanceof Request&&r.referrer&&r.referrer!=='about:client')){var ni=Object.assign({},init||{},{referrer:lh.slice(0,hi)});return orig.call(this,r,ni);}return orig.call(this,r,init);};}})()";
+            const vf = _.ctx.eval(frag_fetch_wrap);
+            if (jsIsException(vf)) {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
+            _.ctx.freeValue(vf);
+        }
+
         // Sync User-Agent override to JS environment
         _.syncUserAgentToJs();
         _.outbound_reject_websocket = false;
@@ -1807,8 +1841,8 @@ pub struct CdpPageSession {
             const stripped_str = if (_.nav_tty_stripped) "true" else "false";
             const meta_js = std.fmt.bufPrint(
                 &meta_js_buf,
-                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};}})()",
-                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str },
+                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};globalThis.__capsurf_tty_cell_w={d};globalThis.__capsurf_tty_cell_h={d};}})()",
+                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str, _.tty_cell_w, _.tty_cell_h },
             ) catch "";
             if (meta_js.len > 0) {
                 const mv = _.ctx.eval(meta_js);
@@ -2070,6 +2104,18 @@ pub struct CdpPageSession {
         while (nid < initial_node_count) : (nid += 1) {
             const n = &_.doc.nodes.items[nid];
             if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
+                let is_in_template = false;
+                let p_id = n.parent;
+                let depth: usize = 0;
+                while (p_id != NULL_NODE && @as(usize, p_id) < _.doc.nodes.items.len && depth < 128) : (depth += 1) {
+                    const pn = &_.doc.nodes.items[@as(usize, p_id)];
+                    if (pn.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(pn.tag_name, "template")) {
+                        is_in_template = true;
+                        break;
+                    }
+                    p_id = pn.parent;
+                }
+                if (is_in_template) continue;
                 const cur_script_idx = script_idx;
                 script_idx += 1;
                 const has_nomodule = n.hasAttribute("nomodule");
@@ -2250,6 +2296,7 @@ pub struct CdpPageSession {
                                 code: dc,
                                 url: du,
                                 script_idx: cur_script_idx,
+                                script_nid: nid,
                                 is_module: is_module,
                                 has_src: has_src,
                             }) catch {
@@ -2268,6 +2315,7 @@ pub struct CdpPageSession {
                                 code: dc,
                                 url: du,
                                 script_idx: cur_script_idx,
+                                script_nid: nid,
                                 is_module: is_module,
                                 has_src: has_src,
                             }) catch {
@@ -2278,10 +2326,12 @@ pub struct CdpPageSession {
                             alloc.free(du);
                         }
                     } else if (is_module) {
-                        _.executeModuleScript(code_buf[0..code_len], script_url);
+                        _.executeModuleScript(code_buf[0..code_len], script_url, nid, has_src);
                     } else {
-                        _.executeClassicScript(code_buf[0..code_len], cur_script_idx);
+                        _.executeClassicScript(code_buf[0..code_len], nid, has_src);
                     }
+                } else if (has_src) {
+                    _.dispatchScriptEventByNid(nid, "error");
                 }
             }
         }
@@ -2290,9 +2340,9 @@ pub struct CdpPageSession {
         while (d_idx < defer_scripts.items.len) : (d_idx += 1) {
             const item = &defer_scripts.items[d_idx];
             if (item.is_module) {
-                _.executeModuleScript(item.code, item.url);
+                _.executeModuleScript(item.code, item.url, item.script_nid, item.has_src);
             } else {
-                _.executeClassicScript(item.code, item.script_idx);
+                _.executeClassicScript(item.code, item.script_nid, item.has_src);
             }
         }
         {
@@ -2337,9 +2387,9 @@ pub struct CdpPageSession {
             while (a_idx < async_scripts.items.len) : (a_idx += 1) {
                 const item = &async_scripts.items[a_idx];
                 if (item.is_module) {
-                    _.executeModuleScript(item.code, item.url);
+                    _.executeModuleScript(item.code, item.url, item.script_nid, item.has_src);
                 } else {
-                    _.executeClassicScript(item.code, item.script_idx);
+                    _.executeClassicScript(item.code, item.script_nid, item.has_src);
                 }
             }
 

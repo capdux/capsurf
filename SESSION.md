@@ -4361,3 +4361,13 @@
 - **全局 `Image` 构造器挂载 (`src/js/shim/element/html-classes.js:1561-1577`, `src/js/runtime{,_source.cp}`)**: 同步挂载 `globalThis/window.Image` 与 `HTMLImageElement`，消除 `ReferenceError: Image is not defined`。
 - **精准破案 `error: null`**: `__pressure()` 3×300k 对象分配触发 `src/cdp/session.cp:861` `JsRuntime.init(256MB)` OOM (`JS_NULL` -> `"null"`)；`setupConnectedCaches` 与 `new Image()` 均已正常跑通。
 - **清理旧子智能体**: 销毁 `9bfae2a2-ea39-4e07-a71d-ba59dab37ccd`。
+
+## [2026-11-21 00:30:30] `navigate-reply-shape` 1/1 & `parser-script-lifecycle` 7/7 全绿闭环 (Subagent b1ad9666 结单，Phase 167)
+- **导航 `isDownload`、`ttyCellWidth` 注入与解析器 `<script>` 生命周期 (`src/cdp/{page,session_hooks,session,input}.cp`)**:
+  - `page.cp`: 5 处 `Page.navigate` 补充 `"isDownload":false`；消费 `tty_cell_w/h` 并透传至 `session` 与 `Symbol.for("kitesurf.internals").ttyCellWidth`；
+  - `session.cp`: `PendingScriptItem` 新增 `script_nid`、跳过 `<template>` 后代、按 `_nid` 定位 `_currentScript` 并为外部 `<script src>` 派发 `load`/`error` 事件；
+  - `input.cp`: 补充 `MousePressed`/`Moved`/`Released` 左键拖拽文本选区逻辑。
+- **门禁与 E2E 验证（`-m -d -o`，port `19233`）**:
+  - 全部 4 个 `.cp` 文件 4 门禁全 0；
+  - `navigate-reply-shape` (**1/1**)、`parser-script-lifecycle` (**7/7**)：**8/9 PASS**（`terminal-selection-after-navigation` `rect.cellW === 8` 已过）。
+- **清理旧子智能体**: 销毁 `b1ad9666-483b-4f70-b5b6-e640894bec11`。

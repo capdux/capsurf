@@ -8,6 +8,7 @@ import { TtyNavState, applyTtyNavParams } from "../tty/nav_params.cp";
 import { jsIsException } from "../js/qjs_engine.cp";
 import { HttpLoader } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
+import { computeNextReferrer } from "../net/redirect_walk.cp";
 import { NodeType, NULL_NODE } from "../dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { PdfOptions, computePdfPagination, renderPdfAlloc, renderPdfWithDocAlloc } from "../render/pdf.cp";
@@ -218,6 +219,12 @@ fn applyTtyNavParamsFromUrl(raw_url: []const u8, session: *CdpPageSession): bool
     }
     if (d := state.dark_color_scheme) {
         session.dark_color_scheme = d;
+    }
+    if (w := state.tty_cell_w) {
+        session.tty_cell_w = w;
+    }
+    if (h := state.tty_cell_h) {
+        session.tty_cell_h = h;
     }
     return true;
 }
@@ -591,7 +598,7 @@ pub struct PageHandler {
                 event_count.* = 1;
                 const pna_res = std.fmt.bufPrint(
                     out_buf,
-                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS\"}}",
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS\"}}",
                     .{ session.frame_id, session.loader_id },
                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, pna_res);
@@ -646,7 +653,7 @@ pub struct PageHandler {
                 }
                 const nav_res = std.fmt.bufPrint(
                     out_buf,
-                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\"}}",
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false}}",
                     .{ session.frame_id, session.loader_id },
                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, nav_res);
@@ -658,10 +665,22 @@ pub struct PageHandler {
             defer session.allocator.free(fetch_buf);
 
             const fetch_res = HttpLoader.fetchDocument(session, url, fetch_buf, 0) catch |e| {
-                if (e == error.RequestAborted) {
+                const err_name = @errorName(e);
+                if (std.mem.eql(u8, err_name, "InvalidUrl")) {
+                    return CdpResponse.err(req.id, -32000, "Cannot navigate to invalid URL");
+                }
+                if (std.mem.eql(u8, err_name, "FileTooBig")) {
+                    const too_big_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_FILE_TOO_BIG\"}}",
+                        .{ session.frame_id, session.loader_id },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, too_big_res);
+                }
+                if (std.mem.eql(u8, err_name, "RequestAborted")) {
                     return CdpResponse.err(req.id, -32000, "net::ERR_ABORTED");
                 }
-                if (e == error.BlockedByClient) {
+                if (std.mem.eql(u8, err_name, "BlockedByClient")) {
                     return CdpResponse.err(req.id, -32000, "net::ERR_BLOCKED_BY_CLIENT");
                 }
                 return CdpResponse.err(req.id, -32000, "Navigation failed");
@@ -671,7 +690,7 @@ pub struct PageHandler {
             const doc_req_id = nextDocRequestId(&doc_req_id_buf);
 
             const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
-            if (kind == DocumentKind.blocked) {
+            if (kind == DocumentKind.blocked || fetch_res.status_code == 204 || fetch_res.status_code == 205) {
                 if (session.network_enabled && event_count.* < out_events.len) {
                     const fail_json = std.fmt.allocPrint(
                         session.allocator,
@@ -683,7 +702,7 @@ pub struct PageHandler {
                 }
                 const abort_res = std.fmt.bufPrint(
                     out_buf,
-                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_ABORTED\"}}",
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_ABORTED\"}}",
                     .{ session.frame_id, session.loader_id },
                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, abort_res);
@@ -719,7 +738,31 @@ pub struct PageHandler {
                 recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
             }
 
-            session.navigate(nav_html, fetch_res.final_url, referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            let effective_referrer: []const u8 = referrer;
+            let ref_origin_buf_a: [1024]u8 = undefined;
+            let ref_origin_buf_b: [1024]u8 = undefined;
+            if (fetch_res.redirect_count > 0 && effective_referrer.len > 0) {
+                let hi: usize = 0;
+                while (hi < fetch_res.redirect_count) : (hi += 1) {
+                    if (fetch_res.redirect_urls[hi].len > 0) {
+                        if (hi + 1 < fetch_res.redirect_count && fetch_res.redirect_urls[hi + 1].len > 0) {
+                            if ((hi % 2) == 0) {
+                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_a);
+                            } else {
+                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_b);
+                            }
+                        } else {
+                            if ((hi % 2) == 0) {
+                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_a);
+                            } else {
+                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_b);
+                            }
+                        }
+                    }
+                }
+            }
+
+            session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
             syncIframeTargets(session, true);
 
             if (event_count.* < out_events.len) {
@@ -733,15 +776,34 @@ pub struct PageHandler {
             }
 
             if (session.network_enabled && event_count.* < out_events.len) {
-                let esc_u_buf: [2048]u8 = [0; 2048];
-                const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
-                const req_json = std.fmt.allocPrint(
-                    session.allocator,
-                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                    .{ doc_req_id, session.loader_id, esc_u, esc_u, session.frame_id },
-                ) catch "{}";
-                out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
-                event_count.* += 1;
+                if (fetch_res.redirect_count == 0) {
+                    let esc_u_buf: [2048]u8 = [0; 2048];
+                    const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+                    const req_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                        .{ doc_req_id, session.loader_id, esc_u, esc_u, session.frame_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                    event_count.* += 1;
+                } else {
+                    let hi: usize = 1;
+                    while (hi <= fetch_res.redirect_count && event_count.* < out_events.len) : (hi += 1) {
+                        const hop_u = if (hi < fetch_res.redirect_count) fetch_res.redirect_urls[hi] else fetch_res.final_url;
+                        let esc_u_buf: [2048]u8 = [0; 2048];
+                        const esc_u = escapeJsonString(hop_u, &esc_u_buf);
+                        const prev_u = fetch_res.redirect_urls[hi - 1];
+                        let esc_prev_buf: [2048]u8 = [0; 2048];
+                        const esc_prev = escapeJsonString(prev_u, &esc_prev_buf);
+                        const req_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":302,\"statusText\":\"Found\",\"headers\":{{}},\"mimeType\":\"text/html\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                            .{ doc_req_id, session.loader_id, esc_u, esc_u, esc_prev, session.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                        event_count.* += 1;
+                    }
+                }
             }
 
             if (session.network_enabled && event_count.* < out_events.len) {
@@ -935,7 +997,7 @@ pub struct PageHandler {
 
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\"}}",
+                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false}}",
                 .{ session.frame_id, session.loader_id },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);

@@ -1659,3 +1659,6 @@
 ## Phase 163 `@errorName` 错误匹配与重定向 Referrer 链方案 (`src/cdp/`, `src/net/`)
 1. **错误联合匹配规避 (`page.cp`)**：`cp_eq(anyerror, error{...})` 在编译器期可能求值为 `false`，统一使用 `@errorName(e)` 匹配 `"FileTooBig"` / `"InvalidUrl"` 确保稳定输出 `net::ERR_FILE_TOO_BIG` 与 `Cannot navigate to invalid URL`。
 2. **重定向链与片段剥离 (`http_loader.cp`, `page.cp`, `session.cp`)**：记录 `redirect_urls` 补发每跳 `redirectResponse` 事件，以 `computeNextReferrer` 计算 `document.referrer` 并为子资源 `referer` 剥离 `#fragment`。
+
+## Phase 167 解析器 `<script>` `_nid` 定位与 `load`/`error` 生命周期方案 (`src/cdp/session.cp`)
+1. **稳定 `_nid` 定位与 `<template>` 隔离**：`PendingScriptItem` 记录 `script_nid` 并在扫描时沿 `parent` 跳过 `<template>` 后代，防止 `onload` 动态插入 `<script>` 导致索引错位，同时在获取/SRI 失败与执行成功后精确派发 `error`/`load` 事件。

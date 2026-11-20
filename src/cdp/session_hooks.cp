@@ -970,6 +970,12 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "  (function() {\n" ++
     "    var ksSym = Symbol.for('kitesurf.internals');\n" ++
     "    if (!g[ksSym]) g[ksSym] = {};\n" ++
+    "    if (typeof g.__capsurf_tty_cell_w === 'number' && g.__capsurf_tty_cell_w > 0) {\n" ++
+    "      g[ksSym].ttyCellWidth = g.__capsurf_tty_cell_w;\n" ++
+    "    }\n" ++
+    "    if (typeof g.__capsurf_tty_cell_h === 'number' && g.__capsurf_tty_cell_h > 0) {\n" ++
+    "      g[ksSym].ttyCellHeight = g.__capsurf_tty_cell_h;\n" ++
+    "    }\n" ++
     "    if (!g[ksSym].domDebug) g[ksSym].domDebug = {};\n" ++
     "    if (typeof g[ksSym].domDebug.matchesInSubtreeBytes !== 'function') {\n" ++
     "      g[ksSym].domDebug.matchesInSubtreeBytes = function() { return false; };\n" ++

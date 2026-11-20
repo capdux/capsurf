@@ -370,13 +370,40 @@ pub struct InputHandler {
                         }
                     }
                 }
+                if (session.has_document && button == .Left && not_prevented && session.range_drag_node == NULL_NODE) {
+                    let sel_buf: [2048]u8 = [0; 2048];
+                    const sel_js = std.fmt.bufPrint(
+                        &sel_buf,
+                        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const cs = r.childNodes || []; for (let i = 0; i < cs.length; i++) {{ const h = f(cs[i], nid); if (h) return h; }} return null; }} function firstText(n) {{ if (!n) return null; if (n.nodeType === 3) return n; const cs = n.childNodes || []; for (let i = 0; i < cs.length; i++) {{ const t = firstText(cs[i]); if (t) return t; }} return null; }} let el = f(document, {d}); if (!el && typeof document.elementFromPoint === 'function') el = document.elementFromPoint({d:.2}, {d:.2}); if (!el) el = document.body || document.documentElement; if (!el) return; const tag = String(el.tagName || '').toUpperCase(); if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return; const tn = firstText(el); if (!tn) return; const boxEl = tn.parentNode || el; const r = (boxEl && boxEl.getBoundingClientRect) ? boxEl.getBoundingClientRect() : {{ left: 0 }}; const internals = globalThis[Symbol.for('kitesurf.internals')]; const cw = (internals && typeof internals.ttyCellWidth === 'number' && internals.ttyCellWidth > 0) ? internals.ttyCellWidth : 8; const len = (tn.nodeValue || tn.textContent || '').length; const startOff = Math.max(0, Math.min(len, Math.floor(({d:.2} - r.left) / cw))); globalThis.__capsurf_drag_sel = {{ tn: tn, startOff: startOff, left: r.left, cw: cw }}; if (typeof getSelection === 'function') {{ const sel = getSelection(); if (sel && sel.removeAllRanges) sel.removeAllRanges(); }} }})()",
+                        .{ target_node, x, y, x },
+                    ) catch null;
+                    if (sjs := sel_js) {
+                        const sval = session.ctx.eval(sjs);
+                        session.ctx.freeValue(sval);
+                    }
+                }
             } else if (ev_type == .MouseMoved) {
                 if (session.range_drag_node != NULL_NODE) {
                     if (updateRangeFromX(session, session.range_drag_node, x)) {
                         session.range_drag_changed = true;
                     }
+                } else if (session.has_document && (buttons & 1) != 0) {
+                    let mv_buf: [1024]u8 = [0; 1024];
+                    const mv_js = std.fmt.bufPrint(
+                        &mv_buf,
+                        "(() => {{ const ds = globalThis.__capsurf_drag_sel; if (!ds || !ds.tn || typeof getSelection !== 'function' || !document.createRange) return; const len = (ds.tn.nodeValue || ds.tn.textContent || '').length; const rawOff = ({d:.2} - ds.left) / ds.cw; const endOff = rawOff >= ds.startOff ? Math.max(0, Math.min(len, Math.ceil(rawOff))) : Math.max(0, Math.min(len, Math.floor(rawOff))); const s = Math.min(ds.startOff, endOff); const e = Math.max(ds.startOff, endOff); const range = document.createRange(); range.setStart(ds.tn, s); range.setEnd(ds.tn, e); const sel = getSelection(); if (sel) {{ sel.removeAllRanges(); sel.addRange(range); }} }})()",
+                        .{x},
+                    ) catch null;
+                    if (mjs := mv_js) {
+                        const mval = session.ctx.eval(mjs);
+                        session.ctx.freeValue(mval);
+                    }
                 }
             } else if (ev_type == .MouseReleased) {
+                if (session.has_document) {
+                    const clr = session.ctx.eval("globalThis.__capsurf_drag_sel = null;");
+                    session.ctx.freeValue(clr);
+                }
                 const target_node = hitTest(session, x, y);
                 * = dispatchMouseDomEvent(session, target_node, "mouseup", x, y);
                 * = dispatchMouseDomEvent(session, target_node, "click", x, y);
