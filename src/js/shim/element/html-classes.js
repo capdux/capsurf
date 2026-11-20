@@ -2076,6 +2076,8 @@ function installHtmlClasses(global) {
         const fn = new Function(
           "window", "document", "location", "fetch", "self", "globalThis",
           "addEventListener", "removeEventListener", "postMessage",
+          "innerWidth", "innerHeight", "outerWidth", "outerHeight",
+          "parent", "top", "frames", "frameElement",
           code
         );
         fn.call(
@@ -2088,7 +2090,15 @@ function installHtmlClasses(global) {
           win,
           win.addEventListener.bind(win),
           win.removeEventListener.bind(win),
-          win.postMessage.bind(win)
+          win.postMessage.bind(win),
+          win.innerWidth,
+          win.innerHeight,
+          win.outerWidth,
+          win.outerHeight,
+          win.parent,
+          win.top,
+          win.frames,
+          win.frameElement
         );
       } catch (e) {
         if (typeof console !== "undefined" && console.error) {
@@ -2392,6 +2402,53 @@ function installHtmlClasses(global) {
 
     contentWindow.self = contentWindow;
     contentWindow.window = contentWindow;
+
+    function getIframeViewportDim(el, axis) {
+      try {
+        if (axis === "width" && typeof el.clientWidth === "number" && el.clientWidth > 0) {
+          return el.clientWidth;
+        }
+        if (axis === "height" && typeof el.clientHeight === "number" && el.clientHeight > 0) {
+          return el.clientHeight;
+        }
+      } catch (e) {}
+      try {
+        if (typeof el.getBoundingClientRect === "function") {
+          const r = el.getBoundingClientRect();
+          const val = axis === "width" ? r.width : r.height;
+          if (typeof val === "number" && val > 0) return Math.round(val);
+        }
+      } catch (e) {}
+      try {
+        const attr = el.getAttribute ? el.getAttribute(axis) : null;
+        if (attr !== null && attr !== "") {
+          const n = parseFloat(attr);
+          if (Number.isFinite(n) && n >= 0) return n;
+        }
+      } catch (e) {}
+      return axis === "width" ? 300 : 150;
+    }
+
+    Object.defineProperty(contentWindow, "innerWidth", {
+      enumerable: true,
+      configurable: true,
+      get: function () { return getIframeViewportDim(iframeEl, "width"); },
+    });
+    Object.defineProperty(contentWindow, "innerHeight", {
+      enumerable: true,
+      configurable: true,
+      get: function () { return getIframeViewportDim(iframeEl, "height"); },
+    });
+    Object.defineProperty(contentWindow, "outerWidth", {
+      enumerable: true,
+      configurable: true,
+      get: function () { return getIframeViewportDim(iframeEl, "width"); },
+    });
+    Object.defineProperty(contentWindow, "outerHeight", {
+      enumerable: true,
+      configurable: true,
+      get: function () { return getIframeViewportDim(iframeEl, "height"); },
+    });
 
     decorateIframeWindow(contentWindow);
     ensureIframeLocationFacade(contentWindow, iframeEl, initialUrl);

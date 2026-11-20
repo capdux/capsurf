@@ -4454,3 +4454,10 @@
 ## [2026-11-21 01:02:30] 3 分钟新增并全绿通过纯 CP HTML5 `<template>`/SVG 白盒单测 `test/html/test_svg_and_template.cp` (Subagent a755e45d 结单，Phase 183)
 - **新增白盒测试 (`test/html/test_svg_and_template.cp`)**: 覆盖 `<template>` 解析与查询隔离、SVG 容器与自闭合子标签 (`<path/>`/`<rect/>`/`<circle/>`)、以及未闭合标签与 Adoption Agency 重构（**3/3 PASS**, 989ms, 4 门禁全 0；`test/html/` 达 **4/4 PASS**）。
 - **清理旧子智能体**: 销毁 `a755e45d-32f2-4da5-afc2-1df085029927`。
+
+## [2026-11-21 01:04:00] 3 分半修复静态 `<iframe>` 自动初始化、`contentWindow` 视口与 `evalInIframe` 返回值 (Subagent 1ae7d75f 结单，Phase 184)
+- **OOPIF/Iframe 执行上下文与视口隔离 (`src/js/shim/{element/html-classes,window}.js`, `src/js/runtime{,_source.cp}`)**:
+  - `window.js:9241-9254`：`__capsurf_dispatch_lifecycle` 对非 lazy 静态 `<iframe>` 自动触发 `__capsurf_on_iframe_connected`；
+  - `html-classes.js:2074-2104,2403-2452` & `window.js:11249-11300`：`getOrCreateIframeWindow` 定义子 frame `innerWidth`/`innerHeight`/`outerWidth`/`outerHeight`，`executeIframeInlineScripts` 与 `evalInIframe` 注入子 frame 视口及 `parent`/`top`/`frames`/`frameElement`，并为 `evalInIframe` 多语句补齐末句 `return (...)`。
+- **门禁校验**: `bundle_runtime.py` + `cpc_brief.py` 4 门禁全 0（待 `Slot B` 结单后立即一键 `cap build` 复测 `oopif-postmessage` & `oopif-runtime-evaluate`）。
+- **清理旧子智能体**: 销毁 `1ae7d75f-2b15-4078-b6b7-c3cc7359b946`。

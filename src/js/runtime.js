@@ -14039,6 +14039,8 @@
           const fn = new Function(
             "window", "document", "location", "fetch", "self", "globalThis",
             "addEventListener", "removeEventListener", "postMessage",
+            "innerWidth", "innerHeight", "outerWidth", "outerHeight",
+            "parent", "top", "frames", "frameElement",
             code
           );
           fn.call(
@@ -14051,7 +14053,15 @@
             win,
             win.addEventListener.bind(win),
             win.removeEventListener.bind(win),
-            win.postMessage.bind(win)
+            win.postMessage.bind(win),
+            win.innerWidth,
+            win.innerHeight,
+            win.outerWidth,
+            win.outerHeight,
+            win.parent,
+            win.top,
+            win.frames,
+            win.frameElement
           );
         } catch (e) {
           if (typeof console !== "undefined" && console.error) {
@@ -14355,6 +14365,53 @@
 
       contentWindow.self = contentWindow;
       contentWindow.window = contentWindow;
+
+      function getIframeViewportDim(el, axis) {
+        try {
+          if (axis === "width" && typeof el.clientWidth === "number" && el.clientWidth > 0) {
+            return el.clientWidth;
+          }
+          if (axis === "height" && typeof el.clientHeight === "number" && el.clientHeight > 0) {
+            return el.clientHeight;
+          }
+        } catch (e) {}
+        try {
+          if (typeof el.getBoundingClientRect === "function") {
+            const r = el.getBoundingClientRect();
+            const val = axis === "width" ? r.width : r.height;
+            if (typeof val === "number" && val > 0) return Math.round(val);
+          }
+        } catch (e) {}
+        try {
+          const attr = el.getAttribute ? el.getAttribute(axis) : null;
+          if (attr !== null && attr !== "") {
+            const n = parseFloat(attr);
+            if (Number.isFinite(n) && n >= 0) return n;
+          }
+        } catch (e) {}
+        return axis === "width" ? 300 : 150;
+      }
+
+      Object.defineProperty(contentWindow, "innerWidth", {
+        enumerable: true,
+        configurable: true,
+        get: function () { return getIframeViewportDim(iframeEl, "width"); },
+      });
+      Object.defineProperty(contentWindow, "innerHeight", {
+        enumerable: true,
+        configurable: true,
+        get: function () { return getIframeViewportDim(iframeEl, "height"); },
+      });
+      Object.defineProperty(contentWindow, "outerWidth", {
+        enumerable: true,
+        configurable: true,
+        get: function () { return getIframeViewportDim(iframeEl, "width"); },
+      });
+      Object.defineProperty(contentWindow, "outerHeight", {
+        enumerable: true,
+        configurable: true,
+        get: function () { return getIframeViewportDim(iframeEl, "height"); },
+      });
 
       decorateIframeWindow(contentWindow);
       ensureIframeLocationFacade(contentWindow, iframeEl, initialUrl);
@@ -37088,9 +37145,13 @@
           for (let i = 0; i < iframes.length; i++) {
             const f = iframes[i];
             const loadingAttr = f.getAttribute ? String(f.getAttribute("loading") || "").toLowerCase() : "";
-            if (loadingAttr === "lazy" && !f._lazyLoadTriggered) {
-              f._lazyLoadTriggered = true;
-              global.__capsurf_on_iframe_connected(f, { forceLazy: true });
+            if (loadingAttr === "lazy") {
+              if (!f._lazyLoadTriggered) {
+                f._lazyLoadTriggered = true;
+                global.__capsurf_on_iframe_connected(f, { forceLazy: true });
+              }
+            } else if (!f._contentWindow && !f._navSeq) {
+              global.__capsurf_on_iframe_connected(f);
             }
           }
         }
@@ -39090,37 +39151,56 @@
     function evalInIframe(expr) {
       const iframeEl = document.querySelector("iframe");
       const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
+      const args = [
+        win,
+        win.document,
+        win.location,
+        win.fetch,
+        win,
+        win,
+        win.addEventListener.bind(win),
+        win.removeEventListener.bind(win),
+        win.postMessage.bind(win),
+        win.innerWidth,
+        win.innerHeight,
+        win.outerWidth,
+        win.outerHeight,
+        win.parent,
+        win.top,
+        win.frames,
+        win.frameElement,
+      ];
+      function compileIframeFn(body) {
+        return new Function(
+          "window", "document", "location", "fetch", "self", "globalThis",
+          "addEventListener", "removeEventListener", "postMessage",
+          "innerWidth", "innerHeight", "outerWidth", "outerHeight",
+          "parent", "top", "frames", "frameElement",
+          body
+        );
+      }
+      let fn = null;
+      try {
+        fn = compileIframeFn("return (" + expr + ");");
+      } catch (e) {
+        const trimmed = String(expr || "").replace(/[\s;]+$/, "");
+        const semi = trimmed.lastIndexOf(";");
+        if (semi !== -1) {
+          const prefix = trimmed.slice(0, semi + 1);
+          const last = trimmed.slice(semi + 1).trim();
+          if (last) {
+            try {
+              fn = compileIframeFn(prefix + "\nreturn (" + last + ");");
+            } catch (e2) {}
+          }
+        }
+        if (!fn) {
+          fn = compileIframeFn(expr);
+        }
+      }
       activeWindowStack.push(win);
       try {
-        try {
-          const fn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", "return (" + expr + ");");
-          return fn.call(
-            win,
-            win,
-            win.document,
-            win.location,
-            win.fetch,
-            win,
-            win,
-            win.addEventListener.bind(win),
-            win.removeEventListener.bind(win),
-            win.postMessage.bind(win)
-          );
-        } catch (e) {
-          const stmtFn = new Function("window", "document", "location", "fetch", "self", "globalThis", "addEventListener", "removeEventListener", "postMessage", expr);
-          return stmtFn.call(
-            win,
-            win,
-            win.document,
-            win.location,
-            win.fetch,
-            win,
-            win,
-            win.addEventListener.bind(win),
-            win.removeEventListener.bind(win),
-            win.postMessage.bind(win)
-          );
-        }
+        return fn.apply(win, args);
       } finally {
         activeWindowStack.pop();
       }

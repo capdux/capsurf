@@ -1681,3 +1681,6 @@
 
 ## Phase 182 独立 rAF 帧队列与外部步进钩子方案 (`src/js/shim/window.js`)
 1. **原子帧切出与防重入**：`__capsurf_pump_raf(ts)` 先取消 16ms 后备器再以 `_rafQueue.splice(0, _rafQueue.length)` 原子切出当前帧回调，确保回调内新注册的 `rAF` 严格推迟至下一帧。
+
+## Phase 184 静态 Iframe 自动挂载与子窗口视口隔离方案 (`src/js/shim/`)
+1. **子窗口作用域显式遮蔽**：为 `contentWindow` 定义基于 iframe 自身几何的 `innerWidth`/`innerHeight`，并在 `executeIframeInlineScripts` 与 `evalInIframe` 的 `new Function` 形参中显式传入，避免子 frame 脚本穿透读取父窗口 `800x600`。

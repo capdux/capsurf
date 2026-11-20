@@ -2210,3 +2210,6 @@
 
 ## Phase 183: Pure-CP HTML5 `<template>` Isolation & SVG Self-Closing Whitebox Suite `test/html/test_svg_and_template.cp` (3/3 PASS)
 - 新增 `test/html/test_svg_and_template.cp`，覆盖 `<template>` 查询隔离、SVG 自闭合标签与 Adoption Agency 建树（`cap test -m` **3/3 PASS**, 989ms）。
+
+## Phase 184: Static `<iframe>` Lifecycle Init, Child `innerWidth`/`innerHeight` & `evalInIframe` Return
+- **`src/js/shim/{element/html-classes,window}.js` & `src/js/runtime{,_source.cp}`**：补齐静态 `<iframe>` 自动挂载、子窗口 `innerWidth`/`innerHeight` 与多语句 `evalInIframe` 返回值（4 门禁全 0）。
