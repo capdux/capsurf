@@ -107,13 +107,14 @@ pub struct CdpDispatcher {
         }
 
         if (std.mem.startsWith(u8, req.method, "WebMCP.")) {
-            let mcp_evts: [1]CdpEvent = [CdpEvent{}; 1];
+            let mcp_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             let mcp_cnt: usize = 0;
             const resp = WebMcpHandler.handle(session, req, out_buf, &mcp_evts, &mcp_cnt);
-            if (mcp_cnt > 0 && out_events.len > 0) {
-                out_events[0] = mcp_evts[0];
-                event_count.* = 1;
+            let mi: usize = 0;
+            while (mi < mcp_cnt && mi < out_events.len) : (mi += 1) {
+                out_events[mi] = mcp_evts[mi];
             }
+            event_count.* = @min(mcp_cnt, out_events.len);
             return resp;
         }
 

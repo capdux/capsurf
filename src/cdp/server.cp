@@ -569,23 +569,38 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     fn emitCdpEvents(*_, client_fd: i32, events: *[MAX_CDP_EVENTS]CdpEvent, event_count: usize)! {
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
-            const evt_needed = events[i].method.len + events[i].params_json.len + 32;
+            const has_sid = events[i].session_id.len > 0;
+            const evt_needed = events[i].method.len + events[i].params_json.len + events[i].session_id.len + 64;
             if (evt_needed <= 4096) {
                 let evt_buf: [4096]u8 = [0; 4096];
-                const evt_msg = std.fmt.bufPrint(
-                    &evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
+                const evt_msg = if (has_sid)
+                    (std.fmt.bufPrint(
+                        &evt_buf,
+                        "{{\"method\":\"{s}\",\"params\":{s},\"sessionId\":\"{s}\"}}",
+                        .{ events[i].method, events[i].params_json, events[i].session_id },
+                    ) catch continue)
+                else
+                    (std.fmt.bufPrint(
+                        &evt_buf,
+                        "{{\"method\":\"{s}\",\"params\":{s}}}",
+                        .{ events[i].method, events[i].params_json },
+                    ) catch continue);
                 writeWsTextFrame(client_fd, evt_msg)?;
             } else {
                 const dyn_evt_buf = std.heap.c_allocator.alloc(u8, evt_needed) catch continue;
                 defer std.heap.c_allocator.free(dyn_evt_buf);
-                const evt_msg = std.fmt.bufPrint(
-                    dyn_evt_buf,
-                    "{{\"method\":\"{s}\",\"params\":{s}}}",
-                    .{ events[i].method, events[i].params_json },
-                ) catch continue;
+                const evt_msg = if (has_sid)
+                    (std.fmt.bufPrint(
+                        dyn_evt_buf,
+                        "{{\"method\":\"{s}\",\"params\":{s},\"sessionId\":\"{s}\"}}",
+                        .{ events[i].method, events[i].params_json, events[i].session_id },
+                    ) catch continue)
+                else
+                    (std.fmt.bufPrint(
+                        dyn_evt_buf,
+                        "{{\"method\":\"{s}\",\"params\":{s}}}",
+                        .{ events[i].method, events[i].params_json },
+                    ) catch continue);
                 writeWsTextFrame(client_fd, evt_msg)?;
             }
         }

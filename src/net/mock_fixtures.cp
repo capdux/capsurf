@@ -4,6 +4,7 @@
 
 import { open, read, close, lseek } from "../cdp/server.cp";
 import { CookieJar, RequestContext } from "./cookies.cp";
+import { parseCsp, isInlineScriptAllowed } from "./csp.cp";
 
 pub struct MockFixtures {
     static fn extractHost(url: []const u8): []const u8 {
@@ -678,12 +679,96 @@ pub struct MockFixtures {
             if (raw_tag := MockFixtures.extractQueryParam(url, "tag")) {
                 tag = MockFixtures.decodeUri(raw_tag, &tag_buf);
             }
+            let has_extra = false;
+            if (raw_extra := MockFixtures.extractQueryParam(url, "extra")) {
+                if (std.mem.eql(u8, raw_extra, "1")) has_extra = true;
+            }
+            const extra_suffix = if (has_extra) "/* tampered */\n" else "";
             const res = std.fmt.bufPrint(
                 out_buf,
-                "window.__policy_loaded = true;\nglobalThis.__ksRan = (globalThis.__ksRan || []).concat([\"{s}\"]);\n",
-                .{ tag },
+                "globalThis.__ksRan = (globalThis.__ksRan || []).concat([\"{s}\"]);\n{s}",
+                .{ tag, extra_suffix },
             ) catch return null;
             return res;
+        }
+
+        if (std.mem.indexOf(u8, url, "/oopif-csp-hits/") != null) {
+            if (h_pos := std.mem.indexOf(u8, url, "/oopif-csp-hits/")) {
+                let key = url[h_pos + "/oopif-csp-hits/".len ..];
+                if (q := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q];
+                let hit_key_buf: [160]u8 = undefined;
+                const hit_key = std.fmt.bufPrint(&hit_key_buf, "oopif-csp:{s}", .{ key }) catch key;
+                const hits = getFramePolicyHits(hit_key);
+                const res = std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch return null;
+                return res;
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/oopif-csp-hop/") != null) {
+            if (h_pos := std.mem.indexOf(u8, url, "/oopif-csp-hop/")) {
+                let key = url[h_pos + "/oopif-csp-hop/".len ..];
+                if (q := std.mem.indexOfScalar(u8, key, '?')) key = key[0..q];
+                if (std.mem.endsWith(u8, key, ".js")) key = key[0 .. key.len - 3];
+                let hit_key_buf: [160]u8 = undefined;
+                const hit_key = std.fmt.bufPrint(&hit_key_buf, "oopif-csp:{s}", .{ key }) catch key;
+                incrementFramePolicyHits(hit_key);
+                const body = "parent.postMessage(\"hop\", \"*\");";
+                const len = @min(body.len, out_buf.len);
+                @memcpy(out_buf[0..len], body[0..len]);
+                return out_buf[0..len];
+            }
+        }
+
+        if (std.mem.indexOf(u8, url, "/oopif-csp-frame.html") != null) {
+            let csp_buf: [512]u8 = undefined;
+            let csp_esc_buf: [768]u8 = undefined;
+            let csp_meta_buf: [1024]u8 = undefined;
+            let csp_meta: []const u8 = "";
+            if (raw_csp := MockFixtures.extractQueryParam(url, "csp")) {
+                const csp_val = MockFixtures.decodeUri(raw_csp, &csp_buf);
+                const csp_esc = escapeHtmlAttr(csp_val, &csp_esc_buf);
+                csp_meta = std.fmt.bufPrint(&csp_meta_buf, "<meta http-equiv=\"Content-Security-Policy\" content=\"{s}\">", .{ csp_esc }) catch "";
+            }
+            let src_buf: [1024]u8 = undefined;
+            let src_esc_buf: [1536]u8 = undefined;
+            let src_tag_buf: [2048]u8 = undefined;
+            let src_tag: []const u8 = "";
+            if (raw_src := MockFixtures.extractQueryParam(url, "src")) {
+                const src_val = MockFixtures.decodeUri(raw_src, &src_buf);
+                if (src_val.len > 0) {
+                    const src_esc = escapeHtmlAttr(src_val, &src_esc_buf);
+                    src_tag = std.fmt.bufPrint(&src_tag_buf, "<script src=\"{s}\"></script>", .{ src_esc }) catch "";
+                }
+            }
+            let inline_tag: []const u8 = "";
+            if (raw_inl := MockFixtures.extractQueryParam(url, "inline")) {
+                if (std.mem.eql(u8, raw_inl, "1")) {
+                    let allow_inl = true;
+                    if (raw_csp2 := MockFixtures.extractQueryParam(url, "csp")) {
+                        let csp2_buf: [512]u8 = undefined;
+                        const csp2_val = MockFixtures.decodeUri(raw_csp2, &csp2_buf);
+                        if (csp2_val.len > 0) {
+                            const pol = parseCsp(csp2_val);
+                            if (!isInlineScriptAllowed(&pol, "", "parent.postMessage(\"inline\", \"*\")")) {
+                                allow_inl = false;
+                            }
+                        }
+                    }
+                    if (allow_inl) {
+                        inline_tag = "<script>parent.postMessage(\"inline\", \"*\")</script>";
+                    }
+                }
+            }
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html><head>{s}<title>oopif csp</title></head><body>{s}{s}<script nonce=\"n0nce\">parent.postMessage(\"parsed\", \"*\")</script></body>",
+                .{ csp_meta, src_tag, inline_tag },
+            ) catch return null;
+            return res;
+        }
+
+        if (std.mem.indexOf(u8, url, "/status-204") != null) {
+            return "";
         }
 
         // 2.1. /corp-script-page.html (Fetch CORP classic script fixture)
@@ -812,6 +897,66 @@ pub struct MockFixtures {
 
         if (std.mem.indexOf(u8, url, "slow-headers-red.png") != null || std.mem.indexOf(u8, url, "slow-red.png") != null) {
             if (content := MockFixtures.readPageFile("solid-red.png", out_buf)) {
+                return content;
+            }
+            return "";
+        }
+
+        if (std.mem.indexOf(u8, url, "/font-heavy.html") != null) {
+            let declared: u32 = 12;
+            let used: u32 = 3;
+            if (raw_dec := MockFixtures.extractQueryParam(url, "declared")) {
+                const p_dec = std.fmt.parseInt(u32, raw_dec, 10) catch 12;
+                declared = @min(@max(p_dec, @as(u32, 1)), @as(u32, 64));
+            }
+            if (raw_used := MockFixtures.extractQueryParam(url, "used")) {
+                const p_used = std.fmt.parseInt(u32, raw_used, 10) catch 3;
+                used = @min(p_used, declared);
+            }
+            let off: usize = 0;
+            const head_part = std.fmt.bufPrint(
+                out_buf[off..],
+                "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><title>font-heavy fixture ({d} declared / {d} used)</title>\n<style>\n",
+                .{ declared, used },
+            ) catch return null;
+            off += head_part.len;
+            let fi: u32 = 0;
+            while (fi < declared) : (fi += 1) {
+                const face_part = std.fmt.bufPrint(
+                    out_buf[off..],
+                    "@font-face {{\n  font-family: \"wf-{d}\";\n  src: url(\"/__fixtures/noto-var-latin-subset.woff2?v={d}\") format(\"woff2\");\n}}\n",
+                    .{ fi, fi },
+                ) catch break;
+                off += face_part.len;
+            }
+            const mid_part = std.fmt.bufPrint(
+                out_buf[off..],
+                "p {{ font-size: 18px; margin: 4px; }}\n</style></head>\n<body>\n<h1>font-heavy: {d} declared, {d} used</h1>\n",
+                .{ declared, used },
+            ) catch return null;
+            off += mid_part.len;
+            let ui: u32 = 0;
+            while (ui < used) : (ui += 1) {
+                const p_part = std.fmt.bufPrint(
+                    out_buf[off..],
+                    "<p style=\"font-family: 'wf-{d}', sans-serif\">used family wf-{d}: lorem ipsum dolor</p>\n",
+                    .{ ui, ui },
+                ) catch break;
+                off += p_part.len;
+            }
+            const tail_part = "<p style=\"font-family: sans-serif\">control paragraph (UA font)</p>\n</body>\n</html>";
+            if (off + tail_part.len <= out_buf.len) {
+                @memcpy(out_buf[off .. off + tail_part.len], tail_part);
+                off += tail_part.len;
+            }
+            return out_buf[0..off];
+        }
+
+        if (std.mem.indexOf(u8, url, "noto-var-latin-subset.woff2") != null) {
+            if (content := MockFixtures.readPageFile("noto-var-latin-subset.woff2", out_buf)) {
+                return content;
+            }
+            if (content := MockFixtures.readPageFile("ks-test-mono.woff2", out_buf)) {
                 return content;
             }
             return "";

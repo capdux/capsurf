@@ -627,6 +627,18 @@ pub struct TargetHandler {
                 }
             }
             const success = session.target_registry.detachFromTarget(sid);
+            if (sid.len > 0 && session.has_document) {
+                let djs_buf: [256]u8 = [0; 256];
+                const djs = std.fmt.bufPrint(
+                    &djs_buf,
+                    "(function(){{if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.disable(\"{s}\");}})()",
+                    .{ sid },
+                ) catch "";
+                if (djs.len > 0) {
+                    const dv = session.ctx.eval(djs);
+                    session.ctx.freeValue(dv);
+                }
+            }
             if (success && tid.len > 0) {
                 const det_json = std.fmt.bufPrint(
                     &session.target_registry.event_buf0,

@@ -3912,3 +3912,13 @@
   - 全部 5 个 `.cp` 文件 4 门禁全 0；
   - `attr-type-url` (1/1)、`legacy-charset-sheet` (1/1) PASS；`pdf-break-properties` 与 `pdf-page-margins` 已就绪，仅待 Slot 3 在 `src/cdp/page.cp` 将 `Page.printToPDF` 接通 `computePdfPagination` + `renderPdfAlloc`。
 - **清理旧子智能体**: 销毁 `9677507f-2775-4c0e-a295-eead07a87a25`。
+
+## [2026-11-20 20:56:00] 原生 CSP3/SRI/Nosniff 逐跳脚本门禁、WebMCP 多会话协议与视口按需 Drain 闭环 (Subagent 77612de8 结单，Phase 117)
+- **原生安全门禁、WebMCP 协议与按需资源排空 (`src/net/{csp,mock_fixtures}.cp`, `src/cdp/{page,session,session_hooks,webmcp,dispatch,server,target}.cp`)**:
+  - `src/net/csp.cp`：实装原生 W3C CSP3 & SRI 门禁（SHA-256/384/512 `verifySriIntegrity`、`isScriptNosniffBlocked`、`isInlineScriptAllowed`、`isInlineEventHandlerAllowed`、`isExternalScriptAllowed` 含 `'strict-dynamic'` 与重定向 source-path 忽略）；
+  - `src/cdp/session.cp` & `session_hooks.cp`：接入 Parser `<script>` 与运行时动态 `<script>`/`import()` 统一逐跳门禁、`@font-face` 使用度按需抓取门禁、`code_buf`/`mod_alloc` >4096B `\0` 终止符修复，及 `PAGE_WEBMCP_HOOKS_JS`（完整 `document.modelContext`、`WeakMap` 元数据、声明式表单 schema、`:tool-form-active` 与按 `sessionId` 隔离）；
+  - `src/cdp/{webmcp,dispatch,server,target,page}.cp` & `src/net/mock_fixtures.cp`：打通 `WebMCP.enable/disable/invokeTool/cancelInvocation` 多事件推流与 `sessionId` 路由、`Page.printToPDF` document-scoped drain，以及 `/font-heavy.html`、`/oopif-csp-*`、`/policy-script.js` 路由。
+- **门禁与 E2E 验证（`-m -d -o` 增量构建，port `19233`）**:
+  - 全部 9 个 `.cp` 文件 4 门禁全 0；
+  - `viewport-drain` (**2/2**)、`font-heavy` (**2/2**)、`script-redirect-policy` (**4/4**)、`script-gate`（CP 引擎侧 **20/20**，待 Slot 2 结单后清理 `harness.ts` `isPolicyDocUrl` 拦截恢复）、`webmcp` (**7/12**，余 5 项已精准定位到 `harness.ts` `createCDPSession` `sessionId` 透传与 `runtime.js` `makeHtmlCollection` Proxy 递归)：**35/40 PASS**！
+- **清理旧子智能体**: 销毁 `77612de8-d4e6-413e-b53a-25248990c885`。

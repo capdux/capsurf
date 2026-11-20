@@ -2,7 +2,7 @@
 // CDP WebMCP (Model Context Protocol) Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/webmcp.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 
@@ -697,12 +697,61 @@ pub struct WebMcpHandler {
         session: *CdpPageSession,
         req: CdpRequest,
         out_buf: []u8,
-        out_events: *[1]CdpEvent,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
         const is_invoke = std.mem.eql(u8, req.method, "WebMCP.invokeTool");
+        if (is_invoke) {
+            session.webmcp_invocation_count += 1;
+            let inv_buf: [32]u8 = [0; 32];
+            const inv_id = std.fmt.bufPrint(&inv_buf, "webmcp-{d}", .{session.webmcp_invocation_count}) catch "webmcp-1";
+
+            let tool_name: []const u8 = "";
+            if (tn := extractJsonString(req.params_raw, "toolName")) {
+                tool_name = tn;
+            } else if (n := extractJsonString(req.params_raw, "name")) {
+                tool_name = n;
+            }
+
+            let args_obj: []const u8 = "{}";
+            if (inp := extractJsonObject(req.params_raw, "input")) {
+                args_obj = inp;
+            } else if (a := extractJsonObject(req.params_raw, "arguments")) {
+                args_obj = a;
+            } else if (ar := extractJsonObject(req.params_raw, "args")) {
+                args_obj = ar;
+            }
+
+            let esc_name_buf: [256]u8 = [0; 256];
+            const esc_name = escapeJson(tool_name, &esc_name_buf);
+            let esc_args_buf: [2048]u8 = [0; 2048];
+            const esc_args = escapeJson(args_obj, &esc_args_buf);
+            const sk = if (req.session_id.len > 0) req.session_id else "default";
+            let esc_sk_buf: [128]u8 = [0; 128];
+            const esc_sk = escapeJson(sk, &esc_sk_buf);
+
+            let js_buf: [3200]u8 = [0; 3200];
+            const js = std.fmt.bufPrint(
+                &js_buf,
+                "(function(){{if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.invoke(\"{s}\",\"{s}\",\"{s}\",\"{s}\");}})()",
+                .{ inv_id, esc_name, esc_args, esc_sk },
+            ) catch "";
+            if (js.len > 0 && session.has_document) {
+                const v = session.ctx.eval(js);
+                session.ctx.freeValue(v);
+            }
+
+            const res = std.fmt.bufPrint(
+                out_buf,
+                "{{\"invocationId\":\"{s}\"}}",
+                .{inv_id},
+            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
+        }
+
         let inv_buf: [32]u8 = [0; 32];
         const inv_id = g_webmcp_state.nextInvocationId(&inv_buf);
+        * = inv_id;
 
         let tool_name: []const u8 = "";
         if (n := extractJsonString(req.params_raw, "name")) {
@@ -841,7 +890,7 @@ pub struct WebMcpHandler {
         session: *CdpPageSession,
         req: CdpRequest,
         out_buf: []u8,
-        out_events: *[1]CdpEvent,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
         event_count.* = 0;
@@ -849,12 +898,49 @@ pub struct WebMcpHandler {
         if (std.mem.eql(u8, req.method, "WebMCP.enable")) {
             g_webmcp_state.enable();
             session.webmcp_enabled = true;
+            const sk = if (req.session_id.len > 0) req.session_id else "default";
+            let esc_sk_buf: [128]u8 = [0; 128];
+            const esc_sk = escapeJson(sk, &esc_sk_buf);
+            if (!session.has_document) {
+                session.navigate("<!doctype html><html><head></head><body></body></html>", "about:blank", "") catch {};
+            }
+            if (session.has_document) {
+                let js_buf: [256]u8 = [0; 256];
+                const js = std.fmt.bufPrint(
+                    &js_buf,
+                    "(function(){{if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.enable(\"{s}\",false);}})()",
+                    .{ esc_sk },
+                ) catch "";
+                if (js.len > 0) {
+                    const v = session.ctx.eval(js);
+                    session.ctx.freeValue(v);
+                    session.ctx.drainJobs();
+                }
+                event_count.* = session.pollWebMcpEvents(out_events[0..]);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "WebMCP.disable")) {
-            g_webmcp_state.disable();
-            session.webmcp_enabled = false;
+            const sk = if (req.session_id.len > 0) req.session_id else "default";
+            let esc_sk_buf: [128]u8 = [0; 128];
+            const esc_sk = escapeJson(sk, &esc_sk_buf);
+            if (req.session_id.len == 0) {
+                g_webmcp_state.disable();
+                session.webmcp_enabled = false;
+            }
+            if (session.has_document) {
+                let js_buf: [256]u8 = [0; 256];
+                const js = std.fmt.bufPrint(
+                    &js_buf,
+                    "(function(){{if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.disable(\"{s}\");}})()",
+                    .{ esc_sk },
+                ) catch "";
+                if (js.len > 0) {
+                    const v = session.ctx.eval(js);
+                    session.ctx.freeValue(v);
+                }
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -869,6 +955,25 @@ pub struct WebMcpHandler {
         }
 
         if (std.mem.eql(u8, req.method, "WebMCP.cancelInvocation")) {
+            if (inv_id := extractJsonString(req.params_raw, "invocationId")) {
+                if (session.has_document) {
+                    const sk = if (req.session_id.len > 0) req.session_id else "default";
+                    let esc_id_buf: [128]u8 = [0; 128];
+                    const esc_id = escapeJson(inv_id, &esc_id_buf);
+                    let esc_sk_buf: [128]u8 = [0; 128];
+                    const esc_sk = escapeJson(sk, &esc_sk_buf);
+                    let js_buf: [384]u8 = [0; 384];
+                    const js = std.fmt.bufPrint(
+                        &js_buf,
+                        "(function(){{if(globalThis.__capsurf_webmcp)globalThis.__capsurf_webmcp.cancel(\"{s}\",\"{s}\");}})()",
+                        .{ esc_id, esc_sk },
+                    ) catch "";
+                    if (js.len > 0) {
+                        const v = session.ctx.eval(js);
+                        session.ctx.freeValue(v);
+                    }
+                }
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

@@ -1497,4 +1497,10 @@
    - 在 `Cascade` 级联阶段解析 `@page` 页边距与 `break-before`/`break-after`/`break-inside` 属性，通过 `computePdfPagination` 按纸张内容框高度自动切分页面并遵守 `avoid` 约束，由 `renderPdfAlloc` 输出标准多页 `%PDF-1.4` 字节流。
 2. **旧字符集样式表 UTF-8 转码 (`paged_media.cp`, `dom_binding.cp`)**：
    - 当外部样式表非合法 UTF-8 时，结合响应 `charset` 与 `@charset` 规则将其安全转码为 UTF-8（支持 ISO-8859-15 / Windows-1252）后再送入 `cap:css` 解析器。
+
+## Phase 117 原生 CSP3/SRI 门禁、WebMCP 多会话与脚本缓冲区终止符修复技术方案
+1. **统一 CSP3/SRI/Nosniff 逐跳脚本门禁 (`csp.cp`, `session.cp`, `session_hooks.cp`)**：
+   - Parser `<script>` 与运行时动态 `<script>`/`import()` 共用 `js_capsurf_script_gate` 与 `csp.cp` 原生校验，完整支持 SHA-256/384/512 SRI、`script-src-attr`、`strict-dynamic` 及重定向后忽略 source path 规范；同时修复 >4096B 动态脚本缓冲区缺失 `\0` 终止符导致的 QuickJS UTF-8 误报。
+2. **WebMCP 按 Session 路由与 `@font-face` 惰性门禁 (`webmcp.cp`, `server.cp`, `session.cp`)**：
+   - 扩展 `dispatch.cp` 多事件缓冲并在 `server.cp` 透传 `sessionId` 实现多 CDP 会话隔离；在 `@font-face` 阶段校验页面实际使用字体族避免未用字体急切抓取。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

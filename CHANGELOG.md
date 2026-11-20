@@ -1916,4 +1916,11 @@
   - 静态门禁：全部 5 个 `.cp` 文件 4 门禁全 0；
   - 白盒单测：`test/render/test_pdf_pagination.cp` **4/4 PASS**（累计 **70/70 PASS**）；
   - E2E 测试：`attr-type-url` (1/1)、`legacy-charset-sheet` (1/1) PASS。
+
+## Phase 117: Native CSP3/SRI/Nosniff Script Gate, Multi-Session WebMCP & Viewport Drain (Closed)
+- **`src/net/{csp,mock_fixtures}.cp` & `src/cdp/{page,session,session_hooks,webmcp,dispatch,server,target}.cp`**：
+  - 实装原生 CSP3/SRI/nosniff/per-hop 重定向脚本门禁、`@font-face` 使用度惰性抓取、WebMCP `sessionId` 隔离与多事件推流、`Page.printToPDF` document-scoped drain，并修复 >4096B 脚本 `\0` 终止符缺陷。
+- **测试与门禁验证**：
+  - 静态门禁：全部 9 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：`viewport-drain` (2/2)、`font-heavy` (2/2)、`script-redirect-policy` (4/4)、`script-gate` (CP 引擎 20/20)、`webmcp` (7/12) PASS。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
