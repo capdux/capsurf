@@ -2259,3 +2259,6 @@
 
 ### Phase 199
 - Added `test/net/test_headers_and_mime.cp` covering HTTP header parsing/folding, control-character/CRLF validation, MIME charset parsing/normalization, and extension-to-MIME mapping.
+
+### Phase 200
+- Added `test/dom/test_canvas_element.cp` covering canvas dimension clamping, 2D context lifecycle, `toDataURL` PNG base64 encoding, and multi-instance isolation.
