@@ -222,7 +222,7 @@ pub struct Canvas {
         }
     }
 
-    fn drawText(*_, x: f32, y: f32, text: []const u8, color: CssColor) {
+    fn drawTextClipped(*_, x: f32, y: f32, text: []const u8, color: CssColor, clip: ClipRect?) {
         if (color.a == 0 || text.len == 0) {
             return;
         }
@@ -240,13 +240,22 @@ pub struct Canvas {
                     while (col < 8) : (col += 1) {
                         const shift: u3 = @intCast(7 - col);
                         if (((bits >> shift) & 1) == 1) {
-                            _.blendPixel(cursor_x + @as(i32, @intCast(col)), base_y + @as(i32, @intCast(row)) + 2, color);
+                            const px = cursor_x + @as(i32, @intCast(col));
+                            const py = base_y + @as(i32, @intCast(row)) + 2;
+                            if (c := clip) {
+                                if (px < c.x0 || px >= c.x1 || py < c.y0 || py >= c.y1) continue;
+                            }
+                            _.blendPixel(px, py, color);
                         }
                     }
                 }
             }
             cursor_x += 8;
         }
+    }
+
+    fn drawText(*_, x: f32, y: f32, text: []const u8, color: CssColor) {
+        _.drawTextClipped(x, y, text, color, null);
     }
 
     fn drawScaledTextClipped(*_, x: f32, y: f32, text: []const u8, pixel_size: f32, color: CssColor, clip: ClipRect?) {
@@ -584,7 +593,56 @@ fn paintSvgPath(
     }
 }
 
+fn resolveSvgGradientColor(doc: *const Document, raw_val: []const u8): CssColor? {
+    const t = std.mem.trim(u8, raw_val, " \t\r\n");
+    if (t.len < 6 || !std.ascii.startsWithIgnoreCase(t, "url(") || t[t.len - 1] != ')') return null;
+    let inner = std.mem.trim(u8, t[4 .. t.len - 1], " \t\r\n\"'");
+    if (inner.len < 2 || inner[0] != '#') return null;
+    const grad_id = findNodeById(doc, inner[1..]);
+    if (grad_id == NULL_NODE || @as(usize, grad_id) >= doc.nodes.items.len) return null;
+    const gnode = &doc.nodes.items[@as(usize, grad_id)];
+    if (!gnode.hasTag("lineargradient") && !gnode.hasTag("radialgradient")) return null;
+    let child = gnode.first_child;
+    while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) : (child = doc.nodes.items[@as(usize, child)].next_sibling) {
+        const cn = &doc.nodes.items[@as(usize, child)];
+        if (cn.isElement() && cn.hasTag("stop")) {
+            if (sc := cn.getAttribute("stop-color")) {
+                if (c := CssColor.parse(std.mem.trim(u8, sc, " \t\r\n"))) {
+                    return c;
+                }
+            }
+            if (cn.inline_style.len > 0) {
+                let it = std.mem.splitScalar(u8, cn.inline_style, ';');
+                while (decl := it.next()) {
+                    if (colon := std.mem.indexOfScalar(u8, decl, ':')) {
+                        const k = std.mem.trim(u8, decl[0..colon], " \t\r\n");
+                        if (std.ascii.eqlIgnoreCase(k, "stop-color")) {
+                            const v = std.mem.trim(u8, decl[colon + 1 ..], " \t\r\n");
+                            if (c := CssColor.parse(v)) return c;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
+fn resolveSvgAttrVar(
+    node_id: NodeId,
+    styles_opt: ([]const ComputedStyle)?,
+    raw: []const u8,
+): []const u8 {
+    if (styles := styles_opt) {
+        if (@as(usize, node_id) < styles.len) {
+            return styles[@as(usize, node_id)].resolveVarValue(raw);
+        }
+    }
+    return std.mem.trim(u8, raw, " \t\r\n");
+}
+
 fn resolveSvgElementFill(
+    doc: *const Document,
     node: *const NodeData,
     node_id: NodeId,
     styles_opt: ([]const ComputedStyle)?,
@@ -606,12 +664,15 @@ fn resolveSvgElementFill(
         }
     }
     if (fa := node.getAttribute("fill")) {
-        const t = std.mem.trim(u8, fa, " \t\r\n");
+        const t = resolveSvgAttrVar(node_id, styles_opt, fa);
         if (std.ascii.eqlIgnoreCase(t, "none")) {
             return CssColor.rgba(0, 0, 0, 0);
         }
         if (std.ascii.eqlIgnoreCase(t, "currentcolor")) {
             return current_color;
+        }
+        if (gc := resolveSvgGradientColor(doc, t)) {
+            return gc;
         }
         if (c := CssColor.parse(t)) {
             return c;
@@ -621,16 +682,22 @@ fn resolveSvgElementFill(
 }
 
 fn resolveSvgElementStroke(
+    doc: *const Document,
     node: *const NodeData,
+    node_id: NodeId,
+    styles_opt: ([]const ComputedStyle)?,
     current_color: CssColor,
 ): CssColor {
     if (sa := node.getAttribute("stroke")) {
-        const t = std.mem.trim(u8, sa, " \t\r\n");
+        const t = resolveSvgAttrVar(node_id, styles_opt, sa);
         if (std.ascii.eqlIgnoreCase(t, "none")) {
             return CssColor.rgba(0, 0, 0, 0);
         }
         if (std.ascii.eqlIgnoreCase(t, "currentcolor")) {
             return current_color;
+        }
+        if (gc := resolveSvgGradientColor(doc, t)) {
+            return gc;
         }
         if (c := CssColor.parse(t)) {
             return c;
@@ -837,8 +904,8 @@ fn paintSvgChildrenDirect(
         if (cnode.hasTag("defs") || cnode.hasTag("symbol") || cnode.hasTag("style") || cnode.hasTag("metadata") || cnode.hasTag("title") || cnode.hasTag("desc")) {
             continue;
         }
-        const fill_c = resolveSvgElementFill(cnode, child, styles_opt, inherited_fill, current_color);
-        const stroke_c = resolveSvgElementStroke(cnode, current_color);
+        const fill_c = resolveSvgElementFill(doc, cnode, child, styles_opt, inherited_fill, current_color);
+        const stroke_c = resolveSvgElementStroke(doc, cnode, child, styles_opt, current_color);
         let stroke_w: f32 = 1.0 * scale;
         if (swa := cnode.getAttribute("stroke-width")) {
             if (v := parseSvgNum(swa)) stroke_w = v * scale;
@@ -930,7 +997,16 @@ fn paintSvgChildrenDirect(
                 if (v := parseSvgNum(a)) ty = v;
             }
             if (a := cnode.getAttribute("font-size")) {
-                if (v := parseSvgNum(a)) {
+                const fs_str = resolveSvgAttrVar(child, styles_opt, a);
+                if (std.ascii.endsWithIgnoreCase(fs_str, "rem")) {
+                    if (v := parseSvgNum(fs_str[0 .. fs_str.len - 3])) {
+                        if (v > 0.0) font_sz = v * 16.0;
+                    }
+                } else if (std.ascii.endsWithIgnoreCase(fs_str, "em")) {
+                    if (v := parseSvgNum(fs_str[0 .. fs_str.len - 2])) {
+                        if (v > 0.0) font_sz = v * 16.0;
+                    }
+                } else if (v := parseSvgNum(fs_str)) {
                     if (v > 0.0) font_sz = v;
                 }
             }
@@ -1094,7 +1170,7 @@ fn paintSvgContainerRef(
         offset_y = (box_h - vb_h * scale) * 0.5;
     }
 
-    const fill_c = resolveSvgElementFill(cnode, container_id, styles_opt, inherited_fill, current_color);
+    const fill_c = resolveSvgElementFill(doc, cnode, container_id, styles_opt, inherited_fill, current_color);
     paintSvgChildrenDirect(canvas, doc, styles_opt, container_id, box_x + offset_x, box_y + offset_y, min_x, min_y, scale, box_w, box_h, fill_c, current_color, clip, depth + 1);
 }
 
@@ -1359,7 +1435,7 @@ fn paintNodeRecursive(
                         use_fill = CssColor.rgb(0, 0, 0);
                     }
                 }
-                use_fill = resolveSvgElementFill(node, node_id, styles, use_fill, style.color);
+                use_fill = resolveSvgElementFill(doc, node, node_id, styles, use_fill, style.color);
                 if (t.len > 1 && t[0] == '#') {
                     const target_id = findNodeById(doc, t[1..]);
                     if (target_id != NULL_NODE) {
@@ -1504,7 +1580,7 @@ fn paintNodeRecursive(
         if (display_text.len > 0) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
-            canvas.drawText(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color);
+            canvas.drawTextClipped(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, paint_style.text_color, active_clip);
         }
 
         if (node_id == opts.focused_node && is_form_text) {
@@ -1540,7 +1616,7 @@ fn paintNodeRecursive(
         }
         const parent_id = node.parent;
         const parent_color = if (parent_id != NULL_NODE) styles[@as(usize, parent_id)].color else CssColor.rgb(0, 0, 0);
-        canvas.drawText(r.x + 2.0, r.y + 2.0, node.text_content, parent_color);
+        canvas.drawTextClipped(r.x + 2.0, r.y + 2.0, node.text_content, parent_color, active_clip);
     }
 
     let child = node.first_child;

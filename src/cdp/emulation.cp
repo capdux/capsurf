@@ -55,6 +55,9 @@ pub struct EmulationHandler {
             session.layout.viewport_height = clamped.height;
             session.scroll_x = 0.0;
             session.scroll_y = 0.0;
+            if (dctx := session.dom_ctx) {
+                dctx.layout_dirty = true;
+            }
 
             if (dsf > 0) {
                 session.device_scale_factor = @floatFromInt(dsf);
@@ -91,6 +94,9 @@ pub struct EmulationHandler {
             session.layout.viewport_height = DEFAULT_VIEWPORT_HEIGHT;
             session.device_scale_factor = 1.0;
             session.is_mobile = false;
+            if (dctx := session.dom_ctx) {
+                dctx.layout_dirty = true;
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 

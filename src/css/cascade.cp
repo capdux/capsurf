@@ -1027,6 +1027,12 @@ fn canonicalizeCssPropertyName(name: []const u8): []const u8 {
     return name;
 }
 
+pub struct CustomProp {
+    name: []const u8 = "",
+    value: []const u8 = "",
+    weight: u64 = 0,
+}
+
 pub struct ComputedStyle {
     display: Display = Display.block();
     visibility: Visibility = Visibility.Visible;
@@ -1104,6 +1110,10 @@ pub struct ComputedStyle {
 
     // 64-bit packed cascade weight per property slot
     weights: [TOTAL_PROP_SLOTS]u64 = [0; TOTAL_PROP_SLOTS];
+
+    // Inherited CSS custom properties (`--*`)
+    custom_props: [16]CustomProp = [CustomProp{}; 16],
+    custom_prop_count: usize = 0,
 
     /// Initializes UA default display, margins, paddings, and typography per W3C HTML5 spec.
     fn initForNode(*_, node: *const NodeData, parent_style: (*const ComputedStyle)?) {
@@ -1293,6 +1303,15 @@ pub struct ComputedStyle {
             _.border_spacing_h = p.border_spacing_h;
             _.border_spacing_v = p.border_spacing_v;
             _.caption_side = p.caption_side;
+            let cpi: usize = 0;
+            while (cpi < p.custom_prop_count && cpi < 16) : (cpi += 1) {
+                _.custom_props[cpi] = CustomProp{
+                    name: p.custom_props[cpi].name,
+                    value: p.custom_props[cpi].value,
+                    weight: 0,
+                };
+            }
+            _.custom_prop_count = @min(p.custom_prop_count, @as(usize, 16));
         }
         if (tag == .B || tag == .Strong) {
             _.font_weight = 700.0;
@@ -1381,10 +1400,71 @@ pub struct ComputedStyle {
         return std.fmt.bufPrint(buf, "rgba({d}, {d}, {d}, {d:.2})", .{ _.accent_color.r, _.accent_color.g, _.accent_color.b, a_f }) catch "auto";
     }
 
+    fn setCustomProp(*_, name: []const u8, value: []const u8, weight: u64) {
+        let i: usize = 0;
+        while (i < _.custom_prop_count) : (i += 1) {
+            if (std.mem.eql(u8, _.custom_props[i].name, name)) {
+                if (weight >= _.custom_props[i].weight) {
+                    _.custom_props[i].value = value;
+                    _.custom_props[i].weight = weight;
+                }
+                return;
+            }
+        }
+        if (_.custom_prop_count < 16) {
+            _.custom_props[_.custom_prop_count] = CustomProp{
+                name: name,
+                value: value,
+                weight: weight,
+            };
+            _.custom_prop_count += 1;
+        }
+    }
+
+    fn getCustomProp(name: []const u8): ([]const u8)? {
+        let i: usize = 0;
+        while (i < _.custom_prop_count) : (i += 1) {
+            if (std.mem.eql(u8, _.custom_props[i].name, name)) {
+                return _.custom_props[i].value;
+            }
+        }
+        return null;
+    }
+
+    fn resolveVarValue(raw: []const u8): []const u8 {
+        let cur = std.mem.trim(u8, raw, " \t\r\n");
+        let depth: u32 = 0;
+        while (depth < 8) : (depth += 1) {
+            if (cur.len < 6) break;
+            if (!std.ascii.startsWithIgnoreCase(cur, "var(")) break;
+            if (cur[cur.len - 1] != ')') break;
+            const inner = std.mem.trim(u8, cur[4 .. cur.len - 1], " \t\r\n");
+            let var_name = inner;
+            let fallback: []const u8 = "";
+            if (comma := std.mem.indexOfScalar(u8, inner, ',')) {
+                var_name = std.mem.trim(u8, inner[0..comma], " \t\r\n");
+                fallback = std.mem.trim(u8, inner[comma + 1 ..], " \t\r\n");
+            }
+            if (resolved := _.getCustomProp(var_name)) {
+                cur = std.mem.trim(u8, resolved, " \t\r\n");
+            } else if (fallback.len > 0) {
+                cur = fallback;
+            } else {
+                return "";
+            }
+        }
+        return cur;
+    }
+
     /// Applies a single `CssProperty` with prepacked 64-bit `weight` onto this ComputedStyle.
     fn applyProperty(*_, prop: *const CssProperty, weight: u64, root_font_px: f32) {
-        const name = canonicalizeCssPropertyName(prop.name);
-        const val = prop.value;
+        const raw_name = std.mem.trim(u8, prop.name, " \t\r\n");
+        if (std.mem.startsWith(u8, raw_name, "--")) {
+            _.setCustomProp(raw_name, std.mem.trim(u8, prop.value, " \t\r\n"), weight);
+            return;
+        }
+        const name = canonicalizeCssPropertyName(raw_name);
+        const val = _.resolveVarValue(prop.value);
 
         if (std.ascii.eqlIgnoreCase(name, "display")) {
             if (d := Display.parse(val)) {

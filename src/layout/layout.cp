@@ -626,7 +626,7 @@ pub struct LayoutTree {
         if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len) return 0;
         const n = &doc.nodes.items[@as(usize, node_id)];
         if (n.node_type == NodeType.Text) {
-            return n.text_content.len;
+            return std.mem.trim(u8, n.text_content, " \t\r\n").len;
         }
         let total: usize = 0;
         let ch = n.first_child;

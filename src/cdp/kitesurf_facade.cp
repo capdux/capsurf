@@ -132,6 +132,7 @@ pub struct KitesurfFacade {
         }
 
         // 3. Fallback to protocol extensions (layout mode, session info, renderer info, etc.)
+        _.ext_state.paint_prepares = session.getPaintPrepares();
         return handleProtocolExtension(method, params_json, session.target_id, &_.ext_state, out_buf);
     }
 }

@@ -1279,4 +1279,10 @@
    - 在 `captureScreenshotClipped` 前采集 `getSelection()` 文本范围与 `input`/`textarea` live `.value` 传入 `ScreenshotOptions`，实现非折叠选区高亮覆盖与表单实时重绘，并支持 CDP `clip` 局部截图编码。
 2. **`accent-color` 与 Range 滑块交互 (`cascade.cp`, `input.cp`, `dom_binding.cp`)**：
    - 新增 `PROP_ACCENT_COLOR` 槽位及滑块伪元素回退；在 `Input.dispatchMouseEvent` 实装 `<input type="range">` 鼠标按下与拖拽步进更新及 `preventDefault()` 取消拦截。
+
+## Phase 78 `import.meta`、原生 CSS `--*`/`var()`、SVG 渐变与 Fixed 滚动裁剪技术方案
+1. **ES 模块 `import.meta` 与 `paint.prepares` (`qjs_engine.cp`, `session.cp`, `protocol_extensions.cp`)**：
+   - 在 `sessionModuleLoader` 中通过 `JS_GetImportMeta` 注入标准 `url` 与 `resolve`；将 `paint_prepares` 绑定至真实 `computeLayout` 执行，选区移动不置脏 `layout_dirty`。
+2. **原生 `--*`/`var()`、渐变与文本裁剪 (`cascade.cp`, `painter.cp`, `dom_binding.cp`)**：
+   - 在 `ComputedStyle` 维护 `CustomProp` 继承链与嵌套 `var()` 求值，打通 SVG presentation attributes 的 `var(--...)` 与 `url(#grad)`；在 `Canvas.drawTextClipped` 应用活动裁剪框杜绝 `overflow: hidden` 文本溢出。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

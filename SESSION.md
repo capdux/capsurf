@@ -3387,6 +3387,24 @@
   - 派发全新子智能体 **Subagent 43**: Pure CP Kernel Gap Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/boa-import-meta-url.e2e.test.ts`、`e2e/computed-style-reads.e2e.test.ts`、`e2e/svg-css-attribute-values.e2e.test.ts`、`e2e/fixed-position-scroll.e2e.test.ts`、`e2e/fixed-position-viewport.e2e.test.ts`。
 
+## [2026-11-20 16:13:00] import.meta.url、原生 CSS `--*`/`var()`、SVG 渐变与 Fixed 视口滚动 5/5 全绿闭环 (Subagent fec53624 结单，Phase 78)
+- **QuickJS `import.meta` 与 `paint.prepares` 遥测 (`qjs_engine.cp`, `session.cp`, `protocol_extensions.cp`, `kitesurf_facade.cp`, `dom_binding.cp`)**:
+  - 绑定 `JS_GetImportMeta` 并在 `sessionModuleLoader` 注入 `import.meta.url` 与 `import.meta.resolve`；
+  - 实装 `paint.prepares` 真实级联/重排计数，确保选区移动不重复触发 cascade；
+  - `Emulation.setDeviceMetricsOverride` 标记 `layout_dirty`，并在 `computeViewportRect` 将内部滚动偏移 clamp 至实际可滚动区间。
+- **原生 CP CSS 自定义属性 `--*`/`var()`、SVG 渐变与文本裁剪 (`cascade.cp`, `layout.cp`, `painter.cp`)**:
+  - `cascade.cp`: 新增 `CustomProp` 支持 `--*` 继承与 `var(--name, fallback)` 嵌套解析；
+  - `painter.cp`: 新增 `Canvas.drawTextClipped`、SVG `url(#grad)` 渐变解析、`var(--...)` 属性解析与 `<text>` `rem`/`em` 单位换算；
+  - `layout.cp`: 去除纯空白文本节点高度估算干扰。
+- **门禁与 E2E 验证**:
+  - 全部 9 个修改 `.cp` 文件 4 门禁全 0；
+  - `boa-import-meta-url` (2/2) + `computed-style-reads` (2/2) + `fixed-position-scroll` (2/2) + `fixed-position-viewport` (2/2) + `svg-css-attribute-values` (1/1)：**9/9 PASS (28 expect() calls, 9.27s)**！
+- **全新子智能体调度（用完即弃原则）**:
+  - 销毁已结单子智能体 `fec53624-439b-49f4-99b4-a5a9df8dcc3e`；
+  - 派发全新子智能体 **Subagent 44**: Flex Float & Clip Specialist（纯 CP 内核隔离，端口 `19231`）
+    - 攻坚目标：`e2e/flex-svg-intrinsic.e2e.test.ts`、`e2e/flex-wrap-stretch-fit.e2e.test.ts`、`e2e/float-containment.e2e.test.ts`、`e2e/clip-regions.e2e.test.ts`、`e2e/corner-shape-paint.e2e.test.ts`。
+
+
 
 
 

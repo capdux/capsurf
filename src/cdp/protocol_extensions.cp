@@ -11,6 +11,7 @@ pub struct ExtensionSessionState {
     layout_mode: LayoutMode = LayoutMode.full,
     page_state_seq: u32 = 1,
     frames_rendered: u32 = 0,
+    paint_prepares: u64 = 0,
     active_target_id: []const u8 = "capsurf-target-001",
 }
 
@@ -146,10 +147,12 @@ pub fn handleProtocolExtension(
     }
 
     if (std.mem.eql(u8, cap_method, "getMemoryStats")) {
-        let json = "{\"wasmBytes\":0,\"frameWasmBytes\":0,\"timerWheel\":{\"wakesFired\":0,\"wakesArmed\":0}}";
-        if (json.len > out_buf.len) return null;
-        @memcpy(out_buf[0..json.len], json);
-        return out_buf[0..json.len];
+        const res = std.fmt.bufPrint(
+            out_buf,
+            "{{\"wasmBytes\":0,\"frameWasmBytes\":0,\"timerWheel\":{{\"wakesFired\":0,\"wakesArmed\":0}},\"paint\":{{\"prepares\":{d}}}}}",
+            .{state.paint_prepares},
+        ) catch return null;
+        return res;
     }
 
     return null;

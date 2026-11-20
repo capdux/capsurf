@@ -37,6 +37,8 @@ pub @c {
         module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?)?,
         opaque_ptr: *!?,
     );
+    fn JS_GetImportMeta(ctx: *JSContext, m: *JSModuleDef): JSValue;
+    fn JS_Call(ctx: *JSContext, func_obj: JSValue, this_obj: JSValue, argc: i32, argv: [*]const JSValue!): JSValue;
     fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;

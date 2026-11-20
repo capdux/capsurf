@@ -6,7 +6,7 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage } from "./types.cp";
@@ -314,6 +314,31 @@ pub const DEFAULT_HTTP_USER_AGENT: []const u8 = "Mozilla/5.0 (X11; Linux x86_64)
     const ptr_val = @as(usize, @intCast(eval_val.u.uint64));
     const m: *JSModuleDef = @ptrFromInt(ptr_val);
     JS_FreeValue(ctx, eval_val);
+
+    const meta_obj = JS_GetImportMeta(ctx, m);
+    if (!jsIsException(meta_obj)) {
+        const url_val = JS_NewStringLen(ctx, full_url.ptr, full_url.len);
+        * = JS_SetPropertyStr(ctx, meta_obj, "url", JS_DupValue(ctx, url_val));
+        const factory_src = "(function(base){return function resolve(s){s=String(s);if(!/^(?:\\/|\\.\\.?\\/|[a-zA-Z][a-zA-Z0-9+.-]*:)/.test(s))throw new TypeError('Failed to resolve module specifier: '+s);return new URL(s,base).href;};})";
+        const factory_fn = JS_Eval(ctx, factory_src.ptr, factory_src.len, "<import.meta.resolve>", 0);
+        if (!jsIsException(factory_fn)) {
+            let args: [1]JSValue = [url_val];
+            const resolve_fn = JS_Call(ctx, factory_fn, jsUndefined(), 1, @ptrCast(&args));
+            if (!jsIsException(resolve_fn)) {
+                * = JS_SetPropertyStr(ctx, meta_obj, "resolve", resolve_fn);
+            } else {
+                const exc2 = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc2);
+            }
+            JS_FreeValue(ctx, factory_fn);
+        } else {
+            const exc1 = JS_GetException(ctx);
+            JS_FreeValue(ctx, exc1);
+        }
+        JS_FreeValue(ctx, url_val);
+        JS_FreeValue(ctx, meta_obj);
+    }
+
     return m;
 }
 
@@ -332,6 +357,7 @@ pub struct CdpPageSession {
     target_id: []const u8 = "capsurf-target-001",
     has_document: bool = false,
     raw_html: []const u8 = "",
+    paint_prepares: u64 = 0,
 
     // Emulation & Viewport overrides
     viewport_width: f32 = 1280.0,
@@ -664,6 +690,7 @@ pub struct CdpPageSession {
         if (styles != null) {
             Cascade.computeStyles(&_.doc, &sheet, styles.?, 16.0);
             _.layout.computeLayout(&_.doc, styles.?) catch {};
+            _.paint_prepares += 1;
         }
 
         // Mount to JS Context
@@ -1726,6 +1753,15 @@ pub struct CdpPageSession {
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
         _.layout.computeLayout(&_.doc, styles) catch {};
+        _.paint_prepares += 1;
+    }
+
+    pub fn getPaintPrepares(): u64 {
+        let total = _.paint_prepares;
+        if (dctx := _.dom_ctx) {
+            total += dctx.paint_prepares;
+        }
+        return total;
     }
 
     pub fn captureScreenshot(*_, compress_level: u8): ([]const u8)! {
@@ -1769,6 +1805,7 @@ pub struct CdpPageSession {
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
 
         _.layout.computeLayout(&_.doc, styles) catch {};
+        _.paint_prepares += 1;
 
         let rects = _.allocator.alloc(Rect, count)?;
         defer _.allocator.free(rects);

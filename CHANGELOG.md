@@ -1643,4 +1643,13 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 6 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`selection-paint-bridge` + `forms-range-demo` (3/3) + `forms-textarea-default-paint` + `forms-value-repaint-demo` 共 **6/6 PASS (31 expect calls)**。
+
+## Phase 78: `import.meta`, Native CP CSS `--*`/`var()`, SVG Gradients & Fixed Viewport/Scroll — 5 Suites (100% Closed)
+- **`src/js/{qjs_engine,dom_binding}.cp` & `src/cdp/{session,protocol_extensions,kitesurf_facade,emulation}.cp`**：
+  - 绑定 `JS_GetImportMeta` 注入 `import.meta.url`/`resolve`；实装 `Kitesurf.getMemoryStats` `paint.prepares` 计数；修复 `Emulation` 视口变更脏刷新与滚动偏移 clamp。
+- **`src/css/cascade.cp` & `src/layout/layout.cp` & `src/render/painter.cp`**：
+  - 原生 CP 实装 CSS `--*` 自定义属性与 `var()` 解析、`Canvas.drawTextClipped` 文本裁剪、SVG `url(#grad)` 渐变与 `<text>` `rem`/`em` 换算。
+- **测试与门禁验证**：
+  - 静态门禁：全部 9 个 `.cp` 文件 4 门禁全 0；
+  - E2E 测试：5 大 Core 套件共 **9/9 PASS (28 expect calls, 9.27s)**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

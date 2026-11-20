@@ -160,6 +160,7 @@ pub struct JsDomContext {
     doc: *Document,
     layout: (*LayoutTree)? = null,
     layout_dirty: bool = false,
+    paint_prepares: u64 = 0,
     cookie_jar: (*CookieJar)? = null,
     extra_headers: []const u8 = "",
     element_class_id: u32 = 0,
@@ -651,6 +652,7 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         defer std.heap.page_allocator.free(styles);
         Cascade.computeStyles(doc, &sheet, styles, 16.0);
         lt.computeLayout(doc, styles) catch {};
+        dom_ctx.paint_prepares += 1;
     }
 }
 
@@ -696,6 +698,27 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     if (win_y == 0.0) win_y = getJsNumberProp(ctx, global_obj, "pageYOffset");
     info.win_x = win_x;
     info.win_y = win_y;
+
+    // Clamp document scroll offsets for layout/sticky calculation to actual scrollable document bounds
+    let max_doc_w: f32 = lt.viewport_width;
+    let max_doc_h: f32 = lt.viewport_height;
+    let scan_i: usize = 1;
+    while (scan_i < doc.nodes.items.len && scan_i < lt.boxes.items.len) : (scan_i += 1) {
+        const sn = &doc.nodes.items[scan_i];
+        if (sn.node_type == NodeType.Element && (sn.hasTag("html") || sn.hasTag("body"))) {
+            const sb = &lt.boxes.items[scan_i];
+            const bw = @max(sb.rect.width, @max(sb.content_width, sb.scroll_content_width));
+            const bh = @max(sb.rect.height, @max(sb.content_height, sb.scroll_content_height));
+            if (bw > max_doc_w) max_doc_w = bw;
+            if (bh > max_doc_h) max_doc_h = bh;
+        }
+    }
+    const max_scroll_x = @max(0.0, max_doc_w - lt.viewport_width);
+    const max_scroll_y = @max(0.0, max_doc_h - lt.viewport_height);
+    if (win_x < 0.0) win_x = 0.0;
+    if (win_x > max_scroll_x) win_x = max_scroll_x;
+    if (win_y < 0.0) win_y = 0.0;
+    if (win_y > max_scroll_y) win_y = max_scroll_y;
 
     const cache = JS_GetPropertyStr(ctx, global_obj, "__capsurf_wrappers");
     defer JS_FreeValue(ctx, cache);
