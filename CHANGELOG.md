@@ -1958,4 +1958,7 @@
 - **测试与门禁验证**：
   - 静态门禁：`src/js/runtime_source.cp` 4 门禁全 0；
   - E2E 测试：`script-gate` (20/20)、`legacy-charset-url-encoding` (9/9)、`link-onload-media` (2/2)、`page-wrapped-create-element` (2/2)、`interface-own-properties` (1/1)、`intersection-observer` (16/18) PASS。
+
+## Phase 123: Zero-Edit Sweep Verification of 10 JS/DOM Suites (15/15 PASS)
+- 零修改摸底确认 `lazy-load-event` (2/2)、`require-global-shadow` (1/1)、`window-page-functions` (2/2)、`collection-named-shadowing` (1/1)、`custom-element-attributes` (1/1)、`data-transfer-items-add` (1/1)、`event-target-instance-listeners` (1/1)、`invalid-selector-throws` (2/2)、`style-declaration-object-members` (3/3)、`svg-animated-string` (1/1) 共 **15/15 PASS**。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.

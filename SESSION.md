@@ -3974,6 +3974,11 @@
   - `script-gate` (**20/20**)、`legacy-charset-url-encoding` (**9/9**)、`link-onload-media` (**2/2**)、`page-wrapped-create-element` (**2/2**)、`interface-own-properties` (**1/1**)、`intersection-observer` (**16/18**)、`webmcp`（含 `sessionId` 路由与 `cancellation` 通过；余 2 处 `src/cdp/` 缺口：`getMemoryStats` `paint.prepares` 与 `Runtime.evaluate` 空对象 `{"result":}` 序列化）：**50/52+ PASS**！
 - **清理旧子智能体**: 销毁 `a8491d9f-0e21-450c-a611-8207b8e3f277`。
 
+## [2026-11-20 22:25:00] 零修改摸底极速验收 10 组 JS/DOM E2E 套件 (15/15 PASS，Phase 123)
+- **直接 PASS 登记（0 代码改动，两次快扫共计 < 30s 扫完 16 组）**：
+  - `e2e/lazy-load-event.e2e.test.ts` (**2/2**)、`e2e/require-global-shadow.e2e.test.ts` (**1/1**)、`e2e/window-page-functions.e2e.test.ts` (**2/2**)、`e2e/collection-named-shadowing.e2e.test.ts` (**1/1**)、`e2e/custom-element-attributes.e2e.test.ts` (**1/1**)、`e2e/data-transfer-items-add.e2e.test.ts` (**1/1**)、`e2e/event-target-instance-listeners.e2e.test.ts` (**1/1**)、`e2e/invalid-selector-throws.e2e.test.ts` (**2/2**)、`e2e/style-declaration-object-members.e2e.test.ts` (**3/3**)、`e2e/svg-animated-string.e2e.test.ts` (**1/1**)：**15/15 PASS**！
+  - **精准筛出待修小批**：`label-activation-trust` (1/2) + `label-svg-content-activation` (0/1) + `range-contextual-fragment` (0/1) -> 打包派发给全新 Slot A（3 组快进快出）。
+
 ## [2026-11-20 22:15:30] 7 组 CDP/Net 核心加载、CORS 矩阵与 SameSite Iframe 闭环 (Subagent 058b656d 结单，Phase 121)
 - **着陆页、CORS 绕过防护、SameSite Iframe 与 `#fragment`/延迟加载 (`src/cdp/{server,session,session_hooks}.cp`, `src/net/mock_fixtures.cp`)**:
   - `src/cdp/server.cp`：修复 `/?url=<non-http(s)>` 误重定向，新增 `sendLandingPage`（含 CSP / `nosniff` 头、`X-Forwarded-*`/`X-Inspector-Base` 与 `localhost` -> `127.0.0.1` 映射）；
