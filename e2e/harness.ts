@@ -1215,6 +1215,7 @@ export class Page {
 
   target() {
     return {
+      _targetId: "capsurf-target-1",
       createCDPSession: () => this.createCDPSession(),
     };
   }

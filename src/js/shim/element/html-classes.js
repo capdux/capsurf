@@ -935,7 +935,7 @@ function installHtmlClasses(global) {
 
   HTMLImageElement.prototype.getBoundingClientRect = function () {
     if (isImgDisplayNone(this)) {
-      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      return typeof DOMRect === "function" ? new DOMRect(0, 0, 0, 0) : { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
     }
     const r = ElementProto.getBoundingClientRect ? ElementProto.getBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -959,6 +959,9 @@ function installHtmlClasses(global) {
 
     const x = r.x || 0;
     const y = r.y || 0;
+    if (typeof DOMRect === "function") {
+      return new DOMRect(x, y, w, h);
+    }
     return {
       x: x,
       y: y,

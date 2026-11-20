@@ -1249,4 +1249,10 @@
    - 在 `JsDomContext` 录制全部原生属性、子节点、文本与 `innerHTML` 变更，结合 `CdpPageSession.known_dom_nodes` 过滤离屏未观测节点，按 W3C CDP 协议输出精确 `previousNodeId` 链及 `childNodeCountUpdated` + `setChildNodes`。
 2. **非阻塞 15ms 定时器泵 (`server.cp`)**：
    - 使用 POSIX `poll(&pfd, 1, 15)` 替代纯阻塞读取，在空闲 tick 自动调用 `session.pumpTimers()` 并即时刷出 WebSocket 事件帧，彻底打通异步 `setTimeout` DOM 变更推流。
+
+## Phase 73 `URLSearchParams`、`DOMRect` 实装与剩余 Boa 套件全景归档技术方案
+1. **WHATWG `URLSearchParams` 与 `DOMRect` (`window.js`, `element.js`, `range.js`)**：
+   - 补齐 `URLSearchParams` 全套增删改查与迭代器接口并挂载至 `URL.prototype.searchParams`；将所有 `getBoundingClientRect()` 返回值包装为带 `toJSON()` 的标准 `DOMRect` 实例。
+2. **Boa-Wasm/V8 架构专有测试边界厘清**：
+   - 确认剩余 6 项 `boa-*` 套件依赖 Kitesurf 特有的 V8-Boa 双引擎重入与 Wasm 堆统计指标，仅有 `boa-import-meta-url` 为 QuickJS `JS_GetImportMeta` 功能缺口，排入纯 CP 内核后续闭环。
 [2026-11-19T07:18:10Z] Starting new build and test phase. Initializing documentation tracking.

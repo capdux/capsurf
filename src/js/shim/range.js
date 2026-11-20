@@ -978,7 +978,7 @@ Range.prototype.getClientRects = function () {
 Range.prototype.getBoundingClientRect = function () {
   const rects = this.getClientRects();
   if (!rects || rects.length === 0) {
-    return { x: 0, y: 0, width: 0, height: 0, top: 0, bottom: 0, left: 0, right: 0 };
+    return typeof DOMRect === "function" ? new DOMRect(0, 0, 0, 0) : { x: 0, y: 0, width: 0, height: 0, top: 0, bottom: 0, left: 0, right: 0 };
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < rects.length; i++) {
@@ -988,11 +988,16 @@ Range.prototype.getBoundingClientRect = function () {
     if (r.right > maxX) maxX = r.right;
     if (r.bottom > maxY) maxY = r.bottom;
   }
+  const w = Math.max(0, maxX - minX);
+  const h = Math.max(0, maxY - minY);
+  if (typeof DOMRect === "function") {
+    return new DOMRect(minX, minY, w, h);
+  }
   return {
     x: minX,
     y: minY,
-    width: Math.max(0, maxX - minX),
-    height: Math.max(0, maxY - minY),
+    width: w,
+    height: h,
     top: minY,
     bottom: maxY,
     left: minX,

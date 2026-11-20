@@ -9015,10 +9015,31 @@
       return false;
     }
 
+    function makeDomRect(x, y, width, height) {
+      if (typeof DOMRect === "function") {
+        return new DOMRect(x, y, width, height);
+      }
+      const nx = x || 0, ny = y || 0, nw = width || 0, nh = height || 0;
+      const obj = {
+        x: nx,
+        y: ny,
+        width: nw,
+        height: nh,
+        top: ny,
+        right: nx + nw,
+        bottom: ny + nh,
+        left: nx,
+      };
+      obj.toJSON = function () {
+        return { x: this.x, y: this.y, width: this.width, height: this.height, top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+      };
+      return obj;
+    }
+
     const origGetBoundingClientRect = proto.getBoundingClientRect;
     proto.getBoundingClientRect = function () {
       if (isElementDisplayNone(this)) {
-        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+        return makeDomRect(0, 0, 0, 0);
       }
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
       if (this._shadowRoot) {
@@ -9026,7 +9047,7 @@
           const hw = r.width || 800;
           const hx = r.x || 0;
           const hy = r.y || 0;
-          return { x: hx, y: hy, left: hx, top: hy, width: hw, height: 0, right: hx + hw, bottom: hy };
+          return makeDomRect(hx, hy, hw, 0);
         }
         let explicitH = 0;
         if (this.style && this.style.height) explicitH = parseFloat(this.style.height) || 0;
@@ -9060,16 +9081,7 @@
           const hostW = r.width || 800;
           const hostX = r.x || 0;
           const hostY = r.y || 0;
-          return {
-            x: hostX,
-            y: hostY,
-            left: hostX,
-            top: hostY,
-            width: hostW,
-            height: shadowH,
-            right: hostX + hostW,
-            bottom: hostY + shadowH,
-          };
+          return makeDomRect(hostX, hostY, hostW, shadowH);
         }
       }
       if (r.width === 0 && r.height === 0 && r.x === 0 && r.y === 0) {
@@ -9078,7 +9090,7 @@
           const nw = Number(this.naturalWidth || 0);
           const nh = Number(this.naturalHeight || 0);
           if (nw > 0 || nh > 0) {
-            return { x: 0, y: 0, width: nw, height: nh, left: 0, top: 0, right: nw, bottom: nh };
+            return makeDomRect(0, 0, nw, nh);
           }
         }
         let childW = 0, childH = 0;
@@ -9113,18 +9125,9 @@
           }
           const relX = pr.left;
           const relY = pr.top + offsetTop - (parent._scrollTop || 0);
-          return {
-            x: relX,
-            y: relY,
-            left: relX,
-            top: relY,
-            width: childW,
-            height: childH,
-            right: relX + childW,
-            bottom: relY + childH,
-          };
+          return makeDomRect(relX, relY, childW, childH);
         }
-        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+        return makeDomRect(0, 0, 0, 0);
       }
       const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
       const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
@@ -9140,16 +9143,7 @@
       const y = r.y - winY - scrollOffsetParentY;
       const w = r.width;
       const h = r.height;
-      return {
-        x: x,
-        y: y,
-        left: x,
-        top: y,
-        width: w,
-        height: h,
-        right: x + w,
-        bottom: y + h,
-      };
+      return makeDomRect(x, y, w, h);
     };
     markNative(proto.getBoundingClientRect, "getBoundingClientRect");
 
@@ -10880,7 +10874,7 @@
 
     HTMLImageElement.prototype.getBoundingClientRect = function () {
       if (isImgDisplayNone(this)) {
-        return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+        return typeof DOMRect === "function" ? new DOMRect(0, 0, 0, 0) : { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
       }
       const r = ElementProto.getBoundingClientRect ? ElementProto.getBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -10904,6 +10898,9 @@
 
       const x = r.x || 0;
       const y = r.y || 0;
+      if (typeof DOMRect === "function") {
+        return new DOMRect(x, y, w, h);
+      }
       return {
         x: x,
         y: y,
@@ -17621,7 +17618,7 @@
   Range.prototype.getBoundingClientRect = function () {
     const rects = this.getClientRects();
     if (!rects || rects.length === 0) {
-      return { x: 0, y: 0, width: 0, height: 0, top: 0, bottom: 0, left: 0, right: 0 };
+      return typeof DOMRect === "function" ? new DOMRect(0, 0, 0, 0) : { x: 0, y: 0, width: 0, height: 0, top: 0, bottom: 0, left: 0, right: 0 };
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let i = 0; i < rects.length; i++) {
@@ -17631,11 +17628,16 @@
       if (r.right > maxX) maxX = r.right;
       if (r.bottom > maxY) maxY = r.bottom;
     }
+    const w = Math.max(0, maxX - minX);
+    const h = Math.max(0, maxY - minY);
+    if (typeof DOMRect === "function") {
+      return new DOMRect(minX, minY, w, h);
+    }
     return {
       x: minX,
       y: minY,
-      width: Math.max(0, maxX - minX),
-      height: Math.max(0, maxY - minY),
+      width: w,
+      height: h,
       top: minY,
       bottom: maxY,
       left: minX,
@@ -22111,6 +22113,240 @@
     });
     URL.prototype.toString = function () { return this._parsed.href; };
     URL.prototype.toJSON = function () { return this._parsed.href; };
+
+    function encodeFormComponent(str) {
+      return encodeURIComponent(String(str)).replace(/%20/g, "+");
+    }
+    function decodeFormComponent(str) {
+      try {
+        return decodeURIComponent(String(str).replace(/\+/g, " "));
+      } catch (e) {
+        return String(str).replace(/\+/g, " ");
+      }
+    }
+
+    function URLSearchParams(init) {
+      this._list = [];
+      this._url = null;
+      if (init === undefined || init === null) return;
+      if (typeof init === "string") {
+        const s = init.startsWith("?") ? init.slice(1) : init;
+        if (s.length > 0) {
+          const parts = s.split("&");
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (part === "") continue;
+            const eq = part.indexOf("=");
+            if (eq === -1) {
+              this._list.push([decodeFormComponent(part), ""]);
+            } else {
+              this._list.push([decodeFormComponent(part.slice(0, eq)), decodeFormComponent(part.slice(eq + 1))]);
+            }
+          }
+        }
+      } else if (init instanceof URLSearchParams) {
+        for (let i = 0; i < init._list.length; i++) {
+          this._list.push([init._list[i][0], init._list[i][1]]);
+        }
+      } else if (Array.isArray(init)) {
+        for (let i = 0; i < init.length; i++) {
+          const pair = init[i];
+          if (!pair || pair.length !== 2) {
+            throw new TypeError("Failed to construct 'URLSearchParams': Sequence initializer must only contain pair elements");
+          }
+          this._list.push([String(pair[0]), String(pair[1])]);
+        }
+      } else if (typeof init === "object") {
+        if (typeof init[Symbol.iterator] === "function") {
+          for (const pair of init) {
+            const arr = Array.from(pair);
+            if (arr.length !== 2) {
+              throw new TypeError("Failed to construct 'URLSearchParams': Sequence initializer must only contain pair elements");
+            }
+            this._list.push([String(arr[0]), String(arr[1])]);
+          }
+        } else {
+          const keys = Object.keys(init);
+          for (let i = 0; i < keys.length; i++) {
+            this._list.push([String(keys[i]), String(init[keys[i]])]);
+          }
+        }
+      }
+    }
+    URLSearchParams.prototype._syncUrl = function () {
+      if (this._url) {
+        const s = this.toString();
+        this._url._parsed.search = s ? ("?" + s) : "";
+        this._url._parsed = parseUrlString(this._url._parsed.href);
+      }
+    };
+    URLSearchParams.prototype.append = function (name, value) {
+      this._list.push([String(name), String(value)]);
+      this._syncUrl();
+    };
+    URLSearchParams.prototype.delete = function (name, value) {
+      const k = String(name);
+      const hasVal = arguments.length >= 2 && value !== undefined;
+      const v = hasVal ? String(value) : "";
+      this._list = this._list.filter((p) => !(p[0] === k && (!hasVal || p[1] === v)));
+      this._syncUrl();
+    };
+    URLSearchParams.prototype.get = function (name) {
+      const k = String(name);
+      for (let i = 0; i < this._list.length; i++) {
+        if (this._list[i][0] === k) return this._list[i][1];
+      }
+      return null;
+    };
+    URLSearchParams.prototype.getAll = function (name) {
+      const k = String(name);
+      const out = [];
+      for (let i = 0; i < this._list.length; i++) {
+        if (this._list[i][0] === k) out.push(this._list[i][1]);
+      }
+      return out;
+    };
+    URLSearchParams.prototype.has = function (name, value) {
+      const k = String(name);
+      const hasVal = arguments.length >= 2 && value !== undefined;
+      const v = hasVal ? String(value) : "";
+      for (let i = 0; i < this._list.length; i++) {
+        if (this._list[i][0] === k && (!hasVal || this._list[i][1] === v)) return true;
+      }
+      return false;
+    };
+    URLSearchParams.prototype.set = function (name, value) {
+      const k = String(name);
+      const v = String(value);
+      let found = false;
+      const next = [];
+      for (let i = 0; i < this._list.length; i++) {
+        if (this._list[i][0] === k) {
+          if (!found) {
+            next.push([k, v]);
+            found = true;
+          }
+        } else {
+          next.push(this._list[i]);
+        }
+      }
+      if (!found) next.push([k, v]);
+      this._list = next;
+      this._syncUrl();
+    };
+    URLSearchParams.prototype.sort = function () {
+      this._list.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      this._syncUrl();
+    };
+    URLSearchParams.prototype.toString = function () {
+      const parts = [];
+      for (let i = 0; i < this._list.length; i++) {
+        parts.push(encodeFormComponent(this._list[i][0]) + "=" + encodeFormComponent(this._list[i][1]));
+      }
+      return parts.join("&");
+    };
+    URLSearchParams.prototype.keys = function () {
+      return this._list.map((p) => p[0])[Symbol.iterator]();
+    };
+    URLSearchParams.prototype.values = function () {
+      return this._list.map((p) => p[1])[Symbol.iterator]();
+    };
+    URLSearchParams.prototype.entries = function () {
+      return this._list.map((p) => [p[0], p[1]])[Symbol.iterator]();
+    };
+    URLSearchParams.prototype[Symbol.iterator] = URLSearchParams.prototype.entries;
+    URLSearchParams.prototype.forEach = function (cb, thisArg) {
+      for (let i = 0; i < this._list.length; i++) {
+        cb.call(thisArg, this._list[i][1], this._list[i][0], this);
+      }
+    };
+    Object.defineProperty(URLSearchParams.prototype, "size", {
+      get: function () { return this._list.length; },
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(URLSearchParams.prototype, Symbol.toStringTag, {
+      value: "URLSearchParams",
+      configurable: true,
+    });
+    markNative(URLSearchParams, "URLSearchParams");
+    global.URLSearchParams = URLSearchParams;
+    if (typeof window !== "undefined") window.URLSearchParams = URLSearchParams;
+    if (typeof globalThis !== "undefined") globalThis.URLSearchParams = URLSearchParams;
+
+    Object.defineProperty(URL.prototype, "searchParams", {
+      get: function () {
+        const sp = new URLSearchParams(this._parsed.search);
+        sp._url = this;
+        return sp;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
+    function DOMRectReadOnly(x, y, width, height) {
+      const nx = x === undefined ? 0 : Number(x);
+      const ny = y === undefined ? 0 : Number(y);
+      const nw = width === undefined ? 0 : Number(width);
+      const nh = height === undefined ? 0 : Number(height);
+      this.x = nx;
+      this.y = ny;
+      this.width = nw;
+      this.height = nh;
+      this.top = nh < 0 ? ny + nh : ny;
+      this.right = nw < 0 ? nx : nx + nw;
+      this.bottom = nh < 0 ? ny : ny + nh;
+      this.left = nw < 0 ? nx + nw : nx;
+    }
+    DOMRectReadOnly.prototype.toJSON = function () {
+      return {
+        x: this.x,
+        y: this.y,
+        width: this.width,
+        height: this.height,
+        top: this.top,
+        right: this.right,
+        bottom: this.bottom,
+        left: this.left,
+      };
+    };
+    DOMRectReadOnly.fromRect = function (other) {
+      const o = other || {};
+      return new DOMRectReadOnly(o.x, o.y, o.width, o.height);
+    };
+    Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag, {
+      value: "DOMRectReadOnly",
+      configurable: true,
+    });
+    markNative(DOMRectReadOnly, "DOMRectReadOnly");
+    markNative(DOMRectReadOnly.prototype.toJSON, "toJSON");
+
+    function DOMRect(x, y, width, height) {
+      DOMRectReadOnly.call(this, x, y, width, height);
+    }
+    DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
+    DOMRect.prototype.constructor = DOMRect;
+    DOMRect.fromRect = function (other) {
+      const o = other || {};
+      return new DOMRect(o.x, o.y, o.width, o.height);
+    };
+    Object.defineProperty(DOMRect.prototype, Symbol.toStringTag, {
+      value: "DOMRect",
+      configurable: true,
+    });
+    markNative(DOMRect, "DOMRect");
+
+    global.DOMRectReadOnly = DOMRectReadOnly;
+    global.DOMRect = DOMRect;
+    if (typeof window !== "undefined") {
+      window.DOMRectReadOnly = DOMRectReadOnly;
+      window.DOMRect = DOMRect;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.DOMRectReadOnly = DOMRectReadOnly;
+      globalThis.DOMRect = DOMRect;
+    }
+
     markNative(URL, "URL");
     global.URL = URL;
     if (typeof window !== "undefined") window.URL = URL;

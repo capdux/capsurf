@@ -1556,10 +1556,31 @@ function installElementExtensions(proto) {
     return false;
   }
 
+  function makeDomRect(x, y, width, height) {
+    if (typeof DOMRect === "function") {
+      return new DOMRect(x, y, width, height);
+    }
+    const nx = x || 0, ny = y || 0, nw = width || 0, nh = height || 0;
+    const obj = {
+      x: nx,
+      y: ny,
+      width: nw,
+      height: nh,
+      top: ny,
+      right: nx + nw,
+      bottom: ny + nh,
+      left: nx,
+    };
+    obj.toJSON = function () {
+      return { x: this.x, y: this.y, width: this.width, height: this.height, top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+    };
+    return obj;
+  }
+
   const origGetBoundingClientRect = proto.getBoundingClientRect;
   proto.getBoundingClientRect = function () {
     if (isElementDisplayNone(this)) {
-      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      return makeDomRect(0, 0, 0, 0);
     }
     const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
     if (this._shadowRoot) {
@@ -1567,7 +1588,7 @@ function installElementExtensions(proto) {
         const hw = r.width || 800;
         const hx = r.x || 0;
         const hy = r.y || 0;
-        return { x: hx, y: hy, left: hx, top: hy, width: hw, height: 0, right: hx + hw, bottom: hy };
+        return makeDomRect(hx, hy, hw, 0);
       }
       let explicitH = 0;
       if (this.style && this.style.height) explicitH = parseFloat(this.style.height) || 0;
@@ -1601,16 +1622,7 @@ function installElementExtensions(proto) {
         const hostW = r.width || 800;
         const hostX = r.x || 0;
         const hostY = r.y || 0;
-        return {
-          x: hostX,
-          y: hostY,
-          left: hostX,
-          top: hostY,
-          width: hostW,
-          height: shadowH,
-          right: hostX + hostW,
-          bottom: hostY + shadowH,
-        };
+        return makeDomRect(hostX, hostY, hostW, shadowH);
       }
     }
     if (r.width === 0 && r.height === 0 && r.x === 0 && r.y === 0) {
@@ -1619,7 +1631,7 @@ function installElementExtensions(proto) {
         const nw = Number(this.naturalWidth || 0);
         const nh = Number(this.naturalHeight || 0);
         if (nw > 0 || nh > 0) {
-          return { x: 0, y: 0, width: nw, height: nh, left: 0, top: 0, right: nw, bottom: nh };
+          return makeDomRect(0, 0, nw, nh);
         }
       }
       let childW = 0, childH = 0;
@@ -1654,18 +1666,9 @@ function installElementExtensions(proto) {
         }
         const relX = pr.left;
         const relY = pr.top + offsetTop - (parent._scrollTop || 0);
-        return {
-          x: relX,
-          y: relY,
-          left: relX,
-          top: relY,
-          width: childW,
-          height: childH,
-          right: relX + childW,
-          bottom: relY + childH,
-        };
+        return makeDomRect(relX, relY, childW, childH);
       }
-      return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 };
+      return makeDomRect(0, 0, 0, 0);
     }
     const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
     const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
@@ -1681,16 +1684,7 @@ function installElementExtensions(proto) {
     const y = r.y - winY - scrollOffsetParentY;
     const w = r.width;
     const h = r.height;
-    return {
-      x: x,
-      y: y,
-      left: x,
-      top: y,
-      width: w,
-      height: h,
-      right: x + w,
-      bottom: y + h,
-    };
+    return makeDomRect(x, y, w, h);
   };
   markNative(proto.getBoundingClientRect, "getBoundingClientRect");
 

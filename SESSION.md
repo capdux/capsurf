@@ -3325,6 +3325,18 @@
   - 派发全新子智能体 **Subagent 38**: Selection & Form Paint Specialist（纯 CP 内核隔离，端口 `19231`）
     - 攻坚目标：`e2e/demo/selection-paint-bridge.e2e.test.ts`、`e2e/demo/forms-range-demo.e2e.test.ts`、`e2e/demo/forms-textarea-default-paint.e2e.test.ts`、`e2e/demo/forms-value-repaint-demo.e2e.test.ts`。
 
+## [2026-11-20 15:19:00] URLSearchParams、DOMRect 规范实装与剩余 Boa 套件全景清扫 (Subagent 1729b7e6 结单，Phase 73)
+- **标准 `URLSearchParams` 与 `DOMRect`/`DOMRectReadOnly` (`src/js/shim/`, `e2e/harness.ts`)**:
+  - `window.js`: 新增完整 WHATWG `URLSearchParams` 并接入 `URL.prototype.searchParams`；新增 `DOMRectReadOnly` 与 `DOMRect`（含 `toJSON()` 与 `fromRect()`）。
+  - `element/element.js` & `html-classes.js` & `range.js`: `getBoundingClientRect()` 返回值统一包装为 `DOMRect` 实例。
+  - `e2e/harness.ts`: `page.target()` 补齐 `_targetId`。
+- **10 项剩余 Boa 套件状态归档**:
+  - **PASS (3 套件 4/4)**：`boa-bridge-fidelity` (2/2)、`boa-long-comma-chain` (1/1)、`boa-null-base-message` (1/1)，另 `boa-object-from-page` 5/6 PASS；
+  - **内核待跟进 (1 套件)**：`boa-import-meta-url`（仅需在 `qjs_engine.cp` + `session.cp` 接入 `JS_GetImportMeta`）；
+  - **Kitesurf Boa-Wasm/V8 架构专有指标 (6 套件)**：`boa-bridged-intrinsic-proto`、`boa-code-stats`、`boa-ctx-reentry`、`boa-heap-shape`、`boa-interner-reclaim` 及 `boa-object-from-page` 第 6 项，均为 V8-Boa 双引擎内部监控指标，非 CapSurf 单 QuickJS-NG 引擎功能缺口。
+- **清理旧子智能体**: 销毁 `1729b7e6-9c53-41cf-940b-30277400312d`。
+
+
 
 
 

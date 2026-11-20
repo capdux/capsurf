@@ -1605,4 +1605,11 @@
 - **测试与门禁验证**：
   - 静态门禁：全部 4 个 `.cp` 文件 4 门禁全 0；
   - E2E 测试：`dom-innerhtml-rebuild-demo` + `dom-mutation-events-demo` 共 **2/2 PASS (33 expect calls, 3.13s)**。
+
+## Phase 73: WHATWG `URLSearchParams`, `DOMRect`/`DOMRectReadOnly` & Remaining Boa Audit (100% Closed)
+- **`src/js/shim/{window,range,element/element,element/html-classes}.js` & `e2e/harness.ts`**：
+  - 实装标准 `URLSearchParams`（接入 `URL.prototype.searchParams`）与 `DOMRectReadOnly`/`DOMRect`（含 `toJSON()`/`fromRect()`），统一包装 `getBoundingClientRect()` 返回值；`harness.ts` 补齐 `page.target()._targetId`。
+- **测试与门禁验证**：
+  - 静态门禁：`src/js/runtime_source.cp` 100% PASS（4 门禁全 0）；
+  - E2E 测试：`boa-bridge-fidelity` (2/2) + `boa-long-comma-chain` (1/1) + `boa-null-base-message` (1/1) PASS；完成全部 Boa 专有指标套件归档与 `boa-import-meta-url` 内核缺口定位。
 [2026-11-19T07:18:10Z] Initialize documentation for the new build and test phase.
