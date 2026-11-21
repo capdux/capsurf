@@ -51,7 +51,7 @@ pub class PngCodec {
         const filtered_row_len = row_stride + 1;
         const raw_scanlines_len = (height as usize) * filtered_row_len;
         let scanlines_ptr: [*]u8 = @alloc(raw_scanlines_len);
-        let scanlines = scanlines_ptr[0..raw_scanlines_len];
+        let scanlines = unsafe { scanlines_ptr[0..raw_scanlines_len] };
 
         // Level 0: Filter None (0x00), direct memcpy
         // Level >= 1: Filter Sub (0x01), byte delta against previous pixel channel
@@ -79,7 +79,7 @@ pub class PngCodec {
         // Compress via cap:pack zlib compress2 with target compression level
         let max_comp_bound = compressBound(raw_scanlines_len);
         let comp_buf_ptr: [*]u8 = @alloc(max_comp_bound);
-        let comp_buf = comp_buf_ptr[0..max_comp_bound];
+        let comp_buf = unsafe { comp_buf_ptr[0..max_comp_bound] };
         let comp_len: usize = max_comp_bound;
         const lvl = if (compress_level > 9) 9 as i32 else compress_level as i32;
         const zlib_code = compress2(comp_buf.ptr, &comp_len, scanlines.ptr, raw_scanlines_len, lvl);
@@ -95,7 +95,7 @@ pub class PngCodec {
         // - 12 bytes IEND chunk
         const total_png_size = 8 + 25 + (12 + comp_len) + 12;
         let out_png_ptr: [*]u8 = @alloc(total_png_size);
-        let out_png = out_png_ptr[0..total_png_size];
+        let out_png = unsafe { out_png_ptr[0..total_png_size] };
 
         let pos: usize = 0;
 
@@ -204,7 +204,7 @@ pub class PngCodec {
 
         // Aggregate IDAT payloads
         let combined_ptr: [*]u8 = @alloc(total_idat_bytes);
-        let combined_idat = combined_ptr[0..total_idat_bytes];
+        let combined_idat = unsafe { combined_ptr[0..total_idat_bytes] };
 
         offset = 8;
         let idat_pos: usize = 0;
@@ -232,7 +232,7 @@ pub class PngCodec {
         const row_bytes = (width as usize) * 4;
         const decomp_scanlines_len = (height as usize) * (row_bytes + 1);
         let uncomp_ptr: [*]u8 = @alloc(decomp_scanlines_len);
-        let uncomp_buf = uncomp_ptr[0..decomp_scanlines_len];
+        let uncomp_buf = unsafe { uncomp_ptr[0..decomp_scanlines_len] };
 
         let actual_len: usize = decomp_scanlines_len;
         const u_res = uncompress(uncomp_buf.ptr, &actual_len, combined_idat.ptr, total_idat_bytes);
@@ -243,14 +243,14 @@ pub class PngCodec {
         // Reverse filtering to RGBA8
         const out_len = (width as usize) * (height as usize) * 4;
         let out_ptr: [*]u8 = @alloc(out_len);
-        let out_rgba = out_ptr[0..out_len];
+        let out_rgba = unsafe { out_ptr[0..out_len] };
 
         let prev_recon_ptr: [*]u8 = @alloc(row_bytes);
-        let prev_recon = prev_recon_ptr[0..row_bytes];
+        let prev_recon = unsafe { prev_recon_ptr[0..row_bytes] };
         @memset(prev_recon, 0);
 
         let curr_recon_ptr: [*]u8 = @alloc(row_bytes);
-        let curr_recon = curr_recon_ptr[0..row_bytes];
+        let curr_recon = unsafe { curr_recon_ptr[0..row_bytes] };
 
         let y: usize = 0;
         let src_off: usize = 0;

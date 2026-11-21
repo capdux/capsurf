@@ -523,7 +523,7 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
         const factory_fn = JS_Eval(ctx, factory_src.ptr, factory_src.len, "<import.meta.resolve>", 0);
         if (!jsIsException(factory_fn)) {
             let args: [1]JSValue = [url_val];
-            const resolve_fn = JS_Call(ctx, factory_fn, jsUndefined(), 1, @ptrCast(&args));
+            const resolve_fn = JS_Call(ctx, factory_fn, jsUndefined(), 1, unsafe { @ptrCast(&args) });
             if (!jsIsException(resolve_fn)) {
                 * = JS_SetPropertyStr(ctx, meta_obj, "resolve", resolve_fn);
             } else {
@@ -548,7 +548,7 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
 
     let session_ptr: (*CdpPageSession)? = null;
     if (opaque_ptr != null) {
-        session_ptr = @ptrCast(@alignCast(opaque_ptr.?));
+        session_ptr = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
     }
 
     let base_url: []const u8 = "";
@@ -567,13 +567,13 @@ fn setModuleImportMeta(ctx: *JSContext, m: *JSModuleDef, full_url: []const u8) {
         const res = resolveModuleSpecifier(session_ptr.?, raw_name, base_url, true, &out_buf);
         if (res.len < out_buf.len) {
             out_buf[res.len] = 0;
-            return js_strdup(ctx, @ptrCast(&out_buf));
+            return js_strdup(ctx, unsafe { @ptrCast(&out_buf) });
         }
     } else if (!isBareSpecifier(raw_name)) {
         const res = resolveUrlWithDots(base_url, raw_name, &out_buf);
         if (res.len < out_buf.len) {
             out_buf[res.len] = 0;
-            return js_strdup(ctx, @ptrCast(&out_buf));
+            return js_strdup(ctx, unsafe { @ptrCast(&out_buf) });
         }
     }
     return js_strdup(ctx, module_name);
@@ -656,7 +656,7 @@ fn hasJsonExtension(url: []const u8): bool {
 
     let session_ptr: (*CdpPageSession)? = null;
     if (opaque_ptr != null) {
-        session_ptr = @ptrCast(@alignCast(opaque_ptr.?));
+        session_ptr = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
     }
 
     if (isBareSpecifier(raw_name)) {
@@ -673,7 +673,7 @@ fn hasJsonExtension(url: []const u8): bool {
             return null;
         }
         const ptr_s = @as(usize, @intCast(stub_eval.u.uint64));
-        const ms: *JSModuleDef = @ptrFromInt(ptr_s);
+        const ms: *JSModuleDef = unsafe { @ptrFromInt(ptr_s) };
         JS_FreeValue(ctx, stub_eval);
         setModuleImportMeta(ctx, ms, raw_name);
         return ms;
@@ -702,7 +702,7 @@ fn hasJsonExtension(url: []const u8): bool {
                     return null;
                 }
                 const ptr_im = @as(usize, @intCast(eval_im.u.uint64));
-                const m_im: *JSModuleDef = @ptrFromInt(ptr_im);
+                const m_im: *JSModuleDef = unsafe { @ptrFromInt(ptr_im) };
                 JS_FreeValue(ctx, eval_im);
                 setModuleImportMeta(ctx, m_im, item.url);
                 return m_im;
@@ -795,7 +795,7 @@ fn hasJsonExtension(url: []const u8): bool {
             const jerr_len = @min(jerr_msg.len, 1024);
             @memcpy(jerr_z[0..jerr_len], jerr_msg[0..jerr_len]);
             jerr_z[jerr_len] = 0;
-            * = JS_ThrowSyntaxError(ctx, "%s", @as([*c]const u8, @ptrCast(&jerr_z)));
+            * = JS_ThrowSyntaxError(ctx, "%s", @as([*c]const u8, unsafe { @ptrCast(&jerr_z) }));
             return null;
         }
         const jm = JS_NewCModule(ctx, module_name, sessionJsonModuleInit);
@@ -812,7 +812,7 @@ fn hasJsonExtension(url: []const u8): bool {
         return null;
     }
     const ptr_val = @as(usize, @intCast(eval_val.u.uint64));
-    const m: *JSModuleDef = @ptrFromInt(ptr_val);
+    const m: *JSModuleDef = unsafe { @ptrFromInt(ptr_val) };
     JS_FreeValue(ctx, eval_val);
     setModuleImportMeta(ctx, m, full_url);
     return m;
@@ -1102,7 +1102,7 @@ pub struct CdpPageSession {
         ptr.scroll_x = 0.0;
         ptr.scroll_y = 0.0;
         ptr.ctx = ptr.rt.createContext() catch return error.JsContextFailed;
-        JS_SetModuleLoaderFunc2(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(ptr));
+        JS_SetModuleLoaderFunc2(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(ptr) });
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
     }
@@ -1322,7 +1322,7 @@ pub struct CdpPageSession {
         _.ctx.freeValue(clr_mod);
 
         _.rt.resetReductions();
-        const compiled = JS_Eval(_.ctx.raw_ctx, code_z.ptr, code.len, @ptrCast(&url_buf), 33);
+        const compiled = JS_Eval(_.ctx.raw_ctx, code_z.ptr, code.len, unsafe { @ptrCast(&url_buf) }, 33);
         if (jsIsException(compiled)) {
             const exc = _.ctx.getException();
             let exc_str_buf: [256]u8 = undefined;
@@ -1331,7 +1331,7 @@ pub struct CdpPageSession {
             _.ctx.freeValue(exc);
         } else {
             const ptr_val = @as(usize, @intCast(compiled.u.uint64));
-            const m: *JSModuleDef = @ptrFromInt(ptr_val);
+            const m: *JSModuleDef = unsafe { @ptrFromInt(ptr_val) };
             setModuleImportMeta(_.ctx.raw_ctx, m, mod_url);
             const exec_res = JS_EvalFunction(_.ctx.raw_ctx, compiled);
             if (jsIsException(exec_res)) {
@@ -1663,10 +1663,10 @@ pub struct CdpPageSession {
             _.rt.deinit();
             _.rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
-            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(_));
+            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(_) });
         } else {
             _.rt.runGC();
-            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, @ptrCast(_));
+            JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(_) });
         }
         const active_jar = _.getActiveCookieJar();
         const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;

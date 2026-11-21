@@ -2466,3 +2466,8 @@
 - Codified 3-lane `-m -d` fast-build isolation matrix (`bin_19231`–`bin_19233`) vs `-m -r` release sync in `GEMINI.md`.
 - Fixed `FileReader` macrotask/microtask boundary in `src/js/shim/window.js` and eliminated $O(2^N)$ shadow/sibling recursion in `src/js/shim/element/element.js`.
 - Preserved `[native code]` `Function` wrapper shape in `src/cdp/session_hooks.cp`, paired stylesheet response bodies via `recordPendingFetchBody` in `src/cdp/session.cp`, and deduplicated `recordResponseBody` slots in `src/cdp/network.cp`.
+
+## [2026-11-22] Phase 253: 统一测试目录拓扑 (`test/{unit,e2e,wpt,pptr,pw}`)
+- **Moved**: `test/{cdp,css,dom,eval,html,js,layout,net,render,tty}/` -> `test/unit/...`（批量更新 137 个 `.cp` 导入路径至 `../../../src/`）；`e2e/` -> `test/e2e/`；清理遗留 `tests/`。
+- **Added**: `test/wpt/`（`wpt-*.json` + `scripts/wpt-*.mjs`）、`test/pptr/`（`pptr-*.json` + `scripts/pptr-*.mjs`）、`test/pw/`（`pw-*.json` + `scripts/pw-*.mjs`）。
+- **Updated**: `cap.json`, `bunfig.toml`, `package.json`, `tsconfig.json`, `test/e2e/tsconfig.json`, `test/e2e/preload.ts`, `test/e2e/harness.{ts,js}`, `scripts/e2e_suite.py`, `src/net/mock_fixtures.cp`, `src/render/painter.cp`, `GEMINI.md`；并为 `src/js/{qjs_engine,dom_binding}.cp`、`src/cdp/{session,session_hooks,runtime}.cp`、`src/render/{painter,png}.cp` 补齐 `unsafe { ... }`（`E0209`）。

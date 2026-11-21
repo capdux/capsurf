@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Concurrent E2E test runner for CapSurf (e2e/*.e2e.test.ts and e2e/demo/*.e2e.test.ts)."""
+"""Concurrent E2E test runner for CapSurf (test/e2e/*.e2e.test.ts and test/e2e/demo/*.e2e.test.ts)."""
 
 from __future__ import annotations
 
@@ -65,11 +65,11 @@ ARCH_SKIP_CATEGORIES: dict[str, tuple[str, set[str]]] = {
 }
 
 SMOKE_SUITES: list[str] = [
-    "e2e/smoke.e2e.test.ts",
-    "e2e/blank-page-document.e2e.test.ts",
-    "e2e/alert-non-throwing.e2e.test.ts",
-    "e2e/demo/hello.e2e.test.ts",
-    "e2e/demo/cookies-demo.e2e.test.ts",
+    "test/e2e/smoke.e2e.test.ts",
+    "test/e2e/blank-page-document.e2e.test.ts",
+    "test/e2e/alert-non-throwing.e2e.test.ts",
+    "test/test/e2e/demo/hello.e2e.test.ts",
+    "test/test/e2e/demo/cookies-demo.e2e.test.ts",
 ]
 
 PASS_RE = re.compile(r"^\s*(\d+)\s+pass\b", re.MULTILINE)
@@ -94,7 +94,7 @@ def classify_arch_skip(rel_path: str) -> tuple[str, str] | None:
 
 def discover_suites(repo_root: Path) -> list[str]:
     suites: list[Path] = []
-    e2e_dir = repo_root / "e2e"
+    e2e_dir = repo_root / "test" / "e2e"
     demo_dir = e2e_dir / "demo"
     if e2e_dir.is_dir():
         suites.extend(sorted(e2e_dir.glob("*.e2e.test.ts")))

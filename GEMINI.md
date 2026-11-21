@@ -211,37 +211,41 @@
 
 ---
 
-## 10. 目录组织拓扑与双轨测试架构（白盒 `test/` 与黑盒 `e2e/` 权威规范）
+## 10. 目录组织拓扑与双轨测试架构（统一 `test/` 分层权威规范）
 
 1. **项目目录拓扑与单数命名规范**：
-   - 遵循清晰的职责隔离与目录单数化命名（如 `demo` 替代 `demos`）：
+   - 遵循清晰的职责隔离与目录单数化命名（如 `demo` 替代 `demos`），所有测试资产统一收敛于 `test/` 下：
      - `src/`：CapSurf 纯 CP 核心引擎源码（DOM, CSS, Layout, HTML, Render, JS, CDP, Net, Eval, Storage, XPath 等）。
-     - `test/`：纯 CP 编写的白盒单元测试（`test/dom/`, `test/css/`, `test/net/`, `test/eval/`, `test/render/` 等），严禁放入 `.ts`, `.js`, `.html` 等异构文件，确保可通过 `cap test` / `cap run` 极速批量执行。
-     - `e2e/`：独立根目录，存放全量黑盒端到端测试套件（统一使用 `bun test` 驱动 TypeScript 原版测试用例）：
-       - `e2e/*.e2e.test.ts`：从 Kitesurf 迁移的 392 个全量黑盒 E2E 测试用例。
-       - `e2e/harness/`：独立进程拉起、CDP WebSocket 客户端会话与断言框架（`harness.cjs`, `index.cjs`）。
-       - `e2e/page/`：Kitesurf 原始测试页面合集（HTML、CSS、Wasm、自定义字体等），供测试服务加载。
-       - `e2e/ref/`：需转写为纯 CP 白盒测试的原版 TypeScript 测试参考源。
-       - `e2e/demo/`：172 个功能演示与特殊场景验证 E2E 用例（原 `demos` 单数化规范命名）。
-     - `scripts/`：项目工程化与自动化工具链（`cpc_brief.py`, `bundle_runtime.py`, `watch_task.py`, `task_queue.py` 等）。
+     - `test/`：统一测试根目录，按测试层级划分子目录：
+       - `test/unit/`：纯 CP 编写的白盒单元测试（`test/unit/dom/`, `test/unit/css/`, `test/unit/net/`, `test/unit/eval/`, `test/unit/render/` 等），严禁放入 `.ts`, `.js`, `.html` 等异构文件，确保可通过 `cap test test/unit/` / `cap run` 极速批量执行。
+       - `test/e2e/`：黑盒端到端测试套件（统一使用 `bun test` 驱动 TypeScript 原版测试用例）：
+         - `test/e2e/*.e2e.test.ts`：从 Kitesurf 迁移的 392 个全量黑盒 E2E 测试用例。
+         - `test/e2e/harness/`：独立进程拉起、CDP WebSocket 客户端会话与断言框架（`harness.cjs`, `index.cjs`）。
+         - `test/e2e/page/`：Kitesurf 原始测试页面合集（HTML、CSS、Wasm、自定义字体等），供测试服务加载。
+         - `test/e2e/ref/`：需转写为纯 CP 白盒测试的原版 TypeScript 测试参考源。
+         - `test/e2e/demo/`：172 个功能演示与特殊场景验证 E2E 用例（原 `demos` 单数化规范命名）。
+       - `test/wpt/`：Web Platform Tests 清单、预期基线与运行器脚本（`scripts/`）。
+       - `test/pptr/`：Puppeteer 上游兼容测试清单、基线与运行器脚本（`scripts/`）。
+       - `test/pw/`：Playwright 上游兼容测试清单、基线与运行器脚本（`scripts/`）。
+     - `scripts/`：项目工程化与自动化工具链（`cpc_brief.py`, `bundle_runtime.py`, `watch_task.py`, `task_queue.py`, `e2e_suite.py` 等）。
      - `vendor/`：第三方参考源码与静态资产（`html5ever`, `lexbor`, `taffy`, `quickjs`, `kitesurf`）。
      - `bin/`：编译输出产物（`bin/main`, `bin/test/`）。
 
 2. **双轨测试分工与语言纯洁性铁律**：
-   - **白盒 / 纯 CP 原生单元测试（`test/**/*.cp`）**：
+   - **白盒 / 纯 CP 原生单元测试（`test/unit/**/*.cp`）**：
      - 验证内部 Arena DOM 结构、CSS 级联权重算法、URL 展开截幅、内存生命周期、XPath 评估等底层算法准确性与内存安全。
      - 必须使用纯 CP 编写，严禁混入 Node.js 运行时或外置依赖，通过 `cap run <file.cp>` 毫秒级闭环。
-   - **黑盒 / E2E 远程驱动测试（`e2e/*.e2e.test.ts` & `e2e/demo/*.e2e.test.ts`）**：
+   - **黑盒 / E2E 远程驱动测试（`test/e2e/*.e2e.test.ts` & `test/e2e/demo/*.e2e.test.ts`）**：
      - **端到端测试严格保留为 TypeScript，统一使用 `bun test` 执行，严禁再生成冗余 `.test.js` 副本或转写为 CP 语言**！
      - 必须以真实的外部客户端视角（如 Playwright / Puppeteer），通过网络 WebSocket 远程连接测试 CapSurf 独立服务。
      - 验证真实网络监听、HTTP 自省、RFC 6455 帧收发、CDP 域状态同步、JS 页面执行与视觉光栅化截屏。
 
-3. **进程级解耦适配架构 (`e2e/harness/harness.cjs`)**：
+3. **进程级解耦适配架构 (`test/e2e/harness/harness.cjs`)**：
    - 原版 Kitesurf E2E 深度绑定了 Cloudflare Workers 专有的 `cloudflare:test` 和 `env.ENGINE` 内部句柄。
-   - CapSurf 通过 `e2e/harness/harness.cjs` 与 `e2e/shim/cloudflare-test.ts` 统一拉起独立进程（`./bin/main --remote-debugging-port=<port>`），通过标准 CDP 调试端点（`ws://127.0.0.1:<port>/devtools/browser/...`）建立会话，提供标准 `test()` 与 `expect()` 断言器，并在测试结束后优雅销毁进程。
+   - CapSurf 通过 `test/e2e/harness/harness.cjs` 与 `test/e2e/shim/cloudflare-test.ts` 统一拉起独立进程（`./bin/main --remote-debugging-port=<port>`），通过标准 CDP 调试端点（`ws://127.0.0.1:<port>/devtools/browser/...`）建立会话，提供标准 `test()` 与 `expect()` 断言器，并在测试结束后优雅销毁进程。
 
 4. **全量 Kitesurf E2E 测试统一执行流水线**：
-   - 保持 `e2e/*.e2e.test.ts`（392）与 `e2e/demo/*.e2e.test.ts`（172）原版 TypeScript 测试文件不变；
+   - 保持 `test/e2e/*.e2e.test.ts`（392）与 `test/e2e/demo/*.e2e.test.ts`（172）原版 TypeScript 测试文件不变；
    - 统一通过 `CAPSURF_BIN=./bin/main bun test <files...>` 执行，将其无缝集成到每个 Milestone / Phase 的自动化交付回归流水线中。
 
 ---

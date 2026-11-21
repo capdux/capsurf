@@ -1842,3 +1842,8 @@
 ### Phase 252: 536 E2E 总验收残余清零与三线快编规范固化
 - 全量 536 套件跑盘曾暴露 `element.js` 在 shadow-root 增量插入场景下因前向兄弟累加递归导致的 $O(2^N)$ 卡死，引入 `inSiblingOffsetCalc` 与 `_inShadowRect` 守卫后降至 $O(N)$（2.66s 通过）。
 - `cap build -m -d` 实测比 `-m -r` 快 7–10 倍（12.7s vs ~81s），正式固化为所有三线日常开发默认编译模式。
+
+### Phase 253: 统一测试目录收敛与 `E0209` 适配笔记
+- 白盒测试统一收敛至 `test/unit/` 后，所有 `.cp` 测试相对 `src/` 的导入层级由 `../../src/` 变为 `../../../src/`；`cap.json` 的 `scripts.test` 同步收窄为 `cap test test/unit/`，避免扫描 `e2e`/`wpt`/`pptr`/`pw` 中的 TS/JS 资产。
+- 迁入 `test/wpt/`、`test/pptr/`、`test/pw/` 时仅吸收 JSON 清单/基线与 `.mjs` 运行器，剥离 Bazel 规则；后续只需将各 `scripts/*-engine.mjs` / `*-run.mjs` 中的 `wrangler`/`miniflare` 启动逻辑替换为 `./bin/main --remote-debugging-port=<port>` 即可打通上游兼容测试。
+- 2026-11-22 02:21 版 `cpc` 新增严格 `E0209` 检查，已先完成 `src/js/`、`src/cdp/`、`src/render/` 中 `@ptrCast`/`@alignCast`/`@intFromPtr`/`@ptrFromInt`/裸指针切片的 `unsafe { ... }` 适配；上游 `/data/dev/cp/lib/pack/gzip.cp` 的 17 处 `E0209` 已提交 `task-capsurf-20261122-lib-pack-gzip-e0209` 待 `cp_agy` 修复后即可重编 `bin/main`。

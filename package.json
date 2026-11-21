@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "imports": {
-    "#cloudflare-test": "./e2e/shim/cloudflare-test.ts"
+    "#cloudflare-test": "./test/e2e/shim/cloudflare-test.ts"
   }
 }

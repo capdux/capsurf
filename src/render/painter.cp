@@ -1956,19 +1956,19 @@ fn readLocalFilePath(path: []const u8, out_buf: []u8): ([]const u8)? {
     if (fp_opt == null) return null;
     const fp = fp_opt.?;
     defer * = fclose(fp);
-    const n = fread(@ptrCast(out_buf.ptr), 1, out_buf.len, fp);
+    const n = fread(unsafe { @ptrCast(out_buf.ptr) }, 1, out_buf.len, fp);
     return out_buf[0..n];
 }
 
 fn readFixtureFileLocal(filename: []const u8, out_buf: []u8): ([]const u8)? {
     let pbuf: [512]u8 = [0; 512];
-    const rel = std.fmt.bufPrint(&pbuf, "e2e/page/{s}", .{ filename }) catch return null;
+    const rel = std.fmt.bufPrint(&pbuf, "test/e2e/page/{s}", .{ filename }) catch return null;
     if (res1 := readLocalFilePath(rel, out_buf)) {
         return res1;
     }
 
     let abuf: [512]u8 = [0; 512];
-    const abs = std.fmt.bufPrint(&abuf, "/data/dev/capsurf/e2e/page/{s}", .{ filename }) catch return null;
+    const abs = std.fmt.bufPrint(&abuf, "/data/dev/capsurf/test/e2e/page/{s}", .{ filename }) catch return null;
     if (res2 := readLocalFilePath(abs, out_buf)) {
         return res2;
     }

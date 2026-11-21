@@ -8,7 +8,7 @@
   "mode": "parallel",
   "scripts": {
     "start": "cap src/main.cp",
-    "test": "cap test test/",
+    "test": "cap test test/unit/",
     "build": "cap build -r -f",
     "build:nest": "cap build -b"
   },

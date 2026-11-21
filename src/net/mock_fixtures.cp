@@ -235,16 +235,16 @@ pub struct MockFixtures {
             target_name = "euckr-child.html.bin";
         }
 
-        // 1. Try relative path: e2e/page/<filename>
+        // 1. Try relative path: test/e2e/page/<filename>
         let path_buf: [512]u8 = [0; 512];
-        const rel_path = std.fmt.bufPrint(&path_buf, "e2e/page/{s}", .{ target_name }) catch return null;
+        const rel_path = std.fmt.bufPrint(&path_buf, "test/e2e/page/{s}", .{ target_name }) catch return null;
         if (res1 := MockFixtures.readFileContent(rel_path, out_buf)) {
             return res1;
         }
 
-        // 2. Try absolute path: /data/dev/capsurf/e2e/page/<filename>
+        // 2. Try absolute path: /data/dev/capsurf/test/e2e/page/<filename>
         let abs_buf: [512]u8 = [0; 512];
-        const abs_path = std.fmt.bufPrint(&abs_buf, "/data/dev/capsurf/e2e/page/{s}", .{ target_name }) catch return null;
+        const abs_path = std.fmt.bufPrint(&abs_buf, "/data/dev/capsurf/test/e2e/page/{s}", .{ target_name }) catch return null;
         if (res2 := MockFixtures.readFileContent(abs_path, out_buf)) {
             return res2;
         }
@@ -254,13 +254,13 @@ pub struct MockFixtures {
             const base = target_name[last_slash + 1..];
             if (base.len > 0) {
                 let base_buf: [512]u8 = [0; 512];
-                const base_rel = std.fmt.bufPrint(&base_buf, "e2e/page/{s}", .{ base }) catch return null;
+                const base_rel = std.fmt.bufPrint(&base_buf, "test/e2e/page/{s}", .{ base }) catch return null;
                 if (res3 := MockFixtures.readFileContent(base_rel, out_buf)) {
                     return res3;
                 }
 
                 let abs_base: [512]u8 = [0; 512];
-                const base_abs = std.fmt.bufPrint(&abs_base, "/data/dev/capsurf/e2e/page/{s}", .{ base }) catch return null;
+                const base_abs = std.fmt.bufPrint(&abs_base, "/data/dev/capsurf/test/e2e/page/{s}", .{ base }) catch return null;
                 if (res4 := MockFixtures.readFileContent(base_abs, out_buf)) {
                     return res4;
                 }

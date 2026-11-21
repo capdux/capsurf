@@ -229,7 +229,7 @@ pub struct ReductionState {
 @c fn jsInterruptHandler(rt: *JSRuntime, opaque_ptr: *!?): i32 {
     * = rt;
     if (opaque_ptr == null) return 0;
-    const state: *ReductionState = @ptrCast(@alignCast(opaque_ptr.?));
+    const state: *ReductionState = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
     state.reduction_count += 1;
     if (state.reduction_limit > 0 && state.reduction_count >= state.reduction_limit) {
         state.interrupted = true;
@@ -254,7 +254,7 @@ pub struct JsRuntime {
             reduction_count: 0,
             interrupted: false,
         };
-        JS_SetInterruptHandler(rt, jsInterruptHandler, @ptrCast(st));
+        unsafe { JS_SetInterruptHandler(rt, jsInterruptHandler, @ptrCast(st)); }
         return JsRuntime {
             raw_rt: rt,
             state: st,
@@ -331,7 +331,7 @@ pub struct JsContext {
             return null;
         }
         const ptr_val = @as(usize, @intCast(val.u.uint64));
-        const m: *JSModuleDef = @ptrFromInt(ptr_val);
+        const m: *JSModuleDef = unsafe { @ptrFromInt(ptr_val) };
         JS_FreeValue(_.raw_ctx, val);
         return m;
     }
@@ -405,7 +405,7 @@ pub struct JsContext {
         const to_copy = @min(name.len, name_buf.len - 1);
         @memcpy(name_buf[0..to_copy], name[0..to_copy]);
         name_buf[to_copy] = 0;
-        * = JS_SetPropertyStr(_.raw_ctx, _.getGlobal(), @ptrCast(&name_buf), JS_DupValue(_.raw_ctx, val));
+        unsafe { * = JS_SetPropertyStr(_.raw_ctx, _.getGlobal(), @ptrCast(&name_buf), JS_DupValue(_.raw_ctx, val)); }
     }
 
     fn isArray(val: JSValue): bool {

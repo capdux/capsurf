@@ -121,7 +121,7 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     let out_buf: [32768]u8 = undefined;
     if (body := MockFixtures.handleFixtureRequest(url, "", "", &out_buf, null, extra_headers)) {
         if (opaq := JS_GetContextOpaque(ctx)) {
-            const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+            const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaq)) };
             let base_url = url;
             if (q_idx := std.mem.indexOfScalar(u8, base_url, '?')) {
                 base_url = base_url[0..q_idx];
@@ -157,7 +157,7 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
 
     let cookie_jar_ptr: (*CookieJar)? = null;
     if (opaq := JS_GetContextOpaque(ctx)) {
-        const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+        const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaq)) };
         cookie_jar_ptr = dom_ctx.cookie_jar;
     }
 
@@ -329,7 +329,7 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     }
     url_buf[url_len] = 0;
 
-    const compiled = JS_Eval(ctx, code_ptr.?, code_len, @ptrCast(&url_buf), 33);
+    const compiled = JS_Eval(ctx, code_ptr.?, code_len, unsafe { @ptrCast(&url_buf) }, 33);
     if (jsIsException(compiled)) {
         const exc = JS_GetException(ctx);
         defer JS_FreeValue(ctx, exc);
@@ -344,7 +344,7 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     }
 
     const ptr_val = @as(usize, @intCast(compiled.u.uint64));
-    const m: *JSModuleDef = @ptrFromInt(ptr_val);
+    const m: *JSModuleDef = unsafe { @ptrFromInt(ptr_val) };
     const meta = JS_GetImportMeta(ctx, m);
     if (!jsIsException(meta)) {
         const uval = JS_NewStringLen(ctx, &url_buf, url_len);
@@ -603,7 +603,7 @@ fn originSliceOf(url: []const u8): []const u8 {
     defer if (body_ptr != null) JS_FreeCString(ctx, body_ptr);
 
     if (opaq := JS_GetContextOpaque(ctx)) {
-        const dom_ctx: *JsDomContext = @ptrCast(@alignCast(opaq));
+        const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaq)) };
         dom_ctx.addFetchRecord(url, mime);
         recordPendingFetchBody(url, body);
     }

@@ -154,3 +154,9 @@
   1. **唯一双重幂等析构 `~init()`，`release` 彻底退回普通方法**：`init(...)` 为 `class` 构造函数；`~init() { ... }` 为 `struct`/`class` 唯一析构函数；提前手动释放用 `drop(x)`（消耗所有权防误用）或 `x.~init()`（双重幂等防 Double-Free）。**无论是否带参，`release` 均不再作为析构函数、绝不触发自动析构且绝不截断参数**；裸指针 `*T!` 与字段读取 `const h = _.handlers;` 均绝不误析构。
   2. **三态赋值与五态解构**：直接赋值默认只读（RAII 零析构，不再隐式 move），转移必须显式写 `move`；对象解构支持整体可变 `= *_`、局部成员分离可变 `{ *a: ma, *b: mb } = obj`、整体/单字段 `move`；`&v` 回收为纯取址符可直接初始化 `*T!` / `*const T!`。
   3. **语法增强**：饱和/环绕复合赋值（`+|=`, `-|=`, `*|=` , `<<|=`, `+%=`, `-%=`, `*%=`）、`?? break :label` / `?? continue :label` 与带标签 `for` 循环均已修复并发布 Release `cpc`。
+
+已定位 test/regression/issue/28083.test.ts（dgram 全败）的根因：src/runtime/socket/udp_socket.cp:337 的 this_ptr.socket = uws.udp.Socket.create(...)
+orelse { ... } 被 cpc 误降级为 if (this_ptr.socket == null) 吞掉了 Socket.create 调用，导致每次绑定都抛出 "Failed to bind socket"。
+
+在编译 udp_socket 修复时暴露出 src/uws_sys/udp.cp 中 PacketBuffer / Loop / Socket 可选指针类型优先级错误（*T? 误生成为 *?*T）；已全部修正为 (*T)? /
+*PacketBuffer 并通过 cpc_brief.py 门禁。

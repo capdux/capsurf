@@ -5,10 +5,10 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "cloudflare:test": ["./e2e/shim/cloudflare-test.ts"],
-      "vitest": ["./e2e/harness.ts"],
-      "@cloudflare/puppeteer": ["./e2e/harness.ts"],
-      "@cloudflare/puppeteer/*": ["./e2e/harness.ts"]
+      "cloudflare:test": ["./test/e2e/shim/cloudflare-test.ts"],
+      "vitest": ["./test/e2e/harness.ts"],
+      "@cloudflare/puppeteer": ["./test/e2e/harness.ts"],
+      "@cloudflare/puppeteer/*": ["./test/e2e/harness.ts"]
     }
   }
 }

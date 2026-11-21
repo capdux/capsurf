@@ -4850,3 +4850,14 @@
   - `network-stylesheet-headers-demo` (1/1) + `oversize-body-streams` (1/1)：`session.cp` 使用 `recordPendingFetchBody` 与 `network.cp` `recordResponseBody` 按 `request_id` 覆写去重；
   - `font-face-demo` (1/1) + `matchmedia-demo` (1/1) 全通过；`screencast-partial-frames` (11/11) 串行全过。
 - 清理多余临时构建目录（`bin_19231..19233`、`bin_rel`、`temp`），保留正式产物 `bin/main`。
+
+### [2026-11-22 02:35] Phase 253: 统一测试目录拓扑收敛 (`test/{unit,e2e,wpt,pptr,pw}`) 与 `E0209` 适配
+- **用户指令**: 确认白盒目录命名为 `unit`，立即将全部测试统一收敛至 `test/` 下，并迁入 `wpt` / `pptr` / `pw` 清单与非 Bazel 运行器。
+- **目录与配置改造**:
+  - `test/{cdp,css,dom,eval,html,js,layout,net,render,tty}/` -> `test/unit/...`，同步更新 137 个 `.cp` 文件的相对导入（`../../src/` -> `../../../src/`），移除历史遗留根目录 `tests/`。
+  - `e2e/` -> `test/e2e/`，同步更新 `cap.json`、`bunfig.toml`、`package.json`、`tsconfig.json`、`test/e2e/tsconfig.json`、`test/e2e/preload.ts`、`test/e2e/harness.{ts,js}`、`scripts/e2e_suite.py`、`src/net/mock_fixtures.cp`、`src/render/painter.cp` 与 `GEMINI.md` 第 10 节。
+  - 新建 `test/wpt/`、`test/pptr/`、`test/pw/`，迁入 `vendor/kitesurf/tests/` 对应清单/期望 JSON 及 `vendor/kitesurf/scripts/{wpt,pptr,pw}-*.mjs`（跳过 `.test.mjs` 与 Bazel 文件）。
+- **验证与上游上报**:
+  - `cap test test/unit/dom/`: 20/24 通过（`test_canvas2d.cp` / `test_canvas_element.cp` 受最新 `cpc` `E0209` 门禁影响）。
+  - `python3 scripts/e2e_suite.py --smoke`: `test/e2e/alert-non-throwing.e2e.test.ts` (1/1 PASS) 与 `test/e2e/blank-page-document.e2e.test.ts` (3/3 PASS) 通过；`smoke.e2e.test.ts` 因现有 `bin/main` 仍硬编码旧 `e2e/page/` 需重编。
+  - 已为 `src/js/qjs_engine.cp`、`src/js/dom_binding.cp`、`src/cdp/session.cp`、`src/cdp/session_hooks.cp`、`src/cdp/runtime.cp`、`src/render/painter.cp`、`src/render/png.cp` 补齐 `unsafe { ... }` 适配 `E0209`；重编 `bin/main` 时命中上游标准库 `/data/dev/cp/lib/pack/gzip.cp` 17 处 `E0209`，已通过 `task_queue.py submit` 上报 `cp_agy`（`task-capsurf-20261122-lib-pack-gzip-e209` -> `task-capsurf-20261122-lib-pack-gzip-e0209`）。

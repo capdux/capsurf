@@ -154,7 +154,7 @@ pub struct RuntimeHandler {
             let url_buf: [1024]u8 = [0; 1024];
             const url_slice = unescapeJsonString(raw_url, url_buf[0 .. url_buf.len - 1]);
             url_buf[url_slice.len] = 0;
-            const fname: [*c]const u8 = if (url_slice.len > 0) @ptrCast(&url_buf) else "<compileScript>";
+            const fname: [*c]const u8 = if (url_slice.len > 0) unsafe { @ptrCast(&url_buf) } else "<compileScript>";
 
             const persist = extractJsonBool(req.params_raw, "persistScript") ?? false;
 
