@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind, FloatMode } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType } from "../css/cascade.cp";
 import {
     Direction,
     UnicodeBidi,
@@ -2914,7 +2914,7 @@ fn paintNodeRecursive(
 
     let own_scroll_l: f32 = 0.0;
     let own_scroll_t: f32 = 0.0;
-    if (node.node_type == NodeType.Element && opts.scroll_offsets.len > 0) {
+    if (node.node_type == NodeType.Element && node_id != doc.root_element && !node.hasTag("html") && opts.scroll_offsets.len > 0) {
         let soi: usize = 0;
         while (soi < opts.scroll_offsets.len) : (soi += 1) {
             if (opts.scroll_offsets[soi].node_id == node_id) {
@@ -2932,23 +2932,67 @@ fn paintNodeRecursive(
     if (node.node_type == NodeType.Element && is_self_visible) {
         if (node.hasTag("li") && node.parent != NULL_NODE && @as(usize, node.parent) < doc.nodes.items.len) {
             const pnode = &doc.nodes.items[@as(usize, node.parent)];
-            if (pnode.hasTag("ol") || pnode.hasTag("ul")) {
+            const p_lt = if (@as(usize, node.parent) < styles.len) styles[@as(usize, node.parent)].list_style_type else ListStyleType.Decimal;
+            const eff_lt = if (style.list_style_type != ListStyleType.Decimal) style.list_style_type else p_lt;
+            if ((pnode.hasTag("ol") || pnode.hasTag("ul")) && eff_lt != ListStyleType.None) {
                 let marker_y = r.y;
                 if (fy := findFirstTextRectY(doc, rects, node_id)) {
                     marker_y = fy;
                 }
                 const marker_x = @max(2.0, r.x - 24.0);
-                let marker_buf: [16]u8 = undefined;
+                let marker_buf: [24]u8 = undefined;
                 let marker_str: []const u8 = "*";
                 if (pnode.hasTag("ol")) {
-                    let idx: usize = 1;
+                    const is_rev = pnode.hasAttribute("reversed");
+                    let cur_num: i32 = 1;
+                    if (s_attr := pnode.getAttribute("start")) {
+                        cur_num = std.fmt.parseInt(i32, std.mem.trim(u8, s_attr, " \t\r\n"), 10) catch 1;
+                    } else if (is_rev) {
+                        let total_li: i32 = 0;
+                        let s0 = pnode.first_child;
+                        while (s0 != NULL_NODE && @as(usize, s0) < doc.nodes.items.len) {
+                            const sn0 = &doc.nodes.items[@as(usize, s0)];
+                            if (sn0.hasTag("li")) total_li += 1;
+                            s0 = sn0.next_sibling;
+                        }
+                        cur_num = total_li;
+                    }
                     let sib = pnode.first_child;
-                    while (sib != NULL_NODE && sib != node_id && @as(usize, sib) < doc.nodes.items.len) {
+                    while (sib != NULL_NODE && @as(usize, sib) < doc.nodes.items.len) {
                         const sn = &doc.nodes.items[@as(usize, sib)];
-                        if (sn.hasTag("li")) idx += 1;
+                        if (sn.hasTag("li")) {
+                            if (v_attr := sn.getAttribute("value")) {
+                                cur_num = std.fmt.parseInt(i32, std.mem.trim(u8, v_attr, " \t\r\n"), 10) catch cur_num;
+                            }
+                            if (sib == node_id) break;
+                            cur_num += if (is_rev) @as(i32, -1) else @as(i32, 1);
+                        }
                         sib = sn.next_sibling;
                     }
-                    marker_str = std.fmt.bufPrint(&marker_buf, "{d}.", .{idx}) catch "1.";
+                    if (eff_lt == ListStyleType.UpperRoman && cur_num > 0 && cur_num < 4000) {
+                        const vals: [13]i32 = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+                        const syms: [13][]const u8 = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+                        let rem = cur_num;
+                        let rlen: usize = 0;
+                        let ri: usize = 0;
+                        while (ri < 13) : (ri += 1) {
+                            while (rem >= vals[ri]) {
+                                const sym = syms[ri];
+                                if (rlen + sym.len < marker_buf.len) {
+                                    std.mem.copyForwards(u8, marker_buf[rlen .. rlen + sym.len], sym);
+                                    rlen += sym.len;
+                                }
+                                rem -= vals[ri];
+                            }
+                        }
+                        if (rlen < marker_buf.len) {
+                            marker_buf[rlen] = '.';
+                            rlen += 1;
+                        }
+                        marker_str = marker_buf[0..rlen];
+                    } else {
+                        marker_str = std.fmt.bufPrint(&marker_buf, "{d}.", .{cur_num}) catch "1.";
+                    }
                 }
                 const fsz = if (style.font_size_px > 0.0) style.font_size_px else 16.0;
                 if (fsz >= 14.0) {
@@ -3209,7 +3253,11 @@ fn paintNodeRecursive(
             canvas.drawTextClipped(r.x + pad_l + 2.0, r.y + pad_t + 2.0, display_text, draw_color, active_clip);
         }
 
-        if (style.has_before_content && style.before_content_len > 0 && paint_style.text_color.a > 0) {
+        let before_vis = is_self_visible;
+        if (bv := style.before_visibility) {
+            before_vis = (bv == Visibility.Visible);
+        }
+        if (before_vis && r.visible && style.has_before_content && style.before_content_len > 0 && paint_style.text_color.a > 0) {
             const before_pseudo_txt = style.before_content_buf[0..style.before_content_len];
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
@@ -3222,7 +3270,11 @@ fn paintNodeRecursive(
                 canvas.drawTextClipped(r.x + pad_l + 1.0, r.y + pad_t + 2.0, before_pseudo_txt, paint_style.text_color, active_clip);
             }
         }
-        if (style.has_after_content && style.after_content_len > 0 && paint_style.text_color.a > 0) {
+        let after_vis = is_self_visible;
+        if (av := style.after_visibility) {
+            after_vis = (av == Visibility.Visible);
+        }
+        if (after_vis && r.visible && style.has_after_content && style.after_content_len > 0 && paint_style.text_color.a > 0) {
             const after_pseudo_txt = style.after_content_buf[0..style.after_content_len];
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_r = style.padding_right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);

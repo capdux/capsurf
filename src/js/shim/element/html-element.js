@@ -162,7 +162,9 @@ function installHtmlElementExtensions(proto) {
 
   if (!proto.click) {
     proto.click = function () {
-      const evt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+      const MouseCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.MouseEvent) || MouseEvent;
+      const EventCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.Event) || Event;
+      const evt = new MouseCtor("click", { bubbles: true, cancelable: true, composed: true });
       this.dispatchEvent(evt);
       if (!evt.defaultPrevented) {
         const tag = String(this.tagName || this.localName || "").toLowerCase();
@@ -217,7 +219,7 @@ function installHtmlElementExtensions(proto) {
           if (ctrl && ctrl !== this && !(typeof ctrl.contains === "function" && ctrl.contains(this))) {
             const isCtrlDisabled = Boolean(ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled")));
             if (!isCtrlDisabled && typeof ctrl.dispatchEvent === "function") {
-              const fwdEvt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+              const fwdEvt = new MouseCtor("click", { bubbles: true, cancelable: true, composed: true });
               ctrl.dispatchEvent(fwdEvt);
               if (!fwdEvt.defaultPrevented) {
                 const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();

@@ -548,14 +548,12 @@ pub struct LayoutTree {
                                 if (sw := LayoutTree.extractSvgDim(root_tag, "width")) {
                                     nat_w = sw;
                                     svg_has_w = true;
-                                    is_auth = true;
                                 }
                             }
                             if (!svg_has_h) {
                                 if (sh := LayoutTree.extractSvgDim(root_tag, "height")) {
                                     nat_h = sh;
                                     svg_has_h = true;
-                                    is_auth = true;
                                 }
                             }
                             if (!svg_has_w || !svg_has_h) {
@@ -1557,10 +1555,15 @@ pub struct LayoutTree {
         return st.hasFontFamily("monospace");
     }
 
+    static fn weightWidthScale(st: *const ComputedStyle): f32 {
+        if (st.font_weight == 400.0) return 1.0;
+        return 1.0 + (st.font_weight - 400.0) * 0.00015;
+    }
+
     static fn spaceWidth(st: *const ComputedStyle): f32 {
         const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
         const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ' '));
-        if (wf_ratio > 0.0) return base_sz * wf_ratio;
+        if (wf_ratio > 0.0) return base_sz * wf_ratio * LayoutTree.weightWidthScale(st);
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
         return base_sz * 0.28;
     }
@@ -1568,7 +1571,7 @@ pub struct LayoutTree {
     static fn charWidthForStyle(ch: u8, st: *const ComputedStyle): f32 {
         const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
         const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ch));
-        if (wf_ratio > 0.0) return base_sz * wf_ratio;
+        if (wf_ratio > 0.0) return base_sz * wf_ratio * LayoutTree.weightWidthScale(st);
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
         const w = LayoutTree.estimateCharWidth(ch, base_sz);
         if (st.font_weight >= 600.0) return w * 1.06;
@@ -2097,8 +2100,13 @@ pub struct LayoutTree {
         const v_decor = tbox.paddingVertical() + tbox.borderVertical();
         const core_w = if (dims[0] > h_decor) (dims[0] - h_decor) else 0.0;
         const core_h = if (dims[1] > v_decor) (dims[1] - v_decor) else 0.0;
-        tbox.content_width = if (!tstyle.width.is_auto && !tstyle.width.is_none) @max(tbox.content_width, core_w) else core_w;
-        tbox.content_height = if (!tbox.height_is_auto) @max(tbox.content_height, core_h) else core_h;
+        if (tstyle.border_collapse == BorderCollapse.Collapse) {
+            tbox.content_width = core_w;
+            tbox.content_height = core_h;
+        } else {
+            tbox.content_width = if (!tstyle.width.is_auto && !tstyle.width.is_none) @max(tbox.content_width, core_w) else core_w;
+            tbox.content_height = if (!tbox.height_is_auto) @max(tbox.content_height, core_h) else core_h;
+        }
     }
 
     fn layoutTableCore(

@@ -3,6 +3,23 @@
 // Entry point for CapSurf Web API Runtime Shim.
 
 function installShim(global) {
+  try {
+    Object.defineProperty(global, "__capsurf_nativeEvents", {
+      value: {
+        Event: Event,
+        MouseEvent: MouseEvent,
+        PointerEvent: PointerEvent,
+        WheelEvent: WheelEvent,
+        InputEvent: InputEvent,
+        KeyboardEvent: KeyboardEvent,
+        MessageEvent: MessageEvent,
+        HashChangeEvent: HashChangeEvent,
+        PopStateEvent: PopStateEvent,
+      },
+      configurable: true,
+      writable: true,
+    });
+  } catch (e) {}
   // 1. Expose Event classes
   global.Event = Event;
   global.CustomEvent = CustomEvent;
@@ -1294,7 +1311,8 @@ function installShim(global) {
         configurable: true,
       });
     }
-    if (!Object.getOwnPropertyDescriptor(global.document, "location")) {
+    const docLocDesc = Object.getOwnPropertyDescriptor(global.document, "location");
+    if (!docLocDesc || docLocDesc.configurable) {
       try {
         Object.defineProperty(global.document, "location", {
           get: function () { return global.location; },
@@ -1454,8 +1472,9 @@ function installShim(global) {
 
     if (changed) {
       try {
-        const inputEvt = typeof InputEvent !== "undefined"
-          ? new InputEvent("input", { bubbles: true, cancelable: false })
+        const InputCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.InputEvent) || (typeof InputEvent !== "undefined" ? InputEvent : null);
+        const inputEvt = InputCtor
+          ? new InputCtor("input", { bubbles: true, cancelable: false })
           : new Event("input", { bubbles: true, cancelable: false });
         if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
           global.__capsurf_dispatchTrustedEvent(control, inputEvt);

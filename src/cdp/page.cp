@@ -1591,6 +1591,21 @@ pub fn performPendingNavigation(
     const target_url = HttpLoader.resolveRelativeUrl(session.url, pending_url, &resolved_buf);
     if (target_url.len == 0) return false;
 
+    // Do not treat an iframe's src navigation as a top-level page navigation
+    {
+        let ni: usize = 0;
+        while (ni < session.doc.nodes.items.len) : (ni += 1) {
+            const node = &session.doc.nodes.items[ni];
+            if (node.isElement() && node.hasTag("iframe")) {
+                if (isrc := session.doc.getAttribute(node.id, "src")) {
+                    if (std.mem.eql(u8, isrc, pending_url) || std.mem.eql(u8, isrc, target_url)) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
     // Private Network Access: block a public page from navigating itself to a loopback address
     if (HttpLoader.isPublicHttpUrl(session.url) && HttpLoader.isLoopbackUrl(target_url)) {
         return false;

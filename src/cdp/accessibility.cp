@@ -619,6 +619,14 @@ pub struct LiveSelect {
     selected_opts_len: usize = 0,
 }
 
+pub struct LiveInput {
+    nid: NodeId = NULL_NODE,
+    checked: bool = false,
+    val_offset: usize = 0,
+    val_len: usize = 0,
+    has_value: bool = false,
+}
+
 pub struct AXTree {
     nodes: [MAX_AX_NODES]AXNode = [AXNode{}; MAX_AX_NODES],
     node_count: usize = 0,
@@ -628,6 +636,10 @@ pub struct AXTree {
     root_url: []const u8 = "",
     live_selects: [32]LiveSelect = [LiveSelect{}; 32],
     live_selects_len: usize = 0,
+    live_inputs: [64]LiveInput = [LiveInput{}; 64],
+    live_inputs_len: usize = 0,
+    input_pool: [4096]u8 = [0; 4096],
+    input_pool_len: usize = 0,
     has_live_state: bool = false,
 
     fn allocNode(*_): usize? {
@@ -746,6 +758,55 @@ pub struct AXTree {
             }
         }
         session.ctx.freeValue(val);
+
+        const js_inp = "(() => { const list = document.querySelectorAll ? document.querySelectorAll('input, textarea') : []; const res = []; for (let i = 0; i < list.length && res.length < 64; i++) { const el = list[i]; const nid = (typeof el._nid === 'number') ? el._nid : 0; if (nid <= 0) continue; const chk = el.checked ? '1' : '0'; const v = (el.value !== undefined && el.value !== null) ? String(el.value) : ''; let hex = ''; for (let j = 0; j < v.length && j < 512; j++) { const c = v.charCodeAt(j) & 0xff; hex += (c < 16 ? '0' : '') + c.toString(16); } res.push(nid + ':' + chk + ':' + hex); } return res.join('|'); })()";
+        const val_inp = session.ctx.eval(js_inp);
+        const cstr_inp = session.ctx.toCString(val_inp);
+        if (cstr_inp.len > 0) {
+            _.has_live_state = true;
+            let inp_it = std.mem.splitScalar(u8, cstr_inp, '|');
+            while (inp_chunk := inp_it.next()) {
+                if (inp_chunk.len == 0 || _.live_inputs_len >= 64) continue;
+                let col_it = std.mem.splitScalar(u8, inp_chunk, ':');
+                const nid_s = col_it.next() ?? "";
+                const chk_s = col_it.next() ?? "";
+                const hex_s = col_it.next() ?? "";
+                const inid = @as(NodeId, std.fmt.parseInt(u32, nid_s, 10) catch 0);
+                if (inid == NULL_NODE) continue;
+                let li = LiveInput{
+                    nid: inid,
+                    checked: std.mem.eql(u8, chk_s, "1"),
+                    val_offset: _.input_pool_len,
+                    val_len: 0,
+                    has_value: false,
+                };
+                const byte_len = hex_s.len / 2;
+                const remain = 4096 - _.input_pool_len;
+                if (byte_len > 0 && byte_len <= remain) {
+                    let bi: usize = 0;
+                    while (bi < byte_len) : (bi += 1) {
+                        const hi = std.fmt.charToDigit(hex_s[bi * 2], 16) catch 0;
+                        const lo = std.fmt.charToDigit(hex_s[bi * 2 + 1], 16) catch 0;
+                        _.input_pool[_.input_pool_len + bi] = (hi << 4) | lo;
+                    }
+                    _.input_pool_len += byte_len;
+                    li.val_len = byte_len;
+                    li.has_value = true;
+                }
+                _.live_inputs[_.live_inputs_len] = li;
+                _.live_inputs_len += 1;
+            }
+        }
+        session.ctx.freeValue(val_inp);
+    }
+
+    fn findLiveInput(nid: NodeId): LiveInput? {
+        if (!_.has_live_state) return null;
+        let i: usize = 0;
+        while (i < _.live_inputs_len) : (i += 1) {
+            if (_.live_inputs[i].nid == nid) return _.live_inputs[i];
+        }
+        return null;
     }
 
     fn findSelectedOptionText(*_, doc: *const Document, select_id: NodeId): ([]const u8)? {
@@ -956,9 +1017,24 @@ pub struct AXTree {
     fn computeValue(*_, doc: *const Document, node: *const NodeData): ([]const u8)? {
         if (vn := node.getAttribute("aria-valuenow")) return vn;
         if (std.ascii.eqlIgnoreCase(node.tag_name, "input")) {
+            const typ = node.getAttribute("type") ?? "text";
+            const is_checkable = std.ascii.eqlIgnoreCase(typ, "checkbox") || std.ascii.eqlIgnoreCase(typ, "radio");
+            if (!is_checkable) {
+                if (li := _.findLiveInput(node.id)) {
+                    if (li.has_value) {
+                        return _.input_pool[li.val_offset .. li.val_offset + li.val_len];
+                    }
+                    return null;
+                }
+            }
             if (v := node.getAttribute("value")) return v;
         }
         if (std.ascii.eqlIgnoreCase(node.tag_name, "textarea")) {
+            if (li := _.findLiveInput(node.id)) {
+                if (li.has_value) {
+                    return _.input_pool[li.val_offset .. li.val_offset + li.val_len];
+                }
+            }
             if (v := node.getAttribute("value")) return v;
             const txt = _.collectSubtreeText(doc, node.id);
             if (txt.len > 0) return txt;
@@ -1065,7 +1141,10 @@ pub struct AXTree {
         if (std.ascii.eqlIgnoreCase(node.tag_name, "input")) {
             const typ = node.getAttribute("type") ?? "text";
             if (std.ascii.eqlIgnoreCase(typ, "checkbox") || std.ascii.eqlIgnoreCase(typ, "radio")) {
-                const is_chk = node.getAttribute("checked") != null;
+                let is_chk = node.getAttribute("checked") != null;
+                if (li := _.findLiveInput(node.id)) {
+                    is_chk = li.checked;
+                }
                 node_ref.addProperty(AXProperty.create("checked", AxValue.fromString("tristate", if (is_chk) "true" else "false")));
             } else if (std.ascii.eqlIgnoreCase(typ, "range") || std.ascii.eqlIgnoreCase(typ, "number")) {
                 if (min_str := node.getAttribute("min")) {
@@ -1076,9 +1155,22 @@ pub struct AXTree {
                     const max_val = std.fmt.parseInt(i64, std.mem.trim(u8, max_str, " \t\r\n"), 10) catch -1;
                     if (max_val >= 0) node_ref.addProperty(AXProperty.create("valuemax", AxValue.fromInt("number", max_val)));
                 }
-                if (now_str := node.getAttribute("value")) {
-                    const now_val = std.fmt.parseInt(i64, std.mem.trim(u8, now_str, " \t\r\n"), 10) catch -1;
-                    if (now_val >= 0) node_ref.addProperty(AXProperty.create("valuenow", AxValue.fromInt("number", now_val)));
+                let used_live_now = false;
+                if (li := _.findLiveInput(node.id)) {
+                    if (li.has_value && li.val_len > 0) {
+                        const live_s = _.input_pool[li.val_offset .. li.val_offset + li.val_len];
+                        const now_val = std.fmt.parseInt(i64, std.mem.trim(u8, live_s, " \t\r\n"), 10) catch -1;
+                        if (now_val >= 0) {
+                            node_ref.addProperty(AXProperty.create("valuenow", AxValue.fromInt("number", now_val)));
+                            used_live_now = true;
+                        }
+                    }
+                }
+                if (!used_live_now) {
+                    if (now_str := node.getAttribute("value")) {
+                        const now_val = std.fmt.parseInt(i64, std.mem.trim(u8, now_str, " \t\r\n"), 10) catch -1;
+                        if (now_val >= 0) node_ref.addProperty(AXProperty.create("valuenow", AxValue.fromInt("number", now_val)));
+                    }
                 }
             }
         } else if (ac := node.getAttribute("aria-checked")) {
@@ -1342,6 +1434,8 @@ pub struct AXTree {
 
     fn buildFromSession(*_, session: *CdpPageSession) {
         _.live_selects_len = 0;
+        _.live_inputs_len = 0;
+        _.input_pool_len = 0;
         _.has_live_state = false;
         if (session.has_document) {
             _.fetchLiveState(session);

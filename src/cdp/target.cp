@@ -71,15 +71,15 @@ pub struct TargetItem {
 }
 
 pub struct TargetRegistry {
-    targets: [48]TargetItem = [TargetItem{}; 48],
-    contexts: [8]BrowserContextState = [BrowserContextState{}; 8],
+    targets: [64]TargetItem = [TargetItem{}; 64],
+    contexts: [64]BrowserContextState = [BrowserContextState{}; 64],
     next_target_id: u32 = 2,
     next_context_id: u32 = 1,
     next_session_id: u32 = 2,
     auto_attach: bool = false,
     flatten: bool = false,
     discover_targets: bool = false,
-    bctx_json_buf: [512]u8 = [0; 512],
+    bctx_json_buf: [2048]u8 = [0; 2048],
     event_buf0: [512]u8 = [0; 512],
     event_buf1: [512]u8 = [0; 512],
     create_ctx_resp_buf: [64]u8 = [0; 64],
@@ -88,15 +88,15 @@ pub struct TargetRegistry {
 
     static fn init(): TargetRegistry {
         let reg = TargetRegistry {
-            targets: [TargetItem{}; 48],
-            contexts: [BrowserContextState{}; 8],
+            targets: [TargetItem{}; 64],
+            contexts: [BrowserContextState{}; 64],
             next_target_id: 2,
             next_context_id: 1,
             next_session_id: 2,
             auto_attach: false,
             flatten: false,
             discover_targets: false,
-            bctx_json_buf: [0; 512],
+            bctx_json_buf: [0; 2048],
             event_buf0: [0; 512],
             event_buf1: [0; 512],
             create_ctx_resp_buf: [0; 64],
@@ -137,6 +137,22 @@ pub struct TargetRegistry {
     fn setAutoAttach(*_, auto_attach: bool, flatten: bool) {
         _.auto_attach = auto_attach;
         _.flatten = flatten;
+    }
+
+    fn deinit(*_) {
+        let i: usize = 0;
+        while (i < _.contexts.len) : (i += 1) {
+            if (_.contexts[i].active) {
+                _.contexts[i].cookie_jar.deinit();
+                _.contexts[i].active = false;
+                _.contexts[i].id_len = 0;
+            }
+        }
+    }
+
+    fn reset(*_) {
+        _.deinit();
+        _.* = TargetRegistry.init();
     }
 
     fn createBrowserContext(*_): []const u8 {

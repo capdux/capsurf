@@ -373,6 +373,18 @@ pub struct CdpServer {
                 if (_.tab_sessions[i].page_session != null) return _.tab_sessions[i].page_session.?;
             }
         }
+        if (sid.len > 0 && bctx.len > 0) {
+            let j: usize = 0;
+            while (j < MAX_TAB_SESSIONS) : (j += 1) {
+                if (!_.tab_sessions[j].active) continue;
+                if (_.tab_sessions[j].key_len == 0 && _.tab_sessions[j].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[j].bctx_buf[0.._.tab_sessions[j].bctx_len], bctx)) {
+                    const slen = @min(sid.len, _.tab_sessions[j].key_buf.len);
+                    @memcpy(_.tab_sessions[j].key_buf[0..slen], sid[0..slen]);
+                    _.tab_sessions[j].key_len = slen;
+                    if (_.tab_sessions[j].page_session != null) return _.tab_sessions[j].page_session.?;
+                }
+            }
+        }
         let slot_idx: usize = 0;
         let found_slot = false;
         while (slot_idx < MAX_TAB_SESSIONS) : (slot_idx += 1) {
@@ -385,6 +397,16 @@ pub struct CdpServer {
 
         const new_sess = CdpPageSession.init(_.allocator) catch return _.session;
         new_sess.skip_raster = _.session.skip_raster;
+        new_sess.viewport_width = _.session.viewport_width;
+        new_sess.viewport_height = _.session.viewport_height;
+        new_sess.layout.viewport_width = _.session.viewport_width;
+        new_sess.layout.viewport_height = _.session.viewport_height;
+        new_sess.device_scale_factor = _.session.device_scale_factor;
+        new_sess.is_mobile = _.session.is_mobile;
+        if (new_sess.viewport_width != 1280.0 || new_sess.viewport_height != 720.0) {
+            new_sess.ensureLayout();
+        }
+        new_sess.owner_target_registry = &_.session.target_registry;
         if (bctx.len > 0) {
             new_sess.setContextId(bctx);
         }

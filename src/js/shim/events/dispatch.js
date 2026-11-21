@@ -14,7 +14,34 @@ function getListeners(target) {
   return map;
 }
 
-function EventTarget() {}
+function EventTarget() {
+  if (this && this.constructor && this.constructor.name === "CapSurfWebSocket") {
+    const ws = this;
+    const handlers = { onopen: null, onerror: null, onclose: null, onmessage: null };
+    ["onopen", "onerror", "onclose", "onmessage"].forEach(function (prop) {
+      Object.defineProperty(ws, prop, {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          const fn = handlers[prop];
+          if (typeof fn !== "function") return fn;
+          return function (ev) {
+            if (ev && typeof ev === "object") {
+              ev._handledByOnProp = true;
+              if (prop === "onmessage" && ws.binaryType === "arraybuffer" && ev.data && ArrayBuffer.isView(ev.data)) {
+                ev.data = ev.data.buffer.slice(ev.data.byteOffset, ev.data.byteOffset + ev.data.byteLength);
+              }
+            }
+            return fn.call(this, ev);
+          };
+        },
+        set: function (v) {
+          handlers[prop] = typeof v === "function" ? v : null;
+        },
+      });
+    });
+  }
+}
 
 const PHASE_NONE = 0;
 const PHASE_CAPTURING = 1;
@@ -370,7 +397,7 @@ function internalDispatch(target, event, trusted) {
       }
 
       // Inline event handler (e.g. element.onclick, element.onsubmit)
-      if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
+      if ((phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) && !event._handledByOnProp) {
         const propName = "on" + eventType;
         let hydrated = hydratedHandlersMap.get(entry);
         if (!hydrated) {
@@ -382,7 +409,7 @@ function internalDispatch(target, event, trusted) {
           hydrated[propName] = true;
           if (!hasOwnProp && typeof entry.getAttribute === "function") {
             const attrVal = entry.getAttribute(propName);
-            if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+            if (typeof attrVal === "string" && attrVal && entry[propName] === undefined) {
               try {
                 entry[propName] = new Function("event", attrVal);
               } catch (e) {}
@@ -405,7 +432,7 @@ function internalDispatch(target, event, trusted) {
             };
             if (WINDOW_BODY_HANDLERS[propName] && !Object.prototype.hasOwnProperty.call(document.body, propName)) {
               const bodyAttr = document.body.getAttribute(propName);
-              if (typeof bodyAttr === "string" && bodyAttr && typeof entry[propName] !== "function") {
+              if (typeof bodyAttr === "string" && bodyAttr && entry[propName] === undefined) {
                 try {
                   entry[propName] = new Function("event", bodyAttr);
                 } catch (e) {}

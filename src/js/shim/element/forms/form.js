@@ -616,7 +616,7 @@ function installFormElement(global) {
     "style", "classList", "className", "innerHTML", "outerHTML", "textContent", "innerText",
     "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
     "propertyIsEnumerable", "toLocaleString", "__proto__", "shadowRoot", "attachShadow",
-    "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot", "id",
+    "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot",
   ]);
   const RX_ARRAY_INDEX = /^(0|[1-9]\d*)$/;
   let _inFormNamedLookup = false;

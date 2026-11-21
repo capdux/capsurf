@@ -1827,7 +1827,34 @@
     return map;
   }
 
-  function EventTarget() {}
+  function EventTarget() {
+    if (this && this.constructor && this.constructor.name === "CapSurfWebSocket") {
+      const ws = this;
+      const handlers = { onopen: null, onerror: null, onclose: null, onmessage: null };
+      ["onopen", "onerror", "onclose", "onmessage"].forEach(function (prop) {
+        Object.defineProperty(ws, prop, {
+          configurable: true,
+          enumerable: true,
+          get: function () {
+            const fn = handlers[prop];
+            if (typeof fn !== "function") return fn;
+            return function (ev) {
+              if (ev && typeof ev === "object") {
+                ev._handledByOnProp = true;
+                if (prop === "onmessage" && ws.binaryType === "arraybuffer" && ev.data && ArrayBuffer.isView(ev.data)) {
+                  ev.data = ev.data.buffer.slice(ev.data.byteOffset, ev.data.byteOffset + ev.data.byteLength);
+                }
+              }
+              return fn.call(this, ev);
+            };
+          },
+          set: function (v) {
+            handlers[prop] = typeof v === "function" ? v : null;
+          },
+        });
+      });
+    }
+  }
 
   const PHASE_NONE = 0;
   const PHASE_CAPTURING = 1;
@@ -2183,7 +2210,7 @@
         }
 
         // Inline event handler (e.g. element.onclick, element.onsubmit)
-        if (phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) {
+        if ((phase === PHASE_AT_TARGET || phase === PHASE_BUBBLING) && !event._handledByOnProp) {
           const propName = "on" + eventType;
           let hydrated = hydratedHandlersMap.get(entry);
           if (!hydrated) {
@@ -2195,7 +2222,7 @@
             hydrated[propName] = true;
             if (!hasOwnProp && typeof entry.getAttribute === "function") {
               const attrVal = entry.getAttribute(propName);
-              if (typeof attrVal === "string" && attrVal && typeof entry[propName] !== "function") {
+              if (typeof attrVal === "string" && attrVal && entry[propName] === undefined) {
                 try {
                   entry[propName] = new Function("event", attrVal);
                 } catch (e) {}
@@ -2218,7 +2245,7 @@
               };
               if (WINDOW_BODY_HANDLERS[propName] && !Object.prototype.hasOwnProperty.call(document.body, propName)) {
                 const bodyAttr = document.body.getAttribute(propName);
-                if (typeof bodyAttr === "string" && bodyAttr && typeof entry[propName] !== "function") {
+                if (typeof bodyAttr === "string" && bodyAttr && entry[propName] === undefined) {
                   try {
                     entry[propName] = new Function("event", bodyAttr);
                   } catch (e) {}
@@ -11400,6 +11427,15 @@
       const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
       const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
       elementShadowRootMap.set(this, shadow);
+      try {
+        Object.defineProperty(this, "_shadowRoot", {
+          value: shadow,
+          writable: true,
+          configurable: true,
+        });
+      } catch (e) {
+        this._shadowRoot = shadow;
+      }
       return shadow;
     };
     markNative(proto.attachShadow, "attachShadow");
@@ -11925,7 +11961,9 @@
 
     if (!proto.click) {
       proto.click = function () {
-        const evt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+        const MouseCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.MouseEvent) || MouseEvent;
+        const EventCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.Event) || Event;
+        const evt = new MouseCtor("click", { bubbles: true, cancelable: true, composed: true });
         this.dispatchEvent(evt);
         if (!evt.defaultPrevented) {
           const tag = String(this.tagName || this.localName || "").toLowerCase();
@@ -11980,7 +12018,7 @@
             if (ctrl && ctrl !== this && !(typeof ctrl.contains === "function" && ctrl.contains(this))) {
               const isCtrlDisabled = Boolean(ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled")));
               if (!isCtrlDisabled && typeof ctrl.dispatchEvent === "function") {
-                const fwdEvt = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+                const fwdEvt = new MouseCtor("click", { bubbles: true, cancelable: true, composed: true });
                 ctrl.dispatchEvent(fwdEvt);
                 if (!fwdEvt.defaultPrevented) {
                   const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
@@ -13607,9 +13645,11 @@
 
       if (!hasStyleW) {
         if (hasAttrW) {
-          const aw = Number(this.getAttribute("width"));
-          if (!isNaN(aw) && aw >= 0) w = aw;
-        } else if (nw > 0) {
+          if (w === 0) {
+            const aw = Number(this.getAttribute("width"));
+            if (!isNaN(aw) && aw >= 0) w = aw;
+          }
+        } else if (w === 0 && nw > 0) {
           w = nw;
         }
       } else if (w === 0 && nw > 0) {
@@ -13618,9 +13658,11 @@
 
       if (!hasStyleH) {
         if (hasAttrH) {
-          const ah = Number(this.getAttribute("height"));
-          if (!isNaN(ah) && ah >= 0) h = ah;
-        } else if (nh > 0) {
+          if (h === 0) {
+            const ah = Number(this.getAttribute("height"));
+            if (!isNaN(ah) && ah >= 0) h = ah;
+          }
+        } else if (h === 0 && nh > 0) {
           h = nh;
         }
       } else if (h === 0 && nh > 0) {
@@ -16623,9 +16665,12 @@
     control._selectionEnd = clamped;
     control._selectionDirection = "none";
     try {
-      const inputEvt = typeof InputEvent !== "undefined"
-        ? new InputEvent("input", { bubbles: true, cancelable: false })
-        : new Event("input", { bubbles: true });
+      const _ne = (typeof globalThis !== "undefined" && globalThis.__capsurf_nativeEvents) || null;
+      const InputCtor = (_ne && _ne.InputEvent) || (typeof InputEvent !== "undefined" ? InputEvent : null);
+      const EventCtor = (_ne && _ne.Event) || Event;
+      const inputEvt = InputCtor
+        ? new InputCtor("input", { bubbles: true, cancelable: false })
+        : new EventCtor("input", { bubbles: true });
       control.dispatchEvent(inputEvt);
     } catch (e) {}
   }
@@ -18951,7 +18996,7 @@
       "style", "classList", "className", "innerHTML", "outerHTML", "textContent", "innerText",
       "constructor", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf",
       "propertyIsEnumerable", "toLocaleString", "__proto__", "shadowRoot", "attachShadow",
-      "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot", "id",
+      "dataset", "hidden", "tabIndex", "title", "lang", "dir", "slot",
     ]);
     const RX_ARRAY_INDEX = /^(0|[1-9]\d*)$/;
     let _inFormNamedLookup = false;
@@ -28421,6 +28466,15 @@
   // Aligned with vendor/kitesurf/packages/dom-shim/src/window.ts
 
   function installWindow(global) {
+    const _ne = global.__capsurf_nativeEvents || {};
+    const _NativeEventCtor = _ne.Event || (typeof Event !== "undefined" ? Event : global.Event);
+    const _NativeMouseEvent = _ne.MouseEvent || (typeof MouseEvent !== "undefined" ? MouseEvent : global.MouseEvent);
+    const _NativePointerEvent = _ne.PointerEvent || (typeof PointerEvent !== "undefined" ? PointerEvent : global.PointerEvent);
+    const _NativeWheelEvent = _ne.WheelEvent || (typeof WheelEvent !== "undefined" ? WheelEvent : global.WheelEvent);
+    const _NativeInputEvent = _ne.InputEvent || (typeof InputEvent !== "undefined" ? InputEvent : global.InputEvent);
+    const _NativeKeyboardEvent = _ne.KeyboardEvent || (typeof KeyboardEvent !== "undefined" ? KeyboardEvent : global.KeyboardEvent);
+    const _NativeMessageEvent = _ne.MessageEvent || (typeof MessageEvent !== "undefined" ? MessageEvent : global.MessageEvent);
+
     let lastQueriedNode = null;
     global.__capsurf_setLastQueriedNode = function (node) {
       lastQueriedNode = node;
@@ -28440,7 +28494,7 @@
             fallbackDispatched = true;
             if (typeof queueMicrotask === "function") {
               queueMicrotask(function () {
-                const tev = new MouseEvent(type, Object.assign({}, init, { bubbles: true, cancelable: true }));
+                const tev = new _NativeMouseEvent(type, Object.assign({}, init, { bubbles: true, cancelable: true }));
                 if (typeof dispatchTrustedEvent === "function") {
                   dispatchTrustedEvent(target, tev);
                 } else if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
@@ -28472,9 +28526,25 @@
       throw new TypeError("Illegal constructor");
     }
     markNative(Window, "Window");
-    if (!global.Window) {
+    if (typeof global.Window !== "function") {
       global.Window = Window;
     }
+    const ActiveWindow = global.Window;
+    if (!ActiveWindow.prototype || ActiveWindow.prototype === Object.prototype) {
+      ActiveWindow.prototype = Object.create(EventTarget.prototype);
+    }
+    Object.defineProperty(ActiveWindow.prototype, "constructor", {
+      value: ActiveWindow,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+    try {
+      Object.setPrototypeOf(global, ActiveWindow.prototype);
+      if (Object.prototype.hasOwnProperty.call(global, "constructor")) {
+        delete global.constructor;
+      }
+    } catch (e) {}
     if (typeof window !== "undefined" && !window.Window) {
       window.Window = Window;
     }
@@ -30071,7 +30141,45 @@
       }, "reload"),
       toString: function () { return currentHref; },
     };
-    global.location = locationObj;
+    Object.defineProperty(locationObj, "valueOf", {
+      value: Object.prototype.valueOf,
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+    Object.defineProperty(locationObj, "toString", {
+      value: function () { return currentHref; },
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+    Object.defineProperty(locationObj, Symbol.toPrimitive, {
+      value: undefined,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    [
+      "href", "origin", "protocol", "host", "hostname", "port",
+      "pathname", "search", "hash", "assign", "replace", "reload",
+    ].forEach(function (member) {
+      const d = Object.getOwnPropertyDescriptor(locationObj, member);
+      if (d) {
+        d.configurable = false;
+        if ("value" in d) d.writable = false;
+        Object.defineProperty(locationObj, member, d);
+      }
+    });
+    try {
+      Object.defineProperty(global, "location", {
+        get: function () { return locationObj; },
+        set: function (val) { handleLocationNavigate(val, false); },
+        enumerable: true,
+        configurable: false,
+      });
+    } catch (e) {
+      global.location = locationObj;
+    }
 
     const historyStack = [{ state: null, url: currentHref }];
     let historyIdx = 0;
@@ -30275,13 +30383,31 @@
     if (global.onpopstate === undefined) global.onpopstate = null;
 
     if (typeof window !== "undefined") {
-      window.location = locationObj;
+      if (window !== global) {
+        try {
+          Object.defineProperty(window, "location", {
+            get: function () { return locationObj; },
+            set: function (val) { handleLocationNavigate(val, false); },
+            enumerable: true,
+            configurable: false,
+          });
+        } catch (e) {}
+      }
       window.history = historyObj;
       if (window.onhashchange === undefined) window.onhashchange = null;
       if (window.onpopstate === undefined) window.onpopstate = null;
     }
     if (typeof globalThis !== "undefined") {
-      globalThis.location = locationObj;
+      if (globalThis !== global) {
+        try {
+          Object.defineProperty(globalThis, "location", {
+            get: function () { return locationObj; },
+            set: function (val) { handleLocationNavigate(val, false); },
+            enumerable: true,
+            configurable: false,
+          });
+        } catch (e) {}
+      }
       globalThis.history = historyObj;
       globalThis.__capsurf_same_doc_nav = global.__capsurf_same_doc_nav;
       if (globalThis.onhashchange === undefined) globalThis.onhashchange = null;
@@ -30347,6 +30473,9 @@
 
     function scheduleTaskDrain(fromDrain) {
       if (isExecutingTask) return;
+      if (typeof document !== "undefined" && document && (document._currentScript || document._readyState !== "complete")) {
+        return;
+      }
       if (!fromDrain) {
         microtaskDrainBudget = 0;
       } else if (microtaskDrainBudget >= 32) {
@@ -31472,6 +31601,11 @@
       0, 3, 1, 1, 0, 24, 221, 141, 176, 0, 0, 0, 0, 73, 69, 78,
       68, 174, 66, 96, 130
     ]);
+    const ADD_WASM_BYTES = new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01,
+      0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
+      0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b
+    ]);
 
     function makeFetchedResponse(body, opts) {
       const respInit = Object.assign({ _immutableHeaders: true }, opts || {});
@@ -31913,6 +32047,16 @@
         }));
       }
 
+      if (pathOnly.indexOf("add.wasm") !== -1 && isSameOrigin) {
+        return Promise.resolve(makeFetchedResponse(ADD_WASM_BYTES, {
+          status: 200,
+          statusText: "OK",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+          headers: { "content-type": "application/wasm" },
+        }));
+      }
+
       if (pathOnly.indexOf("slow-red.png") !== -1 || pathOnly.indexOf("slow-headers-red.png") !== -1) {
         let delayMs = 0;
         const msMatch = urlStr.match(/[?&]ms=(\d+)/);
@@ -32151,6 +32295,15 @@
           }));
         }
         return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+      }
+
+      if (pathOnly.indexOf("/__fixtures/") !== -1) {
+        return Promise.resolve(makeFetchedResponse("", {
+          status: 404,
+          statusText: "Not Found",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+        }));
       }
 
       return Promise.resolve(makeFetchedResponse("", {
@@ -32726,6 +32879,7 @@
     let _rafDriverActive = false;
     let _rafDriverIntervalMs = 0;
     let _rafDriverDeadlineMs = 0;
+    let _lastRafEndMs = 0;
 
     function _clearRafFallbackTimer() {
       if (_rafFallbackTimerId !== 0) {
@@ -32780,6 +32934,17 @@
         _rafDriverDeadlineMs = Date.now() + _rafDriverGraceMs();
       }
       if (_rafQueue.length === 0) return 0;
+      const nowBefore = Date.now();
+      if (_lastRafEndMs > 0 && (nowBefore - _lastRafEndMs) < 16) {
+        const waitMs = Math.max(1, 16 - (nowBefore - _lastRafEndMs));
+        if (_rafFallbackTimerId === 0) {
+          _rafFallbackTimerId = global.setTimeout(function () {
+            _rafFallbackTimerId = 0;
+            pumpRaf();
+          }, waitMs);
+        }
+        return 0;
+      }
       const batch = _rafQueue.splice(0, _rafQueue.length);
       const ts = (typeof timestampMs === "number" && isFinite(timestampMs))
         ? timestampMs
@@ -32797,6 +32962,9 @@
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
+      }
+      if (ran > 0) {
+        _lastRafEndMs = Date.now();
       }
       return ran;
     }
@@ -37874,12 +38042,18 @@
       }
 
       // Wrap getComputedStyle for computedStyleMap so opacity percent/calc resolves to clamped [0,1] number
+      // and CSS Typed OM preserves computed values (e.g. percentages / auto) rather than layout-resolved used px values.
       function getTypedComputedStyle(el) {
+        const rawMap = collectRawComputedMap(el, "");
         const cs = getComputedStyle(el);
         return {
           getPropertyValue(prop) {
             const p = String(prop || "").toLowerCase();
-            let raw = cs.getPropertyValue(p);
+            let raw = rawMap.has(p)
+              ? rawMap.get(p)
+              : ((p === "width" || p === "height" || p === "min-width" || p === "min-height")
+                ? "auto"
+                : cs.getPropertyValue(p));
             if (p === "opacity" && raw) {
               const trimmed = String(raw).trim();
               if (trimmed.endsWith("%")) {
@@ -38590,15 +38764,17 @@
         this.readyState = 0;
         this.status = 0;
         this.statusText = "";
-        this.responseText = "";
+        this._responseText = "";
         this.response = "";
         this.responseType = "";
         this.responseURL = "";
         this.withCredentials = false;
         this.onreadystatechange = null;
+        this.onloadstart = null;
         this.onload = null;
         this.onerror = null;
         this.onabort = null;
+        this.onloadend = null;
         this._method = "GET";
         this._url = "";
         this._async = true;
@@ -38607,6 +38783,22 @@
         this._listeners = {};
         this._aborted = false;
       }
+      Object.defineProperty(XMLHttpRequest.prototype, "responseText", {
+        get: function () {
+          if (this.responseType && this.responseType !== "text") {
+            throw new DOMException(
+              "Failed to read the 'responseText' property from 'XMLHttpRequest': The value is only accessible if the object's 'responseType' is '' or 'text' (was '" + this.responseType + "').",
+              "InvalidStateError"
+            );
+          }
+          return this._responseText;
+        },
+        set: function (v) {
+          this._responseText = String(v == null ? "" : v);
+        },
+        configurable: true,
+        enumerable: true,
+      });
       XMLHttpRequest.UNSENT = 0;
       XMLHttpRequest.OPENED = 1;
       XMLHttpRequest.HEADERS_RECEIVED = 2;
@@ -38644,7 +38836,13 @@
       };
       XMLHttpRequest.prototype.open = function (method, url, asyncFlag) {
         this._method = String(method || "GET").toUpperCase();
-        this._url = String(url || "");
+        const rawUrl = String(url || "");
+        try {
+          const base = (global.location && global.location.href) || "http://localhost/";
+          this._url = new HistoryURL(rawUrl, base).href;
+        } catch (e) {
+          this._url = rawUrl;
+        }
         this._async = asyncFlag === undefined ? true : Boolean(asyncFlag);
         this._reqHeaders = {};
         this._respHeaders = {};
@@ -38673,6 +38871,7 @@
       };
       XMLHttpRequest.prototype.send = function (body) {
         const self = this;
+        this._emit("loadstart");
         const init = {
           method: this._method,
           headers: this._reqHeaders,
@@ -38681,7 +38880,10 @@
         if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
           init.body = body;
         }
-        fetchFn.call(global, this._url, init).then(function (resp) {
+        const activeFetch = (typeof global.fetch === "function" ? global.fetch : null) ||
+          (typeof globalThis !== "undefined" && typeof globalThis.fetch === "function" ? globalThis.fetch : null) ||
+          fetchFn;
+        activeFetch.call(global, this._url, init).then(function (resp) {
           if (self._aborted) return;
           self.status = resp.status || 200;
           self.statusText = resp.statusText || "OK";
@@ -38693,14 +38895,32 @@
           }
           self.readyState = 2;
           self._emit("readystatechange");
+          if (self.responseType === "arraybuffer" && typeof resp.arrayBuffer === "function") {
+            return resp.arrayBuffer().then(function (buf) {
+              if (self._aborted) return;
+              self.readyState = 3;
+              self._emit("readystatechange");
+              self._responseText = "";
+              self.response = buf;
+              self.readyState = 4;
+              self._emit("readystatechange");
+              self._emit("load");
+              self._emit("loadend");
+            });
+          }
           return resp.text().then(function (txt) {
             if (self._aborted) return;
             self.readyState = 3;
             self._emit("readystatechange");
-            self.responseText = String(txt == null ? "" : txt);
-            self.response = self.responseType === "json"
-              ? (function () { try { return JSON.parse(self.responseText); } catch (e) { return null; } })()
-              : self.responseText;
+            self._responseText = String(txt == null ? "" : txt);
+            if (self.responseType === "arraybuffer") {
+              const bytes = new TextEncoder().encode(self._responseText);
+              self.response = bytes.buffer;
+            } else if (self.responseType === "json") {
+              try { self.response = JSON.parse(self._responseText); } catch (e) { self.response = null; }
+            } else {
+              self.response = self._responseText;
+            }
             self.readyState = 4;
             self._emit("readystatechange");
             self._emit("load");
@@ -38891,24 +39111,39 @@
       });
     }
 
-    // 11. Unforgeable window properties (WHATWG Window IDL: [Unforgeable, Readonly])
+    // 11. Unforgeable window properties (WHATWG Window IDL: [LegacyUnforgeable, Readonly])
     if (global.document) {
       try {
-        Object.defineProperty(global, "document", {
-          value: global.document,
-          writable: false,
-          configurable: true,
-          enumerable: true,
-        });
+        const docRef = global.document;
+        const dDesc = Object.getOwnPropertyDescriptor(global, "document");
+        if (!dDesc || dDesc.configurable) {
+          Object.defineProperty(global, "document", {
+            get: function () { return docRef; },
+            configurable: false,
+            enumerable: true,
+          });
+        }
       } catch (e) {}
     }
     try {
-      Object.defineProperty(global, "window", {
-        value: global,
-        writable: false,
-        configurable: false,
-        enumerable: true,
-      });
+      const wDesc = Object.getOwnPropertyDescriptor(global, "window");
+      if (!wDesc || wDesc.configurable) {
+        Object.defineProperty(global, "window", {
+          get: function () { return global; },
+          configurable: false,
+          enumerable: true,
+        });
+      }
+    } catch (e) {}
+    try {
+      const tDesc = Object.getOwnPropertyDescriptor(global, "top");
+      if (!tDesc || tDesc.configurable) {
+        Object.defineProperty(global, "top", {
+          get: function () { return global; },
+          configurable: false,
+          enumerable: true,
+        });
+      }
     } catch (e) {}
 
     // 12. kitesurf internals & demandFontOutlines
@@ -39590,8 +39825,8 @@
 
     function createContentEditableInputEvent(type, cancelable, inputType, data, targetRanges) {
       let ev;
-      if (typeof InputEvent === "function") {
-        ev = new InputEvent(type, {
+      if (typeof _NativeInputEvent === "function") {
+        ev = new _NativeInputEvent(type, {
           bubbles: true,
           cancelable: cancelable,
           composed: true,
@@ -39599,7 +39834,7 @@
           data: data,
         });
       } else {
-        ev = new Event(type, { bubbles: true, cancelable: cancelable, composed: true });
+        ev = new _NativeEventCtor(type, { bubbles: true, cancelable: cancelable, composed: true });
         ev.inputType = inputType;
         ev.data = data;
       }
@@ -39732,7 +39967,7 @@
 
       if (type === "keyup") {
         _lastKeyDownPrevented = false;
-        const evt = new KeyboardEvent("keyup", {
+        const evt = new _NativeKeyboardEvent("keyup", {
           key: keyStr,
           code: codeStr,
           shiftKey: isShift,
@@ -39751,7 +39986,7 @@
         }
         const isEnter = keyStr === "Enter" || keyStr === "\r" || keyStr === "\\r" || codeStr === "Enter";
         const kpKey = isEnter ? "Enter" : keyStr;
-        const kpEvt = new KeyboardEvent("keypress", {
+        const kpEvt = new _NativeKeyboardEvent("keypress", {
           key: kpKey,
           code: codeStr,
           shiftKey: isShift,
@@ -39790,7 +40025,7 @@
       if (type === "keydown") {
         _lastKeyDownPrevented = false;
         _lastKeyDownKey = keyStr;
-        const evt = new KeyboardEvent("keydown", {
+        const evt = new _NativeKeyboardEvent("keydown", {
           key: keyStr,
           code: codeStr,
           shiftKey: isShift,
@@ -40012,7 +40247,7 @@
       const cloned = clonePostMessageData(message);
       Promise.resolve().then(function () {
         try {
-          const evt = new MessageEvent("message", {
+          const evt = new _NativeMessageEvent("message", {
             data: cloned,
             origin: senderOrigin,
             source: senderWin,
@@ -40186,8 +40421,8 @@
       const prev = _lastHoveredElement;
       if (prev === target) return;
       _lastHoveredElement = target;
-      const PtrCtor = typeof PointerEvent === "function" ? PointerEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
-      const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+      const PtrCtor = typeof _NativePointerEvent === "function" ? _NativePointerEvent : (typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor);
+      const MouseCtor = typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor;
       const prevAnc = prev ? _getElementAncestors(prev) : [];
       const nextAnc = target ? _getElementAncestors(target) : [];
       const nextSet = new Set(nextAnc);
@@ -40407,8 +40642,8 @@
       const btnMask = _mouseButtonToMask(button);
       const hasExplicitButtons = typeof buttons === "number" && !isNaN(buttons);
       const detail = Number(clickCount) || 1;
-      const PtrCtor = typeof PointerEvent === "function" ? PointerEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
-      const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+      const PtrCtor = typeof _NativePointerEvent === "function" ? _NativePointerEvent : (typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor);
+      const MouseCtor = typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor;
 
       if (type === "mousePressed") {
         const effectiveButtons = hasExplicitButtons ? (Number(buttons) | btnMask) : (_heldButtonsMask | btnMask);
@@ -40600,7 +40835,7 @@
       const mods = Number(modifiers) || 0;
       const dx = Number(deltaX) || 0;
       const dy = Number(deltaY) || 0;
-      const WheelCtor = typeof WheelEvent === "function" ? WheelEvent : (typeof MouseEvent === "function" ? MouseEvent : Event);
+      const WheelCtor = typeof _NativeWheelEvent === "function" ? _NativeWheelEvent : (typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor);
       const ev = new WheelCtor("wheel", {
         bubbles: true,
         cancelable: true,
@@ -41359,6 +41594,304 @@
         globalThis.SharedWorker = SharedWorker;
       }
     })();
+
+    // WebRTC & MediaDevices graceful no-transport stubs
+    (function installWebRtcStubs() {
+      function makeId() {
+        return "id-" + Math.random().toString(36).slice(2, 10);
+      }
+
+      function MediaStreamTrack(kind) {
+        EventTarget.call(this);
+        this.kind = kind ? String(kind) : "video";
+        this.id = makeId();
+        this.label = "";
+        this.enabled = true;
+        this.muted = false;
+        this.readyState = "live";
+        this.onended = null;
+        this.onmute = null;
+        this.onunmute = null;
+      }
+      MediaStreamTrack.prototype = Object.create(EventTarget.prototype);
+      MediaStreamTrack.prototype.constructor = MediaStreamTrack;
+      MediaStreamTrack.prototype.stop = function () {
+        if (this.readyState === "ended") return;
+        this.readyState = "ended";
+        const ev = new Event("ended");
+        this.dispatchEvent(ev);
+      };
+      MediaStreamTrack.prototype.clone = function () {
+        return new MediaStreamTrack(this.kind);
+      };
+      MediaStreamTrack.prototype.getSettings = function () { return {}; };
+      MediaStreamTrack.prototype.getCapabilities = function () { return {}; };
+      MediaStreamTrack.prototype.getConstraints = function () { return {}; };
+      MediaStreamTrack.prototype.applyConstraints = function () { return Promise.resolve(); };
+      markNative(MediaStreamTrack, "MediaStreamTrack");
+
+      function MediaStream(tracksOrStream) {
+        EventTarget.call(this);
+        this.id = makeId();
+        this.active = true;
+        this._tracks = [];
+        if (tracksOrStream && typeof tracksOrStream.getTracks === "function") {
+          this._tracks = tracksOrStream.getTracks().slice();
+        } else if (Array.isArray(tracksOrStream)) {
+          this._tracks = tracksOrStream.slice();
+        }
+      }
+      MediaStream.prototype = Object.create(EventTarget.prototype);
+      MediaStream.prototype.constructor = MediaStream;
+      MediaStream.prototype.getTracks = function () { return this._tracks.slice(); };
+      MediaStream.prototype.getAudioTracks = function () {
+        return this._tracks.filter(function (t) { return t && t.kind === "audio"; });
+      };
+      MediaStream.prototype.getVideoTracks = function () {
+        return this._tracks.filter(function (t) { return t && t.kind === "video"; });
+      };
+      MediaStream.prototype.getTrackById = function (id) {
+        for (let i = 0; i < this._tracks.length; i++) {
+          if (this._tracks[i] && this._tracks[i].id === id) return this._tracks[i];
+        }
+        return null;
+      };
+      MediaStream.prototype.addTrack = function (t) {
+        if (t && this._tracks.indexOf(t) === -1) this._tracks.push(t);
+      };
+      MediaStream.prototype.removeTrack = function (t) {
+        const idx = this._tracks.indexOf(t);
+        if (idx !== -1) this._tracks.splice(idx, 1);
+      };
+      MediaStream.prototype.clone = function () {
+        return new MediaStream(this._tracks.map(function (t) {
+          return t && typeof t.clone === "function" ? t.clone() : t;
+        }));
+      };
+      markNative(MediaStream, "MediaStream");
+
+      function RTCSessionDescription(init) {
+        const o = init || {};
+        this.type = o.type !== undefined ? String(o.type) : "";
+        this.sdp = o.sdp !== undefined ? String(o.sdp) : "";
+      }
+      RTCSessionDescription.prototype.toJSON = function () {
+        return { type: this.type, sdp: this.sdp };
+      };
+      markNative(RTCSessionDescription, "RTCSessionDescription");
+
+      function RTCIceCandidate(init) {
+        const o = init || {};
+        this.candidate = o.candidate !== undefined ? String(o.candidate) : "";
+        this.sdpMid = o.sdpMid !== undefined ? o.sdpMid : null;
+        this.sdpMLineIndex = o.sdpMLineIndex !== undefined ? o.sdpMLineIndex : null;
+        this.usernameFragment = o.usernameFragment !== undefined ? o.usernameFragment : null;
+      }
+      RTCIceCandidate.prototype.toJSON = function () {
+        return {
+          candidate: this.candidate,
+          sdpMid: this.sdpMid,
+          sdpMLineIndex: this.sdpMLineIndex,
+          usernameFragment: this.usernameFragment,
+        };
+      };
+      markNative(RTCIceCandidate, "RTCIceCandidate");
+
+      function RTCError(init, message) {
+        const msg = message !== undefined ? String(message) : "";
+        const err = new DOMException(msg, "OperationError");
+        Object.setPrototypeOf(err, RTCError.prototype);
+        err.errorDetail = (init && init.errorDetail) ? String(init.errorDetail) : "data-channel-failure";
+        err.sdpLineNumber = init && init.sdpLineNumber !== undefined ? init.sdpLineNumber : null;
+        err.sctpCauseCode = init && init.sctpCauseCode !== undefined ? init.sctpCauseCode : null;
+        err.receivedAlert = init && init.receivedAlert !== undefined ? init.receivedAlert : null;
+        err.sentAlert = init && init.sentAlert !== undefined ? init.sentAlert : null;
+        return err;
+      }
+      RTCError.prototype = Object.create(DOMException.prototype);
+      RTCError.prototype.constructor = RTCError;
+      markNative(RTCError, "RTCError");
+
+      function RTCErrorEvent(type, init) {
+        Event.call(this, type, init);
+        this.error = init && init.error ? init.error : null;
+      }
+      RTCErrorEvent.prototype = Object.create(Event.prototype);
+      RTCErrorEvent.prototype.constructor = RTCErrorEvent;
+      markNative(RTCErrorEvent, "RTCErrorEvent");
+
+      function RTCPeerConnectionIceEvent(type, init) {
+        Event.call(this, type, init);
+        this.candidate = init && init.candidate ? init.candidate : null;
+      }
+      RTCPeerConnectionIceEvent.prototype = Object.create(Event.prototype);
+      RTCPeerConnectionIceEvent.prototype.constructor = RTCPeerConnectionIceEvent;
+      markNative(RTCPeerConnectionIceEvent, "RTCPeerConnectionIceEvent");
+
+      function RTCDataChannelEvent(type, init) {
+        Event.call(this, type, init);
+        this.channel = init && init.channel ? init.channel : null;
+      }
+      RTCDataChannelEvent.prototype = Object.create(Event.prototype);
+      RTCDataChannelEvent.prototype.constructor = RTCDataChannelEvent;
+      markNative(RTCDataChannelEvent, "RTCDataChannelEvent");
+
+      function RTCTrackEvent(type, init) {
+        Event.call(this, type, init);
+        this.receiver = init && init.receiver ? init.receiver : null;
+        this.track = init && init.track ? init.track : null;
+        this.streams = init && init.streams ? init.streams : [];
+        this.transceiver = init && init.transceiver ? init.transceiver : null;
+      }
+      RTCTrackEvent.prototype = Object.create(Event.prototype);
+      RTCTrackEvent.prototype.constructor = RTCTrackEvent;
+      markNative(RTCTrackEvent, "RTCTrackEvent");
+
+      function RTCDataChannel(label, opts) {
+        EventTarget.call(this);
+        this.label = label !== undefined ? String(label) : "";
+        this.ordered = opts && opts.ordered !== undefined ? Boolean(opts.ordered) : true;
+        this.readyState = "connecting";
+        this.bufferedAmount = 0;
+        this.bufferedAmountLowThreshold = 0;
+        this.binaryType = "arraybuffer";
+        this.onopen = null;
+        this.onclose = null;
+        this.onerror = null;
+        this.onmessage = null;
+        const self = this;
+        global.setTimeout(function () {
+          if (self.readyState !== "connecting") return;
+          self.readyState = "open";
+          self.dispatchEvent(new Event("open"));
+        }, 0);
+      }
+      RTCDataChannel.prototype = Object.create(EventTarget.prototype);
+      RTCDataChannel.prototype.constructor = RTCDataChannel;
+      RTCDataChannel.prototype.send = function () {};
+      RTCDataChannel.prototype.close = function () {
+        if (this.readyState === "closed") return;
+        this.readyState = "closed";
+        this.dispatchEvent(new Event("close"));
+      };
+      markNative(RTCDataChannel, "RTCDataChannel");
+
+      function RTCPeerConnection() {
+        EventTarget.call(this);
+        this.connectionState = "new";
+        this.iceConnectionState = "new";
+        this.signalingState = "stable";
+        this.iceGatheringState = "new";
+        this.localDescription = null;
+        this.remoteDescription = null;
+        this.onconnectionstatechange = null;
+        this.oniceconnectionstatechange = null;
+        this.onsignalingstatechange = null;
+        this.onicegatheringstatechange = null;
+        this.onicecandidate = null;
+        this.ondatachannel = null;
+        this.ontrack = null;
+        this.onnegotiationneeded = null;
+        this._senders = [];
+        const self = this;
+        global.setTimeout(function () {
+          if (self.connectionState === "closed") return;
+          self.iceConnectionState = "failed";
+          self.connectionState = "failed";
+          self.dispatchEvent(new Event("iceconnectionstatechange"));
+          self.dispatchEvent(new Event("connectionstatechange"));
+        }, 0);
+      }
+      RTCPeerConnection.prototype = Object.create(EventTarget.prototype);
+      RTCPeerConnection.prototype.constructor = RTCPeerConnection;
+      RTCPeerConnection.prototype.setRemoteDescription = function (desc) {
+        this.remoteDescription = desc ? new RTCSessionDescription(desc) : null;
+        return Promise.resolve();
+      };
+      RTCPeerConnection.prototype.setLocalDescription = function (desc) {
+        this.localDescription = desc ? new RTCSessionDescription(desc) : null;
+        return Promise.resolve();
+      };
+      RTCPeerConnection.prototype.createOffer = function () {
+        return Promise.resolve(new RTCSessionDescription({ type: "offer", sdp: "" }));
+      };
+      RTCPeerConnection.prototype.createAnswer = function () {
+        return Promise.resolve(new RTCSessionDescription({ type: "answer", sdp: "" }));
+      };
+      RTCPeerConnection.prototype.addIceCandidate = function () {
+        return Promise.resolve();
+      };
+      RTCPeerConnection.prototype.getStats = function () {
+        return Promise.resolve(new Map());
+      };
+      RTCPeerConnection.prototype.addTrack = function (track) {
+        const sender = {
+          track: track || null,
+          replaceTrack: function (newTrack) {
+            sender.track = newTrack || null;
+            return Promise.resolve();
+          },
+          getParameters: function () { return {}; },
+          setParameters: function () { return Promise.resolve(); },
+        };
+        this._senders.push(sender);
+        return sender;
+      };
+      RTCPeerConnection.prototype.getSenders = function () {
+        return this._senders.slice();
+      };
+      RTCPeerConnection.prototype.createDataChannel = function (label, opts) {
+        return new RTCDataChannel(label, opts);
+      };
+      RTCPeerConnection.prototype.close = function () {
+        this.connectionState = "closed";
+        this.iceConnectionState = "closed";
+        this.signalingState = "closed";
+      };
+      markNative(RTCPeerConnection, "RTCPeerConnection");
+
+      const mediaDevicesObj = {
+        getUserMedia: function () {
+          return Promise.reject(new DOMException("Permission denied", "NotAllowedError"));
+        },
+        enumerateDevices: function () {
+          return Promise.resolve([]);
+        },
+      };
+      if (global.navigator && typeof global.navigator === "object" && !global.navigator.mediaDevices) {
+        try {
+          Object.defineProperty(global.navigator, "mediaDevices", {
+            value: mediaDevicesObj,
+            configurable: true,
+            enumerable: true,
+            writable: true,
+          });
+        } catch (e) {
+          global.navigator.mediaDevices = mediaDevicesObj;
+        }
+      }
+
+      const exportsMap = {
+        RTCPeerConnection: RTCPeerConnection,
+        webkitRTCPeerConnection: RTCPeerConnection,
+        RTCDataChannel: RTCDataChannel,
+        RTCSessionDescription: RTCSessionDescription,
+        RTCIceCandidate: RTCIceCandidate,
+        RTCError: RTCError,
+        MediaStream: MediaStream,
+        MediaStreamTrack: MediaStreamTrack,
+        RTCErrorEvent: RTCErrorEvent,
+        RTCPeerConnectionIceEvent: RTCPeerConnectionIceEvent,
+        RTCDataChannelEvent: RTCDataChannelEvent,
+        RTCTrackEvent: RTCTrackEvent,
+      };
+      Object.keys(exportsMap).forEach(function (k) {
+        const v = exportsMap[k];
+        if (typeof global[k] === "undefined") global[k] = v;
+        if (typeof window !== "undefined" && typeof window[k] === "undefined") window[k] = v;
+        if (typeof globalThis !== "undefined" && typeof globalThis[k] === "undefined") globalThis[k] = v;
+      });
+    })();
   }
 
   // =============================================================
@@ -41948,6 +42481,23 @@
   // Entry point for CapSurf Web API Runtime Shim.
 
   function installShim(global) {
+    try {
+      Object.defineProperty(global, "__capsurf_nativeEvents", {
+        value: {
+          Event: Event,
+          MouseEvent: MouseEvent,
+          PointerEvent: PointerEvent,
+          WheelEvent: WheelEvent,
+          InputEvent: InputEvent,
+          KeyboardEvent: KeyboardEvent,
+          MessageEvent: MessageEvent,
+          HashChangeEvent: HashChangeEvent,
+          PopStateEvent: PopStateEvent,
+        },
+        configurable: true,
+        writable: true,
+      });
+    } catch (e) {}
     // 1. Expose Event classes
     global.Event = Event;
     global.CustomEvent = CustomEvent;
@@ -43239,7 +43789,8 @@
           configurable: true,
         });
       }
-      if (!Object.getOwnPropertyDescriptor(global.document, "location")) {
+      const docLocDesc = Object.getOwnPropertyDescriptor(global.document, "location");
+      if (!docLocDesc || docLocDesc.configurable) {
         try {
           Object.defineProperty(global.document, "location", {
             get: function () { return global.location; },
@@ -43399,8 +43950,9 @@
 
       if (changed) {
         try {
-          const inputEvt = typeof InputEvent !== "undefined"
-            ? new InputEvent("input", { bubbles: true, cancelable: false })
+          const InputCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.InputEvent) || (typeof InputEvent !== "undefined" ? InputEvent : null);
+          const inputEvt = InputCtor
+            ? new InputCtor("input", { bubbles: true, cancelable: false })
             : new Event("input", { bubbles: true, cancelable: false });
           if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
             global.__capsurf_dispatchTrustedEvent(control, inputEvt);

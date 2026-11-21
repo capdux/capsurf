@@ -2441,3 +2441,8 @@
 ## Phase 247 (2026-11-21)
 - Removed 392 redundant `e2e/*.e2e.test.js` copies, `e2e/run_all.js`, and `e2e/run_all.cjs`.
 - Updated `GEMINI.md` section 10 to standardize E2E execution on `bun test` over `e2e/*.e2e.test.ts` (392) and `e2e/demo/*.e2e.test.ts` (172).
+
+## Phase 248 (2026-11-21)
+- Fixed CDP BrowserContext cookie/target isolation, live AXTree state, border-box `getBoxModel`, and viewport inheritance in `src/cdp/`.
+- Implemented CSS counters (`counter-reset`/`counter-increment`/`counter()`/`counters()`/`attr()`), `<ol start/reversed>` + `upper-roman` markers, pseudo-element `visibility`, collapsed-border table width, WebFont weight scaling, and single-scroll root guard across `src/css/`, `src/layout/`, and `src/render/`.
+- Fixed `HTMLImageElement.getBoundingClientRect` layout override, CSS Typed OM `computedStyleMap`, rAF overrun frame gap, WebRTC stubs, XHR/WS boot, unforgeable `location`, `form` named overrides, and shadow directionality in `src/js/shim/`.

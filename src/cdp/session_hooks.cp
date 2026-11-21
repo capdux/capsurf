@@ -1543,7 +1543,7 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "        if (/prefers-color-scheme\\s*:\\s*dark/.test(q)) matchesScheme = isDark;\n" ++
     "        else if (/prefers-color-scheme\\s*:\\s*light/.test(q)) matchesScheme = !isDark;\n" ++
     "        return {\n" ++
-    "          matches: Boolean(res && res.matches) && matchesScheme,\n" ++
+    "          matches: matchesScheme,\n" ++
     "          media: res ? res.media : String(query),\n" ++
     "          addEventListener: res && res.addEventListener ? res.addEventListener : function(){},\n" ++
     "          removeEventListener: res && res.removeEventListener ? res.removeEventListener : function(){},\n" ++
@@ -1566,6 +1566,28 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    wrappedSetDocUrl.__tty_wrapped = true;\n" ++
     "    g.__capsurf_set_document_url = wrappedSetDocUrl;\n" ++
     "    if (typeof globalThis !== 'undefined') globalThis.__capsurf_set_document_url = wrappedSetDocUrl;\n" ++
+    "  }\n" ++
+    "  if (typeof g.HTMLFormElement === 'function' && g.HTMLFormElement.prototype && typeof g.HTMLFormElement.prototype.reset === 'function' && !g.HTMLFormElement.prototype.reset.__select_fixed) {\n" ++
+    "    var OrigFormReset = g.HTMLFormElement.prototype.reset;\n" ++
+    "    var wrappedFormReset = function() {\n" ++
+    "      var r = OrigFormReset.apply(this, arguments);\n" ++
+    "      try {\n" ++
+    "        var sels = this.querySelectorAll ? this.querySelectorAll('select') : [];\n" ++
+    "        for (var i = 0; i < sels.length; i++) {\n" ++
+    "          var s = sels[i];\n" ++
+    "          if (!s.multiple && s.selectedIndex === -1 && s.options && s.options.length > 0) {\n" ++
+    "            var fallback = 0;\n" ++
+    "            for (var j = 0; j < s.options.length; j++) {\n" ++
+    "              if (!s.options[j].disabled) { fallback = j; break; }\n" ++
+    "            }\n" ++
+    "            s.selectedIndex = fallback;\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "      } catch (e) {}\n" ++
+    "      return r;\n" ++
+    "    };\n" ++
+    "    wrappedFormReset.__select_fixed = true;\n" ++
+    "    g.HTMLFormElement.prototype.reset = wrappedFormReset;\n" ++
     "  }\n" ++
     "  if (g.document) {\n" ++
     "    var reopenBuf = '';\n" ++

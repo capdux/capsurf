@@ -1,6 +1,8 @@
 // src/css/font_face.cp
 // CSS Fonts Module Level 4: @font-face rule parsing, unicode-range matching, and CORS gating.
 
+import { NodeData } from "../dom/dom.cp";
+
 pub struct UnicodeRange {
     start: u32 = 0;
     end: u32 = 0x10FFFF;
@@ -347,6 +349,170 @@ pub fn parsePseudoContentValue(raw: []const u8, out_buf: []u8): usize? {
         }
     }
     if (!found_string) return null;
+    return out_len;
+}
+
+pub struct CssCounterEntry {
+    name: [32]u8 = [0; 32];
+    name_len: usize = 0;
+    value: i32 = 0;
+}
+
+pub struct CssCounterStack {
+    entries: [64]CssCounterEntry = [CssCounterEntry{}; 64];
+    count: usize = 0;
+
+    fn pushReset(*_, name: []const u8, val: i32) {
+        const trimmed = std.mem.trim(u8, name, " \t\r\n");
+        if (trimmed.len == 0 || _.count >= 64) return;
+        let entry = CssCounterEntry{};
+        const copy_len = @min(trimmed.len, 32);
+        std.mem.copyForwards(u8, entry.name[0..copy_len], trimmed[0..copy_len]);
+        entry.name_len = copy_len;
+        entry.value = val;
+        _.entries[_.count] = entry;
+        _.count += 1;
+    }
+
+    fn increment(*_, name: []const u8, delta: i32) {
+        const trimmed = std.mem.trim(u8, name, " \t\r\n");
+        if (trimmed.len == 0) return;
+        let i = _.count;
+        while (i > 0) {
+            i -= 1;
+            let e = &_.entries[i];
+            if (std.mem.eql(u8, e.name[0..e.name_len], trimmed)) {
+                e.value += delta;
+                return;
+            }
+        }
+        _.pushReset(trimmed, delta);
+    }
+
+    fn formatCounter(name: []const u8, out_buf: []u8): []const u8 {
+        const trimmed = std.mem.trim(u8, name, " \t\r\n");
+        let val: i32 = 0;
+        let i = _.count;
+        while (i > 0) {
+            i -= 1;
+            let e = &_.entries[i];
+            if (std.mem.eql(u8, e.name[0..e.name_len], trimmed)) {
+                val = e.value;
+                break;
+            }
+        }
+        return std.fmt.bufPrint(out_buf, "{d}", .{val}) catch "";
+    }
+
+    fn formatCounters(name: []const u8, sep: []const u8, out_buf: []u8): usize {
+        const trimmed = std.mem.trim(u8, name, " \t\r\n");
+        let out_len: usize = 0;
+        let first = true;
+        let i: usize = 0;
+        while (i < _.count) : (i += 1) {
+            const e = &_.entries[i];
+            if (!std.mem.eql(u8, e.name[0..e.name_len], trimmed)) continue;
+            if (!first && sep.len > 0) {
+                const take_s = @min(sep.len, out_buf.len - out_len);
+                std.mem.copyForwards(u8, out_buf[out_len .. out_len + take_s], sep[0..take_s]);
+                out_len += take_s;
+            }
+            let num_buf: [16]u8 = undefined;
+            const num_str = std.fmt.bufPrint(&num_buf, "{d}", .{e.value}) catch "0";
+            const take_n = @min(num_str.len, out_buf.len - out_len);
+            std.mem.copyForwards(u8, out_buf[out_len .. out_len + take_n], num_str[0..take_n]);
+            out_len += take_n;
+            first = false;
+        }
+        if (first && out_buf.len > 0) {
+            out_buf[0] = '0';
+            return 1;
+        }
+        return out_len;
+    }
+}
+
+pub fn hasDynamicPseudoContent(raw: []const u8): bool {
+    return std.mem.indexOf(u8, raw, "counter(") != null ||
+        std.mem.indexOf(u8, raw, "counters(") != null ||
+        std.mem.indexOf(u8, raw, "attr(") != null;
+}
+
+pub fn resolvePseudoContentExpr(
+    raw: []const u8,
+    node: *const NodeData,
+    stack: *const CssCounterStack,
+    out_buf: []u8,
+): usize? {
+    const s = std.mem.trim(u8, raw, " \t\r\n");
+    if (s.len == 0) return null;
+    if (std.ascii.eqlIgnoreCase(s, "none") || std.ascii.eqlIgnoreCase(s, "normal")) return null;
+
+    let out_len: usize = 0;
+    let i: usize = 0;
+    let produced = false;
+    while (i < s.len) {
+        while (i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) : (i += 1) {}
+        if (i >= s.len) break;
+        const q = s[i];
+        if (q == '"' || q == '\'') {
+            produced = true;
+            i += 1;
+            while (i < s.len && s[i] != q) : (i += 1) {
+                if (s[i] == '\\' && i + 1 < s.len) i += 1;
+                if (out_len < out_buf.len) {
+                    out_buf[out_len] = s[i];
+                    out_len += 1;
+                }
+            }
+            if (i < s.len && s[i] == q) i += 1;
+        } else if (q == '/') {
+            break;
+        } else if (i + 9 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 9], "counters(")) {
+            i += 9;
+            const start = i;
+            while (i < s.len && s[i] != ')') : (i += 1) {}
+            const args = s[start..i];
+            if (i < s.len && s[i] == ')') i += 1;
+            if (comma := std.mem.indexOfScalar(u8, args, ',')) {
+                const cname = std.mem.trim(u8, args[0..comma], " \t\r\n");
+                let sep = std.mem.trim(u8, args[comma + 1 ..], " \t\r\n");
+                if (sep.len >= 2 && ((sep[0] == '"' && sep[sep.len - 1] == '"') || (sep[0] == '\'' && sep[sep.len - 1] == '\''))) {
+                    sep = sep[1 .. sep.len - 1];
+                }
+                const wrote = stack.formatCounters(cname, sep, out_buf[out_len..]);
+                out_len += wrote;
+                produced = true;
+            }
+        } else if (i + 8 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 8], "counter(")) {
+            i += 8;
+            const start = i;
+            while (i < s.len && s[i] != ')') : (i += 1) {}
+            const arg = std.mem.trim(u8, s[start..i], " \t\r\n");
+            if (i < s.len && s[i] == ')') i += 1;
+            let num_buf: [16]u8 = undefined;
+            const txt = stack.formatCounter(arg, &num_buf);
+            const take = @min(txt.len, out_buf.len - out_len);
+            std.mem.copyForwards(u8, out_buf[out_len .. out_len + take], txt[0..take]);
+            out_len += take;
+            produced = true;
+        } else if (i + 5 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 5], "attr(")) {
+            i += 5;
+            const start = i;
+            while (i < s.len && s[i] != ')') : (i += 1) {}
+            const aname = std.mem.trim(u8, s[start..i], " \t\r\n");
+            if (i < s.len && s[i] == ')') i += 1;
+            if (aval := node.getAttribute(aname)) {
+                const take = @min(aval.len, out_buf.len - out_len);
+                std.mem.copyForwards(u8, out_buf[out_len .. out_len + take], aval[0..take]);
+                out_len += take;
+            }
+            produced = true;
+        } else {
+            while (i < s.len && s[i] != ' ' && s[i] != '\t' && s[i] != '"' && s[i] != '\'') : (i += 1) {}
+        }
+    }
+    if (!produced) return null;
     return out_len;
 }
 

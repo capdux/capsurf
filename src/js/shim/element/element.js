@@ -2706,6 +2706,15 @@ function installElementExtensions(proto) {
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
     elementShadowRootMap.set(this, shadow);
+    try {
+      Object.defineProperty(this, "_shadowRoot", {
+        value: shadow,
+        writable: true,
+        configurable: true,
+      });
+    } catch (e) {
+      this._shadowRoot = shadow;
+    }
     return shadow;
   };
   markNative(proto.attachShadow, "attachShadow");

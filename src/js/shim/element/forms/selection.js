@@ -60,9 +60,12 @@ function notifyControlValueMutation(control, cursor) {
   control._selectionEnd = clamped;
   control._selectionDirection = "none";
   try {
-    const inputEvt = typeof InputEvent !== "undefined"
-      ? new InputEvent("input", { bubbles: true, cancelable: false })
-      : new Event("input", { bubbles: true });
+    const _ne = (typeof globalThis !== "undefined" && globalThis.__capsurf_nativeEvents) || null;
+    const InputCtor = (_ne && _ne.InputEvent) || (typeof InputEvent !== "undefined" ? InputEvent : null);
+    const EventCtor = (_ne && _ne.Event) || Event;
+    const inputEvt = InputCtor
+      ? new InputCtor("input", { bubbles: true, cancelable: false })
+      : new EventCtor("input", { bubbles: true });
     control.dispatchEvent(inputEvt);
   } catch (e) {}
 }

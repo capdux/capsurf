@@ -10,7 +10,7 @@ import { Document, NodeData, NodeType, NodeId, NULL_NODE, StringSlice } from "..
 import { SelectorList, Matcher } from "./matcher.cp";
 import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
-import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue } from "./font_face.cp";
+import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue, CssCounterStack, hasDynamicPseudoContent, resolvePseudoContentExpr } from "./font_face.cp";
 import { parseAttrExpr, evaluateCssAttr } from "./attr_evaluator.cp";
 import { BreakValue, BreakInsideValue, PageMarginRule, isValidUtf8, decodeLegacyCssToUtf8 } from "./paged_media.cp";
 import { Direction, UnicodeBidi, resolveFirstStrongDirection } from "./bidi.cp";
@@ -28,6 +28,22 @@ import {
 pub enum DisplayKeyword {
     None,
     Contents,
+}
+
+pub enum ListStyleType {
+    Decimal,
+    UpperRoman,
+    LowerRoman,
+    None,
+
+    static fn parse(raw: []const u8): ListStyleType? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "none")) return ListStyleType.None;
+        if (std.ascii.eqlIgnoreCase(s, "decimal")) return ListStyleType.Decimal;
+        if (std.ascii.eqlIgnoreCase(s, "upper-roman")) return ListStyleType.UpperRoman;
+        if (std.ascii.eqlIgnoreCase(s, "lower-roman")) return ListStyleType.LowerRoman;
+        return null;
+    }
 }
 
 pub enum DisplayOutside {
@@ -1954,9 +1970,24 @@ pub struct ComputedStyle {
     before_content_buf: [64]u8 = [0; 64],
     before_content_len: usize = 0,
     has_before_content: bool = false,
+    before_visibility: Visibility? = null,
+    before_content_expr_buf: [128]u8 = [0; 128],
+    before_content_expr_len: usize = 0,
     after_content_buf: [64]u8 = [0; 64],
     after_content_len: usize = 0,
     has_after_content: bool = false,
+    after_visibility: Visibility? = null,
+    after_content_expr_buf: [128]u8 = [0; 128],
+    after_content_expr_len: usize = 0,
+    list_style_type: ListStyleType = ListStyleType.Decimal,
+    has_counter_reset: bool = false,
+    counter_reset_name: [32]u8 = [0; 32],
+    counter_reset_len: usize = 0,
+    counter_reset_val: i32 = 0,
+    has_counter_inc: bool = false,
+    counter_inc_name: [32]u8 = [0; 32],
+    counter_inc_len: usize = 0,
+    counter_inc_val: i32 = 1,
     font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
     text_fill_color: CssColor = CssColor.rgba(0, 0, 0, 0);
@@ -2258,6 +2289,7 @@ pub struct ComputedStyle {
         if (p := parent_style) {
             _.visibility = p.visibility;
             _.direction = p.direction;
+            _.list_style_type = p.list_style_type;
             if (!node.hasTag("pre")) {
                 _.white_space = p.white_space;
             }
@@ -2550,6 +2582,44 @@ pub struct ComputedStyle {
             if (v := Visibility.parse(val)) {
                 if (_.tryClaimSlot(PROP_VISIBILITY, weight)) {
                     _.visibility = v;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "list-style-type") || std.ascii.eqlIgnoreCase(name, "list-style")) {
+            if (lt := ListStyleType.parse(val)) {
+                _.list_style_type = lt;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "counter-reset")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (cname := it.next()) {
+                if (!std.ascii.eqlIgnoreCase(cname, "none")) {
+                    const take = @min(cname.len, 32);
+                    std.mem.copyForwards(u8, _.counter_reset_name[0..take], cname[0..take]);
+                    _.counter_reset_len = take;
+                    _.counter_reset_val = 0;
+                    if (num_s := it.next()) {
+                        _.counter_reset_val = std.fmt.parseInt(i32, num_s, 10) catch 0;
+                    }
+                    _.has_counter_reset = true;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "counter-increment")) {
+            let it = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            if (cname := it.next()) {
+                if (!std.ascii.eqlIgnoreCase(cname, "none")) {
+                    const take = @min(cname.len, 32);
+                    std.mem.copyForwards(u8, _.counter_inc_name[0..take], cname[0..take]);
+                    _.counter_inc_len = take;
+                    _.counter_inc_val = 1;
+                    if (num_s := it.next()) {
+                        _.counter_inc_val = std.fmt.parseInt(i32, num_s, 10) catch 1;
+                    }
+                    _.has_counter_inc = true;
                 }
             }
             return;
@@ -4898,22 +4968,41 @@ pub struct Cascade {
                         const decl = &rule.declarations[pd_i];
                         if (std.ascii.eqlIgnoreCase(decl.name, "content")) {
                             if (matched_before_pseudo) {
-                                if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
+                                if (hasDynamicPseudoContent(decl.value)) {
+                                    const elen = @min(decl.value.len, 128);
+                                    std.mem.copyForwards(u8, style.before_content_expr_buf[0..elen], decl.value[0..elen]);
+                                    style.before_content_expr_len = elen;
+                                    style.has_before_content = true;
+                                } else if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
                                     style.before_content_len = clen;
+                                    style.before_content_expr_len = 0;
                                     style.has_before_content = true;
                                 } else {
                                     style.before_content_len = 0;
+                                    style.before_content_expr_len = 0;
                                     style.has_before_content = false;
                                 }
                             }
                             if (matched_after_pseudo) {
-                                if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
+                                if (hasDynamicPseudoContent(decl.value)) {
+                                    const elen = @min(decl.value.len, 128);
+                                    std.mem.copyForwards(u8, style.after_content_expr_buf[0..elen], decl.value[0..elen]);
+                                    style.after_content_expr_len = elen;
+                                    style.has_after_content = true;
+                                } else if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
                                     style.after_content_len = clen;
+                                    style.after_content_expr_len = 0;
                                     style.has_after_content = true;
                                 } else {
                                     style.after_content_len = 0;
+                                    style.after_content_expr_len = 0;
                                     style.has_after_content = false;
                                 }
+                            }
+                        } else if (std.ascii.eqlIgnoreCase(decl.name, "visibility")) {
+                            if (v := Visibility.parse(decl.value)) {
+                                if (matched_before_pseudo) style.before_visibility = v;
+                                if (matched_after_pseudo) style.after_visibility = v;
                             }
                         }
                     }
@@ -4922,22 +5011,41 @@ pub struct Cascade {
                         const decl = &rule.important_declarations[pi_i];
                         if (std.ascii.eqlIgnoreCase(decl.name, "content")) {
                             if (matched_before_pseudo) {
-                                if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
+                                if (hasDynamicPseudoContent(decl.value)) {
+                                    const elen = @min(decl.value.len, 128);
+                                    std.mem.copyForwards(u8, style.before_content_expr_buf[0..elen], decl.value[0..elen]);
+                                    style.before_content_expr_len = elen;
+                                    style.has_before_content = true;
+                                } else if (clen := parsePseudoContentValue(decl.value, style.before_content_buf[0..])) {
                                     style.before_content_len = clen;
+                                    style.before_content_expr_len = 0;
                                     style.has_before_content = true;
                                 } else {
                                     style.before_content_len = 0;
+                                    style.before_content_expr_len = 0;
                                     style.has_before_content = false;
                                 }
                             }
                             if (matched_after_pseudo) {
-                                if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
+                                if (hasDynamicPseudoContent(decl.value)) {
+                                    const elen = @min(decl.value.len, 128);
+                                    std.mem.copyForwards(u8, style.after_content_expr_buf[0..elen], decl.value[0..elen]);
+                                    style.after_content_expr_len = elen;
+                                    style.has_after_content = true;
+                                } else if (clen := parsePseudoContentValue(decl.value, style.after_content_buf[0..])) {
                                     style.after_content_len = clen;
+                                    style.after_content_expr_len = 0;
                                     style.has_after_content = true;
                                 } else {
                                     style.after_content_len = 0;
+                                    style.after_content_expr_len = 0;
                                     style.has_after_content = false;
                                 }
+                            }
+                        } else if (std.ascii.eqlIgnoreCase(decl.name, "visibility")) {
+                            if (v := Visibility.parse(decl.value)) {
+                                if (matched_before_pseudo) style.before_visibility = v;
+                                if (matched_after_pseudo) style.after_visibility = v;
                             }
                         }
                     }
@@ -5047,6 +5155,51 @@ pub struct Cascade {
 
             out_styles[nid] = style;
         }
+        Cascade.resolveCountersAndPseudo(doc, out_styles);
+    }
+
+    static fn resolveCountersRecursive(
+        doc: *const Document,
+        styles: []ComputedStyle,
+        node_id: NodeId,
+        stack: *CssCounterStack,
+    ) {
+        if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || @as(usize, node_id) >= styles.len) return;
+        const node = &doc.nodes.items[@as(usize, node_id)];
+        const saved_count = stack.count;
+        if (node.node_type == NodeType.Element) {
+            let st = &styles[@as(usize, node_id)];
+            if (st.has_counter_reset && st.counter_reset_len > 0) {
+                stack.pushReset(st.counter_reset_name[0..st.counter_reset_len], st.counter_reset_val);
+            }
+            if (st.has_counter_inc && st.counter_inc_len > 0) {
+                stack.increment(st.counter_inc_name[0..st.counter_inc_len], st.counter_inc_val);
+            }
+            if (st.before_content_expr_len > 0) {
+                if (wlen := resolvePseudoContentExpr(st.before_content_expr_buf[0..st.before_content_expr_len], node, stack, st.before_content_buf[0..])) {
+                    st.before_content_len = wlen;
+                    st.has_before_content = true;
+                }
+            }
+            if (st.after_content_expr_len > 0) {
+                if (wlen := resolvePseudoContentExpr(st.after_content_expr_buf[0..st.after_content_expr_len], node, stack, st.after_content_buf[0..])) {
+                    st.after_content_len = wlen;
+                    st.has_after_content = true;
+                }
+            }
+        }
+        let ch = node.first_child;
+        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+            Cascade.resolveCountersRecursive(doc, styles, ch, stack);
+            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        stack.count = saved_count;
+    }
+
+    static fn resolveCountersAndPseudo(doc: *const Document, styles: []ComputedStyle) {
+        let stack = CssCounterStack{};
+        const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
+        Cascade.resolveCountersRecursive(doc, styles, root_id, &stack);
     }
 
     static fn parseContainerLengthPx(raw: []const u8, root_font_px: f32): f32? {

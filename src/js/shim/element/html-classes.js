@@ -1527,9 +1527,11 @@ function installHtmlClasses(global) {
 
     if (!hasStyleW) {
       if (hasAttrW) {
-        const aw = Number(this.getAttribute("width"));
-        if (!isNaN(aw) && aw >= 0) w = aw;
-      } else if (nw > 0) {
+        if (w === 0) {
+          const aw = Number(this.getAttribute("width"));
+          if (!isNaN(aw) && aw >= 0) w = aw;
+        }
+      } else if (w === 0 && nw > 0) {
         w = nw;
       }
     } else if (w === 0 && nw > 0) {
@@ -1538,9 +1540,11 @@ function installHtmlClasses(global) {
 
     if (!hasStyleH) {
       if (hasAttrH) {
-        const ah = Number(this.getAttribute("height"));
-        if (!isNaN(ah) && ah >= 0) h = ah;
-      } else if (nh > 0) {
+        if (h === 0) {
+          const ah = Number(this.getAttribute("height"));
+          if (!isNaN(ah) && ah >= 0) h = ah;
+        }
+      } else if (h === 0 && nh > 0) {
         h = nh;
       }
     } else if (h === 0 && nh > 0) {

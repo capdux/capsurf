@@ -921,6 +921,7 @@ pub struct CdpPageSession {
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
     target_registry: TargetRegistry = TargetRegistry.init(),
+    owner_target_registry: (*TargetRegistry)? = null,
     network_enabled: bool = false,
     child_network_session_id_buf: [64]u8 = [0; 64],
     child_network_session_id_len: usize = 0,
@@ -1068,6 +1069,7 @@ pub struct CdpPageSession {
         ptr.fetch_enabled = false;
         ptr.fetch_state = FetchState{};
         ptr.target_registry = TargetRegistry.init();
+        ptr.owner_target_registry = null;
         ptr.network_enabled = false;
         ptr.runtime_enabled = true;
         ptr.log_enabled = false;
@@ -1413,6 +1415,7 @@ pub struct CdpPageSession {
         _.wrappers_demoted = 0;
         _.wrappers_revived = 0;
         _.wrappers_reclaimed = 0;
+        _.target_registry.deinit();
         _.cookie_jar.deinit();
         _.clearModuleState();
         _.ctx.deinit();
@@ -2731,6 +2734,9 @@ pub struct CdpPageSession {
         _.renderer_active = false;
         _.frames_rendered = 0;
         _.screencast_handler.state.reset();
+        if (_.owner_target_registry == null) {
+            _.target_registry.reset();
+        }
         clearLearnedScripts();
         _.resetDomTracking();
     }
@@ -3618,8 +3624,8 @@ pub struct CdpPageSession {
         const mb = bb + mgn_b;
 
         return CdpBoxModel {
-            width: @max(0.0, cr - cl),
-            height: @max(0.0, cb - ct),
+            width: @max(0.0, br - bl),
+            height: @max(0.0, bb - bt),
             border: .{ bl, bt, br, bt, br, bb, bl, bb },
             content: .{ cl, ct, cr, ct, cr, cb, cl, cb },
             padding: .{ pl, pt, pr, pt, pr, pb, pl, pb },
@@ -4725,16 +4731,23 @@ pub struct CdpPageSession {
         }
     }
 
+    fn getBrowserTargetRegistry(*_): *TargetRegistry {
+        if (reg := _.owner_target_registry) {
+            return reg;
+        }
+        return &_.target_registry;
+    }
+
     fn getCookieJarForContext(*_, ctx_id: []const u8): (*CookieJar)? {
         if (ctx_id.len == 0 || std.mem.eql(u8, ctx_id, "default")) {
             return &_.cookie_jar;
         }
-        return _.target_registry.getCookieJarForContext(ctx_id);
+        return _.getBrowserTargetRegistry().getCookieJarForContext(ctx_id);
     }
 
     fn getActiveCookieJar(*_): *CookieJar {
         if (_.current_browser_context_id_len > 0) {
-            if (jar := _.target_registry.getCookieJarForContext(_.currentBrowserContextId())) {
+            if (jar := _.getBrowserTargetRegistry().getCookieJarForContext(_.currentBrowserContextId())) {
                 return jar;
             }
         }
@@ -4839,10 +4852,17 @@ pub struct CdpPageSession {
                 const ref_esc = escapeJsonString(_.url, &ref_esc_buf);
                 const accept_val = if (is_css) "text/css,*/*;q=0.1" else if (is_img) "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" else "*/*";
 
+                let bctx_buf: [96]u8 = undefined;
+                const cur_bctx = _.currentBrowserContextId();
+                const bctx_kv = if (cur_bctx.len > 0)
+                    (std.fmt.bufPrint(&bctx_buf, ",\"browserContextId\":\"{s}\"", .{cur_bctx}) catch "")
+                else
+                    "";
+
                 const req_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
-                    .{ req_seq, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"{s}}}",
+                    .{ req_seq, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid, bctx_kv },
                 ) catch "";
                 const is_child_net = _.child_network_session_id_len > 0 &&
                     ((_.iframe_origin_len > 0 && std.mem.startsWith(u8, fetch_url, _.iframe_origin_buf[0.._.iframe_origin_len])) ||
@@ -4859,8 +4879,8 @@ pub struct CdpPageSession {
 
                 const resp_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
-                    .{ req_seq, lid, res_type, fetch_url, fetch_mime, fid },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
+                    .{ req_seq, lid, res_type, fetch_url, fetch_mime, fid, bctx_kv },
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;
@@ -4872,8 +4892,8 @@ pub struct CdpPageSession {
 
                 const fin_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":0}}",
-                    .{ req_seq },
+                    "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":0{s}}}",
+                    .{ req_seq, bctx_kv },
                 ) catch "";
                 if (fin_json.len > 0) {
                     storage_pos += fin_json.len;
