@@ -8,7 +8,7 @@ import {
   captureTrustedFetch,
   takeTrustedRequestMeta,
   trustedFetch,
-} from "../vendor/kitesurf/packages/page-script/src/trusted-fetch.ts";
+} from "../../vendor/kitesurf/packages/page-script/src/trusted-fetch.ts";
 
 test("trusted metadata survives repeated reads of the same retry init", async () => {
   const originalFetch = globalThis.fetch;

@@ -6,7 +6,7 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue, JS_IsPromise, JS_PromiseState } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_EvalFunction, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue, JS_IsPromise, JS_PromiseState } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext, ConsoleRecord, getMilliTimestamp } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
@@ -23,6 +23,7 @@ import { ScreencastHandler } from "./screencast.cp";
 import { ResourceStore } from "./resource_store.cp";
 import { KitesurfFacade } from "./kitesurf_facade.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
+import { HttpLoader, HttpLoaderResult } from "../net/http_loader.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isInlineEventHandlerAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
 import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
@@ -31,7 +32,6 @@ import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX 
 
 @c {
     fn usleep(usec: u32): i32;
-    fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
     fn JS_ThrowTypeError(ctx: *JSContext, fmt: [*c]const u8, ...): JSValue;
     fn JS_ThrowSyntaxError(ctx: *JSContext, fmt: [*c]const u8, ...): JSValue;
     fn JS_ParseJSON(ctx: *JSContext, buf: [*c]const u8, buf_len: usize, filename: [*c]const u8): JSValue;
@@ -40,12 +40,6 @@ import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX 
     fn JS_SetModuleExport(ctx: *JSContext, m: *JSModuleDef, export_name: [*c]const u8, val: JSValue): i32;
     fn JS_SetModulePrivateValue(ctx: *JSContext, m: *JSModuleDef, val: JSValue): i32;
     fn JS_GetModulePrivateValue(ctx: *JSContext, m: *JSModuleDef): JSValue;
-    fn JS_SetModuleLoaderFunc(
-        rt: *JSRuntime,
-        module_normalize: (@c fn(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8)?,
-        module_loader: (@c fn(ctx: *JSContext, module_name: [*c]const u8, opaque_ptr: *!?): (*JSModuleDef)?)?,
-        opaque_ptr: *!?,
-    );
     fn JS_SetModuleLoaderFunc2(
         rt: *JSRuntime,
         module_normalize: (@c fn(ctx: *JSContext, module_base_name: [*c]const u8, module_name: [*c]const u8, opaque_ptr: *!?): [*c]u8)?,
@@ -871,6 +865,11 @@ pub struct KnownChildFrame {
     }
 }
 
+pub struct NewDocumentScriptEntry {
+    id: []const u8 = "",
+    source: []const u8 = "",
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -1031,6 +1030,8 @@ pub struct CdpPageSession {
     font_asset_cache_bytes: u64 = 0,
     deferred_fonts: [16]DeferredFontFace = [DeferredFontFace{}; 16],
     deferred_font_count: usize = 0,
+    new_document_scripts: std.ArrayListUnmanaged(NewDocumentScriptEntry) = .empty,
+    next_new_doc_script_id: u64 = 1,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -1044,6 +1045,8 @@ pub struct CdpPageSession {
         ptr.doc = document;
         ptr.layout = layout_tree;
         ptr.rt = js_rt;
+        ptr.new_document_scripts = .empty;
+        ptr.next_new_doc_script_id = 1;
         ptr.ctx = JsContext { raw_ctx: undefined, runtime: undefined };
         ptr.dom_ctx = null;
         ptr.url = "about:blank";
@@ -1105,6 +1108,51 @@ pub struct CdpPageSession {
         JS_SetModuleLoaderFunc2(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(ptr) });
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
+    }
+
+    pub fn clearNewDocumentScripts(*_) {
+        const alloc = std.heap.c_allocator;
+        let i: usize = 0;
+        while (i < _.new_document_scripts.items.len) : (i += 1) {
+            alloc.free(_.new_document_scripts.items[i].id);
+            alloc.free(_.new_document_scripts.items[i].source);
+        }
+        _.new_document_scripts.deinit(alloc);
+        _.new_document_scripts = .empty;
+    }
+
+    pub fn addNewDocumentScript(*_, source: []const u8, out_id_buf: []u8): []const u8 {
+        const alloc = std.heap.c_allocator;
+        const seq = _.next_new_doc_script_id;
+        _.next_new_doc_script_id += 1;
+        const id_slice = std.fmt.bufPrint(out_id_buf, "capsurf-script-{d}", .{seq}) catch "capsurf-script-1";
+        const dup_id = alloc.dupe(u8, id_slice) catch return id_slice;
+        const dup_src = alloc.dupe(u8, source) catch {
+            alloc.free(dup_id);
+            return id_slice;
+        };
+        _.new_document_scripts.append(alloc, NewDocumentScriptEntry{
+            id: dup_id,
+            source: dup_src,
+        }) catch {
+            alloc.free(dup_id);
+            alloc.free(dup_src);
+        };
+        return id_slice;
+    }
+
+    pub fn removeNewDocumentScript(*_, id: []const u8) {
+        const alloc = std.heap.c_allocator;
+        let i: usize = 0;
+        while (i < _.new_document_scripts.items.len) {
+            if (std.mem.eql(u8, _.new_document_scripts.items[i].id, id)) {
+                alloc.free(_.new_document_scripts.items[i].id);
+                alloc.free(_.new_document_scripts.items[i].source);
+                * = _.new_document_scripts.orderedRemove(i);
+            } else {
+                i += 1;
+            }
+        }
     }
 
     pub fn clearModuleState(*_) {
@@ -1426,6 +1474,7 @@ pub struct CdpPageSession {
         _.wrappers_reclaimed = 0;
         _.target_registry.deinit();
         _.cookie_jar.deinit();
+        _.clearNewDocumentScripts();
         _.clearModuleState();
         _.ctx.deinit();
         _.rt.deinit();
@@ -2232,6 +2281,23 @@ pub struct CdpPageSession {
         }
         _.ctx.freeValue(sync_named_val);
 
+        // Execute scripts registered via Page.addScriptToEvaluateOnNewDocument
+        {
+            let ndi: usize = 0;
+            while (ndi < _.new_document_scripts.items.len) : (ndi += 1) {
+                const nd_src = _.new_document_scripts.items[ndi].source;
+                if (nd_src.len > 0) {
+                    const nd_v = _.ctx.eval(nd_src);
+                    if (jsIsException(nd_v)) {
+                        const exc = _.ctx.getException();
+                        _.ctx.freeValue(exc);
+                    }
+                    _.ctx.freeValue(nd_v);
+                    _.ctx.drainJobs();
+                }
+            }
+        }
+
         // Defer macrotask timers (setTimeout) during initial script parsing so per-script
         // microtask draining (drainJobs) does not prematurely fire macrotasks before subsequent
         // scripts execute or while document.currentScript is still set.
@@ -2425,7 +2491,8 @@ pub struct CdpPageSession {
                 const integrity_attr = n.getAttribute("integrity") ?? "";
                 const has_crossorigin = n.hasAttribute("crossorigin");
 
-                let code_buf = _.allocator.alloc(u8, 65536) catch break;
+                const script_buf_cap: usize = if (n.hasAttribute("src")) 2097152 else 262144;
+                let code_buf = _.allocator.alloc(u8, script_buf_cap) catch break;
                 defer _.allocator.free(code_buf);
                 let code_len: usize = 0;
                 let has_src = false;
@@ -2509,6 +2576,13 @@ pub struct CdpPageSession {
                             } else if (MockFixtures.isFixtureUrl(src_attr)) {
                                 if (fixture_code2 := MockFixtures.handleFixtureRequest(src_attr, "", "", code_buf, null)) {
                                     code_len = fixture_code2.len;
+                                }
+                            } else if (std.mem.startsWith(u8, cur_url, "http://") || std.mem.startsWith(u8, cur_url, "https://") || std.mem.startsWith(u8, cur_url, "data:")) {
+                                const fetch_res = HttpLoader.fetchDocument(_, cur_url, code_buf, 0) catch HttpLoaderResult{ status_code: 0 };
+                                if (fetch_res.status_code >= 200 && fetch_res.status_code < 300 && fetch_res.html.len > 0) {
+                                    const body_len = @min(fetch_res.html.len, code_buf.len);
+                                    std.mem.copyForwards(u8, code_buf[0..body_len], fetch_res.html[0..body_len]);
+                                    code_len = body_len;
                                 }
                             }
                             if (code_len > 0 && integrity_attr.len > 0) {
@@ -3335,7 +3409,7 @@ pub struct CdpPageSession {
         return formatted.len;
     }
 
-    pub fn callFunctionOn(*_, objectId: []const u8, functionDeclaration: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+    pub fn callFunctionOn(*_, objectId: []const u8, functionDeclaration: []const u8, argumentsJson: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
         const id_val = _.ctx.newString(objectId);
         defer _.ctx.freeValue(id_val);
         _.ctx.setPropertyStr("__capsurf_call_id", id_val);
@@ -3344,7 +3418,11 @@ pub struct CdpPageSession {
         defer _.ctx.freeValue(decl_val);
         _.ctx.setPropertyStr("__capsurf_call_decl", decl_val);
 
-        const val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl)");
+        const args_val = _.ctx.newString(if (argumentsJson.len > 0) argumentsJson else "[]");
+        defer _.ctx.freeValue(args_val);
+        _.ctx.setPropertyStr("__capsurf_call_args", args_val);
+
+        const val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl, globalThis.__capsurf_call_args)");
         defer _.ctx.freeValue(val);
 
         if (await_promise && !_.ctx.isPromise(val) && val.tag == JS_TAG_OBJECT) {

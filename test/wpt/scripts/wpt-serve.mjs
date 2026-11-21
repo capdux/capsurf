@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
-const WPT_DIR = resolve(ROOT, ".wpt");
+const SUITE_DIR = resolve(__dirname, "..");
+const WPT_DIR = resolve(SUITE_DIR, ".wpt");
 
 if (!existsSync(WPT_DIR)) {
   console.error("[wpt-serve] .wpt/ not found. Run `pnpm run wpt:setup` first.");

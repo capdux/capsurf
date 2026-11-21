@@ -1,6 +1,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/eval/cors.ts
 
 import { isForbiddenRequestHeaderName, isForbiddenResponseHeader, startsWithIgnoreCase } from "./forbidden_headers.cp";
+import { stripHttpWhitespace, isHttpTokenChar } from "./headers_parser.cp";
 
 pub enum CredentialsMode {
     Omit,
@@ -23,18 +24,6 @@ pub fn isSafelistMethod(method: []const u8): bool {
         || std.ascii.eqlIgnoreCase(method, "POST");
 }
 pub const isSafelistedMethod = isSafelistMethod;
-
-pub fn stripHttpWhitespace(s: []const u8): []const u8 {
-    return std.mem.trim(u8, s, " \t\r\n");
-}
-
-pub fn isHttpTokenChar(c: u8): bool {
-    if (std.ascii.isAlphanumeric(c)) return true;
-    return switch (c) {
-        '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~' => true,
-        else => false,
-    };
-}
 
 pub fn isHttpToken(s: []const u8): bool {
     if (s.len == 0) return false;

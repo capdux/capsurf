@@ -21,7 +21,7 @@ pub struct TestTrackerContext {
 
 fn trackerClassify(ctx: (*void)?, req: *const BlockableRequest): RequestBlockVerdict? {
     if (ctx_ptr := ctx) {
-        let t: *TestTrackerContext = @ptrCast(@alignCast(ctx_ptr));
+        let t: *TestTrackerContext = unsafe { @ptrCast(@alignCast(ctx_ptr)) };
         if (t.seen_count < t.seen_reqs.len) {
             t.seen_reqs[t.seen_count] = req.*;
             t.seen_count += 1;

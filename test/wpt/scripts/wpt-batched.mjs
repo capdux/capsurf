@@ -29,10 +29,9 @@ import {
   bold,
 } from "./wpt-shared.mjs";
 import { planRowDisposition } from "./wpt-collateral.mjs";
-import { DEFAULT_DIST, prepare as prepareEngineDist } from "./wpt-engine.mjs";
+import { DEFAULT_BIN, prepare as prepareEngineDist } from "./wpt-engine.mjs";
 
-const ENGINE_CWD = resolve(ROOT, "packages/engine");
-const EXEC = resolve(ROOT, "scripts/wpt-exec.mjs");
+const EXEC = resolve(import.meta.dirname, "wpt-exec.mjs");
 
 const HELP = `Usage: pnpm run test:wpt [options]   (node scripts/wpt-batched.mjs)
 
@@ -184,8 +183,8 @@ function parseArgs(arr) {
     start: 0,
     port: parseInt(process.env.KITESURF_PORT ?? "8787", 10) || 8787,
     build: true,
-    engineLauncher: "wrangler",
-    engineDist: DEFAULT_DIST,
+    engineLauncher: "capsurf",
+    engineDist: DEFAULT_BIN,
     passthrough: [],
   };
   for (let i = 0; i < arr.length; i++) {
@@ -239,9 +238,9 @@ function parseArgs(arr) {
       process.exit(2);
     }
   }
-  if (o.engineLauncher !== "wrangler" && o.engineLauncher !== "miniflare") {
+  if (o.engineLauncher !== "capsurf" && o.engineLauncher !== "wrangler" && o.engineLauncher !== "miniflare") {
     console.error(
-      red(`[batched] --engine-launcher must be wrangler or miniflare, got ${o.engineLauncher}`),
+      red(`[batched] --engine-launcher must be capsurf (got ${o.engineLauncher})`),
     );
     process.exit(2);
   }
@@ -250,11 +249,10 @@ function parseArgs(arr) {
 const opts = parseArgs(process.argv.slice(2));
 const INSPECTOR_PORT = opts.inspectorPort ?? (opts.port === 8787 ? 9229 : opts.port + 1000);
 const wsFor = (port) => `ws://127.0.0.1:${port}/devtools/browser`;
-const healthFor = (port) => `http://127.0.0.1:${port}/health`;
+const healthFor = (port) => `http://127.0.0.1:${port}/json/version`;
 const ENGINE_LOG_DIR = opts.engineLogDir ? resolve(opts.engineLogDir) : "/tmp";
 mkdirSync(ENGINE_LOG_DIR, { recursive: true });
 const devLogFor = (port) => resolve(ENGINE_LOG_DIR, `ks-dev-batched-${port}.log`);
-const persistDirFor = (port) => resolve(ENGINE_CWD, ".wrangler", `state-wpt-${port}`);
 const WS = wsFor(opts.port);
 const WPT_BASE = opts.base ?? DEFAULT_WPT_BASE;
 const BATCH_FILE = `/tmp/wpt-batch-${opts.port}.json`;
@@ -265,7 +263,9 @@ async function probeHealth(port, ms = 2000) {
   try {
     const ctl = AbortSignal.timeout(ms);
     const r = await fetch(healthFor(port), { signal: ctl });
-    return r.ok;
+    if (!r.ok) return false;
+    const info = await r.json();
+    return Boolean(info && info.webSocketDebuggerUrl);
   } catch {
     return false;
   }
@@ -349,57 +349,25 @@ async function waitPortFree(port, deadlineMs = 15000) {
 }
 
 function runPrebuild() {
-  const t0 = Date.now();
-  const r = spawnSync("pnpm", ["--filter", "@kitesurf/engine", "run", "prebuild"], {
-    cwd: ROOT,
-    stdio: ["ignore", "inherit", "inherit"],
-  });
-  if (r.status !== 0) {
-    console.error(red(`[batched] prebuild failed (exit ${r.status}) — aborting`));
-    console.error(dim(`[batched] pass --no-build to run against the bundles already on disk`));
+  if (!existsSync(opts.engineDist)) {
+    console.error(red(`[batched] CapSurf binary not found at ${opts.engineDist} — aborting`));
+    console.error(dim(`[batched] set CAPSURF_BIN or build ./bin/main first`));
     process.exit(2);
   }
-  console.log(dim(`[batched] prebuild done in ${Date.now() - t0}ms`));
 }
 
 function spawnEngine(set, i, port) {
   const logFd = openSync(devLogFor(port), "w");
-  const persistDir = persistDirFor(port);
-  // Clear port-scoped state to avoid SQLite contention and stale WAL/cache data.
-  rmSync(persistDir, { recursive: true, force: true });
-  const inspector = String(INSPECTOR_PORT + set.range + i);
-  const child =
-    opts.engineLauncher === "miniflare"
-      ? spawn(
-          process.execPath,
-          [
-            resolve(ROOT, "scripts/wpt-engine.mjs"),
-            "serve",
-            "--port",
-            String(port),
-            "--inspector-port",
-            inspector,
-            "--dist",
-            opts.engineDist,
-          ],
-          { cwd: ROOT, stdio: ["ignore", logFd, logFd], detached: true, env: process.env },
-        )
-      : spawn(
-          "npx",
-          [
-            "wrangler",
-            "dev",
-            "-c",
-            "wrangler.jsonc",
-            "--port",
-            String(port),
-            "--inspector-port",
-            inspector,
-            "--persist-to",
-            persistDir,
-          ],
-          { cwd: ENGINE_CWD, stdio: ["ignore", logFd, logFd], detached: true, env: process.env },
-        );
+  const child = spawn(
+    opts.engineDist,
+    [
+      `--remote-debugging-port=${port}`,
+      "--headless",
+      "--no-sandbox",
+      "--disable-gpu",
+    ],
+    { cwd: ROOT, stdio: ["ignore", logFd, logFd], detached: true, env: process.env },
+  );
   child.unref();
   set.children.set(port, child);
   return child;
@@ -532,7 +500,7 @@ async function startWptServe() {
       return "ignore";
     }
   })();
-  wptChild = spawn("pnpm", ["run", "wpt:serve"], {
+  wptChild = spawn(process.execPath, [resolve(import.meta.dirname, "wpt-serve.mjs")], {
     cwd: ROOT,
     stdio: ["ignore", logFd, logFd],
     env: process.env,
@@ -617,7 +585,7 @@ function runBatch(batchIdx, remainingMs, ports) {
       ...(remainingMs != null ? ["--max-total", String(Math.max(1, Math.round(remainingMs)))] : []),
       ...opts.passthrough,
     ];
-    const child = spawn("node", args, { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] });
+    const child = spawn(process.execPath, args, { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] });
     child.on("exit", (code) => {
       let results = [];
       let truncated = false;
@@ -746,18 +714,7 @@ function runDiscover() {
     if (refuseHeldPorts(footprint)) process.exit(2);
   }
   if (opts.build) runPrebuild();
-  if (opts.engineLauncher === "miniflare") {
-    if (opts.build) await prepareEngineDist(opts.engineDist);
-    else if (!existsSync(resolve(opts.engineDist, "engine-mf.json"))) {
-      console.error(red(`[batched] Miniflare dist is missing engine-mf.json: ${opts.engineDist}`));
-      console.error(
-        dim(
-          `[batched] create it with node scripts/wpt-engine.mjs prepare --dist ${opts.engineDist}`,
-        ),
-      );
-      process.exit(2);
-    }
-  }
+  await prepareEngineDist(opts.engineDist);
   if (opts.startServer) await startWptServe();
   if (!(await probeWpt(3000))) {
     console.error(red(`[batched] cannot reach ${WPT_BASE}`));

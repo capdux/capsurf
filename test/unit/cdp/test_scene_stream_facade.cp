@@ -23,7 +23,7 @@ import {
 } from "../../../src/cdp/kitesurf_facade.cp";
 import { CdpPageSession } from "../../../src/cdp/session.cp";
 
-fn check(desc: []const u8, cond: bool) {
+fn assertCheck(desc: []const u8, cond: bool) {
     if (!cond) {
         std.debug.print("Assertion failed: {s}\n", .{desc});
         @panic("test failure");
@@ -32,10 +32,10 @@ fn check(desc: []const u8, cond: bool) {
 
 fn testSceneHost() {
     std.debug.print("1. Scene Host Manifest & Range Validation\n", .{});
-    check("valid range 0..1024", validateRange(0, 1024, 2048));
-    check("invalid offset outside artifact", !validateRange(2048, 1024, 2048));
-    check("invalid length 0", !validateRange(0, 0, 2048));
-    check("invalid length > 4MB", !validateRange(0, CHUNK_BYTES + 1, CHUNK_BYTES * 2));
+    assertCheck("valid range 0..1024", validateRange(0, 1024, 2048));
+    assertCheck("invalid offset outside artifact", !validateRange(2048, 1024, 2048));
+    assertCheck("invalid length 0", !validateRange(0, 0, 2048));
+    assertCheck("invalid length > 4MB", !validateRange(0, CHUNK_BYTES + 1, CHUNK_BYTES * 2));
 
     let manifest = SceneHostManifest{
         sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -44,22 +44,22 @@ fn testSceneHost() {
 
     let buf: [512]u8 = [0; 512];
     const json = formatManifestJson(manifest, buf[0..]);
-    check("manifest json formatted", json.len > 0);
-    check("has abi 1", std.mem.indexOf(u8, json, "\"abi\":1") != null);
-    check("has wasm name", std.mem.indexOf(u8, json, "\"wasm\":\"scene_host.wasm\"") != null);
-    check("has sha256", std.mem.indexOf(u8, json, "0123456789abcdef") != null);
+    assertCheck("manifest json formatted", json.len > 0);
+    assertCheck("has abi 1", std.mem.indexOf(u8, json, "\"abi\":1") != null);
+    assertCheck("has wasm name", std.mem.indexOf(u8, json, "\"wasm\":\"scene_host.wasm\"") != null);
+    assertCheck("has sha256", std.mem.indexOf(u8, json, "0123456789abcdef") != null);
 
     let chunk_buf: [512]u8 = [0; 512];
     const chunk_json = formatChunkResponse(manifest.sha256, 0, 524288, "AQIDBA==", chunk_buf[0..]);
-    check("chunk json formatted", chunk_json.len > 0);
-    check("has dataB64", std.mem.indexOf(u8, chunk_json, "\"dataB64\":\"AQIDBA==\"") != null);
-    check("has totalBytes", std.mem.indexOf(u8, chunk_json, "\"totalBytes\":524288") != null);
+    assertCheck("chunk json formatted", chunk_json.len > 0);
+    assertCheck("has dataB64", std.mem.indexOf(u8, chunk_json, "\"dataB64\":\"AQIDBA==\"") != null);
+    assertCheck("has totalBytes", std.mem.indexOf(u8, chunk_json, "\"totalBytes\":524288") != null);
 }
 
 fn testSceneStreamManager() {
     std.debug.print("2. Scene Stream Flow & Frame Ack\n", .{});
     let mgr = SceneStreamManager{};
-    check("initial active count 0", mgr.active_count == 0);
+    assertCheck("initial active count 0", mgr.active_count == 0);
 
     let cfg = SceneStreamConfig{
         target_id: "page-target-1",
@@ -69,43 +69,43 @@ fn testSceneStreamManager() {
     };
 
     const started = mgr.startStream(cfg, "sess-1", 1000);
-    check("stream started", started);
-    check("active count 1", mgr.active_count == 1);
+    assertCheck("stream started", started);
+    assertCheck("active count 1", mgr.active_count == 1);
 
     const stream_opt = mgr.getStream("page-target-1");
-    check("stream exists", stream_opt != null);
+    assertCheck("stream exists", stream_opt != null);
     if (*stream := stream_opt) {
-        check("clamped width to 320", stream.config.width == MIN_SCENE_STREAM_WIDTH);
-        check("clamped height to 240", stream.config.height == MIN_SCENE_STREAM_HEIGHT);
-        check("clamped fps to 60", stream.config.fps == MAX_SCENE_STREAM_FPS);
-        check("initial need_full_frame is true", stream.need_full_frame);
+        assertCheck("clamped width to 320", stream.config.width == MIN_SCENE_STREAM_WIDTH);
+        assertCheck("clamped height to 240", stream.config.height == MIN_SCENE_STREAM_HEIGHT);
+        assertCheck("clamped fps to 60", stream.config.fps == MAX_SCENE_STREAM_FPS);
+        assertCheck("initial need_full_frame is true", stream.need_full_frame);
     }
 
     // Sequence progression
     const seq1 = mgr.nextFrameSeq("page-target-1");
-    check("seq1 is 1", seq1 == 1);
+    assertCheck("seq1 is 1", seq1 == 1);
     const seq2 = mgr.nextFrameSeq("page-target-1");
-    check("seq2 is 2", seq2 == 2);
+    assertCheck("seq2 is 2", seq2 == 2);
 
     // Ack with painted = true
     const ack1 = mgr.ackFrame("page-target-1", 1, true);
-    check("ack1 succeeded", ack1);
+    assertCheck("ack1 succeeded", ack1);
 
     // Ack with painted = false (client dropped frame, requests full keyframe)
     if (*stream := stream_opt) {
         stream.need_full_frame = false;
     }
     const ack2 = mgr.ackFrame("page-target-1", 2, false);
-    check("ack2 succeeded", ack2);
+    assertCheck("ack2 succeeded", ack2);
     if (*stream := stream_opt) {
-        check("need_full_frame reset to true", stream.need_full_frame);
-        check("last_acked_seq is 2", stream.last_acked_seq == 2);
+        assertCheck("need_full_frame reset to true", stream.need_full_frame);
+        assertCheck("last_acked_seq is 2", stream.last_acked_seq == 2);
     }
 
     // Stop stream
     const stopped = mgr.stopStream("page-target-1");
-    check("stopped stream", stopped);
-    check("active count 0", mgr.active_count == 0);
+    assertCheck("stopped stream", stopped);
+    assertCheck("active count 0", mgr.active_count == 0);
 }
 
 fn testKitesurfFacade() {
@@ -120,36 +120,36 @@ fn testKitesurfFacade() {
 
     // getSceneHostManifest
     const res_man = facade.dispatchCommand("Kitesurf.getSceneHostManifest", "{}", "sess-1", &session, out_buf[0..]);
-    check("manifest dispatch succeeded", res_man != null);
+    assertCheck("manifest dispatch succeeded", res_man != null);
     if (m := res_man) {
-        check("contains wasm name", std.mem.indexOf(u8, m, "scene_host.wasm") != null);
+        assertCheck("contains wasm name", std.mem.indexOf(u8, m, "scene_host.wasm") != null);
     }
 
     // readSceneHost
     const res_read = facade.dispatchCommand("Kitesurf.readSceneHost", "{}", "sess-1", &session, out_buf[0..]);
-    check("readSceneHost succeeded", res_read != null);
+    assertCheck("readSceneHost succeeded", res_read != null);
 
     // startSceneStream
     const res_start = facade.dispatchCommand("Kitesurf.startSceneStream", "{}", "sess-1", &session, out_buf[0..]);
-    check("startSceneStream succeeded", res_start != null);
-    check("stream active in mgr", facade.stream_mgr.active_count == 1);
+    assertCheck("startSceneStream succeeded", res_start != null);
+    assertCheck("stream active in mgr", facade.stream_mgr.active_count == 1);
 
     // sceneFrameAck
     const res_ack = facade.dispatchCommand("Kitesurf.sceneFrameAck", "{}", "sess-1", &session, out_buf[0..]);
-    check("sceneFrameAck succeeded", res_ack != null);
+    assertCheck("sceneFrameAck succeeded", res_ack != null);
 
     // getSceneResources
     const res_res = facade.dispatchCommand("Kitesurf.getSceneResources", "{}", "sess-1", &session, out_buf[0..]);
-    check("getSceneResources succeeded", res_res != null);
+    assertCheck("getSceneResources succeeded", res_res != null);
 
     // stopSceneStream
     const res_stop = facade.dispatchCommand("Kitesurf.stopSceneStream", "{}", "sess-1", &session, out_buf[0..]);
-    check("stopSceneStream succeeded", res_stop != null);
-    check("stream inactive in mgr", facade.stream_mgr.active_count == 0);
+    assertCheck("stopSceneStream succeeded", res_stop != null);
+    assertCheck("stream inactive in mgr", facade.stream_mgr.active_count == 0);
 
     // Passthrough to protocol extensions (getSessionInfo)
     const res_info = facade.dispatchCommand("CapSurf.getSessionInfo", "{}", "sess-1", &session, out_buf[0..]);
-    check("getSessionInfo passthrough succeeded", res_info != null);
+    assertCheck("getSessionInfo passthrough succeeded", res_info != null);
 }
 
 pub fn main() {

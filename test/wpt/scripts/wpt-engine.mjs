@@ -2,168 +2,210 @@
 // Licensed under the Apache 2.0 license found in the LICENSE file or at:
 // https://opensource.org/licenses/Apache-2.0
 
-// Build and launch the public Worker dist used by local and Bazel WPT runs.
+// Launch and manage CapSurf's native binary (--remote-debugging-port) for WPT,
+// Puppeteer, and Playwright test runners.
 
-import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(import.meta.dirname, "..");
-const ENGINE_DIR = resolve(ROOT, "packages/engine");
-export const DEFAULT_DIST = resolve(ENGINE_DIR, ".wpt-dist");
-const OPTIONS_FILE = "engine-mf.json";
-const fromEngine = createRequire(resolve(ENGINE_DIR, "package.json"));
-const engineDep = (name) => import(pathToFileURL(fromEngine.resolve(name)).href);
-const USAGE = `usage: node scripts/wpt-engine.mjs prepare [--dist <dir>] [--config <file>]
-       node scripts/wpt-engine.mjs serve --port <n> [--dist <dir>] [--assets <dir>]
-                                  [--inspector-port <n>] [--var KEY:VALUE]...`;
+const REPO_ROOT = resolve(import.meta.dirname, "../../..");
+export const DEFAULT_BIN = process.env.CAPSURF_BIN
+  ? resolve(REPO_ROOT, process.env.CAPSURF_BIN)
+  : resolve(REPO_ROOT, "bin/main");
+export const DEFAULT_DIST = DEFAULT_BIN;
 
-const ENGINE_RULES = [
-  { type: "CompiledWasm", include: ["**/*.wasm"] },
-  { type: "Text", include: ["**/*.glue.js", "*.css", "**/*.css", "**/*.dat"] },
-  { type: "Data", include: ["**/*.woff2", "**/*.bin"] },
-];
-
-const DROP = new Set([
-  "rootPath",
-  "modulesRules",
-  "unsafeBindings",
-  "zone",
-  "access",
-  "versionMetadata",
-]);
+const USAGE = `usage: node test/wpt/scripts/wpt-engine.mjs prepare [--bin <path>]
+       node test/wpt/scripts/wpt-engine.mjs serve --port <n> [--bin <path>] [--timeout <ms>]`;
 
 function parseArgs(argv) {
-  const options = { dist: DEFAULT_DIST, vars: {} };
+  const options = { bin: DEFAULT_BIN, timeoutMs: 15_000 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    if (arg === "--help" || arg === "-h") {
+      options.help = true;
+      return options;
+    }
     const next = () => {
       const value = argv[++i];
       if (!value) throw new Error(`${arg} requires a value`);
       return value;
     };
-    if (arg === "--config") options.config = resolve(next());
-    else if (arg === "--dist") options.dist = resolve(next());
-    else if (arg === "--assets") options.assets = resolve(next());
+    if (arg === "--bin" || arg === "--dist") options.bin = resolve(REPO_ROOT, next());
     else if (arg === "--port") options.port = Number(next());
-    else if (arg === "--inspector-port") options.inspectorPort = Number(next());
-    else if (arg === "--var") {
-      const value = next();
-      const at = value.indexOf(":");
-      if (at < 1) throw new Error(`--var wants KEY:VALUE, got ${value}`);
-      options.vars[value.slice(0, at)] = value.slice(at + 1);
+    else if (arg === "--timeout") options.timeoutMs = Number(next());
+    else if (arg === "--inspector-port" || arg === "--config" || arg === "--assets" || arg === "--var") {
+      // Accepted for CLI compatibility with legacy callers.
+      next();
     } else throw new Error(`unknown option: ${arg}`);
   }
   return options;
 }
 
-/** @param {string} dist @param {string} config @returns {Promise<object>} */
-export async function prepare(dist = DEFAULT_DIST, config = resolve(ENGINE_DIR, "wrangler.jsonc")) {
-  const wranglerPackage = fromEngine.resolve("wrangler/package.json");
-  const wrangler = resolve(
-    dirname(wranglerPackage),
-    JSON.parse(readFileSync(wranglerPackage, "utf8")).bin.wrangler,
-  );
-  execFileSync(
-    process.execPath,
-    [wrangler, "deploy", "--dry-run", "--config", config, "--outdir", dist],
-    {
-      cwd: dirname(config),
-      stdio: ["ignore", "inherit", "inherit"],
-      env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
-    },
-  );
-  rmSync(resolve(dist, "README.md"), { force: true });
-  const mapFile = resolve(dist, "index.js.map");
-  const map = JSON.parse(readFileSync(mapFile, "utf8"));
-  writeFileSync(mapFile, JSON.stringify({ ...map, sourceRoot: "" }));
-  const { unstable_getMiniflareWorkerOptions } = await engineDep("wrangler");
-  const { workerOptions } = unstable_getMiniflareWorkerOptions(config);
-  const options = {};
-  for (const [key, value] of Object.entries(workerOptions)) {
-    if (DROP.has(key) || value === undefined) continue;
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      Object.keys(value).length === 0
-    )
-      continue;
-    options[key] = value;
+/**
+ * Poll CapSurf's /json/version endpoint until webSocketDebuggerUrl is available.
+ * @param {number} port
+ * @param {import("node:child_process").ChildProcess | null} child
+ * @param {number} [timeoutMs]
+ * @returns {Promise<string>}
+ */
+export async function waitForDevTools(port, child = null, timeoutMs = 15_000) {
+  const url = `http://127.0.0.1:${port}/json/version`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child && (child.exitCode !== null || child.signalCode)) {
+      throw new Error(
+        `CapSurf exited prematurely on port ${port} (code=${child.exitCode}, signal=${child.signalCode})`,
+      );
+    }
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+      if (res.ok) {
+        const info = await res.json();
+        if (info && typeof info.webSocketDebuggerUrl === "string" && info.webSocketDebuggerUrl) {
+          return info.webSocketDebuggerUrl;
+        }
+      }
+    } catch {}
+    await sleep(100);
   }
-  if (options.assets)
-    options.assets = { ...options.assets, directory: relative(dist, options.assets.directory) };
-  writeFileSync(resolve(dist, OPTIONS_FILE), JSON.stringify(options, null, 1) + "\n");
-  return options;
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for CapSurf on ${url}`);
 }
 
-function distModules(root, entry, testRegExps, compiledRules) {
-  const modules = [{ type: "ESModule", path: resolve(root, entry) }];
-  const walk = (dir) => {
-    for (const item of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )) {
-      const full = resolve(dir, item.name);
-      if (item.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      const name = relative(root, full).replaceAll("\\", "/");
-      if (name === entry) continue;
-      const rule = compiledRules.find((candidate) => testRegExps(candidate.include, name));
-      if (rule) modules.push({ type: rule.type, path: full });
-    }
+/**
+ * Spawn CapSurf with --remote-debugging-port=<port> and wait until /json/version is ready.
+ * @param {{ port: number, binPath?: string, extraArgs?: string[], logFd?: number | null, timeoutMs?: number, detached?: boolean }} opts
+ * @returns {Promise<{ port: number, wsEndpoint: string, proc: import("node:child_process").ChildProcess, stop: () => void }>}
+ */
+export async function startCapSurfEngine({
+  port,
+  binPath = DEFAULT_BIN,
+  extraArgs = [],
+  logFd = null,
+  timeoutMs = 15_000,
+  detached = false,
+}) {
+  if (!existsSync(binPath)) {
+    throw new Error(`CapSurf binary not found at ${binPath} (set CAPSURF_BIN or build ./bin/main)`);
+  }
+  const proc = spawn(
+    binPath,
+    [
+      `--remote-debugging-port=${port}`,
+      "--headless",
+      "--no-sandbox",
+      "--disable-gpu",
+      ...extraArgs,
+    ],
+    {
+      cwd: REPO_ROOT,
+      stdio: logFd != null ? ["ignore", logFd, logFd] : ["ignore", "pipe", "pipe"],
+      detached,
+      env: process.env,
+    },
+  );
+  if (detached) proc.unref();
+
+  let stderrTail = "";
+  if (proc.stderr) {
+    proc.stderr.on("data", (chunk) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-2048);
+    });
+  }
+
+  const stop = () => {
+    try {
+      if (detached && proc.pid) process.kill(-proc.pid, "SIGKILL");
+      else proc.kill("SIGKILL");
+    } catch {}
   };
-  walk(root);
-  return modules;
+
+  try {
+    const wsEndpoint = await waitForDevTools(port, proc, timeoutMs);
+    return { port, wsEndpoint, proc, stop };
+  } catch (err) {
+    stop();
+    if (stderrTail) {
+      throw new Error(`${err.message}\n${stderrTail}`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Engine pool helper compatible with pptr-run.mjs and pw-run.mjs.
+ * @param {{ tag?: string, firstPort?: number, binPath?: string, timeoutMs?: number }} [opts]
+ */
+export function localEngines({
+  tag = "capsurf",
+  firstPort = 9720,
+  binPath = DEFAULT_BIN,
+  timeoutMs = 15_000,
+} = {}) {
+  let nextPort = firstPort;
+  return {
+    async buildBundles() {
+      if (!existsSync(binPath)) {
+        throw new Error(
+          `[${tag}] CapSurf binary not found at ${binPath} (set CAPSURF_BIN or build ./bin/main)`,
+        );
+      }
+    },
+    async startEngine() {
+      const port = nextPort++;
+      return startCapSurfEngine({ port, binPath, timeoutMs });
+    },
+  };
+}
+
+/** @param {string} [binPath] */
+export async function prepare(binPath = DEFAULT_BIN) {
+  if (!existsSync(binPath)) {
+    throw new Error(`CapSurf binary not found at ${binPath} (set CAPSURF_BIN or build ./bin/main)`);
+  }
+  return { bin: binPath };
 }
 
 async function serve(options) {
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
     throw new Error("serve needs a valid --port");
   }
-  const { Miniflare, compileModuleRules, convertV4MiniflareOptions, testRegExps } =
-    await engineDep("miniflare");
-  const workerOptions = JSON.parse(readFileSync(resolve(options.dist, OPTIONS_FILE), "utf8"));
-  const assets = workerOptions.assets && {
-    ...workerOptions.assets,
-    directory: options.assets ?? resolve(options.dist, workerOptions.assets.directory),
-  };
-  const engine = {
-    ...workerOptions,
-    name: "kitesurf-engine",
-    modulesRoot: options.dist,
-    modules: distModules(options.dist, "index.js", testRegExps, compileModuleRules(ENGINE_RULES)),
-    bindings: { ...workerOptions.bindings, ...options.vars },
-    assets,
-  };
-  const miniflare = new Miniflare(
-    convertV4MiniflareOptions({
-      host: "127.0.0.1",
-      port: options.port,
-      inspectorPort: options.inspectorPort,
-      cf: false,
-      workers: [engine],
-    }),
-  );
-  const url = await miniflare.ready;
-  console.log(`[wpt-engine] ready on ${url.href} (dist ${options.dist})`);
-  const stop = async () => {
-    await miniflare.dispose().catch(() => {});
+  const engine = await startCapSurfEngine({
+    port: options.port,
+    binPath: options.bin,
+    timeoutMs: options.timeoutMs,
+  });
+  console.log(`[wpt-engine] ready on ${engine.wsEndpoint} (bin ${options.bin})`);
+  const stop = () => {
+    engine.stop();
     process.exit(0);
   };
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
+  engine.proc.once("exit", (code) => {
+    process.exit(code ?? 0);
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, ...args] = process.argv.slice(2);
+  if (!command || command === "--help" || command === "-h") {
+    console.log(USAGE);
+    process.exit(0);
+  }
   const options = parseArgs(args);
-  if (command === "prepare") await prepare(options.dist, options.config);
-  else if (command === "serve") await serve(options);
-  else {
+  if (options.help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  if (command === "prepare") {
+    await prepare(options.bin);
+    console.log(`[wpt-engine] CapSurf binary ready: ${options.bin}`);
+  } else if (command === "serve") {
+    await serve(options);
+  } else {
     console.error(USAGE);
     process.exit(2);
   }

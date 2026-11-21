@@ -7,7 +7,7 @@ import {
 import { HTMLCanvasElement } from "../../../src/dom/canvas_element.cp";
 
 const FALLBACK_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-const DATA_URL_PREFIX = "data:image/png;base64,";
+const TEST_DATA_URL_PREFIX = "data:image/png;base64,";
 
 fn assert(cond: bool, msg: []const u8) {
     if (!cond) {
@@ -146,10 +146,10 @@ fn testToDataUrlAndFallbacks() {
 
     // 3.4 Valid output buffer produces PNG base64 data URL with decodable PNG header
     let data_url = canvas.toDataURL(&out_buf);
-    assert(std.mem.startsWith(u8, data_url, DATA_URL_PREFIX), "toDataURL starts with data:image/png;base64,");
+    assert(std.mem.startsWith(u8, data_url, TEST_DATA_URL_PREFIX), "toDataURL starts with data:image/png;base64,");
     assert(!std.mem.eql(u8, data_url, FALLBACK_URL), "drawn canvas toDataURL differs from 1x1 fallback");
 
-    let b64_payload = data_url[DATA_URL_PREFIX.len..];
+    let b64_payload = data_url[TEST_DATA_URL_PREFIX.len..];
     assert(b64_payload.len > 16, "non-empty base64 payload");
 
     let decoder = std.base64.standard.Decoder;
@@ -210,7 +210,7 @@ fn testMultiCanvasIsolationAndCleanup() {
 
     let url_buf: [16384]u8 = [0; 16384];
     let url_a = canvas_a.toDataURL(&url_buf);
-    assert(std.mem.startsWith(u8, url_a, DATA_URL_PREFIX), "canvas_a still exports valid PNG data URL");
+    assert(std.mem.startsWith(u8, url_a, TEST_DATA_URL_PREFIX), "canvas_a still exports valid PNG data URL");
 
     canvas_a.deinit();
     assert(canvas_a.ctx == null, "canvas_a ctx cleared after final deinit");

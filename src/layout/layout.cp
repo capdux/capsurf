@@ -13,7 +13,7 @@ import {
     Display,
     Visibility,
     BoxSizing,
-    Position,
+    CssPosition,
     FlexDirection,
     FlexWrap,
     JustifyContent,
@@ -82,7 +82,7 @@ pub struct LayoutBox {
     content_height: f32 = 0.0;
 
     // Scroll & positioning metadata for sticky/fixed viewport resolution and hit testing
-    position: Position = Position.Static;
+    position: CssPosition = CssPosition.Static;
     overflow_visible: bool = true;
     height_is_auto: bool = true;
     z_index: i32 = 0;
@@ -701,7 +701,7 @@ pub struct LayoutTree {
             const cn = &doc.nodes.items[@as(usize, ch)];
             if (cn.node_type == NodeType.Element && @as(usize, ch) < styles.len) {
                 const cst = &styles[@as(usize, ch)];
-                if (cst.display.isNone() || cst.position == Position.Absolute || cst.position == Position.Fixed) {
+                if (cst.display.isNone() || cst.position == CssPosition.Absolute || cst.position == CssPosition.Fixed) {
                     ch = cn.next_sibling;
                     continue;
                 }
@@ -783,13 +783,13 @@ pub struct LayoutTree {
         const has_tx = !style.transform_tx.is_auto && !style.transform_tx.is_none;
         const has_ty = !style.transform_ty.is_auto && !style.transform_ty.is_none;
         box.creates_stacking_context = style.isolation_isolate ||
-            (style.position != Position.Static && style.has_z_index) ||
+            (style.position != CssPosition.Static && style.has_z_index) ||
             (style.opacity < 1.0) ||
             has_tx || has_ty;
-        box.has_sticky_top = (style.position == Position.Sticky) && !style.top.is_auto && !style.top.is_none;
-        box.has_sticky_bottom = (style.position == Position.Sticky) && !style.bottom.is_auto && !style.bottom.is_none;
-        box.has_sticky_left = (style.position == Position.Sticky) && !style.left.is_auto && !style.left.is_none;
-        box.has_sticky_right = (style.position == Position.Sticky) && !style.right.is_auto && !style.right.is_none;
+        box.has_sticky_top = (style.position == CssPosition.Sticky) && !style.top.is_auto && !style.top.is_none;
+        box.has_sticky_bottom = (style.position == CssPosition.Sticky) && !style.bottom.is_auto && !style.bottom.is_none;
+        box.has_sticky_left = (style.position == CssPosition.Sticky) && !style.left.is_auto && !style.left.is_none;
+        box.has_sticky_right = (style.position == CssPosition.Sticky) && !style.right.is_auto && !style.right.is_none;
         if (box.has_sticky_top) {
             box.sticky_top = style.top.resolvePx(parent_h, font_px, root_px, vw, vh);
         }
@@ -827,7 +827,7 @@ pub struct LayoutTree {
         }
 
         // Content width calculation
-        const is_abs_or_fixed = (style.position == Position.Absolute || style.position == Position.Fixed);
+        const is_abs_or_fixed = (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed);
         const h_decor = box.paddingHorizontal() + box.borderHorizontal();
         const mh = box.marginHorizontal();
         let raw_w: f32 = 0.0;
@@ -1025,7 +1025,7 @@ pub struct LayoutTree {
         // BEFORE laying out children so descendant static positions follow positioned ancestors.
         let border_box_x = origin_x + box.margin_left;
         let border_box_y = origin_y + box.margin_top;
-        if (style.position == Position.Absolute || style.position == Position.Fixed) {
+        if (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed) {
             if (!style.left.is_auto && !style.left.is_none) {
                 border_box_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_left;
             } else if (!style.right.is_auto && !style.right.is_none) {
@@ -1068,10 +1068,10 @@ pub struct LayoutTree {
         const prev_abs_cb_y = _.abs_cb_y;
         const prev_abs_cb_w = _.abs_cb_w;
         const prev_abs_cb_h = _.abs_cb_h;
-        if (style.position != Position.Static) {
+        if (style.position != CssPosition.Static) {
             let cb_x = border_box_x + box.border_left;
             let cb_y = border_box_y + box.border_top;
-            if (style.position == Position.Relative) {
+            if (style.position == CssPosition.Relative) {
                 if (!style.left.is_auto && !style.left.is_none) {
                     cb_x += style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                 } else if (!style.right.is_auto && !style.right.is_none) {
@@ -1086,7 +1086,7 @@ pub struct LayoutTree {
                         cb_y -= style.bottom.resolvePx(avail_h, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                     }
                 }
-            } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
+            } else if (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed) {
                 if (!style.left.is_auto && !style.left.is_none) {
                     cb_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + box.margin_left + box.border_left;
                 } else if (!style.right.is_auto && !style.right.is_none) {
@@ -1208,7 +1208,7 @@ pub struct LayoutTree {
         let rect_x = border_box_x;
         let rect_y = border_box_y;
 
-        if (style.position == Position.Relative) {
+        if (style.position == CssPosition.Relative) {
             if (!style.left.is_auto && !style.left.is_none) {
                 pos_offset_x = style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
             } else if (!style.right.is_auto && !style.right.is_none) {
@@ -1227,7 +1227,7 @@ pub struct LayoutTree {
             }
             rect_x += pos_offset_x;
             rect_y += pos_offset_y;
-        } else if (style.position == Position.Absolute || style.position == Position.Fixed) {
+        } else if (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed) {
             if (!style.left.is_auto && !style.left.is_none) {
                 rect_x = origin_x + style.left.resolvePx(avail_w, style.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height) + final_box.margin_left;
             } else if (!style.right.is_auto && !style.right.is_none) {
@@ -1760,7 +1760,7 @@ pub struct LayoutTree {
         }
         if (node.node_type != NodeType.Element) return;
         const st = &styles[@as(usize, node_id)];
-        if (st.display.isNone() || st.position == Position.Absolute || st.position == Position.Fixed) return;
+        if (st.display.isNone() || st.position == CssPosition.Absolute || st.position == CssPosition.Fixed) return;
         if (node.hasTag("br")) {
             const line_final = if (cur_w.* >= trailing_ws_w.*) (cur_w.* - trailing_ws_w.*) else cur_w.*;
             if (line_final > best_w.*) best_w.* = line_final;
@@ -1855,7 +1855,7 @@ pub struct LayoutTree {
                 const cn = &doc.nodes.items[@as(usize, ch)];
                 if (cn.node_type == NodeType.Element) {
                     const cst = &styles[@as(usize, ch)];
-                    if (!cst.display.isNone() && cst.position != Position.Absolute && cst.position != Position.Fixed) {
+                    if (!cst.display.isNone() && cst.position != CssPosition.Absolute && cst.position != CssPosition.Fixed) {
                         const cw = _.measureIntrinsicWidth(doc, styles, ch, avail_w);
                         if (is_row) {
                             sum_w += cw;
@@ -1899,7 +1899,7 @@ pub struct LayoutTree {
                 const cn = &doc.nodes.items[@as(usize, ch)];
                 if (cn.node_type == NodeType.Element) {
                     const cst = &styles[@as(usize, ch)];
-                    if (cst.display.isNone() || cst.position == Position.Absolute || cst.position == Position.Fixed) {
+                    if (cst.display.isNone() || cst.position == CssPosition.Absolute || cst.position == CssPosition.Fixed) {
                         ch = cn.next_sibling;
                         continue;
                     }
@@ -2014,7 +2014,7 @@ pub struct LayoutTree {
                 const cn = &doc.nodes.items[@as(usize, ch)];
                 if (cn.node_type == NodeType.Element) {
                     const cst = &styles[@as(usize, ch)];
-                    if (!cst.display.isNone() && cst.position != Position.Absolute && cst.position != Position.Fixed) {
+                    if (!cst.display.isNone() && cst.position != CssPosition.Absolute && cst.position != CssPosition.Fixed) {
                         const cw = _.measureMinContentWidth(doc, styles, ch, avail_w);
                         if (is_row_nowrap) {
                             sum_w += cw;
@@ -2039,7 +2039,7 @@ pub struct LayoutTree {
                 const cn = &doc.nodes.items[@as(usize, ch)];
                 if (cn.node_type == NodeType.Element) {
                     const cst = &styles[@as(usize, ch)];
-                    if (cst.display.isNone() || cst.position == Position.Absolute || cst.position == Position.Fixed) {
+                    if (cst.display.isNone() || cst.position == CssPosition.Absolute || cst.position == CssPosition.Fixed) {
                         ch = cn.next_sibling;
                         continue;
                     }
@@ -2714,7 +2714,7 @@ pub struct LayoutTree {
     static fn isBlockLevelInFlow(node: *const NodeData, style: *const ComputedStyle): bool {
         if (node.node_type != NodeType.Element) return false;
         if (style.display.isNone()) return false;
-        if (style.position == Position.Absolute || style.position == Position.Fixed) return false;
+        if (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed) return false;
         if (style.float_mode != FloatMode.None) return false;
         if (style.display.isTableInternal()) return true;
         if (node.hasTag("br")) return false;
@@ -2953,7 +2953,7 @@ pub struct LayoutTree {
             _.boxes.items[@as(usize, node_id)].rect = Rect.zero();
             return;
         }
-        if (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed) {
+        if (cstyle.position == CssPosition.Absolute || cstyle.position == CssPosition.Fixed) {
             items.append(_.allocator, InlineItem {
                 kind: InlineItemKind.AbsPos,
                 node_id: node_id,
@@ -3058,7 +3058,7 @@ pub struct LayoutTree {
                 const it = &line_items[i];
                 if (it.kind == InlineItemKind.AbsPos) {
                     const cst = &styles[@as(usize, it.node_id)];
-                    if (cst.position == Position.Fixed) {
+                    if (cst.position == CssPosition.Fixed) {
                         _.layoutNodeEx(doc, styles, it.node_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x + it.line_x, line_y, true);
                     } else {
                         _.layoutNodeEx(doc, styles, it.node_id, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x + it.line_x, line_y, true);
@@ -3146,7 +3146,7 @@ pub struct LayoutTree {
         out_lines_used.* = @intCast(max_wrapped_lines);
         const total_line_h = if (max_wrapped_lines > 1) (@as(f32, @floatFromInt(max_wrapped_lines)) * single_line_h) else single_line_h;
 
-        // Position every item on this line
+        // CssPosition every item on this line
         i = 0;
         while (i < line_items.len) : (i += 1) {
             const it = &line_items[i];
@@ -3212,7 +3212,7 @@ pub struct LayoutTree {
                 if (cr > max_child_right.*) max_child_right.* = cr;
             } else if (it.kind == InlineItemKind.AbsPos) {
                 const cst = &styles[@as(usize, it.node_id)];
-                if (cst.position == Position.Fixed) {
+                if (cst.position == CssPosition.Fixed) {
                     _.layoutNodeEx(doc, styles, it.node_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x + it.line_x, line_y, true);
                 } else {
                     _.layoutNodeEx(doc, styles, it.node_id, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x + it.line_x, line_y, true);
@@ -3279,7 +3279,7 @@ pub struct LayoutTree {
                 if (tr.width > 0.0 || tr.height > 0.0) include = true;
             } else if (cn.node_type == NodeType.Element) {
                 const cst = &styles[@as(usize, ch)];
-                if (!cst.display.isNone() && cst.position != Position.Absolute && cst.position != Position.Fixed && cst.float_mode == FloatMode.None) {
+                if (!cst.display.isNone() && cst.position != CssPosition.Absolute && cst.position != CssPosition.Fixed && cst.float_mode == FloatMode.None) {
                     const cr = _.boxes.items[@as(usize, ch)].rect;
                     if (cr.width > 0.0 || cr.height > 0.0) include = true;
                 }
@@ -3350,7 +3350,7 @@ pub struct LayoutTree {
         const pstyle_blk = &styles[@as(usize, parent_id)];
         let emitted_lines: u32 = 0;
         const clamp_limit: u32 = if (pstyle_blk.is_line_clamped) pstyle_blk.webkit_line_clamp else 0;
-        const parent_pinned_v = (pstyle_blk.position == Position.Absolute || pstyle_blk.position == Position.Fixed) &&
+        const parent_pinned_v = (pstyle_blk.position == CssPosition.Absolute || pstyle_blk.position == CssPosition.Fixed) &&
             !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
             !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
         const child_h_definite = !parent_box.height_is_auto || parent_pinned_v;
@@ -3613,8 +3613,8 @@ pub struct LayoutTree {
             !pstyle_blk.overflow_visible ||
             pstyle_blk.display.isInlineBlock() ||
             pstyle_blk.float_mode != FloatMode.None ||
-            pstyle_blk.position == Position.Absolute ||
-            pstyle_blk.position == Position.Fixed ||
+            pstyle_blk.position == CssPosition.Absolute ||
+            pstyle_blk.position == CssPosition.Fixed ||
             pstyle_blk.display.isTableCell() ||
             pstyle_blk.display.isTableCaption();
         const scroll_bottom = @max(cursor_y, @max(float_left_bottom, float_right_bottom));
@@ -3743,7 +3743,7 @@ pub struct LayoutTree {
                 const cstyle = &styles[@as(usize, child)];
                 if (cstyle.display.isNone()) {
                     _.boxes.items[@as(usize, child)].rect = Rect.zero();
-                } else if (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed) {
+                } else if (cstyle.position == CssPosition.Absolute || cstyle.position == CssPosition.Fixed) {
                     if (abs_count < 32) {
                         abs_children[abs_count] = child;
                         abs_count += 1;
@@ -3833,12 +3833,12 @@ pub struct LayoutTree {
             const pad_x = _.abs_cb_x;
             const pad_y = _.abs_cb_y;
             const pad_w = _.abs_cb_w;
-            const pad_h = if (pstyle.position != Position.Static) (pbox_now.content_height + pbox_now.paddingVertical()) else _.abs_cb_h;
+            const pad_h = if (pstyle.position != CssPosition.Static) (pbox_now.content_height + pbox_now.paddingVertical()) else _.abs_cb_h;
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
                 const abs_id = abs_children[ai];
                 const astyle = &styles[@as(usize, abs_id)];
-                if (astyle.position == Position.Fixed) {
+                if (astyle.position == CssPosition.Fixed) {
                     _.layoutNodeEx(doc, styles, abs_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
                 } else {
                     let cb_left = pad_x;
@@ -3848,7 +3848,7 @@ pub struct LayoutTree {
                     let sx = content_x;
                     let sy = content_y;
 
-                    if (pstyle.position != Position.Static) {
+                    if (pstyle.position != CssPosition.Static) {
                         if (astyle.grid_col_start > 0) {
                             const line_idx: usize = @min(@as(usize, @intCast(astyle.grid_col_start - 1)), eff_cols);
                             cb_left = content_x + col_offsets[line_idx];
@@ -3910,7 +3910,7 @@ pub struct LayoutTree {
                 const cstyle = &styles[@as(usize, child)];
                 if (cstyle.display.isNone()) {
                     _.boxes.items[@as(usize, child)].rect = Rect.zero();
-                } else if (cstyle.position == Position.Absolute || cstyle.position == Position.Fixed) {
+                } else if (cstyle.position == CssPosition.Absolute || cstyle.position == CssPosition.Fixed) {
                     if (abs_count < 16) {
                         abs_children[abs_count] = child;
                         abs_count += 1;
@@ -3993,7 +3993,7 @@ pub struct LayoutTree {
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
                 const aid = abs_children[ai];
-                if (styles[@as(usize, aid)].position == Position.Fixed) {
+                if (styles[@as(usize, aid)].position == CssPosition.Fixed) {
                     _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
                 } else {
                     _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);
@@ -4126,7 +4126,7 @@ pub struct LayoutTree {
                 * => gap,
             };
 
-            // Position each flex item in this line and layout its children
+            // CssPosition each flex item in this line and layout its children
             let current_main = start_offset;
             let line_max_cross: f32 = 0.0;
             const line_cross_avail = if (line_count == 1) cross_size else 0.0;
@@ -4238,7 +4238,7 @@ pub struct LayoutTree {
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
                 const aid = abs_children[ai];
-                if (styles[@as(usize, aid)].position == Position.Fixed) {
+                if (styles[@as(usize, aid)].position == CssPosition.Fixed) {
                     _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
                 } else {
                     _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);

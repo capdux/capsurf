@@ -1847,3 +1847,8 @@
 - 白盒测试统一收敛至 `test/unit/` 后，所有 `.cp` 测试相对 `src/` 的导入层级由 `../../src/` 变为 `../../../src/`；`cap.json` 的 `scripts.test` 同步收窄为 `cap test test/unit/`，避免扫描 `e2e`/`wpt`/`pptr`/`pw` 中的 TS/JS 资产。
 - 迁入 `test/wpt/`、`test/pptr/`、`test/pw/` 时仅吸收 JSON 清单/基线与 `.mjs` 运行器，剥离 Bazel 规则；后续只需将各 `scripts/*-engine.mjs` / `*-run.mjs` 中的 `wrangler`/`miniflare` 启动逻辑替换为 `./bin/main --remote-debugging-port=<port>` 即可打通上游兼容测试。
 - 2026-11-22 02:21 版 `cpc` 新增严格 `E0209` 检查，已先完成 `src/js/`、`src/cdp/`、`src/render/` 中 `@ptrCast`/`@alignCast`/`@intFromPtr`/`@ptrFromInt`/裸指针切片的 `unsafe { ... }` 适配；上游 `/data/dev/cp/lib/pack/gzip.cp` 的 17 处 `E0209` 已提交 `task-capsurf-20261122-lib-pack-gzip-e0209` 待 `cp_agy` 修复后即可重编 `bin/main`。
+
+### Phase 254: 真实浏览器协议栈（Puppeteer / Playwright / WPT）联调排障笔记
+- **Puppeteer / Playwright 协议差异**：扁平化会话模式下，服务端必须把请求的 `sessionId` 原样回传到对应 `result`/`error` 响应（但 `Target.*` 浏览器级事件不可误加 `sessionId`）；Playwright 还强依赖 `frame.id === targetId` 与 `Page.close` 触发 `Target.targetDestroyed`。
+- **WPT `testharness.js` 与 Reftest 流水线**：通过补齐 `HttpLoader` `Content-Length`/`chunked` 与 `web-platform.test` 回环、2MB 外链脚本缓冲、`Page.addScriptToEvaluateOnNewDocument`、以及 `getElementsByTagName` + `window.parent`，成功在 CapSurf 内原生跑通 198KB `testharness.js` 与 WPT Reftest 像素对比，实测 20+ WPT 领域 450+ 用例。
+- **ReleaseFast 阻塞**：`cap build -m -r` 触发上游 `__cp_runtime.zig` `cp_unpack_elem` 冗余 `comptime` 报错，已提交 `task-capsurf-20261122-cp-unpack-elem-comptime` 待 `cp_agy` 修复；Debug 模式 `cap build -m -d -o bin_wpt src/main.cp` 136 模块编译正常。

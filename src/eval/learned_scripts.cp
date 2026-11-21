@@ -206,7 +206,7 @@ pub struct OriginScripts {
     }
 }
 
-pub fn originOf(url: []const u8): ([]const u8)? {
+pub fn learnedOriginOf(url: []const u8): ([]const u8)? {
     let scheme_end: usize = 0;
     if (std.mem.startsWith(u8, url, "http://")) {
         scheme_end = 7;
@@ -247,7 +247,7 @@ pub fn hasQuery(url: []const u8): bool {
 }
 
 pub fn storeKey(buf: []u8, page_url: []const u8, context_id: []const u8): ([]const u8)? {
-    if (origin := originOf(page_url)) {
+    if (origin := learnedOriginOf(page_url)) {
         return std.fmt.bufPrint(buf, "{s}|{s}", .{ context_id, origin }) catch null;
     }
     return null;
@@ -318,7 +318,7 @@ pub struct LearnedScriptsStore {
         if (key_opt == null) return;
         const key = key_opt.?;
 
-        if (originOf(script_url) == null) return;
+        if (learnedOriginOf(script_url) == null) return;
 
         let entry = _.getOrigin(key);
         if (run == InsertedRun.stale) {

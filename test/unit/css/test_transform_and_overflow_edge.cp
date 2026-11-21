@@ -4,7 +4,7 @@
 
 import { test, expect_eq } from "cap:test";
 import { Document, NodeId, NULL_NODE } from "../../../src/dom/dom.cp";
-import { StyleSheet, Cascade, ComputedStyle, OverflowMode, Position } from "../../../src/css/cascade.cp";
+import { StyleSheet, Cascade, ComputedStyle, OverflowMode, CssPosition } from "../../../src/css/cascade.cp";
 import { LayoutTree, Rect } from "../../../src/layout/layout.cp";
 
 fn nearF32(actual: f32, expected: f32, eps: f32): bool {
@@ -212,7 +212,7 @@ fn testPositionFixedBoundaries()! {
     Cascade.computeStyles(&doc, &sheet, styles, 16.0);
 
     const fix_tl_id = doc.getElementById("fix_tl");
-    expect_eq(styles[@as(usize, fix_tl_id)].position == Position.Fixed, true);
+    expect_eq(styles[@as(usize, fix_tl_id)].position == CssPosition.Fixed, true);
 
     let layout = LayoutTree.init(std.heap.page_allocator, 500.0, 400.0)?;
     defer layout.deinit();

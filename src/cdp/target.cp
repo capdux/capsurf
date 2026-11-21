@@ -564,7 +564,7 @@ pub struct TargetHandler {
             session.target_registry.auto_attach = auto_attach;
             session.target_registry.flatten = flatten;
 
-            if (auto_attach) {
+            if (auto_attach && req.session_id.len == 0) {
                 if (!session.target_registry.targets[0].attached || session.target_registry.targets[0].session_id_len == 0) {
                     * = session.target_registry.attachToTarget("capsurf-target-001");
                 }

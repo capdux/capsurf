@@ -7,7 +7,7 @@
 
 import { test, expect_eq } from "cap:test";
 import { Document, NodeId, NULL_NODE } from "../../../src/dom/dom.cp";
-import { StyleSheet, Cascade, ComputedStyle, Position } from "../../../src/css/cascade.cp";
+import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../../../src/css/cascade.cp";
 import { LayoutTree, LayoutBox, Rect } from "../../../src/layout/layout.cp";
 
 fn main() {
@@ -176,7 +176,7 @@ fn main() {
         expect_eq(layout.boxes.items[@as(usize, bb)].content_height, 20.0);
     });
 
-    test("4. Position sticky, position fixed, and display none", () => {
+    test("4. CssPosition sticky, position fixed, and display none", () => {
         let doc = Document.init(std.heap.page_allocator) catch unreachable;
         defer doc.deinit();
 
@@ -209,7 +209,7 @@ fn main() {
 
         // Sticky metadata & static-flow box
         const sbox: LayoutBox = layout.boxes.items[@as(usize, sticky_el)];
-        expect_eq(sbox.position, Position.Sticky);
+        expect_eq(sbox.position, CssPosition.Sticky);
         expect_eq(sbox.has_sticky_top, true);
         expect_eq(sbox.sticky_top, 12.0);
         expect_eq(sbox.has_sticky_left, true);

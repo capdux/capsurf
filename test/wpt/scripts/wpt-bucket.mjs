@@ -21,7 +21,8 @@ import os from "node:os";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-const ROOT = resolve(import.meta.dirname, "..");
+const SUITE_DIR = resolve(import.meta.dirname, "..");
+const ROOT = resolve(import.meta.dirname, "../../..");
 const USAGE =
   "usage: node scripts/wpt-bucket.mjs --tests <json> --expectations <json> --dist <engine dist> --out-dir <dir> [--wpt-dir <dir>] [-j <engines>] [--draw]";
 const WPT_PORTS = [8000, 8443];
@@ -51,7 +52,7 @@ function parseArgs(argv) {
       process.exit(0);
     } else fail(`unknown option ${arg}\n${USAGE}`);
   }
-  options.wptDir ??= resolve(process.env.KITESURF_WPT_DIR ?? resolve(ROOT, ".wpt"));
+  options.wptDir ??= resolve(process.env.KITESURF_WPT_DIR ?? resolve(SUITE_DIR, ".wpt"));
   options.hostsFile ??= process.env.KITESURF_WPT_HOSTS
     ? resolve(process.env.KITESURF_WPT_HOSTS)
     : undefined;
@@ -200,7 +201,7 @@ async function startWptServe(options, env, scratch) {
 
 function runBatched(options, env, limitMs) {
   const args = [
-    resolve(ROOT, "scripts/wpt-batched.mjs"),
+    resolve(import.meta.dirname, "wpt-batched.mjs"),
     "--tests-file",
     options.tests,
     "--expectations",
@@ -213,7 +214,7 @@ function runBatched(options, env, limitMs) {
     "--no-record",
     "--no-report",
     "--engine-launcher",
-    "miniflare",
+    "capsurf",
     "--engine-dist",
     options.dist,
     ...(options.draw ? [] : ["--skip-expected-timeouts", "--skip-expected-crashes"]),

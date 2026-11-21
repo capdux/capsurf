@@ -2,6 +2,67 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/index.ts
 // Entry point for CapSurf Web API Runtime Shim.
 
+function _makeTagCollection(root, qualifiedName) {
+  const q = String(qualifiedName);
+  const isWildcard = (q === "*");
+  const qLower = q.toLowerCase();
+  const getList = function () {
+    if (typeof findInSubtree !== "function") return [];
+    const isHtmlDoc = !root.ownerDocument ? (root.contentType !== "application/xml" && root.contentType !== "text/xml") : (root.ownerDocument.contentType !== "application/xml" && root.ownerDocument.contentType !== "text/xml");
+    const list = findInSubtree(root, function (el) {
+      if (isWildcard) return true;
+      const tag = el.tagName || el.nodeName || "";
+      return isHtmlDoc ? (tag.toLowerCase() === qLower) : (tag === q);
+    }, false) || [];
+    if (typeof upgradeElement === "function") {
+      for (let i = 0; i < list.length; i++) list[i] = upgradeElement(list[i]);
+    }
+    return list;
+  };
+  return (typeof makeHtmlCollection === "function") ? makeHtmlCollection(getList) : getList();
+}
+
+function _makeTagNSCollection(root, namespace, localName) {
+  const ns = (namespace === null || namespace === undefined || namespace === "") ? null : String(namespace);
+  const ln = String(localName);
+  const getList = function () {
+    if (typeof findInSubtree !== "function") return [];
+    const list = findInSubtree(root, function (el) {
+      const elNs = el.namespaceURI !== undefined ? el.namespaceURI : "http://www.w3.org/1999/xhtml";
+      const elLn = el.localName || (el.tagName || el.nodeName || "").toLowerCase();
+      const nsMatch = (ns === "*") || (elNs === ns);
+      const lnMatch = (ln === "*") || (elLn === ln);
+      return nsMatch && lnMatch;
+    }, false) || [];
+    if (typeof upgradeElement === "function") {
+      for (let i = 0; i < list.length; i++) list[i] = upgradeElement(list[i]);
+    }
+    return list;
+  };
+  return (typeof makeHtmlCollection === "function") ? makeHtmlCollection(getList) : getList();
+}
+
+function _makeClassCollection(root, classNames) {
+  const tokens = String(classNames).split(/[ \t\r\n\f]+/).filter(Boolean);
+  const getList = function () {
+    if (tokens.length === 0 || typeof findInSubtree !== "function") return [];
+    const list = findInSubtree(root, function (el) {
+      const cls = (typeof el.getAttribute === "function" ? el.getAttribute("class") : el.className) || "";
+      if (!cls) return false;
+      const elTokens = String(cls).split(/[ \t\r\n\f]+/);
+      for (let i = 0; i < tokens.length; i++) {
+        if (elTokens.indexOf(tokens[i]) === -1) return false;
+      }
+      return true;
+    }, false) || [];
+    if (typeof upgradeElement === "function") {
+      for (let i = 0; i < list.length; i++) list[i] = upgradeElement(list[i]);
+    }
+    return list;
+  };
+  return (typeof makeHtmlCollection === "function") ? makeHtmlCollection(getList) : getList();
+}
+
 function installShim(global) {
   try {
     Object.defineProperty(global, "__capsurf_nativeEvents", {
@@ -365,6 +426,21 @@ function installShim(global) {
         }
     });
 
+    global.Element.prototype.getElementsByTagName = markNative(function(qualifiedName) {
+        if (arguments.length === 0) throw new TypeError("getElementsByTagName: 1 argument required");
+        return _makeTagCollection(this, qualifiedName);
+    }, "getElementsByTagName");
+
+    global.Element.prototype.getElementsByTagNameNS = markNative(function(namespace, localName) {
+        if (arguments.length < 2) throw new TypeError("getElementsByTagNameNS: 2 arguments required");
+        return _makeTagNSCollection(this, namespace, localName);
+    }, "getElementsByTagNameNS");
+
+    global.Element.prototype.getElementsByClassName = markNative(function(classNames) {
+        if (arguments.length === 0) throw new TypeError("getElementsByClassName: 1 argument required");
+        return _makeClassCollection(this, classNames);
+    }, "getElementsByClassName");
+
     global.Element.prototype.toDataURL = markNative(function (type) {
       if (this._ctx2d) {
         const w = Number(this.getAttribute("width") || this.width || 300);
@@ -558,6 +634,25 @@ function installShim(global) {
     docProto.querySelector = wrapQuerySelector(origQS);
     const origQSA = docProto.querySelectorAll;
     docProto.querySelectorAll = wrapQuerySelectorAll(origQSA);
+
+    if (typeof docProto.getElementsByTagName !== "function") {
+      docProto.getElementsByTagName = markNative(function (qualifiedName) {
+        if (arguments.length === 0) throw new TypeError("getElementsByTagName: 1 argument required");
+        return _makeTagCollection(this, qualifiedName);
+      }, "getElementsByTagName");
+    }
+    if (typeof docProto.getElementsByTagNameNS !== "function") {
+      docProto.getElementsByTagNameNS = markNative(function (namespace, localName) {
+        if (arguments.length < 2) throw new TypeError("getElementsByTagNameNS: 2 arguments required");
+        return _makeTagNSCollection(this, namespace, localName);
+      }, "getElementsByTagNameNS");
+    }
+    if (typeof docProto.getElementsByClassName !== "function") {
+      docProto.getElementsByClassName = markNative(function (classNames) {
+        if (arguments.length === 0) throw new TypeError("getElementsByClassName: 1 argument required");
+        return _makeClassCollection(this, classNames);
+      }, "getElementsByClassName");
+    }
 
     // Upgrade document.body / document.head / document.documentElement so HTMLBodyElement/HTMLElement
     // prototype getters (e.g. innerText) are always available even before querySelector is called.

@@ -54,24 +54,15 @@ import {
 
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
-import { StyleSheet, Cascade, ComputedStyle, Position } from "../css/cascade.cp";
+import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CookieJar } from "../net/cookies.cp";
-
-pub @c {
-    struct TimeVal {
-        tv_sec: i64;
-        tv_usec: i64;
-    }
-    fn gettimeofday(tv: *TimeVal, tz: *!?): i32;
-}
+import { getHostMilliTimestamp } from "../eval/host_clock.cp";
 
 pub fn getMilliTimestamp(): i64 {
-    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
-    * = gettimeofday(&tv, null);
-    return tv.tv_sec * 1000 + @divTrunc(tv.tv_usec, 1000);
+    return getHostMilliTimestamp();
 }
 
 pub threadlocal let g_element_class_id: u32 = 0;
@@ -1083,7 +1074,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
         let vx: f32 = box.rect.x;
         let vy: f32 = box.rect.y;
 
-        if (box.position == Position.Fixed) {
+        if (box.position == CssPosition.Fixed) {
             // Fixed boxes escape ancestor scroll and sticky offsets
             vx = box.rect.x;
             vy = box.rect.y;
@@ -1097,7 +1088,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
             let sticky_dx: f32 = 0.0;
             let sticky_dy: f32 = 0.0;
 
-            if (box.position == Position.Sticky && !ignore_sticky) {
+            if (box.position == CssPosition.Sticky && !ignore_sticky) {
                 // Find nearest non-root scrollport ancestor (html/body overflow propagates to viewport)
                 let sp_left: f32 = 0.0;
                 let sp_top: f32 = 0.0;
@@ -1334,13 +1325,13 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
 
             // Check ancestor overflow clipping (fixed escapes all ancestor clips)
             let clipped = false;
-            if (box.position != Position.Fixed) {
+            if (box.position != CssPosition.Fixed) {
                 let ci: usize = depth;
                 while (ci > 1) {
                     ci -= 1;
                     const anc = chain[ci - 1];
                     const child_id = chain[ci];
-                    if (lt.boxes.items[@as(usize, child_id)].position == Position.Fixed) {
+                    if (lt.boxes.items[@as(usize, child_id)].position == CssPosition.Fixed) {
                         break;
                     }
                     const anc_node = &doc.nodes.items[@as(usize, anc)];
@@ -1370,7 +1361,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
                 const anode = &doc.nodes.items[@as(usize, aid)];
                 if (anode.node_type != NodeType.Element || anode.hasTag("html") || anode.hasTag("body")) continue;
                 const abox = &lt.boxes.items[@as(usize, aid)];
-                const is_pos = (abox.position != Position.Static);
+                const is_pos = (abox.position != CssPosition.Static);
                 if (sc_root == NULL_NODE) {
                     if (is_pos) sc_pos = 1;
                     if (abox.creates_stacking_context) {
@@ -2509,7 +2500,14 @@ pub fn mountDom(
         "    if (val === undefined) return { type: 'undefined' };" +
         "    if (val === null) return { type: 'object', subtype: 'null', value: null };" +
         "    const t = typeof val;" +
-        "    if (t === 'boolean' || t === 'number' || t === 'string') return { type: t, value: val };" +
+        "    if (t === 'boolean' || t === 'string') return { type: t, value: val };" +
+        "    if (t === 'number') {" +
+        "      if (Number.isNaN(val)) return { type: 'number', unserializableValue: 'NaN' };" +
+        "      if (Object.is(val, -0)) return { type: 'number', unserializableValue: '-0' };" +
+        "      if (val === Infinity) return { type: 'number', unserializableValue: 'Infinity' };" +
+        "      if (val === -Infinity) return { type: 'number', unserializableValue: '-Infinity' };" +
+        "      return { type: 'number', value: val };" +
+        "    }" +
         "    if (t === 'symbol') return { type: 'symbol', description: String(val) };" +
         "    if (t === 'bigint') return { type: 'bigint', unserializableValue: String(val) + 'n' };" +
         "    if (t === 'function') {" +
@@ -2534,14 +2532,49 @@ pub fn mountDom(
         "    }" +
         "    return { type: 'undefined' };" +
         "  };" +
-        "  globalThis.__capsurf_call_fn = function (id, fnDecl) {" +
+        "  globalThis.__capsurf_call_fn = function (id, fnDecl, argsJson) {" +
         "    const target = globalThis.__capsurf_get_object(id);" +
         "    if (!target && id !== 'global' && id !== 'globalThis') {" +
         "      throw new Error('Could not find object with id ' + id);" +
         "    }" +
-        "    const fn = (0, eval)('(' + fnDecl + ')');" +
+        "    let fn;" +
+        "    try {" +
+        "      fn = (0, eval)('(' + fnDecl + ')');" +
+        "    } catch (e) {" +
+        "      if (e instanceof SyntaxError) {" +
+        "        const obj = (0, eval)('({' + fnDecl + '})');" +
+        "        const keys = Object.keys(obj);" +
+        "        if (keys.length === 1) fn = obj[keys[0]];" +
+        "      } else {" +
+        "        throw e;" +
+        "      }" +
+        "    }" +
         "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');" +
-        "    return fn.call(target || globalThis);" +
+        "    const rawArgs = argsJson ? JSON.parse(argsJson) : [];" +
+        "    const args = [];" +
+        "    for (let i = 0; i < rawArgs.length; i++) {" +
+        "      const arg = rawArgs[i] || {};" +
+        "      if (arg.objectId) {" +
+        "        const resolved = globalThis.__capsurf_get_object(arg.objectId);" +
+        "        if (resolved === undefined && arg.objectId !== 'global' && arg.objectId !== 'globalThis') {" +
+        "          throw new Error('Could not find object with id ' + arg.objectId);" +
+        "        }" +
+        "        args.push(resolved);" +
+        "      } else if (arg.unserializableValue !== undefined) {" +
+        "        const u = arg.unserializableValue;" +
+        "        if (u === 'NaN') args.push(NaN);" +
+        "        else if (u === '-0') args.push(-0);" +
+        "        else if (u === 'Infinity') args.push(Infinity);" +
+        "        else if (u === '-Infinity') args.push(-Infinity);" +
+        "        else if (/^-?\\d+n$/.test(u)) args.push(BigInt(u.slice(0, -1)));" +
+        "        else args.push(undefined);" +
+        "      } else if ('value' in arg) {" +
+        "        args.push(arg.value);" +
+        "      } else {" +
+        "        args.push(undefined);" +
+        "      }" +
+        "    }" +
+        "    return fn.apply(target || globalThis, args);" +
         "  };" +
         "  if (typeof document !== 'undefined' && !document.fonts) {" +
         "    const _readyP = Promise.resolve();" +

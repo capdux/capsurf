@@ -6,9 +6,11 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { deviations, loadExpectations, reportGaps, summarize } from "./pw-shared.mjs";
+import { deviations, loadExpectations, reportGaps, summarize } from "../../pw/scripts/pw-shared.mjs";
 import { coverageGaps, loadAllowList, rebaselineSlow, splitId } from "./pptr-shared.mjs";
-import { isMain } from "./wpt-shared.mjs";
+import { isMain } from "../../wpt/scripts/wpt-shared.mjs";
+
+const SUITE_DIR = resolve(import.meta.dirname, "..");
 
 const USAGE =
   "usage: node scripts/pptr-gate.mjs --results <results.json>... [--tests <file>] [--expectations <file>] [--junit <file>] [--update-expectations]";
@@ -56,8 +58,8 @@ export function junit(results, devs, emptyFiles, missingPins, unrun) {
 function main(argv) {
   const options = {
     results: [],
-    tests: "tests/pptr-tests.json",
-    expectations: "tests/pptr-expectations.json",
+    tests: resolve(SUITE_DIR, "pptr-tests.json"),
+    expectations: resolve(SUITE_DIR, "pptr-expectations.json"),
     junit: process.env.XML_OUTPUT_FILE,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -116,7 +118,7 @@ function update(results, durations, errors) {
     );
     process.exit(2);
   }
-  const file = resolve(workspace, "tests/pptr-expectations.json");
+  const file = resolve(workspace, "test/pptr/pptr-expectations.json");
   const expectations = loadExpectations(file);
   const devs = deviations(results, expectations);
   for (const deviation of devs)

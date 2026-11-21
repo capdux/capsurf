@@ -38,7 +38,7 @@ function main(argv) {
     console.error(`${USAGE}\n(run it with bazel run, which sets BUILD_WORKSPACE_DIRECTORY)`);
     process.exit(2);
   }
-  const file = resolve(workspace, "tests/wpt-expectations.json");
+  const file = resolve(workspace, "test/wpt/wpt-expectations.json");
   const expectations = JSON.parse(readFileSync(file, "utf8"));
   const rows = deviating(
     expectations,

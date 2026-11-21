@@ -9,9 +9,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { isMain } from "./wpt-shared.mjs";
 
-const ROOT = resolve(import.meta.dirname, "..");
-const TESTS_FILE = resolve(ROOT, "tests/wpt-tests.json");
-export const BUCKETS_FILE = resolve(ROOT, "tests/wpt-buckets.json");
+const SUITE_DIR = resolve(import.meta.dirname, "..");
+const TESTS_FILE = resolve(SUITE_DIR, "wpt-tests.json");
+export const BUCKETS_FILE = resolve(SUITE_DIR, "wpt-buckets.json");
 const USAGE = `usage: node scripts/wpt-buckets.mjs --durations <wpt full report>... [--budget-ms 35000]
        node scripts/wpt-buckets.mjs --default-only [--budget-ms 35000] [--check]`;
 

@@ -73,14 +73,12 @@ function main(options) {
   const result = spawnSync(
     process.execPath,
     [
-      resolve(ROOT, "scripts/pptr-run.mjs"),
+      resolve(import.meta.dirname, "pptr-run.mjs"),
       "--pptr-dir",
       puppeteerDir,
       "--out-dir",
       resolve(options.outDir, "test-results"),
-      "--engine-launcher",
-      "miniflare",
-      "--dist",
+      "--bin",
       options.dist,
       "--spec",
       options.spec,

@@ -4871,3 +4871,20 @@
 - **修复说明**: `cp_agy` 已在 12 个 CapSurf 依赖的标准库文件（`pack/{zstd,tar_pax,zip_writer}.cp`、`ws/permessage_deflate.cp`、`event/{concurrent_task,timer}.cp`、`crypto/{cipher,kdf}.cp`、`sys/{fs_ops,process}.cp`、`blob/{blob,store}.cp`）中为全部裸指针/`@ptrCast`/`@alignCast`/`@constCast` 补齐最小 `unsafe` 块，并已执行 `ack`。
 - **复现验证**: `cpc check /data/dev/cp/temp/repro_lib_e0209_batch.cp` → `Check successful`；`cap build -m -d -o bin_19231 src/main.cp` 99 模块全量转译编译 **13.82s** 通过。
 - **E2E 冒烟验证**: `CAPSURF_BIN=./bin_19231/main python3 scripts/e2e_suite.py --smoke` → **3/3 suites passed**（`alert-non-throwing` 1/1、`smoke` 2/2、`blank-page-document` 3/3，6 pass / 0 fail / 8 expect()）。
+
+### [2026-11-22 04:53] Phase 254: 138/138 白盒全绿 + PPTR/PW/WPT 联调打通与多路并发实测
+- **纯 CP 白盒单元测试 (`test/unit/`)**: `ulimit -s unlimited && cap test test/unit/` **138 / 138 全部通过（0 failed）**（覆盖 `cdp` 28、`css` 18、`dom` 24、`eval` 18、`html` 9、`js` 4、`layout` 5、`net` 18、`render` 10、`tty` 4），并清理了 `Position`->`CssPosition`、`FontFaceRule`->`CssFontFaceRule`、`gettimeofday`、`JS_EvalFunction`、`std.c.open`/`close` 等跨模块符号冲突。
+- **黑盒 E2E (`test/e2e/`)**: `python3 scripts/e2e_suite.py` 在 `./bin/main` 上 **530/536** 一次通过；修复 `trusted-fetch-metadata.e2e.test.ts` 的 `../../vendor/` 导入并单路复测 `redirect-per-hop-gating`(14/14)、`network-stylesheet-headers-demo`(1/1)、`screencast-partial-frames`(11/11)、`cookie-passthrough-demo`(1/1) 全部 PASS，即 **535/536 通过**（仅余 `session-deadlines` 2/3 受 Bun v1.3.14 WS close code `1001->1000` 影响）。
+- **上游仓库与运行器适配 (`test/{pptr,pw,wpt}/`)**:
+  - 已拉取并构建 `test/pptr/.puppeteer`（`v25.16.0`，751M）、`test/pw/.playwright`（`v1.62.0`，584M）、`test/wpt/.wpt`（`6efb1b12b957`），并配置 `/etc/hosts`（`web-platform.test -> 127.0.0.1`）与共享 `wpt-serve.mjs`。
+  - 修复 `wpt-batched.mjs`（`process.execPath`）与 `wpt-exec.mjs`（`waitUntil: "domcontentloaded"`、`page.emulateMediaType`、复用 `page._client()`、`detectReftest` 正则与相对 URL 解析、`navigatePage`）。
+- **引擎 CDP 与 JS Shim 核心修复**:
+  - `src/cdp/server.cp`: 扁平化会话响应/错误包回传 `"sessionId"`，新标签页对齐 `frame_id === targetId` 与 `target_id`；`Target.*` 事件不误加 `sessionId`。
+  - `src/cdp/target.cp`: `Target.setAutoAttach` 在子会话下不重复广播 `capsurf-target-001`。
+  - `src/cdp/runtime.cp` / `src/cdp/session.cp` / `src/js/dom_binding.cp`: `Runtime.callFunctionOn` 缺省 `objectId` 时回落 `globalThis`，解析透传 `arguments`（含 `BigInt`/`NaN`/`-0`/`Infinity`/`-Infinity`/`objectId`）、支持函数简写、并按 `unserializableValue` 序列化特殊数值。
+  - `src/cdp/page.cp` / `src/net/http_loader.cp`: 主帧补发 `Page.lifecycleEvent`、`Page.close` 销毁 target 并发送 `Target.targetDestroyed`、实装 `Page.addScriptToEvaluateOnNewDocument`、`HttpLoader` 支持 `Content-Length`/`chunked` 解码与 `web-platform.test` 回环、2MB 外链脚本加载（198KB `testharness.js` 正常执行）。
+  - `src/js/shim/{index,window}.js` & `src/js/runtime_source.cp`: 补齐 `getElementsByTagName`/`NS`/`ClassName` 与顶层 `window.parent`/`top`/`frames`/`opener`/`frameElement`，打通 WPT `testharness.js`。
+- **PPTR / PW / WPT 实测基线（基于 `./bin_wpt/main`）**:
+  - **Puppeteer**: `injected.test` **8/8 PASS (100%)**；`evaluation.test` **13/17 PASS**（从 3/17 跃升）；`navigation.test` 5/12 PASS；`jshandle.test` 10/25 PASS。
+  - **WPT（多子智能体分片并行，已覆盖 20+ 目录、450+ 用例，零崩溃通过大量用例）**: `/webstorage/` **3/3 (100%)**、`/css/css-cascade/` **22/25 (88.0%)**、`/dom/nodes/Element-` **10/12 (83.3%)**、`/css/css-contain/` **9/11 (81.8%)**、`/html/semantics/selectors/` **3/4 (100% 匹配基线)**、`/domxpath/` **16/22 (72.7%)**、`/css/css-borders/` **16/23 (69.6%)**、`/css/css-backgrounds/` **4/6**、`30 条 crashtest` **22 PASS + 1 expected FAIL**、`/css/selectors/` **21/33 (63.6%)**、`/css/cssom-view/` **7/12 (58.3%)**、`/dom/collections/` **5/10 (50%)**、`/css/css-grid/` **22/44 (50%)**、`/html/dom/` **7/15**、`/css/css-typed-om/` **26/60 (43.3%)**、`/svg/` **21/50 (42.0%)**、`/css/css-fonts/` **9/23 (39.1%)**、`/html/canvas/element/` **22/74**、`/css/css-position/` **14/53**、`/xhr/` **10/37**、`/webidl/` **7/33**。
+- **上游上报**: `cap build -m -r -o bin_rel src/main.cp` 在 LLVM ReleaseFast 下命中 `__cp_runtime.zig` `cp_unpack_elem` 冗余 `comptime` 报错，已提交 `task-capsurf-20261122-cp-unpack-elem-comptime` 给 `cp_agy`。

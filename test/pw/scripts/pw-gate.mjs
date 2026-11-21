@@ -15,7 +15,9 @@ import {
   reportGaps,
   summarize,
 } from "./pw-shared.mjs";
-import { isMain } from "./wpt-shared.mjs";
+import { isMain } from "../../wpt/scripts/wpt-shared.mjs";
+
+const SUITE_DIR = resolve(import.meta.dirname, "..");
 
 const USAGE =
   "usage: node scripts/pw-gate.mjs --results <results.json>... [--tests <file>] [--expectations <file>] [--junit <file>] [--update-expectations]";
@@ -66,8 +68,8 @@ export function junit(results, devs, emptyFiles, missingPins, unrun) {
 function main(argv) {
   const options = {
     results: [],
-    tests: "tests/pw-tests.json",
-    expectations: "tests/pw-expectations.json",
+    tests: resolve(SUITE_DIR, "pw-tests.json"),
+    expectations: resolve(SUITE_DIR, "pw-expectations.json"),
     junit: process.env.XML_OUTPUT_FILE,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -122,7 +124,7 @@ function update(options, results) {
     );
     process.exit(2);
   }
-  const file = resolve(workspace, "tests/pw-expectations.json");
+  const file = resolve(workspace, "test/pw/pw-expectations.json");
   const expectations = loadExpectations(file);
   const devs = deviations(results, expectations);
   for (const deviation of devs)

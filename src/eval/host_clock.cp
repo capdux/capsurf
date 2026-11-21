@@ -15,6 +15,19 @@ pub fn getSystemMilliTimestamp(): f64 {
     return @as(f64, @floatFromInt(tv.tv_sec)) * 1000.0 + @as(f64, @floatFromInt(tv.tv_usec)) / 1000.0;
 }
 
+pub fn getHostMilliTimestamp(): i64 {
+    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
+    * = gettimeofday(&tv, null);
+    return tv.tv_sec * 1000 + @divTrunc(tv.tv_usec, 1000);
+}
+
+pub fn getHostNowMs(): u64 {
+    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
+    * = gettimeofday(&tv, null);
+    if (tv.tv_sec <= 0) return 0;
+    return @as(u64, @intCast(tv.tv_sec)) * 1000 + @as(u64, @intCast(tv.tv_usec)) / 1000;
+}
+
 pub type HostNowFn = *const fn(user_data: *!?): f64;
 
 pub struct HostClock {

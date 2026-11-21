@@ -82,7 +82,7 @@ pub struct UnicodeRange {
     }
 }
 
-pub struct FontFaceRule {
+pub struct CssFontFaceRule {
     family_buf: [64]u8 = [0; 64];
     family_len: usize = 0;
     src_buf: [256]u8 = [0; 256];
@@ -163,17 +163,17 @@ pub struct FontFaceRule {
         if (std.ascii.startsWithIgnoreCase(url_str, "data:")) return true;
         if (std.mem.indexOf(u8, url_str, "://") == null) return true;
         // Same-origin primary test host
-        if (FontFaceRule.containsIgnoreCase(url_str, "://ks.invalid/")) return true;
-        if (FontFaceRule.containsIgnoreCase(url_str, "://127.0.0.1")) return true;
-        if (FontFaceRule.containsIgnoreCase(url_str, "://localhost")) return true;
+        if (CssFontFaceRule.containsIgnoreCase(url_str, "://ks.invalid/")) return true;
+        if (CssFontFaceRule.containsIgnoreCase(url_str, "://127.0.0.1")) return true;
+        if (CssFontFaceRule.containsIgnoreCase(url_str, "://localhost")) return true;
         // Cross-origin font fetch requires CORS ACAO grant
-        if (FontFaceRule.containsIgnoreCase(url_str, "acao=1")) return true;
-        if (FontFaceRule.containsIgnoreCase(url_str, "cors=1")) return true;
+        if (CssFontFaceRule.containsIgnoreCase(url_str, "acao=1")) return true;
+        if (CssFontFaceRule.containsIgnoreCase(url_str, "cors=1")) return true;
         return false;
     }
 
-    static fn parseBlock(body: []const u8): FontFaceRule? {
-        let ff = FontFaceRule{};
+    static fn parseBlock(body: []const u8): CssFontFaceRule? {
+        let ff = CssFontFaceRule{};
         let i: usize = 0;
         while (i < body.len) {
             // Skip leading whitespace and semicolons
@@ -217,12 +217,12 @@ pub struct FontFaceRule {
                     @memcpy(ff.family_buf[0..copy_len], clean_fam[0..copy_len]);
                     ff.family_len = copy_len;
                 } else if (std.ascii.eqlIgnoreCase(prop_name, "src")) {
-                    const url_str = FontFaceRule.extractFirstUrl(prop_val);
+                    const url_str = CssFontFaceRule.extractFirstUrl(prop_val);
                     const copy_len = @min(url_str.len, ff.src_buf.len);
                     @memcpy(ff.src_buf[0..copy_len], url_str[0..copy_len]);
                     ff.src_len = copy_len;
                     if (url_str.len > 0) {
-                        if (FontFaceRule.isCrossOriginCorsAllowed(url_str)) {
+                        if (CssFontFaceRule.isCrossOriginCorsAllowed(url_str)) {
                             ff.is_loaded = true;
                             ff.is_cors_blocked = false;
                         } else {
@@ -248,7 +248,7 @@ pub struct FontFaceRule {
         // Determine advance ratio from font metrics characteristics
         const fam = ff.family_buf[0..ff.family_len];
         const src = ff.src_buf[0..ff.src_len];
-        if (FontFaceRule.containsIgnoreCase(fam, "bungee") || FontFaceRule.containsIgnoreCase(src, "bungee")) {
+        if (CssFontFaceRule.containsIgnoreCase(fam, "bungee") || CssFontFaceRule.containsIgnoreCase(src, "bungee")) {
             ff.advance_ratio = 0.85;
         } else {
             ff.advance_ratio = 0.60;
@@ -277,7 +277,7 @@ pub struct WebfontStyleMetrics {
         return 0.0;
     }
 
-    static fn resolveForFamily(font_family_list: []const u8, faces: []const FontFaceRule): WebfontStyleMetrics {
+    static fn resolveForFamily(font_family_list: []const u8, faces: []const CssFontFaceRule): WebfontStyleMetrics {
         let out = WebfontStyleMetrics{};
         if (font_family_list.len == 0 || faces.len == 0) return out;
 

@@ -25,7 +25,7 @@ pub struct PageScriptKey {
     loader_id: []const u8 = "",
 
     fn getCacheKey(out_buf: []u8): []const u8 {
-        return pageScriptCacheKey(_, out_buf);
+        return pageScriptCacheKey(_.*, out_buf);
     }
 }
 

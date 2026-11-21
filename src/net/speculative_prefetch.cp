@@ -3,19 +3,10 @@
 // Runs speculative prefetches with a short deadline and fixed concurrency.
 
 import { FetchInterceptionState, globMatches } from "../cdp/fetch_interception.cp";
+import { getHostMilliTimestamp } from "../eval/host_clock.cp";
 
-@c {
-    struct TimeVal {
-        tv_sec: i64;
-        tv_usec: i64;
-    }
-    fn gettimeofday(tv: *TimeVal, tz: *!?): i32;
-}
-
-pub fn getMilliTimestamp(): i64 {
-    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
-    * = gettimeofday(&tv, null);
-    return tv.tv_sec * 1000 + @divTrunc(tv.tv_usec, 1000);
+fn getPrefetchMilliTimestamp(): i64 {
+    return getHostMilliTimestamp();
 }
 
 pub const SPECULATIVE_DEADLINE_MS: u64 = 1000;
@@ -32,7 +23,7 @@ pub struct PrefetchSignal {
 
     fn isAborted(): bool {
         if (_.aborted) return true;
-        const now = getMilliTimestamp();
+        const now = getPrefetchMilliTimestamp();
         return (now - _.start_time_ms >= @as(i64, @intCast(_.deadline_ms)));
     }
 
@@ -340,7 +331,7 @@ pub fn prefetchBestEffort(
     let signal = PrefetchSignal{
         aborted: false,
         deadline_ms: deadline_ms,
-        start_time_ms: getMilliTimestamp(),
+        start_time_ms: getPrefetchMilliTimestamp(),
     };
 
     const eff_concurrency = if (concurrency == 0) 1 else @min(concurrency, items.len);

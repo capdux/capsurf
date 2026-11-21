@@ -40,6 +40,8 @@ pub @c {
     fn JS_GetImportMeta(ctx: *JSContext, m: *JSModuleDef): JSValue;
     fn JS_Call(ctx: *JSContext, func_obj: JSValue, this_obj: JSValue, argc: i32, argv: [*]const JSValue!): JSValue;
     fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
+    fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
+    fn JS_GetRuntime(ctx: *JSContext): *JSRuntime;
 
     fn JS_NewContext(rt: *JSRuntime): (*JSContext)?;
     fn JS_FreeContext(ctx: *JSContext);

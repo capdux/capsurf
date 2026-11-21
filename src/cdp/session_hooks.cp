@@ -1,23 +1,13 @@
 // src/cdp/session_hooks.cp
 // Page-level JS runtime hooks, native fixture/bake bridge, and inserted-script engine for CdpPageSession.
 
-import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, jsNull, jsUndefined, jsInt, jsFloat, jsNewString, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_EvalFunction, JS_GetRuntime, JS_ExecutePendingJob, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, jsNull, jsUndefined, jsInt, jsFloat, jsNewString, jsIsException, defineMethod } from "../js/qjs_engine.cp";
 import { JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { recordPendingFetchBody } from "./network.cp";
-
-@c {
-    fn JS_EvalFunction(ctx: *JSContext, fun_obj: JSValue): JSValue;
-    fn JS_GetRuntime(ctx: *JSContext): *JSRuntime;
-    fn JS_ExecutePendingJob(rt: *JSRuntime, pctx: *(*JSContext)?): i32;
-    struct HrTimeVal {
-        tv_sec: i64;
-        tv_usec: i64;
-    }
-    fn gettimeofday(tv: *HrTimeVal, tz: *!?): i32;
-}
+import { getSystemMilliTimestamp } from "../eval/host_clock.cp";
 
 struct LearnedScriptEntry {
     active: bool = false,
@@ -695,10 +685,7 @@ fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) 
     * = this_val;
     * = argc;
     * = argv;
-    let tv = HrTimeVal{ tv_sec: 0, tv_usec: 0 };
-    * = gettimeofday(&tv, null);
-    const ms = @as(f64, @floatFromInt(tv.tv_sec)) * 1000.0 + @as(f64, @floatFromInt(tv.tv_usec)) / 1000.0;
-    return jsFloat(ms);
+    return jsFloat(getSystemMilliTimestamp());
 }
 
 @c fn js_capsurf_worker_emit(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {

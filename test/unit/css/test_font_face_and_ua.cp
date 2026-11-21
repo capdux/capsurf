@@ -6,7 +6,7 @@
 import { test, expect_eq } from "cap:test";
 import {
     UnicodeRange,
-    FontFaceRule,
+    CssFontFaceRule,
     WebfontStyleMetrics,
     parsePseudoContentValue
 } from "../../../src/css/font_face.cp";
@@ -101,12 +101,12 @@ fn main() {
         expect_eq(UnicodeRange.parseSingle("U+GHIJ") == null, true);
     });
 
-    test("2. FontFaceRule.parseBlock: data URI semicolons, CORS gating, unicode-range, advance_ratio", () => {
+    test("2. CssFontFaceRule.parseBlock: data URI semicolons, CORS gating, unicode-range, advance_ratio", () => {
         // Missing font-family -> null
-        expect_eq(FontFaceRule.parseBlock("src: url(/a.woff2);") == null, true);
+        expect_eq(CssFontFaceRule.parseBlock("src: url(/a.woff2);") == null, true);
 
         // Data URI containing ';' inside url(...) must not truncate declaration
-        if (ff_data := FontFaceRule.parseBlock("font-family: 'DataMono'; src: url(data:font/woff2;base64,d09GMgAB);")) {
+        if (ff_data := CssFontFaceRule.parseBlock("font-family: 'DataMono'; src: url(data:font/woff2;base64,d09GMgAB);")) {
             expect_eq(strEq(ff_data.family_buf[0..ff_data.family_len], "DataMono"), true);
             expect_eq(strEq(ff_data.src_buf[0..ff_data.src_len], "data:font/woff2;base64,d09GMgAB"), true);
             expect_eq(ff_data.is_loaded, true);
@@ -120,7 +120,7 @@ fn main() {
         }
 
         // Cross-origin without CORS grant -> blocked
-        if (ff_blocked := FontFaceRule.parseBlock("font-family: BlockedFont; src: url(\"https://cdn.example.com/font.woff2\");")) {
+        if (ff_blocked := CssFontFaceRule.parseBlock("font-family: BlockedFont; src: url(\"https://cdn.example.com/font.woff2\");")) {
             expect_eq(ff_blocked.is_loaded, false);
             expect_eq(ff_blocked.is_cors_blocked, true);
         } else {
@@ -128,15 +128,15 @@ fn main() {
         }
 
         // Cross-origin with acao=1 / cors=1 -> allowed
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed("https://cdn.example.com/f.woff2?acao=1"), true);
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed("https://cdn.example.com/f.woff2?cors=1"), true);
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed("http://127.0.0.1:8080/f.woff2"), true);
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed("http://localhost/f.woff2"), true);
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed("https://ks.invalid/f.woff2"), true);
-        expect_eq(FontFaceRule.isCrossOriginCorsAllowed(""), false);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed("https://cdn.example.com/f.woff2?acao=1"), true);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed("https://cdn.example.com/f.woff2?cors=1"), true);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed("http://127.0.0.1:8080/f.woff2"), true);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed("http://localhost/f.woff2"), true);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed("https://ks.invalid/f.woff2"), true);
+        expect_eq(CssFontFaceRule.isCrossOriginCorsAllowed(""), false);
 
         // Bungee advance_ratio (0.85) + multiple unicode-ranges
-        if (ff_bungee := FontFaceRule.parseBlock("font-family: \"MyBungee\"; src: url(/fonts/bungee.woff2); unicode-range: U+0041, U+0400-04FF, U+30??;")) {
+        if (ff_bungee := CssFontFaceRule.parseBlock("font-family: \"MyBungee\"; src: url(/fonts/bungee.woff2); unicode-range: U+0041, U+0400-04FF, U+30??;")) {
             expect_eq(nearF32(ff_bungee.advance_ratio, 0.85, 0.001), true);
             expect_eq(ff_bungee.range_count, @as(usize, 3));
             expect_eq(ff_bungee.matchesCodepoint(0x0041), true);
@@ -149,11 +149,11 @@ fn main() {
     });
 
     test("3. WebfontStyleMetrics.resolveForFamily & advanceRatioForCodepoint", () => {
-        let faces: [4]FontFaceRule = [FontFaceRule{}; 4];
-        faces[0] = FontFaceRule.parseBlock("font-family: Blocked; src: url(https://evil.invalid/a.woff2);").?;
-        faces[1] = FontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/bungee.woff2); unicode-range: U+0041-005A;").?;
-        faces[2] = FontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/cyr.woff2); unicode-range: U+0400-04FF;").?;
-        faces[3] = FontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/default.woff2);").?;
+        let faces: [4]CssFontFaceRule = [CssFontFaceRule{}; 4];
+        faces[0] = CssFontFaceRule.parseBlock("font-family: Blocked; src: url(https://evil.invalid/a.woff2);").?;
+        faces[1] = CssFontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/bungee.woff2); unicode-range: U+0041-005A;").?;
+        faces[2] = CssFontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/cyr.woff2); unicode-range: U+0400-04FF;").?;
+        faces[3] = CssFontFaceRule.parseBlock("font-family: Hybrid; src: url(/fonts/default.woff2);").?;
 
         // Blocked font only -> not loaded
         const m_blocked = WebfontStyleMetrics.resolveForFamily("Blocked", faces[0..4]);

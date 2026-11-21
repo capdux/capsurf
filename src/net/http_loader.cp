@@ -15,7 +15,6 @@ import {
     SOCK_STREAM,
     socket,
     connect,
-    close,
     recv,
     socketWriteAll,
     socketReadAll
@@ -114,7 +113,8 @@ pub struct HttpLoader {
 
     /// Parse an IPv4 string literal into 32-bit big-endian/native integer
     pub static fn parseIpv4(host: []const u8): u32? {
-        if (std.mem.eql(u8, host, "localhost") || std.mem.eql(u8, host, "127.0.0.1")) {
+        if (std.mem.eql(u8, host, "localhost") || std.mem.eql(u8, host, "127.0.0.1") ||
+            std.mem.eql(u8, host, "web-platform.test") || std.mem.endsWith(u8, host, ".web-platform.test")) {
             return 0x0100007F; // 127.0.0.1
         }
 
@@ -235,13 +235,97 @@ pub struct HttpLoader {
         return HostAndPort{ host: raw_host, port: default_port };
     }
 
+    static fn containsIgnoreCase(haystack: []const u8, needle: []const u8): bool {
+        if (needle.len == 0) return true;
+        if (haystack.len < needle.len) return false;
+        let i: usize = 0;
+        const limit = haystack.len - needle.len;
+        while (i <= limit) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(haystack[i .. i + needle.len], needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub static fn decodeChunkedInPlace(body: []u8): usize {
+        let r: usize = 0;
+        let w: usize = 0;
+        while (r < body.len) {
+            // Skip any leading CRLF
+            while (r < body.len && (body[r] == '\r' || body[r] == '\n')) : (r += 1) {}
+            if (r >= body.len) break;
+            // Parse hex chunk size
+            let chunk_size: usize = 0;
+            let saw_digit = false;
+            while (r < body.len) : (r += 1) {
+                const c = body[r];
+                if (hv := HttpLoader.hexVal(c)) {
+                    chunk_size = chunk_size * 16 + @as(usize, hv);
+                    saw_digit = true;
+                } else {
+                    break;
+                }
+            }
+            if (!saw_digit) break;
+            // Skip to end of chunk-size line (\n)
+            while (r < body.len && body[r] != '\n') : (r += 1) {}
+            if (r < body.len && body[r] == '\n') r += 1;
+            if (chunk_size == 0) break;
+            const avail = body.len - r;
+            const copy_n = @min(chunk_size, avail);
+            if (w != r && copy_n > 0) {
+                std.mem.copyForwards(u8, body[w .. w + copy_n], body[r .. r + copy_n]);
+            }
+            w += copy_n;
+            r += copy_n;
+            if (r < body.len && body[r] == '\r') r += 1;
+            if (r < body.len && body[r] == '\n') r += 1;
+        }
+        return w;
+    }
+
     pub static fn socketReadHttp(fd: i32, buf: []u8): usize! {
         let received: usize = 0;
+        let header_end_pos: usize? = null;
+        let content_length: usize? = null;
+        let is_chunked = false;
         while (received < buf.len) {
             const n = recv(fd, buf.ptr + received, buf.len - received, 0);
             if (n < 0) return error.ReadFailed;
             if (n == 0) break; // EOF (Server finished sending)
             received += @as(usize, @intCast(n));
+            if (header_end_pos == null) {
+                if (hend := std.mem.indexOf(u8, buf[0..received], "\r\n\r\n")) {
+                    header_end_pos = hend;
+                    const hdrs = buf[0..hend];
+                    let hit = std.mem.splitSequence(u8, hdrs, "\r\n");
+                    while (hline := hit.next()) {
+                        if (hline.len >= 15 && std.ascii.eqlIgnoreCase(hline[0..15], "Content-Length:")) {
+                            const cl_str = std.mem.trim(u8, hline[15..], " \t");
+                            content_length = std.fmt.parseInt(usize, cl_str, 10) catch null;
+                        } else if (hline.len >= 18 && std.ascii.eqlIgnoreCase(hline[0..18], "Transfer-Encoding:")) {
+                            const te_val = std.mem.trim(u8, hline[18..], " \t");
+                            if (HttpLoader.containsIgnoreCase(te_val, "chunked")) {
+                                is_chunked = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if (hend := header_end_pos) {
+                const body_start = hend + 4;
+                if (!is_chunked) {
+                    if (cl := content_length) {
+                        if (received >= body_start + cl) break;
+                    }
+                } else {
+                    const body_slice = buf[body_start..received];
+                    if (std.mem.endsWith(u8, body_slice, "\r\n0\r\n\r\n") || std.mem.eql(u8, body_slice, "0\r\n\r\n")) {
+                        break;
+                    }
+                }
+            }
         }
         return received;
     }
@@ -527,7 +611,7 @@ pub struct HttpLoader {
         const ip_addr = ip_opt ?? 0x0100007F; // Default to 127.0.0.1 for local testing
         const sock_fd = socket(AF_INET, SOCK_STREAM, 0);
         if (sock_fd < 0) return error.SocketCreationFailed;
-        defer * = close(sock_fd);
+        defer * = std.c.close(sock_fd);
 
         const addr = SockAddrIn{
             sin_family: @as(u16, @intCast(AF_INET)),
@@ -545,18 +629,20 @@ pub struct HttpLoader {
         let req_pos: usize = 0;
 
         let req_line_len: usize = 0;
+        const has_extra_ae = HttpLoader.containsIgnoreCase(session.extra_headers, "accept-encoding");
+        const ae_hdr: []const u8 = if (has_extra_ae) "" else "Accept-Encoding: identity\r\n";
         if ((parsed.secure && parsed.port != 443) || (!parsed.secure && parsed.port != 80)) {
             const req_line = std.fmt.bufPrint(
                 req_buf[req_pos..],
-                "GET {s} HTTP/1.1\r\nHost: {s}:{d}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Encoding: gzip, br\r\nConnection: close\r\n",
-                .{ parsed.path, parsed.host, parsed.port, session.user_agent },
+                "GET {s} HTTP/1.1\r\nHost: {s}:{d}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n{s}Connection: close\r\n",
+                .{ parsed.path, parsed.host, parsed.port, session.user_agent, ae_hdr },
             ) catch return error.BufferOverflow;
             req_line_len = req_line.len;
         } else {
             const req_line = std.fmt.bufPrint(
                 req_buf[req_pos..],
-                "GET {s} HTTP/1.1\r\nHost: {s}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Encoding: gzip, br\r\nConnection: close\r\n",
-                .{ parsed.path, parsed.host, session.user_agent },
+                "GET {s} HTTP/1.1\r\nHost: {s}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n{s}Connection: close\r\n",
+                .{ parsed.path, parsed.host, session.user_agent, ae_hdr },
             ) catch return error.BufferOverflow;
             req_line_len = req_line.len;
         }
@@ -620,9 +706,10 @@ pub struct HttpLoader {
         const header_end = std.mem.indexOf(u8, raw_resp, "\r\n\r\n");
         const headers_part = if (header_end != null) raw_resp[0..header_end.?] else raw_resp;
 
-        // Parse Set-Cookie, Content-Type, Content-Disposition lines
+        // Parse Set-Cookie, Content-Type, Content-Disposition, Transfer-Encoding lines
         let resp_content_type: []const u8 = "";
         let resp_content_disp: ([]const u8)? = null;
+        let is_chunked_resp = false;
         let line_it = std.mem.splitSequence(u8, headers_part, "\r\n");
         while (line := line_it.next()) {
             if (line.len >= 11 && std.ascii.eqlIgnoreCase(line[0..11], "Set-Cookie:")) {
@@ -635,6 +722,11 @@ pub struct HttpLoader {
                 resp_content_type = std.mem.trim(u8, line[13..], " \t");
             } else if (line.len >= 20 && std.ascii.eqlIgnoreCase(line[0..20], "Content-Disposition:")) {
                 resp_content_disp = std.mem.trim(u8, line[20..], " \t");
+            } else if (line.len >= 18 && std.ascii.eqlIgnoreCase(line[0..18], "Transfer-Encoding:")) {
+                const te_val = std.mem.trim(u8, line[18..], " \t");
+                if (HttpLoader.containsIgnoreCase(te_val, "chunked")) {
+                    is_chunked_resp = true;
+                }
             }
         }
 
@@ -661,7 +753,13 @@ pub struct HttpLoader {
         // 10. Extract HTML body
         let body: []const u8 = "";
         if (idx := header_end) {
-            body = raw_resp[idx + 4..];
+            const body_start = idx + 4;
+            if (is_chunked_resp && body_start < total_read) {
+                const decoded_len = HttpLoader.decodeChunkedInPlace(out_buf[body_start..total_read]);
+                body = out_buf[body_start .. body_start + decoded_len];
+            } else {
+                body = raw_resp[body_start..];
+            }
         }
 
         return HttpLoaderResult{

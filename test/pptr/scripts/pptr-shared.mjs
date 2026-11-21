@@ -6,7 +6,7 @@
 // TestExpectations.json: `[<spec basename>] <mocha fullTitle>`, e.g. `[page.test] Page ...`.
 
 import { readFileSync } from "node:fs";
-import { rebaseline } from "./pw-shared.mjs";
+import { rebaseline } from "../../pw/scripts/pw-shared.mjs";
 
 /** @typedef {{file: string, only: string[] | null}} AllowEntry */
 /** @typedef {{title: string, fullTitle: string, duration?: number, err?: {code?: string, message?: string}}} MochaTest */

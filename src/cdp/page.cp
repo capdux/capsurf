@@ -752,16 +752,47 @@ pub struct PageHandler {
             std.mem.eql(u8, req.method, "Page.setInterceptFileChooserDialog") ||
             std.mem.eql(u8, req.method, "Page.setBypassCSP") ||
             std.mem.eql(u8, req.method, "Page.bringToFront") ||
-            std.mem.eql(u8, req.method, "Page.handleJavaScriptDialog") ||
-            std.mem.eql(u8, req.method, "Page.close")) {
+            std.mem.eql(u8, req.method, "Page.handleJavaScriptDialog")) {
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Page.close")) {
+            let reg = &session.target_registry;
+            if (owner := session.owner_target_registry) {
+                reg = owner;
+            }
+            const existed = reg.closeTarget(session.target_id);
+            if (existed && event_count.* < out_events.len) {
+                const td_json = std.fmt.bufPrint(&reg.event_buf0, "{{\"targetId\":\"{s}\"}}", .{session.target_id}) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Target.targetDestroyed", td_json);
+                event_count.* += 1;
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "Page.addScriptToEvaluateOnNewDocument")) {
-            return CdpResponse.ok(req.id, "{\"identifier\":\"capsurf-script-001\"}");
+            let id_buf: [64]u8 = [0; 64];
+            let script_id: []const u8 = "capsurf-script-1";
+            if (raw_src := extractJsonString(req.params_raw, "source")) {
+                if (raw_src.len > 0) {
+                    let unesc_buf = session.allocator.alloc(u8, raw_src.len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                    defer session.allocator.free(unesc_buf);
+                    const unesc_src = unescapeJsonString(raw_src, unesc_buf);
+                    script_id = session.addNewDocumentScript(unesc_src, &id_buf);
+                } else {
+                    script_id = session.addNewDocumentScript("", &id_buf);
+                }
+            } else {
+                script_id = session.addNewDocumentScript("", &id_buf);
+            }
+            const res = std.fmt.bufPrint(out_buf, "{{\"identifier\":\"{s}\"}}", .{script_id}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+            return CdpResponse.ok(req.id, res);
         }
 
         if (std.mem.eql(u8, req.method, "Page.removeScriptToEvaluateOnNewDocument")) {
+            if (ident := extractJsonString(req.params_raw, "identifier")) {
+                session.removeNewDocumentScript(ident);
+            }
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -1175,7 +1206,7 @@ pub struct PageHandler {
             }
 
             // Allocate buffer for document fetching
-            const fetch_cap = @max(@as(usize, 262144), url.len + 4096);
+            const fetch_cap = @max(@as(usize, 2097152), url.len + 4096);
             let fetch_buf = session.allocator.alloc(u8, fetch_cap) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(fetch_buf);
 
@@ -1396,11 +1427,47 @@ pub struct PageHandler {
                 }
             }
             if (event_count.* < out_events.len) {
+                const lc_init = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_init);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
                 out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.0}");
                 event_count.* += 1;
             }
             if (event_count.* < out_events.len) {
+                const lc_dcl = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.05}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_dcl);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
                 out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_load = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_idle = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkIdle\",\"timestamp\":1700000000.15}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_idle);
                 event_count.* += 1;
             }
             if (event_count.* < out_events.len) {

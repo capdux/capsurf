@@ -39,9 +39,7 @@ pub @c {
     fn send(fd: i32, buf: [*]const u8, len: usize, flags: i32): isize;
     fn recv(fd: i32, buf: [*]u8, len: usize, flags: i32): isize;
     fn poll(fds: *PollFd, nfds: u64, timeout: i32): i32;
-    fn open(pathname: [*c]const u8, flags: i32): i32;
     fn read(fd: i32, buf: [*]u8, count: usize): isize;
-    fn close(fd: i32): i32;
     fn lseek(fd: i32, offset: i64, whence: i32): i64;
     fn shutdown(fd: i32, how: i32): i32;
     fn setsockopt(fd: i32, level: i32, optname: i32, optval: *const i32, optlen: u32): i32;
@@ -273,7 +271,7 @@ fn wakeServer(port: u16) {
         sin_zero: [0; 8],
     };
     if (connect(sock_fd, &addr, @sizeOf(SockAddrIn)) >= 0) {}
-    * = close(sock_fd);
+    * = std.c.close(sock_fd);
 }
 
 const MAX_TAB_SESSIONS: usize = 16;
@@ -284,6 +282,7 @@ struct TabSessionSlot {
     key_len: usize = 0,
     bctx_buf: [64]u8 = [0; 64],
     bctx_len: usize = 0,
+    frame_id_buf: [48]u8 = [0; 48],
     page_session: (*CdpPageSession)? = null,
 
     fn sessionId(): []const u8 {
@@ -381,7 +380,14 @@ pub struct CdpServer {
                     const slen = @min(sid.len, _.tab_sessions[j].key_buf.len);
                     @memcpy(_.tab_sessions[j].key_buf[0..slen], sid[0..slen]);
                     _.tab_sessions[j].key_len = slen;
-                    if (_.tab_sessions[j].page_session != null) return _.tab_sessions[j].page_session.?;
+                    if (_.tab_sessions[j].page_session != null) {
+                        if (tid := _.session.target_registry.findTargetIdBySessionId(sid)) {
+                            const flen = @min(tid.len, _.tab_sessions[j].frame_id_buf.len);
+                            @memcpy(_.tab_sessions[j].frame_id_buf[0..flen], tid[0..flen]);
+                            _.tab_sessions[j].page_session.?.frame_id = _.tab_sessions[j].frame_id_buf[0..flen];
+                        }
+                        return _.tab_sessions[j].page_session.?;
+                    }
                 }
             }
         }
@@ -425,6 +431,18 @@ pub struct CdpServer {
             new_sess.setContextId(bctx);
         }
         _.tab_sessions[slot_idx] = TabSessionSlot{};
+        if (sid.len > 0) {
+            if (tid := _.session.target_registry.findTargetIdBySessionId(sid)) {
+                const flen = @min(tid.len, _.tab_sessions[slot_idx].frame_id_buf.len);
+                @memcpy(_.tab_sessions[slot_idx].frame_id_buf[0..flen], tid[0..flen]);
+                new_sess.frame_id = _.tab_sessions[slot_idx].frame_id_buf[0..flen];
+                new_sess.target_id = new_sess.frame_id;
+            } else {
+                new_sess.frame_id = std.fmt.bufPrint(&_.tab_sessions[slot_idx].frame_id_buf, "capsurf-frame-tab-{d}", .{slot_idx + 2}) catch "capsurf-frame-001";
+            }
+        } else {
+            new_sess.frame_id = std.fmt.bufPrint(&_.tab_sessions[slot_idx].frame_id_buf, "capsurf-frame-tab-{d}", .{slot_idx + 2}) catch "capsurf-frame-001";
+        }
         _.tab_sessions[slot_idx].active = true;
         if (sid.len > 0) {
             const slen = @min(sid.len, _.tab_sessions[slot_idx].key_buf.len);
@@ -528,12 +546,12 @@ pub struct CdpServer {
         };
 
         if (bind(fd, &addr, @sizeOf(SockAddrIn)) < 0) {
-            * = close(fd);
+            * = std.c.close(fd);
             return error.BindFailed;
         }
 
         if (listen(fd, 128) < 0) {
-            * = close(fd);
+            * = std.c.close(fd);
             return error.ListenFailed;
         }
 
@@ -550,7 +568,7 @@ pub struct CdpServer {
 
         if (fd >= 0) {
             * = shutdown(fd, 2);
-            * = close(fd);
+            * = std.c.close(fd);
         }
         wakeServer(port);
     }
@@ -568,7 +586,7 @@ pub struct CdpServer {
                 continue;
             }
             if (!_.running) {
-                * = close(client_fd);
+                * = std.c.close(client_fd);
                 break;
             }
             _.handleClient(client_fd) catch {};
@@ -589,7 +607,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
     /// Handles a single incoming client connection (HTTP Discovery or WebSocket Session).
     pub fn handleClient(*_, client_fd: i32)! {
         defer {
-            * = close(client_fd);
+            * = std.c.close(client_fd);
         }
 
         let req_buf: [4096]u8 = [0; 4096];
@@ -1472,7 +1490,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         const extra_req = extra_buf[0..@as(usize, @intCast(en))];
                         _.handleHttpRequest(extra_fd, extra_req) catch {};
                     }
-                    * = close(extra_fd);
+                    * = std.c.close(extra_fd);
                 }
                 if ((pfds[0].revents & (POLLIN | POLLERR | POLLNVAL)) == 0) {
                     continue;
@@ -1765,29 +1783,47 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         let i: usize = 0;
         while (i < event_count) : (i += 1) {
             if (events[i].session_id.len == 0 && req.session_id.len > 0 &&
-                !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) {
+                !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-") &&
+                !std.mem.startsWith(u8, events[i].method, "Target.")) {
                 events[i].session_id = req.session_id;
             }
         }
         emitCdpEventsToFd(client_fd, &events, event_count)? ;
 
         if (resp.isOk()) {
-            const needed_len = resp.result_json.len + resp.raw_id.len + 32;
+            const has_sid = req.session_id.len > 0;
+            const needed_len = resp.result_json.len + resp.raw_id.len + req.session_id.len + 64;
             if (needed_len <= 4096) {
                 let stack_buf: [4096]u8 = [0; 4096];
                 let msg_slice: []const u8 = "";
                 if (resp.raw_id.len > 0) {
-                    msg_slice = std.fmt.bufPrint(
-                        &stack_buf,
-                        "{{\"id\":\"{s}\",\"result\":{s}}}",
-                        .{ resp.raw_id, resp.result_json },
-                    ) catch return;
+                    if (has_sid) {
+                        msg_slice = std.fmt.bufPrint(
+                            &stack_buf,
+                            "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}",
+                            .{ resp.raw_id, resp.result_json, req.session_id },
+                        ) catch return;
+                    } else {
+                        msg_slice = std.fmt.bufPrint(
+                            &stack_buf,
+                            "{{\"id\":\"{s}\",\"result\":{s}}}",
+                            .{ resp.raw_id, resp.result_json },
+                        ) catch return;
+                    }
                 } else {
-                    msg_slice = std.fmt.bufPrint(
-                        &stack_buf,
-                        "{{\"id\":{d},\"result\":{s}}}",
-                        .{ resp.id, resp.result_json },
-                    ) catch return;
+                    if (has_sid) {
+                        msg_slice = std.fmt.bufPrint(
+                            &stack_buf,
+                            "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}",
+                            .{ resp.id, resp.result_json, req.session_id },
+                        ) catch return;
+                    } else {
+                        msg_slice = std.fmt.bufPrint(
+                            &stack_buf,
+                            "{{\"id\":{d},\"result\":{s}}}",
+                            .{ resp.id, resp.result_json },
+                        ) catch return;
+                    }
                 }
                 writeWsTextFrame(client_fd, msg_slice)? ;
             } else {
@@ -1795,35 +1831,68 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 defer std.heap.c_allocator.free(dyn_buf);
                 let msg_slice: []const u8 = "";
                 if (resp.raw_id.len > 0) {
-                    msg_slice = std.fmt.bufPrint(
-                        dyn_buf,
-                        "{{\"id\":\"{s}\",\"result\":{s}}}",
-                        .{ resp.raw_id, resp.result_json },
-                    ) catch return;
+                    if (has_sid) {
+                        msg_slice = std.fmt.bufPrint(
+                            dyn_buf,
+                            "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}",
+                            .{ resp.raw_id, resp.result_json, req.session_id },
+                        ) catch return;
+                    } else {
+                        msg_slice = std.fmt.bufPrint(
+                            dyn_buf,
+                            "{{\"id\":\"{s}\",\"result\":{s}}}",
+                            .{ resp.raw_id, resp.result_json },
+                        ) catch return;
+                    }
                 } else {
-                    msg_slice = std.fmt.bufPrint(
-                        dyn_buf,
-                        "{{\"id\":{d},\"result\":{s}}}",
-                        .{ resp.id, resp.result_json },
-                    ) catch return;
+                    if (has_sid) {
+                        msg_slice = std.fmt.bufPrint(
+                            dyn_buf,
+                            "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}",
+                            .{ resp.id, resp.result_json, req.session_id },
+                        ) catch return;
+                    } else {
+                        msg_slice = std.fmt.bufPrint(
+                            dyn_buf,
+                            "{{\"id\":{d},\"result\":{s}}}",
+                            .{ resp.id, resp.result_json },
+                        ) catch return;
+                    }
                 }
                 writeWsTextFrame(client_fd, msg_slice)? ;
             }
         } else {
-            let err_buf: [1024]u8 = [0; 1024];
+            let err_buf: [1280]u8 = [0; 1280];
             let msg: []const u8 = "";
+            const has_sid = req.session_id.len > 0;
             if (resp.raw_id.len > 0) {
-                msg = std.fmt.bufPrint(
-                    &err_buf,
-                    "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
-                    .{ resp.raw_id, resp.error_code, resp.error_message },
-                ) catch return;
+                if (has_sid) {
+                    msg = std.fmt.bufPrint(
+                        &err_buf,
+                        "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}",
+                        .{ resp.raw_id, resp.error_code, resp.error_message, req.session_id },
+                    ) catch return;
+                } else {
+                    msg = std.fmt.bufPrint(
+                        &err_buf,
+                        "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
+                        .{ resp.raw_id, resp.error_code, resp.error_message },
+                    ) catch return;
+                }
             } else {
-                msg = std.fmt.bufPrint(
-                    &err_buf,
-                    "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
-                    .{ resp.id, resp.error_code, resp.error_message },
-                ) catch return;
+                if (has_sid) {
+                    msg = std.fmt.bufPrint(
+                        &err_buf,
+                        "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}",
+                        .{ resp.id, resp.error_code, resp.error_message, req.session_id },
+                    ) catch return;
+                } else {
+                    msg = std.fmt.bufPrint(
+                        &err_buf,
+                        "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}",
+                        .{ resp.id, resp.error_code, resp.error_message },
+                    ) catch return;
+                }
             }
             writeWsTextFrame(client_fd, msg)? ;
         }

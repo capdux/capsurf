@@ -13,7 +13,6 @@ import {
     isSafelistMethod,
     isSafelistRequestHeader,
     isSafelistedResponseHeader,
-    stripHttpWhitespace,
     isHttpToken,
     parseTokenList,
     checkCorsResponse,
@@ -21,6 +20,7 @@ import {
     corsCheck,
     PreflightCache,
 } from "../../../src/net/cors.cp";
+import { stripHttpWhitespace } from "../../../src/net/headers_parser.cp";
 
 fn expect(cond: bool) {
     if (!cond) @panic("assertion failed");

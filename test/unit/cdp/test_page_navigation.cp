@@ -22,7 +22,6 @@ import {
     bind,
     listen,
     accept,
-    close,
     setsockopt,
     socketWriteAll,
     socketRead
@@ -180,7 +179,7 @@ fn testInterceptedNavigation()! {
 fn localHttpServerWorker(server_fd: i32) {
     let client_sock = accept(server_fd, null, null);
     if (client_sock >= 0) {
-        defer * = close(client_sock);
+        defer * = std.c.close(client_sock);
 
         let req_buf: [2048]u8 = undefined;
         const r_len = socketRead(client_sock, req_buf[0..]) catch 0;
@@ -203,7 +202,7 @@ fn testRealHttpLoadingWithServer()! {
     const server_port: u16 = 9876;
     const server_fd = socket(AF_INET, SOCK_STREAM, 0);
     expect_eq(server_fd >= 0, true);
-    defer * = close(server_fd);
+    defer * = std.c.close(server_fd);
 
     const opt: i32 = 1;
     * = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, 4);

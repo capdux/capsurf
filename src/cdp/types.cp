@@ -342,6 +342,51 @@ pub fn extractJsonString(json: []const u8, key: []const u8): ([]const u8)? {
     return null;
 }
 
+pub fn extractJsonArray(json: []const u8, key: []const u8): ([]const u8)? {
+    let key_pat_buf: [64]u8 = [0; 64];
+    if (key.len + 3 > key_pat_buf.len) return null;
+    key_pat_buf[0] = '"';
+    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
+    key_pat_buf[1 + key.len] = '"';
+    const key_pat = key_pat_buf[0 .. 2 + key.len];
+
+    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
+    let idx = pos + key_pat.len;
+
+    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
+    if (idx >= json.len || json[idx] != '[') return null;
+
+    const start = idx;
+    let depth: i32 = 0;
+    let in_str = false;
+    let escaped = false;
+    while (idx < json.len) : (idx += 1) {
+        const ch = json[idx];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (ch == '\\' && in_str) {
+            escaped = true;
+            continue;
+        }
+        if (ch == '"') {
+            in_str = !in_str;
+            continue;
+        }
+        if (!in_str) {
+            if (ch == '[') depth += 1;
+            if (ch == ']') {
+                depth -= 1;
+                if (depth == 0) {
+                    return json[start .. idx + 1];
+                }
+            }
+        }
+    }
+    return null;
+}
+
 pub fn unescapeJsonString(src: []const u8, dst: []u8): []const u8 {
     let out_idx: usize = 0;
     let i: usize = 0;

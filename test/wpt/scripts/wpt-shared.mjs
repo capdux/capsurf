@@ -19,12 +19,14 @@ import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const ROOT = resolve(__dirname, "..");
-export const TESTS_FILE = resolve(ROOT, "tests/wpt-tests.json");
-export const EXPECT_FILE = resolve(ROOT, "tests/wpt-expectations.json");
-export const WPT_ROOT = resolve(ROOT, ".wpt");
-export const REVISION_FILE = resolve(ROOT, "tests/wpt-revision.json");
-export const REPORT_DIR = resolve(ROOT, ".wpt-reports");
+export const SUITE_DIR = resolve(__dirname, "..");
+export const REPO_ROOT = resolve(__dirname, "../../..");
+export const ROOT = REPO_ROOT;
+export const TESTS_FILE = resolve(SUITE_DIR, "wpt-tests.json");
+export const EXPECT_FILE = resolve(SUITE_DIR, "wpt-expectations.json");
+export const WPT_ROOT = resolve(SUITE_DIR, ".wpt");
+export const REVISION_FILE = resolve(SUITE_DIR, "wpt-revision.json");
+export const REPORT_DIR = resolve(SUITE_DIR, ".wpt-reports");
 
 export const DEFAULT_WPT_BASE = "http://web-platform.test:8000";
 

@@ -3,7 +3,7 @@
 // Emulates standard Chromium CLI flags for Playwright, Puppeteer, and AI Agent compatibility
 
 import { extractJsonInt } from "../cdp/types.cp";
-import { open, read, close } from "../cdp/server.cp";
+import { read } from "../cdp/server.cp";
 
 pub struct CliOptions {
     port: u16 = 9222,
@@ -95,9 +95,9 @@ pub struct CliOptions {
 
     /// Read CLI options directly from Linux `/proc/self/cmdline`
     static fn parseFromProcess(): CliOptions {
-        const fd = open("/proc/self/cmdline", 0);
+        const fd = std.c.open("/proc/self/cmdline", .{});
         if (fd < 0) return CliOptions{};
-        defer * = close(fd);
+        defer * = std.c.close(fd);
 
         let buf: [4096]u8 = [0; 4096];
         const bytes_read = read(fd, &buf, buf.len);

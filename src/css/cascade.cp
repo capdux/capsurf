@@ -10,7 +10,7 @@ import { Document, NodeData, NodeType, NodeId, NULL_NODE, StringSlice } from "..
 import { SelectorList, Matcher } from "./matcher.cp";
 import { HtmlTag } from "../html/tags.cp";
 import { UaStylesheet } from "./ua_stylesheet.cp";
-import { UnicodeRange, FontFaceRule, WebfontStyleMetrics, parsePseudoContentValue, CssCounterStack, hasDynamicPseudoContent, resolvePseudoContentExpr } from "./font_face.cp";
+import { UnicodeRange, CssFontFaceRule, WebfontStyleMetrics, parsePseudoContentValue, CssCounterStack, hasDynamicPseudoContent, resolvePseudoContentExpr } from "./font_face.cp";
 import { parseAttrExpr, evaluateCssAttr } from "./attr_evaluator.cp";
 import { BreakValue, BreakInsideValue, PageMarginRule, isValidUtf8, decodeLegacyCssToUtf8 } from "./paged_media.cp";
 import { Direction, UnicodeBidi, resolveFirstStrongDirection } from "./bidi.cp";
@@ -531,20 +531,20 @@ pub enum BoxSizing {
     }
 }
 
-pub enum Position {
+pub enum CssPosition {
     Static,
     Relative,
     Absolute,
     Fixed,
     Sticky,
 
-    static fn parse(raw: []const u8): Position? {
+    static fn parse(raw: []const u8): CssPosition? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
-        if (std.ascii.eqlIgnoreCase(s, "static")) return Position.Static;
-        if (std.ascii.eqlIgnoreCase(s, "relative")) return Position.Relative;
-        if (std.ascii.eqlIgnoreCase(s, "absolute")) return Position.Absolute;
-        if (std.ascii.eqlIgnoreCase(s, "fixed")) return Position.Fixed;
-        if (std.ascii.eqlIgnoreCase(s, "sticky")) return Position.Sticky;
+        if (std.ascii.eqlIgnoreCase(s, "static")) return CssPosition.Static;
+        if (std.ascii.eqlIgnoreCase(s, "relative")) return CssPosition.Relative;
+        if (std.ascii.eqlIgnoreCase(s, "absolute")) return CssPosition.Absolute;
+        if (std.ascii.eqlIgnoreCase(s, "fixed")) return CssPosition.Fixed;
+        if (std.ascii.eqlIgnoreCase(s, "sticky")) return CssPosition.Sticky;
         return null;
     }
 }
@@ -1871,7 +1871,7 @@ pub struct ComputedStyle {
     display: Display = Display.block();
     visibility: Visibility = Visibility.Visible;
     box_sizing: BoxSizing = BoxSizing.ContentBox;
-    position: Position = Position.Static;
+    position: CssPosition = CssPosition.Static;
 
     width: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
     height: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
@@ -2633,7 +2633,7 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "position")) {
-            if (pos := Position.parse(val)) {
+            if (pos := CssPosition.parse(val)) {
                 if (_.tryClaimSlot(PROP_POSITION, weight)) {
                     _.position = pos;
                 }
@@ -4459,7 +4459,7 @@ pub struct StyleSheet {
     rule_count: usize = 0;
     container_rules: [8]ContainerRuleEntry = [ContainerRuleEntry{}; 8];
     container_rule_count: usize = 0;
-    font_faces: [16]FontFaceRule = [FontFaceRule{}; 16];
+    font_faces: [16]CssFontFaceRule = [CssFontFaceRule{}; 16];
     font_face_count: usize = 0;
     page_margin: PageMarginRule = PageMarginRule{};
 
@@ -4489,7 +4489,7 @@ pub struct StyleSheet {
                 }
             } else if (r.kind == CssRuleKind.FontFace) {
                 if (sheet.font_face_count < 16) {
-                    if (ff := FontFaceRule.parseBlock(r.nested_body)) {
+                    if (ff := CssFontFaceRule.parseBlock(r.nested_body)) {
                         sheet.font_faces[sheet.font_face_count] = ff;
                         sheet.font_face_count += 1;
                     }
@@ -4510,7 +4510,7 @@ pub struct StyleSheet {
                             if (nested_rules[j].kind == CssRuleKind.Style && sheet.rule_count < 64) {
                                 StyleSheet.appendStyleRule(&sheet, &nested_rules[j]);
                             } else if (nested_rules[j].kind == CssRuleKind.FontFace && sheet.font_face_count < 16) {
-                                if (ff := FontFaceRule.parseBlock(nested_rules[j].nested_body)) {
+                                if (ff := CssFontFaceRule.parseBlock(nested_rules[j].nested_body)) {
                                     sheet.font_faces[sheet.font_face_count] = ff;
                                     sheet.font_face_count += 1;
                                 }

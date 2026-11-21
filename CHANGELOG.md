@@ -2471,3 +2471,7 @@
 - **Moved**: `test/{cdp,css,dom,eval,html,js,layout,net,render,tty}/` -> `test/unit/...`（批量更新 137 个 `.cp` 导入路径至 `../../../src/`）；`e2e/` -> `test/e2e/`；清理遗留 `tests/`。
 - **Added**: `test/wpt/`（`wpt-*.json` + `scripts/wpt-*.mjs`）、`test/pptr/`（`pptr-*.json` + `scripts/pptr-*.mjs`）、`test/pw/`（`pw-*.json` + `scripts/pw-*.mjs`）。
 - **Updated**: `cap.json`, `bunfig.toml`, `package.json`, `tsconfig.json`, `test/e2e/tsconfig.json`, `test/e2e/preload.ts`, `test/e2e/harness.{ts,js}`, `scripts/e2e_suite.py`, `src/net/mock_fixtures.cp`, `src/render/painter.cp`, `GEMINI.md`；并为 `src/js/{qjs_engine,dom_binding}.cp`、`src/cdp/{session,session_hooks,runtime}.cp`、`src/render/{painter,png}.cp` 补齐 `unsafe { ... }`（`E0209`）。
+
+## [2026-11-22] Phase 254: 138/138 白盒全绿、CDP/JS-Shim 协议补齐与 PPTR/PW/WPT 实测基线
+- **Fixed (`src/`)**: `src/cdp/server.cp`, `src/cdp/target.cp`, `src/cdp/runtime.cp`, `src/cdp/session.cp`, `src/cdp/page.cp`, `src/cdp/types.cp`, `src/net/http_loader.cp`, `src/js/dom_binding.cp`, `src/js/shim/{index,window}.js`, `src/js/runtime_source.cp`（补齐 `sessionId` 回传、`frame_id === targetId`、`Page.close`、`Runtime.callFunctionOn` 实参/简写/特殊值、`addScriptToEvaluateOnNewDocument`、`HttpLoader` chunked/loopback、`getElementsByTagName` 与 `window.parent`）；并完成 `test/unit/` 138/138 符号去重与 `E0209` `unsafe` 适配。
+- **Updated (`test/`)**: `test/e2e/trusted-fetch-metadata.e2e.test.ts`（`../../vendor/`）；`test/wpt/scripts/wpt-exec.mjs`、`wpt-batched.mjs`、`test/pptr/scripts/pptr-run.mjs`、`test/pw/scripts/pw-run.mjs`。

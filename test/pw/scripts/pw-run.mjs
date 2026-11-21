@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { localEngines } from "./local-engine.mjs";
+import { DEFAULT_BIN, localEngines } from "../../wpt/scripts/wpt-engine.mjs";
 import {
   coverageGaps,
   deviations as diffExpectations,
@@ -19,26 +19,38 @@ import {
 } from "./pw-shared.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
-const ENGINE_DIR = resolve(ROOT, "packages/engine");
-const TESTS_JSON = resolve(ROOT, "tests/pw-tests.json");
-const EXPECTATIONS_JSON = resolve(ROOT, "tests/pw-expectations.json");
+const SUITE_DIR = resolve(__dirname, "..");
+const ROOT = resolve(__dirname, "../../..");
+const TESTS_JSON = resolve(SUITE_DIR, "pw-tests.json");
+const EXPECTATIONS_JSON = resolve(SUITE_DIR, "pw-expectations.json");
 
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`Usage: node test/pw/scripts/pw-run.mjs [options]
+  --pw-dir <dir>           Playwright checkout dir (default: test/pw/.playwright)
+  --out-dir <dir>          Output dir for reports
+  --bin <path>             CapSurf binary (default: CAPSURF_BIN or ./bin/main)
+  --port <n>               First CDP port (default: 9720)
+  --results-out <path>     Write aggregated results JSON
+  --filter <substr>        Filter allow-listed specs
+  --spec <name>            Run a single spec
+  --grep <pattern>         Playwright --grep filter
+  --batch-size <n>         Specs per engine restart (default: 1)
+  --no-gate                Exit 0 even on deviations
+  --no-retry               Disable fresh-engine retry on deviations
+  --update-expectations    Rebaseline test/pw/pw-expectations.json`);
+  process.exit(0);
+}
 const optionValue = (flag) => {
   const index = args.indexOf(flag);
   return index >= 0 ? args[index + 1] : null;
 };
-const PW_DIR = resolve(optionValue("--pw-dir") ?? resolve(ROOT, ".playwright"));
+const PW_DIR = resolve(optionValue("--pw-dir") ?? resolve(SUITE_DIR, ".playwright"));
 const OUT_DIR = resolve(optionValue("--out-dir") ?? join(PW_DIR, "test-results"));
-const launcher = optionValue("--engine-launcher") ?? "wrangler";
-const engineDist = resolve(optionValue("--dist") ?? resolve(ENGINE_DIR, ".wpt-dist"));
+const binPath = resolve(ROOT, optionValue("--bin") ?? optionValue("--dist") ?? DEFAULT_BIN);
+const firstPort = parseInt(optionValue("--port") ?? "9720", 10);
 const resultsOut = optionValue("--results-out");
 const noGate = args.includes("--no-gate");
-if (launcher !== "wrangler" && launcher !== "miniflare") {
-  console.error(`[pw-run] --engine-launcher wants wrangler or miniflare, got ${launcher}`);
-  process.exit(2);
-}
 const updateExpectations = args.includes("--update-expectations");
 const noRetry = args.includes("--no-retry");
 const filterIdx = args.indexOf("--filter");
@@ -69,11 +81,8 @@ if (specs.length === 0) {
 
 const { buildBundles, startEngine } = localEngines({
   tag: "pw-run",
-  launcher,
-  dist: engineDist,
-  outDir: OUT_DIR,
-  firstPort: 9720,
-  skipBuildEnv: "PW_SKIP_BUILD",
+  binPath,
+  firstPort,
 });
 
 function loadExpectations() {
@@ -120,7 +129,8 @@ function runPlaywright(wsEndpoint, specFiles, grep, tag) {
   const invert = skipGrepInvert();
   if (invert) cliArgs.push("--grep-invert", invert);
   if (grep) cliArgs.push("--grep", grep);
-  const r = spawnSync(process.execPath, cliArgs, {
+  const runtime = process.versions.bun ? "node" : process.execPath;
+  const r = spawnSync(runtime, cliArgs, {
     cwd: PW_DIR,
     stdio: "inherit",
     env: {

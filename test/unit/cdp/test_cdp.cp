@@ -11,7 +11,6 @@ import {
     SOCK_STREAM,
     socket,
     connect,
-    close,
     socketWriteAll,
     socketRead,
     socketReadAll,
@@ -36,7 +35,7 @@ struct CdpTestClient {
         };
 
         if (connect(sock_fd, &addr, @sizeOf(SockAddrIn)) < 0) {
-            * = close(sock_fd);
+            * = std.c.close(sock_fd);
             return error.ConnectFailed;
         }
 
@@ -46,7 +45,7 @@ struct CdpTestClient {
     }
 
     fn disconnect(*_) {
-        * = close(_.fd);
+        * = std.c.close(_.fd);
         std.heap.c_allocator.destroy(_);
     }
 

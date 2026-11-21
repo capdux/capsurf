@@ -2,7 +2,7 @@
 // CapSurf Internal Test Fixtures Handler for Mock Network Endpoints
 // Aligned with vendor/kitesurf/packages/engine/test/fixtures-worker/src/serve.ts
 
-import { open, read, close, lseek } from "../cdp/server.cp";
+import { read, lseek } from "../cdp/server.cp";
 import { CookieJar, RequestContext } from "./cookies.cp";
 import { parseCsp, isInlineScriptAllowed } from "./csp.cp";
 
@@ -194,9 +194,9 @@ pub struct MockFixtures {
         @memcpy(path_z[0..path.len], path);
         path_z[path.len] = 0;
 
-        const fd = open(&path_z, 0);
+        const fd = std.c.open(unsafe { @ptrCast(&path_z) }, .{});
         if (fd < 0) return null;
-        defer * = close(fd);
+        defer * = std.c.close(fd);
 
         const size = lseek(fd, 0, 2);
         if (size <= 0) return "";

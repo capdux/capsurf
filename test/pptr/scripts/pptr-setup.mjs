@@ -10,9 +10,9 @@ import { dirname, resolve, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const PPTR_DIR = resolve(ROOT, ".puppeteer");
-const PPTR_REPO = "https://github.com/puppeteer/puppeteer.git";
 const PATCH_DIR = resolve(ROOT, "scripts/patches/puppeteer");
 
+const PPTR_REPO = "https://github.com/puppeteer/puppeteer.git";
 // Keep in step with the puppeteer-core devDependency.
 const PPTR_TAG = "puppeteer-v25.16.0";
 

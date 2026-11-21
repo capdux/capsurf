@@ -21,8 +21,8 @@ import {
     isProtocolDowngrade,
 } from "../../../src/net/redirect_walk.cp";
 
-import * as PageScript from "../../../src/eval/page_script.cp";
-import * as LearnedScripts from "../../../src/eval/learned_scripts.cp";
+import { originOf } from "../../../src/eval/page_script.cp";
+import { learnedOriginOf } from "../../../src/eval/learned_scripts.cp";
 import { originOfFrameUrl } from "../../../src/eval/oopif_render.cp";
 
 fn check(cond: bool, msg: []const u8) {
@@ -187,16 +187,16 @@ fn testOriginExtractionAndComparisonEdges() {
     check(!isProtocolDowngrade("http://a.test/1", "https://a.test/1"), "http -> https is not downgrade");
 
     // page_script.originOf
-    check(std.mem.eql(u8, PageScript.originOf("https://a.test:8443/x?y=1#z"), "https://a.test:8443"), "PageScript.originOf valid https");
-    check(std.mem.eql(u8, PageScript.originOf("http://a.test/x"), "http://a.test"), "PageScript.originOf valid http");
-    check(std.mem.eql(u8, PageScript.originOf("ws://a.test/x"), ""), "PageScript.originOf rejects ws");
-    check(std.mem.eql(u8, PageScript.originOf("https:///x"), ""), "PageScript.originOf rejects empty authority");
-    check(std.mem.eql(u8, PageScript.originOf("https://u:p@a.test/x"), ""), "PageScript.originOf rejects userinfo");
+    check(std.mem.eql(u8, originOf("https://a.test:8443/x?y=1#z"), "https://a.test:8443"), "PageScript.originOf valid https");
+    check(std.mem.eql(u8, originOf("http://a.test/x"), "http://a.test"), "PageScript.originOf valid http");
+    check(std.mem.eql(u8, originOf("ws://a.test/x"), ""), "PageScript.originOf rejects ws");
+    check(std.mem.eql(u8, originOf("https:///x"), ""), "PageScript.originOf rejects empty authority");
+    check(std.mem.eql(u8, originOf("https://u:p@a.test/x"), ""), "PageScript.originOf rejects userinfo");
 
-    // learned_scripts.originOf
-    check(std.mem.eql(u8, LearnedScripts.originOf("https://a.test/x").?, "https://a.test"), "LearnedScripts.originOf valid");
-    check(LearnedScripts.originOf("ftp://a.test/x") == null, "LearnedScripts.originOf rejects ftp");
-    check(LearnedScripts.originOf("https://u@a.test/x") == null, "LearnedScripts.originOf rejects userinfo");
+    // learned_scripts.learnedOriginOf
+    check(std.mem.eql(u8, learnedOriginOf("https://a.test/x").?, "https://a.test"), "LearnedScripts.learnedOriginOf valid");
+    check(learnedOriginOf("ftp://a.test/x") == null, "LearnedScripts.learnedOriginOf rejects ftp");
+    check(learnedOriginOf("https://u@a.test/x") == null, "LearnedScripts.learnedOriginOf rejects userinfo");
 
     // oopif_render.originOfFrameUrl
     check(std.mem.eql(u8, originOfFrameUrl("wss://frame.test:9000/ws"), "wss://frame.test:9000"), "originOfFrameUrl supports wss");

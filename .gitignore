@@ -4,7 +4,12 @@ vendor/
 # 临时探测与复现目录、编译输出与缓存
 temp/
 bin/
+bin_*/
 .cap/
+test/wpt/.wpt/
+test/pptr/.puppeteer/
+test/pw/.playwright/
+test/pw/test-results/
 node_modules/*
 !node_modules/cloudflare:test
 

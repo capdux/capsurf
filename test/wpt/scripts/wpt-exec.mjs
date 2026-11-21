@@ -51,7 +51,7 @@ const argv = parseArgs(args);
 const ENGINES = (argv.ws ?? [DEFAULT_WS]).map((ws, index) => ({
   index,
   ws,
-  healthUrl: ws.replace(/^ws/, "http").replace(/\/devtools\/.*$/, "/health"),
+  healthUrl: ws.replace(/^ws/, "http").replace(/\/devtools\/.*$/, "/json/version"),
   recoveryInFlight: null,
   dead: false,
 }));
@@ -481,8 +481,8 @@ async function detectReftest(page) {
     const link = links[0];
     const raw = link.getAttribute('href');
     let href = link.href;
-    if (typeof href !== 'string' || !href) {
-      try { href = new URL(raw, document.baseURI).href; } catch { href = raw; }
+    if (typeof href !== 'string' || !new RegExp('^https?://', 'i').test(href)) {
+      try { href = new URL(raw || href, document.baseURI || location.href).href; } catch { href = raw || href; }
     }
     // Same namespace-prefix trap as the link: SVG documents declare
     // <h:meta name="fuzzy">, an element literally named "h:meta" that a
@@ -638,6 +638,51 @@ function comparePngs(testPng, refPng, fuzzy, isMismatch) {
 const refShotCache = new Map();
 let refShotHits = 0;
 
+async function navigatePage(page, url, timeoutMs) {
+  const session = typeof page._client === "function" ? page._client() : null;
+  if (!session) {
+    return await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+  }
+  // CapSurf reuses loaderId across navigations on the same page, which causes
+  // Puppeteer's LifecycleWatcher to miss domContentEventFired on subsequent gotos.
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      session.off("Page.frameStoppedLoading", onDone);
+    };
+    const onDone = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(`Navigation timeout of ${timeoutMs} ms exceeded`));
+    }, timeoutMs);
+    session.on("Page.frameStoppedLoading", onDone);
+    session.send("Page.navigate", { url }).then(
+      (res) => {
+        if (res && res.errorText && !settled) {
+          settled = true;
+          cleanup();
+          reject(new Error(res.errorText));
+        }
+      },
+      (err) => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          reject(err);
+        }
+      },
+    );
+  });
+}
+
 async function runReftest(page, testInfo, timeoutMs, deadline, lap = () => {}) {
   const fuzzy = parseFuzzy(testInfo.fuzzy);
   const isMismatch = testInfo.rel === "mismatch";
@@ -656,7 +701,7 @@ async function runReftest(page, testInfo, timeoutMs, deadline, lap = () => {}) {
 
   const renderRef = async () => {
     try {
-      await page.goto(testInfo.href, { timeout: timeoutMs });
+      await navigatePage(page, testInfo.href, timeoutMs);
     } catch (e) {
       throw { actual: "ERROR", reason: `ref goto failed: ${e.message}`, subtests: [] };
     }
@@ -820,18 +865,14 @@ async function runOne(page, testPath, expected, perTestTimeoutMs, bridge, profSe
   try {
     outcome = await withDeadline("test", HARD_DEADLINE_MS, async () => {
       try {
-        const session = await page.target().createCDPSession();
-        // Apply print media before navigation so its rules affect the first render.
-        await session.send("Emulation.setEmulatedMedia", {
-          media: wantsPrintMedia ? "print" : "",
-        });
-        await session.detach();
+        // Apply print media before navigation without detaching a raw CDP session.
+        await page.emulateMediaType(wantsPrintMedia ? "print" : "screen");
       } catch {}
       lap("mediaMs");
       try {
         bridge?.reset();
       } catch {}
-      await page.goto(url, { timeout: timeoutMs }).catch(() => {});
+      await navigatePage(page, url, timeoutMs).catch(() => {});
       lap("gotoMs");
       if (prof && profSession) {
         try {
@@ -1157,7 +1198,8 @@ async function main() {
       bridge = null;
       profSession = null;
       try {
-        const session = await page.createCDPSession();
+        const session =
+          typeof page._client === "function" ? page._client() : await page.createCDPSession();
         bridge = createTestdriverBridge({ page, session });
         await attachTestdriverBinding(session, bridge);
         if (PROFILE) profSession = session;
@@ -1341,7 +1383,8 @@ async function main() {
           bridge = null;
           profSession = null;
           try {
-            const session = await page.createCDPSession();
+            const session =
+              typeof page._client === "function" ? page._client() : await page.createCDPSession();
             bridge = createTestdriverBridge({ page, session });
             await attachTestdriverBinding(session, bridge);
             if (PROFILE) profSession = session;

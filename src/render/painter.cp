@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, Position, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, CssPosition, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType } from "../css/cascade.cp";
 import {
     Direction,
     UnicodeBidi,
@@ -2345,7 +2345,7 @@ struct BidiCharItem {
 
 fn isBlockOrOutOfFlowForBidi(node: *const NodeData, st: *const ComputedStyle): bool {
     if (st.display.isNone()) return true;
-    if (st.position == Position.Absolute || st.position == Position.Fixed) return true;
+    if (st.position == CssPosition.Absolute || st.position == CssPosition.Fixed) return true;
     if (st.float_mode != FloatMode.None) return true;
     if (!st.display.isInline()) return true;
     if (st.display.isInlineBlock() || st.display.isTable()) return true;
@@ -2723,15 +2723,15 @@ fn paintNodeRecursive(
     if (node.node_type == NodeType.Element && style.display.isNone()) {
         return;
     }
-    const eff_scroll_dx: f32 = if (node.node_type == NodeType.Element && style.position == Position.Fixed)
+    const eff_scroll_dx: f32 = if (node.node_type == NodeType.Element && style.position == CssPosition.Fixed)
         0.0
-    else if (node.node_type == NodeType.Element && style.position == Position.Absolute)
+    else if (node.node_type == NodeType.Element && style.position == CssPosition.Absolute)
         abs_scroll_dx
     else
         scroll_dx;
-    const eff_scroll_dy: f32 = if (node.node_type == NodeType.Element && style.position == Position.Fixed)
+    const eff_scroll_dy: f32 = if (node.node_type == NodeType.Element && style.position == CssPosition.Fixed)
         0.0
-    else if (node.node_type == NodeType.Element && style.position == Position.Absolute)
+    else if (node.node_type == NodeType.Element && style.position == CssPosition.Absolute)
         abs_scroll_dy
     else
         scroll_dy;
@@ -2826,16 +2826,16 @@ fn paintNodeRecursive(
     // - position: absolute uses the clip established by its positioned containing block,
     //   escaping any static overflow:hidden ancestors in between.
     // - in-flow / relative uses the normal ancestor overflow clip.
-    const base_clip: ClipRect? = if (style.position == Position.Fixed)
+    const base_clip: ClipRect? = if (style.position == CssPosition.Fixed)
         null
-    else if (style.position == Position.Absolute)
+    else if (style.position == CssPosition.Absolute)
         abs_clip
     else
         clip;
 
     // Legacy `clip: rect(t, r, b, l)` applies to abs/fixed elements and wraps both outline and box
     let box_outer_clip = base_clip;
-    if (node.node_type == NodeType.Element && style.legacy_clip.has_clip && (style.position == Position.Absolute || style.position == Position.Fixed)) {
+    if (node.node_type == NodeType.Element && style.legacy_clip.has_clip && (style.position == CssPosition.Absolute || style.position == CssPosition.Fixed)) {
         const lc = style.legacy_clip;
         const t_px = if (lc.top.is_auto) 0.0 else lc.top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
         const r_px = if (lc.right.is_auto) r.width else lc.right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
@@ -2910,7 +2910,7 @@ fn paintNodeRecursive(
             child_clip = own_clip;
         }
     }
-    const child_abs_clip: ClipRect? = if (style.position != Position.Static) child_clip else abs_clip;
+    const child_abs_clip: ClipRect? = if (style.position != CssPosition.Static) child_clip else abs_clip;
 
     let own_scroll_l: f32 = 0.0;
     let own_scroll_t: f32 = 0.0;
@@ -2926,8 +2926,8 @@ fn paintNodeRecursive(
     }
     const child_scroll_dx = eff_scroll_dx + own_scroll_l;
     const child_scroll_dy = eff_scroll_dy + own_scroll_t;
-    const child_abs_scroll_dx = if (style.position != Position.Static) child_scroll_dx else abs_scroll_dx;
-    const child_abs_scroll_dy = if (style.position != Position.Static) child_scroll_dy else abs_scroll_dy;
+    const child_abs_scroll_dx = if (style.position != CssPosition.Static) child_scroll_dx else abs_scroll_dx;
+    const child_abs_scroll_dy = if (style.position != CssPosition.Static) child_scroll_dy else abs_scroll_dy;
 
     if (node.node_type == NodeType.Element && is_self_visible) {
         if (node.hasTag("li") && node.parent != NULL_NODE && @as(usize, node.parent) < doc.nodes.items.len) {
@@ -3360,7 +3360,7 @@ fn paintNodeRecursive(
                     let p_rect = r;
                     if (@as(usize, parent_id) < rects.len) {
                         p_rect = rects[@as(usize, parent_id)];
-                        if (ps.position != Position.Fixed) {
+                        if (ps.position != CssPosition.Fixed) {
                             p_rect.x -= eff_scroll_dx;
                             p_rect.y -= eff_scroll_dy;
                         }
@@ -3403,7 +3403,7 @@ fn paintNodeRecursive(
                     // Stop propagation past atomic inline-level, floated, or out-of-flow boxes
                     if (cs.display.isInlineBlock() || cs.display.isTable() ||
                         cs.float_mode != FloatMode.None ||
-                        cs.position == Position.Absolute || cs.position == Position.Fixed) {
+                        cs.position == CssPosition.Absolute || cs.position == CssPosition.Fixed) {
                         break;
                     }
                     cur_deco = doc.nodes.items[@as(usize, cur_deco)].parent;

@@ -90,6 +90,18 @@ function installWindow(global) {
   if (!global.self) global.self = global;
   if (typeof window !== "undefined" && !window.self) window.self = window;
   if (typeof globalThis !== "undefined" && !globalThis.self) globalThis.self = globalThis;
+  if (!global.parent) global.parent = global;
+  if (!global.top) global.top = global;
+  if (!global.frames) global.frames = global;
+  if (typeof global.opener === "undefined") global.opener = null;
+  if (typeof global.frameElement === "undefined") global.frameElement = null;
+  if (typeof window !== "undefined") {
+    if (!window.parent) window.parent = window;
+    if (!window.top) window.top = window;
+    if (!window.frames) window.frames = window;
+    if (typeof window.opener === "undefined") window.opener = null;
+    if (typeof window.frameElement === "undefined") window.frameElement = null;
+  }
 
   function resolveRelativePath(p) {
     const segments = p.split("/");

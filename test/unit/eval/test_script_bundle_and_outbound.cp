@@ -25,7 +25,7 @@ import {
     MAX_IDLE_NAVIGATES,
     InsertedRun,
     LearnedScriptsStore,
-    originOf,
+    learnedOriginOf,
     hasQuery,
     storeKey,
     recordInsertedScript,
@@ -143,13 +143,13 @@ fn testScriptBundle() {
 fn testLearnedScriptsRecordAndHit() {
     std.debug.print("2. learned_scripts record, query-string gate, dedup & hit\n", .{});
     // Helper checks
-    if (org := originOf("https://app.example.com:8443/path/index.html?x=1")) {
+    if (org := learnedOriginOf("https://app.example.com:8443/path/index.html?x=1")) {
         check("originOf extracts scheme+host+port", std.mem.eql(u8, org, "https://app.example.com:8443"));
     } else {
         check("originOf should succeed", false);
     }
-    check("originOf rejects userinfo", originOf("https://user@example.com/a.js") == null);
-    check("originOf rejects file scheme", originOf("file:///tmp/a.js") == null);
+    check("originOf rejects userinfo", learnedOriginOf("https://user@example.com/a.js") == null);
+    check("originOf rejects file scheme", learnedOriginOf("file:///tmp/a.js") == null);
     check("hasQuery checks", hasQuery("https://a.com/x.js?v=1") && !hasQuery("https://a.com/x.js?#frag"));
 
     let key_buf: [128]u8 = [0; 128];
@@ -261,13 +261,13 @@ fn testExternalAndDeniedOutbound() {
     check("unconfigured initially", !cfg.isConfigured());
     check("defaultExternalFetch 200 ok", defaultExternalFetch(&req_ok).status == 200);
 
-    cfg.setCustomFetch(mockCustomFetch, @ptrCast(&hit_count));
+    cfg.setCustomFetch(mockCustomFetch, unsafe { @ptrCast(&hit_count) });
     check("configured after setCustomFetch", cfg.isConfigured());
 
     const r1 = cfg.fetch(&req_ok);
     check("custom fetch returns 201 with method", r1.status == 201 && r1.ok && std.mem.eql(u8, r1.body, "POST"));
 
-    let cfg2 = HostOutboundConfig.withFetch(mockCustomFetch, @ptrCast(&hit_count));
+    let cfg2 = HostOutboundConfig.withFetch(mockCustomFetch, unsafe { @ptrCast(&hit_count) });
     const r2 = cfg2.fetch(&req_blocked);
     check("withFetch invokes hook 403", r2.status == 403 && !r2.ok);
     check("outbound hook hit_count == 2", hit_count == 2);

@@ -19,7 +19,6 @@ import {
     SOCK_STREAM,
     socket,
     connect,
-    close,
     socketWriteAll,
     socketRead,
     readWsTextFrame,
@@ -41,7 +40,7 @@ struct E2eClient {
         };
 
         if (connect(sock_fd, &addr, @sizeOf(SockAddrIn)) < 0) {
-            * = close(sock_fd);
+            * = std.c.close(sock_fd);
             return error.ConnectFailed;
         }
 
@@ -51,7 +50,7 @@ struct E2eClient {
     }
 
     fn closeClient(*_) {
-        * = close(_.fd);
+        * = std.c.close(_.fd);
         std.heap.c_allocator.destroy(_);
     }
 

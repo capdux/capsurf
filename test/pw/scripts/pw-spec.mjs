@@ -56,7 +56,7 @@ function fail(message, log) {
 
 function checkTag(base) {
   const tag = /const PW_TAG = "v?([^"]+)"/.exec(
-    readFileSync(resolve(ROOT, "scripts/pw-setup.mjs"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "pw-setup.mjs"), "utf8"),
   )?.[1];
   const packageFile = resolve(base, "package.json");
   const version = existsSync(packageFile)
@@ -102,14 +102,12 @@ function main(options) {
   const result = spawnSync(
     process.execPath,
     [
-      resolve(ROOT, "scripts/pw-run.mjs"),
+      resolve(import.meta.dirname, "pw-run.mjs"),
       "--pw-dir",
       playwrightDir,
       "--out-dir",
       resolve(options.outDir, "test-results"),
-      "--engine-launcher",
-      "miniflare",
-      "--dist",
+      "--bin",
       options.dist,
       "--spec",
       options.spec,

@@ -8,8 +8,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve, join } from "node:path";
-import { localEngines } from "./local-engine.mjs";
-import { deviations, loadExpectations, reportGaps, summarize } from "./pw-shared.mjs";
+import { DEFAULT_BIN, localEngines } from "../../wpt/scripts/wpt-engine.mjs";
+import { deviations, loadExpectations, reportGaps, summarize } from "../../pw/scripts/pw-shared.mjs";
 import {
   collectResults,
   coverageGaps,
@@ -21,20 +21,36 @@ import {
   skipConfig,
 } from "./pptr-shared.mjs";
 
-const ROOT = resolve(import.meta.dirname, "..");
-const TESTS_JSON = resolve(ROOT, "tests/pptr-tests.json");
-const EXPECTATIONS_JSON = resolve(ROOT, "tests/pptr-expectations.json");
+const SUITE_DIR = resolve(import.meta.dirname, "..");
+const ROOT = resolve(import.meta.dirname, "../../..");
+const TESTS_JSON = resolve(SUITE_DIR, "pptr-tests.json");
+const EXPECTATIONS_JSON = resolve(SUITE_DIR, "pptr-expectations.json");
 const TAG = "pptr-run";
 
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`Usage: node test/pptr/scripts/pptr-run.mjs [options]
+  --pptr-dir <dir>         Puppeteer checkout dir (default: test/pptr/.puppeteer)
+  --out-dir <dir>          Output dir for reports
+  --bin <path>             CapSurf binary (default: CAPSURF_BIN or ./bin/main)
+  --port <n>               First CDP port (default: 9780)
+  --max-file-ms <ms>       Per-file mocha timeout (default: 600000)
+  --results-out <path>     Write aggregated results JSON
+  --filter <substr>        Filter allow-listed specs
+  --spec <name>            Run a single spec
+  --grep <pattern>         Mocha --grep filter
+  --no-gate                Exit 0 even on deviations
+  --no-retry               Disable fresh-engine retry on deviations
+  --update-expectations    Rebaseline test/pptr/pptr-expectations.json`);
+  process.exit(0);
+}
 const optionValue = (flag) => {
   const index = args.indexOf(flag);
   return index >= 0 ? args[index + 1] : null;
 };
-const PPTR_DIR = resolve(optionValue("--pptr-dir") ?? resolve(ROOT, ".puppeteer"));
+const PPTR_DIR = resolve(optionValue("--pptr-dir") ?? resolve(SUITE_DIR, ".puppeteer"));
 const OUT_DIR = resolve(optionValue("--out-dir") ?? join(PPTR_DIR, "test-results"));
-const launcher = optionValue("--engine-launcher") ?? "wrangler";
-const engineDist = resolve(optionValue("--dist") ?? resolve(ROOT, "packages/engine/.wpt-dist"));
+const binPath = resolve(ROOT, optionValue("--bin") ?? optionValue("--dist") ?? DEFAULT_BIN);
 const firstPort = parseInt(optionValue("--port") ?? "9780", 10);
 const maxFileMs = parseInt(optionValue("--max-file-ms") ?? "600000", 10);
 const resultsOut = optionValue("--results-out");
@@ -44,14 +60,10 @@ const userGrep = optionValue("--grep");
 const noGate = args.includes("--no-gate");
 const noRetry = args.includes("--no-retry");
 const updateExpectations = args.includes("--update-expectations");
-if (launcher !== "wrangler" && launcher !== "miniflare") {
-  console.error(`[${TAG}] --engine-launcher wants wrangler or miniflare, got ${launcher}`);
-  process.exit(2);
-}
 
 const MOCHA = join(PPTR_DIR, "node_modules/mocha/bin/mocha.js");
 const RUNNER_BIN = join(PPTR_DIR, "tools/mocha-runner/bin");
-const REPORTER = resolve(ROOT, "scripts/pptr-reporter.mjs");
+const REPORTER = resolve(import.meta.dirname, "pptr-reporter.mjs");
 if (!existsSync(join(PPTR_DIR, "test/build/mocha-utils.js")) || !existsSync(MOCHA)) {
   console.error(`[${TAG}] .puppeteer/ missing or unbuilt — run \`pnpm run pptr:setup\` first`);
   process.exit(1);
@@ -78,11 +90,8 @@ for (const entry of specs) {
 const expectations = loadExpectations(EXPECTATIONS_JSON);
 const { buildBundles, startEngine } = localEngines({
   tag: TAG,
-  launcher,
-  dist: engineDist,
-  outDir: OUT_DIR,
+  binPath,
   firstPort,
-  skipBuildEnv: "PPTR_SKIP_BUILD",
 });
 
 // One mocha process per spec file. Upstream's custom interface reads the skip config; the
@@ -117,7 +126,8 @@ function runMocha(wsEndpoint, file, grep, label, skipIds = []) {
   delete env.CI;
   delete env.PARALLEL;
   const started = Date.now();
-  const r = spawnSync(process.execPath, mochaArgs, {
+  const runtime = process.versions.bun ? "node" : process.execPath;
+  const r = spawnSync(runtime, mochaArgs, {
     cwd: PPTR_DIR,
     stdio: "inherit",
     env,

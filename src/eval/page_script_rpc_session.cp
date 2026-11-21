@@ -1,19 +1,10 @@
 // Migrated from vendor/kitesurf/packages/engine/src/eval/page-script-rpc-session.ts
 // Adapts PageScript RPC calls with per-call timeouts and bounded teardown.
 
-@c {
-    struct TimeVal {
-        tv_sec: i64;
-        tv_usec: i64;
-    }
-    fn gettimeofday(tv: *TimeVal, tz: *!?): i32;
-}
+import { getHostNowMs } from "./host_clock.cp";
 
 fn getNowMs(): u64 {
-    let tv = TimeVal{ tv_sec: 0, tv_usec: 0 };
-    * = gettimeofday(&tv, null);
-    if (tv.tv_sec <= 0) return 0;
-    return @as(u64, @intCast(tv.tv_sec)) * 1000 + @as(u64, @intCast(tv.tv_usec)) / 1000;
+    return getHostNowMs();
 }
 
 pub const TEARDOWN_RPC_GRACE_MS: u64 = 1000;

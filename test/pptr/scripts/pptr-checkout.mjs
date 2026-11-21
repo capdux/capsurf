@@ -31,7 +31,7 @@ export function checkoutBase(argv) {
 /** @param {string} base @returns {string | null} why the checkout is unusable, or null */
 export function checkoutProblem(base) {
   const tag = /const PPTR_TAG = "([^"]+)"/.exec(
-    readFileSync(resolve(ROOT, "scripts/pptr-setup.mjs"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "pptr-setup.mjs"), "utf8"),
   )?.[1];
   const packageFile = resolve(base, "packages/puppeteer/package.json");
   const version = existsSync(packageFile)

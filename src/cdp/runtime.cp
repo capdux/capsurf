@@ -2,7 +2,7 @@
 // CDP Runtime Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, extractJsonArray, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { emitPendingNavigationEvents } from "./input.cp";
 import { emitNewChildFrameEvents } from "./page.cp";
@@ -241,7 +241,8 @@ pub struct RuntimeHandler {
             if (exec_ctx_id != null && !session.isValidContextId(exec_ctx_id.?)) {
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
             }
-            const object_id = extractJsonString(req.params_raw, "objectId") ?? "";
+            const raw_object_id = extractJsonString(req.params_raw, "objectId");
+            const object_id = raw_object_id ?? (if (exec_ctx_id != null) "globalThis" else "");
             const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
             let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
             defer session.allocator.free(decl_buf);
@@ -250,8 +251,9 @@ pub struct RuntimeHandler {
             const func_decl = decl_buf[0..func_decl_len];
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
+            const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
-            let res_len = session.callFunctionOn(object_id, func_decl, return_by_value, await_promise, out_buf);
+            let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);
 
             if (std.mem.indexOf(u8, out_buf[0..res_len], "cannot read property '") != null ||
                 std.mem.indexOf(u8, out_buf[0..res_len], "cannot set property '") != null ||
