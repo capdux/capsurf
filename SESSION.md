@@ -4888,3 +4888,9 @@
   - **Puppeteer**: `injected.test` **8/8 PASS (100%)**；`evaluation.test` **13/17 PASS**（从 3/17 跃升）；`navigation.test` 5/12 PASS；`jshandle.test` 10/25 PASS。
   - **WPT（多子智能体分片并行，已覆盖 20+ 目录、450+ 用例，零崩溃通过大量用例）**: `/webstorage/` **3/3 (100%)**、`/css/css-cascade/` **22/25 (88.0%)**、`/dom/nodes/Element-` **10/12 (83.3%)**、`/css/css-contain/` **9/11 (81.8%)**、`/html/semantics/selectors/` **3/4 (100% 匹配基线)**、`/domxpath/` **16/22 (72.7%)**、`/css/css-borders/` **16/23 (69.6%)**、`/css/css-backgrounds/` **4/6**、`30 条 crashtest` **22 PASS + 1 expected FAIL**、`/css/selectors/` **21/33 (63.6%)**、`/css/cssom-view/` **7/12 (58.3%)**、`/dom/collections/` **5/10 (50%)**、`/css/css-grid/` **22/44 (50%)**、`/html/dom/` **7/15**、`/css/css-typed-om/` **26/60 (43.3%)**、`/svg/` **21/50 (42.0%)**、`/css/css-fonts/` **9/23 (39.1%)**、`/html/canvas/element/` **22/74**、`/css/css-position/` **14/53**、`/xhr/` **10/37**、`/webidl/` **7/33**。
 - **上游上报**: `cap build -m -r -o bin_rel src/main.cp` 在 LLVM ReleaseFast 下命中 `__cp_runtime.zig` `cp_unpack_elem` 冗余 `comptime` 报错，已提交 `task-capsurf-20261122-cp-unpack-elem-comptime` 给 `cp_agy`。
+
+### [2026-11-22 04:56] 上游结单验收: `task-capsurf-20261122-cp-unpack-elem-comptime`
+- **修复说明**: `cp_agy` 已清理 `cpc/src/codegen/runtime_emit.rs` 中 `cp_unpack_elem`/`cp_unpack_tail`/`cp_unpack_slice` 的冗余 `comptime` 关键字。
+- **复现与 Ack**: `cpc check /data/dev/cp/temp/repro_cp_unpack_elem_comptime.cp` → `Check successful`，已执行 `ack`。
+- **ReleaseFast 全量构建**: `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp` 136 模块 **89.59s** 编译通过并同步至 `bin/main`。
+- **WPT 补充批次 (`d37d0830`, `cccbe644`)**: `/html/semantics/forms/` 7/10 匹配基线、`/streams/` 14 条（0 CRASH）、`/html/semantics/embedded-content/` 43 条（7 PASS 含 3 条 `FAIL→PASS`，19/43 匹配基线，0 CRASH）。
