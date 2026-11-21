@@ -72,6 +72,7 @@ pub struct KitesurfFacade {
         if (std.mem.eql(u8, method, "Kitesurf.setOutboundFilters") ||
             std.mem.eql(u8, method, "CapSurf.setOutboundFilters")) {
             session.setOutboundRejectPatternsFromJson(params_json);
+            session.syncOutboundRejectPatternsToJs();
             if (std.mem.indexOf(u8, params_json, "rejectResourceTypes") != null &&
                 (std.mem.indexOf(u8, params_json, "websocket") != null ||
                  std.mem.indexOf(u8, params_json, "WebSocket") != null)) {

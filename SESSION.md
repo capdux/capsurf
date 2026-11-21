@@ -4813,3 +4813,18 @@
   - `src/cdp/`：`accessibility.cp` 实时 input/select 状态、`session.cp` border-box 盒模型、`session_hooks.cp` form.reset/matchMedia、`server.cp` + `target.cp` + `network.cp` + `page.cp` BrowserContext 隔离（`accessibility`, `accessibility-live-select`, `cdp-input-and-box-model`, `page-get-layout-metrics`, `tty-nav-params-page-initiated`, `browser-context`, `browser-context-iframe`, `sealed-outbound-identity`, `cookie-passthrough-demo` 全通过；`session-deadlines` 2/3，wire 已发 1001）。
   - `src/css/` + `src/layout/` + `src/render/`：`font_face.cp` + `cascade.cp` + `painter.cp` 支持 CSS `counter-reset`/`counter-increment`/`counter()`/`counters()`/`attr()`、`<ol start/reversed>`/`upper-roman` 列表编号、伪元素 `visibility`、`<html>` 滚动偏移防双倍累加；`layout.cp` 修复 `border-collapse` 表格宽度、SVG `<img>` 固有尺寸与 WebFont 字重宽度缩放（`inline-visibility-hidden`, `table-collapsed-border-spans`, `gradient-tile-count`, `font-face-variable-demo`, `css-counters`, `canvas-natural-size`, `document-types`, `svg-ratio-sizing` 全通过；白盒 `test/layout/ test/css/ test/render/` 10/10 通过）。
   - `src/js/shim/`：`form.js`、`dispatch.js`、`index.js`、`window.js`、`html-classes.js`、`element.js`、`selection.js`、`html-element.js` 修复 WebRTC stub、XHR/WS boot、不可伪造 `location`、`currentScript` 微任务、`form` 命名属性、`HTMLImageElement.getBoundingClientRect`、rAF 帧间隙、`computedStyleMap` Typed OM 与 `event-handler-hydration`/`shadow-dir-directionality`（`computed-style-used-values` 9/9, `raf-overrun-frame-gap` 1/1, `webrtc-stub-demo`, `xhr-boot-demo`, `ws-boot-demo`, `unforgeable-location-demo`, `current-script-microtask`, `form-named-properties`, `event-handler-hydration`, `shadow-dir-directionality` 全通过）。
+
+### 语法广播验收 (`syntax-raii-20261121`, 2026-11-21)
+- 收到 `cp_agy` 广播：CP 编译器(Release) 升级唯一双重幂等析构 `~init()` + `drop(x)`、直接赋值三态与五态对象解构、`&v` 纯取址符、饱和/环绕复合赋值及带标签 `for` 循环，且本仓库 `CP_PITFALLS.md` 已同步更新至最新契约。
+- 验收：`/data/dev/cp/cap/bin/cpc check --brief src/main.cp` 通过 (`ok: src/main.cp (0 errors)`)。
+- 状态：已执行 `task_queue.py ack syntax-raii-20261121 --agent capsurf_agy`。
+
+### 语法广播验收 (`syntax-raii-20261121-v2`, 2026-11-21)
+- 收到 `cp_agy` 广播：`release` 彻底退回普通业务方法（永不自动注入 defer / 不截断实参），`init(...)` 为 class 构造函数，`~init()` 为 struct/class 唯一双重幂等析构函数，提前释放用 `drop(x)` 或 `x.~init()`；`CP_PITFALLS.md` 已同步更新。
+- 验收：`/data/dev/cp/cap/bin/cpc check --brief src/main.cp` 通过 (`ok: src/main.cp (0 errors)`)。
+- 状态：已执行 `task_queue.py ack syntax-raii-20261121-v2 --agent capsurf_agy`。
+
+## Phase 249 (2026-11-21): CDP Fetch/OOPIF/Redirect 与 JS Shim DOM/Shadow/Worker/XPath/Sandbox 收敛
+- 联合验证：`bin/main` ReleaseFast 下 7 组核心 E2E（`dedicated-worker`, `fetch-interception`, `redirect-per-hop-gating`, `post-message-origin`, `no-cors-opaque`, `opaque-image-render`, `location-assign-navigates`）跑出 `60 pass, 1 fail (119 expect())`；另单独通过 `forbidden-request-headers`(2/2), `header-intrinsic-tamper`(4/4), `range-contextual-fragment`(1/1), `shadow-dom`(2/2), `window-global-scope`(6/6), `xpath`(9/9), `canvas-2d-paint-demo`(3/3), `forms-realworld-demo`(1/1), `forms-select-dropdown-demo`(1/1), `keyboard-demo`(1/1), `inserted-script`(1/1), `interception-abandoned-park`(2/2), `renderer-laziness`(4/4), `skip-speculative-raster`(2/2), `oopif-runtime-evaluate`(1/1), `iframe-srcdoc`(16/18)。
+- 同步 CP 语法审计：`migrate_cp_syntax.py --no-release src/` 扫描 127 个 `.cp` 文件待更新 0 个。
+- 关键修复：修复 `dom_binding.cp` 重名符号 `js_capsurf_native_record_fetch`、`mock_fixtures.cp` 补齐 `sandbox-*` 动态夹具、`harness.ts` 去除重复人工 `Network.requestWillBeSent`、以及 `src/cdp/` 与 `src/js/shim/` 全套修复。

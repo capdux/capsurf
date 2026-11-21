@@ -2246,7 +2246,7 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsNull();
 }
 
-@c fn js_capsurf_record_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+@c fn js_capsurf_native_record_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     if (argc < 1) return jsNull();
     const ptr = JS_GetContextOpaque(ctx);
@@ -2434,7 +2434,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_get_cookie_header", js_capsurf_get_cookie_header, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
-    defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_record_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 2);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

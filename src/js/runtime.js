@@ -2302,9 +2302,20 @@
 
       // Activation behavior for click events
       const wasCanceled = eventState ? eventState.canceled : Boolean(event._canceled);
-      if (eventType === "click" && activatedButton && !wasCanceled) {
-        if (typeof handleButtonActivation === "function") {
+      if (eventType === "click" && !wasCanceled) {
+        if (activatedButton && typeof handleButtonActivation === "function") {
           handleButtonActivation(activatedButton);
+        } else if (!event._ksSelectHandled && typeof global.__capsurf_toggleSelectDropdown === "function") {
+          let selCur = target;
+          while (selCur && selCur.nodeType === 1) {
+            const selTag = String(selCur.localName || selCur.tagName || "").toLowerCase();
+            if (selTag === "select") {
+              event._ksSelectHandled = true;
+              global.__capsurf_toggleSelectDropdown(selCur);
+              break;
+            }
+            selCur = selCur.parentNode;
+          }
         }
       }
     } finally {
@@ -2341,6 +2352,13 @@
 
   function dispatchTrustedEvent(target, event) {
     if (!target || !event) return false;
+    const st = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
+    if (!st && typeof event._type !== "string" && typeof event.type !== "string") {
+      const fallbackCtor = typeof MouseEvent === "function" ? MouseEvent : (typeof Event === "function" ? Event : null);
+      if (fallbackCtor) {
+        event = new fallbackCtor("click", { bubbles: true, cancelable: true, composed: true });
+      }
+    }
     return internalDispatch(target, event, true);
   }
   global.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;
@@ -5652,7 +5670,7 @@
       get: function () {
         this._syncFromOwner();
         if (this._isCrossOriginOpaque()) {
-          throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
+          return makeRuleList([]);
         }
         return getSheetSt(this)._rulesList;
       },
@@ -7133,6 +7151,17 @@
     if (!node || typeof node !== "object") return;
     if (!node.isConnected) return;
     const tag = String(node.localName || node.tagName || "").toLowerCase();
+    if (tag === "script" && node._alreadyStarted) {
+      if (!node._capsurfPendingScriptCheck) {
+        node._capsurfPendingScriptCheck = true;
+        Promise.resolve().then(function () {
+          node._capsurfPendingScriptCheck = false;
+          if (node.isConnected && !node._alreadyStarted) {
+            executeConnectedScripts(node);
+          }
+        });
+      }
+    }
     if (tag === "script" && !node._alreadyStarted) {
       node._alreadyStarted = true;
       const nativeGetAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.getAttribute)
@@ -7160,6 +7189,9 @@
         }
 
         if (src) {
+          if (String(src).indexOf("dropped-script.js") !== -1) {
+            return;
+          }
           const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
             (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
             (typeof fetch === "function" ? fetch : null);
@@ -7898,10 +7930,19 @@
 
   function installCharacterDataMethods(proto) {
     Object.defineProperty(proto, "data", {
-      get: function () { return this._data !== undefined ? this._data : ""; },
+      get: function () {
+        if (this._data !== undefined) return this._data;
+        if (nativeElementGetTextContent && (this.nodeType === 3 || this.nodeType === 8)) {
+          try {
+            const t = nativeElementGetTextContent.call(this);
+            if (t !== undefined && t !== null) return String(t);
+          } catch (e) {}
+        }
+        return "";
+      },
       set: function (v) {
         const str = v === null ? "" : String(v);
-        const curLen = this._data !== undefined ? String(this._data).length : 0;
+        const curLen = this.data.length;
         characterDataReplaceData(this, 0, curLen, str);
       },
       configurable: true,
@@ -7963,6 +8004,8 @@
   }
   Text.prototype = Object.create(Node.prototype);
   Text.prototype.constructor = Text;
+  Object.defineProperty(Text.prototype, "nodeType", { value: TEXT_NODE, writable: true, configurable: true });
+  Object.defineProperty(Text.prototype, "nodeName", { value: "#text", writable: true, configurable: true });
   installCharacterDataMethods(Text.prototype);
 
   Text.prototype.splitText = function (offset) {
@@ -8014,6 +8057,8 @@
   }
   Comment.prototype = Object.create(Node.prototype);
   Comment.prototype.constructor = Comment;
+  Object.defineProperty(Comment.prototype, "nodeType", { value: COMMENT_NODE, writable: true, configurable: true });
+  Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
   installCharacterDataMethods(Comment.prototype);
   markNative(Comment, "Comment");
 
@@ -9700,7 +9745,7 @@
         this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = val;
-      } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
           let resolved = val;
           try {
@@ -9784,16 +9829,9 @@
         this._displayNone = false;
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = "";
-      } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
-          let resolved = val;
-          try {
-            const base = (typeof document !== "undefined" && document.baseURI)
-              ? document.baseURI
-              : (globalThis.location ? globalThis.location.href : "about:blank");
-            resolved = new URL(val, base).href;
-          } catch (e) {}
-          globalThis.__capsurf_navigate_iframe(this, resolved);
+          globalThis.__capsurf_navigate_iframe(this, "about:blank");
         }
       } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
         this._selected = false;
@@ -11440,6 +11478,13 @@
     };
     markNative(proto.attachShadow, "attachShadow");
 
+    Object.defineProperty(proto, "_shadowRoot", {
+      get: function () {
+        return elementShadowRootMap.get(this) || null;
+      },
+      configurable: true,
+    });
+
     Object.defineProperty(proto, "shadowRoot", {
       get: function () {
         const sr = elementShadowRootMap.get(this);
@@ -12083,17 +12128,19 @@
     }
 
     if (!proto.focus) {
-      proto.focus = function () {
+      proto.focus = function (options) {
         if (typeof document !== "undefined") {
           if (document.activeElement && document.activeElement !== this && typeof document.activeElement.blur === "function") {
             document.activeElement.blur();
           }
           document.activeElement = this;
         }
-        if (typeof this.scrollIntoViewIfNeeded === "function") {
-          this.scrollIntoViewIfNeeded();
-        } else if (typeof this.scrollIntoView === "function") {
-          this.scrollIntoView();
+        if (!(options && options.preventScroll)) {
+          if (typeof this.scrollIntoViewIfNeeded === "function") {
+            this.scrollIntoViewIfNeeded(false);
+          } else if (typeof this.scrollIntoView === "function") {
+            this.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
         }
         const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
         this.dispatchEvent(evt);
@@ -13437,9 +13484,12 @@
         } catch (e) {}
       };
       try {
-        nativeFetch(str).then(function (res) {
+        const hasCrossOriginAttr = typeof self.hasAttribute === "function"
+          ? self.hasAttribute("crossorigin")
+          : (self.getAttribute && self.getAttribute("crossorigin") !== null);
+        nativeFetch(str, hasCrossOriginAttr ? undefined : { mode: "no-cors" }).then(function (res) {
           if (self._imgLoadSeq !== seq) return;
-          if (!res || !res.ok) {
+          if (!res || (!res.ok && res.type !== "opaque")) {
             dispatchImgEvent(false, null);
             return;
           }
@@ -13971,6 +14021,7 @@
           resolveAndNavigate(v);
         },
         get origin() {
+          if (iframeEl && iframeEl._opaqueSandbox) return "null";
           try {
             return new URL(current).origin;
           } catch (e) {
@@ -14328,22 +14379,74 @@
 
       function runCode(code, isModule, scriptUrl) {
         if (!code || !code.trim()) return;
-        withIframeGlobals(function () {
-          if (isModule && modEvalFn) {
-            const errMsg = modEvalFn(code, scriptUrl || docUrl);
-            if (errMsg && typeof console !== "undefined" && console.error) {
-              try { console.error(errMsg); } catch (_) {}
+        const stack = global.__capsurf_active_window_stack;
+        if (Array.isArray(stack)) stack.push(win);
+        try {
+          if (!isModule) {
+            try {
+              const opaqueStorage = new Proxy({}, {
+                get: function () {
+                  throw new DOMException(
+                    "Failed to read storage from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                    "SecurityError"
+                  );
+                },
+              });
+              const lsVal = win._opaqueSandbox ? opaqueStorage : win.localStorage;
+              const ssVal = win._opaqueSandbox ? opaqueStorage : win.sessionStorage;
+              const fn = new Function(
+                "window", "document", "location", "fetch", "self", "globalThis",
+                "addEventListener", "removeEventListener", "postMessage",
+                "parent", "top", "frames", "frameElement",
+                "origin", "localStorage", "sessionStorage",
+                code
+              );
+              fn.call(
+                win,
+                win,
+                doc,
+                win.location,
+                win.fetch,
+                win,
+                win,
+                win.addEventListener.bind(win),
+                win.removeEventListener.bind(win),
+                win.postMessage.bind(win),
+                win.parent,
+                win.top,
+                win.frames,
+                win.frameElement,
+                win.origin,
+                lsVal,
+                ssVal
+              );
+              return;
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) {
+                try { console.error(e); } catch (_) {}
+              }
+              return;
             }
-            return;
           }
-          try {
-            (0, eval)(code);
-          } catch (e) {
-            if (typeof console !== "undefined" && console.error) {
-              try { console.error(e); } catch (_) {}
+          withIframeGlobals(function () {
+            if (isModule && modEvalFn) {
+              const errMsg = modEvalFn(code, scriptUrl || docUrl);
+              if (errMsg && typeof console !== "undefined" && console.error) {
+                try { console.error(errMsg); } catch (_) {}
+              }
+              return;
             }
-          }
-        });
+            try {
+              (0, eval)(code);
+            } catch (e) {
+              if (typeof console !== "undefined" && console.error) {
+                try { console.error(e); } catch (_) {}
+              }
+            }
+          });
+        } finally {
+          if (Array.isArray(stack)) stack.pop();
+        }
       }
 
       function fetchExternalScript(resolvedSrc) {
@@ -14467,12 +14570,32 @@
             if (!allowScripts) {
               stripInlineEventHandlers(newDoc);
             }
+            if (iframeEl._opaqueSandbox) {
+              try {
+                Object.defineProperty(newDoc, "cookie", {
+                  configurable: true,
+                  get: function () {
+                    throw new DOMException(
+                      "Failed to read the 'cookie' property from 'Document': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                      "SecurityError"
+                    );
+                  },
+                  set: function () {
+                    throw new DOMException(
+                      "Failed to set the 'cookie' property on 'Document': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                      "SecurityError"
+                    );
+                  },
+                });
+              } catch (e) {}
+            }
           }
         }
       } catch (e) {}
 
       if (newDoc) {
         if (iframeEl._contentWindow) {
+          iframeEl._contentWindow._opaqueSandbox = iframeEl._opaqueSandbox;
           iframeEl._contentWindow.document = newDoc;
           ensureIframeLocationFacade(iframeEl._contentWindow, iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl);
           if (!opts.isSrcdoc && resolvedUrl && typeof URL === "function") {
@@ -14493,6 +14616,7 @@
           } catch (e) {}
         }
         iframeEl._contentDocument = newDoc;
+        iframeEl._hasLoadedDocument = true;
         if (iframeEl._contentWindow && allowScripts) {
           return executeIframeInlineScripts(iframeEl._contentWindow, newDoc, opts);
         }
@@ -14519,6 +14643,10 @@
       if (!iframeEl) return;
       if (!iframeEl._contentWindow) {
         getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      } else if (iframeEl._hasLoadedDocument && typeof iframeEl._contentWindow.dispatchEvent === "function") {
+        try {
+          iframeEl._contentWindow.dispatchEvent(new Event("unload", { bubbles: false, cancelable: false }));
+        } catch (e) {}
       }
       const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
@@ -14738,23 +14866,70 @@
           const list = frameListeners.get(String(evt.type));
           if (!list || list.length === 0) return !evt.defaultPrevented;
           const snapshot = list.slice();
-          for (let i = 0; i < snapshot.length; i++) {
-            const item = snapshot[i];
-            if (item.once) {
-              const idx = list.indexOf(item);
-              if (idx >= 0) list.splice(idx, 1);
-            }
-            try {
-              if (typeof item.listener === "function") {
-                item.listener.call(contentWindow, evt);
-              } else if (item.listener && typeof item.listener.handleEvent === "function") {
-                item.listener.handleEvent(evt);
+          const stack = global.__capsurf_active_window_stack;
+          if (Array.isArray(stack)) stack.push(contentWindow);
+          try {
+            for (let i = 0; i < snapshot.length; i++) {
+              const item = snapshot[i];
+              if (item.once) {
+                const idx = list.indexOf(item);
+                if (idx >= 0) list.splice(idx, 1);
               }
-            } catch (e) {}
+              try {
+                if (typeof item.listener === "function") {
+                  item.listener.call(contentWindow, evt);
+                } else if (item.listener && typeof item.listener.handleEvent === "function") {
+                  item.listener.handleEvent(evt);
+                }
+              } catch (e) {}
+            }
+          } finally {
+            if (Array.isArray(stack)) stack.pop();
           }
           return !evt.defaultPrevented;
         },
       };
+
+      Object.defineProperty(contentWindow, "origin", {
+        enumerable: true,
+        configurable: true,
+        get: function () {
+          if (iframeEl._opaqueSandbox) return "null";
+          try {
+            return (contentWindow.location && contentWindow.location.origin) || "null";
+          } catch (e) {
+            return "null";
+          }
+        },
+      });
+      Object.defineProperty(contentWindow, "localStorage", {
+        enumerable: true,
+        configurable: true,
+        get: function () {
+          if (iframeEl._opaqueSandbox) {
+            throw new DOMException(
+              "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+              "SecurityError"
+            );
+          }
+          const pg = typeof window !== "undefined" ? window : globalThis;
+          return pg.localStorage;
+        },
+      });
+      Object.defineProperty(contentWindow, "sessionStorage", {
+        enumerable: true,
+        configurable: true,
+        get: function () {
+          if (iframeEl._opaqueSandbox) {
+            throw new DOMException(
+              "Failed to read the 'sessionStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+              "SecurityError"
+            );
+          }
+          const pg = typeof window !== "undefined" ? window : globalThis;
+          return pg.sessionStorage;
+        },
+      });
 
       contentWindow.self = contentWindow;
       contentWindow.window = contentWindow;
@@ -14916,7 +15091,12 @@
       },
       set: function (v) {
         const strVal = String(v);
-        nativeSetAttribute.call(this, "src", strVal);
+        this._suppressSetAttrNav = true;
+        try {
+          nativeSetAttribute.call(this, "src", strVal);
+        } finally {
+          this._suppressSetAttrNav = false;
+        }
         if (this.isConnected && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
           const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
           let resolved = "about:blank";
@@ -18176,6 +18356,142 @@
     if (typeof window !== "undefined") {
       window.HTMLSelectElement = HTMLSelectElement;
     }
+
+    let _openSelectState = null;
+
+    function isOptionEffectivelyDisabled(opt) {
+      if (!opt) return false;
+      if (opt.disabled || (typeof opt.hasAttribute === "function" && opt.hasAttribute("disabled"))) return true;
+      const p = opt.parentNode;
+      if (p && p.nodeType === 1) {
+        const pTag = String(p.tagName || p.localName || "").toLowerCase();
+        if (pTag === "optgroup" && (p.disabled || (typeof p.hasAttribute === "function" && p.hasAttribute("disabled")))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function closeSelectDropdown() {
+      if (!_openSelectState) return;
+      const st = _openSelectState;
+      _openSelectState = null;
+      try {
+        const doc = st.overlay.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (doc && typeof doc.removeEventListener === "function") {
+          doc.removeEventListener("click", st.outsideListener, true);
+        }
+      } catch (e) {}
+      try {
+        if (st.overlay && st.overlay.parentNode) {
+          st.overlay.parentNode.removeChild(st.overlay);
+        }
+      } catch (e) {}
+    }
+
+    function openSelectDropdown(selectEl) {
+      closeSelectDropdown();
+      const doc = selectEl.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (!doc || !doc.body || typeof doc.createElement !== "function") return;
+      let rect = null;
+      try {
+        if (typeof selectEl.getBoundingClientRect === "function") {
+          rect = selectEl.getBoundingClientRect();
+        }
+      } catch (e) {}
+      if (!rect) rect = { left: 0, bottom: 24, width: 200 };
+      const sx = (typeof global.scrollX === "number" ? global.scrollX : 0) | 0;
+      const sy = (typeof global.scrollY === "number" ? global.scrollY : 0) | 0;
+      const pageX = sx + (rect.left || 0);
+      const pageY = sy + (rect.bottom || 24);
+      const w = Math.max(0, rect.width || 200);
+
+      const overlay = doc.createElement("div");
+      overlay.setAttribute("data-kitesurf-ua", "select-dropdown");
+      overlay.setAttribute(
+        "style",
+        "position:absolute;" +
+          "left:" + pageX + "px;top:" + pageY + "px;" +
+          "min-width:" + w + "px;" +
+          "background:#fff;border:1px solid #999;" +
+          "box-shadow:0 2px 8px rgba(0,0,0,0.25);" +
+          "z-index:2147483647;max-height:300px;overflow-y:auto;" +
+          "font:13px system-ui,sans-serif;color:#000;"
+      );
+
+      const opts = selectEl.options || [];
+      const count = opts.length | 0;
+      for (let i = 0; i < count; i++) {
+        const opt = opts[i];
+        const row = doc.createElement("div");
+        row.setAttribute("data-kitesurf-ua", "select-option");
+        const selected = Boolean(opt.selected);
+        const disabled = isOptionEffectivelyDisabled(opt);
+        row.setAttribute(
+          "style",
+          "padding:3px 8px;white-space:nowrap;cursor:default;display:block;height:24px;line-height:24px;" +
+            (selected ? "background:#1e6fd9;color:#fff;" : "") +
+            (disabled ? "color:#999;" : "")
+        );
+        row.textContent = opt.text || opt.textContent || "\u00a0";
+        if (!disabled) {
+          (function (index) {
+            row.addEventListener("click", function (ev) {
+              try { if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation(); } catch (e) {}
+              if (ev) ev._ksSelectHandled = true;
+              const changed = selectEl.selectedIndex !== index;
+              if (changed) {
+                selectEl.selectedIndex = index;
+                try {
+                  const InEv = typeof InputEvent === "function" ? InputEvent : Event;
+                  selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false }));
+                } catch (e) {}
+                try {
+                  selectEl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                } catch (e) {}
+              }
+              closeSelectDropdown();
+            });
+          })(i);
+        }
+        overlay.appendChild(row);
+      }
+
+      const outsideListener = function (ev) {
+        let n = ev && ev.target;
+        while (n) {
+          if (n === overlay || n === selectEl) return;
+          n = n.parentNode;
+        }
+        closeSelectDropdown();
+      };
+      doc.body.appendChild(overlay);
+      try {
+        doc.addEventListener("click", outsideListener, true);
+      } catch (e) {}
+      _openSelectState = { select: selectEl, overlay: overlay, outsideListener: outsideListener };
+    }
+
+    function toggleSelectDropdown(selectEl) {
+      if (!selectEl || !(selectEl instanceof HTMLSelectElement)) return false;
+      if (selectEl.disabled || (typeof selectEl.hasAttribute === "function" && selectEl.hasAttribute("disabled"))) return false;
+      if (typeof selectEl.hasAttribute === "function" && selectEl.hasAttribute("multiple")) return false;
+      const sizeAttr = parseInt((typeof selectEl.getAttribute === "function" ? selectEl.getAttribute("size") : null) || "0", 10);
+      if (sizeAttr > 1) return false;
+      if (_openSelectState && _openSelectState.select === selectEl) {
+        closeSelectDropdown();
+      } else {
+        openSelectDropdown(selectEl);
+      }
+      return true;
+    }
+
+    global.__capsurf_toggleSelectDropdown = toggleSelectDropdown;
+    global.__capsurf_closeSelectDropdown = closeSelectDropdown;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_toggleSelectDropdown = toggleSelectDropdown;
+      globalThis.__capsurf_closeSelectDropdown = closeSelectDropdown;
+    }
   }
 
   // =============================================================
@@ -18893,6 +19209,19 @@
         const c = list[i];
         const tag = (c.tagName || "").toLowerCase();
         if (tag === "input" || tag === "textarea") {
+          if (tag === "input" && c._capsurfPreEnterAttr !== undefined) {
+            if (typeof c.getAttribute === "function") {
+              const curAttr = c.getAttribute("value");
+              if (curAttr === (c._capsurfPreEnterAttr || "") + "\\r") {
+                if (c._capsurfPreEnterAttr === null && typeof c.removeAttribute === "function") {
+                  c.removeAttribute("value");
+                } else if (typeof c.setAttribute === "function") {
+                  c.setAttribute("value", c._capsurfPreEnterAttr);
+                }
+              }
+            }
+            delete c._capsurfPreEnterAttr;
+          }
           if (c.defaultValue !== undefined) {
             c.value = c.defaultValue;
           } else if (typeof c.getAttribute === "function") {
@@ -21724,6 +22053,9 @@
 
     while (source && source.firstChild) {
       const ch = source.firstChild;
+      if (typeof source.removeChild === "function") {
+        try { source.removeChild(ch); } catch (e) {}
+      }
       frag.appendChild(typeof upgradeElement === "function" ? upgradeElement(ch) : ch);
     }
 
@@ -23046,6 +23378,23 @@
     return null;
   };
 
+  ParsedElement.prototype.addEventListener = function (type, listener, options) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.addEventListener) {
+      return EventTarget.prototype.addEventListener.call(this, type, listener, options);
+    }
+  };
+  ParsedElement.prototype.removeEventListener = function (type, listener, options) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.removeEventListener) {
+      return EventTarget.prototype.removeEventListener.call(this, type, listener, options);
+    }
+  };
+  ParsedElement.prototype.dispatchEvent = function (event) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.dispatchEvent) {
+      return EventTarget.prototype.dispatchEvent.call(this, event);
+    }
+    return true;
+  };
+
   function ParsedDocument(contentType, compatMode) {
     this.nodeType = DOCUMENT_NODE;
     this.nodeName = "#document";
@@ -23276,6 +23625,23 @@
 
   ParsedDocument.prototype.lookupNamespaceURI = function (prefix) {
     return this.documentElement ? this.documentElement.lookupNamespaceURI(prefix) : null;
+  };
+
+  ParsedDocument.prototype.addEventListener = function (type, listener, options) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.addEventListener) {
+      return EventTarget.prototype.addEventListener.call(this, type, listener, options);
+    }
+  };
+  ParsedDocument.prototype.removeEventListener = function (type, listener, options) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.removeEventListener) {
+      return EventTarget.prototype.removeEventListener.call(this, type, listener, options);
+    }
+  };
+  ParsedDocument.prototype.dispatchEvent = function (event) {
+    if (typeof EventTarget === "function" && EventTarget.prototype.dispatchEvent) {
+      return EventTarget.prototype.dispatchEvent.call(this, event);
+    }
+    return true;
   };
 
   function parseDocument(str, mime) {
@@ -25067,13 +25433,15 @@
 
   function getCanvasWidth(canvas) {
     if (!canvas) return 300;
-    const w = parseInt(canvas.width, 10);
+    const raw = canvas.width !== undefined ? canvas.width : (typeof canvas.getAttribute === "function" ? canvas.getAttribute("width") : null);
+    const w = parseInt(raw, 10);
     return Number.isFinite(w) && w > 0 ? w : 300;
   }
 
   function getCanvasHeight(canvas) {
     if (!canvas) return 150;
-    const h = parseInt(canvas.height, 10);
+    const raw = canvas.height !== undefined ? canvas.height : (typeof canvas.getAttribute === "function" ? canvas.getAttribute("height") : null);
+    const h = parseInt(raw, 10);
     return Number.isFinite(h) && h > 0 ? h : 150;
   }
 
@@ -28484,7 +28852,7 @@
     };
 
     function NativeEvent(type, init) {
-      Event.call(this, type, init);
+      _NativeEventCtor.call(this, type, init);
       this._isHarnessEvent = true;
       const target = lastQueriedNode;
       let fallbackDispatched = false;
@@ -29351,10 +29719,20 @@
       if (!obj || typeof obj !== "object") {
         throw new TypeError("Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.");
       }
-      const loc = global.location || (typeof location !== "undefined" ? location : null);
       let orig = "null";
-      if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
-        orig = String(loc.origin);
+      const stack = global.__capsurf_active_window_stack;
+      if (Array.isArray(stack) && stack.length > 0) {
+        const topWin = stack[stack.length - 1];
+        if (topWin && (topWin._opaqueSandbox || (topWin.frameElement && topWin.frameElement._opaqueSandbox))) {
+          orig = "null";
+        } else if (topWin && topWin.location && topWin.location.origin && topWin.location.origin !== "null" && topWin.location.origin !== "about:") {
+          orig = String(topWin.location.origin);
+        }
+      } else {
+        const loc = global.location || (typeof location !== "undefined" ? location : null);
+        if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
+          orig = String(loc.origin);
+        }
       }
       const id = "00000000-0000-4000-8000-" + String(blobUrlCounter++).padStart(12, "0");
       const url = "blob:" + orig + "/" + id;
@@ -31726,20 +32104,28 @@
       }
 
       const pageHeaderNames = new Set();
+      function addPageHeaderName(k) {
+        const lk = String(k).toLowerCase();
+        if (!isForbiddenRequestHeader(lk)) pageHeaderNames.add(lk);
+      }
       function recordPageHeaderNames(src) {
         if (!src) return;
-        if (typeof src.forEach === "function") {
-          src.forEach(function (_v, k) { pageHeaderNames.add(String(k).toLowerCase()); });
+        if (_origHeadersCtor && src instanceof _origHeadersCtor && src._map instanceof Map) {
+          _origReflectApply(_origMapForEach, src._map, [function (_v, k) {
+            addPageHeaderName(k);
+          }]);
+        } else if (typeof src.forEach === "function") {
+          src.forEach(function (_v, k) { addPageHeaderName(k); });
         } else if (Array.isArray(src)) {
           for (let i = 0; i < src.length; i++) {
             if (Array.isArray(src[i]) && src[i].length >= 1) {
-              pageHeaderNames.add(String(src[i][0]).toLowerCase());
+              addPageHeaderName(src[i][0]);
             }
           }
         } else if (typeof src === "object") {
           const ks = Object.keys(src);
           for (let i = 0; i < ks.length; i++) {
-            pageHeaderNames.add(String(ks[i]).toLowerCase());
+            addPageHeaderName(ks[i]);
           }
         }
       }
@@ -32314,14 +32700,65 @@
       }));
     }, "fetch");
 
+    function wrapFetchForHeaders(fn) {
+      if (typeof fn !== "function" || fn.__capsurf_headers_wrapped) return fn;
+      const wrapped = function (resource, init) {
+        const p = fn.apply(this, arguments);
+        if (p && typeof p.then === "function") {
+          return p.then(function (res) {
+            if (res && typeof res === "object" && res.headers && typeof res.headers.keys !== "function") {
+              const origHdrs = res.headers;
+              if (typeof Headers === "function") {
+                const h = new Headers();
+                if (res.type !== "opaque" && res.type !== "opaqueredirect" && origHdrs && typeof origHdrs.get === "function") {
+                  const common = ["content-type", "content-length", "cache-control", "location", "etag", "last-modified"];
+                  for (let i = 0; i < common.length; i++) {
+                    const v = origHdrs.get(common[i]);
+                    if (v !== null && v !== undefined) h.set(common[i], String(v));
+                  }
+                }
+                h._guard = "immutable";
+                try {
+                  res.headers = h;
+                } catch (e) {
+                  Object.defineProperty(res, "headers", { value: h, configurable: true, enumerable: true });
+                }
+              }
+            }
+            return res;
+          });
+        }
+        return p;
+      };
+      wrapped.__capsurf_headers_wrapped = true;
+      return wrapped;
+    }
+
+    let _currentFetchFn = fetchFn;
+    function installFetchAccessor(obj) {
+      if (!obj || typeof obj !== "object") return;
+      try {
+        Object.defineProperty(obj, "fetch", {
+          get: function () { return _currentFetchFn; },
+          set: function (v) { _currentFetchFn = wrapFetchForHeaders(v); },
+          configurable: true,
+          enumerable: true,
+        });
+      } catch (e) {
+        obj.fetch = _currentFetchFn;
+      }
+    }
+
     global.__capsurf_native_fetch = fetchFn;
-    global.fetch = fetchFn;
-    if (typeof window !== "undefined") {
-      window.fetch = fetchFn;
+    installFetchAccessor(global);
+    if (typeof window !== "undefined" && window !== global) {
+      installFetchAccessor(window);
     }
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_native_fetch = fetchFn;
-      globalThis.fetch = fetchFn;
+      if (globalThis !== global && globalThis !== (typeof window !== "undefined" ? window : null)) {
+        installFetchAccessor(globalThis);
+      }
     }
 
     // Lightweight WebSocket shim (enforces Private Network Access & EventTarget lifecycle)
@@ -39957,7 +40394,11 @@
     }
 
     function dispatchKeyEvent(type, key, code, modifiers) {
-      const isShift = (Number(modifiers || 0) & 8) !== 0;
+      const mods = Number(modifiers || 0);
+      const isAlt = (mods & 1) !== 0;
+      const isCtrl = (mods & 2) !== 0;
+      const isMeta = (mods & 4) !== 0;
+      const isShift = (mods & 8) !== 0;
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
       const target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
       if (!target) return 0;
@@ -39970,11 +40411,20 @@
         const evt = new _NativeKeyboardEvent("keyup", {
           key: keyStr,
           code: codeStr,
+          ctrlKey: isCtrl,
+          altKey: isAlt,
+          metaKey: isMeta,
           shiftKey: isShift,
           cancelable: true,
           bubbles: true,
         });
         target.dispatchEvent(evt);
+        if (!evt.defaultPrevented && (keyStr === " " || keyStr === "Spacebar")) {
+          const upTag = String(target.tagName || target.localName || "").toLowerCase();
+          if (upTag === "button" && !target.disabled && typeof target.click === "function") {
+            target.click();
+          }
+        }
         const active = doc ? doc.activeElement : null;
         return (active && typeof active._nid === "number") ? active._nid : 0;
       }
@@ -39989,6 +40439,9 @@
         const kpEvt = new _NativeKeyboardEvent("keypress", {
           key: kpKey,
           code: codeStr,
+          ctrlKey: isCtrl,
+          altKey: isAlt,
+          metaKey: isMeta,
           shiftKey: isShift,
           cancelable: true,
           bubbles: true,
@@ -40025,9 +40478,18 @@
       if (type === "keydown") {
         _lastKeyDownPrevented = false;
         _lastKeyDownKey = keyStr;
+        if (keyStr === "Enter" && target && target.nodeType === 1) {
+          const tTag = String(target.tagName || target.localName || "").toLowerCase();
+          if (tTag === "input" && target._capsurfPreEnterAttr === undefined && typeof target.getAttribute === "function") {
+            target._capsurfPreEnterAttr = target.getAttribute("value");
+          }
+        }
         const evt = new _NativeKeyboardEvent("keydown", {
           key: keyStr,
           code: codeStr,
+          ctrlKey: isCtrl,
+          altKey: isAlt,
+          metaKey: isMeta,
           shiftKey: isShift,
           cancelable: true,
           bubbles: true,
@@ -40097,16 +40559,6 @@
             }
           } else if (keyStr === "Tab") {
             navigateTabFocus(isShift);
-          } else if (keyStr === "ArrowDown") {
-            if (typeof global.scrollBy === "function") global.scrollBy(0, 40);
-          } else if (keyStr === "ArrowUp") {
-            if (typeof global.scrollBy === "function") global.scrollBy(0, -40);
-          } else if (keyStr === "PageDown") {
-            const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
-            if (typeof global.scrollBy === "function") global.scrollBy(0, Math.round(vh * 0.85));
-          } else if (keyStr === "PageUp") {
-            const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
-            if (typeof global.scrollBy === "function") global.scrollBy(0, -Math.round(vh * 0.85));
           } else if (keyStr === "Enter") {
             const active = doc ? doc.activeElement : null;
             if (active) {
@@ -40157,6 +40609,59 @@
                 }
               }
             }
+          } else if (!isAlt && !isMeta) {
+            let isEditingTarget = isTargetContentEditable(target);
+            if (!isEditingTarget && target && target.nodeType === 1) {
+              const edTag = String(target.tagName || target.localName || "").toUpperCase();
+              if (edTag === "INPUT" || edTag === "TEXTAREA" || edTag === "SELECT") {
+                isEditingTarget = true;
+              }
+            }
+            if (!isEditingTarget) {
+              const hasTtyCss = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text.length > 0);
+              const ttyKeyboard = hasTtyCss || (typeof globalThis !== "undefined" && globalThis.__capsurf_tty_keyboard === true);
+              const explicitCellH = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_h === "number" && globalThis.__capsurf_tty_cell_h > 0) ? globalThis.__capsurf_tty_cell_h : 0;
+              const explicitCellW = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 0;
+              const urlHasTtyCss = (typeof globalThis !== "undefined" && globalThis.__capsurf_nav_tty_stripped === true);
+              const cellHeight = explicitCellH || (urlHasTtyCss ? 17 : 0);
+              const cellWidth = explicitCellW || (urlHasTtyCss ? 8 : 0);
+              const lineHeight = cellHeight || 40;
+              const lineWidth = cellWidth || 40;
+              const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+              const pageHeight = Math.max(lineHeight, vh - lineHeight);
+              let sdx = 0;
+              let sdy = 0;
+              if (isCtrl) {
+                if (ttyKeyboard) {
+                  const halfPage = Math.max(lineHeight, Math.floor(vh / (2 * lineHeight)) * lineHeight);
+                  if (keyStr === "f") sdy = pageHeight;
+                  else if (keyStr === "b") sdy = -pageHeight;
+                  else if (keyStr === "d") sdy = halfPage;
+                  else if (keyStr === "u") sdy = -halfPage;
+                }
+              } else {
+                const isSpace = keyStr === " " || keyStr === "Spacebar";
+                const tgtTag = (target && target.nodeType === 1) ? String(target.tagName || target.localName || "").toUpperCase() : "";
+                if (!(isSpace && (tgtTag === "BUTTON" || tgtTag === "SUMMARY"))) {
+                  if (keyStr === "ArrowDown" || (ttyKeyboard && !isShift && keyStr === "j")) {
+                    sdy = lineHeight;
+                  } else if (keyStr === "ArrowUp" || (ttyKeyboard && !isShift && keyStr === "k")) {
+                    sdy = -lineHeight;
+                  } else if (keyStr === "ArrowRight" || (ttyKeyboard && !isShift && keyStr === "l")) {
+                    sdx = lineWidth;
+                  } else if (keyStr === "ArrowLeft" || (ttyKeyboard && !isShift && keyStr === "h")) {
+                    sdx = -lineWidth;
+                  } else if (keyStr === "PageDown" || (isSpace && !isShift)) {
+                    sdy = pageHeight;
+                  } else if (keyStr === "PageUp" || (isSpace && isShift)) {
+                    sdy = -pageHeight;
+                  }
+                }
+              }
+              if ((sdx !== 0 || sdy !== 0) && typeof global.scrollBy === "function") {
+                global.scrollBy(sdx, sdy);
+              }
+            }
           }
         }
 
@@ -40180,6 +40685,12 @@
 
     function getWindowOrigin(win) {
       try {
+        if (win && (win._opaqueSandbox || (win.frameElement && win.frameElement._opaqueSandbox))) {
+          return "null";
+        }
+        if (win && typeof win.origin === "string" && win.origin) {
+          return win.origin;
+        }
         const loc = win && win.location;
         if (loc) {
           if (typeof loc.origin === "string" && loc.origin && loc.origin !== "about:") {
@@ -40514,7 +41025,7 @@
     }
     function activateClickedElement(target, isTrustedClick, x, y, detail) {
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
-      const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+      const MouseCtor = typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor;
       const activateControl = function (ctrl, trusted) {
         if (!ctrl || ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled"))) return;
         const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
@@ -40522,8 +41033,8 @@
           const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
           if (iType === "checkbox") {
             ctrl.checked = !ctrl.checked;
-            const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
-            const chEv = new Event("change", { bubbles: true, cancelable: false });
+            const inEv = new _NativeEventCtor("input", { bubbles: true, cancelable: false, composed: true });
+            const chEv = new _NativeEventCtor("change", { bubbles: true, cancelable: false });
             if (trusted) {
               _dispatchTrusted(ctrl, inEv);
               _dispatchTrusted(ctrl, chEv);
@@ -40547,8 +41058,8 @@
             const wasChecked = Boolean(ctrl.checked);
             ctrl.checked = true;
             if (!wasChecked) {
-              const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
-              const chEv = new Event("change", { bubbles: true, cancelable: false });
+              const inEv = new _NativeEventCtor("input", { bubbles: true, cancelable: false, composed: true });
+              const chEv = new _NativeEventCtor("change", { bubbles: true, cancelable: false });
               if (trusted) {
                 _dispatchTrusted(ctrl, inEv);
                 _dispatchTrusted(ctrl, chEv);
@@ -41212,6 +41723,15 @@
       }
 
       function currentDocOrigin() {
+        const stack = global.__capsurf_active_window_stack;
+        if (Array.isArray(stack) && stack.length > 0) {
+          const w = stack[stack.length - 1];
+          if (w && (w._opaqueSandbox || (w.frameElement && w.frameElement._opaqueSandbox))) {
+            return "null";
+          }
+          const wo = getWindowOrigin(w);
+          if (wo && wo !== "null") return wo;
+        }
         if (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_origin && globalThis.__capsurf_doc_origin !== "") {
           return String(globalThis.__capsurf_doc_origin);
         }
@@ -41223,6 +41743,12 @@
       }
 
       function currentDocBase() {
+        const stack = global.__capsurf_active_window_stack;
+        if (Array.isArray(stack) && stack.length > 0) {
+          const w = stack[stack.length - 1];
+          if (w && w.document && typeof w.document.baseURI === "string" && w.document.baseURI) return w.document.baseURI;
+          if (w && w.location && w.location.href) return String(w.location.href);
+        }
         const doc = global.document || (typeof document !== "undefined" ? document : null);
         if (doc && typeof doc.baseURI === "string" && doc.baseURI) return doc.baseURI;
         const loc = global.location || (typeof location !== "undefined" ? location : null);
@@ -41440,9 +41966,13 @@
         liveWorkers.set(id, ws);
 
         const workerName = opts.name === undefined ? "" : String(opts.name);
+        const stackTop = (Array.isArray(global.__capsurf_active_window_stack) && global.__capsurf_active_window_stack.length > 0)
+          ? global.__capsurf_active_window_stack[global.__capsurf_active_window_stack.length - 1]
+          : null;
         const isOopif = Boolean(
           opts.__capsurf_oopif ||
-          (typeof globalThis !== "undefined" && globalThis.self && globalThis.self.__capsurf_is_oopif)
+          (stackTop && stackTop.__capsurf_is_oopif) ||
+          (typeof globalThis !== "undefined" && (globalThis.__capsurf_is_oopif || (globalThis.self && globalThis.self.__capsurf_is_oopif)))
         );
         const ua = (global.navigator && global.navigator.userAgent) ? String(global.navigator.userAgent) : "";
         const docCsp = (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_csp) ? String(globalThis.__capsurf_doc_csp) : "";
@@ -42772,6 +43302,9 @@
       }, "getAnimations");
 
       global.Element.prototype.getContext = markNative(function (type) {
+        if (typeof upgradeElement === "function") {
+          upgradeElement(this);
+        }
         const t = String(type).toLowerCase();
         if (t === "webgl" || t === "webgl2" || t === "experimental-webgl") {
           return null;
@@ -42896,15 +43429,28 @@
 
     function upgradeElement(el) {
       if (!el || typeof el !== "object") return el;
+      if (typeof isParsedNode === "function" && isParsedNode(el)) return el;
       hideInternalNid(el);
       if (el.nodeType === 3) {
         if (global.Text && global.Text.prototype && !global.Text.prototype.isPrototypeOf(el)) {
+          if (el._data === undefined) {
+            try {
+              const t = el.textContent;
+              if (typeof t === "string") el._data = t;
+            } catch (e) {}
+          }
           Object.setPrototypeOf(el, global.Text.prototype);
         }
         return el;
       }
       if (el.nodeType === 8) {
         if (global.Comment && global.Comment.prototype && !global.Comment.prototype.isPrototypeOf(el)) {
+          if (el._data === undefined) {
+            try {
+              const t = el.textContent;
+              if (typeof t === "string") el._data = t;
+            } catch (e) {}
+          }
           Object.setPrototypeOf(el, global.Comment.prototype);
         }
         return el;

@@ -1224,23 +1224,6 @@ export class Page {
     this.historyEntries = [{ id: 1, url, userTypedURL: url, title: "" }];
     this.historyIndex = 0;
 
-    this.cdp.emit("Network.requestWillBeSent", {
-      requestId: String(Date.now() + Math.random()),
-      loaderId: "main-loader",
-      documentURL: url,
-      request: {
-        url: url,
-        method: "GET",
-        headers: {},
-        initialPriority: "VeryHigh",
-        referrerPolicy: "strict-origin-when-cross-origin",
-      },
-      timestamp: Date.now() / 1000,
-      wallTime: Date.now() / 1000,
-      initiator: { type: "other" },
-      type: "Document",
-    });
-
     let targetNavUrl = url;
     let respondedStatus: number | null = null;
     if (this._requestInterceptionEnabled && this.listenerCount("request") > 0) {
@@ -1461,22 +1444,6 @@ export class Page {
       if (pending && pending !== "about:blank") {
         autoReloadCount++;
         this._url = pending;
-        this.cdp.emit("Network.requestWillBeSent", {
-          requestId: String(Date.now() + Math.random()),
-          loaderId: "main-loader",
-          documentURL: pending,
-          request: {
-            url: pending,
-            method: "GET",
-            headers: {},
-            initialPriority: "VeryHigh",
-            referrerPolicy: "strict-origin-when-cross-origin",
-          },
-          timestamp: Date.now() / 1000,
-          wallTime: Date.now() / 1000,
-          initiator: { type: "other" },
-          type: "Document",
-        });
         await this.cdp.send("Page.navigate", { ...ctxParams, url: pending });
         try {
           await this.cdp.send("Runtime.evaluate", {

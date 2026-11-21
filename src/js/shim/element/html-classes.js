@@ -1319,9 +1319,12 @@ function installHtmlClasses(global) {
       } catch (e) {}
     };
     try {
-      nativeFetch(str).then(function (res) {
+      const hasCrossOriginAttr = typeof self.hasAttribute === "function"
+        ? self.hasAttribute("crossorigin")
+        : (self.getAttribute && self.getAttribute("crossorigin") !== null);
+      nativeFetch(str, hasCrossOriginAttr ? undefined : { mode: "no-cors" }).then(function (res) {
         if (self._imgLoadSeq !== seq) return;
-        if (!res || !res.ok) {
+        if (!res || (!res.ok && res.type !== "opaque")) {
           dispatchImgEvent(false, null);
           return;
         }
@@ -1853,6 +1856,7 @@ function installHtmlClasses(global) {
         resolveAndNavigate(v);
       },
       get origin() {
+        if (iframeEl && iframeEl._opaqueSandbox) return "null";
         try {
           return new URL(current).origin;
         } catch (e) {
@@ -2210,22 +2214,74 @@ function installHtmlClasses(global) {
 
     function runCode(code, isModule, scriptUrl) {
       if (!code || !code.trim()) return;
-      withIframeGlobals(function () {
-        if (isModule && modEvalFn) {
-          const errMsg = modEvalFn(code, scriptUrl || docUrl);
-          if (errMsg && typeof console !== "undefined" && console.error) {
-            try { console.error(errMsg); } catch (_) {}
+      const stack = global.__capsurf_active_window_stack;
+      if (Array.isArray(stack)) stack.push(win);
+      try {
+        if (!isModule) {
+          try {
+            const opaqueStorage = new Proxy({}, {
+              get: function () {
+                throw new DOMException(
+                  "Failed to read storage from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                  "SecurityError"
+                );
+              },
+            });
+            const lsVal = win._opaqueSandbox ? opaqueStorage : win.localStorage;
+            const ssVal = win._opaqueSandbox ? opaqueStorage : win.sessionStorage;
+            const fn = new Function(
+              "window", "document", "location", "fetch", "self", "globalThis",
+              "addEventListener", "removeEventListener", "postMessage",
+              "parent", "top", "frames", "frameElement",
+              "origin", "localStorage", "sessionStorage",
+              code
+            );
+            fn.call(
+              win,
+              win,
+              doc,
+              win.location,
+              win.fetch,
+              win,
+              win,
+              win.addEventListener.bind(win),
+              win.removeEventListener.bind(win),
+              win.postMessage.bind(win),
+              win.parent,
+              win.top,
+              win.frames,
+              win.frameElement,
+              win.origin,
+              lsVal,
+              ssVal
+            );
+            return;
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) {
+              try { console.error(e); } catch (_) {}
+            }
+            return;
           }
-          return;
         }
-        try {
-          (0, eval)(code);
-        } catch (e) {
-          if (typeof console !== "undefined" && console.error) {
-            try { console.error(e); } catch (_) {}
+        withIframeGlobals(function () {
+          if (isModule && modEvalFn) {
+            const errMsg = modEvalFn(code, scriptUrl || docUrl);
+            if (errMsg && typeof console !== "undefined" && console.error) {
+              try { console.error(errMsg); } catch (_) {}
+            }
+            return;
           }
-        }
-      });
+          try {
+            (0, eval)(code);
+          } catch (e) {
+            if (typeof console !== "undefined" && console.error) {
+              try { console.error(e); } catch (_) {}
+            }
+          }
+        });
+      } finally {
+        if (Array.isArray(stack)) stack.pop();
+      }
     }
 
     function fetchExternalScript(resolvedSrc) {
@@ -2349,12 +2405,32 @@ function installHtmlClasses(global) {
           if (!allowScripts) {
             stripInlineEventHandlers(newDoc);
           }
+          if (iframeEl._opaqueSandbox) {
+            try {
+              Object.defineProperty(newDoc, "cookie", {
+                configurable: true,
+                get: function () {
+                  throw new DOMException(
+                    "Failed to read the 'cookie' property from 'Document': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                    "SecurityError"
+                  );
+                },
+                set: function () {
+                  throw new DOMException(
+                    "Failed to set the 'cookie' property on 'Document': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+                    "SecurityError"
+                  );
+                },
+              });
+            } catch (e) {}
+          }
         }
       }
     } catch (e) {}
 
     if (newDoc) {
       if (iframeEl._contentWindow) {
+        iframeEl._contentWindow._opaqueSandbox = iframeEl._opaqueSandbox;
         iframeEl._contentWindow.document = newDoc;
         ensureIframeLocationFacade(iframeEl._contentWindow, iframeEl, opts.isSrcdoc ? "about:srcdoc" : resolvedUrl);
         if (!opts.isSrcdoc && resolvedUrl && typeof URL === "function") {
@@ -2375,6 +2451,7 @@ function installHtmlClasses(global) {
         } catch (e) {}
       }
       iframeEl._contentDocument = newDoc;
+      iframeEl._hasLoadedDocument = true;
       if (iframeEl._contentWindow && allowScripts) {
         return executeIframeInlineScripts(iframeEl._contentWindow, newDoc, opts);
       }
@@ -2401,6 +2478,10 @@ function installHtmlClasses(global) {
     if (!iframeEl) return;
     if (!iframeEl._contentWindow) {
       getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+    } else if (iframeEl._hasLoadedDocument && typeof iframeEl._contentWindow.dispatchEvent === "function") {
+      try {
+        iframeEl._contentWindow.dispatchEvent(new Event("unload", { bubbles: false, cancelable: false }));
+      } catch (e) {}
     }
     const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
@@ -2620,23 +2701,70 @@ function installHtmlClasses(global) {
         const list = frameListeners.get(String(evt.type));
         if (!list || list.length === 0) return !evt.defaultPrevented;
         const snapshot = list.slice();
-        for (let i = 0; i < snapshot.length; i++) {
-          const item = snapshot[i];
-          if (item.once) {
-            const idx = list.indexOf(item);
-            if (idx >= 0) list.splice(idx, 1);
-          }
-          try {
-            if (typeof item.listener === "function") {
-              item.listener.call(contentWindow, evt);
-            } else if (item.listener && typeof item.listener.handleEvent === "function") {
-              item.listener.handleEvent(evt);
+        const stack = global.__capsurf_active_window_stack;
+        if (Array.isArray(stack)) stack.push(contentWindow);
+        try {
+          for (let i = 0; i < snapshot.length; i++) {
+            const item = snapshot[i];
+            if (item.once) {
+              const idx = list.indexOf(item);
+              if (idx >= 0) list.splice(idx, 1);
             }
-          } catch (e) {}
+            try {
+              if (typeof item.listener === "function") {
+                item.listener.call(contentWindow, evt);
+              } else if (item.listener && typeof item.listener.handleEvent === "function") {
+                item.listener.handleEvent(evt);
+              }
+            } catch (e) {}
+          }
+        } finally {
+          if (Array.isArray(stack)) stack.pop();
         }
         return !evt.defaultPrevented;
       },
     };
+
+    Object.defineProperty(contentWindow, "origin", {
+      enumerable: true,
+      configurable: true,
+      get: function () {
+        if (iframeEl._opaqueSandbox) return "null";
+        try {
+          return (contentWindow.location && contentWindow.location.origin) || "null";
+        } catch (e) {
+          return "null";
+        }
+      },
+    });
+    Object.defineProperty(contentWindow, "localStorage", {
+      enumerable: true,
+      configurable: true,
+      get: function () {
+        if (iframeEl._opaqueSandbox) {
+          throw new DOMException(
+            "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+            "SecurityError"
+          );
+        }
+        const pg = typeof window !== "undefined" ? window : globalThis;
+        return pg.localStorage;
+      },
+    });
+    Object.defineProperty(contentWindow, "sessionStorage", {
+      enumerable: true,
+      configurable: true,
+      get: function () {
+        if (iframeEl._opaqueSandbox) {
+          throw new DOMException(
+            "Failed to read the 'sessionStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+            "SecurityError"
+          );
+        }
+        const pg = typeof window !== "undefined" ? window : globalThis;
+        return pg.sessionStorage;
+      },
+    });
 
     contentWindow.self = contentWindow;
     contentWindow.window = contentWindow;
@@ -2798,7 +2926,12 @@ function installHtmlClasses(global) {
     },
     set: function (v) {
       const strVal = String(v);
-      nativeSetAttribute.call(this, "src", strVal);
+      this._suppressSetAttrNav = true;
+      try {
+        nativeSetAttribute.call(this, "src", strVal);
+      } finally {
+        this._suppressSetAttrNav = false;
+      }
       if (this.isConnected && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
         let resolved = "about:blank";

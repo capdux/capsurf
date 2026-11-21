@@ -513,6 +513,19 @@ function installFormElement(global) {
       const c = list[i];
       const tag = (c.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea") {
+        if (tag === "input" && c._capsurfPreEnterAttr !== undefined) {
+          if (typeof c.getAttribute === "function") {
+            const curAttr = c.getAttribute("value");
+            if (curAttr === (c._capsurfPreEnterAttr || "") + "\\r") {
+              if (c._capsurfPreEnterAttr === null && typeof c.removeAttribute === "function") {
+                c.removeAttribute("value");
+              } else if (typeof c.setAttribute === "function") {
+                c.setAttribute("value", c._capsurfPreEnterAttr);
+              }
+            }
+          }
+          delete c._capsurfPreEnterAttr;
+        }
         if (c.defaultValue !== undefined) {
           c.value = c.defaultValue;
         } else if (typeof c.getAttribute === "function") {

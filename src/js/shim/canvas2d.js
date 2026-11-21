@@ -139,13 +139,15 @@ function formatColor(rgba) {
 
 function getCanvasWidth(canvas) {
   if (!canvas) return 300;
-  const w = parseInt(canvas.width, 10);
+  const raw = canvas.width !== undefined ? canvas.width : (typeof canvas.getAttribute === "function" ? canvas.getAttribute("width") : null);
+  const w = parseInt(raw, 10);
   return Number.isFinite(w) && w > 0 ? w : 300;
 }
 
 function getCanvasHeight(canvas) {
   if (!canvas) return 150;
-  const h = parseInt(canvas.height, 10);
+  const raw = canvas.height !== undefined ? canvas.height : (typeof canvas.getAttribute === "function" ? canvas.getAttribute("height") : null);
+  const h = parseInt(raw, 10);
   return Number.isFinite(h) && h > 0 ? h : 150;
 }
 

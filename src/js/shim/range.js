@@ -479,6 +479,9 @@ Range.prototype.createContextualFragment = function (fragmentHtml) {
 
   while (source && source.firstChild) {
     const ch = source.firstChild;
+    if (typeof source.removeChild === "function") {
+      try { source.removeChild(ch); } catch (e) {}
+    }
     frag.appendChild(typeof upgradeElement === "function" ? upgradeElement(ch) : ch);
   }
 

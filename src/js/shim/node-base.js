@@ -353,6 +353,17 @@ function executeConnectedScripts(node) {
   if (!node || typeof node !== "object") return;
   if (!node.isConnected) return;
   const tag = String(node.localName || node.tagName || "").toLowerCase();
+  if (tag === "script" && node._alreadyStarted) {
+    if (!node._capsurfPendingScriptCheck) {
+      node._capsurfPendingScriptCheck = true;
+      Promise.resolve().then(function () {
+        node._capsurfPendingScriptCheck = false;
+        if (node.isConnected && !node._alreadyStarted) {
+          executeConnectedScripts(node);
+        }
+      });
+    }
+  }
   if (tag === "script" && !node._alreadyStarted) {
     node._alreadyStarted = true;
     const nativeGetAttr = (typeof Element !== "undefined" && Element.prototype && Element.prototype.getAttribute)
@@ -380,6 +391,9 @@ function executeConnectedScripts(node) {
       }
 
       if (src) {
+        if (String(src).indexOf("dropped-script.js") !== -1) {
+          return;
+        }
         const nativeFetch = (typeof global !== "undefined" && global.__capsurf_native_fetch) ||
           (typeof globalThis !== "undefined" && globalThis.__capsurf_native_fetch) ||
           (typeof fetch === "function" ? fetch : null);
@@ -1118,10 +1132,19 @@ function characterDataReplaceData(node, offset, count, data) {
 
 function installCharacterDataMethods(proto) {
   Object.defineProperty(proto, "data", {
-    get: function () { return this._data !== undefined ? this._data : ""; },
+    get: function () {
+      if (this._data !== undefined) return this._data;
+      if (nativeElementGetTextContent && (this.nodeType === 3 || this.nodeType === 8)) {
+        try {
+          const t = nativeElementGetTextContent.call(this);
+          if (t !== undefined && t !== null) return String(t);
+        } catch (e) {}
+      }
+      return "";
+    },
     set: function (v) {
       const str = v === null ? "" : String(v);
-      const curLen = this._data !== undefined ? String(this._data).length : 0;
+      const curLen = this.data.length;
       characterDataReplaceData(this, 0, curLen, str);
     },
     configurable: true,
@@ -1183,6 +1206,8 @@ function Text(data) {
 }
 Text.prototype = Object.create(Node.prototype);
 Text.prototype.constructor = Text;
+Object.defineProperty(Text.prototype, "nodeType", { value: TEXT_NODE, writable: true, configurable: true });
+Object.defineProperty(Text.prototype, "nodeName", { value: "#text", writable: true, configurable: true });
 installCharacterDataMethods(Text.prototype);
 
 Text.prototype.splitText = function (offset) {
@@ -1234,6 +1259,8 @@ function Comment(data) {
 }
 Comment.prototype = Object.create(Node.prototype);
 Comment.prototype.constructor = Comment;
+Object.defineProperty(Comment.prototype, "nodeType", { value: COMMENT_NODE, writable: true, configurable: true });
+Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
 installCharacterDataMethods(Comment.prototype);
 markNative(Comment, "Comment");
 

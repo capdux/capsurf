@@ -651,6 +651,23 @@ ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
   return null;
 };
 
+ParsedElement.prototype.addEventListener = function (type, listener, options) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.addEventListener) {
+    return EventTarget.prototype.addEventListener.call(this, type, listener, options);
+  }
+};
+ParsedElement.prototype.removeEventListener = function (type, listener, options) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.removeEventListener) {
+    return EventTarget.prototype.removeEventListener.call(this, type, listener, options);
+  }
+};
+ParsedElement.prototype.dispatchEvent = function (event) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.dispatchEvent) {
+    return EventTarget.prototype.dispatchEvent.call(this, event);
+  }
+  return true;
+};
+
 function ParsedDocument(contentType, compatMode) {
   this.nodeType = DOCUMENT_NODE;
   this.nodeName = "#document";
@@ -881,6 +898,23 @@ ParsedDocument.prototype.createExpression = function (expression, resolver) {
 
 ParsedDocument.prototype.lookupNamespaceURI = function (prefix) {
   return this.documentElement ? this.documentElement.lookupNamespaceURI(prefix) : null;
+};
+
+ParsedDocument.prototype.addEventListener = function (type, listener, options) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.addEventListener) {
+    return EventTarget.prototype.addEventListener.call(this, type, listener, options);
+  }
+};
+ParsedDocument.prototype.removeEventListener = function (type, listener, options) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.removeEventListener) {
+    return EventTarget.prototype.removeEventListener.call(this, type, listener, options);
+  }
+};
+ParsedDocument.prototype.dispatchEvent = function (event) {
+  if (typeof EventTarget === "function" && EventTarget.prototype.dispatchEvent) {
+    return EventTarget.prototype.dispatchEvent.call(this, event);
+  }
+  return true;
 };
 
 function parseDocument(str, mime) {

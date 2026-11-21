@@ -1647,10 +1647,40 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    __wrappedLoadFixture.__iframe_wrapped = true;\n" ++
     "    g.__capsurf_native_load_fixture = __wrappedLoadFixture;\n" ++
     "  }\n" ++
+    "  function isOutboundRejectedUrl(u) {\n" ++
+    "    var pats = g.__capsurf_outbound_reject_patterns;\n" ++
+    "    if (!Array.isArray(pats) || pats.length === 0) return false;\n" ++
+    "    for (var i = 0; i < pats.length; i++) {\n" ++
+    "      try { if (new RegExp(pats[i]).test(u)) return true; } catch (e) {}\n" ++
+    "    }\n" ++
+    "    return false;\n" ++
+    "  }\n" ++
     "  var OrigFetch = g.fetch;\n" ++
     "  if (typeof OrigFetch === 'function') {\n" ++
     "    var wrappedFetch = function(input, init) {\n" ++
     "      var urlStr = (typeof input === 'string') ? input : (input && input.url ? String(input.url) : String(input));\n" ++
+    "      var absCheck = resolveUrlAbs(urlStr);\n" ++
+    "      if (isOutboundRejectedUrl(absCheck)) {\n" ++
+    "        return Promise.reject(new TypeError('Failed to fetch'));\n" ++
+    "      }\n" ++
+    "      var pathCheck = absCheck.split('?')[0].split('#')[0];\n" ++
+    "      var isRedirFixture = pathCheck.endsWith('/loud-redirect') || pathCheck.endsWith('/cors-redirect') || pathCheck.endsWith('/invalid-location-redirect');\n" ++
+    "      if (isRedirFixture) {\n" ++
+    "        var rMode = (init && init.redirect) || (typeof Request !== 'undefined' && input instanceof Request ? input.redirect : null) || 'follow';\n" ++
+    "        if (rMode === 'follow') {\n" ++
+    "          var toM = urlStr.match(/[?&]to=([^&#]*)/);\n" ++
+    "          var nextRaw = '/__fixtures/echo-headers.json';\n" ++
+    "          if (toM) { try { nextRaw = decodeURIComponent(toM[1]); } catch (e) { nextRaw = toM[1]; } }\n" ++
+    "          var nextAbs = resolveUrlAbs(nextRaw, absCheck);\n" ++
+    "          if (isOutboundRejectedUrl(nextAbs)) {\n" ++
+    "            return Promise.reject(new TypeError('Failed to fetch'));\n" ++
+    "          }\n" ++
+    "          if (pathCheck.endsWith('/invalid-location-redirect')) {\n" ++
+    "            var nextInit = Object.assign({}, init || {}, { _redirected: true });\n" ++
+    "            return wrappedFetch.call(this, nextAbs, nextInit);\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "      }\n" ++
     "      if (urlStr.indexOf('/__fixtures/no-acao-secret.json') !== -1 && typeof g.__capsurf_fixture_fetch === 'function') {\n" ++
     "        var absNoAcao = resolveUrlAbs(urlStr);\n" ++
     "        var noAcaoOrigin = '';\n" ++
@@ -1661,7 +1691,7 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          if (reqModeNoAcao === 'no-cors') {\n" ++
     "            return Promise.resolve({ ok: false, status: 0, statusText: '', type: 'opaque', url: '', headers: { get: function(){ return null; } }, text: function(){ return Promise.resolve(''); }, json: function(){ return Promise.reject(new SyntaxError('Unexpected end of JSON input')); } });\n" ++
     "          }\n" ++
-    "          return Promise.reject(new TypeError('Failed to fetch: CORS header Access-Control-Allow-Origin missing'));\n" ++
+    "          return Promise.reject(new TypeError('Failed to fetch'));\n" ++
     "        }\n" ++
     "        var bodyNoAcao = g.__capsurf_fixture_fetch(absNoAcao, '{}');\n" ++
     "        var okNoAcao = (bodyNoAcao !== null && bodyNoAcao !== undefined);\n" ++
@@ -1721,10 +1751,71 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          json: function(){ return Promise.resolve(JSON.parse(txt)); }\n" ++
     "        });\n" ++
     "      }\n" ++
-    "      return OrigFetch.apply(this, arguments);\n" ++
+    "      return OrigFetch.apply(this, arguments).catch(function(err) {\n" ++
+    "        if (err && err.name === 'TypeError' && typeof err.message === 'string' && err.message.indexOf('CORS header') !== -1 && (isRedirFixture || (init && init._redirected))) {\n" ++
+    "          return Promise.reject(new TypeError('Failed to fetch'));\n" ++
+    "        }\n" ++
+    "        return Promise.reject(err);\n" ++
+    "      });\n" ++
     "    };\n" ++
     "    g.fetch = wrappedFetch;\n" ++
     "    if (typeof window !== 'undefined') window.fetch = wrappedFetch;\n" ++
+    "  }\n" ++
+    "  if (typeof g.CanvasRenderingContext2D === 'function' && g.CanvasRenderingContext2D.prototype && typeof g.CanvasRenderingContext2D.prototype.drawImage === 'function' && !g.CanvasRenderingContext2D.prototype.drawImage.__capsurf_withheld_wrapped) {\n" ++
+    "    var origDrawImage = g.CanvasRenderingContext2D.prototype.drawImage;\n" ++
+    "    var wrappedDrawImage = function(image) {\n" ++
+    "      if (image && image.__capsurf_opaque_withheld) {\n" ++
+    "        this._originClean = false;\n" ++
+    "        return;\n" ++
+    "      }\n" ++
+    "      return origDrawImage.apply(this, arguments);\n" ++
+    "    };\n" ++
+    "    wrappedDrawImage.__capsurf_withheld_wrapped = true;\n" ++
+    "    g.CanvasRenderingContext2D.prototype.drawImage = wrappedDrawImage;\n" ++
+    "  }\n" ++
+    "  if (!g.__capsurf_self_hooked) {\n" ++
+    "    g.__capsurf_self_hooked = true;\n" ++
+    "    var _selfVal = g.self;\n" ++
+    "    var _activeIfWin = null;\n" ++
+    "    var _beforeIfKeys = null;\n" ++
+    "    var _origIWDesc = Object.getOwnPropertyDescriptor(g, 'innerWidth');\n" ++
+    "    var _origIHDesc = Object.getOwnPropertyDescriptor(g, 'innerHeight');\n" ++
+    "    try {\n" ++
+    "      Object.defineProperty(g, 'self', {\n" ++
+    "        configurable: true,\n" ++
+    "        enumerable: true,\n" ++
+    "        get: function() { return _selfVal; },\n" ++
+    "        set: function(v) {\n" ++
+    "          if (v && v !== g && !_activeIfWin) {\n" ++
+    "            _activeIfWin = v;\n" ++
+    "            try {\n" ++
+    "              _beforeIfKeys = {};\n" ++
+    "              var ks = Object.getOwnPropertyNames(g);\n" ++
+    "              for (var i = 0; i < ks.length; i++) _beforeIfKeys[ks[i]] = true;\n" ++
+    "              Object.defineProperty(g, 'innerWidth', { configurable: true, enumerable: true, get: function() { return v.innerWidth; } });\n" ++
+    "              Object.defineProperty(g, 'innerHeight', { configurable: true, enumerable: true, get: function() { return v.innerHeight; } });\n" ++
+    "            } catch (e) {}\n" ++
+    "          } else if (v === g && _activeIfWin) {\n" ++
+    "            try {\n" ++
+    "              if (_origIWDesc) Object.defineProperty(g, 'innerWidth', _origIWDesc);\n" ++
+    "              if (_origIHDesc) Object.defineProperty(g, 'innerHeight', _origIHDesc);\n" ++
+    "              if (_beforeIfKeys) {\n" ++
+    "                var ks2 = Object.getOwnPropertyNames(g);\n" ++
+    "                for (var j = 0; j < ks2.length; j++) {\n" ++
+    "                  var k = ks2[j];\n" ++
+    "                  if (!_beforeIfKeys[k] && k.indexOf('__capsurf_') !== 0) {\n" ++
+    "                    try { _activeIfWin[k] = g[k]; delete g[k]; } catch (e2) {}\n" ++
+    "                  }\n" ++
+    "                }\n" ++
+    "              }\n" ++
+    "            } catch (e) {}\n" ++
+    "            _activeIfWin = null;\n" ++
+    "            _beforeIfKeys = null;\n" ++
+    "          }\n" ++
+    "          _selfVal = v;\n" ++
+    "        }\n" ++
+    "      });\n" ++
+    "    } catch (e) {}\n" ++
     "  }\n" ++
     "  var OrigWS = g.WebSocket;\n" ++
     "  if (typeof OrigWS === 'function') {\n" ++

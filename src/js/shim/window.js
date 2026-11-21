@@ -20,7 +20,7 @@ function installWindow(global) {
   };
 
   function NativeEvent(type, init) {
-    Event.call(this, type, init);
+    _NativeEventCtor.call(this, type, init);
     this._isHarnessEvent = true;
     const target = lastQueriedNode;
     let fallbackDispatched = false;
@@ -887,10 +887,20 @@ function installWindow(global) {
     if (!obj || typeof obj !== "object") {
       throw new TypeError("Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.");
     }
-    const loc = global.location || (typeof location !== "undefined" ? location : null);
     let orig = "null";
-    if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
-      orig = String(loc.origin);
+    const stack = global.__capsurf_active_window_stack;
+    if (Array.isArray(stack) && stack.length > 0) {
+      const topWin = stack[stack.length - 1];
+      if (topWin && (topWin._opaqueSandbox || (topWin.frameElement && topWin.frameElement._opaqueSandbox))) {
+        orig = "null";
+      } else if (topWin && topWin.location && topWin.location.origin && topWin.location.origin !== "null" && topWin.location.origin !== "about:") {
+        orig = String(topWin.location.origin);
+      }
+    } else {
+      const loc = global.location || (typeof location !== "undefined" ? location : null);
+      if (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") {
+        orig = String(loc.origin);
+      }
     }
     const id = "00000000-0000-4000-8000-" + String(blobUrlCounter++).padStart(12, "0");
     const url = "blob:" + orig + "/" + id;
@@ -3262,20 +3272,28 @@ function installWindow(global) {
     }
 
     const pageHeaderNames = new Set();
+    function addPageHeaderName(k) {
+      const lk = String(k).toLowerCase();
+      if (!isForbiddenRequestHeader(lk)) pageHeaderNames.add(lk);
+    }
     function recordPageHeaderNames(src) {
       if (!src) return;
-      if (typeof src.forEach === "function") {
-        src.forEach(function (_v, k) { pageHeaderNames.add(String(k).toLowerCase()); });
+      if (_origHeadersCtor && src instanceof _origHeadersCtor && src._map instanceof Map) {
+        _origReflectApply(_origMapForEach, src._map, [function (_v, k) {
+          addPageHeaderName(k);
+        }]);
+      } else if (typeof src.forEach === "function") {
+        src.forEach(function (_v, k) { addPageHeaderName(k); });
       } else if (Array.isArray(src)) {
         for (let i = 0; i < src.length; i++) {
           if (Array.isArray(src[i]) && src[i].length >= 1) {
-            pageHeaderNames.add(String(src[i][0]).toLowerCase());
+            addPageHeaderName(src[i][0]);
           }
         }
       } else if (typeof src === "object") {
         const ks = Object.keys(src);
         for (let i = 0; i < ks.length; i++) {
-          pageHeaderNames.add(String(ks[i]).toLowerCase());
+          addPageHeaderName(ks[i]);
         }
       }
     }
@@ -3850,14 +3868,65 @@ function installWindow(global) {
     }));
   }, "fetch");
 
+  function wrapFetchForHeaders(fn) {
+    if (typeof fn !== "function" || fn.__capsurf_headers_wrapped) return fn;
+    const wrapped = function (resource, init) {
+      const p = fn.apply(this, arguments);
+      if (p && typeof p.then === "function") {
+        return p.then(function (res) {
+          if (res && typeof res === "object" && res.headers && typeof res.headers.keys !== "function") {
+            const origHdrs = res.headers;
+            if (typeof Headers === "function") {
+              const h = new Headers();
+              if (res.type !== "opaque" && res.type !== "opaqueredirect" && origHdrs && typeof origHdrs.get === "function") {
+                const common = ["content-type", "content-length", "cache-control", "location", "etag", "last-modified"];
+                for (let i = 0; i < common.length; i++) {
+                  const v = origHdrs.get(common[i]);
+                  if (v !== null && v !== undefined) h.set(common[i], String(v));
+                }
+              }
+              h._guard = "immutable";
+              try {
+                res.headers = h;
+              } catch (e) {
+                Object.defineProperty(res, "headers", { value: h, configurable: true, enumerable: true });
+              }
+            }
+          }
+          return res;
+        });
+      }
+      return p;
+    };
+    wrapped.__capsurf_headers_wrapped = true;
+    return wrapped;
+  }
+
+  let _currentFetchFn = fetchFn;
+  function installFetchAccessor(obj) {
+    if (!obj || typeof obj !== "object") return;
+    try {
+      Object.defineProperty(obj, "fetch", {
+        get: function () { return _currentFetchFn; },
+        set: function (v) { _currentFetchFn = wrapFetchForHeaders(v); },
+        configurable: true,
+        enumerable: true,
+      });
+    } catch (e) {
+      obj.fetch = _currentFetchFn;
+    }
+  }
+
   global.__capsurf_native_fetch = fetchFn;
-  global.fetch = fetchFn;
-  if (typeof window !== "undefined") {
-    window.fetch = fetchFn;
+  installFetchAccessor(global);
+  if (typeof window !== "undefined" && window !== global) {
+    installFetchAccessor(window);
   }
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_native_fetch = fetchFn;
-    globalThis.fetch = fetchFn;
+    if (globalThis !== global && globalThis !== (typeof window !== "undefined" ? window : null)) {
+      installFetchAccessor(globalThis);
+    }
   }
 
   // Lightweight WebSocket shim (enforces Private Network Access & EventTarget lifecycle)
@@ -11493,7 +11562,11 @@ const CSS_TYPED_OM_GLOBALS = {
   }
 
   function dispatchKeyEvent(type, key, code, modifiers) {
-    const isShift = (Number(modifiers || 0) & 8) !== 0;
+    const mods = Number(modifiers || 0);
+    const isAlt = (mods & 1) !== 0;
+    const isCtrl = (mods & 2) !== 0;
+    const isMeta = (mods & 4) !== 0;
+    const isShift = (mods & 8) !== 0;
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
     const target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
     if (!target) return 0;
@@ -11506,11 +11579,20 @@ const CSS_TYPED_OM_GLOBALS = {
       const evt = new _NativeKeyboardEvent("keyup", {
         key: keyStr,
         code: codeStr,
+        ctrlKey: isCtrl,
+        altKey: isAlt,
+        metaKey: isMeta,
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
       });
       target.dispatchEvent(evt);
+      if (!evt.defaultPrevented && (keyStr === " " || keyStr === "Spacebar")) {
+        const upTag = String(target.tagName || target.localName || "").toLowerCase();
+        if (upTag === "button" && !target.disabled && typeof target.click === "function") {
+          target.click();
+        }
+      }
       const active = doc ? doc.activeElement : null;
       return (active && typeof active._nid === "number") ? active._nid : 0;
     }
@@ -11525,6 +11607,9 @@ const CSS_TYPED_OM_GLOBALS = {
       const kpEvt = new _NativeKeyboardEvent("keypress", {
         key: kpKey,
         code: codeStr,
+        ctrlKey: isCtrl,
+        altKey: isAlt,
+        metaKey: isMeta,
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
@@ -11561,9 +11646,18 @@ const CSS_TYPED_OM_GLOBALS = {
     if (type === "keydown") {
       _lastKeyDownPrevented = false;
       _lastKeyDownKey = keyStr;
+      if (keyStr === "Enter" && target && target.nodeType === 1) {
+        const tTag = String(target.tagName || target.localName || "").toLowerCase();
+        if (tTag === "input" && target._capsurfPreEnterAttr === undefined && typeof target.getAttribute === "function") {
+          target._capsurfPreEnterAttr = target.getAttribute("value");
+        }
+      }
       const evt = new _NativeKeyboardEvent("keydown", {
         key: keyStr,
         code: codeStr,
+        ctrlKey: isCtrl,
+        altKey: isAlt,
+        metaKey: isMeta,
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
@@ -11633,16 +11727,6 @@ const CSS_TYPED_OM_GLOBALS = {
           }
         } else if (keyStr === "Tab") {
           navigateTabFocus(isShift);
-        } else if (keyStr === "ArrowDown") {
-          if (typeof global.scrollBy === "function") global.scrollBy(0, 40);
-        } else if (keyStr === "ArrowUp") {
-          if (typeof global.scrollBy === "function") global.scrollBy(0, -40);
-        } else if (keyStr === "PageDown") {
-          const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
-          if (typeof global.scrollBy === "function") global.scrollBy(0, Math.round(vh * 0.85));
-        } else if (keyStr === "PageUp") {
-          const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
-          if (typeof global.scrollBy === "function") global.scrollBy(0, -Math.round(vh * 0.85));
         } else if (keyStr === "Enter") {
           const active = doc ? doc.activeElement : null;
           if (active) {
@@ -11693,6 +11777,59 @@ const CSS_TYPED_OM_GLOBALS = {
               }
             }
           }
+        } else if (!isAlt && !isMeta) {
+          let isEditingTarget = isTargetContentEditable(target);
+          if (!isEditingTarget && target && target.nodeType === 1) {
+            const edTag = String(target.tagName || target.localName || "").toUpperCase();
+            if (edTag === "INPUT" || edTag === "TEXTAREA" || edTag === "SELECT") {
+              isEditingTarget = true;
+            }
+          }
+          if (!isEditingTarget) {
+            const hasTtyCss = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text.length > 0);
+            const ttyKeyboard = hasTtyCss || (typeof globalThis !== "undefined" && globalThis.__capsurf_tty_keyboard === true);
+            const explicitCellH = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_h === "number" && globalThis.__capsurf_tty_cell_h > 0) ? globalThis.__capsurf_tty_cell_h : 0;
+            const explicitCellW = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 0;
+            const urlHasTtyCss = (typeof globalThis !== "undefined" && globalThis.__capsurf_nav_tty_stripped === true);
+            const cellHeight = explicitCellH || (urlHasTtyCss ? 17 : 0);
+            const cellWidth = explicitCellW || (urlHasTtyCss ? 8 : 0);
+            const lineHeight = cellHeight || 40;
+            const lineWidth = cellWidth || 40;
+            const vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+            const pageHeight = Math.max(lineHeight, vh - lineHeight);
+            let sdx = 0;
+            let sdy = 0;
+            if (isCtrl) {
+              if (ttyKeyboard) {
+                const halfPage = Math.max(lineHeight, Math.floor(vh / (2 * lineHeight)) * lineHeight);
+                if (keyStr === "f") sdy = pageHeight;
+                else if (keyStr === "b") sdy = -pageHeight;
+                else if (keyStr === "d") sdy = halfPage;
+                else if (keyStr === "u") sdy = -halfPage;
+              }
+            } else {
+              const isSpace = keyStr === " " || keyStr === "Spacebar";
+              const tgtTag = (target && target.nodeType === 1) ? String(target.tagName || target.localName || "").toUpperCase() : "";
+              if (!(isSpace && (tgtTag === "BUTTON" || tgtTag === "SUMMARY"))) {
+                if (keyStr === "ArrowDown" || (ttyKeyboard && !isShift && keyStr === "j")) {
+                  sdy = lineHeight;
+                } else if (keyStr === "ArrowUp" || (ttyKeyboard && !isShift && keyStr === "k")) {
+                  sdy = -lineHeight;
+                } else if (keyStr === "ArrowRight" || (ttyKeyboard && !isShift && keyStr === "l")) {
+                  sdx = lineWidth;
+                } else if (keyStr === "ArrowLeft" || (ttyKeyboard && !isShift && keyStr === "h")) {
+                  sdx = -lineWidth;
+                } else if (keyStr === "PageDown" || (isSpace && !isShift)) {
+                  sdy = pageHeight;
+                } else if (keyStr === "PageUp" || (isSpace && isShift)) {
+                  sdy = -pageHeight;
+                }
+              }
+            }
+            if ((sdx !== 0 || sdy !== 0) && typeof global.scrollBy === "function") {
+              global.scrollBy(sdx, sdy);
+            }
+          }
         }
       }
 
@@ -11716,6 +11853,12 @@ const CSS_TYPED_OM_GLOBALS = {
 
   function getWindowOrigin(win) {
     try {
+      if (win && (win._opaqueSandbox || (win.frameElement && win.frameElement._opaqueSandbox))) {
+        return "null";
+      }
+      if (win && typeof win.origin === "string" && win.origin) {
+        return win.origin;
+      }
       const loc = win && win.location;
       if (loc) {
         if (typeof loc.origin === "string" && loc.origin && loc.origin !== "about:") {
@@ -12050,7 +12193,7 @@ const CSS_TYPED_OM_GLOBALS = {
   }
   function activateClickedElement(target, isTrustedClick, x, y, detail) {
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
-    const MouseCtor = typeof MouseEvent === "function" ? MouseEvent : Event;
+    const MouseCtor = typeof _NativeMouseEvent === "function" ? _NativeMouseEvent : _NativeEventCtor;
     const activateControl = function (ctrl, trusted) {
       if (!ctrl || ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled"))) return;
       const ctrlTag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
@@ -12058,8 +12201,8 @@ const CSS_TYPED_OM_GLOBALS = {
         const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
         if (iType === "checkbox") {
           ctrl.checked = !ctrl.checked;
-          const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
-          const chEv = new Event("change", { bubbles: true, cancelable: false });
+          const inEv = new _NativeEventCtor("input", { bubbles: true, cancelable: false, composed: true });
+          const chEv = new _NativeEventCtor("change", { bubbles: true, cancelable: false });
           if (trusted) {
             _dispatchTrusted(ctrl, inEv);
             _dispatchTrusted(ctrl, chEv);
@@ -12083,8 +12226,8 @@ const CSS_TYPED_OM_GLOBALS = {
           const wasChecked = Boolean(ctrl.checked);
           ctrl.checked = true;
           if (!wasChecked) {
-            const inEv = new Event("input", { bubbles: true, cancelable: false, composed: true });
-            const chEv = new Event("change", { bubbles: true, cancelable: false });
+            const inEv = new _NativeEventCtor("input", { bubbles: true, cancelable: false, composed: true });
+            const chEv = new _NativeEventCtor("change", { bubbles: true, cancelable: false });
             if (trusted) {
               _dispatchTrusted(ctrl, inEv);
               _dispatchTrusted(ctrl, chEv);
@@ -12748,6 +12891,15 @@ const CSS_TYPED_OM_GLOBALS = {
     }
 
     function currentDocOrigin() {
+      const stack = global.__capsurf_active_window_stack;
+      if (Array.isArray(stack) && stack.length > 0) {
+        const w = stack[stack.length - 1];
+        if (w && (w._opaqueSandbox || (w.frameElement && w.frameElement._opaqueSandbox))) {
+          return "null";
+        }
+        const wo = getWindowOrigin(w);
+        if (wo && wo !== "null") return wo;
+      }
       if (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_origin && globalThis.__capsurf_doc_origin !== "") {
         return String(globalThis.__capsurf_doc_origin);
       }
@@ -12759,6 +12911,12 @@ const CSS_TYPED_OM_GLOBALS = {
     }
 
     function currentDocBase() {
+      const stack = global.__capsurf_active_window_stack;
+      if (Array.isArray(stack) && stack.length > 0) {
+        const w = stack[stack.length - 1];
+        if (w && w.document && typeof w.document.baseURI === "string" && w.document.baseURI) return w.document.baseURI;
+        if (w && w.location && w.location.href) return String(w.location.href);
+      }
       const doc = global.document || (typeof document !== "undefined" ? document : null);
       if (doc && typeof doc.baseURI === "string" && doc.baseURI) return doc.baseURI;
       const loc = global.location || (typeof location !== "undefined" ? location : null);
@@ -12976,9 +13134,13 @@ const CSS_TYPED_OM_GLOBALS = {
       liveWorkers.set(id, ws);
 
       const workerName = opts.name === undefined ? "" : String(opts.name);
+      const stackTop = (Array.isArray(global.__capsurf_active_window_stack) && global.__capsurf_active_window_stack.length > 0)
+        ? global.__capsurf_active_window_stack[global.__capsurf_active_window_stack.length - 1]
+        : null;
       const isOopif = Boolean(
         opts.__capsurf_oopif ||
-        (typeof globalThis !== "undefined" && globalThis.self && globalThis.self.__capsurf_is_oopif)
+        (stackTop && stackTop.__capsurf_is_oopif) ||
+        (typeof globalThis !== "undefined" && (globalThis.__capsurf_is_oopif || (globalThis.self && globalThis.self.__capsurf_is_oopif)))
       );
       const ua = (global.navigator && global.navigator.userAgent) ? String(global.navigator.userAgent) : "";
       const docCsp = (typeof globalThis !== "undefined" && globalThis.__capsurf_doc_csp) ? String(globalThis.__capsurf_doc_csp) : "";

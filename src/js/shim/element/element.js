@@ -979,7 +979,7 @@ function installElementExtensions(proto) {
       this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
     } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = val;
-    } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+    } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
         let resolved = val;
         try {
@@ -1063,16 +1063,9 @@ function installElementExtensions(proto) {
       this._displayNone = false;
     } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
       this.className = "";
-    } else if (key.toLowerCase() === "src" && this.isConnected && (this.tagName || "").toLowerCase() === "iframe") {
+    } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
-        let resolved = val;
-        try {
-          const base = (typeof document !== "undefined" && document.baseURI)
-            ? document.baseURI
-            : (globalThis.location ? globalThis.location.href : "about:blank");
-          resolved = new URL(val, base).href;
-        } catch (e) {}
-        globalThis.__capsurf_navigate_iframe(this, resolved);
+        globalThis.__capsurf_navigate_iframe(this, "about:blank");
       }
     } else if (key.toLowerCase() === "selected" && (this.tagName || "").toLowerCase() === "option") {
       this._selected = false;
@@ -2718,6 +2711,13 @@ function installElementExtensions(proto) {
     return shadow;
   };
   markNative(proto.attachShadow, "attachShadow");
+
+  Object.defineProperty(proto, "_shadowRoot", {
+    get: function () {
+      return elementShadowRootMap.get(this) || null;
+    },
+    configurable: true,
+  });
 
   Object.defineProperty(proto, "shadowRoot", {
     get: function () {

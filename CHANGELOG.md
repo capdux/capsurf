@@ -2446,3 +2446,8 @@
 - Fixed CDP BrowserContext cookie/target isolation, live AXTree state, border-box `getBoxModel`, and viewport inheritance in `src/cdp/`.
 - Implemented CSS counters (`counter-reset`/`counter-increment`/`counter()`/`counters()`/`attr()`), `<ol start/reversed>` + `upper-roman` markers, pseudo-element `visibility`, collapsed-border table width, WebFont weight scaling, and single-scroll root guard across `src/css/`, `src/layout/`, and `src/render/`.
 - Fixed `HTMLImageElement.getBoundingClientRect` layout override, CSS Typed OM `computedStyleMap`, rAF overrun frame gap, WebRTC stubs, XHR/WS boot, unforgeable `location`, `form` named overrides, and shadow directionality in `src/js/shim/`.
+
+## Phase 249 (2026-11-21)
+- Fixed CDP interception/redirect/per-hop gating, renderer laziness, OOPIF runtime evaluate, and tab session inheritance in `src/cdp/`.
+- Fixed `Range.createContextualFragment`, Shadow DOM `_shadowRoot`, XPath `DOMParser` nodes, `no-cors` opaque headers/images, `canvas2d` un-upgraded bitmap sizing, `form.reset()`, `<select>` dropdown activation, keyboard modifiers/scrolling, `focus()` scroll preservation, `executeConnectedScripts`, and sandboxed `iframe`/`srcdoc`/Worker origin isolation in `src/js/shim/`.
+- Added `sandbox-*` fixture routes in `src/net/mock_fixtures.cp`, deduplicated `js_capsurf_native_record_fetch` in `src/js/dom_binding.cp`, and removed duplicate synthetic `Network.requestWillBeSent` emissions in `e2e/harness.ts`.

@@ -559,4 +559,140 @@ function installSelectElement(global) {
   if (typeof window !== "undefined") {
     window.HTMLSelectElement = HTMLSelectElement;
   }
+
+  let _openSelectState = null;
+
+  function isOptionEffectivelyDisabled(opt) {
+    if (!opt) return false;
+    if (opt.disabled || (typeof opt.hasAttribute === "function" && opt.hasAttribute("disabled"))) return true;
+    const p = opt.parentNode;
+    if (p && p.nodeType === 1) {
+      const pTag = String(p.tagName || p.localName || "").toLowerCase();
+      if (pTag === "optgroup" && (p.disabled || (typeof p.hasAttribute === "function" && p.hasAttribute("disabled")))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function closeSelectDropdown() {
+    if (!_openSelectState) return;
+    const st = _openSelectState;
+    _openSelectState = null;
+    try {
+      const doc = st.overlay.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (doc && typeof doc.removeEventListener === "function") {
+        doc.removeEventListener("click", st.outsideListener, true);
+      }
+    } catch (e) {}
+    try {
+      if (st.overlay && st.overlay.parentNode) {
+        st.overlay.parentNode.removeChild(st.overlay);
+      }
+    } catch (e) {}
+  }
+
+  function openSelectDropdown(selectEl) {
+    closeSelectDropdown();
+    const doc = selectEl.ownerDocument || (typeof document !== "undefined" ? document : null);
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return;
+    let rect = null;
+    try {
+      if (typeof selectEl.getBoundingClientRect === "function") {
+        rect = selectEl.getBoundingClientRect();
+      }
+    } catch (e) {}
+    if (!rect) rect = { left: 0, bottom: 24, width: 200 };
+    const sx = (typeof global.scrollX === "number" ? global.scrollX : 0) | 0;
+    const sy = (typeof global.scrollY === "number" ? global.scrollY : 0) | 0;
+    const pageX = sx + (rect.left || 0);
+    const pageY = sy + (rect.bottom || 24);
+    const w = Math.max(0, rect.width || 200);
+
+    const overlay = doc.createElement("div");
+    overlay.setAttribute("data-kitesurf-ua", "select-dropdown");
+    overlay.setAttribute(
+      "style",
+      "position:absolute;" +
+        "left:" + pageX + "px;top:" + pageY + "px;" +
+        "min-width:" + w + "px;" +
+        "background:#fff;border:1px solid #999;" +
+        "box-shadow:0 2px 8px rgba(0,0,0,0.25);" +
+        "z-index:2147483647;max-height:300px;overflow-y:auto;" +
+        "font:13px system-ui,sans-serif;color:#000;"
+    );
+
+    const opts = selectEl.options || [];
+    const count = opts.length | 0;
+    for (let i = 0; i < count; i++) {
+      const opt = opts[i];
+      const row = doc.createElement("div");
+      row.setAttribute("data-kitesurf-ua", "select-option");
+      const selected = Boolean(opt.selected);
+      const disabled = isOptionEffectivelyDisabled(opt);
+      row.setAttribute(
+        "style",
+        "padding:3px 8px;white-space:nowrap;cursor:default;display:block;height:24px;line-height:24px;" +
+          (selected ? "background:#1e6fd9;color:#fff;" : "") +
+          (disabled ? "color:#999;" : "")
+      );
+      row.textContent = opt.text || opt.textContent || "\u00a0";
+      if (!disabled) {
+        (function (index) {
+          row.addEventListener("click", function (ev) {
+            try { if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation(); } catch (e) {}
+            if (ev) ev._ksSelectHandled = true;
+            const changed = selectEl.selectedIndex !== index;
+            if (changed) {
+              selectEl.selectedIndex = index;
+              try {
+                const InEv = typeof InputEvent === "function" ? InputEvent : Event;
+                selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false }));
+              } catch (e) {}
+              try {
+                selectEl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+              } catch (e) {}
+            }
+            closeSelectDropdown();
+          });
+        })(i);
+      }
+      overlay.appendChild(row);
+    }
+
+    const outsideListener = function (ev) {
+      let n = ev && ev.target;
+      while (n) {
+        if (n === overlay || n === selectEl) return;
+        n = n.parentNode;
+      }
+      closeSelectDropdown();
+    };
+    doc.body.appendChild(overlay);
+    try {
+      doc.addEventListener("click", outsideListener, true);
+    } catch (e) {}
+    _openSelectState = { select: selectEl, overlay: overlay, outsideListener: outsideListener };
+  }
+
+  function toggleSelectDropdown(selectEl) {
+    if (!selectEl || !(selectEl instanceof HTMLSelectElement)) return false;
+    if (selectEl.disabled || (typeof selectEl.hasAttribute === "function" && selectEl.hasAttribute("disabled"))) return false;
+    if (typeof selectEl.hasAttribute === "function" && selectEl.hasAttribute("multiple")) return false;
+    const sizeAttr = parseInt((typeof selectEl.getAttribute === "function" ? selectEl.getAttribute("size") : null) || "0", 10);
+    if (sizeAttr > 1) return false;
+    if (_openSelectState && _openSelectState.select === selectEl) {
+      closeSelectDropdown();
+    } else {
+      openSelectDropdown(selectEl);
+    }
+    return true;
+  }
+
+  global.__capsurf_toggleSelectDropdown = toggleSelectDropdown;
+  global.__capsurf_closeSelectDropdown = closeSelectDropdown;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_toggleSelectDropdown = toggleSelectDropdown;
+    globalThis.__capsurf_closeSelectDropdown = closeSelectDropdown;
+  }
 }

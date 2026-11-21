@@ -1825,3 +1825,7 @@
 - `HTMLImageElement.prototype.getBoundingClientRect` 原先在无显式 `width`/`height` 时无条件用 `naturalWidth`/`naturalHeight` 覆盖 `LayoutTree` 结果，导致 `canvas-natural-size`、`document-types` 与 `svg-ratio-sizing` 三个 `<img>` 测试失效；改为仅当原生宽高为 0 时回退。
 - `getTypedComputedStyle` 原先从 `getComputedStyle()`（used px value）读取属性，导致 CSS Typed OM `computedStyleMap()` 无法保留 `%` 与 `auto`；改为优先读取 `collectRawComputedMap`。
 - `painter.cp` 中 `<html>` 若同时存在于 `scroll_offsets` 与 `viewport_scroll_y` 会导致滚动偏移翻倍；已排除根节点重复累加。
+
+### Phase 249: 跨帧 Origin/Sandbox 隔离与 Fetch 重定向链路打通
+- `executeIframeInlineScripts` 改为绑定 iframe `win`/`doc`/`location`/`origin` 并维护 `__capsurf_active_window_stack`，配合 `currentDocOrigin()` 对 opaque sandbox 返回 `"null"`、对普通 OOPIF 帧保留 `__capsurf_is_oopif` 与 `__capsurf_doc_origin` 回退，同时让 `iframe-srcdoc`（16/18）与 `dedicated-worker`（22/22）全部工作正常。
+- `harness.ts` 去除 `goto()` 与自动重定向中冗余的人工 `Network.requestWillBeSent`，避免与 `src/cdp/page.cp` 真实事件重复计数。

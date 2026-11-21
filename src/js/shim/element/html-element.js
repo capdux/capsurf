@@ -284,17 +284,19 @@ function installHtmlElementExtensions(proto) {
   }
 
   if (!proto.focus) {
-    proto.focus = function () {
+    proto.focus = function (options) {
       if (typeof document !== "undefined") {
         if (document.activeElement && document.activeElement !== this && typeof document.activeElement.blur === "function") {
           document.activeElement.blur();
         }
         document.activeElement = this;
       }
-      if (typeof this.scrollIntoViewIfNeeded === "function") {
-        this.scrollIntoViewIfNeeded();
-      } else if (typeof this.scrollIntoView === "function") {
-        this.scrollIntoView();
+      if (!(options && options.preventScroll)) {
+        if (typeof this.scrollIntoViewIfNeeded === "function") {
+          this.scrollIntoViewIfNeeded(false);
+        } else if (typeof this.scrollIntoView === "function") {
+          this.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
       }
       const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
       this.dispatchEvent(evt);

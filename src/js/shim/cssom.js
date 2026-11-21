@@ -2011,7 +2011,7 @@
     get: function () {
       this._syncFromOwner();
       if (this._isCrossOriginOpaque()) {
-        throw new DOMException("Failed to read the 'cssRules' property from 'CSSStyleSheet': Cannot access rules", "SecurityError");
+        return makeRuleList([]);
       }
       return getSheetSt(this)._rulesList;
     },

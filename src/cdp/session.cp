@@ -1931,8 +1931,26 @@ pub struct CdpPageSession {
         _.has_document = true;
         _.nav_start_ms = getMilliTimestamp();
         if (!_.skip_raster) {
-            _.renderer_active = true;
-            _.frames_rendered += 1;
+            let has_oopif_frame = false;
+            let f_nid: usize = 1;
+            while (f_nid < _.doc.nodes.items.len) : (f_nid += 1) {
+                const fn_node = &_.doc.nodes.items[f_nid];
+                if (fn_node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(fn_node.tag_name, "iframe")) {
+                    const f_src = fn_node.getAttribute("src") ?? "";
+                    if (f_src.len > 0 && !std.mem.eql(u8, f_src, "about:blank")) {
+                        let f_url_buf: [1024]u8 = undefined;
+                        const full_f = resolveSubresourceUrl(nav_url, f_src, &f_url_buf);
+                        if (!sameOriginUrls(nav_url, full_f)) {
+                            has_oopif_frame = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (has_oopif_frame) {
+                _.renderer_active = true;
+                _.frames_rendered += 1;
+            }
         }
         _.focused_node = NULL_NODE;
         _.range_drag_node = NULL_NODE;
@@ -2111,6 +2129,9 @@ pub struct CdpPageSession {
             }
         }
         _.reinstallBindings();
+        if (_.outbound_reject_pattern_count > 0) {
+            _.syncOutboundRejectPatternsToJs();
+        }
         if (ext_css_buf != null && ext_css_len > 0) {
             let esc_ext_css = _.allocator.alloc(u8, ext_css_len * 2 + 16) catch null;
             defer if (esc_ext_css != null) _.allocator.free(esc_ext_css.?);
@@ -3713,6 +3734,39 @@ pub struct CdpPageSession {
         }
     }
 
+    pub fn syncOutboundRejectPatternsToJs(*_) {
+        let js_buf: [4096]u8 = [0; 4096];
+        let pos: usize = 0;
+        const prefix = "globalThis.__capsurf_outbound_reject_patterns=[";
+        @memcpy(js_buf[0..prefix.len], prefix);
+        pos = prefix.len;
+        let pi: usize = 0;
+        while (pi < _.outbound_reject_pattern_count) : (pi += 1) {
+            const pat = _.outbound_reject_patterns[pi][0.._.outbound_reject_pattern_lens[pi]];
+            if (pi > 0 && pos < js_buf.len) {
+                js_buf[pos] = ',';
+                pos += 1;
+            }
+            if (pos + 2 >= js_buf.len) break;
+            js_buf[pos] = '"';
+            pos += 1;
+            let esc_buf: [1024]u8 = [0; 1024];
+            const esc = escapeJsonString(pat, &esc_buf);
+            const clen = @min(esc.len, js_buf.len - pos - 4);
+            @memcpy(js_buf[pos .. pos + clen], esc[0..clen]);
+            pos += clen;
+            js_buf[pos] = '"';
+            pos += 1;
+        }
+        const suffix = "];";
+        if (pos + suffix.len <= js_buf.len) {
+            @memcpy(js_buf[pos .. pos + suffix.len], suffix);
+            pos += suffix.len;
+            const v = _.ctx.eval(js_buf[0..pos]);
+            _.ctx.freeValue(v);
+        }
+    }
+
     pub fn isOutboundUrlRejected(url: []const u8): bool {
         let pi: usize = 0;
         while (pi < _.outbound_reject_pattern_count) : (pi += 1) {
@@ -4293,7 +4347,7 @@ pub struct CdpPageSession {
                     std.heap.c_allocator.destroy(child_dom_ctx);
                 }
 
-                const timer_shim = "(function(){var g=globalThis;g.__if_timers=[];g.setTimeout=function(fn,d){g.__if_timers.push({fn:fn,d:Number(d)||0});return g.__if_timers.length;};g.clearTimeout=function(id){if(id>0&&id<=g.__if_timers.length)g.__if_timers[id-1]=null;};})()";
+                const timer_shim = "(function(){var g=globalThis;g.__if_timers=[];g.setTimeout=function(fn,d){g.__if_timers.push({fn:fn,d:Number(d)||0});return g.__if_timers.length;};g.clearTimeout=function(id){if(id>0&&id<=g.__if_timers.length)g.__if_timers[id-1]=null;};var proto=(g.Element&&g.Element.prototype)||(g.document&&g.document.body?Object.getPrototypeOf(g.document.body):null);if(proto){Object.defineProperty(proto,'style',{configurable:true,get:function(){var el=this;return{set background(v){var cur=el.getAttribute('style')||'';el.setAttribute('style',cur+(cur?';':'')+'background:'+String(v));},set backgroundColor(v){var cur=el.getAttribute('style')||'';el.setAttribute('style',cur+(cur?';':'')+'background-color:'+String(v));},set cssText(v){el.setAttribute('style',String(v));}};}});}})()";
                 const tv = child_ctx.eval(timer_shim);
                 child_ctx.freeValue(tv);
 

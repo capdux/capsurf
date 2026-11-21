@@ -489,9 +489,20 @@ function internalDispatch(target, event, trusted) {
 
     // Activation behavior for click events
     const wasCanceled = eventState ? eventState.canceled : Boolean(event._canceled);
-    if (eventType === "click" && activatedButton && !wasCanceled) {
-      if (typeof handleButtonActivation === "function") {
+    if (eventType === "click" && !wasCanceled) {
+      if (activatedButton && typeof handleButtonActivation === "function") {
         handleButtonActivation(activatedButton);
+      } else if (!event._ksSelectHandled && typeof global.__capsurf_toggleSelectDropdown === "function") {
+        let selCur = target;
+        while (selCur && selCur.nodeType === 1) {
+          const selTag = String(selCur.localName || selCur.tagName || "").toLowerCase();
+          if (selTag === "select") {
+            event._ksSelectHandled = true;
+            global.__capsurf_toggleSelectDropdown(selCur);
+            break;
+          }
+          selCur = selCur.parentNode;
+        }
       }
     }
   } finally {
@@ -528,6 +539,13 @@ EventTarget.prototype.dispatchEvent = function (event) {
 
 function dispatchTrustedEvent(target, event) {
   if (!target || !event) return false;
+  const st = typeof _eventState !== "undefined" ? _eventState.get(event) : null;
+  if (!st && typeof event._type !== "string" && typeof event.type !== "string") {
+    const fallbackCtor = typeof MouseEvent === "function" ? MouseEvent : (typeof Event === "function" ? Event : null);
+    if (fallbackCtor) {
+      event = new fallbackCtor("click", { bubbles: true, cancelable: true, composed: true });
+    }
+  }
   return internalDispatch(target, event, true);
 }
 global.__capsurf_dispatchTrustedEvent = dispatchTrustedEvent;

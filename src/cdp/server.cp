@@ -3,7 +3,7 @@
 // Lightweight, native HTTP & RFC 6455 WebSocket server compliant with Puppeteer, Playwright & AI Agents.
 // Uses direct POSIX C-FFI sockets for maximum concurrency, zero-GC, and zero Zig version fragility.
 
-import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
@@ -407,6 +407,20 @@ pub struct CdpServer {
             new_sess.ensureLayout();
         }
         new_sess.owner_target_registry = &_.session.target_registry;
+        if (_.session.binding_count > 0) {
+            let bi: usize = 0;
+            while (bi < _.session.binding_count) : (bi += 1) {
+                const blen = _.session.binding_name_lens[bi];
+                const boff = bi * 128;
+                if (blen > 0) {
+                    new_sess.addBinding(_.session.binding_names[boff .. boff + blen]);
+                }
+            }
+        }
+        if (_.session.fetch_enabled) {
+            new_sess.fetch_enabled = true;
+            new_sess.fetch_state = _.session.fetch_state;
+        }
         if (bctx.len > 0) {
             new_sess.setContextId(bctx);
         }
@@ -436,6 +450,23 @@ pub struct CdpServer {
                 if (bctx.len > 0 && !std.mem.eql(u8, bctx, "default")) {
                     return _.getOrCreateTabSession("", bctx);
                 }
+                if (!_.session.has_document || _.session.url.len == 0 || std.mem.eql(u8, _.session.url, "about:blank")) {
+                    if (std.mem.eql(u8, req.method, "Page.captureScreenshot") ||
+                        std.mem.eql(u8, req.method, "Kitesurf.getRendererInfo") ||
+                        std.mem.eql(u8, req.method, "CapSurf.getRendererInfo")) {
+                        let ti: usize = MAX_TAB_SESSIONS;
+                        while (ti > 0) {
+                            ti -= 1;
+                            if (_.tab_sessions[ti].active) {
+                                if (ts := _.tab_sessions[ti].page_session) {
+                                    if (ts.has_document && ts.url.len > 0 && !std.mem.eql(u8, ts.url, "about:blank")) {
+                                        return ts;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 return _.session;
             }
             if (std.mem.eql(u8, req.session_id, "capsurf-session-renderer") ||
@@ -461,6 +492,23 @@ pub struct CdpServer {
         }
         if (bctx.len > 0 && !std.mem.eql(u8, bctx, "default")) {
             return _.getOrCreateTabSession("", bctx);
+        }
+        if (!_.session.has_document || _.session.url.len == 0 || std.mem.eql(u8, _.session.url, "about:blank")) {
+            if (std.mem.eql(u8, req.method, "Page.captureScreenshot") ||
+                std.mem.eql(u8, req.method, "Kitesurf.getRendererInfo") ||
+                std.mem.eql(u8, req.method, "CapSurf.getRendererInfo")) {
+                let ti: usize = MAX_TAB_SESSIONS;
+                while (ti > 0) {
+                    ti -= 1;
+                    if (_.tab_sessions[ti].active) {
+                        if (ts := _.tab_sessions[ti].page_session) {
+                            if (ts.has_document && ts.url.len > 0 && !std.mem.eql(u8, ts.url, "about:blank")) {
+                                return ts;
+                            }
+                        }
+                    }
+                }
+            }
         }
         return _.session;
     }
@@ -1688,6 +1736,28 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         const target_sess = _.resolveSessionForRequest(req);
         const resp = CdpDispatcher.dispatch(target_sess, req, res_buf, &events, &event_count);
+
+        if (target_sess == _.session &&
+            (std.mem.eql(u8, req.method, "Runtime.addBinding") || std.mem.eql(u8, req.method, "Runtime.removeBinding")))
+        {
+            const raw_bname = extractJsonString(req.params_raw, "name") ?? "";
+            let bname_buf: [128]u8 = [0; 128];
+            const bname = unescapeJsonString(raw_bname, &bname_buf);
+            if (bname.len > 0) {
+                let ti: usize = 0;
+                while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+                    if (_.tab_sessions[ti].active) {
+                        if (ts := _.tab_sessions[ti].page_session) {
+                            if (std.mem.eql(u8, req.method, "Runtime.addBinding")) {
+                                ts.addBinding(bname);
+                            } else {
+                                ts.removeBinding(bname);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Emit triggered events before the command response (matches Chrome CDP ordering)
         let i: usize = 0;

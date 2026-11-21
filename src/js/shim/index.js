@@ -294,6 +294,9 @@ function installShim(global) {
     }, "getAnimations");
 
     global.Element.prototype.getContext = markNative(function (type) {
+      if (typeof upgradeElement === "function") {
+        upgradeElement(this);
+      }
       const t = String(type).toLowerCase();
       if (t === "webgl" || t === "webgl2" || t === "experimental-webgl") {
         return null;
@@ -418,15 +421,28 @@ function installShim(global) {
 
   function upgradeElement(el) {
     if (!el || typeof el !== "object") return el;
+    if (typeof isParsedNode === "function" && isParsedNode(el)) return el;
     hideInternalNid(el);
     if (el.nodeType === 3) {
       if (global.Text && global.Text.prototype && !global.Text.prototype.isPrototypeOf(el)) {
+        if (el._data === undefined) {
+          try {
+            const t = el.textContent;
+            if (typeof t === "string") el._data = t;
+          } catch (e) {}
+        }
         Object.setPrototypeOf(el, global.Text.prototype);
       }
       return el;
     }
     if (el.nodeType === 8) {
       if (global.Comment && global.Comment.prototype && !global.Comment.prototype.isPrototypeOf(el)) {
+        if (el._data === undefined) {
+          try {
+            const t = el.textContent;
+            if (typeof t === "string") el._data = t;
+          } catch (e) {}
+        }
         Object.setPrototypeOf(el, global.Comment.prototype);
       }
       return el;

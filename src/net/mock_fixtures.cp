@@ -1600,6 +1600,97 @@ pub struct MockFixtures {
             return std.fmt.bufPrint(out_buf, "{{\"hits\":{d}}}", .{ hits }) catch null;
         }
 
+        // 2.24. /sandbox-host.html, /sandbox-child.html, /sandbox-worker-child.html, /sandbox-unload-child.html, /sandbox-facade-host.html
+        if (std.mem.indexOf(u8, url, "/sandbox-host.html") != null) {
+            let src_esc_buf: [3072]u8 = undefined;
+            let src_esc_len: usize = 0;
+            if (raw_src := MockFixtures.extractQueryParam(url, "src")) {
+                let src_buf: [2048]u8 = undefined;
+                const src_val = MockFixtures.decodeUri(raw_src, &src_buf);
+                const esc = escapeHtmlAttr(src_val, &src_esc_buf);
+                src_esc_len = esc.len;
+            }
+            const src_esc = src_esc_buf[0..src_esc_len];
+
+            let sb_attr_buf: [1024]u8 = undefined;
+            let sb_attr_len: usize = 0;
+            if (raw_sb := MockFixtures.extractQueryParam(url, "sandbox")) {
+                let sb_buf: [512]u8 = undefined;
+                let sb_esc_buf: [768]u8 = undefined;
+                const sb_val = MockFixtures.decodeUri(raw_sb, &sb_buf);
+                const sb_esc = escapeHtmlAttr(sb_val, &sb_esc_buf);
+                const attr_s = std.fmt.bufPrint(&sb_attr_buf, " sandbox=\"{s}\"", .{ sb_esc }) catch "";
+                sb_attr_len = attr_s.len;
+            }
+            const sb_attr = sb_attr_buf[0..sb_attr_len];
+
+            return std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>sandbox host</title></head>\n<body>\n<iframe id=\"f\" src=\"{s}\"{s}\n  style=\"border:0;display:block;width:120px;height:120px\"></iframe>\n<script>\nwindow.__msgs = [];\naddEventListener(\"message\", (e) => window.__msgs.push({{ data: e.data, origin: e.origin }}));\n</script>\n</body></html>",
+                .{ src_esc, sb_attr },
+            ) catch null;
+        }
+        if (std.mem.indexOf(u8, url, "/sandbox-child.html") != null) {
+            const body =
+                "<!doctype html>\n" ++
+                "<html><head><meta charset=\"utf-8\"><title>sandbox child</title></head>\n" ++
+                "<body style=\"margin:0\">\n" ++
+                "<p id=\"markup\">sandbox child markup</p>\n" ++
+                "<div style=\"width:120px;height:120px;background:rgb(0,0,255)\">x</div>\n" ++
+                "<script>\n" ++
+                "let cookie = \"ok\";\n" ++
+                "let storage = \"ok\";\n" ++
+                "try { document.cookie; } catch (e) { cookie = e.name; }\n" ++
+                "try { localStorage.getItem(\"k\"); } catch (e) { storage = e.name; }\n" ++
+                "parent.postMessage({ ran: true, cookie: cookie, storage: storage }, \"*\");\n" ++
+                "</script>\n" ++
+                "</body></html>";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+        if (std.mem.indexOf(u8, url, "/sandbox-worker-child.html") != null) {
+            let is_blob = false;
+            if (raw_mode := MockFixtures.extractQueryParam(url, "mode")) {
+                if (std.mem.eql(u8, raw_mode, "blob")) is_blob = true;
+            }
+            const script = if (is_blob)
+                "const url = URL.createObjectURL(new Blob([\"\"]));\nURL.revokeObjectURL(url);\nparent.postMessage({ blobUrl: url, blobOrigin: new URL(url).origin }, \"*\");"
+            else
+                "let sameOriginWorker = \"constructed\";\ntry { new Worker(\"/__fixtures/worker-echo.js\"); } catch (e) { sameOriginWorker = e.name; }\nparent.postMessage({ sameOriginWorker: sameOriginWorker }, \"*\");";
+            return std.fmt.bufPrint(
+                out_buf,
+                "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>sandbox worker child</title></head>\n<body><script>{s}</script></body></html>",
+                .{ script },
+            ) catch null;
+        }
+        if (std.mem.indexOf(u8, url, "/sandbox-unload-child.html") != null) {
+            const body =
+                "<!doctype html>\n" ++
+                "<html><head><meta charset=\"utf-8\"><title>sandbox unload child</title></head>\n" ++
+                "<body><p id=\"markup\">sandbox child markup</p>\n" ++
+                "<script>\n" ++
+                "addEventListener(\"unload\", () => parent.postMessage({ unload: 1, href: location.href }, \"*\"));\n" ++
+                "</script>\n" ++
+                "</body></html>";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+        if (std.mem.indexOf(u8, url, "/sandbox-facade-host.html") != null) {
+            const body =
+                "<!doctype html>\n" ++
+                "<html><head><meta charset=\"utf-8\"><title>sandbox facade host</title></head>\n" ++
+                "<body>\n" ++
+                "<iframe id=\"plain\" srcdoc='<script>window.__srcdoc_ran = 1</script><a id=\"a\" href=\"sibling.html\">rel</a>'></iframe>\n" ++
+                "<iframe id=\"same\" sandbox=\"allow-same-origin\" srcdoc='<script>window.__srcdoc_ran = 2</script><a id=\"a\" href=\"sibling.html\">rel</a>'></iframe>\n" ++
+                "<iframe id=\"handler\" sandbox=\"allow-same-origin\" srcdoc='<button id=\"b\" onclick=\"window.__ran = 1\">go</button>'></iframe>\n" ++
+                "</body></html>";
+            const len = @min(body.len, out_buf.len);
+            @memcpy(out_buf[0..len], body[0..len]);
+            return out_buf[0..len];
+        }
+
         // 2.10 Concurrent dynamic import chunk fixtures (concimport-chunk-<N>.js)
         if (cc_idx := std.mem.indexOf(u8, url, "concimport-chunk-")) {
             let rest = url[cc_idx + "concimport-chunk-".len ..];
