@@ -27,8 +27,20 @@ pub fn nextDocRequestId(out_buf: []u8): []const u8 {
 
 pub fn recordResponseBody(request_id: []const u8, body: []const u8, base64_encoded: bool) {
     if (request_id.len == 0) return;
-    let slot = &g_stored_bodies[g_stored_body_cursor % MAX_STORED_BODIES];
-    g_stored_body_cursor += 1;
+    let slot: *StoredResponseBody = &g_stored_bodies[0];
+    let found_existing = false;
+    let k: usize = 0;
+    while (k < MAX_STORED_BODIES) : (k += 1) {
+        if (g_stored_bodies[k].used && std.mem.eql(u8, g_stored_bodies[k].request_id_buf[0..g_stored_bodies[k].request_id_len], request_id)) {
+            slot = &g_stored_bodies[k];
+            found_existing = true;
+            break;
+        }
+    }
+    if (!found_existing) {
+        slot = &g_stored_bodies[g_stored_body_cursor % MAX_STORED_BODIES];
+        g_stored_body_cursor += 1;
+    }
     if (slot.used && slot.body.len > 0) {
         std.heap.c_allocator.free(slot.body);
         slot.body = [];

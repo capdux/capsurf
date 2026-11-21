@@ -2163,6 +2163,7 @@ function installWindow(global) {
       while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
         taskQueue.shift();
       }
+      return withWorkerPump(0);
     }
     return withWorkerPump(0);
   };

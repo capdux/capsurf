@@ -255,7 +255,11 @@
 - **痛点根因**：多路子智能体并发运行时，若各自调用 `cap build src/main.cp -f`，会并发争抢写入同一个 `bin/main` 二进制产物。一旦某个子智能体的编译动作删除了正在被 `bun test` 调用的二进制，就会引发 `CapSurf process exited prematurely (code=0)` 偶发假死报错，导致子智能体陷入无谓的排错与盲目重试，浪费数万 Tokens！
 - **执行规范**：
   1. **纯 JS/TS Shim 优先轻量打包**：若当前任务仅修改 `src/js/shim/` 下的代码，**严禁执行耗时的 `cap build`**！只需运行毫秒级的 `python3 scripts/bundle_runtime.py` 重新生成 `runtime.js` 与 `runtime_source.cp`，若主二进制已具备动态运行时挂载即可直接运行测试；
-  2. **原生 CP 修改的门禁前置与无锁多目录并行编译**：若涉及修改底层 `.cp` 文件，子智能体先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8`（或 `cpc check`）静态门禁；编译统一使用各槽位独立输出目录的模块化增量构建 `ulimit -s 65536 && cap build -m -d -o bin_<port> src/main.cp`（约 3–5s，零 `flock`、零 `FileBusy`），严禁多路同时写入同一个 `bin/main`。仅在发版或性能压测前由主智能体统一运行一次 `cap build -B -r -f src/main.cp`。
+  2. **原生 CP 修改的门禁前置与三线无锁物理隔离并行编译**：若涉及修改底层 `.cp` 文件，先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8` 静态门禁；三线并发（主智能体 + Slot A + Slot B）必须按固定槽位分配独立输出目录、调试端口与源码写权限，**严禁多路同时写入同一个 `bin/main`**：
+     - **主智能体**：`bin_19231` + `REMOTE_DEBUGGING_PORT=19231`（负责非 `cdp`/`shim` 模块如 `src/layout/`、`src/css/`、`src/render/`、`src/html/`、`src/net/` 或汇总验证）；
+     - **Slot A**：`bin_19232` + `REMOTE_DEBUGGING_PORT=19232`（负责 `src/js/shim/` 或 `test/`）；
+     - **Slot B**：`bin_19233` + `REMOTE_DEBUGGING_PORT=19233`（负责 `src/cdp/`）；
+     - 日常开发统一使用 `ulimit -s 65536 && cap build -m -d -o bin_<port> src/main.cp`（全量 ~12.7s、增量 ~8.5s，零 `flock`、零 `FileBusy`），并严格用 `CAPSURF_BIN=./bin_<port>/main REMOTE_DEBUGGING_PORT=<port> bun test ...` 验证；仅在 Milestone/Phase 收口同步正式产物时由主智能体运行一次 `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp && cp bin_rel/main bin/main`。
 
 ### 11.2 Arena DOM 唯一真理源与 C-FFI 包装器单例铁律 (Single Source of Truth & Identity Bridge)
 
@@ -307,3 +311,4 @@
 - **自适应超时预算（Subtest-Scaled Timeout）**：批量扫盘前先用 `rg -c "test\(" <file>` 统计子测数 `N`，按 `max(20, N * 4)` 秒设置超时（如 33 子测的 `inline-metrics-regressions` 需 `120s`），避免把「慢但全绿」误判为挂起而重复浪费轮次。
 - **双端口镜像同步（Binary Sync on Commit）**：每次 Slot B 完成 `bin_19233/main` 构建并提交后，主智能体立即执行 `cp -f bin_19233/main bin_19232/main`，防止 `e2e/harness.ts` 与旧版 `bin_19232` 协议错配产生假失败。
 - **大栈白盒运行规范**：凡传递导入 `src/cdp/` 或 `mock_fixtures.cp`（~98 模块）的白盒测试，执行 `cap test -m` 前必须加 `ulimit -s 65536` 防止编译期栈溢出。
+- **分级构建加速铁律（Debug `-m -d` vs ReleaseFast `-m -r`）**：日常修复与 E2E 调试**严禁**使用 `-m -r`（~81s），必须统一使用 `ulimit -s 65536 && cap build -m -d -o bin_<port> src/main.cp`（实测全量 99 模块仅 **12.70s**，增量单文件仅 **~8.5s**，提速 7–10 倍）；仅在 Milestone/Phase 收口同步正式产物 `./bin/main` 时执行 1 次 `cap build -m -r`。

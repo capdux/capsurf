@@ -2461,3 +2461,8 @@
 - Fixed `picture-srcset-demo`, `message-channel-task-queue`, `opaque-sheet-text`, and `parser-script-lifecycle` in `src/js/shim/` (`html-classes.js`, `window.js`, `node-base.js`), and deduplicated `fireScriptEvent` in `src/cdp/session_hooks.cp`.
 - Fixed `navigation-fidelity` hop-0 `requestWillBeSent`, `oopif-heap-usage` `Runtime.enable` context re-emit, `source-script-pipeline` + `oopif-runtime-evaluate` iframe classic/module global bindings, and `screencast-pipeline-order` immediate first frame in `src/cdp/` (`page.cp`, `runtime.cp`, `session_hooks.cp`, `server.cp`).
 - Renamed `hexVal` to `docKindHexVal`/`regexHexVal`/`serverHexVal` across `src/cdp/`.
+
+## Phase 252 (2026-11-22)
+- Codified 3-lane `-m -d` fast-build isolation matrix (`bin_19231`–`bin_19233`) vs `-m -r` release sync in `GEMINI.md`.
+- Fixed `FileReader` macrotask/microtask boundary in `src/js/shim/window.js` and eliminated $O(2^N)$ shadow/sibling recursion in `src/js/shim/element/element.js`.
+- Preserved `[native code]` `Function` wrapper shape in `src/cdp/session_hooks.cp`, paired stylesheet response bodies via `recordPendingFetchBody` in `src/cdp/session.cp`, and deduplicated `recordResponseBody` slots in `src/cdp/network.cp`.

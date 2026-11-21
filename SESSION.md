@@ -4840,3 +4840,13 @@
   - JS Shim 修复通过（4 项）：`picture-srcset-demo` (1/1), `message-channel-task-queue` (1/1), `opaque-sheet-text` (4/4), `parser-script-lifecycle` (7/7) -> 13 pass, 0 fail；同时修复 `session_hooks.cp` `fireScriptEvent` 避免重复派发 `load`，重测 `inserted-script` + `parser-script-lifecycle` **8 pass, 0 fail (10 expect())**。
   - CDP 修复通过（5 项 + `hexVal` 去重）：`navigation-fidelity` (4/4), `source-script-pipeline` (7/7), `oopif-heap-usage` (1/1), `oopif-runtime-evaluate` (1/1), `screencast-pipeline-order` (8/8) -> 21 pass, 0 fail (568 expect())；`document_kind.cp`/`linear_regex.cp`/`server.cp` `hexVal` 改名去重。
   - 唯一已知宿主客户端限制（1 项）：`session-deadlines` (2/3 pass)，服务端 wire 已发送 `1001`，Bun v1.3.14 `WebSocket` 客户端将其规范化为 `1000`。
+
+## Phase 252 (2026-11-22): 最终 8 项 E2E 回归清零、-m -d 快编矩阵固化与统一产物验收
+- 构建提速固化：实测 `cap build -m -d` 全量 99 模块冷编译仅 12.70s（Native 8.13s），已将三线物理隔离矩阵（`bin_19231`/`19231`、`bin_19232`/`19232`、`bin_19233`/`19233` + `-m -d` 日常快编）及 `cap build -m -r -o bin_rel` 收尾发布命令固化至 `GEMINI.md` 11.1 与 11.7 节。
+- 最终修复与统一 `bin/main` ReleaseFast 联合验收（`10 pass, 0 fail, 283 expect()` in 15.92s）：
+  - `filereader-event-tasks` (2/2)：`window.js` `__capsurf_pump_timers` 单宏任务返回以按规范排空微任务；
+  - `incremental-shadow-insert` (1/1) + `shadow-dom` (2/2)：`element.js` `getBoundingClientRect` 消除 $O(2^N)$ 兄弟累加递归与 shadow-root 重复遍历；
+  - `native-function-shape` (1/1)：`session_hooks.cp` 为 `__WrappedFunction` 保留 `[native code]` 格式化与 `Function` 名称；
+  - `network-stylesheet-headers-demo` (1/1) + `oversize-body-streams` (1/1)：`session.cp` 使用 `recordPendingFetchBody` 与 `network.cp` `recordResponseBody` 按 `request_id` 覆写去重；
+  - `font-face-demo` (1/1) + `matchmedia-demo` (1/1) 全通过；`screencast-partial-frames` (11/11) 串行全过。
+- 清理多余临时构建目录（`bin_19231..19233`、`bin_rel`、`temp`），保留正式产物 `bin/main`。

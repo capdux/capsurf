@@ -15,7 +15,7 @@ import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, Scrol
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
-import { recordResponseBody, consumePendingFetchBody } from "./network.cp";
+import { recordResponseBody, recordPendingFetchBody, consumePendingFetchBody } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -1921,8 +1921,6 @@ pub struct CdpPageSession {
                 const full_u = resolveSubresourceUrl(nav_url, href_a, &u_buf);
                 m.addFetchRecord(full_u, "text/css");
                 if (m.fetch_count > 0) {
-                    let req_id_buf: [32]u8 = undefined;
-                    const req_id = std.fmt.bufPrint(&req_id_buf, "req-{d}", .{m.fetch_count}) catch "req-1";
                     let tmp_css_buf: [16384]u8 = undefined;
                     if (MockFixtures.isFixtureUrl(full_u) || MockFixtures.isFixtureUrl(href_a)) {
                         let loaded_css: ([]const u8)? = MockFixtures.handleFixtureRequest(full_u, "", _.user_agent, &tmp_css_buf, null);
@@ -1930,7 +1928,7 @@ pub struct CdpPageSession {
                             loaded_css = MockFixtures.handleFixtureRequest(href_a, "", _.user_agent, &tmp_css_buf, null);
                         }
                         if (lcss := loaded_css) {
-                            recordResponseBody(req_id, lcss, false);
+                            recordPendingFetchBody(full_u, lcss);
                         }
                     }
                 }

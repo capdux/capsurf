@@ -1838,3 +1838,7 @@
 - `fireScriptEvent` 与 `EventTarget.prototype.dispatchEvent` 均会调用 `on<type>` 属性导致 `inserted-script` 触发双倍 `load`；改为优先 `dispatchEvent`，仅无 `dispatchEvent` 时回退 `onload`/`onerror`。
 - `messageTaskQueue` 执行后立即返回 C++ 排空微任务，确保 `MessageChannel` 微任务先于逾期 `setTimeout` 运行。
 - 构建 `scripts/e2e_suite.py` 固化 CapSurf 可执行 E2E 门禁基线。
+
+### Phase 252: 536 E2E 总验收残余清零与三线快编规范固化
+- 全量 536 套件跑盘曾暴露 `element.js` 在 shadow-root 增量插入场景下因前向兄弟累加递归导致的 $O(2^N)$ 卡死，引入 `inSiblingOffsetCalc` 与 `_inShadowRect` 守卫后降至 $O(N)$（2.66s 通过）。
+- `cap build -m -d` 实测比 `-m -r` 快 7–10 倍（12.7s vs ~81s），正式固化为所有三线日常开发默认编译模式。

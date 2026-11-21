@@ -2033,6 +2033,7 @@ function installElementExtensions(proto) {
     return obj;
   }
 
+  let inSiblingOffsetCalc = false;
   const origGetBoundingClientRect = proto.getBoundingClientRect;
   proto.getBoundingClientRect = function () {
     if (isElementDisplayNone(this)) {
@@ -2128,18 +2129,35 @@ function installElementExtensions(proto) {
           }
           return makeDomRect(absLeft - winX, absTop - winY, childW, childH);
         }
-        const pr = parent.getBoundingClientRect();
+        let pr;
+        if (parent._shadowRoot && !parent._inShadowRect) {
+          parent._inShadowRect = true;
+          try {
+            pr = parent.getBoundingClientRect();
+          } finally {
+            parent._inShadowRect = false;
+          }
+        } else {
+          pr = parent.getBoundingClientRect();
+        }
         if (!childW) childW = pr.width;
         let offsetTop = 0;
-        const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
-                         (parent.children || parent._children || []);
-        for (let i = 0; i < siblings.length; i++) {
-          const sib = siblings[i];
-          if (sib === this) break;
-          if (sib && sib.nodeType === 1) {
-            let sh = (sib.getBoundingClientRect ? sib.getBoundingClientRect().height : 0) || 0;
-            if (!sh && sib.style && sib.style.height) sh = parseFloat(sib.style.height) || 0;
-            offsetTop += sh;
+        if (!inSiblingOffsetCalc) {
+          const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
+                           (parent.children || parent._children || []);
+          inSiblingOffsetCalc = true;
+          try {
+            for (let i = 0; i < siblings.length; i++) {
+              const sib = siblings[i];
+              if (sib === this) break;
+              if (sib && sib.nodeType === 1) {
+                let sh = (sib.getBoundingClientRect ? sib.getBoundingClientRect().height : 0) || 0;
+                if (!sh && sib.style && sib.style.height) sh = parseFloat(sib.style.height) || 0;
+                offsetTop += sh;
+              }
+            }
+          } finally {
+            inSiblingOffsetCalc = false;
           }
         }
         const relX = pr.left;

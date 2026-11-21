@@ -1738,6 +1738,28 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    };\n" ++
     "    __WrappedFunction.prototype = __OrigFunction.prototype;\n" ++
     "    __WrappedFunction.__iframe_var_wrapped = true;\n" ++
+    "    try { Object.defineProperty(__WrappedFunction, 'name', { value: 'Function', configurable: true }); } catch (e) {}\n" ++
+    "    try { Object.defineProperty(__WrappedFunction, '__capsurf_native_name', { value: 'Function', configurable: true }); } catch (e) {}\n" ++
+    "    if (typeof Function.prototype.toString === 'function' && !Function.prototype.toString.__capsurf_fn_ts_wrapped) {\n" ++
+    "      var __origFnToString = Function.prototype.toString;\n" ++
+    "      var __patchedFnToString = function toString() {\n" ++
+    "        if (this === __patchedFnToString) return 'function toString() { [native code] }';\n" ++
+    "        if (typeof this === 'function' && this.__capsurf_native_name) {\n" ++
+    "          return 'function ' + this.__capsurf_native_name + '() { [native code] }';\n" ++
+    "        }\n" ++
+    "        return __origFnToString.call(this);\n" ++
+    "      };\n" ++
+    "      try {\n" ++
+    "        Object.defineProperty(__patchedFnToString, 'name', { value: 'toString', configurable: true });\n" ++
+    "        Object.defineProperty(__patchedFnToString, '__capsurf_fn_ts_wrapped', { value: true, configurable: true });\n" ++
+    "        Object.defineProperty(Function.prototype, 'toString', {\n" ++
+    "          value: __patchedFnToString,\n" ++
+    "          writable: true,\n" ++
+    "          enumerable: false,\n" ++
+    "          configurable: true\n" ++
+    "        });\n" ++
+    "      } catch (e) {}\n" ++
+    "    }\n" ++
     "    g.Function = __WrappedFunction;\n" ++
     "  }\n" ++
     "  function isOutboundRejectedUrl(u) {\n" ++
