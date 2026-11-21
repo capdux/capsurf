@@ -130,11 +130,19 @@ fn isPrintableKey(key: []const u8, text: []const u8): bool {
 
 fn dispatchKeyJs(session: *CdpPageSession, type_str_js: []const u8, escaped_key: []const u8, escaped_code: []const u8, modifiers: i64) {
     let js_buf: [1024]u8 = [0; 1024];
-    const js_expr = std.fmt.bufPrint(
-        &js_buf,
-        "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
-        .{ type_str_js, escaped_key, escaped_code, modifiers },
-    ) catch null;
+    const preserve_scroll = std.mem.eql(u8, escaped_key, "Tab") && session.facade.stream_mgr.isTerminalActive();
+    const js_expr = if (preserve_scroll)
+        std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ var sx=window.scrollX||0,sy=window.scrollY||0; var r=0; if (typeof __capsurf_dispatch_key_event === 'function') {{ r=__capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} if((window.scrollX||0)!==sx||(window.scrollY||0)!==sy)window.scrollTo(sx,sy); return r; }})()",
+            .{ type_str_js, escaped_key, escaped_code, modifiers },
+        ) catch null
+    else
+        std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
+            .{ type_str_js, escaped_key, escaped_code, modifiers },
+        ) catch null;
     if (e := js_expr) {
         const val = session.ctx.eval(e);
         if (val.tag == 0 && val.u.uint64 > 0) {

@@ -140,7 +140,7 @@ fn parsePositiveDecimal(s: []const u8): i64 {
     return val;
 }
 
-fn hexVal(c: u8): u8? {
+fn serverHexVal(c: u8): u8? {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -152,8 +152,8 @@ fn decodeUriComponentLen(src: []const u8, dst: []u8): usize {
     let i: usize = 0;
     while (i < src.len && out_len < dst.len) {
         if (src[i] == '%' && i + 2 < src.len) {
-            if (hi := hexVal(src[i + 1])) {
-                if (lo := hexVal(src[i + 2])) {
+            if (hi := serverHexVal(src[i + 1])) {
+                if (lo := serverHexVal(src[i + 2])) {
                     dst[out_len] = (hi << 4) | lo;
                     out_len += 1;
                     i += 3;
@@ -1436,7 +1436,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 PollFd{ fd: client_fd, events: POLLIN, revents: 0 },
                 PollFd{ fd: _.listen_fd, events: POLLIN, revents: 0 },
             ];
-            let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms < 15;
+            let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms <= 16;
             if (!fast_poll) {
                 if (st := _.session.facade.stream_mgr.getPrimaryStream()) {
                     if (st.min_frame_interval_ms <= 16) fast_poll = true;
@@ -1650,7 +1650,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 const post_now_ms = serverNowMs();
                 let did_post_sc = false;
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
-                    _.session.pumpTimers();
+                    if (!std.mem.eql(u8, cdp_req.method, "Page.startScreencast")) {
+                        _.session.pumpTimers();
+                    }
                     did_post_sc = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
                 }
                 _.pumpAllSceneStreams(client_fd, post_now_ms, did_post_sc) catch break;

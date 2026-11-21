@@ -6,6 +6,7 @@ import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, e
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { emitPendingNavigationEvents } from "./input.cp";
 import { emitNewChildFrameEvents } from "./page.cp";
+import { originOf } from "./frames.cp";
 import { JS_Eval, jsIsException } from "../js/qjs_engine.cp";
 import { makeCompiledScriptMeta, emitScriptParsedEvent } from "./debugger.cp";
 
@@ -17,6 +18,36 @@ pub struct RuntimeHandler {
             session.runtime_enabled = true;
             if (req.session_id.len > 0 && !std.mem.eql(u8, req.session_id, "capsurf-session-001")) {
                 if (iframe_fid := session.target_registry.findFrameIdBySessionId(req.session_id)) {
+                    let ki: usize = 0;
+                    while (ki < session.known_child_frame_count) : (ki += 1) {
+                        let kf = &session.known_child_frames[ki];
+                        if (!kf.active || kf.detached) continue;
+                        const k_fid = kf.frame_id_buf[0..kf.frame_id_len];
+                        if (std.mem.eql(u8, k_fid, iframe_fid)) {
+                            if (kf.exec_context_id <= 0) {
+                                kf.exec_context_id = session.next_context_id;
+                                session.next_context_id += 1;
+                            }
+                            const matched_cid = kf.exec_context_id;
+                            const k_url = kf.url_buf[0..kf.url_len];
+                            let matched_origin: []const u8 = "about:blank";
+                            if (kf.is_opaque) {
+                                matched_origin = "://";
+                            } else if (k_url.len > 0) {
+                                matched_origin = originOf(k_url);
+                            }
+                            let esc_orig_buf: [256]u8 = [0; 256];
+                            const esc_orig = escapeJsonString(matched_origin, &esc_orig_buf);
+                            const ctx_json = std.fmt.bufPrint(
+                                &session.iframe_ctx_event_buf,
+                                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-{d}\",\"auxData\":{{\"isDefault\":false,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
+                                .{ matched_cid, esc_orig, matched_cid, iframe_fid },
+                            ) catch "{}";
+                            out_events[0] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                            event_count.* = 1;
+                            return CdpResponse.ok(req.id, "{}");
+                        }
+                    }
                     * = session.ensureIframeContext();
                     const cid = session.iframe_ctx_id;
                     const origin_str = if (session.iframe_origin_len > 0)
@@ -57,6 +88,24 @@ pub struct RuntimeHandler {
             let c_i: usize = 0;
             while (c_i < polled_c_count && event_count.* < out_events.len) : (c_i += 1) {
                 out_events[event_count.*] = polled_ctx_evts[c_i];
+                event_count.* += 1;
+            }
+
+            // Re-emit existing active child frame execution contexts on Runtime.enable
+            let kci: usize = 0;
+            while (kci < session.known_child_frame_count && event_count.* < out_events.len) : (kci += 1) {
+                const kf = &session.known_child_frames[kci];
+                if (!kf.active || kf.detached || kf.exec_context_id <= 0) continue;
+                const kf_url = kf.url_buf[0..kf.url_len];
+                const kf_orig: []const u8 = if (kf.is_opaque) "://" else originOf(kf_url);
+                let esc_orig_buf: [256]u8 = [0; 256];
+                const esc_orig = escapeJsonString(kf_orig, &esc_orig_buf);
+                const kf_ctx_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":false,\"frameId\":\"{s}\"}}}}}}",
+                    .{ kf.exec_context_id, esc_orig, kf.frame_id_buf[0..kf.frame_id_len] },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", kf_ctx_json);
                 event_count.* += 1;
             }
 
@@ -297,7 +346,7 @@ pub struct RuntimeHandler {
             }
 
             // Poll any network events produced during evaluation
-            let polled_net_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
             let net_i: usize = 0;
             while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {

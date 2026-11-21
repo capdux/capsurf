@@ -2455,3 +2455,9 @@
 ## Phase 250 (2026-11-21)
 - Fixed `fetch-slot-order`, `iframe-referrer` nested policy propagation, `navigate-window-cookies` evaluate `Object.prototype.then` cookie pump, and `oopif-late-spawn`/`oopif-postmessage`/`oopif-rerender` in `src/cdp/page.cp` and `src/cdp/session.cp`.
 - Added whitebox tests `test/css/test_css_counters_and_list_style.cp` and `test/net/test_sandbox_fixtures.cp`, and aligned `test_js_dom.cp`, `test_cdp.cp`, and `test_playwright_e2e.cp` (`138/138` whitebox PASS).
+
+## Phase 251 (2026-11-21)
+- Added `scripts/e2e_suite.py` concurrent E2E runner with explicit 28-suite Kitesurf-architecture skip classification.
+- Fixed `picture-srcset-demo`, `message-channel-task-queue`, `opaque-sheet-text`, and `parser-script-lifecycle` in `src/js/shim/` (`html-classes.js`, `window.js`, `node-base.js`), and deduplicated `fireScriptEvent` in `src/cdp/session_hooks.cp`.
+- Fixed `navigation-fidelity` hop-0 `requestWillBeSent`, `oopif-heap-usage` `Runtime.enable` context re-emit, `source-script-pipeline` + `oopif-runtime-evaluate` iframe classic/module global bindings, and `screencast-pipeline-order` immediate first frame in `src/cdp/` (`page.cp`, `runtime.cp`, `session_hooks.cp`, `server.cp`).
+- Renamed `hexVal` to `docKindHexVal`/`regexHexVal`/`serverHexVal` across `src/cdp/`.

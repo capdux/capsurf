@@ -145,6 +145,12 @@ pub struct KitesurfFacade {
             const owner_sid = if (req_session_id.len > 0) req_session_id else session.target_id;
             * = _.stream_mgr.startStream(cfg, owner_sid, getMilliTimestamp());
             if (session.has_document) {
+                if (term_mode) {
+                    const tv = session.ctx.eval(
+                        "(function(){globalThis.__capsurf_tty_keyboard=true;if(!globalThis.__capsurf_tty_ua_css_text){globalThis.__capsurf_tty_ua_css_text=\"a[href]:focus { outline: none !important; }\\na[href]:focus, a[href]:focus * { text-decoration: underline solid #f00 2px !important; text-decoration-line: underline !important; text-decoration-color: rgb(255, 0, 0) !important; text-underline-offset: 2px !important; }\\n\";}})()",
+                    );
+                    session.ctx.freeValue(tv);
+                }
                 let drv_interval: u32 = 16;
                 if (st := _.stream_mgr.getPrimaryStream()) {
                     drv_interval = st.min_frame_interval_ms;
@@ -168,6 +174,12 @@ pub struct KitesurfFacade {
         if (std.mem.eql(u8, method, "Kitesurf.stopSceneStream") ||
             std.mem.eql(u8, method, "CapSurf.stopSceneStream")) {
             * = _.stream_mgr.stopStream(session.target_id);
+            if (session.has_document) {
+                const tv = session.ctx.eval(
+                    "(function(){globalThis.__capsurf_tty_keyboard=false;if(globalThis.__capsurf_tty_ua_css_text&&globalThis.__capsurf_tty_ua_css_text.indexOf('--ks-tty-cell-w')===-1){globalThis.__capsurf_tty_ua_css_text='';}})()",
+                );
+                session.ctx.freeValue(tv);
+            }
             if (session.has_document && !session.screencast_handler.isActive()) {
                 const dv = session.ctx.eval("(function(){if(typeof __capsurf_set_raf_driver==='function')__capsurf_set_raf_driver(false,16);})()");
                 session.ctx.freeValue(dv);

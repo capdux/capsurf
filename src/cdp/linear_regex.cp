@@ -84,7 +84,7 @@ fn isHexDigit(c: u8): bool {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-fn hexVal(c: u8): u32 {
+fn regexHexVal(c: u8): u32 {
     if (c >= '0' && c <= '9') return @as(u32, c - '0');
     if (c >= 'a' && c <= 'f') return @as(u32, c - 'a' + 10);
     if (c >= 'A' && c <= 'F') return @as(u32, c - 'A' + 10);
@@ -603,7 +603,7 @@ pub struct Parser {
         let val: u32 = 0;
         k = 0;
         while (k < digits) : (k += 1) {
-            val = val * 16 + hexVal(_.src[_.i + k]);
+            val = val * 16 + regexHexVal(_.src[_.i + k]);
         }
         _.i += digits;
         return val;

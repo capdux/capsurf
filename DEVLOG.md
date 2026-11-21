@@ -1833,3 +1833,8 @@
 ### Phase 250: 嵌套 iframe 策略透传、evaluate 异步 Cookie 排空与全量白盒同步
 - `page.cp` 中 `about:blank`/`about:srcdoc`/`data:` 子帧不再误判为跨源 OOPIF，已占槽跨源帧允许继续发射 `Runtime.executionContextCreated`。
 - `session.cp` 中 `evaluateInContext` 在检测到 `Object.prototype.then` 截留且 Cookie 变更时主动触发 `then` getter 并排空微任务队列。
+
+### Phase 251: 全量 536 E2E 收尾清零与双轨门禁固化
+- `fireScriptEvent` 与 `EventTarget.prototype.dispatchEvent` 均会调用 `on<type>` 属性导致 `inserted-script` 触发双倍 `load`；改为优先 `dispatchEvent`，仅无 `dispatchEvent` 时回退 `onload`/`onerror`。
+- `messageTaskQueue` 执行后立即返回 C++ 排空微任务，确保 `MessageChannel` 微任务先于逾期 `setTimeout` 运行。
+- 构建 `scripts/e2e_suite.py` 固化 CapSurf 可执行 E2E 门禁基线。

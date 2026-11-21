@@ -421,24 +421,22 @@ function executeConnectedScripts(node) {
                 });
               }
               const evt = new Event("load", { bubbles: false, cancelable: false });
-              if (typeof node.onload === "function") {
+              if (typeof node.dispatchEvent === "function") {
+                try { node.dispatchEvent(evt); } catch (e) {}
+              } else if (typeof node.onload === "function") {
                 try { node.onload.call(node, evt); } catch (e) {
                   if (typeof console !== "undefined" && console.error) console.error(e);
                 }
               }
-              if (typeof node.dispatchEvent === "function") {
-                try { node.dispatchEvent(evt); } catch (e) {}
-              }
             })
             .catch(function (fetchErr) {
               const evt = new Event("error", { bubbles: false, cancelable: false });
-              if (typeof node.onerror === "function") {
+              if (typeof node.dispatchEvent === "function") {
+                try { node.dispatchEvent(evt); } catch (e) {}
+              } else if (typeof node.onerror === "function") {
                 try { node.onerror.call(node, evt); } catch (e) {
                   if (typeof console !== "undefined" && console.error) console.error(e);
                 }
-              }
-              if (typeof node.dispatchEvent === "function") {
-                try { node.dispatchEvent(evt); } catch (e) {}
               }
             });
         }

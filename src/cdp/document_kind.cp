@@ -187,7 +187,7 @@ pub fn escapeHtml(s: []const u8): []const u8 {
     return escapeHtmlToBuf(s, &tls_escape_buf);
 }
 
-fn hexVal(c: u8): u8? {
+fn docKindHexVal(c: u8): u8? {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -199,8 +199,8 @@ fn decodeUriComponent(s: []const u8, out_buf: []u8): []const u8 {
     let out_len: usize = 0;
     while (i < s.len && out_len < out_buf.len) {
         if (s[i] == '%' && i + 2 < s.len) {
-            const h1 = hexVal(s[i + 1]);
-            const h2 = hexVal(s[i + 2]);
+            const h1 = docKindHexVal(s[i + 1]);
+            const h2 = docKindHexVal(s[i + 2]);
             if (h1 != null && h2 != null) {
                 out_buf[out_len] = (h1.? << 4) | h2.?;
                 out_len += 1;

@@ -414,12 +414,11 @@ fn resolveUrlWithDots(base_url: []const u8, rel: []const u8, out_buf: []u8): []c
         return rel;
     }
     if (std.mem.startsWith(u8, rel, "/")) {
+        const scheme_idx = std.mem.indexOf(u8, base_url, "://") ?? return rel;
+        const after_scheme = base_url[scheme_idx + 3 ..];
         let origin = base_url;
-        if (idx := std.mem.indexOf(u8, base_url, "://")) {
-            const after_scheme = base_url[idx + 3 ..];
-            if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
-                origin = base_url[0 .. idx + 3 + slash_pos];
-            }
+        if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+            origin = base_url[0 .. scheme_idx + 3 + slash_pos];
         }
         return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, rel }) catch rel;
     }
@@ -824,12 +823,11 @@ fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): 
         return rel;
     }
     if (std.mem.startsWith(u8, rel, "/")) {
+        const scheme_idx = std.mem.indexOf(u8, base_url, "://") ?? return rel;
+        const after_scheme = base_url[scheme_idx + 3 ..];
         let origin = base_url;
-        if (idx := std.mem.indexOf(u8, base_url, "://")) {
-            const after_scheme = base_url[idx + 3 ..];
-            if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
-                origin = base_url[0 .. idx + 3 + slash_pos];
-            }
+        if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
+            origin = base_url[0 .. scheme_idx + 3 + slash_pos];
         }
         return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, rel }) catch rel;
     }
@@ -854,6 +852,7 @@ pub struct KnownChildFrame {
     parent_frame_id_buf: [32]u8 = [0; 32],
     parent_frame_id_len: usize = 0,
     is_cross_origin: bool = false,
+    is_opaque: bool = false,
 
     fn frameId(): []const u8 {
         return _.frame_id_buf[0.._.frame_id_len];
@@ -1167,11 +1166,16 @@ pub struct CdpPageSession {
 
     pub fn addModulePreloadPin(*_, url: []const u8, integrity: []const u8) {
         if (url.len == 0 || integrity.len == 0) return;
+        const alloc = std.heap.c_allocator;
         let i: usize = 0;
         while (i < _.modulepreload_pins.items.len) : (i += 1) {
-            if (std.mem.eql(u8, _.modulepreload_pins.items[i].url, url)) return;
+            if (std.mem.eql(u8, _.modulepreload_pins.items[i].url, url)) {
+                const di = alloc.dupe(u8, integrity) catch return;
+                alloc.free(_.modulepreload_pins.items[i].integrity);
+                _.modulepreload_pins.items[i].integrity = di;
+                return;
+            }
         }
-        const alloc = std.heap.c_allocator;
         const du = alloc.dupe(u8, url) catch return;
         const di = alloc.dupe(u8, integrity) catch {
             alloc.free(du);
@@ -1561,6 +1565,17 @@ pub struct CdpPageSession {
                     css_len += tty_css.len;
                     css_buf.?[css_len] = '\n';
                     css_len += 1;
+                }
+                const tty_focus_bg = "a[href]:focus { background-color: #284a9a !important; color: #fff !important; }\n";
+                if (css_len + tty_focus_bg.len <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + tty_focus_bg.len], tty_focus_bg);
+                    css_len += tty_focus_bg.len;
+                }
+            } else if (_.facade.stream_mgr.isTerminalActive()) {
+                const term_focus_css = "a[href]:focus { outline: none !important; }\na[href]:focus, a[href]:focus * { text-decoration: underline solid #f00 2px !important; text-decoration-line: underline !important; text-decoration-color: rgb(255, 0, 0) !important; text-underline-offset: 2px !important; }\n";
+                if (css_len + term_focus_css.len <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + term_focus_css.len], term_focus_css);
+                    css_len += term_focus_css.len;
                 }
             }
             let snid: usize = 0;
@@ -2094,21 +2109,33 @@ pub struct CdpPageSession {
             let meta_js_buf: [4096]u8 = undefined;
             const dark_str = if (_.dark_color_scheme) "true" else "false";
             const stripped_str = if (_.nav_tty_stripped) "true" else "false";
-            let tty_raw_buf: [1536]u8 = undefined;
-            let tty_css_esc_buf: [2048]u8 = undefined;
+            let tty_raw_buf: [2048]u8 = undefined;
+            let tty_css_esc_buf: [3072]u8 = undefined;
             let tty_css_esc_len: usize = 0;
+            const term_active_nav = _.facade.stream_mgr.isTerminalActive();
             if (_.tty_ua_css > 0) {
                 const cw = if (_.tty_cell_w > 0) _.tty_cell_w else DEFAULT_TTY_CELL_WIDTH_PX;
                 const ch = if (_.tty_cell_h > 0) _.tty_cell_h else DEFAULT_TTY_CELL_HEIGHT_PX;
                 const tty_raw = ttyUaStylesheet(_.tty_ua_css, ch, cw, &tty_raw_buf);
-                const esc_slice = escapeJsonString(tty_raw, &tty_css_esc_buf);
+                const tty_focus_bg = "\na[href]:focus { background-color: #284a9a !important; color: #fff !important; }\n";
+                let combined_len = tty_raw.len;
+                if (tty_raw.len + tty_focus_bg.len <= tty_raw_buf.len) {
+                    @memcpy(tty_raw_buf[tty_raw.len .. tty_raw.len + tty_focus_bg.len], tty_focus_bg);
+                    combined_len += tty_focus_bg.len;
+                }
+                const esc_slice = escapeJsonString(tty_raw_buf[0..combined_len], &tty_css_esc_buf);
+                tty_css_esc_len = esc_slice.len;
+            } else if (term_active_nav) {
+                const term_focus_css = "a[href]:focus { outline: none !important; }\na[href]:focus, a[href]:focus * { text-decoration: underline solid #f00 2px !important; text-decoration-line: underline !important; text-decoration-color: rgb(255, 0, 0) !important; text-underline-offset: 2px !important; }\n";
+                const esc_slice = escapeJsonString(term_focus_css, &tty_css_esc_buf);
                 tty_css_esc_len = esc_slice.len;
             }
             const tty_css_esc = tty_css_esc_buf[0..tty_css_esc_len];
+            const tty_kbd_str = if (term_active_nav) "true" else "false";
             const meta_js = std.fmt.bufPrint(
                 &meta_js_buf,
-                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};globalThis.__capsurf_tty_cell_w={d};globalThis.__capsurf_tty_cell_h={d};globalThis.__capsurf_tty_ua_css_text=\"{s}\";}})()",
-                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str, _.tty_cell_w, _.tty_cell_h, tty_css_esc },
+                "(function(){{globalThis.__capsurf_bctx_id=\"{s}\";globalThis.__capsurf_nav_seq={d};globalThis.__capsurf_session_extra_headers=\"{s}\";globalThis.__capsurf_dark_color_scheme={s};globalThis.__capsurf_nav_tty_stripped={s};globalThis.__capsurf_tty_cell_w={d};globalThis.__capsurf_tty_cell_h={d};globalThis.__capsurf_tty_keyboard={s};globalThis.__capsurf_tty_ua_css_text=\"{s}\";}})()",
+                .{ bctx_esc, _.nav_seq, eh_esc, dark_str, stripped_str, _.tty_cell_w, _.tty_cell_h, tty_kbd_str, tty_css_esc },
             ) catch "";
             if (meta_js.len > 0) {
                 const mv = _.ctx.eval(meta_js);
@@ -4190,6 +4217,17 @@ pub struct CdpPageSession {
                     css_buf.?[css_len] = '\n';
                     css_len += 1;
                 }
+                const tty_focus_bg = "a[href]:focus { background-color: #284a9a !important; color: #fff !important; }\n";
+                if (css_len + tty_focus_bg.len <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + tty_focus_bg.len], tty_focus_bg);
+                    css_len += tty_focus_bg.len;
+                }
+            } else if (_.facade.stream_mgr.isTerminalActive()) {
+                const term_focus_css = "a[href]:focus { outline: none !important; }\na[href]:focus, a[href]:focus * { text-decoration: underline solid #f00 2px !important; text-decoration-line: underline !important; text-decoration-color: rgb(255, 0, 0) !important; text-underline-offset: 2px !important; }\n";
+                if (css_len + term_focus_css.len <= css_buf.?.len) {
+                    @memcpy(css_buf.?[css_len..css_len + term_focus_css.len], term_focus_css);
+                    css_len += term_focus_css.len;
+                }
             }
             let snid: usize = 0;
             while (snid < _.doc.nodes.items.len) : (snid += 1) {
@@ -4377,31 +4415,37 @@ pub struct CdpPageSession {
                 const if_node = &_.doc.nodes.items[if_nid];
                 if (if_node.node_type != NodeType.Element || !std.ascii.eqlIgnoreCase(if_node.tag_name, "iframe")) continue;
                 const if_src = if_node.getAttribute("src") ?? "";
-                if (if_src.len == 0) continue;
+                const if_srcdoc = if_node.getAttribute("srcdoc");
+                if (if_src.len == 0 && if_srcdoc == null) continue;
                 const ir = rects[if_nid];
                 const iw = @as(u32, @intFromFloat(@max(0.0, ir.width)));
                 const ih = @as(u32, @intFromFloat(@max(0.0, ir.height)));
                 if (iw == 0 || ih == 0) continue;
 
-                let if_url_buf: [1024]u8 = undefined;
-                const full_if_url = resolveSubresourceUrl(_.url, if_src, &if_url_buf);
-                const if_origin = extractOriginFromUrl(full_if_url);
-                const is_oopif = main_origin.len > 0 && if_origin.len > 0 && !std.mem.eql(u8, main_origin, if_origin);
-                if (is_oopif) {
-                    if (oopif_rendered >= MAX_CONCURRENT_OOPIF) continue;
-                    oopif_rendered += 1;
-                }
-                let if_html_buf = _.allocator.alloc(u8, 65536) catch null;
-                if (if_html_buf == null) continue;
-                defer _.allocator.free(if_html_buf.?);
                 let child_html: []const u8 = "";
-                if (MockFixtures.isFixtureUrl(full_if_url)) {
-                    if (fh := MockFixtures.handleFixtureRequest(full_if_url, "", _.user_agent, if_html_buf.?, null)) {
-                        child_html = fh;
+                let if_html_buf: ([]u8)? = null;
+                defer if (if_html_buf != null) _.allocator.free(if_html_buf.?);
+                if (sd := if_srcdoc) {
+                    child_html = sd;
+                } else {
+                    let if_url_buf: [1024]u8 = undefined;
+                    const full_if_url = resolveSubresourceUrl(_.url, if_src, &if_url_buf);
+                    const if_origin = extractOriginFromUrl(full_if_url);
+                    const is_oopif = main_origin.len > 0 && if_origin.len > 0 && !std.mem.eql(u8, main_origin, if_origin);
+                    if (is_oopif) {
+                        if (oopif_rendered >= MAX_CONCURRENT_OOPIF) continue;
+                        oopif_rendered += 1;
                     }
-                } else if (MockFixtures.isFixtureUrl(if_src)) {
-                    if (fh := MockFixtures.handleFixtureRequest(if_src, "", _.user_agent, if_html_buf.?, null)) {
-                        child_html = fh;
+                    if_html_buf = _.allocator.alloc(u8, 65536) catch null;
+                    if (if_html_buf == null) continue;
+                    if (MockFixtures.isFixtureUrl(full_if_url)) {
+                        if (fh := MockFixtures.handleFixtureRequest(full_if_url, "", _.user_agent, if_html_buf.?, null)) {
+                            child_html = fh;
+                        }
+                    } else if (MockFixtures.isFixtureUrl(if_src)) {
+                        if (fh := MockFixtures.handleFixtureRequest(if_src, "", _.user_agent, if_html_buf.?, null)) {
+                            child_html = fh;
+                        }
                     }
                 }
                 if (child_html.len == 0) continue;
@@ -5049,7 +5093,16 @@ pub struct CdpPageSession {
                     ev_idx += 1;
                 }
             }
-            dom.clearFetchRecords();
+            if (i < dom.fetch_count) {
+                const rem = dom.fetch_count - i;
+                let ri: usize = 0;
+                while (ri < rem) : (ri += 1) {
+                    dom.fetch_records[ri] = dom.fetch_records[i + ri];
+                }
+                dom.fetch_count = rem;
+            } else {
+                dom.clearFetchRecords();
+            }
             _.init_img_flushed = true;
             return ev_idx;
         }

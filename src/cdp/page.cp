@@ -24,6 +24,7 @@ import {
 import { nextDocRequestId, recordResponseBody } from "./network.cp";
 import {
     FrameState,
+    SandboxRestrictions,
     MainFrameArgs,
     ChildFrameArgs,
     makeMainFrameState,
@@ -78,6 +79,23 @@ fn findNestedIframeSrc(html: []const u8): ([]const u8)? {
     return null;
 }
 
+fn parseSandboxAttr(raw: []const u8): SandboxRestrictions {
+    let res = SandboxRestrictions{
+        scripts: false,
+        same_origin: false,
+        forms: false,
+        top_navigation: false,
+    };
+    let it = std.mem.tokenizeAny(u8, raw, " \t\r\n");
+    while (tok := it.next()) {
+        if (std.ascii.eqlIgnoreCase(tok, "allow-scripts")) res.scripts = true;
+        else if (std.ascii.eqlIgnoreCase(tok, "allow-same-origin")) res.same_origin = true;
+        else if (std.ascii.eqlIgnoreCase(tok, "allow-forms")) res.forms = true;
+        else if (std.ascii.eqlIgnoreCase(tok, "allow-top-navigation")) res.top_navigation = true;
+    }
+    return res;
+}
+
 fn addIframeState(
     session: *CdpPageSession,
     out_frames: []FrameState,
@@ -88,6 +106,7 @@ fn addIframeState(
     raw_src: []const u8,
     frame_name: []const u8,
     owner_id: []const u8,
+    sandbox_opt: ([]const u8)?,
 ) {
     if (count.* >= out_frames.len) return;
     child_seq.* += 1;
@@ -112,6 +131,10 @@ fn addIframeState(
 
     let name_buf = session.allocator.dupe(u8, frame_name) catch "";
     let owner_buf = session.allocator.dupe(u8, owner_id) catch "";
+    let sb_val: (SandboxRestrictions)? = null;
+    if (sb_str := sandbox_opt) {
+        sb_val = parseSandboxAttr(sb_str);
+    }
     out_frames[child_idx] = makeChildFrameState(ChildFrameArgs{
         frame_id: child_id,
         parent_frame_id: session.frame_id,
@@ -120,6 +143,7 @@ fn addIframeState(
         name: name_buf,
         owner_element_id: owner_buf,
         is_cross_origin: is_xo,
+        sandbox: sb_val,
     });
     count.* += 1;
 
@@ -210,7 +234,7 @@ fn collectFrameStates(
     let child_seq: usize = 0;
 
     if (session.has_document) {
-        const js_iframes = "(function(){try{if(typeof document==='undefined'||!document.querySelectorAll)return '';var fs=document.querySelectorAll('iframe');var out=[];for(var i=0;i<fs.length;i++){var f=fs[i];var s=(f.getAttribute&&f.getAttribute('src'))||'';var n=(f.getAttribute&&f.getAttribute('name'))||'';var id=(f.getAttribute&&f.getAttribute('id'))||'';out.push(s+'\\x1f'+n+'\\x1f'+id);}return out.join('\\x1e');}catch(e){return '';}})()";
+        const js_iframes = "(function(){try{if(typeof document==='undefined'||!document.querySelectorAll)return '';var fs=document.querySelectorAll('iframe');var out=[];for(var i=0;i<fs.length;i++){var f=fs[i];var s=(f.getAttribute&&f.getAttribute('src'))||'';var n=(f.getAttribute&&f.getAttribute('name'))||'';var id=(f.getAttribute&&f.getAttribute('id'))||'';var sb=(f.hasAttribute&&f.hasAttribute('sandbox'))?(f.getAttribute('sandbox')||''):'__NONE__';out.push(s+'\\x1f'+n+'\\x1f'+id+'\\x1f'+sb);}return out.join('\\x1e');}catch(e){return '';}})()";
         const val = session.ctx.eval(js_iframes);
         defer session.ctx.freeValue(val);
         const cstr = session.ctx.toCString(val);
@@ -222,7 +246,9 @@ fn collectFrameStates(
                 const raw_src = cols.next() ?? "";
                 const frame_name = cols.next() ?? "";
                 const owner_id = cols.next() ?? "";
-                addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id);
+                const raw_sb = cols.next() ?? "__NONE__";
+                const sb_opt: ([]const u8)? = if (std.mem.eql(u8, raw_sb, "__NONE__")) null else raw_sb;
+                addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id, sb_opt);
             }
             appendDetachedKnownFrames(session, out_frames, url_storage, id_storage, &count);
             return count;
@@ -238,7 +264,8 @@ fn collectFrameStates(
             const raw_src = n.getAttribute("src") ?? "";
             const owner_id = n.getAttribute("id") ?? "";
             const frame_name = n.getAttribute("name") ?? "";
-            addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id);
+            const sb_opt = n.getAttribute("sandbox");
+            addIframeState(session, out_frames, url_storage, id_storage, &count, &child_seq, raw_src, frame_name, owner_id, sb_opt);
         }
     }
     appendDetachedKnownFrames(session, out_frames, url_storage, id_storage, &count);
@@ -299,6 +326,7 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
                 if (cf.exec_context_id > 0) {
                     session.known_child_frames[ki].exec_context_id = cf.exec_context_id;
                 }
+                session.known_child_frames[ki].is_opaque = !cf.sandbox.same_origin;
                 found = true;
                 break;
             }
@@ -308,6 +336,7 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
             k.active = true;
             k.detached = false;
             k.exec_context_id = cf.exec_context_id;
+            k.is_opaque = !cf.sandbox.same_origin;
             const fl = @min(cf.frame_id.len, k.frame_id_buf.len);
             @memcpy(k.frame_id_buf[0..fl], cf.frame_id[0..fl]);
             k.frame_id_len = fl;
@@ -761,6 +790,9 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
+            session.tty_ua_css = 0;
+            session.tty_cell_w = 0;
+            session.tty_cell_h = 0;
             const target_url = sanitizeSetContentUrl(session.url);
             if (raw_html := extractJsonString(req.params_raw, "html")) {
                 if (raw_html.len == 0) {
@@ -1056,6 +1088,9 @@ pub struct PageHandler {
             }
             const raw_nav_url = extractJsonString(req.params_raw, "url") ?? "about:blank";
             let clean_nav_buf: [2048]u8 = [0; 2048];
+            session.tty_ua_css = 0;
+            session.tty_cell_w = 0;
+            session.tty_cell_h = 0;
             const tty_matched = applyTtyNavParamsFromUrl(raw_nav_url, session);
             session.nav_tty_stripped = tty_matched;
             const url = if (tty_matched)
@@ -1267,6 +1302,17 @@ pub struct PageHandler {
                     out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
                     event_count.* += 1;
                 } else {
+                    {
+                        let esc_u0_buf: [2048]u8 = [0; 2048];
+                        const esc_u0 = escapeJsonString(fetch_res.redirect_urls[0], &esc_u0_buf);
+                        const req0_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                            .{ doc_req_id, session.loader_id, esc_u0, esc_u0, session.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req0_json);
+                        event_count.* += 1;
+                    }
                     let hi: usize = 1;
                     while (hi <= fetch_res.redirect_count && event_count.* < out_events.len) : (hi += 1) {
                         const hop_u = if (hi < fetch_res.redirect_count) fetch_res.redirect_urls[hi] else fetch_res.final_url;

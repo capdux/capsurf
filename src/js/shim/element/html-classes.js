@@ -1525,6 +1525,22 @@ function installHtmlClasses(global) {
     const nw = this.naturalWidth;
     const nh = this.naturalHeight;
 
+    let hasSrcsetOrPicture = Boolean(this.hasAttribute && this.hasAttribute("srcset"));
+    if (!hasSrcsetOrPicture) {
+      const parent = this.parentElement;
+      if (parent && (parent.tagName === "PICTURE" || (parent.localName && parent.localName.toLowerCase() === "picture"))) {
+        const kids = parent.children || parent.childNodes || [];
+        for (let i = 0; i < kids.length; i++) {
+          const child = kids[i];
+          if (child === this) break;
+          if (child && String(child.tagName || child.localName || "").toLowerCase() === "source") {
+            hasSrcsetOrPicture = true;
+            break;
+          }
+        }
+      }
+    }
+
     let w = r.width;
     let h = r.height;
 
@@ -1534,7 +1550,7 @@ function installHtmlClasses(global) {
           const aw = Number(this.getAttribute("width"));
           if (!isNaN(aw) && aw >= 0) w = aw;
         }
-      } else if (w === 0 && nw > 0) {
+      } else if ((w === 0 || hasSrcsetOrPicture) && nw > 0) {
         w = nw;
       }
     } else if (w === 0 && nw > 0) {
@@ -1547,7 +1563,7 @@ function installHtmlClasses(global) {
           const ah = Number(this.getAttribute("height"));
           if (!isNaN(ah) && ah >= 0) h = ah;
         }
-      } else if (h === 0 && nh > 0) {
+      } else if ((h === 0 || hasSrcsetOrPicture) && nh > 0) {
         h = nh;
       }
     } else if (h === 0 && nh > 0) {

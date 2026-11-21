@@ -2124,7 +2124,7 @@ function installWindow(global) {
         } catch (e) {
           if (typeof console !== "undefined" && console.error) console.error(e);
         }
-        continue;
+        return withWorkerPump(0);
       }
       while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
         taskQueue.shift();
@@ -9779,6 +9779,11 @@ const CSS_TYPED_OM_GLOBALS = {
       }
     } catch (e) {}
     try {
+      if (global.document && global.document.fonts && typeof Promise !== "undefined") {
+        void Promise.resolve(global.document.fonts);
+      }
+    } catch (e) {}
+    try {
       if (global.dispatchEvent) {
         const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
         global.dispatchEvent(loadEv);
@@ -10928,24 +10933,6 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof Element !== "undefined" && Element.prototype) {
     Element.prototype.insertBefore = wrappedInsertBefore;
   }
-
-  // 15. Prevent duplicate script load/error event firing
-  const origDispatchEvent = EventTarget.prototype.dispatchEvent;
-  EventTarget.prototype.dispatchEvent = function (event) {
-    if (event && (event.type === "load" || event.type === "error") && this && (this.tagName === "SCRIPT" || this.localName === "script")) {
-      const prop = "on" + event.type;
-      const savedHandler = this[prop];
-      if (typeof savedHandler === "function") {
-        this[prop] = null;
-        try {
-          return origDispatchEvent.call(this, event);
-        } finally {
-          this[prop] = savedHandler;
-        }
-      }
-    }
-    return origDispatchEvent.call(this, event);
-  };
 
   // 16. Mark scripts created by innerHTML as already started
   function markSubtreeScripts(root) {

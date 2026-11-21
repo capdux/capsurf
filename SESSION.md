@@ -4832,3 +4832,11 @@
 ## Phase 250 (2026-11-21): Batch B4 CDP OOPIF/FetchSlot/Referrer 收敛与 138/138 全量白盒通过
 - E2E 验证（Batch B4）：`fetch-slot-order` (1/1), `iframe-referrer` (7/7), `navigate-window-cookies` (2/2), `oopif-late-spawn` (1/1), `oopif-postmessage` (1/1), `oopif-rerender` (1/1) 全部通过（`13 pass, 0 fail, 50 expect()`）。
 - 白盒补强与全量验证：新增 `test/css/test_css_counters_and_list_style.cp` (4/4) 与 `test/net/test_sandbox_fixtures.cp` (3/3)；修复 `test/js/test_js_dom.cp`、`test/cdp/test_cdp.cp`、`test/cdp/test_playwright_e2e.cp` 断言对齐；全量 `cap test -m test/` 跑出 **138 passed, 0 failed, 138 total**。
+
+## Phase 251 (2026-11-21): 全量 536 CapSurf E2E 跑盘与最后 12 项功能问题清零
+- 全量跑盘（`scripts/e2e_suite.py --workers 6`）：564 个 `.e2e.test.ts` 中跳过 28 个 Kitesurf 架构互斥项（14 Boa-Wasm+V8 bridge + 12 Cloudflare Workers/Wasm-Isolate/外部包 + 2 QuickJS RC 反向内存断言），实测跑完 536 个套件：**523/536 suites passed（97.57%）、1174 pass / 16 fail / 5508 expect()（98.66%）**。
+- 最终收尾清零（剩余 13 个中的 12 个功能/超时项全部验证通过）：
+  - 串行无争抢复测通过（3 项）：`incremental-shadow-insert` (1/1), `keyboard-scroll` (7/7), `screencast-partial-frames` (11/11) -> 19 pass, 0 fail (363 expect())。
+  - JS Shim 修复通过（4 项）：`picture-srcset-demo` (1/1), `message-channel-task-queue` (1/1), `opaque-sheet-text` (4/4), `parser-script-lifecycle` (7/7) -> 13 pass, 0 fail；同时修复 `session_hooks.cp` `fireScriptEvent` 避免重复派发 `load`，重测 `inserted-script` + `parser-script-lifecycle` **8 pass, 0 fail (10 expect())**。
+  - CDP 修复通过（5 项 + `hexVal` 去重）：`navigation-fidelity` (4/4), `source-script-pipeline` (7/7), `oopif-heap-usage` (1/1), `oopif-runtime-evaluate` (1/1), `screencast-pipeline-order` (8/8) -> 21 pass, 0 fail (568 expect())；`document_kind.cp`/`linear_regex.cp`/`server.cp` `hexVal` 改名去重。
+  - 唯一已知宿主客户端限制（1 项）：`session-deadlines` (2/3 pass)，服务端 wire 已发送 `1001`，Bun v1.3.14 `WebSocket` 客户端将其规范化为 `1000`。

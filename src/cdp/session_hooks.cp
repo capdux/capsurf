@@ -1647,6 +1647,99 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "    __wrappedLoadFixture.__iframe_wrapped = true;\n" ++
     "    g.__capsurf_native_load_fixture = __wrappedLoadFixture;\n" ++
     "  }\n" ++
+    "  if (typeof g.__capsurf_eval_module_script === 'function' && !g.__capsurf_eval_module_script.__win_wrapped) {\n" ++
+    "    var __origModEval = g.__capsurf_eval_module_script;\n" ++
+    "    var __skipWinProps = { window:1, document:1, location:1, self:1, parent:1, top:1, frames:1, frameElement:1, name:1, addEventListener:1, removeEventListener:1, dispatchEvent:1, postMessage:1, origin:1, localStorage:1, sessionStorage:1, innerWidth:1, innerHeight:1, outerWidth:1, outerHeight:1, __capsurf_iframe_vars:1, __capsurf_is_oopif:1, _opaqueSandbox:1 };\n" ++
+    "    var __wrappedModEval = function(code, url) {\n" ++
+    "      var w = (g.self && g.self !== g) ? g.self : null;\n" ++
+    "      if (!w) return __origModEval(code, url);\n" ++
+    "      var savedProps = {};\n" ++
+    "      var hadProps = {};\n" ++
+    "      var wKeys = Object.keys(w);\n" ++
+    "      for (var wi = 0; wi < wKeys.length; wi++) {\n" ++
+    "        var wk = wKeys[wi];\n" ++
+    "        if (__skipWinProps[wk]) continue;\n" ++
+    "        var gd = Object.getOwnPropertyDescriptor(g, wk);\n" ++
+    "        if (gd && !gd.configurable && !gd.writable) continue;\n" ++
+    "        hadProps[wk] = Object.prototype.hasOwnProperty.call(g, wk);\n" ++
+    "        if (hadProps[wk]) savedProps[wk] = g[wk];\n" ++
+    "        try { g[wk] = w[wk]; } catch (e) {}\n" ++
+    "      }\n" ++
+    "      var preGKeys = Object.keys(g);\n" ++
+    "      var preGSet = {};\n" ++
+    "      for (var gi = 0; gi < preGKeys.length; gi++) preGSet[preGKeys[gi]] = true;\n" ++
+    "      try {\n" ++
+    "        return __origModEval(code, url);\n" ++
+    "      } finally {\n" ++
+    "        var postGKeys = Object.keys(g);\n" ++
+    "        for (var pi = 0; pi < postGKeys.length; pi++) {\n" ++
+    "          var pk = postGKeys[pi];\n" ++
+    "          if (__skipWinProps[pk]) continue;\n" ++
+    "          if (!preGSet[pk]) {\n" ++
+    "            try { w[pk] = g[pk]; } catch (e) {}\n" ++
+    "            try { delete g[pk]; } catch (e) {}\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "        for (var ri = 0; ri < wKeys.length; ri++) {\n" ++
+    "          var rk = wKeys[ri];\n" ++
+    "          if (__skipWinProps[rk]) continue;\n" ++
+    "          if (Object.prototype.hasOwnProperty.call(hadProps, rk)) {\n" ++
+    "            try { w[rk] = g[rk]; } catch (e) {}\n" ++
+    "            if (hadProps[rk]) { try { g[rk] = savedProps[rk]; } catch (e) {} }\n" ++
+    "            else { try { delete g[rk]; } catch (e) {} }\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "      }\n" ++
+    "    };\n" ++
+    "    __wrappedModEval.__win_wrapped = true;\n" ++
+    "    g.__capsurf_eval_module_script = __wrappedModEval;\n" ++
+    "  }\n" ++
+    "  if (typeof g.Function === 'function' && !g.Function.__iframe_var_wrapped) {\n" ++
+    "    var __OrigFunction = g.Function;\n" ++
+    "    var __WrappedFunction = function() {\n" ++
+    "      if (arguments.length === 17 && arguments[0] === 'window' && arguments[15] === 'sessionStorage') {\n" ++
+    "        var stack = g.__capsurf_active_window_stack;\n" ++
+    "        var win = (Array.isArray(stack) && stack.length > 0) ? stack[stack.length - 1] : null;\n" ++
+    "        if (win && win !== g) {\n" ++
+    "          if (!win.__capsurf_iframe_vars) win.__capsurf_iframe_vars = {};\n" ++
+    "          var vars = win.__capsurf_iframe_vars;\n" ++
+    "          var code = String(arguments[16] || '');\n" ++
+    "          var prefix = 'var innerWidth=window.innerWidth,innerHeight=window.innerHeight,outerWidth=window.outerWidth,outerHeight=window.outerHeight;\\n';\n" ++
+    "          var existingKeys = Object.keys(vars);\n" ++
+    "          for (var ki = 0; ki < existingKeys.length; ki++) {\n" ++
+    "            var k = existingKeys[ki];\n" ++
+    "            prefix += 'var ' + k + '=window.__capsurf_iframe_vars[' + JSON.stringify(k) + '];\\n';\n" ++
+    "          }\n" ++
+    "          var declared = [];\n" ++
+    "          var seenDecl = {};\n" ++
+    "          var reVar = /\\bvar\\s+([A-Za-z_$][A-Za-z0-9_$]*)/g;\n" ++
+    "          var m;\n" ++
+    "          while ((m = reVar.exec(code)) !== null) {\n" ++
+    "            var nm = m[1];\n" ++
+    "            if (!seenDecl[nm] && nm !== 'window' && nm !== 'document' && nm !== 'location' && nm !== 'fetch' && nm !== 'self' && nm !== 'globalThis' && nm !== 'innerWidth' && nm !== 'innerHeight' && nm !== 'outerWidth' && nm !== 'outerHeight') {\n" ++
+    "              seenDecl[nm] = true;\n" ++
+    "              declared.push(nm);\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "          var suffix = '';\n" ++
+    "          if (declared.length > 0) {\n" ++
+    "            suffix = '\\n;';\n" ++
+    "            for (var di = 0; di < declared.length; di++) {\n" ++
+    "              var dn = declared[di];\n" ++
+    "              suffix += 'try{window.__capsurf_iframe_vars[' + JSON.stringify(dn) + ']=' + dn + ';}catch(__e){}\\n';\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "          var args = Array.prototype.slice.call(arguments, 0, 16);\n" ++
+    "          args.push(prefix + code + suffix);\n" ++
+    "          return __OrigFunction.apply(null, args);\n" ++
+    "        }\n" ++
+    "      }\n" ++
+    "      return __OrigFunction.apply(null, arguments);\n" ++
+    "    };\n" ++
+    "    __WrappedFunction.prototype = __OrigFunction.prototype;\n" ++
+    "    __WrappedFunction.__iframe_var_wrapped = true;\n" ++
+    "    g.Function = __WrappedFunction;\n" ++
+    "  }\n" ++
     "  function isOutboundRejectedUrl(u) {\n" ++
     "    var pats = g.__capsurf_outbound_reject_patterns;\n" ++
     "    if (!Array.isArray(pats) || pats.length === 0) return false;\n" ++
@@ -2220,7 +2313,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "  function resolveUrlAbs(raw, base) { try { return new URL(raw, base || (g.location ? g.location.href : 'http://127.0.0.1:8787/')).href; } catch (e) { return raw; } }\n" ++
     "  function getSessionExtraHeadersJson() { try { if (typeof g.__capsurf_get_extra_headers === 'function') { var v = g.__capsurf_get_extra_headers(); if (typeof v === 'string' && v.length > 0) return v; } } catch (e) {} return (typeof g.__capsurf_session_extra_headers === 'string') ? g.__capsurf_session_extra_headers : '{}'; }\n" ++
     "  var INSERTED_SCRIPT_CAP = 1024; var insertedExtCount = 0; var moduleInflight = Object.create(null);\n" ++
-    "  function fireScriptEvent(node, evName) { var evt = new Event(evName, { bubbles: false, cancelable: false }); var prop = evName === 'load' ? 'onload' : 'onerror'; if (typeof node[prop] === 'function') { try { node[prop].call(node, evt); } catch (e) {} } if (typeof node.dispatchEvent === 'function') { try { node.dispatchEvent(evt); } catch (e) {} } }\n" ++
+    "  function fireScriptEvent(node, evName) { var evt = new Event(evName, { bubbles: false, cancelable: false }); var prop = evName === 'load' ? 'onload' : 'onerror'; if (typeof node.dispatchEvent === 'function') { try { node.dispatchEvent(evt); } catch (e) {} } else if (typeof node[prop] === 'function') { try { node[prop].call(node, evt); } catch (e) {} } }\n" ++
     "  function findSyntaxErrorLine(code, err) { if (err && typeof err.lineNumber === 'number' && err.lineNumber > 0) return err.lineNumber; if (err && typeof err.stack === 'string') { var m = err.stack.match(/:(\\d+)(?::\\d+)?/); if (m) return parseInt(m[1], 10); } var lines = String(code || '').split('\\n'); for (var i = 1; i <= lines.length; i++) { try { new Function(lines.slice(0, i).join('\\n')); } catch (e2) { if (i === lines.length) return i; var rest = lines.slice(0, i).join('\\n'); if (rest.indexOf(')') !== -1 && lines[i - 1].indexOf(')') !== -1) return i; } } return lines.length || 1; }\n" ++
     "  function getModulePreloadPin(absUrl) { return (g.__capsurf_modulepreload_pins && typeof g.__capsurf_modulepreload_pins[absUrl] === 'string') ? g.__capsurf_modulepreload_pins[absUrl] : ''; }\n" ++
     "  g.__capsurf_dyn_import = function(spec, baseUrl) {\n" ++

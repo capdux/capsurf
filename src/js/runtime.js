@@ -7219,24 +7219,22 @@
                   });
                 }
                 const evt = new Event("load", { bubbles: false, cancelable: false });
-                if (typeof node.onload === "function") {
+                if (typeof node.dispatchEvent === "function") {
+                  try { node.dispatchEvent(evt); } catch (e) {}
+                } else if (typeof node.onload === "function") {
                   try { node.onload.call(node, evt); } catch (e) {
                     if (typeof console !== "undefined" && console.error) console.error(e);
                   }
                 }
-                if (typeof node.dispatchEvent === "function") {
-                  try { node.dispatchEvent(evt); } catch (e) {}
-                }
               })
               .catch(function (fetchErr) {
                 const evt = new Event("error", { bubbles: false, cancelable: false });
-                if (typeof node.onerror === "function") {
+                if (typeof node.dispatchEvent === "function") {
+                  try { node.dispatchEvent(evt); } catch (e) {}
+                } else if (typeof node.onerror === "function") {
                   try { node.onerror.call(node, evt); } catch (e) {
                     if (typeof console !== "undefined" && console.error) console.error(e);
                   }
-                }
-                if (typeof node.dispatchEvent === "function") {
-                  try { node.dispatchEvent(evt); } catch (e) {}
                 }
               });
           }
@@ -13690,6 +13688,22 @@
       const nw = this.naturalWidth;
       const nh = this.naturalHeight;
 
+      let hasSrcsetOrPicture = Boolean(this.hasAttribute && this.hasAttribute("srcset"));
+      if (!hasSrcsetOrPicture) {
+        const parent = this.parentElement;
+        if (parent && (parent.tagName === "PICTURE" || (parent.localName && parent.localName.toLowerCase() === "picture"))) {
+          const kids = parent.children || parent.childNodes || [];
+          for (let i = 0; i < kids.length; i++) {
+            const child = kids[i];
+            if (child === this) break;
+            if (child && String(child.tagName || child.localName || "").toLowerCase() === "source") {
+              hasSrcsetOrPicture = true;
+              break;
+            }
+          }
+        }
+      }
+
       let w = r.width;
       let h = r.height;
 
@@ -13699,7 +13713,7 @@
             const aw = Number(this.getAttribute("width"));
             if (!isNaN(aw) && aw >= 0) w = aw;
           }
-        } else if (w === 0 && nw > 0) {
+        } else if ((w === 0 || hasSrcsetOrPicture) && nw > 0) {
           w = nw;
         }
       } else if (w === 0 && nw > 0) {
@@ -13712,7 +13726,7 @@
             const ah = Number(this.getAttribute("height"));
             if (!isNaN(ah) && ah >= 0) h = ah;
           }
-        } else if (h === 0 && nh > 0) {
+        } else if ((h === 0 || hasSrcsetOrPicture) && nh > 0) {
           h = nh;
         }
       } else if (h === 0 && nh > 0) {
@@ -30956,7 +30970,7 @@
           } catch (e) {
             if (typeof console !== "undefined" && console.error) console.error(e);
           }
-          continue;
+          return withWorkerPump(0);
         }
         while (taskQueue.length > 0 && !activeTimers.has(taskQueue[0].id)) {
           taskQueue.shift();
@@ -38611,6 +38625,11 @@
         }
       } catch (e) {}
       try {
+        if (global.document && global.document.fonts && typeof Promise !== "undefined") {
+          void Promise.resolve(global.document.fonts);
+        }
+      } catch (e) {}
+      try {
         if (global.dispatchEvent) {
           const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
           global.dispatchEvent(loadEv);
@@ -39760,24 +39779,6 @@
     if (typeof Element !== "undefined" && Element.prototype) {
       Element.prototype.insertBefore = wrappedInsertBefore;
     }
-
-    // 15. Prevent duplicate script load/error event firing
-    const origDispatchEvent = EventTarget.prototype.dispatchEvent;
-    EventTarget.prototype.dispatchEvent = function (event) {
-      if (event && (event.type === "load" || event.type === "error") && this && (this.tagName === "SCRIPT" || this.localName === "script")) {
-        const prop = "on" + event.type;
-        const savedHandler = this[prop];
-        if (typeof savedHandler === "function") {
-          this[prop] = null;
-          try {
-            return origDispatchEvent.call(this, event);
-          } finally {
-            this[prop] = savedHandler;
-          }
-        }
-      }
-      return origDispatchEvent.call(this, event);
-    };
 
     // 16. Mark scripts created by innerHTML as already started
     function markSubtreeScripts(root) {
