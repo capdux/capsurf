@@ -1829,3 +1829,7 @@
 ### Phase 249: 跨帧 Origin/Sandbox 隔离与 Fetch 重定向链路打通
 - `executeIframeInlineScripts` 改为绑定 iframe `win`/`doc`/`location`/`origin` 并维护 `__capsurf_active_window_stack`，配合 `currentDocOrigin()` 对 opaque sandbox 返回 `"null"`、对普通 OOPIF 帧保留 `__capsurf_is_oopif` 与 `__capsurf_doc_origin` 回退，同时让 `iframe-srcdoc`（16/18）与 `dedicated-worker`（22/22）全部工作正常。
 - `harness.ts` 去除 `goto()` 与自动重定向中冗余的人工 `Network.requestWillBeSent`，避免与 `src/cdp/page.cp` 真实事件重复计数。
+
+### Phase 250: 嵌套 iframe 策略透传、evaluate 异步 Cookie 排空与全量白盒同步
+- `page.cp` 中 `about:blank`/`about:srcdoc`/`data:` 子帧不再误判为跨源 OOPIF，已占槽跨源帧允许继续发射 `Runtime.executionContextCreated`。
+- `session.cp` 中 `evaluateInContext` 在检测到 `Object.prototype.then` 截留且 Cookie 变更时主动触发 `then` getter 并排空微任务队列。

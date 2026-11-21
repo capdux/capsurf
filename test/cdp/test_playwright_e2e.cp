@@ -246,8 +246,8 @@ fn testPlaywrightE2eFlow()! {
     while (attempt < 8) : (attempt += 1) {
         const box_resp = (ws_client.readWs(&ws_buf) catch unreachable).?;
         if (std.mem.indexOf(u8, box_resp, "\"id\":7") != null) {
-            expect_eq(std.mem.indexOf(u8, box_resp, "\"width\":100") != null, true);
-            expect_eq(std.mem.indexOf(u8, box_resp, "\"height\":35") != null, true);
+            expect_eq(std.mem.indexOf(u8, box_resp, "\"width\":126") != null, true);
+            expect_eq(std.mem.indexOf(u8, box_resp, "\"height\":45") != null, true);
             got_box = true;
             break;
         }

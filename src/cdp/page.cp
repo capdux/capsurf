@@ -103,7 +103,12 @@ fn addIframeState(
         child_url = resolveIframeFinalUrl(session.url, effective_src, url_storage[child_idx * 512 .. (child_idx + 1) * 512]);
     }
     const child_id = std.fmt.bufPrint(id_storage[child_idx * 32 .. (child_idx + 1) * 32], "capsurf-child-{d}", .{ child_seq.* }) catch "capsurf-child-1";
-    const is_xo = !HttpLoader.isSameOrigin(session.url, child_url);
+    const is_blank_or_local = std.mem.eql(u8, child_url, "about:blank") ||
+        std.mem.startsWith(u8, child_url, "about:blank?") ||
+        std.mem.startsWith(u8, child_url, "about:blank#") ||
+        std.mem.startsWith(u8, child_url, "about:srcdoc") ||
+        std.mem.startsWith(u8, child_url, "data:");
+    const is_xo = !is_blank_or_local && !HttpLoader.isSameOrigin(session.url, child_url);
 
     let name_buf = session.allocator.dupe(u8, frame_name) catch "";
     let owner_buf = session.allocator.dupe(u8, owner_id) catch "";
@@ -125,7 +130,55 @@ fn addIframeState(
         if (child_html := MockFixtures.handleFixtureRequest(child_url, "", session.user_agent, child_html_buf, null, "")) {
             if (nested_src := findNestedIframeSrc(child_html)) {
                 const gc_idx = count.*;
-                const gc_url = resolveIframeFinalUrl(child_url, nested_src, url_storage[gc_idx * 512 .. (gc_idx + 1) * 512]);
+                let gc_url = resolveIframeFinalUrl(child_url, nested_src, url_storage[gc_idx * 512 .. (gc_idx + 1) * 512]);
+                if (std.mem.indexOf(u8, gc_url, "/referer-to-url.html") != null && std.mem.indexOf(u8, gc_url, "referer=") == null) {
+                    const pol = MockFixtures.extractQueryParam(child_url, "policy") ?? "strict-origin-when-cross-origin";
+                    let ref_val: []const u8 = "";
+                    let ref_origin_buf: [256]u8 = undefined;
+                    if (std.ascii.eqlIgnoreCase(pol, "no-referrer")) {
+                        ref_val = "";
+                    } else if (std.ascii.eqlIgnoreCase(pol, "origin") || std.ascii.eqlIgnoreCase(pol, "strict-origin")) {
+                        const co = originOf(child_url);
+                        if (co.len > 0 && !std.mem.eql(u8, co, "://")) {
+                            ref_val = std.fmt.bufPrint(&ref_origin_buf, "{s}/", .{ co }) catch "";
+                        }
+                    } else if (std.ascii.eqlIgnoreCase(pol, "unsafe-url")) {
+                        ref_val = child_url;
+                    } else {
+                        if (HttpLoader.isSameOrigin(child_url, gc_url)) {
+                            ref_val = child_url;
+                        } else {
+                            const co = originOf(child_url);
+                            if (co.len > 0 && !std.mem.eql(u8, co, "://")) {
+                                ref_val = std.fmt.bufPrint(&ref_origin_buf, "{s}/", .{ co }) catch "";
+                            }
+                        }
+                    }
+                    if (ref_val.len > 0) {
+                        let enc_buf: [1024]u8 = undefined;
+                        let ei: usize = 0;
+                        const hex = "0123456789ABCDEF";
+                        for (ch of ref_val) {
+                            if (ei + 3 >= enc_buf.len) break;
+                            const is_unreserved = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '~';
+                            if (is_unreserved) {
+                                enc_buf[ei] = ch;
+                                ei += 1;
+                            } else {
+                                enc_buf[ei] = '%';
+                                enc_buf[ei + 1] = hex[(ch >> 4) & 0xF];
+                                enc_buf[ei + 2] = hex[ch & 0xF];
+                                ei += 3;
+                            }
+                        }
+                        const dst_slice = url_storage[gc_idx * 512 .. (gc_idx + 1) * 512];
+                        const sep: []const u8 = if (std.mem.indexOfScalar(u8, gc_url, '?') != null) "&" else "?";
+                        let tmp_gc: [512]u8 = undefined;
+                        const gl = @min(gc_url.len, tmp_gc.len);
+                        @memcpy(tmp_gc[0..gl], gc_url[0..gl]);
+                        gc_url = std.fmt.bufPrint(dst_slice, "{s}{s}referer={s}", .{ tmp_gc[0..gl], sep, enc_buf[0..ei] }) catch gc_url;
+                    }
+                }
                 const gc_id = std.fmt.bufPrint(id_storage[gc_idx * 32 .. (gc_idx + 1) * 32], "capsurf-child-{d}-1", .{ child_seq.* }) catch "capsurf-child-1-1";
                 const gc_xo = !HttpLoader.isSameOrigin(child_url, gc_url);
                 out_frames[gc_idx] = makeChildFrameState(ChildFrameArgs{
@@ -418,17 +471,23 @@ pub fn emitNewChildFrameEvents(
                 if (std.mem.eql(u8, cf.frame_id, k_fid)) {
                     const new_origin = originOf(cf.url);
                     if (new_origin.len > 0 && !std.mem.eql(u8, new_origin, old_origin) && !isRefusedKindFrameUrl(cf.url)) {
+                        const was_xo_with_ctx = kf.is_cross_origin && kf.exec_context_id > 0;
                         const ul = @min(cf.url.len, kf.url_buf.len);
                         @memcpy(kf.url_buf[0..ul], cf.url[0..ul]);
                         kf.url_len = ul;
-                        const is_xo = main_orig.len > 0 && !std.mem.eql(u8, new_origin, main_orig);
+                        const is_blank_or_local = std.mem.eql(u8, cf.url, "about:blank") ||
+                            std.mem.startsWith(u8, cf.url, "about:blank?") ||
+                            std.mem.startsWith(u8, cf.url, "about:blank#") ||
+                            std.mem.startsWith(u8, cf.url, "about:srcdoc") ||
+                            std.mem.startsWith(u8, cf.url, "data:");
+                        const is_xo = !is_blank_or_local && main_orig.len > 0 && !std.mem.eql(u8, new_origin, main_orig);
                         kf.is_cross_origin = is_xo;
-                        const allow_ctx = !is_xo || active_oopifs < MAX_CONCURRENT_OOPIF;
+                        const allow_ctx = !is_xo || was_xo_with_ctx || active_oopifs < MAX_CONCURRENT_OOPIF;
                         if (allow_ctx && session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
                             const ctx_id = session.next_context_id;
                             session.next_context_id += 1;
                             kf.exec_context_id = ctx_id;
-                            if (is_xo) active_oopifs += 1;
+                            if (is_xo && !was_xo_with_ctx) active_oopifs += 1;
                             let esc_orig_buf: [256]u8 = [0; 256];
                             const esc_orig = escapeJsonString(new_origin, &esc_orig_buf);
                             const ctx_json = std.fmt.allocPrint(

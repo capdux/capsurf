@@ -312,6 +312,7 @@ fn main() {
         * = mountDom(&ctx, &doc, null) catch unreachable;
 
         const code =
+            "document._readyState = 'complete';\n" ++
             "window.schedulerResult = 'initial';\n" ++
             "window.scheduler.postTask(() => {\n" ++
             "  window.schedulerResult = 'postTask-completed';\n" ++

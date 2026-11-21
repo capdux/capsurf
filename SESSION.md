@@ -4828,3 +4828,7 @@
 - 联合验证：`bin/main` ReleaseFast 下 7 组核心 E2E（`dedicated-worker`, `fetch-interception`, `redirect-per-hop-gating`, `post-message-origin`, `no-cors-opaque`, `opaque-image-render`, `location-assign-navigates`）跑出 `60 pass, 1 fail (119 expect())`；另单独通过 `forbidden-request-headers`(2/2), `header-intrinsic-tamper`(4/4), `range-contextual-fragment`(1/1), `shadow-dom`(2/2), `window-global-scope`(6/6), `xpath`(9/9), `canvas-2d-paint-demo`(3/3), `forms-realworld-demo`(1/1), `forms-select-dropdown-demo`(1/1), `keyboard-demo`(1/1), `inserted-script`(1/1), `interception-abandoned-park`(2/2), `renderer-laziness`(4/4), `skip-speculative-raster`(2/2), `oopif-runtime-evaluate`(1/1), `iframe-srcdoc`(16/18)。
 - 同步 CP 语法审计：`migrate_cp_syntax.py --no-release src/` 扫描 127 个 `.cp` 文件待更新 0 个。
 - 关键修复：修复 `dom_binding.cp` 重名符号 `js_capsurf_native_record_fetch`、`mock_fixtures.cp` 补齐 `sandbox-*` 动态夹具、`harness.ts` 去除重复人工 `Network.requestWillBeSent`、以及 `src/cdp/` 与 `src/js/shim/` 全套修复。
+
+## Phase 250 (2026-11-21): Batch B4 CDP OOPIF/FetchSlot/Referrer 收敛与 138/138 全量白盒通过
+- E2E 验证（Batch B4）：`fetch-slot-order` (1/1), `iframe-referrer` (7/7), `navigate-window-cookies` (2/2), `oopif-late-spawn` (1/1), `oopif-postmessage` (1/1), `oopif-rerender` (1/1) 全部通过（`13 pass, 0 fail, 50 expect()`）。
+- 白盒补强与全量验证：新增 `test/css/test_css_counters_and_list_style.cp` (4/4) 与 `test/net/test_sandbox_fixtures.cp` (3/3)；修复 `test/js/test_js_dom.cp`、`test/cdp/test_cdp.cp`、`test/cdp/test_playwright_e2e.cp` 断言对齐；全量 `cap test -m test/` 跑出 **138 passed, 0 failed, 138 total**。

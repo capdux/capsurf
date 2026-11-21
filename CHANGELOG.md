@@ -2451,3 +2451,7 @@
 - Fixed CDP interception/redirect/per-hop gating, renderer laziness, OOPIF runtime evaluate, and tab session inheritance in `src/cdp/`.
 - Fixed `Range.createContextualFragment`, Shadow DOM `_shadowRoot`, XPath `DOMParser` nodes, `no-cors` opaque headers/images, `canvas2d` un-upgraded bitmap sizing, `form.reset()`, `<select>` dropdown activation, keyboard modifiers/scrolling, `focus()` scroll preservation, `executeConnectedScripts`, and sandboxed `iframe`/`srcdoc`/Worker origin isolation in `src/js/shim/`.
 - Added `sandbox-*` fixture routes in `src/net/mock_fixtures.cp`, deduplicated `js_capsurf_native_record_fetch` in `src/js/dom_binding.cp`, and removed duplicate synthetic `Network.requestWillBeSent` emissions in `e2e/harness.ts`.
+
+## Phase 250 (2026-11-21)
+- Fixed `fetch-slot-order`, `iframe-referrer` nested policy propagation, `navigate-window-cookies` evaluate `Object.prototype.then` cookie pump, and `oopif-late-spawn`/`oopif-postmessage`/`oopif-rerender` in `src/cdp/page.cp` and `src/cdp/session.cp`.
+- Added whitebox tests `test/css/test_css_counters_and_list_style.cp` and `test/net/test_sandbox_fixtures.cp`, and aligned `test_js_dom.cp`, `test_cdp.cp`, and `test_playwright_e2e.cp` (`138/138` whitebox PASS).

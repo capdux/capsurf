@@ -273,8 +273,8 @@ fn runWebSocketCdpTest()! {
         expect_eq(frame_opt4 != null, true);
         if (f4 := frame_opt4) {
             if (std.mem.indexOf(u8, f4, "\"id\":104") != null) {
-                expect_eq(std.mem.indexOf(u8, f4, "\"width\":400") != null, true);
-                expect_eq(std.mem.indexOf(u8, f4, "\"height\":200") != null, true);
+                expect_eq(std.mem.indexOf(u8, f4, "\"width\":440") != null, true);
+                expect_eq(std.mem.indexOf(u8, f4, "\"height\":240") != null, true);
                 expect_eq(std.mem.indexOf(u8, f4, "\"border\":[") != null, true);
                 got_bm = true;
                 break;

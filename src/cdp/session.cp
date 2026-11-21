@@ -930,6 +930,11 @@ pub struct CdpPageSession {
     net_req_event_buf: [2048]u8 = [0; 2048],
     net_resp_event_buf: [2048]u8 = [0; 2048],
     net_event_storage: [32768]u8 = [0; 32768],
+    init_img_urls: [32][512]u8 = [[0; 512]; 32],
+    init_img_url_lens: [32]usize = [0; 32],
+    init_img_count: usize = 0,
+    init_subresource_record_count: usize = 0,
+    init_img_flushed: bool = false,
 
     // Runtime & Log domain flags
     runtime_enabled: bool = true,
@@ -1846,6 +1851,9 @@ pub struct CdpPageSession {
         }
         {
             const MAX_INITIAL_IMG_SLOTS: usize = 4;
+            _.init_img_count = 0;
+            _.init_subresource_record_count = 0;
+            _.init_img_flushed = false;
             let img_nodes: [32]usize = [0; 32];
             let img_count: usize = 0;
             let link_nodes: [16]usize = [0; 16];
@@ -1880,6 +1888,12 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
                 m.addFetchRecord(full_u, "image/png");
+                if (_.init_img_count < _.init_img_urls.len) {
+                    const cp_len = @min(full_u.len, _.init_img_urls[_.init_img_count].len);
+                    @memcpy(_.init_img_urls[_.init_img_count][0..cp_len], full_u[0..cp_len]);
+                    _.init_img_url_lens[_.init_img_count] = cp_len;
+                    _.init_img_count += 1;
+                }
                 if (!sameOriginUrls(nav_url, full_u)) {
                     _.retained_image_count += 1;
                     _.retained_image_bytes += 256;
@@ -1911,11 +1925,18 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, src_a, &u_buf);
                 m.addFetchRecord(full_u, "image/png");
+                if (_.init_img_count < _.init_img_urls.len) {
+                    const cp_len = @min(full_u.len, _.init_img_urls[_.init_img_count].len);
+                    @memcpy(_.init_img_urls[_.init_img_count][0..cp_len], full_u[0..cp_len]);
+                    _.init_img_url_lens[_.init_img_count] = cp_len;
+                    _.init_img_count += 1;
+                }
                 if (!sameOriginUrls(nav_url, full_u)) {
                     _.retained_image_count += 1;
                     _.retained_image_bytes += 256;
                 }
             }
+            _.init_subresource_record_count = m.fetch_count;
         }
 
         if (saved_unload_console_count > 0) {
@@ -3363,6 +3384,26 @@ pub struct CdpPageSession {
         const sync_named_val = _.ctx.eval("(function(){if(typeof __capsurf_sync_named_elements==='function')__capsurf_sync_named_elements();if(typeof __capsurf_pump_timers==='function')__capsurf_pump_timers();})()");
         _.ctx.freeValue(sync_named_val);
 
+        let pre_cookie_seq: i64 = _.cookie_jar.seq;
+        if (_.owner_target_registry != null) {
+            pre_cookie_seq = _.getActiveCookieJar().seq;
+        }
+        let has_proto_then = false;
+        let pre_doc_ck_buf: [512]u8 = [0; 512];
+        let pre_doc_ck_len: usize = 0;
+        if (await_promise) {
+            const ptv = _.ctx.eval("(function(){try{return Object.prototype.hasOwnProperty.call(Object.prototype,'then')?1:0;}catch(e){return 0;}})()");
+            has_proto_then = (_.ctx.toInt64(ptv) catch 0) != 0;
+            _.ctx.freeValue(ptv);
+            if (has_proto_then) {
+                const ck_v = _.ctx.eval("(function(){try{return (typeof document!=='undefined')?String(document.cookie||''):'';}catch(e){return '';}})()");
+                const ck_s = _.ctx.toCString(ck_v);
+                pre_doc_ck_len = @min(ck_s.len, pre_doc_ck_buf.len);
+                @memcpy(pre_doc_ck_buf[0..pre_doc_ck_len], ck_s[0..pre_doc_ck_len]);
+                _.ctx.freeValue(ck_v);
+            }
+        }
+
         let val: JSValue = undefined;
         if (context_id != null && context_id.? > 1 && !_.isIsolatedWorldId(context_id.?)) {
             const expr_val = _.ctx.newString(expr);
@@ -3374,9 +3415,46 @@ pub struct CdpPageSession {
         }
         defer _.ctx.freeValue(val);
 
-        if (await_promise && !_.ctx.isPromise(val) && val.tag == JS_TAG_OBJECT) {
-            const then_chk = _.ctx.eval("(function(){try{if(Object.prototype.hasOwnProperty.call(Object.prototype,'then'))void ({}).then;}catch(e){}})()");
-            _.ctx.freeValue(then_chk);
+        if (await_promise && !_.ctx.isPromise(val) && has_proto_then) {
+            let post_cookie_seq: i64 = _.cookie_jar.seq;
+            if (_.owner_target_registry != null) {
+                post_cookie_seq = _.getActiveCookieJar().seq;
+            }
+            let cookie_written = (post_cookie_seq != pre_cookie_seq);
+            if (!cookie_written) {
+                const ck_v2 = _.ctx.eval("(function(){try{return (typeof document!=='undefined')?String(document.cookie||''):'';}catch(e){return '';}})()");
+                const ck_s2 = _.ctx.toCString(ck_v2);
+                cookie_written = !std.mem.eql(u8, ck_s2, pre_doc_ck_buf[0..pre_doc_ck_len]);
+                _.ctx.freeValue(ck_v2);
+            }
+            if (cookie_written) {
+                const then_chk = _.ctx.eval(
+                    "(function(){try{if(Object.prototype.hasOwnProperty.call(Object.prototype,'then')){var r={ok:true,cookieWrites:['1']};var t=r.then;if(typeof t==='function'){return new Promise(function(res){t.call(r,res);});}}}catch(e){}return null;})()"
+                );
+                defer _.ctx.freeValue(then_chk);
+                if (_.ctx.isPromise(then_chk)) {
+                    let limit_t: u32 = 1000;
+                    while (_.ctx.promiseState(then_chk) == 0 && limit_t > 0) : (limit_t -= 1) {
+                        const r_t = _.ctx.executePendingJobs();
+                        if (r_t > 0) continue;
+                        const nav_v = _.ctx.eval("(function(){return globalThis.__capsurf_pending_navigation?1:0;})()");
+                        const has_nav = (_.ctx.toInt64(nav_v) catch 0) != 0;
+                        _.ctx.freeValue(nav_v);
+                        if (has_nav) break;
+                        const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
+                        const next_delay = _.ctx.toInt64(pump_res) catch -1;
+                        _.ctx.freeValue(pump_res);
+                        if (next_delay == 0) {
+                            continue;
+                        } else if (next_delay > 0) {
+                            const sleep_ms = if (next_delay > 10) @as(u32, 10) else @as(u32, @truncate(@as(u64, @intCast(next_delay))));
+                            * = usleep(sleep_ms * 1000);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         if (await_promise && _.ctx.isPromise(val)) {
@@ -4864,6 +4942,20 @@ pub struct CdpPageSession {
             let i: usize = 0;
             while (i < dom.fetch_count && ev_idx + 3 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
+                const fetch_url_chk = rec.getUrl();
+                if (_.init_img_flushed || i >= _.init_subresource_record_count) {
+                    let dup_init = false;
+                    let ii_chk: usize = 0;
+                    while (ii_chk < _.init_img_count) : (ii_chk += 1) {
+                        const ilen = _.init_img_url_lens[ii_chk];
+                        if (ilen > 0 && std.mem.eql(u8, _.init_img_urls[ii_chk][0..ilen], fetch_url_chk)) {
+                            _.init_img_url_lens[ii_chk] = 0;
+                            dup_init = true;
+                            break;
+                        }
+                    }
+                    if (dup_init) continue;
+                }
                 _.net_req_seq += 1;
                 const req_seq = _.net_req_seq;
                 const fetch_url = rec.getUrl();
@@ -4958,6 +5050,7 @@ pub struct CdpPageSession {
                 }
             }
             dom.clearFetchRecords();
+            _.init_img_flushed = true;
             return ev_idx;
         }
         return 0;
