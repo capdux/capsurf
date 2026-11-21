@@ -4861,3 +4861,13 @@
   - `cap test test/unit/dom/`: 20/24 通过（`test_canvas2d.cp` / `test_canvas_element.cp` 受最新 `cpc` `E0209` 门禁影响）。
   - `python3 scripts/e2e_suite.py --smoke`: `test/e2e/alert-non-throwing.e2e.test.ts` (1/1 PASS) 与 `test/e2e/blank-page-document.e2e.test.ts` (3/3 PASS) 通过；`smoke.e2e.test.ts` 因现有 `bin/main` 仍硬编码旧 `e2e/page/` 需重编。
   - 已为 `src/js/qjs_engine.cp`、`src/js/dom_binding.cp`、`src/cdp/session.cp`、`src/cdp/session_hooks.cp`、`src/cdp/runtime.cp`、`src/render/painter.cp`、`src/render/png.cp` 补齐 `unsafe { ... }` 适配 `E0209`；重编 `bin/main` 时命中上游标准库 `/data/dev/cp/lib/pack/gzip.cp` 17 处 `E0209`，已通过 `task_queue.py submit` 上报 `cp_agy`（`task-capsurf-20261122-lib-pack-gzip-e209` -> `task-capsurf-20261122-lib-pack-gzip-e0209`）。
+
+### [2026-11-22 02:39] 上游结单验收: `task-capsurf-20261122-lib-pack-gzip-e0209`
+- **修复说明**: `cp_agy` 已在 `/data/dev/cp/lib/pack/gzip.cp` 为 17 处裸指针/`@ptrCast`/`@alignCast` 补齐最小 `unsafe` 块，并已执行 `ack`。
+- **复现验证**: `cpc check /data/dev/cp/temp/repro_lib_pack_gzip_e0209.cp` → `Check successful`。
+- **后续阻塞排查**: 重跑 `cap build -m -d -o bin_19231 src/main.cp` 时推进到下一处 `/data/dev/cp/lib/pack/zstd.cp:191:23`（`E0209`）。对 `/data/dev/cp/lib/*/*.cp` 批量预扫发现 `pack/{zstd,tar_pax,zip_writer}.cp`、`ws/permessage_deflate.cp`、`event/{concurrent_task,timer}.cp`、`crypto/{cipher,kdf}.cp`、`sys/{fs_ops,process}.cp`、`blob/{blob,store}.cp` 等均存在同类 `E0209`，已合并提交批量任务 `task-capsurf-20261122-lib-e0209-batch` 给 `cp_agy`。
+
+### [2026-11-22 02:53] 上游结单验收: `task-capsurf-20261122-lib-e0209-batch`
+- **修复说明**: `cp_agy` 已在 12 个 CapSurf 依赖的标准库文件（`pack/{zstd,tar_pax,zip_writer}.cp`、`ws/permessage_deflate.cp`、`event/{concurrent_task,timer}.cp`、`crypto/{cipher,kdf}.cp`、`sys/{fs_ops,process}.cp`、`blob/{blob,store}.cp`）中为全部裸指针/`@ptrCast`/`@alignCast`/`@constCast` 补齐最小 `unsafe` 块，并已执行 `ack`。
+- **复现验证**: `cpc check /data/dev/cp/temp/repro_lib_e0209_batch.cp` → `Check successful`；`cap build -m -d -o bin_19231 src/main.cp` 99 模块全量转译编译 **13.82s** 通过。
+- **E2E 冒烟验证**: `CAPSURF_BIN=./bin_19231/main python3 scripts/e2e_suite.py --smoke` → **3/3 suites passed**（`alert-non-throwing` 1/1、`smoke` 2/2、`blank-page-document` 3/3，6 pass / 0 fail / 8 expect()）。
