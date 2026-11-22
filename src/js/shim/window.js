@@ -5652,11 +5652,11 @@ function installWindow(global) {
     // :focus support
     if (s === ":focus") {
       const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-      return Boolean(doc && doc.activeElement === el);
+      return Boolean(doc && (doc._activeElement === el || doc.activeElement === el));
     }
     if (s.endsWith(":focus")) {
       const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-      if (!doc || doc.activeElement !== el) return false;
+      if (!doc || (doc._activeElement !== el && doc.activeElement !== el)) return false;
       const base = s.slice(0, -6).trim();
       if (!base || base === "*") return true;
       return matchesSingleSelector(el, base);

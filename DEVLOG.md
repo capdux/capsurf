@@ -2114,3 +2114,6 @@
 
 ### Phase 333: `page-emulate-media.spec.ts` 9 项媒体模拟失败排障笔记
 - **`Emulation.setEmulatedMedia` 忽略 `features` 且未持久化、以及 `session_hooks.cp` 拦截 `prefers-color-scheme` 根因**：`src/cdp/emulation.cp` 此前仅处理 `media === "print"` 而完全忽略 `features` 数组，且在 `navigate()` 时丢失状态；同时 `session_hooks.cp` 的 `wrappedMatchMedia` 仅读取会被导航重置的 `__capsurf_dark_color_scheme`。在 `CdpPageSession` 持久化 `emulated_media` 与 `emulated_features`、于 `navigate()` 末尾注入、并同步 `window.js` 与 `session_hooks.cp` 后，实测 `Page.setDocumentContent` 后 `mPrint=true, mScreen=false, dark=true, reduced=true, forced=true, contrast=true, bg="rgb(0, 0, 0)"`。
+
+### Phase 334: Shadow DOM `Document.activeElement` 与 `ShadowRoot.activeElement` 及 `:focus` 排障笔记
+- **Shadow DOM 焦点重定向与 `:focus` 缺失根因**：此前 `Document.prototype.activeElement` 直接返回内部 `_activeElement`（Shadow 内部元素），未按规范沿 `getRootNode().host` 重定向至宿主元素；且 `ShadowRoot` 缺少 `activeElement` 属性，CSS `:focus` 与 `Element.prototype.matches(":focus")` 也未同步宿主状态。修复后在 `bin_dev/main` CDP 实测 `docAE="host"`, `srAE="sinp"`, `sinp.matches(":focus")=true`, `host.matches(":focus")=true`。

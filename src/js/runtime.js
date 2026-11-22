@@ -8443,6 +8443,25 @@
     },
     configurable: true,
   });
+  Object.defineProperty(ShadowRoot.prototype, "activeElement", {
+    get: function () {
+      const doc = (typeof document !== "undefined" ? document : null) || global.document;
+      const ae = doc ? (doc._activeElement || doc.activeElement) : null;
+      if (!ae) return null;
+      let cur = ae;
+      while (cur && typeof cur.getRootNode === "function") {
+        const rn = cur.getRootNode();
+        if (rn === this) return cur;
+        if (rn && rn.host) {
+          cur = rn.host;
+        } else {
+          break;
+        }
+      }
+      return null;
+    },
+    configurable: true,
+  });
   global.ShadowRoot = ShadowRoot;
   if (typeof globalThis !== "undefined") {
     globalThis.ShadowRoot = ShadowRoot;
@@ -10791,10 +10810,10 @@
       if (s === ":checked") return Boolean(this.checked);
       if (s === ":disabled") return Boolean(this.disabled);
       if (s === ":enabled") return !this.disabled;
-      if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
+      if (s === ":focus") return Boolean(typeof document !== "undefined" && (document._activeElement === this || document.activeElement === this));
       if (s.endsWith(":focus")) {
         const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-        if (!doc || doc.activeElement !== this) return false;
+        if (!doc || (doc._activeElement !== this && doc.activeElement !== this)) return false;
         const base = s.slice(0, -6).trim();
         if (!base || base === "*") return true;
         return this.matches(base);
@@ -35031,11 +35050,11 @@
       // :focus support
       if (s === ":focus") {
         const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-        return Boolean(doc && doc.activeElement === el);
+        return Boolean(doc && (doc._activeElement === el || doc.activeElement === el));
       }
       if (s.endsWith(":focus")) {
         const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
-        if (!doc || doc.activeElement !== el) return false;
+        if (!doc || (doc._activeElement !== el && doc.activeElement !== el)) return false;
         const base = s.slice(0, -6).trim();
         if (!base || base === "*") return true;
         return matchesSingleSelector(el, base);
@@ -45110,7 +45129,18 @@
       Object.defineProperty(docProto, "activeElement", {
         get: function () {
           const ae = this._activeElement;
-          if (ae && ae.isConnected !== false) return ae;
+          if (ae && ae.isConnected !== false) {
+            let cur = ae;
+            while (cur && typeof cur.getRootNode === "function") {
+              const rn = cur.getRootNode();
+              if (rn && rn !== this && rn.host) {
+                cur = rn.host;
+              } else {
+                break;
+              }
+            }
+            return cur;
+          }
           return this.body || this.documentElement || null;
         },
         set: function (v) {

@@ -2840,3 +2840,7 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `evaluateMediaFeature()` 与 `evaluateMediaQuery()` 读取 `globalThis.__capsurf_emulated_media` 与 `globalThis.__capsurf_emulated_features`，支持 `print`/`screen`、`prefers-color-scheme`、`prefers-reduced-motion`、`forced-colors`、`prefers-contrast`。
   - `src/cdp/emulation.cp`, `src/cdp/session.cp`, `src/cdp/session_hooks.cp`: 解析并持久化 `Emulation.setEmulatedMedia` 的 `media` 与 `features` 数组，在 `navigate()` 末尾自动注入 JS 环境，并同步 `session_hooks.cp` `wrappedMatchMedia` 的 `prefers-color-scheme` 判定。
+
+## [2026-11-22] Phase 334: 修复 Shadow DOM 深度聚焦时 `Document.activeElement` 重定向、补充 `ShadowRoot.activeElement` 并修复 `:focus` 匹配
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `Document.prototype.activeElement` 沿 `getRootNode().host` 向上重定向至最外层宿主，新增 `ShadowRoot.prototype.activeElement` 返回当前 ShadowRoot 内的聚焦节点或其子 Shadow 宿主，`matches(":focus")` 与 CSS `:focus` 同时判定 `doc._activeElement === el || doc.activeElement === el`。

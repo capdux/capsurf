@@ -1815,10 +1815,10 @@ function installElementExtensions(proto) {
     if (s === ":checked") return Boolean(this.checked);
     if (s === ":disabled") return Boolean(this.disabled);
     if (s === ":enabled") return !this.disabled;
-    if (s === ":focus") return Boolean(typeof document !== "undefined" && document.activeElement === this);
+    if (s === ":focus") return Boolean(typeof document !== "undefined" && (document._activeElement === this || document.activeElement === this));
     if (s.endsWith(":focus")) {
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-      if (!doc || doc.activeElement !== this) return false;
+      if (!doc || (doc._activeElement !== this && doc.activeElement !== this)) return false;
       const base = s.slice(0, -6).trim();
       if (!base || base === "*") return true;
       return this.matches(base);

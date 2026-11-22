@@ -1390,7 +1390,18 @@ function installShim(global) {
     Object.defineProperty(docProto, "activeElement", {
       get: function () {
         const ae = this._activeElement;
-        if (ae && ae.isConnected !== false) return ae;
+        if (ae && ae.isConnected !== false) {
+          let cur = ae;
+          while (cur && typeof cur.getRootNode === "function") {
+            const rn = cur.getRootNode();
+            if (rn && rn !== this && rn.host) {
+              cur = rn.host;
+            } else {
+              break;
+            }
+          }
+          return cur;
+        }
         return this.body || this.documentElement || null;
       },
       set: function (v) {

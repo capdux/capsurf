@@ -5498,3 +5498,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Emulation.setEmulatedMedia` 后再 `Page.setDocumentContent`，返回 `{"mPrint":true,"mScreen":false,"dark":true,"reduced":true,"forced":true,"contrast":true,"bg":"rgb(0, 0, 0)"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。
+
+## Phase 334: Shadow DOM 焦点重定向 (`Document.activeElement` / `ShadowRoot.activeElement` / `:focus`) 完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js), [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js), [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js), [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 Shadow DOM 焦点逐层重定向与 `:focus` 宿主匹配。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19399）：`PHASE334_RESULT: {"docAE":"host","srAE":"sinp","deepMatch":true,"hostMatch":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。

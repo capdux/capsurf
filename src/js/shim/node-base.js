@@ -1630,6 +1630,25 @@ Object.defineProperty(ShadowRoot.prototype, "styleSheets", {
   },
   configurable: true,
 });
+Object.defineProperty(ShadowRoot.prototype, "activeElement", {
+  get: function () {
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const ae = doc ? (doc._activeElement || doc.activeElement) : null;
+    if (!ae) return null;
+    let cur = ae;
+    while (cur && typeof cur.getRootNode === "function") {
+      const rn = cur.getRootNode();
+      if (rn === this) return cur;
+      if (rn && rn.host) {
+        cur = rn.host;
+      } else {
+        break;
+      }
+    }
+    return null;
+  },
+  configurable: true,
+});
 global.ShadowRoot = ShadowRoot;
 if (typeof globalThis !== "undefined") {
   globalThis.ShadowRoot = ShadowRoot;
