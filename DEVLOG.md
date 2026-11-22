@@ -2194,3 +2194,6 @@
 
 ### Phase 358: `frame-frame-element.spec.ts` `[5/6]` & `[6/6]` Shadow Root `<iframe>` 缺失排障笔记
 - **`querySelectorAll('iframe')` 不穿透 ShadowRoot 根因**：`collectFrameStates()` 此前使用 `document.querySelectorAll('iframe')` 无法命中 `attachShadow({mode:'closed'})` 或 `<template shadowrootmode="open">` 下的 `<iframe>`，同时 `DOM.getFrameOwner` 仅扫描主文档 Arena DOM 且 `Page.setDocumentContent` 未刷新 `known_child_frames`。双端补齐 `_shadowRoot` 递归遍历后，实测 `PHASE358_RESULT {"c1Count":1,"o1":{"backendNodeId":7,"nodeId":7},"c2Count":1,"o2":{"backendNodeId":6,"nodeId":6}}`。
+
+### Phase 359: `Page.setDocumentContent` 后 `page.frames()[1]` 为 `undefined` 排障笔记
+- **`Page.setDocumentContent` 遗漏子框架事件派发根因**：`Page.navigate` 与 `Runtime.evaluate` 均在结束前同步 `syncIframeTargets` 并派发 `emitNewChildFrameEvents`，而 `Page.setDocumentContent` 未调用，导致 `page.setContent('<template shadowrootmode="open"><iframe ...>...')` 创建的子框架未向客户端发送 `Page.frameAttached`。补齐 2 行调用后，实测 `PHASE359_RESULT` 完整收到 `Page.frameAttached` -> `Page.frameNavigated` -> `Runtime.executionContextCreated` -> `Page.frameStoppedLoading` 全部 8 条事件。

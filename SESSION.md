@@ -5673,3 +5673,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE358_RESULT {"c1Count":1,"o1":{"backendNodeId":7,"nodeId":7},"c2Count":1,"o2":{"backendNodeId":6,"nodeId":6}}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。
+
+## Phase 359: `Page.setDocumentContent` 子框架事件同步修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): `Page.setDocumentContent` 补充 `syncIframeTargets(session, true)` 与 `emitNewChildFrameEvents()` 调用。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE359_RESULT` 完整收到 `capsurf-child-1` 全部 8 条生命周期事件。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

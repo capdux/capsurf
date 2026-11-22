@@ -837,6 +837,9 @@ pub struct PageHandler {
                 }
             }
 
+            syncIframeTargets(session, true);
+            emitNewChildFrameEvents(session, out_events, event_count);
+
             if (session.init_img_count > 0) {
                 const img_buf = session.allocator.alloc(u8, 65536) catch null;
                 defer if (img_buf != null) session.allocator.free(img_buf.?);

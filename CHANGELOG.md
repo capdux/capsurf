@@ -2957,3 +2957,7 @@
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `collectFrameStates()` 改用递归遍历并穿透 `el._shadowRoot`（忽略未展开 `<template>` 内部，兼容 `<frame>` 标签），使 closed 与 declarative shadow root 内的 `<iframe>` 注册进 `Page.getFrameTree` / `page.frames()`。
   - `src/cdp/dom.cp`: `DOM.getFrameOwner` 在 `collectDocIframeEntries` 未命中 `capsurf-child-<k>` 时通过 JS 穿透 `_shadowRoot` 定位对应 `<iframe>` 的 `_nid` 返回。
+
+## [2026-11-23] Phase 359: `Page.setDocumentContent` 同步子框架目标并派发 `Page.frameAttached` 事件流
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `Page.setDocumentContent` 在 `session.navigate` 后调用 `syncIframeTargets(session, true)` 与 `emitNewChildFrameEvents(session, out_events, event_count)`，使 `page.setContent()` 内含或脚本动态插入的 `<iframe>`（含 Shadow Root 内 `<iframe>`）立即注册进 Playwright `page.frames()`。
