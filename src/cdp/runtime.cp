@@ -339,6 +339,15 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Poll any network events produced during callFunctionOn (e.g. fetch() / XHR)
+            let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
+            let net_i: usize = 0;
+            while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
+                out_events[event_count.*] = polled_net_evts[net_i];
+                event_count.* += 1;
+            }
+
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }

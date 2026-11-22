@@ -2995,3 +2995,4 @@
 - Phase 368: `src/cdp/network.cp`, `src/cdp/page.cp`, `src/cdp/session.cp` — 统一共享并增强 `formatHttpHeadersJson` 同名头合并；`PendingFetchBody` 与 `pollNetworkEvents` 透传子资源/`fetch()` 真实 HTTP 状态码、状态文本、MIME 与响应头。
 - Phase 369: `src/cdp/dom.cp` — `DOM.getFrameOwner` 前置检查 `known_child_frames` 中的 `detached` 记录并返回 `-32000 Frame with the given id was not found.`。
 - Phase 370: `src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/cdp/session.cp` — 透传 `fetch()` 真实 HTTP `method` 与 `postData` 至 CDP `Network.requestWillBeSent`。
+- Phase 371: `src/cdp/runtime.cp` — `Runtime.callFunctionOn` 末尾补充 `session.pollNetworkEvents` 实时发射 `Network.*` 事件。
