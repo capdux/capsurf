@@ -5235,7 +5235,6 @@ pub struct CdpPageSession {
             while (i < dom.console_count && ev_idx < out_events.len) : (i += 1) {
                 let rec = &dom.console_records[i];
                 const lvl = rec.getLevel();
-                const txt = rec.getText();
 
                 if (_.runtime_enabled && ev_idx < out_events.len && rt_pos < _.console_event_storage.len) {
                     const args_slice = rec.getArgsJson();
@@ -5251,26 +5250,7 @@ pub struct CdpPageSession {
                         ev_idx += 1;
                     }
                 }
-
-                if (_.log_enabled && ev_idx < out_events.len && log_pos < _.log_event_storage.len) {
-                    const log_lvl = if (std.mem.eql(u8, lvl, "error"))
-                        "error"
-                    else if (std.mem.eql(u8, lvl, "warn"))
-                        "warning"
-                    else
-                        "info";
-
-                    const log_json = std.fmt.bufPrint(
-                        _.log_event_storage[log_pos..],
-                        "{{\"entry\":{{\"source\":\"javascript\",\"level\":\"{s}\",\"text\":\"{s}\",\"timestamp\":{d}}}}}",
-                        .{ log_lvl, txt, rec.timestamp },
-                    ) catch "";
-                    if (log_json.len > 0) {
-                        log_pos += log_json.len;
-                        out_events[ev_idx] = CdpEvent.create("Log.entryAdded", log_json);
-                        ev_idx += 1;
-                    }
-                }
+                * = log_pos;
             }
             dom.clearConsoleRecords();
             return ev_idx;

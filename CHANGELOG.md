@@ -2553,3 +2553,9 @@
 ## [2026-11-22] Phase 268: `Runtime.callFunctionOn` 补齐 `pollBindingEvents` 与 `pollNavigatedWithinDocEvents`
 - **Fixed (`src/`)**:
   - `src/cdp/runtime.cp`: 为 `Runtime.callFunctionOn` 补充 `session.pollBindingEvents()` 与 `session.pollNavigatedWithinDocEvents()` 事件轮询，修复 `page.evaluate(() => ...)` 中 `location.hash`、`history.pushState` 及 `exposeFunction` 回调未同步 `page.url()` / 绑定事件的问题。
+
+## [2026-11-22] Phase 269: 消除 `console` 重复事件并补齐 `console.time`/`count`/`assert`/`trace` API
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`: 移除 `pollConsoleEvents` 中重复发射的 `Log.entryAdded`，使每次 `console.*` 调用仅发射一条 `Runtime.consoleAPICalled`。
+  - `src/cdp/runtime.cp`: 将 `Runtime.callFunctionOn` 与 `Runtime.evaluate` 的 `polled_evts` 缓冲区从 `[4]CdpEvent` 扩容至 `[16]CdpEvent`，避免单次求值多条控制台输出被截断。
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补齐 `console.time`/`timeLog`/`timeEnd`/`count`/`countReset`/`assert`/`dir`/`dirxml`/`table`/`trace`/`group`/`groupCollapsed`/`groupEnd`/`clear`。

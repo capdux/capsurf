@@ -5021,3 +5021,12 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`location.hash = '#dynamic'` 与 `history.pushState({}, '', '/second.html')` 后 `page.url()` 实时同步。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.39s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.20s)**。
+
+### [2026-11-22 16:06] Phase 269: 消除 `console` 重复事件并补齐 `console.time`/`count`/`assert`/`trace` API
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 移除 `pollConsoleEvents` 重复的 `Log.entryAdded` 发射，确保每次 `console.*` 仅发送一条 `Runtime.consoleAPICalled`。
+  - [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): `polled_evts` 从 `[4]CdpEvent` 扩容至 `[16]CdpEvent`。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补齐 `console.time`/`timeLog`/`timeEnd`/`count`/`countReset`/`assert`/`dir`/`dirxml`/`table`/`trace`/`group`/`groupCollapsed`/`groupEnd`/`clear`。
+- **双模式验证**:
+  - `bin_dev/main` 实测：8 条连续 `console.*` 调用均单次准确送达（无重复 `info:`）。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.91s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。

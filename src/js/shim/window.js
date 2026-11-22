@@ -13608,4 +13608,63 @@ const CSS_TYPED_OM_GLOBALS = {
       if (typeof globalThis !== "undefined" && typeof globalThis[k] === "undefined") globalThis[k] = v;
     });
   })();
+
+  // Complete console.* API methods backed by native console.log/warn/error
+  if (typeof global.console === "object" && global.console) {
+    const c = global.console;
+    const timers = new Map();
+    const counters = new Map();
+    if (typeof c.time !== "function") {
+      c.time = function (label) { timers.set(label === undefined ? "default" : String(label), Date.now()); };
+    }
+    if (typeof c.timeLog !== "function") {
+      c.timeLog = function (label) {
+        const k = label === undefined ? "default" : String(label);
+        const start = timers.get(k);
+        const extra = Array.prototype.slice.call(arguments, 1);
+        if (start === undefined) { c.warn("Timer '" + k + "' does not exist"); return; }
+        c.log.apply(c, [k + ": " + (Date.now() - start) + " ms"].concat(extra));
+      };
+    }
+    if (typeof c.timeEnd !== "function") {
+      c.timeEnd = function (label) {
+        const k = label === undefined ? "default" : String(label);
+        const start = timers.get(k);
+        if (start === undefined) { c.warn("Timer '" + k + "' does not exist"); return; }
+        timers.delete(k);
+        c.log(k + ": " + (Date.now() - start) + " ms");
+      };
+    }
+    if (typeof c.count !== "function") {
+      c.count = function (label) {
+        const k = label === undefined ? "default" : String(label);
+        const next = (counters.get(k) || 0) + 1;
+        counters.set(k, next);
+        c.log(k + ": " + next);
+      };
+    }
+    if (typeof c.countReset !== "function") {
+      c.countReset = function (label) {
+        const k = label === undefined ? "default" : String(label);
+        if (!counters.has(k)) { c.warn("Count for '" + k + "' does not exist"); return; }
+        counters.set(k, 0);
+      };
+    }
+    if (typeof c.assert !== "function") {
+      c.assert = function (cond) {
+        if (!cond) {
+          const rest = Array.prototype.slice.call(arguments, 1);
+          c.error.apply(c, rest.length > 0 ? ["Assertion failed:"].concat(rest) : ["Assertion failed"]);
+        }
+      };
+    }
+    if (typeof c.dir !== "function") c.dir = function (obj) { c.log(obj); };
+    if (typeof c.dirxml !== "function") c.dirxml = function () { c.log.apply(c, arguments); };
+    if (typeof c.table !== "function") c.table = function (data) { c.log(data); };
+    if (typeof c.trace !== "function") c.trace = function () { c.log.apply(c, arguments.length ? arguments : ["console.trace"]); };
+    if (typeof c.group !== "function") c.group = function () { if (arguments.length) c.log.apply(c, arguments); };
+    if (typeof c.groupCollapsed !== "function") c.groupCollapsed = function () { if (arguments.length) c.log.apply(c, arguments); };
+    if (typeof c.groupEnd !== "function") c.groupEnd = function () {};
+    if (typeof c.clear !== "function") c.clear = function () {};
+  }
 }

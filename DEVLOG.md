@@ -1914,3 +1914,6 @@
 
 ### Phase 268: `Runtime.callFunctionOn` 同文档导航与绑定事件漏轮询排障笔记
 - **漏轮询根因**：Playwright 的 `page.evaluate(fn)` 实际通过 `Runtime.callFunctionOn`（而非 `Runtime.evaluate`）执行，此前 `runtime.cp` 仅在 `Runtime.evaluate` 分支调用 `pollBindingEvents` 与 `pollNavigatedWithinDocEvents`，导致 `location.hash = '#dynamic'` 与 `history.pushState(..., '/second.html')` 后 `page.url()` 不更新。补齐两路轮询后一次通过。
+
+### Phase 269: `console` 重复事件与扩展 API 排障笔记
+- **双倍事件根因**：Playwright 会同时启用 `Runtime.enable` 与 `Log.enable`，此前 `pollConsoleEvents` 对每条记录同时发射 `Runtime.consoleAPICalled` 与 `Log.entryAdded`，导致 `console.log("hello")` 在 Playwright 中收到两条（`log` + `info`）。仅保留 `Runtime.consoleAPICalled` 并扩容 `[16]CdpEvent` 后，8 条连续混合控制台调用均按预期单次送达。
