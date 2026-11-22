@@ -5687,3 +5687,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE360_RESULT {"loaderId":"capsurf-loader-001","reqId":"capsurf-loader-001","respLoader":"capsurf-loader-001","match":true,"status":200,"hasBody":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 361: 20 跳重定向与 `Page.navigate` 标准 `net::ERR_*` 错误码修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp), [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): 放宽重定向至 20 跳，并映射 `net::ERR_TOO_MANY_REDIRECTS`、`net::ERR_CONNECTION_REFUSED`、`net::ERR_EMPTY_RESPONSE`、`net::ERR_CONNECTION_RESET`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE361_RESULT {"r6Err":null,"r22Err":"net::ERR_TOO_MANY_REDIRECTS","rRefusedErr":"net::ERR_CONNECTION_REFUSED"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

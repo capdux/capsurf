@@ -2965,3 +2965,8 @@
 ## [2026-11-23] Phase 360: 对齐主文档导航 `requestId === loaderId`（根治 `page.goto()` 返回 `null`）
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `Page.navigate` 与历史回退导航将 `doc_req_id` 直接绑定为 `session.loader_id`，满足 Chromium CDP 主文档导航 `requestWillBeSent.requestId === requestWillBeSent.loaderId` 契约，使 Playwright 正确绑定 `document.request` 并返回 `Response` 对象。
+
+## [2026-11-23] Phase 361: 放宽重定向上限至 20 跳并映射 `Page.navigate` 标准 `net::ERR_*` 错误码
+- **Fixed (`src/`)**:
+  - `src/net/http_loader.cp`: 将 `fetchDocumentWithContext` 重定向最大深度从 `5` 放宽至符合 Fetch 规范的 `20` 跳。
+  - `src/cdp/page.cp`: `Page.navigate` 对 `TooManyRedirects`、`ConnectionFailed`/`ConnectFailed`、`EmptyResponse`、`ReadFailed`/`SendFailed` 返回标准 `errorText`（`net::ERR_TOO_MANY_REDIRECTS`、`net::ERR_CONNECTION_REFUSED`、`net::ERR_EMPTY_RESPONSE`、`net::ERR_CONNECTION_RESET`）。

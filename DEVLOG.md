@@ -2200,3 +2200,6 @@
 
 ### Phase 360: `page.goto()` 返回 `null` (`page-network-response.spec.ts` / `page-goto.spec.ts`) 排障笔记
 - **`requestId !== loaderId` 导致 `isNavigationRequest` 恒为 `false` 根因**：`crNetworkManager.ts:360` 严格校验 `requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && type === 'Document'` 才记录 `documentId` 与 `pendingDocument.request`。此前 `Page.navigate` 为主文档生成独立 `doc_req_id`（`req-*`），与 `session.loader_id` 不相等，导致 `page.goto()` 始终返回 `null`。统一为 `session.loader_id` 后，实测 `PHASE360_RESULT {"loaderId":"capsurf-loader-001","reqId":"capsurf-loader-001","match":true,"status":200,"hasBody":true}`。
+
+### Phase 361: `page-goto.spec.ts` `[21, 22, 26]` 重定向与网络错误码缺失排障笔记
+- **重定向深度过窄及统一返回 `"Navigation failed"` 根因**：`HttpLoader` 此前仅允许最多 `5` 跳重定向，且 `Page.navigate` 对除 `FileTooBig` 外的网络失败统一返回 `"Navigation failed"`。放宽至 `20` 跳并映射标准 Chromium `net::ERR_*` `errorText` 后，实测 `PHASE361_RESULT {"r6Err":null,"r22Err":"net::ERR_TOO_MANY_REDIRECTS","rRefusedErr":"net::ERR_CONNECTION_REFUSED"}`。

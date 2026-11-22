@@ -1266,6 +1266,38 @@ pub struct PageHandler {
                     ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                     return CdpResponse.ok(req.id, too_big_res);
                 }
+                if (std.mem.eql(u8, err_name, "TooManyRedirects")) {
+                    const err_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_TOO_MANY_REDIRECTS\"}}",
+                        .{ session.frame_id, session.loader_id },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, err_res);
+                }
+                if (std.mem.eql(u8, err_name, "ConnectionFailed") || std.mem.eql(u8, err_name, "ConnectFailed")) {
+                    const err_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_CONNECTION_REFUSED\"}}",
+                        .{ session.frame_id, session.loader_id },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, err_res);
+                }
+                if (std.mem.eql(u8, err_name, "EmptyResponse")) {
+                    const err_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_EMPTY_RESPONSE\"}}",
+                        .{ session.frame_id, session.loader_id },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, err_res);
+                }
+                if (std.mem.eql(u8, err_name, "ReadFailed") || std.mem.eql(u8, err_name, "SendFailed")) {
+                    const err_res = std.fmt.bufPrint(
+                        out_buf,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_CONNECTION_RESET\"}}",
+                        .{ session.frame_id, session.loader_id },
+                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                    return CdpResponse.ok(req.id, err_res);
+                }
                 if (std.mem.eql(u8, err_name, "RequestAborted")) {
                     return CdpResponse.err(req.id, -32000, "net::ERR_ABORTED");
                 }

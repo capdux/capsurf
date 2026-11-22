@@ -512,7 +512,7 @@ pub struct HttpLoader {
         initiator_url: []const u8,
         strip_credentials: bool,
     ): (HttpLoaderResult)! {
-        if (redirect_depth > 5) {
+        if (redirect_depth > 20) {
             return error.TooManyRedirects;
         }
 
