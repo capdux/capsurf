@@ -2083,6 +2083,14 @@
          finalPath.endsWith("/cors-sheet-echo-origin.css"))) {
       cssText = "#target { color: rgb(0, 0, 255); }\n#other { color: rgb(255, 0, 0); }\n";
     }
+    if ((cssText === null || cssText === undefined) &&
+        (finalUrl.startsWith("http://") || finalUrl.startsWith("https://")) &&
+        typeof globalThis !== "undefined" &&
+        typeof globalThis.__capsurf_http_get === "function") {
+      try {
+        cssText = globalThis.__capsurf_http_get(finalUrl);
+      } catch (e) {}
+    }
     const textStr = (cssText !== null && cssText !== undefined) ? String(cssText) : "";
 
     // Determine ACAO header for CORS-mode stylesheet requests

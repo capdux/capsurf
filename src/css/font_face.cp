@@ -332,13 +332,68 @@ pub fn parsePseudoContentValue(raw: []const u8, out_buf: []u8): usize? {
         if (q == '"' || q == '\'') {
             found_string = true;
             i += 1;
-            while (i < s.len && s[i] != q) : (i += 1) {
+            while (i < s.len && s[i] != q) {
                 if (s[i] == '\\' && i + 1 < s.len) {
                     i += 1;
-                }
-                if (out_len < out_buf.len) {
-                    out_buf[out_len] = s[i];
-                    out_len += 1;
+                    if (std.ascii.isHex(s[i])) {
+                        let cp: u32 = 0;
+                        let digits: usize = 0;
+                        while (i < s.len && digits < 6 && std.ascii.isHex(s[i])) : (i += 1) {
+                            const ch = s[i];
+                            const d: u32 = if (ch >= '0' && ch <= '9') @as(u32, ch - '0')
+                                else if (ch >= 'a' && ch <= 'f') @as(u32, ch - 'a' + 10)
+                                else @as(u32, ch - 'A' + 10);
+                            cp = (cp << 4) | d;
+                            digits += 1;
+                        }
+                        if (i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) {
+                            if (s[i] == '\r' && i + 1 < s.len && s[i + 1] == '\n') {
+                                i += 2;
+                            } else {
+                                i += 1;
+                            }
+                        }
+                        const safe_cp: u32 = if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) 0xFFFD else cp;
+                        if (safe_cp < 0x80) {
+                            if (out_len < out_buf.len) {
+                                out_buf[out_len] = @as(u8, safe_cp);
+                                out_len += 1;
+                            }
+                        } else if (safe_cp < 0x800) {
+                            if (out_len + 2 <= out_buf.len) {
+                                out_buf[out_len] = @as(u8, 0xC0 | (safe_cp >> 6));
+                                out_buf[out_len + 1] = @as(u8, 0x80 | (safe_cp & 0x3F));
+                                out_len += 2;
+                            }
+                        } else if (safe_cp < 0x10000) {
+                            if (out_len + 3 <= out_buf.len) {
+                                out_buf[out_len] = @as(u8, 0xE0 | (safe_cp >> 12));
+                                out_buf[out_len + 1] = @as(u8, 0x80 | ((safe_cp >> 6) & 0x3F));
+                                out_buf[out_len + 2] = @as(u8, 0x80 | (safe_cp & 0x3F));
+                                out_len += 3;
+                            }
+                        } else {
+                            if (out_len + 4 <= out_buf.len) {
+                                out_buf[out_len] = @as(u8, 0xF0 | (safe_cp >> 18));
+                                out_buf[out_len + 1] = @as(u8, 0x80 | ((safe_cp >> 12) & 0x3F));
+                                out_buf[out_len + 2] = @as(u8, 0x80 | ((safe_cp >> 6) & 0x3F));
+                                out_buf[out_len + 3] = @as(u8, 0x80 | (safe_cp & 0x3F));
+                                out_len += 4;
+                            }
+                        }
+                    } else {
+                        if (out_len < out_buf.len) {
+                            out_buf[out_len] = s[i];
+                            out_len += 1;
+                        }
+                        i += 1;
+                    }
+                } else {
+                    if (out_len < out_buf.len) {
+                        out_buf[out_len] = s[i];
+                        out_len += 1;
+                    }
+                    i += 1;
                 }
             }
             if (i < s.len && s[i] == q) i += 1;

@@ -157,7 +157,7 @@ pub enum HtmlTag: u8 {
     /// Self-closing void elements per HTML5 spec section 13.1.2.
     fn isVoid(): bool {
         return switch (_) {
-            .Area, .Base, .Br, .Col, .Embed, .Hr, .Img, .Input, .Link, .Meta, .Param, .Source, .Track, .Wbr => true,
+            .Area, .Base, .Br, .Col, .Embed, .Frame, .Hr, .Img, .Input, .Link, .Meta, .Param, .Source, .Track, .Wbr => true,
             * => false,
         };
     }
@@ -367,6 +367,7 @@ pub enum HtmlTag: u8 {
                 if (std.ascii.eqlIgnoreCase(s, "small")) return .Small;
                 if (std.ascii.eqlIgnoreCase(s, "track")) return .Track;
                 if (std.ascii.eqlIgnoreCase(s, "label")) return .Label;
+                if (std.ascii.eqlIgnoreCase(s, "frame")) return .Frame;
                 return .Unknown;
             },
             6 => {
@@ -411,6 +412,7 @@ pub enum HtmlTag: u8 {
                 if (std.ascii.eqlIgnoreCase(s, "progress")) return .Progress;
                 if (std.ascii.eqlIgnoreCase(s, "noscript")) return .Noscript;
                 if (std.ascii.eqlIgnoreCase(s, "noframes")) return .Noframes;
+                if (std.ascii.eqlIgnoreCase(s, "frameset")) return .Frameset;
                 return .Unknown;
             },
             9 => {
