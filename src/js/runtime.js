@@ -16163,7 +16163,7 @@
     (function () {
       const HTML_NS = "http://www.w3.org/1999/xhtml";
       const isHtmlEl = function (el) {
-        return el && el.nodeType === 1 && (!el.namespaceURI || el.namespaceURI === HTML_NS);
+        return el && el.nodeType === 1 && el.namespaceURI === HTML_NS;
       };
       const makeColl = function (arr) {
         return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;
@@ -24451,6 +24451,7 @@
     this.documentURI = "";
     this.baseURI = "";
     this.defaultView = null;
+    this.location = null;
     this.ownerDocument = null;
     this.parentNode = null;
     this._children = [];
@@ -46971,6 +46972,11 @@
               implProto.createHTMLDocument = markNative(function (title) {
                 const doc = origCreateHTMLDoc.apply(this, arguments);
                 if (doc && typeof doc === "object") {
+                  try {
+                    Object.defineProperty(doc, "location", { value: null, configurable: true });
+                  } catch (e) {
+                    try { doc.location = null; } catch (e2) {}
+                  }
                   const setDocOwner = function (node) {
                     if (!node || typeof node !== "object") return;
                     try {

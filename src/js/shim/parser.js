@@ -681,6 +681,7 @@ function ParsedDocument(contentType, compatMode) {
   this.documentURI = "";
   this.baseURI = "";
   this.defaultView = null;
+  this.location = null;
   this.ownerDocument = null;
   this.parentNode = null;
   this._children = [];

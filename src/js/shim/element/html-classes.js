@@ -3378,7 +3378,7 @@ function installHtmlClasses(global) {
   (function () {
     const HTML_NS = "http://www.w3.org/1999/xhtml";
     const isHtmlEl = function (el) {
-      return el && el.nodeType === 1 && (!el.namespaceURI || el.namespaceURI === HTML_NS);
+      return el && el.nodeType === 1 && el.namespaceURI === HTML_NS;
     };
     const makeColl = function (arr) {
       return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;

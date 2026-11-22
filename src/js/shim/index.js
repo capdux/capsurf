@@ -2180,6 +2180,11 @@ function installShim(global) {
             implProto.createHTMLDocument = markNative(function (title) {
               const doc = origCreateHTMLDoc.apply(this, arguments);
               if (doc && typeof doc === "object") {
+                try {
+                  Object.defineProperty(doc, "location", { value: null, configurable: true });
+                } catch (e) {
+                  try { doc.location = null; } catch (e2) {}
+                }
                 const setDocOwner = function (node) {
                   if (!node || typeof node !== "object") return;
                   try {
