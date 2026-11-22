@@ -2276,3 +2276,4 @@
 - Phase 422 (`src/js/shim/window.js`): 实现 `CountQueuingStrategy` 与 `ByteLengthQueuingStrategy` 构造与 `size()` 方法。
 - Phase 423 (`src/js/shim/file.js`, `src/js/shim/window.js`): 实装 `Blob.prototype.bytes()` 与 `PerformanceObserver`（`supportedEntryTypes`, `observe`, `buffered`, `disconnect`, `takeRecords`）。
 - Phase 424 (`src/js/shim/window.js`, `src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`): 按字母序排列 `supportedEntryTypes`、实现 `link.fetchPriority` 反射、并对齐 `Option.prototype` 原型链。
+- Phase 425 (`src/js/shim/element/forms/form.js`, `button.js`, `input.js`): 提取 `resolveFormActionUrl` 公共函数，统一实现 `action`/`formAction` 相对 `<base href>` 解析与空串回退文档 URL。

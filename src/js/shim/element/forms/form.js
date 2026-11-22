@@ -431,28 +431,31 @@ function installFormElement(global) {
     configurable: true,
   });
 
-  Object.defineProperty(HTMLFormElement.prototype, "action", {
-    get: function () {
-      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-      const docUrl = (doc && (doc.URL || (doc.location && doc.location.href))) || "about:blank";
-      const raw = this.getAttribute("action");
-      if (raw === null || String(raw).trim() === "") return docUrl;
-      let baseUrl = docUrl;
-      if (doc && typeof doc.querySelector === "function") {
-        const baseEl = doc.querySelector("base[href]");
-        if (baseEl) {
-          const bHref = baseEl.getAttribute("href");
-          if (bHref !== null && String(bHref).trim() !== "") {
-            try { baseUrl = new URL(String(bHref).trim(), docUrl).href; } catch (e) {}
-          }
+  function resolveFormActionUrl(el, attrName) {
+    const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const docUrl = (doc && (doc.URL || (doc.location && doc.location.href))) || "about:blank";
+    const raw = el.getAttribute(attrName);
+    if (raw === null || String(raw).trim() === "") return docUrl;
+    let baseUrl = docUrl;
+    if (doc && typeof doc.querySelector === "function") {
+      const baseEl = doc.querySelector("base[href]");
+      if (baseEl) {
+        const bHref = baseEl.getAttribute("href");
+        if (bHref !== null && String(bHref).trim() !== "") {
+          try { baseUrl = new URL(String(bHref).trim(), docUrl).href; } catch (e) {}
         }
       }
-      try {
-        return new URL(String(raw).trim(), baseUrl).href;
-      } catch (e) {
-        return raw;
-      }
-    },
+    }
+    try {
+      return new URL(String(raw).trim(), baseUrl).href;
+    } catch (e) {
+      return raw;
+    }
+  }
+  global.__capsurf_resolveFormActionUrl = resolveFormActionUrl;
+
+  Object.defineProperty(HTMLFormElement.prototype, "action", {
+    get: function () { return resolveFormActionUrl(this, "action"); },
     set: function (v) { this.setAttribute("action", String(v)); },
     configurable: true,
   });

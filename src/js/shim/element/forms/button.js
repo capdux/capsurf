@@ -118,7 +118,11 @@ function installButtonElement(global) {
   }
 
   Object.defineProperty(HTMLButtonElement.prototype, "formAction", {
-    get: function () { return this.getAttribute("formaction") || ""; },
+    get: function () {
+      return typeof global.__capsurf_resolveFormActionUrl === "function"
+        ? global.__capsurf_resolveFormActionUrl(this, "formaction")
+        : (this.getAttribute("formaction") || "");
+    },
     set: function (v) { this.setAttribute("formaction", String(v)); },
     configurable: true,
   });

@@ -368,6 +368,16 @@ function installInputElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLInputElement.prototype, "formAction", {
+    get: function () {
+      return typeof global.__capsurf_resolveFormActionUrl === "function"
+        ? global.__capsurf_resolveFormActionUrl(this, "formaction")
+        : (this.getAttribute("formaction") || "");
+    },
+    set: function (v) { this.setAttribute("formaction", String(v)); },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLInputElement.prototype, "required", {
     get: function () { return this.hasAttribute("required"); },
     set: function (v) { if (v) this.setAttribute("required", ""); else this.removeAttribute("required"); },

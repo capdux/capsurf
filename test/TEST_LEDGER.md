@@ -832,3 +832,10 @@
 | WPT-B154 | `dataset` + `/streams/ 1/2` + `/WebCryptoAPI/ 1/2..2/2` | 29/181 PASS (`dataset` **7/7全绿!**, `streams 1/2` 1/42, `WebCryptoAPI 1/2` 9/66 **9 FAIL→PASS**, `2/2` 12/66 **11 FAIL→PASS**, 0 CRASH) |
 | WPT-B156 | `/streams/ 2/2` + `the-fieldset-element/` + `the-option-element/` | 8/57 PASS (`streams 2/2` 1/42, `fieldset` **6/8**, `option` 1/7, 0 CRASH) |
 | WPT-B157 | `/performance-timeline/` + `/FileAPI/` + `document-metadata/` + `the-datalist-element/` | 39/88 PASS (`perf-timeline` **4/21 (19/21匹配!)**, `FileAPI` **15/36** (`Blob-bytes`过!), `metadata` 17/28, `datalist` **3/3全绿!**, 0 CRASH) |
+| WPT-B155 | `/css-grid/ 2/4..4/4` (487/660) + `/css-values/ 2/2` | 151/662 PASS (`grid 2/4` 19/89 **+4 FAIL→PASS**, `3/4` 51/220 **+10 FAIL→PASS**, `4/4` 38/178 **+7 FAIL→PASS**, `values 2/2` 43/175 **+3 FAIL→PASS**, 0 CRASH) |
+| WPT-B158 | `attributes-common-to-form-controls/` + `form-submission-0/` + `constraints/` + `resetting-a-form/` | 12/29 PASS (`form-submission-0` **5/5匹配**, `constraints` **8/12**, `resetting-a-form` 2/4, 0 CRASH) |
+| 2026-11-23 10:56 | `page-screenshot.spec.ts` | 18/44 PASS (20 fail, 6 timeout) | PW Batch 137 |
+| 2026-11-23 10:56 | `page-network-request.spec.ts` | 7/27 PASS (16 fail, 3 timeout, 1 skip) | PW Batch 137 |
+| 2026-11-23 10:56 | `page-add-init-script.spec.ts` | **11/11 PASS** (`bin_dev` 全绿!) | PW Batch 137 |
+| 2026-11-23 10:56 | `page-set-content.spec.ts` | 14/16 PASS (0 fail, 2 timeout) | PW Batch 137 |
+| WPT-B160 | `the-output-element/` + `the-meter-element/` + `the-progress-element/` + `/performance-timeline/` | 7/29 PASS (`output` 1/2, `meter` 1/2, `progress` 0/4, `perf-timeline` **5/21 (20/21匹配!)**, 0 CRASH) |
