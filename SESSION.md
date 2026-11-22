@@ -4946,3 +4946,14 @@
 - **双模式验证与并行测试**:
   - Playwright（`bin_dev/main` Debug）：`[placeholder="Select\"date"]` 验证 `true`；detached `waitForElementState('hidden')` 通过 & `waitForElementState('visible')` 正确报 `Element is not attached to the DOM`；`number` 输入框 `type('13')` → `"132"`、`press('1')` → `"12"`；双路并行还完成了 `jshandle-properties.spec.ts` (**7/7 PASS**)、`jshandle-json-value.spec.ts` (**3/3 PASS**)、`eval-on-selector-all.spec.ts` (**9/9 PASS**)、`elementhandle-type.spec.ts` (**4/5 PASS**)、`elementhandle-wait-for-element-state.spec.ts` (**8/12 PASS**)、`page-add-init-script.spec.ts` (**9/11 PASS**)。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **135.95s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
+
+### [2026-11-22 14:55] Phase 260: `Page.reload` 真实导航、`addScriptTag` 外部脚本拉取、`invalid-type` 选区修复与测试台账
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): 移除 `Page.reload` 空存根，将其路由至 `Page.navigate` 导航管线（栈缓冲拷贝 `session.url`），支持完整页面重载与 JS 状态重置。
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 新增 `__capsurf_http_get` 原生桥接与 `sessionHttpGetHook`（复用 `HttpLoader.fetchDocument`），为 `handleInsertedScript` 补充经典外部 `<script src="...">` 的真实 HTTP 拉取、全局求值与 `load`/`error` 事件派发。
+  - [src/js/shim/element/forms/selection.js](file:///data/dev/capsurf/src/js/shim/element/forms/selection.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `supportsSelection()` 改用 `normalizeInputType()`，修复 `<input type="invalid-type">` 下 `select()` 失效导致 `page.fill()` 追加前值的问题。
+- **工程与测试提速**:
+  - 新建 [test/TEST_LEDGER.md](file:///data/dev/capsurf/test/TEST_LEDGER.md) 持久化记录已测分片与耗时，避免重复测试；WPT 批量扫测启用 `--skip-expected-timeouts --skip-expected-crashes`，5 批 98 条合计提速至 **161s**。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`addScriptTag({ url })` 200 JS 正常求值（`window.__injected === 42`）、404 正确抛出 `Failed to load script`；`page.fill`（含 `invalid-type`）正确替换输出 `"text invalid-type"`；`page.reload` 正常重置 `window` 状态。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **118.99s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。

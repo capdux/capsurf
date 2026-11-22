@@ -16822,7 +16822,8 @@
     const tag = (control.tagName || "").toLowerCase();
     if (tag === "textarea") return true;
     if (tag === "input") {
-      const type = (control.getAttribute("type") || "text").toLowerCase();
+      const rawType = control.getAttribute("type");
+      const type = typeof normalizeInputType === "function" ? normalizeInputType(rawType) : (rawType || "text").toLowerCase();
       return ["text", "search", "url", "tel", "password"].includes(type);
     }
     return false;

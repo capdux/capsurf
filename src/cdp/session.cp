@@ -26,9 +26,20 @@ import { MockFixtures } from "../net/mock_fixtures.cp";
 import { HttpLoader, HttpLoaderResult } from "../net/http_loader.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isInlineEventHandlerAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
-import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
+import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, registerHttpGetHook, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
 import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
 import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX } from "../tty/nav_params.cp";
+
+fn sessionHttpGetHook(session_ptr: *void, url: []const u8, out_buf: []u8): i64 {
+    const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    const fetch_res = HttpLoader.fetchDocument(sess, url, out_buf, 0) catch return -1;
+    if (fetch_res.status_code < 200 || fetch_res.status_code >= 300) return -1;
+    const n = @min(fetch_res.html.len, out_buf.len);
+    if (n > 0 && unsafe { @intFromPtr(fetch_res.html.ptr) != @intFromPtr(out_buf.ptr) }) {
+        std.mem.copyForwards(u8, out_buf[0..n], fetch_res.html[0..n]);
+    }
+    return @as(i64, @intCast(n));
+}
 
 @c {
     fn usleep(usec: u32): i32;
@@ -2129,6 +2140,7 @@ pub struct CdpPageSession {
         _.syncUserAgentToJs();
         _.outbound_reject_websocket = false;
         _.nav_seq += 1;
+        registerHttpGetHook(unsafe { @ptrCast(_) }, &sessionHttpGetHook);
         registerSessionHooksNative(_.ctx.raw_ctx);
         {
             const active_bctx = if (_.current_browser_context_id_len > 0)

@@ -747,7 +747,6 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.enable") ||
             std.mem.eql(u8, req.method, "Page.disable") ||
             std.mem.eql(u8, req.method, "Page.stopLoading") ||
-            std.mem.eql(u8, req.method, "Page.reload") ||
             std.mem.eql(u8, req.method, "Page.setLifecycleEventsEnabled") ||
             std.mem.eql(u8, req.method, "Page.setInterceptFileChooserDialog") ||
             std.mem.eql(u8, req.method, "Page.setBypassCSP") ||
@@ -1112,12 +1111,20 @@ pub struct PageHandler {
             }
         }
 
-        if (std.mem.eql(u8, req.method, "Page.navigate")) {
+        const is_reload = std.mem.eql(u8, req.method, "Page.reload");
+        if (is_reload || std.mem.eql(u8, req.method, "Page.navigate")) {
             const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
             if (bctx.len > 0) {
                 session.setContextId(bctx);
             }
-            const raw_nav_url = extractJsonString(req.params_raw, "url") ?? "about:blank";
+            let reload_url_buf: [2048]u8 = [0; 2048];
+            let raw_nav_url: []const u8 = extractJsonString(req.params_raw, "url") ?? "about:blank";
+            if (is_reload) {
+                const cur_u = if (session.url.len > 0) session.url else "about:blank";
+                const cpy_len = @min(cur_u.len, reload_url_buf.len);
+                @memcpy(reload_url_buf[0..cpy_len], cur_u[0..cpy_len]);
+                raw_nav_url = reload_url_buf[0..cpy_len];
+            }
             let clean_nav_buf: [2048]u8 = [0; 2048];
             session.tty_ua_css = 0;
             session.tty_cell_w = 0;

@@ -2503,3 +2503,11 @@
   - `src/css/matcher.cp`: `[attr="...\"..."]` 引号扫描与 `\c` 反转义支持。
   - `src/js/dom_binding.cp`: `__capsurf_get_object("node:<nid>")` 补充 `__capsurf_wrappers` / `__capsurf_weak_wrappers` 回查 detached 节点。
   - `src/cdp/input.cp`: `applyInputText` 为 `input[type=number]` 增加 `_numCaret`（默认 `0` 起步）修复文本插入位置。
+
+## [2026-11-22] Phase 260: `Page.reload` 真实导航、`addScriptTag` 外部脚本拉取与 `invalid-type` 选区修复
+- **Added / Fixed (`src/`)**:
+  - `src/cdp/page.cp`: 移除 `Page.reload` 空存根，将其路由至 `Page.navigate` 导航管线（栈缓冲拷贝 `session.url`），支持完整页面重载与 JS 环境重置。
+  - `src/cdp/session_hooks.cp`, `src/cdp/session.cp`: 新增 `__capsurf_http_get` 原生桥接回调（复用 `HttpLoader.fetchDocument`），为 `handleInsertedScript` 补充经典外部 `<script src="...">` 的真实 HTTP 拉取、全局求值与 `load`/`error` 事件派发。
+  - `src/js/shim/element/forms/selection.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `supportsSelection()` 改用 `normalizeInputType()` 规范化 `type` 属性，修复 `<input type="invalid-type">` 下 `select()` 失效导致 `page.fill()` 追加而非替换的问题。
+- **Added (`test/`)**:
+  - `test/TEST_LEDGER.md`: 建立持久化测试台账，记录已测分片时间与结果，避免重复测试。

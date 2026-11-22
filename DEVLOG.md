@@ -1880,3 +1880,8 @@
 - **属性选择器转义**：`matcher.cp` 原先用 `std.mem.trim(rhs, "\"'")` 且未处理 `\"`，导致 `[placeholder="Select\"date"]` 失败；改用栈上 `[512]u8` 就地反转义后零分配修复。
 - **Detached 节点句柄**：`elementhandle-wait-for-element-state` 与 `elementhandle-scroll-into-view` 对已 `remove()` 的节点期望得到 `Element is not attached to the DOM`，回查 `__capsurf_wrappers` / `__capsurf_weak_wrappers` 后即与 Chromium 行为一致。
 - **`input[type=number]` 光标**：HTML5 规范中 `number` 输入框 `selectionStart` 为 `null`，`applyInputText` 回退 `oldLen` 会导致新字符追加到末尾，增加 `_numCaret` 从 `0` 起步后与 Playwright 预期完全一致。
+
+### Phase 260: `Page.reload`、动态 `<script src>` 实网拉取与 `invalid-type` 选区排障笔记
+- **`Page.reload`**：此前 `Page.reload` 被列入空存根直接返回 `{}`，导致 `page.reload()` 既不重载文档也不重置 `window` 状态；接入 `Page.navigate` 管线并使用栈上 `reload_url_buf` 拷贝 `session.url`（避免导航中途清空覆盖原切片）后即恢复正常。
+- **`addScriptTag({ url })`**：`window.js` 中的 `__capsurf_native_fetch` 仅作用于同源/fixture stub，对于普通外部 URL 返回空体 `200`，而 `session_hooks.cp` 中 `handleInsertedScript` 仅拦截 `/__fixtures/` 路径。通过 `registerHttpGetHook` 从 `session.cp` 注入 `HttpLoader.fetchDocument` 回调，使动态插入的 `<script src="...">` 在 2xx 时求值并派发 `load`、非 2xx 时派发 `error`。
+- **`input[type=invalid-type]` 选区**：HTML5 规范中未知 `type` 应回退为 `text`，`selection.js` 中 `supportsSelection()` 直接读取原始 `getAttribute("type")` 导致 `el.select()` 早退、`page.fill()` 未全选替换；改用 `normalizeInputType()` 后问题消除。

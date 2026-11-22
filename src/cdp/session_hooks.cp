@@ -125,6 +125,35 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     return jsNull();
 }
 
+pub type HttpGetHookFn = *const fn (session_ptr: *void, url: []const u8, out_buf: []u8): i64;
+let g_http_get_hook: (HttpGetHookFn)? = null;
+let g_http_session_ptr: (*void)? = null;
+
+pub fn registerHttpGetHook(session_ptr: *void, hook: HttpGetHookFn) {
+    g_http_session_ptr = session_ptr;
+    g_http_get_hook = hook;
+}
+
+@c fn js_capsurf_http_get(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+    if (hook := g_http_get_hook) {
+        if (sess_ptr := g_http_session_ptr) {
+            const buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNull();
+            defer std.heap.c_allocator.free(buf);
+            const n = hook(sess_ptr, url, buf);
+            if (n < 0) return jsNull();
+            return JS_NewStringLen(ctx, buf.ptr, @as(usize, @intCast(n)));
+        }
+    }
+    return jsNull();
+}
+
 @c fn js_capsurf_iframe_load_fixture(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     if (argc < 1) return jsNull();
@@ -605,6 +634,7 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     const global_obj = JS_GetGlobalObject(raw_ctx);
     defer JS_FreeValue(raw_ctx, global_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_http_get", js_capsurf_http_get, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_record_fetch", js_capsurf_record_fetch, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_iframe_load_fixture", js_capsurf_iframe_load_fixture, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_learned_script", js_capsurf_learned_script, 5);
@@ -2499,6 +2529,15 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "        var codeStr = String(fetched);\n" ++
     "        if (typeof g.__capsurf_learned_script === 'function' && codeStr.length >= 128) g.__capsurf_learned_script('learn', bctxId, pageOrigin, absUrl, codeStr);\n" ++
     "        evalClassicCode(node, codeStr, false); fireScriptEvent(node, 'load');\n" ++
+    "      });\n" ++
+    "      return;\n" ++
+    "    }\n" ++
+    "    if (typeof g.__capsurf_http_get === 'function') {\n" ++
+    "      Promise.resolve().then(function() {\n" ++
+    "        var code = g.__capsurf_http_get(absUrl);\n" ++
+    "        if (code === null || code === undefined) { fireScriptEvent(node, 'error'); return; }\n" ++
+    "        evalClassicCode(node, String(code), false);\n" ++
+    "        fireScriptEvent(node, 'load');\n" ++
     "      });\n" ++
     "      return;\n" ++
     "    }\n" ++
