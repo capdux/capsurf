@@ -533,6 +533,11 @@ pub struct HtmlSerializer {
                     let i: usize = 0;
                     while (i < node.text_content.len) : (i += 1) {
                         const c = node.text_content[i];
+                        if (c == 0xC2 && i + 1 < node.text_content.len && node.text_content[i + 1] == 0xA0) {
+                            _.buf.appendSlice(_.doc.allocator, "&nbsp;")?;
+                            i += 1;
+                            continue;
+                        }
                         switch (c) {
                             '&' => _.buf.appendSlice(_.doc.allocator, "&amp;")?,
                             '<' => _.buf.appendSlice(_.doc.allocator, "&lt;")?,
@@ -561,6 +566,11 @@ pub struct HtmlSerializer {
                     let j: usize = 0;
                     while (j < avalue.len) : (j += 1) {
                         const ac = avalue[j];
+                        if (ac == 0xC2 && j + 1 < avalue.len && avalue[j + 1] == 0xA0) {
+                            _.buf.appendSlice(_.doc.allocator, "&nbsp;")?;
+                            j += 1;
+                            continue;
+                        }
                         switch (ac) {
                             '&' => _.buf.appendSlice(_.doc.allocator, "&amp;")?,
                             '"' => _.buf.appendSlice(_.doc.allocator, "&quot;")?,

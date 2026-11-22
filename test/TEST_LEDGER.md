@@ -456,3 +456,12 @@
 | 2026-11-22 20:00 | `selectors-get-by.spec.ts` | 25/25 PASS (28.4s, exit 0) | PW Batch 62 (全绿) |
 | 2026-11-22 20:01 | `/dom/ranges/` (`1/3..3/3`) | 3/12, 3/10, 1/10 PASS (25.1s) | WPT Batch 84 (`bin_dev`) |
 | 2026-11-22 20:01 | `/dom/traversal/` (`1/2, 2/2`) | 3/9, 1/8 PASS (15.7s) | WPT Batch 84 (`bin_dev`) |
+| 2026-11-22 20:03 | `page-navigation.spec.ts` | 2/3 PASS (38.3s, 1 timeout) | PW Batch 63 |
+| 2026-11-22 20:03 | `page-wait-for-url.spec.ts` | 1/9 PASS (90s截断, 2 timeout) | PW Batch 63 |
+| 2026-11-22 20:03 | `jshandle-evaluate.spec.ts` | 2/2 PASS (2.5s, exit 0) | PW Batch 63 (全绿) |
+| 2026-11-22 20:03 | `jshandle-to-string.spec.ts` | 3/6 PASS (22.1s, match exp) | PW Batch 63 |
+| 2026-11-22 20:10 | `selectors-text.spec.ts` | 20/21 PASS (`&nbsp;` 1 FAIL) | PW Batch 64 |
+| 2026-11-22 20:10 | `page-wait-for-function.spec.ts` | 9/26 PASS (90s截断, 2 FAIL) | PW Batch 64 |
+| 2026-11-22 20:10 | `page-wait-for-selector-1.spec.ts` | 13/15 PASS (90s retry截断) | PW Batch 64 |
+| 2026-11-22 20:10 | `page-wait-for-selector-2.spec.ts` | 22/32 PASS (90s截断) | PW Batch 64 |
+| 2026-11-22 20:10 | `jshandle-properties.spec.ts` | 7/7 PASS (exit 1 exp dev) | PW Batch 64 (全绿) |

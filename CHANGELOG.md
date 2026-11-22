@@ -2721,3 +2721,8 @@
 ## [2026-11-22] Phase 306: 修复 `Element.prototype.outerHTML` 未序列化 JS `_children` 文本节点的问题
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `Element.prototype.outerHTML` getter，当 `this._children && this._children.length > 0` 时，将 `this.innerHTML` 拼接回 `origOuterGet.call(this)` 的开闭标签之间，修复 JS 追加 `Text` 子节点后 `outerHTML` 仍返回空标签（如 `<div></div>`）导致 `selectors-text.spec.ts` `text=lowo` 失败的问题。
+
+## [2026-11-22] Phase 307: 修复 `HtmlSerializer` U+00A0 `&nbsp;` 转义与 `TreeWalker`/`NodeIterator` `Symbol.toStringTag`
+- **Fixed (`src/`)**:
+  - `src/dom/dom.cp`: 在 `HtmlSerializer.serializeNode()` 序列化文本节点与属性值时，将 UTF-8 U+00A0 (`0xC2 0xA0`) 编码为 `&nbsp;`（对齐 HTML5 片段序列化规范，修复 `selectors-text.spec.ts` `Sign&nbsp;in` `outerHTML` 断言）。
+  - `src/js/shim/traversal.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `TreeWalker.prototype` 与 `NodeIterator.prototype` 定义 `Symbol.toStringTag`（`"TreeWalker"` / `"NodeIterator"`），使 `Object.prototype.toString.call()` 返回标准字符串。

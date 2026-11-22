@@ -5304,3 +5304,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`d.appendChild(createTextNode("hello"))` + `"world"` 后返回 `{"outer":"<div>helloworld</div>","inner":"helloworld"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.38s)**。
+
+### [2026-11-22 20:12] Phase 307: 修复 `HtmlSerializer` U+00A0 `&nbsp;` 转义与 `TreeWalker`/`NodeIterator` `Symbol.toStringTag`
+- **引擎修复 (`src/`)**:
+  - [src/dom/dom.cp](file:///data/dev/capsurf/src/dom/dom.cp): `HtmlSerializer.serializeNode()` 对 U+00A0 (`0xC2 0xA0`) 输出 `&nbsp;`。
+  - [src/js/shim/traversal.js](file:///data/dev/capsurf/src/js/shim/traversal.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `TreeWalker.prototype` 与 `NodeIterator.prototype` 定义 `Symbol.toStringTag`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`{"outer":"<span>Sign&nbsp;in</span>","twStr":"[object TreeWalker]","niStr":"[object NodeIterator]"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。

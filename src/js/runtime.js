@@ -21802,6 +21802,10 @@
   };
 
   markNative(TreeWalker, "TreeWalker");
+  Object.defineProperty(TreeWalker.prototype, Symbol.toStringTag, {
+    value: "TreeWalker",
+    configurable: true,
+  });
   markNative(TreeWalker.prototype.parentNode, "parentNode");
   markNative(TreeWalker.prototype.firstChild, "firstChild");
   markNative(TreeWalker.prototype.lastChild, "lastChild");
@@ -21889,6 +21893,10 @@
   NodeIterator.prototype.detach = function () {};
 
   markNative(NodeIterator, "NodeIterator");
+  Object.defineProperty(NodeIterator.prototype, Symbol.toStringTag, {
+    value: "NodeIterator",
+    configurable: true,
+  });
   markNative(NodeIterator.prototype.nextNode, "nextNode");
   markNative(NodeIterator.prototype.previousNode, "previousNode");
   markNative(NodeIterator.prototype.detach, "detach");

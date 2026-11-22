@@ -2031,3 +2031,7 @@
 
 ### Phase 306: `selectors-text.spec.ts` `[1/21]` `text=lowo` 匹配空标签 `<div></div>` 排障笔记
 - **`d.outerHTML` 遗漏 JS `_children` 文本节点根因**：Playwright `text` 选择器引擎读取 `element.outerHTML` 进行调试输出或片段匹配时，对于 `document.createElement('div')` 后通过 `appendChild(createTextNode('hello'))` 追加的子节点，由于 `Element.prototype.outerHTML` 直接走原生 C 序列化而未回退 `this._children`，返回了 `"<div></div>"` 而非 `"<div>helloworld</div>"`。在 `outerHTML` getter 中检测 `this._children.length > 0` 并拼接 `this.innerHTML` 后，实测返回 `{"outer":"<div>helloworld</div>","inner":"helloworld"}`。
+
+### Phase 307: `selectors-text.spec.ts` `&nbsp;` 序列化差异与 `TreeWalker`/`NodeIterator` `toStringTag` 排障笔记
+- **`outerHTML` 返回 `"<span>Sign\u00a0in</span>"` 根因**：`HtmlSerializer.serializeNode()` 此前仅转义 `&`、`<`、`>`（及属性引号 `"`），未按 HTML5 片段序列化规范将 U+00A0 (`0xC2 0xA0`) 输出为 `&nbsp;`。在文本与属性分支中增加双字节 `0xC2 0xA0 -> "&nbsp;"` 后，实测返回 `"<span>Sign&nbsp;in</span>"`。
+- **`TreeWalker`/`NodeIterator` `toString` 返回 `[object Object]` 根因**：两者的原型均未定义 `[Symbol.toStringTag]`，补齐后 `Object.prototype.toString.call()` 分别返回 `"[object TreeWalker]"` 与 `"[object NodeIterator]"`。
