@@ -2102,3 +2102,6 @@
 
 ### Phase 329: `page-mouse.spec.ts` `[8/15]` `page.hover('#button-91')` 超时排障笔记
 - **`hitTest()` 未叠加滚动偏移根因**：Playwright 传入的 CDP 鼠标坐标 `(x, y)` 为视口坐标，而 `session.layout.boxes` 存储的是文档坐标。页面滚动（`scrollIntoView` 后 `scrollY = 1320`）时，`hitTest()` 此前直接拿视口坐标对比文档矩形，导致 `#button-91` 漏检且 `hovered_node` 为 `0`。在 `hitTest()` 中同步读取 `window.scrollX/Y` 并对非 `.Fixed` 盒子叠加偏移后，实测 `sy=1320` 下 `document.querySelector("button:hover").id === "button-91"`。
+
+### Phase 330: `page-add-script-tag` `[7/9]` CSP 页面注入内联脚本未抛错排障笔记
+- **静默拦截未输出 CSP `console.error` 根因**：Playwright 的 `addScriptTag({ content })` 通过 `_raceWithCSPError` 监听包含 `"Content Security Policy"` 的浏览器控制台错误来判定 CSP 拒绝。`handleInsertedScript()` 在内联脚本被 `__capsurf_script_gate` 拦截后此前直接静默 `return`，未输出错误日志。补充标准 `Refused to execute inline script because it violates the following Content Security Policy directive: ...` 后，实测 `Runtime.consoleAPICalled` 准确收到该 `error` 日志且 `window.__inj` 保持 `undefined`。

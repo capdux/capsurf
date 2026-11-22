@@ -2823,3 +2823,7 @@
 ## [2026-11-22] Phase 329: `hitTest()` 接入页面滚动偏移 (`scrollX`/`scrollY`) 修复滚动后悬停与点击
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `hitTest()` 中读取当前 `window.scrollX`/`window.scrollY` 并同步至 `session.scroll_x`/`session.scroll_y`，对非 `fixed` 定位元素使用文档坐标 `(x + sx, y + sy)` 进行命中测试，解决滚动后 `page.hover('#button-91')` 等视口命中全部漏检的问题。
+
+## [2026-11-22] Phase 330: CSP 拦截动态内联 `<script>` 时输出标准 `console.error` 违规日志
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: 在 `handleInsertedScript()` 内联脚本被 `__capsurf_script_gate('inline', ...)` 拦截分支补充 `console.error('Refused to execute inline script because it violates the following Content Security Policy directive: ' + docCsp)`，使 Playwright `_raceWithCSPError` 可捕获 CSP 违规并抛错（修复 `page-add-script-tag.spec.ts` `[7/9]`）。

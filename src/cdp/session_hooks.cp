@@ -2500,7 +2500,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    if (!rawSrc) {\n" ++
     "      if (docCsp.length > 0 && typeof g.__capsurf_script_gate === 'function') {\n" ++
     "        var okInl = g.__capsurf_script_gate('inline', docOrigin, docCsp, inlineCode, nonceAttr, '', '0');\n" ++
-    "        if (okInl === null || okInl === undefined) return;\n" ++
+    "        if (okInl === null || okInl === undefined) { if (typeof console !== 'undefined' && console.error) console.error('Refused to execute inline script because it violates the following Content Security Policy directive: ' + docCsp); return; }\n" ++
     "      }\n" ++
     "      evalClassicCode(node, inlineCode, false); return;\n" ++
     "    }\n" ++

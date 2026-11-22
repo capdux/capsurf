@@ -507,3 +507,27 @@
 | 2026-11-22 20:59 | `page-history.spec.ts` | 0/13 PASS (90s截断) | PW Batch 74 |
 | 2026-11-22 21:01 | `/css/css-text/` (`2/5..5/5`) | 4/25, 7/25, 6/25, 3/25 PASS | WPT Batch 87 (`bin_dev`) |
 | 2026-11-22 21:01 | `/css/css-display/` (`1/5`) | 4/11 PASS | WPT Batch 87 (`bin_dev`) |
+| 2026-11-22 21:02 | `jshandle-to-string.spec.ts` | 6/6 PASS (3 exp dev PASS) | PW Batch 75 (全绿) |
+| 2026-11-22 21:02 | `page-keyboard.spec.ts` | 29/44 PASS (`[1..30]` 29/30, 90s截断) | PW Batch 75 |
+| 2026-11-22 21:07 | `page-mouse.spec.ts` | 8/15 PASS (`pointerType` PASS, 90s截断) | PW Batch 76 |
+| 2026-11-22 21:07 | `page-expose-function.spec.ts` | 0/18 PASS (90s截断) | PW Batch 76 |
+| 2026-11-22 21:07 | `page-add-init-script.spec.ts` | 9/11 PASS | PW Batch 76 |
+| 2026-11-22 21:07 | `page-add-script-tag.spec.ts` | 7/9 PASS | PW Batch 76 |
+| 2026-11-22 21:12 | `/css/css-display/` (`2/5..5/5`) | 1/11, 3/10, 4/10, 2/10 PASS | WPT Batch 88 (`bin_dev`) |
+| 2026-11-22 21:12 | `/css/css-position/` (`1/5`) | 15/54 PASS | WPT Batch 88 (`bin_dev`) |
+| 2026-11-22 21:12 | `page-mouse.spec.ts` | 12/15 PASS (`drag select` PASS, 90s截断) | PW Batch 77 |
+| 2026-11-22 21:12 | `page-keyboard.spec.ts` | 30/44 PASS (`[1..30]` 30/30全绿, 90s截断) | PW Batch 77 |
+| 2026-11-22 21:12 | `page-dialog.spec.ts` | 7/9 PASS (3 exp dev PASS) | PW Batch 77 |
+| 2026-11-22 21:12 | `page-dispatchevent.spec.ts` | 15/16 PASS | PW Batch 77 |
+| 2026-11-22 21:18 | `page-add-script-tag.spec.ts` | 8/9 PASS (`sourceURL` PASS) | PW Batch 78 |
+| 2026-11-22 21:18 | `page-click.spec.ts` | 12/77 PASS (`half-aligned` PASS, 90s截断) | PW Batch 78 |
+| 2026-11-22 21:18 | `page-set-input-files.spec.ts` | 9/19 PASS (90s截断) | PW Batch 78 |
+| 2026-11-22 21:18 | `page-check.spec.ts` | 12/16 PASS | PW Batch 78 |
+| 2026-11-22 21:22 | `page-dispatchevent.spec.ts` | 15/16 PASS | PW Batch 79 |
+| 2026-11-22 21:22 | `page-mouse.spec.ts` | 14/15 PASS (`modifiers`+`round down` PASS, 90s截断) | PW Batch 79 |
+| 2026-11-22 21:22 | `page-add-style-tag.spec.ts` | 2/4 PASS | PW Batch 79 |
+| 2026-11-22 21:22 | `page-set-extra-http-headers.spec.ts` | 4/5 PASS (retry全过) | PW Batch 79 |
+| 2026-11-22 21:29 | `page-basic.spec.ts` | 12/16 PASS (`Enter` PASS) | PW Batch 80 |
+| 2026-11-22 21:29 | `page-goto.spec.ts` | 7/61 PASS (90s截断) | PW Batch 80 |
+| 2026-11-22 21:29 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (90s retry截断) | PW Batch 80 |
+| 2026-11-22 21:29 | `page-wait-for-navigation.spec.ts` | 1/12 PASS (90s截断) | PW Batch 80 |

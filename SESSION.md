@@ -5470,3 +5470,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`scrollY=1320` 下 `mouseMoved` 命中 `#button-91` 返回 `{"pt":{"x":29.15999984741211,"y":704,"sy":1320},"hovered":"button-91"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.17s)**。
+
+### [2026-11-22 21:29] Phase 330: CSP 拦截动态内联 `<script>` 时输出标准 `console.error` 违规日志
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): `handleInsertedScript()` 内联脚本被 CSP 拦截时输出标准 `console.error`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<meta http-equiv="Content-Security-Policy" content="default-src 'self'">` 下插入内联脚本，`Runtime.consoleAPICalled` 收到 `"Refused to execute inline script because it violates the following Content Security Policy directive: default-src 'self'"`，`window.__inj` 为 `undefined`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。
