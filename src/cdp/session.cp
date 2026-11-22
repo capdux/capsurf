@@ -5459,11 +5459,13 @@ pub struct CdpPageSession {
 
                 const fetch_method = rec.getMethod();
                 let pd_esc_buf: [4096]u8 = undefined;
-                let pd_kv_buf: [4200]u8 = undefined;
+                let pd_kv_buf: [8192]u8 = undefined;
                 let pd_kv: []const u8 = "";
                 if (rec.has_post_data) {
-                    const pd_esc = escapeJsonString(rec.getPostData(), &pd_esc_buf);
-                    pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\"", .{pd_esc}) catch "";
+                    const pd_raw = rec.getPostData();
+                    const pd_esc = escapeJsonString(pd_raw, &pd_esc_buf);
+                    const pd_b64 = Base64.encodeAlloc(_.allocator, pd_raw) catch "";
+                    pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{pd_esc, pd_b64}) catch "";
                 }
 
                 const req_json = std.fmt.bufPrint(

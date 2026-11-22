@@ -30990,7 +30990,13 @@
           throw new TypeError("Failed to execute 'sendBeacon' on 'Navigator': 1 argument required, but only 0 present.");
         }
         const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
-        new URL(String(url), base);
+        const fullUrl = new URL(String(url), base).href;
+        const bodyStr = (data !== undefined && data !== null) ? String(data) : null;
+        if (typeof __capsurf_native_record_fetch === "function") {
+          __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+        } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
+          globalThis.__capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+        }
         return true;
       }, "sendBeacon"),
     };
