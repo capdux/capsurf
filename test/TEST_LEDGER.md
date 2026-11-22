@@ -724,3 +724,6 @@
 | 2026-11-23 01:47 | `page-route.spec.ts` | 1/11 PASS (`[12/51]`120s截断) | PW Batch 120 |
 | 2026-11-23 01:47 | `page-evaluate.spec.ts` | 20/21 PASS (`[22/95]`120s截断) | PW Batch 120 |
 | 2026-11-23 01:47 | `page-wait-for-selector-1.spec.ts` | 15/15 PASS (`EXIT=0` 29.7s 全绿!) | PW Batch 120 (`bin_dev` 全绿!) |
+| WPT-B111 | `/html/semantics/{tabular-data,embedded-content/the-iframe-element}/` | 26/163 PASS (1 `ERROR→PASS` lazy-iframe, 0 CRASH) |
+| WPT-B112 | `/html/semantics/embedded-content/the-{img,canvas}-element/` | 2/6 PASS (0 CRASH/0 TIMEOUT) |
+| WPT-B113 | `/html/semantics/{scripting-1/the-script-element,document-metadata/the-{link,style}-element}/` | 10/68 PASS (2 `FAIL→PASS`, style 4/5, 0 CRASH) |

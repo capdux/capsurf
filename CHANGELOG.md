@@ -3008,3 +3008,4 @@
 - Phase 381: `src/cdp/session.cp` — `pollPopupTargetEvents` 路由至共享 `owner_target_registry`，打通多标签页 `window.open` 的 `Target.targetCreated` 与 `Target.attachedToTarget` 广播。
 - Phase 382: `src/cdp/input.cp` — `mouseMoved` 根据悬停节点变化自动发射 `mouseout`、`mouseleave`、`mouseover`、`mouseenter`。
 - Phase 383: `src/js/shim/index.js`, `src/js/shim/element/element.js` — `<frame>` 复用 `HTMLIFrameElement.prototype` 与 `src` 动态导航监听。
+- Phase 384: `src/layout/layout.cp` — `getReplacedSize` 新增 `<textarea>` `cols`/`rows` 固有尺寸计算。

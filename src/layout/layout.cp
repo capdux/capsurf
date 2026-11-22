@@ -680,6 +680,24 @@ pub struct LayoutTree {
                 height: nat_h,
                 is_authored: is_auth,
             };
+        } else if (node.hasTag("textarea")) {
+            let cols: f32 = 20.0;
+            let rows: f32 = 2.0;
+            if (c_attr := node.getAttribute("cols")) {
+                if (c_val := LayoutTree.parseDimStr(c_attr)) {
+                    if (c_val > 0.0) cols = c_val;
+                }
+            }
+            if (r_attr := node.getAttribute("rows")) {
+                if (r_val := LayoutTree.parseDimStr(r_attr)) {
+                    if (r_val > 0.0) rows = r_val;
+                }
+            }
+            return ReplacedSize{
+                width: cols * 8.0 + 16.0,
+                height: rows * 16.0 + 6.0,
+                is_authored: false,
+            };
         }
         return null;
     }
