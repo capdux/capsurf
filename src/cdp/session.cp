@@ -919,6 +919,23 @@ fn extractSourceUrl(code: []const u8, out_buf: []u8): [*c]const u8 {
     return unsafe { @ptrCast(&out_buf[0]) };
 }
 
+pub struct OriginStorageEntry {
+    origin_buf: [256]u8 = [0; 256],
+    origin_len: usize = 0,
+    json_buf: [4096]u8 = [0; 4096],
+    json_len: usize = 0,
+}
+
+fn extractUrlOrigin(url: []const u8): []const u8 {
+    if (scheme_end := std.mem.indexOf(u8, url, "://")) {
+        const after_scheme = scheme_end + 3;
+        let end = after_scheme;
+        while (end < url.len && url[end] != '/' && url[end] != '?' && url[end] != '#') : (end += 1) {}
+        if (end > after_scheme) return url[0..end];
+    }
+    return "";
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -998,6 +1015,8 @@ pub struct CdpPageSession {
 
     // Dedicated buffers for event formatting
     console_event_storage: [65536]u8 = [0; 65536],
+    origin_storages: [32]OriginStorageEntry = [OriginStorageEntry{}; 32],
+    origin_storage_count: usize = 0,
     log_event_storage: [16384]u8 = [0; 16384],
     webmcp_event_buf: [32768]u8 = [0; 32768],
     webmcp_retract_buf: [8192]u8 = [0; 8192],
@@ -1571,10 +1590,60 @@ pub struct CdpPageSession {
         _.ctx.freeValue(v);
     }
 
+    fn saveCurrentOriginStorage(*_) {
+        const orig = extractUrlOrigin(_.url);
+        if (orig.len == 0 || orig.len > 256) return;
+        const v = _.ctx.eval("(function(){try{if(typeof localStorage!=='undefined'&&localStorage._data)return JSON.stringify(Array.from(localStorage._data.entries()));}catch(e){}return '';})()");
+        defer _.ctx.freeValue(v);
+        if (jsIsException(v)) return;
+        const json_str = _.ctx.toCString(v);
+        defer std.heap.page_allocator.free(json_str);
+        if (json_str.len == 0 || json_str.len > 4096) return;
+
+        let idx: usize = 0;
+        while (idx < _.origin_storage_count) : (idx += 1) {
+            if (std.mem.eql(u8, _.origin_storages[idx].origin_buf[0.._.origin_storages[idx].origin_len], orig)) {
+                break;
+            }
+        }
+        if (idx == _.origin_storage_count) {
+            if (_.origin_storage_count >= _.origin_storages.len) return;
+            _.origin_storage_count += 1;
+            @memcpy(_.origin_storages[idx].origin_buf[0..orig.len], orig);
+            _.origin_storages[idx].origin_len = orig.len;
+        }
+        @memcpy(_.origin_storages[idx].json_buf[0..json_str.len], json_str);
+        _.origin_storages[idx].json_len = json_str.len;
+    }
+
+    fn restoreOriginStorage(*_, target_url: []const u8) {
+        const orig = extractUrlOrigin(target_url);
+        if (orig.len == 0) return;
+        let idx: usize = 0;
+        while (idx < _.origin_storage_count) : (idx += 1) {
+            if (std.mem.eql(u8, _.origin_storages[idx].origin_buf[0.._.origin_storages[idx].origin_len], orig)) {
+                const json_slice = _.origin_storages[idx].json_buf[0.._.origin_storages[idx].json_len];
+                if (json_slice.len < 2) return;
+                let js_buf: [4608]u8 = undefined;
+                const js = std.fmt.bufPrint(
+                    &js_buf,
+                    "(function(){{try{{var a={s};if(Array.isArray(a)&&typeof localStorage!=='undefined'){{for(var i=0;i<a.length;i++)localStorage.setItem(a[i][0],a[i][1]);}}}}catch(e){{}}}})()",
+                    .{json_slice},
+                ) catch return;
+                const rv = _.ctx.eval(js);
+                _.ctx.freeValue(rv);
+                return;
+            }
+        }
+    }
+
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
         _.renderer_active = false;
         _.frames_rendered = 0;
         _.facade.stream_mgr.markNeedFullFrame();
+        if (_.has_document) {
+            _.saveCurrentOriginStorage();
+        }
         if (_.has_document && _.webmcp_enabled) {
             const ret_v = _.ctx.eval("(function(){return globalThis.__capsurf_webmcp?globalThis.__capsurf_webmcp.retractAll():'';})()");
             if (!jsIsException(ret_v)) {
@@ -2279,6 +2348,7 @@ pub struct CdpPageSession {
             }
         }
         _.reinstallBindings();
+        _.restoreOriginStorage(nav_url);
         if (_.outbound_reject_pattern_count > 0) {
             _.syncOutboundRejectPatternsToJs();
         }

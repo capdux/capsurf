@@ -2624,3 +2624,7 @@
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp`, `src/cdp/runtime.cp`: `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()` 维护 `__capsurf_in_isolated` 标记。
   - `src/js/dom_binding.cp`: 在 `__capsurf_format_remote_object` 中将隔离世界生成的 `objectId` 记入 `__capsurf_isolated_oids`，并在 `__capsurf_call_fn()` 检测到 `id` 或 `args` 含隔离对象时通过 `try/finally` 自动临时恢复并清理 `globalThis.Node`（无需调用方显式传入 `executionContextId`）。
+
+## [2026-11-22] Phase 284: 按 Origin 持久化与恢复 `localStorage`（跨源导航隔离与回溯）
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`: 新增 `OriginStorageEntry`、`extractUrlOrigin()`、`saveCurrentOriginStorage()` 与 `restoreOriginStorage()`，在 `CdpPageSession.navigate()` 销毁旧上下文前保存当前 origin 的 `localStorage` 键值并在新上下文初始化后按目标 origin 恢复，确保同源刷新保留且跨域跳转互不污染。

@@ -5139,3 +5139,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，无 `executionContextId` 调用 `capsurf:obj:1` 及传参调用均返回 `"function"`，主世界保持 `{"type":"undefined","inWin":false}`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **130.22s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.15s)**。
+
+### [2026-11-22 17:47] Phase 284: 按 Origin 持久化与恢复 `localStorage`（跨源导航隔离与回溯）
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 新增 `OriginStorageEntry`、`extractUrlOrigin()`、`saveCurrentOriginStorage()` 与 `restoreOriginStorage()`，在 `navigate()` 中按 origin 持久化与恢复 `localStorage`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`http://127.0.0.1:8000/` 写入 `'origin-1'` -> 跳转 `http://localhost:8000/` 读取为 `null` 并写入 `'origin-2'` -> 切回各自 origin 分别准确读取 `'origin-1'` 与 `'origin-2'`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **124.52s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
