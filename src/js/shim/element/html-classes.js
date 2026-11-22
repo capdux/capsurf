@@ -1992,6 +1992,11 @@ function installHtmlClasses(global) {
     }
     if (win.onhashchange === undefined) win.onhashchange = null;
     if (win.onpopstate === undefined) win.onpopstate = null;
+    if (win.open === undefined && typeof pageGlobal.open === "function") {
+      win.open = function (url, target, features) {
+        return pageGlobal.open.call(win, url, target, features);
+      };
+    }
     if (pageGlobal.fetch) {
       win.fetch = function (resource, init) {
         return pageGlobal.fetch.call(win, resource, init);

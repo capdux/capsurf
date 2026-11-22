@@ -13960,8 +13960,10 @@ const CSS_TYPED_OM_GLOBALS = {
     let fullUrl = "about:blank";
     if (url !== undefined && url !== null && String(url) !== "") {
       try {
-        const base = (global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/";
-        fullUrl = new URL(String(url), base).href;
+        const ctxLoc = (this && typeof this === "object" && this.location && this.location.href && this.location.href !== "about:blank")
+          ? this.location.href
+          : ((global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/");
+        fullUrl = new URL(String(url), ctxLoc).href;
       } catch (e) {
         fullUrl = String(url);
       }
