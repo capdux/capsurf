@@ -5203,3 +5203,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<select id="target" multiple>` 执行 `selectedIndex = -1; options[1].selected = true` 后 `val="cat", idx=1, len=1`；取消选中后恢复 `val="", idx=-1, len=0`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **148.62s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。
+
+### [2026-11-22 18:40] Phase 293: 修复 `getComputedStyle` 对 CSS `content` 属性转义序列的解码与重序列化
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRawComputedMap()` 中对 `content` 属性引号字符串解码 1..6 位 CSS 十六进制及字符转义并重序列化为双引号字符串。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`p::before { content: "\eab2"; }` 返回 `"\"\""`（码点 `eab2`），`span::before { content: '\0041\20 B'; }` 返回 `"\"A B\""`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **129.07s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。

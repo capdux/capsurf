@@ -5990,6 +5990,24 @@ function installWindow(global) {
       globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
     }
 
+    if (computedMap.has("content")) {
+      const cRaw = String(computedMap.get("content") || "").trim();
+      if ((cRaw.startsWith("\"") && cRaw.endsWith("\"") && cRaw.length >= 2) ||
+          (cRaw.startsWith("'") && cRaw.endsWith("'") && cRaw.length >= 2)) {
+        const inner = cRaw.slice(1, -1);
+        const decoded = inner.replace(/\\([0-9a-fA-F]{1,6})[\t\n\f\r ]?|\\(.)/g, function (_, hex, ch) {
+          if (hex) {
+            const cp = parseInt(hex, 16);
+            if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return "\uFFFD";
+            try { return String.fromCodePoint(cp); } catch (e) { return "\uFFFD"; }
+          }
+          return ch;
+        });
+        const reserialized = "\"" + decoded.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"";
+        computedMap.set("content", reserialized);
+      }
+    }
+
     // Pseudo element defaults
     if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
       if (!computedMap.has("display")) {

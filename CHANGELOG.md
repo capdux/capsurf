@@ -2662,3 +2662,7 @@
 ## [2026-11-22] Phase 292: 修复 `<select multiple>` 在置空 `selectedIndex` 后设置 `option.selected` 未重算的缺陷
 - **Fixed (`src/`)**:
   - `src/js/shim/element/forms/select.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `HTMLOptionElement.prototype.selected` setter 中，当所属 `owner.multiple` 为 `true` 时显式将 `getSelectState(owner).selectedIndex` 置为 `undefined` 触发重算，修复先执行 `selectedIndex = -1` 再设置 `option.selected = true` 时 `select.value` 仍返回 `""` 的问题。
+
+## [2026-11-22] Phase 293: 修复 `getComputedStyle` 对 CSS `content` 属性转义序列的解码与重序列化
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRawComputedMap()` 中对 `content` 属性的引号字符串值按 CSS 转义规则解码 1..6 位十六进制码点（含可选尾随空白）及字符转义（如 `"\eab2"` -> `""`、`'\0041\20 B'` -> `"A B"`）并统一按双引号字符串序列化，修复 `::before` 伪元素码点丢失的问题。

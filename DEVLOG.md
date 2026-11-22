@@ -1989,3 +1989,6 @@
 
 ### Phase 292: `<select multiple>` 执行 `selectOption('cat')` 后 `inputValue()` 返回 `""` 排障笔记
 - **`retarget` `select options retargeting` 失败根因**：`selectOption` 先设置 `select.selectedIndex = -1` 清空选项（将 `selState.selectedIndex` 缓存为 `-1`），随后再置目标 `option.selected = true`。`HTMLOptionElement.prototype.selected` setter 此前仅在 `!owner.multiple` 时更新 `selState.selectedIndex`，导致多选模式下 `selectedIndex` 永久卡在 `-1`、`select.value` 返回 `""`。补齐多选分支 `selState.selectedIndex = undefined` 失效重算后，实测 `val="cat", idx=1, len=1`，取消选中后恢复 `val="", idx=-1, len=0`。
+
+### Phase 293: `page-aria-snapshot` `should include pseudo codepoints` 缺失 `::before` 码点排障笔记
+- **`Expected "- paragraph: hello", Received "- paragraph: hello"` 根因**：`collectRawComputedMap()` 直接保留了 CSS 声明文本中的原始转义字符 `"\eab2"`（`\` + `eab2`），未按 CSSOM 字符串规则解码十六进制转义序列。补齐 CSS 字符串转义解码与双引号重序列化后，实测 `getComputedStyle(p, "::before").content` 准确返回 `""`（码点 `0xeab2`）及 `"A B"`。
