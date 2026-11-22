@@ -5044,3 +5044,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`addStyleTag({ url })` 注入外部 CSS 后 `getComputedStyle(document.body).backgroundColor` 返回 `rgb(255, 0, 0)`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.65s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。
+
+### [2026-11-22 16:25] Phase 272: `DOM.describeNode` 补充 `frameId` 归属与 `DOM.setFileInputFiles` 实装
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): 为 `DOM.describeNode` 注入当前 `session.frame_id` 解决 `ownerFrame()` 返回 `null`；新增 `DOM.setFileInputFiles` 处理器，通过 `MockFixtures.readFileContent` 读取文件并以 Base64 构造原生 `File` 对象写入 `el.files` 与 `C:\fakepath\<basename>`，同步派发 `input`/`change` 事件。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`page.setInputFiles` 上传 `CP_PITFALLS.md` 后 `files.length === 1, size === 19583, ev: ['input', 'change']`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.05s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。

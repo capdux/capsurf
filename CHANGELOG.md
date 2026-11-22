@@ -2567,3 +2567,7 @@
 ## [2026-11-22] Phase 271: 动态 `<link rel="stylesheet">` HTTP 拉取与 `fireScriptEvent` 属性回调补全
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: 新增 `handleInsertedLink()`（在 `appendChild`/`insertBefore` 挂载 `<link rel="stylesheet">` 时通过 `__capsurf_http_get` 异步拉取外部 CSS 并注入 `<style data-capsurf-link-mirror>` 镜像节点，同时支持 CSP `style-src 'none'` 拦截与 `load`/`error` 事件）；修复 `fireScriptEvent()` 跳过 `node.onload`/`node.onerror` 属性回调的问题。
+
+## [2026-11-22] Phase 272: `DOM.describeNode` 补充 `frameId` 归属与 `DOM.setFileInputFiles` 实装
+- **Added / Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 为 `DOM.describeNode` 序列化结果注入当前 `session.frame_id`，解决 `ElementHandle.ownerFrame()` 返回 `null` 导致 `setInputFiles` 误报 detached element 的问题；新增 `DOM.setFileInputFiles` 处理器，通过 `MockFixtures.readFileContent` 读取本地文件并构造 `File` / `Uint8Array` 列表写入 `el.files` 与 `C:\fakepath\<basename>`，同步派发 `input` 与 `change` 事件。

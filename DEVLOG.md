@@ -1923,3 +1923,6 @@
 
 ### Phase 271: 动态 `<link rel="stylesheet">` 拉取与 `fireScriptEvent` 排障笔记
 - **`addStyleTag({ url })` 样式生效**：此前 `hookedAppend` / `hookedInsertBefore` 仅拦截 `<script>` 与 `<iframe>`，未处理动态插入的 `<link rel="stylesheet">`。新增 `handleInsertedLink()` 复用 `__capsurf_http_get` 拉取外部样式并镜像为 `<style>` 节点后，`getComputedStyle(document.body).backgroundColor` 即刻返回 `rgb(255, 0, 0)`；同时去除 `fireScriptEvent` 中 `else if` 限制，确保 `onload`/`onerror` 属性处理器与 `addEventListener` 均可触发。
+
+### Phase 272: `DOM.describeNode` `frameId` 与 `DOM.setFileInputFiles` 排障笔记
+- **`Cannot set input files to detached element` 根因**：Playwright `ElementHandle.ownerFrame()` 依赖 `DOM.describeNode` 返回节点中的 `frameId` 字段，缺失时直接认定元素已脱离文档。为 `DOM.describeNode` 注入 `session.frame_id` 并实现 `DOM.setFileInputFiles`（通过 `MockFixtures.readFileContent` + Base64 构造原生 `File` 对象并派发 `input`/`change`）后，实测 `CP_PITFALLS.md` 上传验证一次通过（`len: 1, size: 19583, ev: ['input', 'change']`）。

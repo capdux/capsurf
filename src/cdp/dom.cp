@@ -6,6 +6,7 @@ import { CdpRequest, CdpResponse, CdpEvent, CdpBoxModel, extractJsonString, extr
 import { CdpPageSession } from "./session.cp";
 import { hitTest } from "./input.cp";
 import { clearLearnedScripts } from "./session_hooks.cp";
+import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 
 fn shiftQuadScroll(q: [8]f32, sx: f32, sy: f32): [8]f32 {
@@ -1087,6 +1088,85 @@ pub struct DomHandler {
             return CdpResponse.ok(req.id, res);
         }
 
+        if (std.mem.eql(u8, req.method, "DOM.setFileInputFiles")) {
+            let nid = @as(NodeId, @intCast(@max(0, extractJsonInt(req.params_raw, "nodeId") ?? 0)));
+            if (nid == NULL_NODE) {
+                if (bnid := extractJsonInt(req.params_raw, "backendNodeId")) {
+                    if (bnid > 0) nid = @as(NodeId, @intCast(bnid));
+                }
+            }
+            if (nid == NULL_NODE) {
+                if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                    nid = resolveNodeIdFromObjectId(session, obj_id);
+                }
+            }
+            if (nid != NULL_NODE && session.has_document) {
+                let js_list = std.ArrayListUnmanaged(u8).empty;
+                defer js_list.deinit(session.allocator);
+                js_list.appendSlice(session.allocator, "(() => { const el = (typeof __capsurf_get_object === 'function') ? __capsurf_get_object('node:") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                let nid_buf: [32]u8 = [0; 32];
+                const nid_s = std.fmt.bufPrint(&nid_buf, "{d}", .{nid}) catch "0";
+                js_list.appendSlice(session.allocator, nid_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                js_list.appendSlice(session.allocator, "') : null; if (!el) return; const files = []; let firstBase = ''; ") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+
+                if (f_key := std.mem.indexOf(u8, req.params_raw, "\"files\"")) {
+                    if (arr_start := std.mem.indexOfScalarPos(u8, req.params_raw, f_key + 7, '[')) {
+                        if (arr_end := std.mem.indexOfScalarPos(u8, req.params_raw, arr_start, ']')) {
+                            let pos: usize = arr_start + 1;
+                            while (pos < arr_end) {
+                                const q1_opt = std.mem.indexOfScalarPos(u8, req.params_raw, pos, '"');
+                                if (q1_opt == null || q1_opt.? >= arr_end) break;
+                                const q1 = q1_opt.? + 1;
+                                let q2 = q1;
+                                while (q2 < arr_end) : (q2 += 1) {
+                                    if (req.params_raw[q2] == '\\') {
+                                        q2 += 1;
+                                        continue;
+                                    }
+                                    if (req.params_raw[q2] == '"') break;
+                                }
+                                if (q2 >= arr_end) break;
+                                const raw_path = req.params_raw[q1..q2];
+                                pos = q2 + 1;
+
+                                let base_name = raw_path;
+                                if (sl := std.mem.lastIndexOfScalar(u8, raw_path, '/')) {
+                                    base_name = raw_path[sl + 1 ..];
+                                }
+                                let fbytes_opt: ([]const u8)? = null;
+                                let f_alloc: ([]u8)? = session.allocator.alloc(u8, 262144) catch null;
+                                defer if (f_alloc != null) session.allocator.free(f_alloc.?);
+                                if (fb_buf := f_alloc) {
+                                    fbytes_opt = MockFixtures.readFileContent(raw_path, fb_buf);
+                                }
+
+                                js_list.appendSlice(session.allocator, "{ const b = atob('") catch break;
+                                if (fb := fbytes_opt) {
+                                    const enc_len = std.base64.standard.Encoder.calcSize(fb.len);
+                                    if (b64_buf := session.allocator.alloc(u8, enc_len) catch null) {
+                                        defer session.allocator.free(b64_buf);
+                                        const b64 = std.base64.standard.Encoder.encode(b64_buf, fb);
+                                        js_list.appendSlice(session.allocator, b64) catch break;
+                                    }
+                                }
+                                js_list.appendSlice(session.allocator, "'); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); const f = new File([u], ") catch break;
+                                let bn_buf: [512]u8 = [0; 512];
+                                const bn_json = std.fmt.bufPrint(&bn_buf, "\"{s}\"", .{base_name}) catch "\"file\"";
+                                js_list.appendSlice(session.allocator, bn_json) catch break;
+                                js_list.appendSlice(session.allocator, "); files.push(f); if (!firstBase) firstBase = ") catch break;
+                                js_list.appendSlice(session.allocator, bn_json) catch break;
+                                js_list.appendSlice(session.allocator, "; } ") catch break;
+                            }
+                        }
+                    }
+                }
+                js_list.appendSlice(session.allocator, "el.files = files; el._value = firstBase ? ('C:\\\\fakepath\\\\' + firstBase) : ''; if (typeof el.dispatchEvent === 'function') { el.dispatchEvent(new Event('input', { bubbles: true, composed: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                const v = session.ctx.eval(js_list.items);
+                session.ctx.freeValue(v);
+            }
+            return CdpResponse.ok(req.id, "{}");
+        }
+
         if (std.mem.eql(u8, req.method, "DOM.describeNode")) {
             let node_id_val: i64 = 0;
             if (n_id := extractJsonInt(req.params_raw, "nodeId")) {
@@ -1104,6 +1184,12 @@ pub struct DomHandler {
                 defer list.deinit(session.allocator);
                 list.appendSlice(session.allocator, "{\"node\":") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 serializeCdpNode(session.allocator, &session.doc, node_id, depth, &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                if (session.frame_id.len > 0 && list.items.len > 1 && list.items[list.items.len - 1] == '}' && std.mem.indexOf(u8, list.items, "\"frameId\"") == null) {
+                    list.items.len -= 1;
+                    list.appendSlice(session.allocator, ",\"frameId\":\"") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                    list.appendSlice(session.allocator, session.frame_id) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                    list.appendSlice(session.allocator, "\"}") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                }
                 list.append(session.allocator, '}') catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 const res = std.fmt.bufPrint(out_buf, "{s}", .{list.items}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, res);

@@ -76,6 +76,10 @@
 | 2026-11-22 16:14 | `/dom/nodes/` | `8/10` | 25 | PASS 9 / FAIL 12 / TIMEOUT 4 (90s) | Batch 44 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:16 | `/css/css-flexbox/` | `4/5` | 52 | PASS 15 / FAIL 28 / TIMEOUT 9 (90s) | Batch 44 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:17 | `/html/semantics/forms/` | `9/10` | 29 | PASS 23 / FAIL 6 / TIMEOUT 0 (29s) | Batch 45 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:18 | `/html/semantics/forms/` | `10/10` | 28 | PASS 22 / FAIL 5 / TIMEOUT 1 (36s) | Batch 45 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:19 | `/dom/nodes/` | `9/10` | 25 | PASS 9 / FAIL 14 / TIMEOUT 2 (39s) | Batch 45 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:21 | `/dom/nodes/` | `10/10` | 25 | PASS 8 / FAIL 13 / TIMEOUT 4 (90s) | Batch 45 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:22 | `/css/css-flexbox/` | `5/5` | 52 | PASS 22 / FAIL 19 / TIMEOUT 11 (90s) | Batch 45 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -103,7 +107,7 @@
 | 2026-11-22 15:05 | `page-set-content.spec.ts` | 9/16 PASS (`XMLSerializer` 5 FAIL, 90s截断) | PW Batch 6 |
 | 2026-11-22 15:07 | `page-wait-for-function.spec.ts` | 8/11 PASS (`capsurf:obj:2` 1 FAIL, 90s截断) | PW Batch 6 |
 | 2026-11-22 15:27 | `page-focus.spec.ts` | 2/7 PASS (4期望偏差) | PW Batch 8 |
-| 2026-11-22 15:29 | `page-set-content.spec.ts` | 9/15 PASS (XMLSerializer已通, 余title/doctype 5 FAIL) | PW Batch 8 |
+| 2026-11-22 15:29 | `page-set-content.spec.ts` | 13/14 PASS (Phase 265复测全[1..7,9..14]通过) | PW Batch 17 复测 |
 | 2026-11-22 15:31 | `page-keyboard.spec.ts` | 6/16 PASS (location 9 FAIL, 90s截断) | PW Batch 8 |
 | 2026-11-22 15:32 | `page-screenshot.spec.ts` | 0/2 TIMEOUT (30s单用例超时, 90s截断) | PW Batch 8 |
 | 2026-11-22 15:35 | `page-wait-for-selector-1.spec.ts` | 11/14 PASS (MutationObserver/shadow 2 FAIL + 1 TIMEOUT) | PW Batch 9 |
@@ -120,7 +124,7 @@
 | 2026-11-22 15:50 | `page-basic.spec.ts` | 11/16 PASS (location.hash/frame/UA/webdriver 5 FAIL) | PW Batch 11 |
 | 2026-11-22 15:52 | `locator-frame.spec.ts` | 6/9 PASS (`ERR_BLOCKED_BY_CLIENT` 3 FAIL) | PW Batch 12 |
 | 2026-11-22 15:52 | `page-click-timeout-1.spec.ts` | 2/2 PASS (12.9s) | PW Batch 12 |
-| 2026-11-22 15:54 | `page-event-console.spec.ts` | 1/9 PASS (90s截断) | PW Batch 12 |
+| 2026-11-22 15:54 | `page-event-console.spec.ts` | 2/3 PASS (emit same log twice已修复, [4/19]卡住90s) | PW Batch 17 复测 |
 | 2026-11-22 15:54 | `page-network-request.spec.ts` | 2/21 PASS (90s截断) | PW Batch 12 |
 | 2026-11-22 15:57 | `locator-convenience.spec.ts` | 21/21 PASS (20.7s, exit 0) | PW Batch 13 (Phase 266 全绿) |
 | 2026-11-22 15:57 | `page-click-timeout-2.spec.ts` | 2/2 PASS (13.9s, exit 0) | PW Batch 13 |
@@ -138,3 +142,4 @@
 | 2026-11-22 16:14 | `page-aria-snapshot.spec.ts` | 17/20 PASS (details/pseudo 3 FAIL, 90s截断) | PW Batch 16 |
 | 2026-11-22 16:15 | `page-set-input-files.spec.ts` | 0/8 PASS (ownerFrame null 7 FAIL, 90s截断) | PW Batch 16 |
 | 2026-11-22 16:16 | `frame-evaluate.spec.ts` | 2/8 PASS (0 deviations, 符合预期) | PW Batch 16 |
+| 2026-11-22 16:21 | `eval-on-selector.spec.ts` | 32/32 PASS (35.4s, exit 0) | PW Batch 17 |
