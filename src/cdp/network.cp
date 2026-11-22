@@ -3,7 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/network.ts and cookies.ts
 
 import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { CookieEntry, entryToCdp, parseUrlParts } from "../net/cookies.cp";
 import { markFreshExtraHeaders } from "../net/http_loader.cp";
 
@@ -75,10 +75,70 @@ pub fn findResponseBody(request_id: []const u8): (*const StoredResponseBody)? {
     return null;
 }
 
+pub struct HttpHeaderJoinEntry {
+    key: []const u8 = "",
+    val: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8).empty,
+}
+
+pub fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
+    if (raw_headers.len == 0) return "{}";
+    let entries = std.ArrayListUnmanaged(HttpHeaderJoinEntry).empty;
+    let it = std.mem.splitSequence(u8, raw_headers, "\r\n");
+    while (line := it.next()) {
+        if (line.len == 0) continue;
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const k_raw = std.mem.trim(u8, line[0..colon], " \t");
+            const v_raw = std.mem.trim(u8, line[colon + 1 ..], " \t");
+            if (k_raw.len == 0) continue;
+            let matched = false;
+            let ei: usize = 0;
+            while (ei < entries.items.len) : (ei += 1) {
+                if (std.ascii.eqlIgnoreCase(entries.items[ei].key, k_raw)) {
+                    const sep = if (std.ascii.eqlIgnoreCase(k_raw, "set-cookie")) "\n" else ", ";
+                    entries.items[ei].val.appendSlice(allocator, sep) catch break;
+                    entries.items[ei].val.appendSlice(allocator, v_raw) catch break;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                let entry = HttpHeaderJoinEntry{ key: k_raw };
+                entry.val.appendSlice(allocator, v_raw) catch continue;
+                entries.append(allocator, entry) catch continue;
+            }
+        }
+    }
+    if (entries.items.len == 0) return "{}";
+    let list = std.ArrayListUnmanaged(u8).empty;
+    list.append(allocator, '{') catch return "{}";
+    let i: usize = 0;
+    while (i < entries.items.len) : (i += 1) {
+        let k_esc_buf: [256]u8 = [0; 256];
+        let v_esc_buf: [4096]u8 = [0; 4096];
+        const k_esc = escapeJsonString(entries.items[i].key, &k_esc_buf);
+        const v_esc = escapeJsonString(entries.items[i].val.items, &v_esc_buf);
+        if (i > 0) list.append(allocator, ',') catch break;
+        list.append(allocator, '"') catch break;
+        list.appendSlice(allocator, k_esc) catch break;
+        list.appendSlice(allocator, "\":\"") catch break;
+        list.appendSlice(allocator, v_esc) catch break;
+        list.append(allocator, '"') catch break;
+    }
+    list.append(allocator, '}') catch return "{}";
+    return list.items;
+}
+
 pub struct PendingFetchBody {
     url_buf: [1024]u8 = [0; 1024],
     url_len: usize = 0,
     body: []u8 = [],
+    status_code: u32 = 200,
+    status_text_buf: [64]u8 = [0; 64],
+    status_text_len: usize = 0,
+    mime_buf: [128]u8 = [0; 128],
+    mime_len: usize = 0,
+    raw_headers: []u8 = [],
+    has_meta: bool = false,
     active: bool = false,
 }
 
@@ -86,7 +146,7 @@ const MAX_PENDING_FETCH_BODIES: usize = 32;
 let g_pending_fetch_bodies: [MAX_PENDING_FETCH_BODIES]PendingFetchBody = [PendingFetchBody{}; MAX_PENDING_FETCH_BODIES];
 let g_pending_fetch_cursor: usize = 0;
 
-pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
+fn writePendingFetchSlot(url: []const u8, body: []const u8, status_code: u32, status_text: []const u8, raw_headers: []const u8, mime_type: []const u8, has_meta: bool) {
     if (url.len == 0) return;
     let slot = &g_pending_fetch_bodies[g_pending_fetch_cursor % MAX_PENDING_FETCH_BODIES];
     g_pending_fetch_cursor += 1;
@@ -94,9 +154,21 @@ pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
         std.heap.c_allocator.free(slot.body);
         slot.body = [];
     }
+    if (slot.active && slot.raw_headers.len > 0) {
+        std.heap.c_allocator.free(slot.raw_headers);
+        slot.raw_headers = [];
+    }
     const u_len = @min(url.len, slot.url_buf.len);
     @memcpy(slot.url_buf[0..u_len], url[0..u_len]);
     slot.url_len = u_len;
+    slot.status_code = status_code;
+    const st_len = @min(status_text.len, slot.status_text_buf.len);
+    if (st_len > 0) @memcpy(slot.status_text_buf[0..st_len], status_text[0..st_len]);
+    slot.status_text_len = st_len;
+    const m_len = @min(mime_type.len, slot.mime_buf.len);
+    if (m_len > 0) @memcpy(slot.mime_buf[0..m_len], mime_type[0..m_len]);
+    slot.mime_len = m_len;
+    slot.has_meta = has_meta;
     if (body.len > 0) {
         const dup = std.heap.c_allocator.alloc(u8, body.len) catch {
             slot.body = [];
@@ -108,12 +180,38 @@ pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
     } else {
         slot.body = [];
     }
+    if (raw_headers.len > 0) {
+        const hdup = std.heap.c_allocator.alloc(u8, raw_headers.len) catch {
+            slot.raw_headers = [];
+            slot.active = true;
+            return;
+        };
+        @memcpy(hdup, raw_headers);
+        slot.raw_headers = hdup;
+    } else {
+        slot.raw_headers = [];
+    }
     slot.active = true;
+}
+
+pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
+    writePendingFetchSlot(url, body, 200, "OK", "", "", false);
+}
+
+pub fn recordPendingFetchMeta(url: []const u8, body: []const u8, status_code: u32, status_text: []const u8, raw_headers: []const u8, mime_type: []const u8) {
+    writePendingFetchSlot(url, body, status_code, status_text, raw_headers, mime_type, true);
 }
 
 pub struct PendingFetchResult {
     found: bool = false,
     body: []const u8 = "",
+    status_code: u32 = 200,
+    status_text_buf: [64]u8 = [0; 64],
+    status_text_len: usize = 0,
+    mime_buf: [128]u8 = [0; 128],
+    mime_len: usize = 0,
+    raw_headers: []const u8 = "",
+    has_meta: bool = false,
 }
 
 pub fn consumePendingFetchBody(url: []const u8): PendingFetchResult {
@@ -123,9 +221,22 @@ pub fn consumePendingFetchBody(url: []const u8): PendingFetchResult {
         let slot = &g_pending_fetch_bodies[i];
         if (slot.active && std.mem.eql(u8, slot.url_buf[0..slot.url_len], url)) {
             const b = slot.body;
+            const h = slot.raw_headers;
             slot.body = [];
+            slot.raw_headers = [];
             slot.active = false;
-            return PendingFetchResult{ found: true, body: b };
+            let res = PendingFetchResult{
+                found: true,
+                body: b,
+                status_code: slot.status_code,
+                status_text_len: slot.status_text_len,
+                mime_len: slot.mime_len,
+                raw_headers: h,
+                has_meta: slot.has_meta,
+            };
+            if (slot.status_text_len > 0) @memcpy(res.status_text_buf[0..slot.status_text_len], slot.status_text_buf[0..slot.status_text_len]);
+            if (slot.mime_len > 0) @memcpy(res.mime_buf[0..slot.mime_len], slot.mime_buf[0..slot.mime_len]);
+            return res;
         }
     }
     return PendingFetchResult{};

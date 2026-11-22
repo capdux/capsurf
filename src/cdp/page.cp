@@ -21,7 +21,7 @@ import {
     textDocumentHtml,
     jsonViewerHtml,
 } from "./document_kind.cp";
-import { nextDocRequestId, recordResponseBody } from "./network.cp";
+import { nextDocRequestId, recordResponseBody, formatHttpHeadersJson } from "./network.cp";
 import {
     FrameState,
     SandboxRestrictions,
@@ -738,35 +738,6 @@ fn sanitizeSetContentUrl(url: []const u8): []const u8 {
         return url;
     }
     return "https://kitesurf.local/";
-}
-
-fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
-    if (raw_headers.len == 0) return "{}";
-    let list = std.ArrayListUnmanaged(u8).empty;
-    list.append(allocator, '{') catch return "{}";
-    let first = true;
-    let it = std.mem.splitSequence(u8, raw_headers, "\r\n");
-    while (line := it.next()) {
-        if (line.len == 0) continue;
-        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
-            const k_raw = std.mem.trim(u8, line[0..colon], " \t");
-            const v_raw = std.mem.trim(u8, line[colon + 1 ..], " \t");
-            if (k_raw.len == 0) continue;
-            let k_esc_buf: [256]u8 = [0; 256];
-            let v_esc_buf: [2048]u8 = [0; 2048];
-            const k_esc = escapeJsonString(k_raw, &k_esc_buf);
-            const v_esc = escapeJsonString(v_raw, &v_esc_buf);
-            if (!first) list.append(allocator, ',') catch break;
-            first = false;
-            list.append(allocator, '"') catch break;
-            list.appendSlice(allocator, k_esc) catch break;
-            list.appendSlice(allocator, "\":\"") catch break;
-            list.appendSlice(allocator, v_esc) catch break;
-            list.append(allocator, '"') catch break;
-        }
-    }
-    list.append(allocator, '}') catch return "{}";
-    return list.items;
 }
 
 pub struct PageHandler {

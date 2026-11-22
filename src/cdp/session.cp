@@ -15,7 +15,7 @@ import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, Scrol
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
-import { recordResponseBody, recordPendingFetchBody, consumePendingFetchBody } from "./network.cp";
+import { recordResponseBody, recordPendingFetchBody, recordPendingFetchMeta, consumePendingFetchBody, formatHttpHeadersJson } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -33,6 +33,7 @@ import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX 
 fn sessionHttpGetHook(session_ptr: *void, url: []const u8, out_buf: []u8): i64 {
     const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
     const fetch_res = HttpLoader.fetchDocument(sess, url, out_buf, 0) catch return -1;
+    recordPendingFetchMeta(url, fetch_res.html, fetch_res.status_code, fetch_res.status_text, fetch_res.raw_headers, fetch_res.content_type);
     if (fetch_res.status_code < 200 || fetch_res.status_code >= 300) return -1;
     const n = @min(fetch_res.html.len, out_buf.len);
     if (n > 0 && unsafe { @intFromPtr(fetch_res.html.ptr) != @intFromPtr(out_buf.ptr) }) {
@@ -5392,12 +5393,33 @@ pub struct CdpPageSession {
                 const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
 
                 const pending = consumePendingFetchBody(fetch_url);
+                let resp_status: u32 = 200;
+                let resp_status_text: []const u8 = "OK";
+                let resp_headers_json: []const u8 = "{}";
+                let resp_mime: []const u8 = fetch_mime;
                 if (pending.found) {
                     let p_req_id_buf: [32]u8 = undefined;
                     const p_req_id = std.fmt.bufPrint(&p_req_id_buf, "req-{d}", .{ req_seq }) catch "req-1";
                     recordResponseBody(p_req_id, pending.body, false);
                     if (pending.body.len > 0) {
                         std.heap.c_allocator.free(pending.body);
+                    }
+                    if (pending.has_meta) {
+                        resp_status = pending.status_code;
+                        if (pending.status_text_len > 0) {
+                            resp_status_text = pending.status_text_buf[0..pending.status_text_len];
+                        } else {
+                            resp_status_text = "";
+                        }
+                        if (pending.mime_len > 0) {
+                            resp_mime = pending.mime_buf[0..pending.mime_len];
+                        }
+                        if (pending.raw_headers.len > 0) {
+                            resp_headers_json = formatHttpHeadersJson(pending.raw_headers, _.allocator);
+                            std.heap.c_allocator.free(pending.raw_headers);
+                        }
+                    } else if (pending.raw_headers.len > 0) {
+                        std.heap.c_allocator.free(pending.raw_headers);
                     }
                 }
 
@@ -5453,10 +5475,14 @@ pub struct CdpPageSession {
                     ev_idx += 1;
                 }
 
+                let st_esc_buf: [128]u8 = undefined;
+                const st_esc = escapeJsonString(resp_status_text, &st_esc_buf);
+                let rmime_esc_buf: [256]u8 = undefined;
+                const rmime_esc = escapeJsonString(resp_mime, &rmime_esc_buf);
                 const resp_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ req_seq, lid, res_type, fetch_esc, fetch_mime, fid, bctx_kv },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
+                    .{ req_seq, lid, res_type, fetch_esc, resp_status, st_esc, resp_headers_json, rmime_esc, fid, bctx_kv },
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;
