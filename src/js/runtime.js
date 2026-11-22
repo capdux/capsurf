@@ -1013,10 +1013,12 @@
       charCode = key.charCodeAt(0);
     }
     const which = typeof opts.which === "number" ? opts.which : keyCode;
+    const codeStr = typeof opts.code === "string" ? opts.code : "";
+    const derivedLoc = codeStr.endsWith("Left") ? 1 : (codeStr.endsWith("Right") ? 2 : (codeStr.startsWith("Numpad") ? 3 : 0));
     const s = {
       key: key,
-      code: typeof opts.code === "string" ? opts.code : "",
-      location: typeof opts.location === "number" ? opts.location : 0,
+      code: codeStr,
+      location: typeof opts.location === "number" ? opts.location : derivedLoc,
       repeat: Boolean(opts.repeat),
       isComposing: Boolean(opts.isComposing),
       keyCode: keyCode,

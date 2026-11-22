@@ -516,6 +516,13 @@ pub struct DomHandler {
                         const v = session.ctx.eval(e);
                         session.ctx.freeValue(v);
                     }
+                    let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
+                    const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
+                    let b_i: usize = 0;
+                    while (b_i < polled_b_count && event_count.* < out_events.len) : (b_i += 1) {
+                        out_events[event_count.*] = polled_binding_evts[b_i];
+                        event_count.* += 1;
+                    }
                 }
             }
             return CdpResponse.ok(req.id, "{}");

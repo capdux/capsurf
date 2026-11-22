@@ -1896,3 +1896,7 @@
 
 ### Phase 263: `XMLSerializer` 排障笔记
 - **`page.content()` 报错根因**：Playwright `page.content()` 内部调用 `new XMLSerializer().serializeToString(document)`，此前运行时未定义 `XMLSerializer` 导致 `page-set-content.spec.ts` 前 5 个核心用例全挂。补齐 `XMLSerializer` 并同时挂载到 `window`/`globalThis` 后，`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 下均可正常返回完整序列化 HTML。
+
+### Phase 264: `KeyboardEvent.location` 与 `Tab` 焦点遍历排障笔记
+- **`KeyboardEvent.location`**：此前 `event.js` 中 `KeyboardEvent` 构造器在未显式传 `opts.location` 时固定写死 `0`，导致 `page-keyboard.spec.ts` `[8/44]..[16/44]` 连续 9 项对 `ShiftLeft`/`ShiftRight` 校验 `location` 失败（报 `Unknown: 0`）。按 `codeStr` 后缀推导 `1`/`2`/`3`/`0` 后验证 `ShiftLeft:1, ShiftRight:2, KeyA:0` 通过。
+- **`Tab` 焦点遍历**：`window.js` `keydown` 分支中已存在 `navigateTabFocus(isShift)`，去重后 `Tab` 顺序遍历 `#i1` -> `#i2` 恢复正常。

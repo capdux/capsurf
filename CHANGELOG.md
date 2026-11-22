@@ -2528,3 +2528,9 @@
 ## [2026-11-22] Phase 263: `XMLSerializer` 实现与 `page.content()` 序列化支持
 - **Added (`src/`)**:
   - `src/js/shim/parser.js`, `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现并暴露 `XMLSerializer`（支持 Document、DocumentType、Element、Text、Comment、ProcessingInstruction、DocumentFragment 序列化），打通 Playwright `page.content()` 与 `page.setContent()` 闭环。
+
+## [2026-11-22] Phase 264: `KeyboardEvent.location`、`Tab` 焦点去重与 CDP 绑定事件刷新
+- **Added / Fixed (`src/`)**:
+  - `src/js/shim/events/event.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `KeyboardEvent` 根据 `code` 自动推导 `location`（`Left` -> `1`, `Right` -> `2`, `Numpad` -> `3`, 默认 `0`），修复 `ShiftLeft`/`ShiftRight` 等修饰键位置判断。
+  - `src/js/shim/window.js`: 清理 `Tab` 重复处理逻辑，恢复原生 `navigateTabFocus(isShift)` 单步焦点遍历。
+  - `src/cdp/dom.cp`, `src/cdp/input.cp`: 为 `DOM.focus` 与 `Input.dispatchMouseEvent`/`Input.dispatchKeyEvent` 补充 `session.pollBindingEvents()` 刷新，并在 `mousedown` 命中链路补充可聚焦元素冒泡聚焦。

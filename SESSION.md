@@ -4981,3 +4981,12 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 下均可正常返回序列化 HTML。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（160 模块 **121.45s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。
+
+### [2026-11-22 15:36] Phase 264: `KeyboardEvent.location`、`Tab` 焦点去重与 CDP 绑定事件刷新
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/events/event.js](file:///data/dev/capsurf/src/js/shim/events/event.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `KeyboardEvent` 根据 `code` 自动推导 `location`（`Left` -> `1`, `Right` -> `2`, `Numpad` -> `3`, 默认 `0`）。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js): 清理 `Tab` 重复处理逻辑，恢复原生 `navigateTabFocus(isShift)` 单步焦点遍历。
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp), [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 为 `DOM.focus` 与 `Input.dispatchMouseEvent`/`Input.dispatchKeyEvent` 补充 `session.pollBindingEvents()` 刷新，并在 `mousedown` 命中链路补充可聚焦元素冒泡聚焦。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`Tab` 遍历 `#i1` -> `#i2`（`First` / `Last`）通过，`KeyboardEvent.location`（`ShiftLeft:1, ShiftRight:2, KeyA:0`）通过。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **120.47s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.07s)**。

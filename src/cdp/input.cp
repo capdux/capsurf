@@ -210,8 +210,8 @@ fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name:
     let js_buf: [1280]u8 = [0; 1280];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
-        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0, detail: 1 }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, 1); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
-        .{ target_node, x, y, ev_name, x, y, ev_name, x, y },
+        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0, detail: 1 }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = document.activeElement; cur.focus(); if (document.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, 1); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
+        .{ target_node, x, y, ev_name, x, y, ev_name, ev_name, x, y },
     ) catch return true;
     const val = session.ctx.eval(js_expr);
     let not_prevented = true;
@@ -451,6 +451,15 @@ pub struct InputHandler {
                 }
                 emitPendingNavigationEvents(session, out_events, event_count);
             }
+            if (session.has_document) {
+                let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
+                const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
+                let b_i: usize = 0;
+                while (b_i < polled_b_count && event_count.* < out_events.len) : (b_i += 1) {
+                    out_events[event_count.*] = polled_binding_evts[b_i];
+                    event_count.* += 1;
+                }
+            }
 
             return CdpResponse.ok(req.id, "{}");
         }
@@ -512,6 +521,15 @@ pub struct InputHandler {
             }
             if ((ev_type == .KeyDown || ev_type == .RawKeyDown) && (std.mem.eql(u8, key, "Backspace") || std.mem.eql(u8, key, "Delete") || std.mem.eql(u8, key, "ArrowLeft") || std.mem.eql(u8, key, "ArrowRight") || std.mem.eql(u8, key, "Home") || std.mem.eql(u8, key, "End"))) {
                 applyInputText(session, "", key);
+            }
+            if (session.has_document) {
+                let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
+                const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
+                let b_i: usize = 0;
+                while (b_i < polled_b_count && event_count.* < out_events.len) : (b_i += 1) {
+                    out_events[event_count.*] = polled_binding_evts[b_i];
+                    event_count.* += 1;
+                }
             }
 
             return CdpResponse.ok(req.id, "{}");
