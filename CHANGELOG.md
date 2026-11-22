@@ -3023,3 +3023,4 @@
 - Phase 396: `src/js/shim/element/html-classes.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp` — 为子 `iframe.contentWindow` 挂载 `window.open` 弹窗桥接并按子帧 `location.href` 解析相对 URL。
 - Phase 397: `src/cdp/page.cp` — 修复 `Page.navigateToHistoryEntry` `formatFrameNavigatedEvent(final_url)` 传参错误，并补齐 `Network.*` 响应事件与 `Runtime.executionContextsCleared`。
 - Phase 398: `src/cdp/input.cp` — `Input.dispatchKeyEvent` 穿透 `shadowRoot.activeElement` 与 `_shadowRoot` 子树，支持 Shadow DOM 内键盘输入。
+- Phase 399: `src/cdp/dom.cp` — `DOM.describeNode` 与 `DOM.resolveNode` 支持 `ShadowRoot` 合成 `backendNodeId >= 1000000` 双向解析与跨隔离世界 adopt。

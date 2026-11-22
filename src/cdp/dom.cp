@@ -1038,6 +1038,41 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
+            if (nid_val >= 1000000 && session.has_document) {
+                let sr_buf: [256]u8 = [0; 256];
+                const sr_js = std.fmt.bufPrint(
+                    &sr_buf,
+                    "(() => {{ const m = globalThis.__capsurf_sr_bmap; return m ? (m.get({d}) || '') : ''; }})()",
+                    .{nid_val},
+                ) catch "";
+                if (sr_js.len > 0) {
+                    const sr_val = session.ctx.eval(sr_js);
+                    defer session.ctx.freeValue(sr_val);
+                    const oid = session.ctx.toCString(sr_val);
+                    if (oid.len > 0) {
+                        if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
+                            if (exec_ctx > 1) {
+                                let iso_buf: [256]u8 = [0; 256];
+                                const iso_js = std.fmt.bufPrint(
+                                    &iso_buf,
+                                    "(function(){{globalThis.__capsurf_isolated_oids=globalThis.__capsurf_isolated_oids||new Set();globalThis.__capsurf_isolated_oids.add('{s}');}})()",
+                                    .{oid},
+                                ) catch "";
+                                if (iso_js.len > 0) {
+                                    const v = session.ctx.eval(iso_js);
+                                    session.ctx.freeValue(v);
+                                }
+                            }
+                        }
+                        const res = std.fmt.bufPrint(
+                            out_buf,
+                            "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"ShadowRoot\",\"description\":\"ShadowRoot\",\"objectId\":\"{s}\"}}}}",
+                            .{oid},
+                        ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                        return CdpResponse.ok(req.id, res);
+                    }
+                }
+            }
             if (nid_val <= 0 || @as(usize, @intCast(nid_val)) >= session.doc.nodes.items.len) {
                 return CdpResponse.err(req.id, -32000, "No node with given id found");
             }
@@ -1337,6 +1372,41 @@ pub struct DomHandler {
                 }
                 list.append(session.allocator, '}') catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 const res = std.fmt.bufPrint(out_buf, "{s}", .{list.items}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, res);
+            }
+            if (node_id_val == 0 && session.has_document) {
+                if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                    let sr_buf: [768]u8 = [0; 768];
+                    const sr_js = std.fmt.bufPrint(
+                        &sr_buf,
+                        "(() => {{ const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!o || o.nodeType !== 11 || !o.host) return ''; const m = globalThis.__capsurf_sr_bmap || (globalThis.__capsurf_sr_bmap = new Map()); const rm = globalThis.__capsurf_sr_rmap || (globalThis.__capsurf_sr_rmap = new Map()); let bid = rm.get(o); if (!bid) {{ bid = 1000000 + (globalThis.__capsurf_sr_seq = (globalThis.__capsurf_sr_seq || 0) + 1); rm.set(o, bid); m.set(bid, '{s}'); }} return String(bid) + ',' + (o.mode || 'open'); }})()",
+                        .{ obj_id, obj_id },
+                    ) catch "";
+                    if (sr_js.len > 0) {
+                        const sr_val = session.ctx.eval(sr_js);
+                        defer session.ctx.freeValue(sr_val);
+                        const sr_str = session.ctx.toCString(sr_val);
+                        if (sr_str.len > 0) {
+                            let it = std.mem.splitScalar(u8, sr_str, ',');
+                            const bid = std.fmt.parseInt(i64, it.next() ?? "0", 10) catch 0;
+                            const mode = it.next() ?? "open";
+                            if (bid >= 1000000) {
+                                const res = std.fmt.bufPrint(
+                                    out_buf,
+                                    "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":11,\"nodeName\":\"#document-fragment\",\"localName\":\"\",\"nodeValue\":\"\",\"shadowRootType\":\"{s}\",\"frameId\":\"{s}\"}}}}",
+                                    .{ bid, bid, mode, session.frame_id },
+                                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                                return CdpResponse.ok(req.id, res);
+                            }
+                        }
+                    }
+                }
+            } else if (node_id_val >= 1000000) {
+                const res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":11,\"nodeName\":\"#document-fragment\",\"localName\":\"\",\"nodeValue\":\"\",\"shadowRootType\":\"open\",\"frameId\":\"{s}\"}}}}",
+                    .{ node_id_val, node_id_val, session.frame_id },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, res);
             }
             const res = std.fmt.bufPrint(

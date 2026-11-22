@@ -2250,3 +2250,4 @@
 - Phase 396 (`src/js/shim/element/html-classes.js`, `src/js/shim/window.js`): 修复子 `iframe.contentWindow` 缺少 `open` 方法导致 `frame.evaluate(() => window.open(''))` 失败的缺陷，目标解锁 `page-event-popup.spec.ts` `should report popup opened from iframes`。
 - Phase 397 (`src/cdp/page.cp`): 排查发现 `Page.navigateToHistoryEntry` 错传 `&nav_buf`（4096 字节未初始化栈内存）给 `formatFrameNavigatedEvent` 且漏发 `Network.*` 与 `Runtime.executionContextsCleared`，导致 `page.goBack()` 触发 Playwright 崩溃；修正传参并补齐事件流，目标解锁 `page-history.spec.ts` `@smoke` 等历史导航用例。
 - Phase 398 (`src/cdp/input.cp`): 修复 `Input.dispatchKeyEvent` 仅读取浅层 `document.activeElement`（停留在 Shadow Host）而未下钻 `shadowRoot.activeElement` 的缺陷，解锁 Shadow DOM `contenteditable`/`input` 键入。
+- Phase 399 (`src/cdp/dom.cp`): 解决 `ShadowRoot` 无 Arena `_nid` 导致 `DOM.describeNode` 返回 `backendNodeId: 0` 进而引发 `DOM.resolveNode` 返回 `-32000` (`Unable to adopt element handle from a different document`) 的缺陷，目标解锁 `selectors-css.spec.ts` `25/25` 全绿。
