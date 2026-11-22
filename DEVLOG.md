@@ -1980,3 +1980,6 @@
 
 ### Phase 289: `getByLabel` 祖先 `<label>` 误关联多控件排障笔记
 - **`strict mode violation: getByLabel('Name') resolved to 2 elements` 根因**：`label.js` 的 `getLabelsForControl()` 无条件把所有祖先 `<label>` 加入 `control.labels`，忽略了 `for` 属性排他性及 HTML 仅关联首个可标记后代的规范。补齐 `!hasFor && p.control === control` 判定后，实测 `i1:1, b1:0, non:0, t:1`。
+
+### Phase 290: 闭合 `<details>` 下文本节点与元素在 `toMatchAriaSnapshot`/`isVisible` 仍可见排障笔记
+- **`details visibility` 收到 `"- group: Summary Details"` 根因**：`element.js` 的 `isElementDisplayNone()` 与 `getClientRects()` 未检查祖先闭合 `<details>`，且 `Range.prototype.getClientRects()` 直接为 `<details>` 下的直接文本节点生成非零矩形。两处同步补齐首 `<summary>` 放行与其余后代隐藏后，闭合态 `txtRects=0`、`pRect=0x0`、`pClientRects=0`，展开 `open` 后恢复 `txtRects=1`、`pRectW=1264`。

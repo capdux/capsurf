@@ -5181,3 +5181,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<label>Name <input id="i1"/><button id="b1">B</button></label>` 与 `<label for="t">Name <input id="non"/></label><input id="t"/>` 返回 `{"i1":1,"b1":0,"non":0,"t":1}`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.33s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。
+
+### [2026-11-22 18:24] Phase 290: 修复闭合 `<details>` 折叠态后代元素与文本节点几何可见性
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `isHiddenInClosedDetails()` 并在 `isElementDisplayNone()` 与 `getClientRects()` 中接入，使闭合 `<details>` 下非首个 `<summary>` 后代返回空矩形。
+  - [src/js/shim/range.js](file:///data/dev/capsurf/src/js/shim/range.js): 升级 `Range.prototype.getClientRects()` 遍历逻辑，跳过 `display: none` 子树且对闭合 `<details>` 仅遍历首个 `<summary>` 子元素。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：闭合态 `txtRects=0, sumRects=1, pRect=0x0, pClientRects=0`；展开 `open` 后 `txtRects=1, pRectW=1264, pClientRects=1`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **130.24s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.28s)**。

@@ -10604,6 +10604,12 @@
     // getClientRects
     if (!proto.getClientRects) {
       proto.getClientRects = function () {
+        if (isElementDisplayNone(this)) {
+          if (typeof global.__capsurf_createDOMRectList === "function") {
+            return global.__capsurf_createDOMRectList([]);
+          }
+          return [];
+        }
         const rect = this.getBoundingClientRect();
         if (typeof global.__capsurf_createDOMRectList === "function") {
           return global.__capsurf_createDOMRectList([rect]);
@@ -10752,8 +10758,32 @@
       return null;
     }
 
+    function isHiddenInClosedDetails(node) {
+      let child = node;
+      let p = child ? (child.parentNode || child.parentElement) : null;
+      while (p && p.nodeType === 1) {
+        const ptag = String(p.localName || p.tagName || "").toLowerCase();
+        if (ptag === "details" && !(p.hasAttribute && p.hasAttribute("open"))) {
+          let firstSummary = null;
+          const kids = p.childNodes || p._children || [];
+          for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+              firstSummary = k;
+              break;
+            }
+          }
+          if (child !== firstSummary) return true;
+        }
+        child = p;
+        p = p.parentNode || p.parentElement;
+      }
+      return false;
+    }
+
     function isElementDisplayNone(el) {
       if (!el || el.nodeType !== 1) return false;
+      if (isHiddenInClosedDetails(el)) return true;
       let cur = el;
       while (cur && cur.nodeType === 1) {
         if (cur._displayNone === true) return true;
@@ -22755,6 +22785,27 @@
             }
           }
           return;
+        }
+
+        if (node.nodeType === 1) {
+          if (node.style && node.style.display === "none") return;
+          if (typeof getComputedStyle === "function") {
+            try {
+              if (getComputedStyle(node).display === "none") return;
+            } catch (e) {}
+          }
+          const tag = String(node.localName || node.tagName || "").toLowerCase();
+          if (tag === "details" && !(node.hasAttribute && node.hasAttribute("open"))) {
+            const dkids = node.childNodes || node._children || [];
+            for (let i = 0; i < dkids.length; i++) {
+              const k = dkids[i];
+              if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+                walk(k);
+                break;
+              }
+            }
+            return;
+          }
         }
 
         const kids = node.childNodes || node._children || [];

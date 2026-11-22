@@ -2649,3 +2649,8 @@
 ## [2026-11-22] Phase 289: 规范 `HTMLLabelElement.control` 与 `Element.labels` 祖先关联逻辑
 - **Fixed (`src/`)**:
   - `src/js/shim/element/forms/label.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 修正 `getLabelsForControl()` 仅在祖先 `<label>` 无 `for` 属性且当前控件为其首个可标记后代（`p.control === control`）时纳入关联；同步在 `HTMLLabelElement.prototype.control` 中对空 `for=""` 直接返回 `null`。
+
+## [2026-11-22] Phase 290: 修复闭合 `<details>` 折叠态后代元素与文本节点几何可见性
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `isHiddenInClosedDetails()` 并在 `isElementDisplayNone()` 与 `Element.prototype.getClientRects()` 中接入，确保无 `open` 属性的 `<details>` 下非首个 `<summary>` 后代返回空矩形与空 `DOMRectList`。
+  - `src/js/shim/range.js`: 升级 `Range.prototype.getClientRects()` 遍历逻辑，跳过 `display: none` 子树且对闭合 `<details>` 仅遍历首个 `<summary>` 子元素，避免直接文本节点被判定为可见。

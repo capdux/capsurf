@@ -1110,6 +1110,27 @@ Range.prototype.getClientRects = function () {
         return;
       }
 
+      if (node.nodeType === 1) {
+        if (node.style && node.style.display === "none") return;
+        if (typeof getComputedStyle === "function") {
+          try {
+            if (getComputedStyle(node).display === "none") return;
+          } catch (e) {}
+        }
+        const tag = String(node.localName || node.tagName || "").toLowerCase();
+        if (tag === "details" && !(node.hasAttribute && node.hasAttribute("open"))) {
+          const dkids = node.childNodes || node._children || [];
+          for (let i = 0; i < dkids.length; i++) {
+            const k = dkids[i];
+            if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+              walk(k);
+              break;
+            }
+          }
+          return;
+        }
+      }
+
       const kids = node.childNodes || node._children || [];
       for (let i = 0; i < kids.length; i++) {
         walk(kids[i]);

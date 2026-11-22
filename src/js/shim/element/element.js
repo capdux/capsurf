@@ -1832,6 +1832,12 @@ function installElementExtensions(proto) {
   // getClientRects
   if (!proto.getClientRects) {
     proto.getClientRects = function () {
+      if (isElementDisplayNone(this)) {
+        if (typeof global.__capsurf_createDOMRectList === "function") {
+          return global.__capsurf_createDOMRectList([]);
+        }
+        return [];
+      }
       const rect = this.getBoundingClientRect();
       if (typeof global.__capsurf_createDOMRectList === "function") {
         return global.__capsurf_createDOMRectList([rect]);
@@ -1980,8 +1986,32 @@ function installElementExtensions(proto) {
     return null;
   }
 
+  function isHiddenInClosedDetails(node) {
+    let child = node;
+    let p = child ? (child.parentNode || child.parentElement) : null;
+    while (p && p.nodeType === 1) {
+      const ptag = String(p.localName || p.tagName || "").toLowerCase();
+      if (ptag === "details" && !(p.hasAttribute && p.hasAttribute("open"))) {
+        let firstSummary = null;
+        const kids = p.childNodes || p._children || [];
+        for (let i = 0; i < kids.length; i++) {
+          const k = kids[i];
+          if (k && k.nodeType === 1 && String(k.localName || k.tagName || "").toLowerCase() === "summary") {
+            firstSummary = k;
+            break;
+          }
+        }
+        if (child !== firstSummary) return true;
+      }
+      child = p;
+      p = p.parentNode || p.parentElement;
+    }
+    return false;
+  }
+
   function isElementDisplayNone(el) {
     if (!el || el.nodeType !== 1) return false;
+    if (isHiddenInClosedDetails(el)) return true;
     let cur = el;
     while (cur && cur.nodeType === 1) {
       if (cur._displayNone === true) return true;
