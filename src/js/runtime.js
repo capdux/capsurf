@@ -33465,6 +33465,25 @@
         }));
       }
 
+      if ((cleanFullUrl.startsWith("http://") || cleanFullUrl.startsWith("https://")) && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_http_get === "function") {
+        const realBody = globalThis.__capsurf_http_get(cleanFullUrl);
+        if (realBody !== null && realBody !== undefined) {
+          return Promise.resolve(makeFetchedResponse(String(realBody), {
+            status: 200,
+            statusText: "OK",
+            url: cleanFullUrl,
+            redirected: isRedirected,
+            headers: { "content-type": reqMime },
+          }));
+        }
+        return Promise.resolve(makeFetchedResponse("", {
+          status: 404,
+          statusText: "Not Found",
+          url: cleanFullUrl,
+          redirected: isRedirected,
+        }));
+      }
+
       return Promise.resolve(makeFetchedResponse("", {
         status: 200,
         statusText: "OK",

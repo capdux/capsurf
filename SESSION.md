@@ -5715,3 +5715,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE364_RESULT {"blankRespCount":0,"statusText":"cool!","xCustom":"hello-pw"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 365: 页内 `window.fetch()` 真实 HTTP GET 下沉修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 真实 `http(s)://` URL 的 `fetch()` 调用 `globalThis.__capsurf_http_get()` 发起网络请求。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE365_RESULT {"hit":1,"text":"real-fetch-ok"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。

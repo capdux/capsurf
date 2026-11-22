@@ -651,6 +651,26 @@
 | 2026-11-23 00:01 | `/css/css-transforms/` (`1/5..3/5`) | 0/7, 0/6, 1/6 PASS | WPT Batch 98 (`19470`, `bin_dev`) |
 | 2026-11-23 00:08 | `/css/css-transforms/` (`4/5..5/5`) | 0/6, 1/6 PASS | WPT Batch 99 (`19470`, `bin_dev`) |
 | 2026-11-23 00:08 | `/css/css-grid/` (`1/5..3/5`) | 31/165, 39/176, 38/176 PASS (14 `FAIL→PASS`) | WPT Batch 99 (`19470`, `bin_dev`) |
+| 2026-11-23 00:11 | `frame-frame-element.spec.ts` | 1/6 PASS (Phase 358/359前启动) | PW Batch 107 |
+| 2026-11-23 00:11 | `page-network-response.spec.ts` | 0/11 PASS (`goto`返回`null`, `[12/21]`120s截断) | PW Batch 107 |
+| 2026-11-23 00:11 | `page-network-idle.spec.ts` | 0/4 PASS (`[5/10]`120s截断) | PW Batch 107 |
+| 2026-11-23 00:11 | `page-goto.spec.ts` | 13/26 PASS (`file://`等PASS! `[27/61]`120s截断) | PW Batch 107 |
+| 2026-11-23 00:18 | `selectors-misc.spec.ts` | 18/19 PASS (仅`#inner-link` `TypeError: not a function`) | PW Batch 108 |
+| 2026-11-23 00:18 | `frame-frame-element.spec.ts` | 1/6 PASS | PW Batch 108 |
+| 2026-11-23 00:18 | `elementhandle-content-frame.spec.ts` | 2/5 PASS (非allow-list直跑) | PW Batch 108 |
+| 2026-11-23 00:18 | `elementhandle-owner-frame.spec.ts` | 2/7 PASS (非allow-list直跑) | PW Batch 108 |
+| 2026-11-23 00:22 | `/css/css-grid/` (`4/5..5/5`) | 39/176, 43/176 PASS (18 `FAIL→PASS`!) | WPT Batch 100 (`19470`, `bin_dev`) |
+| 2026-11-23 00:22 | `/css/css-flexbox/` (`1/5..3/5`) | 26/53, 25/52, 23/52 PASS | WPT Batch 100 (`19470`, `bin_dev`) |
+| 2026-11-23 00:26 | `page-network-response.spec.ts` | 4/12 PASS (Phase 360解锁Response! `[13/21]`120s截断) | PW Batch 109 |
+| 2026-11-23 00:26 | `page-goto.spec.ts` | 21/27 PASS (Phase 360+361暴涨+8! `[28/61]`120s截断) | PW Batch 109 |
+| 2026-11-23 00:26 | `page-network-idle.spec.ts` | 1/4 PASS (`[5/10]`120s截断) | PW Batch 109 |
+| 2026-11-23 00:26 | `elementhandle-bounding-box.spec.ts` | 7/7 PASS (11.8s, 6 exp FAIL→PASS) | PW Batch 109 (`bin_dev` 全绿!) |
+| 2026-11-23 00:31 | `/css/css-flexbox/` (`4/5..5/5`) | 15/52, 25/52 PASS | WPT Batch 101 (`19470`, `bin_dev`) |
+| 2026-11-23 00:31 | `/css/css-tables/` (`1/3..3/3`) | 0/6, 4/6, 0/6 PASS | WPT Batch 101 (`19470`, `bin_dev`) |
+| 2026-11-23 00:32 | `selectors-misc.spec.ts` | 19/19 PASS (`internal:has=`+`#inner-link`全绿!) | PW Batch 110 (`bin_dev` 全绿!) |
+| 2026-11-23 00:32 | `frame-frame-element.spec.ts` | 1/6 PASS | PW Batch 110 |
+| 2026-11-23 00:32 | `expect-boolean.spec.ts` | 83/84 PASS (仅`frameLocator 2` 1 fail!) | PW Batch 110 |
+| 2026-11-23 00:32 | `frame-goto.spec.ts` | 0/4 PASS (非allow-list直跑) | PW Batch 110 |
 | 2026-11-23 00:03 | `page-mouse.spec.ts` | 14/14 PASS (`[15/15]`120s截断) | PW Batch 106 |
 | 2026-11-23 00:03 | `selectors-misc.spec.ts` | 18/19 PASS (`internal:has=`PASS, 仅`#inner-link`) | PW Batch 106 |
 | 2026-11-23 00:03 | `page-select-option.spec.ts` | 4/4 PASS (`[1..4]`全绿! `[5/33]`120s截断) | PW Batch 106 |

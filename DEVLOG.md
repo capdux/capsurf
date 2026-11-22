@@ -2212,3 +2212,6 @@
 
 ### Phase 364: `page-network-response.spec.ts` 响应头/`statusText` 缺失与 `goto('about:blank')` 返回非 `null` 排障笔记
 - **硬编码 `"OK"` / `{}` 与 `about:blank` 发 `Network.*` 根因**：`HttpLoaderResult` 此前仅保留 `status_code`、`content_type` 与 `content_security_policy`，`Page.navigate` 发射 `Network.responseReceived` 时写死 `statusText: "OK"`、`headers: {}`，且对 `about:blank` 也发射了 `Network.*` 事件。补齐 `status_text`、`raw_headers` 与 `about:blank` 跳过后，实测 `PHASE364_RESULT {"blankRespCount":0,"statusText":"cool!","xCustom":"hello-pw"}`。
+
+### Phase 365: `page-network-idle.spec.ts` / `page-network-response.spec.ts` 页内 `fetch()` 未请求服务端排障笔记
+- **`window.fetch()` 默认分支空桩直接返回 200 根因**：`src/js/shim/window.js:3888` 在未命中特定 mock URL 时未调用 `globalThis.__capsurf_http_get`，直接 `Promise.resolve(makeFetchedResponse("", { status: 200 }))`，导致页内 `fetch('/fetch-request-a.js')` 等测试请求从未到达服务端。接入 `__capsurf_http_get` 后，实测 `PHASE365_RESULT {"hit":1,"text":"real-fetch-ok"}`。

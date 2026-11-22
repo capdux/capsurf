@@ -2983,3 +2983,7 @@
 - **Fixed (`src/`)**:
   - `src/net/http_loader.cp`: 在 `HttpLoaderResult` 中新增 `status_text` 与 `raw_headers` 字段，从 HTTP/1.x 响应首行与头部分离并持久化持有。
   - `src/cdp/page.cp`: 新增 `formatHttpHeadersJson()`，在 `Network.responseReceived` 中输出真实 `statusText` 与全部响应头；对 `about:blank` 导航跳过 `Network.requestWillBeSent`/`responseReceived`/`loadingFinished` 事件（对齐 `page.goto('about:blank') === null` 规范）。
+
+## [2026-11-23] Phase 365: 打通页内 `window.fetch()` 真实 HTTP 请求下沉至 `__capsurf_http_get`
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `fetch()` 未命中内置 mock fixture 且目标为真实 `http://`/`https://` URL 时，通过 `globalThis.__capsurf_http_get()` 发起真实 HTTP 请求并返回对应 `200`/`404` 响应体。
