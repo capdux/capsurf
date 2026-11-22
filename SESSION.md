@@ -5371,3 +5371,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`{"std":0,"left":1,"right":2,"num":3,"e1Loc":0,"e2Loc":1,"protoStd":0}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.05s)**。
+
+### [2026-11-22 20:45] Phase 316: 修复 `Input.dispatchMouseEvent` 派发事件 `isTrusted` 为 `false` 的问题
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `dispatchMouseDomEvent()` 补充 `composed: true` 并接入 `globalThis.__capsurf_dispatchTrustedEvent(el, ev)`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Input.dispatchMouseEvent` 派发 `mousedown` 与 `click` 返回 `[{"t":"mousedown","trusted":true,"composed":true},{"t":"click","trusted":true,"composed":true}]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。

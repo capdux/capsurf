@@ -2059,3 +2059,6 @@
 
 ### Phase 315: `page-keyboard.spec.ts` 8 项测试 `KeyboardEvent.location` 报 `Unknown: 0/1` 排障笔记
 - **缺少 `DOM_KEY_LOCATION_*` 常量根因**：`KeyboardEvent` 构造函数已正确依据 `code` 推导 `location`（`0..3`），但构造器及原型上未挂载 `DOM_KEY_LOCATION_STANDARD`/`LEFT`/`RIGHT`/`NUMPAD` 四个常量，导致 Playwright 测试辅助函数匹配 `e.location === KeyboardEvent.DOM_KEY_LOCATION_STANDARD`（`0 === undefined`）全部失败并输出 `Unknown: 0/1`。补齐四项常量后，实测 `KeyboardEvent.DOM_KEY_LOCATION_STANDARD=0, LEFT=1, RIGHT=2, NUMPAD=3` 与实例属性均正确。
+
+### Phase 316: `page-mouse.spec.ts` `expect(event.isTrusted).toBe(true)` 收到 `false` 排障笔记
+- **`dispatchMouseDomEvent()` 未走可信派发通道根因**：`Input.dispatchMouseEvent` 在 `src/cdp/input.cp` 通过 `dispatchMouseDomEvent()` 直接调用 `el.dispatchEvent(ev)`，绕过了 `dispatchTrustedEvent()` 内部的 `_setEventTrusted(event, true)`，导致所有 CDP 鼠标事件的 `isTrusted` 恒为 `false`（且缺少 `composed: true`）。改为调用 `globalThis.__capsurf_dispatchTrustedEvent(el, ev)` 后，实测 `mousedown` 与 `click` 均返回 `trusted: true, composed: true`。

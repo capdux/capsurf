@@ -2765,3 +2765,7 @@
 ## [2026-11-22] Phase 315: 补齐 `KeyboardEvent.DOM_KEY_LOCATION_*` 静态与原型常量
 - **Fixed (`src/`)**:
   - `src/js/shim/events/event.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `KeyboardEvent` 构造器与 `KeyboardEvent.prototype` 补齐 `DOM_KEY_LOCATION_STANDARD (0)`、`DOM_KEY_LOCATION_LEFT (1)`、`DOM_KEY_LOCATION_RIGHT (2)`、`DOM_KEY_LOCATION_NUMPAD (3)` 常量，修复 `page-keyboard.spec.ts` 中 8 项 `location` 映射为 `Unknown: 0/1` 的失败。
+
+## [2026-11-22] Phase 316: 修复 `Input.dispatchMouseEvent` 派发事件 `isTrusted` 为 `false` 的问题
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `dispatchMouseDomEvent()` 中为 `MouseEvent` 补齐 `composed: true`，并将 `el.dispatchEvent(ev)` 改为优先调用 `globalThis.__capsurf_dispatchTrustedEvent(el, ev)`，使 CDP 鼠标点击/按下/松开事件正确置位 `isTrusted: true`（修复 `page-mouse.spec.ts` `[1/15]~[3/15]` 失败）。
