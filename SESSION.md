@@ -5568,3 +5568,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE343_RESULT: {"csp":"script-src http://127.0.0.1"}`（内联脚本 `window.e = 10` 被拦截，`e === undefined`）。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。
+
+## Phase 344: `DOM.getContentQuads` 亚像素精度修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `DOM.getContentQuads` 保留 `f32` 亚像素浮点坐标输出。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE344_RESULT: {"quadW":3244,"rectW":3244,"match":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

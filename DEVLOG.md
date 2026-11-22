@@ -2147,3 +2147,6 @@
 
 ### Phase 343: `page-add-init-script.spec.ts` HTTP `Content-Security-Policy` 响应头未拦截 `addScriptTag` 排障笔记
 - **HTTP 响应头 `Content-Security-Policy` 丢失根因**：`src/cdp/session.cp` `navigate()` 此前仅扫描 `<meta http-equiv="Content-Security-Policy">` 标签填充 `csp_policies` 与 `__capsurf_doc_csp`，忽略了 HTTP 响应头中的 `Content-Security-Policy`。在 `HttpLoader` 提取并经 `pending_http_csp` 合并后，实测 `PHASE343_RESULT: {"csp":"script-src http://127.0.0.1"}` 且内联 `<script>window.e = 10;</script>` 成功被拦截。
+
+### Phase 344: `elementhandle-bounding-box.spec.ts` `[7/7]` 亚像素宽度偏差 (`3200` vs `3244`) 排障笔记
+- **`DOM.getContentQuads` 整数取整丢失亚像素精度根因**：`src/cdp/dom.cp` `DOM.getContentQuads` 此前使用 `@as(i64, @intFromFloat(@round(bm.content[i] - s)))` 强制取整，导致 `32.44` 被截为 `32` (`3200`)。改为直接以 `f32` 浮点输出后，实测 `PHASE344_RESULT: {"quadW":3244,"rectW":3244,"match":true}`。

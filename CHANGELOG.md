@@ -2886,3 +2886,7 @@
 - **Fixed (`src/`)**:
   - `src/net/http_loader.cp`: `HttpLoaderResult` 新增 `content_security_policy` 字段并在 `fetchDocumentWithContext()` 解析 `Content-Security-Policy:` 响应头。
   - `src/cdp/page.cp`, `src/cdp/session.cp`: `Page.navigate` 将 `fetch_res.content_security_policy` 传入 `session.pending_http_csp`，并在 `session.navigate()` 中与 `<meta http-equiv="Content-Security-Policy">` 合并注入 `__capsurf_doc_csp` 与 `allow_inline_handlers`。
+
+## [2026-11-22] Phase 344: 保留 `DOM.getContentQuads` 亚像素浮点精度
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: `DOM.getContentQuads` 取消 `@round(...)` 整数截断，直接格式化输出 `f32` 浮点四元组坐标，使 `elementHandle.boundingBox()` 与 `getBoundingClientRect()` 在亚像素尺度 (`32.44px` -> `3244`) 保持一致。

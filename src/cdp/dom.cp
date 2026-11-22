@@ -837,14 +837,14 @@ pub struct DomHandler {
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
 
-            const c0 = @as(i64, @intFromFloat(@round(bm.content[0] - sx)));
-            const c1 = @as(i64, @intFromFloat(@round(bm.content[1] - sy)));
-            const c2 = @as(i64, @intFromFloat(@round(bm.content[2] - sx)));
-            const c3 = @as(i64, @intFromFloat(@round(bm.content[3] - sy)));
-            const c4 = @as(i64, @intFromFloat(@round(bm.content[4] - sx)));
-            const c5 = @as(i64, @intFromFloat(@round(bm.content[5] - sy)));
-            const c6 = @as(i64, @intFromFloat(@round(bm.content[6] - sx)));
-            const c7 = @as(i64, @intFromFloat(@round(bm.content[7] - sy)));
+            const c0 = bm.content[0] - sx;
+            const c1 = bm.content[1] - sy;
+            const c2 = bm.content[2] - sx;
+            const c3 = bm.content[3] - sy;
+            const c4 = bm.content[4] - sx;
+            const c5 = bm.content[5] - sy;
+            const c6 = bm.content[6] - sx;
+            const c7 = bm.content[7] - sy;
 
             const res = std.fmt.bufPrint(
                 out_buf,
