@@ -2232,3 +2232,4 @@
 - Phase 378 (`src/cdp/target.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`): 补齐 `window.open` API 并通过 `JsDomContext` 弹窗队列在 CDP 运行时轮询发射 `Target.targetCreated`（含 `openerId`/`openerFrameId`）与 `Target.attachedToTarget`，支撑 Playwright `page.waitForEvent('popup')` 链路。
 - Phase 379 (`src/cdp/dispatch.cp`, `src/cdp/server.cp`, `src/cdp/session.cp`): 在 `getOrCreateTabSession` 根据目标 `opener_id_len` 标记 `has_opener = true` 并在 `mountDom` 后自动注入 `window.opener`，保证弹窗页 `Boolean(window.opener) === true`；同时让 `Input.` 支持发射点击触发的弹窗事件。
 - Phase 380 (`src/cdp/page.cp`, `src/cdp/session.cp`): 修复 `Page.navigateToHistoryEntry` 仅修改下标而不加载页面/不发射 `frameNavigated` 与 `load` 事件的问题，同时通过 `skip_record_nav` 防止回退时 `recordNavigation` 误清空前进历史记录。
+- Phase 381 (`src/cdp/session.cp`): 通过 `Target.createTarget` 创建的标签页持有独立 `target_registry`（`auto_attach=false`），导致弹窗事件漏发。改为优先使用 `_.owner_target_registry` 后，子标签页调用 `window.open` 即可即时向根 WebSocket 发射匹配 `openerId` 的 `Target.attachedToTarget`。

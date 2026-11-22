@@ -3005,3 +3005,4 @@
 - Phase 378: `src/cdp/target.cp`, `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/runtime.cp`, `src/js/shim/window.js` — 新增 `window.open` 弹窗事件链与 `openerId`/`openerFrameId` 上报。
 - Phase 379: `src/cdp/dispatch.cp`, `src/cdp/server.cp`, `src/cdp/session.cp` — `Input.` 追加弹窗事件轮询，并为带 `openerId` 的弹窗标签页会话自动注入 `window.opener`。
 - Phase 380: `src/cdp/page.cp`, `src/cdp/session.cp` — 实现 `Page.navigateToHistoryEntry` 真实前后退导航与生命周期事件发射，并通过 `skip_record_nav` 保持历史栈完整。
+- Phase 381: `src/cdp/session.cp` — `pollPopupTargetEvents` 路由至共享 `owner_target_registry`，打通多标签页 `window.open` 的 `Target.targetCreated` 与 `Target.attachedToTarget` 广播。
