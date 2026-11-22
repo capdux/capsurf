@@ -867,6 +867,16 @@ pub struct PageHandler {
                 }
             }
 
+            if (session.runtime_enabled) {
+                let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
+                let con_i: usize = 0;
+                while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
+                    out_events[event_count.*] = polled_con_evts[con_i];
+                    event_count.* += 1;
+                }
+            }
+
             return CdpResponse.ok(req.id, "{}");
         }
 
@@ -1606,6 +1616,16 @@ pub struct PageHandler {
                 let wm_i: usize = 0;
                 while (wm_i < polled_wm_count && event_count.* < out_events.len) : (wm_i += 1) {
                     out_events[event_count.*] = polled_wm_evts[wm_i];
+                    event_count.* += 1;
+                }
+            }
+
+            if (session.runtime_enabled) {
+                let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
+                let con_i: usize = 0;
+                while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
+                    out_events[event_count.*] = polled_con_evts[con_i];
                     event_count.* += 1;
                 }
             }

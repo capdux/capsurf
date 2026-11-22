@@ -2142,6 +2142,15 @@ function installHtmlClasses(global) {
 
   function executeIframeInlineScripts(win, doc, opts) {
     if (!win || !doc) return Promise.resolve();
+    if (!win.__capsurf_init_scripts_ran && typeof globalThis !== "undefined" && Array.isArray(globalThis.__capsurf_new_doc_scripts)) {
+      win.__capsurf_init_scripts_ran = true;
+      const ndScripts = globalThis.__capsurf_new_doc_scripts;
+      for (let ndi = 0; ndi < ndScripts.length; ndi++) {
+        try {
+          new Function("window", "self", "globalThis", "location", "document", ndScripts[ndi]).call(win, win, win, win, win.location, doc);
+        } catch (e) {}
+      }
+    }
     const scripts = [];
     function collect(node) {
       if (!node) return;

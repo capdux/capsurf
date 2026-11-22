@@ -2894,3 +2894,8 @@
 ## [2026-11-22] Phase 345: 区分 `visibility: hidden` 与 `display: none`，修复 `getBoxModel()` / `getContentQuads()` / `scrollIntoViewIfNeeded()`
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp`: `getBoxModel()` 将 `!rect.visible` 放宽为 `_.doc.isNodeDisplayNone(node_id)`，使 `visibility: hidden` 元素保留合法盒模型与 `quads`（仅 `display: none` 返回无盒模型错误），解锁 `elementHandle.scrollIntoViewIfNeeded()`。
+
+## [2026-11-22] Phase 346: 打通 `Page.navigate` 控制台事件冲刷与 `addInitScript` 向子 `<iframe>` 一次性注入执行
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `Page.navigate` 在 `session.runtime_enabled` 时补充调用 `session.pollConsoleEvents(&polled_con_evts)`，确保初始化脚本产生的 `console.*` 在导航阶段即时上报。
+  - `src/cdp/session.cp`, `src/js/shim/element/html-classes.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `session.navigate()` 将 `new_document_scripts` 同步写入 `globalThis.__capsurf_new_doc_scripts`，由 `executeIframeInlineScripts()` 在每个子 `<iframe>` 的 `contentWindow`/`location` 就绪后仅执行一次（`__capsurf_init_scripts_ran` 守卫）。

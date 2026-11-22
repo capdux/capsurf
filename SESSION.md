@@ -5582,3 +5582,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE345_RESULT: {"vhModel":true,"vhW":1264,"vhQuads":1,"dnErr":"Could not compute box model"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 346: `addInitScript` 子 `<iframe>` 注入与导航控制台事件冲刷完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/js/shim/element/html-classes.js](file:///data/dev/capsurf/src/js/shim/element/html-classes.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补全 `Page.navigate` `pollConsoleEvents()` 及子帧 `executeIframeInlineScripts()` 一次性 `addInitScript` 执行。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE346_RESULT: ["init script: /frames/one-frame.html","init script: /frames/frame.html"]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

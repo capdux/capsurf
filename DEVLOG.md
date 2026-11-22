@@ -2153,3 +2153,8 @@
 
 ### Phase 345: `elementhandle-scroll-into-view.spec.ts` `[5/9]` `visibility: hidden` 盒模型缺失排障笔记
 - **`!rect.visible` 误拦截 `visibility: hidden` 根因**：`src/cdp/session.cp` `getBoxModel()` 此前以 `!rect.visible` 判空，导致 `visibility: hidden`（仍有布局尺寸）无法通过 `DOM.getBoxModel` / `DOM.getContentQuads` / `DOM.scrollIntoViewIfNeeded`。改为 `_.doc.isNodeDisplayNone(node_id)` 后，实测 `vhModel=true, vhW=1264, vhQuads=1, dnErr="Could not compute box model"`。
+
+### Phase 346: `page-add-init-script.spec.ts` `[11/11]` iframe `addInitScript` 未触发/未上报排障笔记
+- **双重断层根因**：
+  1. `src/cdp/page.cp` `Page.navigate` 仅轮询了 CSS/Network/WebMCP 事件，遗漏 `session.pollConsoleEvents()`，导致 `new_document_scripts` 中的 `console.log` 在导航结束前未发出 `Runtime.consoleAPICalled`。
+  2. `src/cdp/session.cp` `navigate()` 仅在主帧求值 `new_document_scripts`，未向同页创建的 `<iframe>` 传递。通过 `__capsurf_new_doc_scripts` 在 `executeIframeInlineScripts()` 绑定子帧 `window`/`location` 仅执行一次后，实测 `PHASE346_RESULT: ["init script: /frames/one-frame.html","init script: /frames/frame.html"]`。

@@ -2401,10 +2401,27 @@ pub struct CdpPageSession {
 
         // Execute scripts registered via Page.addScriptToEvaluateOnNewDocument
         {
+            const init_arr = _.ctx.eval("globalThis.__capsurf_new_doc_scripts=[];");
+            _.ctx.freeValue(init_arr);
             let ndi: usize = 0;
             while (ndi < _.new_document_scripts.items.len) : (ndi += 1) {
                 const nd_src = _.new_document_scripts.items[ndi].source;
                 if (nd_src.len > 0) {
+                    const esc_cap = nd_src.len * 2 + 64;
+                    let esc_buf = _.allocator.alloc(u8, esc_cap) catch null;
+                    if (eb := esc_buf) {
+                        defer _.allocator.free(eb);
+                        const esc_src = escapeJsonString(nd_src, eb);
+                        let push_buf = _.allocator.alloc(u8, esc_src.len + 64) catch null;
+                        if (pb := push_buf) {
+                            defer _.allocator.free(pb);
+                            const pjs = std.fmt.bufPrint(pb, "globalThis.__capsurf_new_doc_scripts.push(\"{s}\");", .{esc_src}) catch "";
+                            if (pjs.len > 0) {
+                                const pv = _.ctx.eval(pjs);
+                                _.ctx.freeValue(pv);
+                            }
+                        }
+                    }
                     const nd_v = _.ctx.eval(nd_src);
                     if (jsIsException(nd_v)) {
                         const exc = _.ctx.getException();
