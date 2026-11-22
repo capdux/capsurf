@@ -1428,23 +1428,50 @@ if (typeof globalThis !== "undefined") {
       if (typeof getComputedStyle !== "function") return;
       const styles = document.querySelectorAll("style");
       let hasAnimOrTrans = false;
+      const animSels = [];
       for (let i = 0; i < styles.length; i++) {
         const txt = String(styles[i].textContent || "");
         if (txt.indexOf("transition") !== -1 || txt.indexOf("animation") !== -1 || txt.indexOf("keyframes") !== -1) {
           hasAnimOrTrans = true;
-          break;
+          const ruleRe = /([^{}@]+)\{([^{}]*(?:transition|animation)[^{}]*)\}/gi;
+          let rm;
+          while ((rm = ruleRe.exec(txt)) !== null) {
+            const s = rm[1].trim();
+            if (s) animSels.push(s);
+          }
         }
       }
       if (!hasAnimOrTrans) return;
       _pageHasAnimOrTrans = true;
-      const allEls = document.querySelectorAll("*");
-      for (let i = 0; i < allEls.length; i++) {
-        const el = allEls[i];
-        const tag = String(el.localName || el.tagName || "").toLowerCase();
-        if (tag === "html" || tag === "head" || tag === "style" || tag === "script" || tag === "meta" || tag === "title" || tag === "link") {
-          continue;
+      const visited = new Set();
+      if (animSels.length > 0) {
+        try {
+          const matched = document.querySelectorAll(animSels.join(","));
+          for (let i = 0; i < matched.length; i++) {
+            const el = matched[i];
+            if (!visited.has(el)) {
+              visited.add(el);
+              try { getComputedStyle(el); } catch (e) {}
+            }
+          }
+        } catch (e) {
+          const allEls = document.querySelectorAll("*");
+          for (let i = 0; i < allEls.length; i++) {
+            const el = allEls[i];
+            const tag = String(el.localName || el.tagName || "").toLowerCase();
+            if (tag === "html" || tag === "head" || tag === "style" || tag === "script" || tag === "meta" || tag === "title" || tag === "link") continue;
+            try { getComputedStyle(el); } catch (e) {}
+          }
         }
-        try { getComputedStyle(el); } catch (e) {}
+      }
+      const inlineStyled = document.querySelectorAll("[style]");
+      for (let i = 0; i < inlineStyled.length; i++) {
+        const el = inlineStyled[i];
+        if (visited.has(el)) continue;
+        const stStr = String((el.getAttribute && el.getAttribute("style")) || "").toLowerCase();
+        if (stStr.indexOf("transition") !== -1 || stStr.indexOf("animation") !== -1) {
+          try { getComputedStyle(el); } catch (e) {}
+        }
       }
     } catch (e) {}
   }

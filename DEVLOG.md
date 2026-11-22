@@ -2158,3 +2158,6 @@
 - **双重断层根因**：
   1. `src/cdp/page.cp` `Page.navigate` 仅轮询了 CSS/Network/WebMCP 事件，遗漏 `session.pollConsoleEvents()`，导致 `new_document_scripts` 中的 `console.log` 在导航结束前未发出 `Runtime.consoleAPICalled`。
   2. `src/cdp/session.cp` `navigate()` 仅在主帧求值 `new_document_scripts`，未向同页创建的 `<iframe>` 传递。通过 `__capsurf_new_doc_scripts` 在 `executeIframeInlineScripts()` 绑定子帧 `window`/`location` 仅执行一次后，实测 `PHASE346_RESULT: ["init script: /frames/one-frame.html","init script: /frames/frame.html"]`。
+
+### Phase 347: `grid.html` 导航 >25s 超时及 `DOM.getBoxModel` 亚像素精度排障笔记
+- **`initCssTransitionSnapshots()` 全节点扫描与 `<img>` 重复请求根因**：`grid.html` `<style>` 含 `@keyframes move`，导致 `animations.js` `initCssTransitionSnapshots()` 对全部 ~700 个元素逐一调用 `getComputedStyle()` 并同步创建 490 个 `<img>` 加载，触发 >25s 阻塞。收窄快照选择器命中范围并增加文档级 `_imgCache` 后，`grid.html` 导航耗时降至 **3.5s** (`count=200`, `rect13={x:100,y:55,w:50,h:50}`)。同时修复 `src/cdp/dom.cp` `formatQuad()` 保留浮点精度。

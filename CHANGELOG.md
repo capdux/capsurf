@@ -2899,3 +2899,9 @@
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `Page.navigate` 在 `session.runtime_enabled` 时补充调用 `session.pollConsoleEvents(&polled_con_evts)`，确保初始化脚本产生的 `console.*` 在导航阶段即时上报。
   - `src/cdp/session.cp`, `src/js/shim/element/html-classes.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `session.navigate()` 将 `new_document_scripts` 同步写入 `globalThis.__capsurf_new_doc_scripts`，由 `executeIframeInlineScripts()` 在每个子 `<iframe>` 的 `contentWindow`/`location` 就绪后仅执行一次（`__capsurf_init_scripts_ran` 守卫）。
+
+## [2026-11-22] Phase 347: 优化 `initCssTransitionSnapshots()`、`<img>` 文档级缓存去重并保留 `DOM.getBoxModel` 亚像素精度
+- **Fixed (`src/`)**:
+  - `src/js/shim/animations.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `initCssTransitionSnapshots()` 仅对匹配含 `transition`/`animation` CSS 规则或内联样式的元素执行 `getComputedStyle(el)`，消除含 `@keyframes` 页面（如 `grid.html` ~700 节点）初始化时全量 O(N) 级联卡死（>25s 降至 3.5s）。
+  - `src/js/shim/element/html-classes.js`: `triggerImageLoad()` 增加按文档 `_imgCache` 缓存去重，避免重复 URL（如 `grid.html` 490 张数字图）发起冗余请求。
+  - `src/cdp/dom.cp`: `formatQuad()` 取消整数取整，保留 `f32` 亚像素精度。

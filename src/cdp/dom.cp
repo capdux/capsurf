@@ -23,18 +23,10 @@ fn shiftQuadScroll(q: [8]f32, sx: f32, sy: f32): [8]f32 {
 }
 
 fn formatQuad(quad: [8]f32, buf: []u8): []const u8 {
-    const q0 = @as(i64, @intFromFloat(@round(quad[0])));
-    const q1 = @as(i64, @intFromFloat(@round(quad[1])));
-    const q2 = @as(i64, @intFromFloat(@round(quad[2])));
-    const q3 = @as(i64, @intFromFloat(@round(quad[3])));
-    const q4 = @as(i64, @intFromFloat(@round(quad[4])));
-    const q5 = @as(i64, @intFromFloat(@round(quad[5])));
-    const q6 = @as(i64, @intFromFloat(@round(quad[6])));
-    const q7 = @as(i64, @intFromFloat(@round(quad[7])));
     return std.fmt.bufPrint(
         buf,
         "[{d},{d},{d},{d},{d},{d},{d},{d}]",
-        .{ q0, q1, q2, q3, q4, q5, q6, q7 },
+        .{ quad[0], quad[1], quad[2], quad[3], quad[4], quad[5], quad[6], quad[7] },
     ) catch "[]";
 }
 

@@ -5589,3 +5589,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE346_RESULT: ["init script: /frames/one-frame.html","init script: /frames/frame.html"]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 347: `grid.html` 导航性能优化与 `DOM.getBoxModel` 亚像素精度修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/animations.js](file:///data/dev/capsurf/src/js/shim/animations.js), [src/js/shim/element/html-classes.js](file:///data/dev/capsurf/src/js/shim/element/html-classes.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`), [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `initCssTransitionSnapshots()` 精准筛选动画/过渡选择器，新增 `<img>` 文档级 `_imgCache` 去重，保留 `formatQuad()` 浮点精度。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE347_RESULT: {"ms":3555,"hits":0,"dom":{"count":200,"rect":{"x":100,"y":55,"w":50,"h":50}}}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

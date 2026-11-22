@@ -1323,53 +1323,52 @@ function installHtmlClasses(global) {
       const hasCrossOriginAttr = typeof self.hasAttribute === "function"
         ? self.hasAttribute("crossorigin")
         : (self.getAttribute && self.getAttribute("crossorigin") !== null);
-      nativeFetch(str, hasCrossOriginAttr ? undefined : { mode: "no-cors" }).then(function (res) {
+      let cacheUrl = str;
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "");
+        if (base) cacheUrl = new URL(str, base).href;
+      } catch (e) {}
+      const docRef = self.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const imgCache = docRef ? (docRef._imgCache || (docRef._imgCache = new Map())) : null;
+      const cacheKey = cacheUrl + (hasCrossOriginAttr ? "|co" : "|nc");
+      let loadPromise = imgCache ? imgCache.get(cacheKey) : null;
+      if (!loadPromise) {
+        loadPromise = nativeFetch(str, hasCrossOriginAttr ? undefined : { mode: "no-cors" }).then(function (res) {
+          if (!res || (!res.ok && res.type !== "opaque")) {
+            return { ok: false, dims: null };
+          }
+          const fixtureInfo = getKnownFixtureImageInfo(str);
+          if (typeof res.arrayBuffer === "function") {
+            return res.arrayBuffer().then(function (buf) {
+              let dims = null;
+              let hasBytes = false;
+              try {
+                const u8 = new Uint8Array(buf);
+                hasBytes = u8.length > 0;
+                if (u8.length >= 24 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
+                  const w = ((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0;
+                  const h = ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0;
+                  if (w > 0 && h > 0) dims = { width: w, height: h };
+                }
+              } catch (e) {}
+              if (!dims && fixtureInfo) dims = { width: fixtureInfo.width, height: fixtureInfo.height };
+              if (!dims && hasBytes) dims = { width: 16, height: 16 };
+              return dims ? { ok: true, dims: dims } : { ok: false, dims: null };
+            }, function () {
+              return fixtureInfo ? { ok: true, dims: { width: fixtureInfo.width, height: fixtureInfo.height } } : { ok: false, dims: null };
+            });
+          } else if (fixtureInfo) {
+            return { ok: true, dims: { width: fixtureInfo.width, height: fixtureInfo.height } };
+          }
+          return { ok: true, dims: { width: 16, height: 16 } };
+        }, function () {
+          return { ok: false, dims: null };
+        });
+        if (imgCache) imgCache.set(cacheKey, loadPromise);
+      }
+      loadPromise.then(function (outcome) {
         if (self._imgLoadSeq !== seq) return;
-        if (!res || (!res.ok && res.type !== "opaque")) {
-          dispatchImgEvent(false, null);
-          return;
-        }
-        const fixtureInfo = getKnownFixtureImageInfo(str);
-        if (typeof res.arrayBuffer === "function") {
-          res.arrayBuffer().then(function (buf) {
-            if (self._imgLoadSeq !== seq) return;
-            let dims = null;
-            let hasBytes = false;
-            try {
-              const u8 = new Uint8Array(buf);
-              hasBytes = u8.length > 0;
-              // PNG header: 89 50 4E 47 0D 0A 1A 0A, IHDR width@16..19 height@20..23
-              if (u8.length >= 24 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
-                const w = ((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0;
-                const h = ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0;
-                if (w > 0 && h > 0) dims = { width: w, height: h };
-              }
-            } catch (e) {}
-            if (!dims && fixtureInfo) {
-              dims = { width: fixtureInfo.width, height: fixtureInfo.height };
-            }
-            if (!dims && hasBytes) {
-              dims = { width: 16, height: 16 };
-            }
-            if (dims) {
-              dispatchImgEvent(true, dims);
-            } else {
-              dispatchImgEvent(false, null);
-            }
-          }, function () {
-            if (fixtureInfo) {
-              dispatchImgEvent(true, { width: fixtureInfo.width, height: fixtureInfo.height });
-            } else {
-              dispatchImgEvent(false, null);
-            }
-          });
-        } else if (fixtureInfo) {
-          dispatchImgEvent(true, { width: fixtureInfo.width, height: fixtureInfo.height });
-        } else {
-          dispatchImgEvent(true, { width: 16, height: 16 });
-        }
-      }, function () {
-        dispatchImgEvent(false, null);
+        dispatchImgEvent(outcome.ok, outcome.dims);
       });
     } catch (e) {
       dispatchImgEvent(false, null);
