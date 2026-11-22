@@ -3017,3 +3017,4 @@
 - Phase 390: `src/js/shim/window.js` — `window.open` 弹窗代理对象补充 `alert`/`confirm`/`prompt` 方法。
 - Phase 391: `src/js/shim/element/html-element.js` — `proto.click()` 支持 `<a target="_blank">` 与 `rel="noopener"` 触发弹窗。
 - Phase 392: `src/cdp/session.cp` — `escapeJsonString` 完整转义 `< 0x20` ASCII 控制字符为 `\u00XX`。
+- Phase 393: `src/cdp/input.cp` — `hitTest` 跳过 `pointer_events_none` 盒模型节点，支持鼠标事件穿透 `pointer-events: none` 遮罩层。

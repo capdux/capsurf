@@ -2244,3 +2244,4 @@
 - Phase 390 (`src/js/shim/window.js`): 补齐 `popupWin.alert` / `confirm` / `prompt` 代理接口，解决 `page-event-popup.spec.ts` `[5/13]` `TypeError: not a function`。
 - Phase 391 (`src/js/shim/element/html-element.js`): 补齐 JS `a.click()` 对 `target="_blank"` 与 `rel="noopener"` 的弹窗触发支持，打通 `page-event-popup.spec.ts` `[11/13]` fake-clicking 用例。
 - Phase 392 (`src/cdp/session.cp`): 修复 `escapeJsonString` 仅转义 `"`/`\`/`\n`/`\r`/`\t` 而漏掉其余 `< 0x20` 控制字符（如 `\x00`、`\f`）导致 `puppeteer-core` / Playwright 解析 CDP JSON 崩溃的协议缺陷。
+- Phase 393 (`src/cdp/input.cp`): 修复 `hitTest` 未检查 `box.pointer_events_none` 导致 `pointer-events: none` 透明遮罩层拦截 `Input.dispatchMouseEvent` 鼠标点击与文本选区的问题。

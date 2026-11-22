@@ -111,7 +111,7 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
     const count = session.layout.boxes.items.len;
     while (i < count) : (i += 1) {
         const box = session.layout.boxes.items[i];
-        if (box.rect.visible && box.rect.width > 0.0 && box.rect.height > 0.0) {
+        if (box.rect.visible && !box.pointer_events_none && box.rect.width > 0.0 && box.rect.height > 0.0) {
             const tx = if (box.position == .Fixed) x else x + sx;
             const ty = if (box.position == .Fixed) y else y + sy;
             if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&

@@ -753,3 +753,8 @@
 | 2026-11-23 02:21 | `page-event-popup.spec.ts` | 11/13 PASS (Phase 391 `a.click()`过! +1 PASS) | PW Batch 125 |
 | 2026-11-23 02:21 | `page-click.spec.ts` | 28/30 PASS (`[31/77]`120s截断) | PW Batch 125 |
 | WPT-B120 | `/fetch/api/{response,abort,cors}/` | 4/53 PASS (1 `FAIL→PASS` cors-preflight-redirect, 0 CRASH) |
+| 2026-11-23 02:25 | `elementhandle-press.spec.ts` | 5/5 PASS (1 exp FAIL→PASS) | PW Batch 126 (`bin_dev` 全绿!) |
+| 2026-11-23 02:25 | `page-set-input-files.spec.ts` | 13/19 PASS (7 exp FAIL→PASS) | PW Batch 126 |
+| 2026-11-23 02:25 | `page-aria-snapshot.spec.ts` | 36/38 PASS (2 fails: pseudo PUA `\ueab2`, frameset nested `- iframe`) | PW Batch 126 |
+| 2026-11-23 02:25 | `page-wait-for-selector-1.spec.ts` | 15/15 PASS (`exit=0`) | PW Batch 126 (`bin_dev` 全绿!) |
+| WPT-B121 | `/fetch/api/basic/ 1/2..2/2` + `/xhr/ 1/3..2/3` | 27/99 PASS (`basic 1/2` 2/16 `1 FAIL→PASS`, 0 JSON.parse crash, 0 CRASH) |
