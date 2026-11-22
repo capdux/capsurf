@@ -11600,7 +11600,7 @@ const CSS_TYPED_OM_GLOBALS = {
   function applyContentEditableInsertText(doc, host, sel, range, text) {
     if (!range) {
       const tn = doc.createTextNode(text);
-      host.appendChild(tn);
+      host.insertBefore(tn, host.firstChild || null);
       if (sel && typeof sel.collapse === "function") {
         try { sel.collapse(tn, text.length); } catch (e) {}
       }
@@ -11704,7 +11704,10 @@ const CSS_TYPED_OM_GLOBALS = {
     const isMeta = (mods & 4) !== 0;
     const isShift = (mods & 8) !== 0;
     const doc = (typeof document !== "undefined" ? document : null) || global.document;
-    const target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
+    let target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
+    while (target && (target.shadowRoot || target._shadowRoot) && (target.shadowRoot || target._shadowRoot).activeElement) {
+      target = (target.shadowRoot || target._shadowRoot).activeElement;
+    }
     if (!target) return 0;
 
     const keyStr = String(key || "");
