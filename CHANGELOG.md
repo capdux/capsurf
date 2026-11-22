@@ -2917,3 +2917,9 @@
 ## [2026-11-22] Phase 349: 修复 `<link rel="stylesheet">` 在 404 时误触发 `'load'` 事件（`page-add-style-tag.spec.ts` `[3/4]`）
 - **Fixed (`src/`)**:
   - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 当存在宿主 `globalThis.__capsurf_http_get` 钩子时，跳过 `node-base.js` 对 `<link rel="stylesheet">` 的无条件假 `'load'` 微任务回退，交由 `session_hooks.cp` `handleInsertedLink()` 根据真实 HTTP 状态码与 CSP 裁决派发 `'load'` 或 `'error'`。
+
+## [2026-11-22] Phase 350: 消除含 `<style>` 页面（如 `mouse-helper.js`）上 `getBoundingClientRect` / `scrollHeight` O(N) `getComputedStyle` 阻塞
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`):
+    - 新增 `isElementInlineOrJsDisplayNone()`，对具有原生 `_nid > 0` 的元素在 `getBoundingClientRect()` 中直接复用原生 `origGetBoundingClientRect` 内置的 `isNodeDisplayNone` 检查，免去沿祖先链重复调用 `window.getComputedStyle`；
+    - `collectRootScrollExtents()` 仅在存在外部 `<link rel="stylesheet">` 或 `<style>` 实际含 `fixed`/`overflow` 关键字时才查询子元素计算样式，并跳过 `<br>`/`<wbr>`。

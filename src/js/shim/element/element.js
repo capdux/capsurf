@@ -2048,11 +2048,9 @@ function installElementExtensions(proto) {
     return document.querySelectorAll("style, link").length > 0;
   }
 
-  function isElementDisplayNone(el) {
+  function isElementInlineOrJsDisplayNone(el) {
     if (!el || el.nodeType !== 1) return false;
     if (isHiddenInClosedDetails(el)) return true;
-    const hasSheets = docHasCssSheets();
-    const hasGcs = hasSheets && typeof window !== "undefined" && typeof window.getComputedStyle === "function";
     let cur = el;
     while (cur && cur.nodeType === 1) {
       if (cur.parentNode && cur.parentNode._shadowRoot && !cur.assignedSlot) {
@@ -2072,15 +2070,26 @@ function installElementExtensions(proto) {
       if (cur._computedStyle && cur._computedStyle.display === "none") {
         return true;
       }
-      if (hasGcs) {
-        try {
-          const cs = window.getComputedStyle(cur);
-          if (cs) {
-            const cd = (typeof cs.getPropertyValue === "function") ? cs.getPropertyValue("display") : cs.display;
-            if (cd === "none") return true;
-          }
-        } catch (e) {}
-      }
+      cur = getScrollParent(cur);
+    }
+    return false;
+  }
+
+  function isElementDisplayNone(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (isElementInlineOrJsDisplayNone(el)) return true;
+    const hasSheets = docHasCssSheets();
+    const hasGcs = hasSheets && typeof window !== "undefined" && typeof window.getComputedStyle === "function";
+    if (!hasGcs) return false;
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      try {
+        const cs = window.getComputedStyle(cur);
+        if (cs) {
+          const cd = (typeof cs.getPropertyValue === "function") ? cs.getPropertyValue("display") : cs.display;
+          if (cd === "none") return true;
+        }
+      } catch (e) {}
       cur = getScrollParent(cur);
     }
     return false;
@@ -2135,7 +2144,10 @@ function installElementExtensions(proto) {
 
   const origGetBoundingClientRect = proto.getBoundingClientRect;
   proto.getBoundingClientRect = function () {
-    if (isElementDisplayNone(this)) {
+    const fastCheck = (typeof this._nid === "number" && this._nid > 0 && origGetBoundingClientRect)
+      ? isElementInlineOrJsDisplayNone(this)
+      : isElementDisplayNone(this);
+    if (fastCheck) {
       return makeDomRect(0, 0, 0, 0);
     }
     const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
@@ -2459,6 +2471,24 @@ function installElementExtensions(proto) {
     const hasDocSheets = typeof document !== "undefined" && document &&
       typeof document.querySelectorAll === "function" &&
       document.querySelectorAll("style, link").length > 0;
+    let hasFixedOrOverflowCss = false;
+    if (hasDocSheets) {
+      const links = document.querySelectorAll("link");
+      for (let li = 0; li < links.length; li++) {
+        const rel = String((links[li].getAttribute && links[li].getAttribute("rel")) || "").toLowerCase();
+        if (rel.indexOf("stylesheet") !== -1) { hasFixedOrOverflowCss = true; break; }
+      }
+      if (!hasFixedOrOverflowCss) {
+        const sts = document.querySelectorAll("style");
+        for (let si = 0; si < sts.length; si++) {
+          const txt = String(sts[si].textContent || "").toLowerCase();
+          if (txt.indexOf("fixed") !== -1 || txt.indexOf("overflow") !== -1) {
+            hasFixedOrOverflowCss = true;
+            break;
+          }
+        }
+      }
+    }
 
     const rr = getDocRectForScroll(rootEl, hasDocSheets);
     if (rr) {
@@ -2493,11 +2523,11 @@ function installElementExtensions(proto) {
         if (tag === "head" || tag === "style" || tag === "script" || tag === "meta" || tag === "link" || tag === "title" || tag === "template") {
           continue;
         }
-        if (isElementDisplayNone(child)) continue;
+        if (isElementInlineOrJsDisplayNone(child)) continue;
         let isFixed = false;
         let clipped = false;
         const inlineStyle = (child.getAttribute && child.getAttribute("style")) || "";
-        if (hasDocSheets || inlineStyle) {
+        if (hasFixedOrOverflowCss || inlineStyle) {
           if (gcsFn) {
             try {
               const cs = gcsFn(child);
@@ -2515,7 +2545,7 @@ function installElementExtensions(proto) {
           }
         }
         if (isFixed) continue;
-        const cr = getDocRectForScroll(child, hasDocSheets);
+        const cr = (tag === "br" || tag === "wbr") ? null : getDocRectForScroll(child, hasFixedOrOverflowCss);
         if (cr) {
           const relRight = cr.right - originX;
           const relBottom = cr.bottom - originY;

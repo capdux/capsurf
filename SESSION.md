@@ -5610,3 +5610,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE349_RESULT ["404:error","200:load:rgb(255, 0, 0)"]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。
+
+## Phase 350: 含 `<style>` 页面 `getBoundingClientRect` / `scrollIntoViewIfNeeded` 性能瓶颈消除完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `isElementInlineOrJsDisplayNone()` 与 `hasFixedOrOverflowCss` 守卫，消除带 `<style>` 页面（如 `mouse-helper.js`）上 `getBoundingClientRect()` / `scrollHeight` 的 30s+ `getComputedStyle` 阻塞。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385，加载 `mouse-helper.js`）：`PHASE350_RESULT {"scrollMs":1482,"cx":71.800003,"cy":448,"hoverBtnId":"button-91"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。

@@ -2167,3 +2167,6 @@
 
 ### Phase 349: `page-add-style-tag.spec.ts` `[3/4]` 404 样式表未抛错排障笔记
 - **`node-base.js` 微任务抢发 `'load'` 事件根因**：`session_hooks.cp` `handleInsertedLink()` 已会在 `__capsurf_http_get()` 遇到 HTTP >= 400 返回 `null` 时派发 `'error'`，但先挂载的 `src/js/shim/node-base.js` 在 `appendChild` 时先排队了一个 `Promise.resolve().then(...)` 微任务无条件派发 `'load'`，抢先结束了 Playwright 的等待。加上 `typeof globalThis.__capsurf_http_get !== "function"` 守卫后，实测 `PHASE349_RESULT ["404:error","200:load:rgb(255, 0, 0)"]`。
+
+### Phase 350: `page-mouse.spec.ts` `[8/15]` (`scrollable.html` + `mouse-helper.js`) 30s 超时排障笔记
+- **`mouse-helper.js` 注入 `<style>` 触发全量 `getComputedStyle` 根因**：`scrollable.html` 运行时会加载 `mouse-helper.js` 并在 `<head>` 插入含 `position: absolute; transition: ...` 的 `<style>`，使 `docHasCssSheets()` 变为 `true`，导致 `isElementDisplayNone`（3 层祖先）与 `collectRootScrollExtents`（202 个子节点）反复调用 `window.getComputedStyle`（单次 ~16ms，累计 >30s 超时）。引入 `isElementInlineOrJsDisplayNone` 与 `hasFixedOrOverflowCss` 精确守卫后，带 `mouse-helper.js` 实测 `PHASE350_RESULT {"scrollMs":1482,"cx":71.800003,"cy":448,"hoverBtnId":"button-91"}`。

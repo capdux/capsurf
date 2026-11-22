@@ -623,3 +623,15 @@
 | 2026-11-22 23:22 | `page-add-style-tag.spec.ts` | 3/4 PASS (CSP PASS, 仅`[3/4]`bad URL) | PW Batch 101 |
 | 2026-11-22 23:22 | `page-screenshot.spec.ts` | 1/3 PASS (`[4/44]`90s截断) | PW Batch 101 |
 | 2026-11-22 23:22 | `page-goto.spec.ts` | 7/19 PASS (`[20/61]`90s截断, `file://`/`null` response) | PW Batch 101 |
+| 2026-11-22 23:32 | `page-mouse.spec.ts` | 13/14 PASS (`[15/15]`90s截断, 仅`should trigger hover state`) | PW Batch 102 |
+| 2026-11-22 23:32 | `elementhandle-scroll-into-view.spec.ts` | 6/9 PASS (2 fail / 1 skip, retry 90s截断) | PW Batch 102 |
+| 2026-11-22 23:32 | `selectors-misc.spec.ts` | 18/19 PASS (`layout selectors`等11条PASS! 仅`#inner-link`) | PW Batch 102 |
+| 2026-11-22 23:32 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (retry 90s截断) | PW Batch 102 |
+| 2026-11-22 23:34 | `/css/css-values/` (`4/5..5/5`) | 22/70, 11/70 PASS (2 `FAIL→PASS`, pass 2 180s截断) | WPT Batch 94 (`19470`, `bin_dev`) |
+| 2026-11-22 23:34 | `/css/css-color/` (`1/5..3/5`) | 0/12, 1/11, 0/11 PASS | WPT Batch 94 (`19470`, `bin_dev`) |
+| 2026-11-22 23:37 | `page-add-style-tag.spec.ts` | 4/4 PASS (8s, CSP+404全绿!) | PW Batch 103 (`bin_dev` 全绿) |
+| 2026-11-22 23:37 | `page-set-content.spec.ts` | 15/16 PASS (`[16/16]`90s收尾截断, 仅`/img.png`) | PW Batch 103 |
+| 2026-11-22 23:37 | `page-network-idle.spec.ts` | 0/3 PASS (`[4/10]`90s截断) | PW Batch 103 |
+| 2026-11-22 23:37 | `page-goto.spec.ts` | 7/19 PASS (`[20/61]`90s截断) | PW Batch 103 |
+| 2026-11-22 23:40 | `/css/css-color/` (`4/5..5/5`) | 0/11, 1/11 PASS | WPT Batch 95 (`19470`, `bin_dev`) |
+| 2026-11-22 23:40 | `/css/css-backgrounds/` (`1/5..3/5`) | 6/23, 9/23, 6/23 PASS | WPT Batch 95 (`19470`, `bin_dev`) |
