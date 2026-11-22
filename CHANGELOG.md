@@ -3000,3 +3000,4 @@
 - Phase 373: `src/cdp/session_hooks.cp`, `src/js/shim/window.js` — 新增原生同源持久化 `CacheStorage` (`caches`, `Cache`, `CacheStorage`) 支持跨 `reload` 缓存读写。
 - Phase 374: `src/cdp/session.cp`, `src/js/shim/window.js` — `Network.requestWillBeSent` 补充 Base64 `postDataEntries` 数组，并为 `navigator.sendBeacon` 接入请求事件追踪。
 - Phase 375: `src/js/shim/window.js` — 新增共用 `bodyToPostString(data)` 解码 `File`/`Blob`/`ArrayBuffer` 请求体，供 `fetch` 与 `navigator.sendBeacon` 复用。
+- Phase 376: `src/cdp/network.cp`, `src/cdp/session.cp` — 新增 `formatHttpHeadersExtraInfoJson` 并在 `pollNetworkEvents` 发射 `Network.responseReceivedExtraInfo`。

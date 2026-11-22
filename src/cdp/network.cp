@@ -80,7 +80,7 @@ pub struct HttpHeaderJoinEntry {
     val: std.ArrayListUnmanaged(u8) = std.ArrayListUnmanaged(u8).empty,
 }
 
-pub fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
+pub fn formatHttpHeadersJsonWithSep(raw_headers: []const u8, allocator: std.mem.Allocator, default_sep: []const u8): []const u8 {
     if (raw_headers.len == 0) return "{}";
     let entries = std.ArrayListUnmanaged(HttpHeaderJoinEntry).empty;
     let it = std.mem.splitSequence(u8, raw_headers, "\r\n");
@@ -94,7 +94,7 @@ pub fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocat
             let ei: usize = 0;
             while (ei < entries.items.len) : (ei += 1) {
                 if (std.ascii.eqlIgnoreCase(entries.items[ei].key, k_raw)) {
-                    const sep = if (std.ascii.eqlIgnoreCase(k_raw, "set-cookie")) "\n" else ", ";
+                    const sep = if (std.ascii.eqlIgnoreCase(k_raw, "set-cookie")) "\n" else default_sep;
                     entries.items[ei].val.appendSlice(allocator, sep) catch break;
                     entries.items[ei].val.appendSlice(allocator, v_raw) catch break;
                     matched = true;
@@ -126,6 +126,14 @@ pub fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocat
     }
     list.append(allocator, '}') catch return "{}";
     return list.items;
+}
+
+pub fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
+    return formatHttpHeadersJsonWithSep(raw_headers, allocator, ", ");
+}
+
+pub fn formatHttpHeadersExtraInfoJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
+    return formatHttpHeadersJsonWithSep(raw_headers, allocator, "\n");
 }
 
 pub struct PendingFetchBody {

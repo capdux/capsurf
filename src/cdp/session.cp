@@ -15,7 +15,7 @@ import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, Scrol
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
-import { recordResponseBody, recordPendingFetchBody, recordPendingFetchMeta, consumePendingFetchBody, formatHttpHeadersJson } from "./network.cp";
+import { recordResponseBody, recordPendingFetchBody, recordPendingFetchMeta, consumePendingFetchBody, formatHttpHeadersJson, formatHttpHeadersExtraInfoJson } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -5369,7 +5369,7 @@ pub struct CdpPageSession {
             let ev_idx: usize = 0;
             let storage_pos: usize = 0;
             let i: usize = 0;
-            while (i < dom.fetch_count && ev_idx + 3 <= out_events.len) : (i += 1) {
+            while (i < dom.fetch_count && ev_idx + 4 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
                 const fetch_url_chk = rec.getUrl();
                 if (_.init_img_flushed || i >= _.init_subresource_record_count) {
@@ -5396,6 +5396,7 @@ pub struct CdpPageSession {
                 let resp_status: u32 = 200;
                 let resp_status_text: []const u8 = "OK";
                 let resp_headers_json: []const u8 = "{}";
+                let resp_extra_headers_json: []const u8 = "";
                 let resp_mime: []const u8 = fetch_mime;
                 if (pending.found) {
                     let p_req_id_buf: [32]u8 = undefined;
@@ -5416,6 +5417,7 @@ pub struct CdpPageSession {
                         }
                         if (pending.raw_headers.len > 0) {
                             resp_headers_json = formatHttpHeadersJson(pending.raw_headers, _.allocator);
+                            resp_extra_headers_json = formatHttpHeadersExtraInfoJson(pending.raw_headers, _.allocator);
                             std.heap.c_allocator.free(pending.raw_headers);
                         }
                     } else if (pending.raw_headers.len > 0) {
@@ -5501,6 +5503,20 @@ pub struct CdpPageSession {
                     if (child_sid.len > 0) resp_evt.session_id = child_sid;
                     out_events[ev_idx] = resp_evt;
                     ev_idx += 1;
+                }
+                if (resp_extra_headers_json.len > 2 && ev_idx + 1 < out_events.len) {
+                    const extra_json = std.fmt.bufPrint(
+                        _.net_event_storage[storage_pos..],
+                        "{{\"requestId\":\"req-{d}\",\"blockedCookies\":[],\"headers\":{s}}}",
+                        .{ req_seq, resp_extra_headers_json },
+                    ) catch "";
+                    if (extra_json.len > 0) {
+                        storage_pos += extra_json.len;
+                        let extra_evt = CdpEvent.create("Network.responseReceivedExtraInfo", extra_json);
+                        if (child_sid.len > 0) extra_evt.session_id = child_sid;
+                        out_events[ev_idx] = extra_evt;
+                        ev_idx += 1;
+                    }
                 }
 
                 const fin_json = std.fmt.bufPrint(
