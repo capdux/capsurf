@@ -2666,3 +2666,7 @@
 ## [2026-11-22] Phase 293: 修复 `getComputedStyle` 对 CSS `content` 属性转义序列的解码与重序列化
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRawComputedMap()` 中对 `content` 属性的引号字符串值按 CSS 转义规则解码 1..6 位十六进制码点（含可选尾随空白）及字符转义（如 `"\eab2"` -> `""`、`'\0041\20 B'` -> `"A B"`）并统一按双引号字符串序列化，修复 `::before` 伪元素码点丢失的问题。
+
+## [2026-11-22] Phase 294: 补齐 `[hidden]` 属性 UA 默认样式 `display: none` 计算规则
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `getDefaultDisplayForElement()` 中新增 `[hidden]:not([hidden="until-found" i])` UA 默认规则返回 `"none"`（不覆盖作者显式 CSS `display` 声明），修复 `selectors-role` 等场景下 `<button hidden="">` 被 `getComputedStyle` 误报为 `"inline"` 可见的问题。

@@ -34912,6 +34912,10 @@
     function getDefaultDisplayForElement(element) {
       const tag = String((element && (element.localName || element.tagName)) || "").toLowerCase();
       if (HIDDEN_BY_DEFAULT_TAGS.has(tag)) return "none";
+      if (element && typeof element.hasAttribute === "function" && element.hasAttribute("hidden")) {
+        const hv = String(element.getAttribute("hidden") || "").trim().toLowerCase();
+        if (hv !== "until-found") return "none";
+      }
       if (BLOCK_LEVEL_TAGS.has(tag)) return "block";
       if (tag === "table") return "table";
       if (tag === "tr") return "table-row";

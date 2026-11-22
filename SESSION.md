@@ -5210,3 +5210,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`p::before { content: "\eab2"; }` 返回 `"\"\""`（码点 `eab2`），`span::before { content: '\0041\20 B'; }` 返回 `"\"A B\""`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **129.07s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
+
+### [2026-11-22 18:44] Phase 294: 补齐 `[hidden]` 属性 UA 默认样式 `display: none` 计算规则
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `getDefaultDisplayForElement()` 中新增 `[hidden]:not([hidden="until-found" i])` UA 默认 `"none"` 规则（不覆盖作者显式 `display`）。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<button hidden="">` 返回 `display: "none"` 且 `width: 0`；`style="display:inline-block" hidden` 保持 `"inline-block"`；`hidden="until-found"` 保持 `"inline"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（165 模块 **131.14s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。

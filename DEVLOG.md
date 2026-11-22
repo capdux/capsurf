@@ -1992,3 +1992,6 @@
 
 ### Phase 293: `page-aria-snapshot` `should include pseudo codepoints` 缺失 `::before` 码点排障笔记
 - **`Expected "- paragraph: hello", Received "- paragraph: hello"` 根因**：`collectRawComputedMap()` 直接保留了 CSS 声明文本中的原始转义字符 `"\eab2"`（`\` + `eab2`），未按 CSSOM 字符串规则解码十六进制转义序列。补齐 CSS 字符串转义解码与双引号重序列化后，实测 `getComputedStyle(p, "::before").content` 准确返回 `""`（码点 `0xeab2`）及 `"A B"`。
+
+### Phase 294: `<button hidden="">` 在 `selectors-role` 中仍被视为可见排障笔记
+- **`should filter hidden, unless explicitly asked for` 仍包含 `<button hidden="">Hello</button>` 根因**：`getDefaultDisplayForElement()` 仅检查 `HIDDEN_BY_DEFAULT_TAGS`（如 `script`/`style`/`template`），未处理 HTML `[hidden]` 属性的 UA 默认规则 `[hidden]:not([hidden="until-found"]) { display: none; }`，导致 `getComputedStyle(btn).display` 返回 `"inline"`。补齐 `[hidden]` 默认 `"none"` 规则后，实测 `b1Disp="none"`（作者显式 `display:inline-block` 与 `hidden="until-found"` 仍分别保持 `"inline-block"` 与 `"inline"`）。
