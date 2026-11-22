@@ -2674,3 +2674,7 @@
 ## [2026-11-22] Phase 295: 修复 Shadow DOM 未分配/隐藏 `<slot>` 裁剪及 ShadowRoot 固有几何尺寸回退
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `getScrollParent()` 中对 ShadowHost 的轻 DOM 子节点按 `assignedSlot` 路由至对应 `<slot>`；在 `isElementDisplayNone()` 中对未分配 `<slot>`（`!cur.assignedSlot`）直接判为不可见；并在 `getBoundingClientRect()` 中为 ShadowRoot 内无显式宽高的文本/表单控件提供非零固有几何回退。
+
+## [2026-11-22] Phase 296: 实现标准 `Document.prototype.createEvent(interface)` 接口分发与异常校验
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `Document.prototype.createEvent()`，按 WHATWG DOM 规范映射 `CustomEvent`、`Event`/`Events`/`HTMLEvents`/`SVGEvents`、`UIEvent`/`UIEvents`、`MouseEvent`/`MouseEvents`、`KeyboardEvent`/`KeyEvents`、`FocusEvent`、`CompositionEvent`、`DragEvent`、`MessageEvent`、`StorageEvent`、`HashChangeEvent`、`BeforeUnloadEvent` 等接口，并对未知接口抛出 `NotSupportedError` `DOMException`。

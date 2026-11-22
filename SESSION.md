@@ -5224,3 +5224,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：未分配槽 `h1Rect=0x0`、隐藏槽 `h2Rect=0x0`、ShadowRoot 内按钮 `sh1Rect=72x24`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（166 模块 **129.03s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。
+
+### [2026-11-22 18:56] Phase 296: 实现标准 `Document.prototype.createEvent(interface)` 接口分发与异常校验
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `Document.prototype.createEvent()`，按 WHATWG 规范映射 `CustomEvent`/`Event`/`UIEvent`/`MouseEvent`/`KeyboardEvent`/`FocusEvent`/`CompositionEvent`/`DragEvent`/`MessageEvent`/`StorageEvent`/`HashChangeEvent`/`BeforeUnloadEvent` 等接口，未知接口抛出 `NotSupportedError`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/events/CustomEvent.html` **✓ 581ms PASS (1/1 matched expectations)**。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **130.87s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。

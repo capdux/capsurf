@@ -1998,3 +1998,6 @@
 
 ### Phase 295: Shadow DOM `<slot>` 隐藏与 ShadowRoot `<button>` 零尺寸不可见排障笔记
 - **`selectors-role` 缺少 `Shadow1` 且多出 `hidden1`/`hidden2` 根因**：`getScrollParent()` 绕过 `assignedSlot` 直接返回宿主元素，导致未分配 `<slot>` 或处于 `display:none` `<slot>` 中的轻 DOM 节点返回非零矩形；同时 ShadowRoot 内部无显式宽高的 `<button>`/`<a>` 在原生布局中返回 `0x0`。两处同步补齐后，实测 `h1Rect=0x0`、`h2Rect=0x0`、`sh1Rect=72x24`。
+
+### Phase 296: `/dom/events/CustomEvent.html` 报 `TypeError: not a function` 排障笔记
+- **3/3 子测试全部失败根因**：`src/js/shim/events/event.js` 已实现 `CustomEvent.prototype.initCustomEvent()` 与 `Event.prototype.initEvent()`，但全局 `Document.prototype.createEvent` 完全缺失，导致所有调用 `document.createEvent(...)` 的 WPT 用例直接报错。在 `index.js` 补全 WHATWG `createEvent` 接口映射后，`/dom/events/CustomEvent.html` 立即全绿 PASS（`581ms`）。

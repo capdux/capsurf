@@ -44187,8 +44187,68 @@
         if (typeof docProto.createComment === "function") {
           global.__capsurf_native_createComment = docProto.createComment;
         }
+        if (typeof docProto.createEvent !== "function") {
+          docProto.createEvent = markNative(function (iface) {
+            if (arguments.length < 1) {
+              throw new TypeError("Failed to execute 'createEvent' on 'Document': 1 argument required, but only 0 present.");
+            }
+            const key = String(iface).toLowerCase();
+            const EventCtor = global.Event;
+            if (key === "beforeunloadevent") {
+              const C = global.BeforeUnloadEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "compositionevent" || key === "textevent") {
+              const C = global.CompositionEvent || global.UIEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "customevent") {
+              const C = global.CustomEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "devicemotionevent" || key === "deviceorientationevent" || key === "event" || key === "events" || key === "htmlevents" || key === "svgevents") {
+              return new EventCtor("");
+            }
+            if (key === "dragevent") {
+              const C = global.DragEvent || global.MouseEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "focusevent") {
+              const C = global.FocusEvent || global.UIEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "hashchangeevent") {
+              const C = global.HashChangeEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "keyboardevent" || key === "keyevents") {
+              const C = global.KeyboardEvent || global.UIEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "messageevent") {
+              const C = global.MessageEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "mouseevent" || key === "mouseevents") {
+              const C = global.MouseEvent || global.UIEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "storageevent") {
+              const C = global.StorageEvent || EventCtor;
+              return new C("");
+            }
+            if (key === "touchevent" || key === "uievent" || key === "uievents") {
+              const C = global.UIEvent || EventCtor;
+              return new C("");
+            }
+            throw new DOMException("The operation is not supported.", "NotSupportedError");
+          }, "createEvent");
+        }
         if (global.document) {
           global.document.createElement = docProto.createElement;
+          if (typeof global.document.createEvent !== "function") {
+            global.document.createEvent = docProto.createEvent;
+          }
         }
       }
 
