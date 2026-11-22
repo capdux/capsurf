@@ -2619,3 +2619,8 @@
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 实装 `Input.dispatchDragEvent`，支持 `dragEnter`/`dragOver`/`drop`/`dragCancel` 映射为 `dragenter`/`dragover`/`drop`/`dragleave` DOM 事件，通过 `elementFromPoint(x, y)` 命中目标并挂载带 `items` 数据的 `DataTransfer` 对象。
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 暴露 `window.stop()` / `globalThis.stop()` 方法，修复 `calling window.stop sync` `TypeError: not a function`。
+
+## [2026-11-22] Phase 283: 追踪隔离世界 `objectId`（`__capsurf_isolated_oids`）自动恢复 `Node`
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`, `src/cdp/runtime.cp`: `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()` 维护 `__capsurf_in_isolated` 标记。
+  - `src/js/dom_binding.cp`: 在 `__capsurf_format_remote_object` 中将隔离世界生成的 `objectId` 记入 `__capsurf_isolated_oids`，并在 `__capsurf_call_fn()` 检测到 `id` 或 `args` 含隔离对象时通过 `try/finally` 自动临时恢复并清理 `globalThis.Node`（无需调用方显式传入 `executionContextId`）。

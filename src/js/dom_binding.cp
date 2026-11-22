@@ -2648,7 +2648,10 @@ pub fn mountDom(
         "      const className = 'Function';" +
         "      const desc = String(val);" +
         "      const obj = { type: 'function', className: className, description: desc };" +
-        "      if (!returnByValue) obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "      if (!returnByValue) {" +
+        "        obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
+        "      }" +
         "      return obj;" +
         "    }" +
         "    if (t === 'object') {" +
@@ -2666,6 +2669,7 @@ pub fn mountDom(
         "        obj.value = val;" +
         "      } else {" +
         "        obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
         "        obj.description = className;" +
         "      }" +
         "      return obj;" +
@@ -2690,11 +2694,14 @@ pub fn mountDom(
         "      }" +
         "    }" +
         "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');" +
+        "    const isoSet = globalThis.__capsurf_isolated_oids;" +
+        "    let isIso = !!(isoSet && isoSet.has(id));" +
         "    const rawArgs = argsJson ? JSON.parse(argsJson) : [];" +
         "    const args = [];" +
         "    for (let i = 0; i < rawArgs.length; i++) {" +
         "      const arg = rawArgs[i] || {};" +
         "      if (arg.objectId) {" +
+        "        if (!isIso && isoSet && isoSet.has(arg.objectId)) isIso = true;" +
         "        const resolved = globalThis.__capsurf_get_object(arg.objectId);" +
         "        if (resolved === undefined && arg.objectId !== 'global' && arg.objectId !== 'globalThis') {" +
         "          throw new Error('Could not find object with id ' + arg.objectId);" +
@@ -2714,7 +2721,13 @@ pub fn mountDom(
         "        args.push(undefined);" +
         "      }" +
         "    }" +
-        "    return fn.apply(target || globalThis, args);" +
+        "    let restoredNode = false;" +
+        "    if (isIso && globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {" +
+        "      globalThis.Node = globalThis.__capsurf_orig_Node;" +
+        "      restoredNode = true;" +
+        "    }" +
+        "    try { return fn.apply(target || globalThis, args); }" +
+        "    finally { if (restoredNode) { try { delete globalThis.Node; } catch (e) {} } }" +
         "  };" +
         "  if (typeof document !== 'undefined' && !document.fonts) {" +
         "    const _readyP = Promise.resolve();" +

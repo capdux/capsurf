@@ -145,6 +145,11 @@
 | 2026-11-22 17:37 | `/css/cssom/` | `1/5` | 25 | PASS 9 / FAIL 15 / TIMEOUT 1 (12s) | Batch 58 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:38 | `/css/cssom/` | `2/5` | 25 | PASS 13 / FAIL 11 / TIMEOUT 1 (9s) | Batch 58 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:38 | `/css/cssom/` | `3/5` | 24 | PASS 9 / FAIL 13 / ERROR 1 / TIMEOUT 1 (18s) | Batch 58 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:39 | `/css/selectors/` | `3/5` | 13 | PASS 6 / FAIL 6 / TIMEOUT 1 | Batch 59 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:40 | `/css/selectors/` | `4/5` | 13 | PASS 8 / FAIL 5 / TIMEOUT 0 | Batch 59 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:41 | `/css/selectors/` | `5/5` | 13 | PASS 6 / FAIL 5 / TIMEOUT 2 | Batch 59 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:42 | `/dom/events/` | `2/5` | 26 | PASS 5 / FAIL 14 / ERROR 1 / TIMEOUT 6 (90s截断) | Batch 59 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:43 | `/dom/events/` | `3/5` | 26 | PASS 6 / FAIL 12 / ERROR 1 / TIMEOUT 5 / SKIP 2 (90s截断) | Batch 59 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -265,3 +270,7 @@
 | 2026-11-22 17:36 | `expect-misc.spec.ts` | 55/55 PASS (Phase 280 复测 `#FF00FF` 已通, `[56/59]` 90s截断) | PW Batch 32 |
 | 2026-11-22 17:36 | `page-network-sizes.spec.ts` | 0/2 TIMEOUT (`[3/13]` 90s截断, request事件未触发) | PW Batch 32 |
 | 2026-11-22 17:37 | `page-request-continue.spec.ts` | 0/4 FAIL/TIMEOUT (`[5/36]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 32 |
+| 2026-11-22 17:39 | `page-drop.spec.ts` | 2/7 PASS (Phase 282 复测, dragover 5 FAIL, 40s) | PW Batch 33 |
+| 2026-11-22 17:41 | `page-autowaiting-no-hang.spec.ts` | 6/9 PASS (Phase 282 复测大幅提升 2->6, window.stop已通) | PW Batch 33 |
+| 2026-11-22 17:42 | `page-request-fallback.spec.ts` | 1/9 PASS (`[10/14]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 33 |
+| 2026-11-22 17:43 | `page-request-fulfill.spec.ts` | 0/4 FAIL (`[5/20]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 33 |

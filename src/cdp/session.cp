@@ -2971,7 +2971,7 @@ pub struct CdpPageSession {
     }
 
     pub fn restoreIsolatedNodeIfNeeded(*_): bool {
-        const v = _.ctx.eval("(function(){if(globalThis.Node===undefined&&globalThis.__capsurf_orig_Node!==undefined){globalThis.Node=globalThis.__capsurf_orig_Node;return 1;}return 0;})()");
+        const v = _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=true;if(globalThis.Node===undefined&&globalThis.__capsurf_orig_Node!==undefined){globalThis.Node=globalThis.__capsurf_orig_Node;return 1;}return 0;})()");
         defer _.ctx.freeValue(v);
         let n: i32 = 0;
         if (!jsIsException(v)) {
@@ -2980,8 +2980,11 @@ pub struct CdpPageSession {
         return n == 1;
     }
 
-    pub fn clearIsolatedNode(*_) {
-        const v = _.ctx.eval("(function(){try{delete globalThis.Node;}catch(e){}})()");
+    pub fn clearIsolatedNode(*_, restore_node: bool) {
+        const v = if (restore_node)
+            _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;try{delete globalThis.Node;}catch(e){}})()")
+        else
+            _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;})()");
         _.ctx.freeValue(v);
     }
 

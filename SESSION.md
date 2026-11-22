@@ -5132,3 +5132,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`typeof window.stop === "function"`，`Input.dispatchDragEvent` 连续派发准确触发 `["dragenter","dragover","drop:hello"]`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **122.53s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。
+
+### [2026-11-22 17:42] Phase 283: 追踪隔离世界 `objectId`（`__capsurf_isolated_oids`）自动恢复 `Node`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp), [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): 维护 `__capsurf_in_isolated` 与 `__capsurf_isolated_oids`，使无 `executionContextId` 的 `Runtime.callFunctionOn` 在调用隔离世界句柄或参数时亦能自动临时恢复并清理 `globalThis.Node`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，无 `executionContextId` 调用 `capsurf:obj:1` 及传参调用均返回 `"function"`，主世界保持 `{"type":"undefined","inWin":false}`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **130.22s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.15s)**。

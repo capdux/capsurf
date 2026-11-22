@@ -1959,3 +1959,6 @@
 
 ### Phase 282: `Input.dispatchDragEvent` 与 `window.stop()` 排障笔记
 - **`page-drop` 报 `dragover handler did not call preventDefault()` 根因**：`Input.dispatchDragEvent` 原先落入 `Input.` 通用空桩未派发任何 DOM 事件。补齐 `dragenter`/`dragover`/`drop`/`dragleave` 与 `DataTransfer` 构造后，实测准确触发 `["dragenter", "dragover", "drop:hello"]`。
+
+### Phase 283: 无 `executionContextId` 的 `callFunctionOn` 隔离世界恢复 `Node` 排障笔记
+- **`locator.click` 仍报 `Node is not defined` 根因**：Playwright 对在隔离世界创建的 `InjectedScript` 句柄后续调用 `Runtime.callFunctionOn({ objectId, ... })` 时常省略 `executionContextId`，导致仅检查 `exec_ctx_id > 1` 失效。通过 `__capsurf_isolated_oids` 追踪隔离世界产生的 `objectId`，在 `__capsurf_call_fn` 命中 `id` 或任意 `arg.objectId` 时自动 `try/finally` 恢复清理 `Node`，实测 `CALL_INJ` 与 `CALL_ARG` 均返回 `"function"` 且主世界仍为 `"undefined"`。
