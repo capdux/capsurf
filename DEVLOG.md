@@ -2016,3 +2016,6 @@
 
 ### Phase 301: `delete window.Node` 后 `locator.click` / `hover` / `fill` 仍报 `ReferenceError: Node is not defined` 排障笔记
 - **`node:<nid>` 句柄漏出隔离上下文追踪集合根因**：Playwright 对元素句柄先调用 `DOM.resolveNode({ nodeId, executionContextId: 3 })` 获取 `objectId: "node:6"`，再不带 `executionContextId` 调用 `Runtime.callFunctionOn({ objectId: "node:6" })`。由于 `DOM.resolveNode` 返回的静态 `"node:<nid>"` 未经 `__capsurf_format_remote_object` 登记进 `__capsurf_isolated_oids`，导致 `callFunctionOn` 未临时恢复 `Node`。在 `DOM.resolveNode` 补齐 `executionContextId > 1` 登记后，实测 `callFunctionOn` 返回 `"function:true"` 且主世界 `typeof Node` 仍保持 `"undefined"`。
+
+### Phase 302: `selectors-css` `should work with wrong-case id` (`#hello` 匹配 `<section id="Hello">`) 失败排障笔记
+- **缺少 HTML Quirks Mode 选择器大小写规则根因**：无 `<!DOCTYPE html>` 页面在 HTML5 规范中进入 Quirks Mode，此时 CSS `#id` 与 `.class` 必须忽略 ASCII 大小写。此前 `Document` 与 `TreeBuilder` 未将 `DoctypeToken` 判定传递至 `Matcher`。补齐 `doc.in_quirks_mode` 与 `Matcher` 大小写分支后，实测 Quirks 下 `#hello`/`.mycls` 均为 `true`，Standards 下均保持 `false`。

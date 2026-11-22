@@ -5267,3 +5267,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`delete window.Node` 后经 `DOM.resolveNode({ executionContextId: 3 })` 调用 `callFunctionOn` 返回 `"function:true"`，主世界 `typeof Node` 仍为 `"undefined"`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **131.09s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。
+
+### [2026-11-22 19:35] Phase 302: 实现 HTML Quirks Mode 判定及怪异模式下 `#id`/`.class` 大小写不敏感匹配
+- **引擎修复 (`src/`)**:
+  - [src/dom/dom.cp](file:///data/dev/capsurf/src/dom/dom.cp) & [src/html/tree_builder.cp](file:///data/dev/capsurf/src/html/tree_builder.cp): 为 `Document` 新增 `in_quirks_mode` 状态位并依据 `DoctypeToken`（`force_quirks`/非 `"html"`/缺失 `<!DOCTYPE>`）在 `TreeBuilder.processInitial()` 中自动标记。
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): 在 `Matcher.matchesSimpleComponent()` 的 `.Id` 与 `.Class` 分支中按 `doc.in_quirks_mode` 切换 ASCII 大小写不敏感匹配。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：Quirks Mode 下 `#hello` / `.mycls` 均匹配 `<section id="Hello" class="MyCls">`（`true`）；Standards Mode（`<!DOCTYPE html>`）下均保持 `false`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **126.55s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。

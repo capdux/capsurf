@@ -2699,3 +2699,8 @@
 ## [2026-11-22] Phase 301: `DOM.resolveNode` 对隔离上下文节点句柄登记 `__capsurf_isolated_oids` 恢复 `Node`
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: 在 `DOM.resolveNode` 中当传入 `executionContextId > 1` 时，同步将返回的 `node:<nid>` 注册至 `globalThis.__capsurf_isolated_oids`，确保后续无 `executionContextId` 的 `Runtime.callFunctionOn({ objectId: "node:..." })` 也能在页面 `delete window.Node` 后安全恢复 `Node` 全局构造器而不污染主世界。
+
+## [2026-11-22] Phase 302: 实现 HTML Quirks Mode 判定及怪异模式下 `#id`/`.class` 大小写不敏感匹配
+- **Fixed (`src/`)**:
+  - `src/dom/dom.cp` & `src/html/tree_builder.cp`: 为 `Document` 新增 `in_quirks_mode` 状态位，在 `TreeBuilder.processInitial()` 中依据 `DoctypeToken`（`force_quirks` 或非 `"html"` 或缺失 `<!DOCTYPE>`）自动判定并标记怪异模式。
+  - `src/css/matcher.cp`: 在 `Matcher.matchesSimpleComponent()` 的 `.Id` 与 `.Class` 分支中，当 `doc.in_quirks_mode` 为真时使用 `std.ascii.eqlIgnoreCase` 进行匹配，标准模式保持精确大小写匹配。

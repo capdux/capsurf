@@ -626,6 +626,7 @@ pub struct Document {
     root_element: NodeId = NULL_NODE;
     focused_node: NodeId = NULL_NODE;
     hovered_node: NodeId = NULL_NODE;
+    in_quirks_mode: bool = false;
 
     static fn init(allocator: std.mem.Allocator): Document! {
         let doc = Document {

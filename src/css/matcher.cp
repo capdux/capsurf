@@ -978,11 +978,28 @@ pub struct Matcher {
             },
             .Id => {
                 let u_buf: [128]u8 = [0; 128];
-                return node.hasId(unescapeCssIdent(comp.ident, &u_buf));
+                const target_id = unescapeCssIdent(comp.ident, &u_buf);
+                if (doc.in_quirks_mode) {
+                    if (actual_id := node.getAttribute("id")) {
+                        return std.ascii.eqlIgnoreCase(actual_id, target_id);
+                    }
+                    return false;
+                }
+                return node.hasId(target_id);
             },
             .Class => {
                 let u_buf: [128]u8 = [0; 128];
-                return node.hasClass(unescapeCssIdent(comp.ident, &u_buf));
+                const target_cls = unescapeCssIdent(comp.ident, &u_buf);
+                if (doc.in_quirks_mode) {
+                    if (cls_attr := node.getAttribute("class")) {
+                        let it = std.mem.tokenizeAny(u8, cls_attr, " \t\r\n");
+                        while (word := it.next()) {
+                            if (std.ascii.eqlIgnoreCase(word, target_cls)) return true;
+                        }
+                    }
+                    return false;
+                }
+                return node.hasClass(target_cls);
             },
             .Attribute => Matcher.matchesAttribute(node, comp),
             .Pseudo => Matcher.matchesPseudo(doc, node_id, comp),

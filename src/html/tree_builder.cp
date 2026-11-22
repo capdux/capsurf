@@ -859,12 +859,14 @@ pub struct TreeBuilder {
                 _.insertComment(comment);
                 return NextTokenizerState.Data;
             },
-            .Doctype => {
+            .Doctype => |dt| {
+                _.doc.in_quirks_mode = dt.force_quirks || !std.ascii.eqlIgnoreCase(dt.name, "html");
                 _.mode = InsertionMode.BeforeHtml;
                 return NextTokenizerState.Data;
             },
             * => {},
         }
+        _.doc.in_quirks_mode = true;
         _.mode = InsertionMode.BeforeHtml;
         return _.processBeforeHtml(tok);
     }
