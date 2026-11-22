@@ -3039,3 +3039,4 @@
 - **Phase 412 (`src/js/shim/window.js`, `src/js/runtime_source.cp`, `src/cdp/session.cp`, `src/cdp/page.cp`)**：新增 W3C `EventSource`（Server-Sent Events）Web API；在 `Page.captureScreenshot` 接入 `cap:image` 原生 JPEG（`jpegEncode`）与 WebP（`webpEncode`/`webpEncodeLossless`）截图编码。
 - **Phase 413 (`src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：`js_element_append_child`/`js_element_insert_before` 支持将 JS `Text` 节点同步挂载至原生 Arena DOM；`docProto` `title` setter 失效 `head._children` 缓存以同步 `head.lastChild`。
 - **Phase 414 (`src/js/shim/events/dispatch.js`, `src/js/shim/events/event.js`, `src/js/runtime_source.cp`)**：实装默认 `passive` 事件监听与 `inPassiveListener` `preventDefault()` 阻断，并支持空字符串事件类型 `""`。
+- **Phase 415 (`src/net/http_loader.cp`)**：接入 `cap:pack` `brotliDecompress` 原生支持 `Content-Encoding: br` 响应解压，请求头更新为 `Accept-Encoding: gzip, deflate, br`。

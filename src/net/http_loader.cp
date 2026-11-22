@@ -3,7 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/eval/outbound.ts and vendor/kitesurf/packages/engine/src/cdp/page.ts
 
 import { Base64 } from "cap:encoding";
-import { gunzip, inflate } from "cap:pack";
+import { gunzip, inflate, brotliDecompress } from "cap:pack";
 
 import { CdpPageSession } from "../cdp/session.cp";
 import { BlockableRequest, ResourceType, RequestBlocker } from "./request_blocker.cp";
@@ -734,7 +734,7 @@ pub struct HttpLoader {
 
         let req_line_len: usize = 0;
         const has_extra_ae = HttpLoader.containsIgnoreCase(session.extra_headers, "accept-encoding");
-        const ae_hdr: []const u8 = if (has_extra_ae) "" else "Accept-Encoding: identity\r\n";
+        const ae_hdr: []const u8 = if (has_extra_ae) "" else "Accept-Encoding: gzip, deflate, br\r\n";
         if ((parsed.secure && parsed.port != 443) || (!parsed.secure && parsed.port != 80)) {
             const req_line = std.fmt.bufPrint(
                 req_buf[req_pos..],
@@ -922,6 +922,11 @@ pub struct HttpLoader {
             } else if (HttpLoader.containsIgnoreCase(resp_content_encoding, "deflate")) {
                 if (decomp := inflate(body)) {
                     body = session.allocator.dupe(u8, decomp) catch decomp;
+                }
+            } else if (HttpLoader.containsIgnoreCase(resp_content_encoding, "br")) {
+                const decomp_br = brotliDecompress(session.allocator, body) catch "";
+                if (decomp_br.len > 0) {
+                    body = decomp_br;
                 }
             }
         }
