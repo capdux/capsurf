@@ -824,7 +824,9 @@
 | 2026-11-23 10:24 | `page-event-popup.spec.ts` | 11/13 PASS (2 timeout) | PW Batch 136 |
 | WPT-B152 | `the-iframe-element/` (89/152) + `the-canvas-element/` + `/streams/ 1/2` + `/webstorage/` | 26/135 PASS (`iframe` 21/89 **1 ERROR→PASS**, `canvas` **1/1**, `streams 1/2` 1/42, `webstorage` **3/3**, 0 CRASH) |
 | WPT-B153 | `/console/` + `/performance-timeline/` + `/user-timing/` + `/FileAPI/` | 35/106 PASS (`console` **4/13 (13/13匹配!)**, `perf-timeline` 2/21, `user-timing` 15/36 **1 FAIL→PASS**, `FileAPI` 14/36, 0 CRASH) |
+| WPT-B151 | `/css/css-cascade/` + `/css-sizing/ 1/2` + `/css-values/ 1/2` (89/175) + `/css-grid/ 1/4` (213/221) | 103/408 PASS (`cascade` 36/90 **+1 FAIL→PASS**, `sizing` 0/16, `values` 17/89, `grid 1/4` 50/213 **+9 FAIL→PASS**, 0 CRASH) |
 | 2026-11-23 09:56 | `page-evaluate.spec.ts` | 36/95 PASS (59 timeout at teardown) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-keyboard.spec.ts` | 39/44 PASS (40/44 on retry; 2 fail, 3 timeout) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo codepoint space) | PW Batch 135 |
 | 2026-11-23 09:56 | `locator-convenience.spec.ts` | 0/21 PASS (21 timeout at teardown) | PW Batch 135 |
+| WPT-B154 | `dataset` + `/streams/ 1/2` + `/WebCryptoAPI/ 1/2..2/2` | 29/181 PASS (`dataset` **7/7全绿!**, `streams 1/2` 1/42, `WebCryptoAPI 1/2` 9/66 **9 FAIL→PASS**, `2/2` 12/66 **11 FAIL→PASS**, 0 CRASH) |

@@ -3047,3 +3047,4 @@
 - **Phase 420 (`src/js/shim/index.js`, `src/js/shim/parser.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：无浏览上下文文档 `location` 设为 `null`；表格 `isHtmlEl` 严格校验 `namespaceURI === HTML_NS`。
 - **Phase 421 (`src/js/shim/index.js`, `src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`createElementNS("", ...)` 置 `namespaceURI = null`；`dataset` 限制仅 HTML/SVG/MathML 命名空间生效。
 - **Phase 422 (`src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 WHATWG Streams `CountQueuingStrategy` 与 `ByteLengthQueuingStrategy`。
+- **Phase 423 (`src/js/shim/file.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 `Blob.prototype.bytes()` 与 W3C `PerformanceObserver` / `PerformanceObserverEntryList`。

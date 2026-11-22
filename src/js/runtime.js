@@ -20771,6 +20771,14 @@
     }
   };
 
+  Blob.prototype.bytes = function () {
+    try {
+      return Promise.resolve(new Uint8Array(this._bytes));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  };
+
   Blob.prototype.stream = function () {
     const bytes = this._bytes;
     if (typeof ReadableStream !== "undefined") {
@@ -20793,6 +20801,7 @@
   markNative(Blob.prototype.slice, "slice");
   markNative(Blob.prototype.text, "text");
   markNative(Blob.prototype.arrayBuffer, "arrayBuffer");
+  markNative(Blob.prototype.bytes, "bytes");
   markNative(Blob.prototype.stream, "stream");
 
   function File(fileBits, fileName, options) {
@@ -34715,6 +34724,105 @@
     global.PerformanceTiming = PerformanceTiming;
     global.PerformanceNavigation = PerformanceNavigation;
     global.performance = perfInstance;
+
+    const SUPPORTED_PERF_TYPES = Object.freeze(["mark", "measure", "navigation", "resource", "paint"]);
+    function PerformanceObserverEntryList(entries) {
+      this._entries = Array.isArray(entries) ? entries.slice() : [];
+    }
+    PerformanceObserverEntryList.prototype.getEntries = function () { return this._entries.slice(); };
+    PerformanceObserverEntryList.prototype.getEntriesByType = function (type) {
+      const t = String(type);
+      return this._entries.filter(function (e) { return e && e.entryType === t; });
+    };
+    PerformanceObserverEntryList.prototype.getEntriesByName = function (name, type) {
+      const n = String(name);
+      const hasT = type !== undefined;
+      const t = hasT ? String(type) : "";
+      return this._entries.filter(function (e) { return e && e.name === n && (!hasT || e.entryType === t); });
+    };
+    markNative(PerformanceObserverEntryList, "PerformanceObserverEntryList");
+
+    const activePerfObservers = new Set();
+    function PerformanceObserver(callback) {
+      if (typeof callback !== "function") {
+        throw new TypeError("Failed to construct 'PerformanceObserver': parameter 1 is not of type 'Function'.");
+      }
+      this._callback = callback;
+      this._records = [];
+      this._types = new Set();
+      this._scheduled = false;
+    }
+    Object.defineProperty(PerformanceObserver, "supportedEntryTypes", {
+      get: function () { return SUPPORTED_PERF_TYPES; },
+      enumerable: true,
+      configurable: true,
+    });
+    PerformanceObserver.prototype.observe = function (options) {
+      if (!options || typeof options !== "object") {
+        throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': 1 argument required.");
+      }
+      const hasEntryTypes = options.entryTypes !== undefined;
+      const hasType = options.type !== undefined;
+      if (!hasEntryTypes && !hasType) {
+        throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': An observe() call must include either 'entryTypes' or 'type'.");
+      }
+      if (hasEntryTypes && hasType) {
+        throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': Cannot specify both 'entryTypes' and 'type'.");
+      }
+      if (hasEntryTypes && options.buffered !== undefined) {
+        throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': 'buffered' cannot be used with 'entryTypes'.");
+      }
+      this._types.clear();
+      if (hasEntryTypes) {
+        const list = Array.from(options.entryTypes || []);
+        for (let i = 0; i < list.length; i++) {
+          const s = String(list[i]);
+          if (SUPPORTED_PERF_TYPES.indexOf(s) !== -1) this._types.add(s);
+        }
+      } else {
+        const s = String(options.type);
+        if (SUPPORTED_PERF_TYPES.indexOf(s) !== -1) this._types.add(s);
+        if (options.buffered && perfInstance && Array.isArray(perfInstance._entries)) {
+          for (let i = 0; i < perfInstance._entries.length; i++) {
+            const e = perfInstance._entries[i];
+            if (e && e.entryType === s) this._records.push(e);
+          }
+        }
+      }
+      activePerfObservers.add(this);
+      if (this._records.length > 0 && !this._scheduled) {
+        this._scheduled = true;
+        const self = this;
+        Promise.resolve().then(function () {
+          self._scheduled = false;
+          const recs = self.takeRecords();
+          if (recs.length > 0 && activePerfObservers.has(self)) {
+            try { self._callback.call(self, new PerformanceObserverEntryList(recs), self); } catch (e) {}
+          }
+        });
+      }
+    };
+    PerformanceObserver.prototype.disconnect = function () {
+      activePerfObservers.delete(this);
+      this._records = [];
+      this._types.clear();
+    };
+    PerformanceObserver.prototype.takeRecords = function () {
+      const out = this._records.slice();
+      this._records = [];
+      return out;
+    };
+    markNative(PerformanceObserver, "PerformanceObserver");
+    global.PerformanceObserverEntryList = PerformanceObserverEntryList;
+    global.PerformanceObserver = PerformanceObserver;
+    if (typeof window !== "undefined") {
+      window.PerformanceObserverEntryList = PerformanceObserverEntryList;
+      window.PerformanceObserver = PerformanceObserver;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.PerformanceObserverEntryList = PerformanceObserverEntryList;
+      globalThis.PerformanceObserver = PerformanceObserver;
+    }
 
     if (typeof window !== "undefined") {
       window.Performance = Performance;

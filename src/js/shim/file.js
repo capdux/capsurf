@@ -204,6 +204,14 @@ Blob.prototype.arrayBuffer = function () {
   }
 };
 
+Blob.prototype.bytes = function () {
+  try {
+    return Promise.resolve(new Uint8Array(this._bytes));
+  } catch (e) {
+    return Promise.reject(e);
+  }
+};
+
 Blob.prototype.stream = function () {
   const bytes = this._bytes;
   if (typeof ReadableStream !== "undefined") {
@@ -226,6 +234,7 @@ markNative(Blob, "Blob");
 markNative(Blob.prototype.slice, "slice");
 markNative(Blob.prototype.text, "text");
 markNative(Blob.prototype.arrayBuffer, "arrayBuffer");
+markNative(Blob.prototype.bytes, "bytes");
 markNative(Blob.prototype.stream, "stream");
 
 function File(fileBits, fileName, options) {
