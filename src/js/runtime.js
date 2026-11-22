@@ -7317,7 +7317,7 @@
       const relRaw = (nativeGetAttr ? nativeGetAttr.call(node, "rel") : node.rel) || "";
       const rels = String(relRaw).trim().toLowerCase().split(/\s+/);
       const href = (nativeGetAttr ? nativeGetAttr.call(node, "href") : node.href) || "";
-      if (rels.indexOf("stylesheet") !== -1 && href && node._lastLinkLoadHref !== href) {
+      if (rels.indexOf("stylesheet") !== -1 && href && node._lastLinkLoadHref !== href && (typeof globalThis === "undefined" || typeof globalThis.__capsurf_http_get !== "function")) {
         node._lastLinkLoadHref = href;
         Promise.resolve().then(function () {
           if (!node.isConnected) return;

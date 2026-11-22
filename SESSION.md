@@ -5603,3 +5603,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE348_RESULT {"scrollMs":1453,"cx":71.800003,"cy":448,"hoverId":null}`（`scrollIntoViewIfNeeded` 从 >25s 降至 **1.45s**）。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。
+
+## Phase 349: `<link rel="stylesheet">` 404 `'error'` 事件与真实 HTTP 加载仲裁修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 当存在 `globalThis.__capsurf_http_get` 时跳过 `node-base.js` 假 `'load'` 微任务，交由 `handleInsertedLink()` 依据真实 HTTP 响应状态派发 `'load'` / `'error'`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE349_RESULT ["404:error","200:load:rgb(255, 0, 0)"]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。

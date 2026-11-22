@@ -2164,3 +2164,6 @@
 
 ### Phase 348: `scrollable.html` `DOM.scrollIntoViewIfNeeded` >25s 超时排障笔记
 - **`isElementDisplayNone` 与 `@keyframes` 包装器全量触发 `getComputedStyle` 根因**：在无 `<style>`/`<link>` 样式表的 `scrollable.html`（202 个子节点）上，`dom_binding.cp` 的 `getBoundingClientRect` `@keyframes` 包装器与 `element.js` 的 `isElementDisplayNone` 均无条件沿着祖先链调用 `window.getComputedStyle`（单次元素调用耗时 ~900ms），导致 `scrollHeight` 遍历 200 子节点卡死 >25s。增加 `@keyframes` 快速守卫、`docHasCssSheets()` 守卫与按需 `scrollHeight`/`scrollWidth` 读取后，`#button-91` `DOM.scrollIntoViewIfNeeded` 降至 **1453ms** (`PHASE348_RESULT: {"scrollMs":1453,"cx":71.800003,"cy":448}`) 。
+
+### Phase 349: `page-add-style-tag.spec.ts` `[3/4]` 404 样式表未抛错排障笔记
+- **`node-base.js` 微任务抢发 `'load'` 事件根因**：`session_hooks.cp` `handleInsertedLink()` 已会在 `__capsurf_http_get()` 遇到 HTTP >= 400 返回 `null` 时派发 `'error'`，但先挂载的 `src/js/shim/node-base.js` 在 `appendChild` 时先排队了一个 `Promise.resolve().then(...)` 微任务无条件派发 `'load'`，抢先结束了 Playwright 的等待。加上 `typeof globalThis.__capsurf_http_get !== "function"` 守卫后，实测 `PHASE349_RESULT ["404:error","200:load:rgb(255, 0, 0)"]`。

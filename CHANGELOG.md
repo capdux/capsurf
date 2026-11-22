@@ -2913,3 +2913,7 @@
     - 新增 `docHasCssSheets()`，在 `isElementDisplayNone()` 与 `getBoundingClientRect()` 零尺寸回退路径跳过无样式表文档的冗余 `window.getComputedStyle()` 调用（解决 200+ 子节点页面单次 `scrollHeight` >15s 超时）；
     - `collectRootScrollExtents()` 与 `getDocRectForScroll()` 仅在存在样式表或内联样式时查询 `getComputedStyle`；
     - `scrollElementIntoView()` 按需读取 `scrollHeight` / `scrollWidth`。
+
+## [2026-11-22] Phase 349: 修复 `<link rel="stylesheet">` 在 404 时误触发 `'load'` 事件（`page-add-style-tag.spec.ts` `[3/4]`）
+- **Fixed (`src/`)**:
+  - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 当存在宿主 `globalThis.__capsurf_http_get` 钩子时，跳过 `node-base.js` 对 `<link rel="stylesheet">` 的无条件假 `'load'` 微任务回退，交由 `session_hooks.cp` `handleInsertedLink()` 根据真实 HTTP 状态码与 CSP 裁决派发 `'load'` 或 `'error'`。
