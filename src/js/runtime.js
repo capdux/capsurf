@@ -40991,7 +40991,7 @@
       }
     }
 
-    function dispatchKeyEvent(type, key, code, modifiers) {
+    function dispatchKeyEvent(type, key, code, modifiers, isRepeat) {
       const mods = Number(modifiers || 0);
       const isAlt = (mods & 1) !== 0;
       const isCtrl = (mods & 2) !== 0;
@@ -41042,6 +41042,7 @@
           altKey: isAlt,
           metaKey: isMeta,
           shiftKey: isShift,
+          repeat: Boolean(isRepeat),
           cancelable: true,
           bubbles: true,
           composed: true,
@@ -41105,6 +41106,7 @@
           altKey: isAlt,
           metaKey: isMeta,
           shiftKey: isShift,
+          repeat: Boolean(isRepeat),
           cancelable: true,
           bubbles: true,
           composed: true,

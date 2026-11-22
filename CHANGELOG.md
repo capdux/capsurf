@@ -2782,3 +2782,8 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 空数组（`val.length === 0`）跳过生成 `preview` 以保留 `description: "Array(0)"`（使 `jshandle-to-string.spec.ts` `[]` 断言通过）。
   - `src/cdp/input.cp`: 在 `escapeJsString()` 补充 `\n` / `\r` 转义，在 `applyInputText()` 允许保留 `\n`，并将 `Input.dispatchKeyEvent` 中的 `"\r"` / `"\\r"` 规范化为 `"\n"`，修复 `<textarea>` 按 `Enter` 后值为 `"\\r"` 的问题。
+
+## [2026-11-22] Phase 320: 打通 `Input.dispatchKeyEvent` `autoRepeat` 至 `KeyboardEvent.repeat`
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 为 `dispatchKeyJs()` 增加 `is_repeat` 参数，将 `Input.dispatchKeyEvent` 的 `autoRepeat` 透传给 `__capsurf_dispatch_key_event()`。
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `dispatchKeyEvent()` 接收 `isRepeat` 并在 `keydown`/`keypress` 中设置 `repeat: Boolean(isRepeat)`（修复 `page-keyboard.spec.ts` `[18/44] should specify repeat property`）。

@@ -5400,3 +5400,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`emptyArr.description === "Array(0)"`，`<textarea>` `Enter` 后 `taVal === "\n"`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
+
+### [2026-11-22 20:56] Phase 320: 打通 `Input.dispatchKeyEvent` `autoRepeat` 至 `KeyboardEvent.repeat`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp), [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 透传 `autoRepeat` -> `KeyboardEvent.repeat`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Input.dispatchKeyEvent` 连续发送 `autoRepeat: false` 与 `true` 返回 `[false,true]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。

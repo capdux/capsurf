@@ -144,20 +144,21 @@ fn isPrintableKey(key: []const u8, text: []const u8): bool {
     return false;
 }
 
-fn dispatchKeyJs(session: *CdpPageSession, type_str_js: []const u8, escaped_key: []const u8, escaped_code: []const u8, modifiers: i64) {
+fn dispatchKeyJs(session: *CdpPageSession, type_str_js: []const u8, escaped_key: []const u8, escaped_code: []const u8, modifiers: i64, is_repeat: bool) {
     let js_buf: [1024]u8 = [0; 1024];
+    const rep_i: i32 = if (is_repeat) 1 else 0;
     const preserve_scroll = std.mem.eql(u8, escaped_key, "Tab") && session.facade.stream_mgr.isTerminalActive();
     const js_expr = if (preserve_scroll)
         std.fmt.bufPrint(
             &js_buf,
-            "(() => {{ var sx=window.scrollX||0,sy=window.scrollY||0; var r=0; if (typeof __capsurf_dispatch_key_event === 'function') {{ r=__capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} if((window.scrollX||0)!==sx||(window.scrollY||0)!==sy)window.scrollTo(sx,sy); return r; }})()",
-            .{ type_str_js, escaped_key, escaped_code, modifiers },
+            "(() => {{ var sx=window.scrollX||0,sy=window.scrollY||0; var r=0; if (typeof __capsurf_dispatch_key_event === 'function') {{ r=__capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}, {d}); }} if((window.scrollX||0)!==sx||(window.scrollY||0)!==sy)window.scrollTo(sx,sy); return r; }})()",
+            .{ type_str_js, escaped_key, escaped_code, modifiers, rep_i },
         ) catch null
     else
         std.fmt.bufPrint(
             &js_buf,
-            "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}); }} return 0; }})()",
-            .{ type_str_js, escaped_key, escaped_code, modifiers },
+            "(() => {{ if (typeof __capsurf_dispatch_key_event === 'function') {{ return __capsurf_dispatch_key_event('{s}', '{s}', '{s}', {d}, {d}); }} return 0; }})()",
+            .{ type_str_js, escaped_key, escaped_code, modifiers, rep_i },
         ) catch null;
     if (e := js_expr) {
         const val = session.ctx.eval(e);
@@ -529,20 +530,20 @@ pub struct InputHandler {
                     const escaped_code = c_esc_buf[0..escaped_code_len];
 
                     if (ev_type == .KeyDown || ev_type == .RawKeyDown) {
-                        dispatchKeyJs(session, "keydown", escaped_key, escaped_code, modifiers);
+                        dispatchKeyJs(session, "keydown", escaped_key, escaped_code, modifiers, repeat);
                         if (ev_type == .KeyDown && (text.len > 0 || std.mem.eql(u8, key, "Enter")) && isPrintableKey(key, text)) {
                             const kp_key = if (text.len > 0) text else key;
                             let kp_esc_buf: [256]u8 = [0; 256];
                             const kp_esc_len = escapeJsString(kp_key, &kp_esc_buf);
-                            dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers);
+                            dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers, repeat);
                         }
                     } else if (ev_type == .Char) {
                         const kp_key = if (text.len > 0) text else key;
                         let kp_esc_buf: [256]u8 = [0; 256];
                         const kp_esc_len = escapeJsString(kp_key, &kp_esc_buf);
-                        dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers);
+                        dispatchKeyJs(session, "keypress", kp_esc_buf[0..kp_esc_len], escaped_code, modifiers, repeat);
                     } else if (ev_type == .KeyUp) {
-                        dispatchKeyJs(session, "keyup", escaped_key, escaped_code, modifiers);
+                        dispatchKeyJs(session, "keyup", escaped_key, escaped_code, modifiers, false);
                     }
                 }
             }

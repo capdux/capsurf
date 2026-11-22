@@ -2072,3 +2072,6 @@
 ### Phase 319: `jshandle-to-string` `[]` 返回 `"[]"` 与 `page-keyboard` `<textarea>` 回车插入 `"\r"` 排障笔记
 - **空数组 `preview` 覆盖 `"Array(0)"` 根因**：Playwright 对带 `preview` 的空数组渲染为 `"[]"`，对无 `preview` 的空数组回退 `description`（`"Array(0)"`）。跳过 `val.length === 0` 的 `preview` 后，实测返回 `description: "Array(0)"`。
 - **`<textarea>` `Enter` 写入 `"\\r"` 根因**：`Input.dispatchKeyEvent` 收到 `text: "\r"`（原始 JSON 转义串 `"\\r"`），且 `applyInputText()` 的 `c >= 32` 过滤会剔除 `\n`，同时 `escapeJsString()` 未转义 `\n`。补齐 `\r`/`\\r` -> `\n`、放行 `\n` 与 JS 字符串 `\n` 转义后，实测 `<textarea>` 按 `Enter` 后 `value === "\n"`。
+
+### Phase 320: `page-keyboard.spec.ts` `[18/44]` `e.repeat` 恒为 `false` 排障笔记
+- **`autoRepeat` 未透传至 JS 事件构造根因**：`src/cdp/input.cp` 已从请求中解析 `autoRepeat` 为 `repeat`，但调用 `dispatchKeyJs()` 时未将该布尔值传入 `__capsurf_dispatch_key_event()`，导致 `window.js` `dispatchKeyEvent()` 构造 `KeyboardEvent` 时始终省略 `repeat`（默认 `false`）。打通第 5 参数 `isRepeat` 后，实测 `autoRepeat: false/true` 分别输出 `[false,true]`。
