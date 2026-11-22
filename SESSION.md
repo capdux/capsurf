@@ -5275,3 +5275,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：Quirks Mode 下 `#hello` / `.mycls` 均匹配 `<section id="Hello" class="MyCls">`（`true`）；Standards Mode（`<!DOCTYPE html>`）下均保持 `false`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **126.55s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。
+
+### [2026-11-22 19:42] Phase 303: 修复 `applyInputText()` 传参错位导致 `Input.insertText` 不触发 `input` 事件
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 修正 `applyInputText()` JS 模板第 8~10 项参数错传 `escaped_key` 为 `escaped_text`（并扩充 `js_buf` 至 `6144` 及补齐无 `notifyControlValueMutation` 时的 `InputEvent` 回退）。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<input oninput="window.result = this.value">` 经 `Input.insertText("some value")` 后返回 `val="some value", result="some value", listenerResult="some value"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.49s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。

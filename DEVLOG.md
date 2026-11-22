@@ -2019,3 +2019,6 @@
 
 ### Phase 302: `selectors-css` `should work with wrong-case id` (`#hello` 匹配 `<section id="Hello">`) 失败排障笔记
 - **缺少 HTML Quirks Mode 选择器大小写规则根因**：无 `<!DOCTYPE html>` 页面在 HTML5 规范中进入 Quirks Mode，此时 CSS `#id` 与 `.class` 必须忽略 ASCII 大小写。此前 `Document` 与 `TreeBuilder` 未将 `DoctypeToken` 判定传递至 `Matcher`。补齐 `doc.in_quirks_mode` 与 `Matcher` 大小写分支后，实测 Quirks 下 `#hello`/`.mycls` 均为 `true`，Standards 下均保持 `false`。
+
+### Phase 303: `locator-misc-1` `should fill input` 与 `should clear input` `oninput` 未触发排障笔记
+- **`expect(window['result']).toBe('some value')` 收到 `""` 根因**：`applyInputText()` 在 `Input.insertText`（`key == ""`）分支中，JS 格式化模板第 8~10 项误传 `escaped_key` 而非 `escaped_text`，导致 `isPrintable = ''.length > 0` 恒为 `false`，完全跳过 `setRaw` 与 `notifyControlValueMutation`（`dispatchEvent`），仅靠后续 `doc.setAttribute("value", ...)` 改了属性而未触发 `oninput`。修正参数对齐后，实测 `val`、`oninput` 与 `addEventListener('input')` 均同步收到 `"some value"`。

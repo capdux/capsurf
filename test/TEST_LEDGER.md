@@ -215,6 +215,7 @@
 | 2026-11-22 19:29 | `/css/css-overflow/` | `1/5`~`5/5` | 33 | PASS 6 / FAIL 27 (?PASS 4, 0 CRASH) | Batch 78 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:32 | `/css/css-tables/` | `1/5`~`5/5` | 18 | PASS 4 / FAIL 13 / TIMEOUT 1 (0 CRASH) | Batch 79 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:34 | `/css/css-transforms/` | `1/5`~`5/5` | 31 | PASS 2 / FAIL 29 / TIMEOUT 0 (0 CRASH) | Batch 80 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:41 | `/css/css-color/` | `1/5`~`5/5` | 56 | PASS 2 / FAIL 41 / TIMEOUT 13 (0 CRASH) | Batch 81 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -418,3 +419,7 @@
 | 2026-11-22 19:34 | `elementhandle-click.spec.ts` | 5/8 PASS (Node/Shadow/<br> 3 FAIL/TIMEOUT, 59.9s) | PW Batch 54 |
 | 2026-11-22 19:34 | `locator-misc-1.spec.ts` | 4/8 PASS (`[9/13]` 90s截断) | PW Batch 54 |
 | 2026-11-22 19:34 | `page-click.spec.ts` | 6/9 PASS (`[10/77]` 90s截断) | PW Batch 54 |
+| 2026-11-22 19:39 | `selectors-css.spec.ts` | 20/25 PASS (1 SKIP, 1.2m) | PW Batch 55 |
+| 2026-11-22 19:39 | `selectors-role.spec.ts` | 12/15 PASS (1.3m) | PW Batch 55 |
+| 2026-11-22 19:39 | `page-click-timeout-4.spec.ts` | 1/3 PASS (34.8s) | PW Batch 55 |
+| 2026-11-22 19:39 | `retarget.spec.ts` | 14/15 PASS (1.4m) | PW Batch 55 |

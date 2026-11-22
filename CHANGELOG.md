@@ -2704,3 +2704,7 @@
 - **Fixed (`src/`)**:
   - `src/dom/dom.cp` & `src/html/tree_builder.cp`: 为 `Document` 新增 `in_quirks_mode` 状态位，在 `TreeBuilder.processInitial()` 中依据 `DoctypeToken`（`force_quirks` 或非 `"html"` 或缺失 `<!DOCTYPE>`）自动判定并标记怪异模式。
   - `src/css/matcher.cp`: 在 `Matcher.matchesSimpleComponent()` 的 `.Id` 与 `.Class` 分支中，当 `doc.in_quirks_mode` 为真时使用 `std.ascii.eqlIgnoreCase` 进行匹配，标准模式保持精确大小写匹配。
+
+## [2026-11-22] Phase 303: 修复 `applyInputText()` 传参错位导致 `Input.insertText` 不触发 `input` 事件
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 修正 `applyInputText()` 内 JS 模板第 8~10 个格式化参数错传 `escaped_key` 为 `escaped_text`（并扩充 `js_buf` 至 `6144` 及补齐无 `notifyControlValueMutation` 时的 `InputEvent` 回退），使 `Input.insertText` 正确更新控件选区、值并派发 `input` 事件。
