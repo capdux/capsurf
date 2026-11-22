@@ -8662,12 +8662,21 @@
         else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
         else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
         else if (pseudo === ":only-child") { if (el.previousElementSibling || el.nextElementSibling) return false; }
+        else if (pseudo === ":first-of-type") { if (!matchesNthChild(el, "1", false, true)) return false; }
+        else if (pseudo === ":last-of-type") { if (!matchesNthChild(el, "1", true, true)) return false; }
+        else if (pseudo === ":only-of-type") { if (!matchesNthChild(el, "1", false, true) || !matchesNthChild(el, "1", true, true)) return false; }
         else if (pseudo === ":empty") { if (el.firstChild) return false; }
         else if (pseudo.startsWith(":nth-child(") && pseudo.endsWith(")")) {
-          if (!matchesNthChild(el, pseudo.slice(11, -1), false)) return false;
+          if (!matchesNthChild(el, pseudo.slice(11, -1), false, false)) return false;
         }
         else if (pseudo.startsWith(":nth-last-child(") && pseudo.endsWith(")")) {
-          if (!matchesNthChild(el, pseudo.slice(16, -1), true)) return false;
+          if (!matchesNthChild(el, pseudo.slice(16, -1), true, false)) return false;
+        }
+        else if (pseudo.startsWith(":nth-of-type(") && pseudo.endsWith(")")) {
+          if (!matchesNthChild(el, pseudo.slice(13, -1), false, true)) return false;
+        }
+        else if (pseudo.startsWith(":nth-last-of-type(") && pseudo.endsWith(")")) {
+          if (!matchesNthChild(el, pseudo.slice(18, -1), true, true)) return false;
         }
         else if (pseudo.startsWith(":is(") && pseudo.endsWith(")")) {
           if (!matchesElementSelector(el, s.slice(start + 4, i - 1), scopeRoot, true)) return false;
@@ -8791,15 +8800,17 @@
     return matchFrom(el, parts.length - 2);
   }
 
-  function matchesNthChild(el, exprRaw, fromLast) {
+  function matchesNthChild(el, exprRaw, fromLast, ofType) {
     const p = el.parentNode;
     if (!p) return false;
     const kids = p.children || p._children || p.childNodes || [];
+    const elTag = ofType ? String(el.localName || el.tagName || "").toLowerCase() : "";
     let idx = 0;
     let total = 0;
     for (let k = 0; k < kids.length; k++) {
       const ch = kids[k];
       if (ch && ch.nodeType === 1) {
+        if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
         total++;
         if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
           idx = total;

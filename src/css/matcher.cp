@@ -131,6 +131,8 @@ pub enum PseudoKind {
     OnlyOfType,
     NthChild,
     NthLastChild,
+    NthOfType,
+    NthLastOfType,
     Is,
     Where,
     Not,
@@ -629,6 +631,18 @@ pub struct SelectorParser {
                     p_comp.nth_a = ab.a;
                     p_comp.nth_b = ab.b;
                     spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "nth-of-type")) {
+                    p_comp.pseudo_kind = PseudoKind.NthOfType;
+                    const ab = SelectorParser.parseNthFormula(arg_raw);
+                    p_comp.nth_a = ab.a;
+                    p_comp.nth_b = ab.b;
+                    spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "nth-last-of-type")) {
+                    p_comp.pseudo_kind = PseudoKind.NthLastOfType;
+                    const ab = SelectorParser.parseNthFormula(arg_raw);
+                    p_comp.nth_a = ab.a;
+                    p_comp.nth_b = ab.b;
+                    spec.class_like_selectors += 1;
                 } else if (std.ascii.eqlIgnoreCase(p_name, "where")) {
                     p_comp.pseudo_kind = PseudoKind.Where;
                     // :where() always contributes 0 specificity!
@@ -884,6 +898,30 @@ pub struct Matcher {
                 if (parent_id == NULL_NODE || node.element_index_in_parent == 0) return false;
                 const total = doc.nodes.items[@as(usize, parent_id)].child_element_count;
                 const from_end: i32 = @intCast(total - node.element_index_in_parent + 1);
+                return Matcher.matchesNthEquation(comp.nth_a, comp.nth_b, from_end);
+            },
+            .NthOfType => {
+                if (parent_id == NULL_NODE) return false;
+                let idx: i32 = 1;
+                let prev = doc.prevElementSibling(node_id);
+                while (prev != NULL_NODE) {
+                    if (doc.nodes.items[@as(usize, prev)].hasTag(node.tag_name)) {
+                        idx += 1;
+                    }
+                    prev = doc.prevElementSibling(prev);
+                }
+                return Matcher.matchesNthEquation(comp.nth_a, comp.nth_b, idx);
+            },
+            .NthLastOfType => {
+                if (parent_id == NULL_NODE) return false;
+                let from_end: i32 = 1;
+                let next = doc.nextElementSibling(node_id);
+                while (next != NULL_NODE) {
+                    if (doc.nodes.items[@as(usize, next)].hasTag(node.tag_name)) {
+                        from_end += 1;
+                    }
+                    next = doc.nextElementSibling(next);
+                }
                 return Matcher.matchesNthEquation(comp.nth_a, comp.nth_b, from_end);
             },
             .Is, .Where => {

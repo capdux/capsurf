@@ -2041,3 +2041,6 @@
 
 ### Phase 309: `jshandle-to-string.spec.ts` `Symbol()` 返回 `"undefined"` 与 `/foo/` 返回 `"RegExp"` 排障笔记
 - **`Symbol()` 与 `RegExp` CDP `RemoteObject` 字段缺失根因**：Playwright 的 `CRJSHandle.toString()` 依赖 `RemoteObject` 的 `objectId` 判定是否为句柄而非纯值；此前 `__capsurf_store_object` 仅接收 `object`/`function` 且 `symbol` 分支未生成 `objectId`，导致 `Symbol()` 被按无值对象解析成 `"undefined"`。同时 `object` 分支对 `regexp`/`date`/`error` 统一回退 `description = className`，导致 `/foo/` 描述为 `"RegExp"`。两处补齐后，实测 `Symbol()` 返回 `objectId: "capsurf:obj:1"`，`/foo/` 返回 `description: "/foo/"`。
+
+### Phase 310: `elementhandle-bounding-box` `page.$('.box:nth-of-type(13)')` 找不到元素排障笔记
+- **`selector.js` 与 `matcher.cp` 均缺失 `:nth-of-type` 根因**：`PW Batch 65` 中 `elementhandle-bounding-box.spec.ts` `should work` 在 `page.$('.box:nth-of-type(13)')` 处超时返回 `null`。检查发现 `src/js/shim/selector.js` 仅实现了 `:nth-child` 而未实现 `*-of-type` 伪类；同时原生 `src/css/matcher.cp` 虽已有 `FirstOfType`/`LastOfType`/`OnlyOfType`，但遗漏了 `NthOfType`/`NthLastOfType`。两端同步补齐后，`bin_dev/main` 实测 `querySelector("p:nth-of-type(2)")`、`nth-last-of-type(2)`、`first-of-type`、`last-of-type`、`only-of-type` 与 `document.querySelector("#p2").matches("p:nth-of-type(2)")` 全部准确命中。

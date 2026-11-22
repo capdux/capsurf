@@ -2735,3 +2735,8 @@
 ## [2026-11-22] Phase 309: 修复 CDP `RemoteObject` 对 `Symbol` 缺少 `objectId` 与 `RegExp`/`Date`/`Error` 缺少实例 `description`
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: 允许 `__capsurf_store_object` 存储 `typeof val === 'symbol'`；在 `__capsurf_format_remote_object` 中为 `!returnByValue` 的 `symbol` 分配 `objectId`，并为 `regexp` / `date` / `error` 子类型输出 `String(val)` / `val.stack` 作为 `description`（修复 `jshandle-to-string.spec.ts` 中 `Symbol()` 返回 `"undefined"` 与 `/foo/` 返回 `"RegExp"` 的问题）。
+
+## [2026-11-22] Phase 310: 补齐 `:nth-of-type` / `:nth-last-of-type` / `:first-of-type` / `:last-of-type` / `:only-of-type` 选择器支持
+- **Fixed (`src/`)**:
+  - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `matchesNthChild()` 增加 `ofType` 参数，支持 `:nth-of-type()`、`:nth-last-of-type()`、`:first-of-type`、`:last-of-type` 与 `:only-of-type`。
+  - `src/css/matcher.cp`: 在 `PseudoKind`、`SelectorParser` 与 `Matcher.matchesPseudo()` 中补齐 `NthOfType` 与 `NthLastOfType`，使原生 CSS 级联与 `Element.prototype.matches()` 同步支持。

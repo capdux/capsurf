@@ -5326,3 +5326,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Symbol()` 返回 `objectId: "capsurf:obj:1"`，`/foo/` 返回 `description: "/foo/"`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。
+
+### [2026-11-22 20:20] Phase 310: 补齐 `:nth-of-type` / `:nth-last-of-type` / `:first-of-type` / `:last-of-type` / `:only-of-type` 选择器支持
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/selector.js](file:///data/dev/capsurf/src/js/shim/selector.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `:nth-of-type`、`:nth-last-of-type`、`:first-of-type`、`:last-of-type`、`:only-of-type`。
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): 新增 `PseudoKind.NthOfType` 与 `NthLastOfType` 解析与匹配。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`nth2="p2"`, `nthLast2="p1"`, `first="p1"`, `last="p2"`, `only="em"`, `inDoc=true`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
