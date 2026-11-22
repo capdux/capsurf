@@ -531,3 +531,13 @@
 | 2026-11-22 21:29 | `page-goto.spec.ts` | 7/61 PASS (90s截断) | PW Batch 80 |
 | 2026-11-22 21:29 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (90s retry截断) | PW Batch 80 |
 | 2026-11-22 21:29 | `page-wait-for-navigation.spec.ts` | 1/12 PASS (90s截断) | PW Batch 80 |
+| 2026-11-22 21:34 | `page-add-script-tag.spec.ts` | 9/9 PASS (`sourceURL`+`CSP`全绿) | PW Batch 81 (全绿) |
+| 2026-11-22 21:34 | `page-dispatchevent.spec.ts` | 15/16 PASS | PW Batch 81 |
+| 2026-11-22 21:34 | `page-mouse.spec.ts` | 13/15 PASS (90s截断) | PW Batch 81 |
+| 2026-11-22 21:34 | `locator-misc-1.spec.ts` | 8/13 PASS (90s截断) | PW Batch 81 |
+| 2026-11-22 21:35 | `/css/css-position/` (`2/5..5/5`) | 13/54, 17/54, 15/54, 11/53 PASS (5 `FAIL→PASS`) | WPT Batch 89 (`bin_dev`) |
+| 2026-11-22 21:35 | `/css/css-flexbox/` (`1/5`) | 24/53 PASS | WPT Batch 89 (`bin_dev`) |
+| 2026-11-22 21:39 | `page-add-style-tag.spec.ts` | 3/4 PASS (CSP style URL PASS) | PW Batch 82 |
+| 2026-11-22 21:39 | `page-emulate-media.spec.ts` | 3/12 PASS (exit 0, match exp) | PW Batch 82 |
+| 2026-11-22 21:39 | `page-screenshot.spec.ts` | 1/44 PASS (90s截断) | PW Batch 82 |
+| 2026-11-22 21:39 | `page-network-idle.spec.ts` | 0/10 PASS (90s截断) | PW Batch 82 |

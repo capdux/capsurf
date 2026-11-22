@@ -5484,3 +5484,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`default-src 'self'` 下插入跨域 `<link rel="stylesheet">` 返回 `linkErr: true` 且输出 `"Refused to load the stylesheet ..."`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+### [2026-11-22 21:39] Phase 332: 补齐 `getComputedStyle` 定位/弹性盒初始默认值与 `z-index` `calc()` 求值
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补全 `top`/`right`/`bottom`/`left`/`position`/`flex-*` 默认初始计算值与 `z-index` `calc()` 整型求值。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`{"def":{"pos":"static","left":"auto","flexDir":"row","flexBasis":"auto","flexGrow":"0","flexShrink":"1"},"zi":"3"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。

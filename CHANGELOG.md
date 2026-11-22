@@ -2831,3 +2831,7 @@
 ## [2026-11-22] Phase 331: CSP `default-src`/`style-src 'self'` 拦截跨域样式表并输出标准违规日志
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: 在 `handleInsertedLink()` 中增加 `default-src 'self'` / `style-src 'self'` 跨域样式表拦截判定，并在拦截时输出 `console.error("Refused to load the stylesheet ... because it violates the following Content Security Policy directive: ...")` 与触发 `error` 事件（修复 `page-add-style-tag.spec.ts` `[4/4]`）。
+
+## [2026-11-22] Phase 332: 补齐 `getComputedStyle` 定位/弹性盒初始默认值与 `z-index` `calc()` 求值
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `getComputedStyle` 补齐未设置时的初始计算值（`top`/`right`/`bottom`/`left`/`flex-basis` -> `"auto"`，`position` -> `"static"`，`flex-direction` -> `"row"`，`flex-wrap` -> `"nowrap"`，`flex-grow` -> `"0"`，`flex-shrink` -> `"1"`），并为 `z-index` 的 `calc()`/`min()`/`max()`/`clamp()` 表达式做整型求值。

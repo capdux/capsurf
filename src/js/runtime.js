@@ -35667,7 +35667,26 @@
       }
       if (!computedMap.has("z-index")) {
         computedMap.set("z-index", "auto");
+      } else {
+        const ziRaw = String(computedMap.get("z-index") || "").trim();
+        if (/^(?:calc|min|max|clamp)\s*\(/i.test(ziRaw)) {
+          const ziNum = typeof evalCssLengthExpr === "function" ? evalCssLengthExpr(ziRaw, 0, 16) : null;
+          if (ziNum !== null && isFinite(ziNum)) {
+            computedMap.set("z-index", String(Math.round(ziNum)));
+          }
+        }
       }
+      const defaultAutoProps = ["top", "right", "bottom", "left", "flex-basis"];
+      for (let ai = 0; ai < defaultAutoProps.length; ai++) {
+        if (!computedMap.has(defaultAutoProps[ai])) {
+          computedMap.set(defaultAutoProps[ai], "auto");
+        }
+      }
+      if (!computedMap.has("position")) computedMap.set("position", "static");
+      if (!computedMap.has("flex-direction")) computedMap.set("flex-direction", "row");
+      if (!computedMap.has("flex-wrap")) computedMap.set("flex-wrap", "nowrap");
+      if (!computedMap.has("flex-grow")) computedMap.set("flex-grow", "0");
+      if (!computedMap.has("flex-shrink")) computedMap.set("flex-shrink", "1");
       const defaultZeroMargins = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
       for (let mi = 0; mi < defaultZeroMargins.length; mi++) {
         if (!computedMap.has(defaultZeroMargins[mi])) {

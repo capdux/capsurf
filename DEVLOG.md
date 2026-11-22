@@ -2108,3 +2108,6 @@
 
 ### Phase 331: `page-add-style-tag` `[4/4]` CSP 页面注入跨域样式表未抛错排障笔记
 - **未校验 `'self'` 跨域且缺 CSP `console.error` 根因**：`handleInsertedLink()` 此前仅匹配 `default-src 'none'` / `style-src 'none'`，放行了 `default-src 'self'` 页面注入的跨域 `<link rel="stylesheet">`，且拦截分支未输出包含 `"Content Security Policy"` 的 `console.error`。补齐跨域判定与标准违规日志后，实测 `linkErr: true` 且 `Runtime.consoleAPICalled` 收到 `"Refused to load the stylesheet ..."`。
+
+### Phase 332: `css-position` / `css-flexbox` `getComputedStyle` 空串及 `z-index: calc()` 未求值排障笔记
+- **缺少标准初始值与无单位 `calc()` 求值根因**：`getComputedStyle()` 此前仅对 `z-index` 与 `margin-*` 补全默认值，导致未显式设置的 `top`/`right`/`bottom`/`left`/`flex-basis`/`position`/`flex-*` 返回 `""`，且 `z-index: calc(1 + 2)` 原样返回 `"calc(1 + 2)"`。补全初始值表与 `evalCssLengthExpr(..., 0, 16)` 整型求值后，实测默认返回 `pos="static", left="auto", flexDir="row", flexBasis="auto", flexGrow="0", flexShrink="1"`，`zIndex="calc(1 + 2)"` 返回 `"3"`。
