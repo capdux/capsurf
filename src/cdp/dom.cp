@@ -463,6 +463,71 @@ fn resolveNodeIdFromObjectId(session: *CdpPageSession, object_id: []const u8): N
     return NULL_NODE;
 }
 
+fn queryJsObjectRect(session: *CdpPageSession, obj_id: []const u8, node_id_val: i64, out_x: *f32, out_y: *f32, out_w: *f32, out_h: *f32): bool {
+    if (!session.has_document) return false;
+    let js_buf: [640]u8 = [0; 640];
+    let js_expr: []const u8 = "";
+    if (obj_id.len > 0) {
+        js_expr = std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ const el = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!el || !el.getBoundingClientRect) return ''; const r = el.getBoundingClientRect(); if (!r || (r.width <= 0 && r.height <= 0)) return ''; return r.left + ',' + r.top + ',' + r.width + ',' + r.height; }})()",
+            .{obj_id},
+        ) catch "";
+    } else if (node_id_val > 0) {
+        js_expr = std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ const el = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('node:{d}') : null; if (!el || !el.getBoundingClientRect) return ''; const r = el.getBoundingClientRect(); if (!r || (r.width <= 0 && r.height <= 0)) return ''; return r.left + ',' + r.top + ',' + r.width + ',' + r.height; }})()",
+            .{node_id_val},
+        ) catch "";
+    }
+    if (js_expr.len == 0) return false;
+    const val = session.ctx.eval(js_expr);
+    defer session.ctx.freeValue(val);
+    const rstr = session.ctx.toCString(val);
+    if (rstr.len == 0) return false;
+    let it = std.mem.splitScalar(u8, rstr, ',');
+    const rx = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    const ry = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    const rw = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    const rh = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    if (rw <= 0.0 && rh <= 0.0) return false;
+    out_x.* = rx;
+    out_y.* = ry;
+    out_w.* = rw;
+    out_h.* = rh;
+    return true;
+}
+
+fn formatJsBoxModelResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf: []u8): CdpResponse {
+    const x2 = rx + rw;
+    const y2 = ry + rh;
+    let q_buf: [256]u8 = [0; 256];
+    const q_str = std.fmt.bufPrint(
+        &q_buf,
+        "[{d},{d},{d},{d},{d},{d},{d},{d}]",
+        .{ rx, ry, x2, ry, x2, y2, rx, y2 },
+    ) catch "[]";
+    const w_int = @as(i64, @intFromFloat(@round(rw)));
+    const h_int = @as(i64, @intFromFloat(@round(rh)));
+    const res = std.fmt.bufPrint(
+        out_buf,
+        "{{\"model\":{{\"content\":{s},\"padding\":{s},\"border\":{s},\"margin\":{s},\"width\":{d},\"height\":{d}}}}}",
+        .{ q_str, q_str, q_str, q_str, w_int, h_int },
+    ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
+    return CdpResponse.ok(req_id, res);
+}
+
+fn formatJsQuadsResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf: []u8): CdpResponse {
+    const x2 = rx + rw;
+    const y2 = ry + rh;
+    const res = std.fmt.bufPrint(
+        out_buf,
+        "{{\"quads\":[[{d},{d},{d},{d},{d},{d},{d},{d}]]}}",
+        .{ rx, ry, x2, ry, x2, y2, rx, y2 },
+    ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
+    return CdpResponse.ok(req_id, res);
+}
+
 pub struct DomHandler {
     pub static fn handle(
         session: *CdpPageSession,
@@ -762,6 +827,14 @@ pub struct DomHandler {
                 if (resolved > 0) node_id_val = @as(i64, resolved);
             }
             if (node_id_val <= 0 || @as(usize, @intCast(node_id_val)) >= session.doc.nodes.items.len) {
+                const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
+                let rx: f32 = 0.0;
+                let ry: f32 = 0.0;
+                let rw: f32 = 0.0;
+                let rh: f32 = 0.0;
+                if (queryJsObjectRect(session, obj_s, node_id_val, &rx, &ry, &rw, &rh)) {
+                    return formatJsBoxModelResp(rx, ry, rw, rh, req.id, out_buf);
+                }
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
             }
             const node_id: NodeId = @as(NodeId, @intCast(node_id_val));
@@ -777,6 +850,14 @@ pub struct DomHandler {
             session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
+                const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
+                let rx: f32 = 0.0;
+                let ry: f32 = 0.0;
+                let rw: f32 = 0.0;
+                let rh: f32 = 0.0;
+                if (queryJsObjectRect(session, obj_s, node_id_val, &rx, &ry, &rw, &rh)) {
+                    return formatJsBoxModelResp(rx, ry, rw, rh, req.id, out_buf);
+                }
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
             }
 
@@ -811,6 +892,14 @@ pub struct DomHandler {
                 if (resolved > 0) node_id_val = @as(i64, resolved);
             }
             if (node_id_val <= 0 || @as(usize, @intCast(node_id_val)) >= session.doc.nodes.items.len) {
+                const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
+                let rx: f32 = 0.0;
+                let ry: f32 = 0.0;
+                let rw: f32 = 0.0;
+                let rh: f32 = 0.0;
+                if (queryJsObjectRect(session, obj_s, node_id_val, &rx, &ry, &rw, &rh)) {
+                    return formatJsQuadsResp(rx, ry, rw, rh, req.id, out_buf);
+                }
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
             const node_id: NodeId = @as(NodeId, @intCast(node_id_val));
@@ -826,6 +915,14 @@ pub struct DomHandler {
             session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
+                const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
+                let rx: f32 = 0.0;
+                let ry: f32 = 0.0;
+                let rw: f32 = 0.0;
+                let rh: f32 = 0.0;
+                if (queryJsObjectRect(session, obj_s, node_id_val, &rx, &ry, &rw, &rh)) {
+                    return formatJsQuadsResp(rx, ry, rw, rh, req.id, out_buf);
+                }
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
 

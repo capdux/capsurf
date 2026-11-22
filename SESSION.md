@@ -5624,3 +5624,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE351_RESULT {"beforeEndLoaded":false,"afterEndLoaded":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 352: Shadow DOM `objectId` `getContentQuads` / `getBoxModel` 与 `offsetWidth` 回退修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp), [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `queryJsObjectRect()` 回退与 `offsetWidth` / `offsetHeight` JS 盒尺寸回退。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE352_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"boxW":72,"boxH":24,"off":{"ow":72,"oh":24}}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。

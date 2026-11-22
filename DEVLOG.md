@@ -2173,3 +2173,6 @@
 
 ### Phase 351: `page-set-content.spec.ts` `[8/16]` `Request /img.png was not received` 排障笔记
 - **`Page.setDocumentContent` 未拉取静态 `<img>` 根因**：`session.navigate()` 仅将 `<img>` URL 记入 `init_img_urls` 审计表而未实际发起 HTTP 请求。在 `src/cdp/page.cp` `Page.setDocumentContent` 内对 `session.init_img_urls` 中真实 `http(s)://` 图片调用 `HttpLoader.fetchDocument` 后，实测在服务端挂起响应期间 `beforeEndLoaded=false`、响应结束 `afterEndLoaded=true`（`PHASE351_RESULT {"beforeEndLoaded":false,"afterEndLoaded":true}`）。
+
+### Phase 352: `selectors-misc.spec.ts` `[2/19]` (`#inner-link` 报 `element is not visible`) 排障笔记
+- **Shadow DOM 节点有 `nid` 但未入主布局树根因**：`<template>` 克隆进 `ShadowRoot` 的 `<a id="inner-link"><slot></slot></a>` 虽在 Arena DOM 分配了 `NodeId`（`nid=16`），但未挂载到 `Document` 的 Arena 父子拓扑中，导致 `LayoutTree` 输出 `0x0` 且 `DOM.getContentQuads` / `DOM.getBoxModel` 返回空，同时 `offsetWidth` / `offsetHeight` 直接调用 `origGetBoundingClientRect` 也得到 `0`。补齐 `queryJsObjectRect()` 与 `offsetWidth`/`offsetHeight` JS 回退后，实测 `PHASE352_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"boxW":72,"boxH":24,"off":{"ow":72,"oh":24}}`。

@@ -635,3 +635,7 @@
 | 2026-11-22 23:37 | `page-goto.spec.ts` | 7/19 PASS (`[20/61]`90s截断) | PW Batch 103 |
 | 2026-11-22 23:40 | `/css/css-color/` (`4/5..5/5`) | 0/11, 1/11 PASS | WPT Batch 95 (`19470`, `bin_dev`) |
 | 2026-11-22 23:40 | `/css/css-backgrounds/` (`1/5..3/5`) | 6/23, 9/23, 6/23 PASS | WPT Batch 95 (`19470`, `bin_dev`) |
+| 2026-11-22 23:50 | `page-set-input-files.spec.ts` | 9/19 PASS (`[15/19]`90s截断) | PW Batch 104 |
+| 2026-11-22 23:50 | `page-select-option.spec.ts` | 0/33 PASS (`[2/33]`90s截断) | PW Batch 104 |
+| 2026-11-22 23:50 | `frame-frame-element.spec.ts` | 1/6 PASS (55s) | PW Batch 104 |
+| 2026-11-22 23:50 | `frame-hierarchy.spec.ts` | 4/12 PASS (retry 90s截断) | PW Batch 104 |

@@ -2927,3 +2927,8 @@
 ## [2026-11-22] Phase 351: 打通 `Page.setDocumentContent` 外部 `<img>` 资源真实 HTTP 拉取与阻塞等待（`page-set-content.spec.ts` `[8/16]`）
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `Page.setDocumentContent` 在 `session.navigate` 后、返回 `{}` 前，遍历 `session.init_img_urls` 对非 Fixture 的 `http://` / `https://` `<img>` 发起 `HttpLoader.fetchDocument` 拉取并等待响应完成。
+
+## [2026-11-22] Phase 352: 为 Shadow DOM `objectId` / `0x0` 节点补齐 `DOM.getContentQuads` / `DOM.getBoxModel` 及 `offsetWidth` / `offsetHeight` JS 几何回退（`selectors-misc.spec.ts` `[2/19]`）
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 抽取 `queryJsObjectRect()`、`formatJsBoxModelResp()`、`formatJsQuadsResp()`；当 `DOM.getBoxModel` 与 `DOM.getContentQuads` 遇到无原生 `NodeId` 或虽有 `NodeId` 但未入主文档布局树（`bm.width <= 0 && bm.height <= 0`）的元素时，通过 JS `getBoundingClientRect()` 回退输出有效盒模型与 `quads`。
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `offsetWidth` / `offsetHeight` 在无原生 `_nid` 或原生盒尺寸为 `0x0` 时回退到 `this.getBoundingClientRect()`。

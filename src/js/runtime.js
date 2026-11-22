@@ -11405,18 +11405,20 @@
 
     Object.defineProperty(proto, "offsetWidth", {
       get: function () {
-        if (isElementDisplayNone(this)) return 0;
-        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-        return Math.round(r.width || 0);
+        if (isElementInlineOrJsDisplayNone(this)) return 0;
+        let r = (typeof this._nid === "number" && this._nid > 0 && origGetBoundingClientRect) ? origGetBoundingClientRect.call(this) : null;
+        if (!r || (r.width === 0 && r.height === 0)) r = this.getBoundingClientRect();
+        return Math.round((r && r.width) || 0);
       },
       configurable: true,
     });
 
     Object.defineProperty(proto, "offsetHeight", {
       get: function () {
-        if (isElementDisplayNone(this)) return 0;
-        const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
-        return Math.round(r.height || 0);
+        if (isElementInlineOrJsDisplayNone(this)) return 0;
+        let r = (typeof this._nid === "number" && this._nid > 0 && origGetBoundingClientRect) ? origGetBoundingClientRect.call(this) : null;
+        if (!r || (r.width === 0 && r.height === 0)) r = this.getBoundingClientRect();
+        return Math.round((r && r.height) || 0);
       },
       configurable: true,
     });
