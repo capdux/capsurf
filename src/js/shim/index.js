@@ -1893,7 +1893,7 @@ function installShim(global) {
     "subscript", "superscript",
     "stylewithcss", "defaultparagraphseparator",
     "inserttext", "inserthtml", "delete", "forwarddelete",
-    "selectall", "removeformat",
+    "selectall", "removeformat", "copy",
   ]);
 
   function isNodeEditable(node) {
@@ -2084,6 +2084,23 @@ function installShim(global) {
           return true;
         }
         return false;
+      }
+      if (cmd === "selectall") {
+        const sel = typeof this.getSelection === "function" ? this.getSelection() : (typeof global.getSelection === "function" ? global.getSelection() : null);
+        const root = (this.activeElement && isNodeEditable(this.activeElement)) ? this.activeElement : (this.body || this.documentElement);
+        if (sel && root && typeof this.createRange === "function") {
+          const r = this.createRange();
+          r.selectNodeContents(root);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return true;
+        }
+        return false;
+      }
+      if (cmd === "copy") {
+        const sel = typeof this.getSelection === "function" ? this.getSelection() : (typeof global.getSelection === "function" ? global.getSelection() : null);
+        globalThis.__capsurf_clipboard_text = sel ? String(sel.toString() || "") : "";
+        return true;
       }
 
       const range = getActiveEditingRange(this);

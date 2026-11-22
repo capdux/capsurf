@@ -3026,3 +3026,4 @@
 - Phase 399: `src/cdp/dom.cp` — `DOM.describeNode` 与 `DOM.resolveNode` 支持 `ShadowRoot` 合成 `backendNodeId >= 1000000` 双向解析与跨隔离世界 adopt。
 - Phase 400: `src/cdp/session.cp` — `Network.responseReceived` 补充 `hasExtraInfo: true` 以配合 `Network.responseReceivedExtraInfo` 拆分多值响应头，并修复 `jerr_z` `@ptrCast` AST 校验问题。
 - Phase 401: `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`, `src/js/runtime_source.cp` — 隔离 `__capsurf_call_fn`/`__capsurf_safe_stringify` 免疫 `window.JSON = null` 与 `Array.prototype.toJSON` 污染，为 `popupWin` 补充 `Promise` 构造器，并优化 `ua_widgets_script` 为编译期 `++`。
+- Phase 402: `src/js/shim/index.js`, `src/js/runtime_source.cp` — `document.execCommand` 支持 `selectAll` 与 `copy`。
