@@ -5722,3 +5722,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE365_RESULT {"hit":1,"text":"real-fetch-ok"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
+
+## Phase 366: `Page.setDocumentContent` 旧子框架销毁事件修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): `Page.setDocumentContent` 重写文档前先发出活跃旧子框架的 `Page.frameDetached` 与 `Runtime.executionContextDestroyed`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE366_RESULT` 完整按序发出 `frameDetached` -> `executionContextDestroyed` -> `frameAttached` -> `executionContextCreated`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

@@ -2987,3 +2987,7 @@
 ## [2026-11-23] Phase 365: 打通页内 `window.fetch()` 真实 HTTP 请求下沉至 `__capsurf_http_get`
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `fetch()` 未命中内置 mock fixture 且目标为真实 `http://`/`https://` URL 时，通过 `globalThis.__capsurf_http_get()` 发起真实 HTTP 请求并返回对应 `200`/`404` 响应体。
+
+## [2026-11-23] Phase 366: `Page.setDocumentContent` 替换文档前清理旧子框架并派发 `Page.frameDetached` / `Runtime.executionContextDestroyed`
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `Page.setDocumentContent` 在调用 `session.navigate` 前遍历活跃 `session.known_child_frames`，先发出 `Page.frameDetached` 与 `Runtime.executionContextDestroyed` 并置为 `detached`，消除连续 `page.setContent()` 时的重复 `frameId` 碰撞（冲刺 `expect-boolean.spec.ts` `with frameLocator 2` **84/84 全绿**）。

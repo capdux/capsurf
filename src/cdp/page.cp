@@ -852,6 +852,32 @@ pub struct PageHandler {
             session.tty_ua_css = 0;
             session.tty_cell_w = 0;
             session.tty_cell_h = 0;
+            {
+                let dki: usize = 0;
+                while (dki < session.known_child_frame_count && event_count.* < out_events.len) : (dki += 1) {
+                    let dkf = &session.known_child_frames[dki];
+                    if (dkf.active && !dkf.detached && dkf.frame_id_len > 0) {
+                        dkf.detached = true;
+                        const det_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"frameId\":\"{s}\",\"reason\":\"remove\"}}",
+                            .{ dkf.frame_id_buf[0..dkf.frame_id_len] },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Page.frameDetached", det_json);
+                        event_count.* += 1;
+                        if (dkf.exec_context_id > 0 && session.runtime_enabled && event_count.* < out_events.len) {
+                            const des_json = std.fmt.allocPrint(
+                                session.allocator,
+                                "{{\"executionContextId\":{d}}}",
+                                .{ dkf.exec_context_id },
+                            ) catch "{}";
+                            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextDestroyed", des_json);
+                            event_count.* += 1;
+                        }
+                        dkf.exec_context_id = 0;
+                    }
+                }
+            }
             session.in_set_document_content = true;
             defer session.in_set_document_content = false;
             const target_url = sanitizeSetContentUrl(session.url);

@@ -2215,3 +2215,6 @@
 
 ### Phase 365: `page-network-idle.spec.ts` / `page-network-response.spec.ts` 页内 `fetch()` 未请求服务端排障笔记
 - **`window.fetch()` 默认分支空桩直接返回 200 根因**：`src/js/shim/window.js:3888` 在未命中特定 mock URL 时未调用 `globalThis.__capsurf_http_get`，直接 `Promise.resolve(makeFetchedResponse("", { status: 200 }))`，导致页内 `fetch('/fetch-request-a.js')` 等测试请求从未到达服务端。接入 `__capsurf_http_get` 后，实测 `PHASE365_RESULT {"hit":1,"text":"real-fetch-ok"}`。
+
+### Phase 366: `expect-boolean.spec.ts` `[84/84]` (`with frameLocator 2`) 排障笔记
+- **连续 `setContent` 重复发送 `Page.frameAttached` 未发 `frameDetached` 根因**：第 1 次 `page.setContent('<iframe></iframe>')` 产生 `capsurf-child-1` 后，第 2 次 `page.setContent('<iframe srcdoc="<input>"></iframe>')` 未先发出旧 `capsurf-child-1` 的 `Page.frameDetached` 与 `Runtime.executionContextDestroyed`，直接再次发送 `Page.frameAttached: "capsurf-child-1"` 导致 Playwright 帧树碰撞。在 `Page.setDocumentContent` 入口补齐旧子框架销毁事件后，实测 `PHASE366_RESULT` 先发 `Page.frameDetached` / `executionContextDestroyed` 再发 `Page.frameAttached` / `frameNavigated` / `executionContextCreated`。
