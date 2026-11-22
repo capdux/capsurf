@@ -2811,3 +2811,7 @@
 ## [2026-11-22] Phase 326: 动态注入 `<script>` 解析 `//# sourceURL=` 传递至 `JS_Eval` 文件名
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: 在 `js_capsurf_eval_global_script()` 中提取脚本文本末尾的 `//# sourceURL=` / `//@ sourceURL=` 并作为文件名传入 `JS_Eval()`（默认回退 `"<inserted-script>"`），修复 `page.addScriptTag({ path })` 错误堆栈缺少 `assets/injectedfile.js` 的问题。
+
+## [2026-11-22] Phase 327: `Input.dispatchMouseEvent` 透传修饰键 (`modifiers`) 与鼠标坐标向下取整
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 新增 `modifiers: i64` 参数并设置 `PointerEvent`/`MouseEvent` 的 `altKey`/`ctrlKey`/`metaKey`/`shiftKey`，同时对 `clientX`/`clientY` 使用 `@floor(x)`/`@floor(y)` 向下取整（修复 `page-mouse.spec.ts` `should set modifier keys on click` 与 `should always round down`）。

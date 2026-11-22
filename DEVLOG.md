@@ -2093,3 +2093,6 @@
 
 ### Phase 326: `page-add-script-tag` `[5/9]` 错误堆栈缺少 `assets/injectedfile.js` 排障笔记
 - **`JS_Eval` 硬编码 `"<inserted-script>"` 根因**：`src/cdp/session_hooks.cp` 的 `js_capsurf_eval_global_script()` 此前直接传入 `"<inserted-script>"` 作为 `JS_Eval` 文件名，未解析脚本尾部 Playwright 附加的 `//# sourceURL=assets/injectedfile.js`。补齐 `sourceURL` 提取后，实测 `window.__injErr.stack` 第一帧准确输出 `at <eval> (assets/injectedfile.js:1:23)`。
+
+### Phase 327: `page-mouse.spec.ts` 修饰键缺失与小数坐标未向下取整排障笔记
+- **`dispatchMouseDomEvent()` 遗漏 `modifiers` 与未对坐标取整根因**：此前 `dispatchMouseDomEvent()` 未接收 `modifiers`（导致 `shiftKey`/`ctrlKey` 恒为 `false`），且直接将浮点 `x`/`y` 传入 `clientX`/`clientY`（导致 `(50.1, 50.9)` 未按 Chromium 规范向下取整为 `[50, 50]`）。补齐 `modifiers` 与 `@floor(x)`/`@floor(y)` 后，实测 `modifiers: 10, x: 50.1, y: 50.9` 返回 `{"x":50,"y":50,"shift":true,"ctrl":true}`。

@@ -5449,3 +5449,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：动态插入含 `//# sourceURL=assets/injectedfile.js` 的 `<script>` 后，`Error.stack` 输出 `at <eval> (assets/injectedfile.js:1:23)`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.06s)**。
+
+### [2026-11-22 21:14] Phase 327: `Input.dispatchMouseEvent` 透传修饰键 (`modifiers`) 与鼠标坐标向下取整
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `dispatchMouseDomEvent()` 传入 `modifiers` 并对 `clientX`/`clientY` 使用 `@floor`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`x=50.1, y=50.9, modifiers=10` 返回 `{"x":50,"y":50,"shift":true,"ctrl":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.33s)**。
