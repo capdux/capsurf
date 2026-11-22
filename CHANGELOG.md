@@ -3013,3 +3013,4 @@
 - Phase 386: `src/js/shim/window.js` — `activateClickedElement` 支持 `<a target="_blank">` 点击触发弹窗并识别 `rel="noopener"`/`noreferrer`。
 - Phase 387: `src/cdp/input.cp` — 右键 `mouseReleased` 自动发射 `contextmenu` DOM 事件。
 - Phase 388: `src/cdp/input.cp` — `MousePressed` 支持 `clickCount == 2` 双击选词与 `clickCount >= 3` 三击全选（表单控件与普通文本块）。
+- Phase 389: `src/cdp/dom.cp` — `DOM.resolveNode` 对无效或越界 `nodeId`/`backendNodeId` 返回 `-32000 No node with given id found`。

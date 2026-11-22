@@ -1038,6 +1038,9 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
+            if (nid_val <= 0 || @as(usize, @intCast(nid_val)) >= session.doc.nodes.items.len) {
+                return CdpResponse.err(req.id, -32000, "No node with given id found");
+            }
             if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
                 if (exec_ctx > 1 && session.has_document) {
                     let iso_buf: [256]u8 = [0; 256];
