@@ -2234,3 +2234,4 @@
 - Phase 380 (`src/cdp/page.cp`, `src/cdp/session.cp`): 修复 `Page.navigateToHistoryEntry` 仅修改下标而不加载页面/不发射 `frameNavigated` 与 `load` 事件的问题，同时通过 `skip_record_nav` 防止回退时 `recordNavigation` 误清空前进历史记录。
 - Phase 381 (`src/cdp/session.cp`): 通过 `Target.createTarget` 创建的标签页持有独立 `target_registry`（`auto_attach=false`），导致弹窗事件漏发。改为优先使用 `_.owner_target_registry` 后，子标签页调用 `window.open` 即可即时向根 WebSocket 发射匹配 `openerId` 的 `Target.attachedToTarget`。
 - Phase 382 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent(mouseMoved)` 仅派发 `mousemove` 而缺少 `mouseover`/`mouseenter`/`mouseout`/`mouseleave` 的问题，对齐 Chromium 鼠标指针状态机。
+- Phase 383 (`src/js/shim/index.js`, `src/js/shim/element/element.js`): 修复 `<frame>` 元素未挂载 `HTMLIFrameElement.prototype` 导致 `frame.src = ...` 不触发 `URL` 解析与子帧导航加载的问题。

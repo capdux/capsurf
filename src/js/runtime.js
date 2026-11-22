@@ -10028,7 +10028,7 @@
         this._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(val);
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = val;
-      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
+      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && ((this.tagName || "").toLowerCase() === "iframe" || (this.tagName || "").toLowerCase() === "frame") && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
           let resolved = val;
           try {
@@ -10112,7 +10112,7 @@
         this._displayNone = false;
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
         this.className = "";
-      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && (this.tagName || "").toLowerCase() === "iframe" && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
+      } else if (key.toLowerCase() === "src" && this.isConnected && !this._suppressSetAttrNav && ((this.tagName || "").toLowerCase() === "iframe" || (this.tagName || "").toLowerCase() === "frame") && !(this.hasAttribute && this.hasAttribute("srcdoc"))) {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_navigate_iframe === "function") {
           globalThis.__capsurf_navigate_iframe(this, "about:blank");
         }
@@ -44839,6 +44839,7 @@
         case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
         case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
         case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
+        case "frame":
         case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
         case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
         case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;

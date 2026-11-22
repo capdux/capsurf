@@ -641,6 +641,7 @@ function installShim(global) {
       case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
       case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
+      case "frame":
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
       case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
