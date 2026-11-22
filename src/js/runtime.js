@@ -34370,20 +34370,24 @@
     const alertFn = markNative(function (msg) { return undefined; }, "alert");
     const confirmFn = markNative(function (msg) { return false; }, "confirm");
     const promptFn = markNative(function (msg, defaultText) { return null; }, "prompt");
+    const stopFn = markNative(function () {}, "stop");
 
     global.alert = alertFn;
     global.confirm = confirmFn;
     global.prompt = promptFn;
+    global.stop = stopFn;
 
     if (typeof window !== "undefined") {
       window.alert = alertFn;
       window.confirm = confirmFn;
       window.prompt = promptFn;
+      window.stop = stopFn;
     }
     if (typeof globalThis !== "undefined") {
       globalThis.alert = alertFn;
       globalThis.confirm = confirmFn;
       globalThis.prompt = promptFn;
+      globalThis.stop = stopFn;
     }
 
     // 10. CSSOM getComputedStyle & CSSStyleDeclaration (uses global.CSSStyleDeclaration from cssom.js)

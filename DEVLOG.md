@@ -1956,3 +1956,6 @@
 
 ### Phase 281: `delete window.Node` 导致 `locator.click` 崩溃排障笔记
 - **`ReferenceError: Node is not defined` 根因**：CapSurf 的 `Page.createIsolatedWorld` 与主世界共享 QuickJS 上下文，页面脚本执行 `delete window['Node']` 后 Playwright 注入在隔离世界的 `InjectedScript` 亦无法访问 `Node`。在 `contextId > 1` 的 `Runtime.evaluate`/`Runtime.callFunctionOn` 执行期间临时恢复并 `defer` 清理后，主世界维持 `undefined` / `'Node' in window === false`，隔离世界 `typeof Node === "function"`。
+
+### Phase 282: `Input.dispatchDragEvent` 与 `window.stop()` 排障笔记
+- **`page-drop` 报 `dragover handler did not call preventDefault()` 根因**：`Input.dispatchDragEvent` 原先落入 `Input.` 通用空桩未派发任何 DOM 事件。补齐 `dragenter`/`dragover`/`drop`/`dragleave` 与 `DataTransfer` 构造后，实测准确触发 `["dragenter", "dragover", "drop:hello"]`。

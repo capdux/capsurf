@@ -5124,3 +5124,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，隔离世界 `Runtime.evaluate` 与 `Runtime.callFunctionOn` 均返回 `"function"`，返回主世界仍保持 `{"type":"undefined","inWin":false}`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **123.77s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
+
+### [2026-11-22 17:36] Phase 282: 实装 `Input.dispatchDragEvent` 拖放事件与 `window.stop()`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 实装 `Input.dispatchDragEvent`，派发 `dragenter`/`dragover`/`drop`/`dragleave` 并挂载 `DataTransfer`。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 暴露 `window.stop()` / `globalThis.stop()`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`typeof window.stop === "function"`，`Input.dispatchDragEvent` 连续派发准确触发 `["dragenter","dragover","drop:hello"]`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **122.53s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。

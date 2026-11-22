@@ -135,6 +135,16 @@
 | 2026-11-22 17:25 | `/css/css-display/` | `5/5` | 10 | PASS 2 / FAIL 7 / TIMEOUT 1 (18s) | Batch 56 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:27 | `/css/css-grid/` | `3/5` | 89/176 | PASS 21 / FAIL 65 / TIMEOUT 3 (90s截断) | Batch 56 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:28 | `/css/css-grid/` | `4/5` | 89/176 | PASS 18 / FAIL 66 / TIMEOUT 5 (90s截断) | Batch 56 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:30 | `/css/css-grid/` | `5/5` | 132/176 | PASS 31 / FAIL 97 / TIMEOUT 4 (90s截断) | Batch 57 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:31 | `/css/css-fonts/` | `3/5` | 24 | PASS 7 / FAIL 16 / TIMEOUT 1 (22s) | Batch 57 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:33 | `/css/css-fonts/` | `4/5` | 24 | PASS 4 / FAIL 18 / TIMEOUT 2 (90s截断) | Batch 57 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:33 | `/css/css-fonts/` | `5/5` | 24 | PASS 5 / FAIL 19 / TIMEOUT 0 (11s) | Batch 57 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:34 | `/css/css-animations/` | `1/5` | 12 | PASS 6 / FAIL 6 / TIMEOUT 0 (39s) | Batch 57 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:36 | `/css/css-animations/` | `2/5` | 12 | PASS 2 / FAIL 9 / TIMEOUT 1 (90s截断) | Batch 58 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:37 | `/css/css-animations/` | `3/5` | 12 | PASS 4 / FAIL 8 / TIMEOUT 0 (8s) | Batch 58 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:37 | `/css/cssom/` | `1/5` | 25 | PASS 9 / FAIL 15 / TIMEOUT 1 (12s) | Batch 58 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:38 | `/css/cssom/` | `2/5` | 25 | PASS 13 / FAIL 11 / TIMEOUT 1 (9s) | Batch 58 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:38 | `/css/cssom/` | `3/5` | 24 | PASS 9 / FAIL 13 / ERROR 1 / TIMEOUT 1 (18s) | Batch 58 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -251,3 +261,7 @@
 | 2026-11-22 17:28 | `page-localstorage.spec.ts` | 8/9 PASS (cross-origin scope 1 FAIL, 15.1s, exit 0) | PW Batch 31 |
 | 2026-11-22 17:29 | `page-navigation.spec.ts` | 2/3 PASS (cross-origin redirect load 1 TIMEOUT, 39.3s) | PW Batch 31 |
 | 2026-11-22 17:31 | `page-network-idle.spec.ts` | 0/3 (`[4/10]` 90s截断, goto null/request) | PW Batch 31 |
+| 2026-11-22 17:35 | `locator-click.spec.ts` | 4/5 PASS (`objectId`缺`executionContextId`, Node 1 FAIL) | PW Batch 32 |
+| 2026-11-22 17:36 | `expect-misc.spec.ts` | 55/55 PASS (Phase 280 复测 `#FF00FF` 已通, `[56/59]` 90s截断) | PW Batch 32 |
+| 2026-11-22 17:36 | `page-network-sizes.spec.ts` | 0/2 TIMEOUT (`[3/13]` 90s截断, request事件未触发) | PW Batch 32 |
+| 2026-11-22 17:37 | `page-request-continue.spec.ts` | 0/4 FAIL/TIMEOUT (`[5/36]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 32 |

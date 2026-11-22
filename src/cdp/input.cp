@@ -2,7 +2,7 @@
 // CDP Input Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/input.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, extractJsonArray, unescapeJsonString } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { NodeId, NULL_NODE } from "../dom/dom.cp";
 import { HttpLoader } from "../net/http_loader.cp";
@@ -548,7 +548,53 @@ pub struct InputHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
-        // 4. Ignore Input Events flag: setIgnoreInputEvents
+        // 4. Drag Events: dispatchDragEvent
+        if (std.mem.eql(u8, req.method, "Input.dispatchDragEvent")) {
+            const type_str = extractJsonString(req.params_raw, "type") ?? "";
+            const x = extractJsonFloat(req.params_raw, "x") ?? 0.0;
+            const y = extractJsonFloat(req.params_raw, "y") ?? 0.0;
+            let dom_type: []const u8 = "";
+            if (std.mem.eql(u8, type_str, "dragEnter")) {
+                dom_type = "dragenter";
+            } else if (std.mem.eql(u8, type_str, "dragOver")) {
+                dom_type = "dragover";
+            } else if (std.mem.eql(u8, type_str, "drop")) {
+                dom_type = "drop";
+            } else if (std.mem.eql(u8, type_str, "dragCancel")) {
+                dom_type = "dragleave";
+            }
+            if (dom_type.len > 0 && session.has_document) {
+                const items_json = extractJsonArray(req.params_raw, "items") ?? "[]";
+                let esc_items: [2048]u8 = [0; 2048];
+                let ei_len: usize = 0;
+                let ii: usize = 0;
+                while (ii < items_json.len && ei_len + 2 < esc_items.len) : (ii += 1) {
+                    const ch = items_json[ii];
+                    if (ch == '\\' || ch == '\'') {
+                        esc_items[ei_len] = '\\';
+                        esc_items[ei_len + 1] = ch;
+                        ei_len += 2;
+                    } else if (ch >= 0x20) {
+                        esc_items[ei_len] = ch;
+                        ei_len += 1;
+                    }
+                }
+                let drag_js_buf: [4096]u8 = undefined;
+                const drag_js = std.fmt.bufPrint(
+                    &drag_js_buf,
+                    "(function(){{if(typeof document==='undefined')return;var t=(document.elementFromPoint?document.elementFromPoint({d},{d}):null)||document.body||document.documentElement;if(!t)return;var dt=typeof DataTransfer==='function'?new DataTransfer():null;if(dt&&dt.items){{try{{var arr=JSON.parse('{s}');for(var i=0;i<arr.length;i++){{var it=arr[i];if(it&&it.mimeType&&typeof it.data==='string')dt.items.add(it.data,it.mimeType);}}}}catch(e){{}}}}var Ctor=globalThis.DragEvent||globalThis.MouseEvent||globalThis.Event;var ev=new Ctor('{s}',{{bubbles:true,cancelable:true,clientX:{d},clientY:{d}}});try{{Object.defineProperty(ev,'dataTransfer',{{value:dt,configurable:true}});}}catch(e){{ev.dataTransfer=dt;}}if(typeof t.dispatchEvent==='function')t.dispatchEvent(ev);}})()",
+                    .{ @as(i64, @intFromFloat(x)), @as(i64, @intFromFloat(y)), esc_items[0..ei_len], dom_type, @as(i64, @intFromFloat(x)), @as(i64, @intFromFloat(y)) },
+                ) catch "";
+                if (drag_js.len > 0) {
+                    const dv = session.ctx.eval(drag_js);
+                    session.ctx.freeValue(dv);
+                    session.ctx.drainJobs();
+                }
+            }
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        // 5. Ignore Input Events flag: setIgnoreInputEvents
         if (std.mem.eql(u8, req.method, "Input.setIgnoreInputEvents")) {
             const ignore = extractJsonBool(req.params_raw, "ignore") ?? false;
             * = ignore;

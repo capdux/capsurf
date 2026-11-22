@@ -2614,3 +2614,8 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在暴露 `global.Node` 时保存不可枚举备份 `__capsurf_orig_Node`。
   - `src/cdp/session.cp`, `src/cdp/runtime.cp`: 新增 `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()`，在 `Runtime.callFunctionOn` 与 `Runtime.evaluate` 执行隔离世界（`contextId > 1`）期间临时恢复 `globalThis.Node` 并在返回前清理，保证主世界 `'Node' in window === false` 不变而 Playwright `InjectedScript` 点击定位不再报 `ReferenceError: Node is not defined`。
+
+## [2026-11-22] Phase 282: 实装 `Input.dispatchDragEvent` 拖放事件与 `window.stop()`
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 实装 `Input.dispatchDragEvent`，支持 `dragEnter`/`dragOver`/`drop`/`dragCancel` 映射为 `dragenter`/`dragover`/`drop`/`dragleave` DOM 事件，通过 `elementFromPoint(x, y)` 命中目标并挂载带 `items` 数据的 `DataTransfer` 对象。
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 暴露 `window.stop()` / `globalThis.stop()` 方法，修复 `calling window.stop sync` `TypeError: not a function`。
