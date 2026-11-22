@@ -87,6 +87,14 @@
 | 2026-11-22 16:30 | `/css/css-display/` | `4/5` | 10 | PASS 4 / FAIL 6 / TIMEOUT 0 (8s) | Batch 46 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:32 | `/css/css-display/` | `5/5` | 10 | PASS 2 / FAIL 7 / TIMEOUT 1 (18s) | Batch 47 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:33 | `/css/css-color/` | `3/5` | 11 | PASS 0 / FAIL 7 / TIMEOUT 4 (90s) | Batch 47 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:34 | `/css/css-color/` | `4/5` | 11 | PASS 0 / FAIL 8 / TIMEOUT 3 (63s) | Batch 47 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:36 | `/css/css-color/` | `5/5` | 11 | PASS 1 / FAIL 6 / TIMEOUT 4 (81s) | Batch 47 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:36 | `/css/css-overflow/` | `3/5` | 7 | PASS 2 / FAIL 5 / TIMEOUT 0 (7s) | Batch 47 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:38 | `/css/css-overflow/` | `4/5` | 6 | PASS 0 / FAIL 6 / TIMEOUT 0 (7s) | Batch 48 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:38 | `/css/css-overflow/` | `5/5` | 6 | PASS 3 / FAIL 3 / TIMEOUT 0 (7s) | Batch 48 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:38 | `/css/css-tables/` | `3/5` | 4 | PASS 0 / FAIL 4 / TIMEOUT 0 (7s) | Batch 48 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:38 | `/css/css-tables/` | `4/5` | 3 | PASS 1 / FAIL 2 / TIMEOUT 0 (6s) | Batch 48 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:39 | `/css/css-tables/` | `5/5` | 3 | PASS 1 / FAIL 2 / TIMEOUT 0 (6s) | Batch 48 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -155,3 +163,7 @@
 | 2026-11-22 16:30 | `elementhandle-click.spec.ts` | 4/8 PASS (Node/ShadowDOM/br/dblclick 4 FAIL, 90s截断) | PW Batch 19 |
 | 2026-11-22 16:31 | `elementhandle-scroll-into-view.spec.ts` | 2/8 PASS (6 FAIL, 90s截断) | PW Batch 19 |
 | 2026-11-22 16:33 | `frame-hierarchy.spec.ts` | 4/12 PASS (nested/shadow/frameset 8 FAIL, 90s截断) | PW Batch 19 |
+| 2026-11-22 16:36 | `page-event-pageerror.spec.ts` | 0/2 TIMEOUT (未触发pageerror, 90s截断) | PW Batch 20 |
+| 2026-11-22 16:37 | `page-wait-for-url.spec.ts` | 1/3 PASS (waitForURL load未触发 2 TIMEOUT, 90s截断) | PW Batch 20 |
+| 2026-11-22 16:38 | `elementhandle-select-text.spec.ts` | 5/5 PASS (12.2s, exit 0) | PW Batch 20 (Phase 273 全绿) |
+| 2026-11-22 16:38 | `locator-click.spec.ts` | 4/5 PASS (Node removed 1 FAIL, 14.1s) | PW Batch 20 (Phase 266+274 复测) |

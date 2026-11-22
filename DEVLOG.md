@@ -1932,3 +1932,6 @@
 
 ### Phase 274: `dblclick` 与 `MouseEvent.detail` 透传排障笔记
 - **`dblclick()` 测试失败根因**：`Input.dispatchMouseEvent` 在 `MouseReleased` 分支仅派发 `mouseup` 与 `click`，未在 `click_count == 2` 时派发 `dblclick`，且 `detail` 固定为 `1`。透传 `click_count` 并补充 `dblclick` 后，实测 `page.locator("button").dblclick()` 准确触发 `['click:1', 'click:2', 'dblclick:2']`。
+
+### Phase 275: `DOM.scrollIntoViewIfNeeded` 门控排障笔记
+- **未报错与不等待根因**：此前 `DOM.scrollIntoViewIfNeeded` 对 detached 与 `display:none` 节点一律返回 `{}`，导致 `elementhandle-scroll-into-view.spec.ts` 中 `detached` 不抛错且 `display:none` 未进入重试等待循环。补齐 `isConnected` 与 `getBoxModel` 零尺寸错误返回后，`detached`、`display:none` 等待及超时三项全部通过。

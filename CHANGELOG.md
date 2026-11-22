@@ -2580,3 +2580,7 @@
 ## [2026-11-22] Phase 274: `dblclick` 鼠标事件派发与 `MouseEvent.detail` 透传 `clickCount`
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 增加 `detail` 参数（透传 `Input.dispatchMouseEvent` 的 `click_count`），并在 `MouseReleased` 且 `click_count == 2` 时在 `click` 之后派发 `dblclick` 事件（`detail: 2`）。
+
+## [2026-11-22] Phase 275: `DOM.scrollIntoViewIfNeeded` 脱离文档与零尺寸/隐藏状态门控
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 在 `DOM.scrollIntoViewIfNeeded` 中校验目标元素 `isConnected`（脱离文档返回 `"Node is detached from document"`）及 `getBoxModel` 尺寸（`width <= 0 && height <= 0` 返回 `"Node does not have a layout object"`），使 Playwright `scrollIntoViewIfNeeded` 在 detached 时报错、在 `display:none` 时按预期等待可见或超时。

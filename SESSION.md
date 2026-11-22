@@ -5065,3 +5065,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`page.locator("button").dblclick()` 完整触发 `['click:1', 'click:2', 'dblclick:2']`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.19s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.16s)**。
+
+### [2026-11-22 16:39] Phase 275: `DOM.scrollIntoViewIfNeeded` 校验 `isConnected` 与零尺寸不可见布局对象
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `DOM.scrollIntoViewIfNeeded` 增加 `el.isConnected` 校验（未挂载返回 `-32000 "Node is detached from document"`）与 `getBoxModel` 零尺寸校验（`width <= 0 && height <= 0` 返回 `-32000 "Node does not have a layout object"`），使 Playwright `scrollIntoViewIfNeeded()` 在节点脱离文档时立即报错、在 `display: none` 恢复可见前持续等待或超时。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`detached` 抛出 `Element is not attached to the DOM`，`display: none` 节点等待至 `display: block` 后恢复（`beforeBlock: false, afterBlock: true`），超时抛出 `Timeout 500ms exceeded.`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.04s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.07s)**。

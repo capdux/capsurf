@@ -873,6 +873,26 @@ pub struct DomHandler {
 
             // Execute scroll into view in JS environment
             if (session.has_document) {
+                let conn_buf: [512]u8 = [0; 512];
+                const conn_js = std.fmt.bufPrint(
+                    &conn_buf,
+                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} return (el && el.isConnected !== false) ? 1 : 0; }})()",
+                    .{ obj_id_val, obj_id_val, node_id, node_id },
+                ) catch null;
+                if (ce := conn_js) {
+                    const cval = session.ctx.eval(ce);
+                    const is_conn = !(cval.tag == 0 && cval.u.uint64 == 0);
+                    session.ctx.freeValue(cval);
+                    if (!is_conn) {
+                        return CdpResponse.err(req.id, -32000, "Node is detached from document");
+                    }
+                }
+                session.ensureLayout();
+                const bm = session.getBoxModel(node_id);
+                if (bm.width <= 0.0 && bm.height <= 0.0) {
+                    return CdpResponse.err(req.id, -32000, "Node does not have a layout object");
+                }
+
                 let js_buf: [1024]u8 = [0; 1024];
                 const js_expr = std.fmt.bufPrint(
                     &js_buf,
