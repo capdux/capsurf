@@ -1973,38 +1973,81 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     return jsNull();
 }
 
+fn findDocumentHead(doc: *Document): NodeId {
+    const root = doc.root_element;
+    if (root == NULL_NODE || @as(usize, root) >= doc.nodes.items.len) return NULL_NODE;
+    let cur = doc.nodes.items[@as(usize, root)].first_child;
+    while (cur != NULL_NODE && @as(usize, cur) < doc.nodes.items.len) {
+        const node = &doc.nodes.items[@as(usize, cur)];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "head")) {
+            return cur;
+        }
+        cur = node.next_sibling;
+    }
+    return NULL_NODE;
+}
+
+fn findFirstTitleInTree(doc: *Document, root: NodeId): NodeId {
+    if (root == NULL_NODE || @as(usize, root) >= doc.nodes.items.len) return NULL_NODE;
+    let stack: [256]NodeId = [NULL_NODE; 256];
+    let sp: usize = 0;
+    stack[0] = root;
+    sp = 1;
+    while (sp > 0) {
+        sp -= 1;
+        const nid = stack[sp];
+        if (nid == NULL_NODE || @as(usize, nid) >= doc.nodes.items.len) continue;
+        const node = &doc.nodes.items[@as(usize, nid)];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
+            return nid;
+        }
+        // Push children in reverse order so first_child is popped first
+        let kids: [128]NodeId = [NULL_NODE; 128];
+        let kc: usize = 0;
+        let c = node.first_child;
+        while (c != NULL_NODE && @as(usize, c) < doc.nodes.items.len && kc < kids.len) {
+            kids[kc] = c;
+            kc += 1;
+            c = doc.nodes.items[@as(usize, c)].next_sibling;
+        }
+        while (kc > 0 && sp < stack.len) {
+            kc -= 1;
+            stack[sp] = kids[kc];
+            sp += 1;
+        }
+    }
+    return NULL_NODE;
+}
+
 @c fn js_document_get_title(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
     const ptr = JS_GetOpaque(this_val, g_document_class_id);
     if (ptr == null) return jsNewString(ctx, "");
     const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
-    let i: usize = 1;
-    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
-        const node = &dom_ctx.doc.nodes.items[i];
-        if (node.node_type == NodeType.Element && node.parent != NULL_NODE && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
-            const raw = getNodeText(dom_ctx.doc, @intCast(i));
-            let title_buf: [1024]u8 = [0; 1024];
-            let tlen: usize = 0;
-            let in_ws = true;
-            let ri: usize = 0;
-            while (ri < raw.len && tlen < title_buf.len) : (ri += 1) {
-                const c = raw[ri];
-                if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0x0c) {
-                    if (!in_ws) {
-                        title_buf[tlen] = ' ';
-                        tlen += 1;
-                        in_ws = true;
-                    }
-                } else {
-                    title_buf[tlen] = c;
+    const title_nid = findFirstTitleInTree(dom_ctx.doc, dom_ctx.doc.root_element);
+    if (title_nid != NULL_NODE) {
+        const raw = getNodeText(dom_ctx.doc, title_nid);
+        let title_buf: [1024]u8 = [0; 1024];
+        let tlen: usize = 0;
+        let in_ws = true;
+        let ri: usize = 0;
+        while (ri < raw.len && tlen < title_buf.len) : (ri += 1) {
+            const c = raw[ri];
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0x0c) {
+                if (!in_ws) {
+                    title_buf[tlen] = ' ';
                     tlen += 1;
-                    in_ws = false;
+                    in_ws = true;
                 }
+            } else {
+                title_buf[tlen] = c;
+                tlen += 1;
+                in_ws = false;
             }
-            if (tlen > 0 && title_buf[tlen - 1] == ' ') tlen -= 1;
-            return jsNewString(ctx, title_buf[0..tlen]);
         }
+        if (tlen > 0 && title_buf[tlen - 1] == ' ') tlen -= 1;
+        return jsNewString(ctx, title_buf[0..tlen]);
     }
     return jsNewString(ctx, "");
 }
@@ -2018,39 +2061,14 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     defer std.heap.page_allocator.free(str);
     const str_dup = dom_ctx.doc.allocator.dupe(u8, str) catch str;
 
-    let i: usize = 1;
-    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
-        const node = &dom_ctx.doc.nodes.items[i];
-        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
-            setNodeText(dom_ctx.doc, @intCast(i), str_dup);
-            return jsUndefined();
-        }
+    const existing_tid = findFirstTitleInTree(dom_ctx.doc, dom_ctx.doc.root_element);
+    if (existing_tid != NULL_NODE) {
+        setNodeText(dom_ctx.doc, existing_tid, str_dup);
+        return jsUndefined();
     }
 
-    // No <title> found; create <title> in <head>
-    let head_id: NodeId = NULL_NODE;
-    let html_id: NodeId = NULL_NODE;
-    i = 1;
-    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
-        const node = &dom_ctx.doc.nodes.items[i];
-        if (node.node_type == NodeType.Element) {
-            if (std.ascii.eqlIgnoreCase(node.tag_name, "head")) {
-                head_id = @intCast(i);
-                break;
-            } else if (std.ascii.eqlIgnoreCase(node.tag_name, "html") && html_id == NULL_NODE) {
-                html_id = @intCast(i);
-            }
-        }
-    }
-
-    if (head_id == NULL_NODE) {
-        head_id = dom_ctx.doc.createElement("head") catch return jsUndefined();
-        if (html_id != NULL_NODE) {
-            dom_ctx.doc.appendChild(html_id, head_id);
-        } else if (dom_ctx.doc.root_element != NULL_NODE) {
-            dom_ctx.doc.appendChild(dom_ctx.doc.root_element, head_id);
-        }
-    }
+    const head_id = findDocumentHead(dom_ctx.doc);
+    if (head_id == NULL_NODE) return jsUndefined();
 
     const title_id = dom_ctx.doc.createElement("title") catch return jsUndefined();
     dom_ctx.doc.appendChild(head_id, title_id);
@@ -2110,12 +2128,9 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const ptr = JS_GetOpaque(this_val, g_document_class_id);
     if (ptr == null) return jsNull();
     const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
-    let i: usize = 1;
-    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
-        const node = &dom_ctx.doc.nodes.items[i];
-        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "head")) {
-            return createJsElement(ctx, dom_ctx, @intCast(i));
-        }
+    const head_nid = findDocumentHead(dom_ctx.doc);
+    if (head_nid != NULL_NODE) {
+        return createJsElement(ctx, dom_ctx, head_nid);
     }
     return jsNull();
 }
