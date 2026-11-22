@@ -3021,3 +3021,4 @@
 - Phase 394: `src/html/tags.cp`, `src/css/font_face.cp`, `src/js/shim/cssom.js`, `src/js/runtime_source.cp` — 修复 `frame`/`frameset` 标签识别与 void 闭合、CSS `content` 十六进制转义 UTF-8 解码，以及外部 `<link>` 样式表 HTTP 文本加载。
 - Phase 395: `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/runtime_source.cp` — 修复 `ShadowRoot` 子节点的 `previousSibling`/`nextSibling`/`previousElementSibling`/`nextElementSibling` 链与 `Element.prototype.matches` 在 ShadowRoot 及 `:is`/`:not`/`:has`/`:where`/`:scope` 下的匹配作用域。
 - Phase 396: `src/js/shim/element/html-classes.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp` — 为子 `iframe.contentWindow` 挂载 `window.open` 弹窗桥接并按子帧 `location.href` 解析相对 URL。
+- Phase 397: `src/cdp/page.cp` — 修复 `Page.navigateToHistoryEntry` `formatFrameNavigatedEvent(final_url)` 传参错误，并补齐 `Network.*` 响应事件与 `Runtime.executionContextsCleared`。

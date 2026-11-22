@@ -1855,12 +1855,22 @@ pub struct PageHandler {
 
             let nav_html: []const u8 = "";
             let final_url: []const u8 = target_url;
+            let hist_status: u32 = 200;
+            let hist_status_text: []const u8 = "OK";
+            let hist_raw_headers: []const u8 = "";
+            let hist_content_type: []const u8 = "text/html";
+            let hist_raw_body_len: usize = 0;
             if (!std.ascii.eqlIgnoreCase(target_url, "about:blank")) {
                 let fetch_buf = session.allocator.alloc(u8, 524288) catch return CdpResponse.err(req.id, -32000, "Out of memory");
                 defer session.allocator.free(fetch_buf);
                 const fetch_res = HttpLoader.fetchDocument(session, target_url, fetch_buf, 0) catch return CdpResponse.err(req.id, -32000, "History navigation fetch failed");
                 nav_html = session.allocator.dupe(u8, fetch_res.html) catch fetch_res.html;
-                final_url = fetch_res.final_url;
+                final_url = session.allocator.dupe(u8, fetch_res.final_url) catch fetch_res.final_url;
+                hist_status = fetch_res.status_code;
+                hist_status_text = session.allocator.dupe(u8, fetch_res.status_text) catch "OK";
+                hist_raw_headers = session.allocator.dupe(u8, fetch_res.raw_headers) catch "";
+                hist_content_type = session.allocator.dupe(u8, fetch_res.content_type) catch "text/html";
+                hist_raw_body_len = fetch_res.raw_body.len;
             }
 
             session.skip_record_nav = true;
@@ -1875,14 +1885,55 @@ pub struct PageHandler {
                 out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
                 event_count.* += 1;
             }
+            if (session.network_enabled && !std.ascii.eqlIgnoreCase(final_url, "about:blank")) {
+                let esc_u_buf: [2048]u8 = [0; 2048];
+                const esc_u = escapeJsonString(final_url, &esc_u_buf);
+                if (event_count.* < out_events.len) {
+                    const req_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                        .{ session.loader_id, session.loader_id, esc_u, esc_u, session.frame_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                    event_count.* += 1;
+                }
+                if (event_count.* < out_events.len) {
+                    let st_esc_buf: [256]u8 = [0; 256];
+                    const st_esc = escapeJsonString(hist_status_text, &st_esc_buf);
+                    const hdrs_json = formatHttpHeadersJson(hist_raw_headers, session.allocator);
+                    const mime_raw = mimeEssence(hist_content_type);
+                    const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+                    const resp_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                        .{ session.loader_id, session.loader_id, esc_u, hist_status, st_esc, hdrs_json, mime_out, session.frame_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+                    event_count.* += 1;
+                }
+                if (event_count.* < out_events.len) {
+                    const fin_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"encodedDataLength\":{d}}}",
+                        .{ session.loader_id, hist_raw_body_len },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Network.loadingFinished", fin_json);
+                    event_count.* += 1;
+                }
+            }
             if (event_count.* < out_events.len) {
-                let nav_buf: [4096]u8 = undefined;
-                const nav_evt = session.formatFrameNavigatedEvent(&nav_buf);
-                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", session.allocator.dupe(u8, nav_evt) catch nav_evt);
+                const nav_evt = session.formatFrameNavigatedEvent(final_url);
+                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", nav_evt);
                 event_count.* += 1;
             }
             if (session.runtime_enabled && event_count.* < out_events.len) {
-                const main_ctx_json = session.formatExecutionContextEvent(final_url);
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextsCleared", "{}");
+                event_count.* += 1;
+            }
+            if (session.runtime_enabled && event_count.* < out_events.len) {
+                const raw_main_orig = originOf(final_url);
+                const main_orig = if (raw_main_orig.len > 0) raw_main_orig else (if (final_url.len > 0) final_url else "about:blank");
+                const main_ctx_json = session.formatExecutionContextEvent(main_orig);
                 out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", main_ctx_json);
                 event_count.* += 1;
             }
