@@ -191,6 +191,9 @@
 | 2026-11-22 18:41 | `/css/cssom-view/` | `4/5` | 21 | PASS 7 / FAIL 5 / TIMEOUT 9 (0 CRASH) | Batch 69 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:41 | `/css/css-box/` | `3/3` | 11 | PASS 6 / FAIL 5 / TIMEOUT 0 (8s) | Batch 69 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:41 | `/html/semantics/forms/` | `4/10`, `5/10` | 29, 29 | PASS 21/29, 17/29 (0 CRASH) | Batch 69 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:46 | `/css/cssom-view/` | `5/5` | 21 | PASS 10 / FAIL 8 / TIMEOUT 3 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:46 | `/html/dom/elements/` | `4/5`, `5/5` | 39, 39 | PASS 23/39, 22/39 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:46 | `/css/css-break/` | `4/5`, `5/5` | 42, 41 | PASS 28/42, 29/41 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -352,3 +355,7 @@
 | 2026-11-22 18:36 | `selectors-misc.spec.ts` | 7/9 PASS (shadow link/above 2 TIMEOUT, 90s截断) | PW Batch 42 |
 | 2026-11-22 18:36 | `page-aria-snapshot-ai.spec.ts` | 14/36 PASS (第14条后服务退出 ECONNREFUSED, 39.9s) | PW Batch 42 更正 |
 | 2026-11-22 18:41 | `expect-boolean.spec.ts` | 60/61 PASS (`[62/84]` 90s截断) | PW Batch 43 |
+| 2026-11-22 18:45 | `page-dialog.spec.ts` | 7/9 PASS (prompt/confirm 2 FAIL, 18.8s) | PW Batch 44 |
+| 2026-11-22 18:45 | `page-dispatchevent.spec.ts` | 15/16 PASS (`should be atomic` 1 FAIL, 30.1s) | PW Batch 44 |
+| 2026-11-22 18:45 | `page-evaluate-handle.spec.ts` | 10/11 PASS (userAgent 1 FAIL, 13.0s) | PW Batch 44 |
+| 2026-11-22 18:45 | `retarget.spec.ts` | 14/15 PASS (Phase 292 复测提升 13->14, 1.4m) | PW Batch 44 |

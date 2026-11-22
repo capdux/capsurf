@@ -1970,6 +1970,10 @@ function installElementExtensions(proto) {
 
   function getScrollParent(node) {
     if (!node) return null;
+    if (node.nodeType === 1 && node.parentNode && node.parentNode._shadowRoot) {
+      if (node.assignedSlot) return node.assignedSlot;
+      return null;
+    }
     if (node.parentElement) return node.parentElement;
     if (node.parentNode) {
       if (node.parentNode.nodeType === 11 && node.parentNode.host) { // ShadowRoot
@@ -2014,6 +2018,9 @@ function installElementExtensions(proto) {
     if (isHiddenInClosedDetails(el)) return true;
     let cur = el;
     while (cur && cur.nodeType === 1) {
+      if (cur.parentNode && cur.parentNode._shadowRoot && !cur.assignedSlot) {
+        return true;
+      }
       if (cur._displayNone === true) return true;
       if (cur.style) {
         const d = (typeof cur.style.getPropertyValue === "function")
@@ -2136,6 +2143,16 @@ function installElementExtensions(proto) {
         } catch (e) {}
       }
       const parent = getScrollParent(this);
+      if (childW === 0 && childH === 0 && parent && parent.nodeType === 1) {
+        const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+        if (rn && rn.host) {
+          const txt = String(this.textContent || "").trim();
+          if (txt.length > 0 || tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
+            childW = Math.max(20, txt.length * 8 + 16);
+            childH = 24;
+          }
+        }
+      }
       if (parent && parent.nodeType === 1 && (childW > 0 || childH > 0)) {
         const winX = (typeof window !== "undefined" && (window.scrollX || window.pageXOffset)) || 0;
         const winY = (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;

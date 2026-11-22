@@ -1995,3 +1995,6 @@
 
 ### Phase 294: `<button hidden="">` 在 `selectors-role` 中仍被视为可见排障笔记
 - **`should filter hidden, unless explicitly asked for` 仍包含 `<button hidden="">Hello</button>` 根因**：`getDefaultDisplayForElement()` 仅检查 `HIDDEN_BY_DEFAULT_TAGS`（如 `script`/`style`/`template`），未处理 HTML `[hidden]` 属性的 UA 默认规则 `[hidden]:not([hidden="until-found"]) { display: none; }`，导致 `getComputedStyle(btn).display` 返回 `"inline"`。补齐 `[hidden]` 默认 `"none"` 规则后，实测 `b1Disp="none"`（作者显式 `display:inline-block` 与 `hidden="until-found"` 仍分别保持 `"inline-block"` 与 `"inline"`）。
+
+### Phase 295: Shadow DOM `<slot>` 隐藏与 ShadowRoot `<button>` 零尺寸不可见排障笔记
+- **`selectors-role` 缺少 `Shadow1` 且多出 `hidden1`/`hidden2` 根因**：`getScrollParent()` 绕过 `assignedSlot` 直接返回宿主元素，导致未分配 `<slot>` 或处于 `display:none` `<slot>` 中的轻 DOM 节点返回非零矩形；同时 ShadowRoot 内部无显式宽高的 `<button>`/`<a>` 在原生布局中返回 `0x0`。两处同步补齐后，实测 `h1Rect=0x0`、`h2Rect=0x0`、`sh1Rect=72x24`。

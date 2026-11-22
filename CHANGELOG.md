@@ -2670,3 +2670,7 @@
 ## [2026-11-22] Phase 294: 补齐 `[hidden]` 属性 UA 默认样式 `display: none` 计算规则
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `getDefaultDisplayForElement()` 中新增 `[hidden]:not([hidden="until-found" i])` UA 默认规则返回 `"none"`（不覆盖作者显式 CSS `display` 声明），修复 `selectors-role` 等场景下 `<button hidden="">` 被 `getComputedStyle` 误报为 `"inline"` 可见的问题。
+
+## [2026-11-22] Phase 295: 修复 Shadow DOM 未分配/隐藏 `<slot>` 裁剪及 ShadowRoot 固有几何尺寸回退
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `getScrollParent()` 中对 ShadowHost 的轻 DOM 子节点按 `assignedSlot` 路由至对应 `<slot>`；在 `isElementDisplayNone()` 中对未分配 `<slot>`（`!cur.assignedSlot`）直接判为不可见；并在 `getBoundingClientRect()` 中为 ShadowRoot 内无显式宽高的文本/表单控件提供非零固有几何回退。
