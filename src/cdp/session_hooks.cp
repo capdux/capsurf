@@ -305,7 +305,24 @@ pub fn registerHttpGetHook(session_ptr: *void, hook: HttpGetHookFn) {
     const code_ptr = JS_ToCStringLen2(ctx, &code_len, unsafe { argv[0] }, 0);
     if (code_ptr == null) return jsNull();
     defer JS_FreeCString(ctx, code_ptr);
-    const res = JS_Eval(ctx, code_ptr.?, code_len, "<inserted-script>", 0);
+    let fname_buf: [512]u8 = [0; 512];
+    const def_name = "<inserted-script>";
+    @memcpy(fname_buf[0..def_name.len], def_name);
+    const code_slice = unsafe { code_ptr.?[0..code_len] };
+    let su_pos = std.mem.lastIndexOf(u8, code_slice, "//# sourceURL=");
+    if (su_pos == null) {
+        su_pos = std.mem.lastIndexOf(u8, code_slice, "//@ sourceURL=");
+    }
+    if (pos := su_pos) {
+        const rest = code_slice[pos + 14 ..];
+        const end_nl = std.mem.indexOfAny(u8, rest, "\r\n") ?? rest.len;
+        const trimmed = std.mem.trim(u8, rest[0..end_nl], " \t");
+        if (trimmed.len > 0 && trimmed.len < fname_buf.len) {
+            @memcpy(fname_buf[0..trimmed.len], trimmed);
+            fname_buf[trimmed.len] = 0;
+        }
+    }
+    const res = JS_Eval(ctx, code_ptr.?, code_len, unsafe { @ptrCast(&fname_buf) }, 0);
     if (jsIsException(res)) {
         const exc = JS_GetException(ctx);
         defer JS_FreeValue(ctx, exc);

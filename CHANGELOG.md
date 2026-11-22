@@ -2807,3 +2807,7 @@
 ## [2026-11-22] Phase 325: `elementFromPoint()` 亚像素包围盒像素对齐命中测试
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: 在 `js_document_element_from_point()` 中将节点视口矩形边界改为 `@floor(r.x)` / `@ceil(r.x + r.width)`（对齐 Blink 像素包络命中规则，解决半像素偏移 `1x1` 元素 `elementFromPoint` 漏判为 `<html>` 的问题）。
+
+## [2026-11-22] Phase 326: 动态注入 `<script>` 解析 `//# sourceURL=` 传递至 `JS_Eval` 文件名
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: 在 `js_capsurf_eval_global_script()` 中提取脚本文本末尾的 `//# sourceURL=` / `//@ sourceURL=` 并作为文件名传入 `JS_Eval()`（默认回退 `"<inserted-script>"`），修复 `page.addScriptTag({ path })` 错误堆栈缺少 `assets/injectedfile.js` 的问题。

@@ -2090,3 +2090,6 @@
 
 ### Phase 325: `page-click` `[6/77]` `should click the half-aligned 1x1 div` 命中 `<html>` 排障笔记
 - **亚像素整数像素命中边界根因**：`js_document_element_from_point()` 此前直接比较 `px < r.x || px >= r.x + r.width`，对于 `margin-left: 20.5px`（`left=28.5, width=1`）等亚像素偏移 `1x1` 元素，当点击坐标取整落于 `Math.floor(r.left)` (`28`) 时会落出 `[28.5, 29.5)`。改用 `@floor(r.x)` 与 `@ceil(r.x + r.width)` 后，实测 `hitFloor="half", hitCenter="half"` 均精准命中。
+
+### Phase 326: `page-add-script-tag` `[5/9]` 错误堆栈缺少 `assets/injectedfile.js` 排障笔记
+- **`JS_Eval` 硬编码 `"<inserted-script>"` 根因**：`src/cdp/session_hooks.cp` 的 `js_capsurf_eval_global_script()` 此前直接传入 `"<inserted-script>"` 作为 `JS_Eval` 文件名，未解析脚本尾部 Playwright 附加的 `//# sourceURL=assets/injectedfile.js`。补齐 `sourceURL` 提取后，实测 `window.__injErr.stack` 第一帧准确输出 `at <eval> (assets/injectedfile.js:1:23)`。

@@ -5442,3 +5442,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`{"left":28.5,"top":19.5,"cx":29,"cy":20,"hitFloor":"half","hitCenter":"half"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。
+
+### [2026-11-22 21:12] Phase 326: 动态注入 `<script>` 解析 `//# sourceURL=` 传递至 `JS_Eval` 文件名
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): `js_capsurf_eval_global_script()` 提取 `//# sourceURL=` / `//@ sourceURL=` 传入 `JS_Eval`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：动态插入含 `//# sourceURL=assets/injectedfile.js` 的 `<script>` 后，`Error.stack` 输出 `at <eval> (assets/injectedfile.js:1:23)`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.06s)**。
