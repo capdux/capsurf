@@ -216,6 +216,9 @@
 | 2026-11-22 19:32 | `/css/css-tables/` | `1/5`~`5/5` | 18 | PASS 4 / FAIL 13 / TIMEOUT 1 (0 CRASH) | Batch 79 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:34 | `/css/css-transforms/` | `1/5`~`5/5` | 31 | PASS 2 / FAIL 29 / TIMEOUT 0 (0 CRASH) | Batch 80 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:41 | `/css/css-color/` | `1/5`~`5/5` | 56 | PASS 2 / FAIL 41 / TIMEOUT 13 (0 CRASH) | Batch 81 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:47 | `/css/css-display/` | `1/5`~`5/5` | 52 | PASS 15 / FAIL 34 / TIMEOUT 3 (?PASS 2, 0 CRASH) | Batch 82 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:53 | `/css/css-cascade/` | `1/3`~`3/3` | 90 | PASS 36 / FAIL 48 / ERROR 1 / TIMEOUT 5 (?PASS 1, 0 CRASH) | Batch 83 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:53 | `/css/css-box/` | `1/3`, `2/3` | 22 | PASS 7 / FAIL 15 (0 CRASH) | Batch 83 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -423,3 +426,23 @@
 | 2026-11-22 19:39 | `selectors-role.spec.ts` | 12/15 PASS (1.3m) | PW Batch 55 |
 | 2026-11-22 19:39 | `page-click-timeout-4.spec.ts` | 1/3 PASS (34.8s) | PW Batch 55 |
 | 2026-11-22 19:39 | `retarget.spec.ts` | 14/15 PASS (1.4m) | PW Batch 55 |
+| 2026-11-22 19:45 | `locator-misc-1.spec.ts` | 6/8 PASS (Phase 303 复测 fill/clear 全通, `[9/13]` 90s截断) | PW Batch 56 |
+| 2026-11-22 19:45 | `selectors-css.spec.ts` | 20/25 PASS (1 SKIP, 1.2m) | PW Batch 56 |
+| 2026-11-22 19:45 | `elementhandle-misc.spec.ts` | 5/7 PASS (`[8/10]` 90s截断) | PW Batch 56 |
+| 2026-11-22 19:45 | `page-click-timeout-1.spec.ts` | 2/2 PASS (5.5s, exit 0) | PW Batch 56 (全绿) |
+| 2026-11-22 19:47 | `page-click-timeout-2.spec.ts` | 2/2 PASS (13.9s, exit 0) | PW Batch 57 (全绿) |
+| 2026-11-22 19:47 | `page-event-load.spec.ts` | 1/1 PASS (2.7s, exit 0) | PW Batch 57 (全绿) |
+| 2026-11-22 19:47 | `page-listeners.spec.ts` | 3/3 PASS (3.6s, exit 0) | PW Batch 57 (全绿) |
+| 2026-11-22 19:47 | `page-event-pageerror.spec.ts` | 4/7 PASS (stack/clear/illegal 3 FAIL, 25.1s) | PW Batch 57 |
+| 2026-11-22 19:50 | `expect-to-have-value.spec.ts` | 11/11 PASS (15.7s, exit 0) | PW Batch 58 (全绿) |
+| 2026-11-22 19:50 | `expect-to-have-accessible.spec.ts` | 14/14 PASS (16.2s, exit 0) | PW Batch 58 (全绿) |
+| 2026-11-22 19:50 | `expect-timeout.spec.ts` | 15/15 PASS (19.7s, exit 0) | PW Batch 58 (全绿) |
+| 2026-11-22 19:50 | `expect-with-snapshot.spec.ts` | 14/14 PASS (22.9s, exit 0) | PW Batch 58 (全绿) |
+| 2026-11-22 19:51 | `expect-builtins.spec.ts` | 278/278 PASS (6.7s, exit 0) | PW Batch 59 (全绿) |
+| 2026-11-22 19:51 | `expect-matcher-result.spec.ts` | 4/4 PASS (5.2s, exit 0) | PW Batch 59 (全绿) |
+| 2026-11-22 19:51 | `locator-wait-for-function.spec.ts` | 10/10 PASS (11.4s, exit 0) | PW Batch 59 (全绿) |
+| 2026-11-22 19:51 | `queryselector.spec.ts` | 17/17 PASS (18.6s, exit 0) | PW Batch 59 (全绿) |
+| 2026-11-22 19:53 | `page-strict.spec.ts` | 10/10 PASS (8.6s, exit 0) | PW Batch 60 (全绿) |
+| 2026-11-22 19:53 | `page-localstorage.spec.ts` | 9/9 PASS (10.4s, exit 0) | PW Batch 60 (全绿) |
+| 2026-11-22 19:53 | `selectors-register.spec.ts` | 6/6 PASS (5.9s, exit 0) | PW Batch 60 (全绿) |
+| 2026-11-22 19:53 | `elementhandle-select-text.spec.ts` | 5/5 PASS (11.3s, exit 0) | PW Batch 60 (全绿) |

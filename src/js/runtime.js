@@ -8125,6 +8125,33 @@
   Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
   markNative(Comment, "Comment");
 
+  function CDATASection(data) {
+    Text.call(this, data);
+    this.nodeType = CDATA_SECTION_NODE;
+    this.nodeName = "#cdata-section";
+  }
+  CDATASection.prototype = Object.create(Text.prototype);
+  CDATASection.prototype.constructor = CDATASection;
+  Object.defineProperty(CDATASection.prototype, "nodeType", { value: CDATA_SECTION_NODE, writable: true, configurable: true });
+  Object.defineProperty(CDATASection.prototype, "nodeName", { value: "#cdata-section", writable: true, configurable: true });
+  markNative(CDATASection, "CDATASection");
+
+  function ProcessingInstruction(target, data) {
+    CharacterData.call(this);
+    this._data = String(data !== undefined ? data : "");
+    this._target = String(target !== undefined ? target : "");
+    this.nodeType = PROCESSING_INSTRUCTION_NODE;
+    this.nodeName = this._target;
+  }
+  ProcessingInstruction.prototype = Object.create(CharacterData.prototype);
+  ProcessingInstruction.prototype.constructor = ProcessingInstruction;
+  Object.defineProperty(ProcessingInstruction.prototype, "nodeType", { value: PROCESSING_INSTRUCTION_NODE, writable: true, configurable: true });
+  Object.defineProperty(ProcessingInstruction.prototype, "target", {
+    get: function () { return this._target || ""; },
+    configurable: true,
+  });
+  markNative(ProcessingInstruction, "ProcessingInstruction");
+
   function DocumentFragment() {
     Node.call(this);
     this.nodeType = DOCUMENT_FRAGMENT_NODE;
@@ -39908,7 +39935,11 @@
     // contentType
     if (!Object.getOwnPropertyDescriptor(docProto, "contentType")) {
       Object.defineProperty(docProto, "contentType", {
-        get: function () { return "text/html"; },
+        get: function () {
+          if (this._contentType) return this._contentType;
+          if (typeof document !== "undefined" && this === document) return "text/html";
+          return "application/xml";
+        },
         configurable: true,
       });
     }
@@ -43737,6 +43768,8 @@
     global.CharacterData = CharacterData;
     global.Text = Text;
     global.Comment = Comment;
+    global.CDATASection = CDATASection;
+    global.ProcessingInstruction = ProcessingInstruction;
     global.DocumentFragment = DocumentFragment;
 
     // 3. Expose Mutation Observer
@@ -44382,10 +44415,49 @@
             throw new DOMException("The operation is not supported.", "NotSupportedError");
           }, "createEvent");
         }
+        if (typeof docProto.createCDATASection !== "function") {
+          docProto.createCDATASection = markNative(function (data) {
+            if (arguments.length < 1) {
+              throw new TypeError("Failed to execute 'createCDATASection' on 'Document': 1 argument required, but only 0 present.");
+            }
+            const s = String(data);
+            if (s.includes("]]>")) {
+              throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+            }
+            const isHtml = this.contentType === "text/html" || (!this.contentType && this === global.document);
+            if (isHtml) {
+              throw new DOMException("This operation is not supported for HTML documents.", "NotSupportedError");
+            }
+            const node = new CDATASection(s);
+            node.ownerDocument = this;
+            return node;
+          }, "createCDATASection");
+        }
+        if (typeof docProto.createProcessingInstruction !== "function") {
+          docProto.createProcessingInstruction = markNative(function (target, data) {
+            if (arguments.length < 2) {
+              throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
+            }
+            const t = String(target);
+            const d = String(data);
+            if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+              throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+            }
+            const node = new ProcessingInstruction(t, d);
+            node.ownerDocument = this;
+            return node;
+          }, "createProcessingInstruction");
+        }
         if (global.document) {
           global.document.createElement = docProto.createElement;
           if (typeof global.document.createEvent !== "function") {
             global.document.createEvent = docProto.createEvent;
+          }
+          if (typeof global.document.createCDATASection !== "function") {
+            global.document.createCDATASection = docProto.createCDATASection;
+          }
+          if (typeof global.document.createProcessingInstruction !== "function") {
+            global.document.createProcessingInstruction = docProto.createProcessingInstruction;
           }
         }
       }

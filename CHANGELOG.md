@@ -2708,3 +2708,8 @@
 ## [2026-11-22] Phase 303: 修复 `applyInputText()` 传参错位导致 `Input.insertText` 不触发 `input` 事件
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 修正 `applyInputText()` 内 JS 模板第 8~10 个格式化参数错传 `escaped_key` 为 `escaped_text`（并扩充 `js_buf` 至 `6144` 及补齐无 `notifyControlValueMutation` 时的 `InputEvent` 回退），使 `Input.insertText` 正确更新控件选区、值并派发 `input` 事件。
+
+## [2026-11-22] Phase 304: 实现 `CDATASection`、`ProcessingInstruction` 与 `Document.prototype.contentType` 语义
+- **Fixed (`src/`)**:
+  - `src/js/shim/node-base.js` (+ `src/js/shim/index.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `CDATASection`（继承 `Text`）与 `ProcessingInstruction`（继承 `CharacterData`）节点类及全局构造器；在 `Document.prototype` 补全 `createCDATASection()`（校验 `]]>` `InvalidCharacterError` 与 HTML `NotSupportedError`）与 `createProcessingInstruction()`（校验 XML Name 与 `?>`）。
+  - `src/js/shim/window.js`: 修复 `Document.prototype.contentType` getter 此前硬编码 `"text/html"` 的缺陷，使 `new Document()` 等非 HTML 文档实例默认返回 `"application/xml"`。

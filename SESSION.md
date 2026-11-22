@@ -5282,3 +5282,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<input oninput="window.result = this.value">` 经 `Input.insertText("some value")` 后返回 `val="some value", result="some value", listenerResult="some value"`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.49s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。
+
+### [2026-11-22 19:54] Phase 304: 实现 `CDATASection`、`ProcessingInstruction` 与 `Document.prototype.contentType` 语义
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js), `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `CDATASection` 与 `ProcessingInstruction` 节点类及 `Document.prototype.createCDATASection()`/`createProcessingInstruction()`。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js): 修复 `Document.prototype.contentType` getter 默认对非 HTML 文档返回 `"application/xml"`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/traversal/TreeWalker.html` 与 `NodeIterator.html` 均消除 `common.js` `harness ERROR` 完整跑通全部子测试（从 `ERROR` 推进至 `FAIL`，`815ms` / `974ms`）。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（168 模块 **111.30s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。

@@ -162,6 +162,8 @@ function installShim(global) {
   global.CharacterData = CharacterData;
   global.Text = Text;
   global.Comment = Comment;
+  global.CDATASection = CDATASection;
+  global.ProcessingInstruction = ProcessingInstruction;
   global.DocumentFragment = DocumentFragment;
 
   // 3. Expose Mutation Observer
@@ -807,10 +809,49 @@ function installShim(global) {
           throw new DOMException("The operation is not supported.", "NotSupportedError");
         }, "createEvent");
       }
+      if (typeof docProto.createCDATASection !== "function") {
+        docProto.createCDATASection = markNative(function (data) {
+          if (arguments.length < 1) {
+            throw new TypeError("Failed to execute 'createCDATASection' on 'Document': 1 argument required, but only 0 present.");
+          }
+          const s = String(data);
+          if (s.includes("]]>")) {
+            throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+          }
+          const isHtml = this.contentType === "text/html" || (!this.contentType && this === global.document);
+          if (isHtml) {
+            throw new DOMException("This operation is not supported for HTML documents.", "NotSupportedError");
+          }
+          const node = new CDATASection(s);
+          node.ownerDocument = this;
+          return node;
+        }, "createCDATASection");
+      }
+      if (typeof docProto.createProcessingInstruction !== "function") {
+        docProto.createProcessingInstruction = markNative(function (target, data) {
+          if (arguments.length < 2) {
+            throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
+          }
+          const t = String(target);
+          const d = String(data);
+          if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+            throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+          }
+          const node = new ProcessingInstruction(t, d);
+          node.ownerDocument = this;
+          return node;
+        }, "createProcessingInstruction");
+      }
       if (global.document) {
         global.document.createElement = docProto.createElement;
         if (typeof global.document.createEvent !== "function") {
           global.document.createEvent = docProto.createEvent;
+        }
+        if (typeof global.document.createCDATASection !== "function") {
+          global.document.createCDATASection = docProto.createCDATASection;
+        }
+        if (typeof global.document.createProcessingInstruction !== "function") {
+          global.document.createProcessingInstruction = docProto.createProcessingInstruction;
         }
       }
     }

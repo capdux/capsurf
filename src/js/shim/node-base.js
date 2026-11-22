@@ -1320,6 +1320,33 @@ Object.defineProperty(Comment.prototype, "nodeType", { value: COMMENT_NODE, writ
 Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
 markNative(Comment, "Comment");
 
+function CDATASection(data) {
+  Text.call(this, data);
+  this.nodeType = CDATA_SECTION_NODE;
+  this.nodeName = "#cdata-section";
+}
+CDATASection.prototype = Object.create(Text.prototype);
+CDATASection.prototype.constructor = CDATASection;
+Object.defineProperty(CDATASection.prototype, "nodeType", { value: CDATA_SECTION_NODE, writable: true, configurable: true });
+Object.defineProperty(CDATASection.prototype, "nodeName", { value: "#cdata-section", writable: true, configurable: true });
+markNative(CDATASection, "CDATASection");
+
+function ProcessingInstruction(target, data) {
+  CharacterData.call(this);
+  this._data = String(data !== undefined ? data : "");
+  this._target = String(target !== undefined ? target : "");
+  this.nodeType = PROCESSING_INSTRUCTION_NODE;
+  this.nodeName = this._target;
+}
+ProcessingInstruction.prototype = Object.create(CharacterData.prototype);
+ProcessingInstruction.prototype.constructor = ProcessingInstruction;
+Object.defineProperty(ProcessingInstruction.prototype, "nodeType", { value: PROCESSING_INSTRUCTION_NODE, writable: true, configurable: true });
+Object.defineProperty(ProcessingInstruction.prototype, "target", {
+  get: function () { return this._target || ""; },
+  configurable: true,
+});
+markNative(ProcessingInstruction, "ProcessingInstruction");
+
 function DocumentFragment() {
   Node.call(this);
   this.nodeType = DOCUMENT_FRAGMENT_NODE;

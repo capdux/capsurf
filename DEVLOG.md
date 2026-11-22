@@ -2022,3 +2022,6 @@
 
 ### Phase 303: `locator-misc-1` `should fill input` 与 `should clear input` `oninput` 未触发排障笔记
 - **`expect(window['result']).toBe('some value')` 收到 `""` 根因**：`applyInputText()` 在 `Input.insertText`（`key == ""`）分支中，JS 格式化模板第 8~10 项误传 `escaped_key` 而非 `escaped_text`，导致 `isPrintable = ''.length > 0` 恒为 `false`，完全跳过 `setRaw` 与 `notifyControlValueMutation`（`dispatchEvent`），仅靠后续 `doc.setAttribute("value", ...)` 改了属性而未触发 `oninput`。修正参数对齐后，实测 `val`、`oninput` 与 `addEventListener('input')` 均同步收到 `"some value"`。
+
+### Phase 304: `/dom/traversal/` 与 `/dom/ranges/` 公用 `common.js` 崩溃（`TreeWalker.html` / `NodeIterator.html`）排障笔记
+- **连续三层报错根因**：`/dom/common.js` `setupRangeTests()` 依次调用 `new Document().createCDATASection("1234")` 与 `xmlDoc.createProcessingInstruction(...)`；引擎此前缺失 `CDATASection`、`ProcessingInstruction` 及两者的 `Document` 工厂方法，且 `Document.prototype.contentType` 硬编码返回 `"text/html"` 导致 `new Document()` 误触发 HTML `NotSupportedError`。三处同步补齐后，`/dom/traversal/TreeWalker.html` 与 `NodeIterator.html` 均已消除 `harness ERROR` 并完整跑通所有子测试（从 `ERROR` 推进至 `FAIL`：`815ms` / `974ms`）。

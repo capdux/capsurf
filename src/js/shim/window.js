@@ -10628,7 +10628,11 @@ const CSS_TYPED_OM_GLOBALS = {
   // contentType
   if (!Object.getOwnPropertyDescriptor(docProto, "contentType")) {
     Object.defineProperty(docProto, "contentType", {
-      get: function () { return "text/html"; },
+      get: function () {
+        if (this._contentType) return this._contentType;
+        if (typeof document !== "undefined" && this === document) return "text/html";
+        return "application/xml";
+      },
       configurable: true,
     });
   }
