@@ -302,7 +302,11 @@
 | 2026-11-22 17:51 | `page-wait-for-request.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch request未触发) | PW Batch 35 |
 | 2026-11-22 17:52 | `page-wait-for-response.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch response未触发) | PW Batch 35 |
 | 2026-11-22 17:53 | `page-set-extra-http-headers.spec.ts` | 1/5 PASS (header token/error 4 FAIL) | PW Batch 35 |
-| 2026-11-22 17:55 | `page-strict.spec.ts` | 10/10 PASS (Phase 285 复测全绿, 12.1s, exit 0) | PW Batch 36 (全绿) |
-| 2026-11-22 17:56 | `queryselector.spec.ts` | 19/22 PASS (3 FAIL, 22.8s) | PW Batch 36 |
-| 2026-11-22 17:57 | `retarget.spec.ts` | 3/3 PASS (5.3s, exit 0) | PW Batch 36 (全绿) |
-| 2026-11-22 17:58 | `selectors-css.spec.ts` | 1/1 PASS (3.6s, exit 0) | PW Batch 36 (全绿) |
+| 2026-11-22 17:55 | `page-strict.spec.ts` | 10/10 PASS (Phase 285 复测全绿, 8.4s, exit 0) | PW Batch 36 (全绿) |
+| 2026-11-22 17:56 | `queryselector.spec.ts` | 17/17 PASS (18.0s, exit 0) | PW Batch 36 (全绿) |
+| 2026-11-22 17:57 | `retarget.spec.ts` | 10/13 PASS (`[14/15]` 90s截断) | PW Batch 36 |
+| 2026-11-22 17:58 | `selectors-css.spec.ts` | 17/25 PASS (1 SKIP, 8 FAIL, 重试90s截断) | PW Batch 36 |
+| 2026-11-22 18:03 | `page-set-extra-http-headers.spec.ts` | 4/5 PASS (Phase 286 复测大幅提升 1->4, 9.5s) | PW Batch 37 |
+| 2026-11-22 18:04 | `selectors-frame.spec.ts` | 4/13 PASS (`[14/15]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |
+| 2026-11-22 18:04 | `page-route.spec.ts` | 0/5 FAIL (`[6/51]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |
+| 2026-11-22 18:04 | `page-request-intercept.spec.ts` | 1/6 PASS (`[7/14]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |

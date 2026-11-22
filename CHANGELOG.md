@@ -2637,3 +2637,7 @@
 - **Fixed (`src/`)**:
   - `src/cdp/network.cp`: 在 `Network.setExtraHTTPHeaders` 中正确提取 `"headers"` JSON 对象 `{...}`（替代原先 `extractJsonString` 返回空导致整段 `params_raw` 透传的问题）。
   - `src/net/http_loader.cp`: 在 `HttpLoader.fetchDocument()` 中解析 `session.extra_headers` JSON 键值对并格式化为标准 `Key: Value\r\n` HTTP/1.1 请求头，彻底消除 `Parse Error: Invalid header token`。
+
+## [2026-11-22] Phase 287: CSS 十六进制转义解码与无空格属性选择器大小写标识 `[attr*="..."i]`
+- **Fixed (`src/`)**:
+  - `src/css/matcher.cp`: 升级 `unescapeCssIdent()` 支持 1..6 位 CSS 十六进制转义序列（如 `#\31\32\33` -> `#123`）及 UTF-8 编码，跳过可选尾随空白；扩展 `SelectorParser.parseAttributeComponent()` 支持引号后紧邻的 `i`/`s` 大小写修饰符（如 `[attr*="llo WOR"i]`）。

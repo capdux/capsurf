@@ -5160,3 +5160,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399 + `Bun.serve` 19398）：设置 `{"x-extra": "hello-world"}` 后访问页面返回 `EXTRA_HEADER_H1: hello-world`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.90s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.11s)**。
+
+### [2026-11-22 18:04] Phase 287: CSS 十六进制转义解码与无空格属性选择器大小写标识 `[attr*="..."i]`
+- **引擎修复 (`src/`)**:
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): 升级 `unescapeCssIdent()` 支持 1..6 位 CSS 十六进制转义序列与 UTF-8 编码；扩展 `parseAttributeComponent()` 支持引号后紧邻的 `i`/`s` 大小写标识。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`#\31\32\33` 命中 `"num"`、`[attr*="llo WOR"i]` 命中 `"ci"`、`[attr*="llo WOR"s]` 返回 `null`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **128.98s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。

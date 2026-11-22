@@ -1971,3 +1971,6 @@
 
 ### Phase 286: `Network.setExtraHTTPHeaders` 畸形请求头排障笔记
 - **`Parse Error: Invalid header token` 根因**：`network.cp` 对对象字段 `"headers"` 误用 `extractJsonString` 返回 `null` 后直接把 `req.params_raw` 存为 `extra_headers`，随后 `http_loader.cp` 直接将 JSON 文本原样拼入 HTTP/1.1 请求头行。修复 JSON 对象提取与 `Key: Value\r\n` 序列化后，真实本地 HTTP 服务实测准确收到 `x-extra: hello-world`。
+
+### Phase 287: CSS 十六进制转义与 `[attr*="..."i]` 排障笔记
+- **`selectors-css` 数字 ID 与属性 `i` 修饰符失败根因**：`unescapeCssIdent()` 此前仅跳过反斜杠未解析十六进制码点，导致 `#\31\32\33` 无法匹配 `id="123"`；同时 `parseAttributeComponent()` 要求 `i`/`s` 前必须有空格，漏掉 `[attr*="llo WOR"i]`。两处补齐后实测 `num`、`ci` 命中而 `cs` 为 `null`。

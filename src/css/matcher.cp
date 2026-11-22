@@ -27,15 +27,62 @@ fn scanCssIdent(s: []const u8, idx: *usize): []const u8 {
     return s[start..idx.*];
 }
 
+fn hexDigitVal(c: u8): (u32)? {
+    if (c >= '0' and c <= '9') return @as(u32, c - '0');
+    if (c >= 'a' and c <= 'f') return @as(u32, c - 'a' + 10);
+    if (c >= 'A' and c <= 'F') return @as(u32, c - 'A' + 10);
+    return null;
+}
+
 fn unescapeCssIdent(raw: []const u8, out_buf: []u8): []const u8 {
     if (std.mem.indexOf(u8, raw, "\\") == null) return raw;
     let oi: usize = 0;
     let i: usize = 0;
     while (i < raw.len && oi < out_buf.len) {
         if (raw[i] == '\\' && i + 1 < raw.len) {
-            out_buf[oi] = raw[i + 1];
-            oi += 1;
-            i += 2;
+            if (d0 := hexDigitVal(raw[i + 1])) {
+                let cp: u32 = d0;
+                let hi: usize = i + 2;
+                let count: usize = 1;
+                while (hi < raw.len && count < 6) : (count += 1) {
+                    if (dv := hexDigitVal(raw[hi])) {
+                        cp = (cp << 4) | dv;
+                        hi += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if (hi < raw.len && (raw[hi] == ' ' || raw[hi] == '\t' || raw[hi] == '\n' || raw[hi] == '\r' || raw[hi] == 0x0c)) {
+                    hi += 1;
+                }
+                if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+                    cp = 0xFFFD;
+                }
+                if (cp < 0x80) {
+                    out_buf[oi] = @as(u8, @truncate(cp));
+                    oi += 1;
+                } else if (cp < 0x800 && oi + 1 < out_buf.len) {
+                    out_buf[oi] = @as(u8, @truncate(0xC0 | (cp >> 6)));
+                    out_buf[oi + 1] = @as(u8, @truncate(0x80 | (cp & 0x3F)));
+                    oi += 2;
+                } else if (cp < 0x10000 && oi + 2 < out_buf.len) {
+                    out_buf[oi] = @as(u8, @truncate(0xE0 | (cp >> 12)));
+                    out_buf[oi + 1] = @as(u8, @truncate(0x80 | ((cp >> 6) & 0x3F)));
+                    out_buf[oi + 2] = @as(u8, @truncate(0x80 | (cp & 0x3F)));
+                    oi += 3;
+                } else if (oi + 3 < out_buf.len) {
+                    out_buf[oi] = @as(u8, @truncate(0xF0 | (cp >> 18)));
+                    out_buf[oi + 1] = @as(u8, @truncate(0x80 | ((cp >> 12) & 0x3F)));
+                    out_buf[oi + 2] = @as(u8, @truncate(0x80 | ((cp >> 6) & 0x3F)));
+                    out_buf[oi + 3] = @as(u8, @truncate(0x80 | (cp & 0x3F)));
+                    oi += 4;
+                }
+                i = hi;
+            } else {
+                out_buf[oi] = raw[i + 1];
+                oi += 1;
+                i += 2;
+            }
         } else {
             out_buf[oi] = raw[i];
             oi += 1;
@@ -305,15 +352,15 @@ pub struct SelectorParser {
             comp.attr_op = op;
 
             let rhs = std.mem.trim(u8, s[eq_idx + 1 .. s.len], " \t");
-            // Check trailing ` i` or ` s` case-sensitivity modifier
-            if (rhs.len >= 2 && (rhs[rhs.len - 2] == ' ' || rhs[rhs.len - 2] == '\t')) {
+            // Check trailing `i` / `s` case-sensitivity modifier (with or without space after quote)
+            if (rhs.len >= 2 && (rhs[rhs.len - 2] == ' ' || rhs[rhs.len - 2] == '\t' || rhs[rhs.len - 2] == '"' || rhs[rhs.len - 2] == '\'')) {
                 const flag_ch = rhs[rhs.len - 1];
                 if (flag_ch == 'i' || flag_ch == 'I') {
                     comp.attr_case_insensitive = true;
-                    rhs = std.mem.trim(u8, rhs[0 .. rhs.len - 2], " \t");
+                    rhs = std.mem.trim(u8, rhs[0 .. rhs.len - 1], " \t");
                 } else if (flag_ch == 's' || flag_ch == 'S') {
                     comp.attr_case_insensitive = false;
-                    rhs = std.mem.trim(u8, rhs[0 .. rhs.len - 2], " \t");
+                    rhs = std.mem.trim(u8, rhs[0 .. rhs.len - 1], " \t");
                 }
             }
             if (rhs.len >= 2 && ((rhs[0] == '"' && rhs[rhs.len - 1] == '"') || (rhs[0] == '\'' && rhs[rhs.len - 1] == '\''))) {
