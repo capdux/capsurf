@@ -183,7 +183,7 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
         }
       }
       const pseudo = s.slice(start, i).toLowerCase();
-      if (pseudo === ":checked") { if (!el.checked) return false; }
+      if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
       else if (pseudo === ":disabled") { if (!el.disabled) return false; }
       else if (pseudo === ":enabled") { if (el.disabled) return false; }
       else if (pseudo === ":scope") {

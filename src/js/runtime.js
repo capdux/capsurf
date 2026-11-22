@@ -8735,7 +8735,7 @@
           }
         }
         const pseudo = s.slice(start, i).toLowerCase();
-        if (pseudo === ":checked") { if (!el.checked) return false; }
+        if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
         else if (pseudo === ":disabled") { if (!el.disabled) return false; }
         else if (pseudo === ":enabled") { if (el.disabled) return false; }
         else if (pseudo === ":scope") {
@@ -10850,7 +10850,7 @@
           if (e && e.name === "SyntaxError") throw e;
         }
       }
-      if (s === ":checked") return Boolean(this.checked);
+      if (s === ":checked") return Boolean(this.checked || (String(this.tagName || "").toUpperCase() === "OPTION" && this.selected));
       if (s === ":disabled") return Boolean(this.disabled);
       if (s === ":enabled") return !this.disabled;
       if (s === ":focus") return Boolean(typeof document !== "undefined" && (document._activeElement === this || document.activeElement === this));

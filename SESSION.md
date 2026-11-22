@@ -5631,3 +5631,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE352_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"boxW":72,"boxH":24,"off":{"ow":72,"oh":24}}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。
+
+## Phase 353: `:checked` 伪类支持 `<option>.selected` 修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/selector.js](file:///data/dev/capsurf/src/js/shim/selector.js), [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `:checked` 伪类支持 `<option>.selected`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE353_RESULT {"onInput":["blue"],"onChange":["blue"],"checked":["blue"],"selVal":"blue"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

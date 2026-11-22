@@ -2932,3 +2932,7 @@
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: 抽取 `queryJsObjectRect()`、`formatJsBoxModelResp()`、`formatJsQuadsResp()`；当 `DOM.getBoxModel` 与 `DOM.getContentQuads` 遇到无原生 `NodeId` 或虽有 `NodeId` 但未入主文档布局树（`bm.width <= 0 && bm.height <= 0`）的元素时，通过 JS `getBoundingClientRect()` 回退输出有效盒模型与 `quads`。
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `offsetWidth` / `offsetHeight` 在无原生 `_nid` 或原生盒尺寸为 `0x0` 时回退到 `this.getBoundingClientRect()`。
+
+## [2026-11-22] Phase 353: `:checked` 伪类支持 `<option>.selected`（`page-select-option.spec.ts` `option:checked`）
+- **Fixed (`src/`)**:
+  - `src/js/shim/selector.js`, `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `:checked` 伪类匹配规则除 `el.checked` 外同步判定 `OPTION` 元素的 `el.selected` 属性，使 `select.querySelectorAll('option:checked')` 与 `option.matches(':checked')` 正确返回已选项。

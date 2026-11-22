@@ -2176,3 +2176,6 @@
 
 ### Phase 352: `selectors-misc.spec.ts` `[2/19]` (`#inner-link` 报 `element is not visible`) 排障笔记
 - **Shadow DOM 节点有 `nid` 但未入主布局树根因**：`<template>` 克隆进 `ShadowRoot` 的 `<a id="inner-link"><slot></slot></a>` 虽在 Arena DOM 分配了 `NodeId`（`nid=16`），但未挂载到 `Document` 的 Arena 父子拓扑中，导致 `LayoutTree` 输出 `0x0` 且 `DOM.getContentQuads` / `DOM.getBoxModel` 返回空，同时 `offsetWidth` / `offsetHeight` 直接调用 `origGetBoundingClientRect` 也得到 `0`。补齐 `queryJsObjectRect()` 与 `offsetWidth`/`offsetHeight` JS 回退后，实测 `PHASE352_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"boxW":72,"boxH":24,"off":{"ow":72,"oh":24}}`。
+
+### Phase 353: `page-select-option.spec.ts` `option:checked` 返回空数组排障笔记
+- **`:checked` 未检查 `<option>.selected` 根因**：`src/js/shim/selector.js` 与 `src/js/shim/element/element.js` 的 `:checked` 伪类仅检查 `el.checked`，忽略了 W3C Selectors 规范中 `<option>.selected`，导致 `select.html` 的 `input`/`change` 监听器执行 `select.querySelectorAll('option:checked')` 始终返回 `[]`。补齐 `OPTION` 元素的 `selected` 判定后，实测 `PHASE353_RESULT {"onInput":["blue"],"onChange":["blue"],"checked":["blue"],"selVal":"blue"}`。

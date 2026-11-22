@@ -1812,7 +1812,7 @@ function installElementExtensions(proto) {
         if (e && e.name === "SyntaxError") throw e;
       }
     }
-    if (s === ":checked") return Boolean(this.checked);
+    if (s === ":checked") return Boolean(this.checked || (String(this.tagName || "").toUpperCase() === "OPTION" && this.selected));
     if (s === ":disabled") return Boolean(this.disabled);
     if (s === ":enabled") return !this.disabled;
     if (s === ":focus") return Boolean(typeof document !== "undefined" && (document._activeElement === this || document.activeElement === this));
