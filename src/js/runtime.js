@@ -8462,6 +8462,49 @@
     },
     configurable: true,
   });
+  ShadowRoot.prototype.elementFromPoint = markNative(function (x, y) {
+    const vx = Number(x);
+    const vy = Number(y);
+    if (Number.isNaN(vx) || Number.isNaN(vy)) return null;
+    let best = null;
+    function hitWalk(root) {
+      const kids = (root && (root.children || root._children || root.childNodes)) || [];
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (!k || k.nodeType !== 1) continue;
+        const tag = String(k.localName || k.tagName || "").toLowerCase();
+        if (tag === "style" || tag === "script" || tag === "template") continue;
+        let pe = "";
+        let vis = "";
+        let disp = "";
+        if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+          try {
+            const cs = window.getComputedStyle(k);
+            if (cs) {
+              pe = cs.pointerEvents || "";
+              vis = cs.visibility || "";
+              disp = cs.display || "";
+            }
+          } catch (e) {}
+        }
+        if (disp === "none") continue;
+        if (typeof k.getBoundingClientRect === "function") {
+          const r = k.getBoundingClientRect();
+          if (r && r.width > 0 && r.height > 0 && vx >= r.left && vx <= r.right && vy >= r.top && vy <= r.bottom) {
+            if (pe !== "none" && vis !== "hidden") best = k;
+          }
+        }
+        hitWalk(k);
+      }
+    }
+    hitWalk(this);
+    if (best && best._shadowRoot && typeof best._shadowRoot.elementFromPoint === "function") {
+      const deeper = best._shadowRoot.elementFromPoint(vx, vy);
+      if (deeper) return deeper;
+    }
+    return best;
+  }, "elementFromPoint");
+
   global.ShadowRoot = ShadowRoot;
   if (typeof globalThis !== "undefined") {
     globalThis.ShadowRoot = ShadowRoot;

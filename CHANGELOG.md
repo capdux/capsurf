@@ -2852,3 +2852,8 @@
 ## [2026-11-22] Phase 336: 修复 Shadow DOM `<slot>` 分配节点在 `getBoundingClientRect()` 中的尺寸计算
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `getShadowEffectiveText(el)`，在元素自身 `textContent` 为空时收集 `<slot>`（含后代 `<slot>`）的 `assignedNodes({ flatten: true })` 文本，使 `<a id="inner-link"><slot></slot></a>` 与宿主 `<my-link>` 的 `getBoundingClientRect()` 返回非零几何框。
+
+## [2026-11-22] Phase 337: 新增 `ShadowRoot.prototype.elementFromPoint()` 并打通鼠标点击向 Shadow DOM 内部命中下钻
+- **Fixed (`src/`)**:
+  - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `ShadowRoot.prototype.elementFromPoint(x, y)`，按绘制逆序递归命中 Shadow 子树中 `display !== "none"`、`visibility !== "hidden"`、`pointerEvents !== "none"` 且包含坐标 `(x, y)` 的元素。
+  - `src/cdp/input.cp`: `dispatchMouseDomEvent()` 在命中 Shadow Host 后递归调用 `el._shadowRoot.elementFromPoint(x, y)` 下钻至真实目标节点，使 `Input.dispatchMouseEvent` 点击 Shadow DOM `<slot>` 链接成功触发 `onclick` (`clickCount = 1`)。

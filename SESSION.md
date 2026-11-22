@@ -5519,3 +5519,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19399）：`aW=72, aH=24, mlH=24`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.40s)**。
+
+## Phase 337: Shadow DOM 鼠标命中下钻 (`ShadowRoot.elementFromPoint`) 完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`), [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 实现 `ShadowRoot.prototype.elementFromPoint(x, y)` 并在 `dispatchMouseDomEvent()` 中递归下钻 Shadow Host。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19399）：`PHASE337_RESULT: {"srHitId":"","clickCount":1}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.36s)**。

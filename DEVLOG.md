@@ -2123,3 +2123,6 @@
 
 ### Phase 336: Shadow DOM `<slot>` 元素 `getBoundingClientRect()` 返回零尺寸排障笔记
 - **`<slot>` `assignedNodes` 未计入盒模型回退估算根因**：`src/js/shim/element/element.js` 中 Shadow DOM 回退尺寸计算仅读取 `this.textContent` / `sk.textContent`，对 `<a id="inner-link"><slot></slot></a>` 返回空串导致链接与宿主均返回 `height: 0`（Playwright 判定 `element is not visible`）。引入 `getShadowEffectiveText()` 收集 `slot.assignedNodes({ flatten: true })` 文本后，实测 `aW=72, aH=24, mlH=24`。
+
+### Phase 337: Shadow DOM 内部链接点击未触发 `onclick` 排障笔记
+- **`dispatchMouseDomEvent()` 停留在 Shadow Host 未下钻根因**：`document.elementFromPoint(x, y)` 按规范返回最外层宿主 `<my-link>`，而 `src/cdp/input.cp` 直接将该宿主作为 `mousedown`/`mouseup`/`click` 派发目标，导致事件未进入 ShadowRoot 内部 `<a id="inner-link"><slot></slot></a>`。补充 `ShadowRoot.prototype.elementFromPoint(x, y)` 并在 `dispatchMouseDomEvent()` 中递归下钻后，实测点击坐标直接触发 `window.clickCount === 1`。
