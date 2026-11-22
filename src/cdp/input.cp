@@ -102,6 +102,22 @@ fn escapeJsString(input_str: []const u8, out: []u8): usize {
     let i: usize = 0;
     while (i < input_str.len) : (i += 1) {
         const c = input_str[i];
+        if (c == '\n') {
+            if (ei + 1 < out.len) {
+                out[ei] = '\\';
+                out[ei + 1] = 'n';
+            }
+            ei += 2;
+            continue;
+        }
+        if (c == '\r') {
+            if (ei + 1 < out.len) {
+                out[ei] = '\\';
+                out[ei + 1] = 'r';
+            }
+            ei += 2;
+            continue;
+        }
         if (c == '"' || c == '\\' || c == '\'') {
             if (ei + 1 < out.len) out[ei] = '\\';
             ei += 1;
@@ -160,7 +176,7 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
     let clean_buf: [1024]u8 = [0; 1024];
     let clean_len: usize = 0;
     for (c of text) {
-        if (c >= 32 && c != 127 && clean_len < clean_buf.len) {
+        if ((c >= 32 || c == '\n') && c != 127 && clean_len < clean_buf.len) {
             clean_buf[clean_len] = c;
             clean_len += 1;
         }
@@ -532,7 +548,8 @@ pub struct InputHandler {
             }
 
             if (text.len > 0 && (ev_type == .Char || ev_type == .KeyDown || ev_type == .RawKeyDown)) {
-                applyInputText(session, text, key);
+                const norm_text = if (std.mem.eql(u8, text, "\r") || std.mem.eql(u8, text, "\\r")) "\n" else text;
+                applyInputText(session, norm_text, key);
             }
             if ((ev_type == .KeyDown || ev_type == .RawKeyDown) && (std.mem.eql(u8, key, "Backspace") || std.mem.eql(u8, key, "Delete") || std.mem.eql(u8, key, "ArrowLeft") || std.mem.eql(u8, key, "ArrowRight") || std.mem.eql(u8, key, "Home") || std.mem.eql(u8, key, "End"))) {
                 applyInputText(session, "", key);

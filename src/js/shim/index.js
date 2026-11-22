@@ -200,6 +200,7 @@ function installShim(global) {
     }
     if (obj.subtype === "array" && Array.isArray(val)) {
       obj.description = "Array(" + val.length + ")";
+      if (val.length === 0) return obj;
     }
     if (!obj.subtype || obj.subtype === "array") {
       try {

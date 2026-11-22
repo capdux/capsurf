@@ -2777,3 +2777,8 @@
 ## [2026-11-22] Phase 318: 修复 `Input.dispatchMouseEvent` `button`/`buttons` 与 `pointerdown`/`pointerup` 派发
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 增加 `btn_num` 与 `buttons_mask` 参数（0=left, 1=middle, 2=right, 3=back, 4=forward），在 `mousedown`/`mouseup` 前同步派发可信 `PointerEvent`（`pointerdown`/`pointerup`），并仅在 `btn_num == 0` 时触发 `click`/`dblclick`。
+
+## [2026-11-22] Phase 319: 空数组 `Array(0)` 保留与 `<textarea>` `Enter` 换行符 `\n` 规范化
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 空数组（`val.length === 0`）跳过生成 `preview` 以保留 `description: "Array(0)"`（使 `jshandle-to-string.spec.ts` `[]` 断言通过）。
+  - `src/cdp/input.cp`: 在 `escapeJsString()` 补充 `\n` / `\r` 转义，在 `applyInputText()` 允许保留 `\n`，并将 `Input.dispatchKeyEvent` 中的 `"\r"` / `"\\r"` 规范化为 `"\n"`，修复 `<textarea>` 按 `Enter` 后值为 `"\\r"` 的问题。

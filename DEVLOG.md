@@ -2068,3 +2068,7 @@
 
 ### Phase 318: `page-mouse.spec.ts` 自定义按键与 `pointerdown` 缺失排障笔记
 - **`button: 0` 硬编码与缺少 `pointerdown`/`pointerup` 根因**：`dispatchMouseDomEvent()` 此前硬编码 `button: 0` 且未派发 `PointerEvent`，同时非左键松开也会误发 `click`。补齐 `btn_num`/`buttons_mask` 参数、`pointerdown`/`pointerup` 派发及左键 `click` 门控后，实测 `button: "middle", buttons: 4` 准确输出 `pointerdown`/`mousedown`（`btn: 1, btns: 4, trusted: true`）与 `pointerup`/`mouseup`（`btn: 1, btns: 0, trusted: true`）。
+
+### Phase 319: `jshandle-to-string` `[]` 返回 `"[]"` 与 `page-keyboard` `<textarea>` 回车插入 `"\r"` 排障笔记
+- **空数组 `preview` 覆盖 `"Array(0)"` 根因**：Playwright 对带 `preview` 的空数组渲染为 `"[]"`，对无 `preview` 的空数组回退 `description`（`"Array(0)"`）。跳过 `val.length === 0` 的 `preview` 后，实测返回 `description: "Array(0)"`。
+- **`<textarea>` `Enter` 写入 `"\\r"` 根因**：`Input.dispatchKeyEvent` 收到 `text: "\r"`（原始 JSON 转义串 `"\\r"`），且 `applyInputText()` 的 `c >= 32` 过滤会剔除 `\n`，同时 `escapeJsString()` 未转义 `\n`。补齐 `\r`/`\\r` -> `\n`、放行 `\n` 与 JS 字符串 `\n` 转义后，实测 `<textarea>` 按 `Enter` 后 `value === "\n"`。

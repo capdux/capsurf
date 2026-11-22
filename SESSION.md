@@ -5392,3 +5392,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`middle` 键按放输出 `[{"t":"pointerdown","btn":1,"btns":4,"trusted":true},{"t":"mousedown","btn":1,"btns":4,"trusted":true},{"t":"pointerup","btn":1,"btns":0,"trusted":true},{"t":"mouseup","btn":1,"btns":0,"trusted":true}]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。
+
+### [2026-11-22 20:53] Phase 319: 空数组 `Array(0)` 保留与 `<textarea>` `Enter` 换行符 `\n` 规范化
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 空数组跳过 `preview` 保留 `Array(0)`。
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 规范化 `"\r"`/`"\\r"` -> `"\n"` 并补齐 `\n` 保留与 JS 字符串转义。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`emptyArr.description === "Array(0)"`，`<textarea>` `Enter` 后 `taVal === "\n"`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
