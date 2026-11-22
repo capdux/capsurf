@@ -2678,3 +2678,7 @@
 ## [2026-11-22] Phase 296: 实现标准 `Document.prototype.createEvent(interface)` 接口分发与异常校验
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `Document.prototype.createEvent()`，按 WHATWG DOM 规范映射 `CustomEvent`、`Event`/`Events`/`HTMLEvents`/`SVGEvents`、`UIEvent`/`UIEvents`、`MouseEvent`/`MouseEvents`、`KeyboardEvent`/`KeyEvents`、`FocusEvent`、`CompositionEvent`、`DragEvent`、`MessageEvent`、`StorageEvent`、`HashChangeEvent`、`BeforeUnloadEvent` 等接口，并对未知接口抛出 `NotSupportedError` `DOMException`。
+
+## [2026-11-22] Phase 297: 实现 `CharacterData` 基类、`Node.prototype.previousSibling`/`nextSibling` 与 `Text.prototype.wholeText`
+- **Fixed (`src/`)**:
+  - `src/js/shim/node-base.js` (+ `src/js/shim/index.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `CharacterData` 基类并暴露全局 `global.CharacterData`，令 `Text` 与 `Comment` 继承 `CharacterData.prototype`；在 `Node.prototype` 补齐基于 `parentNode.childNodes` 与 `_nid` 等价匹配的 `previousSibling`/`nextSibling` getter；在 `Text.prototype` 实现 `wholeText` getter 拼接逻辑相邻文本节点内容。

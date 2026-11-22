@@ -159,6 +159,7 @@ function installShim(global) {
   global.Attr = Attr;
   global.Node = Node;
   try { Object.defineProperty(global, "__capsurf_orig_Node", { value: Node, enumerable: false, writable: false, configurable: false }); } catch (e) {}
+  global.CharacterData = CharacterData;
   global.Text = Text;
   global.Comment = Comment;
   global.DocumentFragment = DocumentFragment;

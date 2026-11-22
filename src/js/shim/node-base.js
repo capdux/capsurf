@@ -63,6 +63,42 @@ Object.defineProperty(Node.prototype, "isConnected", {
   configurable: true,
 });
 
+Object.defineProperty(Node.prototype, "previousSibling", {
+  get: function () {
+    const p = this.parentNode;
+    if (!p) return null;
+    const kids = p.childNodes || p._children;
+    if (!kids || !kids.length) return null;
+    const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k === this || (nid > 0 && k && k._nid === nid)) {
+        return i > 0 ? kids[i - 1] : null;
+      }
+    }
+    return null;
+  },
+  configurable: true,
+});
+
+Object.defineProperty(Node.prototype, "nextSibling", {
+  get: function () {
+    const p = this.parentNode;
+    if (!p) return null;
+    const kids = p.childNodes || p._children;
+    if (!kids || !kids.length) return null;
+    const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      if (k === this || (nid > 0 && k && k._nid === nid)) {
+        return i + 1 < kids.length ? kids[i + 1] : null;
+      }
+    }
+    return null;
+  },
+  configurable: true,
+});
+
 Node.prototype.getRootNode = function (options) {
   let n = this;
   let p;
@@ -1197,17 +1233,39 @@ function installCharacterDataMethods(proto) {
   markNative(proto.replaceData, "replaceData");
 }
 
+function CharacterData() {
+  Node.call(this);
+}
+CharacterData.prototype = Object.create(Node.prototype);
+CharacterData.prototype.constructor = CharacterData;
+installCharacterDataMethods(CharacterData.prototype);
+markNative(CharacterData, "CharacterData");
+
 function Text(data) {
   Node.call(this);
   this._data = String(data !== undefined ? data : "");
   this.nodeType = TEXT_NODE;
   this.nodeName = "#text";
 }
-Text.prototype = Object.create(Node.prototype);
+Text.prototype = Object.create(CharacterData.prototype);
 Text.prototype.constructor = Text;
 Object.defineProperty(Text.prototype, "nodeType", { value: TEXT_NODE, writable: true, configurable: true });
 Object.defineProperty(Text.prototype, "nodeName", { value: "#text", writable: true, configurable: true });
-installCharacterDataMethods(Text.prototype);
+Object.defineProperty(Text.prototype, "wholeText", {
+  get: function () {
+    let cur = this;
+    while (cur.previousSibling && cur.previousSibling.nodeType === TEXT_NODE) {
+      cur = cur.previousSibling;
+    }
+    let out = "";
+    while (cur && cur.nodeType === TEXT_NODE) {
+      out += (cur.data !== undefined ? cur.data : (cur.nodeValue || cur.textContent || ""));
+      cur = cur.nextSibling;
+    }
+    return out;
+  },
+  configurable: true,
+});
 
 Text.prototype.splitText = function (offset) {
   const cur = this.data;
@@ -1256,11 +1314,10 @@ function Comment(data) {
   this.nodeType = COMMENT_NODE;
   this.nodeName = "#comment";
 }
-Comment.prototype = Object.create(Node.prototype);
+Comment.prototype = Object.create(CharacterData.prototype);
 Comment.prototype.constructor = Comment;
 Object.defineProperty(Comment.prototype, "nodeType", { value: COMMENT_NODE, writable: true, configurable: true });
 Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
-installCharacterDataMethods(Comment.prototype);
 markNative(Comment, "Comment");
 
 function DocumentFragment() {

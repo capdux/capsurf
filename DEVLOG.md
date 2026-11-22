@@ -2001,3 +2001,6 @@
 
 ### Phase 296: `/dom/events/CustomEvent.html` 报 `TypeError: not a function` 排障笔记
 - **3/3 子测试全部失败根因**：`src/js/shim/events/event.js` 已实现 `CustomEvent.prototype.initCustomEvent()` 与 `Event.prototype.initEvent()`，但全局 `Document.prototype.createEvent` 完全缺失，导致所有调用 `document.createEvent(...)` 的 WPT 用例直接报错。在 `index.js` 补全 WHATWG `createEvent` 接口映射后，`/dom/events/CustomEvent.html` 立即全绿 PASS（`581ms`）。
+
+### Phase 297: `/dom/nodes/Text-wholeText.html` 缺失 `wholeText` 与 `nextSibling` 断链排障笔记
+- **`assert_equals(undefined, "a")` -> `assert_equals("a", "ab")` 两层根因**：第一层为 `Text.prototype.wholeText` 未实现；第二层为 `upgradeElement()` 将 `Text`/`Comment` 原型重设至 `shim Node.prototype` 后，因 `shim Node.prototype` 缺失 `previousSibling`/`nextSibling` getter 导致文本节点兄弟链返回 `null`。两处补全后，`/dom/nodes/Text-wholeText.html` 立即全绿 PASS（`545ms`）。

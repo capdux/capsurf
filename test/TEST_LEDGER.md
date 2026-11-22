@@ -194,6 +194,15 @@
 | 2026-11-22 18:46 | `/css/cssom-view/` | `5/5` | 21 | PASS 10 / FAIL 8 / TIMEOUT 3 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:46 | `/html/dom/elements/` | `4/5`, `5/5` | 39, 39 | PASS 23/39, 22/39 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:46 | `/css/css-break/` | `4/5`, `5/5` | 42, 41 | PASS 28/42, 29/41 (0 CRASH) | Batch 70 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:50 | `/css/css-contain/` | `4/5`, `5/5` | 14, 13 | PASS 11/14, 11/13 (0 CRASH) | Batch 71 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:50 | `/dom/events/` | `4/5`, `5/5` | 26, 25 | PASS 6/26, 6/25 (0 CRASH) | Batch 71 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:50 | `/dom/nodes/` | `5/10` | 25 | PASS 12 / FAIL 8 / ERROR 2 / TIMEOUT 3 (0 CRASH) | Batch 71 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:59 | `/css/css-flexbox/` | `1/5`, `2/5` | 53, 52 | PASS 23/53, 23/52 (0 CRASH) | Batch 72 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:59 | `/css/css-position/` | `1/5`, `2/5` | 50, 54 | PASS 15/50, 14/54 (0 CRASH) | Batch 72 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:59 | `/css/css-values/` | `1/5` | 36/70 | PASS 3/36 (90s截断, 0 CRASH) | Batch 72 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:04 | `/dom/events/` | `1/5`~`3/5` | 26, 26, 26 | PASS 12/26(翻倍), 7/26, 5/26 (0 CRASH) | Batch 73 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:04 | `/css/css-fonts/` | `3/5` | 24 | PASS 7 / FAIL 16 / TIMEOUT 1 (0 CRASH) | Batch 73 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:04 | `/css/selectors/` | `1/5` | 14 | PASS 6 / FAIL 7 / ERROR 1 / TIMEOUT 0 | Batch 73 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -359,3 +368,15 @@
 | 2026-11-22 18:45 | `page-dispatchevent.spec.ts` | 15/16 PASS (`should be atomic` 1 FAIL, 30.1s) | PW Batch 44 |
 | 2026-11-22 18:45 | `page-evaluate-handle.spec.ts` | 10/11 PASS (userAgent 1 FAIL, 13.0s) | PW Batch 44 |
 | 2026-11-22 18:45 | `retarget.spec.ts` | 14/15 PASS (Phase 292 复测提升 13->14, 1.4m) | PW Batch 44 |
+| 2026-11-22 18:51 | `page-aria-snapshot.spec.ts` | 25/28 PASS (`[29/38]` 90s截断) | PW Batch 45 |
+| 2026-11-22 18:51 | `selectors-role.spec.ts` | 13/15 PASS (Phase 294前旧二进制, 1.2m) | PW Batch 45 |
+| 2026-11-22 18:51 | `to-match-aria-snapshot.spec.ts` | 35/36 PASS (1.4m, exit 0) | PW Batch 45 |
+| 2026-11-22 18:51 | `page-autowaiting-no-hang.spec.ts` | 5/8 PASS (`[9/9]` 90s截断) | PW Batch 45 |
+| 2026-11-22 18:57 | `selectors-role.spec.ts` | 12/15 PASS (disabled 1 TIMEOUT, shadow 2 FAIL, 1.3m) | PW Batch 46 |
+| 2026-11-22 18:57 | `expect-to-have-text.spec.ts` | 26/28 PASS (shadow/not-found 2 FAIL, 56.4s) | PW Batch 46 |
+| 2026-11-22 18:57 | `selectors-misc.spec.ts` | 7/9 PASS (shadow link/above 2 TIMEOUT, 90s截断) | PW Batch 46 |
+| 2026-11-22 18:57 | `page-dispatchevent.spec.ts` | 15/16 PASS (`should be atomic` 1 FAIL, 30.4s) | PW Batch 46 |
+| 2026-11-22 19:02 | `locator-misc-1.spec.ts` | 4/8 PASS (Node removed/fill/select 4 FAIL, `[9/13]` 90s截断) | PW Batch 47 |
+| 2026-11-22 19:02 | `locator-misc-2.spec.ts` | 4/6 PASS (`[7/14]` 90s截断) | PW Batch 47 |
+| 2026-11-22 19:02 | `page-basic.spec.ts` | 12/16 PASS (frame/UA/webdriver 4 FAIL, 36.1s) | PW Batch 47 |
+| 2026-11-22 19:02 | `locator-frame.spec.ts` | 6/9 PASS (ERR_BLOCKED_BY_CLIENT 3 FAIL, 26.3s) | PW Batch 47 |

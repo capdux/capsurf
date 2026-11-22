@@ -5231,3 +5231,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/events/CustomEvent.html` **✓ 581ms PASS (1/1 matched expectations)**。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **130.87s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。
+
+### [2026-11-22 19:05] Phase 297: 实现 `CharacterData` 基类、`Node.prototype.previousSibling`/`nextSibling` 与 `Text.prototype.wholeText`
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js), `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `CharacterData` 基类并暴露全局 `CharacterData`，令 `Text`/`Comment` 继承 `CharacterData.prototype`；在 `Node.prototype` 补全 `previousSibling`/`nextSibling`；实现 `Text.prototype.wholeText`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/nodes/Text-wholeText.html` **✓ 545ms PASS (1/1 matched expectations)**。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **130.07s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
