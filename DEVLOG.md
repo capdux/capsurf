@@ -1852,3 +1852,7 @@
 - **Puppeteer / Playwright 协议差异**：扁平化会话模式下，服务端必须把请求的 `sessionId` 原样回传到对应 `result`/`error` 响应（但 `Target.*` 浏览器级事件不可误加 `sessionId`）；Playwright 还强依赖 `frame.id === targetId` 与 `Page.close` 触发 `Target.targetDestroyed`。
 - **WPT `testharness.js` 与 Reftest 流水线**：通过补齐 `HttpLoader` `Content-Length`/`chunked` 与 `web-platform.test` 回环、2MB 外链脚本缓冲、`Page.addScriptToEvaluateOnNewDocument`、以及 `getElementsByTagName` + `window.parent`，成功在 CapSurf 内原生跑通 198KB `testharness.js` 与 WPT Reftest 像素对比，实测 20+ WPT 领域 450+ 用例。
 - **ReleaseFast 阻塞**：`cap build -m -r` 触发上游 `__cp_runtime.zig` `cp_unpack_elem` 冗余 `comptime` 报错，已提交 `task-capsurf-20261122-cp-unpack-elem-comptime` 待 `cp_agy` 修复；Debug 模式 `cap build -m -d -o bin_wpt src/main.cp` 136 模块编译正常。
+
+### Phase 255: Playwright `page.close` / `setContent` 与 WPT >8KB JSON 截断排障笔记
+- Playwright `page.close()` 除 `Target.targetDestroyed` 外还强依赖 `Target.detachedFromTarget`；`page.setContent(...)` 通过 `document.open/write/close` 走 `pollReopenLoadEvents`，补齐 `Page.lifecycleEvent` 后 `page-basic.spec.ts` 直接从 `0/16` 升至 `9/16 PASS`。
+- `runtime.cp` 中固定 `[8192]u8` 的 `norm_buf` 会在包含异常文本的大 JSON 结果上截断；改用 `session.allocator.alloc` 后，`/webidl/` 43/43 零崩溃跑通（32/43 符合基线）。

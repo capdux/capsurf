@@ -4894,3 +4894,13 @@
 - **复现与 Ack**: `cpc check /data/dev/cp/temp/repro_cp_unpack_elem_comptime.cp` → `Check successful`，已执行 `ack`。
 - **ReleaseFast 全量构建**: `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp` 136 模块 **89.59s** 编译通过并同步至 `bin/main`。
 - **WPT 补充批次 (`d37d0830`, `cccbe644`)**: `/html/semantics/forms/` 7/10 匹配基线、`/streams/` 14 条（0 CRASH）、`/html/semantics/embedded-content/` 43 条（7 PASS 含 3 条 `FAIL→PASS`，19/43 匹配基线，0 CRASH）。
+
+### [2026-11-22 11:20] Phase 255: CDP `JSON Parse error` / `Target.detachedFromTarget` / `setContent` 修复与多轮 WPT/PW 实测
+- **引擎 CDP 修复**:
+  - `src/cdp/runtime.cp`: 两处 `normalizeExceptionMessage` 改为动态分配 `res_len + 4096` / `eval_len + 4096`，消除 >8KB `testharness` 结果截断导致的 `SyntaxError: JSON Parse error: Expected '}'`。
+  - `src/cdp/target.cp`: `Target.closeTarget` 在 `Target.targetDestroyed` 前补发 `Target.detachedFromTarget`，彻底消除 Playwright `page.close()` 30000ms teardown 超时。
+  - `src/cdp/session.cp`: `pollReopenLoadEvents` 在 `Page.loadEventFired` 旁补齐 `Page.lifecycleEvent`（`DOMContentLoaded`/`load`/`networkIdle`），彻底打通 Playwright `page.setContent(...)`。
+- **复测与新增基线**:
+  - **Playwright**: `page-basic.spec.ts` 从 `0/16` 跃升至 **9/16 PASS**（1.3m）；`frame-evaluate.spec.ts` 1/8 PASS（0 teardown hang）；`elementhandle-{click,query-selector,bounding-box}.spec.ts` 中 `page.setContent` 均秒级返回。
+  - **WPT 新领域扩跑**: `/webidl/` **43/43 零崩溃（32/43 符合基线，9 PASS 含 3 条 `FAIL→PASS`）**；`/css/css-break/` **53/62 PASS (85.5%，60/62 符合基线)**；`/html/dom/documents/` **23/32 PASS (71.9%)**；`/html/webappapis/timers/` **7/9 符合基线（4 PASS）**；`/html/browsers/the-window-object/` **6/7 符合基线**；`/dom/nodes/DocumentFragment-` **2/3 PASS**；`/css/css-multicol/` 6/32 PASS；`/css/css-shapes/` 2/40 PASS；`/html/webappapis/microtask-queuing/` 2/3 符合基线。
+- **ReleaseFast 构建**: `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp`（136 模块 **92.11s**）通过并同步至 `bin/main`。

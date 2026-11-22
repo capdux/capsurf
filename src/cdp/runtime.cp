@@ -260,11 +260,13 @@ pub struct RuntimeHandler {
                 std.mem.indexOf(u8, out_buf[0..res_len], "Cannot read property '") != null ||
                 std.mem.indexOf(u8, out_buf[0..res_len], "Cannot set property '") != null)
             {
-                let norm_buf: [8192]u8 = [0; 8192];
-                const norm_slice = normalizeExceptionMessage(out_buf[0..res_len], &norm_buf);
-                if (norm_slice.len <= out_buf.len) {
-                    @memcpy(out_buf[0..norm_slice.len], norm_slice);
-                    res_len = norm_slice.len;
+                if (norm_buf := session.allocator.alloc(u8, res_len + 4096) catch null) {
+                    defer session.allocator.free(norm_buf);
+                    const norm_slice = normalizeExceptionMessage(out_buf[0..res_len], norm_buf);
+                    if (norm_slice.len <= out_buf.len) {
+                        @memcpy(out_buf[0..norm_slice.len], norm_slice);
+                        res_len = norm_slice.len;
+                    }
                 }
             }
             
@@ -339,11 +341,13 @@ pub struct RuntimeHandler {
                 std.mem.indexOf(u8, out_buf[0..eval_len], "Cannot read property '") != null ||
                 std.mem.indexOf(u8, out_buf[0..eval_len], "Cannot set property '") != null)
             {
-                let norm_buf: [8192]u8 = [0; 8192];
-                const norm_slice = normalizeExceptionMessage(out_buf[0..eval_len], &norm_buf);
-                if (norm_slice.len <= out_buf.len) {
-                    @memcpy(out_buf[0..norm_slice.len], norm_slice);
-                    eval_len = norm_slice.len;
+                if (norm_buf := session.allocator.alloc(u8, eval_len + 4096) catch null) {
+                    defer session.allocator.free(norm_buf);
+                    const norm_slice = normalizeExceptionMessage(out_buf[0..eval_len], norm_buf);
+                    if (norm_slice.len <= out_buf.len) {
+                        @memcpy(out_buf[0..norm_slice.len], norm_slice);
+                        eval_len = norm_slice.len;
+                    }
                 }
             }
 

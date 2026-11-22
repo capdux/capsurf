@@ -4089,8 +4089,27 @@ pub struct CdpPageSession {
         }
         let emitted: usize = 0;
         const count_u: usize = @min(@as(usize, @intCast(pending_i32)), out_events.len);
-        while (emitted < count_u) : (emitted += 1) {
-            out_events[emitted] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.2}");
+        let i: usize = 0;
+        while (i < count_u && emitted < out_events.len) : (i += 1) {
+            if (emitted < out_events.len) {
+                const lc_dcl = std.fmt.allocPrint(_.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.15}}", .{ _.frame_id, _.loader_id }) catch "{}";
+                out_events[emitted] = CdpEvent.create("Page.lifecycleEvent", lc_dcl);
+                emitted += 1;
+            }
+            if (emitted < out_events.len) {
+                out_events[emitted] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.2}");
+                emitted += 1;
+            }
+            if (emitted < out_events.len) {
+                const lc_load = std.fmt.allocPrint(_.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.2}}", .{ _.frame_id, _.loader_id }) catch "{}";
+                out_events[emitted] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+                emitted += 1;
+            }
+            if (emitted < out_events.len) {
+                const lc_idle = std.fmt.allocPrint(_.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkIdle\",\"timestamp\":1700000000.25}}", .{ _.frame_id, _.loader_id }) catch "{}";
+                out_events[emitted] = CdpEvent.create("Page.lifecycleEvent", lc_idle);
+                emitted += 1;
+            }
         }
         return emitted;
     }

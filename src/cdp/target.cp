@@ -675,13 +675,29 @@ pub struct TargetHandler {
         // Target.closeTarget
         if (std.mem.eql(u8, req.method, "Target.closeTarget")) {
             const target_id = extractJsonString(req.params_raw, "targetId") ?? "";
+            let det_sid_buf: [64]u8 = [0; 64];
+            let det_sid_len: usize = 0;
+            if (t_idx := session.target_registry.findTargetIndex(target_id)) {
+                const sid = session.target_registry.targets[t_idx].sessionId();
+                if (sid.len > 0 && sid.len <= det_sid_buf.len) {
+                    @memcpy(det_sid_buf[0..sid.len], sid);
+                    det_sid_len = sid.len;
+                }
+            }
             const existed = session.target_registry.closeTarget(target_id);
             if (existed) {
                 session.has_document = false;
                 session.webmcp_enabled = false;
+                let ec: usize = 0;
+                if (det_sid_len > 0) {
+                    const det_json = std.fmt.bufPrint(&session.target_registry.event_buf1, "{{\"sessionId\":\"{s}\",\"targetId\":\"{s}\"}}", .{ det_sid_buf[0..det_sid_len], target_id }) catch "{}";
+                    out_events[ec] = CdpEvent.create("Target.detachedFromTarget", det_json);
+                    ec += 1;
+                }
                 const td_json = std.fmt.bufPrint(&session.target_registry.event_buf0, "{{\"targetId\":\"{s}\"}}", .{target_id}) catch "{}";
-                out_events[0] = CdpEvent.create("Target.targetDestroyed", td_json);
-                event_count.* = 1;
+                out_events[ec] = CdpEvent.create("Target.targetDestroyed", td_json);
+                ec += 1;
+                event_count.* = ec;
             }
             return CdpResponse.ok(req.id, if (existed) "{\"success\":true}" else "{\"success\":false}");
         }

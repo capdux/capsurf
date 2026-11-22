@@ -2475,3 +2475,6 @@
 ## [2026-11-22] Phase 254: 138/138 白盒全绿、CDP/JS-Shim 协议补齐与 PPTR/PW/WPT 实测基线
 - **Fixed (`src/`)**: `src/cdp/server.cp`, `src/cdp/target.cp`, `src/cdp/runtime.cp`, `src/cdp/session.cp`, `src/cdp/page.cp`, `src/cdp/types.cp`, `src/net/http_loader.cp`, `src/js/dom_binding.cp`, `src/js/shim/{index,window}.js`, `src/js/runtime_source.cp`（补齐 `sessionId` 回传、`frame_id === targetId`、`Page.close`、`Runtime.callFunctionOn` 实参/简写/特殊值、`addScriptToEvaluateOnNewDocument`、`HttpLoader` chunked/loopback、`getElementsByTagName` 与 `window.parent`）；并完成 `test/unit/` 138/138 符号去重与 `E0209` `unsafe` 适配。
 - **Updated (`test/`)**: `test/e2e/trusted-fetch-metadata.e2e.test.ts`（`../../vendor/`）；`test/wpt/scripts/wpt-exec.mjs`、`wpt-batched.mjs`、`test/pptr/scripts/pptr-run.mjs`、`test/pw/scripts/pw-run.mjs`。
+
+## [2026-11-22] Phase 255: CDP `normalizeExceptionMessage` 动态缓冲、`Target.detachedFromTarget` 与 `setContent` 生命周期修复
+- **Fixed**: `src/cdp/runtime.cp`（动态分配 `norm_buf` 修复 >8KB JSON 截断）、`src/cdp/target.cp`（`Target.closeTarget` 补发 `Target.detachedFromTarget`）、`src/cdp/session.cp`（`pollReopenLoadEvents` 补齐 `Page.lifecycleEvent`）。
