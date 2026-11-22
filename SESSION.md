@@ -5652,3 +5652,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE355_RESULT {"url1":"file:///.../empty.html","frames1":1,"url2":"file:///.../two-frames.html","frames2":3}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.02s)**。
+
+## Phase 356: `Page.navigate` / `Page.reload` 递增唯一 `loaderId` 修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): 新增 `nextLoaderId()` 并在导航入口递增，确保 `loaderId` 与所有网络/页面生命周期事件严格一致。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE356_RESULT {"l1":"capsurf-loader-001","l2":"capsurf-loader-002","resps":["capsurf-loader-001","capsurf-loader-002"]}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。

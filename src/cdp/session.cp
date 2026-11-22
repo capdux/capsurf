@@ -934,6 +934,8 @@ pub struct CdpPageSession {
     title: []const u8 = "Blank Page",
     frame_id: []const u8 = "capsurf-frame-001",
     loader_id: []const u8 = "capsurf-loader-001",
+    loader_id_buf: [32]u8 = [0; 32],
+    loader_seq: u32 = 1,
     target_id: []const u8 = "capsurf-target-001",
     has_document: bool = false,
     raw_html: []const u8 = "",
@@ -6008,6 +6010,12 @@ pub struct CdpPageSession {
             "{{\"context\":{{\"id\":1,\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
             .{ origin, _.frame_id },
         ) catch "{\"context\":{\"id\":1,\"origin\":\"about:blank\",\"name\":\"\",\"uniqueId\":\"ctx-1\",\"auxData\":{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"capsurf-frame-001\"}}}";
+    }
+
+    pub fn nextLoaderId(*_) {
+        _.loader_seq += 1;
+        const s = std.fmt.bufPrint(&_.loader_id_buf, "capsurf-loader-{d:0>3}", .{_.loader_seq}) catch "capsurf-loader-001";
+        _.loader_id = s;
     }
 
     pub fn formatFrameNavigatedEvent(*_, url: []const u8): []const u8 {

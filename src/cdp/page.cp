@@ -1143,6 +1143,7 @@ pub struct PageHandler {
 
         const is_reload = std.mem.eql(u8, req.method, "Page.reload");
         if (is_reload || std.mem.eql(u8, req.method, "Page.navigate")) {
+            session.nextLoaderId();
             const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
             if (bctx.len > 0) {
                 session.setContextId(bctx);

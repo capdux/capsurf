@@ -2185,3 +2185,6 @@
 
 ### Phase 355: `page-goto.spec.ts` `file://` URL 导航报 `Cannot navigate to invalid URL` 排障笔记
 - **`HttpLoader` 缺少 `file://` 分支根因**：`fetchDocumentWithContext()` 此前仅识别 `about:blank`、`data:`、`http://`、`https://`，其余均返回 `error.InvalidUrl`。新增 `file://` 路径剥离、URL 解码与 POSIX 文件读取分支后，`file:///.../empty.html` (`frames=1`) 与 `file:///.../two-frames.html` (`frames=3`) 均一次通过（`PHASE355_RESULT`）。
+
+### Phase 356: `page-goto.spec.ts` 多次 `page.goto()` 返回 `null` 排障笔记
+- **`loaderId` 静态写死为 `capsurf-loader-001` 根因**：`CdpPageSession.loader_id` 此前始终固定为 `"capsurf-loader-001"`，多次导航返回相同 `loaderId`，导致 Playwright 客户端判定为同文档未发起新请求而使 `page.goto()` 返回 `null`。新增 `session.nextLoaderId()` 并在 `Page.navigate` / `Page.reload` 入口递增后，实测 `PHASE356_RESULT {"l1":"capsurf-loader-001","l2":"capsurf-loader-002","resps":["capsurf-loader-001","capsurf-loader-002"]}`。

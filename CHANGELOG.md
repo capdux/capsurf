@@ -2944,3 +2944,7 @@
 ## [2026-11-22] Phase 355: 实装 `HttpLoader` 原生 `file://` 本地文件读取支持（`page-goto.spec.ts` `[2/61]` & `[3/61]`）
 - **Fixed (`src/`)**:
   - `src/net/http_loader.cp`: `fetchDocumentWithContext` 新增 `file://`（含 `file://localhost/...`、百分号解码、去掉 `?query`/`#fragment`、POSIX `open`/`read`/`close` 与 MIME 推断），同时支持主文档与本地子 `<iframe>` 加载。
+
+## [2026-11-23] Phase 356: 每次 `Page.navigate` / `Page.reload` 递增唯一 `loaderId`（修复 `page.goto()` 返回 `null`）
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`, `src/cdp/page.cp`: 为 `CdpPageSession` 增加 `loader_id_buf`、`loader_seq` 与 `nextLoaderId()`，每次 `Page.navigate` / `Page.reload` 递增生成唯一 `loaderId` 并贯穿 `Network.requestWillBeSent` / `responseReceived` / `Page.frameNavigated` / `Page.lifecycleEvent` 与导航返回值。
