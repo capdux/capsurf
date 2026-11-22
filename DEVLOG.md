@@ -1890,3 +1890,6 @@
 - **`RawKeyDown` 漏派发**：Playwright `page.keyboard.press("ArrowLeft")` 对无文本控制键发送 `type: "rawKeyDown"`，此前 `input.cp` 仅在 `ev_type == .KeyDown` 时触发光标/删除逻辑，补齐 `ev_type == .RawKeyDown` 后方向键、`Home`/`End` 即刻生效（`"Hello inserted World!"`）。
 - **`textInput` 与 `preventDefault`**：`window.js` 原先仅对 `contentEditable` 派发 `dispatchTextInputEvent`，对 `<input>`/`<textarea>` 缺失 `textInput` 且未向 `applyInputText` 同步 `defaultPrevented` 状态；打通 `globalThis.__capsurf_last_key_prevented` 与普通表单控件的 `textInput` 派发后，`preventDefault()` 拦截与事件序列均与 Chromium 一致。
 - **`MouseEvent.detail`**：`dispatchMouseDomEvent` 构造 `MouseEvent` 时遗漏 `detail`，补上 `detail: 1` 修复 `expect(event.detail).toBe(1)`。
+
+### Phase 262: `document.activeElement` 与 `DOM.focus` 排障笔记
+- **`activeElement` 初始值与焦点同步**：此前 `docProto` 未定义 `activeElement`，初始页面返回 `undefined`，且 `DOM.focus` 为空存根导致 Playwright `page.focus()` 既不更新 `activeElement` 也不派发 `focus`/`blur` 事件。补齐 `docProto.activeElement`、`DOM.focus` 实装与 `isFocusableElement` + 重复聚焦去重后，`initTag: 'BODY'`、`evs: ['d:focus', 'd:blur', 'b:focus']` 与不可聚焦元素保持原焦点全部符合预期。

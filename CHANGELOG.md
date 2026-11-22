@@ -2518,3 +2518,9 @@
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `keypress` 阶段同步暴露 `globalThis.__capsurf_last_key_prevented`，并为 `<input>`/`<textarea>` 派发 `textInput` 事件。
 - **Updated (`test/`)**:
   - `test/TEST_LEDGER.md`: 持续登记 WPT/PW 各批测试结果与耗时。
+
+## [2026-11-22] Phase 262: `document.activeElement`、`DOM.focus` 与可聚焦元素校验
+- **Added / Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 移除 `DOM.focus` 空存根，实现 `nodeId`/`backendNodeId`/`objectId` 解析并同步 `session.focused_node` 与 JS `el.focus()` 派发。
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `docProto` 补齐 `activeElement` getter/setter（未聚焦或节点已脱离 DOM 时回退 `body || documentElement || null`）。
+  - `src/js/shim/element/html-element.js`: `proto.focus()` 增加 `isFocusableElement()` 校验及同元素重复聚焦去重，确保 `focus`/`blur` 事件序列与浏览器一致。

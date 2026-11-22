@@ -490,9 +490,39 @@ pub struct DomHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
+        if (std.mem.eql(u8, req.method, "DOM.focus")) {
+            let nid = @as(NodeId, @intCast(@max(0, extractJsonInt(req.params_raw, "nodeId") ?? 0)));
+            if (nid == NULL_NODE) {
+                if (bnid := extractJsonInt(req.params_raw, "backendNodeId")) {
+                    if (bnid > 0) nid = @as(NodeId, @intCast(bnid));
+                }
+            }
+            if (nid == NULL_NODE) {
+                if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                    nid = resolveNodeIdFromObjectId(session, obj_id);
+                }
+            }
+            if (nid != NULL_NODE) {
+                session.focused_node = nid;
+                session.doc.focused_node = nid;
+                if (session.has_document) {
+                    let js_buf: [256]u8 = [0; 256];
+                    const js_expr = std.fmt.bufPrint(
+                        &js_buf,
+                        "(() => {{ const el = (typeof __capsurf_get_object === 'function') ? __capsurf_get_object('node:{d}') : null; if (el && typeof el.focus === 'function') el.focus(); }})()",
+                        .{nid},
+                    ) catch null;
+                    if (e := js_expr) {
+                        const v = session.ctx.eval(e);
+                        session.ctx.freeValue(v);
+                    }
+                }
+            }
+            return CdpResponse.ok(req.id, "{}");
+        }
+
         if (std.mem.eql(u8, req.method, "DOM.hideHighlight") ||
             std.mem.eql(u8, req.method, "DOM.highlightNode") ||
-            std.mem.eql(u8, req.method, "DOM.focus") ||
             std.mem.eql(u8, req.method, "DOM.setInspectedNode") ||
             std.mem.eql(u8, req.method, "DOM.discardSearchResults") ||
             std.mem.eql(u8, req.method, "DOM.markUndoableState") ||

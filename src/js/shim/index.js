@@ -1221,6 +1221,18 @@ function installShim(global) {
       configurable: true,
     });
 
+    Object.defineProperty(docProto, "activeElement", {
+      get: function () {
+        const ae = this._activeElement;
+        if (ae && ae.isConnected !== false) return ae;
+        return this.body || this.documentElement || null;
+      },
+      set: function (v) {
+        this._activeElement = v || null;
+      },
+      configurable: true,
+    });
+
     let docCookie = "";
     function clearDocCookie() {
       docCookie = "";

@@ -283,9 +283,32 @@ function installHtmlElementExtensions(proto) {
     markNative(proto.click, "click");
   }
 
+  function isFocusableElement(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.disabled) return false;
+    const tag = String(el.tagName || el.localName || "").toLowerCase();
+    if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || tag === "summary" || tag === "iframe" || tag === "body") {
+      return true;
+    }
+    if ((tag === "a" || tag === "area") && typeof el.hasAttribute === "function" && el.hasAttribute("href")) {
+      return true;
+    }
+    if (typeof el.hasAttribute === "function" && el.hasAttribute("tabindex")) {
+      return true;
+    }
+    if (el.isContentEditable) return true;
+    if (typeof el.getAttribute === "function") {
+      const ce = el.getAttribute("contenteditable");
+      if (ce !== null && String(ce).toLowerCase() !== "false") return true;
+    }
+    return false;
+  }
+
   if (!proto.focus) {
     proto.focus = function (options) {
+      if (!isFocusableElement(this)) return;
       if (typeof document !== "undefined") {
+        if (document.activeElement === this) return;
         if (document.activeElement && document.activeElement !== this && typeof document.activeElement.blur === "function") {
           document.activeElement.blur();
         }

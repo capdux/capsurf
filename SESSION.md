@@ -4965,3 +4965,12 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`ArrowLeft` 插入输出 `"Hello inserted World!"`；`keydown` `preventDefault()` 拦截输入 `"ab"` -> `"a"`；`<input>` 完整触发 `keydown -> keypress -> textInput -> input`；`click` 事件 `detail === 1`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（155 模块 **125.44s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.20s)**。
+
+### [2026-11-22 15:08] Phase 262: `document.activeElement`、`DOM.focus` 与可聚焦元素校验
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): 移除 `DOM.focus` 空存根，支持 `nodeId`/`backendNodeId`/`objectId` 解析，同步 `focused_node` 并调用 JS `el.focus()`。
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `docProto` 新增 `activeElement` getter/setter（默认回退 `body || documentElement || null`）。
+  - [src/js/shim/element/html-element.js](file:///data/dev/capsurf/src/js/shim/element/html-element.js): `proto.focus()` 增加 `isFocusableElement()` 校验及同元素重复聚焦去重。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`initTag: 'BODY'`、`ae1: 'd'`、`ae2: 'b'`、`ae3: 'b'`（不可聚焦元素保持原焦点）、`evs: ['d:focus', 'd:blur', 'b:focus']`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（157 模块 **132.04s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。
