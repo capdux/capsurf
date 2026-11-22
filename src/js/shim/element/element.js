@@ -734,6 +734,36 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  const origPrevSibDesc = Object.getOwnPropertyDescriptor(proto, "previousSibling");
+  const nodePrevSibDesc = typeof Node !== "undefined" ? Object.getOwnPropertyDescriptor(Node.prototype, "previousSibling") : null;
+  if (nodePrevSibDesc && nodePrevSibDesc.get) {
+    Object.defineProperty(proto, "previousSibling", {
+      get: function () {
+        if (origPrevSibDesc && origPrevSibDesc.get) {
+          const v = origPrevSibDesc.get.call(this);
+          if (v) return v;
+        }
+        return nodePrevSibDesc.get.call(this);
+      },
+      configurable: true,
+    });
+  }
+
+  const origNextSibDesc = Object.getOwnPropertyDescriptor(proto, "nextSibling");
+  const nodeNextSibDesc = typeof Node !== "undefined" ? Object.getOwnPropertyDescriptor(Node.prototype, "nextSibling") : null;
+  if (nodeNextSibDesc && nodeNextSibDesc.get) {
+    Object.defineProperty(proto, "nextSibling", {
+      get: function () {
+        if (origNextSibDesc && origNextSibDesc.get) {
+          const v = origNextSibDesc.get.call(this);
+          if (v) return v;
+        }
+        return nodeNextSibDesc.get.call(this);
+      },
+      configurable: true,
+    });
+  }
+
   Object.defineProperty(proto, "previousElementSibling", {
     get: function () {
       let sib = this.previousSibling;
@@ -1807,7 +1837,14 @@ function installElementExtensions(proto) {
     }
     if (origProtoMatches) {
       try {
-        return origProtoMatches.call(this, selector);
+        if (origProtoMatches.call(this, selector)) return true;
+        const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+        if (!(rootNode && rootNode.host) &&
+            s.indexOf(":is(") === -1 && s.indexOf(":where(") === -1 &&
+            s.indexOf(":has(") === -1 && s.indexOf(":not(") === -1 &&
+            s.indexOf(":scope") === -1) {
+          return false;
+        }
       } catch (e) {
         if (e && e.name === "SyntaxError") throw e;
       }
@@ -1827,9 +1864,10 @@ function installElementExtensions(proto) {
     if (s.startsWith("#") && this.id === s.slice(1)) return true;
     if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
     if (s.toLowerCase() === this.localName) return true;
-    if (typeof document !== "undefined" && document.querySelectorAll) {
+    const root = typeof this.getRootNode === "function" ? this.getRootNode() : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+    if (root && typeof root.querySelectorAll === "function") {
       try {
-        const matches = document.querySelectorAll(s);
+        const matches = root.querySelectorAll(s);
         for (let i = 0; i < matches.length; i++) {
           if (matches[i] === this) return true;
         }

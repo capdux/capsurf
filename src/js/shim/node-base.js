@@ -67,7 +67,7 @@ Object.defineProperty(Node.prototype, "previousSibling", {
   get: function () {
     const p = this.parentNode;
     if (!p) return null;
-    const kids = p.childNodes || p._children;
+    const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
     if (!kids || !kids.length) return null;
     const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
     for (let i = 0; i < kids.length; i++) {
@@ -85,7 +85,7 @@ Object.defineProperty(Node.prototype, "nextSibling", {
   get: function () {
     const p = this.parentNode;
     if (!p) return null;
-    const kids = p.childNodes || p._children;
+    const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
     if (!kids || !kids.length) return null;
     const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
     for (let i = 0; i < kids.length; i++) {

@@ -3019,3 +3019,4 @@
 - Phase 392: `src/cdp/session.cp` — `escapeJsonString` 完整转义 `< 0x20` ASCII 控制字符为 `\u00XX`。
 - Phase 393: `src/cdp/input.cp` — `hitTest` 跳过 `pointer_events_none` 盒模型节点，支持鼠标事件穿透 `pointer-events: none` 遮罩层。
 - Phase 394: `src/html/tags.cp`, `src/css/font_face.cp`, `src/js/shim/cssom.js`, `src/js/runtime_source.cp` — 修复 `frame`/`frameset` 标签识别与 void 闭合、CSS `content` 十六进制转义 UTF-8 解码，以及外部 `<link>` 样式表 HTTP 文本加载。
+- Phase 395: `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/runtime_source.cp` — 修复 `ShadowRoot` 子节点的 `previousSibling`/`nextSibling`/`previousElementSibling`/`nextElementSibling` 链与 `Element.prototype.matches` 在 ShadowRoot 及 `:is`/`:not`/`:has`/`:where`/`:scope` 下的匹配作用域。
