@@ -13978,6 +13978,7 @@ const CSS_TYPED_OM_GLOBALS = {
     const popupWin = {
       closed: false,
       opener: global,
+      Promise: global.Promise,
       location: { href: fullUrl },
       document: { title: "", URL: fullUrl },
       close: function () { this.closed = true; },

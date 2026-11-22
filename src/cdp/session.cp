@@ -3666,6 +3666,20 @@ pub struct CdpPageSession {
 
     pub fn formatCdpRemoteObject(*_, val: JSValue, return_by_value: bool, out_buf: []u8): usize {
         _.ctx.setPropertyStr("__capsurf_temp_val", val);
+        if (return_by_value) {
+            const s_val = _.ctx.eval("globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true))");
+            defer _.ctx.freeValue(s_val);
+            if (!jsIsException(s_val)) {
+                const json_s = _.ctx.toCString(s_val);
+                if (json_s.len > 0 && !std.mem.eql(u8, json_s, "undefined")) {
+                    const formatted = std.fmt.bufPrint(out_buf, "{{\"result\":{s}}}", .{json_s}) catch return _.formatCdpResult(val, out_buf);
+                    return formatted.len;
+                }
+            } else {
+                const exc = _.ctx.getException();
+                _.ctx.freeValue(exc);
+            }
+        }
         const script = if (return_by_value)
             "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true)"
         else
