@@ -1935,3 +1935,7 @@
 
 ### Phase 275: `DOM.scrollIntoViewIfNeeded` 门控排障笔记
 - **未报错与不等待根因**：此前 `DOM.scrollIntoViewIfNeeded` 对 detached 与 `display:none` 节点一律返回 `{}`，导致 `elementhandle-scroll-into-view.spec.ts` 中 `detached` 不抛错且 `display:none` 未进入重试等待循环。补齐 `isConnected` 与 `getBoxModel` 零尺寸错误返回后，`detached`、`display:none` 等待及超时三项全部通过。
+
+### Phase 276: `Runtime.exceptionThrown` 与闭合 `<details>` 无障碍树排障笔记
+- **`pageerror` 超时根因**：`executeClassicScript` / `executeModuleScript` 以及 `window.js` 的 `setTimeout`/`messageTaskQueue` 捕获未处理异常后仅打印日志或 `console.error`，从未派发 `Runtime.exceptionThrown`。通过 `ConsoleRecord` 队列复用的 `"__exception"` 通道与 `__capsurf_report_exception` 原生绑定后，实测内联脚本与定时器未捕获异常均准确触发 `Runtime.exceptionThrown`。
+- **闭合 `<details>` 文本泄漏根因**：`accessibility.cp` 的 `buildNode` 与 `collectSubtreeTextInternal` 遍历 `<details>` 所有子节点，导致未展开时文本节点被计入 `group` 名称。过滤非首个 `<summary>` 后，`AX_NAMES` 收敛为 `group:Summary` / `button:Summary`。

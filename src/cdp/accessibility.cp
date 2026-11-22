@@ -583,25 +583,42 @@ fn collectSubtreeTextInternal(
     depth: usize,
 ): usize {
     if (depth > 16 || out.len == 0) return 0;
+    let is_closed_details = false;
+    if (p := doc.getNode(node_id)) {
+        if (p.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(p.tag_name, "details") && p.getAttribute("open") == null) {
+            is_closed_details = true;
+        }
+    }
+    let seen_summary = false;
     let offset: usize = 0;
     let curr = doc.getFirstChild(node_id);
     while (curr != NULL_NODE && offset < out.len) {
         if (n := doc.getNode(curr)) {
-            if (n.node_type == NodeType.Text) {
-                const txt = std.mem.trim(u8, n.text_content, " \t\r\n");
-                if (txt.len > 0) {
-                    if (offset > 0 && offset < out.len && out[offset - 1] != ' ') {
-                        out[offset] = ' ';
-                        offset += 1;
-                    }
-                    const copy_len = @min(txt.len, out.len - offset);
-                    @memcpy(out[offset .. offset + copy_len], txt[0..copy_len]);
-                    offset += copy_len;
+            let skip_child = false;
+            if (is_closed_details) {
+                if (!seen_summary && n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "summary")) {
+                    seen_summary = true;
+                } else {
+                    skip_child = true;
                 }
-            } else if (n.node_type == NodeType.Element) {
-                if (!isSkipTag(n.tag_name)) {
-                    const sub_len = collectSubtreeTextInternal(doc, curr, out[offset..], depth + 1);
-                    offset += sub_len;
+            }
+            if (!skip_child) {
+                if (n.node_type == NodeType.Text) {
+                    const txt = std.mem.trim(u8, n.text_content, " \t\r\n");
+                    if (txt.len > 0) {
+                        if (offset > 0 && offset < out.len && out[offset - 1] != ' ') {
+                            out[offset] = ' ';
+                            offset += 1;
+                        }
+                        const copy_len = @min(txt.len, out.len - offset);
+                        @memcpy(out[offset .. offset + copy_len], txt[0..copy_len]);
+                        offset += copy_len;
+                    }
+                } else if (n.node_type == NodeType.Element) {
+                    if (!isSkipTag(n.tag_name)) {
+                        const sub_len = collectSubtreeTextInternal(doc, curr, out[offset..], depth + 1);
+                        offset += sub_len;
+                    }
                 }
             }
             curr = n.next_sibling;
@@ -1381,12 +1398,24 @@ pub struct AXTree {
                 return ax_idx;
             }
 
-            // Recurse children
+            // Recurse children (closed <details> only exposes its first <summary> child)
+            const is_closed_details = std.ascii.eqlIgnoreCase(node.tag_name, "details") && node.getAttribute("open") == null;
+            let seen_summary = false;
             let child_id = node.first_child;
             while (child_id != NULL_NODE) {
                 if (c_node := doc.getNode(child_id)) {
                     const next_sib = c_node.next_sibling;
-                    * = _.buildNode(doc, child_id, ax_idx, frame_id, node_hidden, aria_hidden, vis_hidden, in_layout_table);
+                    let skip_child = false;
+                    if (is_closed_details) {
+                        if (!seen_summary && c_node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(c_node.tag_name, "summary")) {
+                            seen_summary = true;
+                        } else {
+                            skip_child = true;
+                        }
+                    }
+                    if (!skip_child) {
+                        * = _.buildNode(doc, child_id, ax_idx, frame_id, node_hidden, aria_hidden, vis_hidden, in_layout_table);
+                    }
                     child_id = next_sib;
                 } else {
                     break;

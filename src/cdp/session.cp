@@ -1384,6 +1384,7 @@ pub struct CdpPageSession {
         const compiled = JS_Eval(_.ctx.raw_ctx, code_z.ptr, code.len, unsafe { @ptrCast(&url_buf) }, 33);
         if (jsIsException(compiled)) {
             const exc = _.ctx.getException();
+            _.pushExceptionEvent(exc);
             let exc_str_buf: [256]u8 = undefined;
             const exc_len = _.formatCdpException(exc, &exc_str_buf);
             std.debug.print("[MODULE_COMPILE_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
@@ -1395,6 +1396,7 @@ pub struct CdpPageSession {
             const exec_res = JS_EvalFunction(_.ctx.raw_ctx, compiled);
             if (jsIsException(exec_res)) {
                 const exc2 = _.ctx.getException();
+                _.pushExceptionEvent(exc2);
                 let exc_str_buf2: [256]u8 = undefined;
                 const exc_len2 = _.formatCdpException(exc2, &exc_str_buf2);
                 std.debug.print("[MODULE_EXEC_ERR] {s}\n", .{exc_str_buf2[0..exc_len2]});
@@ -1430,6 +1432,7 @@ pub struct CdpPageSession {
         const js_res = _.ctx.eval(code);
         if (jsIsException(js_res)) {
             const exc = _.ctx.getException();
+            _.pushExceptionEvent(exc);
             let exc_str_buf: [256]u8 = undefined;
             const exc_len = _.formatCdpException(exc, &exc_str_buf);
             std.debug.print("[INLINE_SCRIPT_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
@@ -3282,6 +3285,43 @@ pub struct CdpPageSession {
         }
 
         return true;
+    }
+
+    fn pushExceptionEvent(*_, exc: JSValue) {
+        if (dom := _.dom_ctx) {
+            const exc_str = _.ctx.toCString(exc);
+            defer std.heap.page_allocator.free(exc_str);
+
+            let class_name: []const u8 = "Error";
+            if (colon_idx := std.mem.indexOf(u8, exc_str, ":")) {
+                const prefix = exc_str[0..colon_idx];
+                if (prefix.len > 0 && std.mem.indexOf(u8, prefix, " ") == null) {
+                    class_name = prefix;
+                }
+            }
+
+            let desc_buf: [1024]u8 = [0; 1024];
+            let desc_slice: []const u8 = "";
+            if (exc_str.len > 0 && exc_str[exc_str.len - 1] == '\n') {
+                desc_slice = exc_str[0..@min(exc_str.len, desc_buf.len)];
+            } else {
+                desc_slice = std.fmt.bufPrint(&desc_buf, "{s}\n", .{exc_str[0..@min(exc_str.len, 1000)]}) catch exc_str;
+            }
+
+            let norm_desc_buf: [1024]u8 = [0; 1024];
+            const norm_desc = normalizeExceptionMessage(desc_slice, &norm_desc_buf);
+
+            let esc_exc_buf: [1536]u8 = [0; 1536];
+            const esc_exc = escapeJsonString(norm_desc, &esc_exc_buf);
+
+            let details_buf: [2048]u8 = [0; 2048];
+            const details_json = std.fmt.bufPrint(
+                &details_buf,
+                "{{\"exceptionId\":1,\"text\":\"Uncaught\",\"lineNumber\":0,\"columnNumber\":0,\"executionContextId\":1,\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\"}}}}",
+                .{ class_name, esc_exc },
+            ) catch return;
+            dom.addConsoleRecord("__exception", class_name, details_json);
+        }
     }
 
     fn formatCdpException(*_, exc: JSValue, out_buf: []u8): usize {
@@ -5235,6 +5275,23 @@ pub struct CdpPageSession {
             while (i < dom.console_count && ev_idx < out_events.len) : (i += 1) {
                 let rec = &dom.console_records[i];
                 const lvl = rec.getLevel();
+
+                if (std.mem.eql(u8, lvl, "__exception")) {
+                    if (_.runtime_enabled && ev_idx < out_events.len && rt_pos < _.console_event_storage.len) {
+                        const exc_details = rec.getArgsJson();
+                        const rt_json = std.fmt.bufPrint(
+                            _.console_event_storage[rt_pos..],
+                            "{{\"timestamp\":{d},\"exceptionDetails\":{s}}}",
+                            .{ rec.timestamp, exc_details },
+                        ) catch "";
+                        if (rt_json.len > 0) {
+                            rt_pos += rt_json.len;
+                            out_events[ev_idx] = CdpEvent.create("Runtime.exceptionThrown", rt_json);
+                            ev_idx += 1;
+                        }
+                    }
+                    continue;
+                }
 
                 if (_.runtime_enabled && ev_idx < out_events.len && rt_pos < _.console_event_storage.len) {
                     const args_slice = rec.getArgsJson();

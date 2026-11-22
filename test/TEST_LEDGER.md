@@ -95,6 +95,11 @@
 | 2026-11-22 16:38 | `/css/css-tables/` | `3/5` | 4 | PASS 0 / FAIL 4 / TIMEOUT 0 (7s) | Batch 48 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:38 | `/css/css-tables/` | `4/5` | 3 | PASS 1 / FAIL 2 / TIMEOUT 0 (6s) | Batch 48 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:39 | `/css/css-tables/` | `5/5` | 3 | PASS 1 / FAIL 2 / TIMEOUT 0 (6s) | Batch 48 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:40 | `/css/css-transforms/` | `3/5` | 6 | PASS 1 / FAIL 5 / TIMEOUT 0 | Batch 49 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:41 | `/css/css-transforms/` | `4/5` | 6 | PASS 0 / FAIL 6 / TIMEOUT 0 | Batch 49 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:41 | `/css/css-transforms/` | `5/5` | 6 | PASS 1 / FAIL 5 / TIMEOUT 0 | Batch 49 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:43 | `/css/css-values/` | `3/5` | 50/70 | PASS 9 / FAIL 26 / TIMEOUT 15 (90s截断) | Batch 49 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:44 | `/css/css-values/` | `4/5` | 45/70 | PASS 11 / FAIL 17 / TIMEOUT 17 (90s截断) | Batch 49 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -167,3 +172,11 @@
 | 2026-11-22 16:37 | `page-wait-for-url.spec.ts` | 1/3 PASS (waitForURL load未触发 2 TIMEOUT, 90s截断) | PW Batch 20 |
 | 2026-11-22 16:38 | `elementhandle-select-text.spec.ts` | 5/5 PASS (12.2s, exit 0) | PW Batch 20 (Phase 273 全绿) |
 | 2026-11-22 16:38 | `locator-click.spec.ts` | 4/5 PASS (Node removed 1 FAIL, 14.1s) | PW Batch 20 (Phase 266+274 复测) |
+| 2026-11-22 16:44 | `elementhandle-scroll-into-view.spec.ts` | 5/8 PASS (Phase 275 复测提升 2->5, 90s截断) | PW Batch 21 |
+| 2026-11-22 16:44 | `expect-boolean.spec.ts` | 52/54 PASS (empty span/iframe 2 FAIL, 90s截断) | PW Batch 21 |
+| 2026-11-22 16:45 | `expect-to-have-text.spec.ts` | 25/28 PASS (hidden innerText/shadow 3 FAIL, 90s截断) | PW Batch 21 |
+| 2026-11-22 16:45 | `locator-wait-for-function.spec.ts` | 10/10 PASS (11.1s, exit 0) | PW Batch 21 (全绿) |
+| 2026-11-22 16:46 | `expect-to-have-value.spec.ts` | 11/11 PASS (15.7s, exit 0) | PW Batch 22 (全绿) |
+| 2026-11-22 16:46 | `expect-to-have-accessible.spec.ts` | 14/14 PASS (16.1s, 含意外PASS 1项) | PW Batch 22 (全绿) |
+| 2026-11-22 16:47 | `expect-timeout.spec.ts` | 15/15 PASS (19.5s, exit 0) | PW Batch 22 (全绿) |
+| 2026-11-22 16:47 | `frame-frame-element.spec.ts` | 1/6 PASS (DOM.getFrameOwner/shadow 5 FAIL, 36.7s) | PW Batch 22 |

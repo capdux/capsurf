@@ -2141,6 +2141,65 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsUndefined();
 }
 
+@c fn js_report_exception(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsUndefined();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr)) };
+
+    let cstr_len: usize = 0;
+    const cstr = JS_ToCStringLen2(ctx, &cstr_len, unsafe { argv[0] }, 0);
+    if (cstr == null) return jsUndefined();
+    const raw_str = cstr.?[0..cstr_len];
+    defer JS_FreeCString(ctx, cstr);
+
+    let class_name: []const u8 = "Error";
+    if (colon_idx := std.mem.indexOf(u8, raw_str, ":")) {
+        const prefix = raw_str[0..colon_idx];
+        if (prefix.len > 0 && std.mem.indexOf(u8, prefix, " ") == null) {
+            class_name = prefix;
+        }
+    }
+
+    let esc_buf: [1536]u8 = [0; 1536];
+    let esc_len: usize = 0;
+    let si: usize = 0;
+    const max_src = @min(raw_str.len, 1000);
+    while (si < max_src && esc_len + 2 < esc_buf.len) : (si += 1) {
+        const ch = raw_str[si];
+        if (ch == '"' || ch == '\\') {
+            esc_buf[esc_len] = '\\';
+            esc_buf[esc_len + 1] = ch;
+            esc_len += 2;
+        } else if (ch == '\n') {
+            esc_buf[esc_len] = '\\';
+            esc_buf[esc_len + 1] = 'n';
+            esc_len += 2;
+        } else if (ch == '\r') {
+            esc_buf[esc_len] = '\\';
+            esc_buf[esc_len + 1] = 'r';
+            esc_len += 2;
+        } else if (ch == '\t') {
+            esc_buf[esc_len] = '\\';
+            esc_buf[esc_len + 1] = 't';
+            esc_len += 2;
+        } else if (ch >= 0x20) {
+            esc_buf[esc_len] = ch;
+            esc_len += 1;
+        }
+    }
+
+    let details_buf: [2048]u8 = [0; 2048];
+    const details_json = std.fmt.bufPrint(
+        &details_buf,
+        "{{\"exceptionId\":1,\"text\":\"Uncaught\",\"lineNumber\":0,\"columnNumber\":0,\"executionContextId\":1,\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\\n\"}}}}",
+        .{ class_name, esc_buf[0..esc_len] },
+    ) catch return jsUndefined();
+    dom_ctx.addConsoleRecord("__exception", class_name, details_json);
+    return jsUndefined();
+}
+
 @c fn js_console_log(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return handleJsConsole(ctx, argc, argv, "log");
@@ -2456,6 +2515,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

@@ -5072,3 +5072,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`detached` 抛出 `Element is not attached to the DOM`，`display: none` 节点等待至 `display: block` 后恢复（`beforeBlock: false, afterBlock: true`），超时抛出 `Timeout 500ms exceeded.`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.04s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.07s)**。
+
+### [2026-11-22 16:48] Phase 276: `Runtime.exceptionThrown` 全局异常事件上报与闭合 `<details>` 无障碍树过滤
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `executeClassicScript()` / `executeModuleScript()` 及定时器/消息队列未捕获异常增加 `pushExceptionEvent()` / `__capsurf_report_exception()` 上报通道，并在 `pollConsoleEvents()` 中派发 `Runtime.exceptionThrown` CDP 事件。
+  - [src/cdp/accessibility.cp](file:///data/dev/capsurf/src/cdp/accessibility.cp): 在 `buildNode()` 与 `collectSubtreeTextInternal()` 中对闭合 `<details>` 仅保留首个 `<summary>` 子节点。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：内联 `<script>` 与 `setTimeout` 未捕获异常均准确触发 `Runtime.exceptionThrown`（`inline boom` / `timer boom`）；闭合 `<details>` `AX_NAMES` 收敛为 `["RootWebArea:","generic:Summary","group:Summary","button:Summary","StaticText:Summary"]`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **123.61s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.16s)**。

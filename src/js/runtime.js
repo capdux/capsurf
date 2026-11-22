@@ -31124,7 +31124,11 @@
         try {
           msgTask();
         } catch (e) {
-          if (typeof console !== "undefined" && console.error) console.error(e);
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_report_exception === "function") {
+            globalThis.__capsurf_report_exception(e);
+          } else if (typeof console !== "undefined" && console.error) {
+            console.error(e);
+          }
         } finally {
           isExecutingTask = false;
         }
@@ -31190,7 +31194,11 @@
           try {
             msgTask();
           } catch (e) {
-            if (typeof console !== "undefined" && console.error) console.error(e);
+            if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_report_exception === "function") {
+              globalThis.__capsurf_report_exception(e);
+            } else if (typeof console !== "undefined" && console.error) {
+              console.error(e);
+            }
           }
           return withWorkerPump(0);
         }
@@ -31219,7 +31227,11 @@
             (new Function(item.cb))();
           }
         } catch (e) {
-          if (typeof console !== "undefined" && console.error) console.error(e);
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_report_exception === "function") {
+            globalThis.__capsurf_report_exception(e);
+          } else if (typeof console !== "undefined" && console.error) {
+            console.error(e);
+          }
         }
 
         if (item.isInterval && activeTimers.has(item.id)) {
@@ -33634,7 +33646,11 @@
             entry.cb(ts);
           }
         } catch (e) {
-          if (typeof console !== "undefined" && console.error) console.error(e);
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_report_exception === "function") {
+            globalThis.__capsurf_report_exception(e);
+          } else if (typeof console !== "undefined" && console.error) {
+            console.error(e);
+          }
         }
       }
       if (ran > 0) {

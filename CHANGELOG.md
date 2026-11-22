@@ -2584,3 +2584,8 @@
 ## [2026-11-22] Phase 275: `DOM.scrollIntoViewIfNeeded` 脱离文档与零尺寸/隐藏状态门控
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: 在 `DOM.scrollIntoViewIfNeeded` 中校验目标元素 `isConnected`（脱离文档返回 `"Node is detached from document"`）及 `getBoxModel` 尺寸（`width <= 0 && height <= 0` 返回 `"Node does not have a layout object"`），使 Playwright `scrollIntoViewIfNeeded` 在 detached 时报错、在 `display:none` 时按预期等待可见或超时。
+
+## [2026-11-22] Phase 276: `Runtime.exceptionThrown` 全局异常事件上报与闭合 `<details>` 无障碍树过滤
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`, `src/js/dom_binding.cp`, `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `executeClassicScript()` / `executeModuleScript()` 及定时器/消息队列捕获的未捕获异常增加 `pushExceptionEvent()` / `__capsurf_report_exception()` 通道，复用 `ConsoleRecord` 队列并在 `pollConsoleEvents()` 中派发 `Runtime.exceptionThrown` CDP 事件（支撑 `page.on('pageerror')`）。
+  - `src/cdp/accessibility.cp`: 在 `buildNode()` 与 `collectSubtreeTextInternal()` 中对无 `open` 属性的闭合 `<details>` 仅保留首个 `<summary>` 子节点，屏蔽隐藏文本与子节点对无障碍名称及 AX 树的污染。
