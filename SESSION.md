@@ -5638,3 +5638,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE353_RESULT {"onInput":["blue"],"onChange":["blue"],"checked":["blue"],"selVal":"blue"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 354: `DOM.describeNode` 子框架 `frameId` 修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `serializeCdpNodeWithOptions` 支持 `<frame>` 标签，`DOM.describeNode` 传入 `collectDocIframeEntries()` 精确返回子框架 `frameId`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE354_RESULT {"frameId":"capsurf-child-1","ownerNid":5,"match":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

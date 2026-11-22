@@ -2936,3 +2936,7 @@
 ## [2026-11-22] Phase 353: `:checked` 伪类支持 `<option>.selected`（`page-select-option.spec.ts` `option:checked`）
 - **Fixed (`src/`)**:
   - `src/js/shim/selector.js`, `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `:checked` 伪类匹配规则除 `el.checked` 外同步判定 `OPTION` 元素的 `el.selected` 属性，使 `select.querySelectorAll('option:checked')` 与 `option.matches(':checked')` 正确返回已选项。
+
+## [2026-11-22] Phase 354: 修复 `DOM.describeNode` 返回子框架 `frameId`（`frame-frame-element.spec.ts`）
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: `serializeCdpNodeWithOptions()` 同步为 `<frame>` 与 `<iframe>` 输出各自子 `frameId`；`DOM.describeNode` 改用 `collectDocIframeEntries()` + `serializeCdpNodeWithOptions()` 序列化，消除此前误将主帧 `session.frame_id` 填给子框架元素的故障。

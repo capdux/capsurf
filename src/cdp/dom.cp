@@ -230,7 +230,7 @@ pub fn serializeCdpNodeWithOptions(
                 attr_first = false;
             }
             list.appendSlice(allocator, "],")?;
-            if (std.ascii.eqlIgnoreCase(tag, "iframe")) {
+            if (std.ascii.eqlIgnoreCase(tag, "iframe") || std.ascii.eqlIgnoreCase(tag, "frame")) {
                 if (fid := findIframeFrameId(iframe_frames, nid)) {
                     list.appendSlice(allocator, "\"frameId\":")?;
                     appendJsonEscaped(allocator, list, fid)?;
@@ -1306,7 +1306,10 @@ pub struct DomHandler {
                 let list = std.ArrayListUnmanaged(u8).empty;
                 defer list.deinit(session.allocator);
                 list.appendSlice(session.allocator, "{\"node\":") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
-                serializeCdpNode(session.allocator, &session.doc, node_id, depth, &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                let iframe_entries: [32]IframeFrameEntry = [IframeFrameEntry{}; 32];
+                const iframe_count = collectDocIframeEntries(session, &iframe_entries);
+                const empty_sr: []const ShadowRootEntry = [];
+                serializeCdpNodeWithOptions(session.allocator, &session.doc, node_id, depth, isNodeInSvg(&session.doc, node_id), empty_sr, iframe_entries[0..iframe_count], &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 if (session.frame_id.len > 0 && list.items.len > 1 && list.items[list.items.len - 1] == '}' && std.mem.indexOf(u8, list.items, "\"frameId\"") == null) {
                     list.items.len -= 1;
                     list.appendSlice(session.allocator, ",\"frameId\":\"") catch return CdpResponse.err(req.id, -32000, "Alloc failed");

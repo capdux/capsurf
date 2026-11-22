@@ -2179,3 +2179,6 @@
 
 ### Phase 353: `page-select-option.spec.ts` `option:checked` 返回空数组排障笔记
 - **`:checked` 未检查 `<option>.selected` 根因**：`src/js/shim/selector.js` 与 `src/js/shim/element/element.js` 的 `:checked` 伪类仅检查 `el.checked`，忽略了 W3C Selectors 规范中 `<option>.selected`，导致 `select.html` 的 `input`/`change` 监听器执行 `select.querySelectorAll('option:checked')` 始终返回 `[]`。补齐 `OPTION` 元素的 `selected` 判定后，实测 `PHASE353_RESULT {"onInput":["blue"],"onChange":["blue"],"checked":["blue"],"selVal":"blue"}`。
+
+### Phase 354: `frame-frame-element.spec.ts` `DOM.getFrameOwner` 误报 `Frame has been detached` 排障笔记
+- **`DOM.describeNode` 误填主帧 `frameId` 根因**：`elementHandle.contentFrame()` 通过 `DOM.describeNode` 读取 `node.frameId`，但 `DOM.describeNode` 调用无 `iframe_frames` 的 `serializeCdpNode()`，随后第 1310 行见无 `"frameId"` 字段便强行填入主帧 `session.frame_id`（`frame-001`），导致 `frame.frameElement()` 用主帧 ID 调 `DOM.getFrameOwner` 被拒绝。补齐 `serializeCdpNodeWithOptions`（含 `<frame>` 标签）后，实测 `PHASE354_RESULT {"frameId":"capsurf-child-1","ownerNid":5,"match":true}`。
