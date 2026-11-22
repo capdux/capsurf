@@ -10364,6 +10364,22 @@ const CSS_TYPED_OM_GLOBALS = {
     });
   }
 
+  // Invalidate cached head._children when native document.title setter appends a <title>
+  const origTitleDesc = Object.getOwnPropertyDescriptor(docProto, "title");
+  if (origTitleDesc && typeof origTitleDesc.set === "function") {
+    Object.defineProperty(docProto, "title", {
+      get: origTitleDesc.get,
+      set: function (val) {
+        origTitleDesc.set.call(this, val);
+        const h = this.head;
+        if (h && h._children) {
+          h._children = null;
+        }
+      },
+      configurable: true,
+    });
+  }
+
   // compatMode
   if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
     Object.defineProperty(docProto, "compatMode", {

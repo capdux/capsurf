@@ -3037,3 +3037,4 @@
 - Phase 410: `src/cdp/network.cp`, `src/cdp/page.cp` — 主文档导航切换时清理旧 `doc-req-*`/`capsurf-loader-*` 响应体缓存，使 `Network.getResponseBody` 在导航离开后返回 `-32000`。
 - **Phase 411 (`src/js/shim/element/element.js`, `src/js/shim/node-base.js`, `src/js/runtime_source.cp`, `src/js/dom_binding.cp`, `src/cdp/page.cp`)**：`firstChild`/`lastChild`/`ensureChildren` 接入 `upgradeElement` 升级 DOM 元素原型；`getNodeText` 优化多文本子节点拼接逻辑；`Page.navigate` 识别 XML/XHTML 响应清除怪异模式。
 - **Phase 412 (`src/js/shim/window.js`, `src/js/runtime_source.cp`, `src/cdp/session.cp`, `src/cdp/page.cp`)**：新增 W3C `EventSource`（Server-Sent Events）Web API；在 `Page.captureScreenshot` 接入 `cap:image` 原生 JPEG（`jpegEncode`）与 WebP（`webpEncode`/`webpEncodeLossless`）截图编码。
+- **Phase 413 (`src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：`js_element_append_child`/`js_element_insert_before` 支持将 JS `Text` 节点同步挂载至原生 Arena DOM；`docProto` `title` setter 失效 `head._children` 缓存以同步 `head.lastChild`。

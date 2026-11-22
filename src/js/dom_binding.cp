@@ -574,26 +574,46 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     return jsBool(node.getAttribute(attr_name) != null);
 }
 
+fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValue): NodeId {
+    const child_ptr = JS_GetOpaque(child_val, g_element_class_id);
+    if (child_ptr != null) {
+        const child_el: *JsElement = unsafe { @ptrCast(@alignCast(child_ptr.?)) };
+        return child_el.node_id;
+    }
+    const nt_val = JS_GetPropertyStr(ctx, child_val, "nodeType");
+    defer JS_FreeValue(ctx, nt_val);
+    const nt_str = jsToSlice(ctx, nt_val);
+    defer std.heap.page_allocator.free(nt_str);
+    if (std.mem.eql(u8, nt_str, "3")) {
+        const data_val = JS_GetPropertyStr(ctx, child_val, "data");
+        defer JS_FreeValue(ctx, data_val);
+        const data_str = jsToSlice(ctx, data_val);
+        defer std.heap.page_allocator.free(data_str);
+        const duped = doc.allocator.dupe(u8, data_str) catch return NULL_NODE;
+        return doc.createTextNode(duped) catch NULL_NODE;
+    }
+    return NULL_NODE;
+}
+
 @c fn js_element_append_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     if (argc < 1) return jsUndefined();
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
     if (ptr == null) return jsUndefined();
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
-    const child_ptr = JS_GetOpaque(unsafe { argv[0] }, g_element_class_id);
-    if (child_ptr == null) return jsUndefined();
-    const child_el: *JsElement = unsafe { @ptrCast(@alignCast(child_ptr.?)) };
-    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
-        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].parent;
+    const child_nid = resolveOrCreateNativeChild(ctx, el.dom_ctx.doc, unsafe { argv[0] });
+    if (child_nid == NULL_NODE) return jsUndefined();
+    if (@as(usize, child_nid) < el.dom_ctx.doc.nodes.items.len) {
+        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].parent;
         if (old_parent != NULL_NODE) {
-            el.dom_ctx.recordChildRemoved(old_parent, child_el.node_id);
+            el.dom_ctx.recordChildRemoved(old_parent, child_nid);
         }
     }
-    el.dom_ctx.doc.appendChild(el.node_id, child_el.node_id);
+    el.dom_ctx.doc.appendChild(el.node_id, child_nid);
     let prev_id: NodeId = NULL_NODE;
-    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
-        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].prev_sibling;
+    if (@as(usize, child_nid) < el.dom_ctx.doc.nodes.items.len) {
+        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
     }
-    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_el.node_id);
+    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_nid);
     return JS_DupValue(ctx, unsafe { argv[0] });
 }
 
@@ -602,9 +622,8 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     const ptr = JS_GetOpaque(this_val, g_element_class_id);
     if (ptr == null) return jsUndefined();
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
-    const child_ptr = JS_GetOpaque(unsafe { argv[0] }, g_element_class_id);
-    if (child_ptr == null) return jsUndefined();
-    const child_el: *JsElement = unsafe { @ptrCast(@alignCast(child_ptr.?)) };
+    const child_nid = resolveOrCreateNativeChild(ctx, el.dom_ctx.doc, unsafe { argv[0] });
+    if (child_nid == NULL_NODE) return jsUndefined();
 
     let ref_node_id: NodeId = NULL_NODE;
     if (argc >= 2) {
@@ -614,18 +633,18 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
             ref_node_id = ref_el.node_id;
         }
     }
-    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
-        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].parent;
+    if (@as(usize, child_nid) < el.dom_ctx.doc.nodes.items.len) {
+        const old_parent = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].parent;
         if (old_parent != NULL_NODE) {
-            el.dom_ctx.recordChildRemoved(old_parent, child_el.node_id);
+            el.dom_ctx.recordChildRemoved(old_parent, child_nid);
         }
     }
-    el.dom_ctx.doc.insertBefore(el.node_id, child_el.node_id, ref_node_id);
+    el.dom_ctx.doc.insertBefore(el.node_id, child_nid, ref_node_id);
     let prev_id: NodeId = NULL_NODE;
-    if (@as(usize, child_el.node_id) < el.dom_ctx.doc.nodes.items.len) {
-        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_el.node_id)].prev_sibling;
+    if (@as(usize, child_nid) < el.dom_ctx.doc.nodes.items.len) {
+        prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
     }
-    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_el.node_id);
+    el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_nid);
     return JS_DupValue(ctx, unsafe { argv[0] });
 }
 
