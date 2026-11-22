@@ -1692,6 +1692,17 @@ ShadowRoot.prototype.elementFromPoint = markNative(function (x, y) {
   return best;
 }, "elementFromPoint");
 
+ShadowRoot.prototype.elementsFromPoint = markNative(function (x, y) {
+  const out = [];
+  let cur = this.elementFromPoint(x, y);
+  while (cur && cur.nodeType === 1) {
+    out.push(cur);
+    cur = cur.parentNode || cur.parentElement;
+    if (cur && cur === this) break;
+  }
+  return out;
+}, "elementsFromPoint");
+
 global.ShadowRoot = ShadowRoot;
 if (typeof globalThis !== "undefined") {
   globalThis.ShadowRoot = ShadowRoot;

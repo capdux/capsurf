@@ -2970,3 +2970,7 @@
 - **Fixed (`src/`)**:
   - `src/net/http_loader.cp`: 将 `fetchDocumentWithContext` 重定向最大深度从 `5` 放宽至符合 Fetch 规范的 `20` 跳。
   - `src/cdp/page.cp`: `Page.navigate` 对 `TooManyRedirects`、`ConnectionFailed`/`ConnectFailed`、`EmptyResponse`、`ReadFailed`/`SendFailed` 返回标准 `errorText`（`net::ERR_TOO_MANY_REDIRECTS`、`net::ERR_CONNECTION_REFUSED`、`net::ERR_EMPTY_RESPONSE`、`net::ERR_CONNECTION_RESET`）。
+
+## [2026-11-23] Phase 362: 补齐 `ShadowRoot.prototype.elementsFromPoint(x, y)`，打通 Playwright Shadow DOM 点击（`selectors-misc.spec.ts` `[2/19]`）
+- **Fixed (`src/`)**:
+  - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `ShadowRoot.prototype` 实装 `elementsFromPoint(x, y)`（复用 `elementFromPoint(x, y)` 并沿 `ShadowRoot` 内祖先链返回命中栈），修复 Playwright `page.click('#inner-link')` 在 `expectHitTarget` 阶段报 `TypeError: not a function`。

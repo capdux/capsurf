@@ -5694,3 +5694,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE361_RESULT {"r6Err":null,"r22Err":"net::ERR_TOO_MANY_REDIRECTS","rRefusedErr":"net::ERR_CONNECTION_REFUSED"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 362: `ShadowRoot.prototype.elementsFromPoint(x, y)` 实装完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实装 `ShadowRoot.prototype.elementsFromPoint(x, y)`。
+- **双模式验证**:
+  - 真实 Playwright CDP 实测（端口 19385）：`PHASE362_RESULT {"clickCount":1}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

@@ -2203,3 +2203,6 @@
 
 ### Phase 361: `page-goto.spec.ts` `[21, 22, 26]` 重定向与网络错误码缺失排障笔记
 - **重定向深度过窄及统一返回 `"Navigation failed"` 根因**：`HttpLoader` 此前仅允许最多 `5` 跳重定向，且 `Page.navigate` 对除 `FileTooBig` 外的网络失败统一返回 `"Navigation failed"`。放宽至 `20` 跳并映射标准 Chromium `net::ERR_*` `errorText` 后，实测 `PHASE361_RESULT {"r6Err":null,"r22Err":"net::ERR_TOO_MANY_REDIRECTS","rRefusedErr":"net::ERR_CONNECTION_REFUSED"}`。
+
+### Phase 362: `selectors-misc.spec.ts` `[2/19]` (`page.click('#inner-link')`) `TypeError: not a function` 排障笔记
+- **缺失 `ShadowRoot.prototype.elementsFromPoint` 根因**：Playwright `page.click()` 在完成滚动与可见性检查后，于目标节点所属 `ShadowRoot` 上调用 `root.elementsFromPoint(x, y)` 执行命中遮挡校验，而此前 `node-base.js` 仅实现了单数 `ShadowRoot.prototype.elementFromPoint`。补齐 `ShadowRoot.prototype.elementsFromPoint(x, y)` 后，真实 Playwright `page.click("#inner-link")` 一次通过（`PHASE362_RESULT {"clickCount":1}`）。
