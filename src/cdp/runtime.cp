@@ -286,6 +286,12 @@ pub struct RuntimeHandler {
             defer if (in_iso) session.clearIsolatedNode(restored_node);
             let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);
 
+            if (std.mem.indexOf(u8, out_buf[0..res_len], "\"exceptionDetails\"") != null &&
+                std.mem.indexOf(u8, out_buf[0..res_len], "Could not find object with id") != null)
+            {
+                return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
+            }
+
             if (std.mem.indexOf(u8, out_buf[0..res_len], "cannot read property '") != null ||
                 std.mem.indexOf(u8, out_buf[0..res_len], "cannot set property '") != null ||
                 std.mem.indexOf(u8, out_buf[0..res_len], "Cannot read property '") != null ||

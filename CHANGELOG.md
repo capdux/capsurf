@@ -3028,3 +3028,4 @@
 - Phase 401: `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`, `src/js/runtime_source.cp` — 隔离 `__capsurf_call_fn`/`__capsurf_safe_stringify` 免疫 `window.JSON = null` 与 `Array.prototype.toJSON` 污染，为 `popupWin` 补充 `Promise` 构造器，并优化 `ua_widgets_script` 为编译期 `++`。
 - Phase 402: `src/js/shim/index.js`, `src/js/runtime_source.cp` — `document.execCommand` 支持 `selectAll` 与 `copy`。
 - Phase 403: `src/cdp/target.cp`, `src/cdp/session.cp` — `formatTargetInfo` 转义 `title`/`url` 并扩容至 `2048` 字节，`Target.targetCreated`/`attachedToTarget` 改用 `allocPrint` 消除共享缓冲区覆盖。
+- Phase 404: `src/cdp/runtime.cp` — `Runtime.callFunctionOn` 将已销毁上下文的 `Could not find object with id` 异常转为 `-32000 Cannot find context with specified id` 协议错误。
