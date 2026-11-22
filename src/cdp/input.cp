@@ -475,8 +475,19 @@ pub struct InputHandler {
                 if (session.layout.boxes.items.len == 0) {
                     session.ensureLayout();
                 }
+                const prev_hover = session.doc.hovered_node;
                 const mv_target = hitTest(session, x, y);
                 session.doc.hovered_node = mv_target;
+                if (mv_target != prev_hover) {
+                    if (prev_hover != NULL_NODE) {
+                        * = dispatchMouseDomEvent(session, prev_hover, "mouseout", x, y, 0, btn_num, buttons, modifiers);
+                        * = dispatchMouseDomEvent(session, prev_hover, "mouseleave", x, y, 0, btn_num, buttons, modifiers);
+                    }
+                    if (mv_target != NULL_NODE) {
+                        * = dispatchMouseDomEvent(session, mv_target, "mouseover", x, y, 0, btn_num, buttons, modifiers);
+                        * = dispatchMouseDomEvent(session, mv_target, "mouseenter", x, y, 0, btn_num, buttons, modifiers);
+                    }
+                }
                 * = dispatchMouseDomEvent(session, mv_target, "mousemove", x, y, 0, btn_num, buttons, modifiers);
                 if (session.range_drag_node != NULL_NODE) {
                     if (updateRangeFromX(session, session.range_drag_node, x)) {

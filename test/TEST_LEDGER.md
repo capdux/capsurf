@@ -720,3 +720,7 @@
 | 2026-11-23 01:40 | `locator-convenience.spec.ts` | 21/21 PASS (`EXIT=0` 21.7s 全绿!) | PW Batch 119 (`bin_dev` 全绿!) |
 | 2026-11-23 01:40 | `page-fill.spec.ts` | 38/40 PASS (retry 120s截断) | PW Batch 119 |
 | WPT-B110 | `/html/semantics/forms/{constraints,form-submission-0,attributes-common-to-form-controls}/` | 12/25 PASS (0 CRASH/0 TIMEOUT; constraints 10/12, submission 5/5 matched) |
+| 2026-11-23 01:47 | `page-history.spec.ts` | 7/13 PASS (0/3→7/13! reload全过, goBack待修currentIndex) | PW Batch 120 |
+| 2026-11-23 01:47 | `page-route.spec.ts` | 1/11 PASS (`[12/51]`120s截断) | PW Batch 120 |
+| 2026-11-23 01:47 | `page-evaluate.spec.ts` | 20/21 PASS (`[22/95]`120s截断) | PW Batch 120 |
+| 2026-11-23 01:47 | `page-wait-for-selector-1.spec.ts` | 15/15 PASS (`EXIT=0` 29.7s 全绿!) | PW Batch 120 (`bin_dev` 全绿!) |
