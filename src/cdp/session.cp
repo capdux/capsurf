@@ -938,6 +938,7 @@ pub struct CdpPageSession {
     loader_id_buf: [32]u8 = [0; 32],
     loader_seq: u32 = 1,
     target_id: []const u8 = "capsurf-target-001",
+    has_opener: bool = false,
     has_document: bool = false,
     raw_html: []const u8 = "",
     paint_prepares: u64 = 0,
@@ -1839,6 +1840,10 @@ pub struct CdpPageSession {
         const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;
         m.cookie_jar = active_jar;
         m.extra_headers = _.extra_headers;
+        if (_.has_opener) {
+            const op_v = _.ctx.eval("window.opener = window.opener || { closed: false };");
+            _.ctx.freeValue(op_v);
+        }
         if (_.current_browser_context_id_len > 0) {
             const f_slice = std.fmt.bufPrint(&m.frame_id_buf, "capsurf-frame-{s}", .{_.currentBrowserContextId()}) catch "capsurf-frame-001";
             m.frame_id_len = f_slice.len;

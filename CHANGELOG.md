@@ -3003,3 +3003,4 @@
 - Phase 376: `src/cdp/network.cp`, `src/cdp/session.cp` — 新增 `formatHttpHeadersExtraInfoJson` 并在 `pollNetworkEvents` 发射 `Network.responseReceivedExtraInfo`。
 - Phase 377: `src/js/shim/file.js`, `src/js/shim/window.js` — 新增 `Response.prototype.formData()` 解析与 `bodyToPostString` 的 `FormData` 序列化支持。
 - Phase 378: `src/cdp/target.cp`, `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/runtime.cp`, `src/js/shim/window.js` — 新增 `window.open` 弹窗事件链与 `openerId`/`openerFrameId` 上报。
+- Phase 379: `src/cdp/dispatch.cp`, `src/cdp/server.cp`, `src/cdp/session.cp` — `Input.` 追加弹窗事件轮询，并为带 `openerId` 的弹窗标签页会话自动注入 `window.opener`。

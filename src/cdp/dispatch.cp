@@ -110,6 +110,13 @@ pub struct CdpDispatcher {
             let in_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             let in_cnt: usize = 0;
             const resp = InputHandler.handle(session, req, out_buf, &in_evts, &in_cnt);
+            let pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
+            const pop_cnt = session.pollPopupTargetEvents(&pop_evts);
+            let pi: usize = 0;
+            while (pi < pop_cnt && in_cnt < MAX_CDP_EVENTS) : (pi += 1) {
+                in_evts[in_cnt] = pop_evts[pi];
+                in_cnt += 1;
+            }
             let i: usize = 0;
             while (i < in_cnt && i < out_events.len) : (i += 1) {
                 out_events[i] = in_evts[i];
