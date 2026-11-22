@@ -42,6 +42,7 @@ pub struct HttpLoaderResult {
     html: []const u8 = "",
     content_type: []const u8 = "",
     content_disposition: ([]const u8)? = null,
+    content_security_policy: []const u8 = "",
     raw_body: []const u8 = "",
     raw_body_base64: bool = false,
     redirect_urls: [6][]const u8 = ["", "", "", "", "", ""],
@@ -779,6 +780,7 @@ pub struct HttpLoader {
         // Parse Set-Cookie, Content-Type, Content-Disposition, Transfer-Encoding lines
         let resp_content_type: []const u8 = "";
         let resp_content_disp: ([]const u8)? = null;
+        let resp_csp: []const u8 = "";
         let is_chunked_resp = false;
         let line_it = std.mem.splitSequence(u8, headers_part, "\r\n");
         while (line := line_it.next()) {
@@ -792,6 +794,8 @@ pub struct HttpLoader {
                 resp_content_type = std.mem.trim(u8, line[13..], " \t");
             } else if (line.len >= 20 && std.ascii.eqlIgnoreCase(line[0..20], "Content-Disposition:")) {
                 resp_content_disp = std.mem.trim(u8, line[20..], " \t");
+            } else if (line.len >= 24 && std.ascii.eqlIgnoreCase(line[0..24], "Content-Security-Policy:")) {
+                resp_csp = std.mem.trim(u8, line[24..], " \t");
             } else if (line.len >= 18 && std.ascii.eqlIgnoreCase(line[0..18], "Transfer-Encoding:")) {
                 const te_val = std.mem.trim(u8, line[18..], " \t");
                 if (HttpLoader.containsIgnoreCase(te_val, "chunked")) {
@@ -838,6 +842,7 @@ pub struct HttpLoader {
             html: body,
             content_type: resp_content_type,
             content_disposition: resp_content_disp,
+            content_security_policy: resp_csp,
             raw_body: body,
             raw_body_base64: false,
         };

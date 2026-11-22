@@ -964,6 +964,7 @@ pub struct CdpPageSession {
     nav_tty_stripped: bool = false,
     tty_ua_css: u32 = 0,
     in_set_document_content: bool = false,
+    pending_http_csp: []const u8 = "",
     tty_cell_w: u32 = 0,
     tty_cell_h: u32 = 0,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
@@ -2432,6 +2433,20 @@ pub struct CdpPageSession {
         let script_base_url_buf: [1024]u8 = undefined;
         let script_base_url: []const u8 = nav_url;
         {
+            if (_.pending_http_csp.len > 0 && csp_count < 4) {
+                const hcsp = _.pending_http_csp;
+                _.pending_http_csp = "";
+                csp_policies[csp_count] = parseCsp(hcsp);
+                if (!isInlineEventHandlerAllowed(&csp_policies[csp_count])) {
+                    allow_inline_handlers = false;
+                }
+                const clen = @min(hcsp.len, csp_joined_buf.len - csp_joined_len);
+                @memcpy(csp_joined_buf[csp_joined_len .. csp_joined_len + clen], hcsp[0..clen]);
+                csp_joined_len += clen;
+                csp_count += 1;
+            } else {
+                _.pending_http_csp = "";
+            }
             let mnid: usize = 1;
             while (mnid < _.doc.nodes.items.len) : (mnid += 1) {
                 const mn = &_.doc.nodes.items[mnid];

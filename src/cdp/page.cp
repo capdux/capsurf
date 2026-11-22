@@ -1319,6 +1319,7 @@ pub struct PageHandler {
                 }
             }
 
+            session.pending_http_csp = fetch_res.content_security_policy;
             session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
             syncIframeTargets(session, true);
 

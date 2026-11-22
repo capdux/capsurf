@@ -5561,3 +5561,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE342_RESULT: {"closed":{"sumCV":true,"inpCV":false},"opened":{"inpCV":true}}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 343: HTTP `Content-Security-Policy` 响应头门禁打通完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp), [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 提取 HTTP `Content-Security-Policy` 响应头并合并至 `__capsurf_doc_csp` 与内联事件门禁。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE343_RESULT: {"csp":"script-src http://127.0.0.1"}`（内联脚本 `window.e = 10` 被拦截，`e === undefined`）。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。

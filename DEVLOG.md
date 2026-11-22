@@ -2144,3 +2144,6 @@
 
 ### Phase 342: `selectors-role.spec.ts` 闭合 `<details>` 内 `<input>` 未被 `role=textbox` 过滤排障笔记
 - **`checkVisibility()` 未复用 `isElementDisplayNone()` 根因**：`isElementDisplayNone()` 虽已涵盖 `isHiddenInClosedDetails()`，但 `Element.prototype.checkVisibility()` 此前未调用该函数且 `getComputedStyle(inp).display` 仍返回 `"inline"`，导致 Playwright `role=` 引擎判定 `<details><summary>Open form</summary><label><input name="two"></label></details>` 可见。补全校验后，实测闭合时 `sumCV=true, inpCV=false`，展开 `<details open>` 后 `inpCV=true`。
+
+### Phase 343: `page-add-init-script.spec.ts` HTTP `Content-Security-Policy` 响应头未拦截 `addScriptTag` 排障笔记
+- **HTTP 响应头 `Content-Security-Policy` 丢失根因**：`src/cdp/session.cp` `navigate()` 此前仅扫描 `<meta http-equiv="Content-Security-Policy">` 标签填充 `csp_policies` 与 `__capsurf_doc_csp`，忽略了 HTTP 响应头中的 `Content-Security-Policy`。在 `HttpLoader` 提取并经 `pending_http_csp` 合并后，实测 `PHASE343_RESULT: {"csp":"script-src http://127.0.0.1"}` 且内联 `<script>window.e = 10;</script>` 成功被拦截。

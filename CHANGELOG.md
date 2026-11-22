@@ -2881,3 +2881,8 @@
 ## [2026-11-22] Phase 342: 修复 `Element.prototype.checkVisibility()` 对闭合 `<details>` / 隐藏子树的可见性判定
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `checkVisibility()` 入口先校验 `isElementDisplayNone(this)`，使闭合 `<details>` 中非首 `<summary>` 子孙、未插槽 Shadow 子节点与 `display: none` 祖先子树均准确返回 `false`。
+
+## [2026-11-22] Phase 343: 提取并应用 HTTP `Content-Security-Policy` 响应头至页面级 CSP 门禁
+- **Fixed (`src/`)**:
+  - `src/net/http_loader.cp`: `HttpLoaderResult` 新增 `content_security_policy` 字段并在 `fetchDocumentWithContext()` 解析 `Content-Security-Policy:` 响应头。
+  - `src/cdp/page.cp`, `src/cdp/session.cp`: `Page.navigate` 将 `fetch_res.content_security_policy` 传入 `session.pending_http_csp`，并在 `session.navigate()` 中与 `<meta http-equiv="Content-Security-Policy">` 合并注入 `__capsurf_doc_csp` 与 `allow_inline_handlers`。
