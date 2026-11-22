@@ -43580,6 +43580,38 @@
         globalThis.caches = cachesInst;
       }
     })();
+
+    // window.open popup bridge for Target.targetCreated (openerId / openerFrameId)
+    const openFn = markNative(function (url, target, features) {
+      let fullUrl = "about:blank";
+      if (url !== undefined && url !== null && String(url) !== "") {
+        try {
+          const base = (global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/";
+          fullUrl = new URL(String(url), base).href;
+        } catch (e) {
+          fullUrl = String(url);
+        }
+      }
+      if (typeof __capsurf_open_popup === "function") {
+        __capsurf_open_popup(fullUrl);
+      } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_open_popup === "function") {
+        globalThis.__capsurf_open_popup(fullUrl);
+      }
+      const popupWin = {
+        closed: false,
+        opener: global,
+        location: { href: fullUrl },
+        document: { title: "", URL: fullUrl },
+        close: function () { this.closed = true; },
+        focus: function () {},
+        blur: function () {},
+        postMessage: function () {},
+      };
+      return popupWin;
+    }, "open");
+    global.open = openFn;
+    if (typeof window !== "undefined") window.open = openFn;
+    if (typeof globalThis !== "undefined") globalThis.open = openFn;
   }
 
   // =============================================================

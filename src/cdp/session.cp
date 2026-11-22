@@ -5548,6 +5548,40 @@ pub struct CdpPageSession {
         return 0;
     }
 
+    fn pollPopupTargetEvents(*_, out_events: []CdpEvent): usize {
+        let ev_idx: usize = 0;
+        if (dom := _.dom_ctx) {
+            if (dom.popup_count == 0) return 0;
+            const bctx = _.currentBrowserContextId();
+            let i: usize = 0;
+            while (i < dom.popup_count && ev_idx + 2 <= out_events.len) : (i += 1) {
+                const u_len = dom.popup_url_lens[i];
+                const pop_url = if (u_len > 0) dom.popup_urls[i][0..u_len] else "about:blank";
+                const tid = _.target_registry.registerPopupTarget(pop_url, _.target_id, _.frame_id, bctx);
+                if (tid.len == 0) continue;
+                if (t_idx := _.target_registry.findTargetIndex(tid)) {
+                    let info_buf: [512]u8 = undefined;
+                    const info_str = _.target_registry.formatTargetInfo(t_idx, &info_buf);
+                    const tc_json = std.fmt.bufPrint(&_.target_registry.event_buf0, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
+                    out_events[ev_idx] = CdpEvent.create("Target.targetCreated", tc_json);
+                    ev_idx += 1;
+                    if (_.target_registry.auto_attach) {
+                        const sid = _.target_registry.attachToTarget(tid);
+                        const att_json = std.fmt.bufPrint(
+                            &_.target_registry.event_buf1,
+                            "{{\"sessionId\":\"{s}\",\"targetInfo\":{s},\"waitingForDebugger\":false}}",
+                            .{ sid, info_str },
+                        ) catch "{}";
+                        out_events[ev_idx] = CdpEvent.create("Target.attachedToTarget", att_json);
+                        ev_idx += 1;
+                    }
+                }
+            }
+            dom.clearPopupRecords();
+        }
+        return ev_idx;
+    }
+
     fn clearConsoleLogs(*_) {
         if (dom := _.dom_ctx) {
             dom.clearConsoleRecords();

@@ -34,6 +34,8 @@ pub struct TargetItem {
     frame_id_len: usize = 0,
     opener_frame_id_buf: [64]u8 = [0; 64],
     opener_frame_id_len: usize = 0,
+    opener_id_buf: [64]u8 = [0; 64],
+    opener_id_len: usize = 0,
     attached: bool = false,
     active: bool = false,
 
@@ -67,6 +69,10 @@ pub struct TargetItem {
 
     fn openerFrameId(*_): []const u8 {
         return _.opener_frame_id_buf[0.._.opener_frame_id_len];
+    }
+
+    fn openerId(*_): []const u8 {
+        return _.opener_id_buf[0.._.opener_id_len];
     }
 }
 
@@ -268,12 +274,28 @@ pub struct TargetRegistry {
                 _.targets[i].browser_context_id_len = bc_len;
 
                 _.targets[i].session_id_len = 0;
+                _.targets[i].opener_id_len = 0;
+                _.targets[i].opener_frame_id_len = 0;
                 _.targets[i].attached = false;
                 _.targets[i].active = true;
                 return _.targets[i].targetId();
             }
         }
         return "";
+    }
+
+    fn registerPopupTarget(*_, url: []const u8, opener_id: []const u8, opener_frame_id: []const u8, bctx: []const u8): []const u8 {
+        const tid = _.createTargetWithType(url, "page", bctx);
+        if (tid.len == 0) return "";
+        if (idx := _.findTargetIndex(tid)) {
+            const oid_len = @min(opener_id.len, _.targets[idx].opener_id_buf.len);
+            if (oid_len > 0) @memcpy(_.targets[idx].opener_id_buf[0..oid_len], opener_id[0..oid_len]);
+            _.targets[idx].opener_id_len = oid_len;
+            const ofid_len = @min(opener_frame_id.len, _.targets[idx].opener_frame_id_buf.len);
+            if (ofid_len > 0) @memcpy(_.targets[idx].opener_frame_id_buf[0..ofid_len], opener_frame_id[0..ofid_len]);
+            _.targets[idx].opener_frame_id_len = ofid_len;
+        }
+        return tid;
     }
 
     fn createTarget(*_, url: []const u8, bctx: []const u8): []const u8 {
@@ -416,16 +438,28 @@ pub struct TargetRegistry {
 
     fn formatTargetInfo(*_, idx: usize, out_buf: []u8): []const u8 {
         if (idx >= _.targets.len || !_.targets[idx].active) return "{}";
+        let op_kv_buf: [256]u8 = [0; 256];
+        let op_kv: []const u8 = "";
+        if (_.targets[idx].opener_id_len > 0 && _.targets[idx].opener_frame_id_len > 0) {
+            op_kv = std.fmt.bufPrint(&op_kv_buf, ",\"openerId\":\"{s}\",\"openerFrameId\":\"{s}\"", .{ _.targets[idx].openerId(), _.targets[idx].openerFrameId() }) catch "";
+        } else if (_.targets[idx].opener_id_len > 0) {
+            op_kv = std.fmt.bufPrint(&op_kv_buf, ",\"openerId\":\"{s}\"", .{_.targets[idx].openerId()}) catch "";
+        } else if (_.targets[idx].opener_frame_id_len > 0) {
+            op_kv = std.fmt.bufPrint(&op_kv_buf, ",\"openerFrameId\":\"{s}\"", .{_.targets[idx].openerFrameId()}) catch "";
+        }
+        const can_access = if (_.targets[idx].opener_id_len > 0) "true" else "false";
         const res = std.fmt.bufPrint(
             out_buf,
-            "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"canAccessOpener\":false,\"browserContextId\":\"{s}\"}}",
+            "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"canAccessOpener\":{s},\"browserContextId\":\"{s}\"{s}}}",
             .{
                 _.targets[idx].targetId(),
                 _.targets[idx].targetType(),
                 _.targets[idx].title(),
                 _.targets[idx].url(),
                 if (_.targets[idx].attached) "true" else "false",
+                can_access,
                 _.targets[idx].browserContextId(),
+                op_kv,
             },
         ) catch return "{}";
         return res;

@@ -162,6 +162,8 @@ pub struct FetchRecord {
     }
 }
 
+pub const MAX_POPUP_RECORDS: usize = 8;
+
 pub struct JsDomContext {
     doc: *Document,
     layout: (*LayoutTree)? = null,
@@ -175,6 +177,9 @@ pub struct JsDomContext {
     console_count: usize = 0,
     fetch_records: [MAX_FETCH_RECORDS]FetchRecord = [FetchRecord{}; MAX_FETCH_RECORDS],
     fetch_count: usize = 0,
+    popup_urls: [MAX_POPUP_RECORDS][512]u8 = [[0; 512]; MAX_POPUP_RECORDS],
+    popup_url_lens: [MAX_POPUP_RECORDS]usize = [0; MAX_POPUP_RECORDS],
+    popup_count: usize = 0,
     frame_id_buf: [64]u8 = [0; 64],
     frame_id_len: usize = 0,
     loader_id_buf: [64]u8 = [0; 64],
@@ -305,6 +310,19 @@ pub struct JsDomContext {
 
     fn clearFetchRecords(*_) {
         _.fetch_count = 0;
+    }
+
+    fn addPopupRecord(*_, url: []const u8) {
+        if (_.popup_count >= MAX_POPUP_RECORDS) return;
+        const dst = &_.popup_urls[_.popup_count];
+        const u_len = @min(url.len, dst.len);
+        if (u_len > 0) @memcpy(dst[0..u_len], url[0..u_len]);
+        _.popup_url_lens[_.popup_count] = u_len;
+        _.popup_count += 1;
+    }
+
+    fn clearPopupRecords(*_) {
+        _.popup_count = 0;
     }
 
     fn addConsoleRecord(*_, level: []const u8, text: []const u8, args_json: []const u8) {
@@ -2406,6 +2424,25 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsNull();
 }
 
+@c fn js_capsurf_open_popup(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
+    let url_str: []const u8 = "about:blank";
+    let u_ptr: ([*c]const u8)? = null;
+    if (argc >= 1) {
+        let u_len: usize = 0;
+        u_ptr = JS_ToCStringLen2(ctx, &u_len, unsafe { argv[0] }, 0);
+        if (u_ptr != null && u_len > 0) {
+            url_str = unsafe { u_ptr.?[0..u_len] };
+        }
+    }
+    defer if (u_ptr != null) JS_FreeCString(ctx, u_ptr);
+    dom_ctx.addPopupRecord(url_str);
+    return jsNull();
+}
+
 @c fn js_capsurf_native_record_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     if (argc < 1) return jsNull();
@@ -2622,6 +2659,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 4);
+    defineMethod(raw_ctx, global_obj, "__capsurf_open_popup", js_capsurf_open_popup, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
 

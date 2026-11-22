@@ -358,6 +358,14 @@ pub struct RuntimeHandler {
             }
             emitNewChildFrameEvents(session, out_events, event_count);
 
+            let polled_pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
+            const polled_pop_count = session.pollPopupTargetEvents(&polled_pop_evts);
+            let pop_i: usize = 0;
+            while (pop_i < polled_pop_count && event_count.* < out_events.len) : (pop_i += 1) {
+                out_events[event_count.*] = polled_pop_evts[pop_i];
+                event_count.* += 1;
+            }
+
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }
@@ -478,6 +486,14 @@ pub struct RuntimeHandler {
 
             // Emit dynamic child iframe lifecycle events if any new iframes were attached
             emitNewChildFrameEvents(session, out_events, event_count);
+
+            let polled_pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
+            const polled_pop_count = session.pollPopupTargetEvents(&polled_pop_evts);
+            let pop_i: usize = 0;
+            while (pop_i < polled_pop_count && event_count.* < out_events.len) : (pop_i += 1) {
+                out_events[event_count.*] = polled_pop_evts[pop_i];
+                event_count.* += 1;
+            }
 
             // Poll any CSS events produced during evaluation
             if (session.css_enabled) {
