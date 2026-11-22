@@ -13,6 +13,38 @@ import { CssSpecificity } from "cap:css";
 pub const MAX_COMPONENTS_PER_SELECTOR: usize = 24;
 pub const MAX_SELECTORS_PER_LIST: usize = 8;
 
+fn scanCssIdent(s: []const u8, idx: *usize): []const u8 {
+    const start = idx.*;
+    while (idx.* < s.len) {
+        if (s[idx.*] == '\\' && idx.* + 1 < s.len) {
+            idx.* += 2;
+        } else if (SelectorParser.isIdentChar(s[idx.*])) {
+            idx.* += 1;
+        } else {
+            break;
+        }
+    }
+    return s[start..idx.*];
+}
+
+fn unescapeCssIdent(raw: []const u8, out_buf: []u8): []const u8 {
+    if (std.mem.indexOf(u8, raw, "\\") == null) return raw;
+    let oi: usize = 0;
+    let i: usize = 0;
+    while (i < raw.len && oi < out_buf.len) {
+        if (raw[i] == '\\' && i + 1 < raw.len) {
+            out_buf[oi] = raw[i + 1];
+            oi += 1;
+            i += 2;
+        } else {
+            out_buf[oi] = raw[i];
+            oi += 1;
+            i += 1;
+        }
+    }
+    return out_buf[0..oi];
+}
+
 pub enum Combinator {
     Descendant,   // ' '
     Child,        // '>'
@@ -418,9 +450,7 @@ pub struct SelectorParser {
             // ID selector '#id'
             if (c == '#') {
                 i += 1;
-                const start = i;
-                while (i < s.len && SelectorParser.isIdentChar(s[i])) : (i += 1) {}
-                const id_name = s[start..i];
+                const id_name = scanCssIdent(s, &i);
                 if (id_name.len > 0) {
                     left_to_right[ltr_count] = Component {
                         kind: ComponentKind.Id,
@@ -436,9 +466,7 @@ pub struct SelectorParser {
             // Class selector '.class'
             if (c == '.') {
                 i += 1;
-                const start = i;
-                while (i < s.len && SelectorParser.isIdentChar(s[i])) : (i += 1) {}
-                const cls_name = s[start..i];
+                const cls_name = scanCssIdent(s, &i);
                 if (cls_name.len > 0) {
                     left_to_right[ltr_count] = Component {
                         kind: ComponentKind.Class,
@@ -594,14 +622,14 @@ pub struct SelectorParser {
             }
 
             // LocalName (type/tag selector)
-            if (SelectorParser.isIdentChar(c)) {
-                const start = i;
-                while (i < s.len && SelectorParser.isIdentChar(s[i])) : (i += 1) {}
-                const tag = s[start..i];
+            if (SelectorParser.isIdentChar(c) || (c == '\\' && i + 1 < s.len)) {
+                const tag = scanCssIdent(s, &i);
+                let u_buf: [128]u8 = [0; 128];
+                const u_tag = unescapeCssIdent(tag, &u_buf);
                 left_to_right[ltr_count] = Component {
                     kind: ComponentKind.LocalName,
                     ident: tag,
-                    ident_hash: NodeData.hashLowerAscii(tag),
+                    ident_hash: NodeData.hashLowerAscii(u_tag),
                 };
                 ltr_count += 1;
                 cur_compound_len += 1;
@@ -884,12 +912,20 @@ pub struct Matcher {
         return switch (comp.kind) {
             .Universal => true,
             .LocalName => {
-                if (node.tag_name.len != comp.ident.len) return false;
+                let u_buf: [128]u8 = [0; 128];
+                const u_tag = unescapeCssIdent(comp.ident, &u_buf);
+                if (node.tag_name.len != u_tag.len) return false;
                 if (node.local_name_hash != comp.ident_hash) return false;
-                return std.ascii.eqlIgnoreCase(node.tag_name, comp.ident);
+                return std.ascii.eqlIgnoreCase(node.tag_name, u_tag);
             },
-            .Id => node.hasId(comp.ident),
-            .Class => node.hasClass(comp.ident),
+            .Id => {
+                let u_buf: [128]u8 = [0; 128];
+                return node.hasId(unescapeCssIdent(comp.ident, &u_buf));
+            },
+            .Class => {
+                let u_buf: [128]u8 = [0; 128];
+                return node.hasClass(unescapeCssIdent(comp.ident, &u_buf));
+            },
             .Attribute => Matcher.matchesAttribute(node, comp),
             .Pseudo => Matcher.matchesPseudo(doc, node_id, comp),
             .CombinatorComp => false,

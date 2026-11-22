@@ -2628,3 +2628,7 @@
 ## [2026-11-22] Phase 284: 按 Origin 持久化与恢复 `localStorage`（跨源导航隔离与回溯）
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp`: 新增 `OriginStorageEntry`、`extractUrlOrigin()`、`saveCurrentOriginStorage()` 与 `restoreOriginStorage()`，在 `CdpPageSession.navigate()` 销毁旧上下文前保存当前 origin 的 `localStorage` 键值并在新上下文初始化后按目标 origin 恢复，确保同源刷新保留且跨域跳转互不污染。
+
+## [2026-11-22] Phase 285: CSS 选择器反斜杠转义解析与匹配（`q\:template`、`#a\:b`、`.c\:d`）
+- **Fixed (`src/`)**:
+  - `src/css/matcher.cp`: 新增零分配辅助函数 `scanCssIdent()` 与 `unescapeCssIdent()`，使 `SelectorParser` 与 `Matcher.matchesComponent()` 支持标签名、ID 与 Class 选择器中的 CSS 反斜杠转义字符（含哈希计算与大小写无关匹配）。

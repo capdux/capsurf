@@ -154,7 +154,12 @@
 | 2026-11-22 17:45 | `/css/cssom/` | `5/5` | 24 | PASS 12 / FAIL 11 / TIMEOUT 1 (11s) | Batch 60 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:47 | `/css/cssom-view/` | `1/5` | 22 | PASS 15 / FAIL 3 / TIMEOUT 4 (90s截断) | Batch 60 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:48 | `/css/cssom-view/` | `2/5` | 21 | PASS 8 / FAIL 8 / TIMEOUT 5 (83s) | Batch 60 (`--skip-expected-timeouts`) |
-| 2026-11-22 17:49 | `/css/cssom-view/` | `3/5` | 21 | PASS 14 / FAIL 6 / TIMEOUT 1 (26s) | Batch 60 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:49 | `/css/cssom-view/` | `3/5` | 21 | PASS 7 / FAIL 7 / TIMEOUT 6 / CRASH 1 (90s截断) | Batch 60 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:50 | `/css/css-animations/` | `4/5` | 11 | PASS 4 / FAIL 7 / TIMEOUT 0 (8s) | Batch 61 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:51 | `/css/css-animations/` | `5/5` | 11 | PASS 4 / FAIL 7 / TIMEOUT 0 (7s) | Batch 61 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:51 | `/dom/nodes/` | `4/10` | 25 | PASS 9 / FAIL 11 / ERROR 1 / TIMEOUT 4 (24s) | Batch 61 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:52 | `/dom/nodes/` | `6/10` | 25 | PASS 10 / FAIL 11 / ERROR 4 / TIMEOUT 0 (30s) | Batch 61 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:53 | `/dom/nodes/` | `7/10` | 25 | PASS 10 / FAIL 13 / ERROR 1 / TIMEOUT 1 (27s) | Batch 61 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -283,3 +288,7 @@
 | 2026-11-22 17:46 | `page-strict.spec.ts` | 9/10 PASS (colon tag escape 1 FAIL) | PW Batch 34 |
 | 2026-11-22 17:47 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (open/frame/timeout 4 FAIL, 重试90s截断) | PW Batch 34 |
 | 2026-11-22 17:48 | `page-wait-for-navigation.spec.ts` | 1/2 PASS (`[3/12]` 90s截断, load未触发) | PW Batch 34 |
+| 2026-11-22 17:50 | `page-localstorage.spec.ts` | 9/9 PASS (Phase 284 复测全绿) | PW Batch 35 (全绿) |
+| 2026-11-22 17:51 | `page-wait-for-request.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch request未触发) | PW Batch 35 |
+| 2026-11-22 17:52 | `page-wait-for-response.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch response未触发) | PW Batch 35 |
+| 2026-11-22 17:53 | `page-set-extra-http-headers.spec.ts` | 1/5 PASS (header token/error 4 FAIL) | PW Batch 35 |
