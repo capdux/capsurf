@@ -2600,3 +2600,8 @@
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: `js_document_get_title()` 过滤 `node.parent == NULL_NODE` 的已脱离 `<title>` 节点，并按 HTML 规范折叠连续 ASCII 空白符与首尾修剪，修复 `document.open/write/close` 后仍返回 `"Blank Page"` 的问题；`MAX_CONSOLE_RECORDS` 扩容至 `128`，移除 `js_report_exception()` 尾部多余 `\n`。
   - `src/cdp/types.cp`, `src/cdp/runtime.cp`, `src/cdp/session.cp`: `MAX_CDP_EVENTS` 扩容至 `128`（同步更新 `runtime.cp` `polled_evts` 缓冲与 `session.cp` `console_event_storage` 至 `65536` 字节），并在 `pushExceptionEvent()` 中剥离末尾 `\r\n` 使 `pageerror` `error.message` 精确匹配。
+
+## [2026-11-22] Phase 279: `//# sourceURL=` 脚本名透传与 `Runtime.exceptionThrown` 完整调用栈上报
+- **Fixed (`src/`)**:
+  - `src/js/qjs_engine.cp`: 新增 `JsContext.evalWithFilename(code, filename)` 支持为经典脚本传入真实源文件名。
+  - `src/cdp/session.cp`: 新增 `extractSourceUrl()` 解析 `//# sourceURL=` / `//@ sourceURL=` 并传入 `executeClassicScript()`；扩展 `pushExceptionEvent()` 读取 `exc.stack`（`JS_GetPropertyStr`）拼接至 `exception.description`（去重首行避免重复错误头）。

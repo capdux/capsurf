@@ -881,6 +881,44 @@ pub struct NewDocumentScriptEntry {
     source: []const u8 = "",
 }
 
+fn extractSourceUrl(code: []const u8, out_buf: []u8): [*c]const u8 {
+    let pos: usize = 0;
+    const marker1 = "//# sourceURL=";
+    const marker2 = "//@ sourceURL=";
+    let found_start: usize = 0;
+    let has_found = false;
+    while (pos < code.len) {
+        if (idx := std.mem.indexOf(u8, code[pos..], marker1)) {
+            found_start = pos + idx + marker1.len;
+            has_found = true;
+            pos = found_start;
+        } else {
+            break;
+        }
+    }
+    if (!has_found) {
+        pos = 0;
+        while (pos < code.len) {
+            if (idx := std.mem.indexOf(u8, code[pos..], marker2)) {
+                found_start = pos + idx + marker2.len;
+                has_found = true;
+                pos = found_start;
+            } else {
+                break;
+            }
+        }
+    }
+    if (!has_found || out_buf.len < 2) return "<eval>";
+    let end = found_start;
+    while (end < code.len && code[end] != '\n' && code[end] != '\r') : (end += 1) {}
+    const trimmed = std.mem.trim(u8, code[found_start..end], " \t");
+    if (trimmed.len == 0) return "<eval>";
+    const n = @min(trimmed.len, out_buf.len - 1);
+    @memcpy(out_buf[0..n], trimmed[0..n]);
+    out_buf[n] = 0;
+    return unsafe { @ptrCast(&out_buf[0]) };
+}
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -1429,7 +1467,9 @@ pub struct CdpPageSession {
             const cs_v = _.ctx.eval(cs_js);
             _.ctx.freeValue(cs_v);
         }
-        const js_res = _.ctx.eval(code);
+        let surl_buf: [512]u8 = [0; 512];
+        const fname = extractSourceUrl(code, &surl_buf);
+        const js_res = _.ctx.evalWithFilename(code, fname);
         if (jsIsException(js_res)) {
             const exc = _.ctx.getException();
             _.pushExceptionEvent(exc);
@@ -3300,7 +3340,7 @@ pub struct CdpPageSession {
                 }
             }
 
-            let desc_slice: []const u8 = exc_str[0..@min(exc_str.len, 1000)];
+            let desc_slice: []const u8 = exc_str[0..@min(exc_str.len, 800)];
             while (desc_slice.len > 0 && (desc_slice[desc_slice.len - 1] == '\n' || desc_slice[desc_slice.len - 1] == '\r')) {
                 desc_slice = desc_slice[0 .. desc_slice.len - 1];
             }
@@ -3308,8 +3348,31 @@ pub struct CdpPageSession {
             let norm_desc_buf: [1024]u8 = [0; 1024];
             const norm_desc = normalizeExceptionMessage(desc_slice, &norm_desc_buf);
 
-            let esc_exc_buf: [1536]u8 = [0; 1536];
-            const esc_exc = escapeJsonString(norm_desc, &esc_exc_buf);
+            let full_desc_buf: [1400]u8 = [0; 1400];
+            let full_desc: []const u8 = norm_desc;
+            const stack_val = JS_GetPropertyStr(_.ctx.raw_ctx, exc, "stack");
+            defer JS_FreeValue(_.ctx.raw_ctx, stack_val);
+            if (stack_val.tag == -7) {
+                let slen: usize = 0;
+                const sptr = JS_ToCStringLen2(_.ctx.raw_ctx, &slen, stack_val, 0);
+                if (sptr != null) {
+                    defer JS_FreeCString(_.ctx.raw_ctx, sptr);
+                    let stack_str = sptr.?[0..slen];
+                    while (stack_str.len > 0 && (stack_str[stack_str.len - 1] == '\n' || stack_str[stack_str.len - 1] == '\r')) {
+                        stack_str = stack_str[0 .. stack_str.len - 1];
+                    }
+                    if (stack_str.len > 0) {
+                        if (std.mem.startsWith(u8, stack_str, norm_desc)) {
+                            full_desc = stack_str[0..@min(stack_str.len, full_desc_buf.len)];
+                        } else {
+                            full_desc = std.fmt.bufPrint(&full_desc_buf, "{s}\n{s}", .{ norm_desc, stack_str[0..@min(stack_str.len, 500)] }) catch norm_desc;
+                        }
+                    }
+                }
+            }
+
+            let esc_exc_buf: [1800]u8 = [0; 1800];
+            const esc_exc = escapeJsonString(full_desc, &esc_exc_buf);
 
             let details_buf: [2048]u8 = [0; 2048];
             const details_json = std.fmt.bufPrint(

@@ -110,6 +110,11 @@
 | 2026-11-22 16:53 | `/css/css-text/` | `5/5` | 25 | PASS 3 / FAIL 22 / TIMEOUT 0 (16s) | Batch 51 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:54 | `/css/css-sizing/` | `3/5` | 6 | PASS 0 / FAIL 2 / TIMEOUT 4 (75s) | Batch 51 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:56 | `/css/css-sizing/` | `4/5` | 6 | PASS 0 / FAIL 2 / TIMEOUT 4 (74s) | Batch 51 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:58 | `/css/css-sizing/` | `5/5` | 6 | PASS 0 / FAIL 2 / TIMEOUT 4 (73s) | Batch 52 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:59 | `/css/css-backgrounds/` | `1/5` | 23 | PASS 6 / FAIL 16 / TIMEOUT 1 (90s截断) | Batch 52 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:01 | `/css/css-backgrounds/` | `2/5` | 23 | PASS 9 / FAIL 13 / TIMEOUT 1 (90s截断) | Batch 52 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:02 | `/css/css-backgrounds/` | `3/5` | 23 | PASS 6 / FAIL 16 / TIMEOUT 1 (90s截断) | Batch 52 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:03 | `/css/css-backgrounds/` | `4/5` | 23 | PASS 5 / FAIL 18 / TIMEOUT 0 (12s) | Batch 52 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -198,3 +203,7 @@
 | 2026-11-22 16:56 | `page-add-init-script-callback.spec.ts` | 3/7 PASS (exposeFunctions 4 FAIL, `[8/11]` 90s截断) | PW Batch 24 |
 | 2026-11-22 16:56 | `matchers.misc.spec.ts` | 1/2 PASS (outlive navigation 1 FAIL, 重试90s截断) | PW Batch 24 |
 | 2026-11-22 16:56 | `interception.spec.ts` | 3/8 PASS (glob/regexp/cache 5 FAIL, 34.1s) | PW Batch 24 |
+| 2026-11-22 17:01 | `page-event-pageerror.spec.ts` | 3/7 PASS (Phase 278 复测 `pageErrors` 已通, stack空) | PW Batch 25 |
+| 2026-11-22 17:01 | `expect-misc.spec.ts` | 50/51 PASS (Phase 278 复测 `toHaveTitle` 已通, `[52/59]` 90s截断) | PW Batch 25 |
+| 2026-11-22 17:01 | `elementhandle-screenshot.spec.ts` | 2/5 PASS (`[6/11]` 90s截断) | PW Batch 25 |
+| 2026-11-22 17:01 | `expect-with-snapshot.spec.ts` | 14/14 PASS (11.2s, exit 0) | PW Batch 25 (全绿) |

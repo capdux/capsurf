@@ -316,14 +316,18 @@ pub struct JsContext {
     }
 
     fn eval(code: []const u8): JSValue {
+        return _.evalWithFilename(code, "<eval>");
+    }
+
+    fn evalWithFilename(code: []const u8, filename: [*c]const u8): JSValue {
         _.runtime.resetReductions();
         let buf: [4096]u8 = [0; 4096];
         if (code.len + 1 <= buf.len) {
             @memcpy(buf[0..code.len], code);
             buf[code.len] = 0;
-            return JS_Eval(_.raw_ctx, buf[0..code.len].ptr, code.len, "<eval>", 0);
+            return JS_Eval(_.raw_ctx, buf[0..code.len].ptr, code.len, filename, 0);
         }
-        return JS_Eval(_.raw_ctx, code.ptr, code.len, "<eval>", 0);
+        return JS_Eval(_.raw_ctx, code.ptr, code.len, filename, 0);
     }
 
     fn compileModule(*_, code: []const u8, module_name: [*c]const u8): (*JSModuleDef)? {

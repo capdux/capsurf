@@ -1947,3 +1947,6 @@
 ### Phase 278: `document.title` 孤立节点与 `Runtime.exceptionThrown` 队列排障笔记
 - **`toHaveTitle` 返回 `"Blank Page"` 根因**：`document.open/write/close` 清空 `head.innerHTML` 时，旧 `<title>Blank Page</title>` 节点在 Arena 中保留且 `parent == NULL_NODE`，而 `js_document_get_title()` 线性扫描 `nodes.items` 未检查 `parent != NULL_NODE` 导致命中旧节点。补齐检查与空白折叠后实测返回 `"Hello world"`。
 - **`pageerror` 消息尾部换行与 16 条上限根因**：`pushExceptionEvent()` / `js_report_exception()` 末尾多余 `\n` 导致 `error.message` 断言多出换行；同时 `MAX_CONSOLE_RECORDS` 与 `runtime.cp` `polled_evts` 仅 16 槽位，扩容至 128 后单次可承载上百条事件。
+
+### Phase 279: `//# sourceURL=` 与 `pageerror.stack` 排障笔记
+- **`error.stack` 为空根因**：`JsContext.eval()` 此前固定传入 `"<eval>"` 作为文件名且 `pushExceptionEvent()` 仅调用 `toCString(exc)` 未读取 `exc.stack`。新增 `evalWithFilename` + `extractSourceUrl()` 并在 `pushExceptionEvent()` 中读取 `exc.stack`（校验首行防重）后，实测输出 `"Error: boom\n    at foo (myscript.js:1:26)\n    at <eval> (myscript.js:1:40)"`。

@@ -5097,3 +5097,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`document.open/write/close` 后 `document.title` 返回 `"Hello world"`；`Runtime.exceptionThrown` 描述返回 `"Error: Fancy error!"`；105 定时器并发测试单次队列承载 74 条无溢出。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.09s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。
+
+### [2026-11-22 17:03] Phase 279: `//# sourceURL=` 脚本名透传与 `Runtime.exceptionThrown` 完整调用栈上报
+- **引擎修复 (`src/`)**:
+  - [src/js/qjs_engine.cp](file:///data/dev/capsurf/src/js/qjs_engine.cp): 新增 `evalWithFilename()` 支持传入真实脚本名。
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 新增 `extractSourceUrl()` 解析 `//# sourceURL=` / `//@ sourceURL=` 并传入 `executeClassicScript()`；`pushExceptionEvent()` 读取 `exc.stack` 拼接至 `exception.description`（去重首行）。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`//# sourceURL=myscript.js` 内联脚本抛错准确上报 `description: "Error: boom\n    at foo (myscript.js:1:26)\n    at <eval> (myscript.js:1:40)"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.76s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
