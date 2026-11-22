@@ -2580,7 +2580,11 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    node._linkAlreadyLoaded = true;\n" ++
     "    var absUrl = resolveUrlAbs(rawHref);\n" ++
     "    var docCsp = String(g.__capsurf_doc_csp || '');\n" ++
-    "    if (docCsp.length > 0 && /default-src\\s+'none'|style-src\\s+'none'/i.test(docCsp)) {\n" ++
+    "    var docOrigin = String(g.__capsurf_doc_origin || pageOrigin);\n" ++
+    "    var isCrossStyle = (docOrigin.length > 0 && absUrl.indexOf('http') === 0 && absUrl.indexOf(docOrigin + '/') !== 0 && absUrl !== docOrigin);\n" ++
+    "    var cspBlockedStyle = docCsp.length > 0 && (/default-src\\s+'none'|style-src\\s+'none'/i.test(docCsp) || (isCrossStyle && /(?:default-src|style-src)[^;]*'self'/i.test(docCsp)));\n" ++
+    "    if (cspBlockedStyle) {\n" ++
+    "      if (typeof console !== 'undefined' && console.error) console.error(\"Refused to load the stylesheet '\" + absUrl + \"' because it violates the following Content Security Policy directive: \" + docCsp);\n" ++
     "      Promise.resolve().then(function() { fireScriptEvent(node, 'error'); });\n" ++
     "      return;\n" ++
     "    }\n" ++

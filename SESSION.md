@@ -5477,3 +5477,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<meta http-equiv="Content-Security-Policy" content="default-src 'self'">` 下插入内联脚本，`Runtime.consoleAPICalled` 收到 `"Refused to execute inline script because it violates the following Content Security Policy directive: default-src 'self'"`，`window.__inj` 为 `undefined`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。
+
+### [2026-11-22 21:31] Phase 331: CSP `default-src`/`style-src 'self'` 拦截跨域样式表并输出标准违规日志
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): `handleInsertedLink()` 补齐 `'self'` 跨域拦截与 CSP `console.error`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`default-src 'self'` 下插入跨域 `<link rel="stylesheet">` 返回 `linkErr: true` 且输出 `"Refused to load the stylesheet ..."`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

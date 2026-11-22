@@ -2827,3 +2827,7 @@
 ## [2026-11-22] Phase 330: CSP 拦截动态内联 `<script>` 时输出标准 `console.error` 违规日志
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: 在 `handleInsertedScript()` 内联脚本被 `__capsurf_script_gate('inline', ...)` 拦截分支补充 `console.error('Refused to execute inline script because it violates the following Content Security Policy directive: ' + docCsp)`，使 Playwright `_raceWithCSPError` 可捕获 CSP 违规并抛错（修复 `page-add-script-tag.spec.ts` `[7/9]`）。
+
+## [2026-11-22] Phase 331: CSP `default-src`/`style-src 'self'` 拦截跨域样式表并输出标准违规日志
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: 在 `handleInsertedLink()` 中增加 `default-src 'self'` / `style-src 'self'` 跨域样式表拦截判定，并在拦截时输出 `console.error("Refused to load the stylesheet ... because it violates the following Content Security Policy directive: ...")` 与触发 `error` 事件（修复 `page-add-style-tag.spec.ts` `[4/4]`）。

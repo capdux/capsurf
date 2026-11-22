@@ -2105,3 +2105,6 @@
 
 ### Phase 330: `page-add-script-tag` `[7/9]` CSP 页面注入内联脚本未抛错排障笔记
 - **静默拦截未输出 CSP `console.error` 根因**：Playwright 的 `addScriptTag({ content })` 通过 `_raceWithCSPError` 监听包含 `"Content Security Policy"` 的浏览器控制台错误来判定 CSP 拒绝。`handleInsertedScript()` 在内联脚本被 `__capsurf_script_gate` 拦截后此前直接静默 `return`，未输出错误日志。补充标准 `Refused to execute inline script because it violates the following Content Security Policy directive: ...` 后，实测 `Runtime.consoleAPICalled` 准确收到该 `error` 日志且 `window.__inj` 保持 `undefined`。
+
+### Phase 331: `page-add-style-tag` `[4/4]` CSP 页面注入跨域样式表未抛错排障笔记
+- **未校验 `'self'` 跨域且缺 CSP `console.error` 根因**：`handleInsertedLink()` 此前仅匹配 `default-src 'none'` / `style-src 'none'`，放行了 `default-src 'self'` 页面注入的跨域 `<link rel="stylesheet">`，且拦截分支未输出包含 `"Content Security Policy"` 的 `console.error`。补齐跨域判定与标准违规日志后，实测 `linkErr: true` 且 `Runtime.consoleAPICalled` 收到 `"Refused to load the stylesheet ..."`。
