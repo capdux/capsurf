@@ -3015,3 +3015,4 @@
 - Phase 388: `src/cdp/input.cp` — `MousePressed` 支持 `clickCount == 2` 双击选词与 `clickCount >= 3` 三击全选（表单控件与普通文本块）。
 - Phase 389: `src/cdp/dom.cp` — `DOM.resolveNode` 对无效或越界 `nodeId`/`backendNodeId` 返回 `-32000 No node with given id found`。
 - Phase 390: `src/js/shim/window.js` — `window.open` 弹窗代理对象补充 `alert`/`confirm`/`prompt` 方法。
+- Phase 391: `src/js/shim/element/html-element.js` — `proto.click()` 支持 `<a target="_blank">` 与 `rel="noopener"` 触发弹窗。

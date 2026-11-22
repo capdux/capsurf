@@ -249,12 +249,19 @@ function installHtmlElementExtensions(proto) {
             : anchor.href;
           const href = typeof rawHref === "string" ? rawHref : (rawHref && typeof rawHref.baseVal === "string" ? rawHref.baseVal : "");
           if (href) {
-            const loc = (typeof location !== "undefined") ? location : ((typeof window !== "undefined") ? window.location : null);
-            if (loc) {
-              if (href.startsWith("#")) {
-                loc.hash = href;
-              } else {
-                loc.href = href;
+            const tgtAttr = String((anchor.getAttribute ? anchor.getAttribute("target") : anchor.target) || "").toLowerCase();
+            if (tgtAttr === "_blank" && typeof globalThis.open === "function") {
+              const relAttr = String((anchor.getAttribute ? anchor.getAttribute("rel") : anchor.rel) || "").toLowerCase();
+              const isNoop = /(?:^|\s)(noopener|noreferrer)(?:$|\s)/.test(relAttr);
+              globalThis.open(href, "_blank", isNoop ? "noopener" : "");
+            } else {
+              const loc = (typeof location !== "undefined") ? location : ((typeof window !== "undefined") ? window.location : null);
+              if (loc) {
+                if (href.startsWith("#")) {
+                  loc.hash = href;
+                } else {
+                  loc.href = href;
+                }
               }
             }
           }

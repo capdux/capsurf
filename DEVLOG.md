@@ -2242,3 +2242,4 @@
 - Phase 388 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent` 左键双击/三击未自动扩展选区的问题，解锁 `page-click.spec.ts` `[14/77]` `textarea` 三击全选等用例。
 - Phase 389 (`src/cdp/dom.cp`): 修复 `DOM.resolveNode` 在页面导航导致节点失效时仍生成 `"node:0"` 导致 Playwright 无法触发 `kNoNodeWithGivenId` 重试的缺陷。
 - Phase 390 (`src/js/shim/window.js`): 补齐 `popupWin.alert` / `confirm` / `prompt` 代理接口，解决 `page-event-popup.spec.ts` `[5/13]` `TypeError: not a function`。
+- Phase 391 (`src/js/shim/element/html-element.js`): 补齐 JS `a.click()` 对 `target="_blank"` 与 `rel="noopener"` 的弹窗触发支持，打通 `page-event-popup.spec.ts` `[11/13]` fake-clicking 用例。
