@@ -2254,3 +2254,4 @@
 - Phase 400 (`src/cdp/session.cp`): 排查 `crNetworkManager.ts` 发现未在 `Network.responseReceived` 携带 `hasExtraInfo: true` 时 Playwright 会跳过 `Network.responseReceivedExtraInfo` 的换行头合并，导致多值 `header-a` 与多条 `set-cookie` 在 `headersArray()` 合并出错；补齐标记并清理 `session.cp:814` `@ptrCast` 隐式类型报错。
 - Phase 401 (`src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`): 解决页面脚本将 `window.JSON = null` 或污染 `Array.prototype.toJSON` 时 `Runtime.callFunctionOn` 与 `formatCdpRemoteObject` 崩溃或序列化被篡改的问题，同时为 `window.open` 代理对象挂载 `Promise`，目标解锁 `page-evaluate.spec.ts` 3 个稳定用例。
 - Phase 402 (`src/js/shim/index.js`): 修复 `document.execCommand('selectAll')` / `execCommand('copy')` 在非 `contenteditable` 页面返回 `false` 的缺陷，解锁 `page-evaluate.spec.ts` `should simulate a user gesture`。
+- Phase 403 (`src/cdp/target.cp`, `src/cdp/session.cp`): 修复 `WPT /url/ 1/2` 中暴露的 `Target.targetCreated` JSON 尾部出现多余 `"}}"}}}` 导致 `puppeteer-core` `SyntaxError` 崩溃的问题（未转义 `title`/`url` + 共享 `event_buf0` 覆盖）。

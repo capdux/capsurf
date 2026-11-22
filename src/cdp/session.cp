@@ -5592,15 +5592,15 @@ pub struct CdpPageSession {
                 const tid = reg.registerPopupTarget(pop_url, _.target_id, _.frame_id, bctx, dom.popup_noopener[i]);
                 if (tid.len == 0) continue;
                 if (t_idx := reg.findTargetIndex(tid)) {
-                    let info_buf: [512]u8 = undefined;
+                    let info_buf: [2048]u8 = undefined;
                     const info_str = reg.formatTargetInfo(t_idx, &info_buf);
-                    const tc_json = std.fmt.bufPrint(&reg.event_buf0, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
+                    const tc_json = std.fmt.allocPrint(_.allocator, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
                     out_events[ev_idx] = CdpEvent.create("Target.targetCreated", tc_json);
                     ev_idx += 1;
                     if (reg.auto_attach) {
                         const sid = reg.attachToTarget(tid);
-                        const att_json = std.fmt.bufPrint(
-                            &reg.event_buf1,
+                        const att_json = std.fmt.allocPrint(
+                            _.allocator,
                             "{{\"sessionId\":\"{s}\",\"targetInfo\":{s},\"waitingForDebugger\":false}}",
                             .{ sid, info_str },
                         ) catch "{}";

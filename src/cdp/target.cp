@@ -3,7 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/target.ts
 
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonBool, extractJsonInt, MAX_CDP_EVENTS } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { CookieJar } from "../net/cookies.cp";
 
 pub struct BrowserContextState {
@@ -451,14 +451,18 @@ pub struct TargetRegistry {
             op_kv = std.fmt.bufPrint(&op_kv_buf, ",\"openerFrameId\":\"{s}\"", .{_.targets[idx].openerFrameId()}) catch "";
         }
         const can_access = if (_.targets[idx].opener_id_len > 0) "true" else "false";
+        let esc_title_buf: [512]u8 = [0; 512];
+        const esc_title = escapeJsonString(_.targets[idx].title(), &esc_title_buf);
+        let esc_url_buf: [2048]u8 = [0; 2048];
+        const esc_url = escapeJsonString(_.targets[idx].url(), &esc_url_buf);
         const res = std.fmt.bufPrint(
             out_buf,
             "{{\"targetId\":\"{s}\",\"type\":\"{s}\",\"title\":\"{s}\",\"url\":\"{s}\",\"attached\":{s},\"canAccessOpener\":{s},\"browserContextId\":\"{s}\"{s}}}",
             .{
                 _.targets[idx].targetId(),
                 _.targets[idx].targetType(),
-                _.targets[idx].title(),
-                _.targets[idx].url(),
+                esc_title,
+                esc_url,
                 if (_.targets[idx].attached) "true" else "false",
                 can_access,
                 _.targets[idx].browserContextId(),
@@ -585,9 +589,9 @@ pub struct TargetHandler {
             const discover = extractJsonBool(req.params_raw, "discover") ?? true;
             session.target_registry.discover_targets = discover;
             if (discover && session.target_registry.targets[0].active) {
-                let info_buf: [512]u8 = undefined;
+                let info_buf: [2048]u8 = undefined;
                 const info_str = session.target_registry.formatTargetInfo(0, &info_buf);
-                const tc_json = std.fmt.bufPrint(&session.target_registry.event_buf0, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
+                const tc_json = std.fmt.allocPrint(session.allocator, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
                 out_events[0] = CdpEvent.create("Target.targetCreated", tc_json);
                 event_count.* = 1;
             }
@@ -687,16 +691,16 @@ pub struct TargetHandler {
             const t_idx_opt = session.target_registry.findTargetIndex(target_id);
             if (t_idx_opt != null) {
                 const t_idx = t_idx_opt.?;
-                let info_buf: [512]u8 = undefined;
+                let info_buf: [2048]u8 = undefined;
                 const info_str = session.target_registry.formatTargetInfo(t_idx, &info_buf);
-                const tc_json = std.fmt.bufPrint(&session.target_registry.event_buf0, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
+                const tc_json = std.fmt.allocPrint(session.allocator, "{{\"targetInfo\":{s}}}", .{info_str}) catch "{}";
                 out_events[0] = CdpEvent.create("Target.targetCreated", tc_json);
                 event_count.* = 1;
 
                 if (session.target_registry.auto_attach) {
                     const sid = session.target_registry.attachToTarget(target_id);
-                    const att_json = std.fmt.bufPrint(
-                        &session.target_registry.event_buf1,
+                    const att_json = std.fmt.allocPrint(
+                        session.allocator,
                         "{{\"sessionId\":\"{s}\",\"targetInfo\":{s},\"waitingForDebugger\":false}}",
                         .{ sid, info_str },
                     ) catch "{}";
