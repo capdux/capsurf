@@ -811,7 +811,7 @@ fn hasJsonExtension(url: []const u8): bool {
             const jerr_len = @min(jerr_msg.len, 1024);
             @memcpy(jerr_z[0..jerr_len], jerr_msg[0..jerr_len]);
             jerr_z[jerr_len] = 0;
-            * = JS_ThrowSyntaxError(ctx, "%s", @as([*c]const u8, unsafe { @ptrCast(&jerr_z) }));
+            * = JS_ThrowSyntaxError(ctx, "%s", unsafe { @as([*c]const u8, @ptrCast(&jerr_z)) });
             return null;
         }
         const jm = JS_NewCModule(ctx, module_name, sessionJsonModuleInit);
@@ -5508,10 +5508,11 @@ pub struct CdpPageSession {
                 const st_esc = escapeJsonString(resp_status_text, &st_esc_buf);
                 let rmime_esc_buf: [256]u8 = undefined;
                 const rmime_esc = escapeJsonString(resp_mime, &rmime_esc_buf);
+                const has_extra_kv = if (resp_extra_headers_json.len > 2) ",\"hasExtraInfo\":true" else "";
                 const resp_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ req_seq, lid, res_type, fetch_esc, resp_status, st_esc, resp_headers_json, rmime_esc, fid, bctx_kv },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}{s}}}",
+                    .{ req_seq, lid, res_type, fetch_esc, resp_status, st_esc, resp_headers_json, rmime_esc, fid, has_extra_kv, bctx_kv },
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;

@@ -3024,3 +3024,4 @@
 - Phase 397: `src/cdp/page.cp` — 修复 `Page.navigateToHistoryEntry` `formatFrameNavigatedEvent(final_url)` 传参错误，并补齐 `Network.*` 响应事件与 `Runtime.executionContextsCleared`。
 - Phase 398: `src/cdp/input.cp` — `Input.dispatchKeyEvent` 穿透 `shadowRoot.activeElement` 与 `_shadowRoot` 子树，支持 Shadow DOM 内键盘输入。
 - Phase 399: `src/cdp/dom.cp` — `DOM.describeNode` 与 `DOM.resolveNode` 支持 `ShadowRoot` 合成 `backendNodeId >= 1000000` 双向解析与跨隔离世界 adopt。
+- Phase 400: `src/cdp/session.cp` — `Network.responseReceived` 补充 `hasExtraInfo: true` 以配合 `Network.responseReceivedExtraInfo` 拆分多值响应头，并修复 `jerr_z` `@ptrCast` AST 校验问题。
