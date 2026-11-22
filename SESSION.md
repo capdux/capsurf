@@ -5080,3 +5080,12 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：内联 `<script>` 与 `setTimeout` 未捕获异常均准确触发 `Runtime.exceptionThrown`（`inline boom` / `timer boom`）；闭合 `<details>` `AX_NAMES` 收敛为 `["RootWebArea:","generic:Summary","group:Summary","button:Summary","StaticText:Summary"]`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **123.61s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.16s)**。
+
+### [2026-11-22 16:53] Phase 277: `textContent` 设值触发布局重算、`innerText` 跳过 `[hidden]` 及 `<frame>` 归属查询
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): 在 `js_element_set_text_content()` 的文本节点与元素分支均设置 `el.dom_ctx.layout_dirty = true`。
+  - [src/js/shim/element/html-classes.js](file:///data/dev/capsurf/src/js/shim/element/html-classes.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRenderedText()` 中跳过 `hidden` 属性元素，修复 `innerText` 漏出 `<span hidden>` 文本的问题。
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `collectDocIframeEntries()` 支持 `<frame>` 标签以完善 `DOM.getFrameOwner`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`innerText` 返回 `"Text content"`（跳过 `<span hidden>garbage</span>`）；`span.textContent = ""` 后 `getBoundingClientRect()` 从 `34.08x22` 实时更新为 `0x0`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.34s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。

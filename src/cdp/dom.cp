@@ -123,7 +123,7 @@ fn collectDocIframeEntries(session: *CdpPageSession, out_entries: *[32]IframeFra
     let ni: usize = 1;
     while (ni < session.doc.nodes.items.len && count < out_entries.len) : (ni += 1) {
         const n = &session.doc.nodes.items[ni];
-        if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "iframe")) {
+        if (n.node_type == NodeType.Element && (std.ascii.eqlIgnoreCase(n.tag_name, "iframe") || std.ascii.eqlIgnoreCase(n.tag_name, "frame"))) {
             let matched_fid: []const u8 = "";
             if (n.id_attr.len > 0) {
                 let ak: usize = 0;

@@ -100,6 +100,11 @@
 | 2026-11-22 16:41 | `/css/css-transforms/` | `5/5` | 6 | PASS 1 / FAIL 5 / TIMEOUT 0 | Batch 49 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:43 | `/css/css-values/` | `3/5` | 50/70 | PASS 9 / FAIL 26 / TIMEOUT 15 (90s截断) | Batch 49 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:44 | `/css/css-values/` | `4/5` | 45/70 | PASS 11 / FAIL 17 / TIMEOUT 17 (90s截断) | Batch 49 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:46 | `/css/css-values/` | `5/5` | 22/70 | PASS 6 / FAIL 9 / ERROR 3 / TIMEOUT 4 (90s截断) | Batch 50 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:47 | `/css/css-text/` | `1/5` | 25 | PASS 4 / FAIL 19 / TIMEOUT 2 (51s) | Batch 50 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:48 | `/css/css-text/` | `2/5` | 25 | PASS 4 / FAIL 20 / TIMEOUT 1 (42s) | Batch 50 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:50 | `/css/css-sizing/` | `1/5` | 7 | PASS 0 / FAIL 4 / TIMEOUT 3 (90s截断) | Batch 50 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:50 | `/css/css-sizing/` | `2/5` | 7 | PASS 1 / FAIL 3 / TIMEOUT 3 (90s截断) | Batch 50 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -180,3 +185,7 @@
 | 2026-11-22 16:46 | `expect-to-have-accessible.spec.ts` | 14/14 PASS (16.1s, 含意外PASS 1项) | PW Batch 22 (全绿) |
 | 2026-11-22 16:47 | `expect-timeout.spec.ts` | 15/15 PASS (19.5s, exit 0) | PW Batch 22 (全绿) |
 | 2026-11-22 16:47 | `frame-frame-element.spec.ts` | 1/6 PASS (DOM.getFrameOwner/shadow 5 FAIL, 36.7s) | PW Batch 22 |
+| 2026-11-22 16:51 | `page-event-pageerror.spec.ts` | 2/7 PASS (0 TIMEOUT, Phase 276 复测, 尾部换行/16上限) | PW Batch 23 |
+| 2026-11-22 16:51 | `expect-builtins.spec.ts` | 278/278 PASS (6.7s, exit 0) | PW Batch 23 (全绿) |
+| 2026-11-22 16:51 | `expect-misc.spec.ts` | 39/41 PASS (toHaveTitle 2 FAIL, `[42/59]` 90s截断) | PW Batch 23 |
+| 2026-11-22 16:51 | `expect-matcher-result.spec.ts` | 4/4 PASS (5.5s, exit 0) | PW Batch 23 (全绿) |

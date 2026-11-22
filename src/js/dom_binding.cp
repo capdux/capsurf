@@ -1543,11 +1543,13 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
         if (ntype == NodeType.Text || ntype == NodeType.Comment) {
             el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)].text_content = new_text_dup;
             el.dom_ctx.recordCharDataModified(el.node_id, new_text_dup);
+            el.dom_ctx.layout_dirty = true;
             return jsUndefined();
         }
     }
     setNodeText(el.dom_ctx.doc, el.node_id, new_text_dup);
     el.dom_ctx.recordInnerHtmlRebuilt(el.node_id);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 

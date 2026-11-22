@@ -12512,6 +12512,7 @@
 
         const tag = String(node.localName || node.tagName || "").toLowerCase();
         if (!isRoot && IT_HIDDEN_TAGS.has(tag)) return;
+        if (!isRoot && (node.hidden === true || (typeof node.hasAttribute === "function" && node.hasAttribute("hidden")))) return;
 
         const cs = getElComputedStyleSafe(node);
         const disp = getElDisplayForInnerText(node);

@@ -1939,3 +1939,7 @@
 ### Phase 276: `Runtime.exceptionThrown` 与闭合 `<details>` 无障碍树排障笔记
 - **`pageerror` 超时根因**：`executeClassicScript` / `executeModuleScript` 以及 `window.js` 的 `setTimeout`/`messageTaskQueue` 捕获未处理异常后仅打印日志或 `console.error`，从未派发 `Runtime.exceptionThrown`。通过 `ConsoleRecord` 队列复用的 `"__exception"` 通道与 `__capsurf_report_exception` 原生绑定后，实测内联脚本与定时器未捕获异常均准确触发 `Runtime.exceptionThrown`。
 - **闭合 `<details>` 文本泄漏根因**：`accessibility.cp` 的 `buildNode` 与 `collectSubtreeTextInternal` 遍历 `<details>` 所有子节点，导致未展开时文本节点被计入 `group` 名称。过滤非首个 `<summary>` 后，`AX_NAMES` 收敛为 `group:Summary` / `button:Summary`。
+
+### Phase 277: `textContent` 布局失效与 `innerText` `[hidden]` 排障笔记
+- **`not.toBeVisible()` 超时根因**：`js_element_set_text_content()` 修改节点文本后未置位 `el.dom_ctx.layout_dirty = true`，导致 `span.textContent = ""` 后 `getBoundingClientRect()` 仍返回清空前缓存尺寸（`34.08x22`）。补齐后实测立即回落为 `0x0`。
+- **`useInnerText` 包含隐藏文本根因**：`collectRenderedText()` 的 `walk()` 未直接过滤 `hidden` 属性元素，导致 `<span hidden>garbage</span>` 混入 `innerText`。补齐过滤后实测返回 `"Text content"`。

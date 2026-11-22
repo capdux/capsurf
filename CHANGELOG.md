@@ -2589,3 +2589,9 @@
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp`, `src/js/dom_binding.cp`, `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `executeClassicScript()` / `executeModuleScript()` 及定时器/消息队列捕获的未捕获异常增加 `pushExceptionEvent()` / `__capsurf_report_exception()` 通道，复用 `ConsoleRecord` 队列并在 `pollConsoleEvents()` 中派发 `Runtime.exceptionThrown` CDP 事件（支撑 `page.on('pageerror')`）。
   - `src/cdp/accessibility.cp`: 在 `buildNode()` 与 `collectSubtreeTextInternal()` 中对无 `open` 属性的闭合 `<details>` 仅保留首个 `<summary>` 子节点，屏蔽隐藏文本与子节点对无障碍名称及 AX 树的污染。
+
+## [2026-11-22] Phase 277: `textContent` 设值触发布局重算、`innerText` 跳过 `[hidden]` 及 `<frame>` 归属查询
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 在 `js_element_set_text_content()` 的文本节点与元素分支均设置 `el.dom_ctx.layout_dirty = true`，修复动态清空 `span.textContent = ""` 后 `getBoundingClientRect()` 仍返回旧尺寸的问题。
+  - `src/js/shim/element/html-classes.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRenderedText()` 中跳过 `hidden` 属性节点，修复 `innerText`（`useInnerText: true`）包含 `<span hidden>` 文本的问题。
+  - `src/cdp/dom.cp`: 扩展 `collectDocIframeEntries()` 支持 `<frame>` 标签以完善 `DOM.getFrameOwner` 查询。
