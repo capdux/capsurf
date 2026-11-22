@@ -143,6 +143,16 @@ pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
             dst[out_idx] = '\\';
             dst[out_idx + 1] = 't';
             out_idx += 2;
+        } else if (c < 0x20) {
+            if (out_idx + 6 > dst.len) break;
+            const hex = "0123456789abcdef";
+            dst[out_idx] = '\\';
+            dst[out_idx + 1] = 'u';
+            dst[out_idx + 2] = '0';
+            dst[out_idx + 3] = '0';
+            dst[out_idx + 4] = hex[(c >> 4) & 0x0f];
+            dst[out_idx + 5] = hex[c & 0x0f];
+            out_idx += 6;
         } else {
             dst[out_idx] = c;
             out_idx += 1;

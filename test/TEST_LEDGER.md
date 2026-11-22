@@ -747,3 +747,9 @@
 | 2026-11-23 02:15 | `selectors-css.spec.ts` | 21/25 PASS (3 exp FAIL→PASS) | PW Batch 124 |
 | 2026-11-23 02:15 | `selectors-register.spec.ts` | 6/6 PASS (`EXIT=0` 全绿!) | PW Batch 124 (`bin_dev` 全绿!) |
 | 2026-11-23 02:15 | `page-click.spec.ts` | 29/31 PASS (Phase 387 `contextmenu`过! `[31/77]`120s截断) | PW Batch 124 |
+| WPT-B118 | `/html/syntax/parsing/ 3/3` + `/svg/` + `/url/ 1/2..2/2` | 37/106 PASS (`/svg/` 31/65 0崩溃0超时) |
+| WPT-B119 | `/fetch/api/{headers,request,basic}/` | 4/68 PASS (暴露 `escapeJsonString` `<0x20` 控制字符未转义导致 JSON.parse 崩溃) |
+| 2026-11-23 02:21 | `page-wait-for-selector-2.spec.ts` | 32/32 PASS (Phase 389 全绿! 2 exp FAIL→PASS) | PW Batch 125 (`bin_dev` 全绿!) |
+| 2026-11-23 02:21 | `page-event-popup.spec.ts` | 11/13 PASS (Phase 391 `a.click()`过! +1 PASS) | PW Batch 125 |
+| 2026-11-23 02:21 | `page-click.spec.ts` | 28/30 PASS (`[31/77]`120s截断) | PW Batch 125 |
+| WPT-B120 | `/fetch/api/{response,abort,cors}/` | 4/53 PASS (1 `FAIL→PASS` cors-preflight-redirect, 0 CRASH) |
