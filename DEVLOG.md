@@ -2013,3 +2013,6 @@
 
 ### Phase 300: ShadowRoot 下 `span:nth-child(1n +2)`、`:is(div, span)` 与 `:not(:first-child)` 返回 `0` 排障笔记
 - **两层根因**：第一层为 `selector.js` 缺失 `:nth-child`/`:is`/`:not` 分支且用 `s.split(",")` 错误拆散 `:is(div, span)`；第二层为 `matchesCompoundSelector()` 中伪类名称扫描循环停在 `/[.#:\[\s]/`，导致 `:is(div, span)` 在逗号后空格处提前跳出循环、`:not(:first-child)` 在内部 `:` 处断词。补齐结构/逻辑伪类、顶层逗号拆分与 `(` 停靠扫描后，实测 ShadowRoot 下 `srOdd=3, srSp=4, srIs=6, srNot=4`。
+
+### Phase 301: `delete window.Node` 后 `locator.click` / `hover` / `fill` 仍报 `ReferenceError: Node is not defined` 排障笔记
+- **`node:<nid>` 句柄漏出隔离上下文追踪集合根因**：Playwright 对元素句柄先调用 `DOM.resolveNode({ nodeId, executionContextId: 3 })` 获取 `objectId: "node:6"`，再不带 `executionContextId` 调用 `Runtime.callFunctionOn({ objectId: "node:6" })`。由于 `DOM.resolveNode` 返回的静态 `"node:<nid>"` 未经 `__capsurf_format_remote_object` 登记进 `__capsurf_isolated_oids`，导致 `callFunctionOn` 未临时恢复 `Node`。在 `DOM.resolveNode` 补齐 `executionContextId > 1` 登记后，实测 `callFunctionOn` 返回 `"function:true"` 且主世界 `typeof Node` 仍保持 `"undefined"`。

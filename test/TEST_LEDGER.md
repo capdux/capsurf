@@ -209,6 +209,9 @@
 | 2026-11-22 19:16 | `/dom/events/` | `4/5`, `5/5` | 26, 25 | PASS 10/26, 9/25 (Phase 296提升, 0 CRASH) | Batch 75 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:16 | `/css/css-fonts/` | `5/5`, `1/5`, `2/5` | 24, 25, 24 | PASS 5/24, 7/25, 6/24 (0 CRASH) | Batch 75 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:23 | `/dom/nodes/` | `4/10`, `6/10`~`9/10` | 25x5 | PASS 9, 10, 10, 9, 9 (0 CRASH) | Batch 76 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:27 | `/dom/nodes/` | `10/10` | 25 | PASS 8 / FAIL 13 / TIMEOUT 4 (`Node-isConnected` ?PASS) | Batch 77 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:27 | `/dom/collections/` | `1/2`, `2/2` | 6, 5 | PASS 3/6, 3/5 (0 CRASH) | Batch 77 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:27 | `/dom/traversal/` | `1/2`, `2/2` | 9, 8 | PASS 3/9, 2/8 (0 CRASH) | Batch 77 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -402,3 +405,7 @@
 | 2026-11-22 19:20 | `locator-click.spec.ts` | 4/5 PASS (Node removed 1 FAIL, 14.8s) | PW Batch 51 |
 | 2026-11-22 19:20 | `elementhandle-click.spec.ts` | 5/8 PASS (Node/Shadow/<br> 3 FAIL/TIMEOUT, 1.0m) | PW Batch 51 |
 | 2026-11-22 19:20 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (nth-of-type/SVG/inline 3 FAIL/TIMEOUT, 1.2m) | PW Batch 51 |
+| 2026-11-22 19:23 | `selectors-css.spec.ts` | 20/25 PASS (Phase 300 复测提升, 1 SKIP, 1.2m) | PW Batch 52 |
+| 2026-11-22 19:23 | `selectors-get-by.spec.ts` | 25/25 PASS (29.2s, exit 0) | PW Batch 52 (全绿) |
+| 2026-11-22 19:23 | `locator-convenience.spec.ts` | 21/21 PASS (21.0s, exit 0) | PW Batch 52 (全绿) |
+| 2026-11-22 19:23 | `page-autowaiting-no-hang.spec.ts` | 1/9 PASS (第3条后ECONNREFUSED, 1.1m) | PW Batch 52 更正 |

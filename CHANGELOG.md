@@ -2695,3 +2695,7 @@
 ## [2026-11-22] Phase 300: 补齐 Shadow DOM / JS 选择器引擎 `:nth-child`、`:nth-last-child`、`:only-child` 与 `:is`/`:where`/`:not`
 - **Fixed (`src/`)**:
   - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `matchesNthChild()` 支持 `odd`/`even`/`An+B`（含带空格公式如 `23n +2`），新增 `splitSelectorList()` 按括号/方括号层级安全拆分顶层逗号列表，并在 `matchesCompoundSelector()` 中修复伪类扫描正则提前截断括号内空格/冒号的问题，完整支持 `:nth-child()`、`:nth-last-child()`、`:only-child`、`:is()`、`:where()`、`:matches()` 与 `:not()`。
+
+## [2026-11-22] Phase 301: `DOM.resolveNode` 对隔离上下文节点句柄登记 `__capsurf_isolated_oids` 恢复 `Node`
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 在 `DOM.resolveNode` 中当传入 `executionContextId > 1` 时，同步将返回的 `node:<nid>` 注册至 `globalThis.__capsurf_isolated_oids`，确保后续无 `executionContextId` 的 `Runtime.callFunctionOn({ objectId: "node:..." })` 也能在页面 `delete window.Node` 后安全恢复 `Node` 全局构造器而不污染主世界。

@@ -5260,3 +5260,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：ShadowRoot 下 `srOdd=3, srSp=4, srIs=6, srNot=4`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **129.93s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.19s)**。
+
+### [2026-11-22 19:28] Phase 301: `DOM.resolveNode` 对隔离上下文节点句柄登记 `__capsurf_isolated_oids` 恢复 `Node`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): 在 `DOM.resolveNode` 中当 `executionContextId > 1` 时将返回的 `node:<nid>` 登记至 `globalThis.__capsurf_isolated_oids`，确保 `delete window.Node` 后 `Runtime.callFunctionOn` 安全恢复 `Node`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`delete window.Node` 后经 `DOM.resolveNode({ executionContextId: 3 })` 调用 `callFunctionOn` 返回 `"function:true"`，主世界 `typeof Node` 仍为 `"undefined"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **131.09s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。

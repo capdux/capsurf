@@ -933,6 +933,20 @@ pub struct DomHandler {
 
         if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
             const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
+            if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
+                if (exec_ctx > 1 && session.has_document) {
+                    let iso_buf: [256]u8 = [0; 256];
+                    const iso_js = std.fmt.bufPrint(
+                        &iso_buf,
+                        "(function(){{globalThis.__capsurf_isolated_oids=globalThis.__capsurf_isolated_oids||new Set();globalThis.__capsurf_isolated_oids.add('node:{d}');}})()",
+                        .{nid_val},
+                    ) catch "";
+                    if (iso_js.len > 0) {
+                        const v = session.ctx.eval(iso_js);
+                        session.ctx.freeValue(v);
+                    }
+                }
+            }
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"Element\",\"description\":\"Node#{d}\",\"objectId\":\"node:{d}\"}}}}",
