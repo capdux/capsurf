@@ -82,14 +82,40 @@ pub struct KeyEvent {
 
 /// Hit-tests screen pixel coordinates (x, y) against session's layout boxes.
 pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
+    let sx: f32 = session.scroll_x;
+    let sy: f32 = session.scroll_y;
+    if (session.has_document) {
+        const sval = session.ctx.eval("((window.scrollX||0)+','+(window.scrollY||0))");
+        if (!jsIsException(sval)) {
+            const sstr = session.ctx.toCString(sval);
+            if (sstr.len > 0) {
+                let it = std.mem.splitScalar(u8, sstr, ',');
+                if (x_str := it.next()) {
+                    if (vx := std.fmt.parseFloat(f32, x_str) catch null) {
+                        sx = vx;
+                        session.scroll_x = vx;
+                    }
+                }
+                if (y_str := it.next()) {
+                    if (vy := std.fmt.parseFloat(f32, y_str) catch null) {
+                        sy = vy;
+                        session.scroll_y = vy;
+                    }
+                }
+            }
+        }
+        session.ctx.freeValue(sval);
+    }
     let best_node: NodeId = NULL_NODE;
     let i: usize = 0;
     const count = session.layout.boxes.items.len;
     while (i < count) : (i += 1) {
         const box = session.layout.boxes.items[i];
         if (box.rect.visible && box.rect.width > 0.0 && box.rect.height > 0.0) {
-            if (x >= box.rect.x && x <= (box.rect.x + box.rect.width) &&
-                y >= box.rect.y && y <= (box.rect.y + box.rect.height)) {
+            const tx = if (box.position == .Fixed) x else x + sx;
+            const ty = if (box.position == .Fixed) y else y + sy;
+            if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&
+                ty >= box.rect.y && ty <= (box.rect.y + box.rect.height)) {
                 best_node = box.node_id;
             }
         }

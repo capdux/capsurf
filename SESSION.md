@@ -5463,3 +5463,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`data:text/html,<div onclick='window._clicked=true'>Hello</div>` 派发 `click` 返回 `{"clicked":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+### [2026-11-22 21:23] Phase 329: `hitTest()` 接入页面滚动偏移 (`scrollX`/`scrollY`) 修复滚动后悬停与点击
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `hitTest()` 同步 `window.scrollX/Y` 并对非 `fixed` 元素叠加滚动偏移。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`scrollY=1320` 下 `mouseMoved` 命中 `#button-91` 返回 `{"pt":{"x":29.15999984741211,"y":704,"sy":1320},"hovered":"button-91"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.17s)**。

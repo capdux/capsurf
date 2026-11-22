@@ -2099,3 +2099,6 @@
 
 ### Phase 328: `page-dispatchevent` `[16/16]` `<div onclick="window._clicked=true">` 未触发排障笔记
 - **`entry[propName] === undefined` 恒假根因**：`Element.prototype.onclick` 等 IDL 事件属性 getter 默认返回 `null`（`typeof null === "object"`, `hasOwnProperty === false`），导致 `dispatch.js` 第 412 行 `entry[propName] === undefined` 恒为 `false`，所有 HTML 内联 `on*` 内容属性从未被 `new Function("event", attrVal)` 编译挂载。改为 `entry[propName] == null` 后，实测 `data:text/html,<div onclick='window._clicked=true'>` 派发 `click` 后 `window._clicked === true`。
+
+### Phase 329: `page-mouse.spec.ts` `[8/15]` `page.hover('#button-91')` 超时排障笔记
+- **`hitTest()` 未叠加滚动偏移根因**：Playwright 传入的 CDP 鼠标坐标 `(x, y)` 为视口坐标，而 `session.layout.boxes` 存储的是文档坐标。页面滚动（`scrollIntoView` 后 `scrollY = 1320`）时，`hitTest()` 此前直接拿视口坐标对比文档矩形，导致 `#button-91` 漏检且 `hovered_node` 为 `0`。在 `hitTest()` 中同步读取 `window.scrollX/Y` 并对非 `.Fixed` 盒子叠加偏移后，实测 `sy=1320` 下 `document.querySelector("button:hover").id === "button-91"`。

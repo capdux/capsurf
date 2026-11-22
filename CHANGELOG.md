@@ -2819,3 +2819,7 @@
 ## [2026-11-22] Phase 328: 修复 HTML 内联 `on*` 属性（如 `onclick="..."`）在 `dispatchEvent` 时未编译执行的问题
 - **Fixed (`src/`)**:
   - `src/js/shim/events/dispatch.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 将内联事件属性惰性水合判断 `entry[propName] === undefined` 修正为 `entry[propName] == null`（因 `Element.prototype.on*` getter 默认返回 `null` 而非 `undefined`），修复 `page-dispatchevent.spec.ts` `[16/16] should be atomic` 等所有 HTML `on*` 属性触发问题。
+
+## [2026-11-22] Phase 329: `hitTest()` 接入页面滚动偏移 (`scrollX`/`scrollY`) 修复滚动后悬停与点击
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `hitTest()` 中读取当前 `window.scrollX`/`window.scrollY` 并同步至 `session.scroll_x`/`session.scroll_y`，对非 `fixed` 定位元素使用文档坐标 `(x + sx, y + sy)` 进行命中测试，解决滚动后 `page.hover('#button-91')` 等视口命中全部漏检的问题。
