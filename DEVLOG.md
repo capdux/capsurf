@@ -2241,3 +2241,4 @@
 - Phase 387 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent` 右键点击仅触发 `mousedown`/`mouseup` 而漏发 `contextmenu` 的缺陷，解锁 `page-click.spec.ts` `[28/77]` 等右键菜单用例。
 - Phase 388 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent` 左键双击/三击未自动扩展选区的问题，解锁 `page-click.spec.ts` `[14/77]` `textarea` 三击全选等用例。
 - Phase 389 (`src/cdp/dom.cp`): 修复 `DOM.resolveNode` 在页面导航导致节点失效时仍生成 `"node:0"` 导致 Playwright 无法触发 `kNoNodeWithGivenId` 重试的缺陷。
+- Phase 390 (`src/js/shim/window.js`): 补齐 `popupWin.alert` / `confirm` / `prompt` 代理接口，解决 `page-event-popup.spec.ts` `[5/13]` `TypeError: not a function`。

@@ -43615,6 +43615,9 @@
         focus: function () {},
         blur: function () {},
         postMessage: function () {},
+        alert: function (msg) { if (typeof global.alert === "function") return global.alert(msg); },
+        confirm: function (msg) { return typeof global.confirm === "function" ? global.confirm(msg) : false; },
+        prompt: function (msg, def) { return typeof global.prompt === "function" ? global.prompt(msg, def) : null; },
       };
       return popupWin;
     }, "open");

@@ -743,3 +743,7 @@
 | 2026-11-23 02:08 | `eval-on-selector-all.spec.ts` | 9/9 PASS (9.2s, 非allow-list 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
 | 2026-11-23 02:08 | `selectors-text.spec.ts` | 21/21 PASS (48.1s, 3 exp FAIL→PASS 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
 | 2026-11-23 02:08 | `page-wait-for-function.spec.ts` | 8/10 PASS (`[11/26]`120s截断) | PW Batch 123 |
+| 2026-11-23 02:15 | `page-event-popup.spec.ts` | 10/13 PASS (5/11→10/13! `noopener`+`_blank`全过!) | PW Batch 124 |
+| 2026-11-23 02:15 | `selectors-css.spec.ts` | 21/25 PASS (3 exp FAIL→PASS) | PW Batch 124 |
+| 2026-11-23 02:15 | `selectors-register.spec.ts` | 6/6 PASS (`EXIT=0` 全绿!) | PW Batch 124 (`bin_dev` 全绿!) |
+| 2026-11-23 02:15 | `page-click.spec.ts` | 29/31 PASS (Phase 387 `contextmenu`过! `[31/77]`120s截断) | PW Batch 124 |
