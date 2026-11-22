@@ -3730,6 +3730,14 @@ pub struct CdpPageSession {
                 const r = _.ctx.executePendingJobs();
                 if (r > 0) continue;
 
+                const pnav_v = _.ctx.eval("globalThis.__capsurf_pending_navigation ? 1 : 0");
+                const has_pnav = (_.ctx.toInt64(pnav_v) catch 0) != 0;
+                _.ctx.freeValue(pnav_v);
+                if (has_pnav) {
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
+                    return msg.len;
+                }
+
                 const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
                 const next_delay = _.ctx.toInt64(pump_res) catch -1;
                 _.ctx.freeValue(pump_res);
@@ -3859,6 +3867,14 @@ pub struct CdpPageSession {
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
                 if (r > 0) continue;
+
+                const pnav_v = _.ctx.eval("globalThis.__capsurf_pending_navigation ? 1 : 0");
+                const has_pnav = (_.ctx.toInt64(pnav_v) catch 0) != 0;
+                _.ctx.freeValue(pnav_v);
+                if (has_pnav) {
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
+                    return msg.len;
+                }
 
                 const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
                 const next_delay = _.ctx.toInt64(pump_res) catch -1;

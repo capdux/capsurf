@@ -758,3 +758,35 @@
 | 2026-11-23 02:25 | `page-aria-snapshot.spec.ts` | 36/38 PASS (2 fails: pseudo PUA `\ueab2`, frameset nested `- iframe`) | PW Batch 126 |
 | 2026-11-23 02:25 | `page-wait-for-selector-1.spec.ts` | 15/15 PASS (`exit=0`) | PW Batch 126 (`bin_dev` 全绿!) |
 | WPT-B121 | `/fetch/api/basic/ 1/2..2/2` + `/xhr/ 1/3..2/3` | 27/99 PASS (`basic 1/2` 2/16 `1 FAIL→PASS`, 0 JSON.parse crash, 0 CRASH) |
+| WPT-B122 | `/xhr/ 3/3` + `/workers/ 1/2` | 22/75 PASS (`/xhr/ 3/3` 13/34, `/workers/ 1/2` 9/41, 0 CRASH) |
+| 2026-11-23 02:32 | `selectors-css.spec.ts` | 21/25 PASS (3 exp FAIL→PASS) | PW Batch 127 |
+| 2026-11-23 02:32 | `page-aria-snapshot.spec.ts` | 36/38 PASS (2 fails: pseudo `\ueab2`, frameset nested) | PW Batch 127 |
+| 2026-11-23 02:32 | `locator-misc-1.spec.ts` | 13/13 PASS (3 exp FAIL→PASS) | PW Batch 127 (`bin_dev` 全绿!) |
+| 2026-11-23 02:32 | `locator-click.spec.ts` | 5/5 PASS | PW Batch 127 (`bin_dev` 全绿!) |
+| 2026-11-23 02:45 | `page-history.spec.ts` | 7/13 PASS (5 FAIL, 1 TIMEOUT) | PW Batch 128 |
+| 2026-11-23 02:45 | `page-screenshot.spec.ts` | 15/44 PASS (23 FAIL, 6 TIMEOUT) | PW Batch 128 |
+| 2026-11-23 02:45 | `page-keyboard.spec.ts` | 35/44 PASS (6 FAIL, 3 TIMEOUT) | PW Batch 128 |
+| 2026-11-23 03:15 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo `"\ueab2 hello"` extra space) | PW Batch 129 |
+| 2026-11-23 03:15 | `selectors-css.spec.ts` | 24/25 PASS (Phase 395 +3! 1 fail: `root2Shadow.$eval('css:light=#target')`) | PW Batch 129 |
+| 2026-11-23 03:15 | `page-focus.spec.ts` | 7/7 PASS (1 exp FAIL→PASS) | PW Batch 129 (`bin_dev` 全绿!) |
+| 2026-11-23 03:15 | `page-click.spec.ts` | 37/77 PASS (4 offset fail, 36 timeout) | PW Batch 129 |
+| 2026-11-23 04:12 | `page-history.spec.ts` | 10/13 PASS (Phase 397! 0 FAIL, 3 timeout) | PW Batch 130 |
+| 2026-11-23 04:12 | `page-keyboard.spec.ts` | 37/44 PASS (Phase 398! 4 fail, 3 timeout) | PW Batch 130 |
+| 2026-11-23 04:12 | `page-network-request.spec.ts` | 7/27 PASS (18 fail, 1 skip, 1 timeout) | PW Batch 130 |
+| 2026-11-23 04:12 | `page-network-response.spec.ts` | 14/21 PASS (6 fail, 1 timeout) | PW Batch 130 |
+| 2026-11-23 04:40 | `selectors-css.spec.ts` | 25/25 PASS (Phase 399! 0 FAIL, 1 skip) | PW Batch 131 (`bin_dev` 全绿!) |
+| 2026-11-23 04:40 | `page-network-idle.spec.ts` | 3/10 PASS (1 fail, 6 timeout) | PW Batch 131 |
+| 2026-11-23 04:40 | `page-goto.spec.ts` | 41/61 PASS (`file URL`+subframes过! 10 fail, 10 timeout) | PW Batch 131 |
+| 2026-11-23 04:40 | `page-evaluate.spec.ts` | 62/95 PASS (4 fail, 29 timeout) | PW Batch 131 |
+| WPT-B123 | `/workers/ 2/2` + `/domparsing/` + `/encoding/ 1/2` + `/streams/ 1/2` | 35/663 PASS (`/workers/ 2/2` 6/40, `/domparsing/` 6/33, `/encoding/ 1/2` 22/548, `/streams/ 1/2` 1/42, 0 CRASH) |
+| WPT-B124 | `/streams/ 2/2` + `/webstorage/` + `/console/` + `/performance-timeline/` | 10/79 PASS (`/webstorage/` **3/3**, `/console/` **4/4**, `/streams/ 2/2` 1/42, `/performance-timeline/` 2/21, 0 CRASH) |
+| WPT-B125 | `/url/ 1/2..2/2` + `/WebCryptoAPI/ 1/2` | 11/84 PASS (`WebCryptoAPI 1/2` 9/66 **9 FAIL→PASS**, `/url/ 1/2` 发现 `Target.targetCreated` JSON 多余 `"}}` 缺陷) |
+| 2026-11-23 06:10 | `page-network-response.spec.ts` | 16/21 PASS (Phase 400! `allHeaders`+`set-cookie`过! 初轮 17/21) | PW Batch 132 |
+| 2026-11-23 06:10 | `page-wait-for-function.spec.ts` | 9/26 PASS (2 fail, 15 timeout) | PW Batch 132 |
+| 2026-11-23 06:10 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (2 fail, 2 timeout) | PW Batch 132 |
+| 2026-11-23 06:10 | `page-wait-for-navigation.spec.ts` | 7/12 PASS (0 fail, 5 timeout) | PW Batch 132 |
+| 2026-11-23 07:25 | `page-evaluate.spec.ts` | 37/95 PASS (0 FAIL, `reload` 触发 58 timeout) | PW Batch 133 |
+| 2026-11-23 07:25 | `page-check.spec.ts` | 16/16 PASS | PW Batch 133 (`bin_dev` 全绿!) |
+| 2026-11-23 07:25 | `page-emulate-media.spec.ts` | 12/12 PASS | PW Batch 133 (`bin_dev` 全绿!) |
+| 2026-11-23 07:25 | `page-set-content.spec.ts` | 14/16 PASS (0 FAIL, 2 timeout) | PW Batch 133 |
+| WPT-B126+127 | `/url/ 1/2` (Phase 403 无JSON崩溃!) + `/html/dom/documents/` + `/css/css-values/ 1/2..2/2` | 111/401 PASS (`/html/dom/documents/` **23/32**, `css-values` **84/350**, **4 FAIL→PASS**, 0 CRASH) |
