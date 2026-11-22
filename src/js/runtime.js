@@ -12465,6 +12465,10 @@
 
     Object.defineProperty(proto, "dataset", {
       get: function () {
+        const ns = this.namespaceURI;
+        if (ns !== undefined && ns !== "http://www.w3.org/1999/xhtml" && ns !== "http://www.w3.org/2000/svg" && ns !== "http://www.w3.org/1998/Math/MathML") {
+          return undefined;
+        }
         if (!this._datasetProxy) {
           this._datasetProxy = createDatasetProxy(this);
         }
@@ -45725,7 +45729,7 @@
       docProto.createElementNS = function (ns, tagName) {
         let el = origCreateElementNS.call(this, ns, tagName);
         if (el) {
-          const nsVal = ns !== undefined && ns !== null ? String(ns) : null;
+          const nsVal = (ns !== undefined && ns !== null && String(ns) !== "") ? String(ns) : null;
           el._namespaceURI = nsVal;
           try {
             Object.defineProperty(el, "namespaceURI", {

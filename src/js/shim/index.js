@@ -933,7 +933,7 @@ function installShim(global) {
     docProto.createElementNS = function (ns, tagName) {
       let el = origCreateElementNS.call(this, ns, tagName);
       if (el) {
-        const nsVal = ns !== undefined && ns !== null ? String(ns) : null;
+        const nsVal = (ns !== undefined && ns !== null && String(ns) !== "") ? String(ns) : null;
         el._namespaceURI = nsVal;
         try {
           Object.defineProperty(el, "namespaceURI", {

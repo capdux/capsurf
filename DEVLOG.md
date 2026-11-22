@@ -2272,3 +2272,4 @@
 - Phase 418 (`src/js/shim/window.js`, `src/js/shim/element/forms/form.js`): 补全 `location.valueOf` `enumerable: false`、`Document` 实例共享 `location` 访问器以及 `form.action` 相对 `<base href>` 的标准 URL 反射。
 - Phase 419 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/html-element.js`): 实现 `DOMStringMap` 原型及 `dataset` Proxy 的 `ownKeys`/`getOwnPropertyDescriptor`/`SyntaxError`/`InvalidCharacterError` 规范行为，并为 `HTMLTableCellElement.cellIndex` 增加 HTML 命名空间检查。
 - Phase 420 (`src/js/shim/index.js`, `src/js/shim/parser.js`, `src/js/shim/element/html-classes.js`): 为 `createHTMLDocument`/`ParsedDocument` 置空 `location`（返回 `null`），并收紧表格 DOM `isHtmlEl` 命名空间判断。
+- Phase 421 (`src/js/shim/index.js`, `src/js/shim/element/html-element.js`): 修正 `createElementNS("", ...)` 空命名空间为 `null`，并限制 `dataset` 仅对 HTML/SVG/MathML 元素返回 `DOMStringMap`。

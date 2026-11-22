@@ -91,6 +91,10 @@ function installHtmlElementExtensions(proto) {
 
   Object.defineProperty(proto, "dataset", {
     get: function () {
+      const ns = this.namespaceURI;
+      if (ns !== undefined && ns !== "http://www.w3.org/1999/xhtml" && ns !== "http://www.w3.org/2000/svg" && ns !== "http://www.w3.org/1998/Math/MathML") {
+        return undefined;
+      }
       if (!this._datasetProxy) {
         this._datasetProxy = createDatasetProxy(this);
       }

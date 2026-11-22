@@ -815,6 +815,9 @@
 | WPT-B145 | `/html/semantics/tabular-data/` + `/the-input-element/` + `/the-select-element/` (25/54) + `/the-textarea-element/` | 114/156 PASS (`tabular-data` **7/11**, `input` **84/103**, `select` 9/25, `textarea` **14/17**, 0 CRASH) |
 | WPT-B146 | `/fetch/api/request/` + `/fetch/api/response/` + `/html/dom/elements/` (189/195) + `/css/cssom/` | 163/364 PASS (`request` 2/25, `response` 2/28, `dom/elements` **102/189**, `cssom` **57/122** **1 FAIL→PASS**, 0 CRASH) |
 | WPT-B147 | `/html/browsers/history/` + `/the-form-element/` + `/the-button-element/` + `/the-label-element/` | 37/56 PASS (`history` **12/18 (17/18匹配)**, `form` 11/15, `button` **13/16**, `label` 1/7, 2 CRASH) |
+| WPT-B149 | `dataset` + `/tabular-data/` + `/the-form-element/` + `/dom/ranges/` (29/36) | 33/76 PASS (`dataset` **6/7**, `tabular-data` 7/11, `the-form-element` 11/15, `ranges` 9/29, 0 CRASH) |
+| WPT-B148 | `/css-conditional/` + `/cssom-view/` (89/106) + `/css-flexbox/` (78/261) + `/css/selectors/` | 131/369 PASS (`conditional` 39/135, `cssom-view` 40/89, `flexbox` 21/78, `selectors` 31/67 **4 FAIL→PASS**, 0 CRASH) |
+| WPT-B150 | `/html/browsers/history/` + `cellIndex` | 14/19 PASS (`history` **13/18 (18/18基线全匹配!)**, `cellIndex` **1/1**, 0 FAIL, 0 CRASH) |
 | 2026-11-23 09:56 | `page-evaluate.spec.ts` | 36/95 PASS (59 timeout at teardown) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-keyboard.spec.ts` | 39/44 PASS (40/44 on retry; 2 fail, 3 timeout) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo codepoint space) | PW Batch 135 |
