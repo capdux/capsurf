@@ -559,6 +559,64 @@ pub struct HttpLoader {
             return error.InvalidDataUrl;
         }
 
+        // 2.35. Check for file:// local URLs
+        if (url.len >= 7 && std.ascii.eqlIgnoreCase(url[0..7], "file://")) {
+            let path_part = url[7..];
+            if (path_part.len >= 10 && std.ascii.eqlIgnoreCase(path_part[0..10], "localhost/")) {
+                path_part = path_part[9..];
+            }
+            if (q_idx := std.mem.indexOfScalar(u8, path_part, '?')) {
+                path_part = path_part[0..q_idx];
+            }
+            if (h_idx := std.mem.indexOfScalar(u8, path_part, '#')) {
+                path_part = path_part[0..h_idx];
+            }
+            let path_buf: [2048]u8 = [0; 2048];
+            let p_len: usize = 0;
+            let pi: usize = 0;
+            while (pi < path_part.len && p_len + 1 < path_buf.len) {
+                if (path_part[pi] == '%' && pi + 2 < path_part.len) {
+                    if (hex_v := std.fmt.parseInt(u8, path_part[pi + 1 .. pi + 3], 16) catch null) {
+                        path_buf[p_len] = hex_v;
+                        p_len += 1;
+                        pi += 3;
+                        continue;
+                    }
+                }
+                path_buf[p_len] = path_part[pi];
+                p_len += 1;
+                pi += 1;
+            }
+            if (p_len == 0) return error.InvalidUrl;
+            path_buf[p_len] = 0;
+            const fd = std.c.open(unsafe { @ptrCast(&path_buf) }, .{});
+            if (fd < 0) return error.ConnectFailed;
+            defer * = std.c.close(fd);
+            let total: usize = 0;
+            while (total < out_buf.len) {
+                const n = std.c.read(fd, unsafe { @ptrCast(out_buf[total..].ptr) }, out_buf.len - total);
+                if (n <= 0) break;
+                total += @as(usize, @intCast(n));
+            }
+            const decoded_path = path_buf[0..p_len];
+            let mime: []const u8 = "text/html";
+            if (std.mem.endsWith(u8, decoded_path, ".css")) mime = "text/css"
+            else if (std.mem.endsWith(u8, decoded_path, ".js") || std.mem.endsWith(u8, decoded_path, ".mjs")) mime = "application/javascript"
+            else if (std.mem.endsWith(u8, decoded_path, ".svg")) mime = "image/svg+xml"
+            else if (std.mem.endsWith(u8, decoded_path, ".png")) mime = "image/png"
+            else if (std.mem.endsWith(u8, decoded_path, ".json")) mime = "application/json"
+            else if (std.mem.endsWith(u8, decoded_path, ".txt")) mime = "text/plain";
+            const body = out_buf[0..total];
+            return HttpLoaderResult{
+                status_code: 200,
+                final_url: url,
+                html: body,
+                content_type: mime,
+                raw_body: body,
+                raw_body_base64: false,
+            };
+        }
+
         // 2.4. Follow mock redirect endpoints per-hop (Fetch §http-redirect-fetch)
         if (HttpLoader.isMockRedirectUrl(url)) {
             if (std.mem.indexOf(u8, url, "/loud-redirect") != null) {

@@ -5645,3 +5645,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE354_RESULT {"frameId":"capsurf-child-1","ownerNid":5,"match":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 355: `HttpLoader` 原生 `file://` URL 支持完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp): 新增 `file://` 本地文件读取与 MIME 类型识别，支持主文档与子框架相对路径加载。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE355_RESULT {"url1":"file:///.../empty.html","frames1":1,"url2":"file:///.../two-frames.html","frames2":3}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.02s)**。

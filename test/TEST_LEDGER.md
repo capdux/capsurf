@@ -639,3 +639,11 @@
 | 2026-11-22 23:50 | `page-select-option.spec.ts` | 0/33 PASS (`[2/33]`90s截断) | PW Batch 104 |
 | 2026-11-22 23:50 | `frame-frame-element.spec.ts` | 1/6 PASS (55s) | PW Batch 104 |
 | 2026-11-22 23:50 | `frame-hierarchy.spec.ts` | 4/12 PASS (retry 90s截断) | PW Batch 104 |
+| 2026-11-22 23:51 | `/css/css-backgrounds/` (`4/5..5/5`) | 5/23, 7/23 PASS | WPT Batch 96 (`19470`, `bin_dev`) |
+| 2026-11-22 23:51 | `/css/css-sizing/` (`1/5..3/5`) | 0/7, 1/7, 0/6 PASS (180s截断) | WPT Batch 96 (`19470`, `bin_dev`) |
+| 2026-11-22 23:55 | `page-set-content.spec.ts` | 15/16 PASS (`[16/16]`90s收尾截断, 仅`/img.png`) | PW Batch 105 |
+| 2026-11-22 23:55 | `page-mouse.spec.ts` | 14/14 PASS (`[1..14]`零失败! `[15/15]`90s截断) | PW Batch 105 |
+| 2026-11-22 23:55 | `selectors-misc.spec.ts` | 18/19 PASS (43.7s, `internal:has=`PASS) | PW Batch 105 |
+| 2026-11-22 23:55 | `page-dialog.spec.ts` | 7/9 PASS (18.8s, 3 exp FAIL→PASS) | PW Batch 105 |
+| 2026-11-22 23:59 | `/css/css-sizing/` (`4/5..5/5`) | 0/6, 0/6 PASS (180s截断) | WPT Batch 97 (`19470`, `bin_dev`) |
+| 2026-11-22 23:59 | `/css/css-text/` (`1/5..3/5`) | 4/25, 4/25, 7/25 PASS (4 `FAIL→PASS`) | WPT Batch 97 (`19470`, `bin_dev`) |

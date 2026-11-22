@@ -2940,3 +2940,7 @@
 ## [2026-11-22] Phase 354: 修复 `DOM.describeNode` 返回子框架 `frameId`（`frame-frame-element.spec.ts`）
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: `serializeCdpNodeWithOptions()` 同步为 `<frame>` 与 `<iframe>` 输出各自子 `frameId`；`DOM.describeNode` 改用 `collectDocIframeEntries()` + `serializeCdpNodeWithOptions()` 序列化，消除此前误将主帧 `session.frame_id` 填给子框架元素的故障。
+
+## [2026-11-22] Phase 355: 实装 `HttpLoader` 原生 `file://` 本地文件读取支持（`page-goto.spec.ts` `[2/61]` & `[3/61]`）
+- **Fixed (`src/`)**:
+  - `src/net/http_loader.cp`: `fetchDocumentWithContext` 新增 `file://`（含 `file://localhost/...`、百分号解码、去掉 `?query`/`#fragment`、POSIX `open`/`read`/`close` 与 MIME 推断），同时支持主文档与本地子 `<iframe>` 加载。

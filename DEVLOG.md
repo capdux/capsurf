@@ -2182,3 +2182,6 @@
 
 ### Phase 354: `frame-frame-element.spec.ts` `DOM.getFrameOwner` 误报 `Frame has been detached` 排障笔记
 - **`DOM.describeNode` 误填主帧 `frameId` 根因**：`elementHandle.contentFrame()` 通过 `DOM.describeNode` 读取 `node.frameId`，但 `DOM.describeNode` 调用无 `iframe_frames` 的 `serializeCdpNode()`，随后第 1310 行见无 `"frameId"` 字段便强行填入主帧 `session.frame_id`（`frame-001`），导致 `frame.frameElement()` 用主帧 ID 调 `DOM.getFrameOwner` 被拒绝。补齐 `serializeCdpNodeWithOptions`（含 `<frame>` 标签）后，实测 `PHASE354_RESULT {"frameId":"capsurf-child-1","ownerNid":5,"match":true}`。
+
+### Phase 355: `page-goto.spec.ts` `file://` URL 导航报 `Cannot navigate to invalid URL` 排障笔记
+- **`HttpLoader` 缺少 `file://` 分支根因**：`fetchDocumentWithContext()` 此前仅识别 `about:blank`、`data:`、`http://`、`https://`，其余均返回 `error.InvalidUrl`。新增 `file://` 路径剥离、URL 解码与 POSIX 文件读取分支后，`file:///.../empty.html` (`frames=1`) 与 `file:///.../two-frames.html` (`frames=3`) 均一次通过（`PHASE355_RESULT`）。
