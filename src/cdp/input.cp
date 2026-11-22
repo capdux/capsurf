@@ -205,13 +205,14 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
     }
 }
 
-fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32): bool {
+fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32, detail: i64): bool {
     if (!session.has_document) return true;
+    const eff_detail = if (detail > 0) detail else 1;
     let js_buf: [2048]u8 = [0; 2048];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
-        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0, detail: 1 }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = document.activeElement; cur.focus(); if (document.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, 1); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
-        .{ target_node, x, y, ev_name, x, y, ev_name, ev_name, x, y },
+        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0, detail: {d} }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = document.activeElement; cur.focus(); if (document.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, {d}); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
+        .{ target_node, x, y, ev_name, x, y, eff_detail, ev_name, ev_name, x, y, eff_detail },
     ) catch return true;
     const val = session.ctx.eval(js_expr);
     let not_prevented = true;
@@ -390,7 +391,7 @@ pub struct InputHandler {
                     session.ensureLayout();
                 }
                 const target_node = hitTest(session, x, y);
-                const not_prevented = dispatchMouseDomEvent(session, target_node, "mousedown", x, y);
+                const not_prevented = dispatchMouseDomEvent(session, target_node, "mousedown", x, y, click_count);
                 if (target_node != NULL_NODE) {
                     session.focused_node = target_node;
                     if (not_prevented && @as(usize, target_node) < session.doc.nodes.items.len) {
@@ -437,8 +438,11 @@ pub struct InputHandler {
                     session.ctx.freeValue(clr);
                 }
                 const target_node = hitTest(session, x, y);
-                * = dispatchMouseDomEvent(session, target_node, "mouseup", x, y);
-                * = dispatchMouseDomEvent(session, target_node, "click", x, y);
+                * = dispatchMouseDomEvent(session, target_node, "mouseup", x, y, click_count);
+                * = dispatchMouseDomEvent(session, target_node, "click", x, y, click_count);
+                if (click_count == 2) {
+                    * = dispatchMouseDomEvent(session, target_node, "dblclick", x, y, click_count);
+                }
                 if (session.range_drag_node != NULL_NODE) {
                     if (session.range_drag_changed) {
                         dispatchRangeChange(session, session.range_drag_node);

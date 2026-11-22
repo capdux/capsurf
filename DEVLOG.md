@@ -1929,3 +1929,6 @@
 
 ### Phase 273: `Range.toString` 与 `Selection.toString` 排障笔记
 - **`elementHandle.selectText()` 返回空串根因**：`range.js` 中 `Range.prototype.toString()` 原先仅处理 `startContainer === endContainer` 且为 Text/Comment 节点的情况，导致 `selectAllChildren(div)` 返回 `""`；同时 `Selection.prototype.toString()` 未兼容 `<input>`/`<textarea>` 的 `_selectionStart.._selectionEnd` 内部选区。补齐后 `textarea`、`input`、`div` 三类控件实测 `window.getSelection().toString()` 全部一次通过（`some value` / `some value` / `Plain div`）。
+
+### Phase 274: `dblclick` 与 `MouseEvent.detail` 透传排障笔记
+- **`dblclick()` 测试失败根因**：`Input.dispatchMouseEvent` 在 `MouseReleased` 分支仅派发 `mouseup` 与 `click`，未在 `click_count == 2` 时派发 `dblclick`，且 `detail` 固定为 `1`。透传 `click_count` 并补充 `dblclick` 后，实测 `page.locator("button").dblclick()` 准确触发 `['click:1', 'click:2', 'dblclick:2']`。

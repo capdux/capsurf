@@ -2576,3 +2576,7 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/range.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 扩展 `Range.prototype.toString` 支持元素容器节点与跨节点文本遍历（不再仅限单文本节点）；扩展 `Selection.prototype.toString` 在无 DOM Range 时回退读取当前聚焦 `<input>`/`<textarea>` 的 `_selectionStart.._selectionEnd` 文本。
   - `src/js/shim/element/forms/selection.js`: `select()` 自动聚焦控件以确保 `document.activeElement` 与选区同步。
+
+## [2026-11-22] Phase 274: `dblclick` 鼠标事件派发与 `MouseEvent.detail` 透传 `clickCount`
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 增加 `detail` 参数（透传 `Input.dispatchMouseEvent` 的 `click_count`），并在 `MouseReleased` 且 `click_count == 2` 时在 `click` 之后派发 `dblclick` 事件（`detail: 2`）。

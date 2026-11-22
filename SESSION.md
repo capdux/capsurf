@@ -5058,3 +5058,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`textarea.selectText()`、`input.selectText()` 与 `div.selectText()` 均返回准确选区文本（`'some value'` / `'some value'` / `'Plain div'`）。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.28s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
+
+### [2026-11-22 16:34] Phase 274: `dblclick` 鼠标事件派发与 `MouseEvent.detail` 透传 `clickCount`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 为 `dispatchMouseDomEvent()` 增加 `detail` 参数（透传 `click_count`），并在 `MouseReleased` 且 `click_count == 2` 时派发 `dblclick` 事件（`detail: 2`）。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`page.locator("button").dblclick()` 完整触发 `['click:1', 'click:2', 'dblclick:2']`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.19s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.16s)**。
