@@ -2890,3 +2890,7 @@
 ## [2026-11-22] Phase 344: 保留 `DOM.getContentQuads` 亚像素浮点精度
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: `DOM.getContentQuads` 取消 `@round(...)` 整数截断，直接格式化输出 `f32` 浮点四元组坐标，使 `elementHandle.boundingBox()` 与 `getBoundingClientRect()` 在亚像素尺度 (`32.44px` -> `3244`) 保持一致。
+
+## [2026-11-22] Phase 345: 区分 `visibility: hidden` 与 `display: none`，修复 `getBoxModel()` / `getContentQuads()` / `scrollIntoViewIfNeeded()`
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp`: `getBoxModel()` 将 `!rect.visible` 放宽为 `_.doc.isNodeDisplayNone(node_id)`，使 `visibility: hidden` 元素保留合法盒模型与 `quads`（仅 `display: none` 返回无盒模型错误），解锁 `elementHandle.scrollIntoViewIfNeeded()`。

@@ -5575,3 +5575,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE344_RESULT: {"quadW":3244,"rectW":3244,"match":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 345: `visibility: hidden` 盒模型与 `scrollIntoViewIfNeeded` 修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): `getBoxModel()` 改用 `_.doc.isNodeDisplayNone(node_id)` 判定无盒模型。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE345_RESULT: {"vhModel":true,"vhW":1264,"vhQuads":1,"dnErr":"Could not compute box model"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

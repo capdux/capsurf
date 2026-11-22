@@ -3982,7 +3982,7 @@ pub struct CdpPageSession {
 
         if (@as(usize, node_id) < _.doc.nodes.items.len) {
             const node = &_.doc.nodes.items[@as(usize, node_id)];
-            if (node.node_type == .Element && !rect.visible) {
+            if (node.node_type == .Element && _.doc.isNodeDisplayNone(node_id)) {
                 return CdpBoxModel {};
             }
             if (node.node_type == .Element && @as(usize, node_id) < _.layout.boxes.items.len) {
