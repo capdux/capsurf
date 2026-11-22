@@ -23947,13 +23947,21 @@
     const nt = node.nodeType;
     if (nt === 9) {
       const cs = node.childNodes || [];
+      const hasOverrideDt = Object.prototype.hasOwnProperty.call(node, "_reopenDoctype");
       let out = "";
       let sawDoctype = false;
       for (let i = 0; i < cs.length; i++) {
-        if (cs[i] && cs[i].nodeType === 10) sawDoctype = true;
+        if (cs[i] && cs[i].nodeType === 10) {
+          if (hasOverrideDt) continue;
+          sawDoctype = true;
+        }
         out += serializeXmlNode(cs[i]);
       }
-      if (!sawDoctype && node.doctype) {
+      if (hasOverrideDt) {
+        if (node._reopenDoctype) {
+          out = serializeXmlDoctype(node._reopenDoctype) + out;
+        }
+      } else if (!sawDoctype && node.doctype) {
         out = serializeXmlDoctype(node.doctype) + out;
       }
       if (!out && node.documentElement) {
@@ -23967,7 +23975,13 @@
       for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i]);
       return out;
     }
-    if (nt === 10) return serializeXmlDoctype(node);
+    if (nt === 10) {
+      const ownerDoc = node.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (ownerDoc && Object.prototype.hasOwnProperty.call(ownerDoc, "_reopenDoctype")) {
+        return ownerDoc._reopenDoctype ? serializeXmlDoctype(ownerDoc._reopenDoctype) : "";
+      }
+      return serializeXmlDoctype(node);
+    }
     if (nt === 3) {
       return String(node.data !== undefined ? node.data : (node.textContent || ""))
         .replace(/&/g, "&amp;")

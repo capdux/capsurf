@@ -1900,3 +1900,6 @@
 ### Phase 264: `KeyboardEvent.location` 与 `Tab` 焦点遍历排障笔记
 - **`KeyboardEvent.location`**：此前 `event.js` 中 `KeyboardEvent` 构造器在未显式传 `opts.location` 时固定写死 `0`，导致 `page-keyboard.spec.ts` `[8/44]..[16/44]` 连续 9 项对 `ShiftLeft`/`ShiftRight` 校验 `location` 失败（报 `Unknown: 0`）。按 `codeStr` 后缀推导 `1`/`2`/`3`/`0` 后验证 `ShiftLeft:1, ShiftRight:2, KeyA:0` 通过。
 - **`Tab` 焦点遍历**：`window.js` `keydown` 分支中已存在 `navigateTabFocus(isShift)`，去重后 `Tab` 顺序遍历 `#i1` -> `#i2` 恢复正常。
+
+### Phase 265: `document.open/write/close` 与 `DocumentType` 序列化排障笔记
+- **`page.setContent()` 残留 `Blank Page` 与 `<!DOCTYPE html>` 根因**：`about:blank` 初始文档含 `<!DOCTYPE html>` 与 `<title>Blank Page</title>`，此前 `session_hooks.cp` 中 `document.close` 仅覆写 `document.body.innerHTML`，既未清理 `head` 也未更新 `doctype`；且 Playwright `page.content()` 遍历 `document.childNodes` 逐节点调用 `XMLSerializer.serializeToString(child)`（直接命中 `nodeType === 10` 的 `DocumentType`）。在 `document.close` 中同步清理 `head` 并设置 `_reopenDoctype`，同时在 `XMLSerializer` 的 `nt === 9` 与 `nt === 10` 分支读取 `ownerDoc._reopenDoctype` 后，无 doctype、HTML5 doctype 与 HTML4 doctype 全部一次通过。

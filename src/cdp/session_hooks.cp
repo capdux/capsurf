@@ -1633,8 +1633,17 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      if (reopenActive) {\n" ++
     "        reopenActive = false;\n" ++
     "        try {\n" ++
+    "          var dtMatch = reopenBuf.match(/^\\s*<!DOCTYPE\\s+([^>\\s]+)(?:\\s+PUBLIC\\s+\"([^\"]*)\"(?:\\s+\"([^\"]*)\")?|\\s+SYSTEM\\s+\"([^\"]*)\")?[^>]*>/i);\n" ++
+    "          if (dtMatch) {\n" ++
+    "            g.document._reopenDoctype = { nodeType: 10, name: dtMatch[1], publicId: dtMatch[2] || '', systemId: dtMatch[3] || dtMatch[4] || '' };\n" ++
+    "          } else {\n" ++
+    "            g.document._reopenDoctype = null;\n" ++
+    "          }\n" ++
+    "          var hm = reopenBuf.match(/<head[^>]*>([\\s\\S]*?)<\\/head>/i);\n" ++
+    "          if (g.document.head) g.document.head.innerHTML = hm ? hm[1] : '';\n" ++
     "          var m = reopenBuf.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);\n" ++
-    "          if (g.document.body) g.document.body.innerHTML = m ? m[1] : reopenBuf;\n" ++
+    "          var bodyHtml = m ? m[1] : reopenBuf.replace(/^\\s*<!DOCTYPE[^>]*>/i, '').replace(/<head[^>]*>[\\s\\S]*?<\\/head>/gi, '').replace(/<\\/?html[^>]*>/gi, '');\n" ++
+    "          if (g.document.body) g.document.body.innerHTML = bodyHtml;\n" ++
     "          if (typeof g.__capsurf_syncNamedGlobals === 'function') g.__capsurf_syncNamedGlobals();\n" ++
     "        } catch (e) {}\n" ++
     "        reopenBuf = '';\n" ++

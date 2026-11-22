@@ -4990,3 +4990,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`Tab` 遍历 `#i1` -> `#i2`（`First` / `Last`）通过，`KeyboardEvent.location`（`ShiftLeft:1, ShiftRight:2, KeyA:0`）通过。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **120.47s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.07s)**。
+
+### [2026-11-22 15:42] Phase 265: `document.open/write/close` 重置 `head`/DOCTYPE 与 `XMLSerializer` 联动修复
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): `document.close` 解析 `reopenBuf` 中的 `<!DOCTYPE ...>`、`PUBLIC`/`SYSTEM` 标识及 `<head>`/`<body>`，清空残留 `<title>Blank Page</title>` 并记录 `_reopenDoctype`。
+  - [src/js/shim/parser.js](file:///data/dev/capsurf/src/js/shim/parser.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `XMLSerializer` 序列化 `Document` 与 `DocumentType` 时读取 `ownerDoc._reopenDoctype`。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 三种场景下 100% 与 Chromium 一致。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.33s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
