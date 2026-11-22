@@ -2025,3 +2025,6 @@
 
 ### Phase 304: `/dom/traversal/` 与 `/dom/ranges/` 公用 `common.js` 崩溃（`TreeWalker.html` / `NodeIterator.html`）排障笔记
 - **连续三层报错根因**：`/dom/common.js` `setupRangeTests()` 依次调用 `new Document().createCDATASection("1234")` 与 `xmlDoc.createProcessingInstruction(...)`；引擎此前缺失 `CDATASection`、`ProcessingInstruction` 及两者的 `Document` 工厂方法，且 `Document.prototype.contentType` 硬编码返回 `"text/html"` 导致 `new Document()` 误触发 HTML `NotSupportedError`。三处同步补齐后，`/dom/traversal/TreeWalker.html` 与 `NodeIterator.html` 均已消除 `harness ERROR` 并完整跑通所有子测试（从 `ERROR` 推进至 `FAIL`：`815ms` / `974ms`）。
+
+### Phase 305: `paras[5].appendChild(cd)` 后 `paras[5].firstChild` 仍为 `null` 排障笔记
+- **`NodeIterator.html` 报 `Root node required` 根因**：`Element.prototype` 直接继承原生 C `Node.prototype`，其原生 `firstChild` / `lastChild` getter 无法感知仅存储在 JS `this._children` 中的节点（如 `CDATASection`）。为 `Element.prototype` 补充 `_children` 回退后，实测 `firstChild=true, lastChild=true, cdType=4, iterNext=true`。

@@ -10699,6 +10699,36 @@
     global.__capsurf_getNodeDirectionality = getNodeDirectionality;
     global.__capsurf_getComputedDirection = getComputedDirection;
 
+    // Fallback firstChild / lastChild to _children when native DOM lacks JS-only children (e.g. CDATASection/PI)
+    const origElFirstChildDesc = Object.getOwnPropertyDescriptor(proto, "firstChild") ||
+      (global.Node && global.Node.prototype ? Object.getOwnPropertyDescriptor(global.Node.prototype, "firstChild") : null);
+    const origElLastChildDesc = Object.getOwnPropertyDescriptor(proto, "lastChild") ||
+      (global.Node && global.Node.prototype ? Object.getOwnPropertyDescriptor(global.Node.prototype, "lastChild") : null);
+    if (origElFirstChildDesc && typeof origElFirstChildDesc.get === "function") {
+      const origGet = origElFirstChildDesc.get;
+      Object.defineProperty(proto, "firstChild", {
+        get: function () {
+          const res = origGet.call(this);
+          if (res) return res;
+          if (this._children && this._children.length > 0) return this._children[0];
+          return null;
+        },
+        configurable: true,
+      });
+    }
+    if (origElLastChildDesc && typeof origElLastChildDesc.get === "function") {
+      const origGet = origElLastChildDesc.get;
+      Object.defineProperty(proto, "lastChild", {
+        get: function () {
+          const res = origGet.call(this);
+          if (res && (!this._children || this._children.length === 0)) return res;
+          if (this._children && this._children.length > 0) return this._children[this._children.length - 1];
+          return res;
+        },
+        configurable: true,
+      });
+    }
+
     // matches & closest
     const origProtoMatches = typeof proto.matches === "function" ? proto.matches : null;
     proto.matches = function (selector) {

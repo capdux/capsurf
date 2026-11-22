@@ -5290,3 +5290,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/traversal/TreeWalker.html` 与 `NodeIterator.html` 均消除 `common.js` `harness ERROR` 完整跑通全部子测试（从 `ERROR` 推进至 `FAIL`，`815ms` / `974ms`）。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（168 模块 **111.30s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。
+
+### [2026-11-22 20:00] Phase 305: 为 `Element.prototype.firstChild`/`lastChild` 补充 JS `_children` 回退
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `Element.prototype.firstChild` 与 `lastChild` getter，当原生 DOM 返回 `null` 而 `this._children` 非空时回退至 `_children[0]` / `_children[length - 1]`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`p.appendChild(xmlDoc.createCDATASection("1234"))` 后 `firstChild=true, lastChild=true, cdType=4, iterNext=true`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（169 模块 **120.31s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.12s)**。

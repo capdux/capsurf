@@ -446,3 +446,7 @@
 | 2026-11-22 19:53 | `page-localstorage.spec.ts` | 9/9 PASS (10.4s, exit 0) | PW Batch 60 (全绿) |
 | 2026-11-22 19:53 | `selectors-register.spec.ts` | 6/6 PASS (5.9s, exit 0) | PW Batch 60 (全绿) |
 | 2026-11-22 19:53 | `elementhandle-select-text.spec.ts` | 5/5 PASS (11.3s, exit 0) | PW Batch 60 (全绿) |
+| 2026-11-22 19:55 | `page-click-during-navigation.spec.ts` | 1/1 PASS (3.6s, exit 0) | PW Batch 61 (全绿) |
+| 2026-11-22 19:55 | `page-set-extra-http-headers.spec.ts` | 4/5 PASS (9.5s) | PW Batch 61 |
+| 2026-11-22 19:55 | `page-dialog.spec.ts` | 7/9 PASS (18.5s) | PW Batch 61 |
+| 2026-11-22 19:55 | `page-dispatchevent.spec.ts` | 15/16 PASS (26.5s) | PW Batch 61 |
