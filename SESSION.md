@@ -5153,3 +5153,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`document.querySelectorAll("q\\:template").length === 2`、`#a\\:b` === `1`、`.c\\:d` === `1`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **132.20s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。
+
+### [2026-11-22 17:59] Phase 286: `Network.setExtraHTTPHeaders` JSON 解析与 HTTP/1.1 请求头序列化
+- **引擎修复 (`src/`)**:
+  - [src/cdp/network.cp](file:///data/dev/capsurf/src/cdp/network.cp), [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp): 正确提取 `Network.setExtraHTTPHeaders` 的 `"headers"` JSON 对象并序列化为标准 `Key: Value\r\n` HTTP/1.1 请求头。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399 + `Bun.serve` 19398）：设置 `{"x-extra": "hello-world"}` 后访问页面返回 `EXTRA_HEADER_H1: hello-world`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.90s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.11s)**。

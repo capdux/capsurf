@@ -2632,3 +2632,8 @@
 ## [2026-11-22] Phase 285: CSS 选择器反斜杠转义解析与匹配（`q\:template`、`#a\:b`、`.c\:d`）
 - **Fixed (`src/`)**:
   - `src/css/matcher.cp`: 新增零分配辅助函数 `scanCssIdent()` 与 `unescapeCssIdent()`，使 `SelectorParser` 与 `Matcher.matchesComponent()` 支持标签名、ID 与 Class 选择器中的 CSS 反斜杠转义字符（含哈希计算与大小写无关匹配）。
+
+## [2026-11-22] Phase 286: `Network.setExtraHTTPHeaders` JSON 解析与 HTTP/1.1 请求头规范序列化
+- **Fixed (`src/`)**:
+  - `src/cdp/network.cp`: 在 `Network.setExtraHTTPHeaders` 中正确提取 `"headers"` JSON 对象 `{...}`（替代原先 `extractJsonString` 返回空导致整段 `params_raw` 透传的问题）。
+  - `src/net/http_loader.cp`: 在 `HttpLoader.fetchDocument()` 中解析 `session.extra_headers` JSON 键值对并格式化为标准 `Key: Value\r\n` HTTP/1.1 请求头，彻底消除 `Parse Error: Invalid header token`。

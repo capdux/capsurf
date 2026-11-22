@@ -1968,3 +1968,6 @@
 
 ### Phase 285: CSS 选择器反斜杠转义排障笔记
 - **`page-strict` `should escape tag names` 失败根因**：`SelectorParser` 仅用 `isIdentChar` 扫描标签/ID/Class，遇到 `q\:template` 在 `\` 处提前截断导致 `document.querySelectorAll("q\\:template")` 返回 `0`。引入 `scanCssIdent()` 与 `unescapeCssIdent()` 后，实测 `tag: 2, id: 1, cls: 1` 全部准确命中。
+
+### Phase 286: `Network.setExtraHTTPHeaders` 畸形请求头排障笔记
+- **`Parse Error: Invalid header token` 根因**：`network.cp` 对对象字段 `"headers"` 误用 `extractJsonString` 返回 `null` 后直接把 `req.params_raw` 存为 `extra_headers`，随后 `http_loader.cp` 直接将 JSON 文本原样拼入 HTTP/1.1 请求头行。修复 JSON 对象提取与 `Key: Value\r\n` 序列化后，真实本地 HTTP 服务实测准确收到 `x-extra: hello-world`。

@@ -160,6 +160,16 @@
 | 2026-11-22 17:51 | `/dom/nodes/` | `4/10` | 25 | PASS 9 / FAIL 11 / ERROR 1 / TIMEOUT 4 (24s) | Batch 61 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:52 | `/dom/nodes/` | `6/10` | 25 | PASS 10 / FAIL 11 / ERROR 4 / TIMEOUT 0 (30s) | Batch 61 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:53 | `/dom/nodes/` | `7/10` | 25 | PASS 10 / FAIL 13 / ERROR 1 / TIMEOUT 1 (27s) | Batch 61 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:55 | `/dom/nodes/` | `8/10` | 25 | PASS 9 / FAIL 12 / TIMEOUT 4 (90s截断) | Batch 62 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:55 | `/dom/nodes/` | `9/10` | 25 | PASS 9 / FAIL 14 / TIMEOUT 2 (9s) | Batch 62 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:57 | `/dom/nodes/` | `10/10` | 25 | PASS 8 / FAIL 14 / TIMEOUT 3 (90s截断) | Batch 62 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:58 | `/html/semantics/forms/` | `1/10` | 29 | PASS 22 / FAIL 6 / ERROR 1 / TIMEOUT 0 (18s) | Batch 62 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:58 | `/html/semantics/forms/` | `2/10` | 29 | PASS 21 / FAIL 8 / TIMEOUT 0 (12s) | Batch 62 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:59 | `/html/semantics/forms/` | `3/10` | 29 | PASS 19 / FAIL 9 / ERROR 1 / TIMEOUT 0 | Batch 63 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:00 | `/html/semantics/forms/` | `6/10` | 29 | PASS 21 / FAIL 6 / TIMEOUT 2 | Batch 63 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:01 | `/html/semantics/forms/` | `7/10` | 29 | PASS 20 / FAIL 7 / TIMEOUT 2 | Batch 63 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:01 | `/html/semantics/forms/` | `8/10` | 29 | PASS 20 / FAIL 7 / ERROR 1 / TIMEOUT 1 | Batch 63 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:02 | `/html/semantics/forms/` | `9/10` | 29 | PASS 23 / FAIL 6 / TIMEOUT 0 | Batch 63 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -292,3 +302,7 @@
 | 2026-11-22 17:51 | `page-wait-for-request.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch request未触发) | PW Batch 35 |
 | 2026-11-22 17:52 | `page-wait-for-response.spec.ts` | 3/6 PASS (`[6/8]` 90s截断, fetch response未触发) | PW Batch 35 |
 | 2026-11-22 17:53 | `page-set-extra-http-headers.spec.ts` | 1/5 PASS (header token/error 4 FAIL) | PW Batch 35 |
+| 2026-11-22 17:55 | `page-strict.spec.ts` | 10/10 PASS (Phase 285 复测全绿, 12.1s, exit 0) | PW Batch 36 (全绿) |
+| 2026-11-22 17:56 | `queryselector.spec.ts` | 19/22 PASS (3 FAIL, 22.8s) | PW Batch 36 |
+| 2026-11-22 17:57 | `retarget.spec.ts` | 3/3 PASS (5.3s, exit 0) | PW Batch 36 (全绿) |
+| 2026-11-22 17:58 | `selectors-css.spec.ts` | 1/1 PASS (3.6s, exit 0) | PW Batch 36 (全绿) |

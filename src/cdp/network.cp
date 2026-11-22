@@ -272,11 +272,41 @@ pub struct NetworkHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Network.setExtraHTTPHeaders")) {
-            // Save extra headers JSON for subsequent fetch and navigation pipelines
-            const headers_str = extractJsonString(req.params_raw, "headers") ?? "";
-            let raw_to_save: []const u8 = req.params_raw;
-            if (headers_str.len > 0) {
-                raw_to_save = headers_str;
+            // Save extra headers JSON object `{...}` for subsequent fetch and navigation pipelines
+            let raw_to_save: []const u8 = "{}";
+            if (h_key_pos := std.mem.indexOf(u8, req.params_raw, "\"headers\"")) {
+                let p = h_key_pos + 9;
+                while (p < req.params_raw.len && (req.params_raw[p] == ' ' || req.params_raw[p] == ':' || req.params_raw[p] == '\t')) : (p += 1) {}
+                if (p < req.params_raw.len && req.params_raw[p] == '{') {
+                    const obj_start = p;
+                    let depth: usize = 0;
+                    let in_str = false;
+                    let esc = false;
+                    while (p < req.params_raw.len) : (p += 1) {
+                        const ch = req.params_raw[p];
+                        if (in_str) {
+                            if (esc) { esc = false; }
+                            else if (ch == '\\') { esc = true; }
+                            else if (ch == '"') { in_str = false; }
+                        } else {
+                            if (ch == '"') { in_str = true; }
+                            else if (ch == '{') { depth += 1; }
+                            else if (ch == '}') {
+                                if (depth > 0) depth -= 1;
+                                if (depth == 0) {
+                                    p += 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (depth == 0 && p > obj_start) {
+                        raw_to_save = req.params_raw[obj_start..p];
+                    }
+                }
+            } else {
+                const headers_str = extractJsonString(req.params_raw, "headers") ?? "";
+                if (headers_str.len > 0) raw_to_save = headers_str;
             }
             session.extra_headers = sanitizeAcceptEncoding(session.allocator, raw_to_save);
             markFreshExtraHeaders();

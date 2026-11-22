@@ -650,8 +650,36 @@ pub struct HttpLoader {
 
         // Append Extra Headers if configured
         if (session.extra_headers.len > 0 && !std.mem.eql(u8, session.extra_headers, "{}")) {
-            // If extra headers are plain header lines, append them
-            if (std.mem.indexOf(u8, session.extra_headers, ":") != null) {
+            const trimmed_eh = std.mem.trim(u8, session.extra_headers, " \t\r\n");
+            if (trimmed_eh.len >= 2 && trimmed_eh[0] == '{') {
+                // Parse JSON object {"k":"v",...} and format as `k: v\r\n` HTTP headers
+                let p: usize = 1;
+                while (p < trimmed_eh.len) {
+                    while (p < trimmed_eh.len && (trimmed_eh[p] == ' ' || trimmed_eh[p] == ',' || trimmed_eh[p] == '\t' || trimmed_eh[p] == '\r' || trimmed_eh[p] == '\n')) : (p += 1) {}
+                    if (p >= trimmed_eh.len || trimmed_eh[p] == '}') break;
+                    if (trimmed_eh[p] != '"') break;
+                    p += 1;
+                    const k_start = p;
+                    while (p < trimmed_eh.len && trimmed_eh[p] != '"') : (p += 1) {
+                        if (trimmed_eh[p] == '\\' && p + 1 < trimmed_eh.len) p += 1;
+                    }
+                    const key = trimmed_eh[k_start..p];
+                    if (p < trimmed_eh.len && trimmed_eh[p] == '"') p += 1;
+                    while (p < trimmed_eh.len && (trimmed_eh[p] == ' ' || trimmed_eh[p] == ':' || trimmed_eh[p] == '\t')) : (p += 1) {}
+                    if (p >= trimmed_eh.len || trimmed_eh[p] != '"') break;
+                    p += 1;
+                    const v_start = p;
+                    while (p < trimmed_eh.len && trimmed_eh[p] != '"') : (p += 1) {
+                        if (trimmed_eh[p] == '\\' && p + 1 < trimmed_eh.len) p += 1;
+                    }
+                    const val = trimmed_eh[v_start..p];
+                    if (p < trimmed_eh.len && trimmed_eh[p] == '"') p += 1;
+                    if (key.len > 0 && req_pos + key.len + val.len + 4 < req_buf.len) {
+                        const h_line = std.fmt.bufPrint(req_buf[req_pos..], "{s}: {s}\r\n", .{ key, val }) catch break;
+                        req_pos += h_line.len;
+                    }
+                }
+            } else if (std.mem.indexOf(u8, session.extra_headers, ":") != null) {
                 const add_len = @min(session.extra_headers.len, req_buf.len - req_pos - 2);
                 @memcpy(req_buf[req_pos .. req_pos + add_len], session.extra_headers[0..add_len]);
                 req_pos += add_len;
