@@ -46,6 +46,7 @@ pub enum PseudoKind {
     Not,
     Has,
     Focus,
+    Hover,
     Dir,
     Lang,
 }
@@ -552,6 +553,9 @@ pub struct SelectorParser {
                 } else if (std.ascii.eqlIgnoreCase(p_name, "focus")) {
                     p_comp.pseudo_kind = PseudoKind.Focus;
                     spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "hover")) {
+                    p_comp.pseudo_kind = PseudoKind.Hover;
+                    spec.class_like_selectors += 1;
                 } else if (std.ascii.eqlIgnoreCase(p_name, "dir")) {
                     p_comp.pseudo_kind = PseudoKind.Dir;
                     spec.class_like_selectors += 1;
@@ -805,9 +809,21 @@ pub struct Matcher {
                 };
             },
             .Focus => node_id != NULL_NODE && node_id == doc.focused_node,
+            .Hover => Matcher.isHovered(doc, node_id),
             .Dir => doc.matchesDir(node_id, comp.sub_selector_raw),
             .Lang => doc.matchesLang(node_id, comp.sub_selector_raw),
         };
+    }
+
+    static fn isHovered(doc: *const Document, node_id: NodeId): bool {
+        if (node_id == NULL_NODE || doc.hovered_node == NULL_NODE) return false;
+        let cur = doc.hovered_node;
+        let guard: usize = 0;
+        while (cur != NULL_NODE && @as(usize, cur) < doc.nodes.items.len && guard < 1024) : (guard += 1) {
+            if (cur == node_id) return true;
+            cur = doc.nodes.items[@as(usize, cur)].parent;
+        }
+        return false;
     }
 
     static fn subtreeMatches(doc: *const Document, root_id: NodeId, sub_list: SelectorList): bool {

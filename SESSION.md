@@ -4925,3 +4925,15 @@
   - Playwright（`bin_dev/main` Debug）：`elementhandle-misc.spec.ts` 中 `should fill input`、`should check the box`、`should check the box using setChecked`、`should uncheck the box` 全部推进通过。
   - WPT（`bin_dev/main`）：双路并行持续覆盖 `--shard 2/N` 与 `--shard 3/N` 多域分片（`/css/css-break/` 32/42 & 30/42 PASS、`/css/css-contain/` 9/10 & 10/14 PASS、`/css/css-position/` 20/50 PASS、`/html/semantics/forms/` 21/29 & 19/29 PASS、`/html/webappapis/` 4/6 PASS、`/html/webappapis/timers/` 2/2 PASS 等）。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（140 模块 **134.23s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.10s)**。
+
+### [2026-11-22 14:14] Phase 258: `:hover` 动态伪类、Shadow DOM `node:<nid>` 查找与 HTML 属性实体解码
+- **引擎修复 (`src/`)**:
+  - [src/dom/dom.cp](file:///data/dev/capsurf/src/dom/dom.cp): `Document` 新增 `hovered_node: NodeId` 状态追踪。
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): `PseudoKind` 新增 `Hover` 分支及 `isHovered()`，支持 `:hover` 匹配当前悬停节点及其祖先元素链。
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `Input.dispatchMouseEvent(mouseMoved)` 命中更新 `session.doc.hovered_node`。
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `__capsurf_get_object` 查找 `node:<nid>` 时同步遍历 `cur.shadowRoot` 子树，打通跨 Shadow DOM 的 `DOM.resolveNode` 句柄传递。
+  - [src/html/tree_builder.cp](file:///data/dev/capsurf/src/html/tree_builder.cp): `insertElement` 新增 `decodeAttrValue()`（含 `&` 时调用 `decodeEntity(..., true)`），正确解码属性中的 HTML 字符实体（如 `&quot;`）。
+- **验证与双路并行 WPT 扩跑**:
+  - Playwright（`bin_dev/main` Debug）：`elementhandle-convenience.spec.ts` **12/14 → 13/14 PASS**（28.3s，100% 符合预期）；`elementhandle-press.spec.ts` **4/5 PASS**（12.8s，100% 符合预期）；`eval-on-selector.spec.ts` `[23/32]`（`deep-shadow.html`）通过；`elementhandle-misc.spec.ts` `[1/10]` `should hover` 通过。
+  - WPT（`bin_dev/main`）：并行覆盖 `--shard 4/5` 与 `--shard 5/5` 多域分片（`/css/css-break/` `4/5`: 26/42 PASS, `5/5`: 29/41 PASS；`/css/css-contain/` `4/5`: 11/14 PASS, `5/5`: 11/13 PASS；`/dom/nodes/` `5/10`: 24/25 PASS；`/html/semantics/forms/` `4/10`: 21/29 PASS, `5/10`: 17/29 PASS；`/html/dom/elements/` `4/5`: 21/39 PASS, `5/5`: 20/39 PASS 等）。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **114.31s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 3.69s)**。

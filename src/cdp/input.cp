@@ -414,6 +414,7 @@ pub struct InputHandler {
                     }
                 }
             } else if (ev_type == .MouseMoved) {
+                session.doc.hovered_node = hitTest(session, x, y);
                 if (session.range_drag_node != NULL_NODE) {
                     if (updateRangeFromX(session, session.range_drag_node, x)) {
                         session.range_drag_changed = true;

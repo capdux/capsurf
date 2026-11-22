@@ -7,6 +7,7 @@
 import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 import { HtmlTag } from "./tags.cp";
 import { Token, TagToken, TagKind, Attribute, DoctypeToken, NextTokenizerState } from "./tokens.cp";
+import { decodeEntity } from "./entities.cp";
 
 pub enum InsertionMode: u8 {
     Initial,
@@ -492,13 +493,34 @@ pub struct TreeBuilder {
         }
     }
 
+    static fn decodeAttrValue(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
+        if (std.mem.indexOfScalar(u8, raw, '&') == null) return raw;
+        let buf = std.ArrayListUnmanaged(u8).empty;
+        let pos: usize = 0;
+        while (pos < raw.len) {
+            if (raw[pos] == '&') {
+                if (ent := decodeEntity(raw[pos..], true)) {
+                    let eb: [8]u8 = [0; 8];
+                    const written = ent.toUtf8(eb[0..8]);
+                    buf.appendSlice(allocator, eb[0..written]) catch return raw;
+                    pos += ent.bytes_consumed;
+                    continue;
+                }
+            }
+            buf.append(allocator, raw[pos]) catch return raw;
+            pos += 1;
+        }
+        return buf.toOwnedSlice(allocator) catch raw;
+    }
+
     fn insertElement(*_, tag_tok: *const TagToken): NodeId {
         const nid = _.doc.createElement(tag_tok.name) catch NULL_NODE;
         if (nid == NULL_NODE) return NULL_NODE;
 
         let i: usize = 0;
         while (i < tag_tok.attr_count) : (i += 1) {
-            _.doc.setAttribute(nid, tag_tok.attrs[i].name, tag_tok.attrs[i].value);
+            const decoded_val = TreeBuilder.decodeAttrValue(_.doc.allocator, tag_tok.attrs[i].value);
+            _.doc.setAttribute(nid, tag_tok.attrs[i].name, decoded_val);
         }
 
         if (_.foster_parenting) {

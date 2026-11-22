@@ -2491,3 +2491,9 @@
   - `src/js/shim/animations.js`（同步重新生成 `src/js/runtime.js`、`src/js/runtime_source.cp`）：`flushPendingStyleChecks` 增加 `_pageHasAnimOrTrans` 门控，避免无动画页面批量 `style` 修改触发 $O(N^2)$ `getComputedStyle`。
   - `src/js/shim/index.js`: 补齐 `docProto.elementsFromPoint(x, y)`，打通 Playwright `click`/`check`/`uncheck`/`hover`。
   - `src/cdp/session_hooks.cp`: `document.close()` 修正调用 `g.__capsurf_syncNamedGlobals()`。
+
+## [2026-11-22] Phase 258: `:hover` 动态伪类、Shadow DOM `node:<nid>` 查找与 HTML 属性实体解码
+- **Added / Fixed (`src/`)**:
+  - `src/dom/dom.cp`, `src/css/matcher.cp`, `src/cdp/input.cp`: 实现 `:hover` 动态伪类（`hovered_node` 状态 + 祖先链匹配 + `mouseMoved` 命中更新）。
+  - `src/js/dom_binding.cp`: `__capsurf_get_object` 解析 `node:<nid>` 时遍历 `shadowRoot`。
+  - `src/html/tree_builder.cp`: `insertElement` 新增 `decodeAttrValue()` 对含 `&` 属性值调用 `decodeEntity(..., true)` 解码 HTML 实体。

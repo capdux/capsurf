@@ -1870,3 +1870,8 @@
 - **批量 DOM+Style 卡死根因**：`element.js` 在 `setAttribute('style', ...)` 时调用 `notifyCssStyleChange(el)`，而 `animations.js` 的 `flushPendingStyleChecks()` 在 `_snapshotsInitialized=true` 后无论页面是否存在 CSS transition/animation，都会在 `Promise.resolve().then(...)` 微任务中逐个调用 `getComputedStyle(el)` 触发全量样式级联与布局重算。加入 `_pageHasAnimOrTrans` 与内联属性门控后，`n=200` 耗时从 `>10,000ms` 降至 `474ms`。
 - **Playwright `check`/`click` 命中链路**：`expectHitTarget` 同时依赖 `document.elementFromPoint` 与 `document.elementsFromPoint`；补齐 `docProto.elementsFromPoint` 后 `check`/`setChecked`/`uncheck` 全线打通。
 - **栈深注意**：`cpc` 编译/检查 `session_hooks.cp` 及全量 ReleaseFast 时需先执行 `ulimit -s unlimited`。
+
+### Phase 258: `:hover`、Shadow DOM 句柄与 HTML 属性实体解码排障笔记
+- **`:hover` 伪类**：在 `Document` 上维护与 `focused_node` 对称的 `hovered_node`，`Input.dispatchMouseEvent(mouseMoved)` 命中更新后，`Matcher.isHovered` 向上遍历父链使节点及祖先均匹配 `:hover`，`should hover` 即刻通过。
+- **Shadow DOM 句柄**：`__capsurf_get_object("node:<nid>")` 仅遍历 `childNodes` 会漏掉 `el.shadowRoot`，补齐 `if (cur.shadowRoot) stack.push(cur.shadowRoot)` 后 `deep-shadow.html` 通过。
+- **HTML 属性实体解码**：`tokenizer.cp` 零拷贝扫描属性切片未解码 `&quot;` 等实体，在 `TreeBuilder.insertElement` 增加含 `&` 快速门控与 `decodeEntity(raw, true)` 即可在不影响无实体属性性能的前提下彻底修复 `elementhandle-convenience.spec.ts` `[1/14]`（达成 **13/14 PASS**）。

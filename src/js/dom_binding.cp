@@ -2516,6 +2516,7 @@ pub fn mountDom(
         "        while (stack.length > 0) {" +
         "          const cur = stack.pop();" +
         "          if (cur && cur._nid === nid) return cur;" +
+        "          if (cur && cur.shadowRoot) stack.push(cur.shadowRoot);" +
         "          const ch = cur && cur.childNodes;" +
         "          if (ch && ch.length) {" +
         "            for (let i = ch.length - 1; i >= 0; i--) stack.push(ch[i]);" +
