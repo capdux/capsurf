@@ -8,6 +8,19 @@ import { hitTest } from "./input.cp";
 import { clearLearnedScripts } from "./session_hooks.cp";
 import { NodeId, NULL_NODE, Document, NodeType } from "../dom/dom.cp";
 
+fn shiftQuadScroll(q: [8]f32, sx: f32, sy: f32): [8]f32 {
+    let res: [8]f32 = [0.0; 8];
+    res[0] = q[0] - sx;
+    res[1] = q[1] - sy;
+    res[2] = q[2] - sx;
+    res[3] = q[3] - sy;
+    res[4] = q[4] - sx;
+    res[5] = q[5] - sy;
+    res[6] = q[6] - sx;
+    res[7] = q[7] - sy;
+    return res;
+}
+
 fn formatQuad(quad: [8]f32, buf: []u8): []const u8 {
     const q0 = @as(i64, @intFromFloat(@round(quad[0])));
     const q1 = @as(i64, @intFromFloat(@round(quad[1])));
@@ -764,6 +777,11 @@ pub struct DomHandler {
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
             }
             session.ensureLayout();
+            let sx: f32 = 0.0;
+            let sy: f32 = 0.0;
+            let cw: f32 = 0.0;
+            let ch: f32 = 0.0;
+            session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
@@ -776,10 +794,10 @@ pub struct DomHandler {
             let p_buf: [256]u8 = [0; 256];
             let b_buf: [256]u8 = [0; 256];
             let m_buf: [256]u8 = [0; 256];
-            const cq = formatQuad(bm.content, &c_buf);
-            const pq = formatQuad(bm.padding, &p_buf);
-            const bq = formatQuad(bm.border, &b_buf);
-            const mq = formatQuad(bm.margin, &m_buf);
+            const cq = formatQuad(shiftQuadScroll(bm.content, sx, sy), &c_buf);
+            const pq = formatQuad(shiftQuadScroll(bm.padding, sx, sy), &p_buf);
+            const bq = formatQuad(shiftQuadScroll(bm.border, sx, sy), &b_buf);
+            const mq = formatQuad(shiftQuadScroll(bm.margin, sx, sy), &m_buf);
 
             const res = std.fmt.bufPrint(
                 out_buf,
@@ -808,19 +826,24 @@ pub struct DomHandler {
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
             session.ensureLayout();
+            let sx: f32 = 0.0;
+            let sy: f32 = 0.0;
+            let cw: f32 = 0.0;
+            let ch: f32 = 0.0;
+            session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
 
-            const c0 = @as(i64, @intFromFloat(@round(bm.content[0])));
-            const c1 = @as(i64, @intFromFloat(@round(bm.content[1])));
-            const c2 = @as(i64, @intFromFloat(@round(bm.content[2])));
-            const c3 = @as(i64, @intFromFloat(@round(bm.content[3])));
-            const c4 = @as(i64, @intFromFloat(@round(bm.content[4])));
-            const c5 = @as(i64, @intFromFloat(@round(bm.content[5])));
-            const c6 = @as(i64, @intFromFloat(@round(bm.content[6])));
-            const c7 = @as(i64, @intFromFloat(@round(bm.content[7])));
+            const c0 = @as(i64, @intFromFloat(@round(bm.content[0] - sx)));
+            const c1 = @as(i64, @intFromFloat(@round(bm.content[1] - sy)));
+            const c2 = @as(i64, @intFromFloat(@round(bm.content[2] - sx)));
+            const c3 = @as(i64, @intFromFloat(@round(bm.content[3] - sy)));
+            const c4 = @as(i64, @intFromFloat(@round(bm.content[4] - sx)));
+            const c5 = @as(i64, @intFromFloat(@round(bm.content[5] - sy)));
+            const c6 = @as(i64, @intFromFloat(@round(bm.content[6] - sx)));
+            const c7 = @as(i64, @intFromFloat(@round(bm.content[7] - sy)));
 
             const res = std.fmt.bufPrint(
                 out_buf,

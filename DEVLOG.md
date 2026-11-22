@@ -1917,3 +1917,6 @@
 
 ### Phase 269: `console` 重复事件与扩展 API 排障笔记
 - **双倍事件根因**：Playwright 会同时启用 `Runtime.enable` 与 `Log.enable`，此前 `pollConsoleEvents` 对每条记录同时发射 `Runtime.consoleAPICalled` 与 `Log.entryAdded`，导致 `console.log("hello")` 在 Playwright 中收到两条（`log` + `info`）。仅保留 `Runtime.consoleAPICalled` 并扩容 `[16]CdpEvent` 后，8 条连续混合控制台调用均按预期单次送达。
+
+### Phase 270: `DOM.getBoxModel` / `DOM.getContentQuads` 滚动偏移排障笔记
+- **视口相对坐标对齐**：Playwright `ElementHandle.boundingBox()` 依赖 `DOM.getContentQuads` / `DOM.getBoxModel` 返回相对当前视口左上角的坐标（而非文档绝对坐标）。此前 `dom.cp` 未扣除 `session.updateLayoutMetrics()` 获取的 `(sx, sy)`，导致 `window.scrollTo(200, 300)` 后 `boundingBox()` 仍返回 `{ x: 230, y: 340 }`。加入 `shiftQuadScroll` 扣除 `(sx, sy)` 后精确输出 `{ x: 30, y: 40, width: 20, height: 20 }`。

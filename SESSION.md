@@ -5030,3 +5030,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：8 条连续 `console.*` 调用均单次准确送达（无重复 `info:`）。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.91s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.08s)**。
+
+### [2026-11-22 16:12] Phase 270: `DOM.getBoxModel` 与 `DOM.getContentQuads` 视口滚动偏移扣除
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): 新增 `shiftQuadScroll()` 并在 `DOM.getBoxModel` 与 `DOM.getContentQuads` 中调用 `session.updateLayoutMetrics(&sx, &sy, &cw, &ch)` 扣除视口滚动偏移 `(sx, sy)`。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`window.scrollTo(200, 300)` 后 `ElementHandle.boundingBox()` 精确返回 `{ x: 30, y: 40, width: 20, height: 20 }`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.01s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。

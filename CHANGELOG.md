@@ -2559,3 +2559,7 @@
   - `src/cdp/session.cp`: 移除 `pollConsoleEvents` 中重复发射的 `Log.entryAdded`，使每次 `console.*` 调用仅发射一条 `Runtime.consoleAPICalled`。
   - `src/cdp/runtime.cp`: 将 `Runtime.callFunctionOn` 与 `Runtime.evaluate` 的 `polled_evts` 缓冲区从 `[4]CdpEvent` 扩容至 `[16]CdpEvent`，避免单次求值多条控制台输出被截断。
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补齐 `console.time`/`timeLog`/`timeEnd`/`count`/`countReset`/`assert`/`dir`/`dirxml`/`table`/`trace`/`group`/`groupCollapsed`/`groupEnd`/`clear`。
+
+## [2026-11-22] Phase 270: `DOM.getBoxModel` 与 `DOM.getContentQuads` 视口滚动偏移扣除
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: 新增 `shiftQuadScroll()` 辅助函数，在 `DOM.getBoxModel` 与 `DOM.getContentQuads` 中调用 `session.updateLayoutMetrics(&sx, &sy, &cw, &ch)` 并扣除视口滚动偏移 `(sx, sy)`，使滚动后的 `ElementHandle.boundingBox()` 返回准确的视口相对坐标。
