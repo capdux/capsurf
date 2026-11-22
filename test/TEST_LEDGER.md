@@ -800,3 +800,5 @@
 | WPT-B131 | `/css/css-grid/ 4/4` + `/css/css-position/` + `/html/dom/documents/` + `/css/css-sizing/ 2/2` | 139/521 PASS (`grid 4/4` 37/209 **11 FAIL→PASS**, `position` **77/264** **5 FAIL→PASS**, `documents` **24/32**, 0 CRASH) |
 | WPT-B126 | `/WebCryptoAPI/ 2/2` + `/FileAPI/` + `/encoding/ 2/2` | 46/670 PASS (`WebCryptoAPI 2/2` 12/66 **11 FAIL→PASS**, `FileAPI` 14/36, `encoding 2/2` 20/568, 0 CRASH) |
 | WPT-B132 | `/css/css-backgrounds/ 1/2..2/2` + `/css/css-color/` + `/css/css-box/` | 48/204 PASS (`backgrounds` 33/115, `css-color` 2/56, `css-box` 13/33, 0 CRASH) |
+| WPT-B133 | `/html/dom/documents/` + `/url/ 1/2` + `/dom/nodes/ 1/4..2/4` | 106/177 PASS (`documents` 24/32, `url 1/2` 4/19, `nodes 1/4` 38/63, `nodes 2/4` 40/63, 0 CRASH) |
+| WPT-B134 | `/css/css-display/` + `/css/css-position/` + `/css/css-overflow/` + `/css/css-text/` | 127/477 PASS (`display` 15/52 **2 FAIL→PASS**, `position` 82/267 **5 FAIL→PASS**, `overflow` 6/33 **4 FAIL→PASS**, `text` 24/125 **9 FAIL→PASS**, 0 CRASH) |

@@ -102,7 +102,7 @@
 
 ## 5. 分阶段执行流水线（Execution Milestones）
 
-严格按阶段推进，**每批文件必须通过 `cpc fix` + `cpc_brief.py`（或 `cap test`）验证闭环，绝不带病进入下一阶段**：
+严格按阶段推进，**每批文件必须通过 `cpc fix` + `cpc brief`（或 `cap test`）验证闭环，绝不带病进入下一阶段**：
 
 - **Milestone 1（Arena DOM 与 `cap:css` 选择器/级联/布局闭环）**：
   1. 实现 `src/dom/dom.cp`（`Document`, `NodeData`, `ElementHandle`）。
@@ -133,16 +133,16 @@
      ```
      利用编译器自动完成 `E0101`..`E0126`（括号、`?T`->`T?`、`|v|`->`:=`、`* =`、`*_` 等）的多轮就地机械修复！
    - **聚合诊断与门禁验证（严禁直接查看 `cpc` 原始几万行报错！）**：
-     统一使用 `cpc check --brief <file.cp>` 或运行：
+     统一使用编译器内置 `cpc brief` 子命令（已内置 `zig` 版本兜底与 4 门禁检查，无需调用外部脚本）：
      ```bash
-     python3 scripts/cpc_brief.py -n 8 <a.cp> ...
+     /data/dev/cp/cap/bin/cpc brief -n 8 <a.cp> ...
      ```
      同类错误在文件中一次性修完再重编，严禁修一行编一次。
    - **大文件阅读**：调用 `read_file`（指定 `StartLine`/`EndLine`）；对 `> 800` 行的大文件（如 `html5ever/tree_builder/mod.rs`），先用 `run_command` 执行 `rg -n` 提取结构大纲，再分段读取。
 2. **子智能体「用完即弃」与并发上限 `<= 2` 铁律**：
    - 同时运行的子智能体严格限制在 **最多 2 路**。
    - **彻底禁止通过 `send_message` 向已完成上一批任务的子智能体追加新任务**（复用会导致 200k+ Tokens $O(N^2)$ 爆炸）！每批任务必须通过 `invoke_subagent` 启动**全新子智能体**（从 0 上下文起步）。
-   - **踩坑表驱动 Prompt**：给子智能体的 Prompt 只写「先读 `CP_PITFALLS.md`，按规范完成指定文件并通过 `cpc fix` 与 `cpc_brief.py` 门禁」，不再内联长篇语法说明，也不包含复杂正则字符串。
+   - **踩坑表驱动 Prompt**：给子智能体的 Prompt 只写「先读 `CP_PITFALLS.md`，按规范完成指定文件并通过 `cpc fix` 与 `cpc brief` 门禁」，不再内联长篇语法说明，也不包含复杂正则字符串。
    - **步数熔断与大文件拆分**：子智能体单文件 `<= 50` 步仍未过门禁立即汇报 `BLOCKED` 并停止；`> 2,500` 行的大文件（如 `tree_builder`）按状态段拆给多个全新子智能体分治。
    - **主智能体禁止轮询**：发出子任务后只等唤醒，不得重复调用 `manage_subagents list` 或解析 transcript。
 3. **临时文件与中性化汇报规范**：
@@ -204,8 +204,8 @@
    - **双智能体满负荷并行流水线**：始终保持最多 **3 路全新子智能体** 并行推进（严格遵守「用完即弃」铁律，严禁复用已完成上下文）：
      - 一路攻坚原生核心模块（DOM/CSS/JS/网络/存储等）；
      - 一路攻坚配套测试套件、适配驱动或验证框架。
-   - **单阶段七步闭环交付**：每个 Phase 必须严格完成「代码编写 -> `cpc fix` -> `cpc_brief.py` 4 门禁 -> 原生单元测试通过 -> E2E 回归验证 -> 四线文档实时更新 -> 唯一 1 次 Git 原子提交」七步闭环，绝不带病进入下一阶段。
-   - **合批提速迭代铁律（Batch-and-Verify）**：避免每修 1 个小缺陷就单独编译一次 `bin_dev`（严禁逐点微调反复重编）。对同模块或无冲突的 **3~5 个修复点集中修改源码**后，统一执行 **1 次** `cpc fix` + `cpc_brief.py` 门禁 + `bin_dev` 增量编译 + **合并版单脚本多点 CDP 探针** + `--smoke` + 唯一 1 次原子提交，并持续保持 **3 路测试子智能体**（1 PW + 2 WPT 独立端口）并行回归验证。
+   - **单阶段七步闭环交付**：每个 Phase 必须严格完成「代码编写 -> `cpc fix` -> `cpc brief` 4 门禁 -> 原生单元测试通过 -> E2E 回归验证 -> 四线文档实时更新 -> 唯一 1 次 Git 原子提交」七步闭环，绝不带病进入下一阶段。
+   - **合批提速迭代铁律（Batch-and-Verify）**：避免每修 1 个小缺陷就单独编译一次 `bin_dev`（严禁逐点微调反复重编）。对同模块或无冲突的 **3~5 个修复点集中修改源码**后，统一执行 **1 次** `cpc fix` + `cpc brief` 门禁 + `bin_dev` 增量编译 + **合并版单脚本多点 CDP 探针** + `--smoke` + 唯一 1 次原子提交，并持续保持 **3 路测试子智能体**（1 PW + 2 WPT 独立端口）并行回归验证。
 2. **实时工作状态透明透出规范（消除黑盒等待）**：
    - **操作前屏幕提示**：在下发子智能体任务、启动耗时编译（`cap build`）或进入反应式休眠前，主智能体必须在屏幕显式输出「当前正在执行的动作卡片」（正在处理的模块、分配的子智能体、预期目标与检验标准）。
    - **唤醒后即时汇总**：子智能体汇报或后台任务完成被系统唤醒时，主智能体必须在屏幕显式打印阶段性成果、测试断言结果看板与后续计划，让用户随时掌握研发动态。
@@ -228,7 +228,7 @@
        - `test/wpt/`：Web Platform Tests 清单、预期基线与运行器脚本（`scripts/`）。
        - `test/pptr/`：Puppeteer 上游兼容测试清单、基线与运行器脚本（`scripts/`）。
        - `test/pw/`：Playwright 上游兼容测试清单、基线与运行器脚本（`scripts/`）。
-     - `scripts/`：项目工程化与自动化工具链（`cpc_brief.py`, `bundle_runtime.py`, `watch_task.py`, `task_queue.py`, `e2e_suite.py` 等）。
+     - `scripts/`：项目工程化与自动化工具链（`bundle_runtime.py`, `watch_task.py`, `task_queue.py`, `e2e_suite.py` 等）。
      - `vendor/`：第三方参考源码与静态资产（`html5ever`, `lexbor`, `taffy`, `quickjs`, `kitesurf`）。
      - `bin/`：编译输出产物（`bin/main`, `bin/test/`）。
 
@@ -260,7 +260,7 @@
 - **痛点根因**：多路子智能体并发运行时，若各自调用 `cap build src/main.cp -f`，会并发争抢写入同一个 `bin/main` 二进制产物。一旦某个子智能体的编译动作删除了正在被 `bun test` 调用的二进制，就会引发 `CapSurf process exited prematurely (code=0)` 偶发假死报错，导致子智能体陷入无谓的排错与盲目重试，浪费数万 Tokens！
 - **执行规范**：
   1. **纯 JS/TS Shim 优先轻量打包**：若当前任务仅修改 `src/js/shim/` 下的代码，**严禁执行耗时的 `cap build`**！只需运行毫秒级的 `python3 scripts/bundle_runtime.py` 重新生成 `runtime.js` 与 `runtime_source.cp`，若主二进制已具备动态运行时挂载即可直接运行测试；
-  2. **原生 CP 修改的门禁前置与三线无锁物理隔离并行编译**：若涉及修改底层 `.cp` 文件，先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `python3 scripts/cpc_brief.py -n 8` 静态门禁；三线并发（主智能体 + Slot A + Slot B）必须按固定槽位分配独立输出目录、调试端口与源码写权限，**严禁多路同时写入同一个 `bin/main`**：
+  2. **原生 CP 修改的门禁前置与三线无锁物理隔离并行编译**：若涉及修改底层 `.cp` 文件，先跑 `/data/dev/cp/cap/bin/cpc fix` 与 `/data/dev/cp/cap/bin/cpc brief -n 8` 静态门禁；三线并发（主智能体 + Slot A + Slot B）必须按固定槽位分配独立输出目录、调试端口与源码写权限，**严禁多路同时写入同一个 `bin/main`**：
      - **主智能体**：`bin_19231` + `REMOTE_DEBUGGING_PORT=19231`（负责非 `cdp`/`shim` 模块如 `src/layout/`、`src/css/`、`src/render/`、`src/html/`、`src/net/` 或汇总验证）；
      - **Slot A**：`bin_19232` + `REMOTE_DEBUGGING_PORT=19232`（负责 `src/js/shim/` 或 `test/`）；
      - **Slot B**：`bin_19233` + `REMOTE_DEBUGGING_PORT=19233`（负责 `src/cdp/`）；
@@ -294,7 +294,7 @@
   你负责 Phase XX Track Y：[模块名称与核心目标]
   1. 先读根目录下 CP_PITFALLS.md；
   2. 核心修改点：[3~5 行明确的代码位置与逻辑动作]；
-  3. 门禁验证：运行 cpc fix 与 python3 scripts/cpc_brief.py -n 8；
+  3. 门禁验证：运行 cpc fix 与 /data/dev/cp/cap/bin/cpc brief -n 8；
   4. 目标测试：运行 bun test e2e/<target>.e2e.test.ts 确保 100% PASS。
   完成即汇报修改清单与结果。
   ```
@@ -305,7 +305,7 @@
 - **执行规范（强制固化）**：
   1. **主智能体一次性批量快扫全量未验证测试**：直接由主控运行带 `timeout 12` 的全量扫盘脚本一次扫完所有未验证套件（替代 3 个一组派子智能体冷启动摸底），**直接 PASS 的当场批量登记，子智能体 100% 只接手已明确报错行号的纯修复单**。
   2. **小粒度与集中式高密收口单**：热文件（`session.cp`, `window.js`, `page.cp`）攒齐 3–5 个独立带行号小修点后打包为 1 张集中收口单，**只改 1 轮、编译 1 次（5 秒）、一次验证**，控制在 **30–50 步（2–4 分钟）** 内快进快出、高频原子提交。
-  3. **带行号精准派单 + 亚秒级静态校验**：主智能体先用 `rg -n` 定位关键函数和行号再写入 Prompt，压缩子智能体探索轮数；子智能体改完同一批 `.cp` 文件后先用 `cpc check` + `cpc_brief.py` 一次性静态校验通过，再执行 1 次 `cap build -m -d -o bin_<port>` + `bun test`。
+  3. **带行号精准派单 + 亚秒级静态校验**：主智能体先用 `rg -n` 定位关键函数和行号再写入 Prompt，压缩子智能体探索轮数；子智能体改完同一批 `.cp` 文件后先用 `/data/dev/cp/cap/bin/cpc brief -n 8` 一次性静态校验通过，再执行 1 次 `cap build -m -d -o bin_<port>` + `bun test`。
   4. **E2E 端口僵尸进程预检铁律**：启动 `bun test` 前，先清理目标调试端口上的前序遗留进程（`lsof -ti :<port> | xargs -r kill -9`），避免旧 `main` 占端口导致测试卡死并空耗超时。
   5. **双轨零冲突与切片出参包装**：Slot A 专注纯 CP 白盒（严禁改 `src/cdp/` 或跑 `cap build`），1~3 分钟快进快出；遇 `cpc` 剥离 `&slice` 取址时，统一用单字段 `struct { value: []const u8 = "" }` 包装出参。
   6. **诊断超时防护与双端口并发扫盘**：任何临时 `bun -e` WebSocket 诊断脚本必须外加 `timeout 15` 护栏，严禁无超时挂起空转；利用 `bin_19232`（端口 `19232`）与 `bin_19233`（端口 `19233`）物理隔离，可让 Slot A 在不触发编译的前提下并行快扫未记录 E2E 用例，吞吐翻倍。
