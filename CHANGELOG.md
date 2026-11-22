@@ -2544,3 +2544,8 @@
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 将 `dispatchMouseDomEvent` 的 `js_buf` 从 `[1280]u8` 扩容至 `[2048]u8`，修复模板长度（1403 字节）触发 `bufPrint` 溢出静默 `catch return true` 导致点击与焦点完全失效的问题。
   - `src/js/shim/window.js`, `src/js/shim/element/html-element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 点击 `checkbox` 切换 `checked` 时同步清除 `indeterminate = false`，修复 `locator.uncheck()` 在 `indeterminate` 复选框上的状态校验失败。
+
+## [2026-11-22] Phase 267: 折叠 `<details>` 子树隐藏与 `isGenuineNode` `Node` 构造器缓存
+- **Fixed (`src/`)**:
+  - `src/css/cascade.cp`: 在 `Cascade.compute` 初始化节点样式时检测父节点为未展开 `<details>`（无 `open` 属性）的非首个 `<summary>` 子元素并设置 `Display.none()`，修复折叠 `<details>` 内子元素仍被判定为 `visible` 的问题。
+  - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `isGenuineNode()` 缓存初始 `_NodeCtor`，避免页面脚本移除 `window.Node` 后触发 `ReferenceError`。

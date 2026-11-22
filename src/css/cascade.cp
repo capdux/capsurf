@@ -4824,6 +4824,24 @@ pub struct Cascade {
                 parent_style_ptr = &out_styles[@as(usize, node.parent)];
             }
             style.initForNode(node, parent_style_ptr);
+            if (node.parent != NULL_NODE && @as(usize, node.parent) < doc.nodes.items.len) {
+                const p_node = &doc.nodes.items[@as(usize, node.parent)];
+                if (p_node.hasTag("details") && !p_node.hasAttribute("open")) {
+                    let first_sum: NodeId = NULL_NODE;
+                    let ch = p_node.first_child;
+                    while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                        const ch_node = &doc.nodes.items[@as(usize, ch)];
+                        if (ch_node.node_type == .Element && ch_node.hasTag("summary")) {
+                            first_sum = ch;
+                            break;
+                        }
+                        ch = ch_node.next_sibling;
+                    }
+                    if (nid != @as(usize, first_sum)) {
+                        style.display = Display.none();
+                    }
+                }
+            }
 
             let source_order: u32 = 1;
             const node_id_u32: NodeId = @intCast(nid);

@@ -1907,3 +1907,7 @@
 ### Phase 266: `dispatchMouseDomEvent` 缓冲溢出与 `indeterminate` 复选框排障笔记
 - **`dispatchMouseDomEvent` 静默失效根因**：Phase 264 在 `dispatchMouseDomEvent` 的 JS 模板中加入了 `mousedown` 冒泡聚焦逻辑，使模板总长增至 1403 字节，超过了原有的 `js_buf: [1280]u8` 并命中 `catch return true`，导致所有点击事件完全跳过 JS 派发。扩容至 `[2048]u8` 后，`locator.click`、`click checkbox` 聚焦与非可聚焦元素保焦全部恢复。
 - **`indeterminate` 复选框点击**：`activateClickedElement` 与 `html-element.js` 原先仅翻转 `ctrl.checked` 而未清除 `ctrl.indeterminate`，同步置 `indeterminate = false` 后 `locator.uncheck()` 一次通过。
+
+### Phase 267: `<details>` 折叠隐藏与 `Node` 引用缓存排障笔记
+- **折叠 `<details>` 隐藏**：`Cascade.compute` 在 `style.initForNode()` 后检查父节点是否为无 `open` 属性的 `<details>`，仅保留首个 `<summary>` 子节点可见，其余子元素直接赋予 `Display.none()`；实测 `summary` 可见、`ul` 在闭合时 `isVisible() === false`、添加 `open` 后 `isVisible() === true`，打通 `locator-is-visible.spec.ts` 8/8。
+- **`delete window.Node` 隔离说明**：`node-base.js` 已缓存 `_NodeCtor`，而 Playwright `InjectedScript` 对 `delete window.Node` 的抗性依赖独立 `Page.createIsolatedWorld` 全局作用域（待后续孤立世界原型隔离阶段完善）。

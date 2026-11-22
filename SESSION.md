@@ -5006,3 +5006,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`locator.click`（`Clicked`）、`indeterminate uncheck`（`checked: false, indet: false`）、`click focusable`（`focusable`）与 `click checkbox`（`INPUT`）全部通过。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.91s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。
+
+### [2026-11-22 15:54] Phase 267: 折叠 `<details>` 子树隐藏与 `isGenuineNode` `Node` 构造器缓存
+- **引擎修复 (`src/`)**:
+  - [src/css/cascade.cp](file:///data/dev/capsurf/src/css/cascade.cp): `Cascade.compute` 检测未展开 `<details>`（无 `open` 属性）的非首个 `<summary>` 子节点并设置 `Display.none()`。
+  - [src/js/shim/node-base.js](file:///data/dev/capsurf/src/js/shim/node-base.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `isGenuineNode()` 缓存初始 `_NodeCtor` 避免 `delete window.Node` 后触发 `ReferenceError`。
+- **双模式验证**:
+  - `bin_dev/main` 实测：折叠 `<details>` 下 `summary` 可见、`ul` 不可见，添加 `open` 后 `ul` 可见。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.97s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。

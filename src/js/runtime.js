@@ -7101,9 +7101,10 @@
     return this;
   };
 
+  const _NodeCtor = (typeof Node !== "undefined") ? Node : null;
   function isGenuineNode(obj) {
     if (!obj || typeof obj !== "object") return false;
-    if (obj instanceof Node) return true;
+    if (_NodeCtor && obj instanceof _NodeCtor) return true;
     if (isParsedNode(obj)) return true;
     return false;
   }
