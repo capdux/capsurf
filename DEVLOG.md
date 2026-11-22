@@ -2206,3 +2206,6 @@
 
 ### Phase 362: `selectors-misc.spec.ts` `[2/19]` (`page.click('#inner-link')`) `TypeError: not a function` 排障笔记
 - **缺失 `ShadowRoot.prototype.elementsFromPoint` 根因**：Playwright `page.click()` 在完成滚动与可见性检查后，于目标节点所属 `ShadowRoot` 上调用 `root.elementsFromPoint(x, y)` 执行命中遮挡校验，而此前 `node-base.js` 仅实现了单数 `ShadowRoot.prototype.elementFromPoint`。补齐 `ShadowRoot.prototype.elementsFromPoint(x, y)` 后，真实 Playwright `page.click("#inner-link")` 一次通过（`PHASE362_RESULT {"clickCount":1}`）。
+
+### Phase 363: `elementhandle-bounding-box.spec.ts` `[1/7]` (`grid.html` `y=55 vs 50`) 排障笔记
+- **`inline-flex` 未计算 `baseline_offset` 导致行框多加 `strut_below` 根因**：`layoutFlexContainer()` 此前未设置 `box.baseline_offset`（保持 `-1.0`），导致 `inline` 行盒计算将 `.box`（`50px x 50px` `inline-flex`）的基线落在底边 `50px` 处，并叠加父级 `<body>` 的 `strut_below`（`~4.8px`），使第二行起始 `y` 变为 `55`。按 CSS Flexbox §4.4 补齐 `inline-flex` 基线后，实测 `PHASE363_RESULT {"x":100,"y":50,"w":50,"h":50}`，精确对齐 Chromium。

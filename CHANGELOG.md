@@ -2974,3 +2974,7 @@
 ## [2026-11-23] Phase 362: 补齐 `ShadowRoot.prototype.elementsFromPoint(x, y)`，打通 Playwright Shadow DOM 点击（`selectors-misc.spec.ts` `[2/19]`）
 - **Fixed (`src/`)**:
   - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `ShadowRoot.prototype` 实装 `elementsFromPoint(x, y)`（复用 `elementFromPoint(x, y)` 并沿 `ShadowRoot` 内祖先链返回命中栈），修复 Playwright `page.click('#inner-link')` 在 `expectHitTarget` 阶段报 `TypeError: not a function`。
+
+## [2026-11-23] Phase 363: 实现 `inline-flex` 容器 CSS Flexbox §4.4 基线计算，精确消除 `grid.html` 5px 行框偏移
+- **Fixed (`src/`)**:
+  - `src/layout/layout.cp`: 在 `layoutFlexContainer()` 末尾为 `display: inline-flex` 且 `overflow_visible` 的容器计算 `baseline_offset`（取首个在流子项基线/高度，或居中兜底），使行框高度严格贴合 `50px` 而不再额外叠加 `strut_below`（5px）。

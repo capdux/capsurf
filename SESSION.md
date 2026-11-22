@@ -5701,3 +5701,10 @@
 - **双模式验证**:
   - 真实 Playwright CDP 实测（端口 19385）：`PHASE362_RESULT {"clickCount":1}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 363: `inline-flex` 容器基线计算修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/layout/layout.cp](file:///data/dev/capsurf/src/layout/layout.cp): 在 `layoutFlexContainer()` 末尾补充 `inline-flex` 容器的 `baseline_offset` 计算。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE363_RESULT {"x":100,"y":50,"w":50,"h":50}`（精确消除 5px 偏移）。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.33s)**。

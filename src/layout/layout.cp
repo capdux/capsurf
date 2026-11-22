@@ -4245,6 +4245,36 @@ pub struct LayoutTree {
                 }
             }
         }
+
+        // CSS Flexbox §4.4: compute baseline_offset for inline-flex containers from first in-flow flex item
+        const pstyle_flex = &styles[@as(usize, parent_id)];
+        if (pstyle_flex.overflow_visible && pstyle_flex.display.isInlineFlex()) {
+            const pbox_y = _.boxes.items[@as(usize, parent_id)].rect.y;
+            const pbox_h = _.boxes.items[@as(usize, parent_id)].rect.height;
+            let fch = doc.nodes.items[@as(usize, parent_id)].first_child;
+            while (fch != NULL_NODE && @as(usize, fch) < doc.nodes.items.len) {
+                const fn_d = &doc.nodes.items[@as(usize, fch)];
+                if (fn_d.node_type == NodeType.Element) {
+                    const fst = &styles[@as(usize, fch)];
+                    if (!fst.display.isNone() && fst.position != CssPosition.Absolute && fst.position != CssPosition.Fixed) {
+                        const fbox = &_.boxes.items[@as(usize, fch)];
+                        let bl: f32 = -1.0;
+                        if (fbox.baseline_offset >= 0.0) {
+                            bl = (fbox.rect.y - pbox_y) + fbox.baseline_offset;
+                        } else if (fbox.rect.height > 0.0) {
+                            bl = (fbox.rect.y - pbox_y) + fbox.rect.height;
+                        } else {
+                            bl = @min(pbox_h, pbox_h * 0.5 + pstyle_flex.naturalAscent() * 0.5);
+                        }
+                        if (bl >= 0.0) {
+                            _.boxes.items[@as(usize, parent_id)].baseline_offset = bl;
+                        }
+                        break;
+                    }
+                }
+                fch = fn_d.next_sibling;
+            }
+        }
     }
 
     /// Primary entry point: computes screen coordinates for all nodes in `doc` into `tree.boxes`.
