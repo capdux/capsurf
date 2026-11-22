@@ -5253,3 +5253,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`#\31\32\33` 与 `#\31 \32 \33` 均返回 `true`，双空格 `#\31  \32\33` 返回 `false`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.41s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
+
+### [2026-11-22 19:22] Phase 300: 补齐 Shadow DOM / JS 选择器引擎 `:nth-child`、`:nth-last-child`、`:only-child` 与 `:is`/`:where`/`:not`
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/selector.js](file:///data/dev/capsurf/src/js/shim/selector.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `matchesNthChild()`、`splitSelectorList()`，修复 `matchesCompoundSelector()` 伪类括号内空格/冒号断词，完整支持 `:nth-child()`、`:nth-last-child()`、`:only-child`、`:is()`、`:where()`、`:matches()` 与 `:not()`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：ShadowRoot 下 `srOdd=3, srSp=4, srIs=6, srNot=4`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **129.93s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.19s)**。

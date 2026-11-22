@@ -2691,3 +2691,7 @@
 ## [2026-11-22] Phase 299: 修复 `scanCssIdent()` 吞并 CSS 十六进制转义后单空白符的词法规范
 - **Fixed (`src/`)**:
   - `src/css/matcher.cp`: 升级 `scanCssIdent()` 在扫描 `\XXXX` 1..6 位十六进制转义后按 CSS Syntax 规范吞并紧邻的 1 个空白字符，避免 `#\31 \32 \33` 被提前截断为后代组合子。
+
+## [2026-11-22] Phase 300: 补齐 Shadow DOM / JS 选择器引擎 `:nth-child`、`:nth-last-child`、`:only-child` 与 `:is`/`:where`/`:not`
+- **Fixed (`src/`)**:
+  - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `matchesNthChild()` 支持 `odd`/`even`/`An+B`（含带空格公式如 `23n +2`），新增 `splitSelectorList()` 按括号/方括号层级安全拆分顶层逗号列表，并在 `matchesCompoundSelector()` 中修复伪类扫描正则提前截断括号内空格/冒号的问题，完整支持 `:nth-child()`、`:nth-last-child()`、`:only-child`、`:is()`、`:where()`、`:matches()` 与 `:not()`。

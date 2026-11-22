@@ -2010,3 +2010,6 @@
 
 ### Phase 299: `#\31 \32 \33` 带空格十六进制转义 ID 选择器匹配失败排障笔记
 - **`numSp` 返回 `false` 根因**：`scanCssIdent()` 遇到 `\` 仅简单步进 `+= 2`，在扫描 `#\31 \32 \33` 时未消耗 `\31` 后的单个终止空白符，导致解析器将后续空格误判为后代组合子。补齐 1..6 位十六进制及单空白符吞并逻辑后，实测 `#\31\32\33` 与 `#\31 \32 \33` 均为 `true`，双空格 `#\31  \32\33` 正确保持 `false`。
+
+### Phase 300: ShadowRoot 下 `span:nth-child(1n +2)`、`:is(div, span)` 与 `:not(:first-child)` 返回 `0` 排障笔记
+- **两层根因**：第一层为 `selector.js` 缺失 `:nth-child`/`:is`/`:not` 分支且用 `s.split(",")` 错误拆散 `:is(div, span)`；第二层为 `matchesCompoundSelector()` 中伪类名称扫描循环停在 `/[.#:\[\s]/`，导致 `:is(div, span)` 在逗号后空格处提前跳出循环、`:not(:first-child)` 在内部 `:` 处断词。补齐结构/逻辑伪类、顶层逗号拆分与 `(` 停靠扫描后，实测 ShadowRoot 下 `srOdd=3, srSp=4, srIs=6, srNot=4`。

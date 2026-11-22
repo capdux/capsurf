@@ -157,7 +157,7 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       // Pseudo-class
       const start = i;
       i++;
-      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
+      while (i < len && !/[.#:\[\s(]/.test(s[i])) i++;
       if (i < len && s[i] === "(") {
         let depth = 1;
         i++;
@@ -179,7 +179,26 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       }
       else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
       else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
+      else if (pseudo === ":only-child") { if (el.previousElementSibling || el.nextElementSibling) return false; }
       else if (pseudo === ":empty") { if (el.firstChild) return false; }
+      else if (pseudo.startsWith(":nth-child(") && pseudo.endsWith(")")) {
+        if (!matchesNthChild(el, pseudo.slice(11, -1), false)) return false;
+      }
+      else if (pseudo.startsWith(":nth-last-child(") && pseudo.endsWith(")")) {
+        if (!matchesNthChild(el, pseudo.slice(16, -1), true)) return false;
+      }
+      else if (pseudo.startsWith(":is(") && pseudo.endsWith(")")) {
+        if (!matchesElementSelector(el, s.slice(start + 4, i - 1), scopeRoot, true)) return false;
+      }
+      else if (pseudo.startsWith(":where(") && pseudo.endsWith(")")) {
+        if (!matchesElementSelector(el, s.slice(start + 7, i - 1), scopeRoot, true)) return false;
+      }
+      else if (pseudo.startsWith(":matches(") && pseudo.endsWith(")")) {
+        if (!matchesElementSelector(el, s.slice(start + 9, i - 1), scopeRoot, true)) return false;
+      }
+      else if (pseudo.startsWith(":not(") && pseudo.endsWith(")")) {
+        if (matchesElementSelector(el, s.slice(start + 5, i - 1), scopeRoot, true)) return false;
+      }
       else return false;
     } else if (ch === "*") {
       i++;
@@ -290,15 +309,76 @@ function matchesComplexSelector(el, sel, scopeRoot) {
   return matchFrom(el, parts.length - 2);
 }
 
+function matchesNthChild(el, exprRaw, fromLast) {
+  const p = el.parentNode;
+  if (!p) return false;
+  const kids = p.children || p._children || p.childNodes || [];
+  let idx = 0;
+  let total = 0;
+  for (let k = 0; k < kids.length; k++) {
+    const ch = kids[k];
+    if (ch && ch.nodeType === 1) {
+      total++;
+      if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+        idx = total;
+      }
+    }
+  }
+  if (idx === 0) return false;
+  const targetIdx = fromLast ? (total - idx + 1) : idx;
+  const expr = String(exprRaw || "").trim().toLowerCase().replace(/\s+/g, "");
+  if (expr === "odd") return targetIdx % 2 === 1;
+  if (expr === "even") return targetIdx % 2 === 0;
+  if (/^[+-]?\d+$/.test(expr)) return targetIdx === parseInt(expr, 10);
+  const m = expr.match(/^([+-]?\d*)n([+-]\d+)?$/);
+  if (!m) return false;
+  const aStr = m[1];
+  const a = (aStr === "" || aStr === "+") ? 1 : (aStr === "-" ? -1 : parseInt(aStr, 10));
+  const b = m[2] ? parseInt(m[2], 10) : 0;
+  if (a === 0) return targetIdx === b;
+  const diff = targetIdx - b;
+  if (a > 0) return diff >= 0 && diff % a === 0;
+  return diff <= 0 && diff % a === 0;
+}
+
+function splitSelectorList(sel) {
+  const list = [];
+  let buf = "";
+  let inBracket = 0;
+  let inParen = 0;
+  let quote = "";
+  for (let i = 0; i < sel.length; i++) {
+    const ch = sel[i];
+    if (quote) {
+      buf += ch;
+      if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; buf += ch; continue; }
+    if (ch === "[") { inBracket++; buf += ch; continue; }
+    if (ch === "]") { if (inBracket > 0) inBracket--; buf += ch; continue; }
+    if (ch === "(") { inParen++; buf += ch; continue; }
+    if (ch === ")") { if (inParen > 0) inParen--; buf += ch; continue; }
+    if (ch === "," && inBracket === 0 && inParen === 0) {
+      if (buf.trim()) list.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim()) list.push(buf.trim());
+  return list;
+}
+
 function matchesElementSelector(el, selector, scopeRoot, noNativeFallback) {
   if (!el || el.nodeType !== 1 || !selector) return false;
   const s = selector.trim();
   if (s === "*") return true;
 
-  // Handle comma-separated selector lists
-  const list = s.split(",");
+  // Handle comma-separated selector lists (respecting parens/brackets)
+  const list = splitSelectorList(s);
   for (let i = 0; i < list.length; i++) {
-    const item = list[i].trim();
+    const item = list[i];
     if (item && matchesComplexSelector(el, item, scopeRoot)) return true;
   }
 
