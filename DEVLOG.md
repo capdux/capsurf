@@ -2188,3 +2188,6 @@
 
 ### Phase 356: `page-goto.spec.ts` 多次 `page.goto()` 返回 `null` 排障笔记
 - **`loaderId` 静态写死为 `capsurf-loader-001` 根因**：`CdpPageSession.loader_id` 此前始终固定为 `"capsurf-loader-001"`，多次导航返回相同 `loaderId`，导致 Playwright 客户端判定为同文档未发起新请求而使 `page.goto()` 返回 `null`。新增 `session.nextLoaderId()` 并在 `Page.navigate` / `Page.reload` 入口递增后，实测 `PHASE356_RESULT {"l1":"capsurf-loader-001","l2":"capsurf-loader-002","resps":["capsurf-loader-001","capsurf-loader-002"]}`。
+
+### Phase 357: `DOM.scrollIntoViewIfNeeded` 误拦截 Shadow DOM 节点排障笔记
+- **原生 `getBoxModel` 为 `0x0` 提前报错根因**：`DOM.scrollIntoViewIfNeeded` 此前直接拒收 `node_id_val <= 0` 的 `objectId` 且在 `bm.width <= 0 && bm.height <= 0` 时返回 `-32000 Node does not have a layout object`，导致 Shadow DOM 内 `#inner-link` 无法完成滚动与点击。接入 `queryJsObjectRect()` 回退后，实测 `PHASE357_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"clickCount":1}`。

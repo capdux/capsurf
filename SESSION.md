@@ -5659,3 +5659,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE356_RESULT {"l1":"capsurf-loader-001","l2":"capsurf-loader-002","resps":["capsurf-loader-001","capsurf-loader-002"]}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。
+
+## Phase 357: `DOM.scrollIntoViewIfNeeded` Shadow DOM 回退修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `DOM.scrollIntoViewIfNeeded` 接入 `queryJsObjectRect()` 回退，支持无原生 `NodeId` 或未入主布局树的 Shadow DOM 元素滚动定位。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE357_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"clickCount":1}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

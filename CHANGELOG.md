@@ -2948,3 +2948,7 @@
 ## [2026-11-23] Phase 356: 每次 `Page.navigate` / `Page.reload` 递增唯一 `loaderId`（修复 `page.goto()` 返回 `null`）
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp`, `src/cdp/page.cp`: 为 `CdpPageSession` 增加 `loader_id_buf`、`loader_seq` 与 `nextLoaderId()`，每次 `Page.navigate` / `Page.reload` 递增生成唯一 `loaderId` 并贯穿 `Network.requestWillBeSent` / `responseReceived` / `Page.frameNavigated` / `Page.lifecycleEvent` 与导航返回值。
+
+## [2026-11-23] Phase 357: `DOM.scrollIntoViewIfNeeded` 支持 Shadow DOM `objectId` 与 JS 布局回退（`selectors-misc.spec.ts` `[2/19]`）
+- **Fixed (`src/`)**:
+  - `src/cdp/dom.cp`: `DOM.scrollIntoViewIfNeeded` 允许无原生 `NodeId` 或原生盒尺寸为 `0x0` 的 `objectId`（如 Shadow DOM 元素）通过 `queryJsObjectRect()` 校验有效几何框后正常执行 JS `scrollIntoViewIfNeeded(true)`，不再误报 `"Node not found"` / `"Node does not have a layout object"`。

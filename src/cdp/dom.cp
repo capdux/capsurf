@@ -956,9 +956,15 @@ pub struct DomHandler {
                 if (resolved > 0) node_id_val = @as(i64, resolved);
             }
             if (node_id_val <= 0 || @as(usize, @intCast(node_id_val)) >= session.doc.nodes.items.len) {
-                return CdpResponse.err(req.id, -32000, "Node not found");
+                let rx: f32 = 0.0;
+                let ry: f32 = 0.0;
+                let rw: f32 = 0.0;
+                let rh: f32 = 0.0;
+                if (obj_id_val.len == 0 || !queryJsObjectRect(session, obj_id_val, node_id_val, &rx, &ry, &rw, &rh)) {
+                    return CdpResponse.err(req.id, -32000, "Node not found");
+                }
             }
-            const node_id: NodeId = @as(NodeId, @intCast(node_id_val));
+            const node_id: NodeId = if (node_id_val > 0 && @as(usize, @intCast(node_id_val)) < session.doc.nodes.items.len) @as(NodeId, @intCast(node_id_val)) else NULL_NODE;
 
             // Execute scroll into view in JS environment
             if (session.has_document) {
@@ -977,9 +983,19 @@ pub struct DomHandler {
                     }
                 }
                 session.ensureLayout();
-                const bm = session.getBoxModel(node_id);
-                if (bm.width <= 0.0 && bm.height <= 0.0) {
-                    return CdpResponse.err(req.id, -32000, "Node does not have a layout object");
+                let has_box = false;
+                if (node_id != NULL_NODE) {
+                    const bm = session.getBoxModel(node_id);
+                    has_box = (bm.width > 0.0 || bm.height > 0.0);
+                }
+                if (!has_box) {
+                    let rx: f32 = 0.0;
+                    let ry: f32 = 0.0;
+                    let rw: f32 = 0.0;
+                    let rh: f32 = 0.0;
+                    if (!queryJsObjectRect(session, obj_id_val, node_id_val, &rx, &ry, &rw, &rh)) {
+                        return CdpResponse.err(req.id, -32000, "Node does not have a layout object");
+                    }
                 }
 
                 let js_buf: [1024]u8 = [0; 1024];
