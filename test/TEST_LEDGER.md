@@ -804,3 +804,5 @@
 | WPT-B134 | `/css/css-display/` + `/css/css-position/` + `/css/css-overflow/` + `/css/css-text/` | 127/477 PASS (`display` 15/52 **2 FAIL→PASS**, `position` 82/267 **5 FAIL→PASS**, `overflow` 6/33 **4 FAIL→PASS**, `text` 24/125 **9 FAIL→PASS**, 0 CRASH) |
 | WPT-B136 | `/css/css-transforms/` + `/css/css-variables/` + `/css/css-ui/` + `/css/css-align/` (89/119) | 84/391 PASS (`transforms` 2/31, `variables` 60/224, `css-ui` 8/47 **2 FAIL→PASS**, `align` 14/89, 0 CRASH) |
 | WPT-B135 | `/html/dom/documents/` + `/dom/nodes/ 3/4..4/4` + `/dom/events/` | 120/286 PASS (`documents` 24/32, `nodes 3/4` 24/63, `nodes 4/4` 26/62 **1 FAIL→PASS**, `dom/events` 46/129 **1 FAIL→PASS**, 0 CRASH) |
+| WPT-B137 | `/css/css-fonts/` (89/121) + `/css/css-images/` + `/css/css-lists/` + `/html/syntax/` | 50/315 PASS (`fonts` 23/89, `images` 3/26 **1 FAIL→PASS**, `lists` 22/182 **2 FAIL→PASS**, `html/syntax` 2/18, 0 CRASH) |
+| WPT-B138 | `/dom/ranges/` (29/36) + `/dom/traversal/` + `/dom/collections/` + `/url/ 2/2` | 21/75 PASS (`ranges` 8/29, `traversal` 5/17, `collections` 6/11, `url 2/2` 2/18, 0 CRASH) |

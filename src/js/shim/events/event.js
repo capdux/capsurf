@@ -339,7 +339,7 @@ Event.prototype.stopImmediatePropagation = function () {
 
 Event.prototype.preventDefault = function () {
   const s = _eventState.get(this);
-  if (s && s.cancelable) {
+  if (s && s.cancelable && !s.inPassiveListener) {
     s.canceled = true;
   }
 };

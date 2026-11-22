@@ -56,22 +56,31 @@ EventTarget.prototype.addEventListener = function addEventListener(type, callbac
   // Per WHATWG DOM spec, flatten options BEFORE checking if callback is null
   let capture = false;
   let once = false;
-  let passive = false;
+  let passive = undefined;
   let signal = undefined;
   if (typeof options === "boolean") {
     capture = options;
   } else if (options !== null && typeof options === "object") {
     capture = Boolean(options.capture);
     once = Boolean(options.once);
-    passive = Boolean(options.passive);
+    if (options.passive !== undefined) {
+      passive = Boolean(options.passive);
+    }
     signal = options.signal;
   }
-  if (!type || callback === null || callback === undefined) return;
+  if (arguments.length < 2 || type === undefined || type === null || callback === null || callback === undefined) return;
   if (typeof callback !== "function" && typeof callback !== "object") return;
   if (signal && signal.aborted) return;
   const map = getListeners(this);
   if (!map) return;
   const t = String(type).toLowerCase();
+  if (passive === undefined) {
+    const isPassiveEvent = t === "touchstart" || t === "touchmove" || t === "wheel" || t === "mousewheel";
+    const isPassiveTarget = this === global ||
+      (typeof window !== "undefined" && this === window) ||
+      (typeof document !== "undefined" && document && (this === document || this === document.documentElement || this === document.body));
+    passive = Boolean(isPassiveEvent && isPassiveTarget);
+  }
   let list = map.get(t);
   if (!list) {
     list = [];
@@ -380,6 +389,8 @@ function internalDispatch(target, event, trusted) {
             if (item.once) {
               entry.removeEventListener(eventType, item.callback, item.capture);
             }
+            const prevPassive = eventState ? eventState.inPassiveListener : false;
+            if (eventState) eventState.inPassiveListener = Boolean(item.passive);
             try {
               if (typeof item.callback === "function") {
                 item.callback.call(entry, event);
@@ -391,6 +402,8 @@ function internalDispatch(target, event, trusted) {
               }
             } catch (e) {
               reportListenerError(e);
+            } finally {
+              if (eventState) eventState.inPassiveListener = prevPassive;
             }
           }
         }
