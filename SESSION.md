@@ -5554,3 +5554,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE341_RESULT: {"q1":{"cm":"BackCompat","hit":true,"id":"theRect"},"q2":{"cm":"CSS1Compat","hitLower":false,"hitExact":true}}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
+
+## Phase 342: `checkVisibility()` 闭合 `<details>` 可见性修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `checkVisibility()` 增加 `isElementDisplayNone(this)` 校验。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE342_RESULT: {"closed":{"sumCV":true,"inpCV":false},"opened":{"inpCV":true}}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

@@ -2696,7 +2696,7 @@ function installElementExtensions(proto) {
   markNative(proto.scrollIntoViewIfNeeded, "scrollIntoViewIfNeeded");
 
   proto.checkVisibility = function (options) {
-    if (!this.isConnected) return false;
+    if (!this.isConnected || isElementDisplayNone(this)) return false;
 
     function getStyle(el) {
       if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {

@@ -2141,3 +2141,6 @@
 
 ### Phase 341: `elementhandle-bounding-box.spec.ts` SVG `#therect` 返回 `null` 排障笔记
 - **`document.open/write/close` 未同步 Arena `doc.in_quirks_mode` 根因**：`page.setContent('<svg>...<rect id="theRect">...')` 无 DOCTYPE，但 `g.document.close()` 此前仅更新 JS 侧 `_reopenDoctype` 而未更新底层 `doc.in_quirks_mode`，导致 `compatMode` 误报 `"CSS1Compat"` 且 `src/css/matcher.cp` 未启用 Quirks Mode `#id` 大小写不敏感匹配。暴露 `__capsurf_set_quirks_mode` 并在 `document.close()` 同步后，实测 `q1={"cm":"BackCompat","hit":true,"id":"theRect"}`、`q2={"cm":"CSS1Compat","hitLower":false,"hitExact":true}`。
+
+### Phase 342: `selectors-role.spec.ts` 闭合 `<details>` 内 `<input>` 未被 `role=textbox` 过滤排障笔记
+- **`checkVisibility()` 未复用 `isElementDisplayNone()` 根因**：`isElementDisplayNone()` 虽已涵盖 `isHiddenInClosedDetails()`，但 `Element.prototype.checkVisibility()` 此前未调用该函数且 `getComputedStyle(inp).display` 仍返回 `"inline"`，导致 Playwright `role=` 引擎判定 `<details><summary>Open form</summary><label><input name="two"></label></details>` 可见。补全校验后，实测闭合时 `sumCV=true, inpCV=false`，展开 `<details open>` 后 `inpCV=true`。

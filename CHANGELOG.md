@@ -2877,3 +2877,7 @@
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: 新增 `@c fn js_capsurf_set_quirks_mode` 并暴露 `global.__capsurf_set_quirks_mode(bool)` 直接同步 `dom_ctx.doc.in_quirks_mode`。
   - `src/cdp/session_hooks.cp`: `g.document.close()` 依据 `dtMatch`（无 DOCTYPE 或非 `html` DOCTYPE 时为 Quirks Mode）调用 `g.__capsurf_set_quirks_mode(...)`，修复无 DOCTYPE 下 `document.compatMode === "BackCompat"` 与 `querySelector('#therect')` 匹配 `id="theRect"`。
+
+## [2026-11-22] Phase 342: 修复 `Element.prototype.checkVisibility()` 对闭合 `<details>` / 隐藏子树的可见性判定
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `checkVisibility()` 入口先校验 `isElementDisplayNone(this)`，使闭合 `<details>` 中非首 `<summary>` 子孙、未插槽 Shadow 子节点与 `display: none` 祖先子树均准确返回 `false`。
