@@ -2795,3 +2795,7 @@
 ## [2026-11-22] Phase 322: `Input.dispatchMouseEvent` `mouseMoved` 派发可信 `pointermove` 与 `mousemove` 事件
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `MouseMoved` 分支调用 `dispatchMouseDomEvent()` 派发 `mousemove`，并在 `dispatchMouseDomEvent()` 中为 `mousemove` 前置派发可信 `PointerEvent('pointermove', { pointerType: 'mouse', ... })`（修复 `page-mouse.spec.ts` `[6/15] should report correct pointerType property`）。
+
+## [2026-11-22] Phase 323: 在 `dispatchKeyJs()` 补充微任务刷新，对齐键盘事件任务边界
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `dispatchKeyJs()` 派发完单个键盘事件后立即调用 `session.ctx.drainJobs()`，使 `keydown` 回调入队的微任务在 `keypress` 派发前执行（修复 `page-keyboard.spec.ts` `[7/44] should dispatch key events in separate tasks`）。

@@ -167,6 +167,7 @@ fn dispatchKeyJs(session: *CdpPageSession, type_str_js: []const u8, escaped_key:
             session.doc.focused_node = session.focused_node;
         }
         session.ctx.freeValue(val);
+        session.ctx.drainJobs();
     }
 }
 

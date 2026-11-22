@@ -2081,3 +2081,6 @@
 
 ### Phase 322: `page-mouse.spec.ts` `[6/15]` 缺少 `pointermove` 事件排障笔记
 - **`MouseMoved` 仅更新 `hovered_node` 未派发 DOM 事件根因**：`src/cdp/input.cp` 的 `MouseMoved` 分支此前仅更新 `session.doc.hovered_node` 及拖拽选区状态，未触发任何 `pointermove`/`mousemove` DOM 事件。在 `MouseMoved` 接入 `dispatchMouseDomEvent("mousemove")` 并补充 `pointermove` 派发后，实测 `Input.dispatchMouseEvent({ type: "mouseMoved" })` 返回 `[{"t":"pointermove","pt":"mouse","trusted":true},{"t":"mousemove","trusted":true}]`。
+
+### Phase 323: `page-keyboard.spec.ts` `[7/44]` `microtask-keydown` 晚于 `keypress` 排障笔记
+- **连续 JS 派发未执行微任务检查点根因**：`Input.dispatchKeyEvent` (`keyDown`) 在同一 C++ 调用中先后调用 `dispatchKeyJs("keydown")` 与 `dispatchKeyJs("keypress")`，此前 `dispatchKeyJs()` 未调用 `session.ctx.drainJobs()`，导致 `keydown` 内的 `queueMicrotask` 延迟到整个 CDP 请求结束后才执行。在 `dispatchKeyJs()` 末尾补充 `session.ctx.drainJobs()` 后，实测严格输出 `["keydown","microtask-keydown","keypress","microtask-keypress"]`。
