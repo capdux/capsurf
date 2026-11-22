@@ -2237,3 +2237,4 @@
 - Phase 383 (`src/js/shim/index.js`, `src/js/shim/element/element.js`): 修复 `<frame>` 元素未挂载 `HTMLIFrameElement.prototype` 导致 `frame.src = ...` 不触发 `URL` 解析与子帧导航加载的问题。
 - Phase 384 (`src/layout/layout.cp`): 修复空 `<textarea>` 因无固有尺寸导致 `DOM.getContentQuads` 返回零面积 quad 并触发 Playwright `element is outside of the viewport` 超时的缺陷。
 - Phase 385 (`src/cdp/target.cp`, `src/cdp/server.cp`, `src/js/shim/window.js`): 通过 `popup_noopener` 标志区分普通弹窗与 `noopener`/`noreferrer` 弹窗，确保 `page.waitForEvent('popup')` 正常触发的同时严格隔离 `window.opener === null`。
+- Phase 386 (`src/js/shim/window.js`): 将 `<a target="_blank">` 默认点击行为并入 `activateClickedElement` 锚点分支，按 `rel` 属性自动传递 `noopener` 至 `openFn`，打通 `page-event-popup.spec.ts` 点击链接弹窗链路。

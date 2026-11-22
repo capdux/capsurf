@@ -42059,12 +42059,19 @@
           if (cTag === "select" || cTag === "textarea") {
             break;
           }
-          if (cTag === "a" && cur.getAttribute && cur.getAttribute("href")) {
+          if ((cTag === "a" || cTag === "area") && cur.getAttribute && cur.getAttribute("href") != null) {
             const href = cur.getAttribute("href");
-            const loc = (typeof location !== "undefined") ? location : global.location;
-            if (loc && href) {
-              if (href.startsWith("#")) loc.hash = href;
-              else loc.href = cur.href || href;
+            const tgtAttr = String((cur.getAttribute ? cur.getAttribute("target") : cur.target) || "").toLowerCase();
+            if (tgtAttr === "_blank") {
+              const relAttr = String((cur.getAttribute ? cur.getAttribute("rel") : cur.rel) || "").toLowerCase();
+              const isNoop = /(?:^|\s)(noopener|noreferrer)(?:$|\s)/.test(relAttr);
+              openFn(String(href), "_blank", isNoop ? "noopener" : "");
+            } else {
+              const loc = (typeof location !== "undefined") ? location : global.location;
+              if (loc && href) {
+                if (href.startsWith("#")) loc.hash = href;
+                else loc.href = cur.href || href;
+              }
             }
             break;
           }
