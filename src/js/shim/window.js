@@ -3518,10 +3518,11 @@ function installWindow(global) {
     else if (cleanFullUrl.indexOf(".html") !== -1 || cleanFullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
     else if (cleanFullUrl.indexOf(".css") !== -1) reqMime = "text/css";
 
+    const postStr = (reqBody !== undefined && reqBody !== null) ? String(reqBody) : null;
     if (typeof __capsurf_native_record_fetch === "function") {
-      __capsurf_native_record_fetch(cleanFullUrl, reqMime);
+      __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
     } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-      globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime);
+      globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
     }
 
     const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";

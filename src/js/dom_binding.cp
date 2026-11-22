@@ -131,6 +131,11 @@ pub struct FetchRecord {
     frame_id_len: usize = 0,
     loader_id_buf: [64]u8 = [0; 64],
     loader_id_len: usize = 0,
+    method_buf: [16]u8 = [0; 16],
+    method_len: usize = 0,
+    post_data_buf: [2048]u8 = [0; 2048],
+    post_data_len: usize = 0,
+    has_post_data: bool = false,
 
     fn getUrl(*_): []const u8 {
         return _.url_buf[0.._.url_len];
@@ -146,6 +151,14 @@ pub struct FetchRecord {
 
     fn getLoaderId(*_): []const u8 {
         return _.loader_id_buf[0.._.loader_id_len];
+    }
+
+    fn getMethod(*_): []const u8 {
+        return if (_.method_len > 0) _.method_buf[0.._.method_len] else "GET";
+    }
+
+    fn getPostData(*_): []const u8 {
+        return _.post_data_buf[0.._.post_data_len];
     }
 }
 
@@ -251,6 +264,10 @@ pub struct JsDomContext {
     }
 
     fn addFetchRecord(*_, url: []const u8, mime_type: []const u8) {
+        _.addFetchRecordWithMethod(url, mime_type, "GET", "", false);
+    }
+
+    fn addFetchRecordWithMethod(*_, url: []const u8, mime_type: []const u8, method: []const u8, post_data: []const u8, has_post_data: bool) {
         if (_.fetch_count >= MAX_FETCH_RECORDS) return;
         let rec = &_.fetch_records[_.fetch_count];
         const u_len = @min(url.len, rec.url_buf.len);
@@ -268,6 +285,20 @@ pub struct JsDomContext {
         const l_len = @min(_.loader_id_len, rec.loader_id_buf.len);
         @memcpy(rec.loader_id_buf[0..l_len], _.loader_id_buf[0..l_len]);
         rec.loader_id_len = l_len;
+
+        const meth = if (method.len > 0) method else "GET";
+        const meth_len = @min(meth.len, rec.method_buf.len);
+        @memcpy(rec.method_buf[0..meth_len], meth[0..meth_len]);
+        rec.method_len = meth_len;
+
+        rec.has_post_data = has_post_data;
+        if (has_post_data && post_data.len > 0) {
+            const pd_len = @min(post_data.len, rec.post_data_buf.len);
+            @memcpy(rec.post_data_buf[0..pd_len], post_data[0..pd_len]);
+            rec.post_data_len = pd_len;
+        } else {
+            rec.post_data_len = 0;
+        }
 
         _.fetch_count += 1;
     }
@@ -2387,16 +2418,41 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     if (u_ptr != null) {
         defer JS_FreeCString(ctx, u_ptr);
         let m_str: []const u8 = "application/octet-stream";
+        let m_ptr: ([*c]const u8)? = null;
         if (argc >= 2) {
             let m_len: usize = 0;
-            const m_ptr = JS_ToCStringLen2(ctx, &m_len, unsafe { argv[1] }, 0);
+            m_ptr = JS_ToCStringLen2(ctx, &m_len, unsafe { argv[1] }, 0);
             if (m_ptr != null) {
-                defer JS_FreeCString(ctx, m_ptr);
-                dom_ctx.addFetchRecord(u_ptr.?[0..u_len], m_ptr.?[0..m_len]);
-                return jsNull();
+                m_str = unsafe { m_ptr.?[0..m_len] };
             }
         }
-        dom_ctx.addFetchRecord(u_ptr.?[0..u_len], m_str);
+        defer if (m_ptr != null) JS_FreeCString(ctx, m_ptr);
+
+        let meth_str: []const u8 = "GET";
+        let meth_ptr: ([*c]const u8)? = null;
+        if (argc >= 3) {
+            let meth_len: usize = 0;
+            meth_ptr = JS_ToCStringLen2(ctx, &meth_len, unsafe { argv[2] }, 0);
+            if (meth_ptr != null && meth_len > 0) {
+                meth_str = unsafe { meth_ptr.?[0..meth_len] };
+            }
+        }
+        defer if (meth_ptr != null) JS_FreeCString(ctx, meth_ptr);
+
+        let pd_str: []const u8 = "";
+        let pd_ptr: ([*c]const u8)? = null;
+        let has_pd = false;
+        if (argc >= 4 && unsafe { argv[3].tag != 2 && argv[3].tag != 3 }) {
+            let pd_len: usize = 0;
+            pd_ptr = JS_ToCStringLen2(ctx, &pd_len, unsafe { argv[3] }, 0);
+            if (pd_ptr != null) {
+                pd_str = unsafe { pd_ptr.?[0..pd_len] };
+                has_pd = true;
+            }
+        }
+        defer if (pd_ptr != null) JS_FreeCString(ctx, pd_ptr);
+
+        dom_ctx.addFetchRecordWithMethod(u_ptr.?[0..u_len], m_str, meth_str, pd_str, has_pd);
     }
     return jsNull();
 }
@@ -2565,7 +2621,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_get_cookie_header", js_capsurf_get_cookie_header, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
-    defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 4);
     defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
 

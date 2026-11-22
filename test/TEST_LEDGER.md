@@ -671,7 +671,22 @@
 | 2026-11-23 00:32 | `frame-frame-element.spec.ts` | 1/6 PASS | PW Batch 110 |
 | 2026-11-23 00:32 | `expect-boolean.spec.ts` | 83/84 PASS (仅`frameLocator 2` 1 fail!) | PW Batch 110 |
 | 2026-11-23 00:32 | `frame-goto.spec.ts` | 0/4 PASS (非allow-list直跑) | PW Batch 110 |
+| 2026-11-23 00:38 | `/css/css-overflow/` (`1/3..3/3`) | 2/11, 1/11, 3/11 PASS (4 `FAIL→PASS`) | WPT Batch 102 (`19470`, `bin_dev`) |
+| 2026-11-23 00:38 | `/css/css-align/` (`1/2..2/2`) | 7/60, 10/59 PASS | WPT Batch 102 (`19470`, `bin_dev`) |
+| 2026-11-23 00:42 | `page-network-response.spec.ts` | 7/12 PASS (headers+statusText全过! `[13/21]`120s截断) | PW Batch 111 |
+| 2026-11-23 00:42 | `page-network-idle.spec.ts` | 1/2 PASS (`fetch-a`已达! `[3/10]`120s截断) | PW Batch 111 |
+| 2026-11-23 00:42 | `page-goto.spec.ts` | 22/28 PASS (`about:blank`过! `[29/61]`120s截断) | PW Batch 111 |
+| 2026-11-23 00:42 | `page-select-option.spec.ts` | 1/3 PASS (`[4/33]`120s截断) | PW Batch 111 |
 | 2026-11-23 00:03 | `page-mouse.spec.ts` | 14/14 PASS (`[15/15]`120s截断) | PW Batch 106 |
 | 2026-11-23 00:03 | `selectors-misc.spec.ts` | 18/19 PASS (`internal:has=`PASS, 仅`#inner-link`) | PW Batch 106 |
 | 2026-11-23 00:03 | `page-select-option.spec.ts` | 4/4 PASS (`[1..4]`全绿! `[5/33]`120s截断) | PW Batch 106 |
 | 2026-11-23 00:03 | `frame-frame-element.spec.ts` | 1/6 PASS (`contentFrame` FAIL→PASS) | PW Batch 106 |
+| WPT-B103 | `/css/selectors/ 1/3..3/3` + `/dom/nodes/ 1/5..2/5` | 67/168 PASS (4 FAIL→PASS; `/dom/nodes/ 2/5` 尾段串行复测超时 180s) |
+| 2026-11-23 00:52 | `expect-boolean.spec.ts` | 83/84 PASS (仅`frameLocator 2`超时, 3 exp FAIL→PASS) | PW Batch 112 |
+| 2026-11-23 00:52 | `page-fill.spec.ts` | 38/40 PASS (1报错尾空格 + 1 `load`超时) | PW Batch 112 |
+| 2026-11-23 00:52 | `page-event-popup.spec.ts` | 0/13 PASS (`window.open`未定义, 非allow-list) | PW Batch 112 |
+| 2026-11-23 00:52 | `network-post-data.spec.ts` | 0/6 PASS (`new Request`+`fetch`未触发`waitForRequest`, 非allow-list) | PW Batch 112 |
+| 2026-11-23 00:58 | `page-network-response.spec.ts` | 10/14 PASS (`gzip`+多值头+`statusText`全过! `[15/21]`120s截断) | PW Batch 113 |
+| 2026-11-23 00:58 | `frame-frame-element.spec.ts` | 1/6 PASS (`bin_dev` Phase 369前启动) | PW Batch 113 |
+| 2026-11-23 00:58 | `page-cache-storage.spec.ts` | 0/1 PASS (`caches is not defined`, 非allow-list) | PW Batch 113 |
+| 2026-11-23 00:58 | `page-leaks.spec.ts` | 0/3 PASS (WeakRefs 108/116 > 25, 非allow-list) | PW Batch 113 |

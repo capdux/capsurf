@@ -2221,3 +2221,4 @@
 - Phase 367 (`src/net/http_loader.cp`): 即使发送 `Accept-Encoding: identity`，部分服务端（如 Playwright gzip 测试端点）仍强制返回 `Content-Encoding: gzip`。通过复用 `cap:pack` 的 `gunzip` 与 `inflate`，在 `decodeChunkedInPlace` 之后自动解压响应体并拷贝至 `session.allocator`，使 DOM 解析与 `Network.getResponseBody` 均获得明文内容。
 - Phase 368 (`src/cdp/network.cp`, `src/cdp/session.cp`): 修复 `pollNetworkEvents` 对子资源与 `fetch()` 硬编码 `status=200/headers={}` 及同名响应头被 JSON 键覆盖的问题；通过 `recordPendingFetchMeta` 在 `sessionHttpGetHook` 捕获完整响应元信息并在轮询事件时按 RFC 规则合并同名头输出。
 - Phase 369 (`src/cdp/dom.cp`): 修复 `iframe.remove()` 后 `collectDocIframeEntries` 按 DOM 序号顺位重编号导致 `DOM.getFrameOwner("capsurf-child-1")` 误返回第二个 `<iframe>` 节点的缺陷；通过优先检索 `known_child_frames` 的 `detached` 标志，确保已分离帧准确报错。
+- Phase 370 (`src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/cdp/session.cp`): 修复 `fetch()` 请求在 `Network.requestWillBeSent` 中固定上报 `method: "GET"` 且缺失 `hasPostData`/`postData` 的问题，打通 `new Request(..., { method: 'POST'/'PUT', body })` 数据链路。

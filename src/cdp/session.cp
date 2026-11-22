@@ -5457,10 +5457,19 @@ pub struct CdpPageSession {
                 else
                     "";
 
+                const fetch_method = rec.getMethod();
+                let pd_esc_buf: [4096]u8 = undefined;
+                let pd_kv_buf: [4200]u8 = undefined;
+                let pd_kv: []const u8 = "";
+                if (rec.has_post_data) {
+                    const pd_esc = escapeJsonString(rec.getPostData(), &pd_esc_buf);
+                    pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\"", .{pd_esc}) catch "";
+                }
+
                 const req_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"{s}}}",
-                    .{ req_seq, lid, ref_esc, fetch_esc, ua_esc, accept_val, ref_esc, init_type, res_type, fid, bctx_kv },
+                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"{s}}}",
+                    .{ req_seq, lid, ref_esc, fetch_esc, fetch_method, ua_esc, accept_val, ref_esc, pd_kv, init_type, res_type, fid, bctx_kv },
                 ) catch "";
                 const is_child_net = _.child_network_session_id_len > 0 &&
                     ((_.iframe_origin_len > 0 && std.mem.startsWith(u8, fetch_url, _.iframe_origin_buf[0.._.iframe_origin_len])) ||
