@@ -2267,3 +2267,4 @@
 - Phase 413 (`src/js/dom_binding.cp`, `src/js/shim/window.js`): 抽离 `resolveOrCreateNativeChild` 打通 JS `document.createTextNode` 向原生 Arena DOM 的挂载，解决多文本子节点 `<title>` 拼接与 `head` 移除后插入 `<title>` 的遍历问题；在 `title` setter 中清理 `head._children` 缓存消除 `head.lastChild` 过期镜像。
 - Phase 414 (`src/js/shim/events/dispatch.js`, `src/js/shim/events/event.js`): 依据 WHATWG DOM 规范为 `window`/`document`/`documentElement`/`body` 上的 `touchstart`/`touchmove`/`wheel`/`mousewheel` 启用默认 `passive: true` 并在触发期间忽略 `preventDefault()`，同时放开空字符串事件名注册。
 - Phase 415 (`src/net/http_loader.cp`): 验收上游修复 `lib/pack/brotli.cp` 后正式接入 `brotliDecompress` 完成 `Content-Encoding: br` 端到端解压。
+- Phase 416 (`src/js/shim/element/html-classes.js`, `src/js/shim/index.js`, `src/js/shim/window.js`): 补全 `HTMLBaseElement` 接口及 `href` URL 解析逻辑；为 `setTimeout`/`setInterval` 注入嵌套深度 `nestingLevel > 5` 4ms 最小延时钳位。

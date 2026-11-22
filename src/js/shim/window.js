@@ -2197,6 +2197,8 @@ function installWindow(global) {
       }
       pumped++;
 
+      const prevNesting = global.__capsurf_timer_nesting || 0;
+      global.__capsurf_timer_nesting = (item.nestingLevel || 0) + 1;
       try {
         if (typeof item.cb === "function") {
           item.cb.apply(global, item.args);
@@ -2209,10 +2211,14 @@ function installWindow(global) {
         } else if (typeof console !== "undefined" && console.error) {
           console.error(e);
         }
+      } finally {
+        global.__capsurf_timer_nesting = prevNesting;
       }
 
       if (item.isInterval && activeTimers.has(item.id)) {
-        item.due = nativeDateNow() + item.delay;
+        item.nestingLevel = (item.nestingLevel || 0) + 1;
+        const nextDelay = (item.nestingLevel > 5 && item.delay < 4) ? 4 : item.delay;
+        item.due = nativeDateNow() + nextDelay;
         item.order = timerOrderCounter++;
         insertTimerTask(item);
       }
@@ -2230,7 +2236,9 @@ function installWindow(global) {
 
   global.setTimeout = markNative(function (cb, ms) {
     const id = nextTimerId();
-    const delay = Math.max(0, Number(ms) || 0);
+    const curNesting = global.__capsurf_timer_nesting || 0;
+    const rawDelay = Math.max(0, Number(ms) || 0);
+    const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
     const due = nativeDateNow() + delay;
     const args = Array.prototype.slice.call(arguments, 2);
     const item = {
@@ -2241,6 +2249,7 @@ function installWindow(global) {
       delay: delay,
       due: due,
       isInterval: false,
+      nestingLevel: curNesting,
     };
     activeTimers.set(id, true);
     insertTimerTask(item);
@@ -2267,7 +2276,9 @@ function installWindow(global) {
 
   global.setInterval = markNative(function (cb, ms) {
     const id = nextTimerId();
-    const delay = Math.max(0, Number(ms) || 0);
+    const curNesting = global.__capsurf_timer_nesting || 0;
+    const rawDelay = Math.max(0, Number(ms) || 0);
+    const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
     const due = nativeDateNow() + delay;
     const args = Array.prototype.slice.call(arguments, 2);
     const item = {
@@ -2278,6 +2289,7 @@ function installWindow(global) {
       delay: delay,
       due: due,
       isInterval: true,
+      nestingLevel: curNesting,
     };
     activeTimers.set(id, true);
     insertTimerTask(item);

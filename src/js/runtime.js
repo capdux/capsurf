@@ -14319,6 +14319,41 @@
     global.HTMLImageElement = HTMLImageElement;
     if (typeof globalThis !== "undefined") globalThis.HTMLImageElement = HTMLImageElement;
     if (typeof window !== "undefined") window.HTMLImageElement = HTMLImageElement;
+
+    function HTMLBaseElement() {}
+    HTMLBaseElement.prototype = Object.create(HTMLElementProto);
+    HTMLBaseElement.prototype.constructor = HTMLBaseElement;
+    Object.defineProperty(HTMLBaseElement.prototype, Symbol.toStringTag, {
+      value: "HTMLBaseElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLBaseElement.prototype, "href", {
+      get: function () {
+        const raw = this.getAttribute("href");
+        const docUrl = (typeof document !== "undefined" && document && (document.URL || (document.location && document.location.href))) || "about:blank";
+        if (raw === null) return docUrl;
+        const trimmed = String(raw).trim();
+        if (!trimmed) return docUrl;
+        try {
+          return new URL(trimmed, docUrl).href;
+        } catch (e) {
+          return raw;
+        }
+      },
+      set: function (v) {
+        this.setAttribute("href", String(v));
+      },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLBaseElement.prototype, "target", {
+      get: function () { return this.getAttribute("target") || ""; },
+      set: function (v) { this.setAttribute("target", String(v)); },
+      configurable: true,
+    });
+    markNative(HTMLBaseElement, "HTMLBaseElement");
+    global.HTMLBaseElement = HTMLBaseElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLBaseElement = HTMLBaseElement;
+    if (typeof window !== "undefined") window.HTMLBaseElement = HTMLBaseElement;
     function Image(width, height) {
       const img = (typeof document !== "undefined" && document && typeof document.createElement === "function")
         ? document.createElement("img")
@@ -31904,6 +31939,8 @@
         }
         pumped++;
 
+        const prevNesting = global.__capsurf_timer_nesting || 0;
+        global.__capsurf_timer_nesting = (item.nestingLevel || 0) + 1;
         try {
           if (typeof item.cb === "function") {
             item.cb.apply(global, item.args);
@@ -31916,10 +31953,14 @@
           } else if (typeof console !== "undefined" && console.error) {
             console.error(e);
           }
+        } finally {
+          global.__capsurf_timer_nesting = prevNesting;
         }
 
         if (item.isInterval && activeTimers.has(item.id)) {
-          item.due = nativeDateNow() + item.delay;
+          item.nestingLevel = (item.nestingLevel || 0) + 1;
+          const nextDelay = (item.nestingLevel > 5 && item.delay < 4) ? 4 : item.delay;
+          item.due = nativeDateNow() + nextDelay;
           item.order = timerOrderCounter++;
           insertTimerTask(item);
         }
@@ -31937,7 +31978,9 @@
 
     global.setTimeout = markNative(function (cb, ms) {
       const id = nextTimerId();
-      const delay = Math.max(0, Number(ms) || 0);
+      const curNesting = global.__capsurf_timer_nesting || 0;
+      const rawDelay = Math.max(0, Number(ms) || 0);
+      const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
       const due = nativeDateNow() + delay;
       const args = Array.prototype.slice.call(arguments, 2);
       const item = {
@@ -31948,6 +31991,7 @@
         delay: delay,
         due: due,
         isInterval: false,
+        nestingLevel: curNesting,
       };
       activeTimers.set(id, true);
       insertTimerTask(item);
@@ -31974,7 +32018,9 @@
 
     global.setInterval = markNative(function (cb, ms) {
       const id = nextTimerId();
-      const delay = Math.max(0, Number(ms) || 0);
+      const curNesting = global.__capsurf_timer_nesting || 0;
+      const rawDelay = Math.max(0, Number(ms) || 0);
+      const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
       const due = nativeDateNow() + delay;
       const args = Array.prototype.slice.call(arguments, 2);
       const item = {
@@ -31985,6 +32031,7 @@
         delay: delay,
         due: due,
         isInterval: true,
+        nestingLevel: curNesting,
       };
       activeTimers.set(id, true);
       insertTimerTask(item);
@@ -45086,6 +45133,7 @@
         case "dialog": Object.setPrototypeOf(el, global.HTMLDialogElement ? global.HTMLDialogElement.prototype : global.HTMLElement.prototype); break;
         case "style": Object.setPrototypeOf(el, (global.HTMLStyleElement || global.HTMLElement).prototype); break;
         case "link": Object.setPrototypeOf(el, (global.HTMLLinkElement || global.HTMLElement).prototype); break;
+        case "base": Object.setPrototypeOf(el, (global.HTMLBaseElement || global.HTMLElement).prototype); break;
         case "video": Object.setPrototypeOf(el, (global.HTMLVideoElement || global.HTMLMediaElement || global.HTMLElement).prototype); break;
         case "audio": Object.setPrototypeOf(el, (global.HTMLAudioElement || global.HTMLMediaElement || global.HTMLElement).prototype); break;
         case "track": Object.setPrototypeOf(el, (global.HTMLTrackElement || global.HTMLElement).prototype); break;

@@ -1592,6 +1592,41 @@ function installHtmlClasses(global) {
   global.HTMLImageElement = HTMLImageElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLImageElement = HTMLImageElement;
   if (typeof window !== "undefined") window.HTMLImageElement = HTMLImageElement;
+
+  function HTMLBaseElement() {}
+  HTMLBaseElement.prototype = Object.create(HTMLElementProto);
+  HTMLBaseElement.prototype.constructor = HTMLBaseElement;
+  Object.defineProperty(HTMLBaseElement.prototype, Symbol.toStringTag, {
+    value: "HTMLBaseElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLBaseElement.prototype, "href", {
+    get: function () {
+      const raw = this.getAttribute("href");
+      const docUrl = (typeof document !== "undefined" && document && (document.URL || (document.location && document.location.href))) || "about:blank";
+      if (raw === null) return docUrl;
+      const trimmed = String(raw).trim();
+      if (!trimmed) return docUrl;
+      try {
+        return new URL(trimmed, docUrl).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) {
+      this.setAttribute("href", String(v));
+    },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLBaseElement.prototype, "target", {
+    get: function () { return this.getAttribute("target") || ""; },
+    set: function (v) { this.setAttribute("target", String(v)); },
+    configurable: true,
+  });
+  markNative(HTMLBaseElement, "HTMLBaseElement");
+  global.HTMLBaseElement = HTMLBaseElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLBaseElement = HTMLBaseElement;
+  if (typeof window !== "undefined") window.HTMLBaseElement = HTMLBaseElement;
   function Image(width, height) {
     const img = (typeof document !== "undefined" && document && typeof document.createElement === "function")
       ? document.createElement("img")
