@@ -1424,6 +1424,20 @@ function installWindow(global) {
   function bodyToPostString(data) {
     if (data === undefined || data === null) return null;
     if (typeof data === "string") return data;
+    if (typeof FormData === "function" && data instanceof FormData) {
+      const bnd = "----CapSurfFormBoundary7d9f";
+      const chunks = [];
+      data.forEach(function (val, key) {
+        if (typeof File === "function" && val instanceof File) {
+          const inner = bodyToPostString(val) || "";
+          chunks.push("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"; filename=\"" + (val.name || "blob") + "\"\r\nContent-Type: " + (val.type || "application/octet-stream") + "\r\n\r\n" + inner + "\r\n");
+        } else {
+          chunks.push("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"\r\n\r\n" + String(val) + "\r\n");
+        }
+      });
+      chunks.push("--" + bnd + "--\r\n");
+      return chunks.join("");
+    }
     if (data._bytes && data._bytes.BYTES_PER_ELEMENT) {
       return typeof TextDecoder === "function" ? new TextDecoder().decode(data._bytes) : String.fromCharCode.apply(null, data._bytes);
     }

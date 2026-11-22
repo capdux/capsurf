@@ -3001,3 +3001,4 @@
 - Phase 374: `src/cdp/session.cp`, `src/js/shim/window.js` — `Network.requestWillBeSent` 补充 Base64 `postDataEntries` 数组，并为 `navigator.sendBeacon` 接入请求事件追踪。
 - Phase 375: `src/js/shim/window.js` — 新增共用 `bodyToPostString(data)` 解码 `File`/`Blob`/`ArrayBuffer` 请求体，供 `fetch` 与 `navigator.sendBeacon` 复用。
 - Phase 376: `src/cdp/network.cp`, `src/cdp/session.cp` — 新增 `formatHttpHeadersExtraInfoJson` 并在 `pollNetworkEvents` 发射 `Network.responseReceivedExtraInfo`。
+- Phase 377: `src/js/shim/file.js`, `src/js/shim/window.js` — 新增 `Response.prototype.formData()` 解析与 `bodyToPostString` 的 `FormData` 序列化支持。

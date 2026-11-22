@@ -691,3 +691,12 @@
 | 2026-11-23 00:58 | `page-cache-storage.spec.ts` | 0/1 PASS (`caches is not defined`, 非allow-list) | PW Batch 113 |
 | 2026-11-23 00:58 | `page-leaks.spec.ts` | 0/3 PASS (WeakRefs 108/116 > 25, 非allow-list) | PW Batch 113 |
 | WPT-B104 | `/dom/nodes/ 3/5..5/5` + `/dom/events/ 1/2..2/2` | 104/279 PASS (3 FAIL→PASS, 0 CRASH) |
+| 2026-11-23 01:03 | `page-add-script-tag.spec.ts` | 9/9 PASS (8.3s, 1 exp FAIL→PASS) | PW Batch 114 (`bin_dev` 全绿!) |
+| 2026-11-23 01:03 | `page-set-content.spec.ts` | 14/16 PASS (`retry`120s截断) | PW Batch 114 |
+| 2026-11-23 01:03 | `frame-frame-element.spec.ts` | 1/6 PASS (Phase 372前启动) | PW Batch 114 |
+| 2026-11-23 01:03 | `network-post-data.spec.ts` | 0/6 PASS (13.2s不超时! `postData`仍为空) | PW Batch 114 |
+| 2026-11-23 01:10 | `page-network-response.spec.ts` | 14/21 PASS (Phase 371不再超时! +4 PASS) | PW Batch 115 |
+| 2026-11-23 01:10 | `page-network-idle.spec.ts` | 1/10 PASS (`:84`超时后断开连接) | PW Batch 115 |
+| 2026-11-23 01:10 | `frame-frame-element.spec.ts` | 3/6 PASS (`@smoke`+`contentFrame`+`detached`全过! +2 FAIL→PASS) | PW Batch 115 |
+| 2026-11-23 01:10 | `page-cache-storage.spec.ts` | 1/1 PASS (2.2s, 非allow-list) | PW Batch 115 (`bin_dev` 全绿!) |
+| WPT-B105 | `/dom/traversal/ 1/2..2/2` + `/dom/ranges/ 1/3..3/3` | 12/53 PASS (0 CRASH, `/dom/ranges/` 尾段串行复测超时 180s) |

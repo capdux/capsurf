@@ -678,11 +678,64 @@ Response.prototype.arrayBuffer = function () {
   return Promise.resolve(stringToUtf8(String(this._body)).buffer);
 };
 
+Response.prototype.formData = function () {
+  if (typeof FormData !== "function") {
+    return Promise.reject(new TypeError("FormData is not defined"));
+  }
+  const bodyStr = String(this._body != null ? this._body : "");
+  const ct = (this._headers && typeof this._headers.get === "function") ? String(this._headers.get("content-type") || "") : "";
+  const fd = new FormData();
+  if (ct.toLowerCase().indexOf("application/x-www-form-urlencoded") !== -1) {
+    const sp = new URLSearchParams(bodyStr);
+    sp.forEach(function (v, k) { fd.append(k, v); });
+    return Promise.resolve(fd);
+  }
+  let boundary = "";
+  const bm = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(ct);
+  if (bm) {
+    boundary = bm[1] || bm[2] || "";
+  } else if (bodyStr.startsWith("--")) {
+    const eol = bodyStr.indexOf("\n");
+    if (eol > 2) boundary = bodyStr.slice(2, eol).replace(/\r$/, "");
+  }
+  if (!boundary) {
+    return Promise.reject(new TypeError("Invalid MIME type for formData()"));
+  }
+  const delim = "--" + boundary;
+  const parts = bodyStr.split(delim);
+  for (let i = 1; i < parts.length; i++) {
+    let part = parts[i];
+    if (!part || part.startsWith("--")) continue;
+    if (part.startsWith("\r\n")) part = part.slice(2);
+    else if (part.startsWith("\n")) part = part.slice(1);
+    let sepIdx = part.indexOf("\r\n\r\n");
+    let sepLen = 4;
+    if (sepIdx === -1) { sepIdx = part.indexOf("\n\n"); sepLen = 2; }
+    if (sepIdx === -1) continue;
+    const hdrRaw = part.slice(0, sepIdx);
+    let val = part.slice(sepIdx + sepLen);
+    if (val.endsWith("\r\n")) val = val.slice(0, -2);
+    else if (val.endsWith("\n")) val = val.slice(0, -1);
+    const nm = /name="([^"]*)"/i.exec(hdrRaw);
+    if (!nm) continue;
+    const fieldName = nm[1];
+    const fnm = /filename="([^"]*)"/i.exec(hdrRaw);
+    if (fnm && typeof File === "function") {
+      const ctm = /content-type:\s*([^\r\n]+)/i.exec(hdrRaw);
+      fd.append(fieldName, new File([val], fnm[1], { type: ctm ? ctm[1].trim() : "application/octet-stream" }));
+    } else {
+      fd.append(fieldName, val);
+    }
+  }
+  return Promise.resolve(fd);
+};
+
 markNative(Response, "Response");
 markNative(Response.prototype.blob, "blob");
 markNative(Response.prototype.text, "text");
 markNative(Response.prototype.json, "json");
 markNative(Response.prototype.arrayBuffer, "arrayBuffer");
+markNative(Response.prototype.formData, "formData");
 
 // If Request or Response were already defined by environment, enhance their .blob()
 function patchExistingBodyBlob(Ctor) {
