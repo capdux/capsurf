@@ -1439,6 +1439,18 @@ function installShim(global) {
       return global.document._selection;
     };
     if (docProto) {
+      if (!docProto.elementsFromPoint) {
+        docProto.elementsFromPoint = markNative(function (x, y) {
+          const out = [];
+          const top = typeof this.elementFromPoint === "function" ? this.elementFromPoint(x, y) : null;
+          let cur = top;
+          while (cur && cur.nodeType === 1) {
+            out.push(cur);
+            cur = cur.parentElement;
+          }
+          return out;
+        }, "elementsFromPoint");
+      }
       if (!global.document.elementFromPoint && docProto.elementFromPoint) {
         global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
       }

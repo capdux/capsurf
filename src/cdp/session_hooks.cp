@@ -1605,6 +1605,7 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "        try {\n" ++
     "          var m = reopenBuf.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);\n" ++
     "          if (g.document.body) g.document.body.innerHTML = m ? m[1] : reopenBuf;\n" ++
+    "          if (typeof g.__capsurf_syncNamedGlobals === 'function') g.__capsurf_syncNamedGlobals();\n" ++
     "        } catch (e) {}\n" ++
     "        reopenBuf = '';\n" ++
     "        g.__capsurf_reopen_load_pending = (g.__capsurf_reopen_load_pending || 0) + 1;\n" ++

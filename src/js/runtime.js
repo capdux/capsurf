@@ -28740,14 +28740,39 @@
       }
     }
 
+    let _pageHasAnimOrTrans = false;
+    let _checkedStyleCount = -1;
+
     function flushPendingStyleChecks() {
       _pendingStyleCheckScheduled = false;
       if (_pendingStyleCheckElements.size === 0) return;
       const list = Array.from(_pendingStyleCheckElements);
       _pendingStyleCheckElements.clear();
+      if (!_pageHasAnimOrTrans && typeof document !== "undefined" && document && typeof document.querySelectorAll === "function") {
+        try {
+          const styles = document.querySelectorAll("style");
+          if (styles.length !== _checkedStyleCount) {
+            _checkedStyleCount = styles.length;
+            for (let si = 0; si < styles.length; si++) {
+              const txt = String(styles[si].textContent || "");
+              if (txt.indexOf("transition") !== -1 || txt.indexOf("animation") !== -1 || txt.indexOf("keyframes") !== -1) {
+                _pageHasAnimOrTrans = true;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
       for (let i = 0; i < list.length; i++) {
         const el = list[i];
         if (!el || el.nodeType !== 1) continue;
+        if (!_pageHasAnimOrTrans && _activeCssAnimElements.size === 0) {
+          const stAttr = (el.getAttribute && el.getAttribute("style")) || "";
+          const low = typeof stAttr === "string" ? stAttr.toLowerCase() : "";
+          if (low.indexOf("transition") === -1 && low.indexOf("animation") === -1) {
+            continue;
+          }
+        }
         // Only trigger transitions automatically if before-change style is already known
         // (either via explicit getComputedStyle or via post-DCL initial snapshot), or if
         // an animation may have been added/removed.
@@ -28787,6 +28812,7 @@
           }
         }
         if (!hasAnimOrTrans) return;
+        _pageHasAnimOrTrans = true;
         const allEls = document.querySelectorAll("*");
         for (let i = 0; i < allEls.length; i++) {
           const el = allEls[i];
@@ -44479,6 +44505,18 @@
         return global.document._selection;
       };
       if (docProto) {
+        if (!docProto.elementsFromPoint) {
+          docProto.elementsFromPoint = markNative(function (x, y) {
+            const out = [];
+            const top = typeof this.elementFromPoint === "function" ? this.elementFromPoint(x, y) : null;
+            let cur = top;
+            while (cur && cur.nodeType === 1) {
+              out.push(cur);
+              cur = cur.parentElement;
+            }
+            return out;
+          }, "elementsFromPoint");
+        }
         if (!global.document.elementFromPoint && docProto.elementFromPoint) {
           global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
         }

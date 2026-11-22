@@ -2485,3 +2485,9 @@
   - `src/cdp/dom.cp`: `DOM.resolveNode` 兼容 `backendNodeId`；`DOM.getBoxModel`/`DOM.getContentQuads` 补齐 `session.ensureLayout()`。
   - `src/cdp/runtime.cp`: 实现 `Runtime.getProperties` 真实属性枚举。
   - `src/cdp/session.cp`: `Network.requestWillBeSent`/`Network.responseReceived` 使用 `escapeJsonString` 转义 `ref_esc` 与 `fetch_esc`。
+
+## [2026-11-22] Phase 257: `flushPendingStyleChecks` 性能优化、`elementsFromPoint` 与 `document.close` 同步修复
+- **Fixed (`src/`)**:
+  - `src/js/shim/animations.js`（同步重新生成 `src/js/runtime.js`、`src/js/runtime_source.cp`）：`flushPendingStyleChecks` 增加 `_pageHasAnimOrTrans` 门控，避免无动画页面批量 `style` 修改触发 $O(N^2)$ `getComputedStyle`。
+  - `src/js/shim/index.js`: 补齐 `docProto.elementsFromPoint(x, y)`，打通 Playwright `click`/`check`/`uncheck`/`hover`。
+  - `src/cdp/session_hooks.cp`: `document.close()` 修正调用 `g.__capsurf_syncNamedGlobals()`。

@@ -1865,3 +1865,8 @@
   4. `DOM.getBoxModel`/`DOM.getContentQuads` 在 JS 动态写入 DOM 后需先调用 `session.ensureLayout()`；`getComputedStyle(el).visibility` 缺省返回 `""` 会导致 `isVisible()` 误判 `false`；`TextNode` 缺失 `nodeValue` 会同时破坏 `JSHandle` 文本预览与 `:text(...)` 选择器。
 - **CDP `Network.*` JSON 破坏**：`data:text/html,...` URL 含原始 `\n` 与双引号，`session.cp` 未对其调用 `escapeJsonString` 导致 `Connection.js` 抛出 `Unterminated string`。
 - **日常快速构建技巧**：日常调试严格使用 `cap build -m -d -o bin_dev src/main.cp`（全量 ~16s，增量 ~8–11s），仅在最终发布验收时清理 `.cap/zig` 执行 `cap build -m -r -o bin src/main.cp`（~122s）。
+
+### Phase 257: `flushPendingStyleChecks` $O(N^2)$ 卡死与 Playwright `check`/`elementsFromPoint` 排障笔记
+- **批量 DOM+Style 卡死根因**：`element.js` 在 `setAttribute('style', ...)` 时调用 `notifyCssStyleChange(el)`，而 `animations.js` 的 `flushPendingStyleChecks()` 在 `_snapshotsInitialized=true` 后无论页面是否存在 CSS transition/animation，都会在 `Promise.resolve().then(...)` 微任务中逐个调用 `getComputedStyle(el)` 触发全量样式级联与布局重算。加入 `_pageHasAnimOrTrans` 与内联属性门控后，`n=200` 耗时从 `>10,000ms` 降至 `474ms`。
+- **Playwright `check`/`click` 命中链路**：`expectHitTarget` 同时依赖 `document.elementFromPoint` 与 `document.elementsFromPoint`；补齐 `docProto.elementsFromPoint` 后 `check`/`setChecked`/`uncheck` 全线打通。
+- **栈深注意**：`cpc` 编译/检查 `session_hooks.cp` 及全量 ReleaseFast 时需先执行 `ulimit -s unlimited`。

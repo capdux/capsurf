@@ -4915,3 +4915,13 @@
   - Playwright（`bin_dev/main` Debug 快速迭代）：`jshandle-as-element.spec.ts` **1/4 → 4/4 PASS** (3.4s)；`elementhandle-query-selector.spec.ts` **0/6 → 6/6 PASS** (7.9s)；`elementhandle-eval-on-selector.spec.ts` **0/6 → 6/6 PASS** (7.4s)；`elementhandle-convenience.spec.ts` **0/14 → 12/14 PASS** (33.9s)；`el.boundingBox()` 返回 `{ x: 0, y: 0, width: 50, height: 50 }`。
   - WPT（`bin_dev/main`）：`/url/data-uri-fragment.html` 消除 Runner JSON 崩溃（1/1 符合期望）；并行覆盖 `/css/css-cascade/`(1/5: 7/18 PASS)、`/css/css-break/`(1/5: 30/42 PASS)、`/css/css-position/`(8/10 PASS)、`/css/css-grid/`(11-20: 8/10 PASS)、`/css/css-fonts/`(6/10 PASS)、`/css/css-cssom-view/`(14/20 PASS)、`/html/semantics/forms/`(1/10: 20/29 PASS)、`/svg/`(1/10: 4/7 PASS) 等 30+ 域批次。
   - ReleaseFast 最终验证：`rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（136 模块 **122.68s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 3.98s)**。
+
+### [2026-11-22 13:13] Phase 257: `flushPendingStyleChecks` $O(N^2)$ 卡死消除、`elementsFromPoint` 与 `document.close` 全局名同步
+- **引擎与运行时修复 (`src/`)**:
+  - [src/js/shim/animations.js](file:///data/dev/capsurf/src/js/shim/animations.js): `flushPendingStyleChecks()` 与 `initCssTransitionSnapshots()` 增加 `_pageHasAnimOrTrans` / `_checkedStyleCount` 及元素内联 `transition`/`animation` 门控，彻底消除无动画页面批量 `setAttribute('style', ...)` + `appendChild` 时微任务触发全量 `getComputedStyle` 导致的 $O(N^2)$ 假死（`n=200` 从 `>10,000ms` 超时降至 **`474ms`**，提速 `>21x`），并重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js): 补齐 `docProto.elementsFromPoint(x, y)`，打通 Playwright `InjectedScript.expectHitTarget` 命中检测。
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): `g.document.close()` 修正调用 `g.__capsurf_syncNamedGlobals()`，使 `page.setContent(...)` 后含 `id` 元素同步挂载至 `window`。
+- **双模式验证与双路并行 WPT 扩跑**:
+  - Playwright（`bin_dev/main` Debug）：`elementhandle-misc.spec.ts` 中 `should fill input`、`should check the box`、`should check the box using setChecked`、`should uncheck the box` 全部推进通过。
+  - WPT（`bin_dev/main`）：双路并行持续覆盖 `--shard 2/N` 与 `--shard 3/N` 多域分片（`/css/css-break/` 32/42 & 30/42 PASS、`/css/css-contain/` 9/10 & 10/14 PASS、`/css/css-position/` 20/50 PASS、`/html/semantics/forms/` 21/29 & 19/29 PASS、`/html/webappapis/` 4/6 PASS、`/html/webappapis/timers/` 2/2 PASS 等）。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（140 模块 **134.23s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.10s)**。
