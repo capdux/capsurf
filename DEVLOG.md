@@ -2117,3 +2117,6 @@
 
 ### Phase 334: Shadow DOM `Document.activeElement` 与 `ShadowRoot.activeElement` 及 `:focus` 排障笔记
 - **Shadow DOM 焦点重定向与 `:focus` 缺失根因**：此前 `Document.prototype.activeElement` 直接返回内部 `_activeElement`（Shadow 内部元素），未按规范沿 `getRootNode().host` 重定向至宿主元素；且 `ShadowRoot` 缺少 `activeElement` 属性，CSS `:focus` 与 `Element.prototype.matches(":focus")` 也未同步宿主状态。修复后在 `bin_dev/main` CDP 实测 `docAE="host"`, `srAE="sinp"`, `sinp.matches(":focus")=true`, `host.matches(":focus")=true`。
+
+### Phase 335: `document.open()/write()/close()` 内嵌 `<script>` 静默未执行排障笔记
+- **双闭包隔离与 `innerHTML` `_alreadyStarted` 标记根因**：Playwright `page.setContent(html)` 通过 `document.open(); document.write(html); document.close();` 写入整页源码，但 `src/cdp/session_hooks.cp` 中 `g.document.close()` 仅设置 `head.innerHTML` / `body.innerHTML`，而 `src/js/shim/window.js` 会为 `innerHTML` 创建的 `<script>` 节点打上 `_alreadyStarted = true` 且 `handleInsertedScript` 位于第二个 IIFE 闭包中。桥接 `g.__capsurf_handle_inserted_script` 并在 `document.close()` 重置 `_alreadyStarted = false` 后调用，实测 `PHASE335_RESULT: {"ran":42,"hasSR":true,"spanText":"some text"}`。

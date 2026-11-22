@@ -2844,3 +2844,7 @@
 ## [2026-11-22] Phase 334: 修复 Shadow DOM 深度聚焦时 `Document.activeElement` 重定向、补充 `ShadowRoot.activeElement` 并修复 `:focus` 匹配
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `Document.prototype.activeElement` 沿 `getRootNode().host` 向上重定向至最外层宿主，新增 `ShadowRoot.prototype.activeElement` 返回当前 ShadowRoot 内的聚焦节点或其子 Shadow 宿主，`matches(":focus")` 与 CSS `:focus` 同时判定 `doc._activeElement === el || doc.activeElement === el`。
+
+## [2026-11-22] Phase 335: 执行 `document.open(); document.write(...); document.close();` 写入文档中的 `<script>` 标签
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: 在第二个闭包暴露 `g.__capsurf_handle_inserted_script = handleInsertedScript`，并在 `g.document.close()` 写入 `head`/`body` 后遍历 `g.document.querySelectorAll('script')` 重置 `_alreadyStarted = false` 并调用 `g.__capsurf_handle_inserted_script(...)`，使 Playwright `page.setContent(...)` 内嵌脚本（Shadow DOM 创建、`setTimeout` 等）与普通 `document.open/write/close` 一致生效。

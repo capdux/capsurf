@@ -1662,6 +1662,15 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          var bodyHtml = m ? m[1] : reopenBuf.replace(/^\\s*<!DOCTYPE[^>]*>/i, '').replace(/<head[^>]*>[\\s\\S]*?<\\/head>/gi, '').replace(/<\\/?html[^>]*>/gi, '');\n" ++
     "          if (g.document.body) g.document.body.innerHTML = bodyHtml;\n" ++
     "          if (typeof g.__capsurf_syncNamedGlobals === 'function') g.__capsurf_syncNamedGlobals();\n" ++
+    "          if (typeof g.document.querySelectorAll === 'function') {\n" ++
+    "            var reopenScripts = g.document.querySelectorAll('script');\n" ++
+    "            for (var rsi = 0; rsi < reopenScripts.length; rsi++) {\n" ++
+    "              try {\n" ++
+    "                reopenScripts[rsi]._alreadyStarted = false;\n" ++
+    "                if (typeof g.__capsurf_handle_inserted_script === 'function') g.__capsurf_handle_inserted_script(reopenScripts[rsi]);\n" ++
+    "              } catch (e) {}\n" ++
+    "            }\n" ++
+    "          }\n" ++
     "        } catch (e) {}\n" ++
     "        reopenBuf = '';\n" ++
     "        g.__capsurf_reopen_load_pending = (g.__capsurf_reopen_load_pending || 0) + 1;\n" ++
@@ -2479,6 +2488,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    visited.__inflight[absUrl] = p;\n" ++
     "    return p;\n" ++
     "  }\n" ++
+    "  g.__capsurf_handle_inserted_script = handleInsertedScript;\n" ++
     "  function handleInsertedScript(node) {\n" ++
     "    if (!node || node.nodeType !== 1) return;\n" ++
     "    var tag = String(node.localName || node.tagName || '').toLowerCase();\n" ++

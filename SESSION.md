@@ -5505,3 +5505,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19399）：`PHASE334_RESULT: {"docAE":"host","srAE":"sinp","deepMatch":true,"hostMatch":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。
+
+## Phase 335: `document.open/write/close` `<script>` 执行修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): 暴露 `g.__capsurf_handle_inserted_script` 并在 `g.document.close()` 中对写入的 `<script>` 重置 `_alreadyStarted = false` 后执行。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19399）：`PHASE335_RESULT: {"ran":42,"hasSR":true,"spanText":"some text"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。
