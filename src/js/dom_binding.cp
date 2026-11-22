@@ -90,7 +90,7 @@ pub struct ConsoleRecord {
     }
 }
 
-pub const MAX_CONSOLE_RECORDS: usize = 16;
+pub const MAX_CONSOLE_RECORDS: usize = 128;
 pub const MAX_FETCH_RECORDS: usize = 16;
 pub const MAX_DOM_MUTATIONS: usize = 1024;
 
@@ -1920,9 +1920,28 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     let i: usize = 1;
     while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
         const node = &dom_ctx.doc.nodes.items[i];
-        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
-            const text = getNodeText(dom_ctx.doc, @intCast(i));
-            return jsNewString(ctx, text);
+        if (node.node_type == NodeType.Element && node.parent != NULL_NODE && std.ascii.eqlIgnoreCase(node.tag_name, "title")) {
+            const raw = getNodeText(dom_ctx.doc, @intCast(i));
+            let title_buf: [1024]u8 = [0; 1024];
+            let tlen: usize = 0;
+            let in_ws = true;
+            let ri: usize = 0;
+            while (ri < raw.len && tlen < title_buf.len) : (ri += 1) {
+                const c = raw[ri];
+                if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0x0c) {
+                    if (!in_ws) {
+                        title_buf[tlen] = ' ';
+                        tlen += 1;
+                        in_ws = true;
+                    }
+                } else {
+                    title_buf[tlen] = c;
+                    tlen += 1;
+                    in_ws = false;
+                }
+            }
+            if (tlen > 0 && title_buf[tlen - 1] == ' ') tlen -= 1;
+            return jsNewString(ctx, title_buf[0..tlen]);
         }
     }
     return jsNewString(ctx, "");
@@ -2195,7 +2214,7 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     let details_buf: [2048]u8 = [0; 2048];
     const details_json = std.fmt.bufPrint(
         &details_buf,
-        "{{\"exceptionId\":1,\"text\":\"Uncaught\",\"lineNumber\":0,\"columnNumber\":0,\"executionContextId\":1,\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\\n\"}}}}",
+        "{{\"exceptionId\":1,\"text\":\"Uncaught\",\"lineNumber\":0,\"columnNumber\":0,\"executionContextId\":1,\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\"}}}}",
         .{ class_name, esc_buf[0..esc_len] },
     ) catch return jsUndefined();
     dom_ctx.addConsoleRecord("__exception", class_name, details_json);

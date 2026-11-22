@@ -959,7 +959,7 @@ pub struct CdpPageSession {
     facade: KitesurfFacade = KitesurfFacade{},
 
     // Dedicated buffers for event formatting
-    console_event_storage: [16384]u8 = [0; 16384],
+    console_event_storage: [65536]u8 = [0; 65536],
     log_event_storage: [16384]u8 = [0; 16384],
     webmcp_event_buf: [32768]u8 = [0; 32768],
     webmcp_retract_buf: [8192]u8 = [0; 8192],
@@ -3300,12 +3300,9 @@ pub struct CdpPageSession {
                 }
             }
 
-            let desc_buf: [1024]u8 = [0; 1024];
-            let desc_slice: []const u8 = "";
-            if (exc_str.len > 0 && exc_str[exc_str.len - 1] == '\n') {
-                desc_slice = exc_str[0..@min(exc_str.len, desc_buf.len)];
-            } else {
-                desc_slice = std.fmt.bufPrint(&desc_buf, "{s}\n", .{exc_str[0..@min(exc_str.len, 1000)]}) catch exc_str;
+            let desc_slice: []const u8 = exc_str[0..@min(exc_str.len, 1000)];
+            while (desc_slice.len > 0 && (desc_slice[desc_slice.len - 1] == '\n' || desc_slice[desc_slice.len - 1] == '\r')) {
+                desc_slice = desc_slice[0 .. desc_slice.len - 1];
             }
 
             let norm_desc_buf: [1024]u8 = [0; 1024];

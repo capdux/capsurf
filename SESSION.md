@@ -5089,3 +5089,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`innerText` 返回 `"Text content"`（跳过 `<span hidden>garbage</span>`）；`span.textContent = ""` 后 `getBoundingClientRect()` 从 `34.08x22` 实时更新为 `0x0`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.34s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。
+
+### [2026-11-22 16:58] Phase 278: `document.title` 孤立节点过滤与空白折叠、`Runtime.exceptionThrown` 队列扩容与换行清洗
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `js_document_get_title()` 过滤 `node.parent == NULL_NODE` 的已脱离 `<title>` 节点并按 HTML 规范折叠空白符；`MAX_CONSOLE_RECORDS` 扩容至 `128`，移除 `js_report_exception()` 尾部多余 `\n`。
+  - [src/cdp/types.cp](file:///data/dev/capsurf/src/cdp/types.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): `MAX_CDP_EVENTS` 扩容至 `128`（同步扩容 `polled_evts` 与 `console_event_storage` 至 `65536`），`pushExceptionEvent()` 剥离末尾 `\r\n`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`document.open/write/close` 后 `document.title` 返回 `"Hello world"`；`Runtime.exceptionThrown` 描述返回 `"Error: Fancy error!"`；105 定时器并发测试单次队列承载 74 条无溢出。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.09s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。

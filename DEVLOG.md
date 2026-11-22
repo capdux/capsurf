@@ -1943,3 +1943,7 @@
 ### Phase 277: `textContent` 布局失效与 `innerText` `[hidden]` 排障笔记
 - **`not.toBeVisible()` 超时根因**：`js_element_set_text_content()` 修改节点文本后未置位 `el.dom_ctx.layout_dirty = true`，导致 `span.textContent = ""` 后 `getBoundingClientRect()` 仍返回清空前缓存尺寸（`34.08x22`）。补齐后实测立即回落为 `0x0`。
 - **`useInnerText` 包含隐藏文本根因**：`collectRenderedText()` 的 `walk()` 未直接过滤 `hidden` 属性元素，导致 `<span hidden>garbage</span>` 混入 `innerText`。补齐过滤后实测返回 `"Text content"`。
+
+### Phase 278: `document.title` 孤立节点与 `Runtime.exceptionThrown` 队列排障笔记
+- **`toHaveTitle` 返回 `"Blank Page"` 根因**：`document.open/write/close` 清空 `head.innerHTML` 时，旧 `<title>Blank Page</title>` 节点在 Arena 中保留且 `parent == NULL_NODE`，而 `js_document_get_title()` 线性扫描 `nodes.items` 未检查 `parent != NULL_NODE` 导致命中旧节点。补齐检查与空白折叠后实测返回 `"Hello world"`。
+- **`pageerror` 消息尾部换行与 16 条上限根因**：`pushExceptionEvent()` / `js_report_exception()` 末尾多余 `\n` 导致 `error.message` 断言多出换行；同时 `MAX_CONSOLE_RECORDS` 与 `runtime.cp` `polled_evts` 仅 16 槽位，扩容至 128 后单次可承载上百条事件。

@@ -2595,3 +2595,8 @@
   - `src/js/dom_binding.cp`: 在 `js_element_set_text_content()` 的文本节点与元素分支均设置 `el.dom_ctx.layout_dirty = true`，修复动态清空 `span.textContent = ""` 后 `getBoundingClientRect()` 仍返回旧尺寸的问题。
   - `src/js/shim/element/html-classes.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `collectRenderedText()` 中跳过 `hidden` 属性节点，修复 `innerText`（`useInnerText: true`）包含 `<span hidden>` 文本的问题。
   - `src/cdp/dom.cp`: 扩展 `collectDocIframeEntries()` 支持 `<frame>` 标签以完善 `DOM.getFrameOwner` 查询。
+
+## [2026-11-22] Phase 278: `document.title` 孤立节点过滤与空白折叠、`Runtime.exceptionThrown` 队列扩容与换行清洗
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: `js_document_get_title()` 过滤 `node.parent == NULL_NODE` 的已脱离 `<title>` 节点，并按 HTML 规范折叠连续 ASCII 空白符与首尾修剪，修复 `document.open/write/close` 后仍返回 `"Blank Page"` 的问题；`MAX_CONSOLE_RECORDS` 扩容至 `128`，移除 `js_report_exception()` 尾部多余 `\n`。
+  - `src/cdp/types.cp`, `src/cdp/runtime.cp`, `src/cdp/session.cp`: `MAX_CDP_EVENTS` 扩容至 `128`（同步更新 `runtime.cp` `polled_evts` 缓冲与 `session.cp` `console_event_storage` 至 `65536` 字节），并在 `pushExceptionEvent()` 中剥离末尾 `\r\n` 使 `pageerror` `error.message` 精确匹配。

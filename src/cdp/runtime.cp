@@ -299,7 +299,7 @@ pub struct RuntimeHandler {
             }
             
             // Poll any console events produced during callFunctionOn
-            let polled_evts: [16]CdpEvent = [CdpEvent{}; 16];
+            let polled_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_count = session.pollConsoleEvents(&polled_evts);
             let p_i: usize = 0;
             while (p_i < polled_count && event_count.* < out_events.len) : (p_i += 1) {
@@ -407,7 +407,7 @@ pub struct RuntimeHandler {
             }
 
             // Poll any console events produced during evaluation
-            let polled_evts: [16]CdpEvent = [CdpEvent{}; 16];
+            let polled_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_count = session.pollConsoleEvents(&polled_evts);
             let p_i: usize = 0;
             while (p_i < polled_count && event_count.* < out_events.len) : (p_i += 1) {
