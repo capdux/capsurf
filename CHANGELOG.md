@@ -2687,3 +2687,7 @@
 - **Fixed (`src/`)**:
   - `src/net/http_loader.cp`: 升级 `HttpLoader.resolveRelativeUrl()` 支持协议相对 URL（`//`）、`base_url` 查询/锚点剥离以及逐段折叠 `./`、`../` 点分路径段。
   - `src/cdp/session.cp`: 将 `resolveSubresourceUrl()`（非 `data:`）统一委托至 `HttpLoader.resolveRelativeUrl()`，消除外部 `<script src="../...">` 与 `<iframe>` 相对路径残留 `/./` 或 `/../` 的问题。
+
+## [2026-11-22] Phase 299: 修复 `scanCssIdent()` 吞并 CSS 十六进制转义后单空白符的词法规范
+- **Fixed (`src/`)**:
+  - `src/css/matcher.cp`: 升级 `scanCssIdent()` 在扫描 `\XXXX` 1..6 位十六进制转义后按 CSS Syntax 规范吞并紧邻的 1 个空白字符，避免 `#\31 \32 \33` 被提前截断为后代组合子。

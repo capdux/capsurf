@@ -5246,3 +5246,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/events/Event-constants.html` **✓ 730ms PASS (1/1 matched expectations)**。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.71s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
+
+### [2026-11-22 19:17] Phase 299: 修复 `scanCssIdent()` 吞并 CSS 十六进制转义后单空白符的词法规范
+- **引擎修复 (`src/`)**:
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): 升级 `scanCssIdent()` 在 `\XXXX` 1..6 位十六进制转义后按 CSS Syntax 规范吞并紧邻的 1 个空白字符。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`#\31\32\33` 与 `#\31 \32 \33` 均返回 `true`，双空格 `#\31  \32\33` 返回 `false`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.41s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。

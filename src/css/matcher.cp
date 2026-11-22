@@ -17,7 +17,18 @@ fn scanCssIdent(s: []const u8, idx: *usize): []const u8 {
     const start = idx.*;
     while (idx.* < s.len) {
         if (s[idx.*] == '\\' && idx.* + 1 < s.len) {
-            idx.* += 2;
+            if (hexDigitVal(s[idx.* + 1]) != null) {
+                idx.* += 2;
+                let hcount: usize = 1;
+                while (idx.* < s.len && hcount < 6 && hexDigitVal(s[idx.*]) != null) : (hcount += 1) {
+                    idx.* += 1;
+                }
+                if (idx.* < s.len && (s[idx.*] == ' ' || s[idx.*] == '\t' || s[idx.*] == '\n' || s[idx.*] == '\r' || s[idx.*] == 0x0c)) {
+                    idx.* += 1;
+                }
+            } else {
+                idx.* += 2;
+            }
         } else if (SelectorParser.isIdentChar(s[idx.*])) {
             idx.* += 1;
         } else {

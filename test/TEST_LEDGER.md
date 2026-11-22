@@ -206,6 +206,8 @@
 | 2026-11-22 19:11 | `/dom/nodes/` | `1/10`~`3/10` | 26, 25, 25 | PASS 8/26, 8/25, 9/25 (0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:11 | `/css/selectors/` | `2/5` | 14 | PASS 5/14 (?PASS 2, 0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:11 | `/css/css-fonts/` | `4/5` | 24 | PASS 4/24 (0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:16 | `/dom/events/` | `4/5`, `5/5` | 26, 25 | PASS 10/26, 9/25 (Phase 296提升, 0 CRASH) | Batch 75 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:16 | `/css/css-fonts/` | `5/5`, `1/5`, `2/5` | 24, 25, 24 | PASS 5/24, 7/25, 6/24 (0 CRASH) | Batch 75 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -391,3 +393,7 @@
 | 2026-11-22 19:10 | `selectors-css.spec.ts` | 18/25 PASS (1 SKIP, 1.4m) | PW Batch 49 |
 | 2026-11-22 19:10 | `page-click-timeout-3.spec.ts` | 4/4 PASS (全绿, 21.6s, exit 0) | PW Batch 49 (全绿) |
 | 2026-11-22 19:10 | `page-click-timeout-4.spec.ts` | 1/3 PASS (stable/intercepts 2 FAIL, 34.8s) | PW Batch 49 |
+| 2026-11-22 19:17 | `frame-hierarchy.spec.ts` | 4/12 PASS (`./frame.html` /./已消除, 59.2s) | PW Batch 50 |
+| 2026-11-22 19:17 | `page-click-scroll.spec.ts` | 4/8 PASS (2 SKIP, 48.0s) | PW Batch 50 |
+| 2026-11-22 19:17 | `page-click.spec.ts` | 4/7 PASS (`[8/77]` 90s截断) | PW Batch 50 |
+| 2026-11-22 19:17 | `page-autowaiting-basic.spec.ts` | 4/6 PASS (`[7/12]` 90s截断) | PW Batch 50 |
