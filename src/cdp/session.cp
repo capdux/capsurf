@@ -3026,19 +3026,25 @@ pub struct CdpPageSession {
         return 1;
     }
 
-    pub fn restoreIsolatedNodeIfNeeded(*_): bool {
-        const v = _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=true;if(globalThis.Node===undefined&&globalThis.__capsurf_orig_Node!==undefined){globalThis.Node=globalThis.__capsurf_orig_Node;return 1;}return 0;})()");
+    pub fn restoreIsolatedNodeIfNeeded(*_): i32 {
+        const v = _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=true;let m=0;if(globalThis.Node===undefined&&globalThis.__capsurf_orig_Node!==undefined){globalThis.Node=globalThis.__capsurf_orig_Node;m|=1;}if(globalThis.MutationObserver===undefined&&globalThis.__capsurf_orig_MutationObserver!==undefined){globalThis.MutationObserver=globalThis.__capsurf_orig_MutationObserver;m|=2;}return m;})()");
         defer _.ctx.freeValue(v);
         let n: i32 = 0;
         if (!jsIsException(v)) {
             * = JS_ToInt32(_.ctx.raw_ctx, &n, v);
         }
-        return n == 1;
+        return n;
     }
 
-    pub fn clearIsolatedNode(*_, restore_node: bool) {
-        const v = if (restore_node)
+    pub fn clearIsolatedNode(*_, restore_mask: i32) {
+        const rest_node = (restore_mask & 1) != 0;
+        const rest_mo = (restore_mask & 2) != 0;
+        const v = if (rest_node && rest_mo)
+            _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;try{delete globalThis.Node;}catch(e){}try{delete globalThis.MutationObserver;}catch(e){}})()")
+        else if (rest_node)
             _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;try{delete globalThis.Node;}catch(e){}})()")
+        else if (rest_mo)
+            _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;try{delete globalThis.MutationObserver;}catch(e){}})()")
         else
             _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;})()");
         _.ctx.freeValue(v);

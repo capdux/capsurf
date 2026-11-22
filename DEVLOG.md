@@ -2035,3 +2035,6 @@
 ### Phase 307: `selectors-text.spec.ts` `&nbsp;` 序列化差异与 `TreeWalker`/`NodeIterator` `toStringTag` 排障笔记
 - **`outerHTML` 返回 `"<span>Sign\u00a0in</span>"` 根因**：`HtmlSerializer.serializeNode()` 此前仅转义 `&`、`<`、`>`（及属性引号 `"`），未按 HTML5 片段序列化规范将 U+00A0 (`0xC2 0xA0`) 输出为 `&nbsp;`。在文本与属性分支中增加双字节 `0xC2 0xA0 -> "&nbsp;"` 后，实测返回 `"<span>Sign&nbsp;in</span>"`。
 - **`TreeWalker`/`NodeIterator` `toString` 返回 `[object Object]` 根因**：两者的原型均未定义 `[Symbol.toStringTag]`，补齐后 `Object.prototype.toString.call()` 分别返回 `"[object TreeWalker]"` 与 `"[object NodeIterator]"`。
+
+### Phase 308: `page-wait-for-selector-1` `should work with removed MutationObserver` 报 `ReferenceError` 排障笔记
+- **隔离上下文受主世界 `delete window.MutationObserver` 影响根因**：此前隔离上下文仅对 `Node` 做了临时备份与恢复，未覆盖 `MutationObserver`。当页面执行 `delete window.MutationObserver` 后，Playwright 注入脚本在隔离上下文中调用 `new MutationObserver(...)` 触发 `ReferenceError`。将恢复逻辑升级为位掩码同时覆盖 `Node` 与 `MutationObserver` 后，实测隔离上下文内 `typeof MutationObserver === "function"` 而主世界仍保持 `"undefined"`。

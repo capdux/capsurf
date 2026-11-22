@@ -168,6 +168,7 @@ function installShim(global) {
 
   // 3. Expose Mutation Observer
   global.MutationObserver = MutationObserver;
+  try { Object.defineProperty(global, "__capsurf_orig_MutationObserver", { value: MutationObserver, enumerable: false, writable: false, configurable: false }); } catch (e) {}
   global.MutationRecord = MutationRecord;
 
   // 4. Expose FormData, Blob, File, FileList and DataTransfer

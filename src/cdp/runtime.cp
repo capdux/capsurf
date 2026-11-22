@@ -282,7 +282,7 @@ pub struct RuntimeHandler {
             const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
             const in_iso = exec_ctx_id != null && exec_ctx_id.? > 1;
-            const restored_node = if (in_iso) session.restoreIsolatedNodeIfNeeded() else false;
+            const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
             defer if (in_iso) session.clearIsolatedNode(restored_node);
             let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);
 
@@ -384,7 +384,7 @@ pub struct RuntimeHandler {
             }
 
             const in_iso = context_id != null && context_id.? > 1;
-            const restored_node = if (in_iso) session.restoreIsolatedNodeIfNeeded() else false;
+            const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
             defer if (in_iso) session.clearIsolatedNode(restored_node);
             let eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
 

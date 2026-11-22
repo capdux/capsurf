@@ -2726,3 +2726,8 @@
 - **Fixed (`src/`)**:
   - `src/dom/dom.cp`: 在 `HtmlSerializer.serializeNode()` 序列化文本节点与属性值时，将 UTF-8 U+00A0 (`0xC2 0xA0`) 编码为 `&nbsp;`（对齐 HTML5 片段序列化规范，修复 `selectors-text.spec.ts` `Sign&nbsp;in` `outerHTML` 断言）。
   - `src/js/shim/traversal.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `TreeWalker.prototype` 与 `NodeIterator.prototype` 定义 `Symbol.toStringTag`（`"TreeWalker"` / `"NodeIterator"`），使 `Object.prototype.toString.call()` 返回标准字符串。
+
+## [2026-11-22] Phase 308: 隔离上下文临时恢复 `MutationObserver` 以隔离页面删除操作
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 备份不可枚举只读引用 `globalThis.__capsurf_orig_MutationObserver`。
+  - `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/runtime.cp`: 将 `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()` 升级为位掩码机制（bit 1 = `Node`, bit 2 = `MutationObserver`），在隔离上下文执行期间临时恢复被页面脚本删除的 `MutationObserver` 并在退出后还原删除状态。

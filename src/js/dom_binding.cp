@@ -2726,8 +2726,16 @@ pub fn mountDom(
         "      globalThis.Node = globalThis.__capsurf_orig_Node;" +
         "      restoredNode = true;" +
         "    }" +
+        "    let restoredMo = false;" +
+        "    if (isIso && globalThis.MutationObserver === undefined && globalThis.__capsurf_orig_MutationObserver !== undefined) {" +
+        "      globalThis.MutationObserver = globalThis.__capsurf_orig_MutationObserver;" +
+        "      restoredMo = true;" +
+        "    }" +
         "    try { return fn.apply(target || globalThis, args); }" +
-        "    finally { if (restoredNode) { try { delete globalThis.Node; } catch (e) {} } }" +
+        "    finally {" +
+        "      if (restoredNode) { try { delete globalThis.Node; } catch (e) {} }" +
+        "      if (restoredMo) { try { delete globalThis.MutationObserver; } catch (e) {} }" +
+        "    }" +
         "  };" +
         "  if (typeof document !== 'undefined' && !document.fonts) {" +
         "    const _readyP = Promise.resolve();" +

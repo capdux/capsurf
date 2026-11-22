@@ -5312,3 +5312,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`{"outer":"<span>Sign&nbsp;in</span>","twStr":"[object TreeWalker]","niStr":"[object NodeIterator]"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。
+
+### [2026-11-22 20:14] Phase 308: 隔离上下文临时恢复 `MutationObserver` 以隔离页面删除操作
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js), [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): 为隔离上下文同步备份并临时恢复 `MutationObserver`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.MutationObserver` 后，隔离上下文 `typeof MutationObserver` 返回 `"function"`，主世界仍为 `"undefined"`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
