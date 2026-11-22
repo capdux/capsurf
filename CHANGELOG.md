@@ -2605,3 +2605,7 @@
 - **Fixed (`src/`)**:
   - `src/js/qjs_engine.cp`: 新增 `JsContext.evalWithFilename(code, filename)` 支持为经典脚本传入真实源文件名。
   - `src/cdp/session.cp`: 新增 `extractSourceUrl()` 解析 `//# sourceURL=` / `//@ sourceURL=` 并传入 `executeClassicScript()`；扩展 `pushExceptionEvent()` 读取 `exc.stack`（`JS_GetPropertyStr`）拼接至 `exception.description`（去重首行避免重复错误头）。
+
+## [2026-11-22] Phase 280: `--*` CSS 自定义属性跳过颜色序列化与计算样式颜色规范化
+- **Fixed (`src/`)**:
+  - `src/js/shim/cssom.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `CSSStyleDeclaration.prototype.getPropertyValue`、`getComputedStyle` Proxy `getPropertyValue` 及 `Proxy.get` 陷阱中对 `--*` 前缀自定义属性跳过 `serializeCssValue()` 与 `normalizeCssColor()`，确保 `--custom-color-property: #FF00FF` 原样保留而非被强转为 `rgb(255, 0, 255)`。

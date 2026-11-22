@@ -1950,3 +1950,6 @@
 
 ### Phase 279: `//# sourceURL=` 与 `pageerror.stack` 排障笔记
 - **`error.stack` 为空根因**：`JsContext.eval()` 此前固定传入 `"<eval>"` 作为文件名且 `pushExceptionEvent()` 仅调用 `toCString(exc)` 未读取 `exc.stack`。新增 `evalWithFilename` + `extractSourceUrl()` 并在 `pushExceptionEvent()` 中读取 `exc.stack`（校验首行防重）后，实测输出 `"Error: boom\n    at foo (myscript.js:1:26)\n    at <eval> (myscript.js:1:40)"`。
+
+### Phase 280: `--*` 自定义属性颜色规范化误伤排障笔记
+- **`toHaveCSS` 自定义属性期望 `#FF00FF` 收到 `rgb(255, 0, 255)` 根因**：`cssom.js` 中 `decl.getPropertyValue` 调用 `serializeCssValue`、且 `getComputedStyle` Proxy 的 `getPropertyValue`（通过 `receiver[k]`）和 `Proxy.get` 陷阱无条件调用 `normalizeCssColor(val)`，将 `--custom-color-property` 的十六进制值改写。三处均增加 `!prop.startsWith("--")` 豁免后，实测 `sheet`/`inline`/`inlineStyle` 全部原样返回 `"#FF00FF"`。

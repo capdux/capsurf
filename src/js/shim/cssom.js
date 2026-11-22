@@ -625,7 +625,8 @@
       const key = p.startsWith("--") ? p : p.toLowerCase();
       if (context === "margin" && key === "size") return "";
       if (data.has(key)) {
-        return serializeCssValue(data.get(key).value);
+        const rawVal = data.get(key).value;
+        return key.startsWith("--") ? rawVal : serializeCssValue(rawVal);
       }
       if (key === "margin-top" || key === "margin-right" || key === "margin-bottom" || key === "margin-left") {
         if (data.has("margin")) {
@@ -2977,7 +2978,9 @@
                 if (k === "shape-outside" || k === "clip-path" || k === "offset-path") {
                   val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
                 }
-                val = normalizeCssColor(val);
+                if (!k.startsWith("--")) {
+                  val = normalizeCssColor(val);
+                }
               }
               return val || "";
             };
@@ -3088,7 +3091,9 @@
           let val = target[prop];
           if (typeof val === "string") {
             val = resolveCssVars(element, val);
-            val = normalizeCssColor(val);
+            if (!prop.startsWith("--")) {
+              val = normalizeCssColor(val);
+            }
           }
           return val;
         }

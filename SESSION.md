@@ -5105,3 +5105,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`//# sourceURL=myscript.js` 内联脚本抛错准确上报 `description: "Error: boom\n    at foo (myscript.js:1:26)\n    at <eval> (myscript.js:1:40)"`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.76s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
+
+### [2026-11-22 17:11] Phase 280: `--*` CSS 自定义属性跳过颜色序列化与计算样式颜色规范化
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/cssom.js](file:///data/dev/capsurf/src/js/shim/cssom.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `decl.getPropertyValue`、`getComputedStyle` Proxy `getPropertyValue` 与 `Proxy.get` 陷阱中对 `--*` 自定义属性跳过 `serializeCssValue()` 与 `normalizeCssColor()`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<style>`、内联 `style` 与 `el.style.getPropertyValue("--custom-color-property")` 均原样返回 `"#FF00FF"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.29s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.12s)**。
