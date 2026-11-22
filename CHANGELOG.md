@@ -2478,3 +2478,10 @@
 
 ## [2026-11-22] Phase 255: CDP `normalizeExceptionMessage` 动态缓冲、`Target.detachedFromTarget` 与 `setContent` 生命周期修复
 - **Fixed**: `src/cdp/runtime.cp`（动态分配 `norm_buf` 修复 >8KB JSON 截断）、`src/cdp/target.cp`（`Target.closeTarget` 补发 `Target.detachedFromTarget`）、`src/cdp/session.cp`（`pollReopenLoadEvents` 补齐 `Page.lifecycleEvent`）。
+
+## [2026-11-22] Phase 256: Playwright `ElementHandle` 链路打通与 CDP `Network.*` JSON 转义修复
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: `__capsurf_format_remote_object` 补齐 `subtype: 'node'`/`date`/`regexp`/`error`/`map`/`set`；`__capsurf_get_object` 支持 `node:<nid>`；`_wrappedGcs` 补充 `visibility` 默认 `'visible'`；`el_proto` 新增 `nodeValue` getter/setter。
+  - `src/cdp/dom.cp`: `DOM.resolveNode` 兼容 `backendNodeId`；`DOM.getBoxModel`/`DOM.getContentQuads` 补齐 `session.ensureLayout()`。
+  - `src/cdp/runtime.cp`: 实现 `Runtime.getProperties` 真实属性枚举。
+  - `src/cdp/session.cp`: `Network.requestWillBeSent`/`Network.responseReceived` 使用 `escapeJsonString` 转义 `ref_esc` 与 `fetch_esc`。

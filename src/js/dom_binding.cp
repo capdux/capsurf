@@ -1491,6 +1491,35 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     return jsNewString(ctx, buf[0..len]);
 }
 
+@c fn js_element_get_node_value(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsNull();
+    const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
+    if (@as(usize, el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+        if (node.node_type == NodeType.Text || node.node_type == NodeType.Comment) {
+            return jsNewString(ctx, node.text_content);
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_element_set_node_value(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetOpaque(this_val, g_element_class_id);
+    if (ptr == null) return jsUndefined();
+    const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
+    if (@as(usize, el.node_id) < el.dom_ctx.doc.nodes.items.len) {
+        const ntype = el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)].node_type;
+        if (ntype == NodeType.Text || ntype == NodeType.Comment) {
+            return js_element_set_text_content(ctx, this_val, argc, argv);
+        }
+    }
+    return jsUndefined();
+}
+
 @c fn js_element_get_text_content(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
@@ -2332,6 +2361,7 @@ pub fn mountDom(
     defineGetterSetter(raw_ctx, el_proto, "className", js_element_get_class_name, js_element_set_class_name);
     defineGetterSetter(raw_ctx, el_proto, "tagName", js_element_get_tag_name, null);
     defineGetterSetter(raw_ctx, el_proto, "nodeType", js_element_get_node_type, null);
+    defineGetterSetter(raw_ctx, el_proto, "nodeValue", js_element_get_node_value, js_element_set_node_value);
     defineGetterSetter(raw_ctx, el_proto, "textContent", js_element_get_text_content, js_element_set_text_content);
     defineGetterSetter(raw_ctx, el_proto, "innerHTML", js_element_get_inner_html, js_element_set_inner_html);
     defineGetterSetter(raw_ctx, el_proto, "outerHTML", js_element_get_outer_html, null);
@@ -2479,6 +2509,21 @@ pub fn mountDom(
         "  };" +
         "  globalThis.__capsurf_get_object = function (id) {" +
         "    if (id === 'global' || id === 'globalThis') return globalThis;" +
+        "    if (typeof id === 'string' && id.startsWith('node:')) {" +
+        "      const nid = parseInt(id.slice(5), 10);" +
+        "      if (nid > 0 && typeof document !== 'undefined' && document) {" +
+        "        const stack = [document];" +
+        "        while (stack.length > 0) {" +
+        "          const cur = stack.pop();" +
+        "          if (cur && cur._nid === nid) return cur;" +
+        "          const ch = cur && cur.childNodes;" +
+        "          if (ch && ch.length) {" +
+        "            for (let i = ch.length - 1; i >= 0; i--) stack.push(ch[i]);" +
+        "          }" +
+        "        }" +
+        "      }" +
+        "      return undefined;" +
+        "    }" +
         "    return globalThis.__capsurf_remote_objects.get(id);" +
         "  };" +
         "  globalThis.__capsurf_get_class_name = function (val) {" +
@@ -2522,6 +2567,12 @@ pub fn mountDom(
         "      const className = globalThis.__capsurf_get_class_name(val);" +
         "      const obj = { type: 'object', className: className };" +
         "      if (isArr) obj.subtype = 'array';" +
+        "      else if (typeof val.nodeType === 'number') obj.subtype = 'node';" +
+        "      else if (val instanceof Date) obj.subtype = 'date';" +
+        "      else if (val instanceof RegExp) obj.subtype = 'regexp';" +
+        "      else if (val instanceof Error) obj.subtype = 'error';" +
+        "      else if (typeof Map !== 'undefined' && val instanceof Map) obj.subtype = 'map';" +
+        "      else if (typeof Set !== 'undefined' && val instanceof Set) obj.subtype = 'set';" +
         "      if (returnByValue) {" +
         "        obj.value = val;" +
         "      } else {" +
@@ -2610,7 +2661,7 @@ pub fn mountDom(
         " function _normRgbSpace(raw) { const m = String(raw || '').trim().match(/^rgb\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)$/i); if (m) return 'rgb(' + m[1] + ', ' + m[2] + ', ' + m[3] + ')'; return _normColor(raw); }" +
         " function _resolveLightDark(val, el) { if (typeof val !== 'string') return val; const low = val.trim().toLowerCase(); if (!low.startsWith('light-dark(') || !low.endsWith(')')) return val; const inner = val.trim().slice(11, -1); let depth = 0, splitIdx = -1; for (let i = 0; i < inner.length; i++) { const ch = inner[i]; if (ch === '(') depth++; else if (ch === ')') depth--; else if (ch === ',' && depth === 0) { splitIdx = i; break; } } if (splitIdx === -1) return val; const lightArg = inner.slice(0, splitIdx).trim(); const darkArg = inner.slice(splitIdx + 1).trim(); const picked = _usedColorSchemeDark(el) ? darkArg : lightArg; return _normRgbSpace(picked); }" +
         " function _hasLinkSheets() { try { const ls = document.querySelectorAll('link'); for (let i = 0; i < ls.length; i++) { const r = String(ls[i].getAttribute && ls[i].getAttribute('rel') || '').toLowerCase(); if (r.indexOf('stylesheet') !== -1) return true; } } catch (e) {} return false; }" +
-        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } let res = target.getPropertyValue(name); if (typeof res === 'string' && res.toLowerCase().indexOf('light-dark(') !== -1) res = _resolveLightDark(res, el); if (!res && ln === 'background-color' && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return res; }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } let v = target[prop]; if (typeof v === 'string' && v.toLowerCase().indexOf('light-dark(') !== -1) v = _resolveLightDark(v, el); if (!v && (prop === 'backgroundColor' || prop === 'background-color') && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return typeof v === 'function' ? v.bind(target) : v; } }); };" +
+        " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); if (cv) return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } let res = target.getPropertyValue(name); if (typeof res === 'string' && res.toLowerCase().indexOf('light-dark(') !== -1) res = _resolveLightDark(res, el); if (!res && ln === 'visibility') return 'visible'; if (!res && ln === 'background-color' && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return res; }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); if (cv) return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); if (cv) return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } let v = target[prop]; if (typeof v === 'string' && v.toLowerCase().indexOf('light-dark(') !== -1) v = _resolveLightDark(v, el); if (!v && prop === 'visibility') return 'visible'; if (!v && (prop === 'backgroundColor' || prop === 'background-color') && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return typeof v === 'function' ? v.bind(target) : v; } }); };" +
         " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs;" +
         " if (typeof Element !== 'undefined' && Element.prototype && typeof Element.prototype.matches === 'function') { const _origMatches = Element.prototype.matches; Element.prototype.matches = function (sel) { const m = String(sel || '').trim().match(/^:dir\\(\\s*([a-zA-Z0-9_-]+)\\s*\\)$/i); if (m) { const fd = _formDirAuto(this); if (fd) { const td = m[1].toLowerCase(); return (td === 'ltr' || td === 'rtl') && fd === td; } } return _origMatches.call(this, sel); }; }" +
         " (function () { if (typeof globalThis.fetch === 'function') { const _origFetch = globalThis.fetch; const _wrappedFetch = function (input, init) { try { const raw = typeof input === 'string' ? input : (input && input.url ? String(input.url) : String(input || '')); const pth = raw.replace(/^https?:\\/\\/[^\\/]+/i, '').split('?')[0].split('#')[0]; if (pth.startsWith('/__ks_resource/')) { return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found', url: raw, headers: { get: function () { return null; } }, text: function () { return Promise.resolve(''); }, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(0)); } }); } } catch (e) {} return _origFetch.apply(this, arguments); }; globalThis.fetch = _wrappedFetch; if (typeof window !== 'undefined') window.fetch = _wrappedFetch; } })();" +

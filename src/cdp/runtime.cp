@@ -232,6 +232,34 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.getProperties")) {
+            const obj_id = extractJsonString(req.params_raw, "objectId") ?? "";
+            const accessor_only = extractJsonBool(req.params_raw, "accessorPropertiesOnly") ?? false;
+            if (obj_id.len > 0 && !accessor_only) {
+                const id_val = session.ctx.newString(obj_id);
+                defer session.ctx.freeValue(id_val);
+                session.ctx.setPropertyStr("__capsurf_props_id", id_val);
+                const js_val = session.ctx.eval(
+                    "(function(){var o=globalThis.__capsurf_get_object?globalThis.__capsurf_get_object(globalThis.__capsurf_props_id):undefined;" ++
+                    "if(o===null||(typeof o!=='object'&&typeof o!=='function'))return '{\"result\":[]}';" ++
+                    "var ks=Object.getOwnPropertyNames(o);var out=[];" ++
+                    "for(var i=0;i<ks.length;i++){var k=ks[i];var d=Object.getOwnPropertyDescriptor(o,k);if(!d)continue;" ++
+                    "var e={name:String(k),configurable:!!d.configurable,enumerable:!!d.enumerable,writable:!!d.writable,isOwn:true};" ++
+                    "if('value' in d)e.value=globalThis.__capsurf_format_remote_object(d.value,false);out.push(e);}" ++
+                    "return JSON.stringify({result:out});})()",
+                );
+                defer session.ctx.freeValue(js_val);
+                if (!jsIsException(js_val)) {
+                    const s = session.ctx.toCString(js_val);
+                    defer std.heap.page_allocator.free(s);
+                    if (s.len > 0 && s[0] == '{') {
+                        const res = std.fmt.bufPrint(out_buf, "{s}", .{s}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                        return CdpResponse.ok(req.id, res);
+                    }
+                } else {
+                    const exc = session.ctx.getException();
+                    session.ctx.freeValue(exc);
+                }
+            }
             const res = std.fmt.bufPrint(out_buf, "{{\"result\":[]}}", .{}) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }

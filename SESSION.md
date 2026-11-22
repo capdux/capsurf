@@ -4904,3 +4904,14 @@
   - **Playwright**: `page-basic.spec.ts` 从 `0/16` 跃升至 **9/16 PASS**（1.3m）；`frame-evaluate.spec.ts` 1/8 PASS（0 teardown hang）；`elementhandle-{click,query-selector,bounding-box}.spec.ts` 中 `page.setContent` 均秒级返回。
   - **WPT 新领域扩跑**: `/webidl/` **43/43 零崩溃（32/43 符合基线，9 PASS 含 3 条 `FAIL→PASS`）**；`/css/css-break/` **53/62 PASS (85.5%，60/62 符合基线)**；`/html/dom/documents/` **23/32 PASS (71.9%)**；`/html/webappapis/timers/` **7/9 符合基线（4 PASS）**；`/html/browsers/the-window-object/` **6/7 符合基线**；`/dom/nodes/DocumentFragment-` **2/3 PASS**；`/css/css-multicol/` 6/32 PASS；`/css/css-shapes/` 2/40 PASS；`/html/webappapis/microtask-queuing/` 2/3 符合基线。
 - **ReleaseFast 构建**: `ulimit -s 65536 && cap build -m -r -o bin_rel src/main.cp`（136 模块 **92.11s**）通过并同步至 `bin/main`。
+
+### [2026-11-22 12:26] Phase 256: Playwright `ElementHandle` 链路打通、CDP `Network.*` JSON 转义修复与多路 WPT 扩跑
+- **引擎与协议修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `__capsurf_format_remote_object` 为 DOM 节点补充 `subtype: 'node'`（及 `date`/`regexp`/`error`/`map`/`set`）；`__capsurf_get_object` 支持解析跨隔离世界的 `node:<nid>`；`_wrappedGcs` 为 `getComputedStyle(el).visibility` 补充默认初值 `'visible'`；`el_proto` 补充 `nodeValue` getter/setter（`Text`/`Comment` 节点返回并可写 `text_content`）。
+  - [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `DOM.resolveNode` 同时兼容 `nodeId` 与 `backendNodeId`；`DOM.getBoxModel` 与 `DOM.getContentQuads` 调用 `session.ensureLayout()` 保证动态 DOM 修改后盒模型实时同步。
+  - [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): `Runtime.getProperties` 从空桩实现为真实属性描述符枚举。
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): `Network.requestWillBeSent` 与 `Network.responseReceived` 统一使用 `escapeJsonString` 转义 `_.url`（`ref_esc`）与 `fetch_url`（`fetch_esc`），消除内联 `data:text/html,...` 换行/引号引发的 `SyntaxError: JSON Parse error: Unterminated string`。
+- **双模式验证结果**:
+  - Playwright（`bin_dev/main` Debug 快速迭代）：`jshandle-as-element.spec.ts` **1/4 → 4/4 PASS** (3.4s)；`elementhandle-query-selector.spec.ts` **0/6 → 6/6 PASS** (7.9s)；`elementhandle-eval-on-selector.spec.ts` **0/6 → 6/6 PASS** (7.4s)；`elementhandle-convenience.spec.ts` **0/14 → 12/14 PASS** (33.9s)；`el.boundingBox()` 返回 `{ x: 0, y: 0, width: 50, height: 50 }`。
+  - WPT（`bin_dev/main`）：`/url/data-uri-fragment.html` 消除 Runner JSON 崩溃（1/1 符合期望）；并行覆盖 `/css/css-cascade/`(1/5: 7/18 PASS)、`/css/css-break/`(1/5: 30/42 PASS)、`/css/css-position/`(8/10 PASS)、`/css/css-grid/`(11-20: 8/10 PASS)、`/css/css-fonts/`(6/10 PASS)、`/css/css-cssom-view/`(14/20 PASS)、`/html/semantics/forms/`(1/10: 20/29 PASS)、`/svg/`(1/10: 4/7 PASS) 等 30+ 域批次。
+  - ReleaseFast 最终验证：`rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（136 模块 **122.68s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 3.98s)**。

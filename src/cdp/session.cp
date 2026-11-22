@@ -5133,8 +5133,10 @@ pub struct CdpPageSession {
                 let ua_esc_buf: [512]u8 = undefined;
                 const ua_val = if (_.user_agent.len > 0) _.user_agent else DEFAULT_HTTP_USER_AGENT;
                 const ua_esc = escapeJsonString(ua_val, &ua_esc_buf);
-                let ref_esc_buf: [1024]u8 = undefined;
+                let ref_esc_buf: [2048]u8 = undefined;
                 const ref_esc = escapeJsonString(_.url, &ref_esc_buf);
+                let fetch_esc_buf: [4096]u8 = undefined;
+                const fetch_esc = escapeJsonString(fetch_url, &fetch_esc_buf);
                 const accept_val = if (is_css) "text/css,*/*;q=0.1" else if (is_img) "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" else "*/*";
 
                 let bctx_buf: [96]u8 = undefined;
@@ -5147,7 +5149,7 @@ pub struct CdpPageSession {
                 const req_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"{s}}}",
-                    .{ req_seq, lid, _.url, fetch_url, ua_esc, accept_val, ref_esc, init_type, res_type, fid, bctx_kv },
+                    .{ req_seq, lid, ref_esc, fetch_esc, ua_esc, accept_val, ref_esc, init_type, res_type, fid, bctx_kv },
                 ) catch "";
                 const is_child_net = _.child_network_session_id_len > 0 &&
                     ((_.iframe_origin_len > 0 && std.mem.startsWith(u8, fetch_url, _.iframe_origin_buf[0.._.iframe_origin_len])) ||
@@ -5165,7 +5167,7 @@ pub struct CdpPageSession {
                 const resp_json = std.fmt.bufPrint(
                     _.net_event_storage[storage_pos..],
                     "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ req_seq, lid, res_type, fetch_url, fetch_mime, fid, bctx_kv },
+                    .{ req_seq, lid, res_type, fetch_esc, fetch_mime, fid, bctx_kv },
                 ) catch "";
                 if (resp_json.len > 0) {
                     storage_pos += resp_json.len;

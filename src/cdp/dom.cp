@@ -726,6 +726,7 @@ pub struct DomHandler {
             if (node_type == .Comment) {
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
             }
+            session.ensureLayout();
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 return CdpResponse.err(req.id, -32000, "Could not compute box model");
@@ -769,6 +770,7 @@ pub struct DomHandler {
             if (node_type == .Comment) {
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
             }
+            session.ensureLayout();
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 return CdpResponse.ok(req.id, "{\"quads\":[]}");
@@ -849,7 +851,7 @@ pub struct DomHandler {
         }
 
         if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
-            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? 0;
+            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"Element\",\"description\":\"Node#{d}\",\"objectId\":\"node:{d}\"}}}}",

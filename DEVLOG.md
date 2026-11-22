@@ -1856,3 +1856,12 @@
 ### Phase 255: Playwright `page.close` / `setContent` 与 WPT >8KB JSON 截断排障笔记
 - Playwright `page.close()` 除 `Target.targetDestroyed` 外还强依赖 `Target.detachedFromTarget`；`page.setContent(...)` 通过 `document.open/write/close` 走 `pollReopenLoadEvents`，补齐 `Page.lifecycleEvent` 后 `page-basic.spec.ts` 直接从 `0/16` 升至 `9/16 PASS`。
 - `runtime.cp` 中固定 `[8192]u8` 的 `norm_buf` 会在包含异常文本的大 JSON 结果上截断；改用 `session.allocator.alloc` 后，`/webidl/` 43/43 零崩溃跑通（32/43 符合基线）。
+
+### Phase 256: Playwright `ElementHandle` 协议闭环与 CDP `Network.*` 转义排障笔记
+- **Playwright `page.$`/`$$`/`boundingBox`/`isVisible` 连续打通**：
+  1. `Runtime.RemoteObject` 缺少 `subtype: 'node'` 时 Playwright 直接丢弃句柄并释放对象；
+  2. 跨隔离世界通过 `DOM.describeNode` + `DOM.resolveNode({ backendNodeId })` 传递句柄时，`DOM.resolveNode` 未读 `backendNodeId` 导致返回 `node:0`，且 `__capsurf_get_object` 不识别 `node:<nid>`；
+  3. `page.$$`/`elementHandle.$$` 依赖 `Runtime.getProperties` 枚举数组元素（此前空桩返回 `[]`）；
+  4. `DOM.getBoxModel`/`DOM.getContentQuads` 在 JS 动态写入 DOM 后需先调用 `session.ensureLayout()`；`getComputedStyle(el).visibility` 缺省返回 `""` 会导致 `isVisible()` 误判 `false`；`TextNode` 缺失 `nodeValue` 会同时破坏 `JSHandle` 文本预览与 `:text(...)` 选择器。
+- **CDP `Network.*` JSON 破坏**：`data:text/html,...` URL 含原始 `\n` 与双引号，`session.cp` 未对其调用 `escapeJsonString` 导致 `Connection.js` 抛出 `Unterminated string`。
+- **日常快速构建技巧**：日常调试严格使用 `cap build -m -d -o bin_dev src/main.cp`（全量 ~16s，增量 ~8–11s），仅在最终发布验收时清理 `.cap/zig` 执行 `cap build -m -r -o bin src/main.cp`（~122s）。
