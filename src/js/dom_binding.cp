@@ -2150,12 +2150,12 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         "  const args = globalThis.__capsurf_temp_args;" +
         "  const formatted = [];" +
         "  for(let i=0; i<args.length; i++) {" +
-        "    formatted.push(globalThis.__capsurf_format_remote_object(args[i], true));" +
+        "    formatted.push(globalThis.__capsurf_format_remote_object(args[i], false));" +
         "  }" +
         "  return JSON.stringify(formatted);" +
         "})()";
     const format_res = JS_Eval(ctx, unsafe { @ptrCast(format_script) }, format_script.len, "format.js", 0);
-    let args_buf: [1024]u8 = [0; 1024];
+    let args_buf: [4096]u8 = [0; 4096];
     let args_len: usize = 0;
     let cstr_len: usize = 0;
     const cstr = JS_ToCStringLen2(ctx, &cstr_len, format_res, 0);

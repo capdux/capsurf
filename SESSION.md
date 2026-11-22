@@ -5349,3 +5349,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，经隔离上下文 `UtilityScript` 间接返回的元素句柄调用 `callFunctionOn` 返回 `{"isoNode":"function","mainNode":"undefined"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。
+
+### [2026-11-22 20:34] Phase 313: 为 `Runtime.consoleAPICalled` 参数分配 `objectId` 与对象 `preview` 包装
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `console` 格式化改为 `returnByValue = false` 并扩容 `args_buf` 至 `4096`。
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `__capsurf_format_remote_object` 补充 `preview.properties` 包装。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Runtime.consoleAPICalled` `args` 返回 `[{"type":"string","value":"hello"},{"type":"number","value":5},{"type":"object","className":"Object","objectId":"capsurf:obj:1","description":"Object"}]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.28s)**。

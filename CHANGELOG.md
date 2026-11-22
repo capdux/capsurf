@@ -2751,3 +2751,8 @@
 ## [2026-11-22] Phase 312: 传递标记隔离上下文 `callFunctionOn` 返回的句柄，修复 `elementHandle.click` `Node` 缺失
 - **Fixed (`src/`)**:
   - `src/cdp/session.cp` & `src/cdp/runtime.cp`: 新增 `CdpPageSession.isIsolatedObjectId(object_id)`，在 `Runtime.callFunctionOn` 中当 `object_id` 属于隔离上下文句柄时同步置位 `in_iso`，使调用期间保持 `__capsurf_in_isolated=true` 并临时恢复 `Node`/`MutationObserver`，从而让返回的元素句柄（如 `page.$('button')`）也传递登记至 `__capsurf_isolated_oids`。
+
+## [2026-11-22] Phase 313: 为 `Runtime.consoleAPICalled` 参数分配 `objectId` 与对象 `preview` 包装
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 将 `console` 格式化调用的 `__capsurf_format_remote_object` 改为 `returnByValue = false`（并扩充 `args_buf` 至 `4096`），使 `console.log` 对象参数生成 CDP `objectId` 与 `description`。
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `__capsurf_format_remote_object`，在 `!returnByValue` 时为普通对象/数组附加 `preview.properties`（规避 `dom_binding.cp` `helper_script` `+` 拼接触发 Zig 编译期分支上限）。

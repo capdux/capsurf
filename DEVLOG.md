@@ -2050,3 +2050,6 @@
 
 ### Phase 312: `elementhandle-click` `should work with Node removed` 报 `ReferenceError: Node is not defined` 排障笔记
 - **隔离句柄传递断链根因**：Playwright 通过隔离上下文内的 `UtilityScript`（`Runtime.callFunctionOn` 未传 `executionContextId`）执行 `page.$('button')`。由于 `runtime.cp` 仅判断 `exec_ctx_id > 1`，导致 `UtilityScript` 返回的元素句柄在 `formatCdpRemoteObject` 阶段未看到 `__capsurf_in_isolated=true`，未被登记进 `__capsurf_isolated_oids`。随后 `button.click()` 调用 `callFunctionOn` 时未能恢复 `Node`。新增 `isIsolatedObjectId(object_id)` 补全 `in_iso` 判定后，实测经隔离句柄派生的返回句柄 `typeof Node === "function"`，主世界仍保持 `"undefined"`。
+
+### Phase 313: `console.log("hello", 5, {foo: "bar"})` 缺少 `objectId` 排障笔记
+- **`returnByValue = true` 导致无句柄根因**：`dom_binding.cp` 的 `console` 格式化脚本此前对参数传入 `returnByValue = true`，导致对象参数未生成 `objectId`。改为 `returnByValue = false` 并在 `src/js/shim/index.js` 附加 `preview` 包装（避免触发 Zig `cp_add` 1000 分支上限）后，实测 `Runtime.consoleAPICalled` 参数返回 `{"type":"object","className":"Object","objectId":"capsurf:obj:1","description":"Object"}`。
