@@ -36,6 +36,7 @@ pub struct TargetItem {
     opener_frame_id_len: usize = 0,
     opener_id_buf: [64]u8 = [0; 64],
     opener_id_len: usize = 0,
+    popup_noopener: bool = false,
     attached: bool = false,
     active: bool = false,
 
@@ -276,6 +277,7 @@ pub struct TargetRegistry {
                 _.targets[i].session_id_len = 0;
                 _.targets[i].opener_id_len = 0;
                 _.targets[i].opener_frame_id_len = 0;
+                _.targets[i].popup_noopener = false;
                 _.targets[i].attached = false;
                 _.targets[i].active = true;
                 return _.targets[i].targetId();
@@ -284,7 +286,7 @@ pub struct TargetRegistry {
         return "";
     }
 
-    fn registerPopupTarget(*_, url: []const u8, opener_id: []const u8, opener_frame_id: []const u8, bctx: []const u8): []const u8 {
+    fn registerPopupTarget(*_, url: []const u8, opener_id: []const u8, opener_frame_id: []const u8, bctx: []const u8, noopener: bool): []const u8 {
         const tid = _.createTargetWithType(url, "page", bctx);
         if (tid.len == 0) return "";
         if (idx := _.findTargetIndex(tid)) {
@@ -294,6 +296,7 @@ pub struct TargetRegistry {
             const ofid_len = @min(opener_frame_id.len, _.targets[idx].opener_frame_id_buf.len);
             if (ofid_len > 0) @memcpy(_.targets[idx].opener_frame_id_buf[0..ofid_len], opener_frame_id[0..ofid_len]);
             _.targets[idx].opener_frame_id_len = ofid_len;
+            _.targets[idx].popup_noopener = noopener;
         }
         return tid;
     }

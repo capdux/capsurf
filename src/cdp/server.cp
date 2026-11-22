@@ -438,7 +438,7 @@ pub struct CdpServer {
                 new_sess.frame_id = _.tab_sessions[slot_idx].frame_id_buf[0..flen];
                 new_sess.target_id = new_sess.frame_id;
                 if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
-                    if (_.session.target_registry.targets[t_idx].opener_id_len > 0) {
+                    if (_.session.target_registry.targets[t_idx].opener_id_len > 0 && !_.session.target_registry.targets[t_idx].popup_noopener) {
                         new_sess.has_opener = true;
                         const op_v = new_sess.ctx.eval("window.opener = window.opener || { closed: false };");
                         new_sess.ctx.freeValue(op_v);

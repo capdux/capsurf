@@ -5564,7 +5564,7 @@ pub struct CdpPageSession {
             while (i < dom.popup_count && ev_idx + 2 <= out_events.len) : (i += 1) {
                 const u_len = dom.popup_url_lens[i];
                 const pop_url = if (u_len > 0) dom.popup_urls[i][0..u_len] else "about:blank";
-                const tid = reg.registerPopupTarget(pop_url, _.target_id, _.frame_id, bctx);
+                const tid = reg.registerPopupTarget(pop_url, _.target_id, _.frame_id, bctx, dom.popup_noopener[i]);
                 if (tid.len == 0) continue;
                 if (t_idx := reg.findTargetIndex(tid)) {
                     let info_buf: [512]u8 = undefined;

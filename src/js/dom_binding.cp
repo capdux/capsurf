@@ -179,6 +179,7 @@ pub struct JsDomContext {
     fetch_count: usize = 0,
     popup_urls: [MAX_POPUP_RECORDS][512]u8 = [[0; 512]; MAX_POPUP_RECORDS],
     popup_url_lens: [MAX_POPUP_RECORDS]usize = [0; MAX_POPUP_RECORDS],
+    popup_noopener: [MAX_POPUP_RECORDS]bool = [false; MAX_POPUP_RECORDS],
     popup_count: usize = 0,
     frame_id_buf: [64]u8 = [0; 64],
     frame_id_len: usize = 0,
@@ -313,11 +314,16 @@ pub struct JsDomContext {
     }
 
     fn addPopupRecord(*_, url: []const u8) {
+        _.addPopupRecordWithFlags(url, false);
+    }
+
+    fn addPopupRecordWithFlags(*_, url: []const u8, noopener: bool) {
         if (_.popup_count >= MAX_POPUP_RECORDS) return;
         const dst = &_.popup_urls[_.popup_count];
         const u_len = @min(url.len, dst.len);
         if (u_len > 0) @memcpy(dst[0..u_len], url[0..u_len]);
         _.popup_url_lens[_.popup_count] = u_len;
+        _.popup_noopener[_.popup_count] = noopener;
         _.popup_count += 1;
     }
 
@@ -2439,7 +2445,14 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         }
     }
     defer if (u_ptr != null) JS_FreeCString(ctx, u_ptr);
-    dom_ctx.addPopupRecord(url_str);
+    let noopener = false;
+    if (argc >= 2) {
+        let flag: i32 = 0;
+        if ((JS_ToInt32(ctx, &flag, unsafe { argv[1] })) == 0) {
+            noopener = flag != 0;
+        }
+    }
+    dom_ctx.addPopupRecordWithFlags(url_str, noopener);
     return jsNull();
 }
 
@@ -2659,7 +2672,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_get_extra_headers", js_capsurf_get_extra_headers, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 4);
-    defineMethod(raw_ctx, global_obj, "__capsurf_open_popup", js_capsurf_open_popup, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_open_popup", js_capsurf_open_popup, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
 

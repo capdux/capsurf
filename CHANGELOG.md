@@ -3009,3 +3009,4 @@
 - Phase 382: `src/cdp/input.cp` — `mouseMoved` 根据悬停节点变化自动发射 `mouseout`、`mouseleave`、`mouseover`、`mouseenter`。
 - Phase 383: `src/js/shim/index.js`, `src/js/shim/element/element.js` — `<frame>` 复用 `HTMLIFrameElement.prototype` 与 `src` 动态导航监听。
 - Phase 384: `src/layout/layout.cp` — `getReplacedSize` 新增 `<textarea>` `cols`/`rows` 固有尺寸计算。
+- Phase 385: `src/cdp/target.cp`, `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/server.cp`, `src/js/shim/window.js` — 实现 `window.open(..., 'noopener'/'noreferrer')` 返回值与弹窗 `window.opener` 隔离。

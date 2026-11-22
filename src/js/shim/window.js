@@ -13959,11 +13959,13 @@ const CSS_TYPED_OM_GLOBALS = {
         fullUrl = String(url);
       }
     }
+    const isNoopener = /(?:^|[,\s])(noopener|noreferrer)(?:$|[,\s=])/i.test(String(features || ""));
     if (typeof __capsurf_open_popup === "function") {
-      __capsurf_open_popup(fullUrl);
+      __capsurf_open_popup(fullUrl, isNoopener ? 1 : 0);
     } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_open_popup === "function") {
-      globalThis.__capsurf_open_popup(fullUrl);
+      globalThis.__capsurf_open_popup(fullUrl, isNoopener ? 1 : 0);
     }
+    if (isNoopener) return null;
     const popupWin = {
       closed: false,
       opener: global,
