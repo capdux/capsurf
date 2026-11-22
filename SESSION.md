@@ -4957,3 +4957,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`addScriptTag({ url })` 200 JS 正常求值（`window.__injected === 42`）、404 正确抛出 `Failed to load script`；`page.fill`（含 `invalid-type`）正确替换输出 `"text invalid-type"`；`page.reload` 正常重置 `window` 状态。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **118.99s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。
+
+### [2026-11-22 15:02] Phase 261: 键盘光标导航、`preventDefault` 拦截、`textInput` 事件与 `MouseEvent.detail`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `applyInputText` 与 `Input.dispatchKeyEvent`（同时覆盖 `.KeyDown` 与 `.RawKeyDown`）新增 `ArrowLeft`/`ArrowRight`/`Home`/`End` 光标移动支持；接入 `globalThis.__capsurf_last_key_prevented` 拦截被 `preventDefault()` 的文本输入；`dispatchMouseDomEvent` 为 `mousedown`/`mouseup`/`click` 补充 `detail: 1`。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `keypress` 阶段同步暴露 `globalThis.__capsurf_last_key_prevented`，并为 `<input>`/`<textarea>` 派发 `textInput` 事件。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`ArrowLeft` 插入输出 `"Hello inserted World!"`；`keydown` `preventDefault()` 拦截输入 `"ab"` -> `"a"`；`<input>` 完整触发 `keydown -> keypress -> textInput -> input`；`click` 事件 `detail === 1`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（155 模块 **125.44s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.20s)**。

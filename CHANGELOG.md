@@ -2511,3 +2511,10 @@
   - `src/js/shim/element/forms/selection.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `supportsSelection()` 改用 `normalizeInputType()` 规范化 `type` 属性，修复 `<input type="invalid-type">` 下 `select()` 失效导致 `page.fill()` 追加而非替换的问题。
 - **Added (`test/`)**:
   - `test/TEST_LEDGER.md`: 建立持久化测试台账，记录已测分片时间与结果，避免重复测试。
+
+## [2026-11-22] Phase 261: 键盘光标导航 (`ArrowLeft`/`ArrowRight`/`Home`/`End`)、`preventDefault` 拦截、`textInput` 事件与 `MouseEvent.detail`
+- **Added / Fixed (`src/`)**:
+  - `src/cdp/input.cp`: `applyInputText` 与 `Input.dispatchKeyEvent`（含 `.RawKeyDown`）新增 `ArrowLeft`/`ArrowRight`/`Home`/`End` 光标/选区移动支持；`applyInputText` 检查 `globalThis.__capsurf_last_key_prevented` 拦截被 `preventDefault()` 的文本输入；`dispatchMouseDomEvent` 为 `mousedown`/`mouseup`/`click` 补充 `detail: 1`。
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `keypress` 阶段同步暴露 `globalThis.__capsurf_last_key_prevented`，并为 `<input>`/`<textarea>` 派发 `textInput` 事件。
+- **Updated (`test/`)**:
+  - `test/TEST_LEDGER.md`: 持续登记 WPT/PW 各批测试结果与耗时。

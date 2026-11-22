@@ -11615,29 +11615,43 @@ const CSS_TYPED_OM_GLOBALS = {
         bubbles: true,
       });
       target.dispatchEvent(kpEvt);
-      if (!kpEvt.defaultPrevented && isTargetContentEditable(target)) {
-        const host = findEditingHost(target) || target;
-        const selInfo = getSelectionInHost(doc, host);
-        const inputType = isEnter ? "insertParagraph" : "insertText";
-        const biData = isEnter ? null : kpKey;
-        const tiData = isEnter ? "\n" : kpKey;
-        const targetRanges = selInfo.range
-          ? [makeStaticTargetRange(selInfo.range.startContainer, selInfo.range.startOffset, selInfo.range.endContainer, selInfo.range.endOffset)]
-          : [];
-        const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, biData, targetRanges);
-        target.dispatchEvent(biEvt);
-        if (!biEvt.defaultPrevented) {
-          const tiAllowed = dispatchTextInputEvent(target, tiData);
-          if (tiAllowed) {
-            if (isEnter) {
-              applyContentEditableInsertParagraph(doc, host, selInfo.sel, selInfo.range);
-            } else {
-              applyContentEditableInsertText(doc, host, selInfo.sel, selInfo.range, kpKey);
+      let tiAllowedAll = true;
+      if (!kpEvt.defaultPrevented) {
+        if (isTargetContentEditable(target)) {
+          const host = findEditingHost(target) || target;
+          const selInfo = getSelectionInHost(doc, host);
+          const inputType = isEnter ? "insertParagraph" : "insertText";
+          const biData = isEnter ? null : kpKey;
+          const tiData = isEnter ? "\n" : kpKey;
+          const targetRanges = selInfo.range
+            ? [makeStaticTargetRange(selInfo.range.startContainer, selInfo.range.startOffset, selInfo.range.endContainer, selInfo.range.endOffset)]
+            : [];
+          const biEvt = createContentEditableInputEvent("beforeinput", true, inputType, biData, targetRanges);
+          target.dispatchEvent(biEvt);
+          if (!biEvt.defaultPrevented) {
+            const tiAllowed = dispatchTextInputEvent(target, tiData);
+            tiAllowedAll = tiAllowed;
+            if (tiAllowed) {
+              if (isEnter) {
+                applyContentEditableInsertParagraph(doc, host, selInfo.sel, selInfo.range);
+              } else {
+                applyContentEditableInsertText(doc, host, selInfo.sel, selInfo.range, kpKey);
+              }
+              const inEvt = createContentEditableInputEvent("input", false, inputType, biData, []);
+              target.dispatchEvent(inEvt);
             }
-            const inEvt = createContentEditableInputEvent("input", false, inputType, biData, []);
-            target.dispatchEvent(inEvt);
+          } else {
+            tiAllowedAll = false;
+          }
+        } else if (target && target.nodeType === 1) {
+          const tTag = String(target.tagName || target.localName || "").toLowerCase();
+          if ((tTag === "input" || tTag === "textarea") && kpKey.length === 1) {
+            tiAllowedAll = dispatchTextInputEvent(target, kpKey);
           }
         }
+      }
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_last_key_prevented = Boolean(_lastKeyDownPrevented || kpEvt.defaultPrevented || !tiAllowedAll);
       }
       const active = doc ? doc.activeElement : null;
       return (active && typeof active._nid === "number") ? active._nid : 0;
@@ -11665,6 +11679,9 @@ const CSS_TYPED_OM_GLOBALS = {
       target.dispatchEvent(evt);
       const defaultPrevented = Boolean(evt.defaultPrevented);
       _lastKeyDownPrevented = defaultPrevented;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_last_key_prevented = defaultPrevented;
+      }
 
       if (!defaultPrevented) {
         if (!isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {

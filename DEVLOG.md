@@ -1885,3 +1885,8 @@
 - **`Page.reload`**：此前 `Page.reload` 被列入空存根直接返回 `{}`，导致 `page.reload()` 既不重载文档也不重置 `window` 状态；接入 `Page.navigate` 管线并使用栈上 `reload_url_buf` 拷贝 `session.url`（避免导航中途清空覆盖原切片）后即恢复正常。
 - **`addScriptTag({ url })`**：`window.js` 中的 `__capsurf_native_fetch` 仅作用于同源/fixture stub，对于普通外部 URL 返回空体 `200`，而 `session_hooks.cp` 中 `handleInsertedScript` 仅拦截 `/__fixtures/` 路径。通过 `registerHttpGetHook` 从 `session.cp` 注入 `HttpLoader.fetchDocument` 回调，使动态插入的 `<script src="...">` 在 2xx 时求值并派发 `load`、非 2xx 时派发 `error`。
 - **`input[type=invalid-type]` 选区**：HTML5 规范中未知 `type` 应回退为 `text`，`selection.js` 中 `supportsSelection()` 直接读取原始 `getAttribute("type")` 导致 `el.select()` 早退、`page.fill()` 未全选替换；改用 `normalizeInputType()` 后问题消除。
+
+### Phase 261: 键盘事件链路与 `MouseEvent.detail` 排障笔记
+- **`RawKeyDown` 漏派发**：Playwright `page.keyboard.press("ArrowLeft")` 对无文本控制键发送 `type: "rawKeyDown"`，此前 `input.cp` 仅在 `ev_type == .KeyDown` 时触发光标/删除逻辑，补齐 `ev_type == .RawKeyDown` 后方向键、`Home`/`End` 即刻生效（`"Hello inserted World!"`）。
+- **`textInput` 与 `preventDefault`**：`window.js` 原先仅对 `contentEditable` 派发 `dispatchTextInputEvent`，对 `<input>`/`<textarea>` 缺失 `textInput` 且未向 `applyInputText` 同步 `defaultPrevented` 状态；打通 `globalThis.__capsurf_last_key_prevented` 与普通表单控件的 `textInput` 派发后，`preventDefault()` 拦截与事件序列均与 Chromium 一致。
+- **`MouseEvent.detail`**：`dispatchMouseDomEvent` 构造 `MouseEvent` 时遗漏 `detail`，补上 `detail: 1` 修复 `expect(event.detail).toBe(1)`。
