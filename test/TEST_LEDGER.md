@@ -690,3 +690,4 @@
 | 2026-11-23 00:58 | `frame-frame-element.spec.ts` | 1/6 PASS (`bin_dev` Phase 369前启动) | PW Batch 113 |
 | 2026-11-23 00:58 | `page-cache-storage.spec.ts` | 0/1 PASS (`caches is not defined`, 非allow-list) | PW Batch 113 |
 | 2026-11-23 00:58 | `page-leaks.spec.ts` | 0/3 PASS (WeakRefs 108/116 > 25, 非allow-list) | PW Batch 113 |
+| WPT-B104 | `/dom/nodes/ 3/5..5/5` + `/dom/events/ 1/2..2/2` | 104/279 PASS (3 FAIL→PASS, 0 CRASH) |

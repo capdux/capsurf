@@ -348,6 +348,16 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Poll any execution context created events and child iframe lifecycle events
+            let polled_ctx_evts: [2]CdpEvent = [CdpEvent{}; 2];
+            const polled_c_count = session.pollExecutionContextEvents(&polled_ctx_evts);
+            let c_i: usize = 0;
+            while (c_i < polled_c_count && event_count.* < out_events.len) : (c_i += 1) {
+                out_events[event_count.*] = polled_ctx_evts[c_i];
+                event_count.* += 1;
+            }
+            emitNewChildFrameEvents(session, out_events, event_count);
+
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }
