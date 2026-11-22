@@ -738,3 +738,8 @@
 | 2026-11-23 02:02 | `page-history.spec.ts` | 7/13 PASS (retry 120s截断) | PW Batch 122 |
 | 2026-11-23 02:02 | `page-screenshot.spec.ts` | 2/3 PASS (`[4/44]`120s截断) | PW Batch 122 |
 | WPT-B117 | `/html/canvas/` (852) + `/html/infrastructure/` + `/html/syntax/parsing/ 1/3..2/3` | 361/882 PASS (canvas **356/852**, **42 FAIL→PASS**, 0 CRASH) |
+| 2026-11-23 02:08 | `eval-on-selector.spec.ts` | 26/26 PASS (非allow-list 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
+| 2026-11-23 02:08 | `elementhandle-eval-on-selector.spec.ts` | 6/6 PASS (非allow-list 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
+| 2026-11-23 02:08 | `eval-on-selector-all.spec.ts` | 9/9 PASS (9.2s, 非allow-list 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
+| 2026-11-23 02:08 | `selectors-text.spec.ts` | 21/21 PASS (48.1s, 3 exp FAIL→PASS 全绿!) | PW Batch 123 (`bin_dev` 全绿!) |
+| 2026-11-23 02:08 | `page-wait-for-function.spec.ts` | 8/10 PASS (`[11/26]`120s截断) | PW Batch 123 |

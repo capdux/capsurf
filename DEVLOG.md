@@ -2239,3 +2239,4 @@
 - Phase 385 (`src/cdp/target.cp`, `src/cdp/server.cp`, `src/js/shim/window.js`): 通过 `popup_noopener` 标志区分普通弹窗与 `noopener`/`noreferrer` 弹窗，确保 `page.waitForEvent('popup')` 正常触发的同时严格隔离 `window.opener === null`。
 - Phase 386 (`src/js/shim/window.js`): 将 `<a target="_blank">` 默认点击行为并入 `activateClickedElement` 锚点分支，按 `rel` 属性自动传递 `noopener` 至 `openFn`，打通 `page-event-popup.spec.ts` 点击链接弹窗链路。
 - Phase 387 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent` 右键点击仅触发 `mousedown`/`mouseup` 而漏发 `contextmenu` 的缺陷，解锁 `page-click.spec.ts` `[28/77]` 等右键菜单用例。
+- Phase 388 (`src/cdp/input.cp`): 修复 `Input.dispatchMouseEvent` 左键双击/三击未自动扩展选区的问题，解锁 `page-click.spec.ts` `[14/77]` `textarea` 三击全选等用例。

@@ -3012,3 +3012,4 @@
 - Phase 385: `src/cdp/target.cp`, `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/server.cp`, `src/js/shim/window.js` — 实现 `window.open(..., 'noopener'/'noreferrer')` 返回值与弹窗 `window.opener` 隔离。
 - Phase 386: `src/js/shim/window.js` — `activateClickedElement` 支持 `<a target="_blank">` 点击触发弹窗并识别 `rel="noopener"`/`noreferrer`。
 - Phase 387: `src/cdp/input.cp` — 右键 `mouseReleased` 自动发射 `contextmenu` DOM 事件。
+- Phase 388: `src/cdp/input.cp` — `MousePressed` 支持 `clickCount == 2` 双击选词与 `clickCount >= 3` 三击全选（表单控件与普通文本块）。
