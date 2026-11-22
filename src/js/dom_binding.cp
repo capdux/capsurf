@@ -444,11 +444,10 @@ fn getNodeText(doc: *Document, node_id: NodeId): []const u8 {
     if (node.node_type == NodeType.Text) {
         return node.text_content;
     }
-    if (node.text_content.len > 0) {
+    let child = node.first_child;
+    if (child == NULL_NODE) {
         return node.text_content;
     }
-    let child = node.first_child;
-    if (child == NULL_NODE) return "";
     if (doc.nodes.items[@as(usize, child)].next_sibling == NULL_NODE &&
         doc.nodes.items[@as(usize, child)].node_type == NodeType.Text) {
         return doc.nodes.items[@as(usize, child)].text_content;

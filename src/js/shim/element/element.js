@@ -1796,10 +1796,9 @@ function installElementExtensions(proto) {
     const origGet = origElFirstChildDesc.get;
     Object.defineProperty(proto, "firstChild", {
       get: function () {
-        const res = origGet.call(this);
-        if (res) return res;
-        if (this._children && this._children.length > 0) return this._children[0];
-        return null;
+        let out = origGet.call(this);
+        if (!out && this._children && this._children.length > 0) out = this._children[0];
+        return (out && out.nodeType === 1 && typeof upgradeElement === "function") ? upgradeElement(out) : out;
       },
       configurable: true,
     });
@@ -1808,10 +1807,11 @@ function installElementExtensions(proto) {
     const origGet = origElLastChildDesc.get;
     Object.defineProperty(proto, "lastChild", {
       get: function () {
-        const res = origGet.call(this);
-        if (res && (!this._children || this._children.length === 0)) return res;
-        if (this._children && this._children.length > 0) return this._children[this._children.length - 1];
-        return res;
+        let res = origGet.call(this);
+        if (this._children && this._children.length > 0 && !(res && (!this._children || this._children.length === 0))) {
+          res = this._children[this._children.length - 1];
+        }
+        return (res && res.nodeType === 1 && typeof upgradeElement === "function") ? upgradeElement(res) : res;
       },
       configurable: true,
     });

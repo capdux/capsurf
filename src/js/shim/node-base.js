@@ -374,6 +374,9 @@ function ensureChildren(node) {
         child = nativeElementFirstChild.call(node);
       }
       while (child) {
+        if (child.nodeType === 1 && typeof upgradeElement === "function") {
+          upgradeElement(child);
+        }
         node._children.push(child);
         if (nativeElementNextSibling) {
           child = nativeElementNextSibling.call(child);

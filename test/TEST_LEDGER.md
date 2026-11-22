@@ -790,3 +790,13 @@
 | 2026-11-23 07:25 | `page-emulate-media.spec.ts` | 12/12 PASS | PW Batch 133 (`bin_dev` 全绿!) |
 | 2026-11-23 07:25 | `page-set-content.spec.ts` | 14/16 PASS (0 FAIL, 2 timeout) | PW Batch 133 |
 | WPT-B126+127 | `/url/ 1/2` (Phase 403 无JSON崩溃!) + `/html/dom/documents/` + `/css/css-values/ 1/2..2/2` | 111/401 PASS (`/html/dom/documents/` **23/32**, `css-values` **84/350**, **4 FAIL→PASS**, 0 CRASH) |
+| WPT-B128 | `/css/selectors/ 1/2..2/2` + `/css/css-cascade/` + `/css/css-sizing/ 1/2` | 67/173 PASS (`selectors` **31/67** **4 FAIL→PASS**, `css-cascade` **36/90** **1 FAIL→PASS**, 0 CRASH) |
+| WPT-B129 | `/css/css-flexbox/ 1/4..2/4` + `/css/css-grid/ 1/4` + `/css/css-display/` | 126/404 PASS (`flexbox` **56/131**, `css-grid 1/4` **55/221** **12 FAIL→PASS**, `css-display` **15/52** **2 FAIL→PASS**, 0 CRASH) |
+| 2026-11-23 08:17 | `page-keyboard.spec.ts` | 39/44 PASS (Phase 405! copy/cut-paste过! 2 fail, 3 timeout) | PW Batch 134 |
+| 2026-11-23 08:17 | `page-wait-for-function.spec.ts` | 9/26 PASS (1 fail, 16 timeout) | PW Batch 134 |
+| 2026-11-23 08:17 | `locator-convenience.spec.ts` | 0/21 PASS (21 timeout) | PW Batch 134 |
+| 2026-11-23 08:17 | `page-wait-for-selector-2.spec.ts` | 32/32 PASS | PW Batch 134 (`bin_dev` 全绿!) |
+| WPT-B130 | `/css/css-flexbox/ 3/4..4/4` + `/css/css-grid/ 2/4..3/4` | 170/570 PASS (`flexbox` **58/130**, `css-grid` **112/440** **20 FAIL→PASS**, 0 CRASH) |
+| WPT-B131 | `/css/css-grid/ 4/4` + `/css/css-position/` + `/html/dom/documents/` + `/css/css-sizing/ 2/2` | 139/521 PASS (`grid 4/4` 37/209 **11 FAIL→PASS**, `position` **77/264** **5 FAIL→PASS**, `documents` **24/32**, 0 CRASH) |
+| WPT-B126 | `/WebCryptoAPI/ 2/2` + `/FileAPI/` + `/encoding/ 2/2` | 46/670 PASS (`WebCryptoAPI 2/2` 12/66 **11 FAIL→PASS**, `FileAPI` 14/36, `encoding 2/2` 20/568, 0 CRASH) |
+| WPT-B132 | `/css/css-backgrounds/ 1/2..2/2` + `/css/css-color/` + `/css/css-box/` | 48/204 PASS (`backgrounds` 33/115, `css-color` 2/56, `css-box` 13/33, 0 CRASH) |

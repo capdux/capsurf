@@ -22,6 +22,12 @@ import {
     jsonViewerHtml,
 } from "./document_kind.cp";
 import { nextDocRequestId, recordResponseBody, clearDocResponseBodies, formatHttpHeadersJson } from "./network.cp";
+
+fn isXmlOrXhtml(content_type: []const u8, url: []const u8): bool {
+    if (std.mem.indexOf(u8, content_type, "xml") != null) return true;
+    const base = if (qi := std.mem.indexOfScalar(u8, url, '?')) url[0..qi] else url;
+    return std.mem.endsWith(u8, base, ".xhtml") || std.mem.endsWith(u8, base, ".xml");
+}
 import {
     FrameState,
     SandboxRestrictions,
@@ -1411,6 +1417,9 @@ pub struct PageHandler {
 
             session.pending_http_csp = fetch_res.content_security_policy;
             session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
+                session.doc.in_quirks_mode = false;
+            }
             syncIframeTargets(session, true);
 
             if (event_count.* < out_events.len) {
@@ -1877,6 +1886,9 @@ pub struct PageHandler {
             session.skip_record_nav = true;
             defer session.skip_record_nav = false;
             session.navigate(nav_html, final_url, "") catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            if (isXmlOrXhtml(hist_content_type, final_url)) {
+                session.doc.in_quirks_mode = false;
+            }
             session.current_nav_index = target_idx;
             session.url = session.nav_entries[target_idx].url;
             syncIframeTargets(session, true);
@@ -2075,6 +2087,9 @@ pub fn performPendingNavigation(
 
     session.nav_tty_stripped = false;
     session.navigate(nav_html, fetch_res.final_url, "") catch return false;
+    if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
+        session.doc.in_quirks_mode = false;
+    }
 
     if (session.network_enabled && event_count.* < out_events.len) {
         let esc_u_buf: [2048]u8 = [0; 2048];
