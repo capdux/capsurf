@@ -2047,3 +2047,6 @@
 
 ### Phase 311: `elementhandle-bounding-box` `should work with SVG nodes` (`page.$('#therect')` 返回 `null`) 排障笔记
 - **双层 Quirks Mode 断链根因**：Playwright 用例调用 `page.setContent('<svg ...><rect id="theRect"...></svg>')` 后以小写 `#therect` 查询。由于无 `<!DOCTYPE html>`，规范中应进入 Quirks Mode，此时 `#id` 与 `.class` 忽略大小写。CapSurf 此前存在两处断链：(1) `Page.setDocumentContent` 复用 `session.navigate` 时触发 `isSvgDocument()`，自动包裹了 `<!doctype html>` 强行进入 Standards Mode；(2) `Document.prototype.compatMode` 硬编码 `"CSS1Compat"` 且 `selector.js` 未实现 Quirks `#id`/`.class` 大小写不敏感匹配。四处同步补齐后，实测无 doctype 下 `compat="BackCompat", byId="theRect", byCls="theRect"`，有 `<!DOCTYPE html>` 下保持 `compat="CSS1Compat", byId=null, byCls=null`。
+
+### Phase 312: `elementhandle-click` `should work with Node removed` 报 `ReferenceError: Node is not defined` 排障笔记
+- **隔离句柄传递断链根因**：Playwright 通过隔离上下文内的 `UtilityScript`（`Runtime.callFunctionOn` 未传 `executionContextId`）执行 `page.$('button')`。由于 `runtime.cp` 仅判断 `exec_ctx_id > 1`，导致 `UtilityScript` 返回的元素句柄在 `formatCdpRemoteObject` 阶段未看到 `__capsurf_in_isolated=true`，未被登记进 `__capsurf_isolated_oids`。随后 `button.click()` 调用 `callFunctionOn` 时未能恢复 `Node`。新增 `isIsolatedObjectId(object_id)` 补全 `in_iso` 判定后，实测经隔离句柄派生的返回句柄 `typeof Node === "function"`，主世界仍保持 `"undefined"`。

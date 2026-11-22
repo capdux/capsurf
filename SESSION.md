@@ -5342,3 +5342,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：无 doctype `<svg><rect id="theRect" class="MyCls">` 返回 `{"compat":"BackCompat","byId":"theRect","byCls":"theRect"}`；带 `<!DOCTYPE html>` 返回 `{"compat":"CSS1Compat","byId":null,"byCls":null}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+### [2026-11-22 20:30] Phase 312: 传递标记隔离上下文 `callFunctionOn` 返回的句柄，修复 `elementHandle.click` `Node` 缺失
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): 新增 `isIsolatedObjectId()` 并在 `Runtime.callFunctionOn` 纳入 `in_iso` 判定。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，经隔离上下文 `UtilityScript` 间接返回的元素句柄调用 `callFunctionOn` 返回 `{"isoNode":"function","mainNode":"undefined"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。

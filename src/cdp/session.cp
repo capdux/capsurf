@@ -3051,6 +3051,23 @@ pub struct CdpPageSession {
         _.ctx.freeValue(v);
     }
 
+    pub fn isIsolatedObjectId(*_, object_id: []const u8): bool {
+        if (_.isolated_world_count == 0 || object_id.len == 0) return false;
+        let buf: [256]u8 = [0; 256];
+        if (object_id.len > 128) return false;
+        for (c of object_id) {
+            if (c == '\'' || c == '\\' || c == '\n' || c == '\r') return false;
+        }
+        const js = std.fmt.bufPrint(&buf, "(function(){{return (globalThis.__capsurf_isolated_oids&&globalThis.__capsurf_isolated_oids.has('{s}'))?1:0;}})()", .{object_id}) catch return false;
+        const v = _.ctx.eval(js);
+        defer _.ctx.freeValue(v);
+        let n: i32 = 0;
+        if (!jsIsException(v)) {
+            * = JS_ToInt32(_.ctx.raw_ctx, &n, v);
+        }
+        return n == 1;
+    }
+
     pub fn rotateIsolatedWorldsOnNavigate(*_) {
         let i: usize = 0;
         while (i < _.isolated_world_count) : (i += 1) {

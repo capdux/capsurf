@@ -281,7 +281,7 @@ pub struct RuntimeHandler {
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
-            const in_iso = exec_ctx_id != null && exec_ctx_id.? > 1;
+            const in_iso = (exec_ctx_id != null && exec_ctx_id.? > 1) || session.isIsolatedObjectId(object_id);
             const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
             defer if (in_iso) session.clearIsolatedNode(restored_node);
             let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);

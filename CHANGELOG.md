@@ -2747,3 +2747,7 @@
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 使 `Document.prototype.compatMode` 依据 `doctype` 判定怪异模式。
   - `src/js/shim/selector.js`: 在 `matchesCompoundSelector()` 中当 `doc.compatMode === "BackCompat"` 时对 `#id` 与 `.class` 执行 ASCII 大小写不敏感匹配。
   - `src/cdp/session.cp` & `src/cdp/page.cp`: 新增 `in_set_document_content` 标记，避免 `Page.setDocumentContent` 传入 `<svg>` 片段时被 `isSvgDocument` 误包裹 `<!doctype html>` 而破坏 Quirks Mode。
+
+## [2026-11-22] Phase 312: 传递标记隔离上下文 `callFunctionOn` 返回的句柄，修复 `elementHandle.click` `Node` 缺失
+- **Fixed (`src/`)**:
+  - `src/cdp/session.cp` & `src/cdp/runtime.cp`: 新增 `CdpPageSession.isIsolatedObjectId(object_id)`，在 `Runtime.callFunctionOn` 中当 `object_id` 属于隔离上下文句柄时同步置位 `in_iso`，使调用期间保持 `__capsurf_in_isolated=true` 并临时恢复 `Node`/`MutationObserver`，从而让返回的元素句柄（如 `page.$('button')`）也传递登记至 `__capsurf_isolated_oids`。
