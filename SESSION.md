@@ -5617,3 +5617,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385，加载 `mouse-helper.js`）：`PHASE350_RESULT {"scrollMs":1482,"cx":71.800003,"cy":448,"hoverBtnId":"button-91"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。
+
+## Phase 351: `Page.setDocumentContent` 外部 `<img>` 真实 HTTP 拉取与等待时序修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): `Page.setDocumentContent` 遍历 `session.init_img_urls` 对外部 `http(s)://` 图片发起真实 `HttpLoader.fetchDocument` 拉取并等待完成。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE351_RESULT {"beforeEndLoaded":false,"afterEndLoaded":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

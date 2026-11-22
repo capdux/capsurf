@@ -2923,3 +2923,7 @@
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`):
     - 新增 `isElementInlineOrJsDisplayNone()`，对具有原生 `_nid > 0` 的元素在 `getBoundingClientRect()` 中直接复用原生 `origGetBoundingClientRect` 内置的 `isNodeDisplayNone` 检查，免去沿祖先链重复调用 `window.getComputedStyle`；
     - `collectRootScrollExtents()` 仅在存在外部 `<link rel="stylesheet">` 或 `<style>` 实际含 `fixed`/`overflow` 关键字时才查询子元素计算样式，并跳过 `<br>`/`<wbr>`。
+
+## [2026-11-22] Phase 351: 打通 `Page.setDocumentContent` 外部 `<img>` 资源真实 HTTP 拉取与阻塞等待（`page-set-content.spec.ts` `[8/16]`）
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `Page.setDocumentContent` 在 `session.navigate` 后、返回 `{}` 前，遍历 `session.init_img_urls` 对非 Fixture 的 `http://` / `https://` `<img>` 发起 `HttpLoader.fetchDocument` 拉取并等待响应完成。

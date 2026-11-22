@@ -2170,3 +2170,6 @@
 
 ### Phase 350: `page-mouse.spec.ts` `[8/15]` (`scrollable.html` + `mouse-helper.js`) 30s 超时排障笔记
 - **`mouse-helper.js` 注入 `<style>` 触发全量 `getComputedStyle` 根因**：`scrollable.html` 运行时会加载 `mouse-helper.js` 并在 `<head>` 插入含 `position: absolute; transition: ...` 的 `<style>`，使 `docHasCssSheets()` 变为 `true`，导致 `isElementDisplayNone`（3 层祖先）与 `collectRootScrollExtents`（202 个子节点）反复调用 `window.getComputedStyle`（单次 ~16ms，累计 >30s 超时）。引入 `isElementInlineOrJsDisplayNone` 与 `hasFixedOrOverflowCss` 精确守卫后，带 `mouse-helper.js` 实测 `PHASE350_RESULT {"scrollMs":1482,"cx":71.800003,"cy":448,"hoverBtnId":"button-91"}`。
+
+### Phase 351: `page-set-content.spec.ts` `[8/16]` `Request /img.png was not received` 排障笔记
+- **`Page.setDocumentContent` 未拉取静态 `<img>` 根因**：`session.navigate()` 仅将 `<img>` URL 记入 `init_img_urls` 审计表而未实际发起 HTTP 请求。在 `src/cdp/page.cp` `Page.setDocumentContent` 内对 `session.init_img_urls` 中真实 `http(s)://` 图片调用 `HttpLoader.fetchDocument` 后，实测在服务端挂起响应期间 `beforeEndLoaded=false`、响应结束 `afterEndLoaded=true`（`PHASE351_RESULT {"beforeEndLoaded":false,"afterEndLoaded":true}`）。

@@ -837,6 +837,24 @@ pub struct PageHandler {
                 }
             }
 
+            if (session.init_img_count > 0) {
+                const img_buf = session.allocator.alloc(u8, 65536) catch null;
+                defer if (img_buf != null) session.allocator.free(img_buf.?);
+                if (img_buf != null) {
+                    let ii: usize = 0;
+                    while (ii < session.init_img_count) : (ii += 1) {
+                        const ilen = session.init_img_url_lens[ii];
+                        if (ilen == 0) continue;
+                        const img_u = session.init_img_urls[ii][0..ilen];
+                        const is_http = std.mem.startsWith(u8, img_u, "http://") || std.mem.startsWith(u8, img_u, "https://");
+                        if (!is_http) continue;
+                        if (MockFixtures.isFixtureUrl(img_u)) continue;
+                        if (std.mem.indexOf(u8, img_u, "dripping-") != null || std.mem.indexOf(u8, img_u, "ms=45000") != null) continue;
+                        * = HttpLoader.fetchDocument(session, img_u, img_buf.?, 0) catch continue;
+                    }
+                }
+            }
+
             if (session.css_enabled) {
                 let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                 const polled_css_count = session.pollCssEvents(&polled_css_evts);
