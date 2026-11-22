@@ -5385,3 +5385,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Input.dispatchKeyEvent` 派发 `keydown` 与 `keyup` 返回 `[{"t":"keydown","trusted":true,"composed":true},{"t":"keyup","trusted":true,"composed":true}]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.27s)**。
+
+### [2026-11-22 20:49] Phase 318: 修复 `Input.dispatchMouseEvent` `button`/`buttons` 与 `pointerdown`/`pointerup` 派发
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `dispatchMouseDomEvent()` 传入 `btn_num`/`buttons_mask`，补齐可信 `pointerdown`/`pointerup` 并仅左键触发 `click`/`dblclick`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`middle` 键按放输出 `[{"t":"pointerdown","btn":1,"btns":4,"trusted":true},{"t":"mousedown","btn":1,"btns":4,"trusted":true},{"t":"pointerup","btn":1,"btns":0,"trusted":true},{"t":"mouseup","btn":1,"btns":0,"trusted":true}]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。

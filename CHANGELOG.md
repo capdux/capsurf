@@ -2773,3 +2773,7 @@
 ## [2026-11-22] Phase 317: 修复 `Input.dispatchKeyEvent` 派发 `keydown`/`keypress`/`keyup` `isTrusted` 为 `false`
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `dispatchKeyEvent()` 中为 `keydown`/`keypress`/`keyup` 补齐 `composed: true`，并将 `target.dispatchEvent()` 改为 `_dispatchTrusted(target, ...)`，使 CDP 键盘事件正确置位 `isTrusted: true`。
+
+## [2026-11-22] Phase 318: 修复 `Input.dispatchMouseEvent` `button`/`buttons` 与 `pointerdown`/`pointerup` 派发
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 增加 `btn_num` 与 `buttons_mask` 参数（0=left, 1=middle, 2=right, 3=back, 4=forward），在 `mousedown`/`mouseup` 前同步派发可信 `PointerEvent`（`pointerdown`/`pointerup`），并仅在 `btn_num == 0` 时触发 `click`/`dblclick`。

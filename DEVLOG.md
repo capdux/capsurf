@@ -2065,3 +2065,6 @@
 
 ### Phase 317: `Input.dispatchKeyEvent` `isTrusted` 为 `false` 排障笔记
 - **`dispatchKeyEvent()` 直接调用 `target.dispatchEvent()` 根因**：`src/js/shim/window.js` 中的 `dispatchKeyEvent()` 此前对 `keyup`/`keypress`/`keydown` 均直接调用 `target.dispatchEvent(evt)`，未经过 `_dispatchTrusted(target, evt)`，导致 `event.isTrusted` 为 `false` 且缺少 `composed: true`。改为 `_dispatchTrusted(target, evt)` 后，实测 `keydown` 与 `keyup` 均返回 `trusted: true, composed: true`。
+
+### Phase 318: `page-mouse.spec.ts` 自定义按键与 `pointerdown` 缺失排障笔记
+- **`button: 0` 硬编码与缺少 `pointerdown`/`pointerup` 根因**：`dispatchMouseDomEvent()` 此前硬编码 `button: 0` 且未派发 `PointerEvent`，同时非左键松开也会误发 `click`。补齐 `btn_num`/`buttons_mask` 参数、`pointerdown`/`pointerup` 派发及左键 `click` 门控后，实测 `button: "middle", buttons: 4` 准确输出 `pointerdown`/`mousedown`（`btn: 1, btns: 4, trusted: true`）与 `pointerup`/`mouseup`（`btn: 1, btns: 0, trusted: true`）。
