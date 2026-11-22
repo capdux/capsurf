@@ -25,6 +25,22 @@ pub fn nextDocRequestId(out_buf: []u8): []const u8 {
     return std.fmt.bufPrint(out_buf, "doc-req-{d}", .{g_doc_req_seq}) catch "doc-req-1";
 }
 
+pub fn clearDocResponseBodies() {
+    let k: usize = 0;
+    while (k < MAX_STORED_BODIES) : (k += 1) {
+        if (g_stored_bodies[k].used) {
+            const rid = g_stored_bodies[k].request_id_buf[0..g_stored_bodies[k].request_id_len];
+            if (std.mem.startsWith(u8, rid, "doc-req-") || std.mem.startsWith(u8, rid, "capsurf-loader-")) {
+                if (g_stored_bodies[k].body.len > 0) {
+                    std.heap.c_allocator.free(g_stored_bodies[k].body);
+                }
+                g_stored_bodies[k].body = [];
+                g_stored_bodies[k].used = false;
+            }
+        }
+    }
+}
+
 pub fn recordResponseBody(request_id: []const u8, body: []const u8, base64_encoded: bool) {
     if (request_id.len == 0) return;
     let slot: *StoredResponseBody = &g_stored_bodies[0];

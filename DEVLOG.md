@@ -2261,3 +2261,4 @@
 - Phase 407 (`src/cdp/input.cp`): 为 `contenteditable` 补齐 `ArrowLeft`/`ArrowRight`（含 `Alt`/`Control` 按词跳转与 `Shift` 选区同步至 `window.getSelection()`），目标解锁 `page-keyboard.spec.ts` `should move around the selection in a contenteditable`。
 - Phase 408 (`src/js/dom_binding.cp`): 修复 `js_document_get_head`/`get_title`/`set_title` 按 Arena 分配下标扫描导致的脱离文档节点残留、`insertBefore` 后顺序错乱以及无 `<head>` 仍新建节点问题，目标解锁 WPT `/html/dom/documents/` `document.head-01`/`document.title-*` 系列用例。
 - Phase 409 (`src/js/shim/window.js`, `src/cdp/input.cp`): 排查 `page-keyboard.spec.ts` `shadow dom with nested elements` 发现 `window.js` `applyContentEditableInsertText` 在无选区时使用 `appendChild` 尾部追加而非 `firstChild` 前插、且未穿透 `shadowRoot.activeElement`，同时移除 `input.cp` 对 `contenteditable` 的重复字符插入。
+- Phase 410 (`src/cdp/network.cp`, `src/cdp/page.cp`): 修复页面导航离开后旧文档响应体仍保留在 `g_stored_bodies` 导致 `page-network-response.spec.ts` `response.body() races with navigation` 未抛出 `navigated away` 错误的缺陷。

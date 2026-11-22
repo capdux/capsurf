@@ -3034,3 +3034,4 @@
 - Phase 407: `src/cdp/input.cp` — `contenteditable` 支持 `ArrowLeft`/`ArrowRight` 单词级光标移动与 `Shift` 选区扩展。
 - Phase 408: `src/js/dom_binding.cp` — `document.head` 与 `document.title` 读写改为规范 DOM 树序遍历并修复无 `<head>` 时禁止凭空建树。
 - Phase 409: `src/js/shim/window.js`, `src/cdp/input.cp`, `src/js/runtime_source.cp` — 修复 `contenteditable` 无选区时从 `firstChild` 前插文本、穿透 `shadowRoot.activeElement`，并消除 `input.cp` 与 `window.js` `keypress` 的重复字符写入。
+- Phase 410: `src/cdp/network.cp`, `src/cdp/page.cp` — 主文档导航切换时清理旧 `doc-req-*`/`capsurf-loader-*` 响应体缓存，使 `Network.getResponseBody` 在导航离开后返回 `-32000`。

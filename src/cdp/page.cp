@@ -21,7 +21,7 @@ import {
     textDocumentHtml,
     jsonViewerHtml,
 } from "./document_kind.cp";
-import { nextDocRequestId, recordResponseBody, formatHttpHeadersJson } from "./network.cp";
+import { nextDocRequestId, recordResponseBody, clearDocResponseBodies, formatHttpHeadersJson } from "./network.cp";
 import {
     FrameState,
     SandboxRestrictions,
@@ -1361,6 +1361,7 @@ pub struct PageHandler {
             let b64_str: []const u8 = fetch_res.raw_body;
             let nav_html: []const u8 = fetch_res.html;
 
+            clearDocResponseBodies();
             if (kind == DocumentKind.image) {
                 if (!fetch_res.raw_body_base64) {
                     alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
@@ -2048,6 +2049,7 @@ pub fn performPendingNavigation(
     let b64_str: []const u8 = fetch_res.raw_body;
     let nav_html: []const u8 = fetch_res.html;
 
+    clearDocResponseBodies();
     if (kind == DocumentKind.image) {
         if (!fetch_res.raw_body_base64) {
             alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return false;
