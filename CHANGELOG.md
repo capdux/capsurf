@@ -2857,3 +2857,8 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `ShadowRoot.prototype.elementFromPoint(x, y)`，按绘制逆序递归命中 Shadow 子树中 `display !== "none"`、`visibility !== "hidden"`、`pointerEvents !== "none"` 且包含坐标 `(x, y)` 的元素。
   - `src/cdp/input.cp`: `dispatchMouseDomEvent()` 在命中 Shadow Host 后递归调用 `el._shadowRoot.elementFromPoint(x, y)` 下钻至真实目标节点，使 `Input.dispatchMouseEvent` 点击 Shadow DOM `<slot>` 链接成功触发 `onclick` (`clickCount = 1`)。
+
+## [2026-11-22] Phase 338: 修复非滚动容器 `overflow: visible` 误滚动及 `computeViewportRect` 视口滚动裁剪失真
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `scrollElementIntoView()` 仅在祖先容器计算样式 `overflow-x`/`overflow-y` 为 `auto`/`scroll`/`hidden` 且存在溢出时才滚动该容器，避免 `overflow: visible` 祖先被误滚动后无法随 `window.scrollTo(0, 0)` 归零。
+  - `src/js/dom_binding.cp`: `computeViewportRect()` 统计最大文档滚动范围 `(max_doc_w, max_doc_h)` 时除 `html`/`body` 外亦纳入非 `position: fixed` 可见元素的右/下边界，避免 `win_x`/`win_y` 被错误裁剪为 `0` 后在 `js_element_get_bounding_client_rect` 补回 `info.win_x` 导致 `getBoundingClientRect()` 忽略 `window.scrollX`。

@@ -2618,16 +2618,14 @@ function installElementExtensions(proto) {
         const style = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(cur) : cur.style;
         const ox = (style && (style.overflowX || style.overflow)) || "";
         const oy = (style && (style.overflowY || style.overflow)) || "";
-        const styleAttr = (cur.getAttribute && cur.getAttribute("style")) || "";
-        const isScrollable = ox === "auto" || ox === "scroll" || ox === "hidden" ||
-                             oy === "auto" || oy === "scroll" || oy === "hidden" ||
-                             styleAttr.includes("overflow");
+        const isScrollableX = ox === "auto" || ox === "scroll" || ox === "hidden";
+        const isScrollableY = oy === "auto" || oy === "scroll" || oy === "hidden";
         const sh = cur.scrollHeight || 0;
         const ch = cur.clientHeight || 0;
         const sw = cur.scrollWidth || 0;
         const cw = cur.clientWidth || 0;
-        const overflowsY = isScrollable || (sh > ch && ch > 0);
-        const overflowsX = isScrollable || (sw > cw && cw > 0);
+        const overflowsY = isScrollableY && sh > ch && ch > 0;
+        const overflowsX = isScrollableX && sw > cw && cw > 0;
 
         if (overflowsY || overflowsX) {
           const cr = cur.getBoundingClientRect();

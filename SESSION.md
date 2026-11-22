@@ -5526,3 +5526,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19399）：`PHASE337_RESULT: {"srHitId":"","clickCount":1}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.36s)**。
+
+## Phase 338: 水平 `scrollIntoViewIfNeeded` 与 `computeViewportRect` 视口补偿修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`), [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): 收窄祖先可滚容器判定，并在 `computeViewportRect` 纳入非 `fixed` 溢出子元素边界。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE338_SINGLE: {"before":10,"after":-90,"sx":100}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。

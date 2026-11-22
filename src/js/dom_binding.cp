@@ -1012,12 +1012,19 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     let scan_i: usize = 1;
     while (scan_i < doc.nodes.items.len && scan_i < lt.boxes.items.len) : (scan_i += 1) {
         const sn = &doc.nodes.items[scan_i];
-        if (sn.node_type == NodeType.Element && (sn.hasTag("html") || sn.hasTag("body"))) {
+        if (sn.node_type == NodeType.Element) {
             const sb = &lt.boxes.items[scan_i];
-            const bw = @max(sb.rect.width, @max(sb.content_width, sb.scroll_content_width));
-            const bh = @max(sb.rect.height, @max(sb.content_height, sb.scroll_content_height));
-            if (bw > max_doc_w) max_doc_w = bw;
-            if (bh > max_doc_h) max_doc_h = bh;
+            if (sn.hasTag("html") || sn.hasTag("body")) {
+                const bw = @max(sb.rect.width, @max(sb.content_width, sb.scroll_content_width));
+                const bh = @max(sb.rect.height, @max(sb.content_height, sb.scroll_content_height));
+                if (bw > max_doc_w) max_doc_w = bw;
+                if (bh > max_doc_h) max_doc_h = bh;
+            } else if (sb.rect.visible && sb.position != CssPosition.Fixed) {
+                const er = sb.rect.x + sb.rect.width;
+                const eb = sb.rect.y + sb.rect.height;
+                if (er > max_doc_w) max_doc_w = er;
+                if (eb > max_doc_h) max_doc_h = eb;
+            }
         }
     }
     const max_scroll_x = @max(0.0, max_doc_w - lt.viewport_width);

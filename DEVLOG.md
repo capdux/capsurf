@@ -2126,3 +2126,9 @@
 
 ### Phase 337: Shadow DOM 内部链接点击未触发 `onclick` 排障笔记
 - **`dispatchMouseDomEvent()` 停留在 Shadow Host 未下钻根因**：`document.elementFromPoint(x, y)` 按规范返回最外层宿主 `<my-link>`，而 `src/cdp/input.cp` 直接将该宿主作为 `mousedown`/`mouseup`/`click` 派发目标，导致事件未进入 ShadowRoot 内部 `<a id="inner-link"><slot></slot></a>`。补充 `ShadowRoot.prototype.elementFromPoint(x, y)` 并在 `dispatchMouseDomEvent()` 中递归下钻后，实测点击坐标直接触发 `window.clickCount === 1`。
+
+### Phase 338: 水平 `scrollIntoViewIfNeeded` 后 `getBoundingClientRect().right` 未随 `window.scrollX` 更新排障笔记
+- **双重根因定位**：
+  1. `src/js/shim/element/element.js` `scrollElementIntoView()` 此前以 `isScrollable || (sw > cw && cw > 0)` 判定祖先是否可滚，导致 `offscreenbuttons.html` 中 `overflow: visible` 的父 `<div>` 被写入 `scrollLeft`。
+  2. `src/js/dom_binding.cp` `computeViewportRect()` 仅扫描 `html`/`body` 盒计算 `max_doc_w`，当子元素 `position: absolute; right: -10px` 溢出视口时 `max_scroll_x` 被误算为 `0`、`win_x` 被裁剪为 `0`，而外层 `js_element_get_bounding_client_rect` 又加回了未裁剪的 `info.win_x`，最终与 `element.js` 减去的 `window.scrollX` 互相抵消。
+- **修复验证**：实测 `PHASE338_SINGLE: {"before":10,"after":-90,"sx":100}`，`--smoke` 3/3 全绿。
