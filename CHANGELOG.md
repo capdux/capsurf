@@ -2756,3 +2756,8 @@
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: 将 `console` 格式化调用的 `__capsurf_format_remote_object` 改为 `returnByValue = false`（并扩充 `args_buf` 至 `4096`），使 `console.log` 对象参数生成 CDP `objectId` 与 `description`。
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `__capsurf_format_remote_object`，在 `!returnByValue` 时为普通对象/数组附加 `preview.properties`（规避 `dom_binding.cp` `helper_script` `+` 拼接触发 Zig 编译期分支上限）。
+
+## [2026-11-22] Phase 314: 支持 `Proxy` 代理对象与 `Array(N)`/`preview` 的 CDP `RemoteObject` 格式化
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 在 `__capsurf_format_remote_object` 接入 `globalThis.__capsurf_fmt_hook(obj, val)` 单行钩子。
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 通过 `WeakMap` 追踪 `new Proxy` 与 `Proxy.revocable` 实例，在 `__capsurf_fmt_hook` 中输出 `subtype: "proxy"`、`description: "Proxy(...)"`，为数组输出 `description: "Array(N)"`，并为普通对象/数组生成 `preview.properties`。

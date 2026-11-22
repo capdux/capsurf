@@ -2053,3 +2053,6 @@
 
 ### Phase 313: `console.log("hello", 5, {foo: "bar"})` 缺少 `objectId` 排障笔记
 - **`returnByValue = true` 导致无句柄根因**：`dom_binding.cp` 的 `console` 格式化脚本此前对参数传入 `returnByValue = true`，导致对象参数未生成 `objectId`。改为 `returnByValue = false` 并在 `src/js/shim/index.js` 附加 `preview` 包装（避免触发 Zig `cp_add` 1000 分支上限）后，实测 `Runtime.consoleAPICalled` 参数返回 `{"type":"object","className":"Object","objectId":"capsurf:obj:1","description":"Object"}`。
+
+### Phase 314: `jshandle-to-string` `new Proxy({}, {})` 返回 `"Object"` 及数组 `preview` 缺失排障笔记
+- **初始化顺序与钩子机制**：`RUNTIME_CHUNKS`（`shim/index.js`）在 `dom_binding.cp` 的 `helper_script` 之前执行，此前在 `shim/index.js` 中检测 `__capsurf_format_remote_object` 会被跳过。改为在 `dom_binding.cp` 留出 1 行 `__capsurf_fmt_hook` 回调并在 `shim/index.js` 注入 `WeakMap` 代理追踪与 `Array(N)`/`preview` 逻辑后，实测 `new Proxy({}, {})` 返回 `subtype: "proxy", description: "Proxy(Object)"`，`[, 1, , 2]` 返回 `description: "Array(4)"` 与完整 `preview.properties`。

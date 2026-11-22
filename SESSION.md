@@ -5357,3 +5357,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Runtime.consoleAPICalled` `args` 返回 `[{"type":"string","value":"hello"},{"type":"number","value":5},{"type":"object","className":"Object","objectId":"capsurf:obj:1","description":"Object"}]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.28s)**。
+
+### [2026-11-22 20:37] Phase 314: 支持 `Proxy` 代理对象与 `Array(N)`/`preview` 的 CDP `RemoteObject` 格式化
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 接入 `__capsurf_fmt_hook` 与 `WeakMap` Proxy 追踪，输出 `Proxy(Target)`、`Array(N)` 与 `preview.properties`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`new Proxy({}, {})` 返回 `subtype: "proxy", description: "Proxy(Object)"`；`[, 1, , 2]` 返回 `description: "Array(4)"` 及 `preview.properties`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

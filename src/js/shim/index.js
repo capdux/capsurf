@@ -171,30 +171,55 @@ function installShim(global) {
   try { Object.defineProperty(global, "__capsurf_orig_MutationObserver", { value: MutationObserver, enumerable: false, writable: false, configurable: false }); } catch (e) {}
   global.MutationRecord = MutationRecord;
 
-  if (typeof global.__capsurf_format_remote_object === "function") {
-    const _origFmtRemote = global.__capsurf_format_remote_object;
-    global.__capsurf_format_remote_object = function (val, returnByValue) {
-      const obj = _origFmtRemote(val, returnByValue);
-      if (!returnByValue && obj && obj.type === "object" && (!obj.subtype || obj.subtype === "array") && val && typeof val === "object") {
-        try {
-          const keys = Object.keys(val);
-          const props = [];
-          const limit = Math.min(keys.length, 5);
-          for (let pi = 0; pi < limit; pi++) {
-            const pk = keys[pi];
-            const pv = val[pk];
-            const pt = typeof pv;
-            if (pv === null) props.push({ name: pk, type: "object", subtype: "null", value: "null" });
-            else if (pt === "undefined" || pt === "boolean" || pt === "number" || pt === "string") props.push({ name: pk, type: pt, value: String(pv) });
-            else props.push({ name: pk, type: pt, value: pt === "function" ? "ƒ" : "Object" });
-          }
-          obj.preview = { type: "object", description: obj.description, overflow: keys.length > 5, properties: props };
-          if (obj.subtype === "array") obj.preview.subtype = "array";
-        } catch (e) {}
-      }
-      return obj;
+  if (typeof global.Proxy === "function") {
+    const _OrigProxy = global.Proxy;
+    const _proxyTargets = new WeakMap();
+    const _WrappedProxy = function (target, handler) {
+      const p = new _OrigProxy(target, handler);
+      try { _proxyTargets.set(p, target); } catch (e) {}
+      return p;
     };
+    _WrappedProxy.revocable = function (target, handler) {
+      const res = _OrigProxy.revocable(target, handler);
+      try { if (res && res.proxy) _proxyTargets.set(res.proxy, target); } catch (e) {}
+      return res;
+    };
+    global.Proxy = _WrappedProxy;
+    global.__capsurf_proxy_targets = _proxyTargets;
   }
+
+  global.__capsurf_fmt_hook = function (obj, val) {
+    if (global.__capsurf_proxy_targets && global.__capsurf_proxy_targets.has(val)) {
+      obj.subtype = "proxy";
+      obj.className = "Proxy";
+      const tgt = global.__capsurf_proxy_targets.get(val);
+      const tgtName = (tgt && tgt.constructor && tgt.constructor.name) ? tgt.constructor.name : "Object";
+      obj.description = "Proxy(" + tgtName + ")";
+      delete obj.preview;
+      return obj;
+    }
+    if (obj.subtype === "array" && Array.isArray(val)) {
+      obj.description = "Array(" + val.length + ")";
+    }
+    if (!obj.subtype || obj.subtype === "array") {
+      try {
+        const keys = Object.keys(val);
+        const props = [];
+        const limit = Math.min(keys.length, 5);
+        for (let pi = 0; pi < limit; pi++) {
+          const pk = keys[pi];
+          const pv = val[pk];
+          const pt = typeof pv;
+          if (pv === null) props.push({ name: pk, type: "object", subtype: "null", value: "null" });
+          else if (pt === "undefined" || pt === "boolean" || pt === "number" || pt === "string") props.push({ name: pk, type: pt, value: String(pv) });
+          else props.push({ name: pk, type: pt, value: pt === "function" ? "ƒ" : "Object" });
+        }
+        obj.preview = { type: "object", description: obj.description, overflow: keys.length > 5, properties: props };
+        if (obj.subtype === "array") obj.preview.subtype = "array";
+      } catch (e) {}
+    }
+    return obj;
+  };
 
   // 4. Expose FormData, Blob, File, FileList and DataTransfer
   global.FormData = FormData;

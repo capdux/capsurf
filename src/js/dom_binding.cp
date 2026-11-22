@@ -2693,6 +2693,7 @@ pub fn mountDom(
         "        if (obj.subtype === 'regexp' || obj.subtype === 'date') obj.description = String(val);" +
         "        else if (obj.subtype === 'error') obj.description = val.stack || String(val);" +
         "        else obj.description = className;" +
+        "        if (globalThis.__capsurf_fmt_hook) return globalThis.__capsurf_fmt_hook(obj, val);" +
         "      }" +
         "      return obj;" +
         "    }" +
