@@ -647,3 +647,11 @@
 | 2026-11-22 23:55 | `page-dialog.spec.ts` | 7/9 PASS (18.8s, 3 exp FAIL→PASS) | PW Batch 105 |
 | 2026-11-22 23:59 | `/css/css-sizing/` (`4/5..5/5`) | 0/6, 0/6 PASS (180s截断) | WPT Batch 97 (`19470`, `bin_dev`) |
 | 2026-11-22 23:59 | `/css/css-text/` (`1/5..3/5`) | 4/25, 4/25, 7/25 PASS (4 `FAIL→PASS`) | WPT Batch 97 (`19470`, `bin_dev`) |
+| 2026-11-23 00:01 | `/css/css-text/` (`4/5..5/5`) | 6/25, 3/25 PASS (5 `FAIL→PASS`) | WPT Batch 98 (`19470`, `bin_dev`) |
+| 2026-11-23 00:01 | `/css/css-transforms/` (`1/5..3/5`) | 0/7, 0/6, 1/6 PASS | WPT Batch 98 (`19470`, `bin_dev`) |
+| 2026-11-23 00:08 | `/css/css-transforms/` (`4/5..5/5`) | 0/6, 1/6 PASS | WPT Batch 99 (`19470`, `bin_dev`) |
+| 2026-11-23 00:08 | `/css/css-grid/` (`1/5..3/5`) | 31/165, 39/176, 38/176 PASS (14 `FAIL→PASS`) | WPT Batch 99 (`19470`, `bin_dev`) |
+| 2026-11-23 00:03 | `page-mouse.spec.ts` | 14/14 PASS (`[15/15]`120s截断) | PW Batch 106 |
+| 2026-11-23 00:03 | `selectors-misc.spec.ts` | 18/19 PASS (`internal:has=`PASS, 仅`#inner-link`) | PW Batch 106 |
+| 2026-11-23 00:03 | `page-select-option.spec.ts` | 4/4 PASS (`[1..4]`全绿! `[5/33]`120s截断) | PW Batch 106 |
+| 2026-11-23 00:03 | `frame-frame-element.spec.ts` | 1/6 PASS (`contentFrame` FAIL→PASS) | PW Batch 106 |

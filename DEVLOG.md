@@ -2191,3 +2191,6 @@
 
 ### Phase 357: `DOM.scrollIntoViewIfNeeded` 误拦截 Shadow DOM 节点排障笔记
 - **原生 `getBoxModel` 为 `0x0` 提前报错根因**：`DOM.scrollIntoViewIfNeeded` 此前直接拒收 `node_id_val <= 0` 的 `objectId` 且在 `bm.width <= 0 && bm.height <= 0` 时返回 `-32000 Node does not have a layout object`，导致 Shadow DOM 内 `#inner-link` 无法完成滚动与点击。接入 `queryJsObjectRect()` 回退后，实测 `PHASE357_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"clickCount":1}`。
+
+### Phase 358: `frame-frame-element.spec.ts` `[5/6]` & `[6/6]` Shadow Root `<iframe>` 缺失排障笔记
+- **`querySelectorAll('iframe')` 不穿透 ShadowRoot 根因**：`collectFrameStates()` 此前使用 `document.querySelectorAll('iframe')` 无法命中 `attachShadow({mode:'closed'})` 或 `<template shadowrootmode="open">` 下的 `<iframe>`，同时 `DOM.getFrameOwner` 仅扫描主文档 Arena DOM 且 `Page.setDocumentContent` 未刷新 `known_child_frames`。双端补齐 `_shadowRoot` 递归遍历后，实测 `PHASE358_RESULT {"c1Count":1,"o1":{"backendNodeId":7,"nodeId":7},"c2Count":1,"o2":{"backendNodeId":6,"nodeId":6}}`。

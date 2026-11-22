@@ -2952,3 +2952,8 @@
 ## [2026-11-23] Phase 357: `DOM.scrollIntoViewIfNeeded` 支持 Shadow DOM `objectId` 与 JS 布局回退（`selectors-misc.spec.ts` `[2/19]`）
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: `DOM.scrollIntoViewIfNeeded` 允许无原生 `NodeId` 或原生盒尺寸为 `0x0` 的 `objectId`（如 Shadow DOM 元素）通过 `queryJsObjectRect()` 校验有效几何框后正常执行 JS `scrollIntoViewIfNeeded(true)`，不再误报 `"Node not found"` / `"Node does not have a layout object"`。
+
+## [2026-11-23] Phase 358: 支持 closed / declarative Shadow Root 内 `<iframe>` 发现与 `DOM.getFrameOwner`（`frame-frame-element.spec.ts` `[5..6/6]`）
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `collectFrameStates()` 改用递归遍历并穿透 `el._shadowRoot`（忽略未展开 `<template>` 内部，兼容 `<frame>` 标签），使 closed 与 declarative shadow root 内的 `<iframe>` 注册进 `Page.getFrameTree` / `page.frames()`。
+  - `src/cdp/dom.cp`: `DOM.getFrameOwner` 在 `collectDocIframeEntries` 未命中 `capsurf-child-<k>` 时通过 JS 穿透 `_shadowRoot` 定位对应 `<iframe>` 的 `_nid` 返回。

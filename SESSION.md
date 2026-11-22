@@ -5666,3 +5666,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE357_RESULT {"quads":[[8,8,80,8,80,32,8,32]],"clickCount":1}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 358: Shadow Root 内 `<iframe>` 发现与 `DOM.getFrameOwner` 修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp), [src/cdp/dom.cp](file:///data/dev/capsurf/src/cdp/dom.cp): `collectFrameStates()` 与 `DOM.getFrameOwner` 支持穿透 `el._shadowRoot` 发现并归属 closed / declarative shadow root 内的 `<iframe>` / `<frame>`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE358_RESULT {"c1Count":1,"o1":{"backendNodeId":7,"nodeId":7},"c2Count":1,"o2":{"backendNodeId":6,"nodeId":6}}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。

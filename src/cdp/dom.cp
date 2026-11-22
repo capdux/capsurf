@@ -1363,6 +1363,30 @@ pub struct DomHandler {
                     return CdpResponse.ok(req.id, res);
                 }
             }
+            if (session.has_document && std.mem.startsWith(u8, fid, "capsurf-child-")) {
+                const idx_1based = std.fmt.parseInt(usize, fid[14..], 10) catch 0;
+                if (idx_1based > 0) {
+                    let js_buf: [768]u8 = [0; 768];
+                    const js_expr = std.fmt.bufPrint(
+                        &js_buf,
+                        "(() => {{ if (!document || !document.documentElement) return 0; var fs = []; var seen = new Set(); function walk(r) {{ if (!r) return; var cs = r.childNodes || r.children || []; for (var i = 0; i < cs.length; i++) {{ var el = cs[i]; if (!el || el.nodeType !== 1) continue; var t = String(el.localName || el.tagName || '').toLowerCase(); if (t === 'template') continue; if ((t === 'iframe' || t === 'frame') && !seen.has(el)) {{ seen.add(el); fs.push(el); }} if (el._shadowRoot) walk(el._shadowRoot); walk(el); }} }} walk(document.documentElement); var target = fs[{d}]; return (target && typeof target._nid === 'number' && target._nid > 0) ? target._nid : 0; }})()",
+                        .{idx_1based - 1},
+                    ) catch "";
+                    if (js_expr.len > 0) {
+                        const val = session.ctx.eval(js_expr);
+                        defer session.ctx.freeValue(val);
+                        const nid_i32 = session.ctx.toInt32(val) catch 0;
+                        if (nid_i32 > 0) {
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"backendNodeId\":{d},\"nodeId\":{d}}}",
+                                .{ nid_i32, nid_i32 },
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
+                        }
+                    }
+                }
+            }
             return CdpResponse.err(req.id, -32000, "Frame with the given id was not found.");
         }
 

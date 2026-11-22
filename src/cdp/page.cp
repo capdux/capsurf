@@ -234,7 +234,7 @@ fn collectFrameStates(
     let child_seq: usize = 0;
 
     if (session.has_document) {
-        const js_iframes = "(function(){try{if(typeof document==='undefined'||!document.querySelectorAll)return '';var fs=document.querySelectorAll('iframe');var out=[];for(var i=0;i<fs.length;i++){var f=fs[i];var s=(f.getAttribute&&f.getAttribute('src'))||'';var n=(f.getAttribute&&f.getAttribute('name'))||'';var id=(f.getAttribute&&f.getAttribute('id'))||'';var sb=(f.hasAttribute&&f.hasAttribute('sandbox'))?(f.getAttribute('sandbox')||''):'__NONE__';out.push(s+'\\x1f'+n+'\\x1f'+id+'\\x1f'+sb);}return out.join('\\x1e');}catch(e){return '';}})()";
+        const js_iframes = "(function(){try{if(typeof document==='undefined'||!document.documentElement)return '';var out=[];var seen=new Set();function walk(r){if(!r)return;var cs=r.childNodes||r.children||[];for(var i=0;i<cs.length;i++){var el=cs[i];if(!el||el.nodeType!==1)continue;var t=String(el.localName||el.tagName||'').toLowerCase();if(t==='template')continue;if((t==='iframe'||t==='frame')&&!seen.has(el)){seen.add(el);var s=(el.getAttribute&&el.getAttribute('src'))||'';var n=(el.getAttribute&&el.getAttribute('name'))||'';var id=(el.getAttribute&&el.getAttribute('id'))||'';var sb=(el.hasAttribute&&el.hasAttribute('sandbox'))?(el.getAttribute('sandbox')||''):'__NONE__';out.push(s+'\\x1f'+n+'\\x1f'+id+'\\x1f'+sb);}if(el._shadowRoot)walk(el._shadowRoot);walk(el);}}walk(document.documentElement);return out.join('\\x1e');}catch(e){return '';}})()";
         const val = session.ctx.eval(js_iframes);
         defer session.ctx.freeValue(val);
         const cstr = session.ctx.toCString(val);
