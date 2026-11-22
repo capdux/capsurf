@@ -830,3 +830,5 @@
 | 2026-11-23 09:56 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo codepoint space) | PW Batch 135 |
 | 2026-11-23 09:56 | `locator-convenience.spec.ts` | 0/21 PASS (21 timeout at teardown) | PW Batch 135 |
 | WPT-B154 | `dataset` + `/streams/ 1/2` + `/WebCryptoAPI/ 1/2..2/2` | 29/181 PASS (`dataset` **7/7全绿!**, `streams 1/2` 1/42, `WebCryptoAPI 1/2` 9/66 **9 FAIL→PASS**, `2/2` 12/66 **11 FAIL→PASS**, 0 CRASH) |
+| WPT-B156 | `/streams/ 2/2` + `the-fieldset-element/` + `the-option-element/` | 8/57 PASS (`streams 2/2` 1/42, `fieldset` **6/8**, `option` 1/7, 0 CRASH) |
+| WPT-B157 | `/performance-timeline/` + `/FileAPI/` + `document-metadata/` + `the-datalist-element/` | 39/88 PASS (`perf-timeline` **4/21 (19/21匹配!)**, `FileAPI` **15/36** (`Blob-bytes`过!), `metadata` 17/28, `datalist` **3/3全绿!**, 0 CRASH) |

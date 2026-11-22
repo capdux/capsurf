@@ -3048,3 +3048,4 @@
 - **Phase 421 (`src/js/shim/index.js`, `src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`createElementNS("", ...)` 置 `namespaceURI = null`；`dataset` 限制仅 HTML/SVG/MathML 命名空间生效。
 - **Phase 422 (`src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 WHATWG Streams `CountQueuingStrategy` 与 `ByteLengthQueuingStrategy`。
 - **Phase 423 (`src/js/shim/file.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 `Blob.prototype.bytes()` 与 W3C `PerformanceObserver` / `PerformanceObserverEntryList`。
+- **Phase 424 (`src/js/shim/window.js`, `src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`, `src/js/runtime_source.cp`)**：修正 `PerformanceObserver.supportedEntryTypes` 字母序；新增 `HTMLLinkElement.fetchPriority`；补齐 `Option.prototype`。

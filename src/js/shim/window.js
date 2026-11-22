@@ -4704,7 +4704,7 @@ function installWindow(global) {
   global.PerformanceNavigation = PerformanceNavigation;
   global.performance = perfInstance;
 
-  const SUPPORTED_PERF_TYPES = Object.freeze(["mark", "measure", "navigation", "resource", "paint"]);
+  const SUPPORTED_PERF_TYPES = Object.freeze(["mark", "measure", "navigation", "paint", "resource"]);
   function PerformanceObserverEntryList(entries) {
     this._entries = Array.isArray(entries) ? entries.slice() : [];
   }

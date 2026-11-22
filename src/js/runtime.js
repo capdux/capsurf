@@ -13667,6 +13667,16 @@
       },
       configurable: true,
     });
+    Object.defineProperty(HTMLLinkElement.prototype, "fetchPriority", {
+      get: function () {
+        const v = String(this.getAttribute("fetchpriority") || "").toLowerCase();
+        return (v === "high" || v === "low" || v === "auto") ? v : "auto";
+      },
+      set: function (v) {
+        this.setAttribute("fetchpriority", String(v));
+      },
+      configurable: true,
+    });
     markNative(HTMLLinkElement, "HTMLLinkElement");
     global.HTMLLinkElement = HTMLLinkElement;
     if (typeof globalThis !== "undefined") globalThis.HTMLLinkElement = HTMLLinkElement;
@@ -18977,6 +18987,7 @@
       if (selected !== undefined) opt.selected = Boolean(selected);
       return opt;
     };
+    global.Option.prototype = HTMLOptionElement.prototype;
     if (typeof globalThis !== "undefined") {
       globalThis.Option = global.Option;
     }
@@ -34725,7 +34736,7 @@
     global.PerformanceNavigation = PerformanceNavigation;
     global.performance = perfInstance;
 
-    const SUPPORTED_PERF_TYPES = Object.freeze(["mark", "measure", "navigation", "resource", "paint"]);
+    const SUPPORTED_PERF_TYPES = Object.freeze(["mark", "measure", "navigation", "paint", "resource"]);
     function PerformanceObserverEntryList(entries) {
       this._entries = Array.isArray(entries) ? entries.slice() : [];
     }

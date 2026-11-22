@@ -878,6 +878,16 @@ function installHtmlClasses(global) {
     },
     configurable: true,
   });
+  Object.defineProperty(HTMLLinkElement.prototype, "fetchPriority", {
+    get: function () {
+      const v = String(this.getAttribute("fetchpriority") || "").toLowerCase();
+      return (v === "high" || v === "low" || v === "auto") ? v : "auto";
+    },
+    set: function (v) {
+      this.setAttribute("fetchpriority", String(v));
+    },
+    configurable: true,
+  });
   markNative(HTMLLinkElement, "HTMLLinkElement");
   global.HTMLLinkElement = HTMLLinkElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLLinkElement = HTMLLinkElement;

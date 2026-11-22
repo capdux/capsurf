@@ -297,6 +297,7 @@ function installSelectElement(global) {
     if (selected !== undefined) opt.selected = Boolean(selected);
     return opt;
   };
+  global.Option.prototype = HTMLOptionElement.prototype;
   if (typeof globalThis !== "undefined") {
     globalThis.Option = global.Option;
   }
