@@ -1653,8 +1653,10 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          var dtMatch = reopenBuf.match(/^\\s*<!DOCTYPE\\s+([^>\\s]+)(?:\\s+PUBLIC\\s+\"([^\"]*)\"(?:\\s+\"([^\"]*)\")?|\\s+SYSTEM\\s+\"([^\"]*)\")?[^>]*>/i);\n" ++
     "          if (dtMatch) {\n" ++
     "            g.document._reopenDoctype = { nodeType: 10, name: dtMatch[1], publicId: dtMatch[2] || '', systemId: dtMatch[3] || dtMatch[4] || '' };\n" ++
+    "            if (typeof g.__capsurf_set_quirks_mode === 'function') g.__capsurf_set_quirks_mode(!/^html$/i.test(dtMatch[1]));\n" ++
     "          } else {\n" ++
     "            g.document._reopenDoctype = null;\n" ++
+    "            if (typeof g.__capsurf_set_quirks_mode === 'function') g.__capsurf_set_quirks_mode(true);\n" ++
     "          }\n" ++
     "          var hm = reopenBuf.match(/<head[^>]*>([\\s\\S]*?)<\\/head>/i);\n" ++
     "          if (g.document.head) g.document.head.innerHTML = hm ? hm[1] : '';\n" ++

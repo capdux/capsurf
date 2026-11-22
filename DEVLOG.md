@@ -2138,3 +2138,6 @@
 
 ### Phase 340: `page-fill.spec.ts` `input[type=number]` 无法清空 (`"123"` -> `"23"`) 排障笔记
 - **`number` 输入框缺少 `selectionStart`/`selectionEnd` 导致全选状态丢失根因**：HTML 规范禁止 `input[type=number]` 暴露 `selectionStart`/`selectionEnd`，此前 `selection.js` `select()` 在 `!supportsSelection(this)` 时直接返回，且 `input.cp` `applyInputText()` 退回 `_numCaret`（默认为 `0`），导致 `Delete` 仅删掉首字符 `'1'`。补充 `_numSelAll` 标记后，实测 `select() + Delete` 与 `selectAll + Backspace` 均彻底清空为 `""`。
+
+### Phase 341: `elementhandle-bounding-box.spec.ts` SVG `#therect` 返回 `null` 排障笔记
+- **`document.open/write/close` 未同步 Arena `doc.in_quirks_mode` 根因**：`page.setContent('<svg>...<rect id="theRect">...')` 无 DOCTYPE，但 `g.document.close()` 此前仅更新 JS 侧 `_reopenDoctype` 而未更新底层 `doc.in_quirks_mode`，导致 `compatMode` 误报 `"CSS1Compat"` 且 `src/css/matcher.cp` 未启用 Quirks Mode `#id` 大小写不敏感匹配。暴露 `__capsurf_set_quirks_mode` 并在 `document.close()` 同步后，实测 `q1={"cm":"BackCompat","hit":true,"id":"theRect"}`、`q2={"cm":"CSS1Compat","hitLower":false,"hitExact":true}`。

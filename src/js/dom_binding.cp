@@ -2181,6 +2181,16 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     return jsUndefined();
 }
 
+@c fn js_capsurf_set_quirks_mode(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsUndefined();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr)) };
+    dom_ctx.doc.in_quirks_mode = jsToBool(ctx, unsafe { argv[0] });
+    return jsUndefined();
+}
+
 @c fn js_report_exception(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     if (argc < 1) return jsUndefined();
@@ -2557,6 +2567,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_set_cookie", js_capsurf_set_cookie, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_record_fetch", js_capsurf_native_record_fetch, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

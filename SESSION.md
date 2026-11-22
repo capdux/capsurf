@@ -5547,3 +5547,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE340_RESULT: {"v1":"","v2":""}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。
+
+## Phase 341: `document.open/write/close` Quirks Mode 同步修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): 新增 `__capsurf_set_quirks_mode` 并在 `g.document.close()` 依据 DOCTYPE 同步 `doc.in_quirks_mode`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE341_RESULT: {"q1":{"cm":"BackCompat","hit":true,"id":"theRect"},"q2":{"cm":"CSS1Compat","hitLower":false,"hitExact":true}}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。

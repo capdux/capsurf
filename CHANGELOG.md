@@ -2872,3 +2872,8 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/element/forms/selection.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `select()` 对 `type="number"` 设置 `_numSelAll = true`。
   - `src/cdp/input.cp`: `applyInputText()` 在 `is_select_all` 时为 `isNum` 置 `_numSelAll = true`，并在后续输入/删除/光标移动时展开 `[0, oldLen]` 选区并复位 `_numSelAll = false`。
+
+## [2026-11-22] Phase 341: 修复 `document.open/write/close` 写入文档时同步 `doc.in_quirks_mode`（Quirks Mode 大小写不敏感 `#id` 匹配）
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 新增 `@c fn js_capsurf_set_quirks_mode` 并暴露 `global.__capsurf_set_quirks_mode(bool)` 直接同步 `dom_ctx.doc.in_quirks_mode`。
+  - `src/cdp/session_hooks.cp`: `g.document.close()` 依据 `dtMatch`（无 DOCTYPE 或非 `html` DOCTYPE 时为 Quirks Mode）调用 `g.__capsurf_set_quirks_mode(...)`，修复无 DOCTYPE 下 `document.compatMode === "BackCompat"` 与 `querySelector('#therect')` 匹配 `id="theRect"`。
