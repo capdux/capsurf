@@ -2791,3 +2791,7 @@
 ## [2026-11-22] Phase 321: 支持 `Shift+ArrowLeft/Right/Home/End` 选区扩展与 `selectAll` 全选命令
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 为 `applyInputText()` 新增 `modifiers` 与 `is_select_all` 参数，支持 `Shift+ArrowLeft`/`ArrowRight`/`Home`/`End` 双向选区扩展（跟踪 `_selDir` 并调用 `setSelectionRange(ns, ne, dir)`）以及 CDP `"commands": ["selectAll"]` / `Ctrl+A` 全选文本（修复 `page-keyboard.spec.ts` `[2/44]` 与 `[25/44]`）。
+
+## [2026-11-22] Phase 322: `Input.dispatchMouseEvent` `mouseMoved` 派发可信 `pointermove` 与 `mousemove` 事件
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `MouseMoved` 分支调用 `dispatchMouseDomEvent()` 派发 `mousemove`，并在 `dispatchMouseDomEvent()` 中为 `mousemove` 前置派发可信 `PointerEvent('pointermove', { pointerType: 'mouse', ... })`（修复 `page-mouse.spec.ts` `[6/15] should report correct pointerType property`）。

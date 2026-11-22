@@ -5414,3 +5414,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`{"afterShiftBack":"Hello World!","afterSelectAllBack":""}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+### [2026-11-22 21:01] Phase 322: `Input.dispatchMouseEvent` `mouseMoved` 派发可信 `pointermove` 与 `mousemove` 事件
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `MouseMoved` 分支派发可信 `pointermove` 与 `mousemove`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`mouseMoved` 返回 `[{"t":"pointermove","pt":"mouse","trusted":true},{"t":"mousemove","trusted":true}]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.11s)**。

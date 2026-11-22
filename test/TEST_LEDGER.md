@@ -488,3 +488,22 @@
 | 2026-11-22 20:35 | `page-keyboard.spec.ts` | 6/44 PASS (90s截断) | PW Batch 70 |
 | 2026-11-22 20:38 | `/css/css-values/` (`2/5..5/5`) | 18/70, 18/70, 22/70, 11/70 PASS (3 `FAIL→PASS`) | WPT Batch 85 (`bin_dev`) |
 | 2026-11-22 20:38 | `/css/css-sizing/` (`1/5`) | 0/7 PASS | WPT Batch 85 (`bin_dev`) |
+| 2026-11-22 20:42 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (90s retry截断) | PW Batch 71 |
+| 2026-11-22 20:42 | `elementhandle-click.spec.ts` | 6/8 PASS (`Node removed` PASS) | PW Batch 71 |
+| 2026-11-22 20:42 | `page-mouse.spec.ts` | 0/15 PASS (`isTrusted=false`, 90s截断) | PW Batch 71 |
+| 2026-11-22 20:42 | `page-click-react.spec.ts` | 0/3 PASS (90s retry截断) | PW Batch 71 |
+| 2026-11-22 20:48 | `jshandle-to-string.spec.ts` | 5/6 PASS (sparse array PASS) | PW Batch 72 |
+| 2026-11-22 20:48 | `page-keyboard.spec.ts` | 21/44 PASS (8 location PASS, 90s截断) | PW Batch 72 |
+| 2026-11-22 20:48 | `page-event-console.spec.ts` | 3/19 PASS (`@smoke` PASS, 90s截断) | PW Batch 72 |
+| 2026-11-22 20:48 | `page-click.spec.ts` | 10/77 PASS (90s截断) | PW Batch 72 |
+| 2026-11-22 20:52 | `page-check.spec.ts` | 12/16 PASS | PW Batch 73 |
+| 2026-11-22 20:52 | `page-fill.spec.ts` | 9/40 PASS (90s截断) | PW Batch 73 |
+| 2026-11-22 20:52 | `page-focus.spec.ts` | 6/7 PASS (exit 0, match exp) | PW Batch 73 |
+| 2026-11-22 20:58 | `/css/css-sizing/` (`2/5..5/5`) | 1/7, 0/6, 0/6, 0/6 PASS | WPT Batch 86 (`bin_dev`) |
+| 2026-11-22 20:58 | `/css/css-text/` (`1/5`) | 4/25 PASS | WPT Batch 86 (`bin_dev`) |
+| 2026-11-22 20:59 | `page-mouse.spec.ts` | 7/15 PASS (`[1..5,9,10]` PASS, 90s截断) | PW Batch 74 |
+| 2026-11-22 20:59 | `page-select-option.spec.ts` | 0/33 PASS (90s截断) | PW Batch 74 |
+| 2026-11-22 20:59 | `page-set-content.spec.ts` | 14/16 PASS (90s截断) | PW Batch 74 |
+| 2026-11-22 20:59 | `page-history.spec.ts` | 0/13 PASS (90s截断) | PW Batch 74 |
+| 2026-11-22 21:01 | `/css/css-text/` (`2/5..5/5`) | 4/25, 7/25, 6/25, 3/25 PASS | WPT Batch 87 (`bin_dev`) |
+| 2026-11-22 21:01 | `/css/css-display/` (`1/5`) | 4/11 PASS | WPT Batch 87 (`bin_dev`) |

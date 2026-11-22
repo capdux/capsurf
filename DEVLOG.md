@@ -2078,3 +2078,6 @@
 
 ### Phase 321: `page-keyboard.spec.ts` `[2/44]` 方向键选区与 `[25/44]` `selectAll` 失败排障笔记
 - **方向键无条件折叠选区与忽略 `commands: ["selectAll"]` 根因**：`applyInputText()` 此前未接收 `modifiers`（`Shift` 位 `8`），执行 `ArrowLeft`/`ArrowRight`/`Home`/`End` 时直接调用 `setSelectionRange(cursor, cursor)` 丢失选区；且未处理 Playwright 通过 CDP `Input.dispatchKeyEvent` `commands: ["selectAll"]` 下发的全选指令。补齐双向选区扩展与 `selectAll` 后，实测 `Shift+ArrowLeft`+`Backspace` 准确恢复 `"Hello World!"`，`selectAll`+`Backspace` 清空为 `""`。
+
+### Phase 322: `page-mouse.spec.ts` `[6/15]` 缺少 `pointermove` 事件排障笔记
+- **`MouseMoved` 仅更新 `hovered_node` 未派发 DOM 事件根因**：`src/cdp/input.cp` 的 `MouseMoved` 分支此前仅更新 `session.doc.hovered_node` 及拖拽选区状态，未触发任何 `pointermove`/`mousemove` DOM 事件。在 `MouseMoved` 接入 `dispatchMouseDomEvent("mousemove")` 并补充 `pointermove` 派发后，实测 `Input.dispatchMouseEvent({ type: "mouseMoved" })` 返回 `[{"t":"pointermove","pt":"mouse","trusted":true},{"t":"mousemove","trusted":true}]`。
