@@ -3029,3 +3029,4 @@
 - Phase 402: `src/js/shim/index.js`, `src/js/runtime_source.cp` — `document.execCommand` 支持 `selectAll` 与 `copy`。
 - Phase 403: `src/cdp/target.cp`, `src/cdp/session.cp` — `formatTargetInfo` 转义 `title`/`url` 并扩容至 `2048` 字节，`Target.targetCreated`/`attachedToTarget` 改用 `allocPrint` 消除共享缓冲区覆盖。
 - Phase 404: `src/cdp/runtime.cp` — `Runtime.callFunctionOn` 将已销毁上下文的 `Could not find object with id` 异常转为 `-32000 Cannot find context with specified id` 协议错误。
+- Phase 405: `src/cdp/input.cp` — `contenteditable` 支持 `Ctrl/Meta + A/C/X/V` 全选、复制、剪切与粘贴快捷键。
