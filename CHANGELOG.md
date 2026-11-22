@@ -2803,3 +2803,7 @@
 ## [2026-11-22] Phase 324: 支持 `<input>`/`<textarea>` 鼠标拖拽框选文本
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `MousePressed` 与 `MouseMoved` 拖拽选区逻辑中取消对 `INPUT`/`TEXTAREA` 的早退跳过，计算起止字符偏移并调用 `setSelectionRange(s, e)`（修复 `page-mouse.spec.ts` `[7/15] should select the text with mouse`）。
+
+## [2026-11-22] Phase 325: `elementFromPoint()` 亚像素包围盒像素对齐命中测试
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 在 `js_document_element_from_point()` 中将节点视口矩形边界改为 `@floor(r.x)` / `@ceil(r.x + r.width)`（对齐 Blink 像素包络命中规则，解决半像素偏移 `1x1` 元素 `elementFromPoint` 漏判为 `<html>` 的问题）。

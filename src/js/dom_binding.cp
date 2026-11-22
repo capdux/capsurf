@@ -1304,7 +1304,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
 
             const info = computeViewportRect(ctx, dom_ctx, lt, node_id, false);
             const r = info.rect;
-            if (px < r.x || px >= r.x + r.width || py < r.y || py >= r.y + r.height) continue;
+            if (px < @floor(r.x) || px >= @ceil(r.x + r.width) || py < @floor(r.y) || py >= @ceil(r.y + r.height)) continue;
 
             // Build ancestor chain (from root down to node_id) for overflow clipping & stacking context
             let chain: [64]NodeId = [NULL_NODE; 64];

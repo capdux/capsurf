@@ -5435,3 +5435,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<textarea>` 鼠标拖拽选中返回 `{"selected":"Hello drag world"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
+
+### [2026-11-22 21:08] Phase 325: `elementFromPoint()` 亚像素包围盒像素对齐命中测试
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `js_document_element_from_point()` 使用 `@floor`/`@ceil` 像素对齐边界。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`{"left":28.5,"top":19.5,"cx":29,"cy":20,"hitFloor":"half","hitCenter":"half"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。

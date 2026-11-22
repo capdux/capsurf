@@ -2087,3 +2087,6 @@
 
 ### Phase 324: `page-mouse.spec.ts` `[7/15]` `<textarea>` 鼠标拖拽选区为空排障笔记
 - **`INPUT`/`TEXTAREA` 被拖拽选区早退跳过根因**：`src/cdp/input.cp` 的 `MousePressed` 拖拽选区脚本此前写死 `if (tag === 'INPUT' || tag === 'TEXTAREA' || ...) return;`，导致框选文本控件内部文字时完全不记录起止偏移。为 `INPUT`/`TEXTAREA` 补齐 `ctrl` 拖拽状态与 `setSelectionRange(s, e)` 更新后，实测拖拽 `<textarea>` 返回 `{"selected":"Hello drag world"}`。
+
+### Phase 325: `page-click` `[6/77]` `should click the half-aligned 1x1 div` 命中 `<html>` 排障笔记
+- **亚像素整数像素命中边界根因**：`js_document_element_from_point()` 此前直接比较 `px < r.x || px >= r.x + r.width`，对于 `margin-left: 20.5px`（`left=28.5, width=1`）等亚像素偏移 `1x1` 元素，当点击坐标取整落于 `Math.floor(r.left)` (`28`) 时会落出 `[28.5, 29.5)`。改用 `@floor(r.x)` 与 `@ceil(r.x + r.width)` 后，实测 `hitFloor="half", hitCenter="half"` 均精准命中。
