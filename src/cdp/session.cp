@@ -939,6 +939,7 @@ pub struct CdpPageSession {
     loader_seq: u32 = 1,
     target_id: []const u8 = "capsurf-target-001",
     has_opener: bool = false,
+    skip_record_nav: bool = false,
     has_document: bool = false,
     raw_html: []const u8 = "",
     paint_prepares: u64 = 0,
@@ -5865,6 +5866,7 @@ pub struct CdpPageSession {
     }
 
     fn recordNavigation(*_, nav_url: []const u8, nav_title: []const u8) {
+        if (_.skip_record_nav) return;
         // If current entry has the same URL, update its title (e.g. reload)
         if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
             if (std.mem.eql(u8, _.nav_entries[_.current_nav_index].url, nav_url)) {

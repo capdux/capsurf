@@ -1837,8 +1837,91 @@ pub struct PageHandler {
             if (entry_id < 0) {
                 return CdpResponse.err(req.id, -32602, "Invalid entryId");
             }
-            if (!session.navigateToHistoryEntry(@as(i32, @intCast(entry_id)))) {
+            let target_idx: usize = 0;
+            let found_entry = false;
+            let ei: usize = 0;
+            while (ei < session.nav_entry_count) : (ei += 1) {
+                if (session.nav_entries[ei].id == @as(i32, @intCast(entry_id))) {
+                    target_idx = ei;
+                    found_entry = true;
+                    break;
+                }
+            }
+            if (!found_entry) {
                 return CdpResponse.err(req.id, -32000, "No entry with given id");
+            }
+            const target_url = session.nav_entries[target_idx].url;
+            session.nextLoaderId();
+
+            let nav_html: []const u8 = "";
+            let final_url: []const u8 = target_url;
+            if (!std.ascii.eqlIgnoreCase(target_url, "about:blank")) {
+                let fetch_buf = session.allocator.alloc(u8, 524288) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                defer session.allocator.free(fetch_buf);
+                const fetch_res = HttpLoader.fetchDocument(session, target_url, fetch_buf, 0) catch return CdpResponse.err(req.id, -32000, "History navigation fetch failed");
+                nav_html = session.allocator.dupe(u8, fetch_res.html) catch fetch_res.html;
+                final_url = fetch_res.final_url;
+            }
+
+            session.skip_record_nav = true;
+            defer session.skip_record_nav = false;
+            session.navigate(nav_html, final_url, "") catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
+            session.current_nav_index = target_idx;
+            session.url = session.nav_entries[target_idx].url;
+            syncIframeTargets(session, true);
+
+            if (event_count.* < out_events.len) {
+                const start_json = std.fmt.allocPrint(session.allocator, "{{\"frameId\":\"{s}\"}}", .{session.frame_id}) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                let nav_buf: [4096]u8 = undefined;
+                const nav_evt = session.formatFrameNavigatedEvent(&nav_buf);
+                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", session.allocator.dupe(u8, nav_evt) catch nav_evt);
+                event_count.* += 1;
+            }
+            if (session.runtime_enabled && event_count.* < out_events.len) {
+                const main_ctx_json = session.formatExecutionContextEvent(final_url);
+                out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", main_ctx_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Page.domContentEventFired", "{\"timestamp\":1700000000.2}");
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.3}");
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_dcl = std.fmt.allocPrint(session.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.25}}", .{ session.frame_id, session.loader_id }) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_dcl);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_load = std.fmt.allocPrint(session.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.3}}", .{ session.frame_id, session.loader_id }) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_idle = std.fmt.allocPrint(session.allocator, "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkIdle\",\"timestamp\":1700000000.35}}", .{ session.frame_id, session.loader_id }) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_idle);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const stop_json = std.fmt.allocPrint(session.allocator, "{{\"frameId\":\"{s}\"}}", .{session.frame_id}) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+                event_count.* += 1;
+            }
+            if (session.runtime_enabled) {
+                let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
+                let con_i: usize = 0;
+                while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
+                    out_events[event_count.*] = polled_con_evts[con_i];
+                    event_count.* += 1;
+                }
             }
             return CdpResponse.ok(req.id, "{}");
         }

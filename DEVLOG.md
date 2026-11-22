@@ -2231,3 +2231,4 @@
 - Phase 377 (`src/js/shim/file.js`, `src/js/shim/window.js`): 补齐 `Response.prototype.formData()`（兼容 `Content-Type` 显式 boundary 与自动嗅探首行 `--boundary`）及 `FormData` 请求体编码，打通 `page-network-response.spec.ts` #17 与 `network-post-data.spec.ts` 表单上传链路。
 - Phase 378 (`src/cdp/target.cp`, `src/cdp/session.cp`, `src/js/shim/window.js`): 补齐 `window.open` API 并通过 `JsDomContext` 弹窗队列在 CDP 运行时轮询发射 `Target.targetCreated`（含 `openerId`/`openerFrameId`）与 `Target.attachedToTarget`，支撑 Playwright `page.waitForEvent('popup')` 链路。
 - Phase 379 (`src/cdp/dispatch.cp`, `src/cdp/server.cp`, `src/cdp/session.cp`): 在 `getOrCreateTabSession` 根据目标 `opener_id_len` 标记 `has_opener = true` 并在 `mountDom` 后自动注入 `window.opener`，保证弹窗页 `Boolean(window.opener) === true`；同时让 `Input.` 支持发射点击触发的弹窗事件。
+- Phase 380 (`src/cdp/page.cp`, `src/cdp/session.cp`): 修复 `Page.navigateToHistoryEntry` 仅修改下标而不加载页面/不发射 `frameNavigated` 与 `load` 事件的问题，同时通过 `skip_record_nav` 防止回退时 `recordNavigation` 误清空前进历史记录。

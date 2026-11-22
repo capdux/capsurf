@@ -700,3 +700,23 @@
 | 2026-11-23 01:10 | `frame-frame-element.spec.ts` | 3/6 PASS (`@smoke`+`contentFrame`+`detached`全过! +2 FAIL→PASS) | PW Batch 115 |
 | 2026-11-23 01:10 | `page-cache-storage.spec.ts` | 1/1 PASS (2.2s, 非allow-list) | PW Batch 115 (`bin_dev` 全绿!) |
 | WPT-B105 | `/dom/traversal/ 1/2..2/2` + `/dom/ranges/ 1/3..3/3` | 12/53 PASS (0 CRASH, `/dom/ranges/` 尾段串行复测超时 180s) |
+| WPT-B106 | `/dom/collections/` + `/dom/lists/` + `/dom/abort/` + `/html/semantics/selectors/` | 12/27 PASS (0 CRASH/0 TIMEOUT; selectors 4/4 matched) |
+| 2026-11-23 01:23 | `network-post-data.spec.ts` | 6/6功能全过! (5.7s, 4 pass + 2 upstream `it.fail` 实际 PASS) | PW Batch 116 (`bin_dev` 功能全绿!) |
+| 2026-11-23 01:23 | `expect-boolean.spec.ts` | 83/84 PASS (仅`frameLocator 2`超时, 3 exp FAIL→PASS) | PW Batch 116 |
+| 2026-11-23 01:23 | `page-mouse.spec.ts` | 14/14 PASS (`[15/15]`120s截断) | PW Batch 116 |
+| 2026-11-23 01:23 | `page-history.spec.ts` | 0/3 PASS (`goBack`等待`load`超时, 120s截断) | PW Batch 116 |
+| 2026-11-23 01:30 | `page-network-response.spec.ts` | 15/21 PASS (`Response.formData()` PASS! +1 PASS) | PW Batch 117 |
+| 2026-11-23 01:30 | `frame-frame-element.spec.ts` | 3/6 PASS (`@smoke`+`contentFrame`+`detached`) | PW Batch 117 |
+| 2026-11-23 01:30 | `page-event-popup.spec.ts` | 0/3 PASS (`waitForEvent('popup')`超时, 120s截断) | PW Batch 117 |
+| 2026-11-23 01:30 | `page-focus.spec.ts` | 7/7 PASS (1 exp FAIL→PASS, 重试全过) | PW Batch 117 (`bin_dev` 全绿!) |
+| WPT-B107 | `/html/dom/ 1/4..4/4` (全量) | 135/267 PASS (50.6%, 0 CRASH, 1 rerun PASS) |
+| 2026-11-23 01:33 | `page-emulate-media.spec.ts` | 12/12 PASS (9 exp FAIL→PASS) | PW Batch 118 (`bin_dev` 全绿!) |
+| 2026-11-23 01:33 | `page-check.spec.ts` | 16/16 PASS (`EXIT=0`全绿!) | PW Batch 118 (`bin_dev` 全绿!) |
+| 2026-11-23 01:33 | `page-click.spec.ts` | 19/22 PASS (`[23/77]`120s截断) | PW Batch 118 |
+| WPT-B108 | `/html/semantics/forms/the-{input,select,form}-element/` | 141/172 PASS (82.0%, 0 CRASH, select 49/54) |
+| WPT-B109 | `/html/semantics/forms/the-{textarea,button,label,fieldset,option}-element/` | 37/55 PASS (0 CRASH; button 13/16, textarea 12/17) |
+| 2026-11-23 01:40 | `page-dispatchevent.spec.ts` | 15/17 PASS (1.0m, 非allow-list) | PW Batch 119 |
+| 2026-11-23 01:40 | `page-keyboard.spec.ts` | 34/40 PASS (`[41/44]`120s截断) | PW Batch 119 |
+| 2026-11-23 01:40 | `locator-convenience.spec.ts` | 21/21 PASS (`EXIT=0` 21.7s 全绿!) | PW Batch 119 (`bin_dev` 全绿!) |
+| 2026-11-23 01:40 | `page-fill.spec.ts` | 38/40 PASS (retry 120s截断) | PW Batch 119 |
+| WPT-B110 | `/html/semantics/forms/{constraints,form-submission-0,attributes-common-to-form-controls}/` | 12/25 PASS (0 CRASH/0 TIMEOUT; constraints 10/12, submission 5/5 matched) |
