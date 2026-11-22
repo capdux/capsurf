@@ -125,6 +125,16 @@
 | 2026-11-22 17:10 | `/css/css-ui/` | `4/5` | 9 | PASS 2 / FAIL 6 / TIMEOUT 1 (90s截断) | Batch 54 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:11 | `/css/css-ui/` | `5/5` | 9 | PASS 5 / FAIL 4 / TIMEOUT 0 | Batch 54 (`--skip-expected-timeouts`) |
 | 2026-11-22 17:13 | `/css/css-flexbox/` | `3/5` | 52 | PASS 21 / FAIL 24 / TIMEOUT 7 (90s截断) | Batch 54 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:15 | `/css/css-flexbox/` | `4/5` | 52 | PASS 16 / FAIL 27 / TIMEOUT 9 (90s截断) | Batch 55 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:17 | `/css/css-flexbox/` | `5/5` | 52 | PASS 22 / FAIL 19 / TIMEOUT 11 (90s截断) | Batch 55 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:19 | `/css/css-position/` | `3/5` | 54 | PASS 20 / FAIL 28 / TIMEOUT 6 (90s截断) | Batch 55 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:20 | `/css/css-position/` | `4/5` | 54 | PASS 16 / FAIL 33 / TIMEOUT 5 (90s截断) | Batch 55 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:22 | `/css/css-position/` | `5/5` | 53 | PASS 11 / FAIL 38 / TIMEOUT 4 (90s截断) | Batch 55 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:24 | `/css/css-display/` | `3/5` | 10 | PASS 4 / FAIL 5 / TIMEOUT 1 (90s截断) | Batch 56 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:24 | `/css/css-display/` | `4/5` | 10 | PASS 4 / FAIL 6 / TIMEOUT 0 (8s) | Batch 56 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:25 | `/css/css-display/` | `5/5` | 10 | PASS 2 / FAIL 7 / TIMEOUT 1 (18s) | Batch 56 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:27 | `/css/css-grid/` | `3/5` | 89/176 | PASS 21 / FAIL 65 / TIMEOUT 3 (90s截断) | Batch 56 (`--skip-expected-timeouts`) |
+| 2026-11-22 17:28 | `/css/css-grid/` | `4/5` | 89/176 | PASS 18 / FAIL 66 / TIMEOUT 5 (90s截断) | Batch 56 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -225,3 +235,19 @@
 | 2026-11-22 17:08 | `page-click-scroll.spec.ts` | 4/8 PASS (2 SKIP, intercepts/viewport 4 FAIL, 47.6s) | PW Batch 27 |
 | 2026-11-22 17:09 | `page-click-timeout-4.spec.ts` | 1/3 PASS (stable/fixed-intercept 2 FAIL, 34.1s) | PW Batch 27 |
 | 2026-11-22 17:11 | `page-click.spec.ts` | 6/9 PASS (frameset/Node/half-px 3 FAIL, `[10/77]` 90s截断) | PW Batch 27 |
+| 2026-11-22 17:15 | `page-drag.spec.ts` | 0/15 SKIP (全部跳过) | PW Batch 28 |
+| 2026-11-22 17:16 | `page-drop.spec.ts` | 2/7 PASS (dragover preventDefault 5 FAIL, 40.2s) | PW Batch 28 |
+| 2026-11-22 17:16 | `page-add-locator-handler.spec.ts` | 2/6 PASS (`[7/13]` 90s截断) | PW Batch 28 |
+| 2026-11-22 17:16 | `page-aria-snapshot-ai.spec.ts` | 2/4 PASS (iframe递归拼接 `[5/36]` 90s截断) | PW Batch 28 |
+| 2026-11-22 17:19 | `page-autowaiting-no-hang.spec.ts` | 2/6 PASS (window.stop/open 4 FAIL, `[7/9]` 90s截断) | PW Batch 29 |
+| 2026-11-22 17:20 | `page-evaluate-callback.spec.ts` | 1/1 PASS (`[2/22]` exposeFunctions 挂起 90s截断) | PW Batch 29 |
+| 2026-11-22 17:21 | `page-evaluate-handle.spec.ts` | 10/11 PASS (userAgent 1 FAIL, 含1项意外PASS, 13.5s) | PW Batch 29 |
+| 2026-11-22 17:21 | `page-evaluate-no-stall.spec.ts` | 1/3 PASS (pending nav/no ctx 2 FAIL, 14.4s) | PW Batch 29 |
+| 2026-11-22 17:23 | `page-event-load.spec.ts` | 1/1 PASS (2.8s, exit 0) | PW Batch 30 (全绿) |
+| 2026-11-22 17:24 | `page-event-network.spec.ts` | 2/6 PASS (goto null/requestfailed 4 FAIL, 27.5s) | PW Batch 30 |
+| 2026-11-22 17:25 | `page-event-request.spec.ts` | 2/9 PASS (`[10/13]` 90s截断, fetch/goto/SW) | PW Batch 30 |
+| 2026-11-22 17:26 | `page-filechooser.spec.ts` | 4/6 PASS (iframe/upload 2 TIMEOUT, 重试90s截断) | PW Batch 30 |
+| 2026-11-22 17:28 | `page-listeners.spec.ts` | 3/3 PASS (3.8s, exit 0) | PW Batch 31 (全绿) |
+| 2026-11-22 17:28 | `page-localstorage.spec.ts` | 8/9 PASS (cross-origin scope 1 FAIL, 15.1s, exit 0) | PW Batch 31 |
+| 2026-11-22 17:29 | `page-navigation.spec.ts` | 2/3 PASS (cross-origin redirect load 1 TIMEOUT, 39.3s) | PW Batch 31 |
+| 2026-11-22 17:31 | `page-network-idle.spec.ts` | 0/3 (`[4/10]` 90s截断, goto null/request) | PW Batch 31 |

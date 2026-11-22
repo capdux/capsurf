@@ -2970,6 +2970,21 @@ pub struct CdpPageSession {
         return 1;
     }
 
+    pub fn restoreIsolatedNodeIfNeeded(*_): bool {
+        const v = _.ctx.eval("(function(){if(globalThis.Node===undefined&&globalThis.__capsurf_orig_Node!==undefined){globalThis.Node=globalThis.__capsurf_orig_Node;return 1;}return 0;})()");
+        defer _.ctx.freeValue(v);
+        let n: i32 = 0;
+        if (!jsIsException(v)) {
+            * = JS_ToInt32(_.ctx.raw_ctx, &n, v);
+        }
+        return n == 1;
+    }
+
+    pub fn clearIsolatedNode(*_) {
+        const v = _.ctx.eval("(function(){try{delete globalThis.Node;}catch(e){}})()");
+        _.ctx.freeValue(v);
+    }
+
     pub fn rotateIsolatedWorldsOnNavigate(*_) {
         let i: usize = 0;
         while (i < _.isolated_world_count) : (i += 1) {

@@ -5112,3 +5112,15 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<style>`、内联 `style` 与 `el.style.getPropertyValue("--custom-color-property")` 均原样返回 `"#FF00FF"`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.29s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.12s)**。
+
+### [2026-11-22 17:29] 上游 `cp_agy` 结单验收 (`task-capsurf-20261122-layer-rule-e0200`)
+- **Task ID**: `task-capsurf-20261122-layer-rule-e0200`（`delivery_id: 142`）
+- **修复结论**: `lib/css/layer_rule.cp` 已修正为 `([]const u8)?`；同步修复 `diagnostic.rs` 中 `E0200` 误指向首个 `return null` 行号的缺陷，新增 `[]const T?` vs `([]const T)?` 诊断提示。回归测试 `test_layer_rule_e0200.cp` + 原始 repro 100% PASS，Phase 281 构建已解封。
+
+### [2026-11-22 17:31] Phase 281: 隔离世界（`executionContextId > 1`）临时恢复 `Node` 修复 `delete window.Node`
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 保存不可枚举备份 `__capsurf_orig_Node`。
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): 新增 `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()`，在 `contextId > 1` 的 `Runtime.callFunctionOn` / `Runtime.evaluate` 期间临时恢复 `Node`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.Node` 后，隔离世界 `Runtime.evaluate` 与 `Runtime.callFunctionOn` 均返回 `"function"`，返回主世界仍保持 `{"type":"undefined","inWin":false}`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **123.77s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。

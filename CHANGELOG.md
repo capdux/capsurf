@@ -2609,3 +2609,8 @@
 ## [2026-11-22] Phase 280: `--*` CSS 自定义属性跳过颜色序列化与计算样式颜色规范化
 - **Fixed (`src/`)**:
   - `src/js/shim/cssom.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `CSSStyleDeclaration.prototype.getPropertyValue`、`getComputedStyle` Proxy `getPropertyValue` 及 `Proxy.get` 陷阱中对 `--*` 前缀自定义属性跳过 `serializeCssValue()` 与 `normalizeCssColor()`，确保 `--custom-color-property: #FF00FF` 原样保留而非被强转为 `rgb(255, 0, 255)`。
+
+## [2026-11-22] Phase 281: 隔离世界（`executionContextId > 1`）临时恢复 `Node` 避免 `delete window.Node` 点击崩溃
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在暴露 `global.Node` 时保存不可枚举备份 `__capsurf_orig_Node`。
+  - `src/cdp/session.cp`, `src/cdp/runtime.cp`: 新增 `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()`，在 `Runtime.callFunctionOn` 与 `Runtime.evaluate` 执行隔离世界（`contextId > 1`）期间临时恢复 `globalThis.Node` 并在返回前清理，保证主世界 `'Node' in window === false` 不变而 Playwright `InjectedScript` 点击定位不再报 `ReferenceError: Node is not defined`。

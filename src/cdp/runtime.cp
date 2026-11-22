@@ -281,6 +281,8 @@ pub struct RuntimeHandler {
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
+            const restored_node = if (exec_ctx_id != null && exec_ctx_id.? > 1) session.restoreIsolatedNodeIfNeeded() else false;
+            defer if (restored_node) session.clearIsolatedNode();
             let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);
 
             if (std.mem.indexOf(u8, out_buf[0..res_len], "cannot read property '") != null ||
@@ -380,6 +382,8 @@ pub struct RuntimeHandler {
                 return CdpResponse.ok(req.id, err_res);
             }
 
+            const restored_node = if (context_id != null && context_id.? > 1) session.restoreIsolatedNodeIfNeeded() else false;
+            defer if (restored_node) session.clearIsolatedNode();
             let eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
 
             if (std.mem.indexOf(u8, out_buf[0..eval_len], "cannot read property '") != null ||
