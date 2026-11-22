@@ -152,6 +152,9 @@ function installSelectionMixin(Cls) {
 
   Cls.prototype.select = function () {
     if (!supportsSelection(this)) return;
+    if (typeof this.focus === "function" && typeof document !== "undefined" && document.activeElement !== this) {
+      this.focus();
+    }
     const len = String(getValueRaw(this) || "").length;
     this.setSelectionRange(0, len, "none");
   };

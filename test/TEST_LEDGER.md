@@ -80,6 +80,10 @@
 | 2026-11-22 16:19 | `/dom/nodes/` | `9/10` | 25 | PASS 9 / FAIL 14 / TIMEOUT 2 (39s) | Batch 45 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:21 | `/dom/nodes/` | `10/10` | 25 | PASS 8 / FAIL 13 / TIMEOUT 4 (90s) | Batch 45 (`--skip-expected-timeouts`) |
 | 2026-11-22 16:22 | `/css/css-flexbox/` | `5/5` | 52 | PASS 22 / FAIL 19 / TIMEOUT 11 (90s) | Batch 45 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:25 | `/css/css-position/` | `3/5` | 54 | PASS 20 / FAIL 28 / TIMEOUT 6 (90s) | Batch 46 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:27 | `/css/css-position/` | `4/5` | 54 | PASS 16 / FAIL 33 / TIMEOUT 5 (90s) | Batch 46 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:28 | `/css/css-position/` | `5/5` | 53 | PASS 11 / FAIL 37 / TIMEOUT 5 (90s) | Batch 46 (`--skip-expected-timeouts`) |
+| 2026-11-22 16:30 | `/css/css-display/` | `3/5` | 10 | PASS 4 / FAIL 5 / TIMEOUT 1 (90s) | Batch 46 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -132,7 +136,7 @@
 | 2026-11-22 16:00 | `page-network-response.spec.ts` | 0/10 PASS (`page.goto` null 10 FAIL, 90s截断) | PW Batch 13 |
 | 2026-11-22 16:02 | `page-click-react.spec.ts` | 0/3 PASS (1 FAIL + 2 TIMEOUT) | PW Batch 14 |
 | 2026-11-22 16:03 | `page-emulate-media.spec.ts` | 3/12 PASS (emulateMedia/matchMedia 9 FAIL) | PW Batch 14 |
-| 2026-11-22 16:05 | `elementhandle-bounding-box.spec.ts` | 3/7 PASS (frame/force layout PASS, scroll offset等4 FAIL/TIMEOUT) | PW Batch 14 |
+| 2026-11-22 16:05 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (Phase 270 scroll offset修复通过) | PW Batch 18 复测 |
 | 2026-11-22 16:06 | `elementhandle-misc.spec.ts` | 5/7 PASS (check全通, 90s截断) | PW Batch 14 |
 | 2026-11-22 16:09 | `jshandle-to-string.spec.ts` | 3/6 PASS (sparse/Symbol/RegExp 3 FAIL, 20.9s) | PW Batch 15 |
 | 2026-11-22 16:10 | `jshandle-evaluate.spec.ts` | 2/2 PASS (2.1s, exit 0) | PW Batch 15 |
@@ -140,6 +144,9 @@
 | 2026-11-22 16:11 | `page-add-style-tag.spec.ts` | 1/4 PASS (addStyleTag url 3 FAIL, 21.9s) | PW Batch 15 |
 | 2026-11-22 16:12 | `elementhandle-select-text.spec.ts` | 2/5 PASS (getSelection 3 FAIL) | PW Batch 16 |
 | 2026-11-22 16:14 | `page-aria-snapshot.spec.ts` | 17/20 PASS (details/pseudo 3 FAIL, 90s截断) | PW Batch 16 |
-| 2026-11-22 16:15 | `page-set-input-files.spec.ts` | 0/8 PASS (ownerFrame null 7 FAIL, 90s截断) | PW Batch 16 |
+| 2026-11-22 16:15 | `page-set-input-files.spec.ts` | 9/14 PASS (Phase 272生效, @smoke全通, 90s截断) | PW Batch 18 复测 |
 | 2026-11-22 16:16 | `frame-evaluate.spec.ts` | 2/8 PASS (0 deviations, 符合预期) | PW Batch 16 |
 | 2026-11-22 16:21 | `eval-on-selector.spec.ts` | 32/32 PASS (35.4s, exit 0) | PW Batch 17 |
+| 2026-11-22 16:27 | `locator-evaluate.spec.ts` | 5/5 PASS (5.7s, exit 0) | PW Batch 18 |
+| 2026-11-22 16:27 | `locator-list.spec.ts` | 1/1 PASS (2.0s, exit 0) | PW Batch 18 |
+| 2026-11-22 16:30 | `elementhandle-click.spec.ts` | 4/8 PASS (Node/ShadowDOM/br/dblclick 4 FAIL, 90s截断) | PW Batch 19 |

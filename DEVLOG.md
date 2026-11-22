@@ -1926,3 +1926,6 @@
 
 ### Phase 272: `DOM.describeNode` `frameId` 与 `DOM.setFileInputFiles` 排障笔记
 - **`Cannot set input files to detached element` 根因**：Playwright `ElementHandle.ownerFrame()` 依赖 `DOM.describeNode` 返回节点中的 `frameId` 字段，缺失时直接认定元素已脱离文档。为 `DOM.describeNode` 注入 `session.frame_id` 并实现 `DOM.setFileInputFiles`（通过 `MockFixtures.readFileContent` + Base64 构造原生 `File` 对象并派发 `input`/`change`）后，实测 `CP_PITFALLS.md` 上传验证一次通过（`len: 1, size: 19583, ev: ['input', 'change']`）。
+
+### Phase 273: `Range.toString` 与 `Selection.toString` 排障笔记
+- **`elementHandle.selectText()` 返回空串根因**：`range.js` 中 `Range.prototype.toString()` 原先仅处理 `startContainer === endContainer` 且为 Text/Comment 节点的情况，导致 `selectAllChildren(div)` 返回 `""`；同时 `Selection.prototype.toString()` 未兼容 `<input>`/`<textarea>` 的 `_selectionStart.._selectionEnd` 内部选区。补齐后 `textarea`、`input`、`div` 三类控件实测 `window.getSelection().toString()` 全部一次通过（`some value` / `some value` / `Plain div`）。

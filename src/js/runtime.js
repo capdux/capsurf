@@ -16997,6 +16997,9 @@
 
     Cls.prototype.select = function () {
       if (!supportsSelection(this)) return;
+      if (typeof this.focus === "function" && typeof document !== "undefined" && document.activeElement !== this) {
+        this.focus();
+      }
       const len = String(getValueRaw(this) || "").length;
       this.setSelectionRange(0, len, "none");
     };
@@ -21937,10 +21940,49 @@
   Range.prototype.toString = function () {
     if (this.collapsed) return "";
     if (this.startContainer === this.endContainer && (this.startContainer.nodeType === 3 || this.startContainer.nodeType === 8)) {
-      const text = this.startContainer.data || this.startContainer.textContent || "";
+      const text = this.startContainer.data !== undefined ? String(this.startContainer.data) : String(this.startContainer.textContent || "");
       return text.slice(this.startOffset, this.endOffset);
     }
-    return "";
+    if (this.startContainer === this.endContainer && this.startContainer.nodeType === 1) {
+      const cs = this.startContainer.childNodes || [];
+      let out = "";
+      const endIdx = Math.min(this.endOffset, cs.length);
+      for (let i = Math.max(0, this.startOffset); i < endIdx; i++) {
+        if (cs[i]) out += String(cs[i].nodeType === 3 ? (cs[i].data !== undefined ? cs[i].data : (cs[i].textContent || "")) : (cs[i].textContent || ""));
+      }
+      return out;
+    }
+    const root = this.commonAncestorContainer;
+    if (!root) return "";
+    let out = "";
+    const sc = this.startContainer;
+    const so = this.startOffset;
+    const ec = this.endContainer;
+    const eo = this.endOffset;
+    function walk(n) {
+      if (!n) return;
+      if (n.nodeType === 3) {
+        const txt = n.data !== undefined ? String(n.data) : String(n.textContent || "");
+        const sCmp = compareBoundaryPoints(n, 0, sc, so);
+        const eCmp = compareBoundaryPoints(n, txt.length, ec, eo);
+        if (n === sc && n === ec) {
+          out += txt.slice(so, eo);
+        } else if (n === sc) {
+          out += txt.slice(so);
+        } else if (n === ec) {
+          out += txt.slice(0, eo);
+        } else if (sCmp >= 0 && eCmp <= 0) {
+          out += txt;
+        } else if (compareBoundaryPoints(n, txt.length, sc, so) > 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+          out += txt;
+        }
+        return;
+      }
+      const cs = n.childNodes || [];
+      for (let i = 0; i < cs.length; i++) walk(cs[i]);
+    }
+    walk(root);
+    return out;
   };
 
   Range.prototype.deleteContents = function () {};
@@ -22620,8 +22662,24 @@
 
   Selection.prototype.toString = function () {
     const r = selLive(this);
-    if (!r) return "";
-    return r.toString ? r.toString() : "";
+    if (r && !r.collapsed) {
+      return r.toString ? r.toString() : "";
+    }
+    const st = _selState.get(this);
+    const doc = (st && st.doc) || (typeof document !== "undefined" ? document : null);
+    const ae = doc ? doc.activeElement : null;
+    if (ae && ae.nodeType === 1) {
+      const tag = String(ae.tagName || ae.localName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea") {
+        const s = ae._selectionStart || 0;
+        const e = ae._selectionEnd || 0;
+        if (e > s) {
+          const val = typeof getValueRaw === "function" ? getValueRaw(ae) : (ae._value !== undefined ? ae._value : (ae.value || ""));
+          return String(val || "").slice(s, e);
+        }
+      }
+    }
+    return "";
   };
 
   Range.prototype.getClientRects = function () {

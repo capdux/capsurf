@@ -2571,3 +2571,8 @@
 ## [2026-11-22] Phase 272: `DOM.describeNode` 补充 `frameId` 归属与 `DOM.setFileInputFiles` 实装
 - **Added / Fixed (`src/`)**:
   - `src/cdp/dom.cp`: 为 `DOM.describeNode` 序列化结果注入当前 `session.frame_id`，解决 `ElementHandle.ownerFrame()` 返回 `null` 导致 `setInputFiles` 误报 detached element 的问题；新增 `DOM.setFileInputFiles` 处理器，通过 `MockFixtures.readFileContent` 读取本地文件并构造 `File` / `Uint8Array` 列表写入 `el.files` 与 `C:\fakepath\<basename>`，同步派发 `input` 与 `change` 事件。
+
+## [2026-11-22] Phase 273: `Range.toString` / `Selection.toString` 跨节点与表单选区对齐
+- **Fixed (`src/`)**:
+  - `src/js/shim/range.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 扩展 `Range.prototype.toString` 支持元素容器节点与跨节点文本遍历（不再仅限单文本节点）；扩展 `Selection.prototype.toString` 在无 DOM Range 时回退读取当前聚焦 `<input>`/`<textarea>` 的 `_selectionStart.._selectionEnd` 文本。
+  - `src/js/shim/element/forms/selection.js`: `select()` 自动聚焦控件以确保 `document.activeElement` 与选区同步。

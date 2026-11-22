@@ -5051,3 +5051,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`page.setInputFiles` 上传 `CP_PITFALLS.md` 后 `files.length === 1, size === 19583, ev: ['input', 'change']`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.05s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.23s)**。
+
+### [2026-11-22 16:30] Phase 273: `Range.toString` / `Selection.toString` 跨节点与表单选区对齐
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/range.js](file:///data/dev/capsurf/src/js/shim/range.js), [src/js/shim/element/forms/selection.js](file:///data/dev/capsurf/src/js/shim/element/forms/selection.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 扩展 `Range.toString()` 支持元素容器与跨节点文本收集；`Selection.toString()` 回退读取聚焦表单控件的 `_selectionStart.._selectionEnd`；`select()` 自动聚焦控件。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`textarea.selectText()`、`input.selectText()` 与 `div.selectText()` 均返回准确选区文本（`'some value'` / `'some value'` / `'Plain div'`）。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.28s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
