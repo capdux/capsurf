@@ -2084,3 +2084,6 @@
 
 ### Phase 323: `page-keyboard.spec.ts` `[7/44]` `microtask-keydown` 晚于 `keypress` 排障笔记
 - **连续 JS 派发未执行微任务检查点根因**：`Input.dispatchKeyEvent` (`keyDown`) 在同一 C++ 调用中先后调用 `dispatchKeyJs("keydown")` 与 `dispatchKeyJs("keypress")`，此前 `dispatchKeyJs()` 未调用 `session.ctx.drainJobs()`，导致 `keydown` 内的 `queueMicrotask` 延迟到整个 CDP 请求结束后才执行。在 `dispatchKeyJs()` 末尾补充 `session.ctx.drainJobs()` 后，实测严格输出 `["keydown","microtask-keydown","keypress","microtask-keypress"]`。
+
+### Phase 324: `page-mouse.spec.ts` `[7/15]` `<textarea>` 鼠标拖拽选区为空排障笔记
+- **`INPUT`/`TEXTAREA` 被拖拽选区早退跳过根因**：`src/cdp/input.cp` 的 `MousePressed` 拖拽选区脚本此前写死 `if (tag === 'INPUT' || tag === 'TEXTAREA' || ...) return;`，导致框选文本控件内部文字时完全不记录起止偏移。为 `INPUT`/`TEXTAREA` 补齐 `ctrl` 拖拽状态与 `setSelectionRange(s, e)` 更新后，实测拖拽 `<textarea>` 返回 `{"selected":"Hello drag world"}`。

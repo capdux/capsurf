@@ -2799,3 +2799,7 @@
 ## [2026-11-22] Phase 323: 在 `dispatchKeyJs()` 补充微任务刷新，对齐键盘事件任务边界
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `dispatchKeyJs()` 派发完单个键盘事件后立即调用 `session.ctx.drainJobs()`，使 `keydown` 回调入队的微任务在 `keypress` 派发前执行（修复 `page-keyboard.spec.ts` `[7/44] should dispatch key events in separate tasks`）。
+
+## [2026-11-22] Phase 324: 支持 `<input>`/`<textarea>` 鼠标拖拽框选文本
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `MousePressed` 与 `MouseMoved` 拖拽选区逻辑中取消对 `INPUT`/`TEXTAREA` 的早退跳过，计算起止字符偏移并调用 `setSelectionRange(s, e)`（修复 `page-mouse.spec.ts` `[7/15] should select the text with mouse`）。

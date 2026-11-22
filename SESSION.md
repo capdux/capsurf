@@ -5428,3 +5428,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Input.dispatchKeyEvent` `keyDown` `'a'` 输出 `["keydown","microtask-keydown","keypress","microtask-keypress"]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.33s)**。
+
+### [2026-11-22 21:05] Phase 324: 支持 `<input>`/`<textarea>` 鼠标拖拽框选文本
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 在 `MousePressed`/`MouseMoved` 为 `INPUT`/`TEXTAREA` 补齐拖拽选区与 `setSelectionRange(s, e)`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<textarea>` 鼠标拖拽选中返回 `{"selected":"Hello drag world"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
