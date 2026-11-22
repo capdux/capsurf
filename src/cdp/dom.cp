@@ -1349,6 +1349,13 @@ pub struct DomHandler {
             if (fid.len == 0) {
                 return CdpResponse.err(req.id, -32602, "frameId is required");
             }
+            let ki: usize = 0;
+            while (ki < session.known_child_frame_count) : (ki += 1) {
+                const kf = &session.known_child_frames[ki];
+                if (kf.active && kf.detached && std.mem.eql(u8, kf.frame_id_buf[0..kf.frame_id_len], fid)) {
+                    return CdpResponse.err(req.id, -32000, "Frame with the given id was not found.");
+                }
+            }
             let iframe_entries: [32]IframeFrameEntry = [IframeFrameEntry{}; 32];
             const iframe_count = collectDocIframeEntries(session, &iframe_entries);
             let fi: usize = 0;
