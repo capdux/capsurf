@@ -5378,3 +5378,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Input.dispatchMouseEvent` 派发 `mousedown` 与 `click` 返回 `[{"t":"mousedown","trusted":true,"composed":true},{"t":"click","trusted":true,"composed":true}]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.30s)**。
+
+### [2026-11-22 20:47] Phase 317: 修复 `Input.dispatchKeyEvent` 派发 `keydown`/`keypress`/`keyup` `isTrusted` 为 `false`
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `dispatchKeyEvent()` 补充 `composed: true` 并接入 `_dispatchTrusted()`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Input.dispatchKeyEvent` 派发 `keydown` 与 `keyup` 返回 `[{"t":"keydown","trusted":true,"composed":true},{"t":"keyup","trusted":true,"composed":true}]`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.27s)**。

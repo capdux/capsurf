@@ -2769,3 +2769,7 @@
 ## [2026-11-22] Phase 316: 修复 `Input.dispatchMouseEvent` 派发事件 `isTrusted` 为 `false` 的问题
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `dispatchMouseDomEvent()` 中为 `MouseEvent` 补齐 `composed: true`，并将 `el.dispatchEvent(ev)` 改为优先调用 `globalThis.__capsurf_dispatchTrustedEvent(el, ev)`，使 CDP 鼠标点击/按下/松开事件正确置位 `isTrusted: true`（修复 `page-mouse.spec.ts` `[1/15]~[3/15]` 失败）。
+
+## [2026-11-22] Phase 317: 修复 `Input.dispatchKeyEvent` 派发 `keydown`/`keypress`/`keyup` `isTrusted` 为 `false`
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `dispatchKeyEvent()` 中为 `keydown`/`keypress`/`keyup` 补齐 `composed: true`，并将 `target.dispatchEvent()` 改为 `_dispatchTrusted(target, ...)`，使 CDP 键盘事件正确置位 `isTrusted: true`。

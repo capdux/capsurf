@@ -11636,8 +11636,9 @@ const CSS_TYPED_OM_GLOBALS = {
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
+        composed: true,
       });
-      target.dispatchEvent(evt);
+      _dispatchTrusted(target, evt);
       if (!evt.defaultPrevented && (keyStr === " " || keyStr === "Spacebar")) {
         const upTag = String(target.tagName || target.localName || "").toLowerCase();
         if (upTag === "button" && !target.disabled && typeof target.click === "function") {
@@ -11664,8 +11665,9 @@ const CSS_TYPED_OM_GLOBALS = {
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
+        composed: true,
       });
-      target.dispatchEvent(kpEvt);
+      _dispatchTrusted(target, kpEvt);
       let tiAllowedAll = true;
       if (!kpEvt.defaultPrevented) {
         if (isTargetContentEditable(target)) {
@@ -11726,8 +11728,9 @@ const CSS_TYPED_OM_GLOBALS = {
         shiftKey: isShift,
         cancelable: true,
         bubbles: true,
+        composed: true,
       });
-      target.dispatchEvent(evt);
+      _dispatchTrusted(target, evt);
       const defaultPrevented = Boolean(evt.defaultPrevented);
       _lastKeyDownPrevented = defaultPrevented;
       if (typeof globalThis !== "undefined") {

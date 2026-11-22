@@ -2062,3 +2062,6 @@
 
 ### Phase 316: `page-mouse.spec.ts` `expect(event.isTrusted).toBe(true)` 收到 `false` 排障笔记
 - **`dispatchMouseDomEvent()` 未走可信派发通道根因**：`Input.dispatchMouseEvent` 在 `src/cdp/input.cp` 通过 `dispatchMouseDomEvent()` 直接调用 `el.dispatchEvent(ev)`，绕过了 `dispatchTrustedEvent()` 内部的 `_setEventTrusted(event, true)`，导致所有 CDP 鼠标事件的 `isTrusted` 恒为 `false`（且缺少 `composed: true`）。改为调用 `globalThis.__capsurf_dispatchTrustedEvent(el, ev)` 后，实测 `mousedown` 与 `click` 均返回 `trusted: true, composed: true`。
+
+### Phase 317: `Input.dispatchKeyEvent` `isTrusted` 为 `false` 排障笔记
+- **`dispatchKeyEvent()` 直接调用 `target.dispatchEvent()` 根因**：`src/js/shim/window.js` 中的 `dispatchKeyEvent()` 此前对 `keyup`/`keypress`/`keydown` 均直接调用 `target.dispatchEvent(evt)`，未经过 `_dispatchTrusted(target, evt)`，导致 `event.isTrusted` 为 `false` 且缺少 `composed: true`。改为 `_dispatchTrusted(target, evt)` 后，实测 `keydown` 与 `keyup` 均返回 `trusted: true, composed: true`。
