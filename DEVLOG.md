@@ -1977,3 +1977,6 @@
 
 ### Phase 288: `contenteditable` `fill()` 失效排障笔记
 - **`selection retargeting` 失败根因**：`applyInputText()` 此前仅读写表单控件的 `_value` / `value` 属性，对 `el.isContentEditable` 节点未更新 `textContent`。补齐选区替换、`Backspace` 截尾与 `input` 事件派发后，实测全选插入 `"foo"` 得 `"foo"`、退格得 `"fo"`。
+
+### Phase 289: `getByLabel` 祖先 `<label>` 误关联多控件排障笔记
+- **`strict mode violation: getByLabel('Name') resolved to 2 elements` 根因**：`label.js` 的 `getLabelsForControl()` 无条件把所有祖先 `<label>` 加入 `control.labels`，忽略了 `for` 属性排他性及 HTML 仅关联首个可标记后代的规范。补齐 `!hasFor && p.control === control` 判定后，实测 `i1:1, b1:0, non:0, t:1`。

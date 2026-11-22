@@ -5174,3 +5174,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`<div contenteditable>content</div>` 全选后 `Input.insertText("foo")` 返回 `"foo"`，`Backspace` 后返回 `"fo"`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.00s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。
+
+### [2026-11-22 18:13] Phase 289: 规范 `HTMLLabelElement.control` 与 `Element.labels` 祖先关联逻辑
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/forms/label.js](file:///data/dev/capsurf/src/js/shim/element/forms/label.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 修正 `getLabelsForControl()` 仅在祖先 `<label>` 无 `for` 属性且 `p.control === control` 时纳入关联，`for=""` 返回 `null`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<label>Name <input id="i1"/><button id="b1">B</button></label>` 与 `<label for="t">Name <input id="non"/></label><input id="t"/>` 返回 `{"i1":1,"b1":0,"non":0,"t":1}`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.33s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。

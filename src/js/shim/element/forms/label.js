@@ -47,11 +47,12 @@ function getLabelsForControl(control) {
     }
   }
 
-  // 2. Ancestor label(s)
+  // 2. Ancestor label(s) (only when label has no `for` attr and this control is its first labelable descendant)
   let p = control.parentElement || control.parentNode;
   while (p) {
     if ((p.tagName || "").toLowerCase() === "label") {
-      if (!seen.has(p)) {
+      const hasFor = typeof p.hasAttribute === "function" ? p.hasAttribute("for") : (p.getAttribute && p.getAttribute("for") !== null);
+      if (!hasFor && p.control === control && !seen.has(p)) {
         seen.add(p);
         matches.push(p);
       }
@@ -82,8 +83,10 @@ function installLabelElement(global) {
 
   Object.defineProperty(HTMLLabelElement.prototype, "control", {
     get: function () {
-      const forId = this.getAttribute("for");
-      if (forId) {
+      const hasFor = typeof this.hasAttribute === "function" ? this.hasAttribute("for") : (this.getAttribute("for") !== null);
+      if (hasFor) {
+        const forId = this.getAttribute("for");
+        if (!forId) return null;
         const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
         const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
         return (el && isLabelable(el)) ? el : null;

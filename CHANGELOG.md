@@ -2645,3 +2645,7 @@
 ## [2026-11-22] Phase 288: `applyInputText()` 支持 `contenteditable` 元素文本输入与退格删除
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 在 `applyInputText()` 中为 `el.isContentEditable` 元素增加独立文本更新分支（结合 `window.getSelection()` 非折叠选区替换与 `Backspace` 删除），更新 `el.textContent` 并派发 `input` 事件，修复 `locator.fill()` 对 `contenteditable` 元素无效的问题。
+
+## [2026-11-22] Phase 289: 规范 `HTMLLabelElement.control` 与 `Element.labels` 祖先关联逻辑
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/forms/label.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 修正 `getLabelsForControl()` 仅在祖先 `<label>` 无 `for` 属性且当前控件为其首个可标记后代（`p.control === control`）时纳入关联；同步在 `HTMLLabelElement.prototype.control` 中对空 `for=""` 直接返回 `null`。

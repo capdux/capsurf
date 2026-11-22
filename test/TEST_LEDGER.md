@@ -175,6 +175,11 @@
 | 2026-11-22 18:05 | `/html/dom/elements/` | `2/5` | 39 | PASS 19 / FAIL 16 / TIMEOUT 4 | Batch 64 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:07 | `/html/dom/elements/` | `3/5` | 39 | PASS 19 / FAIL 14 / TIMEOUT 6 (90s截断) | Batch 64 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:07 | `/css/css-break/` | `1/5` | 42 | PASS 30 / FAIL 12 / TIMEOUT 0 | Batch 64 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:09 | `/css/css-break/` | `2/5` | 42 | PASS 32 / FAIL 10 / TIMEOUT 0 | Batch 65 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:10 | `/css/css-break/` | `3/5` | 42 | PASS 32 / FAIL 9 / TIMEOUT 1 (90s截断) | Batch 65 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:11 | `/css/css-contain/` | `1/5` | 14 | PASS 13 / FAIL 1 / TIMEOUT 0 (exit 0, 14/14匹配) | Batch 65 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:12 | `/css/css-contain/` | `2/5` | 14 | PASS 12 / FAIL 1 / TIMEOUT 1 (90s截断) | Batch 65 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:13 | `/css/css-contain/` | `3/5` | 14 | PASS 10 / FAIL 2 / ERROR 1 / TIMEOUT 1 | Batch 65 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
