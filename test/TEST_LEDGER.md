@@ -450,3 +450,9 @@
 | 2026-11-22 19:55 | `page-set-extra-http-headers.spec.ts` | 4/5 PASS (9.5s) | PW Batch 61 |
 | 2026-11-22 19:55 | `page-dialog.spec.ts` | 7/9 PASS (18.5s) | PW Batch 61 |
 | 2026-11-22 19:55 | `page-dispatchevent.spec.ts` | 15/16 PASS (26.5s) | PW Batch 61 |
+| 2026-11-22 20:00 | `expect-misc.spec.ts` | 57/57 PASS (`[57/59]` 90s截断) | PW Batch 62 |
+| 2026-11-22 20:00 | `page-evaluate-handle.spec.ts` | 10/11 PASS (12.9s) | PW Batch 62 |
+| 2026-11-22 20:00 | `selectors-text.spec.ts` | 20/21 PASS (`text=lowo` outerHTML 1 FAIL, 51.6s) | PW Batch 62 |
+| 2026-11-22 20:00 | `selectors-get-by.spec.ts` | 25/25 PASS (28.4s, exit 0) | PW Batch 62 (全绿) |
+| 2026-11-22 20:01 | `/dom/ranges/` (`1/3..3/3`) | 3/12, 3/10, 1/10 PASS (25.1s) | WPT Batch 84 (`bin_dev`) |
+| 2026-11-22 20:01 | `/dom/traversal/` (`1/2, 2/2`) | 3/9, 1/8 PASS (15.7s) | WPT Batch 84 (`bin_dev`) |

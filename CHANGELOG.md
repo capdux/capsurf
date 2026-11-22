@@ -2717,3 +2717,7 @@
 ## [2026-11-22] Phase 305: 为 `Element.prototype.firstChild`/`lastChild` 补充 JS `_children` 回退
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `Element.prototype.firstChild` 与 `lastChild` getter，当原生 DOM 返回 `null` 而 `this._children` 非空（如挂载 `CDATASection`/`ProcessingInstruction` 等 JS 子节点）时回退至 `_children[0]` / `_children[length - 1]`，修复 `createNodeIterator(paras[5].firstChild, ...)` 报 `Root node required` 的问题。
+
+## [2026-11-22] Phase 306: 修复 `Element.prototype.outerHTML` 未序列化 JS `_children` 文本节点的问题
+- **Fixed (`src/`)**:
+  - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `Element.prototype.outerHTML` getter，当 `this._children && this._children.length > 0` 时，将 `this.innerHTML` 拼接回 `origOuterGet.call(this)` 的开闭标签之间，修复 JS 追加 `Text` 子节点后 `outerHTML` 仍返回空标签（如 `<div></div>`）导致 `selectors-text.spec.ts` `text=lowo` 失败的问题。

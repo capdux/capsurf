@@ -2028,3 +2028,6 @@
 
 ### Phase 305: `paras[5].appendChild(cd)` 后 `paras[5].firstChild` 仍为 `null` 排障笔记
 - **`NodeIterator.html` 报 `Root node required` 根因**：`Element.prototype` 直接继承原生 C `Node.prototype`，其原生 `firstChild` / `lastChild` getter 无法感知仅存储在 JS `this._children` 中的节点（如 `CDATASection`）。为 `Element.prototype` 补充 `_children` 回退后，实测 `firstChild=true, lastChild=true, cdType=4, iterNext=true`。
+
+### Phase 306: `selectors-text.spec.ts` `[1/21]` `text=lowo` 匹配空标签 `<div></div>` 排障笔记
+- **`d.outerHTML` 遗漏 JS `_children` 文本节点根因**：Playwright `text` 选择器引擎读取 `element.outerHTML` 进行调试输出或片段匹配时，对于 `document.createElement('div')` 后通过 `appendChild(createTextNode('hello'))` 追加的子节点，由于 `Element.prototype.outerHTML` 直接走原生 C 序列化而未回退 `this._children`，返回了 `"<div></div>"` 而非 `"<div>helloworld</div>"`。在 `outerHTML` getter 中检测 `this._children.length > 0` 并拼接 `this.innerHTML` 后，实测返回 `{"outer":"<div>helloworld</div>","inner":"helloworld"}`。

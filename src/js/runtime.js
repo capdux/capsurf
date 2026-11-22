@@ -43964,7 +43964,17 @@
       if (outerHtmlDesc && typeof outerHtmlDesc.get === "function" && !outerHtmlDesc.set) {
         const origOuterGet = outerHtmlDesc.get;
         Object.defineProperty(global.Element.prototype, "outerHTML", {
-          get: origOuterGet,
+          get: function () {
+            const raw = origOuterGet.call(this);
+            if (this._children && this._children.length > 0 && typeof raw === "string") {
+              const gt = raw.indexOf(">");
+              const closeIdx = raw.lastIndexOf("</");
+              if (gt !== -1 && closeIdx > gt) {
+                return raw.slice(0, gt + 1) + (this.innerHTML || "") + raw.slice(closeIdx);
+              }
+            }
+            return raw;
+          },
           set: function (val) {
             const parent = this.parentNode;
             if (!parent) return;

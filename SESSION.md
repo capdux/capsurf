@@ -5297,3 +5297,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`p.appendChild(xmlDoc.createCDATASection("1234"))` 后 `firstChild=true, lastChild=true, cdType=4, iterNext=true`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（169 模块 **120.31s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.12s)**。
+
+### [2026-11-22 20:02] Phase 306: 修复 `Element.prototype.outerHTML` 未序列化 JS `_children` 文本节点的问题
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 包装 `Element.prototype.outerHTML` getter，当 `this._children && this._children.length > 0` 时将 `this.innerHTML` 拼接回开闭标签之间。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`d.appendChild(createTextNode("hello"))` + `"world"` 后返回 `{"outer":"<div>helloworld</div>","inner":"helloworld"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.38s)**。
