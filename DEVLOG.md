@@ -2161,3 +2161,6 @@
 
 ### Phase 347: `grid.html` 导航 >25s 超时及 `DOM.getBoxModel` 亚像素精度排障笔记
 - **`initCssTransitionSnapshots()` 全节点扫描与 `<img>` 重复请求根因**：`grid.html` `<style>` 含 `@keyframes move`，导致 `animations.js` `initCssTransitionSnapshots()` 对全部 ~700 个元素逐一调用 `getComputedStyle()` 并同步创建 490 个 `<img>` 加载，触发 >25s 阻塞。收窄快照选择器命中范围并增加文档级 `_imgCache` 后，`grid.html` 导航耗时降至 **3.5s** (`count=200`, `rect13={x:100,y:55,w:50,h:50}`)。同时修复 `src/cdp/dom.cp` `formatQuad()` 保留浮点精度。
+
+### Phase 348: `scrollable.html` `DOM.scrollIntoViewIfNeeded` >25s 超时排障笔记
+- **`isElementDisplayNone` 与 `@keyframes` 包装器全量触发 `getComputedStyle` 根因**：在无 `<style>`/`<link>` 样式表的 `scrollable.html`（202 个子节点）上，`dom_binding.cp` 的 `getBoundingClientRect` `@keyframes` 包装器与 `element.js` 的 `isElementDisplayNone` 均无条件沿着祖先链调用 `window.getComputedStyle`（单次元素调用耗时 ~900ms），导致 `scrollHeight` 遍历 200 子节点卡死 >25s。增加 `@keyframes` 快速守卫、`docHasCssSheets()` 守卫与按需 `scrollHeight`/`scrollWidth` 读取后，`#button-91` `DOM.scrollIntoViewIfNeeded` 降至 **1453ms** (`PHASE348_RESULT: {"scrollMs":1453,"cx":71.800003,"cy":448}`) 。

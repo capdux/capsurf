@@ -541,3 +541,85 @@
 | 2026-11-22 21:39 | `page-emulate-media.spec.ts` | 3/12 PASS (exit 0, match exp) | PW Batch 82 |
 | 2026-11-22 21:39 | `page-screenshot.spec.ts` | 1/44 PASS (90s截断) | PW Batch 82 |
 | 2026-11-22 21:39 | `page-network-idle.spec.ts` | 0/10 PASS (90s截断) | PW Batch 82 |
+| 2026-11-22 21:43 | `elementhandle-convenience.spec.ts` | 13/14 PASS (29.5s, exit 0) | PW Batch 83 |
+| 2026-11-22 21:43 | `elementhandle-misc.spec.ts` | 7/10 PASS (90s截断) | PW Batch 83 |
+| 2026-11-22 21:43 | `elementhandle-press.spec.ts` | 5/5 PASS (7.9s, number input PASS) | PW Batch 83 (全绿) |
+| 2026-11-22 21:43 | `elementhandle-query-selector.spec.ts` | 6/6 PASS (8.7s, exit 0) | PW Batch 83 (全绿) |
+| 2026-11-22 21:48 | `elementhandle-type.spec.ts` | 5/5 PASS (`number input` PASS) | PW Batch 84 (全绿) |
+| 2026-11-22 21:48 | `eval-on-selector.spec.ts` | 32/32 PASS (exit 0) | PW Batch 84 (全绿) |
+| 2026-11-22 21:48 | `eval-on-selector-all.spec.ts` | 9/9 PASS (2 `* capture` PASS) | PW Batch 84 (全绿) |
+| 2026-11-22 21:48 | `frame-evaluate.spec.ts` | 2/8 PASS (exit 0, match exp) | PW Batch 84 |
+| 2026-11-22 21:51 | `locator-evaluate.spec.ts` | 5/5 PASS (exit 0) | PW Batch 85 (全绿) |
+| 2026-11-22 21:51 | `locator-is-visible.spec.ts` | 8/8 PASS (exit 0) | PW Batch 85 (全绿) |
+| 2026-11-22 21:51 | `locator-list.spec.ts` | 1/1 PASS (exit 0) | PW Batch 85 (全绿) |
+| 2026-11-22 21:51 | `expect-boolean.spec.ts` | 60/84 PASS (90s截断) | PW Batch 85 |
+| 2026-11-22 21:57 | `expect-to-have-text.spec.ts` | 26/28 PASS | PW Batch 86 |
+| 2026-11-22 21:57 | `frame-frame-element.spec.ts` | 1/6 PASS | PW Batch 86 |
+| 2026-11-22 21:57 | `frame-hierarchy.spec.ts` | 4/12 PASS (90s retry截断) | PW Batch 86 |
+| 2026-11-22 21:57 | `interception.spec.ts` | 3/8 PASS | PW Batch 86 |
+| 2026-11-22 22:03 | `page-emulate-media.spec.ts` | 12/12 PASS (9 exp FAIL→PASS) | PW Batch 87 (`bin_dev` 全绿) |
+| 2026-11-22 22:05 | `selectors-misc.spec.ts` | 7/19 PASS (`#inner-link` shadow dom 超时, 90s截断) | PW Batch 87 |
+| 2026-11-22 22:05 | `selectors-role.spec.ts` | 12/15 PASS (`disabled`/`hidden` slot) | PW Batch 87 |
+| 2026-11-22 22:05 | `selectors-frame.spec.ts` | 4/15 PASS (`ERR_BLOCKED_BY_CLIENT`, 90s截断) | PW Batch 87 |
+| 2026-11-22 22:08 | `locator-misc-2.spec.ts` | 4/14 PASS (90s截断于`[7/14]`) | PW Batch 88 |
+| 2026-11-22 22:08 | `page-event-request.spec.ts` | 2/13 PASS (`fetch`未报事件/`route`拦截, 90s截断) | PW Batch 88 |
+| 2026-11-22 22:15 | `page-wait-for-selector-1.spec.ts` | 14/15 PASS (`frame detached` 1 fail) | PW Batch 89 |
+| 2026-11-22 22:15 | `page-wait-for-selector-2.spec.ts` | 22/32 PASS (`[24/32]` 90s截断) | PW Batch 89 |
+| 2026-11-22 22:15 | `page-wait-for-function.spec.ts` | 8/26 PASS (`[11/26]` 90s截断) | PW Batch 89 |
+| 2026-11-22 22:15 | `page-evaluate.spec.ts` | 20/95 PASS (`[1..20]`零失败, `[21]` reload 90s截断) | PW Batch 89 |
+| 2026-11-22 22:21 | `expect-to-have-text.spec.ts` | 28/28 PASS (35.7s, `in shadow dom`+`#field`修复) | PW Batch 90 (`bin_dev` 全绿) |
+| 2026-11-22 22:21 | `selectors-role.spec.ts` | 9/15 PASS (`Shadow1`PASS, `[12/15]`90s截断) | PW Batch 90 |
+| 2026-11-22 22:21 | `selectors-misc.spec.ts` | 7/19 PASS (`#inner-link`/`layout`90s截断) | PW Batch 90 |
+| 2026-11-22 22:21 | `locator-misc-2.spec.ts` | 5/14 PASS (`lazyload`PASS, `before`PASS/`after>0`, 90s截断) | PW Batch 90 |
+| 2026-11-22 22:21 | `/css/css-flexbox/` (`2/5..5/5`) | 26/52, 23/52, 16/52, 25/52 PASS | WPT Batch 90 (`bin_dev`) |
+| 2026-11-22 22:21 | `/css/css-grid/` (`1/5`) | 63/177 PASS (11 `FAIL→PASS`) | WPT Batch 90 (`bin_dev`) |
+| 2026-11-22 22:26 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (SVG `#therect` null/90s截断) | PW Batch 91 |
+| 2026-11-22 22:26 | `elementhandle-scroll-into-view.spec.ts` | 5/9 PASS (`@smoke` `after>0`/90s截断) | PW Batch 91 |
+| 2026-11-22 22:26 | `elementhandle-wait-for-element-state.spec.ts` | 11/12 PASS (23.9s, match exp) | PW Batch 91 |
+| 2026-11-22 22:26 | `expect-boolean.spec.ts` | 77/78 PASS (`[78/84]`90s截断, 仅`frameLocator 2`1 fail) | PW Batch 91 |
+| 2026-11-22 22:31 | `page-select-option.spec.ts` | 0/33 PASS (`[1/33]`/`[2/33]` 90s截断) | PW Batch 92 |
+| 2026-11-22 22:31 | `page-fill.spec.ts` | 35/37 PASS (`[38/40]` 90s截断, 仅2 fail) | PW Batch 92 |
+| 2026-11-22 22:31 | `page-check.spec.ts` | 16/16 PASS (30.5s) | PW Batch 92 (`bin_dev` 全绿) |
+| 2026-11-22 22:31 | `page-focus.spec.ts` | 7/7 PASS (1 exp FAIL→PASS) | PW Batch 92 (`bin_dev` 全绿) |
+| 2026-11-22 22:37 | `page-keyboard.spec.ts` | 30/44 PASS (`[1..30]`零失败, `[31]`PageDown 90s截断) | PW Batch 93 |
+| 2026-11-22 22:37 | `page-mouse.spec.ts` | 8/15 PASS (`hover #button-91` 90s截断) | PW Batch 93 |
+| 2026-11-22 22:37 | `page-click.spec.ts` | 12/77 PASS (`frameset` 90s截断) | PW Batch 93 |
+| 2026-11-22 22:37 | `page-dispatchevent.spec.ts` | 15/16 PASS (29.0s, 仅`should be atomic`) | PW Batch 93 |
+| 2026-11-22 22:40 | `page-add-init-script.spec.ts` | 9/11 PASS (CSP/iframe 2 fail) | PW Batch 94 |
+| 2026-11-22 22:40 | `page-set-extra-http-headers.spec.ts` | 5/5 PASS (1 exp FAIL→PASS) | PW Batch 94 (`bin_dev` 全绿) |
+| 2026-11-22 22:40 | `page-dialog.spec.ts` | 7/9 PASS (3 dismiss PASS, 2 accept fail) | PW Batch 94 |
+| 2026-11-22 22:40 | `frame-evaluate.spec.ts` | 2/8 PASS (match exp) | PW Batch 94 |
+| 2026-11-22 22:47 | `expect-boolean.spec.ts` | 77/78 PASS (`[78/84]`90s截断) | PW Batch 95 |
+| 2026-11-22 22:47 | `elementhandle-bounding-box.spec.ts` | 5/7 PASS (`#therect`PASS) | PW Batch 95 |
+| 2026-11-22 22:47 | `elementhandle-scroll-into-view.spec.ts` | 6/8 PASS (`stop moving`PASS, `[8/9]`90s截断) | PW Batch 95 |
+| 2026-11-22 22:47 | `page-fill.spec.ts` | 37/38 PASS (`type=number`清空PASS, 仅`·`1 fail) | PW Batch 95 |
+| 2026-11-22 22:51 | `/css/css-flexbox/` (`2/5..5/5`) | 26/52, 23/52, 15/52, 25/52 PASS | WPT Batch 90 (`19470`, `bin_dev`) |
+| 2026-11-22 22:51 | `/css/css-grid/` (`1/5`) | 63/177 PASS (11 `FAIL→PASS`, 790s) | WPT Batch 90 (`19470`, `bin_dev`) |
+| 2026-11-22 22:53 | `selectors-role.spec.ts` | 8/10 PASS (`[10/15]`90s截断) | PW Batch 96 |
+| 2026-11-22 22:53 | `selectors-misc.spec.ts` | 7/19 PASS (`#inner-link`/`layout`90s截断) | PW Batch 96 |
+| 2026-11-22 22:53 | `locator-misc-2.spec.ts` | 5/14 PASS (`[7/14]`90s截断) | PW Batch 96 |
+| 2026-11-22 22:53 | `page-add-init-script.spec.ts` | 10/11 PASS (CSP PASS, 17.8s, 仅iframe 1 fail) | PW Batch 96 |
+| 2026-11-22 23:00 | `elementhandle-bounding-box.spec.ts` | 5/7 PASS (90s截断于retry) | PW Batch 97 |
+| 2026-11-22 23:00 | `expect-boolean.spec.ts` | 77/78 PASS (`[78/84]`90s截断) | PW Batch 97 |
+| 2026-11-22 23:00 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (90s截断于retry) | PW Batch 97 |
+| 2026-11-22 23:00 | `page-wait-for-navigation.spec.ts` | 1/12 PASS (`grid.html` 90s截断) | PW Batch 97 |
+| 2026-11-22 23:01 | `/css/css-grid/` (`2/5..5/5`) | 48/176, 21/89, 30/137, 43/176 PASS (27 `FAIL→PASS`, 3-5/5 120s截断) | WPT Batch 91 (`19470`, `bin_dev`) |
+| 2026-11-22 23:01 | `/css/css-cascade/` (`1/3`) | 10/30 PASS (48s) | WPT Batch 91 (`19470`, `bin_dev`) |
+| 2026-11-22 23:05 | `page-add-init-script.spec.ts` | 11/11 PASS (10.2s, 2 exp FAIL→PASS) | PW Batch 98 (`bin_dev` 全绿) |
+| 2026-11-22 23:05 | `elementhandle-scroll-into-view.spec.ts` | 6/9 PASS (`visibility:hidden`PASS, 90s截断于retry) | PW Batch 98 |
+| 2026-11-22 23:05 | `elementhandle-bounding-box.spec.ts` | 5/7 PASS (90s截断于retry) | PW Batch 98 |
+| 2026-11-22 23:05 | `page-dispatchevent.spec.ts` | 15/16 PASS (29.9s) | PW Batch 98 |
+| 2026-11-22 23:10 | `expect-boolean.spec.ts` | 77/78 PASS (`[79/84]`90s截断) | PW Batch 99 |
+| 2026-11-22 23:10 | `selectors-role.spec.ts` | 10/11 PASS (`[10/15]`PASS, `[12/15]`90s截断) | PW Batch 99 |
+| 2026-11-22 23:10 | `page-fill.spec.ts` | 37/38 PASS (`[39/40]`90s截断) | PW Batch 99 |
+| 2026-11-22 23:10 | `page-basic.spec.ts` | 12/16 PASS (`page.press`/`frame.press` exp FAIL→PASS) | PW Batch 99 |
+| 2026-11-22 23:12 | `/css/css-cascade/` (`2/3`, `3/3`) | 12/30, 14/30 PASS (1 `FAIL→PASS`, 41s/25s) | WPT Batch 92 (`19470`, `bin_dev`) |
+| 2026-11-22 23:12 | `/css/css-position/` (`1/5..3/5`) | 17/54, 15/54, 20/54 PASS (4 `FAIL→PASS`) | WPT Batch 92 (`19470`, `bin_dev`) |
+| 2026-11-22 23:16 | `elementhandle-bounding-box.spec.ts` | 6/7 PASS (17.3s! `grid.html`+`3244`PASS, 仅y=55 vs 50) | PW Batch 100 |
+| 2026-11-22 23:16 | `page-wait-for-navigation.spec.ts` | 1/12 PASS (90s截断于`[4/12]`) | PW Batch 100 |
+| 2026-11-22 23:16 | `page-mouse.spec.ts` | 14/15 PASS (仅`#button-91` hover 1 fail, 90s收尾截断) | PW Batch 100 |
+| 2026-11-22 23:16 | `elementhandle-scroll-into-view.spec.ts` | 6/9 PASS (56.4s, retry 90s截断) | PW Batch 100 |
+| 2026-11-22 23:22 | `page-set-content.spec.ts` | 14/15 PASS (`[8/16] /img.png` 1 fail, `[16/16]`90s截断) | PW Batch 101 |
+| 2026-11-22 23:22 | `page-add-style-tag.spec.ts` | 3/4 PASS (CSP PASS, 仅`[3/4]`bad URL) | PW Batch 101 |
+| 2026-11-22 23:22 | `page-screenshot.spec.ts` | 1/3 PASS (`[4/44]`90s截断) | PW Batch 101 |
+| 2026-11-22 23:22 | `page-goto.spec.ts` | 7/19 PASS (`[20/61]`90s截断, `file://`/`null` response) | PW Batch 101 |

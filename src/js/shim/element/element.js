@@ -2043,9 +2043,16 @@ function installElementExtensions(proto) {
     return false;
   }
 
+  function docHasCssSheets() {
+    if (typeof document === "undefined" || !document || typeof document.querySelectorAll !== "function") return false;
+    return document.querySelectorAll("style, link").length > 0;
+  }
+
   function isElementDisplayNone(el) {
     if (!el || el.nodeType !== 1) return false;
     if (isHiddenInClosedDetails(el)) return true;
+    const hasSheets = docHasCssSheets();
+    const hasGcs = hasSheets && typeof window !== "undefined" && typeof window.getComputedStyle === "function";
     let cur = el;
     while (cur && cur.nodeType === 1) {
       if (cur.parentNode && cur.parentNode._shadowRoot && !cur.assignedSlot) {
@@ -2065,7 +2072,7 @@ function installElementExtensions(proto) {
       if (cur._computedStyle && cur._computedStyle.display === "none") {
         return true;
       }
-      if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      if (hasGcs) {
         try {
           const cs = window.getComputedStyle(cur);
           if (cs) {
@@ -2188,7 +2195,7 @@ function installElementExtensions(proto) {
         if (this.style.width) childW = parseFloat(this.style.width) || 0;
         if (this.style.height) childH = parseFloat(this.style.height) || 0;
       }
-      if ((!childW || !childH) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      if ((!childW || !childH) && (docHasCssSheets() || (this.getAttribute && this.getAttribute("style"))) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
         try {
           const cs = window.getComputedStyle(this);
           if (cs) {
@@ -2406,7 +2413,7 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
-  function getDocRectForScroll(el) {
+  function getDocRectForScroll(el, checkCss) {
     if (!el || el.nodeType !== 1) return null;
     const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(el) : (el.getBoundingClientRect ? el.getBoundingClientRect() : null);
     if (r && (r.width > 0 || r.height > 0 || r.x !== 0 || r.y !== 0)) {
@@ -2423,7 +2430,7 @@ function installElementExtensions(proto) {
       if (el.style.left) x = parseFloat(el.style.left) || 0;
       if (el.style.top) y = parseFloat(el.style.top) || 0;
     }
-    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+    if ((checkCss || (el.getAttribute && el.getAttribute("style"))) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
       try {
         const cs = window.getComputedStyle(el);
         if (cs) {
@@ -2449,7 +2456,11 @@ function installElementExtensions(proto) {
     let maxW = vw;
     let maxH = vh;
 
-    const rr = getDocRectForScroll(rootEl);
+    const hasDocSheets = typeof document !== "undefined" && document &&
+      typeof document.querySelectorAll === "function" &&
+      document.querySelectorAll("style, link").length > 0;
+
+    const rr = getDocRectForScroll(rootEl, hasDocSheets);
     if (rr) {
       originX = rr.x;
       originY = rr.y;
@@ -2469,6 +2480,10 @@ function installElementExtensions(proto) {
       if (!isNaN(pw) && pw > maxW) maxW = pw;
     }
 
+    const gcsFn = (typeof window !== "undefined" && typeof window.getComputedStyle === "function")
+      ? window.getComputedStyle
+      : null;
+
     function walk(parent) {
       const kids = parent.children || [];
       for (let i = 0; i < kids.length; i++) {
@@ -2479,15 +2494,35 @@ function installElementExtensions(proto) {
           continue;
         }
         if (isElementDisplayNone(child)) continue;
-        if (getComputedPosition(child) === "fixed") continue;
-        const cr = getDocRectForScroll(child);
+        let isFixed = false;
+        let clipped = false;
+        const inlineStyle = (child.getAttribute && child.getAttribute("style")) || "";
+        if (hasDocSheets || inlineStyle) {
+          if (gcsFn) {
+            try {
+              const cs = gcsFn(child);
+              if (cs) {
+                const pos = String(cs.getPropertyValue("position") || cs.position || "").trim().toLowerCase();
+                if (pos === "fixed") isFixed = true;
+                const ox = String(cs.getPropertyValue("overflow-x") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+                const oy = String(cs.getPropertyValue("overflow-y") || cs.getPropertyValue("overflow") || "").trim().toLowerCase();
+                if (ox === "hidden" || ox === "clip" || ox === "scroll" || ox === "auto" ||
+                    oy === "hidden" || oy === "clip" || oy === "scroll" || oy === "auto") {
+                  clipped = true;
+                }
+              }
+            } catch (e) {}
+          }
+        }
+        if (isFixed) continue;
+        const cr = getDocRectForScroll(child, hasDocSheets);
         if (cr) {
           const relRight = cr.right - originX;
           const relBottom = cr.bottom - originY;
           if (relRight > maxW) maxW = relRight;
           if (relBottom > maxH) maxH = relBottom;
         }
-        if (!isOverflowClipped(child)) {
+        if (!clipped) {
           walk(child);
         }
       }
@@ -2620,10 +2655,10 @@ function installElementExtensions(proto) {
         const oy = (style && (style.overflowY || style.overflow)) || "";
         const isScrollableX = ox === "auto" || ox === "scroll" || ox === "hidden";
         const isScrollableY = oy === "auto" || oy === "scroll" || oy === "hidden";
-        const sh = cur.scrollHeight || 0;
-        const ch = cur.clientHeight || 0;
-        const sw = cur.scrollWidth || 0;
-        const cw = cur.clientWidth || 0;
+        const ch = isScrollableY ? (cur.clientHeight || 0) : 0;
+        const sh = (isScrollableY && ch > 0) ? (cur.scrollHeight || 0) : 0;
+        const cw = isScrollableX ? (cur.clientWidth || 0) : 0;
+        const sw = (isScrollableX && cw > 0) ? (cur.scrollWidth || 0) : 0;
         const overflowsY = isScrollableY && sh > ch && ch > 0;
         const overflowsX = isScrollableX && sw > cw && cw > 0;
 

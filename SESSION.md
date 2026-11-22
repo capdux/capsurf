@@ -5596,3 +5596,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE347_RESULT: {"ms":3555,"hits":0,"dom":{"count":200,"rect":{"x":100,"y":55,"w":50,"h":50}}}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 348: `getBoundingClientRect()` 与 `scrollIntoViewIfNeeded()` 性能优化完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 增加 `@keyframes` 快速守卫、`docHasCssSheets()` 守卫跳过无样式表页面的 `getComputedStyle` 祖先链扫描，按需读取 `scrollHeight`/`scrollWidth`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE348_RESULT {"scrollMs":1453,"cx":71.800003,"cy":448,"hoverId":null}`（`scrollIntoViewIfNeeded` 从 >25s 降至 **1.45s**）。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。

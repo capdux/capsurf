@@ -2905,3 +2905,11 @@
   - `src/js/shim/animations.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `initCssTransitionSnapshots()` 仅对匹配含 `transition`/`animation` CSS 规则或内联样式的元素执行 `getComputedStyle(el)`，消除含 `@keyframes` 页面（如 `grid.html` ~700 节点）初始化时全量 O(N) 级联卡死（>25s 降至 3.5s）。
   - `src/js/shim/element/html-classes.js`: `triggerImageLoad()` 增加按文档 `_imgCache` 缓存去重，避免重复 URL（如 `grid.html` 490 张数字图）发起冗余请求。
   - `src/cdp/dom.cp`: `formatQuad()` 取消整数取整，保留 `f32` 亚像素精度。
+
+## [2026-11-22] Phase 348: 消除 `getBoundingClientRect()` 与 `scrollIntoViewIfNeeded()` O(N) 级联/样式计算瓶颈
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: `Element.prototype.getBoundingClientRect` `@keyframes` 包装器增加 `<style>` 含 `@keyframes` 快速守卫，未包含关键帧动画时直接返回 `rect`。
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`):
+    - 新增 `docHasCssSheets()`，在 `isElementDisplayNone()` 与 `getBoundingClientRect()` 零尺寸回退路径跳过无样式表文档的冗余 `window.getComputedStyle()` 调用（解决 200+ 子节点页面单次 `scrollHeight` >15s 超时）；
+    - `collectRootScrollExtents()` 与 `getDocRectForScroll()` 仅在存在样式表或内联样式时查询 `getComputedStyle`；
+    - `scrollElementIntoView()` 按需读取 `scrollHeight` / `scrollWidth`。
