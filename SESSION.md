@@ -4937,3 +4937,12 @@
   - Playwright（`bin_dev/main` Debug）：`elementhandle-convenience.spec.ts` **12/14 → 13/14 PASS**（28.3s，100% 符合预期）；`elementhandle-press.spec.ts` **4/5 PASS**（12.8s，100% 符合预期）；`eval-on-selector.spec.ts` `[23/32]`（`deep-shadow.html`）通过；`elementhandle-misc.spec.ts` `[1/10]` `should hover` 通过。
   - WPT（`bin_dev/main`）：并行覆盖 `--shard 4/5` 与 `--shard 5/5` 多域分片（`/css/css-break/` `4/5`: 26/42 PASS, `5/5`: 29/41 PASS；`/css/css-contain/` `4/5`: 11/14 PASS, `5/5`: 11/13 PASS；`/dom/nodes/` `5/10`: 24/25 PASS；`/html/semantics/forms/` `4/10`: 21/29 PASS, `5/10`: 17/29 PASS；`/html/dom/elements/` `4/5`: 21/39 PASS, `5/5`: 20/39 PASS 等）。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **114.31s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 3.69s)**。
+
+### [2026-11-22 14:28] Phase 259: CSS 属性选择器转义引号、Detached 节点句柄回查与 `number` 输入框光标定位
+- **引擎修复 (`src/`)**:
+  - [src/css/matcher.cp](file:///data/dev/capsurf/src/css/matcher.cp): `SelectorParser.parseAttributeComponent` 改为剥离首尾成对引号并在 `matchesAttribute` 中就地反转义 `\"`/`\'`/`\\`（栈缓冲零堆分配），扫描 `[...]` 时正确跳过引号内及转义字符，修复 `[placeholder="Select\"date"]` 匹配失败。
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `__capsurf_get_object("node:<nid>")` 在 `document` 遍历未命中时回查 `__capsurf_wrappers` 与 `__capsurf_weak_wrappers`，使已从 DOM 移除（detached）的元素句柄可被 Playwright `InjectedScript` 正确识别并触发 `Element is not attached to the DOM` 或 `waitForElementState('hidden')`。
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `applyInputText` 针对 `type='number'`（`selectionStart === null`）维护 `_numCaret`（默认从 `0` 起步并递增），修复 `<input type='number' value=2 />` 输入 `"13"`/`"1"` 错位为 `"213"`/`"21"` 的问题。
+- **双模式验证与并行测试**:
+  - Playwright（`bin_dev/main` Debug）：`[placeholder="Select\"date"]` 验证 `true`；detached `waitForElementState('hidden')` 通过 & `waitForElementState('visible')` 正确报 `Element is not attached to the DOM`；`number` 输入框 `type('13')` → `"132"`、`press('1')` → `"12"`；双路并行还完成了 `jshandle-properties.spec.ts` (**7/7 PASS**)、`jshandle-json-value.spec.ts` (**3/3 PASS**)、`eval-on-selector-all.spec.ts` (**9/9 PASS**)、`elementhandle-type.spec.ts` (**4/5 PASS**)、`elementhandle-wait-for-element-state.spec.ts` (**8/12 PASS**)、`page-add-init-script.spec.ts` (**9/11 PASS**)。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（142 模块 **135.95s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。

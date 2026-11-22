@@ -2523,6 +2523,13 @@ pub fn mountDom(
         "          }" +
         "        }" +
         "      }" +
+        "      if (nid > 0) {" +
+        "        const suffix = ':' + nid;" +
+        "        const wc = globalThis.__capsurf_wrappers;" +
+        "        if (wc) { for (const k in wc) { if (k.endsWith(suffix) && wc[k] && wc[k]._nid === nid) return wc[k]; } }" +
+        "        const wwc = globalThis.__capsurf_weak_wrappers;" +
+        "        if (wwc) { for (const k in wwc) { if (k.endsWith(suffix) && wwc[k] && typeof wwc[k].deref === 'function') { const t = wwc[k].deref(); if (t && t._nid === nid) return t; } } }" +
+        "      }" +
         "      return undefined;" +
         "    }" +
         "    return globalThis.__capsurf_remote_objects.get(id);" +

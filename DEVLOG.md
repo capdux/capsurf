@@ -1875,3 +1875,8 @@
 - **`:hover` 伪类**：在 `Document` 上维护与 `focused_node` 对称的 `hovered_node`，`Input.dispatchMouseEvent(mouseMoved)` 命中更新后，`Matcher.isHovered` 向上遍历父链使节点及祖先均匹配 `:hover`，`should hover` 即刻通过。
 - **Shadow DOM 句柄**：`__capsurf_get_object("node:<nid>")` 仅遍历 `childNodes` 会漏掉 `el.shadowRoot`，补齐 `if (cur.shadowRoot) stack.push(cur.shadowRoot)` 后 `deep-shadow.html` 通过。
 - **HTML 属性实体解码**：`tokenizer.cp` 零拷贝扫描属性切片未解码 `&quot;` 等实体，在 `TreeBuilder.insertElement` 增加含 `&` 快速门控与 `decodeEntity(raw, true)` 即可在不影响无实体属性性能的前提下彻底修复 `elementhandle-convenience.spec.ts` `[1/14]`（达成 **13/14 PASS**）。
+
+### Phase 259: 属性选择器转义、Detached 句柄与 `number` 输入框光标排障笔记
+- **属性选择器转义**：`matcher.cp` 原先用 `std.mem.trim(rhs, "\"'")` 且未处理 `\"`，导致 `[placeholder="Select\"date"]` 失败；改用栈上 `[512]u8` 就地反转义后零分配修复。
+- **Detached 节点句柄**：`elementhandle-wait-for-element-state` 与 `elementhandle-scroll-into-view` 对已 `remove()` 的节点期望得到 `Element is not attached to the DOM`，回查 `__capsurf_wrappers` / `__capsurf_weak_wrappers` 后即与 Chromium 行为一致。
+- **`input[type=number]` 光标**：HTML5 规范中 `number` 输入框 `selectionStart` 为 `null`，`applyInputText` 回退 `oldLen` 会导致新字符追加到末尾，增加 `_numCaret` 从 `0` 起步后与 Playwright 预期完全一致。

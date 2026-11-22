@@ -2497,3 +2497,9 @@
   - `src/dom/dom.cp`, `src/css/matcher.cp`, `src/cdp/input.cp`: 实现 `:hover` 动态伪类（`hovered_node` 状态 + 祖先链匹配 + `mouseMoved` 命中更新）。
   - `src/js/dom_binding.cp`: `__capsurf_get_object` 解析 `node:<nid>` 时遍历 `shadowRoot`。
   - `src/html/tree_builder.cp`: `insertElement` 新增 `decodeAttrValue()` 对含 `&` 属性值调用 `decodeEntity(..., true)` 解码 HTML 实体。
+
+## [2026-11-22] Phase 259: CSS 属性选择器转义引号、Detached 节点回查与 `number` 输入框光标修复
+- **Fixed (`src/`)**:
+  - `src/css/matcher.cp`: `[attr="...\"..."]` 引号扫描与 `\c` 反转义支持。
+  - `src/js/dom_binding.cp`: `__capsurf_get_object("node:<nid>")` 补充 `__capsurf_wrappers` / `__capsurf_weak_wrappers` 回查 detached 节点。
+  - `src/cdp/input.cp`: `applyInputText` 为 `input[type=number]` 增加 `_numCaret`（默认 `0` 起步）修复文本插入位置。

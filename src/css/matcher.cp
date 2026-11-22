@@ -284,7 +284,10 @@ pub struct SelectorParser {
                     rhs = std.mem.trim(u8, rhs[0 .. rhs.len - 2], " \t");
                 }
             }
-            comp.attr_val = std.mem.trim(u8, rhs, "\"'");
+            if (rhs.len >= 2 && ((rhs[0] == '"' && rhs[rhs.len - 1] == '"') || (rhs[0] == '\'' && rhs[rhs.len - 1] == '\''))) {
+                rhs = rhs[1 .. rhs.len - 1];
+            }
+            comp.attr_val = rhs;
         } else {
             comp.ident = s;
         }
@@ -452,7 +455,25 @@ pub struct SelectorParser {
             if (c == '[') {
                 i += 1;
                 const start = i;
-                while (i < s.len && s[i] != ']') : (i += 1) {}
+                let quote: u8 = 0;
+                while (i < s.len) : (i += 1) {
+                    const ch = s[i];
+                    if (quote != 0) {
+                        if (ch == '\\' && i + 1 < s.len) {
+                            i += 1;
+                            continue;
+                        }
+                        if (ch == quote) {
+                            quote = 0;
+                        }
+                    } else {
+                        if (ch == '"' || ch == '\'') {
+                            quote = ch;
+                        } else if (ch == ']') {
+                            break;
+                        }
+                    }
+                }
                 const inside = s[start..i];
                 if (i < s.len && s[i] == ']') {
                     i += 1;
@@ -642,7 +663,20 @@ pub struct Matcher {
             return false;
         }
         const actual = val_opt ?? "";
-        const expected = comp.attr_val;
+        let unesc_buf: [512]u8 = [0; 512];
+        let expected = comp.attr_val;
+        if (std.mem.indexOfScalar(u8, expected, '\\') != null) {
+            let ui: usize = 0;
+            let ulen: usize = 0;
+            while (ui < expected.len && ulen < unesc_buf.len) : (ui += 1) {
+                if (expected[ui] == '\\' && ui + 1 < expected.len) {
+                    ui += 1;
+                }
+                unesc_buf[ulen] = expected[ui];
+                ulen += 1;
+            }
+            expected = unesc_buf[0..ulen];
+        }
         const ci = comp.attr_case_insensitive;
 
         return switch (comp.attr_op) {
