@@ -16101,6 +16101,188 @@
       if (typeof window !== "undefined") window[clsName] = Ctor;
     }
 
+    // W3C HTML Table DOM (HTMLTableElement, HTMLTableSectionElement, HTMLTableRowElement, HTMLTableCellElement)
+    (function () {
+      const makeColl = function (arr) {
+        return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;
+      };
+      const childTags = function (el, tagSet) {
+        const out = [];
+        const kids = el && el.children ? el.children : [];
+        for (let i = 0; i < kids.length; i++) {
+          const tn = String(kids[i].tagName || "").toLowerCase();
+          if (tagSet.has(tn)) out.push(kids[i]);
+        }
+        return out;
+      };
+      const getTableRows = function (tbl) {
+        const theadRows = [];
+        const bodyRows = [];
+        const tfootRows = [];
+        const kids = tbl && tbl.children ? tbl.children : [];
+        const trSet = new Set(["tr"]);
+        for (let i = 0; i < kids.length; i++) {
+          const ch = kids[i];
+          const tn = String(ch.tagName || "").toLowerCase();
+          if (tn === "thead") theadRows.push.apply(theadRows, childTags(ch, trSet));
+          else if (tn === "tfoot") tfootRows.push.apply(tfootRows, childTags(ch, trSet));
+          else if (tn === "tbody") bodyRows.push.apply(bodyRows, childTags(ch, trSet));
+          else if (tn === "tr") bodyRows.push(ch);
+        }
+        return theadRows.concat(bodyRows, tfootRows);
+      };
+      const throwIdxErr = function (msg) {
+        const DOMEx = typeof DOMException === "function" ? DOMException : Error;
+        throw new DOMEx(msg, "IndexSizeError");
+      };
+
+      const tblProto = global.HTMLTableElement.prototype;
+      Object.defineProperty(tblProto, "tBodies", {
+        get: function () { return makeColl(childTags(this, new Set(["tbody"]))); },
+        configurable: true,
+      });
+      Object.defineProperty(tblProto, "tHead", {
+        get: function () { return childTags(this, new Set(["thead"]))[0] || null; },
+        configurable: true,
+      });
+      Object.defineProperty(tblProto, "tFoot", {
+        get: function () { return childTags(this, new Set(["tfoot"]))[0] || null; },
+        configurable: true,
+      });
+      Object.defineProperty(tblProto, "caption", {
+        get: function () { return childTags(this, new Set(["caption"]))[0] || null; },
+        configurable: true,
+      });
+      Object.defineProperty(tblProto, "rows", {
+        get: function () { return makeColl(getTableRows(this)); },
+        configurable: true,
+      });
+      tblProto.insertRow = function (index) {
+        const idx = arguments.length === 0 ? -1 : (Number(index) | 0);
+        const rows = getTableRows(this);
+        if (idx < -1 || idx > rows.length) throwIdxErr("Failed to execute 'insertRow' on 'HTMLTableElement': The index provided (" + idx + ") is greater than the number of rows in the table (" + rows.length + ").");
+        const doc = this.ownerDocument || document;
+        const tr = doc.createElement("tr");
+        if (rows.length === 0) {
+          const bodies = childTags(this, new Set(["tbody"]));
+          const targetBody = bodies.length > 0 ? bodies[bodies.length - 1] : this.appendChild(doc.createElement("tbody"));
+          targetBody.appendChild(tr);
+        } else if (idx === -1 || idx === rows.length) {
+          const last = rows[rows.length - 1];
+          last.parentNode.appendChild(tr);
+        } else {
+          const ref = rows[idx];
+          ref.parentNode.insertBefore(tr, ref);
+        }
+        return tr;
+      };
+      tblProto.deleteRow = function (index) {
+        let idx = Number(index) | 0;
+        const rows = getTableRows(this);
+        if (idx === -1) idx = rows.length - 1;
+        if (idx < 0 || idx >= rows.length) throwIdxErr("Failed to execute 'deleteRow' on 'HTMLTableElement': The index provided (" + idx + ") is out of range.");
+        const row = rows[idx];
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+      };
+      tblProto.createTHead = function () { return this.tHead || this.appendChild((this.ownerDocument || document).createElement("thead")); };
+      tblProto.deleteTHead = function () { if (this.tHead) this.removeChild(this.tHead); };
+      tblProto.createTFoot = function () { return this.tFoot || this.appendChild((this.ownerDocument || document).createElement("tfoot")); };
+      tblProto.deleteTFoot = function () { if (this.tFoot) this.removeChild(this.tFoot); };
+      tblProto.createTBody = function () { return this.appendChild((this.ownerDocument || document).createElement("tbody")); };
+      tblProto.createCaption = function () { return this.caption || this.appendChild((this.ownerDocument || document).createElement("caption")); };
+      tblProto.deleteCaption = function () { if (this.caption) this.removeChild(this.caption); };
+
+      const secProto = global.HTMLTableSectionElement.prototype;
+      Object.defineProperty(secProto, "rows", {
+        get: function () { return makeColl(childTags(this, new Set(["tr"]))); },
+        configurable: true,
+      });
+      secProto.insertRow = function (index) {
+        const idx = arguments.length === 0 ? -1 : (Number(index) | 0);
+        const rows = childTags(this, new Set(["tr"]));
+        if (idx < -1 || idx > rows.length) throwIdxErr("Failed to execute 'insertRow' on 'HTMLTableSectionElement': index out of range.");
+        const tr = (this.ownerDocument || document).createElement("tr");
+        if (idx === -1 || idx === rows.length) this.appendChild(tr);
+        else this.insertBefore(tr, rows[idx]);
+        return tr;
+      };
+      secProto.deleteRow = function (index) {
+        let idx = Number(index) | 0;
+        const rows = childTags(this, new Set(["tr"]));
+        if (idx === -1) idx = rows.length - 1;
+        if (idx < 0 || idx >= rows.length) throwIdxErr("Failed to execute 'deleteRow' on 'HTMLTableSectionElement': index out of range.");
+        this.removeChild(rows[idx]);
+      };
+
+      const rowProto = global.HTMLTableRowElement.prototype;
+      const cellSet = new Set(["td", "th"]);
+      Object.defineProperty(rowProto, "cells", {
+        get: function () { return makeColl(childTags(this, cellSet)); },
+        configurable: true,
+      });
+      Object.defineProperty(rowProto, "rowIndex", {
+        get: function () {
+          let p = this.parentNode;
+          while (p && String(p.tagName || "").toLowerCase() !== "table") {
+            const pt = String(p.tagName || "").toLowerCase();
+            if (pt !== "thead" && pt !== "tbody" && pt !== "tfoot") return -1;
+            p = p.parentNode;
+          }
+          if (!p) return -1;
+          const rows = getTableRows(p);
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i] === this || (this._nid && rows[i]._nid === this._nid)) return i;
+          }
+          return -1;
+        },
+        configurable: true,
+      });
+      Object.defineProperty(rowProto, "sectionRowIndex", {
+        get: function () {
+          const p = this.parentNode;
+          if (!p) return -1;
+          const pt = String(p.tagName || "").toLowerCase();
+          if (pt !== "thead" && pt !== "tbody" && pt !== "tfoot" && pt !== "table") return -1;
+          const rows = childTags(p, new Set(["tr"]));
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i] === this || (this._nid && rows[i]._nid === this._nid)) return i;
+          }
+          return -1;
+        },
+        configurable: true,
+      });
+      rowProto.insertCell = function (index) {
+        const idx = arguments.length === 0 ? -1 : (Number(index) | 0);
+        const cells = childTags(this, cellSet);
+        if (idx < -1 || idx > cells.length) throwIdxErr("Failed to execute 'insertCell' on 'HTMLTableRowElement': index out of range.");
+        const td = (this.ownerDocument || document).createElement("td");
+        if (idx === -1 || idx === cells.length) this.appendChild(td);
+        else this.insertBefore(td, cells[idx]);
+        return td;
+      };
+      rowProto.deleteCell = function (index) {
+        let idx = Number(index) | 0;
+        const cells = childTags(this, cellSet);
+        if (idx === -1) idx = cells.length - 1;
+        if (idx < 0 || idx >= cells.length) throwIdxErr("Failed to execute 'deleteCell' on 'HTMLTableRowElement': index out of range.");
+        this.removeChild(cells[idx]);
+      };
+
+      const cellProto = global.HTMLTableCellElement.prototype;
+      Object.defineProperty(cellProto, "cellIndex", {
+        get: function () {
+          const p = this.parentNode;
+          if (!p || String(p.tagName || "").toLowerCase() !== "tr") return -1;
+          const cells = childTags(p, cellSet);
+          for (let i = 0; i < cells.length; i++) {
+            if (cells[i] === this || (this._nid && cells[i]._nid === this._nid)) return i;
+          }
+          return -1;
+        },
+        configurable: true,
+      });
+    })();
+
     // Window-reflecting event handlers on HTMLBodyElement.prototype
     if (global.HTMLBodyElement && global.HTMLBodyElement.prototype) {
       const bodyProto = global.HTMLBodyElement.prototype;

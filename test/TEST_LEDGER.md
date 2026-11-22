@@ -809,3 +809,5 @@
 | WPT-B140 | `/html/webappapis/microtask-queuing/` + `/dom/abort/` + `/html/webappapis/scripting/` | 17/31 PASS (`microtask` 1/3, `abort` 4/7, `scripting` 12/21, 0 CRASH) |
 | WPT-B139 | `/html/semantics/document-metadata/` + `/the-img-element/` + `/encoding/ 1/2` (116/633) + `/html/webappapis/timers/` | 20/159 PASS (`metadata` 15/28, `img` 1/5, `encoding 1/2` 0/116, `timers` 4/10, 0 CRASH) |
 | WPT-B141 | `/html/dom/documents/` + `/dom/events/` + `/html/webappapis/atob/` + `/html/webappapis/structured-clone/` | 78/164 PASS (`documents` **28/32**, `dom/events` **49/129** **1 FAIL→PASS**, `atob` 0/1, `structured-clone` 1/2, 0 CRASH) |
+| WPT-B142 | `/html/semantics/tabular-data/` + `/html/semantics/selectors/` + `/html/browsers/history/` + `/the-form-element/` | 26/48 PASS (`tabular-data` 1/11, `selectors` **3/4 (4/4匹配)**, `history` **11/18**, `the-form-element` **11/15**, 0 CRASH) |
+| WPT-B143 | `/html/semantics/scripting-1/` + `/text-level-semantics/` + `/grouping-content/` | 34/108 PASS (`scripting-1` 3/58 **2 FAIL→PASS**, `text-level` **18/23**, `grouping` 13/27, 0 CRASH) |

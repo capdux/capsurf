@@ -2268,3 +2268,4 @@
 - Phase 414 (`src/js/shim/events/dispatch.js`, `src/js/shim/events/event.js`): 依据 WHATWG DOM 规范为 `window`/`document`/`documentElement`/`body` 上的 `touchstart`/`touchmove`/`wheel`/`mousewheel` 启用默认 `passive: true` 并在触发期间忽略 `preventDefault()`，同时放开空字符串事件名注册。
 - Phase 415 (`src/net/http_loader.cp`): 验收上游修复 `lib/pack/brotli.cp` 后正式接入 `brotliDecompress` 完成 `Content-Encoding: br` 端到端解压。
 - Phase 416 (`src/js/shim/element/html-classes.js`, `src/js/shim/index.js`, `src/js/shim/window.js`): 补全 `HTMLBaseElement` 接口及 `href` URL 解析逻辑；为 `setTimeout`/`setInterval` 注入嵌套深度 `nestingLevel > 5` 4ms 最小延时钳位。
+- Phase 417 (`src/js/shim/element/html-classes.js`): 补全表格 DOM 树序 `rows`/`cells` 集合与 `insertRow`/`deleteRow`/`insertCell`/`deleteCell`/`rowIndex`/`sectionRowIndex`/`cellIndex` 实现及 `IndexSizeError` 边界检查。

@@ -3041,3 +3041,4 @@
 - **Phase 414 (`src/js/shim/events/dispatch.js`, `src/js/shim/events/event.js`, `src/js/runtime_source.cp`)**：实装默认 `passive` 事件监听与 `inPassiveListener` `preventDefault()` 阻断，并支持空字符串事件类型 `""`。
 - **Phase 415 (`src/net/http_loader.cp`)**：接入 `cap:pack` `brotliDecompress` 原生支持 `Content-Encoding: br` 响应解压，请求头更新为 `Accept-Encoding: gzip, deflate, br`。
 - **Phase 416 (`src/js/shim/element/html-classes.js`, `src/js/shim/index.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 `HTMLBaseElement` 与 `<base>` 原型映射，并实装定时器 `nestingLevel > 5` 4ms 延时钳位。
+- **Phase 417 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：完整实现 `HTMLTableElement`、`HTMLTableSectionElement`、`HTMLTableRowElement` 与 `HTMLTableCellElement` 全套 W3C 表格 DOM 方法与索引访问器。
