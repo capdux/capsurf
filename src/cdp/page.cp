@@ -740,6 +740,35 @@ fn sanitizeSetContentUrl(url: []const u8): []const u8 {
     return "https://kitesurf.local/";
 }
 
+fn formatHttpHeadersJson(raw_headers: []const u8, allocator: std.mem.Allocator): []const u8 {
+    if (raw_headers.len == 0) return "{}";
+    let list = std.ArrayListUnmanaged(u8).empty;
+    list.append(allocator, '{') catch return "{}";
+    let first = true;
+    let it = std.mem.splitSequence(u8, raw_headers, "\r\n");
+    while (line := it.next()) {
+        if (line.len == 0) continue;
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const k_raw = std.mem.trim(u8, line[0..colon], " \t");
+            const v_raw = std.mem.trim(u8, line[colon + 1 ..], " \t");
+            if (k_raw.len == 0) continue;
+            let k_esc_buf: [256]u8 = [0; 256];
+            let v_esc_buf: [2048]u8 = [0; 2048];
+            const k_esc = escapeJsonString(k_raw, &k_esc_buf);
+            const v_esc = escapeJsonString(v_raw, &v_esc_buf);
+            if (!first) list.append(allocator, ',') catch break;
+            first = false;
+            list.append(allocator, '"') catch break;
+            list.appendSlice(allocator, k_esc) catch break;
+            list.appendSlice(allocator, "\":\"") catch break;
+            list.appendSlice(allocator, v_esc) catch break;
+            list.append(allocator, '"') catch break;
+        }
+    }
+    list.append(allocator, '}') catch return "{}";
+    return list.items;
+}
+
 pub struct PageHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
@@ -1311,7 +1340,7 @@ pub struct PageHandler {
 
             const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
             if (kind == DocumentKind.blocked || fetch_res.status_code == 204 || fetch_res.status_code == 205) {
-                if (session.network_enabled && event_count.* < out_events.len) {
+                if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
                     const fail_json = std.fmt.allocPrint(
                         session.allocator,
                         "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":false}}",
@@ -1396,7 +1425,7 @@ pub struct PageHandler {
                 event_count.* += 1;
             }
 
-            if (session.network_enabled && event_count.* < out_events.len) {
+            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
                 if (fetch_res.redirect_count == 0) {
                     let esc_u_buf: [2048]u8 = [0; 2048];
                     const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
@@ -1438,21 +1467,24 @@ pub struct PageHandler {
                 }
             }
 
-            if (session.network_enabled && event_count.* < out_events.len) {
+            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
                 let esc_u_buf: [2048]u8 = [0; 2048];
                 const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+                let st_esc_buf: [256]u8 = [0; 256];
+                const st_esc = escapeJsonString(fetch_res.status_text, &st_esc_buf);
+                const hdrs_json = formatHttpHeadersJson(fetch_res.raw_headers, session.allocator);
                 const mime_raw = mimeEssence(fetch_res.content_type);
                 const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
                 const resp_json = std.fmt.allocPrint(
                     session.allocator,
-                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
-                    .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, mime_out, session.frame_id },
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                    .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, st_esc, hdrs_json, mime_out, session.frame_id },
                 ) catch "{}";
                 out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
                 event_count.* += 1;
             }
 
-            if (session.network_enabled && event_count.* < out_events.len) {
+            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
                 const fin_json = std.fmt.allocPrint(
                     session.allocator,
                     "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"encodedDataLength\":{d}}}",

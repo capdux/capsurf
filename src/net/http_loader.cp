@@ -38,11 +38,13 @@ pub fn parseHttpUrl(url: []const u8): ParsedHttpUrl? {
 
 pub struct HttpLoaderResult {
     status_code: u32 = 200,
+    status_text: []const u8 = "OK",
     final_url: []const u8 = "",
     html: []const u8 = "",
     content_type: []const u8 = "",
     content_disposition: ([]const u8)? = null,
     content_security_policy: []const u8 = "",
+    raw_headers: []const u8 = "",
     raw_body: []const u8 = "",
     raw_body_base64: bool = false,
     redirect_urls: [6][]const u8 = ["", "", "", "", "", ""],
@@ -821,19 +823,34 @@ pub struct HttpLoader {
 
         const raw_resp = out_buf[0..total_read];
 
-        // 8. Parse status code (e.g. "HTTP/1.1 200 OK")
+        // 8. Parse status code & status text (e.g. "HTTP/1.1 200 cool!")
         let status: u16 = 200;
-        if (raw_resp.len >= 12 && std.mem.startsWith(u8, raw_resp, "HTTP/")) {
-            let it = std.mem.splitScalar(u8, raw_resp, ' ');
-            * = it.next();
-            if (s_str := it.next()) {
-                status = std.fmt.parseInt(u16, s_str, 10) catch 200;
+        let status_text_val: []const u8 = "OK";
+        const first_crlf = std.mem.indexOf(u8, raw_resp, "\r\n");
+        const status_line = if (first_crlf != null) raw_resp[0..first_crlf.?] else raw_resp;
+        if (status_line.len >= 12 && std.mem.startsWith(u8, status_line, "HTTP/")) {
+            if (sp1 := std.mem.indexOfScalar(u8, status_line, ' ')) {
+                const after_sp1 = status_line[sp1 + 1 ..];
+                if (sp2 := std.mem.indexOfScalar(u8, after_sp1, ' ')) {
+                    status = std.fmt.parseInt(u16, after_sp1[0..sp2], 10) catch 200;
+                    const raw_st = std.mem.trim(u8, after_sp1[sp2 + 1 ..], " \t\r\n");
+                    if (raw_st.len > 0) {
+                        status_text_val = session.allocator.dupe(u8, raw_st) catch "OK";
+                    } else {
+                        status_text_val = "";
+                    }
+                } else {
+                    status = std.fmt.parseInt(u16, after_sp1, 10) catch 200;
+                    status_text_val = "";
+                }
             }
         }
 
         // 9. Inspect headers for Set-Cookie & Location
         const header_end = std.mem.indexOf(u8, raw_resp, "\r\n\r\n");
         const headers_part = if (header_end != null) raw_resp[0..header_end.?] else raw_resp;
+        const raw_headers_body = if (first_crlf != null && first_crlf.? + 2 <= headers_part.len) headers_part[first_crlf.? + 2 ..] else "";
+        const duped_headers = if (raw_headers_body.len > 0) (session.allocator.dupe(u8, raw_headers_body) catch "") else "";
 
         // Parse Set-Cookie, Content-Type, Content-Disposition, Transfer-Encoding lines
         let resp_content_type: []const u8 = "";
@@ -896,11 +913,13 @@ pub struct HttpLoader {
 
         return HttpLoaderResult{
             status_code: status,
+            status_text: status_text_val,
             final_url: url,
             html: body,
             content_type: resp_content_type,
             content_disposition: resp_content_disp,
             content_security_policy: resp_csp,
+            raw_headers: duped_headers,
             raw_body: body,
             raw_body_base64: false,
         };

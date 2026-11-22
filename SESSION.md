@@ -5708,3 +5708,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE363_RESULT {"x":100,"y":50,"w":50,"h":50}`（精确消除 5px 偏移）。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.33s)**。
+
+## Phase 364: 真实 HTTP `statusText` / 响应头透传与 `about:blank` 规范对齐完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp), [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): 透传真实 HTTP `statusText` 与完整响应头到 `Network.responseReceived`，并对 `about:blank` 跳过 `Network.*` 事件。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE364_RESULT {"blankRespCount":0,"statusText":"cool!","xCustom":"hello-pw"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

@@ -2978,3 +2978,8 @@
 ## [2026-11-23] Phase 363: 实现 `inline-flex` 容器 CSS Flexbox §4.4 基线计算，精确消除 `grid.html` 5px 行框偏移
 - **Fixed (`src/`)**:
   - `src/layout/layout.cp`: 在 `layoutFlexContainer()` 末尾为 `display: inline-flex` 且 `overflow_visible` 的容器计算 `baseline_offset`（取首个在流子项基线/高度，或居中兜底），使行框高度严格贴合 `50px` 而不再额外叠加 `strut_below`（5px）。
+
+## [2026-11-23] Phase 364: 透传真实 HTTP `statusText` 与响应头，并使 `about:blank` 不触发冗余 `Network.*` 事件
+- **Fixed (`src/`)**:
+  - `src/net/http_loader.cp`: 在 `HttpLoaderResult` 中新增 `status_text` 与 `raw_headers` 字段，从 HTTP/1.x 响应首行与头部分离并持久化持有。
+  - `src/cdp/page.cp`: 新增 `formatHttpHeadersJson()`，在 `Network.responseReceived` 中输出真实 `statusText` 与全部响应头；对 `about:blank` 导航跳过 `Network.requestWillBeSent`/`responseReceived`/`loadingFinished` 事件（对齐 `page.goto('about:blank') === null` 规范）。

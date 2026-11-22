@@ -2209,3 +2209,6 @@
 
 ### Phase 363: `elementhandle-bounding-box.spec.ts` `[1/7]` (`grid.html` `y=55 vs 50`) 排障笔记
 - **`inline-flex` 未计算 `baseline_offset` 导致行框多加 `strut_below` 根因**：`layoutFlexContainer()` 此前未设置 `box.baseline_offset`（保持 `-1.0`），导致 `inline` 行盒计算将 `.box`（`50px x 50px` `inline-flex`）的基线落在底边 `50px` 处，并叠加父级 `<body>` 的 `strut_below`（`~4.8px`），使第二行起始 `y` 变为 `55`。按 CSS Flexbox §4.4 补齐 `inline-flex` 基线后，实测 `PHASE363_RESULT {"x":100,"y":50,"w":50,"h":50}`，精确对齐 Chromium。
+
+### Phase 364: `page-network-response.spec.ts` 响应头/`statusText` 缺失与 `goto('about:blank')` 返回非 `null` 排障笔记
+- **硬编码 `"OK"` / `{}` 与 `about:blank` 发 `Network.*` 根因**：`HttpLoaderResult` 此前仅保留 `status_code`、`content_type` 与 `content_security_policy`，`Page.navigate` 发射 `Network.responseReceived` 时写死 `statusText: "OK"`、`headers: {}`，且对 `about:blank` 也发射了 `Network.*` 事件。补齐 `status_text`、`raw_headers` 与 `about:blank` 跳过后，实测 `PHASE364_RESULT {"blankRespCount":0,"statusText":"cool!","xCustom":"hello-pw"}`。
