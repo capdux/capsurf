@@ -318,6 +318,24 @@ pub struct RuntimeHandler {
                 }
             }
 
+            // Poll any binding events produced during callFunctionOn
+            let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
+            let b_i: usize = 0;
+            while (b_i < polled_b_count && event_count.* < out_events.len) : (b_i += 1) {
+                out_events[event_count.*] = polled_binding_evts[b_i];
+                event_count.* += 1;
+            }
+
+            // Poll any same-document navigation events produced during callFunctionOn
+            let polled_nav_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_n_count = session.pollNavigatedWithinDocEvents(&polled_nav_evts);
+            let n_i: usize = 0;
+            while (n_i < polled_n_count && event_count.* < out_events.len) : (n_i += 1) {
+                out_events[event_count.*] = polled_nav_evts[n_i];
+                event_count.* += 1;
+            }
+
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }

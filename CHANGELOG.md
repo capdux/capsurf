@@ -2549,3 +2549,7 @@
 - **Fixed (`src/`)**:
   - `src/css/cascade.cp`: 在 `Cascade.compute` 初始化节点样式时检测父节点为未展开 `<details>`（无 `open` 属性）的非首个 `<summary>` 子元素并设置 `Display.none()`，修复折叠 `<details>` 内子元素仍被判定为 `visible` 的问题。
   - `src/js/shim/node-base.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `isGenuineNode()` 缓存初始 `_NodeCtor`，避免页面脚本移除 `window.Node` 后触发 `ReferenceError`。
+
+## [2026-11-22] Phase 268: `Runtime.callFunctionOn` 补齐 `pollBindingEvents` 与 `pollNavigatedWithinDocEvents`
+- **Fixed (`src/`)**:
+  - `src/cdp/runtime.cp`: 为 `Runtime.callFunctionOn` 补充 `session.pollBindingEvents()` 与 `session.pollNavigatedWithinDocEvents()` 事件轮询，修复 `page.evaluate(() => ...)` 中 `location.hash`、`history.pushState` 及 `exposeFunction` 回调未同步 `page.url()` / 绑定事件的问题。

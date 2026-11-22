@@ -1911,3 +1911,6 @@
 ### Phase 267: `<details>` 折叠隐藏与 `Node` 引用缓存排障笔记
 - **折叠 `<details>` 隐藏**：`Cascade.compute` 在 `style.initForNode()` 后检查父节点是否为无 `open` 属性的 `<details>`，仅保留首个 `<summary>` 子节点可见，其余子元素直接赋予 `Display.none()`；实测 `summary` 可见、`ul` 在闭合时 `isVisible() === false`、添加 `open` 后 `isVisible() === true`，打通 `locator-is-visible.spec.ts` 8/8。
 - **`delete window.Node` 隔离说明**：`node-base.js` 已缓存 `_NodeCtor`，而 Playwright `InjectedScript` 对 `delete window.Node` 的抗性依赖独立 `Page.createIsolatedWorld` 全局作用域（待后续孤立世界原型隔离阶段完善）。
+
+### Phase 268: `Runtime.callFunctionOn` 同文档导航与绑定事件漏轮询排障笔记
+- **漏轮询根因**：Playwright 的 `page.evaluate(fn)` 实际通过 `Runtime.callFunctionOn`（而非 `Runtime.evaluate`）执行，此前 `runtime.cp` 仅在 `Runtime.evaluate` 分支调用 `pollBindingEvents` 与 `pollNavigatedWithinDocEvents`，导致 `location.hash = '#dynamic'` 与 `history.pushState(..., '/second.html')` 后 `page.url()` 不更新。补齐两路轮询后一次通过。

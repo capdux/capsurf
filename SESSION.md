@@ -5014,3 +5014,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：折叠 `<details>` 下 `summary` 可见、`ul` 不可见，添加 `open` 后 `ul` 可见。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **125.97s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。
+
+### [2026-11-22 15:59] Phase 268: `Runtime.callFunctionOn` 补齐 `pollBindingEvents` 与 `pollNavigatedWithinDocEvents`
+- **引擎修复 (`src/`)**:
+  - [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): 为 `Runtime.callFunctionOn` 补充 `session.pollBindingEvents()` 与 `session.pollNavigatedWithinDocEvents()` 事件轮询，打通 `page.evaluate(() => ...)` 中的 `location.hash`、`history.pushState` 与 `exposeFunction` 回调同步。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`location.hash = '#dynamic'` 与 `history.pushState({}, '', '/second.html')` 后 `page.url()` 实时同步。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.39s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.20s)**。
