@@ -5167,3 +5167,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`#\31\32\33` 命中 `"num"`、`[attr*="llo WOR"i]` 命中 `"ci"`、`[attr*="llo WOR"s]` 返回 `null`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **128.98s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。
+
+### [2026-11-22 18:09] Phase 288: `applyInputText()` 支持 `contenteditable` 元素文本输入与退格删除
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 在 `applyInputText()` 中为 `el.isContentEditable` 补齐基于 `window.getSelection()` 的文本替换、退格删除与 `input` 事件派发。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<div contenteditable>content</div>` 全选后 `Input.insertText("foo")` 返回 `"foo"`，`Backspace` 后返回 `"fo"`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（163 模块 **125.00s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。

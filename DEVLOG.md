@@ -1974,3 +1974,6 @@
 
 ### Phase 287: CSS 十六进制转义与 `[attr*="..."i]` 排障笔记
 - **`selectors-css` 数字 ID 与属性 `i` 修饰符失败根因**：`unescapeCssIdent()` 此前仅跳过反斜杠未解析十六进制码点，导致 `#\31\32\33` 无法匹配 `id="123"`；同时 `parseAttributeComponent()` 要求 `i`/`s` 前必须有空格，漏掉 `[attr*="llo WOR"i]`。两处补齐后实测 `num`、`ci` 命中而 `cs` 为 `null`。
+
+### Phase 288: `contenteditable` `fill()` 失效排障笔记
+- **`selection retargeting` 失败根因**：`applyInputText()` 此前仅读写表单控件的 `_value` / `value` 属性，对 `el.isContentEditable` 节点未更新 `textContent`。补齐选区替换、`Backspace` 截尾与 `input` 事件派发后，实测全选插入 `"foo"` 得 `"foo"`、退格得 `"fo"`。

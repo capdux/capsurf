@@ -170,6 +170,11 @@
 | 2026-11-22 18:01 | `/html/semantics/forms/` | `7/10` | 29 | PASS 20 / FAIL 7 / TIMEOUT 2 | Batch 63 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:01 | `/html/semantics/forms/` | `8/10` | 29 | PASS 20 / FAIL 7 / ERROR 1 / TIMEOUT 1 | Batch 63 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:02 | `/html/semantics/forms/` | `9/10` | 29 | PASS 23 / FAIL 6 / TIMEOUT 0 | Batch 63 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:03 | `/html/semantics/forms/` | `10/10` | 28 | PASS 22 / FAIL 5 / TIMEOUT 1 | Batch 64 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:04 | `/html/dom/elements/` | `1/5` | 39 | PASS 22 / FAIL 15 / TIMEOUT 2 | Batch 64 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:05 | `/html/dom/elements/` | `2/5` | 39 | PASS 19 / FAIL 16 / TIMEOUT 4 | Batch 64 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:07 | `/html/dom/elements/` | `3/5` | 39 | PASS 19 / FAIL 14 / TIMEOUT 6 (90s截断) | Batch 64 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:07 | `/css/css-break/` | `1/5` | 42 | PASS 30 / FAIL 12 / TIMEOUT 0 | Batch 64 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -310,3 +315,7 @@
 | 2026-11-22 18:04 | `selectors-frame.spec.ts` | 4/13 PASS (`[14/15]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |
 | 2026-11-22 18:04 | `page-route.spec.ts` | 0/5 FAIL (`[6/51]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |
 | 2026-11-22 18:04 | `page-request-intercept.spec.ts` | 1/6 PASS (`[7/14]` 90s截断, ERR_BLOCKED_BY_CLIENT) | PW Batch 37 |
+| 2026-11-22 18:06 | `selectors-css.spec.ts` | 18/25 PASS (Phase 287 复测 `[attr*="..."i]` 已通, 1 SKIP) | PW Batch 38 |
+| 2026-11-22 18:07 | `selectors-get-by.spec.ts` | 23/25 PASS (getByLabel 2 FAIL, 39.9s) | PW Batch 38 |
+| 2026-11-22 18:09 | `selectors-misc.spec.ts` | 7/9 PASS (`[10/19]` 90s截断, shadow click/above) | PW Batch 38 |
+| 2026-11-22 18:09 | `selectors-register.spec.ts` | 6/6 PASS (6.9s, exit 0) | PW Batch 38 (全绿) |

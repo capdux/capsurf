@@ -2641,3 +2641,7 @@
 ## [2026-11-22] Phase 287: CSS 十六进制转义解码与无空格属性选择器大小写标识 `[attr*="..."i]`
 - **Fixed (`src/`)**:
   - `src/css/matcher.cp`: 升级 `unescapeCssIdent()` 支持 1..6 位 CSS 十六进制转义序列（如 `#\31\32\33` -> `#123`）及 UTF-8 编码，跳过可选尾随空白；扩展 `SelectorParser.parseAttributeComponent()` 支持引号后紧邻的 `i`/`s` 大小写修饰符（如 `[attr*="llo WOR"i]`）。
+
+## [2026-11-22] Phase 288: `applyInputText()` 支持 `contenteditable` 元素文本输入与退格删除
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 在 `applyInputText()` 中为 `el.isContentEditable` 元素增加独立文本更新分支（结合 `window.getSelection()` 非折叠选区替换与 `Backspace` 删除），更新 `el.textContent` 并派发 `input` 事件，修复 `locator.fill()` 对 `contenteditable` 元素无效的问题。
