@@ -2232,7 +2232,7 @@
             hydrated[propName] = true;
             if (!hasOwnProp && typeof entry.getAttribute === "function") {
               const attrVal = entry.getAttribute(propName);
-              if (typeof attrVal === "string" && attrVal && entry[propName] === undefined) {
+              if (typeof attrVal === "string" && attrVal && entry[propName] == null) {
                 try {
                   entry[propName] = new Function("event", attrVal);
                 } catch (e) {}

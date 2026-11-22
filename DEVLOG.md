@@ -2096,3 +2096,6 @@
 
 ### Phase 327: `page-mouse.spec.ts` 修饰键缺失与小数坐标未向下取整排障笔记
 - **`dispatchMouseDomEvent()` 遗漏 `modifiers` 与未对坐标取整根因**：此前 `dispatchMouseDomEvent()` 未接收 `modifiers`（导致 `shiftKey`/`ctrlKey` 恒为 `false`），且直接将浮点 `x`/`y` 传入 `clientX`/`clientY`（导致 `(50.1, 50.9)` 未按 Chromium 规范向下取整为 `[50, 50]`）。补齐 `modifiers` 与 `@floor(x)`/`@floor(y)` 后，实测 `modifiers: 10, x: 50.1, y: 50.9` 返回 `{"x":50,"y":50,"shift":true,"ctrl":true}`。
+
+### Phase 328: `page-dispatchevent` `[16/16]` `<div onclick="window._clicked=true">` 未触发排障笔记
+- **`entry[propName] === undefined` 恒假根因**：`Element.prototype.onclick` 等 IDL 事件属性 getter 默认返回 `null`（`typeof null === "object"`, `hasOwnProperty === false`），导致 `dispatch.js` 第 412 行 `entry[propName] === undefined` 恒为 `false`，所有 HTML 内联 `on*` 内容属性从未被 `new Function("event", attrVal)` 编译挂载。改为 `entry[propName] == null` 后，实测 `data:text/html,<div onclick='window._clicked=true'>` 派发 `click` 后 `window._clicked === true`。

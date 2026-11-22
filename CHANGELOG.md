@@ -2815,3 +2815,7 @@
 ## [2026-11-22] Phase 327: `Input.dispatchMouseEvent` 透传修饰键 (`modifiers`) 与鼠标坐标向下取整
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 为 `dispatchMouseDomEvent()` 新增 `modifiers: i64` 参数并设置 `PointerEvent`/`MouseEvent` 的 `altKey`/`ctrlKey`/`metaKey`/`shiftKey`，同时对 `clientX`/`clientY` 使用 `@floor(x)`/`@floor(y)` 向下取整（修复 `page-mouse.spec.ts` `should set modifier keys on click` 与 `should always round down`）。
+
+## [2026-11-22] Phase 328: 修复 HTML 内联 `on*` 属性（如 `onclick="..."`）在 `dispatchEvent` 时未编译执行的问题
+- **Fixed (`src/`)**:
+  - `src/js/shim/events/dispatch.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 将内联事件属性惰性水合判断 `entry[propName] === undefined` 修正为 `entry[propName] == null`（因 `Element.prototype.on*` getter 默认返回 `null` 而非 `undefined`），修复 `page-dispatchevent.spec.ts` `[16/16] should be atomic` 等所有 HTML `on*` 属性触发问题。

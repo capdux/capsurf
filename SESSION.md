@@ -5456,3 +5456,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`x=50.1, y=50.9, modifiers=10` 返回 `{"x":50,"y":50,"shift":true,"ctrl":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.33s)**。
+
+### [2026-11-22 21:17] Phase 328: 修复 HTML 内联 `on*` 属性（如 `onclick="..."`）在 `dispatchEvent` 时未编译执行的问题
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/events/dispatch.js](file:///data/dev/capsurf/src/js/shim/events/dispatch.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `entry[propName] === undefined` -> `entry[propName] == null`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`data:text/html,<div onclick='window._clicked=true'>Hello</div>` 派发 `click` 返回 `{"clicked":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
