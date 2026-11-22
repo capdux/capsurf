@@ -34,11 +34,11 @@ function wrapQuerySelector(origFn) {
     if (isPurePseudoElementSelector(s)) {
       return null;
     }
-    if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+    if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const root = this === document ? (document.documentElement || document) : this;
       const found = findInSubtree(root, function (el) {
         const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
-        return matchesElementSelector(up, s, undefined, true);
+        return matchesElementSelector(up, s, root, true);
       }, true);
       return found ? (typeof upgradeElement === "function" ? upgradeElement(found) : found) : null;
     }
@@ -58,11 +58,11 @@ function wrapQuerySelectorAll(origFn) {
     if (isPurePseudoElementSelector(s)) {
       return new NodeList([]);
     }
-    if (s.includes(":checked") && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+    if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const root = this === document ? (document.documentElement || document) : this;
       const matched = findInSubtree(root, function (el) {
         const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
-        return matchesElementSelector(up, s, undefined, true);
+        return matchesElementSelector(up, s, root, true);
       }, false);
       const out = [];
       for (let i = 0; i < matched.length; i++) {
@@ -85,7 +85,7 @@ function wrapQuerySelectorAll(origFn) {
   };
 }
 
-function matchesCompoundSelector(el, compound) {
+function matchesCompoundSelector(el, compound, scopeRoot) {
   if (!el || el.nodeType !== 1 || !compound) return false;
   const s = compound.trim();
   if (!s) return false;
@@ -171,6 +171,12 @@ function matchesCompoundSelector(el, compound) {
       if (pseudo === ":checked") { if (!el.checked) return false; }
       else if (pseudo === ":disabled") { if (!el.disabled) return false; }
       else if (pseudo === ":enabled") { if (el.disabled) return false; }
+      else if (pseudo === ":scope") {
+        const sr = scopeRoot || (typeof document !== "undefined" ? document.documentElement : null);
+        if (!sr) return false;
+        const same = el === sr || (typeof el._nid === "number" && typeof sr._nid === "number" && el._nid > 0 && el._nid === sr._nid);
+        if (!same) return false;
+      }
       else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
       else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
       else if (pseudo === ":empty") { if (el.firstChild) return false; }
@@ -240,7 +246,7 @@ function splitComplexSelector(sel) {
 function matchesComplexSelector(el, sel, scopeRoot) {
   const parts = splitComplexSelector(sel);
   if (parts.length === 0) return false;
-  if (!matchesCompoundSelector(el, parts[parts.length - 1])) return false;
+  if (!matchesCompoundSelector(el, parts[parts.length - 1], scopeRoot)) return false;
   if (parts.length === 1) return true;
 
   function matchFrom(node, idx) {
@@ -250,28 +256,28 @@ function matchesComplexSelector(el, sel, scopeRoot) {
     if (comb === " ") {
       let anc = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
       while (anc) {
-        if (scopeRoot && anc === scopeRoot) break;
-        if (matchesCompoundSelector(anc, targetCompound) && matchFrom(anc, idx - 2)) {
+        if (matchesCompoundSelector(anc, targetCompound, scopeRoot) && matchFrom(anc, idx - 2)) {
           return true;
         }
+        if (scopeRoot && (anc === scopeRoot || (typeof anc._nid === "number" && anc._nid > 0 && anc._nid === scopeRoot._nid))) break;
         anc = anc.parentElement || (anc.parentNode && anc.parentNode.nodeType === 1 ? anc.parentNode : null);
       }
       return false;
     }
     if (comb === ">") {
       const p = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
-      if (!p || (scopeRoot && p === scopeRoot)) return false;
-      return matchesCompoundSelector(p, targetCompound) && matchFrom(p, idx - 2);
+      if (!p) return false;
+      return matchesCompoundSelector(p, targetCompound, scopeRoot) && matchFrom(p, idx - 2);
     }
     if (comb === "+") {
       const prev = node.previousElementSibling;
       if (!prev) return false;
-      return matchesCompoundSelector(prev, targetCompound) && matchFrom(prev, idx - 2);
+      return matchesCompoundSelector(prev, targetCompound, scopeRoot) && matchFrom(prev, idx - 2);
     }
     if (comb === "~") {
       let prev = node.previousElementSibling;
       while (prev) {
-        if (matchesCompoundSelector(prev, targetCompound) && matchFrom(prev, idx - 2)) {
+        if (matchesCompoundSelector(prev, targetCompound, scopeRoot) && matchFrom(prev, idx - 2)) {
           return true;
         }
         prev = prev.previousElementSibling;

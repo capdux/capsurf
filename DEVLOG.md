@@ -1983,3 +1983,6 @@
 
 ### Phase 290: 闭合 `<details>` 下文本节点与元素在 `toMatchAriaSnapshot`/`isVisible` 仍可见排障笔记
 - **`details visibility` 收到 `"- group: Summary Details"` 根因**：`element.js` 的 `isElementDisplayNone()` 与 `getClientRects()` 未检查祖先闭合 `<details>`，且 `Range.prototype.getClientRects()` 直接为 `<details>` 下的直接文本节点生成非零矩形。两处同步补齐首 `<summary>` 放行与其余后代隐藏后，闭合态 `txtRects=0`、`pRect=0x0`、`pClientRects=0`，展开 `open` 后恢复 `txtRects=1`、`pRectW=1264`。
+
+### Phase 291: `fieldset.querySelector(':scope > legend')` 返回 `null` 排障笔记
+- **`selectors-role` `disabled fieldset` `<legend>` 误判为 `disabled` 根因**：`selector.js` 的 `wrapQuerySelector()` 仅拦截 `:checked` 而未拦截 `:scope`，且 `matchesComplexSelector()` 在 `comb === ">"` 时直接写 `if (scopeRoot && p === scopeRoot) return false` 拦截了作用域根节点匹配。补齐 `:scope` 伪类与 `scopeRoot` 放行后，实测 `fs.querySelector(":scope > legend")` 精准命中 `leg1`，`allLen=2, deepLen=3`。

@@ -5189,3 +5189,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：闭合态 `txtRects=0, sumRects=1, pRect=0x0, pClientRects=0`；展开 `open` 后 `txtRects=1, pRectW=1264, pClientRects=1`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **130.24s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.28s)**。
+
+### [2026-11-22 18:30] Phase 291: 支持 `querySelector` / `querySelectorAll` 的 `:scope` 伪类与作用域组合子匹配
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/selector.js](file:///data/dev/capsurf/src/js/shim/selector.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `wrapQuerySelector()`/`wrapQuerySelectorAll()` 中拦截 `:scope` 并传入 `scopeRoot`，在 `matchesCompoundSelector()` 与 `matchesComplexSelector()` 中实现 `:scope` 伪类与作用域父节点放行。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`fs.querySelector(":scope > legend")` 精准返回 `"leg1"`，`allLen=2, deepLen=3, containsIn1=true, containsIn2=false`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **151.42s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。

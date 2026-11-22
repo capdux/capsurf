@@ -2654,3 +2654,7 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `isHiddenInClosedDetails()` 并在 `isElementDisplayNone()` 与 `Element.prototype.getClientRects()` 中接入，确保无 `open` 属性的 `<details>` 下非首个 `<summary>` 后代返回空矩形与空 `DOMRectList`。
   - `src/js/shim/range.js`: 升级 `Range.prototype.getClientRects()` 遍历逻辑，跳过 `display: none` 子树且对闭合 `<details>` 仅遍历首个 `<summary>` 子元素，避免直接文本节点被判定为可见。
+
+## [2026-11-22] Phase 291: 支持 `querySelector` / `querySelectorAll` 的 `:scope` 伪类与作用域组合子匹配
+- **Fixed (`src/`)**:
+  - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `wrapQuerySelector()` / `wrapQuerySelectorAll()` 中拦截 `:scope` selectors 并传入 `scopeRoot`，在 `matchesCompoundSelector()` 中实现 `:scope`（支持 `_nid` 等价性），并在 `matchesComplexSelector()` 中允许 `>` 与后代组合子正确匹配 `scopeRoot` 本身（修复 `fieldset.querySelector(':scope > legend')` 返回 `null`）。

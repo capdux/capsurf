@@ -180,6 +180,10 @@
 | 2026-11-22 18:11 | `/css/css-contain/` | `1/5` | 14 | PASS 13 / FAIL 1 / TIMEOUT 0 (exit 0, 14/14匹配) | Batch 65 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:12 | `/css/css-contain/` | `2/5` | 14 | PASS 12 / FAIL 1 / TIMEOUT 1 (90s截断) | Batch 65 (`--skip-expected-timeouts`) |
 | 2026-11-22 18:13 | `/css/css-contain/` | `3/5` | 14 | PASS 10 / FAIL 2 / ERROR 1 / TIMEOUT 1 | Batch 65 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:17 | `/html/semantics/embedded-content/` | `3/5`~`5/5` | 40, 40, 40 | PASS 5/40, 10/40, 6/40 (0 CRASH) | Batch 66 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:18 | `/fetch/api/basic/` | `2/3`, `3/3` | 10, 10 | PASS 0/10, 2/10 (0 CRASH) | Batch 66 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:26 | `/css/selectors/` | `3/5`~`5/5` | 13, 13, 13 | PASS 6/13, 8/13, 6/13 (0 CRASH) | Batch 67 (`--skip-expected-timeouts`) |
+| 2026-11-22 18:26 | `/css/cssom-view/` | `1/5`, `2/5` | 22, 21 | PASS 15/22, 8/21 (0 CRASH) | Batch 67 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -324,3 +328,11 @@
 | 2026-11-22 18:07 | `selectors-get-by.spec.ts` | 23/25 PASS (getByLabel 2 FAIL, 39.9s) | PW Batch 38 |
 | 2026-11-22 18:09 | `selectors-misc.spec.ts` | 7/9 PASS (`[10/19]` 90s截断, shadow click/above) | PW Batch 38 |
 | 2026-11-22 18:09 | `selectors-register.spec.ts` | 6/6 PASS (6.9s, exit 0) | PW Batch 38 (全绿) |
+| 2026-11-22 18:16 | `retarget.spec.ts` | 13/15 PASS (shadow label/selectOption 2 FAIL, 重试90s截断) | PW Batch 39 |
+| 2026-11-22 18:16 | `selectors-role.spec.ts` | 7/9 PASS (disabled/fieldset 2 FAIL, `[10/15]` 90s截断) | PW Batch 39 |
+| 2026-11-22 18:16 | `selectors-text.spec.ts` | 20/21 PASS (`text=lowo` 跨节点 1 FAIL, 52.3s) | PW Batch 39 |
+| 2026-11-22 18:16 | `to-match-aria-snapshot.spec.ts` | 31/32 PASS (`details visibility` 1 FAIL, `[33/36]` 90s截断) | PW Batch 39 |
+| 2026-11-22 18:25 | `selectors-get-by.spec.ts` | 25/25 PASS (Phase 289 复测全绿, 29.4s, exit 0) | PW Batch 40 (全绿) |
+| 2026-11-22 18:25 | `wheel.spec.ts` | 5/6 PASS (scroll when nobody listening 1 TIMEOUT, 49.9s) | PW Batch 40 |
+| 2026-11-22 18:25 | `workers.spec.ts` | 0/3 TIMEOUT (worker network 3 TIMEOUT, 90s截断) | PW Batch 40 |
+| 2026-11-22 18:25 | `locator-is-visible.spec.ts` | 8/8 PASS (Phase 290 复测全绿, 10.1s, exit 0) | PW Batch 40 (全绿) |
