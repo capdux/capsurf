@@ -2991,3 +2991,4 @@
 ## [2026-11-23] Phase 366: `Page.setDocumentContent` 替换文档前清理旧子框架并派发 `Page.frameDetached` / `Runtime.executionContextDestroyed`
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `Page.setDocumentContent` 在调用 `session.navigate` 前遍历活跃 `session.known_child_frames`，先发出 `Page.frameDetached` 与 `Runtime.executionContextDestroyed` 并置为 `detached`，消除连续 `page.setContent()` 时的重复 `frameId` 碰撞（冲刺 `expect-boolean.spec.ts` `with frameLocator 2` **84/84 全绿**）。
+- Phase 367: `src/net/http_loader.cp` — 解析 `Content-Encoding` 响应头，基于 `cap:pack` (`gunzip` / `inflate`) 自动解压 `gzip` / `x-gzip` / `deflate` 响应体（保留原始 `raw_headers` 与失败回退）。

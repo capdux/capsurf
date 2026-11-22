@@ -5729,3 +5729,4 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE366_RESULT` 完整按序发出 `frameDetached` -> `executionContextDestroyed` -> `frameAttached` -> `executionContextCreated`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+- [Phase 367] (`src/net/http_loader.cp`) 接入 `cap:pack` (`gunzip` / `inflate`) 解压 `Content-Encoding: gzip` / `x-gzip` / `deflate` 响应体；`bin_dev` 编译 + CDP gzip/deflate 探针 (`gzipDom: "hello-gzip-ok"`, `gzipBodyOk: true`, `deflateDom: "hello-deflate-ok"`, `deflateBodyOk: true`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

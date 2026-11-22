@@ -3,6 +3,7 @@
 // Migrated from vendor/kitesurf/packages/engine/src/eval/outbound.ts and vendor/kitesurf/packages/engine/src/cdp/page.ts
 
 import { Base64 } from "cap:encoding";
+import { gunzip, inflate } from "cap:pack";
 
 import { CdpPageSession } from "../cdp/session.cp";
 import { BlockableRequest, ResourceType, RequestBlocker } from "./request_blocker.cp";
@@ -856,6 +857,7 @@ pub struct HttpLoader {
         let resp_content_type: []const u8 = "";
         let resp_content_disp: ([]const u8)? = null;
         let resp_csp: []const u8 = "";
+        let resp_content_encoding: []const u8 = "";
         let is_chunked_resp = false;
         let line_it = std.mem.splitSequence(u8, headers_part, "\r\n");
         while (line := line_it.next()) {
@@ -871,6 +873,8 @@ pub struct HttpLoader {
                 resp_content_disp = std.mem.trim(u8, line[20..], " \t");
             } else if (line.len >= 24 && std.ascii.eqlIgnoreCase(line[0..24], "Content-Security-Policy:")) {
                 resp_csp = std.mem.trim(u8, line[24..], " \t");
+            } else if (line.len >= 17 && std.ascii.eqlIgnoreCase(line[0..17], "Content-Encoding:")) {
+                resp_content_encoding = std.mem.trim(u8, line[17..], " \t");
             } else if (line.len >= 18 && std.ascii.eqlIgnoreCase(line[0..18], "Transfer-Encoding:")) {
                 const te_val = std.mem.trim(u8, line[18..], " \t");
                 if (HttpLoader.containsIgnoreCase(te_val, "chunked")) {
@@ -908,6 +912,17 @@ pub struct HttpLoader {
                 body = out_buf[body_start .. body_start + decoded_len];
             } else {
                 body = raw_resp[body_start..];
+            }
+        }
+        if (body.len > 0 && resp_content_encoding.len > 0) {
+            if (HttpLoader.containsIgnoreCase(resp_content_encoding, "gzip") || HttpLoader.containsIgnoreCase(resp_content_encoding, "x-gzip")) {
+                if (decomp := gunzip(body)) {
+                    body = session.allocator.dupe(u8, decomp) catch decomp;
+                }
+            } else if (HttpLoader.containsIgnoreCase(resp_content_encoding, "deflate")) {
+                if (decomp := inflate(body)) {
+                    body = session.allocator.dupe(u8, decomp) catch decomp;
+                }
             }
         }
 

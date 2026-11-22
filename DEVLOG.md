@@ -2218,3 +2218,4 @@
 
 ### Phase 366: `expect-boolean.spec.ts` `[84/84]` (`with frameLocator 2`) 排障笔记
 - **连续 `setContent` 重复发送 `Page.frameAttached` 未发 `frameDetached` 根因**：第 1 次 `page.setContent('<iframe></iframe>')` 产生 `capsurf-child-1` 后，第 2 次 `page.setContent('<iframe srcdoc="<input>"></iframe>')` 未先发出旧 `capsurf-child-1` 的 `Page.frameDetached` 与 `Runtime.executionContextDestroyed`，直接再次发送 `Page.frameAttached: "capsurf-child-1"` 导致 Playwright 帧树碰撞。在 `Page.setDocumentContent` 入口补齐旧子框架销毁事件后，实测 `PHASE366_RESULT` 先发 `Page.frameDetached` / `executionContextDestroyed` 再发 `Page.frameAttached` / `frameNavigated` / `executionContextCreated`。
+- Phase 367 (`src/net/http_loader.cp`): 即使发送 `Accept-Encoding: identity`，部分服务端（如 Playwright gzip 测试端点）仍强制返回 `Content-Encoding: gzip`。通过复用 `cap:pack` 的 `gunzip` 与 `inflate`，在 `decodeChunkedInPlace` 之后自动解压响应体并拷贝至 `session.allocator`，使 DOM 解析与 `Network.getResponseBody` 均获得明文内容。
