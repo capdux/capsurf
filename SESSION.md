@@ -5680,3 +5680,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE359_RESULT` 完整收到 `capsurf-child-1` 全部 8 条生命周期事件。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+## Phase 360: 主文档导航 `requestId === loaderId` 对齐完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): 将 `Page.navigate` 与历史回退导航的 `doc_req_id` 统一设为 `session.loader_id`。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE360_RESULT {"loaderId":"capsurf-loader-001","reqId":"capsurf-loader-001","respLoader":"capsurf-loader-001","match":true,"status":200,"hasBody":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。

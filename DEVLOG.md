@@ -2197,3 +2197,6 @@
 
 ### Phase 359: `Page.setDocumentContent` 后 `page.frames()[1]` 为 `undefined` 排障笔记
 - **`Page.setDocumentContent` 遗漏子框架事件派发根因**：`Page.navigate` 与 `Runtime.evaluate` 均在结束前同步 `syncIframeTargets` 并派发 `emitNewChildFrameEvents`，而 `Page.setDocumentContent` 未调用，导致 `page.setContent('<template shadowrootmode="open"><iframe ...>...')` 创建的子框架未向客户端发送 `Page.frameAttached`。补齐 2 行调用后，实测 `PHASE359_RESULT` 完整收到 `Page.frameAttached` -> `Page.frameNavigated` -> `Runtime.executionContextCreated` -> `Page.frameStoppedLoading` 全部 8 条事件。
+
+### Phase 360: `page.goto()` 返回 `null` (`page-network-response.spec.ts` / `page-goto.spec.ts`) 排障笔记
+- **`requestId !== loaderId` 导致 `isNavigationRequest` 恒为 `false` 根因**：`crNetworkManager.ts:360` 严格校验 `requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && type === 'Document'` 才记录 `documentId` 与 `pendingDocument.request`。此前 `Page.navigate` 为主文档生成独立 `doc_req_id`（`req-*`），与 `session.loader_id` 不相等，导致 `page.goto()` 始终返回 `null`。统一为 `session.loader_id` 后，实测 `PHASE360_RESULT {"loaderId":"capsurf-loader-001","reqId":"capsurf-loader-001","match":true,"status":200,"hasBody":true}`。

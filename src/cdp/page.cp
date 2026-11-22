@@ -1275,8 +1275,7 @@ pub struct PageHandler {
                 return CdpResponse.err(req.id, -32000, "Navigation failed");
             };
 
-            let doc_req_id_buf: [64]u8 = [0; 64];
-            const doc_req_id = nextDocRequestId(&doc_req_id_buf);
+            const doc_req_id = session.loader_id;
 
             const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
             if (kind == DocumentKind.blocked || fetch_res.status_code == 204 || fetch_res.status_code == 205) {
@@ -1845,8 +1844,7 @@ pub fn performPendingNavigation(
     const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
     if (kind == DocumentKind.blocked) return false;
 
-    let doc_req_id_buf: [64]u8 = [0; 64];
-    const doc_req_id = nextDocRequestId(&doc_req_id_buf);
+    const doc_req_id = session.loader_id;
 
     let synth_buf: ([]u8)? = null;
     defer if (synth_buf != null) session.allocator.free(synth_buf.?);

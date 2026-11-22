@@ -2961,3 +2961,7 @@
 ## [2026-11-23] Phase 359: `Page.setDocumentContent` 同步子框架目标并派发 `Page.frameAttached` 事件流
 - **Fixed (`src/`)**:
   - `src/cdp/page.cp`: `Page.setDocumentContent` 在 `session.navigate` 后调用 `syncIframeTargets(session, true)` 与 `emitNewChildFrameEvents(session, out_events, event_count)`，使 `page.setContent()` 内含或脚本动态插入的 `<iframe>`（含 Shadow Root 内 `<iframe>`）立即注册进 Playwright `page.frames()`。
+
+## [2026-11-23] Phase 360: 对齐主文档导航 `requestId === loaderId`（根治 `page.goto()` 返回 `null`）
+- **Fixed (`src/`)**:
+  - `src/cdp/page.cp`: `Page.navigate` 与历史回退导航将 `doc_req_id` 直接绑定为 `session.loader_id`，满足 Chromium CDP 主文档导航 `requestWillBeSent.requestId === requestWillBeSent.loaderId` 契约，使 Playwright 正确绑定 `document.request` 并返回 `Response` 对象。
