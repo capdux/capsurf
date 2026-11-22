@@ -610,6 +610,14 @@ function KeyboardEvent(type, options) {
 }
 KeyboardEvent.prototype = Object.create(UIEvent.prototype);
 KeyboardEvent.prototype.constructor = KeyboardEvent;
+KeyboardEvent.DOM_KEY_LOCATION_STANDARD = 0;
+KeyboardEvent.DOM_KEY_LOCATION_LEFT = 1;
+KeyboardEvent.DOM_KEY_LOCATION_RIGHT = 2;
+KeyboardEvent.DOM_KEY_LOCATION_NUMPAD = 3;
+KeyboardEvent.prototype.DOM_KEY_LOCATION_STANDARD = 0;
+KeyboardEvent.prototype.DOM_KEY_LOCATION_LEFT = 1;
+KeyboardEvent.prototype.DOM_KEY_LOCATION_RIGHT = 2;
+KeyboardEvent.prototype.DOM_KEY_LOCATION_NUMPAD = 3;
 markNative(KeyboardEvent, "KeyboardEvent");
 
 ["key", "code", "location", "repeat", "isComposing", "keyCode", "charCode", "which", "ctrlKey", "shiftKey", "altKey", "metaKey"].forEach(function (prop) {

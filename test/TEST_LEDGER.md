@@ -470,3 +470,21 @@
 | 2026-11-22 20:16 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (90s retry截断) | PW Batch 65 |
 | 2026-11-22 20:16 | `elementhandle-wait-for-element-state.spec.ts` | 11/12 PASS (24.0s, exit 0) | PW Batch 65 |
 | 2026-11-22 20:16 | `page-evaluate.spec.ts` | 20/95 PASS (90s截断) | PW Batch 65 |
+| 2026-11-22 20:22 | `selectors-text.spec.ts` | 21/21 PASS (48.8s, 3 exp dev PASS) | PW Batch 66 (全绿) |
+| 2026-11-22 20:22 | `jshandle-to-string.spec.ts` | 4/6 PASS (17.2s, `/foo/`+`Symbol` PASS) | PW Batch 66 |
+| 2026-11-22 20:22 | `page-wait-for-selector-1.spec.ts` | 14/15 PASS (`removed MutationObserver` PASS) | PW Batch 66 |
+| 2026-11-22 20:22 | `elementhandle-click.spec.ts` | 5/8 PASS (90s retry截断) | PW Batch 66 |
+| 2026-11-22 20:27 | `page-event-console.spec.ts` | 2/19 PASS (90s截断) | PW Batch 67 |
+| 2026-11-22 20:27 | `page-event-pageerror.spec.ts` | 4/7 PASS (3 exp dev PASS) | PW Batch 67 |
+| 2026-11-22 20:27 | `page-event-request.spec.ts` | 2/13 PASS (90s截断) | PW Batch 67 |
+| 2026-11-22 20:27 | `locator-convenience.spec.ts` | 21/21 PASS (21.7s, exit 0) | PW Batch 67 (全绿) |
+| 2026-11-22 20:29 | `locator-frame.spec.ts` | 6/9 PASS (3 `ERR_BLOCKED_BY_CLIENT`) | PW Batch 68 |
+| 2026-11-22 20:29 | `locator-query.spec.ts` | 21/21 PASS (exit 0) | PW Batch 68 (全绿) |
+| 2026-11-22 20:31 | `locator-element-handle.spec.ts` | 5/5 PASS (6.3s, exit 0) | PW Batch 69 (全绿) |
+| 2026-11-22 20:31 | `elementhandle-scroll-into-view.spec.ts` | 5/9 PASS (90s retry截断) | PW Batch 69 |
+| 2026-11-22 20:35 | `locator-click.spec.ts` | 5/5 PASS (exit 0) | PW Batch 70 (全绿) |
+| 2026-11-22 20:35 | `page-click-timeout-3.spec.ts` | 3/4 PASS | PW Batch 70 |
+| 2026-11-22 20:35 | `page-click-timeout-4.spec.ts` | 1/3 PASS | PW Batch 70 |
+| 2026-11-22 20:35 | `page-keyboard.spec.ts` | 6/44 PASS (90s截断) | PW Batch 70 |
+| 2026-11-22 20:38 | `/css/css-values/` (`2/5..5/5`) | 18/70, 18/70, 22/70, 11/70 PASS (3 `FAIL→PASS`) | WPT Batch 85 (`bin_dev`) |
+| 2026-11-22 20:38 | `/css/css-sizing/` (`1/5`) | 0/7 PASS | WPT Batch 85 (`bin_dev`) |

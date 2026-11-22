@@ -2056,3 +2056,6 @@
 
 ### Phase 314: `jshandle-to-string` `new Proxy({}, {})` 返回 `"Object"` 及数组 `preview` 缺失排障笔记
 - **初始化顺序与钩子机制**：`RUNTIME_CHUNKS`（`shim/index.js`）在 `dom_binding.cp` 的 `helper_script` 之前执行，此前在 `shim/index.js` 中检测 `__capsurf_format_remote_object` 会被跳过。改为在 `dom_binding.cp` 留出 1 行 `__capsurf_fmt_hook` 回调并在 `shim/index.js` 注入 `WeakMap` 代理追踪与 `Array(N)`/`preview` 逻辑后，实测 `new Proxy({}, {})` 返回 `subtype: "proxy", description: "Proxy(Object)"`，`[, 1, , 2]` 返回 `description: "Array(4)"` 与完整 `preview.properties`。
+
+### Phase 315: `page-keyboard.spec.ts` 8 项测试 `KeyboardEvent.location` 报 `Unknown: 0/1` 排障笔记
+- **缺少 `DOM_KEY_LOCATION_*` 常量根因**：`KeyboardEvent` 构造函数已正确依据 `code` 推导 `location`（`0..3`），但构造器及原型上未挂载 `DOM_KEY_LOCATION_STANDARD`/`LEFT`/`RIGHT`/`NUMPAD` 四个常量，导致 Playwright 测试辅助函数匹配 `e.location === KeyboardEvent.DOM_KEY_LOCATION_STANDARD`（`0 === undefined`）全部失败并输出 `Unknown: 0/1`。补齐四项常量后，实测 `KeyboardEvent.DOM_KEY_LOCATION_STANDARD=0, LEFT=1, RIGHT=2, NUMPAD=3` 与实例属性均正确。

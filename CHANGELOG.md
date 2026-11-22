@@ -2761,3 +2761,7 @@
 - **Fixed (`src/`)**:
   - `src/js/dom_binding.cp`: 在 `__capsurf_format_remote_object` 接入 `globalThis.__capsurf_fmt_hook(obj, val)` 单行钩子。
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 通过 `WeakMap` 追踪 `new Proxy` 与 `Proxy.revocable` 实例，在 `__capsurf_fmt_hook` 中输出 `subtype: "proxy"`、`description: "Proxy(...)"`，为数组输出 `description: "Array(N)"`，并为普通对象/数组生成 `preview.properties`。
+
+## [2026-11-22] Phase 315: 补齐 `KeyboardEvent.DOM_KEY_LOCATION_*` 静态与原型常量
+- **Fixed (`src/`)**:
+  - `src/js/shim/events/event.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `KeyboardEvent` 构造器与 `KeyboardEvent.prototype` 补齐 `DOM_KEY_LOCATION_STANDARD (0)`、`DOM_KEY_LOCATION_LEFT (1)`、`DOM_KEY_LOCATION_RIGHT (2)`、`DOM_KEY_LOCATION_NUMPAD (3)` 常量，修复 `page-keyboard.spec.ts` 中 8 项 `location` 映射为 `Unknown: 0/1` 的失败。

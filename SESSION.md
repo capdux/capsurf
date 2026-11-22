@@ -5364,3 +5364,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`new Proxy({}, {})` 返回 `subtype: "proxy", description: "Proxy(Object)"`；`[, 1, , 2]` 返回 `description: "Array(4)"` 及 `preview.properties`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
+
+### [2026-11-22 20:39] Phase 315: 补齐 `KeyboardEvent.DOM_KEY_LOCATION_*` 静态与原型常量
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/events/event.js](file:///data/dev/capsurf/src/js/shim/events/event.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 补齐 `DOM_KEY_LOCATION_STANDARD`/`LEFT`/`RIGHT`/`NUMPAD` 常量。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`{"std":0,"left":1,"right":2,"num":3,"e1Loc":0,"e2Loc":1,"protoStd":0}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.05s)**。
