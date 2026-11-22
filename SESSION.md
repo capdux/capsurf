@@ -5319,3 +5319,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：主世界 `delete window.MutationObserver` 后，隔离上下文 `typeof MutationObserver` 返回 `"function"`，主世界仍为 `"undefined"`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
+
+### [2026-11-22 20:16] Phase 309: 修复 CDP `RemoteObject` 对 `Symbol` 缺少 `objectId` 与 `RegExp`/`Date`/`Error` 缺少实例 `description`
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp): `__capsurf_store_object` 支持 `symbol`，`__capsurf_format_remote_object` 为 `symbol` 分配 `objectId` 并为 `regexp`/`date`/`error` 输出规范 `description`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Symbol()` 返回 `objectId: "capsurf:obj:1"`，`/foo/` 返回 `description: "/foo/"`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.31s)**。

@@ -465,3 +465,8 @@
 | 2026-11-22 20:10 | `page-wait-for-selector-1.spec.ts` | 13/15 PASS (90s retry截断) | PW Batch 64 |
 | 2026-11-22 20:10 | `page-wait-for-selector-2.spec.ts` | 22/32 PASS (90s截断) | PW Batch 64 |
 | 2026-11-22 20:10 | `jshandle-properties.spec.ts` | 7/7 PASS (exit 1 exp dev) | PW Batch 64 (全绿) |
+| 2026-11-22 20:16 | `jshandle-as-element.spec.ts` | 4/4 PASS (4.2s, exit 0) | PW Batch 65 (全绿) |
+| 2026-11-22 20:16 | `jshandle-json-value.spec.ts` | 3/3 PASS (2.9s, exit 0) | PW Batch 65 (全绿) |
+| 2026-11-22 20:16 | `elementhandle-bounding-box.spec.ts` | 4/7 PASS (90s retry截断) | PW Batch 65 |
+| 2026-11-22 20:16 | `elementhandle-wait-for-element-state.spec.ts` | 11/12 PASS (24.0s, exit 0) | PW Batch 65 |
+| 2026-11-22 20:16 | `page-evaluate.spec.ts` | 20/95 PASS (90s截断) | PW Batch 65 |

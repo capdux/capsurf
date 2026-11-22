@@ -2038,3 +2038,6 @@
 
 ### Phase 308: `page-wait-for-selector-1` `should work with removed MutationObserver` 报 `ReferenceError` 排障笔记
 - **隔离上下文受主世界 `delete window.MutationObserver` 影响根因**：此前隔离上下文仅对 `Node` 做了临时备份与恢复，未覆盖 `MutationObserver`。当页面执行 `delete window.MutationObserver` 后，Playwright 注入脚本在隔离上下文中调用 `new MutationObserver(...)` 触发 `ReferenceError`。将恢复逻辑升级为位掩码同时覆盖 `Node` 与 `MutationObserver` 后，实测隔离上下文内 `typeof MutationObserver === "function"` 而主世界仍保持 `"undefined"`。
+
+### Phase 309: `jshandle-to-string.spec.ts` `Symbol()` 返回 `"undefined"` 与 `/foo/` 返回 `"RegExp"` 排障笔记
+- **`Symbol()` 与 `RegExp` CDP `RemoteObject` 字段缺失根因**：Playwright 的 `CRJSHandle.toString()` 依赖 `RemoteObject` 的 `objectId` 判定是否为句柄而非纯值；此前 `__capsurf_store_object` 仅接收 `object`/`function` 且 `symbol` 分支未生成 `objectId`，导致 `Symbol()` 被按无值对象解析成 `"undefined"`。同时 `object` 分支对 `regexp`/`date`/`error` 统一回退 `description = className`，导致 `/foo/` 描述为 `"RegExp"`。两处补齐后，实测 `Symbol()` 返回 `objectId: "capsurf:obj:1"`，`/foo/` 返回 `description: "/foo/"`。

@@ -2583,7 +2583,7 @@ pub fn mountDom(
         "  globalThis.__capsurf_store_object = function (val) {" +
         "    if (val === null || val === undefined) return null;" +
         "    const t = typeof val;" +
-        "    if (t !== 'object' && t !== 'function') return null;" +
+        "    if (t !== 'object' && t !== 'function' && t !== 'symbol') return null;" +
         "    const id = 'capsurf:obj:' + (globalThis.__capsurf_next_object_id++);" +
         "    globalThis.__capsurf_remote_objects.set(id, val);" +
         "    return id;" +
@@ -2642,7 +2642,14 @@ pub fn mountDom(
         "      if (val === -Infinity) return { type: 'number', unserializableValue: '-Infinity' };" +
         "      return { type: 'number', value: val };" +
         "    }" +
-        "    if (t === 'symbol') return { type: 'symbol', description: String(val) };" +
+        "    if (t === 'symbol') {" +
+        "      const obj = { type: 'symbol', description: String(val) };" +
+        "      if (!returnByValue) {" +
+        "        obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
+        "      }" +
+        "      return obj;" +
+        "    }" +
         "    if (t === 'bigint') return { type: 'bigint', unserializableValue: String(val) + 'n' };" +
         "    if (t === 'function') {" +
         "      const className = 'Function';" +
@@ -2670,7 +2677,9 @@ pub fn mountDom(
         "      } else {" +
         "        obj.objectId = globalThis.__capsurf_store_object(val);" +
         "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
-        "        obj.description = className;" +
+        "        if (obj.subtype === 'regexp' || obj.subtype === 'date') obj.description = String(val);" +
+        "        else if (obj.subtype === 'error') obj.description = val.stack || String(val);" +
+        "        else obj.description = className;" +
         "      }" +
         "      return obj;" +
         "    }" +

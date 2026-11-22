@@ -2731,3 +2731,7 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 备份不可枚举只读引用 `globalThis.__capsurf_orig_MutationObserver`。
   - `src/js/dom_binding.cp`, `src/cdp/session.cp`, `src/cdp/runtime.cp`: 将 `restoreIsolatedNodeIfNeeded()` / `clearIsolatedNode()` 升级为位掩码机制（bit 1 = `Node`, bit 2 = `MutationObserver`），在隔离上下文执行期间临时恢复被页面脚本删除的 `MutationObserver` 并在退出后还原删除状态。
+
+## [2026-11-22] Phase 309: 修复 CDP `RemoteObject` 对 `Symbol` 缺少 `objectId` 与 `RegExp`/`Date`/`Error` 缺少实例 `description`
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 允许 `__capsurf_store_object` 存储 `typeof val === 'symbol'`；在 `__capsurf_format_remote_object` 中为 `!returnByValue` 的 `symbol` 分配 `objectId`，并为 `regexp` / `date` / `error` 子类型输出 `String(val)` / `val.stack` 作为 `description`（修复 `jshandle-to-string.spec.ts` 中 `Symbol()` 返回 `"undefined"` 与 `/foo/` 返回 `"RegExp"` 的问题）。
