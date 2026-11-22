@@ -422,7 +422,7 @@ pub struct RuntimeHandler {
             }
 
             // Poll any document.open/write/close reopened load events (strictly after console events)
-            let polled_reopen_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            let polled_reopen_evts: [16]CdpEvent = [CdpEvent{}; 16];
             const polled_reopen_count = session.pollReopenLoadEvents(&polled_reopen_evts);
             let r_i: usize = 0;
             while (r_i < polled_reopen_count && event_count.* < out_events.len) : (r_i += 1) {

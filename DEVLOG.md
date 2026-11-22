@@ -2132,3 +2132,6 @@
   1. `src/js/shim/element/element.js` `scrollElementIntoView()` 此前以 `isScrollable || (sw > cw && cw > 0)` 判定祖先是否可滚，导致 `offscreenbuttons.html` 中 `overflow: visible` 的父 `<div>` 被写入 `scrollLeft`。
   2. `src/js/dom_binding.cp` `computeViewportRect()` 仅扫描 `html`/`body` 盒计算 `max_doc_w`，当子元素 `position: absolute; right: -10px` 溢出视口时 `max_scroll_x` 被误算为 `0`、`win_x` 被裁剪为 `0`，而外层 `js_element_get_bounding_client_rect` 又加回了未裁剪的 `info.win_x`，最终与 `element.js` 减去的 `window.scrollX` 互相抵消。
 - **修复验证**：实测 `PHASE338_SINGLE: {"before":10,"after":-90,"sx":100}`，`--smoke` 3/3 全绿。
+
+### Phase 339: `expect-boolean.spec.ts` `with frameLocator 2` (`<iframe>` -> `<iframe srcdoc>`) 排障笔记
+- **重写文档未分离旧子帧且未解析新 `srcdoc` 根因**：`page.setContent('<iframe></iframe>')` 后再次 `page.setContent('<iframe srcdoc="<input>"></iframe>')` 时，仅触发 `document.open/write/close`，既未对旧匿名子帧派发 `Page.frameDetached`/`Runtime.executionContextDestroyed`，也未在 `document.close()` 对新 `<iframe>` 调用 `__capsurf_on_iframe_connected`。补全分离清理、重置 `known_child_frame_count`/`emitted_child_frame_count` 与 `onIframeConnected` 后，实测 `PHASE339_CHILD: {"lastChildCtx":4,"childInput":true}`。

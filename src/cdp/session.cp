@@ -4317,6 +4317,32 @@ pub struct CdpPageSession {
             return 0;
         }
         let emitted: usize = 0;
+        let ki: usize = 0;
+        while (ki < _.known_child_frame_count && emitted < out_events.len) : (ki += 1) {
+            let kf = &_.known_child_frames[ki];
+            if (!kf.active || kf.detached) continue;
+            kf.detached = true;
+            const det_json = std.fmt.allocPrint(
+                _.allocator,
+                "{{\"frameId\":\"{s}\",\"reason\":\"remove\"}}",
+                .{ kf.frame_id_buf[0..kf.frame_id_len] },
+            ) catch "{}";
+            out_events[emitted] = CdpEvent.create("Page.frameDetached", det_json);
+            emitted += 1;
+            if (kf.exec_context_id > 0 && _.runtime_enabled && emitted < out_events.len) {
+                const des_json = std.fmt.allocPrint(
+                    _.allocator,
+                    "{{\"executionContextId\":{d}}}",
+                    .{ kf.exec_context_id },
+                ) catch "{}";
+                out_events[emitted] = CdpEvent.create("Runtime.executionContextDestroyed", des_json);
+                emitted += 1;
+            }
+            kf.exec_context_id = 0;
+            kf.active = false;
+        }
+        _.known_child_frame_count = 0;
+        _.emitted_child_frame_count = 0;
         const count_u: usize = @min(@as(usize, @intCast(pending_i32)), out_events.len);
         let i: usize = 0;
         while (i < count_u && emitted < out_events.len) : (i += 1) {

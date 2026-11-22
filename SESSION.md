@@ -5533,3 +5533,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE338_SINGLE: {"before":10,"after":-90,"sx":100}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+## Phase 339: `document.open/write/close` 子帧分离与 `srcdoc` 重建修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/runtime.cp](file:///data/dev/capsurf/src/cdp/runtime.cp): `g.document.close()` 触发 `__capsurf_on_iframe_connected`，`pollReopenLoadEvents()` 派发旧子帧分离/销毁事件并重置子帧计数以便重建新子帧。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE339_EV2` 完整产出 `Page.frameDetached` -> `Runtime.executionContextDestroyed` -> `Page.frameAttached` -> `Page.frameNavigated` -> `Runtime.executionContextCreated`，且 `PHASE339_CHILD: {"lastChildCtx":4,"childInput":true}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。

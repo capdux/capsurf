@@ -2862,3 +2862,8 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `scrollElementIntoView()` 仅在祖先容器计算样式 `overflow-x`/`overflow-y` 为 `auto`/`scroll`/`hidden` 且存在溢出时才滚动该容器，避免 `overflow: visible` 祖先被误滚动后无法随 `window.scrollTo(0, 0)` 归零。
   - `src/js/dom_binding.cp`: `computeViewportRect()` 统计最大文档滚动范围 `(max_doc_w, max_doc_h)` 时除 `html`/`body` 外亦纳入非 `position: fixed` 可见元素的右/下边界，避免 `win_x`/`win_y` 被错误裁剪为 `0` 后在 `js_element_get_bounding_client_rect` 补回 `info.win_x` 导致 `getBoundingClientRect()` 忽略 `window.scrollX`。
+
+## [2026-11-22] Phase 339: 修复 `document.open/write/close` 重写 `<iframe>` 时旧子帧分离销毁与新 `srcdoc` 子帧重建生命周期
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: `g.document.close()` 遍历 `querySelectorAll('iframe')` 调用 `g.__capsurf_on_iframe_connected()` 触发 `srcdoc`/`src` 子帧文档解析。
+  - `src/cdp/session.cp`, `src/cdp/runtime.cp`: `pollReopenLoadEvents()` 清理已知子帧并派发 `Page.frameDetached` + `Runtime.executionContextDestroyed`，重置 `known_child_frame_count` 与 `emitted_child_frame_count`（`polled_reopen_evts` 扩容至 16），确保随后 `emitNewChildFrameEvents()` 完整重建新子帧 `Page.frameAttached`/`Page.frameNavigated`/`Runtime.executionContextCreated`。

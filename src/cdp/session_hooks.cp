@@ -1670,6 +1670,12 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "                if (typeof g.__capsurf_handle_inserted_script === 'function') g.__capsurf_handle_inserted_script(reopenScripts[rsi]);\n" ++
     "              } catch (e) {}\n" ++
     "            }\n" ++
+    "            var reopenIframes = g.document.querySelectorAll('iframe');\n" ++
+    "            for (var rii = 0; rii < reopenIframes.length; rii++) {\n" ++
+    "              try {\n" ++
+    "                if (typeof g.__capsurf_on_iframe_connected === 'function') g.__capsurf_on_iframe_connected(reopenIframes[rii]);\n" ++
+    "              } catch (e) {}\n" ++
+    "            }\n" ++
     "          }\n" ++
     "        } catch (e) {}\n" ++
     "        reopenBuf = '';\n" ++
