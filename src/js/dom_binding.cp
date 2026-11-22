@@ -1996,6 +1996,18 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     return jsUndefined();
 }
 
+@c fn js_document_get_compat_mode(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = argc;
+    * = argv;
+    const ptr = JS_GetOpaque(this_val, g_document_class_id);
+    if (ptr == null) return jsNewString(ctx, "CSS1Compat");
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
+    if (dom_ctx.doc.in_quirks_mode) {
+        return jsNewString(ctx, "BackCompat");
+    }
+    return jsNewString(ctx, "CSS1Compat");
+}
+
 @c fn js_document_get_document_element(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = argc;
     * = argv;
@@ -2470,6 +2482,7 @@ pub fn mountDom(
     defineGetterSetter(raw_ctx, doc_proto, "nodeType", js_document_get_node_type, null);
     defineGetterSetter(raw_ctx, doc_proto, "nodeName", js_document_get_node_name, null);
     defineGetterSetter(raw_ctx, doc_proto, "documentElement", js_document_get_document_element, null);
+    defineGetterSetter(raw_ctx, doc_proto, "compatMode", js_document_get_compat_mode, null);
     defineGetterSetter(raw_ctx, doc_proto, "firstChild", js_element_get_first_child, null);
     defineGetterSetter(raw_ctx, doc_proto, "lastChild", js_element_get_last_child, null);
 

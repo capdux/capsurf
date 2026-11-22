@@ -2044,3 +2044,6 @@
 
 ### Phase 310: `elementhandle-bounding-box` `page.$('.box:nth-of-type(13)')` 找不到元素排障笔记
 - **`selector.js` 与 `matcher.cp` 均缺失 `:nth-of-type` 根因**：`PW Batch 65` 中 `elementhandle-bounding-box.spec.ts` `should work` 在 `page.$('.box:nth-of-type(13)')` 处超时返回 `null`。检查发现 `src/js/shim/selector.js` 仅实现了 `:nth-child` 而未实现 `*-of-type` 伪类；同时原生 `src/css/matcher.cp` 虽已有 `FirstOfType`/`LastOfType`/`OnlyOfType`，但遗漏了 `NthOfType`/`NthLastOfType`。两端同步补齐后，`bin_dev/main` 实测 `querySelector("p:nth-of-type(2)")`、`nth-last-of-type(2)`、`first-of-type`、`last-of-type`、`only-of-type` 与 `document.querySelector("#p2").matches("p:nth-of-type(2)")` 全部准确命中。
+
+### Phase 311: `elementhandle-bounding-box` `should work with SVG nodes` (`page.$('#therect')` 返回 `null`) 排障笔记
+- **双层 Quirks Mode 断链根因**：Playwright 用例调用 `page.setContent('<svg ...><rect id="theRect"...></svg>')` 后以小写 `#therect` 查询。由于无 `<!DOCTYPE html>`，规范中应进入 Quirks Mode，此时 `#id` 与 `.class` 忽略大小写。CapSurf 此前存在两处断链：(1) `Page.setDocumentContent` 复用 `session.navigate` 时触发 `isSvgDocument()`，自动包裹了 `<!doctype html>` 强行进入 Standards Mode；(2) `Document.prototype.compatMode` 硬编码 `"CSS1Compat"` 且 `selector.js` 未实现 Quirks `#id`/`.class` 大小写不敏感匹配。四处同步补齐后，实测无 doctype 下 `compat="BackCompat", byId="theRect", byCls="theRect"`，有 `<!DOCTYPE html>` 下保持 `compat="CSS1Compat", byId=null, byCls=null`。

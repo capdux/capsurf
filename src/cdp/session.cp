@@ -959,6 +959,7 @@ pub struct CdpPageSession {
     emulated_media_print: bool = false,
     nav_tty_stripped: bool = false,
     tty_ua_css: u32 = 0,
+    in_set_document_content: bool = false,
     tty_cell_w: u32 = 0,
     tty_cell_h: u32 = 0,
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
@@ -1676,7 +1677,7 @@ pub struct CdpPageSession {
         let svg_buf: ([]u8)? = null;
         defer if (svg_buf != null) _.allocator.free(svg_buf.?);
 
-        if (isSvgDocument(nav_url, "", html)) {
+        if (!_.in_set_document_content && isSvgDocument(nav_url, "", html)) {
             const extra_sz = 2048 + html.len * 2;
             svg_buf = _.allocator.alloc(u8, extra_sz) catch null;
             if (svg_buf != null) {

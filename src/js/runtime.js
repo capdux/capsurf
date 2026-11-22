@@ -8583,7 +8583,10 @@
         const start = i;
         while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
         const id = s.slice(start, i);
-        if (el.id !== id && !(typeof el.getAttribute === "function" && el.getAttribute("id") === id)) {
+        const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const quirks = doc && doc.compatMode === "BackCompat";
+        const actualId = el.id || (typeof el.getAttribute === "function" ? el.getAttribute("id") : "") || "";
+        if (quirks ? (actualId.toLowerCase() !== id.toLowerCase()) : (actualId !== id)) {
           return false;
         }
       } else if (ch === ".") {
@@ -8591,8 +8594,20 @@
         const start = i;
         while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
         const cls = s.slice(start, i);
-        const hasClass = (el.classList && el.classList.contains(cls)) ||
-          (((el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "") + "").split(/\s+/).indexOf(cls) !== -1);
+        const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const quirks = doc && doc.compatMode === "BackCompat";
+        const clsStr = ((el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "") + "");
+        let hasClass = !quirks && Boolean(el.classList && el.classList.contains(cls));
+        if (!hasClass && clsStr) {
+          const parts = clsStr.split(/\s+/);
+          const target = quirks ? cls.toLowerCase() : cls;
+          for (let k = 0; k < parts.length; k++) {
+            if ((quirks ? parts[k].toLowerCase() : parts[k]) === target) {
+              hasClass = true;
+              break;
+            }
+          }
+        }
         if (!hasClass) return false;
       } else if (ch === "[") {
         const closeIdx = s.indexOf("]", i + 1);
@@ -39507,7 +39522,12 @@
     // compatMode
     if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
       Object.defineProperty(docProto, "compatMode", {
-        get: function () { return "CSS1Compat"; },
+        get: function () {
+          if (!this.doctype) return "BackCompat";
+          const dtName = String(this.doctype.name || "").toLowerCase();
+          if (dtName !== "html") return "BackCompat";
+          return "CSS1Compat";
+        },
         configurable: true,
       });
     }

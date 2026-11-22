@@ -823,6 +823,8 @@ pub struct PageHandler {
             session.tty_ua_css = 0;
             session.tty_cell_w = 0;
             session.tty_cell_h = 0;
+            session.in_set_document_content = true;
+            defer session.in_set_document_content = false;
             const target_url = sanitizeSetContentUrl(session.url);
             if (raw_html := extractJsonString(req.params_raw, "html")) {
                 if (raw_html.len == 0) {
@@ -1129,6 +1131,8 @@ pub struct PageHandler {
             session.tty_ua_css = 0;
             session.tty_cell_w = 0;
             session.tty_cell_h = 0;
+            session.in_set_document_content = true;
+            defer session.in_set_document_content = false;
             const tty_matched = applyTtyNavParamsFromUrl(raw_nav_url, session);
             session.nav_tty_stripped = tty_matched;
             const url = if (tty_matched)

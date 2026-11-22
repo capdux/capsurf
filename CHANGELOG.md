@@ -2740,3 +2740,10 @@
 - **Fixed (`src/`)**:
   - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `matchesNthChild()` 增加 `ofType` 参数，支持 `:nth-of-type()`、`:nth-last-of-type()`、`:first-of-type`、`:last-of-type` 与 `:only-of-type`。
   - `src/css/matcher.cp`: 在 `PseudoKind`、`SelectorParser` 与 `Matcher.matchesPseudo()` 中补齐 `NthOfType` 与 `NthLastOfType`，使原生 CSS 级联与 `Element.prototype.matches()` 同步支持。
+
+## [2026-11-22] Phase 311: 对齐 `Document.compatMode` 与怪异模式 `#id`/`.class` 选择器，修复 `setContent` 内 SVG 大小写匹配
+- **Fixed (`src/`)**:
+  - `src/js/dom_binding.cp`: 为 `Document.prototype` 绑定原生 `compatMode` getter，直接映射 `doc.in_quirks_mode`（`"BackCompat"` / `"CSS1Compat"`）。
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 使 `Document.prototype.compatMode` 依据 `doctype` 判定怪异模式。
+  - `src/js/shim/selector.js`: 在 `matchesCompoundSelector()` 中当 `doc.compatMode === "BackCompat"` 时对 `#id` 与 `.class` 执行 ASCII 大小写不敏感匹配。
+  - `src/cdp/session.cp` & `src/cdp/page.cp`: 新增 `in_set_document_content` 标记，避免 `Page.setDocumentContent` 传入 `<svg>` 片段时被 `isSvgDocument` 误包裹 `<!doctype html>` 而破坏 Quirks Mode。

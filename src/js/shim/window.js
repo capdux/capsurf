@@ -10151,7 +10151,12 @@ const CSS_TYPED_OM_GLOBALS = {
   // compatMode
   if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
     Object.defineProperty(docProto, "compatMode", {
-      get: function () { return "CSS1Compat"; },
+      get: function () {
+        if (!this.doctype) return "BackCompat";
+        const dtName = String(this.doctype.name || "").toLowerCase();
+        if (dtName !== "html") return "BackCompat";
+        return "CSS1Compat";
+      },
       configurable: true,
     });
   }

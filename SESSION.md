@@ -5334,3 +5334,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`nth2="p2"`, `nthLast2="p1"`, `first="p1"`, `last="p2"`, `only="em"`, `inDoc=true`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
+
+### [2026-11-22 20:27] Phase 311: 对齐 `Document.compatMode` 与怪异模式 `#id`/`.class` 选择器，修复 `setContent` 内 SVG 大小写匹配
+- **引擎修复 (`src/`)**:
+  - [src/js/dom_binding.cp](file:///data/dev/capsurf/src/js/dom_binding.cp), [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js), [src/js/shim/selector.js](file:///data/dev/capsurf/src/js/shim/selector.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 暴露真实 `compatMode` 并在 `BackCompat` 下对 `#id`/`.class` 执行大小写不敏感匹配。
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/page.cp](file:///data/dev/capsurf/src/cdp/page.cp): `Page.setDocumentContent` 跳过 `isSvgDocument` 的 `<!doctype html>` 自动包裹。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：无 doctype `<svg><rect id="theRect" class="MyCls">` 返回 `{"compat":"BackCompat","byId":"theRect","byCls":"theRect"}`；带 `<!DOCTYPE html>` 返回 `{"compat":"CSS1Compat","byId":null,"byCls":null}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.35s)**。
