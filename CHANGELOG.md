@@ -2539,3 +2539,8 @@
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: `document.close` 解析 `reopenBuf` 中的 `<!DOCTYPE ...>`、`PUBLIC`/`SYSTEM` 标识及 `<head>`/`<body>`，清空残留 `<title>Blank Page</title>` 并记录 `_reopenDoctype`。
   - `src/js/shim/parser.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `XMLSerializer` 序列化 `Document` 与 `DocumentType` 时读取 `ownerDoc._reopenDoctype`，使 `page.setContent()` + `page.content()` 在无 doctype、HTML5 与 HTML4 doctype 下均与 Chromium 完全一致。
+
+## [2026-11-22] Phase 266: `dispatchMouseDomEvent` 缓冲溢出修复与 `indeterminate` 复选框清除
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 将 `dispatchMouseDomEvent` 的 `js_buf` 从 `[1280]u8` 扩容至 `[2048]u8`，修复模板长度（1403 字节）触发 `bufPrint` 溢出静默 `catch return true` 导致点击与焦点完全失效的问题。
+  - `src/js/shim/window.js`, `src/js/shim/element/html-element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 点击 `checkbox` 切换 `checked` 时同步清除 `indeterminate = false`，修复 `locator.uncheck()` 在 `indeterminate` 复选框上的状态校验失败。

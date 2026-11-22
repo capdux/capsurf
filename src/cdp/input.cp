@@ -207,7 +207,7 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
 
 fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32): bool {
     if (!session.has_document) return true;
-    let js_buf: [1280]u8 = [0; 1280];
+    let js_buf: [2048]u8 = [0; 2048];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
         "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; const el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? byPt : (byNid || byPt || document.body || document.documentElement); if (!el || typeof el.dispatchEvent !== 'function') return 1; const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: true, cancelable: true, clientX: {d:.2}, clientY: {d:.2}, button: 0, detail: 1 }}); const ok = el.dispatchEvent(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = document.activeElement; cur.focus(); if (document.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.2}, {d:.2}, 1); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
@@ -227,7 +227,7 @@ fn updateRangeFromX(session: *CdpPageSession, node_id: NodeId, x: f32): bool {
     const rect = session.layout.getBoundingClientRect(node_id);
     if (rect.width <= 0.0) return false;
     const ratio = std.math.clamp((x - rect.x) / rect.width, 0.0, 1.0);
-    let js_buf: [1280]u8 = [0; 1280];
+    let js_buf: [2048]u8 = [0; 2048];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
         "(() => {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const el = f(document, {d}); if (!el) return 0; const mn = (el.min !== '' && !isNaN(Number(el.min))) ? Number(el.min) : 0; const mx = (el.max !== '' && !isNaN(Number(el.max))) ? Number(el.max) : 100; const st = (el.step && el.step !== 'any' && !isNaN(Number(el.step)) && Number(el.step) > 0) ? Number(el.step) : 1; const raw = mn + {d:.6} * (mx - mn); const stepped = Math.min(mx, Math.max(mn, mn + Math.round((raw - mn) / st) * st)); const nextStr = String(stepped); const prevStr = String(el.value); if (nextStr !== prevStr) {{ el.value = nextStr; if (typeof el.dispatchEvent === 'function') el.dispatchEvent(new Event('input', {{ bubbles: true }})); return 1; }} return 0; }})()",

@@ -12217,6 +12217,7 @@ const CSS_TYPED_OM_GLOBALS = {
       if (ctrlTag === "input") {
         const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
         if (iType === "checkbox") {
+          ctrl.indeterminate = false;
           ctrl.checked = !ctrl.checked;
           const inEv = new _NativeEventCtor("input", { bubbles: true, cancelable: false, composed: true });
           const chEv = new _NativeEventCtor("change", { bubbles: true, cancelable: false });

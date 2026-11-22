@@ -179,6 +179,7 @@ function installHtmlElementExtensions(proto) {
               const iType = String(cur.getAttribute ? (cur.getAttribute("type") || "text") : "text").toLowerCase();
               if (!cur.disabled && !(cur.hasAttribute && cur.hasAttribute("disabled"))) {
                 if (iType === "checkbox") {
+                  cur.indeterminate = false;
                   cur.checked = !cur.checked;
                   if (typeof cur.dispatchEvent === "function") {
                     cur.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
@@ -226,6 +227,7 @@ function installHtmlElementExtensions(proto) {
                 if (ctrlTag === "input") {
                   const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : "text").toLowerCase();
                   if (iType === "checkbox") {
+                    ctrl.indeterminate = false;
                     ctrl.checked = !ctrl.checked;
                     ctrl.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
                     ctrl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));

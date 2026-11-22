@@ -4998,3 +4998,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 三种场景下 100% 与 Chromium 一致。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **124.33s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.14s)**。
+
+### [2026-11-22 15:49] Phase 266: `dispatchMouseDomEvent` 缓冲溢出修复与 `indeterminate` 复选框清除
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 将 `dispatchMouseDomEvent` 的 `js_buf` 从 `[1280]u8` 扩容至 `[2048]u8`，修复模板长度（1403 字节）触发 `bufPrint` 溢出静默跳过 JS 点击派发的问题。
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js), [src/js/shim/element/html-element.js](file:///data/dev/capsurf/src/js/shim/element/html-element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 点击 `checkbox` 切换 `checked` 时同步清除 `indeterminate = false`。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`locator.click`（`Clicked`）、`indeterminate uncheck`（`checked: false, indet: false`）、`click focusable`（`focusable`）与 `click checkbox`（`INPUT`）全部通过。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.91s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。

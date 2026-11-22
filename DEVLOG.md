@@ -1903,3 +1903,7 @@
 
 ### Phase 265: `document.open/write/close` 与 `DocumentType` 序列化排障笔记
 - **`page.setContent()` 残留 `Blank Page` 与 `<!DOCTYPE html>` 根因**：`about:blank` 初始文档含 `<!DOCTYPE html>` 与 `<title>Blank Page</title>`，此前 `session_hooks.cp` 中 `document.close` 仅覆写 `document.body.innerHTML`，既未清理 `head` 也未更新 `doctype`；且 Playwright `page.content()` 遍历 `document.childNodes` 逐节点调用 `XMLSerializer.serializeToString(child)`（直接命中 `nodeType === 10` 的 `DocumentType`）。在 `document.close` 中同步清理 `head` 并设置 `_reopenDoctype`，同时在 `XMLSerializer` 的 `nt === 9` 与 `nt === 10` 分支读取 `ownerDoc._reopenDoctype` 后，无 doctype、HTML5 doctype 与 HTML4 doctype 全部一次通过。
+
+### Phase 266: `dispatchMouseDomEvent` 缓冲溢出与 `indeterminate` 复选框排障笔记
+- **`dispatchMouseDomEvent` 静默失效根因**：Phase 264 在 `dispatchMouseDomEvent` 的 JS 模板中加入了 `mousedown` 冒泡聚焦逻辑，使模板总长增至 1403 字节，超过了原有的 `js_buf: [1280]u8` 并命中 `catch return true`，导致所有点击事件完全跳过 JS 派发。扩容至 `[2048]u8` 后，`locator.click`、`click checkbox` 聚焦与非可聚焦元素保焦全部恢复。
+- **`indeterminate` 复选框点击**：`activateClickedElement` 与 `html-element.js` 原先仅翻转 `ctrl.checked` 而未清除 `ctrl.indeterminate`，同步置 `indeterminate = false` 后 `locator.uncheck()` 一次通过。
