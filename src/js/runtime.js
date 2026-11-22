@@ -18076,22 +18076,26 @@
         const ost = getOptionState(this);
         ost.selected = Boolean(v);
         const owner = findOwnerSelect(this);
-        if (owner && !owner.multiple) {
+        if (owner) {
           const selState = getSelectState(owner);
-          const opts = owner.options;
-          if (v) {
-            for (let i = 0; i < opts.length; i++) {
-              if (isSameElement(opts[i], this)) {
-                selState.selectedIndex = i;
-              } else {
-                getOptionState(opts[i]).selected = false;
+          if (!owner.multiple) {
+            const opts = owner.options;
+            if (v) {
+              for (let i = 0; i < opts.length; i++) {
+                if (isSameElement(opts[i], this)) {
+                  selState.selectedIndex = i;
+                } else {
+                  getOptionState(opts[i]).selected = false;
+                }
+              }
+            } else {
+              const curIdx = owner.selectedIndex;
+              if (curIdx !== -1 && isSameElement(opts[curIdx], this)) {
+                selState.selectedIndex = -1;
               }
             }
           } else {
-            const curIdx = owner.selectedIndex;
-            if (curIdx !== -1 && isSameElement(opts[curIdx], this)) {
-              selState.selectedIndex = -1;
-            }
+            selState.selectedIndex = undefined;
           }
         }
       },

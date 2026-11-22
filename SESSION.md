@@ -5196,3 +5196,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`fs.querySelector(":scope > legend")` 精准返回 `"leg1"`，`allLen=2, deepLen=3, containsIn1=true, containsIn2=false`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **151.42s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.24s)**。
+
+### [2026-11-22 18:36] Phase 292: 修复 `<select multiple>` 在置空 `selectedIndex` 后设置 `option.selected` 未重算的缺陷
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/forms/select.js](file:///data/dev/capsurf/src/js/shim/element/forms/select.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `HTMLOptionElement.prototype.selected` setter 中，当 `owner.multiple` 为 `true` 时将 `getSelectState(owner).selectedIndex` 置为 `undefined` 触发重算。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`<select id="target" multiple>` 执行 `selectedIndex = -1; options[1].selected = true` 后 `val="cat", idx=1, len=1`；取消选中后恢复 `val="", idx=-1, len=0`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（164 模块 **148.62s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。

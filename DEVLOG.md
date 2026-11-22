@@ -1986,3 +1986,6 @@
 
 ### Phase 291: `fieldset.querySelector(':scope > legend')` 返回 `null` 排障笔记
 - **`selectors-role` `disabled fieldset` `<legend>` 误判为 `disabled` 根因**：`selector.js` 的 `wrapQuerySelector()` 仅拦截 `:checked` 而未拦截 `:scope`，且 `matchesComplexSelector()` 在 `comb === ">"` 时直接写 `if (scopeRoot && p === scopeRoot) return false` 拦截了作用域根节点匹配。补齐 `:scope` 伪类与 `scopeRoot` 放行后，实测 `fs.querySelector(":scope > legend")` 精准命中 `leg1`，`allLen=2, deepLen=3`。
+
+### Phase 292: `<select multiple>` 执行 `selectOption('cat')` 后 `inputValue()` 返回 `""` 排障笔记
+- **`retarget` `select options retargeting` 失败根因**：`selectOption` 先设置 `select.selectedIndex = -1` 清空选项（将 `selState.selectedIndex` 缓存为 `-1`），随后再置目标 `option.selected = true`。`HTMLOptionElement.prototype.selected` setter 此前仅在 `!owner.multiple` 时更新 `selState.selectedIndex`，导致多选模式下 `selectedIndex` 永久卡在 `-1`、`select.value` 返回 `""`。补齐多选分支 `selState.selectedIndex = undefined` 失效重算后，实测 `val="cat", idx=1, len=1`，取消选中后恢复 `val="", idx=-1, len=0`。

@@ -2658,3 +2658,7 @@
 ## [2026-11-22] Phase 291: 支持 `querySelector` / `querySelectorAll` 的 `:scope` 伪类与作用域组合子匹配
 - **Fixed (`src/`)**:
   - `src/js/shim/selector.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `wrapQuerySelector()` / `wrapQuerySelectorAll()` 中拦截 `:scope` selectors 并传入 `scopeRoot`，在 `matchesCompoundSelector()` 中实现 `:scope`（支持 `_nid` 等价性），并在 `matchesComplexSelector()` 中允许 `>` 与后代组合子正确匹配 `scopeRoot` 本身（修复 `fieldset.querySelector(':scope > legend')` 返回 `null`）。
+
+## [2026-11-22] Phase 292: 修复 `<select multiple>` 在置空 `selectedIndex` 后设置 `option.selected` 未重算的缺陷
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/forms/select.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `HTMLOptionElement.prototype.selected` setter 中，当所属 `owner.multiple` 为 `true` 时显式将 `getSelectState(owner).selectedIndex` 置为 `undefined` 触发重算，修复先执行 `selectedIndex = -1` 再设置 `option.selected = true` 时 `select.value` 仍返回 `""` 的问题。
