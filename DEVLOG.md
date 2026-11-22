@@ -1920,3 +1920,6 @@
 
 ### Phase 270: `DOM.getBoxModel` / `DOM.getContentQuads` 滚动偏移排障笔记
 - **视口相对坐标对齐**：Playwright `ElementHandle.boundingBox()` 依赖 `DOM.getContentQuads` / `DOM.getBoxModel` 返回相对当前视口左上角的坐标（而非文档绝对坐标）。此前 `dom.cp` 未扣除 `session.updateLayoutMetrics()` 获取的 `(sx, sy)`，导致 `window.scrollTo(200, 300)` 后 `boundingBox()` 仍返回 `{ x: 230, y: 340 }`。加入 `shiftQuadScroll` 扣除 `(sx, sy)` 后精确输出 `{ x: 30, y: 40, width: 20, height: 20 }`。
+
+### Phase 271: 动态 `<link rel="stylesheet">` 拉取与 `fireScriptEvent` 排障笔记
+- **`addStyleTag({ url })` 样式生效**：此前 `hookedAppend` / `hookedInsertBefore` 仅拦截 `<script>` 与 `<iframe>`，未处理动态插入的 `<link rel="stylesheet">`。新增 `handleInsertedLink()` 复用 `__capsurf_http_get` 拉取外部样式并镜像为 `<style>` 节点后，`getComputedStyle(document.body).backgroundColor` 即刻返回 `rgb(255, 0, 0)`；同时去除 `fireScriptEvent` 中 `else if` 限制，确保 `onload`/`onerror` 属性处理器与 `addEventListener` 均可触发。

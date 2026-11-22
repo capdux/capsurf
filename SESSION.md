@@ -5037,3 +5037,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`window.scrollTo(200, 300)` 后 `ElementHandle.boundingBox()` 精确返回 `{ x: 30, y: 40, width: 20, height: 20 }`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **126.01s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.22s)**。
+
+### [2026-11-22 16:18] Phase 271: 动态 `<link rel="stylesheet">` HTTP 拉取与 `fireScriptEvent` 属性回调补全
+- **引擎修复 (`src/`)**:
+  - [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): 新增 `handleInsertedLink()` 拦截动态挂载的 `<link rel="stylesheet">` 并通过 `__capsurf_http_get` 拉取外部 CSS 注入 `<style data-capsurf-link-mirror>` 镜像节点；修复 `fireScriptEvent()` 跳过 `node.onload`/`node.onerror` 属性回调的问题。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`addStyleTag({ url })` 注入外部 CSS 后 `getComputedStyle(document.body).backgroundColor` 返回 `rgb(255, 0, 0)`。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（161 模块 **122.65s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.13s)**。

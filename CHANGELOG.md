@@ -2563,3 +2563,7 @@
 ## [2026-11-22] Phase 270: `DOM.getBoxModel` 与 `DOM.getContentQuads` 视口滚动偏移扣除
 - **Fixed (`src/`)**:
   - `src/cdp/dom.cp`: 新增 `shiftQuadScroll()` 辅助函数，在 `DOM.getBoxModel` 与 `DOM.getContentQuads` 中调用 `session.updateLayoutMetrics(&sx, &sy, &cw, &ch)` 并扣除视口滚动偏移 `(sx, sy)`，使滚动后的 `ElementHandle.boundingBox()` 返回准确的视口相对坐标。
+
+## [2026-11-22] Phase 271: 动态 `<link rel="stylesheet">` HTTP 拉取与 `fireScriptEvent` 属性回调补全
+- **Fixed (`src/`)**:
+  - `src/cdp/session_hooks.cp`: 新增 `handleInsertedLink()`（在 `appendChild`/`insertBefore` 挂载 `<link rel="stylesheet">` 时通过 `__capsurf_http_get` 异步拉取外部 CSS 并注入 `<style data-capsurf-link-mirror>` 镜像节点，同时支持 CSP `style-src 'none'` 拦截与 `load`/`error` 事件）；修复 `fireScriptEvent()` 跳过 `node.onload`/`node.onerror` 属性回调的问题。

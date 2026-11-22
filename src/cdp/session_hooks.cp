@@ -2362,7 +2362,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "  function resolveUrlAbs(raw, base) { try { return new URL(raw, base || (g.location ? g.location.href : 'http://127.0.0.1:8787/')).href; } catch (e) { return raw; } }\n" ++
     "  function getSessionExtraHeadersJson() { try { if (typeof g.__capsurf_get_extra_headers === 'function') { var v = g.__capsurf_get_extra_headers(); if (typeof v === 'string' && v.length > 0) return v; } } catch (e) {} return (typeof g.__capsurf_session_extra_headers === 'string') ? g.__capsurf_session_extra_headers : '{}'; }\n" ++
     "  var INSERTED_SCRIPT_CAP = 1024; var insertedExtCount = 0; var moduleInflight = Object.create(null);\n" ++
-    "  function fireScriptEvent(node, evName) { var evt = new Event(evName, { bubbles: false, cancelable: false }); var prop = evName === 'load' ? 'onload' : 'onerror'; if (typeof node.dispatchEvent === 'function') { try { node.dispatchEvent(evt); } catch (e) {} } else if (typeof node[prop] === 'function') { try { node[prop].call(node, evt); } catch (e) {} } }\n" ++
+    "  function fireScriptEvent(node, evName) { var evt = new Event(evName, { bubbles: false, cancelable: false }); var prop = evName === 'load' ? 'onload' : 'onerror'; if (typeof node.dispatchEvent === 'function') { try { node.dispatchEvent(evt); } catch (e) {} } if (typeof node[prop] === 'function') { try { node[prop].call(node, evt); } catch (e) {} } }\n" ++
     "  function findSyntaxErrorLine(code, err) { if (err && typeof err.lineNumber === 'number' && err.lineNumber > 0) return err.lineNumber; if (err && typeof err.stack === 'string') { var m = err.stack.match(/:(\\d+)(?::\\d+)?/); if (m) return parseInt(m[1], 10); } var lines = String(code || '').split('\\n'); for (var i = 1; i <= lines.length; i++) { try { new Function(lines.slice(0, i).join('\\n')); } catch (e2) { if (i === lines.length) return i; var rest = lines.slice(0, i).join('\\n'); if (rest.indexOf(')') !== -1 && lines[i - 1].indexOf(')') !== -1) return i; } } return lines.length || 1; }\n" ++
     "  function getModulePreloadPin(absUrl) { return (g.__capsurf_modulepreload_pins && typeof g.__capsurf_modulepreload_pins[absUrl] === 'string') ? g.__capsurf_modulepreload_pins[absUrl] : ''; }\n" ++
     "  g.__capsurf_dyn_import = function(spec, baseUrl) {\n" ++
@@ -2552,6 +2552,36 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    }\n" ++
     "    node._alreadyStarted = false;\n" ++
     "  }\n" ++
+    "  function handleInsertedLink(node) {\n" ++
+    "    if (!node || node.nodeType !== 1) return;\n" ++
+    "    var tag = String(node.localName || node.tagName || '').toLowerCase();\n" ++
+    "    if (tag !== 'link' || node._linkAlreadyLoaded) return;\n" ++
+    "    var rel = String((node.getAttribute && node.getAttribute('rel')) || node.rel || '').trim().toLowerCase();\n" ++
+    "    if (rel.split(/\\s+/).indexOf('stylesheet') === -1) return;\n" ++
+    "    var rawHref = (node.getAttribute && node.getAttribute('href')) || node.href || '';\n" ++
+    "    if (!rawHref) return;\n" ++
+    "    node._linkAlreadyLoaded = true;\n" ++
+    "    var absUrl = resolveUrlAbs(rawHref);\n" ++
+    "    var docCsp = String(g.__capsurf_doc_csp || '');\n" ++
+    "    if (docCsp.length > 0 && /default-src\\s+'none'|style-src\\s+'none'/i.test(docCsp)) {\n" ++
+    "      Promise.resolve().then(function() { fireScriptEvent(node, 'error'); });\n" ++
+    "      return;\n" ++
+    "    }\n" ++
+    "    if (typeof g.__capsurf_http_get === 'function') {\n" ++
+    "      Promise.resolve().then(function() {\n" ++
+    "        var css = g.__capsurf_http_get(absUrl);\n" ++
+    "        if (css === null || css === undefined) { fireScriptEvent(node, 'error'); return; }\n" ++
+    "        var doc = node.ownerDocument || g.document;\n" ++
+    "        if (doc && doc.createElement && node.parentNode) {\n" ++
+    "          var st = doc.createElement('style');\n" ++
+    "          st.setAttribute('data-capsurf-link-mirror', '1');\n" ++
+    "          st.textContent = String(css);\n" ++
+    "          node.parentNode.insertBefore(st, node.nextSibling);\n" ++
+    "        }\n" ++
+    "        fireScriptEvent(node, 'load');\n" ++
+    "      });\n" ++
+    "    }\n" ++
+    "  }\n" ++
     "  function handleOopifCspFrame(iframe) {\n" ++
     "    var raw = (iframe.getAttribute && iframe.getAttribute('src')) || iframe.src || '';\n" ++
     "    if (raw.indexOf('/__fixtures/oopif-csp-frame.html') === -1) return;\n" ++
@@ -2592,7 +2622,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "  if (typeof Node !== 'undefined' && Node.prototype) {\n" ++
     "    var origAppend = Node.prototype.appendChild;\n" ++
     "    if (typeof origAppend === 'function') {\n" ++
-    "      var hookedAppend = function(child) { var tag = child && child.nodeType === 1 ? String(child.tagName || '').toLowerCase() : ''; if (tag === 'script') { var prevSt = child._alreadyStarted; child._alreadyStarted = true; var res = origAppend.apply(this, arguments); child._alreadyStarted = prevSt; if (child.isConnected) handleInsertedScript(child); return res; } var res2 = origAppend.apply(this, arguments); if (tag === 'iframe' && child.isConnected) handleOopifCspFrame(child); return res2; };\n" ++
+    "      var hookedAppend = function(child) { var tag = child && child.nodeType === 1 ? String(child.tagName || '').toLowerCase() : ''; if (tag === 'script') { var prevSt = child._alreadyStarted; child._alreadyStarted = true; var res = origAppend.apply(this, arguments); child._alreadyStarted = prevSt; if (child.isConnected) handleInsertedScript(child); return res; } var res2 = origAppend.apply(this, arguments); if (tag === 'iframe' && child.isConnected) handleOopifCspFrame(child); if (tag === 'link' && child.isConnected) handleInsertedLink(child); return res2; };\n" ++
     "      Node.prototype.appendChild = hookedAppend;\n" ++
     "      if (typeof Element !== 'undefined' && Element.prototype) Element.prototype.appendChild = hookedAppend;\n" ++
     "      if (typeof HTMLElement !== 'undefined' && HTMLElement.prototype && Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'appendChild')) HTMLElement.prototype.appendChild = hookedAppend;\n" ++
@@ -2600,7 +2630,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    }\n" ++
     "    var origInsertBefore = Node.prototype.insertBefore;\n" ++
     "    if (typeof origInsertBefore === 'function') {\n" ++
-    "      var hookedInsertBefore = function(child, ref) { var isScript = child && child.nodeType === 1 && String(child.tagName || '').toLowerCase() === 'script'; if (isScript) { var prevSt = child._alreadyStarted; child._alreadyStarted = true; var res = origInsertBefore.apply(this, arguments); child._alreadyStarted = prevSt; if (child.isConnected) handleInsertedScript(child); return res; } return origInsertBefore.apply(this, arguments); };\n" ++
+    "      var hookedInsertBefore = function(child, ref) { var tag = child && child.nodeType === 1 ? String(child.tagName || '').toLowerCase() : ''; if (tag === 'script') { var prevSt = child._alreadyStarted; child._alreadyStarted = true; var res = origInsertBefore.apply(this, arguments); child._alreadyStarted = prevSt; if (child.isConnected) handleInsertedScript(child); return res; } var res2 = origInsertBefore.apply(this, arguments); if (tag === 'link' && child.isConnected) handleInsertedLink(child); return res2; };\n" ++
     "      Node.prototype.insertBefore = hookedInsertBefore;\n" ++
     "      if (typeof Element !== 'undefined' && Element.prototype) Element.prototype.insertBefore = hookedInsertBefore;\n" ++
     "      if (typeof HTMLElement !== 'undefined' && HTMLElement.prototype && Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'insertBefore')) HTMLElement.prototype.insertBefore = hookedInsertBefore;\n" ++
