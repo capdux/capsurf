@@ -2787,3 +2787,7 @@
 - **Fixed (`src/`)**:
   - `src/cdp/input.cp`: 为 `dispatchKeyJs()` 增加 `is_repeat` 参数，将 `Input.dispatchKeyEvent` 的 `autoRepeat` 透传给 `__capsurf_dispatch_key_event()`。
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `dispatchKeyEvent()` 接收 `isRepeat` 并在 `keydown`/`keypress` 中设置 `repeat: Boolean(isRepeat)`（修复 `page-keyboard.spec.ts` `[18/44] should specify repeat property`）。
+
+## [2026-11-22] Phase 321: 支持 `Shift+ArrowLeft/Right/Home/End` 选区扩展与 `selectAll` 全选命令
+- **Fixed (`src/`)**:
+  - `src/cdp/input.cp`: 为 `applyInputText()` 新增 `modifiers` 与 `is_select_all` 参数，支持 `Shift+ArrowLeft`/`ArrowRight`/`Home`/`End` 双向选区扩展（跟踪 `_selDir` 并调用 `setSelectionRange(ns, ne, dir)`）以及 CDP `"commands": ["selectAll"]` / `Ctrl+A` 全选文本（修复 `page-keyboard.spec.ts` `[2/44]` 与 `[25/44]`）。

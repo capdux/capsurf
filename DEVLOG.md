@@ -2075,3 +2075,6 @@
 
 ### Phase 320: `page-keyboard.spec.ts` `[18/44]` `e.repeat` 恒为 `false` 排障笔记
 - **`autoRepeat` 未透传至 JS 事件构造根因**：`src/cdp/input.cp` 已从请求中解析 `autoRepeat` 为 `repeat`，但调用 `dispatchKeyJs()` 时未将该布尔值传入 `__capsurf_dispatch_key_event()`，导致 `window.js` `dispatchKeyEvent()` 构造 `KeyboardEvent` 时始终省略 `repeat`（默认 `false`）。打通第 5 参数 `isRepeat` 后，实测 `autoRepeat: false/true` 分别输出 `[false,true]`。
+
+### Phase 321: `page-keyboard.spec.ts` `[2/44]` 方向键选区与 `[25/44]` `selectAll` 失败排障笔记
+- **方向键无条件折叠选区与忽略 `commands: ["selectAll"]` 根因**：`applyInputText()` 此前未接收 `modifiers`（`Shift` 位 `8`），执行 `ArrowLeft`/`ArrowRight`/`Home`/`End` 时直接调用 `setSelectionRange(cursor, cursor)` 丢失选区；且未处理 Playwright 通过 CDP `Input.dispatchKeyEvent` `commands: ["selectAll"]` 下发的全选指令。补齐双向选区扩展与 `selectAll` 后，实测 `Shift+ArrowLeft`+`Backspace` 准确恢复 `"Hello World!"`，`selectAll`+`Backspace` 清空为 `""`。

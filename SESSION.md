@@ -5407,3 +5407,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`Input.dispatchKeyEvent` 连续发送 `autoRepeat: false` 与 `true` 返回 `[false,true]`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.25s)**。
+
+### [2026-11-22 20:58] Phase 321: 支持 `Shift+ArrowLeft/Right/Home/End` 选区扩展与 `selectAll` 全选命令
+- **引擎修复 (`src/`)**:
+  - [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): `applyInputText()` 接入 `modifiers` 与 `is_select_all`，支持 `Shift` 双向选区扩展及 `"selectAll"`/`Ctrl+A`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`{"afterShiftBack":"Hello World!","afterSelectAllBack":""}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.34s)**。
