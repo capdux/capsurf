@@ -34594,11 +34594,18 @@
         if (val === "portrait") return w < h;
         return false;
       }
+      const ef = (typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_features) || {};
       if (feat === "prefers-color-scheme") {
-        return val === "light";
+        return val === (ef["prefers-color-scheme"] || "light");
       }
       if (feat === "prefers-reduced-motion") {
-        return val === "no-preference";
+        return val === (ef["prefers-reduced-motion"] || "no-preference");
+      }
+      if (feat === "forced-colors") {
+        return val === (ef["forced-colors"] || "none");
+      }
+      if (feat === "prefers-contrast") {
+        return val === (ef["prefers-contrast"] || "no-preference");
       }
       if (feat === "hover") {
         return val === "hover";
@@ -34650,8 +34657,14 @@
               branchOk = false;
               break;
             }
-          } else if (part === "all" || part === "screen") {
+          } else if (part === "all") {
             // matches
+          } else if (part === "screen" || part === "print") {
+            const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
+            if (part !== curMedia) {
+              branchOk = false;
+              break;
+            }
           } else {
             branchOk = false;
             break;

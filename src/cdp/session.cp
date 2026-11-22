@@ -957,6 +957,10 @@ pub struct CdpPageSession {
     is_mobile: bool = false,
     dark_color_scheme: bool = false,
     emulated_media_print: bool = false,
+    emulated_media_buf: [64]u8 = [0; 64],
+    emulated_media_len: usize = 0,
+    emulated_features_buf: [1024]u8 = [0; 1024],
+    emulated_features_len: usize = 0,
     nav_tty_stripped: bool = false,
     tty_ua_css: u32 = 0,
     in_set_document_content: bool = false,
@@ -2122,6 +2126,7 @@ pub struct CdpPageSession {
         _.url = nav_url;
         _.referrer = nav_referrer;
         _.has_document = true;
+        _.applyEmulatedMediaToJs();
         _.nav_start_ms = getMilliTimestamp();
         if (!_.skip_raster) {
             let has_oopif_frame = false;
@@ -3048,6 +3053,20 @@ pub struct CdpPageSession {
             _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;try{delete globalThis.MutationObserver;}catch(e){}})()")
         else
             _.ctx.eval("(function(){globalThis.__capsurf_in_isolated=false;})()");
+        _.ctx.freeValue(v);
+    }
+
+    pub fn applyEmulatedMediaToJs(*_) {
+        if (!_.has_document && _.emulated_media_len == 0 && _.emulated_features_len == 0) return;
+        const m_slice = _.emulated_media_buf[0.._.emulated_media_len];
+        const f_slice = if (_.emulated_features_len > 0) _.emulated_features_buf[0.._.emulated_features_len] else "[]";
+        let js_buf: [2048]u8 = [0; 2048];
+        const js = std.fmt.bufPrint(
+            &js_buf,
+            "(function(){{globalThis.__capsurf_emulated_media='{s}';try{{const arr={s};const f={{}};if(Array.isArray(arr)){{for(let i=0;i<arr.length;i++){{if(arr[i]&&arr[i].name)f[String(arr[i].name).toLowerCase()]=String(arr[i].value||'').toLowerCase();}}}}globalThis.__capsurf_emulated_features=f;globalThis.__capsurf_dark_color_scheme=(f['prefers-color-scheme']==='dark');}}catch(e){{globalThis.__capsurf_emulated_features={{}};globalThis.__capsurf_dark_color_scheme=false;}}}})()",
+            .{ m_slice, f_slice },
+        ) catch return;
+        const v = _.ctx.eval(js);
         _.ctx.freeValue(v);
     }
 

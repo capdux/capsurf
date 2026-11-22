@@ -2111,3 +2111,6 @@
 
 ### Phase 332: `css-position` / `css-flexbox` `getComputedStyle` 空串及 `z-index: calc()` 未求值排障笔记
 - **缺少标准初始值与无单位 `calc()` 求值根因**：`getComputedStyle()` 此前仅对 `z-index` 与 `margin-*` 补全默认值，导致未显式设置的 `top`/`right`/`bottom`/`left`/`flex-basis`/`position`/`flex-*` 返回 `""`，且 `z-index: calc(1 + 2)` 原样返回 `"calc(1 + 2)"`。补全初始值表与 `evalCssLengthExpr(..., 0, 16)` 整型求值后，实测默认返回 `pos="static", left="auto", flexDir="row", flexBasis="auto", flexGrow="0", flexShrink="1"`，`zIndex="calc(1 + 2)"` 返回 `"3"`。
+
+### Phase 333: `page-emulate-media.spec.ts` 9 项媒体模拟失败排障笔记
+- **`Emulation.setEmulatedMedia` 忽略 `features` 且未持久化、以及 `session_hooks.cp` 拦截 `prefers-color-scheme` 根因**：`src/cdp/emulation.cp` 此前仅处理 `media === "print"` 而完全忽略 `features` 数组，且在 `navigate()` 时丢失状态；同时 `session_hooks.cp` 的 `wrappedMatchMedia` 仅读取会被导航重置的 `__capsurf_dark_color_scheme`。在 `CdpPageSession` 持久化 `emulated_media` 与 `emulated_features`、于 `navigate()` 末尾注入、并同步 `window.js` 与 `session_hooks.cp` 后，实测 `Page.setDocumentContent` 后 `mPrint=true, mScreen=false, dark=true, reduced=true, forced=true, contrast=true, bg="rgb(0, 0, 0)"`。

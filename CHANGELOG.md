@@ -2835,3 +2835,8 @@
 ## [2026-11-22] Phase 332: 补齐 `getComputedStyle` 定位/弹性盒初始默认值与 `z-index` `calc()` 求值
 - **Fixed (`src/`)**:
   - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 为 `getComputedStyle` 补齐未设置时的初始计算值（`top`/`right`/`bottom`/`left`/`flex-basis` -> `"auto"`，`position` -> `"static"`，`flex-direction` -> `"row"`，`flex-wrap` -> `"nowrap"`，`flex-grow` -> `"0"`，`flex-shrink` -> `"1"`），并为 `z-index` 的 `calc()`/`min()`/`max()`/`clamp()` 表达式做整型求值。
+
+## [2026-11-22] Phase 333: 完整打通 `Emulation.setEmulatedMedia` (`media` 与 `features`) 至 `matchMedia` 与 `@media` 级联并跨导航持久化
+- **Fixed (`src/`)**:
+  - `src/js/shim/window.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `evaluateMediaFeature()` 与 `evaluateMediaQuery()` 读取 `globalThis.__capsurf_emulated_media` 与 `globalThis.__capsurf_emulated_features`，支持 `print`/`screen`、`prefers-color-scheme`、`prefers-reduced-motion`、`forced-colors`、`prefers-contrast`。
+  - `src/cdp/emulation.cp`, `src/cdp/session.cp`, `src/cdp/session_hooks.cp`: 解析并持久化 `Emulation.setEmulatedMedia` 的 `media` 与 `features` 数组，在 `navigate()` 末尾自动注入 JS 环境，并同步 `session_hooks.cp` `wrappedMatchMedia` 的 `prefers-color-scheme` 判定。

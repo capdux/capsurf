@@ -1572,7 +1572,7 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      var res = OrigMatchMedia.call(this, query);\n" ++
     "      var q = String(query || '').toLowerCase();\n" ++
     "      if (q.indexOf('prefers-color-scheme') !== -1) {\n" ++
-    "        var isDark = Boolean(g.__capsurf_dark_color_scheme);\n" ++
+    "        var isDark = Boolean(g.__capsurf_dark_color_scheme || (g.__capsurf_emulated_features && g.__capsurf_emulated_features['prefers-color-scheme'] === 'dark'));\n" ++
     "        var matchesScheme = true;\n" ++
     "        if (/prefers-color-scheme\\s*:\\s*dark/.test(q)) matchesScheme = isDark;\n" ++
     "        else if (/prefers-color-scheme\\s*:\\s*light/.test(q)) matchesScheme = !isDark;\n" ++

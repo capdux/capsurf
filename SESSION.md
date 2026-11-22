@@ -5491,3 +5491,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（端口 19399）：`{"def":{"pos":"static","left":"auto","flexDir":"row","flexBasis":"auto","flexGrow":"0","flexShrink":"1"},"zi":"3"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.32s)**。
+
+### [2026-11-22 21:52] Phase 333: 完整打通 `Emulation.setEmulatedMedia` (`media` 与 `features`) 至 `matchMedia` 与 `@media` 级联并跨导航持久化
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/window.js](file:///data/dev/capsurf/src/js/shim/window.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`), [src/cdp/emulation.cp](file:///data/dev/capsurf/src/cdp/emulation.cp), [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp), [src/cdp/session_hooks.cp](file:///data/dev/capsurf/src/cdp/session_hooks.cp): 持久化并注入 `media` 与 `features`，统一 `matchMedia` 与 `getComputedStyle` `@media` 求值。
+- **双模式验证**:
+  - `bin_dev/main` 实测（端口 19399）：`Emulation.setEmulatedMedia` 后再 `Page.setDocumentContent`，返回 `{"mPrint":true,"mScreen":false,"dark":true,"reduced":true,"forced":true,"contrast":true,"bg":"rgb(0, 0, 0)"}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。
