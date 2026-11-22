@@ -19948,7 +19948,27 @@
     });
 
     Object.defineProperty(HTMLFormElement.prototype, "action", {
-      get: function () { return this.getAttribute("action") || ""; },
+      get: function () {
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const docUrl = (doc && (doc.URL || (doc.location && doc.location.href))) || "about:blank";
+        const raw = this.getAttribute("action");
+        if (raw === null || String(raw).trim() === "") return docUrl;
+        let baseUrl = docUrl;
+        if (doc && typeof doc.querySelector === "function") {
+          const baseEl = doc.querySelector("base[href]");
+          if (baseEl) {
+            const bHref = baseEl.getAttribute("href");
+            if (bHref !== null && String(bHref).trim() !== "") {
+              try { baseUrl = new URL(String(bHref).trim(), docUrl).href; } catch (e) {}
+            }
+          }
+        }
+        try {
+          return new URL(String(raw).trim(), baseUrl).href;
+        } catch (e) {
+          return raw;
+        }
+      },
       set: function (v) { this.setAttribute("action", String(v)); },
       configurable: true,
     });
@@ -31659,7 +31679,7 @@
     Object.defineProperty(locationObj, "valueOf", {
       value: Object.prototype.valueOf,
       writable: false,
-      enumerable: true,
+      enumerable: false,
       configurable: false,
     });
     Object.defineProperty(locationObj, "toString", {
@@ -40230,11 +40250,37 @@
       ? global.Document.prototype
       : Object.create(global.Node ? global.Node.prototype : Object.prototype);
 
+    const sharedDocLocationGet = function () {
+      const mainDoc = global.document || (typeof document !== "undefined" ? document : null);
+      return (this === mainDoc) ? (global.location || null) : null;
+    };
+    const sharedDocLocationSet = function (val) {
+      const mainDoc = global.document || (typeof document !== "undefined" ? document : null);
+      if (this === mainDoc) {
+        handleLocationNavigate(val, false);
+      }
+    };
+    const defineDocLocation = function (targetDoc) {
+      if (!targetDoc || (typeof targetDoc !== "object" && typeof targetDoc !== "function")) return;
+      const desc = Object.getOwnPropertyDescriptor(targetDoc, "location");
+      if (!desc || desc.configurable) {
+        try {
+          Object.defineProperty(targetDoc, "location", {
+            get: sharedDocLocationGet,
+            set: sharedDocLocationSet,
+            enumerable: true,
+            configurable: false,
+          });
+        } catch (e) {}
+      }
+    };
+
     let DocCtor = global.Document;
     if (typeof DocCtor !== "function") {
       DocCtor = function Document() {
         if (global.Node) global.Node.call(this);
         this._nid = 0;
+        defineDocLocation(this);
       };
       DocCtor.prototype = docProto;
       docProto.constructor = DocCtor;
@@ -40242,6 +40288,22 @@
       if (typeof globalThis !== "undefined") globalThis.Document = DocCtor;
       if (typeof window !== "undefined") window.Document = DocCtor;
       markNative(DocCtor, "Document");
+    } else {
+      const origDocCtor = DocCtor;
+      const WrappedDocCtor = function Document() {
+        const inst = new origDocCtor();
+        defineDocLocation(inst);
+        return inst;
+      };
+      WrappedDocCtor.prototype = origDocCtor.prototype;
+      origDocCtor.prototype.constructor = WrappedDocCtor;
+      markNative(WrappedDocCtor, "Document");
+      global.Document = WrappedDocCtor;
+      if (typeof globalThis !== "undefined") globalThis.Document = WrappedDocCtor;
+      if (typeof window !== "undefined") window.Document = WrappedDocCtor;
+    }
+    if (typeof document !== "undefined" && document) {
+      defineDocLocation(document);
     }
 
     // doctype

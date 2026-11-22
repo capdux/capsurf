@@ -1735,7 +1735,7 @@ function installWindow(global) {
   Object.defineProperty(locationObj, "valueOf", {
     value: Object.prototype.valueOf,
     writable: false,
-    enumerable: true,
+    enumerable: false,
     configurable: false,
   });
   Object.defineProperty(locationObj, "toString", {
@@ -10306,11 +10306,37 @@ const CSS_TYPED_OM_GLOBALS = {
     ? global.Document.prototype
     : Object.create(global.Node ? global.Node.prototype : Object.prototype);
 
+  const sharedDocLocationGet = function () {
+    const mainDoc = global.document || (typeof document !== "undefined" ? document : null);
+    return (this === mainDoc) ? (global.location || null) : null;
+  };
+  const sharedDocLocationSet = function (val) {
+    const mainDoc = global.document || (typeof document !== "undefined" ? document : null);
+    if (this === mainDoc) {
+      handleLocationNavigate(val, false);
+    }
+  };
+  const defineDocLocation = function (targetDoc) {
+    if (!targetDoc || (typeof targetDoc !== "object" && typeof targetDoc !== "function")) return;
+    const desc = Object.getOwnPropertyDescriptor(targetDoc, "location");
+    if (!desc || desc.configurable) {
+      try {
+        Object.defineProperty(targetDoc, "location", {
+          get: sharedDocLocationGet,
+          set: sharedDocLocationSet,
+          enumerable: true,
+          configurable: false,
+        });
+      } catch (e) {}
+    }
+  };
+
   let DocCtor = global.Document;
   if (typeof DocCtor !== "function") {
     DocCtor = function Document() {
       if (global.Node) global.Node.call(this);
       this._nid = 0;
+      defineDocLocation(this);
     };
     DocCtor.prototype = docProto;
     docProto.constructor = DocCtor;
@@ -10318,6 +10344,22 @@ const CSS_TYPED_OM_GLOBALS = {
     if (typeof globalThis !== "undefined") globalThis.Document = DocCtor;
     if (typeof window !== "undefined") window.Document = DocCtor;
     markNative(DocCtor, "Document");
+  } else {
+    const origDocCtor = DocCtor;
+    const WrappedDocCtor = function Document() {
+      const inst = new origDocCtor();
+      defineDocLocation(inst);
+      return inst;
+    };
+    WrappedDocCtor.prototype = origDocCtor.prototype;
+    origDocCtor.prototype.constructor = WrappedDocCtor;
+    markNative(WrappedDocCtor, "Document");
+    global.Document = WrappedDocCtor;
+    if (typeof globalThis !== "undefined") globalThis.Document = WrappedDocCtor;
+    if (typeof window !== "undefined") window.Document = WrappedDocCtor;
+  }
+  if (typeof document !== "undefined" && document) {
+    defineDocLocation(document);
   }
 
   // doctype
