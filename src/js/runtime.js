@@ -30991,7 +30991,7 @@
         }
         const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
         const fullUrl = new URL(String(url), base).href;
-        const bodyStr = (data !== undefined && data !== null) ? String(data) : null;
+        const bodyStr = bodyToPostString(data);
         if (typeof __capsurf_native_record_fetch === "function") {
           __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
         } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
@@ -31000,6 +31000,19 @@
         return true;
       }, "sendBeacon"),
     };
+
+    function bodyToPostString(data) {
+      if (data === undefined || data === null) return null;
+      if (typeof data === "string") return data;
+      if (data._bytes && data._bytes.BYTES_PER_ELEMENT) {
+        return typeof TextDecoder === "function" ? new TextDecoder().decode(data._bytes) : String.fromCharCode.apply(null, data._bytes);
+      }
+      if (ArrayBuffer.isView(data) || data instanceof ArrayBuffer) {
+        const u8 = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        return typeof TextDecoder === "function" ? new TextDecoder().decode(u8) : String.fromCharCode.apply(null, u8);
+      }
+      return String(data);
+    }
 
     function setUserAgent(ua) {
       const rawUa = ua ? String(ua) : "";
@@ -33104,7 +33117,7 @@
       else if (cleanFullUrl.indexOf(".html") !== -1 || cleanFullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
       else if (cleanFullUrl.indexOf(".css") !== -1) reqMime = "text/css";
 
-      const postStr = (reqBody !== undefined && reqBody !== null) ? String(reqBody) : null;
+      const postStr = bodyToPostString(reqBody);
       if (typeof __capsurf_native_record_fetch === "function") {
         __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
       } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {

@@ -2226,3 +2226,4 @@
 - Phase 372 (`src/cdp/runtime.cp`): 补齐 `Runtime.callFunctionOn` 缺失的子帧与执行上下文事件发射，消除通过 `page.evaluate` 动态插拔 `<iframe>` 时的事件延迟与漏发。
 - Phase 373 (`src/cdp/session_hooks.cp`, `src/js/shim/window.js`): 补齐 `window.caches` / `Cache` / `CacheStorage` 原生持久化实现，将序列化响应对象按 `(origin, cacheName, url)` 存入 `g_cache_entries`，确保 `page.reload()` 后 `cache.match()` 仍可命中并返回 `Response`。
 - Phase 374 (`src/cdp/session.cp`, `src/js/shim/window.js`): Playwright `CRNetworkManager` 仅从 `postDataEntries[i].bytes` 解码 `postDataBuffer()`；补充 Base64 编码的 `postDataEntries` 并打通 `navigator.sendBeacon` 的 `POST` 负载记录。
+- Phase 375 (`src/js/shim/window.js`): 修复向 `fetch` 或 `navigator.sendBeacon` 传入 `File` / `Blob` 时 `String(data)` 退化为 `"[object Blob]"` 的问题，统一解码底层 `_bytes` / `ArrayBuffer` 视图为 UTF-8 字符串上报 `postDataEntries`。
