@@ -811,3 +811,10 @@
 | WPT-B141 | `/html/dom/documents/` + `/dom/events/` + `/html/webappapis/atob/` + `/html/webappapis/structured-clone/` | 78/164 PASS (`documents` **28/32**, `dom/events` **49/129** **1 FAIL→PASS**, `atob` 0/1, `structured-clone` 1/2, 0 CRASH) |
 | WPT-B142 | `/html/semantics/tabular-data/` + `/html/semantics/selectors/` + `/html/browsers/history/` + `/the-form-element/` | 26/48 PASS (`tabular-data` 1/11, `selectors` **3/4 (4/4匹配)**, `history` **11/18**, `the-form-element` **11/15**, 0 CRASH) |
 | WPT-B143 | `/html/semantics/scripting-1/` + `/text-level-semantics/` + `/grouping-content/` | 34/108 PASS (`scripting-1` 3/58 **2 FAIL→PASS**, `text-level` **18/23**, `grouping` 13/27, 0 CRASH) |
+| WPT-B144 | `/html/semantics/document-metadata/` + `/timers/` + `/fetch/api/headers/` + `/fetch/api/basic/` | 26/81 PASS (`metadata` **17/28**, `timers` 4/10, `headers` 2/12, `fetch/basic` 3/31 **1 FAIL→PASS**, 0 CRASH) |
+| WPT-B145 | `/html/semantics/tabular-data/` + `/the-input-element/` + `/the-select-element/` (25/54) + `/the-textarea-element/` | 114/156 PASS (`tabular-data` **7/11**, `input` **84/103**, `select` 9/25, `textarea` **14/17**, 0 CRASH) |
+| WPT-B146 | `/fetch/api/request/` + `/fetch/api/response/` + `/html/dom/elements/` (189/195) + `/css/cssom/` | 163/364 PASS (`request` 2/25, `response` 2/28, `dom/elements` **102/189**, `cssom` **57/122** **1 FAIL→PASS**, 0 CRASH) |
+| 2026-11-23 09:56 | `page-evaluate.spec.ts` | 36/95 PASS (59 timeout at teardown) | PW Batch 135 |
+| 2026-11-23 09:56 | `page-keyboard.spec.ts` | 39/44 PASS (40/44 on retry; 2 fail, 3 timeout) | PW Batch 135 |
+| 2026-11-23 09:56 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo codepoint space) | PW Batch 135 |
+| 2026-11-23 09:56 | `locator-convenience.spec.ts` | 0/21 PASS (21 timeout at teardown) | PW Batch 135 |

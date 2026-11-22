@@ -2270,3 +2270,4 @@
 - Phase 416 (`src/js/shim/element/html-classes.js`, `src/js/shim/index.js`, `src/js/shim/window.js`): 补全 `HTMLBaseElement` 接口及 `href` URL 解析逻辑；为 `setTimeout`/`setInterval` 注入嵌套深度 `nestingLevel > 5` 4ms 最小延时钳位。
 - Phase 417 (`src/js/shim/element/html-classes.js`): 补全表格 DOM 树序 `rows`/`cells` 集合与 `insertRow`/`deleteRow`/`insertCell`/`deleteCell`/`rowIndex`/`sectionRowIndex`/`cellIndex` 实现及 `IndexSizeError` 边界检查。
 - Phase 418 (`src/js/shim/window.js`, `src/js/shim/element/forms/form.js`): 补全 `location.valueOf` `enumerable: false`、`Document` 实例共享 `location` 访问器以及 `form.action` 相对 `<base href>` 的标准 URL 反射。
+- Phase 419 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/html-element.js`): 实现 `DOMStringMap` 原型及 `dataset` Proxy 的 `ownKeys`/`getOwnPropertyDescriptor`/`SyntaxError`/`InvalidCharacterError` 规范行为，并为 `HTMLTableCellElement.cellIndex` 增加 HTML 命名空间检查。

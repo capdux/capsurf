@@ -3043,3 +3043,4 @@
 - **Phase 416 (`src/js/shim/element/html-classes.js`, `src/js/shim/index.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 `HTMLBaseElement` 与 `<base>` 原型映射，并实装定时器 `nestingLevel > 5` 4ms 延时钳位。
 - **Phase 417 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：完整实现 `HTMLTableElement`、`HTMLTableSectionElement`、`HTMLTableRowElement` 与 `HTMLTableCellElement` 全套 W3C 表格 DOM 方法与索引访问器。
 - **Phase 418 (`src/js/shim/window.js`, `src/js/shim/element/forms/form.js`, `src/js/runtime_source.cp`)**：修正 `location.valueOf` 不可枚举性、`Document.location` 共享描述符与 `HTMLFormElement.prototype.action` `<base href>` 解析。
+- **Phase 419 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：新增 `DOMStringMap` 与 `dataset` 枚举/异常校验，并为表格 DOM 补全 HTML 命名空间校验。

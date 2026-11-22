@@ -1,29 +1,87 @@
 // src/js/shim/element/html-element.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/html-element.ts
 
+function DOMStringMap() {}
+if (typeof global !== "undefined") global.DOMStringMap = DOMStringMap;
+if (typeof globalThis !== "undefined") globalThis.DOMStringMap = DOMStringMap;
+if (typeof window !== "undefined") window.DOMStringMap = DOMStringMap;
+
+function toDatasetAttrName(prop) {
+  if (/-[a-z]/.test(prop)) {
+    const DOMEx = typeof DOMException === "function" ? DOMException : Error;
+    throw new DOMEx("Failed to set the '" + prop + "' property on 'DOMStringMap': '" + prop + "' is not a valid property name.", "SyntaxError");
+  }
+  const attr = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+  if (/[\s\u0000/>=]/.test(attr)) {
+    const DOMEx = typeof DOMException === "function" ? DOMException : Error;
+    throw new DOMEx("Failed to set the '" + prop + "' property on 'DOMStringMap': '" + attr + "' is not a valid attribute name.", "InvalidCharacterError");
+  }
+  return attr;
+}
+
+function attrNameToDatasetProp(attrName) {
+  if (!attrName || attrName.indexOf("data-") !== 0) return null;
+  if (/[A-Z]/.test(attrName)) return null;
+  const raw = attrName.slice(5);
+  return raw.replace(/-([a-z])/g, function (_, ch) { return ch.toUpperCase(); });
+}
+
+function getDatasetKeys(element) {
+  const keys = [];
+  const attrs = element && element.attributes ? element.attributes : [];
+  for (let i = 0; i < attrs.length; i++) {
+    const a = attrs[i];
+    const p = attrNameToDatasetProp(a && a.name);
+    if (p !== null) keys.push(p);
+  }
+  return keys;
+}
+
 function createDatasetProxy(element) {
-  return new Proxy({}, {
-    get: function (target, prop) {
-      if (typeof prop !== "string") return undefined;
+  const target = Object.create(DOMStringMap.prototype);
+  return new Proxy(target, {
+    get: function (_t, prop, receiver) {
+      if (typeof prop !== "string") return Reflect.get(_t, prop, receiver);
+      if (prop in DOMStringMap.prototype && !element.hasAttribute("data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); }))) {
+        return Reflect.get(_t, prop, receiver);
+      }
+      if (/-[a-z]/.test(prop)) return undefined;
       const kebab = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-      return element.getAttribute(kebab) ?? undefined;
+      const v = element.getAttribute(kebab);
+      return v === null ? undefined : v;
     },
-    set: function (target, prop, value) {
+    set: function (_t, prop, value) {
       if (typeof prop !== "string") return true;
-      const kebab = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      const kebab = toDatasetAttrName(prop);
       element.setAttribute(kebab, String(value));
       return true;
     },
-    deleteProperty: function (target, prop) {
+    deleteProperty: function (_t, prop) {
       if (typeof prop !== "string") return true;
+      if (/-[a-z]/.test(prop)) return true;
       const kebab = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
       element.removeAttribute(kebab);
       return true;
     },
-    has: function (target, prop) {
+    has: function (_t, prop) {
       if (typeof prop !== "string") return false;
+      if (/-[a-z]/.test(prop)) return false;
       const kebab = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-      return element.hasAttribute(kebab);
+      return element.hasAttribute(kebab) || (prop in DOMStringMap.prototype);
+    },
+    ownKeys: function () {
+      return getDatasetKeys(element);
+    },
+    getOwnPropertyDescriptor: function (_t, prop) {
+      if (typeof prop !== "string" || /-[a-z]/.test(prop)) return undefined;
+      const kebab = "data-" + prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+      if (!element.hasAttribute(kebab)) return undefined;
+      return {
+        value: element.getAttribute(kebab),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      };
     }
   });
 }

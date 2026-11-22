@@ -3376,6 +3376,10 @@ function installHtmlClasses(global) {
 
   // W3C HTML Table DOM (HTMLTableElement, HTMLTableSectionElement, HTMLTableRowElement, HTMLTableCellElement)
   (function () {
+    const HTML_NS = "http://www.w3.org/1999/xhtml";
+    const isHtmlEl = function (el) {
+      return el && el.nodeType === 1 && (!el.namespaceURI || el.namespaceURI === HTML_NS);
+    };
     const makeColl = function (arr) {
       return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;
     };
@@ -3383,6 +3387,7 @@ function installHtmlClasses(global) {
       const out = [];
       const kids = el && el.children ? el.children : [];
       for (let i = 0; i < kids.length; i++) {
+        if (!isHtmlEl(kids[i])) continue;
         const tn = String(kids[i].tagName || "").toLowerCase();
         if (tagSet.has(tn)) out.push(kids[i]);
       }
@@ -3545,7 +3550,7 @@ function installHtmlClasses(global) {
     Object.defineProperty(cellProto, "cellIndex", {
       get: function () {
         const p = this.parentNode;
-        if (!p || String(p.tagName || "").toLowerCase() !== "tr") return -1;
+        if (!isHtmlEl(p) || String(p.tagName || "").toLowerCase() !== "tr") return -1;
         const cells = childTags(p, cellSet);
         for (let i = 0; i < cells.length; i++) {
           if (cells[i] === this || (this._nid && cells[i]._nid === this._nid)) return i;
