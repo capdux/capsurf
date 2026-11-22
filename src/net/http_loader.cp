@@ -384,6 +384,10 @@ pub struct HttpLoader {
             @memcpy(out_buf[0..n], target[0..n]);
             return out_buf[0..n];
         }
+        if (std.mem.startsWith(u8, target, "//")) {
+            const scheme = if (std.mem.startsWith(u8, base_url, "https:")) "https:" else "http:";
+            return std.fmt.bufPrint(out_buf, "{s}{s}", .{ scheme, target }) catch target;
+        }
         const origin = HttpLoader.extractOrigin(base_url);
         if (origin.len == 0) {
             const n = @min(target.len, out_buf.len);
@@ -393,13 +397,51 @@ pub struct HttpLoader {
         if (std.mem.startsWith(u8, target, "/")) {
             return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, target }) catch target;
         }
+        let base_no_qh = base_url;
+        if (q_idx := std.mem.indexOfScalar(u8, base_no_qh, '?')) {
+            base_no_qh = base_no_qh[0..q_idx];
+        }
+        if (h_idx := std.mem.indexOfScalar(u8, base_no_qh, '#')) {
+            base_no_qh = base_no_qh[0..h_idx];
+        }
         let base_dir = origin;
-        if (last_slash := std.mem.lastIndexOfScalar(u8, base_url, '/')) {
+        if (last_slash := std.mem.lastIndexOfScalar(u8, base_no_qh, '/')) {
             if (last_slash >= origin.len) {
-                base_dir = base_url[0..last_slash];
+                base_dir = base_no_qh[0..last_slash];
             }
         }
-        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ base_dir, target }) catch target;
+        let clean_target = target;
+        while (std.mem.startsWith(u8, clean_target, "./") || std.mem.startsWith(u8, clean_target, "../")) {
+            if (std.mem.startsWith(u8, clean_target, "./")) {
+                clean_target = clean_target[2..];
+            } else {
+                clean_target = clean_target[3..];
+                if (base_dir.len > origin.len) {
+                    if (ls := std.mem.lastIndexOfScalar(u8, base_dir, '/')) {
+                        if (ls >= origin.len) {
+                            base_dir = base_dir[0..ls];
+                        } else {
+                            base_dir = origin;
+                        }
+                    } else {
+                        base_dir = origin;
+                    }
+                }
+            }
+        }
+        if (std.mem.eql(u8, clean_target, ".")) {
+            clean_target = "";
+        } else if (std.mem.eql(u8, clean_target, "..")) {
+            clean_target = "";
+            if (base_dir.len > origin.len) {
+                if (ls := std.mem.lastIndexOfScalar(u8, base_dir, '/')) {
+                    base_dir = if (ls >= origin.len) base_dir[0..ls] else origin;
+                } else {
+                    base_dir = origin;
+                }
+            }
+        }
+        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ base_dir, clean_target }) catch target;
     }
 
     pub static fn isMockRedirectUrl(url: []const u8): bool {

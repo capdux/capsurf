@@ -203,6 +203,9 @@
 | 2026-11-22 19:04 | `/dom/events/` | `1/5`~`3/5` | 26, 26, 26 | PASS 12/26(翻倍), 7/26, 5/26 (0 CRASH) | Batch 73 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:04 | `/css/css-fonts/` | `3/5` | 24 | PASS 7 / FAIL 16 / TIMEOUT 1 (0 CRASH) | Batch 73 (`--skip-expected-timeouts`) |
 | 2026-11-22 19:04 | `/css/selectors/` | `1/5` | 14 | PASS 6 / FAIL 7 / ERROR 1 / TIMEOUT 0 | Batch 73 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:11 | `/dom/nodes/` | `1/10`~`3/10` | 26, 25, 25 | PASS 8/26, 8/25, 9/25 (0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:11 | `/css/selectors/` | `2/5` | 14 | PASS 5/14 (?PASS 2, 0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
+| 2026-11-22 19:11 | `/css/css-fonts/` | `4/5` | 24 | PASS 4/24 (0 CRASH) | Batch 74 (`--skip-expected-timeouts`) |
 
 ## Playwright (PW) 已测 Spec 记录
 
@@ -380,3 +383,11 @@
 | 2026-11-22 19:02 | `locator-misc-2.spec.ts` | 4/6 PASS (`[7/14]` 90s截断) | PW Batch 47 |
 | 2026-11-22 19:02 | `page-basic.spec.ts` | 12/16 PASS (frame/UA/webdriver 4 FAIL, 36.1s) | PW Batch 47 |
 | 2026-11-22 19:02 | `locator-frame.spec.ts` | 6/9 PASS (ERR_BLOCKED_BY_CLIENT 3 FAIL, 26.3s) | PW Batch 47 |
+| 2026-11-22 19:06 | `frame-hierarchy.spec.ts` | 4/12 PASS (nested/frameset/shadow 8 FAIL, 59.2s) | PW Batch 48 |
+| 2026-11-22 19:06 | `frame-frame-element.spec.ts` | 1/6 PASS (detached/shadow 5 FAIL, 36.9s) | PW Batch 48 |
+| 2026-11-22 19:06 | `page-add-style-tag.spec.ts` | 2/4 PASS (url error/CSP 2 FAIL, 15.3s) | PW Batch 48 |
+| 2026-11-22 19:06 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (timeout/popup/frame 4 FAIL/TIMEOUT, 1.1m) | PW Batch 48 |
+| 2026-11-22 19:10 | `wheel.spec.ts` | 5/6 PASS (1 TIMEOUT, 51.3s) | PW Batch 49 |
+| 2026-11-22 19:10 | `selectors-css.spec.ts` | 18/25 PASS (1 SKIP, 1.4m) | PW Batch 49 |
+| 2026-11-22 19:10 | `page-click-timeout-3.spec.ts` | 4/4 PASS (全绿, 21.6s, exit 0) | PW Batch 49 (全绿) |
+| 2026-11-22 19:10 | `page-click-timeout-4.spec.ts` | 1/3 PASS (stable/intercepts 2 FAIL, 34.8s) | PW Batch 49 |

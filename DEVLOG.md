@@ -2004,3 +2004,6 @@
 
 ### Phase 297: `/dom/nodes/Text-wholeText.html` 缺失 `wholeText` 与 `nextSibling` 断链排障笔记
 - **`assert_equals(undefined, "a")` -> `assert_equals("a", "ab")` 两层根因**：第一层为 `Text.prototype.wholeText` 未实现；第二层为 `upgradeElement()` 将 `Text`/`Comment` 原型重设至 `shim Node.prototype` 后，因 `shim Node.prototype` 缺失 `previousSibling`/`nextSibling` getter 导致文本节点兄弟链返回 `null`。两处补全后，`/dom/nodes/Text-wholeText.html` 立即全绿 PASS（`545ms`）。
+
+### Phase 298: `<script src="../constants.js">` 加载失败与 `<iframe>` URL 含 `/./` 排障笔记
+- **`Event-constants.html` 报 `ReferenceError: testConstants is not defined` 根因**：`HttpLoader.resolveRelativeUrl()` 与 `session.cp` 的 `resolveSubresourceUrl()` 均直接字符串拼接 `{base_dir}/{target}`，未折叠 `./` 与 `../` 点分路径段，导致 `../constants.js` 与 `./frame.html` 解析出错。统一升级 `resolveRelativeUrl()` 并委托 `resolveSubresourceUrl()` 后，`/dom/events/Event-constants.html` 立即全绿 PASS（`730ms`）。

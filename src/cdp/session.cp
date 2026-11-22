@@ -824,22 +824,8 @@ fn hasJsonExtension(url: []const u8): bool {
 }
 
 fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): []const u8 {
-    if (std.mem.startsWith(u8, rel, "http://") || std.mem.startsWith(u8, rel, "https://") || std.mem.startsWith(u8, rel, "data:")) {
-        return rel;
-    }
-    if (std.mem.startsWith(u8, rel, "/")) {
-        const scheme_idx = std.mem.indexOf(u8, base_url, "://") ?? return rel;
-        const after_scheme = base_url[scheme_idx + 3 ..];
-        let origin = base_url;
-        if (slash_pos := std.mem.indexOfScalar(u8, after_scheme, '/')) {
-            origin = base_url[0 .. scheme_idx + 3 + slash_pos];
-        }
-        return std.fmt.bufPrint(out_buf, "{s}{s}", .{ origin, rel }) catch rel;
-    }
-    if (last_slash := std.mem.lastIndexOfScalar(u8, base_url, '/')) {
-        return std.fmt.bufPrint(out_buf, "{s}/{s}", .{ base_url[0..last_slash], rel }) catch rel;
-    }
-    return rel;
+    if (std.mem.startsWith(u8, rel, "data:")) return rel;
+    return HttpLoader.resolveRelativeUrl(base_url, rel, out_buf);
 }
 
 pub struct KnownChildFrame {

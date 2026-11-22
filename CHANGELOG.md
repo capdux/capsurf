@@ -2682,3 +2682,8 @@
 ## [2026-11-22] Phase 297: 实现 `CharacterData` 基类、`Node.prototype.previousSibling`/`nextSibling` 与 `Text.prototype.wholeText`
 - **Fixed (`src/`)**:
   - `src/js/shim/node-base.js` (+ `src/js/shim/index.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `CharacterData` 基类并暴露全局 `global.CharacterData`，令 `Text` 与 `Comment` 继承 `CharacterData.prototype`；在 `Node.prototype` 补齐基于 `parentNode.childNodes` 与 `_nid` 等价匹配的 `previousSibling`/`nextSibling` getter；在 `Text.prototype` 实现 `wholeText` getter 拼接逻辑相邻文本节点内容。
+
+## [2026-11-22] Phase 298: 统一相对 URL 点分路径规范化（`./`、`../`、`//`）修复跨目录脚本与子帧解析
+- **Fixed (`src/`)**:
+  - `src/net/http_loader.cp`: 升级 `HttpLoader.resolveRelativeUrl()` 支持协议相对 URL（`//`）、`base_url` 查询/锚点剥离以及逐段折叠 `./`、`../` 点分路径段。
+  - `src/cdp/session.cp`: 将 `resolveSubresourceUrl()`（非 `data:`）统一委托至 `HttpLoader.resolveRelativeUrl()`，消除外部 `<script src="../...">` 与 `<iframe>` 相对路径残留 `/./` 或 `/../` 的问题。

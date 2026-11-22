@@ -5238,3 +5238,11 @@
 - **双模式验证**:
   - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/nodes/Text-wholeText.html` **✓ 545ms PASS (1/1 matched expectations)**。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **130.07s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
+
+### [2026-11-22 19:13] Phase 298: 统一相对 URL 点分路径规范化（`./`、`../`、`//`）修复跨目录脚本与子帧解析
+- **引擎修复 (`src/`)**:
+  - [src/net/http_loader.cp](file:///data/dev/capsurf/src/net/http_loader.cp): 升级 `HttpLoader.resolveRelativeUrl()` 支持协议相对 URL（`//`）、`base_url` 查询/锚点剥离及 `./`/`../` 逐段折叠。
+  - [src/cdp/session.cp](file:///data/dev/capsurf/src/cdp/session.cp): 将 `resolveSubresourceUrl()`（非 `data:`）统一委托至 `HttpLoader.resolveRelativeUrl()`。
+- **双模式验证**:
+  - `bin_dev/main` 实测（WPT 端口 19470）：`/dom/events/Event-constants.html` **✓ 730ms PASS (1/1 matched expectations)**。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（167 模块 **128.71s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
