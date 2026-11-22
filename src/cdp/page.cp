@@ -13,6 +13,7 @@ import { NodeType, NULL_NODE } from "../dom/dom.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { PdfOptions, computePdfPagination, renderPdfAlloc, renderPdfWithDocAlloc } from "../render/pdf.cp";
 import { Base64 } from "cap:encoding";
+import { jpegEncode, webpEncode, webpEncodeLossless } from "cap:image";
 import {
     DocumentKind,
     documentKind,
@@ -1104,9 +1105,13 @@ pub struct PageHandler {
 
         if (std.mem.eql(u8, req.method, "Page.captureScreenshot")) {
             let compress_lvl: u8 = 6;
+            let img_quality: u8 = 80;
             const fmt = extractJsonString(req.params_raw, "format") ?? "png";
 
             if (q := extractJsonInt(req.params_raw, "quality")) {
+                if (q >= 1 && q <= 100) {
+                    img_quality = @as(u8, @intCast(q));
+                }
                 if (q >= 0 && q <= 9) {
                     compress_lvl = @as(u8, @intCast(q));
                 } else if (q < 50) {
@@ -1114,10 +1119,6 @@ pub struct PageHandler {
                 } else {
                     compress_lvl = 6;
                 }
-            }
-
-            if (std.mem.eql(u8, fmt, "jpeg")) {
-                compress_lvl = 1;
             }
 
             if (std.mem.indexOf(u8, req.params_raw, "\"optimizeForSpeed\":true") != null) {
@@ -1152,10 +1153,29 @@ pub struct PageHandler {
             let cw_sync: f32 = 0.0;
             let ch_sync: f32 = 0.0;
             session.updateLayoutMetrics(&sx_sync, &sy_sync, &cw_sync, &ch_sync);
-            const png_bytes = session.captureScreenshotClipped(compress_lvl, clip_x, clip_y, clip_w, clip_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
-            defer session.allocator.free(png_bytes);
+            let encoded_bytes: []const u8 = "";
+            if (std.mem.eql(u8, fmt, "jpeg")) {
+                let img_w: u32 = 0;
+                let img_h: u32 = 0;
+                const rgba = session.captureRgbaClipped(clip_x, clip_y, clip_w, clip_h, &img_w, &img_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
+                defer session.allocator.free(rgba);
+                encoded_bytes = jpegEncode(session.allocator, rgba, img_w, img_h, img_quality) catch return CdpResponse.err(req.id, -32000, "JPEG encoding failed");
+            } else if (std.mem.eql(u8, fmt, "webp")) {
+                let img_w: u32 = 0;
+                let img_h: u32 = 0;
+                const rgba = session.captureRgbaClipped(clip_x, clip_y, clip_w, clip_h, &img_w, &img_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
+                defer session.allocator.free(rgba);
+                if (img_quality >= 100) {
+                    encoded_bytes = webpEncodeLossless(session.allocator, rgba, img_w, img_h) catch return CdpResponse.err(req.id, -32000, "WebP encoding failed");
+                } else {
+                    encoded_bytes = webpEncode(session.allocator, rgba, img_w, img_h, img_quality) catch return CdpResponse.err(req.id, -32000, "WebP encoding failed");
+                }
+            } else {
+                encoded_bytes = session.captureScreenshotClipped(compress_lvl, clip_x, clip_y, clip_w, clip_h) catch return CdpResponse.err(req.id, -32000, "Screenshot capture failed");
+            }
+            defer session.allocator.free(encoded_bytes);
 
-            const b64_str = Base64.encodeAlloc(session.allocator, png_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
+            const b64_str = Base64.encodeAlloc(session.allocator, encoded_bytes) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
             defer session.allocator.free(b64_str);
 
             const prefix = "{\"data\":\"";

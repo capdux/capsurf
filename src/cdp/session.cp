@@ -4615,6 +4615,10 @@ pub struct CdpPageSession {
         return _.captureSceneInternal(compress_level, clip_x, clip_y, clip_w, clip_h, false, null, null, null);
     }
 
+    pub fn captureRgbaClipped(*_, clip_x: i32, clip_y: i32, clip_w: u32, clip_h: u32, out_w: *u32, out_h: *u32): ([]const u8)! {
+        return _.captureSceneInternal(1, clip_x, clip_y, clip_w, clip_h, true, out_w, out_h, null);
+    }
+
     fn captureSceneInternal(
         *_,
         compress_level: u8,

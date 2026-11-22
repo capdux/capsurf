@@ -4083,6 +4083,137 @@ function installWindow(global) {
     if (typeof globalThis !== "undefined") globalThis.WebSocket = WebSocket;
   }
 
+  // W3C Server-Sent Events (EventSource)
+  if (typeof global.EventSource === "undefined") {
+    function EventSource(url, eventSourceInitDict) {
+      EventTarget.call(this);
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to construct 'EventSource': 1 argument required, but only 0 present.");
+      }
+      const loc = global.location || (typeof window !== "undefined" ? window.location : null);
+      let resolvedUrl;
+      let origin = "";
+      try {
+        const parsed = new URL(String(url), (loc && loc.href) || "http://localhost/");
+        resolvedUrl = parsed.href;
+        origin = parsed.origin || "";
+      } catch (e) {
+        throw new DOMException("Failed to construct 'EventSource': The URL '" + String(url) + "' is invalid.", "SyntaxError");
+      }
+      this.url = resolvedUrl;
+      this.withCredentials = !!(eventSourceInitDict && eventSourceInitDict.withCredentials);
+      this.readyState = 0; // CONNECTING
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this._closed = false;
+      this._lastEventId = "";
+
+      const self = this;
+      const dispatchEsEvent = function (type, evt) {
+        evt.target = self;
+        evt.currentTarget = self;
+        const handler = self["on" + type];
+        if (typeof handler === "function") {
+          try { handler.call(self, evt); } catch (e) {}
+        }
+        self.dispatchEvent(evt);
+      };
+      const failEs = function () {
+        if (self._closed || self.readyState === 2) return;
+        self.readyState = 2; // CLOSED
+        self._closed = true;
+        dispatchEsEvent("error", new Event("error"));
+      };
+
+      setTimeout(function () {
+        if (self._closed || self.readyState === 2) return;
+        if (typeof global.fetch !== "function") {
+          failEs();
+          return;
+        }
+        global.fetch(self.url, {
+          headers: { Accept: "text/event-stream" },
+          credentials: self.withCredentials ? "include" : "same-origin",
+        }).then(function (res) {
+          if (self._closed || self.readyState === 2) return;
+          if (!res || res.status !== 200) {
+            failEs();
+            return;
+          }
+          self.readyState = 1; // OPEN
+          dispatchEsEvent("open", new Event("open"));
+          return res.text().then(function (bodyText) {
+            if (self._closed || self.readyState === 2) return;
+            const lines = String(bodyText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+            let dataBuf = [];
+            let eventType = "";
+            let hasEvent = false;
+            const flushEvent = function () {
+              if (dataBuf.length === 0) {
+                eventType = "";
+                hasEvent = false;
+                return;
+              }
+              const payload = dataBuf.join("\n");
+              const type = (hasEvent && eventType) ? eventType : "message";
+              dataBuf = [];
+              eventType = "";
+              hasEvent = false;
+              const msgEvt = typeof MessageEvent === "function"
+                ? new MessageEvent(type, { data: payload, origin: origin, lastEventId: self._lastEventId })
+                : Object.assign(new Event(type), { data: payload, origin: origin, lastEventId: self._lastEventId });
+              dispatchEsEvent(type, msgEvt);
+            };
+            for (let i = 0; i < lines.length; i++) {
+              if (self._closed || self.readyState === 2) return;
+              const line = lines[i];
+              if (line === "") {
+                flushEvent();
+                continue;
+              }
+              if (line.charCodeAt(0) === 58) continue; // comment ':'
+              const colonIdx = line.indexOf(":");
+              let field = line;
+              let value = "";
+              if (colonIdx !== -1) {
+                field = line.slice(0, colonIdx);
+                value = line.slice(colonIdx + 1);
+                if (value.charCodeAt(0) === 32) value = value.slice(1);
+              }
+              if (field === "event") {
+                eventType = value;
+                hasEvent = true;
+              } else if (field === "data") {
+                dataBuf.push(value);
+              } else if (field === "id") {
+                if (value.indexOf("\0") === -1) self._lastEventId = value;
+              }
+            }
+          });
+        }).catch(function () {
+          failEs();
+        });
+      }, 0);
+    }
+    EventSource.CONNECTING = 0;
+    EventSource.OPEN = 1;
+    EventSource.CLOSED = 2;
+    EventSource.prototype = Object.create(EventTarget.prototype);
+    EventSource.prototype.constructor = EventSource;
+    EventSource.prototype.CONNECTING = 0;
+    EventSource.prototype.OPEN = 1;
+    EventSource.prototype.CLOSED = 2;
+    EventSource.prototype.close = function () {
+      this._closed = true;
+      this.readyState = 2;
+    };
+    markNative(EventSource, "EventSource");
+    global.EventSource = EventSource;
+    if (typeof window !== "undefined") window.EventSource = EventSource;
+    if (typeof globalThis !== "undefined") globalThis.EventSource = EventSource;
+  }
+
   // =============================================================
   // 5b. W3C Performance & User Timing Specification Implementation
   // =============================================================

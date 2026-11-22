@@ -5752,6 +5752,14 @@
            finalPath.endsWith("/cors-sheet-echo-origin.css"))) {
         cssText = "#target { color: rgb(0, 0, 255); }\n#other { color: rgb(255, 0, 0); }\n";
       }
+      if ((cssText === null || cssText === undefined) &&
+          (finalUrl.startsWith("http://") || finalUrl.startsWith("https://")) &&
+          typeof globalThis !== "undefined" &&
+          typeof globalThis.__capsurf_http_get === "function") {
+        try {
+          cssText = globalThis.__capsurf_http_get(finalUrl);
+        } catch (e) {}
+      }
       const textStr = (cssText !== null && cssText !== undefined) ? String(cssText) : "";
 
       // Determine ACAO header for CORS-mode stylesheet requests
@@ -6880,7 +6888,7 @@
     get: function () {
       const p = this.parentNode;
       if (!p) return null;
-      const kids = p.childNodes || p._children;
+      const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
       if (!kids || !kids.length) return null;
       const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
       for (let i = 0; i < kids.length; i++) {
@@ -6898,7 +6906,7 @@
     get: function () {
       const p = this.parentNode;
       if (!p) return null;
-      const kids = p.childNodes || p._children;
+      const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
       if (!kids || !kids.length) return null;
       const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
       for (let i = 0; i < kids.length; i++) {
@@ -7187,6 +7195,9 @@
           child = nativeElementFirstChild.call(node);
         }
         while (child) {
+          if (child.nodeType === 1 && typeof upgradeElement === "function") {
+            upgradeElement(child);
+          }
           node._children.push(child);
           if (nativeElementNextSibling) {
             child = nativeElementNextSibling.call(child);
@@ -9783,6 +9794,36 @@
       configurable: true,
     });
 
+    const origPrevSibDesc = Object.getOwnPropertyDescriptor(proto, "previousSibling");
+    const nodePrevSibDesc = typeof Node !== "undefined" ? Object.getOwnPropertyDescriptor(Node.prototype, "previousSibling") : null;
+    if (nodePrevSibDesc && nodePrevSibDesc.get) {
+      Object.defineProperty(proto, "previousSibling", {
+        get: function () {
+          if (origPrevSibDesc && origPrevSibDesc.get) {
+            const v = origPrevSibDesc.get.call(this);
+            if (v) return v;
+          }
+          return nodePrevSibDesc.get.call(this);
+        },
+        configurable: true,
+      });
+    }
+
+    const origNextSibDesc = Object.getOwnPropertyDescriptor(proto, "nextSibling");
+    const nodeNextSibDesc = typeof Node !== "undefined" ? Object.getOwnPropertyDescriptor(Node.prototype, "nextSibling") : null;
+    if (nodeNextSibDesc && nodeNextSibDesc.get) {
+      Object.defineProperty(proto, "nextSibling", {
+        get: function () {
+          if (origNextSibDesc && origNextSibDesc.get) {
+            const v = origNextSibDesc.get.call(this);
+            if (v) return v;
+          }
+          return nodeNextSibDesc.get.call(this);
+        },
+        configurable: true,
+      });
+    }
+
     Object.defineProperty(proto, "previousElementSibling", {
       get: function () {
         let sib = this.previousSibling;
@@ -10815,10 +10856,9 @@
       const origGet = origElFirstChildDesc.get;
       Object.defineProperty(proto, "firstChild", {
         get: function () {
-          const res = origGet.call(this);
-          if (res) return res;
-          if (this._children && this._children.length > 0) return this._children[0];
-          return null;
+          let out = origGet.call(this);
+          if (!out && this._children && this._children.length > 0) out = this._children[0];
+          return (out && out.nodeType === 1 && typeof upgradeElement === "function") ? upgradeElement(out) : out;
         },
         configurable: true,
       });
@@ -10827,10 +10867,11 @@
       const origGet = origElLastChildDesc.get;
       Object.defineProperty(proto, "lastChild", {
         get: function () {
-          const res = origGet.call(this);
-          if (res && (!this._children || this._children.length === 0)) return res;
-          if (this._children && this._children.length > 0) return this._children[this._children.length - 1];
-          return res;
+          let res = origGet.call(this);
+          if (this._children && this._children.length > 0 && !(res && (!this._children || this._children.length === 0))) {
+            res = this._children[this._children.length - 1];
+          }
+          return (res && res.nodeType === 1 && typeof upgradeElement === "function") ? upgradeElement(res) : res;
         },
         configurable: true,
       });
@@ -10856,7 +10897,14 @@
       }
       if (origProtoMatches) {
         try {
-          return origProtoMatches.call(this, selector);
+          if (origProtoMatches.call(this, selector)) return true;
+          const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+          if (!(rootNode && rootNode.host) &&
+              s.indexOf(":is(") === -1 && s.indexOf(":where(") === -1 &&
+              s.indexOf(":has(") === -1 && s.indexOf(":not(") === -1 &&
+              s.indexOf(":scope") === -1) {
+            return false;
+          }
         } catch (e) {
           if (e && e.name === "SyntaxError") throw e;
         }
@@ -10876,9 +10924,10 @@
       if (s.startsWith("#") && this.id === s.slice(1)) return true;
       if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
       if (s.toLowerCase() === this.localName) return true;
-      if (typeof document !== "undefined" && document.querySelectorAll) {
+      const root = typeof this.getRootNode === "function" ? this.getRootNode() : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+      if (root && typeof root.querySelectorAll === "function") {
         try {
-          const matches = document.querySelectorAll(s);
+          const matches = root.querySelectorAll(s);
           for (let i = 0; i < matches.length; i++) {
             if (matches[i] === this) return true;
           }
@@ -14657,6 +14706,11 @@
       }
       if (win.onhashchange === undefined) win.onhashchange = null;
       if (win.onpopstate === undefined) win.onpopstate = null;
+      if (win.open === undefined && typeof pageGlobal.open === "function") {
+        win.open = function (url, target, features) {
+          return pageGlobal.open.call(win, url, target, features);
+        };
+      }
       if (pageGlobal.fetch) {
         win.fetch = function (resource, init) {
           return pageGlobal.fetch.call(win, resource, init);
@@ -33723,6 +33777,137 @@
       if (typeof globalThis !== "undefined") globalThis.WebSocket = WebSocket;
     }
 
+    // W3C Server-Sent Events (EventSource)
+    if (typeof global.EventSource === "undefined") {
+      function EventSource(url, eventSourceInitDict) {
+        EventTarget.call(this);
+        if (arguments.length === 0) {
+          throw new TypeError("Failed to construct 'EventSource': 1 argument required, but only 0 present.");
+        }
+        const loc = global.location || (typeof window !== "undefined" ? window.location : null);
+        let resolvedUrl;
+        let origin = "";
+        try {
+          const parsed = new URL(String(url), (loc && loc.href) || "http://localhost/");
+          resolvedUrl = parsed.href;
+          origin = parsed.origin || "";
+        } catch (e) {
+          throw new DOMException("Failed to construct 'EventSource': The URL '" + String(url) + "' is invalid.", "SyntaxError");
+        }
+        this.url = resolvedUrl;
+        this.withCredentials = !!(eventSourceInitDict && eventSourceInitDict.withCredentials);
+        this.readyState = 0; // CONNECTING
+        this.onopen = null;
+        this.onmessage = null;
+        this.onerror = null;
+        this._closed = false;
+        this._lastEventId = "";
+
+        const self = this;
+        const dispatchEsEvent = function (type, evt) {
+          evt.target = self;
+          evt.currentTarget = self;
+          const handler = self["on" + type];
+          if (typeof handler === "function") {
+            try { handler.call(self, evt); } catch (e) {}
+          }
+          self.dispatchEvent(evt);
+        };
+        const failEs = function () {
+          if (self._closed || self.readyState === 2) return;
+          self.readyState = 2; // CLOSED
+          self._closed = true;
+          dispatchEsEvent("error", new Event("error"));
+        };
+
+        setTimeout(function () {
+          if (self._closed || self.readyState === 2) return;
+          if (typeof global.fetch !== "function") {
+            failEs();
+            return;
+          }
+          global.fetch(self.url, {
+            headers: { Accept: "text/event-stream" },
+            credentials: self.withCredentials ? "include" : "same-origin",
+          }).then(function (res) {
+            if (self._closed || self.readyState === 2) return;
+            if (!res || res.status !== 200) {
+              failEs();
+              return;
+            }
+            self.readyState = 1; // OPEN
+            dispatchEsEvent("open", new Event("open"));
+            return res.text().then(function (bodyText) {
+              if (self._closed || self.readyState === 2) return;
+              const lines = String(bodyText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+              let dataBuf = [];
+              let eventType = "";
+              let hasEvent = false;
+              const flushEvent = function () {
+                if (dataBuf.length === 0) {
+                  eventType = "";
+                  hasEvent = false;
+                  return;
+                }
+                const payload = dataBuf.join("\n");
+                const type = (hasEvent && eventType) ? eventType : "message";
+                dataBuf = [];
+                eventType = "";
+                hasEvent = false;
+                const msgEvt = typeof MessageEvent === "function"
+                  ? new MessageEvent(type, { data: payload, origin: origin, lastEventId: self._lastEventId })
+                  : Object.assign(new Event(type), { data: payload, origin: origin, lastEventId: self._lastEventId });
+                dispatchEsEvent(type, msgEvt);
+              };
+              for (let i = 0; i < lines.length; i++) {
+                if (self._closed || self.readyState === 2) return;
+                const line = lines[i];
+                if (line === "") {
+                  flushEvent();
+                  continue;
+                }
+                if (line.charCodeAt(0) === 58) continue; // comment ':'
+                const colonIdx = line.indexOf(":");
+                let field = line;
+                let value = "";
+                if (colonIdx !== -1) {
+                  field = line.slice(0, colonIdx);
+                  value = line.slice(colonIdx + 1);
+                  if (value.charCodeAt(0) === 32) value = value.slice(1);
+                }
+                if (field === "event") {
+                  eventType = value;
+                  hasEvent = true;
+                } else if (field === "data") {
+                  dataBuf.push(value);
+                } else if (field === "id") {
+                  if (value.indexOf("\0") === -1) self._lastEventId = value;
+                }
+              }
+            });
+          }).catch(function () {
+            failEs();
+          });
+        }, 0);
+      }
+      EventSource.CONNECTING = 0;
+      EventSource.OPEN = 1;
+      EventSource.CLOSED = 2;
+      EventSource.prototype = Object.create(EventTarget.prototype);
+      EventSource.prototype.constructor = EventSource;
+      EventSource.prototype.CONNECTING = 0;
+      EventSource.prototype.OPEN = 1;
+      EventSource.prototype.CLOSED = 2;
+      EventSource.prototype.close = function () {
+        this._closed = true;
+        this.readyState = 2;
+      };
+      markNative(EventSource, "EventSource");
+      global.EventSource = EventSource;
+      if (typeof window !== "undefined") window.EventSource = EventSource;
+      if (typeof globalThis !== "undefined") globalThis.EventSource = EventSource;
+    }
+
     // =============================================================
     // 5b. W3C Performance & User Timing Specification Implementation
     // =============================================================
@@ -41240,7 +41425,7 @@
     function applyContentEditableInsertText(doc, host, sel, range, text) {
       if (!range) {
         const tn = doc.createTextNode(text);
-        host.appendChild(tn);
+        host.insertBefore(tn, host.firstChild || null);
         if (sel && typeof sel.collapse === "function") {
           try { sel.collapse(tn, text.length); } catch (e) {}
         }
@@ -41344,7 +41529,10 @@
       const isMeta = (mods & 4) !== 0;
       const isShift = (mods & 8) !== 0;
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
-      const target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
+      let target = (doc && doc.activeElement) ? doc.activeElement : (doc || null);
+      while (target && (target.shadowRoot || target._shadowRoot) && (target.shadowRoot || target._shadowRoot).activeElement) {
+        target = (target.shadowRoot || target._shadowRoot).activeElement;
+      }
       if (!target) return 0;
 
       const keyStr = String(key || "");
@@ -43600,8 +43788,10 @@
       let fullUrl = "about:blank";
       if (url !== undefined && url !== null && String(url) !== "") {
         try {
-          const base = (global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/";
-          fullUrl = new URL(String(url), base).href;
+          const ctxLoc = (this && typeof this === "object" && this.location && this.location.href && this.location.href !== "about:blank")
+            ? this.location.href
+            : ((global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/");
+          fullUrl = new URL(String(url), ctxLoc).href;
         } catch (e) {
           fullUrl = String(url);
         }
@@ -43616,6 +43806,7 @@
       const popupWin = {
         closed: false,
         opener: global,
+        Promise: global.Promise,
         location: { href: fullUrl },
         document: { title: "", URL: fullUrl },
         close: function () { this.closed = true; },
@@ -46110,7 +46301,7 @@
       "subscript", "superscript",
       "stylewithcss", "defaultparagraphseparator",
       "inserttext", "inserthtml", "delete", "forwarddelete",
-      "selectall", "removeformat",
+      "selectall", "removeformat", "copy",
     ]);
 
     function isNodeEditable(node) {
@@ -46301,6 +46492,23 @@
             return true;
           }
           return false;
+        }
+        if (cmd === "selectall") {
+          const sel = typeof this.getSelection === "function" ? this.getSelection() : (typeof global.getSelection === "function" ? global.getSelection() : null);
+          const root = (this.activeElement && isNodeEditable(this.activeElement)) ? this.activeElement : (this.body || this.documentElement);
+          if (sel && root && typeof this.createRange === "function") {
+            const r = this.createRange();
+            r.selectNodeContents(root);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            return true;
+          }
+          return false;
+        }
+        if (cmd === "copy") {
+          const sel = typeof this.getSelection === "function" ? this.getSelection() : (typeof global.getSelection === "function" ? global.getSelection() : null);
+          globalThis.__capsurf_clipboard_text = sel ? String(sel.toString() || "") : "";
+          return true;
         }
 
         const range = getActiveEditingRange(this);
