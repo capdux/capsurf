@@ -17368,7 +17368,10 @@
     };
 
     Cls.prototype.select = function () {
-      if (!supportsSelection(this)) return;
+      if (!supportsSelection(this)) {
+        if (String(this.type || "").toLowerCase() === "number") this._numSelAll = true;
+        return;
+      }
       if (typeof this.focus === "function" && typeof document !== "undefined" && document.activeElement !== this) {
         this.focus();
       }

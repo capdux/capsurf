@@ -2867,3 +2867,8 @@
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: `g.document.close()` 遍历 `querySelectorAll('iframe')` 调用 `g.__capsurf_on_iframe_connected()` 触发 `srcdoc`/`src` 子帧文档解析。
   - `src/cdp/session.cp`, `src/cdp/runtime.cp`: `pollReopenLoadEvents()` 清理已知子帧并派发 `Page.frameDetached` + `Runtime.executionContextDestroyed`，重置 `known_child_frame_count` 与 `emitted_child_frame_count`（`polled_reopen_evts` 扩容至 16），确保随后 `emitNewChildFrameEvents()` 完整重建新子帧 `Page.frameAttached`/`Page.frameNavigated`/`Runtime.executionContextCreated`。
+
+## [2026-11-22] Phase 340: 修复 `input[type=number]` 全选后按键清空仅删首字符的问题
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/forms/selection.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): `select()` 对 `type="number"` 设置 `_numSelAll = true`。
+  - `src/cdp/input.cp`: `applyInputText()` 在 `is_select_all` 时为 `isNum` 置 `_numSelAll = true`，并在后续输入/删除/光标移动时展开 `[0, oldLen]` 选区并复位 `_numSelAll = false`。

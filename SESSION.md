@@ -5540,3 +5540,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19385）：`PHASE339_EV2` 完整产出 `Page.frameDetached` -> `Runtime.executionContextDestroyed` -> `Page.frameAttached` -> `Page.frameNavigated` -> `Runtime.executionContextCreated`，且 `PHASE339_CHILD: {"lastChildCtx":4,"childInput":true}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.26s)**。
+
+## Phase 340: `input[type=number]` 全选清空修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/forms/selection.js](file:///data/dev/capsurf/src/js/shim/element/forms/selection.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`), [src/cdp/input.cp](file:///data/dev/capsurf/src/cdp/input.cp): 维护 `input[type=number]` 的 `_numSelAll` 状态以支持全选替换与清空。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19385）：`PHASE340_RESULT: {"v1":"","v2":""}`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.29s)**。

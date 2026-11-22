@@ -2135,3 +2135,6 @@
 
 ### Phase 339: `expect-boolean.spec.ts` `with frameLocator 2` (`<iframe>` -> `<iframe srcdoc>`) 排障笔记
 - **重写文档未分离旧子帧且未解析新 `srcdoc` 根因**：`page.setContent('<iframe></iframe>')` 后再次 `page.setContent('<iframe srcdoc="<input>"></iframe>')` 时，仅触发 `document.open/write/close`，既未对旧匿名子帧派发 `Page.frameDetached`/`Runtime.executionContextDestroyed`，也未在 `document.close()` 对新 `<iframe>` 调用 `__capsurf_on_iframe_connected`。补全分离清理、重置 `known_child_frame_count`/`emitted_child_frame_count` 与 `onIframeConnected` 后，实测 `PHASE339_CHILD: {"lastChildCtx":4,"childInput":true}`。
+
+### Phase 340: `page-fill.spec.ts` `input[type=number]` 无法清空 (`"123"` -> `"23"`) 排障笔记
+- **`number` 输入框缺少 `selectionStart`/`selectionEnd` 导致全选状态丢失根因**：HTML 规范禁止 `input[type=number]` 暴露 `selectionStart`/`selectionEnd`，此前 `selection.js` `select()` 在 `!supportsSelection(this)` 时直接返回，且 `input.cp` `applyInputText()` 退回 `_numCaret`（默认为 `0`），导致 `Delete` 仅删掉首字符 `'1'`。补充 `_numSelAll` 标记后，实测 `select() + Delete` 与 `selectAll + Backspace` 均彻底清空为 `""`。
