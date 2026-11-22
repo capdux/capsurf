@@ -2997,3 +2997,4 @@
 - Phase 370: `src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/cdp/session.cp` — 透传 `fetch()` 真实 HTTP `method` 与 `postData` 至 CDP `Network.requestWillBeSent`。
 - Phase 371: `src/cdp/runtime.cp` — `Runtime.callFunctionOn` 末尾补充 `session.pollNetworkEvents` 实时发射 `Network.*` 事件。
 - Phase 372: `src/cdp/runtime.cp` — `Runtime.callFunctionOn` 末尾补充 `pollExecutionContextEvents` 与 `emitNewChildFrameEvents` 子帧生命周期事件发射。
+- Phase 373: `src/cdp/session_hooks.cp`, `src/js/shim/window.js` — 新增原生同源持久化 `CacheStorage` (`caches`, `Cache`, `CacheStorage`) 支持跨 `reload` 缓存读写。

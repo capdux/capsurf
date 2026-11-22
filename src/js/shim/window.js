@@ -13775,4 +13775,143 @@ const CSS_TYPED_OM_GLOBALS = {
     if (typeof c.groupEnd !== "function") c.groupEnd = function () {};
     if (typeof c.clear !== "function") c.clear = function () {};
   }
+
+  // Web Cache & CacheStorage API backed by native session-persisted origin store
+  (function () {
+    const memCaches = new Map();
+    function cacheOrigin() {
+      try {
+        const loc = global.location || (typeof window !== "undefined" ? window.location : null);
+        if (loc && loc.origin && loc.origin !== "null") return String(loc.origin);
+        if (loc && loc.href) return new URL(loc.href).origin || "null";
+      } catch (e) {}
+      return "null";
+    }
+    function resolveReqUrl(req) {
+      const raw = (req && typeof req === "object" && typeof req.url === "string") ? req.url : String(req);
+      try {
+        const base = (global.location && global.location.href && global.location.href !== "about:blank") ? global.location.href : "http://localhost/";
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    }
+    function Cache(name) {
+      this._name = String(name);
+    }
+    Cache.prototype.put = function (req, res) {
+      const origin = cacheOrigin();
+      const fullUrl = resolveReqUrl(req);
+      const name = this._name;
+      const readBody = (res && typeof res.text === "function") ? res.text() : Promise.resolve(res && res._body != null ? String(res._body) : "");
+      return Promise.resolve(readBody).then(function (bodyText) {
+        const hdrObj = {};
+        if (res && res.headers && typeof res.headers.forEach === "function") {
+          res.headers.forEach(function (v, k) { hdrObj[k] = v; });
+        }
+        const payload = JSON.stringify({
+          status: (res && typeof res.status === "number") ? res.status : 200,
+          statusText: (res && res.statusText != null) ? String(res.statusText) : "OK",
+          headers: hdrObj,
+          body: String(bodyText != null ? bodyText : ""),
+        });
+        if (typeof globalThis.__capsurf_cache_put === "function") {
+          globalThis.__capsurf_cache_put(origin, name, fullUrl, payload);
+        } else {
+          if (!memCaches.has(origin + "\0" + name)) memCaches.set(origin + "\0" + name, new Map());
+          memCaches.get(origin + "\0" + name).set(fullUrl, payload);
+        }
+      });
+    };
+    Cache.prototype.match = function (req) {
+      const origin = cacheOrigin();
+      const fullUrl = resolveReqUrl(req);
+      let raw = null;
+      if (typeof globalThis.__capsurf_cache_match === "function") {
+        raw = globalThis.__capsurf_cache_match(origin, this._name, fullUrl);
+      } else {
+        const m = memCaches.get(origin + "\0" + this._name);
+        raw = m ? (m.get(fullUrl) || null) : null;
+      }
+      if (!raw) return Promise.resolve(undefined);
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof Response === "function") {
+          return Promise.resolve(new Response(parsed.body, {
+            status: parsed.status || 200,
+            statusText: parsed.statusText || "OK",
+            headers: parsed.headers || {},
+          }));
+        }
+        return Promise.resolve(makeFetchedResponse(parsed.body, {
+          status: parsed.status || 200,
+          statusText: parsed.statusText || "OK",
+          url: fullUrl,
+          headers: parsed.headers || {},
+        }));
+      } catch (e) {
+        return Promise.resolve(undefined);
+      }
+    };
+    Cache.prototype.delete = function (req) {
+      const origin = cacheOrigin();
+      const fullUrl = resolveReqUrl(req);
+      if (typeof globalThis.__capsurf_cache_delete === "function") {
+        return Promise.resolve(Boolean(globalThis.__capsurf_cache_delete(origin, this._name, fullUrl)));
+      }
+      const m = memCaches.get(origin + "\0" + this._name);
+      return Promise.resolve(m ? m.delete(fullUrl) : false);
+    };
+    Cache.prototype.add = function (req) {
+      const self = this;
+      return fetch(req).then(function (res) { return self.put(req, res); });
+    };
+    function CacheStorage() {}
+    CacheStorage.prototype.open = function (name) {
+      return Promise.resolve(new Cache(String(name)));
+    };
+    CacheStorage.prototype.has = function (name) {
+      const origin = cacheOrigin();
+      if (typeof globalThis.__capsurf_cache_has === "function") {
+        return Promise.resolve(Boolean(globalThis.__capsurf_cache_has(origin, String(name))));
+      }
+      return Promise.resolve(memCaches.has(origin + "\0" + String(name)));
+    };
+    CacheStorage.prototype.delete = function (name) {
+      const origin = cacheOrigin();
+      if (typeof globalThis.__capsurf_cache_delete === "function") {
+        return Promise.resolve(Boolean(globalThis.__capsurf_cache_delete(origin, String(name), "")));
+      }
+      return Promise.resolve(memCaches.delete(origin + "\0" + String(name)));
+    };
+    CacheStorage.prototype.match = function (req) {
+      const origin = cacheOrigin();
+      const fullUrl = resolveReqUrl(req);
+      if (typeof globalThis.__capsurf_cache_match === "function") {
+        const raw = globalThis.__capsurf_cache_match(origin, "", fullUrl);
+        if (!raw) return Promise.resolve(undefined);
+        try {
+          const parsed = JSON.parse(raw);
+          return Promise.resolve(typeof Response === "function"
+            ? new Response(parsed.body, { status: parsed.status || 200, statusText: parsed.statusText || "OK", headers: parsed.headers || {} })
+            : makeFetchedResponse(parsed.body, { status: parsed.status || 200, statusText: parsed.statusText || "OK", url: fullUrl, headers: parsed.headers || {} }));
+        } catch (e) {}
+      }
+      return Promise.resolve(undefined);
+    };
+    const cachesInst = new CacheStorage();
+    global.Cache = Cache;
+    global.CacheStorage = CacheStorage;
+    global.caches = cachesInst;
+    if (typeof window !== "undefined") {
+      window.Cache = Cache;
+      window.CacheStorage = CacheStorage;
+      window.caches = cachesInst;
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.Cache = Cache;
+      globalThis.CacheStorage = CacheStorage;
+      globalThis.caches = cachesInst;
+    }
+  })();
 }

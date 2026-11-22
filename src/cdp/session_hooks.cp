@@ -646,6 +646,191 @@ fn originSliceOf(url: []const u8): []const u8 {
     return jsUndefined();
 }
 
+pub struct CacheStorageEntry {
+    origin_buf: [256]u8 = [0; 256],
+    origin_len: usize = 0,
+    cache_buf: [128]u8 = [0; 128],
+    cache_len: usize = 0,
+    url_buf: [512]u8 = [0; 512],
+    url_len: usize = 0,
+    payload: []u8 = [],
+    active: bool = false,
+}
+
+const MAX_CACHE_ENTRIES: usize = 64;
+let g_cache_entries: [MAX_CACHE_ENTRIES]CacheStorageEntry = [CacheStorageEntry{}; MAX_CACHE_ENTRIES];
+let g_cache_cursor: usize = 0;
+
+@c fn js_capsurf_cache_put(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 4) return jsUndefined();
+    let o_len: usize = 0;
+    const o_ptr = JS_ToCStringLen2(ctx, &o_len, unsafe { argv[0] }, 0);
+    if (o_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, o_ptr);
+    const origin = unsafe { o_ptr.?[0..o_len] };
+
+    let c_len: usize = 0;
+    const c_ptr = JS_ToCStringLen2(ctx, &c_len, unsafe { argv[1] }, 0);
+    if (c_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, c_ptr);
+    const cname = unsafe { c_ptr.?[0..c_len] };
+
+    let u_len: usize = 0;
+    const u_ptr = JS_ToCStringLen2(ctx, &u_len, unsafe { argv[2] }, 0);
+    if (u_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, u_ptr);
+    const url = unsafe { u_ptr.?[0..u_len] };
+
+    let p_len: usize = 0;
+    const p_ptr = JS_ToCStringLen2(ctx, &p_len, unsafe { argv[3] }, 0);
+    if (p_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, p_ptr);
+    const payload = unsafe { p_ptr.?[0..p_len] };
+
+    let target: (*CacheStorageEntry)? = null;
+    let i: usize = 0;
+    while (i < MAX_CACHE_ENTRIES) : (i += 1) {
+        let e = &g_cache_entries[i];
+        if (e.active && std.mem.eql(u8, e.origin_buf[0..e.origin_len], origin) && std.mem.eql(u8, e.cache_buf[0..e.cache_len], cname) && std.mem.eql(u8, e.url_buf[0..e.url_len], url)) {
+            target = e;
+            break;
+        }
+    }
+    if (target == null) {
+        i = 0;
+        while (i < MAX_CACHE_ENTRIES) : (i += 1) {
+            if (!g_cache_entries[i].active) {
+                target = &g_cache_entries[i];
+                break;
+            }
+        }
+    }
+    if (target == null) {
+        target = &g_cache_entries[g_cache_cursor % MAX_CACHE_ENTRIES];
+        g_cache_cursor += 1;
+    }
+    let slot = target.?;
+    if (slot.active && slot.payload.len > 0) {
+        std.heap.c_allocator.free(slot.payload);
+        slot.payload = [];
+    }
+    const ol = @min(origin.len, slot.origin_buf.len);
+    if (ol > 0) @memcpy(slot.origin_buf[0..ol], origin[0..ol]);
+    slot.origin_len = ol;
+    const cl = @min(cname.len, slot.cache_buf.len);
+    if (cl > 0) @memcpy(slot.cache_buf[0..cl], cname[0..cl]);
+    slot.cache_len = cl;
+    const ul = @min(url.len, slot.url_buf.len);
+    if (ul > 0) @memcpy(slot.url_buf[0..ul], url[0..ul]);
+    slot.url_len = ul;
+    if (payload.len > 0) {
+        const dup = std.heap.c_allocator.alloc(u8, payload.len) catch return jsUndefined();
+        @memcpy(dup, payload);
+        slot.payload = dup;
+    }
+    slot.active = true;
+    return jsUndefined();
+}
+
+@c fn js_capsurf_cache_match(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 3) return jsNull();
+    let o_len: usize = 0;
+    const o_ptr = JS_ToCStringLen2(ctx, &o_len, unsafe { argv[0] }, 0);
+    if (o_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, o_ptr);
+    const origin = unsafe { o_ptr.?[0..o_len] };
+
+    let c_len: usize = 0;
+    const c_ptr = JS_ToCStringLen2(ctx, &c_len, unsafe { argv[1] }, 0);
+    if (c_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, c_ptr);
+    const cname = unsafe { c_ptr.?[0..c_len] };
+
+    let u_len: usize = 0;
+    const u_ptr = JS_ToCStringLen2(ctx, &u_len, unsafe { argv[2] }, 0);
+    if (u_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, u_ptr);
+    const url = unsafe { u_ptr.?[0..u_len] };
+
+    let i: usize = 0;
+    while (i < MAX_CACHE_ENTRIES) : (i += 1) {
+        const e = &g_cache_entries[i];
+        if (!e.active) continue;
+        if (!std.mem.eql(u8, e.origin_buf[0..e.origin_len], origin)) continue;
+        if (cname.len > 0 && !std.mem.eql(u8, e.cache_buf[0..e.cache_len], cname)) continue;
+        if (std.mem.eql(u8, e.url_buf[0..e.url_len], url)) {
+            return JS_NewStringLen(ctx, e.payload.ptr, e.payload.len);
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_cache_has(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsNull();
+    let o_len: usize = 0;
+    const o_ptr = JS_ToCStringLen2(ctx, &o_len, unsafe { argv[0] }, 0);
+    if (o_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, o_ptr);
+    const origin = unsafe { o_ptr.?[0..o_len] };
+
+    let c_len: usize = 0;
+    const c_ptr = JS_ToCStringLen2(ctx, &c_len, unsafe { argv[1] }, 0);
+    if (c_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, c_ptr);
+    const cname = unsafe { c_ptr.?[0..c_len] };
+
+    let i: usize = 0;
+    while (i < MAX_CACHE_ENTRIES) : (i += 1) {
+        const e = &g_cache_entries[i];
+        if (e.active && std.mem.eql(u8, e.origin_buf[0..e.origin_len], origin) && std.mem.eql(u8, e.cache_buf[0..e.cache_len], cname)) {
+            return JS_NewStringLen(ctx, "1", 1);
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_cache_delete(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 3) return jsNull();
+    let o_len: usize = 0;
+    const o_ptr = JS_ToCStringLen2(ctx, &o_len, unsafe { argv[0] }, 0);
+    if (o_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, o_ptr);
+    const origin = unsafe { o_ptr.?[0..o_len] };
+
+    let c_len: usize = 0;
+    const c_ptr = JS_ToCStringLen2(ctx, &c_len, unsafe { argv[1] }, 0);
+    if (c_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, c_ptr);
+    const cname = unsafe { c_ptr.?[0..c_len] };
+
+    let u_len: usize = 0;
+    const u_ptr = JS_ToCStringLen2(ctx, &u_len, unsafe { argv[2] }, 0);
+    if (u_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, u_ptr);
+    const url = unsafe { u_ptr.?[0..u_len] };
+
+    let deleted = false;
+    let i: usize = 0;
+    while (i < MAX_CACHE_ENTRIES) : (i += 1) {
+        let e = &g_cache_entries[i];
+        if (!e.active) continue;
+        if (!std.mem.eql(u8, e.origin_buf[0..e.origin_len], origin)) continue;
+        if (!std.mem.eql(u8, e.cache_buf[0..e.cache_len], cname)) continue;
+        if (url.len > 0 && !std.mem.eql(u8, e.url_buf[0..e.url_len], url)) continue;
+        if (e.payload.len > 0) {
+            std.heap.c_allocator.free(e.payload);
+            e.payload = [];
+        }
+        e.active = false;
+        deleted = true;
+    }
+    return if (deleted) JS_NewStringLen(ctx, "1", 1) else jsNull();
+}
+
 pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     terminateAllWorkers();
     const global_obj = JS_GetGlobalObject(raw_ctx);
@@ -663,6 +848,10 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     defineMethod(raw_ctx, global_obj, "__capsurf_worker_terminate", js_capsurf_worker_terminate, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_worker_pump", js_capsurf_worker_pump, 0);
     defineMethod(raw_ctx, global_obj, "__capsurf_hr_now", js_capsurf_hr_now, 0);
+    defineMethod(raw_ctx, global_obj, "__capsurf_cache_put", js_capsurf_cache_put, 4);
+    defineMethod(raw_ctx, global_obj, "__capsurf_cache_match", js_capsurf_cache_match, 3);
+    defineMethod(raw_ctx, global_obj, "__capsurf_cache_has", js_capsurf_cache_has, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_cache_delete", js_capsurf_cache_delete, 3);
 }
 
 const MAX_WORKER_SLOTS: usize = 1;

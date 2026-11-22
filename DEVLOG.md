@@ -2224,3 +2224,4 @@
 - Phase 370 (`src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/cdp/session.cp`): 修复 `fetch()` 请求在 `Network.requestWillBeSent` 中固定上报 `method: "GET"` 且缺失 `hasPostData`/`postData` 的问题，打通 `new Request(..., { method: 'POST'/'PUT', body })` 数据链路。
 - Phase 371 (`src/cdp/runtime.cp`): `Runtime.evaluate` 已接入 `pollNetworkEvents`，而 Playwright `page.evaluate` 实际走 `Runtime.callFunctionOn`，导致 `page-network-response.spec.ts` #11-#13 与 `network-post-data.spec.ts` 在 `waitForResponse`/`waitForRequest` 处全部超时。补齐 `Runtime.callFunctionOn` 网络事件轮询后，单次调用即可即时收到完整 `Network.*` 三事件与真实响应头。
 - Phase 372 (`src/cdp/runtime.cp`): 补齐 `Runtime.callFunctionOn` 缺失的子帧与执行上下文事件发射，消除通过 `page.evaluate` 动态插拔 `<iframe>` 时的事件延迟与漏发。
+- Phase 373 (`src/cdp/session_hooks.cp`, `src/js/shim/window.js`): 补齐 `window.caches` / `Cache` / `CacheStorage` 原生持久化实现，将序列化响应对象按 `(origin, cacheName, url)` 存入 `g_cache_entries`，确保 `page.reload()` 后 `cache.match()` 仍可命中并返回 `Response`。
