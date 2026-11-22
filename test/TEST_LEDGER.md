@@ -818,6 +818,12 @@
 | WPT-B149 | `dataset` + `/tabular-data/` + `/the-form-element/` + `/dom/ranges/` (29/36) | 33/76 PASS (`dataset` **6/7**, `tabular-data` 7/11, `the-form-element` 11/15, `ranges` 9/29, 0 CRASH) |
 | WPT-B148 | `/css-conditional/` + `/cssom-view/` (89/106) + `/css-flexbox/` (78/261) + `/css/selectors/` | 131/369 PASS (`conditional` 39/135, `cssom-view` 40/89, `flexbox` 21/78, `selectors` 31/67 **4 FAIL→PASS**, 0 CRASH) |
 | WPT-B150 | `/html/browsers/history/` + `cellIndex` | 14/19 PASS (`history` **13/18 (18/18基线全匹配!)**, `cellIndex` **1/1**, 0 FAIL, 0 CRASH) |
+| 2026-11-23 10:24 | `page-history.spec.ts` | 10/13 PASS (`reload data url` FAIL→PASS; 3 timeout) | PW Batch 136 |
+| 2026-11-23 10:24 | `page-network-response.spec.ts` | **18/21 PASS** (**8 FAIL→PASS** 含 Brotli/set-cookie/navigated away; 2 fail, 1 timeout) | PW Batch 136 |
+| 2026-11-23 10:24 | `page-network-idle.spec.ts` | 2/10 PASS (8 timeout) | PW Batch 136 |
+| 2026-11-23 10:24 | `page-event-popup.spec.ts` | 11/13 PASS (2 timeout) | PW Batch 136 |
+| WPT-B152 | `the-iframe-element/` (89/152) + `the-canvas-element/` + `/streams/ 1/2` + `/webstorage/` | 26/135 PASS (`iframe` 21/89 **1 ERROR→PASS**, `canvas` **1/1**, `streams 1/2` 1/42, `webstorage` **3/3**, 0 CRASH) |
+| WPT-B153 | `/console/` + `/performance-timeline/` + `/user-timing/` + `/FileAPI/` | 35/106 PASS (`console` **4/13 (13/13匹配!)**, `perf-timeline` 2/21, `user-timing` 15/36 **1 FAIL→PASS**, `FileAPI` 14/36, 0 CRASH) |
 | 2026-11-23 09:56 | `page-evaluate.spec.ts` | 36/95 PASS (59 timeout at teardown) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-keyboard.spec.ts` | 39/44 PASS (40/44 on retry; 2 fail, 3 timeout) | PW Batch 135 |
 | 2026-11-23 09:56 | `page-aria-snapshot.spec.ts` | 37/38 PASS (1 fail: pseudo codepoint space) | PW Batch 135 |

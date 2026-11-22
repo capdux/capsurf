@@ -4226,6 +4226,35 @@ function installWindow(global) {
     if (typeof globalThis !== "undefined") globalThis.EventSource = EventSource;
   }
 
+  // WHATWG Streams: CountQueuingStrategy & ByteLengthQueuingStrategy
+  if (typeof global.CountQueuingStrategy === "undefined") {
+    function makeQueuingStrategy(name, sizeFn) {
+      function Strategy(init) {
+        if (!init || typeof init !== "object") {
+          throw new TypeError("Failed to construct '" + name + "': 1 argument required, but only 0 present.");
+        }
+        if (!("highWaterMark" in init) || init.highWaterMark === undefined) {
+          throw new TypeError("Failed to construct '" + name + "': Failed to read the 'highWaterMark' property from 'QueuingStrategyInit': Required member is undefined.");
+        }
+        const hwm = Number(init.highWaterMark);
+        Object.defineProperty(this, "_highWaterMark", { value: hwm, enumerable: false, configurable: false, writable: false });
+      }
+      Object.defineProperty(Strategy.prototype, "highWaterMark", {
+        get: function () { return this._highWaterMark; },
+        enumerable: true,
+        configurable: true,
+      });
+      Strategy.prototype.size = sizeFn;
+      Object.defineProperty(Strategy.prototype, Symbol.toStringTag, { value: name, configurable: true });
+      markNative(Strategy, name);
+      global[name] = Strategy;
+      if (typeof window !== "undefined") window[name] = Strategy;
+      if (typeof globalThis !== "undefined") globalThis[name] = Strategy;
+    }
+    makeQueuingStrategy("CountQueuingStrategy", function () { return 1; });
+    makeQueuingStrategy("ByteLengthQueuingStrategy", function (chunk) { return chunk.byteLength; });
+  }
+
   // =============================================================
   // 5b. W3C Performance & User Timing Specification Implementation
   // =============================================================

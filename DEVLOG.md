@@ -2273,3 +2273,4 @@
 - Phase 419 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/html-element.js`): 实现 `DOMStringMap` 原型及 `dataset` Proxy 的 `ownKeys`/`getOwnPropertyDescriptor`/`SyntaxError`/`InvalidCharacterError` 规范行为，并为 `HTMLTableCellElement.cellIndex` 增加 HTML 命名空间检查。
 - Phase 420 (`src/js/shim/index.js`, `src/js/shim/parser.js`, `src/js/shim/element/html-classes.js`): 为 `createHTMLDocument`/`ParsedDocument` 置空 `location`（返回 `null`），并收紧表格 DOM `isHtmlEl` 命名空间判断。
 - Phase 421 (`src/js/shim/index.js`, `src/js/shim/element/html-element.js`): 修正 `createElementNS("", ...)` 空命名空间为 `null`，并限制 `dataset` 仅对 HTML/SVG/MathML 元素返回 `DOMStringMap`。
+- Phase 422 (`src/js/shim/window.js`): 实现 `CountQueuingStrategy` 与 `ByteLengthQueuingStrategy` 构造与 `size()` 方法。
