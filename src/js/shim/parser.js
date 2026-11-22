@@ -1139,9 +1139,74 @@ DOMParser.prototype.parseFromString = function (str, mimeType) {
 markNative(DOMParser, "DOMParser");
 markNative(DOMParser.prototype.parseFromString, "parseFromString");
 
+function XMLSerializer() {}
+
+function serializeXmlDoctype(dt) {
+  if (!dt || !dt.name) return "";
+  let out = "<!DOCTYPE " + dt.name;
+  if (dt.publicId) {
+    out += ' PUBLIC "' + dt.publicId + '"';
+    if (dt.systemId !== undefined && dt.systemId !== null) {
+      out += ' "' + dt.systemId + '"';
+    }
+  } else if (dt.systemId) {
+    out += ' SYSTEM "' + dt.systemId + '"';
+  }
+  return out + ">";
+}
+
+function serializeXmlNode(node) {
+  if (!node || typeof node !== "object") {
+    throw new TypeError("Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.");
+  }
+  const nt = node.nodeType;
+  if (nt === 9) {
+    const cs = node.childNodes || [];
+    let out = "";
+    let sawDoctype = false;
+    for (let i = 0; i < cs.length; i++) {
+      if (cs[i] && cs[i].nodeType === 10) sawDoctype = true;
+      out += serializeXmlNode(cs[i]);
+    }
+    if (!sawDoctype && node.doctype) {
+      out = serializeXmlDoctype(node.doctype) + out;
+    }
+    if (!out && node.documentElement) {
+      out = serializeXmlNode(node.documentElement);
+    }
+    return out;
+  }
+  if (nt === 11) {
+    const cs = node.childNodes || [];
+    let out = "";
+    for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i]);
+    return out;
+  }
+  if (nt === 10) return serializeXmlDoctype(node);
+  if (nt === 3) {
+    return String(node.data !== undefined ? node.data : (node.textContent || ""))
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  if (nt === 8) return "<!--" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "-->";
+  if (nt === 7) return "<?" + String(node.target || "") + " " + String(node.data || "") + "?>";
+  if (typeof node.outerHTML === "string") return node.outerHTML;
+  return "";
+}
+
+XMLSerializer.prototype.serializeToString = function (root) {
+  return serializeXmlNode(root);
+};
+
+markNative(XMLSerializer, "XMLSerializer");
+markNative(XMLSerializer.prototype.serializeToString, "serializeToString");
+
 if (typeof globalThis !== "undefined") {
   globalThis.DOMParser = DOMParser;
+  globalThis.XMLSerializer = XMLSerializer;
 }
 if (typeof window !== "undefined") {
   window.DOMParser = DOMParser;
+  window.XMLSerializer = XMLSerializer;
 }

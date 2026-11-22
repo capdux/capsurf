@@ -1893,3 +1893,6 @@
 
 ### Phase 262: `document.activeElement` 与 `DOM.focus` 排障笔记
 - **`activeElement` 初始值与焦点同步**：此前 `docProto` 未定义 `activeElement`，初始页面返回 `undefined`，且 `DOM.focus` 为空存根导致 Playwright `page.focus()` 既不更新 `activeElement` 也不派发 `focus`/`blur` 事件。补齐 `docProto.activeElement`、`DOM.focus` 实装与 `isFocusableElement` + 重复聚焦去重后，`initTag: 'BODY'`、`evs: ['d:focus', 'd:blur', 'b:focus']` 与不可聚焦元素保持原焦点全部符合预期。
+
+### Phase 263: `XMLSerializer` 排障笔记
+- **`page.content()` 报错根因**：Playwright `page.content()` 内部调用 `new XMLSerializer().serializeToString(document)`，此前运行时未定义 `XMLSerializer` 导致 `page-set-content.spec.ts` 前 5 个核心用例全挂。补齐 `XMLSerializer` 并同时挂载到 `window`/`globalThis` 后，`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 下均可正常返回完整序列化 HTML。

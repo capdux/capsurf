@@ -231,8 +231,9 @@ function installShim(global) {
   global.__capsurf_upgradeElement = upgradeElement;
   global.Selection = Selection;
 
-  // 7. Expose DOMParser
+  // 7. Expose DOMParser & XMLSerializer
   global.DOMParser = DOMParser;
+  global.XMLSerializer = XMLSerializer;
 
   // 7.5. Expose XPath
   if (typeof XPathResult !== "undefined") {

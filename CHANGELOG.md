@@ -2524,3 +2524,7 @@
   - `src/cdp/dom.cp`: 移除 `DOM.focus` 空存根，实现 `nodeId`/`backendNodeId`/`objectId` 解析并同步 `session.focused_node` 与 JS `el.focus()` 派发。
   - `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 在 `docProto` 补齐 `activeElement` getter/setter（未聚焦或节点已脱离 DOM 时回退 `body || documentElement || null`）。
   - `src/js/shim/element/html-element.js`: `proto.focus()` 增加 `isFocusableElement()` 校验及同元素重复聚焦去重，确保 `focus`/`blur` 事件序列与浏览器一致。
+
+## [2026-11-22] Phase 263: `XMLSerializer` 实现与 `page.content()` 序列化支持
+- **Added (`src/`)**:
+  - `src/js/shim/parser.js`, `src/js/shim/index.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现并暴露 `XMLSerializer`（支持 Document、DocumentType、Element、Text、Comment、ProcessingInstruction、DocumentFragment 序列化），打通 Playwright `page.content()` 与 `page.setContent()` 闭环。

@@ -4974,3 +4974,10 @@
 - **双模式验证**:
   - `bin_dev/main` 实测：`initTag: 'BODY'`、`ae1: 'd'`、`ae2: 'b'`、`ae3: 'b'`（不可聚焦元素保持原焦点）、`evs: ['d:focus', 'd:blur', 'b:focus']`。
   - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（157 模块 **132.04s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.21s)**。
+
+### [2026-11-22 15:28] Phase 263: `XMLSerializer` 实现与 `page.content()` 序列化支持
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/parser.js](file:///data/dev/capsurf/src/js/shim/parser.js), [src/js/shim/index.js](file:///data/dev/capsurf/src/js/shim/index.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现并暴露 `XMLSerializer`（支持 Document、DocumentType、Element、Text、Comment、ProcessingInstruction、DocumentFragment 序列化），打通 Playwright `page.content()` 与 `page.setContent()` 闭环。
+- **双模式验证**:
+  - `bin_dev/main` 实测：`page.setContent()` + `page.content()` 在无 doctype、HTML5 doctype 与 HTML4 doctype 下均可正常返回序列化 HTML。
+  - ReleaseFast 最终验证：`ulimit -s unlimited && rm -rf .cap/zig && cap build -m -r -o bin src/main.cp`（160 模块 **121.45s**）通过，`python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.18s)**。
