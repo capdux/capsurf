@@ -5512,3 +5512,10 @@
 - **双模式验证**:
   - `bin_dev/main` CDP 实测（端口 19399）：`PHASE335_RESULT: {"ran":42,"hasSR":true,"spanText":"some text"}`。
   - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.37s)**。
+
+## Phase 336: Shadow DOM `<slot>` `getBoundingClientRect()` 零尺寸修复完成并提交
+- **引擎修复 (`src/`)**:
+  - [src/js/shim/element/element.js](file:///data/dev/capsurf/src/js/shim/element/element.js) (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `getShadowEffectiveText()` 纳入 `<slot>` `assignedNodes({ flatten: true })` 文本。
+- **双模式验证**:
+  - `bin_dev/main` CDP 实测（端口 19399）：`aW=72, aH=24, mlH=24`。
+  - `bin_dev/main` `--smoke` 回归：`CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites passed (6 pass, 0 fail, 8 expect(), 4.40s)**。

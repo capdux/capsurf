@@ -11096,6 +11096,31 @@
     }
 
     let inSiblingOffsetCalc = false;
+    function getShadowEffectiveText(el) {
+      if (!el) return "";
+      let txt = String(el.textContent || "").trim();
+      if (txt.length > 0) return txt;
+      const t = String(el.localName || el.tagName || "").toUpperCase();
+      const collectSlot = function (sl) {
+        if (!sl || typeof sl.assignedNodes !== "function") return "";
+        const nodes = sl.assignedNodes({ flatten: true });
+        let s = "";
+        for (let i = 0; i < nodes.length; i++) {
+          if (nodes[i] && nodes[i].textContent) s += nodes[i].textContent;
+        }
+        return s.trim();
+      };
+      if (t === "SLOT") return collectSlot(el);
+      if (typeof el.querySelectorAll === "function") {
+        const slots = el.querySelectorAll("slot");
+        for (let i = 0; i < slots.length; i++) {
+          txt = collectSlot(slots[i]);
+          if (txt.length > 0) return txt;
+        }
+      }
+      return "";
+    }
+
     const origGetBoundingClientRect = proto.getBoundingClientRect;
     proto.getBoundingClientRect = function () {
       if (isElementDisplayNone(this)) {
@@ -11130,7 +11155,7 @@
                 const sr = typeof sk.getBoundingClientRect === "function" ? sk.getBoundingClientRect() : null;
                 if (sr && sr.height > 0) {
                   shadowH += sr.height;
-                } else if (sk.textContent && sk.textContent.trim().length > 0) {
+                } else if (getShadowEffectiveText(sk).length > 0) {
                   shadowH += 16;
                 }
               }
@@ -11171,7 +11196,7 @@
         if (childW === 0 && childH === 0 && parent && parent.nodeType === 1) {
           const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
           if (rn && rn.host) {
-            const txt = String(this.textContent || "").trim();
+            const txt = getShadowEffectiveText(this);
             if (txt.length > 0 || tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
               childW = Math.max(20, txt.length * 8 + 16);
               childH = 24;

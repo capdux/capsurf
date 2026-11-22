@@ -2120,3 +2120,6 @@
 
 ### Phase 335: `document.open()/write()/close()` 内嵌 `<script>` 静默未执行排障笔记
 - **双闭包隔离与 `innerHTML` `_alreadyStarted` 标记根因**：Playwright `page.setContent(html)` 通过 `document.open(); document.write(html); document.close();` 写入整页源码，但 `src/cdp/session_hooks.cp` 中 `g.document.close()` 仅设置 `head.innerHTML` / `body.innerHTML`，而 `src/js/shim/window.js` 会为 `innerHTML` 创建的 `<script>` 节点打上 `_alreadyStarted = true` 且 `handleInsertedScript` 位于第二个 IIFE 闭包中。桥接 `g.__capsurf_handle_inserted_script` 并在 `document.close()` 重置 `_alreadyStarted = false` 后调用，实测 `PHASE335_RESULT: {"ran":42,"hasSR":true,"spanText":"some text"}`。
+
+### Phase 336: Shadow DOM `<slot>` 元素 `getBoundingClientRect()` 返回零尺寸排障笔记
+- **`<slot>` `assignedNodes` 未计入盒模型回退估算根因**：`src/js/shim/element/element.js` 中 Shadow DOM 回退尺寸计算仅读取 `this.textContent` / `sk.textContent`，对 `<a id="inner-link"><slot></slot></a>` 返回空串导致链接与宿主均返回 `height: 0`（Playwright 判定 `element is not visible`）。引入 `getShadowEffectiveText()` 收集 `slot.assignedNodes({ flatten: true })` 文本后，实测 `aW=72, aH=24, mlH=24`。

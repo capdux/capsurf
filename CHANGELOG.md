@@ -2848,3 +2848,7 @@
 ## [2026-11-22] Phase 335: 执行 `document.open(); document.write(...); document.close();` 写入文档中的 `<script>` 标签
 - **Fixed (`src/`)**:
   - `src/cdp/session_hooks.cp`: 在第二个闭包暴露 `g.__capsurf_handle_inserted_script = handleInsertedScript`，并在 `g.document.close()` 写入 `head`/`body` 后遍历 `g.document.querySelectorAll('script')` 重置 `_alreadyStarted = false` 并调用 `g.__capsurf_handle_inserted_script(...)`，使 Playwright `page.setContent(...)` 内嵌脚本（Shadow DOM 创建、`setTimeout` 等）与普通 `document.open/write/close` 一致生效。
+
+## [2026-11-22] Phase 336: 修复 Shadow DOM `<slot>` 分配节点在 `getBoundingClientRect()` 中的尺寸计算
+- **Fixed (`src/`)**:
+  - `src/js/shim/element/element.js` (+ `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `getShadowEffectiveText(el)`，在元素自身 `textContent` 为空时收集 `<slot>`（含后代 `<slot>`）的 `assignedNodes({ flatten: true })` 文本，使 `<a id="inner-link"><slot></slot></a>` 与宿主 `<my-link>` 的 `getBoundingClientRect()` 返回非零几何框。
