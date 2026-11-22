@@ -517,6 +517,8 @@ pub struct InputHandler {
                     if (click_count == 2) {
                         * = dispatchMouseDomEvent(session, target_node, "dblclick", x, y, click_count, btn_num, buttons, modifiers);
                     }
+                } else if (btn_num == 2) {
+                    * = dispatchMouseDomEvent(session, target_node, "contextmenu", x, y, click_count, btn_num, buttons, modifiers);
                 }
                 if (session.range_drag_node != NULL_NODE) {
                     if (session.range_drag_changed) {

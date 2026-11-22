@@ -727,3 +727,14 @@
 | WPT-B111 | `/html/semantics/{tabular-data,embedded-content/the-iframe-element}/` | 26/163 PASS (1 `ERROR→PASS` lazy-iframe, 0 CRASH) |
 | WPT-B112 | `/html/semantics/embedded-content/the-{img,canvas}-element/` | 2/6 PASS (0 CRASH/0 TIMEOUT) |
 | WPT-B113 | `/html/semantics/{scripting-1/the-script-element,document-metadata/the-{link,style}-element}/` | 10/68 PASS (2 `FAIL→PASS`, style 4/5, 0 CRASH) |
+| 2026-11-23 01:55 | `page-event-popup.spec.ts` | 5/11 PASS (0/3→5/11! `@smoke`等5项全过, `[12/13]`120s截断) | PW Batch 121 |
+| 2026-11-23 01:55 | `page-wait-for-selector-2.spec.ts` | 31/32 PASS (`zero-sized` FAIL→PASS!) | PW Batch 121 |
+| 2026-11-23 01:55 | `page-wait-for-navigation.spec.ts` | 1/3 PASS (`[4/12]`120s截断) | PW Batch 121 |
+| 2026-11-23 01:55 | `page-click.spec.ts` | 23/25 PASS (Phase 382 checkbox通过! `[25/77]`120s截断) | PW Batch 121 |
+| WPT-B114 | `/html/webappapis/{timers,microtask-queuing,dynamic-markup-insertion,scripting/events}/` | 17/32 PASS (23/32 matched, events 9/14, 0 CRASH) |
+| WPT-B115 | `/html/webappapis/{system-state,atob,structured-clone}/` + `/html/browsers/history/the-history-interface/` | 12/16 PASS (history 7/7 全绿, 0 CRASH/0 TIMEOUT) |
+| WPT-B116 | `/html/browsers/{the-window-object,browsing-the-web/navigating-across-documents}/` | 2/9 PASS (9/9 matched `exit=0`, 0 CRASH) |
+| 2026-11-23 02:02 | `page-click.spec.ts` | 28/31 PASS (`[14/77]`不卡viewport! 推进至`[31/77]`) | PW Batch 122 |
+| 2026-11-23 02:02 | `page-history.spec.ts` | 7/13 PASS (retry 120s截断) | PW Batch 122 |
+| 2026-11-23 02:02 | `page-screenshot.spec.ts` | 2/3 PASS (`[4/44]`120s截断) | PW Batch 122 |
+| WPT-B117 | `/html/canvas/` (852) + `/html/infrastructure/` + `/html/syntax/parsing/ 1/3..2/3` | 361/882 PASS (canvas **356/852**, **42 FAIL→PASS**, 0 CRASH) |
