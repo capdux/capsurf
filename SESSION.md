@@ -7351,3 +7351,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 530 (`animation` 简写扩展、`animation-range-{start,end}` 与 `sign(cqw)` 计算)
 - **[Agent]**: 完成 Phase 530：支持 `animation-range-start` / `animation-range-end` 校验/规范化/计算值（`cover 0% -> cover`、`0 -> 0px`、`em -> px`、`calc` 求值），修复 `animation` 简写展开（未指定 `animation-duration` 默认 `"auto"`，并重置 `animation-timeline: auto`、`animation-range-start: normal`、`animation-range-end: normal`），在 `window.js` 新增容器尺寸查询与 `sign(2cqw - ...)` 求值支持 `animation-delay` / `animation-iteration-count`。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 531 (`animation-name`/`animation-range-end` 完美收尾、`word-break`/`letter-spacing`/`tab-size`/`white-space` 级联)
+- **[Agent]**: 完成 Phase 531：修复 `animation-name` 多连字符 custom-ident（`---\"---` round-trip）、`animation-range-end` 默认 `100%` 省略及 `calc` 项顺序；新增 `word-break: manual`、`letter-spacing`/`word-spacing` `calc(% + len)` 规范化与线性求值、`tab-size` `sign(cqw)` 求值、`white-space-collapse`/`text-wrap-mode`/`text-wrap-style` 继承且 `white-space` 展开不覆写 `text-wrap-style`。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

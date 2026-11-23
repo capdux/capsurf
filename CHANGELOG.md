@@ -3517,3 +3517,5 @@
   - `test/TEST_LEDGER.md`: 记录 `WPT-B280`（`/css/css-text/parsing/` 58/86 PASS）。
 
 - **Phase 530** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `animation-range-start`/`animation-range-end` 解析与计算值，完善 `animation` 简写展开（`animation-duration` 默认 `auto` 及 `animation-timeline`/`animation-range-*` 重置），新增 `sign(cqw)` 容器单位求值。
+
+- **Phase 531** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `animation-name` 多连字符 ident、`animation-range-end` `100%` 省略与 `calc` 顺序；新增 `word-break: manual`、`letter-spacing`/`word-spacing` `%+len` 线性求值、`tab-size` `sign(cqw)` 求值与 `text-wrap-*` 继承修复。

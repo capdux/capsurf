@@ -2550,3 +2550,7 @@
 ### Phase 530: `animation-range-{start,end}`、`animation` 11 长属性展开与 `sign(cqw)` 求值
 - `expandCssShorthand("animation")` 必须将省略 `duration` 层的 `animation-duration` 设为 `"auto"`（CSS Animations 2），并显式重置 `animation-timeline: auto`、`animation-range-start: normal`、`animation-range-end: normal`；`serializeExpandedShorthand` 仅在这 3 项为默认值时序列化为简写。
 - `window.js` 沿 `parentElement` 查找 `container-type: inline-size|size` 祖先宽度计算 `cqw`，在 `timeProps` 和 `animation-iteration-count` 的 `calc()` 求解前先替换 `sign(...)`。
+
+### Phase 531: `animation-range-end` `100%` 默认省略与 `css-text` 6 项收尾
+- `animation-range-start` 默认百分比为 `0%`，而 `animation-range-end` 默认百分比为 `100%`；同时 `<custom-ident>` 校验需允许任意前导 `-`（`-*(?:[a-z_]|\\.)`），解决 `---\"---` round-trip 失败。
+- `white-space` 简写展开仅写 `white-space-collapse` 与 `text-wrap-mode`，并将 `white-space-collapse`/`text-wrap-mode`/`text-wrap-style`/`text-wrap` 加入 `INHERITED_CSS_PROPS`。

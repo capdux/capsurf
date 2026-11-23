@@ -4073,7 +4073,7 @@
         "overflow-inline": ["visible", "hidden", "clip", "scroll", "auto"],
         "overflow-wrap": ["normal", "break-word", "anywhere"],
         "word-wrap": ["normal", "break-word", "anywhere"],
-        "word-break": ["normal", "break-all", "keep-all", "break-word", "auto-phrase"],
+        "word-break": ["normal", "break-all", "keep-all", "manual", "break-word", "auto-phrase"],
         "hyphens": ["none", "manual", "auto"],
         "line-break": ["auto", "loose", "normal", "strict", "anywhere"],
         "text-align": ["start", "end", "left", "right", "center", "justify", "match-parent", "justify-all"],
@@ -5099,7 +5099,7 @@
             if (t.length <= 2) return false;
             continue;
           }
-          if (BAD.has(tl) || !/^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+          if (BAD.has(tl) || !/^(?:-*(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
         }
         return true;
       }
@@ -5184,7 +5184,7 @@
           const toks = splitCssTokens(items[i].trim());
           if (toks.length !== 1) return false;
           const t = toks[0], tl = t.toLowerCase();
-          if (BAD.has(tl) || !/^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+          if (BAD.has(tl) || !/^(?:-*(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
         }
         return true;
       }
@@ -5843,8 +5843,15 @@
       }
       if (key === "animation-range-start" || key === "animation-range-end") {
         const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+        const defaultPctRe = key === "animation-range-end" ? /^[+-]?100(?:\.0+)?%$/ : /^[+-]?0(?:\.0+)?%$/;
         const normOffset = (tok) => {
           if (/^[+-]?0(?:\.0+)?$/.test(tok)) return "0px";
+          if (/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|ex|ch|vw|vh))\s*\+\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i.test(tok)) {
+            return tok.replace(/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|ex|ch|vw|vh))\s*\+\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i, "calc($2 + $1)");
+          }
+          if (/^calc\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i.test(tok)) {
+            return tok.replace(/^calc\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i, "calc($2 * $1)");
+          }
           return tok;
         };
         return splitTopLevelComma(s).map((part) => {
@@ -5857,7 +5864,7 @@
           if (toks.length === 2) {
             const name = toks[0].toLowerCase();
             const off = normOffset(toks[1]);
-            if (/^[+-]?0(?:\.0+)?%$/.test(off)) return name;
+            if (defaultPctRe.test(off)) return name;
             return name + " " + off;
           }
           return part;
@@ -5869,6 +5876,16 @@
           const tl = t.toLowerCase();
           return (tl === "all" || tl === "none") ? tl : t;
         }).join(", ");
+      }
+      if (key === "letter-spacing" || key === "word-spacing") {
+        const sl = s.toLowerCase();
+        if (/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:ch|em|rem|ex|px|vw|vh))\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i.test(sl)) {
+          return sl.replace(/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:ch|em|rem|ex|px|vw|vh))\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i, (_, len, op, pct) => {
+            const signedPct = op === "-" ? (pct.startsWith("-") ? pct.slice(1) : "-" + pct) : pct;
+            return "calc(" + signedPct + " + " + len + ")";
+          });
+        }
+        return sl;
       }
       if (key === "scrollbar-gutter") {
         const p = splitCssTokens(s.toLowerCase());
@@ -6114,10 +6131,10 @@
           "pre-line": ["preserve-breaks", "wrap"]
         };
         if (MAP[canon]) {
-          return [["white-space-collapse", MAP[canon][0]], ["text-wrap-mode", MAP[canon][1]], ["text-wrap-style", "auto"]];
+          return [["white-space-collapse", MAP[canon][0]], ["text-wrap-mode", MAP[canon][1]]];
         }
         const p = splitCssTokens(canon);
-        return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"], ["text-wrap-style", "auto"]];
+        return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"]];
       }
       if (key === "text-wrap") {
         const p = splitCssTokens(normV.toLowerCase());
@@ -6158,7 +6175,7 @@
       flex: ["flex-grow", "flex-shrink", "flex-basis"],
       "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
       "text-wrap": ["text-wrap-mode", "text-wrap-style"],
-      "white-space": ["white-space-collapse", "text-wrap-mode", "text-wrap-style"],
+      "white-space": ["white-space-collapse", "text-wrap-mode"],
       animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name", "animation-timeline", "animation-range-start", "animation-range-end"],
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
@@ -39217,6 +39234,7 @@
     const INHERITED_CSS_PROPS = new Set([
       "color", "font-size", "font-family", "font-weight", "font-style",
       "line-height", "text-align", "visibility", "direction", "white-space",
+      "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
       "letter-spacing", "word-spacing", "cursor",
     ]);
 
@@ -40021,13 +40039,77 @@
           if (px !== null) {
             computedMap.set(sk, (sk === "letter-spacing" && px === 0) ? "normal" : formatCssPx(px));
           }
+        } else if (/^calc\(/i.test(sv) && sv.indexOf("%") !== -1) {
+          const inner = sv.slice(5, -1).trim();
+          const evalLinear = (pctVal, pxVal) => {
+            const e = inner
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctVal))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * pxVal))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * pxVal));
+            if (/^[\d+\-*/().\s]+$/.test(e)) {
+              try {
+                const v = Function("return (" + e + ")")();
+                if (typeof v === "number" && isFinite(v)) return v;
+              } catch (_) {}
+            }
+            return null;
+          };
+          const pxCoeff = evalLinear(0, 1);
+          const pctCoeff = evalLinear(1, 0);
+          if (pxCoeff !== null && pctCoeff !== null) {
+            const pRounded = Number(pctCoeff.toFixed(6));
+            const xRounded = Number(pxCoeff.toFixed(6));
+            if (xRounded === 0) computedMap.set(sk, String(pRounded) + "%");
+            else if (pRounded === 0) computedMap.set(sk, (sk === "letter-spacing" && xRounded === 0) ? "normal" : formatCssPx(xRounded));
+            else {
+              const op = xRounded < 0 ? " - " + formatCssPx(-xRounded) : " + " + formatCssPx(xRounded);
+              computedMap.set(sk, "calc(" + String(pRounded) + "%" + op + ")");
+            }
+          }
         }
       }
       const tsRaw = (computedMap.get("tab-size") || "").trim().toLowerCase();
       if (tsRaw && !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tsRaw)) {
-        if (/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)/i.test(tsRaw)) {
-          const px = evalCssLengthExpr(tsRaw, 0, fontSize);
+        const tsEval = tsRaw.indexOf("sign(") !== -1 && /^calc\(/i.test(tsRaw)
+          ? (() => {
+              let cw = 800;
+              let cur = element && element.parentElement;
+              while (cur) {
+                const pMap = collectRawComputedMap(cur, "");
+                const ct = (pMap.get("container-type") || "").toLowerCase();
+                if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+                  const wm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec((pMap.get("width") || "").trim());
+                  if (wm) { cw = Number(wm[1]); break; }
+                }
+                cur = cur.parentElement;
+              }
+              const rep = tsRaw.slice(5, -1).replace(/sign\(([^()]+)\)/gi, (full, inn) => {
+                const r = inn
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize));
+                if (/^[\d+\-*/().\s]+$/.test(r)) {
+                  try {
+                    const v = Function("return (" + r + ")")();
+                    if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+                  } catch (_) {}
+                }
+                return full;
+              });
+              return "calc(" + rep + ")";
+            })()
+          : tsRaw;
+        if (/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)/i.test(tsEval)) {
+          const px = evalCssLengthExpr(tsEval, 0, fontSize);
           if (px !== null) computedMap.set("tab-size", formatCssPx(Math.max(0, px)));
+        } else if (/^calc\(/i.test(tsEval)) {
+          const inner = tsEval.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inner)) {
+            try {
+              const v = Function("return (" + inner + ")")();
+              if (typeof v === "number" && isFinite(v)) computedMap.set("tab-size", String(Math.max(0, Number(v.toFixed(6)))));
+            } catch (_) {}
+          }
         }
       }
       const ooRaw = (computedMap.get("outline-offset") || "").trim().toLowerCase();
@@ -40363,7 +40445,8 @@
           }
           const name = toks[0].toLowerCase();
           const off = resolveOff(toks.slice(1).join(" "));
-          if (off === "0%") return name;
+          const defOff = rk === "animation-range-end" ? "100%" : "0%";
+          if (off === defOff) return name;
           return name + " " + off;
         });
         computedMap.set(rk, items.join(", "));
