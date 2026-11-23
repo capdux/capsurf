@@ -7150,3 +7150,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 437] (`src/js/shim/range.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 将 `Range.prototype.commonAncestorContainer` 改为基于 `startContainer` 与 `endContainer` 动态计算（`isInclusiveAncestorNode`），消除静态缓存随节点变更过期的问题；`bin_dev` 编译 + CDP 探针 (`{"c1":true,"c2":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 438] (`src/js/shim/collections.js`, `src/js/shim/events/event.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 为 `DOMTokenList` Proxy 新增 `has` trap 并将 `forEach`/`keys`/`values`/`entries`/`[Symbol.iterator]` 统一对齐为 `Array.prototype.*`；将 `Event` 实例 `isTrusted` getter 抽离为模块级共享函数 `_getIsTrusted`；`bin_dev` 编译 + CDP 探针 (`{"protoOk":true,"feOk":true,"trustedOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [COMM -> cp_agy] 提交工单 `task-capsurf-20261123-image-webp-compile`：`/data/dev/cp/lib/image/webp.cp` 编译报错（`L1338 E0217` 越界、`L1499/L1505 E0207` `I32->USize` 类型不匹配及级联 `E0206`），等待上游 `cp_agy` 修复。
+
+- [cp_agy 结单] `task-capsurf-20261123-image-webp-compile`（delivery_id=211）：上游修复 `/data/dev/cp/lib/image/webp.cp` 的 `entropy_ids` 越界与 `usize(...)` 转换；`bin_dev` 编译通过并已完成 `ack`。
+- [Phase 439] (`src/js/shim/events/dispatch.js`, `src/js/shim/range.js`, `src/js/shim/parser.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 修正 `PHASE_AT_TARGET` 捕获先于冒泡的监听器触发顺序；补齐 `StaticRange` `Node`/`offset` 校验与 `InvalidNodeTypeError`；为 `ParsedDocument.prototype` 补齐 `createCDATASection`；`bin_dev` 编译 + CDP 探针 (`{"orderOk":true,"srOk":true,"missErr":true,"attrErr":true,"cdataOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

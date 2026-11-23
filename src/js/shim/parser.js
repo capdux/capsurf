@@ -836,6 +836,21 @@ ParsedDocument.prototype.createComment = function (data) {
   return new ParsedComment(data, this);
 };
 
+ParsedDocument.prototype.createCDATASection = function (data) {
+  if (arguments.length === 0) throw new TypeError("Failed to execute 'createCDATASection': 1 argument required.");
+  const s = String(data);
+  if (s.indexOf("]]>") !== -1) {
+    throw new DOMException("String contains ']]>'", "InvalidCharacterError");
+  }
+  if (this.contentType === "text/html") {
+    throw new DOMException("Operation is not supported for HTML documents.", "NotSupportedError");
+  }
+  const node = new ParsedText(s, this);
+  node.nodeType = 4;
+  node.nodeName = "#cdata-section";
+  return node;
+};
+
 ParsedDocument.prototype.createDocumentFragment = function () {
   return new ParsedFragment(this);
 };

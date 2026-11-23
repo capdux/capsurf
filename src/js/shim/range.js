@@ -32,11 +32,17 @@ function StaticRange(init) {
   }
   const sc = init.startContainer;
   const ec = init.endContainer;
-  const so = Number(init.startOffset) || 0;
-  const eo = Number(init.endOffset) || 0;
-  if (!sc || !ec) {
-    throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer are required.");
+  if (!sc || typeof sc.nodeType !== "number" || !ec || typeof ec.nodeType !== "number") {
+    throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer must be Nodes.");
   }
+  if (init.startOffset === undefined || init.endOffset === undefined) {
+    throw new TypeError("Failed to construct 'StaticRange': startOffset and endOffset are required.");
+  }
+  if (sc.nodeType === 10 || sc.nodeType === 2 || ec.nodeType === 10 || ec.nodeType === 2) {
+    throw new DOMException("The node provided is of an invalid type.", "InvalidNodeTypeError");
+  }
+  const so = Number(init.startOffset) >>> 0;
+  const eo = Number(init.endOffset) >>> 0;
   _rangeState.set(this, {
     startContainer: sc,
     startOffset: so,

@@ -2205,30 +2205,35 @@
           const list = map.get(eventType);
           if (list && list.length > 0) {
             const copy = list.slice();
-            for (let i = 0; i < copy.length; i++) {
-              if (isImmediateStopped()) return;
-              const item = copy[i];
-              if (phase === PHASE_CAPTURING && !item.capture) continue;
-              if (phase === PHASE_BUBBLING && item.capture) continue;
+            const passes = phase === PHASE_AT_TARGET ? [true, false] : [null];
+            for (let p = 0; p < passes.length; p++) {
+              const wantCapture = passes[p];
+              for (let i = 0; i < copy.length; i++) {
+                if (isImmediateStopped()) return;
+                const item = copy[i];
+                if (phase === PHASE_CAPTURING && !item.capture) continue;
+                if (phase === PHASE_BUBBLING && item.capture) continue;
+                if (wantCapture !== null && Boolean(item.capture) !== wantCapture) continue;
 
-              if (item.once) {
-                entry.removeEventListener(eventType, item.callback, item.capture);
-              }
-              const prevPassive = eventState ? eventState.inPassiveListener : false;
-              if (eventState) eventState.inPassiveListener = Boolean(item.passive);
-              try {
-                if (typeof item.callback === "function") {
-                  item.callback.call(entry, event);
-                } else if (item.callback && typeof item.callback === "object") {
-                  const handleFn = item.callback.handleEvent;
-                  if (typeof handleFn === "function") {
-                    handleFn.call(item.callback, event);
-                  }
+                if (item.once) {
+                  entry.removeEventListener(eventType, item.callback, item.capture);
                 }
-              } catch (e) {
-                reportListenerError(e);
-              } finally {
-                if (eventState) eventState.inPassiveListener = prevPassive;
+                const prevPassive = eventState ? eventState.inPassiveListener : false;
+                if (eventState) eventState.inPassiveListener = Boolean(item.passive);
+                try {
+                  if (typeof item.callback === "function") {
+                    item.callback.call(entry, event);
+                  } else if (item.callback && typeof item.callback === "object") {
+                    const handleFn = item.callback.handleEvent;
+                    if (typeof handleFn === "function") {
+                      handleFn.call(item.callback, event);
+                    }
+                  }
+                } catch (e) {
+                  reportListenerError(e);
+                } finally {
+                  if (eventState) eventState.inPassiveListener = prevPassive;
+                }
               }
             }
           }
@@ -22980,11 +22985,17 @@
     }
     const sc = init.startContainer;
     const ec = init.endContainer;
-    const so = Number(init.startOffset) || 0;
-    const eo = Number(init.endOffset) || 0;
-    if (!sc || !ec) {
-      throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer are required.");
+    if (!sc || typeof sc.nodeType !== "number" || !ec || typeof ec.nodeType !== "number") {
+      throw new TypeError("Failed to construct 'StaticRange': startContainer and endContainer must be Nodes.");
     }
+    if (init.startOffset === undefined || init.endOffset === undefined) {
+      throw new TypeError("Failed to construct 'StaticRange': startOffset and endOffset are required.");
+    }
+    if (sc.nodeType === 10 || sc.nodeType === 2 || ec.nodeType === 10 || ec.nodeType === 2) {
+      throw new DOMException("The node provided is of an invalid type.", "InvalidNodeTypeError");
+    }
+    const so = Number(init.startOffset) >>> 0;
+    const eo = Number(init.endOffset) >>> 0;
     _rangeState.set(this, {
       startContainer: sc,
       startOffset: so,
@@ -25025,6 +25036,21 @@
 
   ParsedDocument.prototype.createComment = function (data) {
     return new ParsedComment(data, this);
+  };
+
+  ParsedDocument.prototype.createCDATASection = function (data) {
+    if (arguments.length === 0) throw new TypeError("Failed to execute 'createCDATASection': 1 argument required.");
+    const s = String(data);
+    if (s.indexOf("]]>") !== -1) {
+      throw new DOMException("String contains ']]>'", "InvalidCharacterError");
+    }
+    if (this.contentType === "text/html") {
+      throw new DOMException("Operation is not supported for HTML documents.", "NotSupportedError");
+    }
+    const node = new ParsedText(s, this);
+    node.nodeType = 4;
+    node.nodeName = "#cdata-section";
+    return node;
   };
 
   ParsedDocument.prototype.createDocumentFragment = function () {

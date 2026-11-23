@@ -380,30 +380,35 @@ function internalDispatch(target, event, trusted) {
         const list = map.get(eventType);
         if (list && list.length > 0) {
           const copy = list.slice();
-          for (let i = 0; i < copy.length; i++) {
-            if (isImmediateStopped()) return;
-            const item = copy[i];
-            if (phase === PHASE_CAPTURING && !item.capture) continue;
-            if (phase === PHASE_BUBBLING && item.capture) continue;
+          const passes = phase === PHASE_AT_TARGET ? [true, false] : [null];
+          for (let p = 0; p < passes.length; p++) {
+            const wantCapture = passes[p];
+            for (let i = 0; i < copy.length; i++) {
+              if (isImmediateStopped()) return;
+              const item = copy[i];
+              if (phase === PHASE_CAPTURING && !item.capture) continue;
+              if (phase === PHASE_BUBBLING && item.capture) continue;
+              if (wantCapture !== null && Boolean(item.capture) !== wantCapture) continue;
 
-            if (item.once) {
-              entry.removeEventListener(eventType, item.callback, item.capture);
-            }
-            const prevPassive = eventState ? eventState.inPassiveListener : false;
-            if (eventState) eventState.inPassiveListener = Boolean(item.passive);
-            try {
-              if (typeof item.callback === "function") {
-                item.callback.call(entry, event);
-              } else if (item.callback && typeof item.callback === "object") {
-                const handleFn = item.callback.handleEvent;
-                if (typeof handleFn === "function") {
-                  handleFn.call(item.callback, event);
-                }
+              if (item.once) {
+                entry.removeEventListener(eventType, item.callback, item.capture);
               }
-            } catch (e) {
-              reportListenerError(e);
-            } finally {
-              if (eventState) eventState.inPassiveListener = prevPassive;
+              const prevPassive = eventState ? eventState.inPassiveListener : false;
+              if (eventState) eventState.inPassiveListener = Boolean(item.passive);
+              try {
+                if (typeof item.callback === "function") {
+                  item.callback.call(entry, event);
+                } else if (item.callback && typeof item.callback === "object") {
+                  const handleFn = item.callback.handleEvent;
+                  if (typeof handleFn === "function") {
+                    handleFn.call(item.callback, event);
+                  }
+                }
+              } catch (e) {
+                reportListenerError(e);
+              } finally {
+                if (eventState) eventState.inPassiveListener = prevPassive;
+              }
             }
           }
         }
