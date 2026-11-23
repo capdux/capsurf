@@ -8069,6 +8069,32 @@
     return parent ? parent.lookupNamespaceURI(p) : null;
   };
 
+  function computeDocumentBaseURI(doc) {
+    if (!doc) return "about:blank";
+    const docUrl = doc.URL || doc.documentURI || (doc.location && doc.location.href) || (typeof location !== "undefined" && location && location.href) || "about:blank";
+    if (typeof doc.querySelector === "function") {
+      const baseEl = doc.querySelector("base[href]");
+      if (baseEl && typeof baseEl.getAttribute === "function") {
+        const bHref = baseEl.getAttribute("href");
+        if (bHref !== null) {
+          try {
+            return new URL(String(bHref).trim(), docUrl).href;
+          } catch (e) {}
+        }
+      }
+    }
+    return String(docUrl);
+  }
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_computeDocumentBaseURI = computeDocumentBaseURI;
+
+  Object.defineProperty(Node.prototype, "baseURI", {
+    get: function () {
+      const doc = this.nodeType === 9 ? this : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+      return computeDocumentBaseURI(doc);
+    },
+    configurable: true,
+  });
+
   Node.prototype.isSameNode = function (otherNode) {
     return this === otherNode;
   };
@@ -41113,6 +41139,19 @@
             return globalThis.getOrCreateStyleSheetList(this);
           }
           return [];
+        },
+        configurable: true,
+      });
+    }
+
+    // Document.prototype.baseURI reflecting <base href="...">
+    if (!Object.getOwnPropertyDescriptor(docProto, "baseURI")) {
+      Object.defineProperty(docProto, "baseURI", {
+        get: function () {
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_computeDocumentBaseURI === "function") {
+            return globalThis.__capsurf_computeDocumentBaseURI(this);
+          }
+          return this.URL || this.documentURI || "about:blank";
         },
         configurable: true,
       });

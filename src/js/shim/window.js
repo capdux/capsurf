@@ -10546,6 +10546,19 @@ const CSS_TYPED_OM_GLOBALS = {
     });
   }
 
+  // Document.prototype.baseURI reflecting <base href="...">
+  if (!Object.getOwnPropertyDescriptor(docProto, "baseURI")) {
+    Object.defineProperty(docProto, "baseURI", {
+      get: function () {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_computeDocumentBaseURI === "function") {
+          return globalThis.__capsurf_computeDocumentBaseURI(this);
+        }
+        return this.URL || this.documentURI || "about:blank";
+      },
+      configurable: true,
+    });
+  }
+
   // Invalidate cached head._children when native document.title setter appends a <title>
   const origTitleDesc = Object.getOwnPropertyDescriptor(docProto, "title");
   if (origTitleDesc && typeof origTitleDesc.set === "function") {

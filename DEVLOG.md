@@ -2315,3 +2315,5 @@
 - Phase 444 (`src/js/shim/element/html-element.js`): 修复 Phase 441 重命名 `tag->selfTag` 后 `summary` 分支残留未定义 `tag` 导致的 `ReferenceError`。
 
 - Phase 445 (`events/event.js`): 在未显式传入 `offsetX`/`offsetY` 时，动态计算 `clientX - (rect.left + target.clientLeft)` 与 `clientY - (rect.top + target.clientTop)`。
+
+- Phase 446 (`node-base.js`, `window.js`): 抽离 `computeDocumentBaseURI` 实装 `Node.baseURI` 与 `Document.baseURI` 动态 `<base href>` 解析，修复 `base_href_specified` 与 `form-action-reflection*`。
