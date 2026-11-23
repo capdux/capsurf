@@ -7318,3 +7318,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 513 完成 (`block-ellipsis` / `continue` / `max-lines` 对齐 CSS Overflow 4)**：在 `src/js/shim/cssom.js` 将 `continue` 更新为 `normal | discard | collapse | -webkit-legacy`、`max-lines` 拒绝 `none`、`block-ellipsis` 更新为 `no-ellipsis | ellipsis | <string>`；`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
 
 - **Phase 514 完成 (`outline` & `column-rule` shorthand 展开与规范序)**：在 `src/js/shim/cssom.js` 修复 `outline` 规范化序为 `color style width`（省略默认 `currentcolor`/`none`/`medium`），并在 `expandCssShorthand` / `SHORTHAND_EXPAND_LONGHANDS` / `serializeExpandedShorthand` 补充 `outline` 与 `column-rule`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
+
+- **Phase 515 完成 (`column-rule-width: 0->0px` / `-webkit-appearance` 别名 / `column-count` `calc()` 求值)**：在 `src/js/shim/cssom.js` `LEN_ZERO_PROPS` 新增 `column-rule-width`；在 `src/js/shim/element/element.js` 补充 `-webkit-appearance` <-> `appearance` 别名转发与同步清理；在 `src/js/shim/window.js` 为 `column-count`、`orphans`、`widows` 补充纯数字 `calc(...)` 求值。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B256`。

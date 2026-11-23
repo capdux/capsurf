@@ -7215,6 +7215,22 @@ function installWindow(global) {
         computedMap.set(ok, res);
       }
     }
+    const intCalcProps = ["column-count", "orphans", "widows"];
+    for (let ii = 0; ii < intCalcProps.length; ii++) {
+      const ik = intCalcProps[ii];
+      const iv = computedMap.get(ik);
+      if (iv && /^calc\(/i.test(iv)) {
+        const inner = iv.slice(5, -1).trim();
+        if (/^[\d+\-*/().\s]+$/.test(inner)) {
+          try {
+            const num = Function("return (" + inner + ")")();
+            if (typeof num === "number" && isFinite(num)) {
+              computedMap.set(ik, String(Math.max(1, Math.round(num))));
+            }
+          } catch (_) {}
+        }
+      }
+    }
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [
         "counter-reset", "counter-increment", "counter-set",

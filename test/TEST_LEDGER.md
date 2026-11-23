@@ -1303,3 +1303,13 @@
 - `/css/css-break/parsing/`: 18 total | **16 PASS (+2 FAIL→PASS, 0 regressions!)** | 2 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-position/parsing/`: **22 / 22 PASS (100% ALL GREEN!)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **38 PASS / 2 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B255 (port=19700, Phase 514 verification, 70 tests)
+- `/css/css-ui/parsing/`: 39 total | **27 PASS (up from 25, `outline-shorthand` & `outline-valid` green!, 38/39 matched)** | 12 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-multicol/parsing/`: 31 total | **19 PASS (up from 18, `column-rule-shorthand` green!)** | 12 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **46 PASS / 24 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B256 (port=19700, Phase 514 verification, 79 tests)
+- `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-box/parsing/`: 29 total | 23 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **58 PASS / 21 FAIL / 0 TIMEOUT / 0 CRASH**

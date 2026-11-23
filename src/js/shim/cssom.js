@@ -1365,7 +1365,7 @@
     "top", "right", "bottom", "left", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end",
     "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
     "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
-    "outline-width", "outline-offset", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
+    "outline-width", "outline-offset", "column-rule-width", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
     "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness"
   ]);
   const TWO_SIDE_PROPS = new Set([

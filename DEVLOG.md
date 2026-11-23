@@ -2531,3 +2531,4 @@
 - **Phase 512**: 补齐 `text-decoration` 校验中的 `auto` 厚度关键字并按标准顺序规范化，消除 `underline auto` 被误拒及 `double overline underline` 序乱问题。
 - **Phase 513**: 修复 `css-overflow` 中 `continue`、`max-lines`、`block-ellipsis` 沿用旧版 `none`/`auto` 导致 `*-invalid` 失败的问题。
 - **Phase 514**: 打通 `outline-shorthand`/`outline-valid` 与 `column-rule-shorthand`，统一 `outline` 规范序列化与默认值省略。
+- **Phase 515**: 打通 `column-rule-width` `0px` 规范化、`-webkit-appearance` 传统别名一致性及 `column-count`/`orphans`/`widows` 整数 `calc(...)` 计算值求值。

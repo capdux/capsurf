@@ -355,11 +355,21 @@ function createStyleProxy(element) {
     } else if (key === "align-content") {
       const e = map.get("-webkit-align-content");
       if (e) return e.value;
+    } else if (key === "-webkit-appearance") {
+      const e = map.get("appearance");
+      if (e) return e.value;
+    } else if (key === "appearance") {
+      const e = map.get("-webkit-appearance");
+      if (e) return e.value;
     }
     return "";
   }
 
   function setEntryWithShorthand(map, key, rawName, normV, pri) {
+    if (key === "-webkit-appearance") {
+      setEntryInStyleMap(map, "appearance", "appearance", normV, pri);
+      return;
+    }
     if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
       const expanded = globalThis.__capsurf_expandShorthand(key, normV);
       if (expanded) {
@@ -375,6 +385,10 @@ function createStyleProxy(element) {
 
   function removeKeyWithShorthand(map, key) {
     let prev = removeKeyFromStyleMap(map, key);
+    if (key === "-webkit-appearance") {
+      const p = removeKeyFromStyleMap(map, "appearance");
+      if (!prev && p) prev = p;
+    }
     if (!key.startsWith("--") && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
       const lhs = globalThis.__capsurf_shorthandLonghands[key];
       for (let i = 0; i < lhs.length; i++) {

@@ -3469,3 +3469,8 @@
   - `src/js/shim/cssom.js`: 对齐 CSS Overflow 4 最新 `continue`、`max-lines`、`block-ellipsis` 语法校验。
 - **Phase 514**:
   - `src/js/shim/cssom.js`: 修复 `outline` 规范化序（`color style width`），补充 `outline` 与 `column-rule` 无残留 shorthand 展开与反向序列化。
+- **Phase 515**:
+  - `src/js/shim/cssom.js`: `LEN_ZERO_PROPS` 新增 `column-rule-width`。
+  - `src/js/shim/element/element.js`: 支持 `-webkit-appearance` 与 `appearance` 双向别名读写及移除。
+  - `src/js/shim/window.js`: 为 `column-count`、`orphans`、`widows` 补充纯数字 `calc(...)` 求值。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B256`（`/css/css-align/parsing/` 35/50、`/css/css-box/parsing/` 23/29）。

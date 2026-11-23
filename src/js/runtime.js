@@ -5155,7 +5155,7 @@
       "top", "right", "bottom", "left", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end",
       "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
       "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
-      "outline-width", "outline-offset", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
+      "outline-width", "outline-offset", "column-rule-width", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
       "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness"
     ]);
     const TWO_SIDE_PROPS = new Set([
@@ -11334,11 +11334,21 @@
       } else if (key === "align-content") {
         const e = map.get("-webkit-align-content");
         if (e) return e.value;
+      } else if (key === "-webkit-appearance") {
+        const e = map.get("appearance");
+        if (e) return e.value;
+      } else if (key === "appearance") {
+        const e = map.get("-webkit-appearance");
+        if (e) return e.value;
       }
       return "";
     }
 
     function setEntryWithShorthand(map, key, rawName, normV, pri) {
+      if (key === "-webkit-appearance") {
+        setEntryInStyleMap(map, "appearance", "appearance", normV, pri);
+        return;
+      }
       if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
         const expanded = globalThis.__capsurf_expandShorthand(key, normV);
         if (expanded) {
@@ -11354,6 +11364,10 @@
 
     function removeKeyWithShorthand(map, key) {
       let prev = removeKeyFromStyleMap(map, key);
+      if (key === "-webkit-appearance") {
+        const p = removeKeyFromStyleMap(map, "appearance");
+        if (!prev && p) prev = p;
+      }
       if (!key.startsWith("--") && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
         const lhs = globalThis.__capsurf_shorthandLonghands[key];
         for (let i = 0; i < lhs.length; i++) {
@@ -39660,6 +39674,22 @@
           let res = formatCssPx(xPx) + " " + formatCssPx(yPx);
           if (zPx !== null && zPx !== 0) res += " " + formatCssPx(zPx);
           computedMap.set(ok, res);
+        }
+      }
+      const intCalcProps = ["column-count", "orphans", "widows"];
+      for (let ii = 0; ii < intCalcProps.length; ii++) {
+        const ik = intCalcProps[ii];
+        const iv = computedMap.get(ik);
+        if (iv && /^calc\(/i.test(iv)) {
+          const inner = iv.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inner)) {
+            try {
+              const num = Function("return (" + inner + ")")();
+              if (typeof num === "number" && isFinite(num)) {
+                computedMap.set(ik, String(Math.max(1, Math.round(num))));
+              }
+            } catch (_) {}
+          }
         }
       }
       if (typeof global.__capsurf_normalizeCssValue === "function") {
