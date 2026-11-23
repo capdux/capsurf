@@ -5865,6 +5865,15 @@ function installWindow(global) {
       const key = prop.startsWith("--") ? prop : prop.toLowerCase();
       setDecl(key, val, isImp);
 
+      if (typeof globalThis.__capsurf_expandShorthand === "function") {
+        const expanded = globalThis.__capsurf_expandShorthand(key, val);
+        if (expanded) {
+          for (let ei = 0; ei < expanded.length; ei++) {
+            setDecl(expanded[ei][0], expanded[ei][1], isImp);
+          }
+        }
+      }
+
       if (key === "inset") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
@@ -7270,6 +7279,18 @@ function installWindow(global) {
         });
         computedMap.set(tk, items.join(", "));
       }
+    }
+    if ((computedMap.get("text-align") || "").trim().toLowerCase() === "match-parent") {
+      let resolvedAlign = "start";
+      const pe = element && element.parentElement;
+      if (pe) {
+        const pMap = collectRawComputedMap(pe, "");
+        const pAlign = (pMap.get("text-align") || "start").trim().toLowerCase();
+        if (pAlign === "start" || pAlign === "match-parent") resolvedAlign = "left";
+        else if (pAlign === "end") resolvedAlign = "right";
+        else resolvedAlign = pAlign;
+      }
+      computedMap.set("text-align", resolvedAlign);
     }
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [

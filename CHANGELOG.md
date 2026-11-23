@@ -3508,3 +3508,6 @@
 - **Phase 527**:
   - `src/js/shim/cssom.js`: 支持 `white-space` 单关键字校验、规范化及 shorthand 展开/反序列化；支持 `text-transform` 多关键字组合校验与规范化排序。
   - `src/js/shim/window.js`: `canonComputedProps` 新增 `text-transform`；`getShorthandComputed` 新增 `white-space`。
+- **Phase 528**:
+  - `src/js/shim/cssom.js`: `white-space` shorthand 展开补齐 `["text-wrap-style", "auto"]`。
+  - `src/js/shim/window.js`: `parseDeclarationsBlockInto` 接入 `__capsurf_expandShorthand` 通用展开；支持 `text-align: match-parent` 解析。

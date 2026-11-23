@@ -2182,10 +2182,10 @@
         "pre-line": ["preserve-breaks", "wrap"]
       };
       if (MAP[canon]) {
-        return [["white-space-collapse", MAP[canon][0]], ["text-wrap-mode", MAP[canon][1]]];
+        return [["white-space-collapse", MAP[canon][0]], ["text-wrap-mode", MAP[canon][1]], ["text-wrap-style", "auto"]];
       }
       const p = splitCssTokens(canon);
-      return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"]];
+      return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"], ["text-wrap-style", "auto"]];
     }
     if (key === "text-wrap") {
       const p = splitCssTokens(normV.toLowerCase());
@@ -2226,7 +2226,7 @@
     flex: ["flex-grow", "flex-shrink", "flex-basis"],
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
     "text-wrap": ["text-wrap-mode", "text-wrap-style"],
-    "white-space": ["white-space-collapse", "text-wrap-mode"],
+    "white-space": ["white-space-collapse", "text-wrap-mode", "text-wrap-style"],
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],

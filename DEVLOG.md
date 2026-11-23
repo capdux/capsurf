@@ -2544,3 +2544,4 @@
 - **Phase 525**: 补齐 `animation-composition` 与 `animation-name` 校验及 `<keyframes-name>` 序列化，修复引号关键字与多词字符串标识符转换。
 - **Phase 526**: 解决 `\"` 转义引号干扰 CSS 声明分号切分的问题，并补充 `getComputedStyle().textWrap` 计算样式拼装。
 - **Phase 527**: 打通 `white-space` 作为 `white-space-collapse` + `text-wrap-mode` 的 CSS Text 4 shorthand，以及 `text-transform` 多修饰符规范排序。
+- **Phase 528**: 打通 `<style>` 规则体内全部 shorthand 与 longhand 的层叠覆盖（解决 `white-space` 与 `text-wrap` 相互覆盖次序），并补全 `text-align: match-parent` 继承求值。
