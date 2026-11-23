@@ -3128,3 +3128,11 @@
   - `font-weight`: 支持 `normal | bold | bolder | lighter | [1, 1000]` 及数学/变量函数。
   - `line-height`: 支持 `normal | <number [0,∞]> | <length-percentage [0,∞]>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 460: CSSOM `border-style`, `outline-*`, `background-repeat/attachment/clip/origin` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `border-style` / `border-*-style` / `outline-style`: 严格校验 `<line-style>` 关键字与 token 数量上限（`border-style` 1~4，逻辑简写 1~2，单边 1；`outline-style` 允许 `auto`）。
+  - `outline-width`: 校验 `thin | medium | thick | <length [0,∞]>`，拒绝 `%`。
+  - `background-repeat`: 按逗号分层校验，单 token 支持 `repeat-x`/`repeat-y`，双 token 仅允许 `repeat | space | round | no-repeat`。
+  - `background-attachment` / `background-clip` / `background-origin`: 按逗号分层校验单关键字（`clip` 额外允许 `text`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -4230,6 +4230,54 @@
         }
         return isValidLenPct(t, false);
       }
+      if (prop === "border-style" || prop === "border-block-style" || prop === "border-inline-style" ||
+          prop === "border-top-style" || prop === "border-right-style" || prop === "border-bottom-style" || prop === "border-left-style" ||
+          prop === "border-block-start-style" || prop === "border-block-end-style" || prop === "border-inline-start-style" || prop === "border-inline-end-style" ||
+          prop === "outline-style") {
+        const LINE_STYLES = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+        const maxN = prop === "border-style" ? 4 : (prop === "border-block-style" || prop === "border-inline-style" ? 2 : 1);
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > maxN) return false;
+        for (let i = 0; i < toks.length; i++) {
+          if (prop === "outline-style" && toks[i] === "auto") continue;
+          if (!LINE_STYLES.has(toks[i])) return false;
+        }
+        return true;
+      }
+      if (prop === "outline-width") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t === "thin" || t === "medium" || t === "thick") return true;
+        if (t.endsWith("%")) return false;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
+        return isValidLenPct(t, false);
+      }
+      if (prop === "background-repeat") {
+        const layers = vLower.split(",");
+        const SINGLE = new Set(["repeat-x", "repeat-y", "repeat", "space", "round", "no-repeat"]);
+        const PAIR = new Set(["repeat", "space", "round", "no-repeat"]);
+        for (let i = 0; i < layers.length; i++) {
+          const toks = splitCssTokens(layers[i].trim());
+          if (toks.length === 1) { if (!SINGLE.has(toks[0])) return false; }
+          else if (toks.length === 2) { if (!PAIR.has(toks[0]) || !PAIR.has(toks[1])) return false; }
+          else return false;
+        }
+        return true;
+      }
+      if (prop === "background-attachment" || prop === "background-clip" || prop === "background-origin") {
+        const allowed = prop === "background-attachment"
+          ? new Set(["scroll", "fixed", "local"])
+          : (prop === "background-clip"
+            ? new Set(["border-box", "padding-box", "content-box", "text"])
+            : new Set(["border-box", "padding-box", "content-box"]));
+        const layers = vLower.split(",");
+        for (let i = 0; i < layers.length; i++) {
+          const toks = splitCssTokens(layers[i].trim());
+          if (toks.length !== 1 || !allowed.has(toks[0])) return false;
+        }
+        return true;
+      }
 
       return true;
     }

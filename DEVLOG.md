@@ -2347,3 +2347,7 @@
 ### Phase 459: CSSOM 边框半径/宽度与字体排版校验
 - `border-radius` 通过括号深度感知的 `/` 拆分，精确拦截 `1em /`、`1px / 2px / 3px` 及 5+ token 等畸形简写。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 460: CSSOM 边框样式与背景多层语法门禁
+- 对 `background-repeat` 实行逗号分层 + 单/双 token 分支校验，有效拦截 `repeat repeat-x`、`repeat-y round` 与 3+ token 非法组合。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
