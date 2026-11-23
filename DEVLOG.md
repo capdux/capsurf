@@ -2281,3 +2281,5 @@
 - Phase 427 (`src/js/shim/element/html-classes.js`, `select.js`): 对齐 WebIDL `[LegacyFactoryFunction]` 规范，将 `Image.prototype` 与 `Option.prototype` 设为不可写/不可枚举/不可配置。
 
 - Phase 428 (`src/js/shim/collections.js`, `html-classes.js`): 修正 `DOMTokenList.contains` 对非字符串参数（`undefined`/`null`/`0`）的 WebIDL 字符串化；新增 `HTMLTitleElement.text` 及 `HTMLProgressElement.{max, value, position}` 数值解析与不确定态处理。
+
+- Phase 429 (`src/js/shim/element/html-classes.js`): 复用 `parseValidHtmlFloat` 实现 `HTMLMeterElement` 全属性夹紧规范，并实现 `HTMLOutputElement` 的 `default`/`value` 双模式状态机及自定义校验接口。

@@ -16212,19 +16212,21 @@
       });
     }
 
+    // HTMLProgressElement & HTMLMeterElement shared float parser
+    const parseValidHtmlFloat = function (s) {
+      if (s == null) return NaN;
+      const trimmed = String(s).trim();
+      if (!trimmed) return NaN;
+      if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return NaN;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : NaN;
+    };
+
     // HTMLProgressElement.prototype.{max, value, position}
     if (typeof global.HTMLProgressElement === "function") {
-      const parseValidFloat = function (s) {
-        if (s == null) return NaN;
-        const trimmed = String(s).trim();
-        if (!trimmed) return NaN;
-        if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return NaN;
-        const n = Number(trimmed);
-        return Number.isFinite(n) ? n : NaN;
-      };
       const getMax = function (el) {
         const raw = el.getAttribute("max");
-        const n = parseValidFloat(raw);
+        const n = parseValidHtmlFloat(raw);
         return Number.isFinite(n) && n > 0 ? n : 1.0;
       };
       Object.defineProperties(global.HTMLProgressElement.prototype, {
@@ -16243,7 +16245,7 @@
         value: {
           get: function () {
             if (!this.hasAttribute("value")) return 0.0;
-            const n = parseValidFloat(this.getAttribute("value"));
+            const n = parseValidHtmlFloat(this.getAttribute("value"));
             if (!Number.isFinite(n) || n <= 0) return 0.0;
             const m = getMax(this);
             return n > m ? m : n;
@@ -16259,7 +16261,7 @@
         position: {
           get: function () {
             if (!this.hasAttribute("value")) return -1.0;
-            const n = parseValidFloat(this.getAttribute("value"));
+            const n = parseValidHtmlFloat(this.getAttribute("value"));
             if (!Number.isFinite(n)) return -1.0;
             const clamped = n <= 0 ? 0.0 : n;
             const m = getMax(this);
@@ -16269,6 +16271,130 @@
           configurable: true,
         },
       });
+    }
+
+    // HTMLMeterElement.prototype.{value, min, max, low, high, optimum}
+    if (typeof global.HTMLMeterElement === "function") {
+      const clampMeter = function (v, lo, hi) {
+        return v < lo ? lo : v > hi ? hi : v;
+      };
+      const getMin = function (el) {
+        if (!el.hasAttribute("min")) return 0.0;
+        const n = parseValidHtmlFloat(el.getAttribute("min"));
+        return Number.isFinite(n) ? n : 0.0;
+      };
+      const getMax = function (el) {
+        const min = getMin(el);
+        if (!el.hasAttribute("max")) return 1.0 >= min ? 1.0 : min;
+        const n = parseValidHtmlFloat(el.getAttribute("max"));
+        const raw = Number.isFinite(n) ? n : 1.0;
+        return raw >= min ? raw : min;
+      };
+      const getLow = function (el) {
+        const min = getMin(el);
+        const max = getMax(el);
+        if (!el.hasAttribute("low")) return min;
+        const n = parseValidHtmlFloat(el.getAttribute("low"));
+        return Number.isFinite(n) ? clampMeter(n, min, max) : min;
+      };
+      const makeDoubleProp = function (attr, getter) {
+        return {
+          get: getter,
+          set: function (v) {
+            const n = Number(v);
+            if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
+            this.setAttribute(attr, String(n));
+          },
+          enumerable: true,
+          configurable: true,
+        };
+      };
+      Object.defineProperties(global.HTMLMeterElement.prototype, {
+        min: makeDoubleProp("min", function () { return getMin(this); }),
+        max: makeDoubleProp("max", function () { return getMax(this); }),
+        value: makeDoubleProp("value", function () {
+          const min = getMin(this);
+          const max = getMax(this);
+          if (!this.hasAttribute("value")) return clampMeter(0.0, min, max);
+          const n = parseValidHtmlFloat(this.getAttribute("value"));
+          return clampMeter(Number.isFinite(n) ? n : 0.0, min, max);
+        }),
+        low: makeDoubleProp("low", function () { return getLow(this); }),
+        high: makeDoubleProp("high", function () {
+          const min = getMin(this);
+          const max = getMax(this);
+          const low = getLow(this);
+          if (!this.hasAttribute("high")) return max;
+          const n = parseValidHtmlFloat(this.getAttribute("high"));
+          if (!Number.isFinite(n)) return max;
+          const c = clampMeter(n, min, max);
+          return c < low ? low : c;
+        }),
+        optimum: makeDoubleProp("optimum", function () {
+          const min = getMin(this);
+          const max = getMax(this);
+          if (!this.hasAttribute("optimum")) return (min + max) / 2.0;
+          const n = parseValidHtmlFloat(this.getAttribute("optimum"));
+          return Number.isFinite(n) ? clampMeter(n, min, max) : (min + max) / 2.0;
+        }),
+      });
+    }
+
+    // HTMLOutputElement.prototype.{type, value, defaultValue, validationMessage, checkValidity, reportValidity, setCustomValidity}
+    if (typeof global.HTMLOutputElement === "function") {
+      Object.defineProperties(global.HTMLOutputElement.prototype, {
+        type: {
+          get: function () { return "output"; },
+          enumerable: true,
+          configurable: true,
+        },
+        value: {
+          get: function () {
+            return this.textContent != null ? String(this.textContent) : "";
+          },
+          set: function (v) {
+            const s = v == null ? "" : String(v);
+            if (this._outputValueMode !== "value") {
+              this._outputDefaultValue = this.textContent != null ? String(this.textContent) : "";
+              this._outputValueMode = "value";
+            }
+            this.textContent = s;
+          },
+          enumerable: true,
+          configurable: true,
+        },
+        defaultValue: {
+          get: function () {
+            if (this._outputValueMode === "value") {
+              return this._outputDefaultValue != null ? this._outputDefaultValue : "";
+            }
+            return this.textContent != null ? String(this.textContent) : "";
+          },
+          set: function (v) {
+            const s = v == null ? "" : String(v);
+            this._outputDefaultValue = s;
+            if (this._outputValueMode !== "value") {
+              this.textContent = s;
+            }
+          },
+          enumerable: true,
+          configurable: true,
+        },
+        validationMessage: {
+          get: function () { return this._customValidity ? String(this._customValidity) : ""; },
+          enumerable: true,
+          configurable: true,
+        },
+      });
+      global.HTMLOutputElement.prototype.setCustomValidity = function (msg) {
+        this._customValidity = msg == null ? "" : String(msg);
+      };
+      global.HTMLOutputElement.prototype.checkValidity = function () {
+        return !this._customValidity;
+      };
+      global.HTMLOutputElement.prototype.reportValidity = function () {
+        return !this._customValidity;
+      };
     }
 
     // W3C HTML Table DOM (HTMLTableElement, HTMLTableSectionElement, HTMLTableRowElement, HTMLTableCellElement)

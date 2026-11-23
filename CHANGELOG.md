@@ -3054,3 +3054,5 @@
 - **Phase 427 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`, `src/js/runtime_source.cp`)**：收紧 `Image.prototype` 与 `Option.prototype` 描述符为不可写/不可枚举/不可配置。
 
 - **Phase 428 (`src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：修正 `DOMTokenList.prototype.contains` 参数字符串化（`undefined`/`null`/`0`）；新增 `HTMLTitleElement.prototype.text` 与 `HTMLProgressElement.prototype.{max, value, position}`。
+
+- **Phase 429 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：抽离 `parseValidHtmlFloat` 并补齐 `HTMLMeterElement`（`min`/`max`/`value`/`low`/`high`/`optimum`）与 `HTMLOutputElement`（`type`/`value`/`defaultValue`/校验接口）。
