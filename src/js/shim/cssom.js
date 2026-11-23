@@ -87,8 +87,8 @@
     "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
     "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
     "text-align", "text-align-last", "text-combine-upright", "text-decoration",
-    "text-decoration-color", "text-decoration-line", "text-decoration-skip-ink",
-    "text-decoration-style", "text-decoration-thickness", "text-emphasis",
+    "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
+    "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-indent",
     "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow",
     "text-transform", "text-underline-offset", "text-underline-position", "top",
@@ -1168,6 +1168,21 @@
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], false));
     }
+    if (prop === "text-decoration-skip-spaces") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "none" || toks[0] === "all" || toks[0] === "start" || toks[0] === "end";
+      if (toks.length === 2) return (toks[0] === "start" && toks[1] === "end") || (toks[0] === "end" && toks[1] === "start");
+      return false;
+    }
+    if (prop === "text-decoration-inset") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "auto" || (!toks[0].endsWith("%") && isValidLenPct(toks[0], false));
+      if (toks.length === 2) {
+        return !toks[0].endsWith("%") && !toks[1].endsWith("%") &&
+               isValidLenPct(toks[0], false) && isValidLenPct(toks[1], false);
+      }
+      return false;
+    }
     if (prop === "text-emphasis-position") {
       const toks = splitCssTokens(vLower);
       if (toks.length === 1) return toks[0] === "auto" || toks[0] === "over" || toks[0] === "under";
@@ -1491,7 +1506,8 @@
         else if (tl === "from-font" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) th = tl;
         else col = t;
       }
-      return [lines.join(" "), st, th, col].filter(Boolean).join(" ");
+      const outStr = [lines.join(" "), st === "solid" ? "" : st, th, col].filter(Boolean).join(" ");
+      return outStr || "none";
     }
     if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
       const parts = splitCssTokens(s);
@@ -1570,6 +1586,19 @@
       const ordered = (p.length === 2 && (p[0] === "left" || p[0] === "right")) ? [p[1], p[0]] : p;
       if (ordered.length === 2 && ordered[1] === "right") return ordered[0];
       return ordered.join(" ");
+    }
+    if (key === "text-decoration-skip-spaces") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2) return "start end";
+      return p.join(" ");
+    }
+    if (key === "text-decoration-inset") {
+      const p = splitCssTokens(s.toLowerCase());
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") p[i] = "0px";
+      }
+      if (p.length === 2 && p[0] === p[1]) return p[0];
+      return p.join(" ");
     }
     if (key === "text-underline-position") {
       const p = splitCssTokens(s.toLowerCase());

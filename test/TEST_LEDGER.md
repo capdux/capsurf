@@ -1193,3 +1193,8 @@
 - `/css/css-text-decor/parsing/`: 31 total | 15 PASS | 16 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-grid/parsing/ --shard 1/2`: 31 total | 3 PASS (`FAIL→PASS`: `grid-template-rows-repeat-intrinsic-valid.tentative.html`) | 27 FAIL | 1 TIMEOUT | 0 CRASH
 - Totals: **30 PASS / 54 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B239 (port=19700, Phase 505 verification, 54 tests)
+- `/css/css-lists/parsing/`: 23 total | **13 PASS (up from 12, `list-style-type-valid` green!)** | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | **18 PASS (up from 15, `text-emphasis-position-*` & `text-underline-position-computed` green!)** | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **31 PASS / 23 FAIL / 0 TIMEOUT / 0 CRASH**

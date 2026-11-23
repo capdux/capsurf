@@ -3443,3 +3443,7 @@
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `counter-set`、`text-decoration-{inset,skip-spaces,thickness}`、`text-emphasis-{color,position,style}`、`text-underline-{offset,position}`。
   - `src/js/shim/cssom.js`: `counter-*` 支持 `calc/min/max/clamp` 计数值与 `reversed(...)` 规范化；`text-emphasis-position` 省略默认 `right`；`list-style-type` 去除 `symbols(symbolic ...)` 默认 `symbolic`。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B238`（`/css/css-lists/parsing/` 12/23、`/css/css-text-decor/parsing/` 15/31、`/css/css-grid/parsing/ 1/2` 3/31）。
+- **Phase 506**:
+  - `src/js/shim/cssom.js`: 支持并校验 `text-decoration-inset` 与 `text-decoration-skip-spaces`，规范化省略 `text-decoration` 默认 `solid`。
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 接入 `text-decoration-skip-spaces` 与 `text-decoration-inset` 计算值规范化。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B239`（`/css/css-lists/parsing/` 13/23 PASS，`/css/css-text-decor/parsing/` 18/31 PASS）。

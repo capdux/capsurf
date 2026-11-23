@@ -7218,7 +7218,7 @@ function installWindow(global) {
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [
         "counter-reset", "counter-increment", "counter-set",
-        "grid-auto-flow", "scrollbar-gutter", "text-decoration-line",
+        "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
         "aspect-ratio", "text-emphasis-position", "text-underline-position",
         "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
       ];
