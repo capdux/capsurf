@@ -1037,3 +1037,15 @@
 - `/css/css-ui/parsing/`: 39 total | 21 PASS (up from 19!) | 17 FAIL | 1 TIMEOUT | 0 CRASH (`field-sizing-invalid`, `outline-invalid` PASS!)
 - `/css/css-multicol/parsing/`: 31 total | 16 PASS (up from 9!) | 15 FAIL | 0 TIMEOUT | 0 CRASH (`column-fill/rule/rule-style/rule-width/span-invalid`, `column-rule-style/color-computed` PASS!)
 - Totals: **37 PASS / 32 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B219 (port=19700, Phase 477 verification, 70 tests, 48/70 matched)
+- `/css/css-text-decor/parsing/`: 31 total | 12 PASS (up from 11!) | 19 FAIL | 0 TIMEOUT | 0 CRASH (`text-emphasis-position-invalid` PASS!)
+- `/css/css-ui/parsing/`: 39 total | 21 PASS | 17 FAIL | 1 TIMEOUT | 0 CRASH
+- Totals: **33 PASS / 36 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### PW Batch 144 (port=19386, 168 tests)
+- `page-evaluate.spec.ts`: 95 total | 37 PASS | 0 FAIL | 58 TIMEOUT
+- `page-wait-for-selector-1.spec.ts`: 15 total | **15 PASS (100%)** | 0 FAIL | 0 TIMEOUT
+- `page-wait-for-selector-2.spec.ts`: 32 total | **32 PASS (100%, +2 unexpected passes!)** | 0 FAIL | 0 TIMEOUT
+- `page-wait-for-function.spec.ts`: 26 total | 5 PASS | 2 FAIL | 19 TIMEOUT
+- Totals: **89 PASS / 2 FAIL / 77 TIMEOUT / 0 SKIP**

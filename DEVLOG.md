@@ -2419,3 +2419,7 @@
 ### Phase 477: CSSOM 边框/轮廓简写与着重号位置门禁
 - 统一 `outline`/`border*`/`column-rule` 的 1~3 token 乱序简写校验，拦截重复线宽/线型及 `outline: invert` 等非法声明。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 478: CSSOM 引号分词与 `text-decoration`/`grid-template-areas` 门禁
+- `splitCssTokens` 增加引号态，使 `grid-template-areas: "a b" "c d"` 与 `text-overflow: "a b"` 等带空格字符串不再被错误切分。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

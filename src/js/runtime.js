@@ -4099,9 +4099,16 @@
       function splitCssTokens(s) {
         const out = [];
         let cur = "";
-        let depth = 0;
+        let depth = 0, quote = "";
         for (let i = 0; i < s.length; i++) {
           const ch = s[i];
+          if (quote) {
+            cur += ch;
+            if (ch === "\\" && i + 1 < s.length) { cur += s[++i]; continue; }
+            if (ch === quote) quote = "";
+            continue;
+          }
+          if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
           if (ch === "(") depth++;
           else if (ch === ")" && depth > 0) depth--;
           if (depth === 0 && /\s/.test(ch)) {
@@ -4280,7 +4287,10 @@
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > maxN) return false;
         for (let i = 0; i < toks.length; i++) {
-          if (prop === "outline-style" && toks[i] === "auto") continue;
+          if (prop === "outline-style") {
+            if (toks[i] === "auto" || (toks[i] !== "hidden" && LINE_STYLES.has(toks[i]))) continue;
+            return false;
+          }
           if (!LINE_STYLES.has(toks[i])) return false;
         }
         return true;
@@ -4968,7 +4978,7 @@
         let seenW = false, seenS = false, seenC = false;
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i], tl = t.toLowerCase();
-          if (STYLES.has(tl) || (prop === "outline" && tl === "auto")) {
+          if ((prop === "outline" ? (tl === "auto" || (tl !== "hidden" && STYLES.has(tl))) : STYLES.has(tl))) {
             if (seenS) return false; seenS = true;
           } else if (tl === "thin" || tl === "medium" || tl === "thick" ||
                      (!tl.endsWith("%") && !(/^(?:calc|min|max|clamp)\(/i.test(tl) && tl.includes("%")) && isValidLenPct(tl, false))) {
@@ -4978,6 +4988,49 @@
           } else {
             return false;
           }
+        }
+        return true;
+      }
+      if (prop === "text-decoration") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length < 1) return false;
+        const LINES = new Set(["underline", "overline", "line-through", "blink"]);
+        const STYLES = new Set(["solid", "double", "dotted", "dashed", "wavy"]);
+        let seenStyle = false, seenColor = false, seenThick = false, seenLineGroup = false, inLineGroup = false;
+        const seenLines = new Set();
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (tl === "none" || tl === "spelling-error" || tl === "grammar-error") {
+            if (inLineGroup || seenLineGroup || seenLines.size > 0) return false;
+            seenLineGroup = true;
+          } else if (LINES.has(tl)) {
+            if ((seenLineGroup && !inLineGroup) || seenLines.has(tl)) return false;
+            seenLines.add(tl);
+            seenLineGroup = true;
+            inLineGroup = true;
+          } else {
+            inLineGroup = false;
+            if (STYLES.has(tl)) { if (seenStyle) return false; seenStyle = true; }
+            else if (tl === "from-font" || isValidLenPct(tl, false)) { if (seenThick) return false; seenThick = true; }
+            else if (isValidColor(t)) { if (seenColor) return false; seenColor = true; }
+            else return false;
+          }
+        }
+        return true;
+      }
+      if (prop === "grid-template-areas") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 1 && toks[0].toLowerCase() === "none") return true;
+        if (toks.length < 1) return false;
+        let cols = -1;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (!(/^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t))) return false;
+          const inner = t.slice(1, -1).trim();
+          if (!inner) return false;
+          const cells = inner.split(/\s+/);
+          if (cols === -1) cols = cells.length;
+          else if (cells.length !== cols) return false;
         }
         return true;
       }

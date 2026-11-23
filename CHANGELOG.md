@@ -3270,3 +3270,11 @@
   - `text-emphasis-position`: 校验 `auto | [ over | under ] && [ left | right ]?`。
   - `outline` / `border` / `border-*` / `column-rule`: 校验 `[ <line-width> || <line-style> || <color> ]`（`outline` 额外允许 `auto` 样式，拒绝废弃的 `invert` 与重复类别）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 478: CSSOM `outline-style` 禁 `hidden`, `text-decoration`, `grid-template-areas` 与引号分词
+- `src/js/shim/cssom.js`:
+  - `splitCssTokens`: 新增单/双引号与反斜杠转义感知，保持带空格字符串为单个 token。
+  - `outline-style` / `outline`: 按 `<outline-line-style>` 规范禁用 `hidden`。
+  - `text-decoration`: 校验装饰线连续分组（拦截 `overline blue underline`）与样式/颜色/粗细互斥。
+  - `grid-template-areas`: 校验 `none | <string>+`，拦截空串/纯空白与行列数不一致。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

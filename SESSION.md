@@ -7231,3 +7231,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 476 CSSOM `css-text-decor` 文本装饰校验]** 在 `src/js/shim/cssom.js` 中新增 `text-decoration-line`、`text-underline-position`、`text-underline-offset`、`text-decoration-thickness` 校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B216` 并派发 `WPT Batch 217 Runner`。
 
 - **[Phase 477 CSSOM `field-sizing` / `text-emphasis-position` / `outline` / `border*` / `column-rule` 校验]** 在 `src/js/shim/cssom.js` 中补全 `SUPPORTED_CSS_PROPS`（`"field-sizing"`）与 `KEYWORD_CSS_PROPS`（`"field-sizing": ["fixed", "content"]`），并新增 `text-emphasis-position`、`outline`/`border`/`border-*`/`column-rule` 简写（`[ <line-width> || <line-style> || <color> ]`）校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B218` 并派发 `WPT Batch 219 Runner`。
+
+- **[User]** 汇报工作成果, 还剩多少工作位完成
+- **[Agent]** 汇报 Phase 457–477 已完成 21 轮 CSSOM/ComputedStyle 闭环提交与 WPT B203–B219 / PW Batch 143 验证进展，以及全量 WPT（11,795 项，基线 PASS 6,990 / FAIL 2,334 / TIMEOUT 318 / SKIP 31 / ERROR 23）、Playwright（123 个 spec）与后续待攻克模块拓扑。
+
+- **[User]** PW 还没全部结束吗? WPT 完成了多少,还剩多少测试文件?
+- **[Agent]** 明确答复：PW 全量 123 个 spec 文件已全部跑过首轮并建档，当前为持续回归与清理 358 项预期 FAIL；WPT 全量 11,795 个测试文件已完成基线 9,696 个（PASS 6,990 / FAIL 2,334 / TIMEOUT 318 / SKIP/ERR 54），尚余 2,099 个未建档（其中 1,916 个在 `/css/`）。
+
+- **[Phase 478 CSSOM `outline-style` / `text-decoration` / `grid-template-areas` 与引号分词修复]** 修复 `src/js/shim/cssom.js` `splitCssTokens` 引号与转义感知、禁用 `outline-style`/`outline` 的 `hidden`，并新增 `text-decoration`（连续装饰线组与样式/颜色/粗细互斥校验）与 `grid-template-areas`（`none|<string>+` 非空与列数一致校验）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B219` 并派发 `WPT Batch 220 Runner`。
