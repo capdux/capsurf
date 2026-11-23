@@ -5106,11 +5106,11 @@
       "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
       "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
       "outline-width", "outline-offset", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
-      "perspective", "column-width", "flex-basis", "translate"
+      "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness"
     ]);
     const TWO_SIDE_PROPS = new Set([
       "inset-block", "inset-inline", "margin-block", "margin-inline", "padding-block", "padding-inline",
-      "overflow", "gap", "grid-gap", "place-content", "place-items", "place-self"
+      "overflow", "gap", "grid-gap"
     ]);
     function normalizeCssSpecifiedValue(key, raw) {
       if (!raw || key.startsWith("--")) return raw;
@@ -5326,6 +5326,21 @@
           } else layers[i] = p.join(" ");
         }
         return layers.join(", ");
+      }
+      if (key === "place-content" || key === "place-items" || key === "place-self") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length >= 2) {
+          const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
+          if (splitAt < p.length) {
+            const a = p.slice(0, splitAt).join(" "), b = p.slice(splitAt).join(" ");
+            return a === b ? a : (a + " " + b);
+          }
+        }
+        return p.join(" ");
+      }
+      if (key === "line-height" && /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
+        const n = Number(s);
+        if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
       }
       return s;
     }

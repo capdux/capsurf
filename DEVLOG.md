@@ -2503,3 +2503,7 @@
 ### Phase 498: CSS 指定值背景与边框间距最短序列化
 - `background-repeat` 与 `background-size` 按逗号图层逐层折叠为规范最短形式。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 3/3 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 499: CSS 指定值 `place-*` 与排版长度/数值归一化
+- 解决 `place-*` 在 `TWO_SIDE_PROPS` 中被提前拦截的问题，实现双词修饰符的同值最短折叠。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

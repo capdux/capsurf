@@ -3406,3 +3406,10 @@
   - `background-size`: 逗号分层省略尾随 `auto`（`50% auto -> 50%`）及 `0 -> 0px`。
   - `background-repeat`: 逗号分层折叠 `repeat no-repeat -> repeat-x`、`no-repeat repeat -> repeat-y` 与同值单关键字。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 499: CSS 指定值 `place-*`, `font-size`, `vertical-align`, `line-height` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `place-content` / `place-items` / `place-self`: 从 `TWO_SIDE_PROPS` 移出，按 `first/last/safe/unsafe/legacy` 双词修饰符切分并在两端相同时折叠（如 `safe center safe center -> safe center`）。
+  - `ZERO_PX_PROPS`: 新增 `font-size`, `vertical-align`, `text-underline-offset`, `text-decoration-thickness`。
+  - `line-height`: 无单位数值规范化（如 `.5 -> 0.5`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

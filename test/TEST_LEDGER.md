@@ -1148,3 +1148,10 @@
 - `/css/css-values/ --shard 2/4`: 88 total | 25 PASS (`FAIL→PASS`: `random-item-valid`, `various-values-important`) | 52 FAIL | 11 TIMEOUT | 0 CRASH
 - `/css/css-values/ --shard 3/4`: 87 total | 25 PASS | 51 FAIL | 10 TIMEOUT | 1 ERROR
 - Totals: **50 PASS / 103 FAIL / 21 TIMEOUT / 1 ERROR**
+
+### PW Batch 149 (port=19386, 39 tests)
+- `page-emulate-media.spec.ts`: 12 total | **12 PASS (100%, +9 unexpected passes!)** | 0 FAIL | 0 TIMEOUT
+- `page-event-console.spec.ts`: 19 total | 3 PASS | 0 FAIL | 16 TIMEOUT
+- `page-event-pageerror.spec.ts`: 7 total | 4 PASS | 3 FAIL | 0 TIMEOUT
+- `page-event-load.spec.ts`: 1 total | **1 PASS (100%)** | 0 FAIL | 0 TIMEOUT
+- Totals: **20 PASS / 3 FAIL / 16 TIMEOUT / 0 SKIP**
