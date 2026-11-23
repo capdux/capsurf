@@ -3413,3 +3413,9 @@
   - `ZERO_PX_PROPS`: 新增 `font-size`, `vertical-align`, `text-underline-offset`, `text-decoration-thickness`。
   - `line-height`: 无单位数值规范化（如 `.5 -> 0.5`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 500: CSS 指定值 `aspect-ratio`, `text-emphasis-position`, `text-underline-position` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `aspect-ratio`: 规范化 `/` 空格、补齐单数 `<ratio>` 为 `n / 1`，并将 `auto` 前置。
+  - `text-emphasis-position` / `text-underline-position`: 将水平关键字后置为规范顺序（`[over|under|from-font] [left|right]`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

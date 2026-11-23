@@ -2507,3 +2507,7 @@
 ### Phase 499: CSS 指定值 `place-*` 与排版长度/数值归一化
 - 解决 `place-*` 在 `TWO_SIDE_PROPS` 中被提前拦截的问题，实现双词修饰符的同值最短折叠。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 500: 里程碑节点 — CSSOM 指定值与计算值 500 Phase 门禁闭环
+- 完成第 500 个 Phase 迭代，`aspect-ratio` 与文本着重/下划线位置指定值序列化与计算值规则全面对齐。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

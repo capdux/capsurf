@@ -1552,6 +1552,29 @@
       const n = Number(s);
       if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
     }
+    if (key === "aspect-ratio") {
+      const p = splitCssTokens(s.replace(/\s*\/\s*/g, " / ").toLowerCase());
+      if (p.length === 1 && p[0] === "auto") return "auto";
+      let hasAuto = false;
+      const rem = [];
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "auto") hasAuto = true;
+        else rem.push(p[i]);
+      }
+      if (rem.length === 1) rem.push("/", "1");
+      const out = rem.join(" ");
+      return hasAuto ? ("auto " + out) : out;
+    }
+    if (key === "text-emphasis-position") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && (p[0] === "left" || p[0] === "right")) return p[1] + " " + p[0];
+      return p.join(" ");
+    }
+    if (key === "text-underline-position") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && (p[0] === "left" || p[0] === "right")) return p[1] + " " + p[0];
+      return p.join(" ");
+    }
     return s;
   }
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
