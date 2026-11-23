@@ -3080,3 +3080,5 @@
 - **Phase 440 (`src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/runtime_source.cp`)**：`cloneNode` 按 HTML 克隆步骤迁移 `<input>` 与 `<textarea>` 脏状态标志。
 
 - **Phase 441 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`checkbox`/`radio` `click()` 补齐预激活/取消回滚步骤及受信任 `input`/`change` 事件派发。
+
+- **Phase 442 (`src/js/shim/collections.js`, `src/js/shim/element/forms/validity.js`, `src/js/runtime_source.cp`)**：`RadioNodeList` 升级为活体 `Proxy` 对接 `HTMLFormControlsCollection`；`email` + `multiple` 补充换行符剥离。

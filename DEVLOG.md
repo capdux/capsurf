@@ -2307,3 +2307,5 @@
 - Phase 440 (`index.js`, `node-base.js`): 抽离 `copyCloneFormState` 在 `Element.prototype.cloneNode` 中递归迁移 `<input>` 与 `<textarea>` 脏状态。
 
 - Phase 441 (`src/js/shim/element/html-element.js`): 对齐 HTML `checkbox`/`radio` 预激活与 `defaultPrevented` 回滚规范，使用 `dispatchTrustedEvent` 派发可信 `input`/`change` 事件。
+
+- Phase 442 (`collections.js`, `validity.js`): `RadioNodeList` 支持动态 `getter` 函数代理以响应表单控件增删变化；`sanitizeInputValue("email")` 在 `multiple` 分支先执行 `stripInputNewlines`。

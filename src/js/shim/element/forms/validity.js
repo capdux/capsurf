@@ -329,7 +329,7 @@ function sanitizeInputValue(type, value, opts) {
       return stripInputHtmlWhitespace(stripInputNewlines(str));
     case "email":
       if (opts && opts.multiple) {
-        return str.split(",").map(stripInputHtmlWhitespace).join(",");
+        return stripInputNewlines(str).split(",").map(stripInputHtmlWhitespace).join(",");
       }
       return stripInputHtmlWhitespace(stripInputNewlines(str));
     case "number":

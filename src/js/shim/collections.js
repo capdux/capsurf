@@ -229,7 +229,20 @@ function makeHtmlCollection(getList, customTarget) {
           }
           if (matches.length === 0) return null;
           if (matches.length === 1) return matches[0];
-          if (t._isFormControlsCollection) return new RadioNodeList(matches);
+          if (t._isFormControlsCollection) {
+            return new RadioNodeList(function () {
+              const curList = getList();
+              const m = [];
+              for (let i = 0; i < curList.length; i++) {
+                const it = curList[i];
+                if (!it) continue;
+                const itId = it.id || (typeof it.getAttribute === "function" ? it.getAttribute("id") : "");
+                const itName = it.name || (typeof it.getAttribute === "function" ? it.getAttribute("name") : "");
+                if (itId === key || itName === key) m.push(it);
+              }
+              return m;
+            });
+          }
           return matches[0];
         };
       }
@@ -265,7 +278,20 @@ function makeHtmlCollection(getList, customTarget) {
             }
           }
           if (matches.length === 1) return matches[0];
-          if (matches.length > 1) return new RadioNodeList(matches);
+          if (matches.length > 1) {
+            return new RadioNodeList(function () {
+              const curList = getList();
+              const m = [];
+              for (let i = 0; i < curList.length; i++) {
+                const it = curList[i];
+                if (!it) continue;
+                const itId = it.id || (typeof it.getAttribute === "function" ? it.getAttribute("id") : "");
+                const itName = it.name || (typeof it.getAttribute === "function" ? it.getAttribute("name") : "");
+                if (itId === key || itName === key) m.push(it);
+              }
+              return m;
+            });
+          }
         } else {
           const named = findNamedItemInList(list, prop);
           if (named !== null) {
@@ -494,8 +520,48 @@ function isRadio(node) {
   return node && (node.tagName || "").toLowerCase() === "input" && (node.type || "").toLowerCase() === "radio";
 }
 
-function RadioNodeList(items) {
-  const list = items || [];
+function RadioNodeList(itemsOrGetter) {
+  if (typeof itemsOrGetter === "function") {
+    const getItems = itemsOrGetter;
+    return new Proxy(this, {
+      get: function (target, prop, receiver) {
+        if (prop === "length") return getItems().length;
+        if (prop === "item") return function (idx) { const l = getItems(); const i = Number(idx); return i >= 0 && i < l.length ? l[i] : null; };
+        if (prop === Symbol.iterator) {
+          return function () {
+            const l = getItems();
+            let idx = 0;
+            return { next: function () { return idx < l.length ? { value: l[idx++], done: false } : { value: undefined, done: true }; } };
+          };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const l = getItems();
+          const i = Number(prop);
+          return i >= 0 && i < l.length ? l[i] : undefined;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+      has: function (target, prop) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < getItems().length;
+        return Reflect.has(target, prop);
+      },
+      ownKeys: function (target) {
+        const l = getItems();
+        const keys = [];
+        for (let i = 0; i < l.length; i++) keys.push(String(i));
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (target, prop) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const l = getItems();
+          const i = Number(prop);
+          if (i >= 0 && i < l.length) return { value: l[i], writable: false, enumerable: true, configurable: true };
+        }
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+      },
+    });
+  }
+  const list = itemsOrGetter || [];
   for (let i = 0; i < list.length; i++) {
     Object.defineProperty(this, i, {
       value: list[i],
