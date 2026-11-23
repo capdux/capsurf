@@ -3197,3 +3197,12 @@
   - `perspective-origin` / `object-position`: 校验 CSS `<position>`（1/2/4 token，拒绝 3-token 旧语法如 `center left 1px` 及同轴双关键字）。
   - `transform-origin`: 校验 1/2/3 token（第 3 维 Z 轴仅允许 `<length>`），拒绝 4-token 边缘偏移与 `1px left`/`top 1px`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 469: CSSOM `calc` 维度校验与 `background-size/position-x/y`, `border-spacing`, `cursor`
+- `src/js/shim/cssom.js`:
+  - `isValidLenPct`: 拦截含角度/时间/频率/分辨率单位或无任何长度/百分比单位的 `calc()`/`min()`/`max()`/`clamp()`（如 `calc(20deg)`, `calc(0)`）。
+  - `background-size`: 逗号分层校验 `cover | contain | [ <length-percentage [0,∞]> | auto ]{1,2}`。
+  - `background-position-x` / `background-position-y`: 校验单值及 `<edge> <length-percentage>`。
+  - `border-spacing`: 校验 1~2 个非负 `<length>`（拒绝 `%`）。
+  - `cursor`: 校验可选 `url(...) [x y]? ,` 前缀列表与标准关键字结尾。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

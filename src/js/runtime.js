@@ -4100,8 +4100,13 @@
       }
 
       function isValidLenPct(tok, allowNegative) {
-        if (/^(?:calc|min|max|clamp|var|env|attr|anchor|anchor-size)\(/i.test(tok)) {
+        if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
           if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
+            return false;
+          }
+          if (/(?:\d|\.)(?:deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(tok)) return false;
+          if (!/(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%)/i.test(tok) && !/(?:var|env)\(/i.test(tok)) {
             return false;
           }
           return true;
@@ -4606,6 +4611,61 @@
           if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
         }
         return false;
+      }
+      if (prop === "background-size") {
+        const layers = vLower.split(",");
+        for (let i = 0; i < layers.length; i++) {
+          const toks = splitCssTokens(layers[i].trim());
+          if (toks.length === 1 && (toks[0] === "cover" || toks[0] === "contain")) continue;
+          if (toks.length < 1 || toks.length > 2) return false;
+          for (let j = 0; j < toks.length; j++) {
+            if (toks[j] !== "auto" && !isValidLenPct(toks[j], false)) return false;
+          }
+        }
+        return true;
+      }
+      if (prop === "background-position-x" || prop === "background-position-y") {
+        const isX = prop === "background-position-x";
+        const EDGES = isX ? new Set(["left", "right", "x-start", "x-end"]) : new Set(["top", "bottom", "y-start", "y-end"]);
+        const layers = vLower.split(",");
+        for (let i = 0; i < layers.length; i++) {
+          const toks = splitCssTokens(layers[i].trim());
+          if (toks.length === 1) {
+            if (toks[0] !== "center" && !EDGES.has(toks[0]) && !isValidLenPct(toks[0], true)) return false;
+          } else if (toks.length === 2) {
+            if (!EDGES.has(toks[0]) || !isValidLenPct(toks[1], true)) return false;
+          } else return false;
+        }
+        return true;
+      }
+      if (prop === "border-spacing") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 2) return false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
+          if (!isValidLenPct(t, false)) return false;
+        }
+        return true;
+      }
+      if (prop === "cursor") {
+        const KW = new Set([
+          "auto", "default", "none", "context-menu", "help", "pointer", "progress", "wait",
+          "cell", "crosshair", "text", "vertical-text", "alias", "copy", "move", "no-drop",
+          "not-allowed", "grab", "grabbing", "e-resize", "n-resize", "ne-resize", "nw-resize",
+          "s-resize", "se-resize", "sw-resize", "w-resize", "ew-resize", "ns-resize",
+          "nesw-resize", "nwse-resize", "col-resize", "row-resize", "all-scroll", "zoom-in", "zoom-out"
+        ]);
+        const parts = vLower.split(",");
+        const last = splitCssTokens(parts[parts.length - 1].trim());
+        if (last.length !== 1 || !KW.has(last[0])) return false;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const toks = splitCssTokens(parts[i].trim());
+          if (toks.length !== 1 && toks.length !== 3) return false;
+          if (!/^url\(/i.test(toks[0])) return false;
+          if (toks.length === 3 && (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[1]) || !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[2]))) return false;
+        }
+        return true;
       }
 
       return true;
