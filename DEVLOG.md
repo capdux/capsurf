@@ -2499,3 +2499,7 @@
 ### Phase 497: CSS 指定值 `<position>` 轴序重排
 - 确保 `transform-origin: center right 0` 回读为 `"right center 0px"`，与 CSS Transforms 指定值序列化保持一致。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 3/3 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 498: CSS 指定值背景与边框间距最短序列化
+- `background-repeat` 与 `background-size` 按逗号图层逐层折叠为规范最短形式。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 3/3 `true`，`--smoke` 3/3 PASS (6/6)。

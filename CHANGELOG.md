@@ -3399,3 +3399,10 @@
 - `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
   - 新增 `perspective-origin`, `transform-origin`, `object-position` 的水平/垂直轴序重排（`top left -> left top`, `center left -> left center`）与 `0 -> 0px`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 498: CSS 指定值 `border-spacing`, `background-size`, `background-repeat` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `border-spacing`: `0 -> 0px` 及双值相同折叠。
+  - `background-size`: 逗号分层省略尾随 `auto`（`50% auto -> 50%`）及 `0 -> 0px`。
+  - `background-repeat`: 逗号分层折叠 `repeat no-repeat -> repeat-x`、`no-repeat repeat -> repeat-y` 与同值单关键字。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

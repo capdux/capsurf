@@ -1508,6 +1508,35 @@
       }
       return parts.join(" ");
     }
+    if (key === "border-spacing") {
+      const parts = splitCssTokens(s);
+      for (let i = 0; i < parts.length; i++) if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+      if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
+      return parts.join(" ");
+    }
+    if (key === "background-size") {
+      const layers = s.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const p = splitCssTokens(layers[i].trim());
+        for (let j = 0; j < p.length; j++) if (p[j] === "0" || p[j] === "+0" || p[j] === "-0") p[j] = "0px";
+        if (p.length === 2 && p[1].toLowerCase() === "auto") p.pop();
+        layers[i] = p.join(" ");
+      }
+      return layers.join(", ");
+    }
+    if (key === "background-repeat") {
+      const layers = s.toLowerCase().split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const p = splitCssTokens(layers[i].trim());
+        if (p.length === 2) {
+          if (p[0] === "repeat" && p[1] === "no-repeat") layers[i] = "repeat-x";
+          else if (p[0] === "no-repeat" && p[1] === "repeat") layers[i] = "repeat-y";
+          else if (p[0] === p[1]) layers[i] = p[0];
+          else layers[i] = p.join(" ");
+        } else layers[i] = p.join(" ");
+      }
+      return layers.join(", ");
+    }
     return s;
   }
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
