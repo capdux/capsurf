@@ -2331,3 +2331,5 @@
 - Phase 452 (`src/js/shim/element/forms/label.js`): 抽离 `collectLabelsArray` 与 `_labelsCache` 活体 Proxy，修复 `labelable-elements.html` 的 `[SameObject]`、`hidden` 动态切换与非可关联元素 `undefined` 语义。
 
 - Phase 453 (`button.js`, `input.js`): `getButtonType` 增加 `command`/`commandfor` 隐式 `"button"` 判定；`input.files` setter 直接保留 `FileList` 对象引用并严格校验 WebIDL 类型。
+
+- Phase 454 (`src/js/shim/element/html-element.js`): 完善 `proto.click()` 中 HTML 交互式内容判定，避免 `<label>` 内嵌交互控件时向关联控件转发多余点击。

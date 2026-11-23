@@ -283,7 +283,12 @@ function installHtmlElementExtensions(proto) {
               }
               break;
             }
-            if (curTag === "button" || curTag === "select" || curTag === "textarea") {
+            if (
+              curTag === "button" || curTag === "select" || curTag === "textarea" ||
+              curTag === "details" || curTag === "embed" || curTag === "iframe" ||
+              ((curTag === "audio" || curTag === "video") && cur.hasAttribute && cur.hasAttribute("controls")) ||
+              ((curTag === "img" || curTag === "object") && cur.hasAttribute && cur.hasAttribute("usemap"))
+            ) {
               break;
             }
             if (curTag === "a") {

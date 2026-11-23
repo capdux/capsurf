@@ -3104,3 +3104,5 @@
 - **Phase 452 (`src/js/shim/element/forms/label.js`, `src/js/runtime_source.cp`)**：非可关联元素 `.labels` 返回 `undefined`，`getLabelsForControl` 升级为 `[SameObject]` 活体 `NodeList`。
 
 - **Phase 453 (`src/js/shim/element/forms/button.js`, `src/js/shim/element/forms/input.js`, `src/js/runtime_source.cp`)**：支持 `<button command/commandfor>` 隐式 `"button"` 类型；对齐 `input.files` setter 的 `FileList` 引用共享与 `TypeError` 校验。
+
+- **Phase 454 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`proto.click()` 遇交互式子元素（`<details>`/`<embed>`/`<iframe>`/`<audio/video[controls]>`/`<img/object[usemap]>`）提前中断 `<label>` 点击转发。
