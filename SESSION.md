@@ -7390,3 +7390,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 543 (`counter-*` 独立 `sign()`、`list-style` `outside outside`/`none url` 与渐变计算值)
 - **[Agent]**: 完成 Phase 543：修复 `counter-*` 独立 `sign(...)` 校验、修复 `list-style: none url(...)` 与 `outside outside` 序列化、补全 `gold` 颜色映射并在 `window.js` 实现 `linear-gradient`/`radial-gradient`/`conic-gradient` 计算期颜色/角度/长度/双色标解析。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 544 (`list-style-image` 括号自动闭合、`interactivity`、`outline-offset: inset`、`outline-color: auto`、`caret-color`)
+- **[Agent]**: 完成 Phase 544：修复 `list-style-image`/`background-image` 未闭合 `)` 自动补齐（消除 `const s` 只读异常，使 `conic-gradient(black 1turn, white` 精准算出 `conic-gradient(rgb(0, 0, 0) 360deg, rgb(255, 255, 255))`）；新增 `interactivity`（`auto | inert` 及继承）、`outline-offset: inset`、`outline-color: auto` 及 `caret-color` 双值解析。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

@@ -3846,7 +3846,7 @@
       "grid-template-areas", "grid-template-columns", "grid-template-rows", "hanging-punctuation", "height",
       "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering",
       "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
-      "inset-inline", "inset-inline-end", "inset-inline-start", "isolation", "justify-content",
+      "inset-inline", "inset-inline-end", "inset-inline-start", "interactivity", "isolation", "justify-content",
       "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-height",
       "list-style", "list-style-image", "list-style-position", "list-style-type", "margin",
       "margin-block", "margin-block-end", "margin-block-start", "margin-bottom",
@@ -4085,6 +4085,7 @@
         "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
         "text-group-align": ["none", "start", "end", "left", "right", "center"],
         "text-spacing-trim": ["normal", "auto", "space-all", "trim-both", "trim-all", "trim-start", "space-first"],
+        "interactivity": ["auto", "inert"],
         "text-wrap-mode": ["wrap", "nowrap"],
         "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
         "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
@@ -4693,8 +4694,21 @@
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
+        if (t === "inset") return true;
         if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
         return isValidLenPct(t, true);
+      }
+      if (prop === "outline-color") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        if (toks[0] === "auto") return true;
+        return /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(toks[0]);
+      }
+      if (prop === "caret-color") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 2) return false;
+        const isColTok = (t) => t === "auto" || /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(t);
+        return toks.every(isColTok);
       }
       if (prop === "hyphenate-character") {
         const toks = splitCssTokens(trimmed);
@@ -6094,6 +6108,14 @@
         if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
         const order = ["underline", "overline", "line-through", "blink"];
         return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "list-style-image" || key === "background-image") {
+        let open = 0, close = 0;
+        for (let i = 0; i < s.length; i++) {
+          if (s[i] === "(") open++;
+          else if (s[i] === ")") close++;
+        }
+        return open > close ? s + ")".repeat(open - close) : s;
       }
       if (key === "list-style-type") {
         if (/^symbols\(\s*symbolic\s+/i.test(s)) {
@@ -39502,7 +39524,7 @@
       "color", "font-size", "font-family", "font-weight", "font-style",
       "line-height", "text-align", "visibility", "direction", "white-space",
       "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
-      "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars",
+      "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -40875,10 +40897,36 @@
       const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
       const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
       computedMap.set("color", elColor);
-      for (const ck of ["text-decoration-color", "text-emphasis-color"]) {
+      for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color"]) {
         const cv = (computedMap.get(ck) || "").trim();
-        if (!cv || cv.toLowerCase() === "currentcolor") computedMap.set(ck, elColor);
-        else computedMap.set(ck, normCol(cv));
+        if (ck === "outline-color" && cv.toLowerCase() === "auto") {
+          const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
+          computedMap.set(ck, os === "auto" ? "auto" : elColor);
+        } else if (!cv || cv.toLowerCase() === "currentcolor") {
+          computedMap.set(ck, elColor);
+        } else {
+          computedMap.set(ck, normCol(cv));
+        }
+      }
+      const ccRaw = (computedMap.get("caret-color") || "").trim();
+      if (!ccRaw || ccRaw.toLowerCase() === "initial") {
+        computedMap.set("caret-color", "auto");
+      } else {
+        const ccToks = [];
+        let cCur = "", cD = 0;
+        for (let i = 0; i < ccRaw.length; i++) {
+          const ch = ccRaw[i];
+          if (ch === "(") cD++; else if (ch === ")" && cD > 0) cD--;
+          if (cD === 0 && /\s/.test(ch)) { if (cCur) { ccToks.push(cCur); cCur = ""; } }
+          else cCur += ch;
+        }
+        if (cCur) ccToks.push(cCur);
+        computedMap.set("caret-color", ccToks.map((t) => {
+          const tl = t.toLowerCase();
+          if (tl === "auto") return "auto";
+          if (tl === "currentcolor") return elColor;
+          return normCol(t);
+        }).join(" "));
       }
       const wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
       const tes = (computedMap.get("text-emphasis-style") || "").trim().toLowerCase();
@@ -41077,6 +41125,9 @@
       if (tfv && tfv.indexOf("consistent") !== -1) {
         computedMap.set("text-fit", tfv.split(/\s+/).filter((t) => t !== "consistent").join(" ") || "none");
       }
+      if (!computedMap.get("interactivity") || computedMap.get("interactivity") === "initial") {
+        computedMap.set("interactivity", "auto");
+      }
       if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
         computedMap.set("hanging-punctuation", "none");
       }
@@ -41124,7 +41175,7 @@
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering",
+      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering", "interactivity",
       "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
       "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
       "line-height", "list-style-image", "list-style-position", "list-style-type",

@@ -6230,7 +6230,7 @@ function installWindow(global) {
     "color", "font-size", "font-family", "font-weight", "font-style",
     "line-height", "text-align", "visibility", "direction", "white-space",
     "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
-    "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars",
+    "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -7603,10 +7603,36 @@ function installWindow(global) {
     const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
     const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
     computedMap.set("color", elColor);
-    for (const ck of ["text-decoration-color", "text-emphasis-color"]) {
+    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color"]) {
       const cv = (computedMap.get(ck) || "").trim();
-      if (!cv || cv.toLowerCase() === "currentcolor") computedMap.set(ck, elColor);
-      else computedMap.set(ck, normCol(cv));
+      if (ck === "outline-color" && cv.toLowerCase() === "auto") {
+        const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
+        computedMap.set(ck, os === "auto" ? "auto" : elColor);
+      } else if (!cv || cv.toLowerCase() === "currentcolor") {
+        computedMap.set(ck, elColor);
+      } else {
+        computedMap.set(ck, normCol(cv));
+      }
+    }
+    const ccRaw = (computedMap.get("caret-color") || "").trim();
+    if (!ccRaw || ccRaw.toLowerCase() === "initial") {
+      computedMap.set("caret-color", "auto");
+    } else {
+      const ccToks = [];
+      let cCur = "", cD = 0;
+      for (let i = 0; i < ccRaw.length; i++) {
+        const ch = ccRaw[i];
+        if (ch === "(") cD++; else if (ch === ")" && cD > 0) cD--;
+        if (cD === 0 && /\s/.test(ch)) { if (cCur) { ccToks.push(cCur); cCur = ""; } }
+        else cCur += ch;
+      }
+      if (cCur) ccToks.push(cCur);
+      computedMap.set("caret-color", ccToks.map((t) => {
+        const tl = t.toLowerCase();
+        if (tl === "auto") return "auto";
+        if (tl === "currentcolor") return elColor;
+        return normCol(t);
+      }).join(" "));
     }
     const wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
     const tes = (computedMap.get("text-emphasis-style") || "").trim().toLowerCase();
@@ -7805,6 +7831,9 @@ function installWindow(global) {
     if (tfv && tfv.indexOf("consistent") !== -1) {
       computedMap.set("text-fit", tfv.split(/\s+/).filter((t) => t !== "consistent").join(" ") || "none");
     }
+    if (!computedMap.get("interactivity") || computedMap.get("interactivity") === "initial") {
+      computedMap.set("interactivity", "auto");
+    }
     if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
       computedMap.set("hanging-punctuation", "none");
     }
@@ -7852,7 +7881,7 @@ function installWindow(global) {
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
     "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
     "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering",
+    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering", "interactivity",
     "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
     "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
     "line-height", "list-style-image", "list-style-position", "list-style-type",

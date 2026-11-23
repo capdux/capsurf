@@ -3543,3 +3543,5 @@
 - **Phase 542** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `counter-*` `calc(sign(cqw))` 整数求值与 `list-style` 简写规范化计算值。
 
 - **Phase 543** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `counter-*` 独立 `sign()`、`list-style` 完整展开与梯度计算期求值。
+
+- **Phase 544** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `list-style-image` 缺失右括号补全、`interactivity` 属性与继承、`outline-offset: inset`、`outline-color: auto` 及 `caret-color` 双值计算。

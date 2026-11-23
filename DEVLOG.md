@@ -2595,3 +2595,7 @@
 ### Phase 543: `list-style-image` 渐变计算求值与 `counter-*` / `list-style` 收尾
 - `expandCssShorthand("list-style")` 按 `!hasType` 判定 `none` 归属，`serializeExpandedShorthand("list-style")` 保留 `outside outside` 防回环歧义。
 - `window.js` 对 `linear-gradient` / `radial-gradient` / `conic-gradient` 实现色值 `rgb()`、角度 `calc()/turn -> deg`、长度/百分比 `calc()` 与双位置色标拆分。
+
+### Phase 544: `list-style-image` 容错闭合与 `css-ui` 属性扩展
+- `normalizeCssSpecifiedValue` 对 `list-style-image`/`background-image` 自动补齐缺失右括号，解决 WPT 容错输入解析。
+- 扩展 `interactivity`（继承）、`outline-offset: inset`、`outline-color: auto` 与 `caret-color` 双值。

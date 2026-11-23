@@ -56,7 +56,7 @@
     "grid-template-areas", "grid-template-columns", "grid-template-rows", "hanging-punctuation", "height",
     "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering",
     "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
-    "inset-inline", "inset-inline-end", "inset-inline-start", "isolation", "justify-content",
+    "inset-inline", "inset-inline-end", "inset-inline-start", "interactivity", "isolation", "justify-content",
     "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-height",
     "list-style", "list-style-image", "list-style-position", "list-style-type", "margin",
     "margin-block", "margin-block-end", "margin-block-start", "margin-bottom",
@@ -295,6 +295,7 @@
       "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
       "text-group-align": ["none", "start", "end", "left", "right", "center"],
       "text-spacing-trim": ["normal", "auto", "space-all", "trim-both", "trim-all", "trim-start", "space-first"],
+      "interactivity": ["auto", "inert"],
       "text-wrap-mode": ["wrap", "nowrap"],
       "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
       "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
@@ -903,8 +904,21 @@
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
+      if (t === "inset") return true;
       if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
       return isValidLenPct(t, true);
+    }
+    if (prop === "outline-color") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      if (toks[0] === "auto") return true;
+      return /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(toks[0]);
+    }
+    if (prop === "caret-color") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      const isColTok = (t) => t === "auto" || /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(t);
+      return toks.every(isColTok);
     }
     if (prop === "hyphenate-character") {
       const toks = splitCssTokens(trimmed);
@@ -2304,6 +2318,14 @@
       if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
       const order = ["underline", "overline", "line-through", "blink"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
+    }
+    if (key === "list-style-image" || key === "background-image") {
+      let open = 0, close = 0;
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === "(") open++;
+        else if (s[i] === ")") close++;
+      }
+      return open > close ? s + ")".repeat(open - close) : s;
     }
     if (key === "list-style-type") {
       if (/^symbols\(\s*symbolic\s+/i.test(s)) {
