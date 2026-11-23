@@ -3190,3 +3190,10 @@
   - `white-space`: 支持 CSS Text 3 单关键字与 CSS Text 4 `<white-space-collapse> || <text-wrap-mode>` 双值组合，拒绝 `balance`/`pretty`/`auto` 等。
   - `outline-offset`: 校验 `<length>`（允许负值，拒绝 `%`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 468: CSSOM `perspective`, `perspective-origin`, `object-position`, `transform-origin` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `perspective`: 仅允许 `none` 或非负 `<length>`（拒绝无单位数值与 `%`）。
+  - `perspective-origin` / `object-position`: 校验 CSS `<position>`（1/2/4 token，拒绝 3-token 旧语法如 `center left 1px` 及同轴双关键字）。
+  - `transform-origin`: 校验 1/2/3 token（第 3 维 Z 轴仅允许 `<length>`），拒绝 4-token 边缘偏移与 `1px left`/`top 1px`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

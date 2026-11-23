@@ -2379,3 +2379,7 @@
 ### Phase 467: CSSOM `translate` / `text-indent` / `white-space` / `outline-offset` 语法门禁
 - `translate` 第 3 维 Z 轴仅允许 `<length>`，显式拦截 `100px 200px 300%` 与 `calc(30px + 30%)`。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 468: CSSOM 透视与变换原点语法门禁
+- 统一 `perspective-origin`/`object-position` 与 `transform-origin` 的 2D `<position>` 校验，并对 `transform-origin` 第 3 维与 4-token 语法执行严格区分。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

@@ -778,6 +778,45 @@
       if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
       return isValidLenPct(t, true);
     }
+    if (prop === "perspective") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t === "none") return true;
+      if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
+      return isValidLenPct(t, false);
+    }
+    if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
+      const toks = splitCssTokens(vLower);
+      const HX = new Set(["left", "center", "right"]);
+      const VY = new Set(["top", "center", "bottom"]);
+      const is2Pos = (a, b) => {
+        if (HX.has(a) && VY.has(b)) return !(a === "center" && b === "center") || true;
+        if (VY.has(a) && HX.has(b)) return true;
+        if (isValidLenPct(a, true) && (VY.has(b) || isValidLenPct(b, true))) return true;
+        if (HX.has(a) && isValidLenPct(b, true)) return true;
+        return false;
+      };
+      if (toks.length === 1) {
+        return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
+      }
+      if (toks.length === 2) return is2Pos(toks[0], toks[1]);
+      if (prop === "transform-origin") {
+        if (toks.length === 3 && is2Pos(toks[0], toks[1])) {
+          const z = toks[2];
+          if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
+          return isValidLenPct(z, true);
+        }
+        return false;
+      }
+      if (toks.length === 4) {
+        const EX = new Set(["left", "right"]);
+        const EY = new Set(["top", "bottom"]);
+        if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && EY.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
+        if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
+      }
+      return false;
+    }
 
     return true;
   }
