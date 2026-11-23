@@ -7155,3 +7155,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 - [cp_agy 结单] `task-capsurf-20261123-image-webp-compile`（delivery_id=211）：上游修复 `/data/dev/cp/lib/image/webp.cp` 的 `entropy_ids` 越界与 `usize(...)` 转换；`bin_dev` 编译通过并已完成 `ack`。
 - [Phase 439] (`src/js/shim/events/dispatch.js`, `src/js/shim/range.js`, `src/js/shim/parser.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 修正 `PHASE_AT_TARGET` 捕获先于冒泡的监听器触发顺序；补齐 `StaticRange` `Node`/`offset` 校验与 `InvalidNodeTypeError`；为 `ParsedDocument.prototype` 补齐 `createCDATASection`；`bin_dev` 编译 + CDP 探针 (`{"orderOk":true,"srOk":true,"missErr":true,"attrErr":true,"cdataOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [Phase 440] (`src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 在 `Element.prototype.cloneNode` 与 `Node.prototype.cloneNode` 中按 HTML 克隆步骤迁移 `<input>` 脏值/脏选中标志（`_valueDirty`/`_value`/`_checkedDirty`/`_checked`）与 `<textarea>` 脏值标志（`_value`），支持 `deep=true` 子树递归升级；`bin_dev` 编译 + CDP 探针 (`{"taOk":true,"inpOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

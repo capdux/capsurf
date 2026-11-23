@@ -2303,3 +2303,5 @@
 - Phase 438 (`collections.js`, `events/event.js`): `DOMTokenList` 补齐 Proxy `has` trap 以支撑 `Array.prototype.forEach`/`keys`/`values`/`entries`；`Event` 实例 `isTrusted` 改为共享 `_getIsTrusted` 函数。
 
 - Phase 439 (`events/dispatch.js`, `range.js`, `parser.js`): `PHASE_AT_TARGET` 按 `[true, false]` 两轮触发保证捕获优先于冒泡；`StaticRange` 补齐 `Node`/`DocumentType`/`Attr` 校验；`ParsedDocument` 实装 `createCDATASection`。
+
+- Phase 440 (`index.js`, `node-base.js`): 抽离 `copyCloneFormState` 在 `Element.prototype.cloneNode` 中递归迁移 `<input>` 与 `<textarea>` 脏状态。

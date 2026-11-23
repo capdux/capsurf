@@ -3076,3 +3076,5 @@
 - **Phase 438 (`src/js/shim/collections.js`, `src/js/shim/events/event.js`, `src/js/runtime_source.cp`)**：`DOMTokenList` 迭代器方法严格对齐 `Array.prototype.*` 并补齐 Proxy `has` trap；`Event.isTrusted` 共享统一 getter。
 
 - **Phase 439 (`src/js/shim/events/dispatch.js`, `src/js/shim/range.js`, `src/js/shim/parser.js`, `src/js/runtime_source.cp`)**：修正 `AT_TARGET` 捕获先于冒泡顺序；补齐 `StaticRange` 参数与 `InvalidNodeTypeError` 校验；新增 `ParsedDocument.createCDATASection`。
+
+- **Phase 440 (`src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/runtime_source.cp`)**：`cloneNode` 按 HTML 克隆步骤迁移 `<input>` 与 `<textarea>` 脏状态标志。

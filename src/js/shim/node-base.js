@@ -332,7 +332,22 @@ Node.prototype.cloneNode = function (deep) {
         clone.appendChild(kids[i].cloneNode(true));
       }
     }
-    return clone;
+    const upgraded = typeof upgradeElement === "function" ? upgradeElement(clone) : clone;
+    if (tag === "input") {
+      if (this._valueDirty) {
+        upgraded._valueDirty = true;
+        upgraded._value = this._value;
+      }
+      if (this._checkedDirty) {
+        upgraded._checkedDirty = true;
+        upgraded._checked = this._checked;
+      }
+    } else if (tag === "textarea") {
+      if (this._value !== undefined) {
+        upgraded._value = this._value;
+      }
+    }
+    return upgraded;
   }
   return this;
 };

@@ -368,11 +368,40 @@ function installShim(global) {
     installElementExtensions(global.Element.prototype);
     installHtmlElementExtensions(global.Element.prototype);
 
+    function copyCloneFormState(src, dst, deep) {
+      if (!src || !dst) return dst;
+      const tag = String(src.localName || src.tagName || "").toLowerCase();
+      if (tag === "input") {
+        if (src._valueDirty) {
+          dst._valueDirty = true;
+          dst._value = src._value;
+        }
+        if (src._checkedDirty) {
+          dst._checkedDirty = true;
+          dst._checked = src._checked;
+        }
+      } else if (tag === "textarea") {
+        if (src._value !== undefined) {
+          dst._value = src._value;
+        }
+      }
+      if (deep) {
+        const sk = src.children || src._children || [];
+        const dk = dst.children || dst._children || [];
+        const len = sk.length < dk.length ? sk.length : dk.length;
+        for (let i = 0; i < len; i++) {
+          copyCloneFormState(sk[i], upgradeElement(dk[i]), true);
+        }
+      }
+      return dst;
+    }
+
     if (typeof global.Element.prototype.cloneNode === "function") {
       const origElCloneNode = global.Element.prototype.cloneNode;
       global.Element.prototype.cloneNode = markNative(function (deep) {
         const cloned = origElCloneNode.call(this, Boolean(deep));
-        return cloned ? upgradeElement(cloned) : cloned;
+        if (!cloned) return cloned;
+        return copyCloneFormState(this, upgradeElement(cloned), Boolean(deep));
       }, "cloneNode");
     }
 
