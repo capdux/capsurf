@@ -13,6 +13,12 @@ function DOMTokenList(getter, setter, supportedSet) {
       }
       return Reflect.get(target, prop, receiver);
     },
+    has: function (target, prop) {
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        return Number(prop) < target.length;
+      }
+      return Reflect.has(target, prop);
+    },
   });
   _dtlState.set(proxy, st);
   return proxy;
@@ -132,30 +138,10 @@ DOMTokenList.prototype.replace = function (oldToken, newToken) {
   return true;
 };
 
-DOMTokenList.prototype.forEach = function (callback, thisArg) {
-  const tokens = this._getTokens();
-  for (let i = 0; i < tokens.length; i++) {
-    callback.call(thisArg, tokens[i], i, this);
-  }
-};
-
-DOMTokenList.prototype.keys = function () {
-  const tokens = this._getTokens();
-  const arr = [];
-  for (let i = 0; i < tokens.length; i++) arr.push(i);
-  return arr[Symbol.iterator]();
-};
-
-DOMTokenList.prototype.values = function () {
-  return this._getTokens()[Symbol.iterator]();
-};
-
-DOMTokenList.prototype.entries = function () {
-  const tokens = this._getTokens();
-  const arr = [];
-  for (let i = 0; i < tokens.length; i++) arr.push([i, tokens[i]]);
-  return arr[Symbol.iterator]();
-};
+DOMTokenList.prototype.forEach = Array.prototype.forEach;
+DOMTokenList.prototype.keys = Array.prototype.keys;
+DOMTokenList.prototype.values = Array.prototype.values;
+DOMTokenList.prototype.entries = Array.prototype.entries;
 
 DOMTokenList.prototype.toString = function () {
   const st = _dtlState.get(this);
@@ -170,7 +156,7 @@ DOMTokenList.prototype.supports = function (token) {
   return st.supportedSet.has(String(token).toLowerCase());
 };
 
-DOMTokenList.prototype[Symbol.iterator] = DOMTokenList.prototype.values;
+DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
 Object.defineProperty(DOMTokenList.prototype, Symbol.toStringTag, {
   value: "DOMTokenList",
   configurable: true,

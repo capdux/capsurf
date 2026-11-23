@@ -48,6 +48,10 @@ function nullableDouble(value, member) {
 // -------------------------------------------------------------
 // Base Event
 // -------------------------------------------------------------
+function _getIsTrusted() {
+  return Boolean(_trustedFlags.get(this));
+}
+
 function Event(type, options) {
   if (arguments.length === 0) {
     throw new TypeError("Failed to construct 'Event': 1 argument required, but only 0 present.");
@@ -76,9 +80,7 @@ function Event(type, options) {
   _trustedFlags.set(this, false);
 
   Object.defineProperty(this, "isTrusted", {
-    get: function () {
-      return Boolean(_trustedFlags.get(this));
-    },
+    get: _getIsTrusted,
     set: undefined,
     enumerable: true,
     configurable: false,

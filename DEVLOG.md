@@ -2299,3 +2299,5 @@
 - Phase 436 (`element.js`, `html-classes.js`): 移除 `relList` 命名空间 `HTML_NS` 错误回退；抽离 `defineAttrTokenList` 统一实装 `HTMLLinkElement.sizes`、`HTMLIFrameElement.sandbox` 与 `HTMLOutputElement.htmlFor`。
 
 - Phase 437 (`src/js/shim/range.js`): 抽离 `isInclusiveAncestorNode`，将 `Range.commonAncestorContainer` 改为动态遍历计算以匹配 DOM 规范。
+
+- Phase 438 (`collections.js`, `events/event.js`): `DOMTokenList` 补齐 Proxy `has` trap 以支撑 `Array.prototype.forEach`/`keys`/`values`/`entries`；`Event` 实例 `isTrusted` 改为共享 `_getIsTrusted` 函数。
