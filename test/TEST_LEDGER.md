@@ -1488,3 +1488,15 @@
 
 ### WPT-B291 (bin_dev Phase 536, 2026-11-23)
 - **Filter `/css/css-text/parsing/`**: `86` files (**75 PASS / 11 FAIL / 0 TIMEOUT / 0 ERROR**, `70` matched expectations, `13` unexpected PASS, `3` unexpected FAIL). `hyphenate-limit-chars-computed` 11/11, `text-fit-invalid`, `text-group-align-invalid`, `word-space-transform-{invalid,computed}` all green!
+
+### WPT-B292 (bin_dev Phase 537, 2026-11-23)
+- **Filter `/css/css-text/parsing/`**: `86` files (**81 PASS / 5 FAIL / 0 TIMEOUT / 0 ERROR**, `0` unexpected FAIL, `16` unexpected PASS). Remaining `text-fit-computed` & `word-space-transform-valid` & `hanging-punctuation-valid` fixed in Phase 538; `text-spacing: auto` serialization fixed in Phase 539.
+
+### WPT-B293 (bin_dev Phase 539, 2026-11-23)
+- **Filter `/css/css-text/parsing/`**: `86` files (**86 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `65` matched expectations, `21` unexpected PASS; **100% ALL GREEN**!).
+
+### WPT-B294 (bin_dev Phase 539, 2026-11-23)
+- **Filter `/css/css-flexbox/parsing/`**: `27` files (`23 PASS / 4 FAIL / 0 TIMEOUT / 0 ERROR`, `24` matched expectations, `3` unexpected FAIL: `flex-basis-computed` 10/12, `flex-computed` 10/14, `flex-valid` 12/16, `webkit-aliases` 0/12). Fixed in Phase 540.
+
+### WPT-B295 (bin_dev Phase 540, 2026-11-23)
+- **Filter `/css/css-flexbox/parsing/`**: `27` files (`24 PASS / 3 FAIL / 0 TIMEOUT / 0 ERROR`), `flex-basis-computed` 12/12 all green, `flex-valid` 15/16, `flex-computed` 13/14, `webkit-aliases` jumped `0/12 -> 10/12`.

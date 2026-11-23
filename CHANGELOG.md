@@ -3535,3 +3535,5 @@
 - **Phase 538** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `hanging-punctuation` 与 `word-space-transform` 指定值保序，及 `text-fit` 计算值省略默认 `consistent`。
 
 - **Phase 539** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `text-spacing: auto` 简写反序列化为 `"auto"`。
+
+- **Phase 540** (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `flex` 纯数字 `calc()`/`sign(cqw)`、`flex-basis` `calc(10% + 0px)` 化简、以及 12 个 `-webkit-*` Flexbox Legacy 别名映射。

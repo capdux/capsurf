@@ -3892,6 +3892,9 @@
       // Vendor prefixed
       "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
       "-webkit-user-select", "-webkit-box-sizing", "-webkit-appearance", "-webkit-line-clamp",
+      "-webkit-align-content", "-webkit-align-items", "-webkit-align-self", "-webkit-flex",
+      "-webkit-flex-basis", "-webkit-flex-direction", "-webkit-flex-flow", "-webkit-flex-grow",
+      "-webkit-flex-shrink", "-webkit-flex-wrap", "-webkit-justify-content", "-webkit-order",
       "-webkit-box-orient", "-webkit-box-direction", "-webkit-background-clip",
       "-moz-animation", "-moz-transform", "-moz-user-select", "-moz-box-sizing", "-moz-appearance"
     ]);
@@ -4560,11 +4563,29 @@
         }
         return true;
       }
+      const FLEX_ALIASES = {
+        "-webkit-align-content": "align-content",
+        "-webkit-align-items": "align-items",
+        "-webkit-align-self": "align-self",
+        "-webkit-flex": "flex",
+        "-webkit-flex-basis": "flex-basis",
+        "-webkit-flex-direction": "flex-direction",
+        "-webkit-flex-flow": "flex-flow",
+        "-webkit-flex-grow": "flex-grow",
+        "-webkit-flex-shrink": "flex-shrink",
+        "-webkit-flex-wrap": "flex-wrap",
+        "-webkit-justify-content": "justify-content",
+        "-webkit-order": "order"
+      };
+      if (Object.prototype.hasOwnProperty.call(FLEX_ALIASES, prop)) {
+        return isValidCssValue(FLEX_ALIASES[prop], value);
+      }
       if (prop === "flex") {
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length < 1 || toks.length > 3) return false;
-        const isFlexNum = (t) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0;
+        const isFlexNum = (t) => (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0) ||
+          (/^(?:calc|min|max|clamp)\(/i.test(t) && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(t.replace(/sign\([^()]+\)/gi, "")));
         const isFlexBasis = (t) => {
           if (t === "auto" || t === "content" || t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch" || /^fit-content\(/i.test(t)) return true;
           if (/^(?:calc|min|max|clamp)\(/i.test(t)) return /(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(t);
@@ -4756,7 +4777,7 @@
         if (autoToks.length > 0) {
           if (normalCount > 1 || (trimCount === 1 && normalCount > 0)) return false;
           if (autoToks.length === 1 && autoToks[0] === "no-autospace") return true;
-          return declSupported("text-autospace", autoToks.join(" "));
+          return isValidCssValue("text-autospace", autoToks.join(" "));
         }
         return (trimCount + normalCount) <= 2;
       }
@@ -5637,7 +5658,19 @@
         return [w, st, c].filter(Boolean).join(" ");
       }
       if (key === "flex") {
-        const parts = splitCssTokens(s);
+        const normCalcTok = (t) => {
+          if (!/^calc\(/i.test(t)) return t;
+          let out = t.replace(/(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|%)?)/gi, "$2 * $1");
+          const inn = out.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inn)) {
+            try {
+              const v = Function("return (" + inn + ")")();
+              if (typeof v === "number" && isFinite(v)) return "calc(" + String(Number(v.toFixed(6))) + ")";
+            } catch (_) {}
+          }
+          return out;
+        };
+        const parts = splitCssTokens(s).map(normCalcTok);
         if (parts.length === 1) {
           const p0 = parts[0].toLowerCase();
           if (p0 === "none") return "0 0 auto";
@@ -5647,13 +5680,15 @@
           }
           return "1 1 " + (p0 === "0" ? "0px" : parts[0]);
         }
-        const isNum = (x) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x);
+        const isNum = (x) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x) ||
+          (/^(?:calc|min|max|clamp)\(/i.test(x) && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(x.replace(/sign\([^()]+\)/gi, "")));
         let grow = "1", shrink = "1", basis = "0%";
         const nums = [];
         let bRaw = "";
         for (let i = 0; i < parts.length; i++) {
-          if (isNum(parts[i]) && !(nums.length === 2 && parts[i] === "0")) nums.push(String(Number(parts[i])));
-          else bRaw = parts[i];
+          if (isNum(parts[i]) && !(nums.length === 2 && parts[i] === "0")) {
+            nums.push(/^(?:calc|min|max|clamp)\(/i.test(parts[i]) ? parts[i] : String(Number(parts[i])));
+          } else bRaw = parts[i];
         }
         if (nums.length >= 1) grow = nums[0];
         if (nums.length >= 2) shrink = nums[1];
@@ -12038,6 +12073,9 @@
         }
         return globalThis.__capsurf_serializeShorthand(key, (lh) => map.get(lh).value);
       }
+      if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+        return lookupPropertyValue(map, LEGACY_CSS_ALIASES[key]);
+      }
       if (key === "background") {
         for (let i = 0; i < BG_LONGHANDS.length; i++) {
           if (!map.has(BG_LONGHANDS[i])) return "";
@@ -12069,9 +12107,26 @@
       return "";
     }
 
+    const LEGACY_CSS_ALIASES = {
+      "-webkit-appearance": "appearance",
+      "-webkit-align-content": "align-content",
+      "-webkit-align-items": "align-items",
+      "-webkit-align-self": "align-self",
+      "-webkit-flex": "flex",
+      "-webkit-flex-basis": "flex-basis",
+      "-webkit-flex-direction": "flex-direction",
+      "-webkit-flex-flow": "flex-flow",
+      "-webkit-flex-grow": "flex-grow",
+      "-webkit-flex-shrink": "flex-shrink",
+      "-webkit-flex-wrap": "flex-wrap",
+      "-webkit-justify-content": "justify-content",
+      "-webkit-order": "order"
+    };
+
     function setEntryWithShorthand(map, key, rawName, normV, pri) {
-      if (key === "-webkit-appearance") {
-        setEntryInStyleMap(map, "appearance", "appearance", normV, pri);
+      if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+        const target = LEGACY_CSS_ALIASES[key];
+        setEntryWithShorthand(map, target, target, normV, pri);
         return;
       }
       if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
@@ -12088,11 +12143,10 @@
     }
 
     function removeKeyWithShorthand(map, key) {
-      let prev = removeKeyFromStyleMap(map, key);
-      if (key === "-webkit-appearance") {
-        const p = removeKeyFromStyleMap(map, "appearance");
-        if (!prev && p) prev = p;
+      if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+        return removeKeyWithShorthand(map, LEGACY_CSS_ALIASES[key]);
       }
+      let prev = removeKeyFromStyleMap(map, key);
       if (!key.startsWith("--") && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
         const lhs = globalThis.__capsurf_shorthandLonghands[key];
         for (let i = 0; i < lhs.length; i++) {
@@ -40329,10 +40383,92 @@
       const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
       for (let i = 0; i < nonNegLenProps.length; i++) {
         const nk = nonNegLenProps[i];
-        const nv = (computedMap.get(nk) || "").trim().toLowerCase();
+        let nv = (computedMap.get(nk) || "").trim().toLowerCase();
+        if (nv && nv.indexOf("sign(") !== -1 && /^calc\(/i.test(nv)) {
+          let cw = 800, cur = element && element.parentElement;
+          while (cur) {
+            const pMap = collectRawComputedMap(cur, "");
+            const ct = (pMap.get("container-type") || "").toLowerCase();
+            if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+              const wm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec((pMap.get("width") || "").trim());
+              if (wm) { cw = Number(wm[1]); break; }
+            }
+            cur = cur.parentElement;
+          }
+          nv = nv.replace(/sign\(([^()]+)\)/gi, (full, inn) => {
+            const r = inn
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize));
+            if (/^[\d+\-*/().\s]+$/.test(r)) {
+              try {
+                const v = Function("return (" + r + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+              } catch (_) {}
+            }
+            return full;
+          });
+        }
         if (nv && nv !== "auto" && nv !== "none" && nv !== "normal" && nv !== "min-content" && nv !== "max-content" && nv !== "fit-content" && nv.indexOf("%") === -1) {
           const px = evalCssLengthExpr(nv, 0, fontSize);
           if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
+        } else if (nk === "flex-basis" && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
+          const inn = nv.slice(5, -1).trim();
+          const evalL = (pv, xv) => {
+            const e = inn
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pv))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * xv))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * xv));
+            if (/^[\d+\-*/().\s]+$/.test(e)) {
+              try {
+                const v = Function("return (" + e + ")")();
+                if (typeof v === "number" && isFinite(v)) return v;
+              } catch (_) {}
+            }
+            return null;
+          };
+          const pxC = evalL(0, 1);
+          const pctC = evalL(1, 0);
+          if (pxC !== null && pctC !== null) {
+            const pR = Number(pctC.toFixed(6));
+            const xR = Number(pxC.toFixed(6));
+            if (xR === 0) computedMap.set(nk, String(pR) + "%");
+            else computedMap.set(nk, "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")");
+          }
+        }
+      }
+      for (const fk of ["flex-grow", "flex-shrink"]) {
+        const fv = (computedMap.get(fk) || "").trim();
+        if (fv && /^calc\(/i.test(fv)) {
+          let cw = 800, cur = element && element.parentElement;
+          while (cur) {
+            const pMap = collectRawComputedMap(cur, "");
+            const ct = (pMap.get("container-type") || "").toLowerCase();
+            if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+              const wm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec((pMap.get("width") || "").trim());
+              if (wm) { cw = Number(wm[1]); break; }
+            }
+            cur = cur.parentElement;
+          }
+          const rep = fv.slice(5, -1).replace(/sign\(([^()]+)\)/gi, (full, inn) => {
+            const r = inn
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize));
+            if (/^[\d+\-*/().\s]+$/.test(r)) {
+              try {
+                const v = Function("return (" + r + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+              } catch (_) {}
+            }
+            return full;
+          });
+          if (/^[\d+\-*/().\s]+$/.test(rep)) {
+            try {
+              const v = Function("return (" + rep + ")")();
+              if (typeof v === "number" && isFinite(v)) computedMap.set(fk, String(Math.max(0, Number(v.toFixed(6)))));
+            } catch (_) {}
+          }
         }
       }
       const radProps = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];

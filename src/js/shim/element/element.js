@@ -334,6 +334,9 @@ function createStyleProxy(element) {
       }
       return globalThis.__capsurf_serializeShorthand(key, (lh) => map.get(lh).value);
     }
+    if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+      return lookupPropertyValue(map, LEGACY_CSS_ALIASES[key]);
+    }
     if (key === "background") {
       for (let i = 0; i < BG_LONGHANDS.length; i++) {
         if (!map.has(BG_LONGHANDS[i])) return "";
@@ -365,9 +368,26 @@ function createStyleProxy(element) {
     return "";
   }
 
+  const LEGACY_CSS_ALIASES = {
+    "-webkit-appearance": "appearance",
+    "-webkit-align-content": "align-content",
+    "-webkit-align-items": "align-items",
+    "-webkit-align-self": "align-self",
+    "-webkit-flex": "flex",
+    "-webkit-flex-basis": "flex-basis",
+    "-webkit-flex-direction": "flex-direction",
+    "-webkit-flex-flow": "flex-flow",
+    "-webkit-flex-grow": "flex-grow",
+    "-webkit-flex-shrink": "flex-shrink",
+    "-webkit-flex-wrap": "flex-wrap",
+    "-webkit-justify-content": "justify-content",
+    "-webkit-order": "order"
+  };
+
   function setEntryWithShorthand(map, key, rawName, normV, pri) {
-    if (key === "-webkit-appearance") {
-      setEntryInStyleMap(map, "appearance", "appearance", normV, pri);
+    if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+      const target = LEGACY_CSS_ALIASES[key];
+      setEntryWithShorthand(map, target, target, normV, pri);
       return;
     }
     if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
@@ -384,11 +404,10 @@ function createStyleProxy(element) {
   }
 
   function removeKeyWithShorthand(map, key) {
-    let prev = removeKeyFromStyleMap(map, key);
-    if (key === "-webkit-appearance") {
-      const p = removeKeyFromStyleMap(map, "appearance");
-      if (!prev && p) prev = p;
+    if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
+      return removeKeyWithShorthand(map, LEGACY_CSS_ALIASES[key]);
     }
+    let prev = removeKeyFromStyleMap(map, key);
     if (!key.startsWith("--") && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
       const lhs = globalThis.__capsurf_shorthandLonghands[key];
       for (let i = 0; i < lhs.length; i++) {

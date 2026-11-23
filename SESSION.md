@@ -7378,3 +7378,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 539 (`text-spacing: auto` 简写序列化与计算值收尾)
 - **[Agent]**: 完成 Phase 539：修复 `text-spacing: auto` 展开为 `auto auto` 后回写序列化返回 `"auto"`（避免 `text-autospace` 误处理双 `auto`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 540 (`flex`/`flex-basis` `calc(sign(cqw))` 与 `-webkit-*` Flexbox 别名映射)
+- **[Agent]**: 完成 Phase 540：`flex` 简写与 `flex-grow`/`flex-shrink` 支持纯数字 `calc()`（含 `sign(20cqw - 10px)`），`flex-basis` 支持 `calc(10% + 0px) -> 10%` 并保留 `calc(0% + 10px)`；在 `element.js` 与 `cssom.js` 建立 `LEGACY_CSS_ALIASES` 映射表统一处理 12 个 `-webkit-*` Flexbox 别名。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

@@ -7143,10 +7143,92 @@ function installWindow(global) {
     const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
     for (let i = 0; i < nonNegLenProps.length; i++) {
       const nk = nonNegLenProps[i];
-      const nv = (computedMap.get(nk) || "").trim().toLowerCase();
+      let nv = (computedMap.get(nk) || "").trim().toLowerCase();
+      if (nv && nv.indexOf("sign(") !== -1 && /^calc\(/i.test(nv)) {
+        let cw = 800, cur = element && element.parentElement;
+        while (cur) {
+          const pMap = collectRawComputedMap(cur, "");
+          const ct = (pMap.get("container-type") || "").toLowerCase();
+          if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+            const wm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec((pMap.get("width") || "").trim());
+            if (wm) { cw = Number(wm[1]); break; }
+          }
+          cur = cur.parentElement;
+        }
+        nv = nv.replace(/sign\(([^()]+)\)/gi, (full, inn) => {
+          const r = inn
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize));
+          if (/^[\d+\-*/().\s]+$/.test(r)) {
+            try {
+              const v = Function("return (" + r + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+            } catch (_) {}
+          }
+          return full;
+        });
+      }
       if (nv && nv !== "auto" && nv !== "none" && nv !== "normal" && nv !== "min-content" && nv !== "max-content" && nv !== "fit-content" && nv.indexOf("%") === -1) {
         const px = evalCssLengthExpr(nv, 0, fontSize);
         if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
+      } else if (nk === "flex-basis" && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
+        const inn = nv.slice(5, -1).trim();
+        const evalL = (pv, xv) => {
+          const e = inn
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pv))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * xv))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * xv));
+          if (/^[\d+\-*/().\s]+$/.test(e)) {
+            try {
+              const v = Function("return (" + e + ")")();
+              if (typeof v === "number" && isFinite(v)) return v;
+            } catch (_) {}
+          }
+          return null;
+        };
+        const pxC = evalL(0, 1);
+        const pctC = evalL(1, 0);
+        if (pxC !== null && pctC !== null) {
+          const pR = Number(pctC.toFixed(6));
+          const xR = Number(pxC.toFixed(6));
+          if (xR === 0) computedMap.set(nk, String(pR) + "%");
+          else computedMap.set(nk, "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")");
+        }
+      }
+    }
+    for (const fk of ["flex-grow", "flex-shrink"]) {
+      const fv = (computedMap.get(fk) || "").trim();
+      if (fv && /^calc\(/i.test(fv)) {
+        let cw = 800, cur = element && element.parentElement;
+        while (cur) {
+          const pMap = collectRawComputedMap(cur, "");
+          const ct = (pMap.get("container-type") || "").toLowerCase();
+          if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+            const wm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec((pMap.get("width") || "").trim());
+            if (wm) { cw = Number(wm[1]); break; }
+          }
+          cur = cur.parentElement;
+        }
+        const rep = fv.slice(5, -1).replace(/sign\(([^()]+)\)/gi, (full, inn) => {
+          const r = inn
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize));
+          if (/^[\d+\-*/().\s]+$/.test(r)) {
+            try {
+              const v = Function("return (" + r + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+            } catch (_) {}
+          }
+          return full;
+        });
+        if (/^[\d+\-*/().\s]+$/.test(rep)) {
+          try {
+            const v = Function("return (" + rep + ")")();
+            if (typeof v === "number" && isFinite(v)) computedMap.set(fk, String(Math.max(0, Number(v.toFixed(6)))));
+          } catch (_) {}
+        }
       }
     }
     const radProps = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];

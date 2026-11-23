@@ -102,6 +102,9 @@
     // Vendor prefixed
     "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
     "-webkit-user-select", "-webkit-box-sizing", "-webkit-appearance", "-webkit-line-clamp",
+    "-webkit-align-content", "-webkit-align-items", "-webkit-align-self", "-webkit-flex",
+    "-webkit-flex-basis", "-webkit-flex-direction", "-webkit-flex-flow", "-webkit-flex-grow",
+    "-webkit-flex-shrink", "-webkit-flex-wrap", "-webkit-justify-content", "-webkit-order",
     "-webkit-box-orient", "-webkit-box-direction", "-webkit-background-clip",
     "-moz-animation", "-moz-transform", "-moz-user-select", "-moz-box-sizing", "-moz-appearance"
   ]);
@@ -770,11 +773,29 @@
       }
       return true;
     }
+    const FLEX_ALIASES = {
+      "-webkit-align-content": "align-content",
+      "-webkit-align-items": "align-items",
+      "-webkit-align-self": "align-self",
+      "-webkit-flex": "flex",
+      "-webkit-flex-basis": "flex-basis",
+      "-webkit-flex-direction": "flex-direction",
+      "-webkit-flex-flow": "flex-flow",
+      "-webkit-flex-grow": "flex-grow",
+      "-webkit-flex-shrink": "flex-shrink",
+      "-webkit-flex-wrap": "flex-wrap",
+      "-webkit-justify-content": "justify-content",
+      "-webkit-order": "order"
+    };
+    if (Object.prototype.hasOwnProperty.call(FLEX_ALIASES, prop)) {
+      return isValidCssValue(FLEX_ALIASES[prop], value);
+    }
     if (prop === "flex") {
       const toks = splitCssTokens(vLower);
       if (toks.length === 1 && toks[0] === "none") return true;
       if (toks.length < 1 || toks.length > 3) return false;
-      const isFlexNum = (t) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0;
+      const isFlexNum = (t) => (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0) ||
+        (/^(?:calc|min|max|clamp)\(/i.test(t) && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(t.replace(/sign\([^()]+\)/gi, "")));
       const isFlexBasis = (t) => {
         if (t === "auto" || t === "content" || t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch" || /^fit-content\(/i.test(t)) return true;
         if (/^(?:calc|min|max|clamp)\(/i.test(t)) return /(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(t);
@@ -966,7 +987,7 @@
       if (autoToks.length > 0) {
         if (normalCount > 1 || (trimCount === 1 && normalCount > 0)) return false;
         if (autoToks.length === 1 && autoToks[0] === "no-autospace") return true;
-        return declSupported("text-autospace", autoToks.join(" "));
+        return isValidCssValue("text-autospace", autoToks.join(" "));
       }
       return (trimCount + normalCount) <= 2;
     }
@@ -1847,7 +1868,19 @@
       return [w, st, c].filter(Boolean).join(" ");
     }
     if (key === "flex") {
-      const parts = splitCssTokens(s);
+      const normCalcTok = (t) => {
+        if (!/^calc\(/i.test(t)) return t;
+        let out = t.replace(/(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|%)?)/gi, "$2 * $1");
+        const inn = out.slice(5, -1).trim();
+        if (/^[\d+\-*/().\s]+$/.test(inn)) {
+          try {
+            const v = Function("return (" + inn + ")")();
+            if (typeof v === "number" && isFinite(v)) return "calc(" + String(Number(v.toFixed(6))) + ")";
+          } catch (_) {}
+        }
+        return out;
+      };
+      const parts = splitCssTokens(s).map(normCalcTok);
       if (parts.length === 1) {
         const p0 = parts[0].toLowerCase();
         if (p0 === "none") return "0 0 auto";
@@ -1857,13 +1890,15 @@
         }
         return "1 1 " + (p0 === "0" ? "0px" : parts[0]);
       }
-      const isNum = (x) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x);
+      const isNum = (x) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x) ||
+        (/^(?:calc|min|max|clamp)\(/i.test(x) && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(x.replace(/sign\([^()]+\)/gi, "")));
       let grow = "1", shrink = "1", basis = "0%";
       const nums = [];
       let bRaw = "";
       for (let i = 0; i < parts.length; i++) {
-        if (isNum(parts[i]) && !(nums.length === 2 && parts[i] === "0")) nums.push(String(Number(parts[i])));
-        else bRaw = parts[i];
+        if (isNum(parts[i]) && !(nums.length === 2 && parts[i] === "0")) {
+          nums.push(/^(?:calc|min|max|clamp)\(/i.test(parts[i]) ? parts[i] : String(Number(parts[i])));
+        } else bRaw = parts[i];
       }
       if (nums.length >= 1) grow = nums[0];
       if (nums.length >= 2) shrink = nums[1];

@@ -2580,3 +2580,6 @@
 
 ### Phase 539: `text-spacing: auto` 简写反序列化
 - `serializeExpandedShorthand("text-spacing")` 与 `normalizeCssSpecifiedValue("text-spacing")` 显式识别 `auto auto -> auto`，补齐 `text-spacing-{valid,computed}` 最后 1 个用例。
+
+### Phase 540: `flex` `calc(sign(cqw))`、`flex-basis` 与 `-webkit-*` Flexbox 别名
+- `element.js` 抽离 `LEGACY_CSS_ALIASES` 统一重定向 `-webkit-*` 读写删与简写展开；`flex-basis` 仅在偏移量为 `0px` 时化简 `calc(P% + 0px) -> P%`，保留 `calc(0% + 10px)`。
