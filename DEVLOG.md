@@ -2541,3 +2541,4 @@
 - **Phase 522**: 修复 `transition-behavior` 单值表误拒 `normal, normal` 导致 `transition-shorthand` round-trip 失败的问题，并补齐 `*-timing-function` 非法参数校验。
 - **Phase 523**: 补齐 `transition` 非法值校验及 `getComputedStyle().transition` 计算值序列化，同时修复 shorthand 设 `initial` 后子属性未回退默认值的边界。
 - **Phase 524**: 修复 shorthand 设置 `initial`/`inherit` 等全局关键字后反向序列化未折叠回全局关键字的问题。
+- **Phase 525**: 补齐 `animation-composition` 与 `animation-name` 校验及 `<keyframes-name>` 序列化，修复引号关键字与多词字符串标识符转换。

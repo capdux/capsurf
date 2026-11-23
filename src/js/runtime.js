@@ -5010,6 +5010,30 @@
         const toks = splitCssTokens(vLower);
         return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
       }
+      if (prop === "animation-composition") {
+        const items = splitTopLevelComma(vLower);
+        if (items.length === 0) return false;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i] !== "replace" && items[i] !== "add" && items[i] !== "accumulate") return false;
+        }
+        return true;
+      }
+      if (prop === "animation-name") {
+        const items = splitTopLevelComma(trimmed);
+        if (items.length === 0) return false;
+        const BAD = new Set(["initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i]);
+          if (toks.length !== 1) return false;
+          const t = toks[0], tl = t.toLowerCase();
+          if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+            if (t.length <= 2) return false;
+            continue;
+          }
+          if (BAD.has(tl) || !/^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+        }
+        return true;
+      }
       if (prop === "transition") {
         const items = splitTopLevelComma(trimmed);
         if (items.length === 0) return false;
@@ -5667,6 +5691,19 @@
         if (p.length === 1 && (p[0] === "normal" || p[0] === "none")) return p[0];
         const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
         return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "animation-name") {
+        const RESTRICTED = new Set(["none", "initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+        return splitTopLevelComma(s).map((part) => {
+          if ((part.startsWith('"') && part.endsWith('"')) || (part.startsWith("'") && part.endsWith("'"))) {
+            const inner = part.slice(1, -1).replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, hex) => {
+              try { return String.fromCodePoint(parseInt(hex, 16)); } catch (_) { return _; }
+            });
+            if (RESTRICTED.has(inner.toLowerCase())) return '"' + inner + '"';
+            return inner.replace(/([ "\'\\])/g, "\\$1");
+          }
+          return part.toLowerCase() === "none" ? "none" : part;
+        }).join(", ");
       }
       if (key === "transition-property") {
         return s.split(",").map((part) => {
@@ -39978,7 +40015,7 @@
       }
       if (typeof global.__capsurf_normalizeCssValue === "function") {
         const canonComputedProps = [
-          "counter-reset", "counter-increment", "counter-set",
+          "counter-reset", "counter-increment", "counter-set", "animation-name",
           "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
           "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
           "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
@@ -39992,7 +40029,7 @@
     }
 
     const STANDARD_COMPUTED_LONGHANDS = [
-      "align-content", "align-items", "align-self", "animation-delay", "animation-direction",
+      "align-content", "align-items", "align-self", "animation-composition", "animation-delay", "animation-direction",
       "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
       "animation-play-state", "animation-timing-function", "appearance", "aspect-ratio",
       "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",

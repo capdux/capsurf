@@ -1405,3 +1405,13 @@
 - `/css/css-lists/parsing/`: 23 total | 17 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **52 PASS / 21 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B274 (port=19700, Phase 524 verification, 49 tests)
+- `/css/css-transitions/parsing/`: **14 / 14 PASS (100% ALL GREEN!)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | 18 PASS | 17 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **32 PASS / 17 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B275 (port=19700, Phase 524 verification, 58 tests)
+- `/css/css-text-decor/parsing/`: 31 total | 25 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | 23 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **48 PASS / 10 FAIL / 0 TIMEOUT / 0 CRASH**

@@ -7267,7 +7267,7 @@ function installWindow(global) {
     }
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [
-        "counter-reset", "counter-increment", "counter-set",
+        "counter-reset", "counter-increment", "counter-set", "animation-name",
         "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
         "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
         "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
@@ -7281,7 +7281,7 @@ function installWindow(global) {
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
-    "align-content", "align-items", "align-self", "animation-delay", "animation-direction",
+    "align-content", "align-items", "align-self", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
     "animation-play-state", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
