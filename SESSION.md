@@ -7316,3 +7316,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 512 完成 (`flex-basis` 拒绝 `anchor-size` + `text-decoration` 完整规范序列化)**：在 `src/js/shim/cssom.js` 中限制 `flex-basis` 拒绝 `anchor(...)`/`anchor-size(...)`；完善 `text-decoration` 校验放行 `auto` 并在序列化时按 `underline overline line-through blink` 排序且省略默认 `solid`/`auto`/`currentcolor`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
 
 - **Phase 513 完成 (`block-ellipsis` / `continue` / `max-lines` 对齐 CSS Overflow 4)**：在 `src/js/shim/cssom.js` 将 `continue` 更新为 `normal | discard | collapse | -webkit-legacy`、`max-lines` 拒绝 `none`、`block-ellipsis` 更新为 `no-ellipsis | ellipsis | <string>`；`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
+
+- **Phase 514 完成 (`outline` & `column-rule` shorthand 展开与规范序)**：在 `src/js/shim/cssom.js` 修复 `outline` 规范化序为 `color style width`（省略默认 `currentcolor`/`none`/`medium`），并在 `expandCssShorthand` / `SHORTHAND_EXPAND_LONGHANDS` / `serializeExpandedShorthand` 补充 `outline` 与 `column-rule`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。

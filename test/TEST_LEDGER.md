@@ -1281,3 +1281,25 @@
 - `/css/css-text-decor/parsing/`: 31 total | **25 PASS (up from 24, `text-decoration-valid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-flexbox/parsing/`: 27 total | **23 PASS (up from 22, `flex-basis-invalid` green!)** | 4 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **48 PASS / 10 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 154 (port=19386, Phase 511 verification, 76 tests)
+- `page-check.spec.ts`: **16 / 16 PASS (100%)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-focus.spec.ts`: **6 / 7 PASS (+1 unexpected pass!)** | 1 FAIL (`should emit blur event`) | 0 TIMEOUT | 0 SKIP
+- `page-fill.spec.ts`: 25 PASS | 1 FAIL | 14 TIMEOUT | 0 SKIP
+- `page-history.spec.ts`: **10 / 13 PASS (+1 unexpected pass!)** | 0 FAIL | 3 TIMEOUT | 0 SKIP
+- Totals: **57 PASS / 2 FAIL / 17 TIMEOUT / 0 SKIP**
+
+### WPT-B252 (port=19700, Phase 513 verification, 37 tests)
+- `/css/css-overflow/parsing/`: 32 total | **16 PASS (up from 11, `block-ellipsis-*`, `continue-*`, `max-lines-invalid` green!)** | 16 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-display/parsing/`: 5 total | 1 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **17 PASS / 20 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B253 (port=19700, Phase 513 verification, 84 tests)
+- `/css/css-ui/parsing/`: 39 total | 25 PASS | 13 FAIL | 1 TIMEOUT | 0 CRASH
+- `/css/css-borders/tentative/parsing/`: 45 total | **13 PASS (+13 FAIL→PASS!)** | 32 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **38 PASS / 45 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B254 (port=19700, Phase 513 verification, 40 tests)
+- `/css/css-break/parsing/`: 18 total | **16 PASS (+2 FAIL→PASS, 0 regressions!)** | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-position/parsing/`: **22 / 22 PASS (100% ALL GREEN!)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **38 PASS / 2 FAIL / 0 TIMEOUT / 0 CRASH**

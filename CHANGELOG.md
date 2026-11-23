@@ -3467,3 +3467,5 @@
   - `src/js/shim/cssom.js`: `flex-basis` 拒绝 `anchor`/`anchor-size`；`text-decoration` 校验放行 `auto` 并实现完整排序与默认值省略序列化。
 - **Phase 513**:
   - `src/js/shim/cssom.js`: 对齐 CSS Overflow 4 最新 `continue`、`max-lines`、`block-ellipsis` 语法校验。
+- **Phase 514**:
+  - `src/js/shim/cssom.js`: 修复 `outline` 规范化序（`color style width`），补充 `outline` 与 `column-rule` 无残留 shorthand 展开与反向序列化。

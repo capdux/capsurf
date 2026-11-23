@@ -5278,6 +5278,12 @@
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
           } else c = t;
         }
+        if (key === "outline") {
+          const oc = c.toLowerCase() === "currentcolor" ? "" : c;
+          const ost = st === "none" ? "" : st;
+          const ow = w === "medium" ? "" : w;
+          return [oc, ost, ow].filter(Boolean).join(" ") || "none";
+        }
         return [w, st, c].filter(Boolean).join(" ");
       }
       if (key === "flex") {
@@ -5650,6 +5656,21 @@
         if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
         if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
       }
+      if (key === "outline" || key === "column-rule") {
+        const p = splitCssTokens(normV);
+        const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
+        let w = "medium", st = "none", c = "currentcolor";
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (STY.has(tl)) st = tl;
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+            w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+          } else c = t;
+        }
+        return key === "outline"
+          ? [["outline-color", c], ["outline-style", st], ["outline-width", w]]
+          : [["column-rule-width", w], ["column-rule-style", st], ["column-rule-color", c]];
+      }
       return null;
     }
     global.__capsurf_expandShorthand = expandCssShorthand;
@@ -5664,6 +5685,8 @@
       "flex-flow": ["flex-direction", "flex-wrap"],
       flex: ["flex-grow", "flex-shrink", "flex-basis"],
       "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
+      outline: ["outline-color", "outline-style", "outline-width"],
+      "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
       "grid-gap": ["row-gap", "column-gap"]
@@ -5703,6 +5726,18 @@
       if (key === "text-emphasis") {
         if (vals[1] === "currentcolor") return vals[0];
         return vals[0] + " " + vals[1];
+      }
+      if (key === "outline") {
+        const oc = vals[0].toLowerCase() === "currentcolor" ? "" : vals[0];
+        const ost = vals[1] === "none" ? "" : vals[1];
+        const ow = vals[2] === "medium" ? "" : vals[2];
+        return [oc, ost, ow].filter(Boolean).join(" ") || "none";
+      }
+      if (key === "column-rule") {
+        const cw = vals[0] === "medium" ? "" : vals[0];
+        const cst = vals[1] === "none" ? "" : vals[1];
+        const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
+        return [cw, cst, cc].filter(Boolean).join(" ") || "none";
       }
       return vals.join(" ");
     }

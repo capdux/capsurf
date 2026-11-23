@@ -2530,3 +2530,4 @@
 - **Phase 511**: 打通 `splitCssTokens` 对反斜杠转义空格（如 `a\ 8`）的切分，以及 `flex` 3 参数中第 2 参为 `0` 时的解析边界。
 - **Phase 512**: 补齐 `text-decoration` 校验中的 `auto` 厚度关键字并按标准顺序规范化，消除 `underline auto` 被误拒及 `double overline underline` 序乱问题。
 - **Phase 513**: 修复 `css-overflow` 中 `continue`、`max-lines`、`block-ellipsis` 沿用旧版 `none`/`auto` 导致 `*-invalid` 失败的问题。
+- **Phase 514**: 打通 `outline-shorthand`/`outline-valid` 与 `column-rule-shorthand`，统一 `outline` 规范序列化与默认值省略。
