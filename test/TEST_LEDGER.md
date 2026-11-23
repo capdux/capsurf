@@ -1482,3 +1482,6 @@
 
 ### WPT-B289 (bin_dev Phase 534, 2026-11-23)
 - **Filter `/css/css-text-decor/parsing/`**: `31` files (**30 PASS / 1 FAIL / 0 TIMEOUT / 0 ERROR**, `0` unexpected FAIL, `4` unexpected PASS: `text-decoration-inset-valid` 16/16, `text-decoration-skip-spaces-{computed,valid}`, `text-emphasis-style-computed-vertical-lr`; `text-decoration-color-computed` 3/3 all green!). Only `text-decoration-inset-computed` (9/16) remained, fixed in Phase 535.
+
+### WPT-B290 (bin_dev Phase 535, 2026-11-23)
+- **Filter `/css/css-text-decor/parsing/`**: `31` files (**31 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `26` matched expectations, `5` unexpected PASS; **100% ALL GREEN**!).

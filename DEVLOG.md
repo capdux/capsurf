@@ -2568,3 +2568,6 @@
 
 ### Phase 535: `font` 简写字号兜底与 `text-decoration-inset` 括号分词
 - 仅设 `font: 20px Ahem` 时需在 `applyUsedValuesToComputedMap` 提取 `font-size` 并识别 `Ahem`（`1ch === fontSize`），同时按括号深度切分 `calc(...)` 复合表达式。
+
+### Phase 536: `text-fit` / `text-group-align` / `word-space-transform` 与 `hyphenate-limit-chars` `calc()`
+- 补充 `text-fit`、`text-group-align`、`word-space-transform` 到 `STANDARD_CSS_PROPERTIES` 与 `STANDARD_COMPUTED_LONGHANDS`，严格校验非法组合并给出默认计算值 `"none"`。

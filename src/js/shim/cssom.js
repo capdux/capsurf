@@ -90,7 +90,7 @@
     "text-align", "text-align-last", "text-combine-upright", "text-decoration",
     "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
     "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
-    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-indent",
+    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent",
     "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow",
     "text-transform", "text-underline-offset", "text-underline-position",
     "text-wrap", "text-wrap-mode", "text-wrap-style", "top",
@@ -98,7 +98,7 @@
     "transition", "transition-behavior", "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "unicode-range",
     "user-select", "vertical-align", "visibility", "white-space", "white-space-collapse", "widows", "width",
-    "will-change", "word-break", "word-spacing", "word-wrap", "writing-mode", "z-index",
+    "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap", "writing-mode", "z-index",
     // Vendor prefixed
     "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
     "-webkit-user-select", "-webkit-box-sizing", "-webkit-appearance", "-webkit-line-clamp",
@@ -290,6 +290,7 @@
       "text-align-all": ["start", "end", "left", "right", "center", "justify", "match-parent"],
       "text-align-last": ["auto", "start", "end", "left", "right", "center", "justify", "match-parent"],
       "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
+      "text-group-align": ["none", "start", "end", "left", "right", "center"],
       "text-wrap-mode": ["wrap", "nowrap"],
       "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
       "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
@@ -894,9 +895,41 @@
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > 3) return false;
       for (let i = 0; i < toks.length; i++) {
-        if (toks[i] !== "auto" && !/^(?:\+?\d+)$/.test(toks[i])) return false;
+        if (toks[i] !== "auto" && !/^(?:\+?\d+)$/.test(toks[i]) && !/^(?:calc|min|max|clamp)\(/i.test(toks[i])) return false;
       }
       return true;
+    }
+    if (prop === "text-fit") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 0 || toks.length > 3) return false;
+      if (toks.length === 1 && toks[0] === "none") return true;
+      let idx = 0;
+      if (toks[idx] !== "grow" && toks[idx] !== "shrink") return false;
+      idx++;
+      if (idx < toks.length && (toks[idx] === "consistent" || toks[idx] === "per-line" || toks[idx] === "per-line-all")) {
+        idx++;
+      }
+      if (idx < toks.length) {
+        const pt = toks[idx];
+        if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(pt) && !/^(?:calc|min|max|clamp)\(/i.test(pt)) return false;
+        idx++;
+      }
+      return idx === toks.length;
+    }
+    if (prop === "word-space-transform") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 0 || toks.length > 2) return false;
+      if (toks.length === 1 && toks[0] === "none") return true;
+      let seenMain = false, seenAutoPhrase = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "space" || t === "ideographic-space") {
+          if (seenMain) return false; seenMain = true;
+        } else if (t === "auto-phrase") {
+          if (seenAutoPhrase) return false; seenAutoPhrase = true;
+        } else return false;
+      }
+      return seenMain;
     }
     if (prop === "hanging-punctuation") {
       const toks = splitCssTokens(vLower);
@@ -2142,9 +2175,14 @@
       return s;
     }
     if (key === "hyphenate-limit-chars") {
-      const p = splitCssTokens(s.toLowerCase()).map((t) => (t === "auto" ? "auto" : String(parseInt(t, 10))));
+      const p = splitCssTokens(s.toLowerCase()).map((t) => (t === "auto" ? "auto" : (/^\+?\d+$/.test(t) ? String(parseInt(t, 10)) : t)));
       if (p.length === 3 && p[2] === p[1]) p.pop();
       if (p.length === 2 && p[0] === "auto" && p[1] === "auto") return "auto";
+      return p.join(" ");
+    }
+    if (key === "word-space-transform") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && p[0] === "auto-phrase") return p[1] + " auto-phrase";
       return p.join(" ");
     }
     if (key === "hanging-punctuation") {

@@ -7572,6 +7572,23 @@ function installWindow(global) {
     }
     if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
       computedMap.set("hyphenate-limit-chars", "auto");
+    } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
+      const parts = computedMap.get("hyphenate-limit-chars").split(/\s+/).filter(Boolean).map((t) => {
+        if (/^calc\(/i.test(t)) {
+          const inn = t.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inn)) {
+            try {
+              const v = Function("return (" + inn + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.max(0, Math.round(v)));
+            } catch (_) {}
+          }
+        }
+        return t;
+      });
+      computedMap.set("hyphenate-limit-chars", parts.join(" "));
+    }
+    for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
+      if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
     }
     if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
       computedMap.set("hanging-punctuation", "none");
@@ -7634,13 +7651,13 @@ function installWindow(global) {
     "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
     "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
     "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
-    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-transform",
+    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-transform",
     "text-underline-offset", "text-underline-position",
     "text-wrap", "text-wrap-mode", "text-wrap-style",
     "top", "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
     "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "user-select", "vertical-align",
-    "visibility", "white-space", "white-space-collapse", "widows", "width", "will-change", "word-break", "word-spacing", "word-wrap",
+    "visibility", "white-space", "white-space-collapse", "widows", "width", "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap",
     "writing-mode", "z-index"
   ];
 

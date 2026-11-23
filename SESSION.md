@@ -7366,3 +7366,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 535 (`font` 简写 `font-size` 提取与 `text-decoration-inset` 括号安全切分)
 - **[Agent]**: 完成 Phase 535：在 `applyUsedValuesToComputedMap` 从 `font` 简写兜底提取 `font-size`（支撑 `font: 20px Ahem` 场景下的 `em`/`ch` 计算），并将 `text-decoration-inset` 分词改为括号深度感知切分（修复 `calc(10% + 1ch) calc(-20%)` 计算值为 `calc(10% + 20px) -20%`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 536 (`text-fit`/`text-group-align`/`word-space-transform` 与 `hyphenate-limit-chars calc()`)
+- **[Agent]**: 完成 Phase 536：新增 `text-fit`、`text-group-align`、`word-space-transform` 校验/规范化/计算默认值；支持 `hyphenate-limit-chars` 内部 `calc(...)` 四舍五入取整（`5 2 calc(3.1) -> 5 2 3`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
