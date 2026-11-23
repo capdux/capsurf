@@ -734,6 +734,50 @@
       }
       return true;
     }
+    if (prop === "translate") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      if (toks.length < 1 || toks.length > 3) return false;
+      if (!isValidLenPct(toks[0], true)) return false;
+      if (toks.length >= 2 && !isValidLenPct(toks[1], true)) return false;
+      if (toks.length === 3) {
+        const t3 = toks[2];
+        if (t3.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t3) && t3.includes("%"))) return false;
+        if (!isValidLenPct(t3, true)) return false;
+      }
+      return true;
+    }
+    if (prop === "text-indent") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 3) return false;
+      let seenLen = false, seenHang = false, seenEach = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "hanging") { if (seenHang) return false; seenHang = true; }
+        else if (t === "each-line") { if (seenEach) return false; seenEach = true; }
+        else if (isValidLenPct(t, true)) { if (seenLen) return false; seenLen = true; }
+        else return false;
+      }
+      return seenLen;
+    }
+    if (prop === "white-space") {
+      const SINGLE = new Set(["normal", "pre", "nowrap", "pre-wrap", "break-spaces", "pre-line"]);
+      const COL = new Set(["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"]);
+      const WRP = new Set(["wrap", "nowrap"]);
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return SINGLE.has(toks[0]);
+      if (toks.length === 2) {
+        return (COL.has(toks[0]) && WRP.has(toks[1])) || (WRP.has(toks[0]) && COL.has(toks[1]));
+      }
+      return false;
+    }
+    if (prop === "outline-offset") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
+      return isValidLenPct(t, true);
+    }
 
     return true;
   }

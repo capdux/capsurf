@@ -2375,3 +2375,7 @@
 ### Phase 466: CSSOM 复合简写与独立变换属性校验
 - 为 `flex` 简写区分无单位数字与带长度/百分比的 `calc(...)`，拦截 `1 2 calc(0)` 与 `2 3 4` 等三数字非法组合。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 467: CSSOM `translate` / `text-indent` / `white-space` / `outline-offset` 语法门禁
+- `translate` 第 3 维 Z 轴仅允许 `<length>`，显式拦截 `100px 200px 300%` 与 `calc(30px + 30%)`。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

@@ -966,3 +966,20 @@
 - `/css/css-transforms/parsing/ --shard 1/2`: 14 total | 1 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-multicol/parsing/`: 31 total | 9 PASS | 22 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **36 PASS / 58 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B207 (port=19700, 49 tests, 23/49 matched)
+- `/css/css-animations/parsing/`: 35 total | 17 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transitions/parsing/`: 14 total | 5 PASS | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **22 PASS / 27 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B208 (port=19700, 69 tests, 55/69 matched)
+- `/css/css-box/parsing/`: 29 total | 22 PASS | 7 FAIL | 0 TIMEOUT | 0 CRASH (`clear-computed`, `float-computed`, `visibility-computed` recovered!)
+- `/css/css-break/parsing/`: 18 total | 16 PASS | 2 FAIL | 0 TIMEOUT | 0 CRASH (0 unexpected failures! `FAIL→PASS`: `orphans-valid`, `widows-valid`; all `*-computed` recovered!)
+- `/css/css-position/parsing/`: 22 total | 15 PASS | 7 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **53 PASS / 16 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B209 (port=19700, 94 tests, 42/94 matched)
+- `/css/css-backgrounds/parsing/ --shard 2/2`: 37 total | 10 PASS | 27 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/ --shard 2/2`: 43 total | 23 PASS | 20 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: 7 — `hanging-punctuation-valid`, `text-align-all-valid`, `text-align-valid`, `text-fit-valid`, `text-group-align-valid`, `text-spacing-trim-valid`, `word-space-transform-valid`)
+- `/css/css-transforms/parsing/ --shard 2/2`: 14 total | 3 PASS | 11 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **36 PASS / 58 FAIL / 0 TIMEOUT / 0 CRASH**

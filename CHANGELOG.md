@@ -3182,3 +3182,11 @@
   - `rotate`: 支持 `none`、单角度、轴+角度、3 向量+角度（正反序）。
   - `scale`: 支持 `none` 或 1~3 个 `<number> | <percentage>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 467: CSSOM `translate`, `text-indent`, `white-space`, `outline-offset` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `translate`: 支持 `none` 及 1~3 维偏移，第 3 维（Z 轴）严格拒绝 `%` 及含 `%` 的 `calc`。
+  - `text-indent`: 校验 `[ <length-percentage> ] && hanging? && each-line?`，拒绝裸关键字、重复修饰及多长度。
+  - `white-space`: 支持 CSS Text 3 单关键字与 CSS Text 4 `<white-space-collapse> || <text-wrap-mode>` 双值组合，拒绝 `balance`/`pretty`/`auto` 等。
+  - `outline-offset`: 校验 `<length>`（允许负值，拒绝 `%`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
