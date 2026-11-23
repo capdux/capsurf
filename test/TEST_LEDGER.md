@@ -946,3 +946,9 @@
 - `/css/css-break/ --shard 3/4`: 52 total | 39 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH (`PASS→FAIL`: 7)
 - `/css/css-break/ --shard 4/4`: 52 total | 37 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH (`PASS→FAIL`: 8)
 - Totals: **125 PASS / 46 FAIL / 1 TIMEOUT / 0 CRASH** (27 `PASS→FAIL`, 1 `PASS→TIMEOUT`, 1 `FAIL→PASS`)
+
+### WPT-B204 (port=19700, 104 tests, 39/104 matched)
+- `/css/css-cascade/ --shard 1/2`: 45 total | 20 PASS | 24 FAIL | 0 TIMEOUT | 1 ERROR (`all-prop-revert-layer.html`)
+- `/css/css-cascade/ --shard 2/2`: 45 total | 16 PASS | 27 FAIL | 2 TIMEOUT | 0 CRASH (`FAIL→PASS`: `layer-counter-style-override.html`)
+- `/css/css-color/ --shard 1/4`: 14 total | 1 PASS | 10 FAIL | 3 TIMEOUT | 0 CRASH
+- Totals: **37 PASS / 61 FAIL / 5 TIMEOUT / 1 ERROR**

@@ -2351,3 +2351,7 @@
 ### Phase 460: CSSOM 边框样式与背景多层语法门禁
 - 对 `background-repeat` 实行逗号分层 + 单/双 token 分支校验，有效拦截 `repeat repeat-x`、`repeat-y round` 与 3+ token 非法组合。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 461: CSSOM Flexbox / Align / Inset 语法门禁
+- `flex-grow` 采纳 CSS Values 规范数字格式，拒绝 `1.` 这类带孤立小数点的输入。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

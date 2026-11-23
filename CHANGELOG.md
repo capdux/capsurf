@@ -3136,3 +3136,12 @@
   - `background-repeat`: 按逗号分层校验，单 token 支持 `repeat-x`/`repeat-y`，双 token 仅允许 `repeat | space | round | no-repeat`。
   - `background-attachment` / `background-clip` / `background-origin`: 按逗号分层校验单关键字（`clip` 额外允许 `text`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 461: CSSOM `flex-grow`, `flex-shrink`, `order`, `flex-basis`, `gap`, `inset*` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `flex-grow` / `flex-shrink`: 非负 `<number>`（严格要求 `\d+(?:\.\d+)?|\.\d+`，拒绝 `1.`、`2e3.4`、`-+5` 及负值）。
+  - `order`: `<integer>`（支持正负整数及数学/变量函数）。
+  - `flex-basis`: 支持 `content | auto | min-content | max-content | fit-content | stretch | fit-content(...) | <length-percentage [0,∞]>`。
+  - `row-gap` / `column-gap` / `gap` / `grid-*gap`: 校验 `normal | <length-percentage [0,∞]>`（单值 1 token，简写 1~2 token）。
+  - `top` / `right` / `bottom` / `left` / `inset*`: 校验 `auto | <length-percentage>`（支持负值）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -488,6 +488,49 @@
       }
       return true;
     }
+    if (prop === "flex-grow" || prop === "flex-shrink") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) return false;
+      return Number(t) >= 0;
+    }
+    if (prop === "order") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      return /^[+-]?\d+$/.test(t);
+    }
+    if (prop === "flex-basis") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t === "content" || t === "auto" || t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch") return true;
+      if (/^fit-content\(/i.test(t)) return true;
+      return isValidLenPct(t, false);
+    }
+    if (prop === "row-gap" || prop === "column-gap" || prop === "grid-row-gap" || prop === "grid-column-gap" || prop === "gap" || prop === "grid-gap") {
+      const maxN = (prop === "gap" || prop === "grid-gap") ? 2 : 1;
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > maxN) return false;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] !== "normal" && !isValidLenPct(toks[i], false)) return false;
+      }
+      return true;
+    }
+    if (prop === "top" || prop === "right" || prop === "bottom" || prop === "left" ||
+        prop === "inset-block-start" || prop === "inset-block-end" || prop === "inset-inline-start" || prop === "inset-inline-end" ||
+        prop === "inset" || prop === "inset-block" || prop === "inset-inline") {
+      const maxN = prop === "inset" ? 4 : ((prop === "inset-block" || prop === "inset-inline") ? 2 : 1);
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > maxN) return false;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] !== "auto" && !isValidLenPct(toks[i], true)) return false;
+      }
+      return true;
+    }
 
     return true;
   }
