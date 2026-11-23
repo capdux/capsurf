@@ -7471,6 +7471,35 @@ function installWindow(global) {
       });
       computedMap.set("animation-iteration-count", iterItems.join(", "));
     }
+    for (const ck of ["counter-reset", "counter-increment", "counter-set"]) {
+      const cv = computedMap.get(ck);
+      if (cv && (cv.indexOf("calc(") !== -1 || cv.indexOf("sign(") !== -1)) {
+        const toks = [];
+        let cur = "", dpt = 0;
+        for (let ci = 0; ci < cv.length; ci++) {
+          const ch = cv[ci];
+          if (ch === "(") dpt++;
+          else if (ch === ")" && dpt > 0) dpt--;
+          if (dpt === 0 && /\s/.test(ch)) { if (cur) { toks.push(cur); cur = ""; } }
+          else cur += ch;
+        }
+        if (cur) toks.push(cur);
+        const mapped = toks.map((t) => {
+          if (/^(?:calc|sign)\(/i.test(t)) {
+            const raw = /^calc\(/i.test(t) ? t.slice(5, -1) : t;
+            const inner = evalSignCalls(raw, element);
+            if (/^[\d+\-*/().\s]+$/.test(inner)) {
+              try {
+                const v = Function("return (" + inner + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Math.round(v));
+              } catch (_) {}
+            }
+          }
+          return t;
+        });
+        computedMap.set(ck, mapped.join(" "));
+      }
+    }
     const timeProps = ["transition-delay", "transition-duration", "animation-delay", "animation-duration"];
     for (let ti = 0; ti < timeProps.length; ti++) {
       const tk = timeProps[ti];
@@ -7913,11 +7942,16 @@ function installWindow(global) {
         if (tec === "currentcolor") tec = elColor;
         return tes + " " + tec;
       }
-      if (name === "list-style") {
-        const lsp = computedMap.get("list-style-position") || "outside";
-        const lsi = computedMap.get("list-style-image") || "none";
-        const lst = computedMap.get("list-style-type") || "disc";
-        return lsp + " " + lsi + " " + lst;
+      if (name === "list-style" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        const lDefs = {
+          "list-style-position": "outside",
+          "list-style-image": "none",
+          "list-style-type": "disc"
+        };
+        return globalThis.__capsurf_serializeShorthand("list-style", (lh) => {
+          const v = computedMap.get(lh);
+          return (!v || v === "initial" || v === "unset") ? lDefs[lh] : v;
+        });
       }
       return null;
     }

@@ -5484,7 +5484,11 @@
         let sPos = false, sImg = false, sType = false, noneCnt = 0;
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i], tl = t.toLowerCase();
-          if (tl === "inside" || tl === "outside") { if (sPos) return false; sPos = true; }
+          if (tl === "inside" || tl === "outside") {
+            if (!sPos) sPos = true;
+            else if (tl === "outside" && !sType) sType = true;
+            else return false;
+          }
           else if (tl === "none") { noneCnt++; if (noneCnt > 2) return false; }
           else if (/^(?:url|linear-gradient|radial-gradient|conic-gradient|image-set)\(/i.test(tl)) { if (sImg) return false; sImg = true; }
           else if (/^symbols\(/i.test(t)) { if (sType || !isValidSymbolsFn(t)) return false; sType = true; }
@@ -6151,17 +6155,21 @@
       }
       if (key === "list-style") {
         const parts = splitCssTokens(normV);
-        let pos = "outside", img = "none", typ = "disc", noneCnt = 0;
+        let pos = "outside", img = "none", typ = "disc", noneCnt = 0, hasPos = false, hasType = false;
         for (let i = 0; i < parts.length; i++) {
           const t = parts[i], tl = t.toLowerCase();
-          if (tl === "inside" || tl === "outside") pos = tl;
+          if ((tl === "inside" || tl === "outside") && !hasPos) { pos = tl; hasPos = true; }
           else if (tl === "none") noneCnt++;
-          else if (/^(?:url|linear-gradient|radial-gradient|conic-gradient|image-set)\(/i.test(tl)) img = t;
-          else typ = t;
+          else if (/^(?:url|linear-gradient|radial-gradient|conic-gradient|image-set)\(/i.test(tl)) {
+            img = /^url\(/i.test(tl) ? t : t.replace(/,\s*/g, ", ").replace(/#([0-9a-f]{3,8})\b/gi, (m) => normalizeSingleColor(m));
+          } else {
+            typ = normalizeCssSpecifiedValue("list-style-type", t);
+            hasType = true;
+          }
         }
         if (noneCnt >= 2) { img = "none"; typ = "none"; }
         else if (noneCnt === 1) {
-          if (img === "none" && typ === "disc") typ = "none";
+          if (!hasType && img === "none") typ = "none";
         }
         return [
           ["list-style-position", pos],
@@ -6414,8 +6422,8 @@
         const out = [];
         if (vals[0] !== "outside") out.push(vals[0]);
         if (vals[1] !== "none") out.push(vals[1]);
-        if (vals[2] !== "disc" || out.length === 0) out.push(vals[2]);
-        return out.join(" ");
+        if (vals[2] !== "disc") out.push(vals[2]);
+        return out.length > 0 ? out.join(" ") : "outside";
       }
       if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap") {
         return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
@@ -40733,6 +40741,35 @@
         });
         computedMap.set("animation-iteration-count", iterItems.join(", "));
       }
+      for (const ck of ["counter-reset", "counter-increment", "counter-set"]) {
+        const cv = computedMap.get(ck);
+        if (cv && (cv.indexOf("calc(") !== -1 || cv.indexOf("sign(") !== -1)) {
+          const toks = [];
+          let cur = "", dpt = 0;
+          for (let ci = 0; ci < cv.length; ci++) {
+            const ch = cv[ci];
+            if (ch === "(") dpt++;
+            else if (ch === ")" && dpt > 0) dpt--;
+            if (dpt === 0 && /\s/.test(ch)) { if (cur) { toks.push(cur); cur = ""; } }
+            else cur += ch;
+          }
+          if (cur) toks.push(cur);
+          const mapped = toks.map((t) => {
+            if (/^(?:calc|sign)\(/i.test(t)) {
+              const raw = /^calc\(/i.test(t) ? t.slice(5, -1) : t;
+              const inner = evalSignCalls(raw, element);
+              if (/^[\d+\-*/().\s]+$/.test(inner)) {
+                try {
+                  const v = Function("return (" + inner + ")")();
+                  if (typeof v === "number" && isFinite(v)) return String(Math.round(v));
+                } catch (_) {}
+              }
+            }
+            return t;
+          });
+          computedMap.set(ck, mapped.join(" "));
+        }
+      }
       const timeProps = ["transition-delay", "transition-duration", "animation-delay", "animation-duration"];
       for (let ti = 0; ti < timeProps.length; ti++) {
         const tk = timeProps[ti];
@@ -41175,11 +41212,16 @@
           if (tec === "currentcolor") tec = elColor;
           return tes + " " + tec;
         }
-        if (name === "list-style") {
-          const lsp = computedMap.get("list-style-position") || "outside";
-          const lsi = computedMap.get("list-style-image") || "none";
-          const lst = computedMap.get("list-style-type") || "disc";
-          return lsp + " " + lsi + " " + lst;
+        if (name === "list-style" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+          const lDefs = {
+            "list-style-position": "outside",
+            "list-style-image": "none",
+            "list-style-type": "disc"
+          };
+          return globalThis.__capsurf_serializeShorthand("list-style", (lh) => {
+            const v = computedMap.get(lh);
+            return (!v || v === "initial" || v === "unset") ? lDefs[lh] : v;
+          });
         }
         return null;
       }

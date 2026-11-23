@@ -7384,3 +7384,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 541 (`flex` `sign(cqw)` 展开与 `serializeStyleMap` `inherit` 简写折叠)
 - **[Agent]**: 完成 Phase 541：修复 `expandCssShorthand("flex")` 对含 `sign(...cqw...)` 的纯数字 `calc()` 识别，及 `serializeStyleMap` 中 `flex`/`flex-flow` CSS-wide keyword 折叠序列化（对齐 `-webkit-flex`/`-webkit-flex-flow` 别名测试）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 542 (`counter-*` `calc(sign(cqw))`、`list-style` 简写计算与展开规范化)
+- **[Agent]**: 完成 Phase 542：在 `window.js` 对 `counter-reset`/`counter-increment`/`counter-set` 新增 `evalSignCalls` 整数求值；让 `getShorthandComputed("list-style")` 调用 `serializeExpandedShorthand("list-style")` 省略默认 `outside`/`none`/`disc`；改进 `list-style` 展开与 `outside outside` 校验。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

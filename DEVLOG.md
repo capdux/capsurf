@@ -2587,3 +2587,7 @@
 ### Phase 541: `flex` `sign(cqw)` 展开与 `serializeStyleMap` 简写折叠
 - `expandCssShorthand("flex")` 剥离 `sign(...)` 内单位后判断纯数字 `calc()`，解决 `flex-grow`/`flex-shrink` 误归类为 `flex-basis` 的问题。
 - `serializeStyleMap` 对 `flex`/`flex-flow` 长属性均等为 CSS-wide keyword 时折叠输出简写声明。
+
+### Phase 542: `counter-*` `sign(cqw)` 与 `list-style` 简写计算值
+- `getShorthandComputed("list-style")` 统一走 `serializeExpandedShorthand("list-style")`，避免输出冗余 `outside`/`none`/`disc`。
+- `counter-reset`/`counter-increment`/`counter-set` 复用 `evalSignCalls` 计算容器单位 `sign()` 表达式。

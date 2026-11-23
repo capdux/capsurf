@@ -3539,3 +3539,5 @@
 - **Phase 540** (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `flex` 纯数字 `calc()`/`sign(cqw)`、`flex-basis` `calc(10% + 0px)` 化简、以及 12 个 `-webkit-*` Flexbox Legacy 别名映射。
 
 - **Phase 541** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `flex` `calc(sign(cqw))` 展开及 `serializeStyleMap` `flex`/`flex-flow` 折叠序列化。
+
+- **Phase 542** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `counter-*` `calc(sign(cqw))` 整数求值与 `list-style` 简写规范化计算值。
