@@ -3474,3 +3474,6 @@
   - `src/js/shim/element/element.js`: 支持 `-webkit-appearance` 与 `appearance` 双向别名读写及移除。
   - `src/js/shim/window.js`: 为 `column-count`、`orphans`、`widows` 补充纯数字 `calc(...)` 求值。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B256`（`/css/css-align/parsing/` 35/50、`/css/css-box/parsing/` 23/29）。
+- **Phase 516**:
+  - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `column-fill`、`column-span`；`borderSideMap` 移除 `column-rule-width`。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B258`（`/css/css-break/parsing/` **18/18 100% ALL GREEN!**，`/css/css-transforms/parsing/` 15/28）。

@@ -1313,3 +1313,13 @@
 - `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-box/parsing/`: 29 total | 23 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **58 PASS / 21 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B257 (port=19700, Phase 515 verification, 70 tests)
+- `/css/css-ui/parsing/`: 39 total | **28 PASS (up from 27, `webkit-appearance-alias` green!, all expected PASS green!)** | 10 FAIL | 1 TIMEOUT | 0 CRASH
+- `/css/css-multicol/parsing/`: 31 total | **21 PASS (up from 19, `column-rule-width-valid` & `column-count-computed` green!)** | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **49 PASS / 20 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B258 (port=19700, Phase 515 verification, 46 tests)
+- `/css/css-break/parsing/`: **18 / 18 PASS (100% ALL GREEN!, +4 FAIL→PASS)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **33 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**

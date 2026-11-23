@@ -2532,3 +2532,4 @@
 - **Phase 513**: 修复 `css-overflow` 中 `continue`、`max-lines`、`block-ellipsis` 沿用旧版 `none`/`auto` 导致 `*-invalid` 失败的问题。
 - **Phase 514**: 打通 `outline-shorthand`/`outline-valid` 与 `column-rule-shorthand`，统一 `outline` 规范序列化与默认值省略。
 - **Phase 515**: 打通 `column-rule-width` `0px` 规范化、`-webkit-appearance` 传统别名一致性及 `column-count`/`orphans`/`widows` 整数 `calc(...)` 计算值求值。
+- **Phase 516**: 按 CSSWG #11494 取消 `column-rule-width` 受 `column-rule-style: none` 清零逻辑，并补全 `column-fill`/`column-span` 计算属性暴露；`/css/css-break/parsing/` 达成 18/18 全绿。

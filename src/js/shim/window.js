@@ -6921,7 +6921,6 @@ function installWindow(global) {
       "border-right-width": "border-right-style",
       "border-bottom-width": "border-bottom-style",
       "border-left-width": "border-left-style",
-      "column-rule-width": "column-rule-style",
     };
     const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width"];
     for (let i = 0; i < lwProps.length; i++) {
@@ -7266,8 +7265,8 @@ function installWindow(global) {
     "border-top-color", "border-top-left-radius", "border-top-right-radius",
     "border-top-style", "border-top-width", "bottom", "box-decoration-break", "box-shadow",
     "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
-    "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-gap",
-    "column-rule-color", "column-rule-style", "column-rule-width", "column-width", "contain",
+    "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
+    "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
     "content", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
