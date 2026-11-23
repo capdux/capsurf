@@ -10,7 +10,10 @@ function getButtonType(button) {
     raw = button._type;
   }
   const lower = String(raw).toLowerCase().trim();
-  if (lower === "button" || lower === "reset") return lower;
+  if (lower === "button" || lower === "reset" || lower === "submit") return lower;
+  if (button && typeof button.hasAttribute === "function" && (button.hasAttribute("command") || button.hasAttribute("commandfor"))) {
+    return "button";
+  }
   return "submit";
 }
 

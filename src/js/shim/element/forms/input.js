@@ -188,25 +188,13 @@ function installInputElement(global) {
     },
     set: function (v) {
       if (this.type !== "file") return;
-      if (v === null || v === undefined) return;
-      const next = [];
-      if (typeof v.length === "number") {
-        for (let i = 0; i < v.length; i++) {
-          if (v[i] !== undefined) next.push(v[i]);
-        }
+      if (v === null) return;
+      if (typeof FileList === "function" && !(v instanceof FileList)) {
+        throw new TypeError("Failed to set the 'files' property on 'HTMLInputElement': Failed to convert value to 'FileList'.");
       }
-      if (!this._fileList) {
-        this._fileList = typeof createFileList === "function" ? createFileList(next) : next;
-      } else if (Array.isArray(this._fileList._files)) {
-        this._fileList._files.length = 0;
-        for (let i = 0; i < next.length; i++) {
-          this._fileList._files.push(next[i]);
-        }
-      } else {
-        this._fileList = typeof createFileList === "function" ? createFileList(next) : next;
-      }
+      this._fileList = v;
       this._valueDirty = true;
-      this._value = next.length > 0 && next[0] ? ("C:\\fakepath\\" + next[0].name) : "";
+      this._value = v && v.length > 0 && v[0] ? ("C:\\fakepath\\" + v[0].name) : "";
     },
     configurable: true,
   });

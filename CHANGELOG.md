@@ -3102,3 +3102,5 @@
 - **Phase 451 (`src/html/tags.cp`, `src/html/tree_builder.cp`)**：新增 `HtmlTag.closesP()` 修复 HTML5 解析器遇 `<button>`/`<input>`/`<img>` 等误关闭 `<p>` 与外层 `<label>` 的缺陷。
 
 - **Phase 452 (`src/js/shim/element/forms/label.js`, `src/js/runtime_source.cp`)**：非可关联元素 `.labels` 返回 `undefined`，`getLabelsForControl` 升级为 `[SameObject]` 活体 `NodeList`。
+
+- **Phase 453 (`src/js/shim/element/forms/button.js`, `src/js/shim/element/forms/input.js`, `src/js/runtime_source.cp`)**：支持 `<button command/commandfor>` 隐式 `"button"` 类型；对齐 `input.files` setter 的 `FileList` 引用共享与 `TypeError` 校验。

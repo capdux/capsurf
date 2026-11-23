@@ -2329,3 +2329,5 @@
 - Phase 451 (`src/html/tags.cp`, `src/html/tree_builder.cp`): 将 `InBody` 隐式闭合 `<p>` 的判断由 `isSpecial()` 收窄为 `closesP()`，根治 `<p><label><button>` 被拆散为 `<form>` 直接子节点的建树缺陷。
 
 - Phase 452 (`src/js/shim/element/forms/label.js`): 抽离 `collectLabelsArray` 与 `_labelsCache` 活体 Proxy，修复 `labelable-elements.html` 的 `[SameObject]`、`hidden` 动态切换与非可关联元素 `undefined` 语义。
+
+- Phase 453 (`button.js`, `input.js`): `getButtonType` 增加 `command`/`commandfor` 隐式 `"button"` 判定；`input.files` setter 直接保留 `FileList` 对象引用并严格校验 WebIDL 类型。
