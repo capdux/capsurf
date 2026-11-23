@@ -2561,3 +2561,7 @@
 ### Phase 533: `text-decoration` / `text-emphasis` 颜色与书写模式计算值修复
 - `text-decoration` 在其余长属性非默认时不得输出 `none`，且 `text-decoration-color` 等于元素 `color`（含 `currentcolor` 解析结果）时省略；而 `text-emphasis` 必须始终序列化为 `<style> <resolved-color>`。
 - `text-emphasis-style` 的 `filled`/`open` 在指定期保持关键字，计算期按 `writing-mode` 分别解析为 `circle`/`open circle`（水平）或 `sesame`/`open sesame`（垂直）。
+
+### Phase 534: 全属性 `inherit` 解析与 `text-decoration-inset` 负长度/百分比
+- `collectRawComputedMap` 此前仅传递 `INHERITED_CSS_PROPS`，未处理非继承属性的显式 `inherit`/`unset`；统一回溯 `ancestors` 链解析所有 `inherit` 声明。
+- `text-decoration-inset` 放开 `<length-percentage>` 负值与 `%`，并在 `normalizeCssSpecifiedValue` 支持 `calc(X / N)` 常量除数化简。

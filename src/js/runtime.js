@@ -5242,11 +5242,8 @@
       }
       if (prop === "text-decoration-inset") {
         const toks = splitCssTokens(vLower);
-        if (toks.length === 1) return toks[0] === "auto" || (!toks[0].endsWith("%") && isValidLenPct(toks[0], false));
-        if (toks.length === 2) {
-          return !toks[0].endsWith("%") && !toks[1].endsWith("%") &&
-                 isValidLenPct(toks[0], false) && isValidLenPct(toks[1], false);
-        }
+        if (toks.length === 1) return toks[0] === "auto" || isValidLenPct(toks[0], true);
+        if (toks.length === 2) return isValidLenPct(toks[0], true) && isValidLenPct(toks[1], true);
         return false;
       }
       if (prop === "text-emphasis-position") {
@@ -5786,7 +5783,13 @@
       if (key === "text-decoration-inset") {
         const p = splitCssTokens(s.toLowerCase());
         for (let i = 0; i < p.length; i++) {
-          if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") p[i] = "0px";
+          if (/^[+-]?0(?:\.0+)?$/.test(p[i])) p[i] = "0px";
+          else {
+            const dm = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]+)\s*\/\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)$/i.exec(p[i]);
+            if (dm && Number(dm[3]) !== 0) {
+              p[i] = "calc(" + String(Number((Number(dm[1]) / Number(dm[3])).toFixed(6))) + dm[2] + ")";
+            }
+          }
         }
         if (p.length === 2 && p[0] === p[1]) return p[0];
         return p.join(" ");
@@ -39492,6 +39495,30 @@
       }
       collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
 
+      // Resolve CSS-wide keywords ("inherit", "initial", "unset") across all properties
+      for (const [ck, cv] of Array.from(computedMap.entries())) {
+        const low = String(cv || "").trim().toLowerCase();
+        if (low === "inherit" || (low === "unset" && INHERITED_CSS_PROPS.has(ck))) {
+          let resolved = null;
+          for (let ai = 0; ai < ancestors.length; ai++) {
+            const ancMap = new Map();
+            collectElementOwnDeclarations(ancestors[ai], styleNodes, "", ancMap);
+            if (ancMap.has(ck)) {
+              const av = String(ancMap.get(ck) || "").trim();
+              const alow = av.toLowerCase();
+              if (alow === "inherit" || (alow === "unset" && INHERITED_CSS_PROPS.has(ck))) continue;
+              if (alow === "initial" || alow === "unset") break;
+              resolved = av;
+              break;
+            }
+          }
+          if (resolved !== null) computedMap.set(ck, resolved);
+          else computedMap.delete(ck);
+        } else if (low === "initial" || (low === "unset" && !INHERITED_CSS_PROPS.has(ck))) {
+          computedMap.delete(ck);
+        }
+      }
+
       // Overlay active/paused Web Animations values
       if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
         const animStyles = globalThis.__capsurf_getAnimatedStyles(element);
@@ -40546,6 +40573,50 @@
       }
       if ((computedMap.get("text-justify") || "").trim().toLowerCase() === "distribute") {
         computedMap.set("text-justify", "inter-character");
+      }
+      const tdiRaw = (computedMap.get("text-decoration-inset") || "").trim();
+      if (tdiRaw && tdiRaw.toLowerCase() !== "auto") {
+        const isAhem = /ahem/i.test(computedMap.get("font-family") || computedMap.get("font") || "");
+        const chUnit = isAhem ? fontSize : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8);
+        const tdiToks = tdiRaw.split(/\s+/).filter(Boolean).map((tok) => {
+          const tl = tok.toLowerCase();
+          if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return tl;
+          if (tl.indexOf("%") === -1) {
+            const rep = tl
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnit) + "px");
+            const px = evalCssLengthExpr(rep, 0, fontSize);
+            if (px !== null) return formatCssPx(px);
+          } else if (/^calc\(/i.test(tl)) {
+            const inner = tl.slice(5, -1).trim();
+            const evalLin = (pctV, pxV) => {
+              const e = inner
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctV))
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * pxV))
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnit * pxV))
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * pxV));
+              if (/^[\d+\-*/().\s]+$/.test(e)) {
+                try {
+                  const v = Function("return (" + e + ")")();
+                  if (typeof v === "number" && isFinite(v)) return v;
+                } catch (_) {}
+              }
+              return null;
+            };
+            const pxC = evalLin(0, 1);
+            const pctC = evalLin(1, 0);
+            if (pxC !== null && pctC !== null) {
+              const pR = Number(pctC.toFixed(6));
+              const xR = Number(pxC.toFixed(6));
+              if (xR === 0) return String(pR) + "%";
+              if (pR === 0) return formatCssPx(xR);
+              return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
+            }
+          }
+          return tl;
+        });
+        if (tdiToks.length === 2 && tdiToks[0] === tdiToks[1]) tdiToks.pop();
+        computedMap.set("text-decoration-inset", tdiToks.join(" "));
       }
       if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
         computedMap.set("hyphenate-character", "auto");

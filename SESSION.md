@@ -7360,3 +7360,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 533 (`text-decoration`/`text-emphasis` 颜色解析、vertical `text-emphasis-style` 与 `currentcolor`)
 - **[Agent]**: 完成 Phase 533：导出 `normalizeSingleColor` 并在 `applyUsedValuesToComputedMap` 规范化 `color` / `text-decoration-color` / `text-emphasis-color`（保留 `inherit` 链上的 `currentcolor` 语义并在使用阶段解析为当前元素 `color`）；修复 `getShorthandComputed("text-decoration")`（省略 `none` 与等于元素 `color` 的装饰色）与 `getShorthandComputed("text-emphasis")`（始终输出 `style + color`）；将 `text-emphasis-style` 的 `filled`/`open` 默认形状推迟到计算期根据 `writing-mode` 区分 `circle`/`sesame`。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 534 (全属性 `inherit`/`initial`/`unset` 解析与 `text-decoration-inset` 负值/百分比)
+- **[Agent]**: 完成 Phase 534：在 `collectRawComputedMap` 新增全属性 `inherit`/`initial`/`unset` 祖先链解析（修复 `text-decoration-color: inherit` 计算为 `rgb(0, 255, 0)`）；扩展 `text-decoration-inset` 支持负长度、`%` 与 `calc(1em / 4)` 化简。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

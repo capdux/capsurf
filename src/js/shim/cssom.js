@@ -1452,11 +1452,8 @@
     }
     if (prop === "text-decoration-inset") {
       const toks = splitCssTokens(vLower);
-      if (toks.length === 1) return toks[0] === "auto" || (!toks[0].endsWith("%") && isValidLenPct(toks[0], false));
-      if (toks.length === 2) {
-        return !toks[0].endsWith("%") && !toks[1].endsWith("%") &&
-               isValidLenPct(toks[0], false) && isValidLenPct(toks[1], false);
-      }
+      if (toks.length === 1) return toks[0] === "auto" || isValidLenPct(toks[0], true);
+      if (toks.length === 2) return isValidLenPct(toks[0], true) && isValidLenPct(toks[1], true);
       return false;
     }
     if (prop === "text-emphasis-position") {
@@ -1996,7 +1993,13 @@
     if (key === "text-decoration-inset") {
       const p = splitCssTokens(s.toLowerCase());
       for (let i = 0; i < p.length; i++) {
-        if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") p[i] = "0px";
+        if (/^[+-]?0(?:\.0+)?$/.test(p[i])) p[i] = "0px";
+        else {
+          const dm = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]+)\s*\/\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)$/i.exec(p[i]);
+          if (dm && Number(dm[3]) !== 0) {
+            p[i] = "calc(" + String(Number((Number(dm[1]) / Number(dm[3])).toFixed(6))) + dm[2] + ")";
+          }
+        }
       }
       if (p.length === 2 && p[0] === p[1]) return p[0];
       return p.join(" ");

@@ -3523,3 +3523,5 @@
 - **Phase 532** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `hyphenate-character`、`hyphenate-limit-chars`、`hanging-punctuation` 校验与规范化，及 `text-justify: distribute` 计算值映射为 `inter-character`。
 
 - **Phase 533** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `text-decoration`/`text-emphasis` 计算期颜色解析与省略规则，支持 `writing-mode: vertical-*` 下 `text-emphasis-style: filled|open` 计算为 `sesame`/`open sesame`。
+
+- **Phase 534** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持全属性 `inherit`/`initial`/`unset` 解析与 `text-decoration-inset` 负长度/百分比/`calc()` 校验与规范化。

@@ -1473,3 +1473,9 @@
 
 ### WPT-B287 (bin_dev pre-533, 2026-11-23)
 - **Filter `/css/css-text-decor/parsing/`**: `31` files (`25 PASS / 6 FAIL / 0 TIMEOUT / 0 ERROR`), `text-decoration-computed` improved `8/14 -> 11/14`; remaining 6 issues (`rgb()` serialization, vertical `filled/open`, `text-decoration-color: inherit`, `text-decoration-inset` negative/%) targeted in Phase 533 & 534.
+
+### PW Batch 158 (bin_dev Phase 530, 2026-11-23)
+- **Specs (`page-focus.spec.ts` 6/7, `page-aria-snapshot.spec.ts` 37/38, `page-screenshot.spec.ts` 18/44, `page-mouse.spec.ts` 14/15)**: `104` total (**75 PASS / 23 FAIL / 6 TIMEOUT / 0 SKIP**; +12 unexpected PASS including 7 in `page-mouse` and 4 in `page-screenshot`).
+
+### WPT-B288 (bin_dev Phase 533, 2026-11-23)
+- **Filter `/css/css-text-decor/parsing/`**: `31` files (**28 PASS / 3 FAIL / 0 TIMEOUT / 0 ERROR**, `27` matched expectations, `3` unexpected PASS: `text-decoration-skip-spaces-{computed,valid}`, `text-emphasis-style-computed-vertical-lr`; `text-decoration-computed` 14/14 and `text-emphasis-computed` 7/7 all green!).
