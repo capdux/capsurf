@@ -1208,6 +1208,26 @@ function installShim(global) {
       }
     }
 
+    docProto.createAttribute = markNative(function (localName) {
+      const name = String(localName);
+      const isHtmlDoc = !this.contentType || String(this.contentType).toLowerCase() === "text/html";
+      const finalName = isHtmlDoc ? name.toLowerCase() : name;
+      const attr = new Attr(finalName, "", null, null, finalName, null);
+      attr.ownerDocument = this;
+      return attr;
+    }, "createAttribute");
+
+    docProto.createAttributeNS = markNative(function (namespace, qualifiedName) {
+      const qn = String(qualifiedName);
+      const ns = namespace ? String(namespace) : null;
+      const colon = qn.indexOf(":");
+      const prefix = colon !== -1 ? qn.slice(0, colon) : null;
+      const localName = colon !== -1 ? qn.slice(colon + 1) : qn;
+      const attr = new Attr(qn, "", null, ns, localName, prefix);
+      attr.ownerDocument = this;
+      return attr;
+    }, "createAttributeNS");
+
     docProto.createTreeWalker = markNative(function (root, whatToShow, filter) {
       return new TreeWalker(root, whatToShow, filter);
     }, "createTreeWalker");

@@ -375,7 +375,16 @@ function installHtmlClasses(global) {
     const rootVis = (rootCs && rootCs.visibility ? String(rootCs.visibility).trim().toLowerCase() : "") || "visible";
     const rootTag = String(root.localName || root.tagName || "").toLowerCase();
     const rootWs = (rootCs && (rootCs.whiteSpace || rootCs["white-space"]) ? String(rootCs.whiteSpace || rootCs["white-space"]).trim().toLowerCase() : "") || (rootTag === "pre" ? "pre" : "normal");
-    const rootTt = (rootCs && (rootCs.textTransform || rootCs["text-transform"]) ? String(rootCs.textTransform || rootCs["text-transform"]).trim().toLowerCase() : "") || (root.style && root.style.textTransform ? String(root.style.textTransform).trim().toLowerCase() : "none");
+    const rootTt = (function () {
+      let cur = root;
+      while (cur && cur.nodeType === 1) {
+        const ccs = cur === root ? rootCs : getElComputedStyleSafe(cur);
+        const ctt = (ccs && (ccs.textTransform || ccs["text-transform"]) ? String(ccs.textTransform || ccs["text-transform"]).trim().toLowerCase() : "") || (cur.style && cur.style.textTransform ? String(cur.style.textTransform).trim().toLowerCase() : "");
+        if (ctt) return ctt;
+        cur = cur.parentElement || cur.parentNode;
+      }
+      return "none";
+    })();
     walk(root, rootVis, rootWs, rootTt, true);
 
     // 1. Merge consecutive collapsible text items and collapse adjacent spaces

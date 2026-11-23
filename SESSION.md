@@ -7137,3 +7137,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 432] (`src/js/shim/element/html-classes.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 为 `collectRenderedText`（`innerText`/`outerText` getter）补齐 `text-transform`（`uppercase`/`lowercase`/`capitalize`）继承与文本变换；优化 `outerText` setter 单文本节点与相邻 `prev`/`next` 文本节点预合并路径，消除替换后移除产生的原生文本残留；`bin_dev` 编译 + CDP 探针 (`{"outerOk":true,"ttOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 433] (`src/js/shim/traversal.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 按 WHATWG DOM 规范重写 `TreeWalker` 遍历算法（`traverseChildren`、`traverseSiblings`、`nextNode`、`previousNode`），补齐 `FILTER_REJECT` 子树跳过、`whatToShow >>> 0` 无符号转换及 `currentNode` 节点类型校验；`bin_dev` 编译 + CDP 探针 (`{"rejectNext":true,"skipSeq":true,"cnErr":true,"wts":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [User] 还剩多少测试未完成?
+- [Agent] 统计完成：Playwright 123 个 spec 中已跑 122 个（仅剩 `matchers.misc.spec.ts` 1 个未首轮覆盖）；WPT 全量清单 11,795 项（基线 9,696 项），已执行 69 批分片（`WPT-B105`~`WPT-B173`）；Unit 138 个、E2E 564 个（392 主 + 172 demo）、PPTR 10 个（79 条基线）均已建库并按需回归。同时 `WPT-B173` 确认 `/dom/traversal/` 跃升至 `8/17 PASS`（`0` 超时！）。
+
+- [Phase 434] (`src/js/shim/index.js`, `src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 补齐 `Document.prototype.createAttribute` 与 `Document.prototype.createAttributeNS`；为 `Attr.prototype` 补齐 `isSameNode`；`collectRenderedText` 向上追溯祖先链继承 `text-transform`；`bin_dev` 编译 + CDP 探针 (`{"attrSameOk":true,"parentTtOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

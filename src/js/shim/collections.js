@@ -889,6 +889,11 @@ Object.defineProperty(Attr.prototype, "nodeType", {
   configurable: true,
 });
 
+Attr.prototype.isSameNode = function (otherNode) {
+  return this === otherNode;
+};
+markNative(Attr.prototype.isSameNode, "isSameNode");
+
 markNative(Attr, "Attr");
 
 function NamedNodeMap(ownerElement) {

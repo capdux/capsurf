@@ -3482,6 +3482,11 @@
     configurable: true,
   });
 
+  Attr.prototype.isSameNode = function (otherNode) {
+    return this === otherNode;
+  };
+  markNative(Attr.prototype.isSameNode, "isSameNode");
+
   markNative(Attr, "Attr");
 
   function NamedNodeMap(ownerElement) {
@@ -13185,7 +13190,16 @@
       const rootVis = (rootCs && rootCs.visibility ? String(rootCs.visibility).trim().toLowerCase() : "") || "visible";
       const rootTag = String(root.localName || root.tagName || "").toLowerCase();
       const rootWs = (rootCs && (rootCs.whiteSpace || rootCs["white-space"]) ? String(rootCs.whiteSpace || rootCs["white-space"]).trim().toLowerCase() : "") || (rootTag === "pre" ? "pre" : "normal");
-      const rootTt = (rootCs && (rootCs.textTransform || rootCs["text-transform"]) ? String(rootCs.textTransform || rootCs["text-transform"]).trim().toLowerCase() : "") || (root.style && root.style.textTransform ? String(root.style.textTransform).trim().toLowerCase() : "none");
+      const rootTt = (function () {
+        let cur = root;
+        while (cur && cur.nodeType === 1) {
+          const ccs = cur === root ? rootCs : getElComputedStyleSafe(cur);
+          const ctt = (ccs && (ccs.textTransform || ccs["text-transform"]) ? String(ccs.textTransform || ccs["text-transform"]).trim().toLowerCase() : "") || (cur.style && cur.style.textTransform ? String(cur.style.textTransform).trim().toLowerCase() : "");
+          if (ctt) return ctt;
+          cur = cur.parentElement || cur.parentNode;
+        }
+        return "none";
+      })();
       walk(root, rootVis, rootWs, rootTt, true);
 
       // 1. Merge consecutive collapsible text items and collapse adjacent spaces
@@ -46476,6 +46490,26 @@
           global.document.writeln = docProto.writeln;
         }
       }
+
+      docProto.createAttribute = markNative(function (localName) {
+        const name = String(localName);
+        const isHtmlDoc = !this.contentType || String(this.contentType).toLowerCase() === "text/html";
+        const finalName = isHtmlDoc ? name.toLowerCase() : name;
+        const attr = new Attr(finalName, "", null, null, finalName, null);
+        attr.ownerDocument = this;
+        return attr;
+      }, "createAttribute");
+
+      docProto.createAttributeNS = markNative(function (namespace, qualifiedName) {
+        const qn = String(qualifiedName);
+        const ns = namespace ? String(namespace) : null;
+        const colon = qn.indexOf(":");
+        const prefix = colon !== -1 ? qn.slice(0, colon) : null;
+        const localName = colon !== -1 ? qn.slice(colon + 1) : qn;
+        const attr = new Attr(qn, "", null, ns, localName, prefix);
+        attr.ownerDocument = this;
+        return attr;
+      }, "createAttributeNS");
 
       docProto.createTreeWalker = markNative(function (root, whatToShow, filter) {
         return new TreeWalker(root, whatToShow, filter);

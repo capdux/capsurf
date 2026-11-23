@@ -3064,3 +3064,5 @@
 - **Phase 432 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：`innerText`/`outerText` 支持 `text-transform` 继承变换；修复 `outerText` 相邻文本节点合并时的原生文本残留。
 
 - **Phase 433 (`src/js/shim/traversal.js`, `src/js/runtime_source.cp`)**：按 WHATWG DOM 规范重写 `TreeWalker` 五向遍历算法并补齐 `FILTER_REJECT`、`whatToShow >>> 0` 与 `currentNode` 校验。
+
+- **Phase 434 (`src/js/shim/index.js`, `src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：新增 `Document.createAttribute`/`createAttributeNS` 与 `Attr.prototype.isSameNode`；`innerText` 支持沿祖先链继承 `text-transform`。
