@@ -22600,10 +22600,10 @@
   const _twState = new WeakMap();
 
   function TreeWalker(root, whatToShow, filter) {
-    if (!root) throw new TypeError("Root node required");
+    if (!root || typeof root.nodeType !== "number") throw new TypeError("Root node required");
     _twState.set(this, {
       root: root,
-      whatToShow: whatToShow !== undefined ? Number(whatToShow) : SHOW_ALL,
+      whatToShow: whatToShow !== undefined ? (Number(whatToShow) >>> 0) : SHOW_ALL,
       filter: filter || null,
       currentNode: root,
     });
@@ -22629,6 +22629,7 @@
     set: function (v) {
       const st = _twState.get(this);
       if (!st) throw new TypeError("Illegal invocation");
+      if (!v || typeof v.nodeType !== "number") throw new TypeError("Failed to set 'currentNode': value is not of type 'Node'.");
       st.currentNode = v;
     },
     configurable: true,
@@ -22650,113 +22651,127 @@
     return null;
   };
 
-  TreeWalker.prototype.firstChild = function () {
-    let node = this.currentNode.firstChild;
+  function traverseChildren(walker, isFirst) {
+    let node = isFirst ? walker.currentNode.firstChild : walker.currentNode.lastChild;
     while (node) {
-      const res = filterNode(node, this.whatToShow, this.filter);
-      if (res === FILTER_ACCEPT) {
-        this.currentNode = node;
+      const result = filterNode(node, walker.whatToShow, walker.filter);
+      if (result === FILTER_ACCEPT) {
+        walker.currentNode = node;
         return node;
       }
-      if (res === FILTER_SKIP && node.firstChild) {
-        node = node.firstChild;
-        continue;
+      if (result === FILTER_SKIP) {
+        const child = isFirst ? node.firstChild : node.lastChild;
+        if (child) {
+          node = child;
+          continue;
+        }
       }
-      node = node.nextSibling;
+      while (node) {
+        const sibling = isFirst ? node.nextSibling : node.previousSibling;
+        if (sibling) {
+          node = sibling;
+          break;
+        }
+        const parent = node.parentNode || node.parentElement;
+        if (!parent || parent === walker.root || parent === walker.currentNode) return null;
+        node = parent;
+      }
     }
     return null;
+  }
+
+  function traverseSiblings(walker, isNext) {
+    let node = walker.currentNode;
+    if (node === walker.root) return null;
+    while (true) {
+      let sibling = isNext ? node.nextSibling : node.previousSibling;
+      while (sibling) {
+        node = sibling;
+        const result = filterNode(node, walker.whatToShow, walker.filter);
+        if (result === FILTER_ACCEPT) {
+          walker.currentNode = node;
+          return node;
+        }
+        sibling = isNext ? node.firstChild : node.lastChild;
+        if (result === FILTER_REJECT || !sibling) {
+          sibling = isNext ? node.nextSibling : node.previousSibling;
+        }
+      }
+      node = node.parentNode || node.parentElement;
+      if (!node || node === walker.root) return null;
+      if (filterNode(node, walker.whatToShow, walker.filter) === FILTER_ACCEPT) return null;
+    }
+  }
+
+  TreeWalker.prototype.firstChild = function () {
+    return traverseChildren(this, true);
   };
 
   TreeWalker.prototype.lastChild = function () {
-    let node = this.currentNode.lastChild;
-    while (node) {
-      const res = filterNode(node, this.whatToShow, this.filter);
-      if (res === FILTER_ACCEPT) {
-        this.currentNode = node;
-        return node;
-      }
-      if (res === FILTER_SKIP && node.lastChild) {
-        node = node.lastChild;
-        continue;
-      }
-      node = node.previousSibling;
-    }
-    return null;
+    return traverseChildren(this, false);
   };
 
   TreeWalker.prototype.previousSibling = function () {
-    let node = this.currentNode;
-    if (node === this.root) return null;
-    while (node) {
-      let sibling = node.previousSibling;
-      while (sibling) {
-        const res = filterNode(sibling, this.whatToShow, this.filter);
-        if (res === FILTER_ACCEPT) {
-          this.currentNode = sibling;
-          return sibling;
-        }
-        sibling = sibling.lastChild || sibling.previousSibling;
-      }
-      node = node.parentNode || node.parentElement;
-      if (!node || node === this.root) return null;
-      if (filterNode(node, this.whatToShow, this.filter) === FILTER_ACCEPT) return null;
-    }
-    return null;
+    return traverseSiblings(this, false);
   };
 
   TreeWalker.prototype.nextSibling = function () {
-    let node = this.currentNode;
-    if (node === this.root) return null;
-    while (node) {
-      let sibling = node.nextSibling;
-      while (sibling) {
-        const res = filterNode(sibling, this.whatToShow, this.filter);
-        if (res === FILTER_ACCEPT) {
-          this.currentNode = sibling;
-          return sibling;
-        }
-        sibling = sibling.firstChild || sibling.nextSibling;
-      }
-      node = node.parentNode || node.parentElement;
-      if (!node || node === this.root) return null;
-      if (filterNode(node, this.whatToShow, this.filter) === FILTER_ACCEPT) return null;
-    }
-    return null;
+    return traverseSiblings(this, true);
   };
 
   TreeWalker.prototype.nextNode = function () {
     let node = this.currentNode;
-    while (node) {
-      let next = node.firstChild;
-      while (!next && node && node !== this.root) {
-        next = node.nextSibling;
+    let result = FILTER_ACCEPT;
+    while (true) {
+      while (result !== FILTER_REJECT && node.firstChild) {
+        node = node.firstChild;
+        result = filterNode(node, this.whatToShow, this.filter);
+        if (result === FILTER_ACCEPT) {
+          this.currentNode = node;
+          return node;
+        }
+      }
+      let following = null;
+      while (node) {
+        if (node === this.root) return null;
+        if (node.nextSibling) {
+          following = node.nextSibling;
+          break;
+        }
         node = node.parentNode || node.parentElement;
       }
-      if (!next) return null;
-      node = next;
-      const res = filterNode(node, this.whatToShow, this.filter);
-      if (res === FILTER_ACCEPT) {
+      if (!following) return null;
+      node = following;
+      result = filterNode(node, this.whatToShow, this.filter);
+      if (result === FILTER_ACCEPT) {
         this.currentNode = node;
         return node;
       }
     }
-    return null;
   };
 
   TreeWalker.prototype.previousNode = function () {
     let node = this.currentNode;
-    if (node === this.root) return null;
-    while (node && node !== this.root) {
-      let prev = node.previousSibling;
-      if (prev) {
-        while (prev.lastChild) prev = prev.lastChild;
-        node = prev;
-      } else {
-        node = node.parentNode || node.parentElement;
+    while (node !== this.root) {
+      let sibling = node.previousSibling;
+      while (sibling) {
+        node = sibling;
+        let result = filterNode(node, this.whatToShow, this.filter);
+        while (result !== FILTER_REJECT && node.lastChild) {
+          node = node.lastChild;
+          result = filterNode(node, this.whatToShow, this.filter);
+        }
+        if (result === FILTER_ACCEPT) {
+          this.currentNode = node;
+          return node;
+        }
+        sibling = node.previousSibling;
       }
-      if (!node) return null;
-      const res = filterNode(node, this.whatToShow, this.filter);
-      if (res === FILTER_ACCEPT) {
+      if (node === this.root) return null;
+      const parent = node.parentNode || node.parentElement;
+      if (!parent) return null;
+      node = parent;
+      if (filterNode(node, this.whatToShow, this.filter) === FILTER_ACCEPT) {
         this.currentNode = node;
         return node;
       }

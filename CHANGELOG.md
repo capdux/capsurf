@@ -3062,3 +3062,5 @@
 - **Phase 431 (`src/js/shim/element/element.js`, `src/js/shim/node-base.js`, `src/js/shim/selector.js`, `src/js/runtime_source.cp`)**：新增 `Element.prototype.hasAttributes` 与 `Node.prototype.isSameNode`；修复 `id=""` 属性误删与 `DocumentFragment.getElementById("")` 误匹配。
 
 - **Phase 432 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：`innerText`/`outerText` 支持 `text-transform` 继承变换；修复 `outerText` 相邻文本节点合并时的原生文本残留。
+
+- **Phase 433 (`src/js/shim/traversal.js`, `src/js/runtime_source.cp`)**：按 WHATWG DOM 规范重写 `TreeWalker` 五向遍历算法并补齐 `FILTER_REJECT`、`whatToShow >>> 0` 与 `currentNode` 校验。

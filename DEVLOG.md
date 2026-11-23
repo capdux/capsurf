@@ -2289,3 +2289,5 @@
 - Phase 431 (`element.js`, `node-base.js`, `selector.js`): 实装 `hasAttributes()` 与 `isSameNode()`；修复 `proto.id` setter 对空串清空属性条目导致 `setAttribute("id", "")` 丢失属性的规范缺陷，以及 `DocumentFragment.getElementById("")` 过滤空串 ID。
 
 - Phase 432 (`src/js/shim/element/html-classes.js`): 在 `collectRenderedText` 中传递 `inheritedTt` 支持 `text-transform`，并在 `outerText` setter 中对单文本节点直接预合并相邻 `Text` 节点后再 `removeChild(this)`。
+
+- Phase 433 (`src/js/shim/traversal.js`): 抽离 `traverseChildren`/`traverseSiblings` 重写 `TreeWalker` 算法，修复 `FILTER_REJECT` 子树跳过、`SKIP` 向上回溯及 `currentNode` 非法类型 `TypeError`。
