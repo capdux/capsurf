@@ -2283,3 +2283,5 @@
 - Phase 428 (`src/js/shim/collections.js`, `html-classes.js`): 修正 `DOMTokenList.contains` 对非字符串参数（`undefined`/`null`/`0`）的 WebIDL 字符串化；新增 `HTMLTitleElement.text` 及 `HTMLProgressElement.{max, value, position}` 数值解析与不确定态处理。
 
 - Phase 429 (`src/js/shim/element/html-classes.js`): 复用 `parseValidHtmlFloat` 实现 `HTMLMeterElement` 全属性夹紧规范，并实现 `HTMLOutputElement` 的 `default`/`value` 双模式状态机及自定义校验接口。
+
+- Phase 430 (`src/js/shim/element/html-classes.js`, `window.js`): 修正 `progress.max` setter 忽略 `<= 0` 值；将 `HTMLOutputElement` 校验状态接入共享 `makeValidityState` 并保持 `willValidate=false`/`validationMessage=""`；同步失效 `title` 节点缓存。

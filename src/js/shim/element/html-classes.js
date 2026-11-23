@@ -3437,7 +3437,7 @@ function installHtmlClasses(global) {
         set: function (v) {
           const n = Number(v);
           if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
-          this.setAttribute("max", String(n > 0 ? n : 1));
+          if (n > 0) this.setAttribute("max", String(n));
         },
         enumerable: true,
         configurable: true,
@@ -3580,20 +3580,30 @@ function installHtmlClasses(global) {
         enumerable: true,
         configurable: true,
       },
+      willValidate: {
+        get: function () { return false; },
+        enumerable: true,
+        configurable: true,
+      },
+      validity: {
+        get: function () { return makeValidityState(this); },
+        enumerable: true,
+        configurable: true,
+      },
       validationMessage: {
-        get: function () { return this._customValidity ? String(this._customValidity) : ""; },
+        get: function () { return ""; },
         enumerable: true,
         configurable: true,
       },
     });
     global.HTMLOutputElement.prototype.setCustomValidity = function (msg) {
-      this._customValidity = msg == null ? "" : String(msg);
+      this._customValidityMessage = msg == null ? "" : String(msg);
     };
     global.HTMLOutputElement.prototype.checkValidity = function () {
-      return !this._customValidity;
+      return true;
     };
     global.HTMLOutputElement.prototype.reportValidity = function () {
-      return !this._customValidity;
+      return true;
     };
   }
 

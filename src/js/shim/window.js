@@ -10554,8 +10554,14 @@ const CSS_TYPED_OM_GLOBALS = {
       set: function (val) {
         origTitleDesc.set.call(this, val);
         const h = this.head;
-        if (h && h._children) {
-          h._children = null;
+        if (h) {
+          if (h._children) h._children = null;
+          if (h._childNodes) h._childNodes = null;
+        }
+        const t = this.getElementsByTagName ? this.getElementsByTagName("title")[0] : null;
+        if (t) {
+          if (t._childNodes) t._childNodes = null;
+          if (t._children) t._children = null;
         }
       },
       configurable: true,
