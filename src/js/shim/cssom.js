@@ -45,9 +45,10 @@
     "flex-flow", "flex-grow", "flex-shrink", "flex-wrap", "float", "font", "font-family",
     "font-feature-settings", "font-kerning", "font-optical-sizing", "font-palette",
     "font-size", "font-size-adjust", "font-stretch", "font-style", "font-synthesis",
-    "font-variant", "font-variant-alternates", "font-variant-caps", "font-variant-east-asian",
+    "font-synthesis-position", "font-synthesis-small-caps", "font-synthesis-style", "font-synthesis-weight",
+    "font-variant", "font-variant-alternates", "font-variant-caps", "font-variant-east-asian", "font-variant-emoji",
     "font-variant-ligatures", "font-variant-numeric", "font-variant-position",
-    "font-variation-settings", "font-weight", "font-display", "forced-color-adjust", "gap",
+    "font-variation-settings", "font-weight", "font-width", "font-display", "forced-color-adjust", "gap",
     "grid", "grid-area", "grid-auto-columns", "grid-auto-flow", "grid-auto-rows",
     "grid-column", "grid-column-end", "grid-column-gap", "grid-column-start", "grid-gap",
     "grid-row", "grid-row-end", "grid-row-gap", "grid-row-start", "grid-template",
@@ -276,6 +277,13 @@
       "writing-mode": ["horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr"],
       "pointer-events": ["auto", "none", "visiblepainted", "visiblefill", "visiblestroke", "visible", "painted", "fill", "stroke", "all", "bounding-box"],
       "user-select": ["auto", "text", "none", "contain", "all"],
+      "font-variant-caps": ["normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps"],
+      "font-variant-emoji": ["normal", "text", "emoji", "unicode"],
+      "font-variant-position": ["normal", "sub", "super"],
+      "font-synthesis-weight": ["auto", "none"],
+      "font-synthesis-style": ["auto", "none"],
+      "font-synthesis-small-caps": ["auto", "none"],
+      "font-synthesis-position": ["auto", "none"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -876,6 +884,35 @@
         if (toks.length === 3 && (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[1]) || !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[2]))) return false;
       }
       return true;
+    }
+    if (prop === "font-size") {
+      const KW = new Set(["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large", "smaller", "larger", "math"]);
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      return KW.has(toks[0]) || isValidLenPct(toks[0], false);
+    }
+    if (prop === "font-style") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "normal" || toks[0] === "italic" || toks[0] === "oblique";
+      if (toks.length === 2 && toks[0] === "oblique") {
+        const t = toks[1];
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)$/i.exec(t);
+        if (!m) return false;
+        const val = Number(m[1]), u = m[2].toLowerCase();
+        const deg = u === "deg" ? val : (u === "turn" ? val * 360 : (u === "grad" ? val * 0.9 : val * 180 / Math.PI));
+        return deg >= -90 && deg <= 90;
+      }
+      return false;
+    }
+    if (prop === "font-stretch" || prop === "font-width") {
+      const KW = new Set(["normal", "ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"]);
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (KW.has(t) || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      const m = /^([+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(t);
+      return !!m && Number(m[1]) >= 0;
     }
 
     return true;

@@ -3206,3 +3206,12 @@
   - `border-spacing`: 校验 1~2 个非负 `<length>`（拒绝 `%`）。
   - `cursor`: 校验可选 `url(...) [x y]? ,` 前缀列表与标准关键字结尾。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 470: CSSOM `font-size`, `font-style`, `font-stretch/width`, `font-variant-*`, `font-synthesis-*` 校验
+- `src/js/shim/cssom.js`:
+  - `SUPPORTED_CSS_PROPS`: 补全 `font-width`, `font-variant-emoji`, `font-synthesis-{position,small-caps,style,weight}`。
+  - `KEYWORD_CSS_PROPS`: 新增 `font-variant-{caps,emoji,position}` 与 4 个 `font-synthesis-*` 关键字表。
+  - `font-size`: 校验 `<absolute-size> | <relative-size> | math | <length-percentage [0,∞]>`。
+  - `font-style`: 校验 `normal | italic | oblique <angle [-90deg,90deg]>?`。
+  - `font-stretch` / `font-width`: 校验关键字与非负 `<percentage>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

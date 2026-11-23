@@ -983,3 +983,21 @@
 - `/css/css-text/parsing/ --shard 2/2`: 43 total | 23 PASS | 20 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: 7 — `hanging-punctuation-valid`, `text-align-all-valid`, `text-align-valid`, `text-fit-valid`, `text-group-align-valid`, `text-spacing-trim-valid`, `word-space-transform-valid`)
 - `/css/css-transforms/parsing/ --shard 2/2`: 14 total | 3 PASS | 11 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **36 PASS / 58 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B210 (port=19700, 113 tests, 33/113 matched)
+- `/css/css-fonts/parsing/`: 82 total | 18 PASS | 62 FAIL | 2 TIMEOUT | 0 CRASH
+- `/css/css-grid/parsing/ --shard 1/2`: 31 total | 1 PASS | 29 FAIL | 1 TIMEOUT | 0 CRASH (`FAIL→PASS`: `grid-template-rows-repeat-intrinsic-valid.tentative.html`)
+- Totals: **19 PASS / 91 FAIL / 3 TIMEOUT / 0 CRASH**
+
+### PW Batch 143 (port=19386, 195 tests)
+- `page-click.spec.ts`: 77 total | 39 PASS | 2 FAIL | 36 TIMEOUT
+- `page-keyboard.spec.ts`: 44 total | 38 PASS | 3 FAIL | 3 TIMEOUT
+- `page-history.spec.ts`: 13 total | 10 PASS | 0 FAIL | 3 TIMEOUT
+- `page-goto.spec.ts`: 61 total | 41 PASS | 10 FAIL | 10 TIMEOUT
+- Totals: **128 PASS / 15 FAIL / 52 TIMEOUT / 0 SKIP**
+
+### WPT-B211 (port=19700, Phase 469 verification, 63 tests, 37/63 matched)
+- `/css/css-flexbox/parsing/`: 27 total | 16 PASS (up from 11!) | 11 FAIL | 0 TIMEOUT | 0 CRASH (`flex-direction-*`, `flex-wrap-*`, `order-*`, `flex-invalid`, `flex-flow-invalid` PASS)
+- `/css/css-position/parsing/`: 22 total | 16 PASS (up from 15!) | 6 FAIL | 0 TIMEOUT | 0 CRASH (`inset-invalid` PASS)
+- `/css/css-transforms/parsing/ --shard 1/2`: 14 total | 4 PASS (up from 1!) | 10 FAIL | 0 TIMEOUT | 0 CRASH (`transform-box-invalid`, `backface-visibility-computed`, `rotate-parsing-invalid` PASS)
+- Totals: **36 PASS / 27 FAIL / 0 TIMEOUT / 0 CRASH**

@@ -2387,3 +2387,7 @@
 ### Phase 469: CSSOM 数学表达式维度门禁与背景/间距/光标校验
 - 在 `isValidLenPct` 内统一拦截非 `<length-percentage>` 维度的 `calc(...)`，同步修复 `inset-*`、`margin-*`、`flex` 等属性对 `calc(20deg)` 与 `calc(0)` 的误放行。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 470: CSSOM 字体大小/斜体/字宽/变体与合成门禁
+- `font-style` 支持 `oblique` 角度范围校验（换算 `deg`/`rad`/`grad`/`turn` 至 `[-90, 90]`）。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
