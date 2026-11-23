@@ -3450,3 +3450,5 @@
 - **Phase 507**:
   - `src/js/shim/cssom.js`: 新增 `expandCssShorthand` / `__capsurf_expandShorthand` 支持 `list-style` 与 `text-decoration` 展开，并接入 `decl.setProperty`。
   - `src/js/shim/element/element.js`: 抽取 `setEntryWithShorthand` 统一在 `setProperty` 与 `styleProxy.set` 展开 shorthand 子属性。
+- **Phase 508**:
+  - `src/js/shim/cssom.js`: `expandCssShorthand` 新增 `place-content`、`place-items`、`place-self`、`flex-flow`、`overflow`、`gap`/`grid-gap` 子属性展开。

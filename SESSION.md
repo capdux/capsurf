@@ -7304,3 +7304,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 506 完成 (`text-decoration-inset` / `skip-spaces` / `text-decoration` 规范化)**：在 `src/js/shim/cssom.js` 新增 `text-decoration-inset` 与 `text-decoration-skip-spaces` 支持声明、校验及序列化规范化（`0 0 -> 0px`、`end start -> start end`），并修复 `text-decoration: solid -> none`；同步接入 `src/js/shim/window.js`。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B239`（`css-lists` 13/23、`css-text-decor` 18/31）。
 
 - **Phase 507 完成 (`list-style` & `text-decoration` shorthand 展开)**：在 `src/js/shim/cssom.js` 新增并导出 `expandCssShorthand`（`__capsurf_expandShorthand`），并在 `src/js/shim/element/element.js` 抽取 `setEntryWithShorthand` 统一接入 `setProperty` 与 `styleProxy.set`；`bin_dev/main` 编译通过，CDP 探针验证 `list-style` 与 `text-decoration` 子属性展开全绿，`--smoke` 3/3 PASS。
+
+- **Phase 508 完成 (`place-*` / `flex-flow` / `overflow` / `gap` shorthand 展开)**：在 `src/js/shim/cssom.js` `expandCssShorthand` 新增 `place-content`、`place-items`、`place-self`、`flex-flow`、`overflow`、`gap`/`grid-gap` 子属性展开；`bin_dev/main` 编译通过，CDP 探针验证全部子属性展开正确，`--smoke` 3/3 PASS。

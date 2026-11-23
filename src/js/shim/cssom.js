@@ -1719,6 +1719,42 @@
         ["list-style-type", typ]
       ];
     }
+    if (key === "place-content" || key === "place-items" || key === "place-self") {
+      const kind = key.slice(6);
+      const p = splitCssTokens(normV.toLowerCase());
+      if (p.length === 1) {
+        return [["align-" + kind, p[0]], ["justify-" + kind, p[0]]];
+      }
+      if (p.length >= 2) {
+        const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
+        if (splitAt < p.length) {
+          return [
+            ["align-" + kind, p.slice(0, splitAt).join(" ")],
+            ["justify-" + kind, p.slice(splitAt).join(" ")]
+          ];
+        }
+        return [["align-" + kind, p.join(" ")], ["justify-" + kind, p.join(" ")]];
+      }
+    }
+    if (key === "flex-flow") {
+      const p = splitCssTokens(normV.toLowerCase());
+      let dir = "row", wr = "nowrap";
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "row" || p[i] === "row-reverse" || p[i] === "column" || p[i] === "column-reverse") dir = p[i];
+        else if (p[i] === "nowrap" || p[i] === "wrap" || p[i] === "wrap-reverse") wr = p[i];
+      }
+      return [["flex-direction", dir], ["flex-wrap", wr]];
+    }
+    if (key === "overflow") {
+      const p = splitCssTokens(normV.toLowerCase());
+      if (p.length === 1) return [["overflow-x", p[0]], ["overflow-y", p[0]]];
+      if (p.length === 2) return [["overflow-x", p[0]], ["overflow-y", p[1]]];
+    }
+    if (key === "gap" || key === "grid-gap") {
+      const p = splitCssTokens(normV);
+      if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
+      if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
+    }
     return null;
   }
   global.__capsurf_expandShorthand = expandCssShorthand;

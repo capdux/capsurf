@@ -2524,3 +2524,4 @@
 - **Phase 505**: 针对 `WPT-B238` 暴露的 `css-lists`/`css-text-decor` 解析与 `getComputedStyle` 支持性问题，一次性补齐长手属性表与 4 类指定值规范化规则。
 - **Phase 506**: 补齐 `text-decoration-inset` 与 `text-decoration-skip-spaces` 的指定值校验及规范化，并确保 `text-decoration` 仅含默认 `solid` 时折叠为 `none`。
 - **Phase 507**: 实现 `list-style` 与 `text-decoration` 的内联样式及 CSSOM 规则双向 shorthand 展开，打通 `list-style-shorthand` 与 `text-decoration-shorthand` WPT 断言。
+- **Phase 508**: 补齐 `place-*`、`flex-flow`、`overflow`、`gap` 在内联样式与 CSSOM 中的子属性展开，支撑 WPT `*-shorthand` 断言。
