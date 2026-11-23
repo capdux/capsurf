@@ -3982,6 +3982,7 @@
       if (vLower === "inherit" || vLower === "initial" || vLower === "unset" || vLower === "revert" || vLower === "revert-layer") {
         return true;
       }
+      if (prop === "all") return false;
       if (vLower === "bogus") return false;
 
       if (prop === "display") {
@@ -4318,6 +4319,69 @@
         if (toks.length < 1 || toks.length > maxN) return false;
         for (let i = 0; i < toks.length; i++) {
           if (toks[i] !== "auto" && !isValidLenPct(toks[i], true)) return false;
+        }
+        return true;
+      }
+      if (prop === "z-index") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t === "auto") return true;
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        return /^[+-]?\d+$/.test(t);
+      }
+      if (prop === "vertical-align") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 3) return false;
+        const BS = new Set(["first", "last"]);
+        const BSH = new Set(["sub", "super"]);
+        const AB = new Set(["baseline", "text-bottom", "alphabetic", "ideographic", "middle", "central", "mathematical", "text-top", "top", "bottom"]);
+        let seenBs = false, seenBsh = false, seenAb = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t.includes(",")) return false;
+          if (BS.has(t)) { if (seenBs) return false; seenBs = true; }
+          else if (BSH.has(t) || isValidLenPct(t, true)) { if (seenBsh) return false; seenBsh = true; }
+          else if (AB.has(t)) { if (seenAb) return false; seenAb = true; }
+          else return false;
+        }
+        return true;
+      }
+      if (prop === "transform") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 1 && toks[0] === "none") return true;
+        if (toks.length < 1) return false;
+        const FN_ARGS = {
+          matrix: [6, 6], matrix3d: [16, 16],
+          translate: [1, 2], translatex: [1, 1], translatey: [1, 1], translatez: [1, 1], translate3d: [3, 3],
+          scale: [1, 2], scalex: [1, 1], scaley: [1, 1], scalez: [1, 1], scale3d: [3, 3],
+          rotate: [1, 1], rotatex: [1, 1], rotatey: [1, 1], rotatez: [1, 1], rotate3d: [4, 4],
+          skew: [1, 2], skewx: [1, 1], skewy: [1, 1], perspective: [1, 1]
+        };
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "none" || t.endsWith(",")) return false;
+          const m = /^([a-z0-9-]+)\((.*)\)$/.exec(t);
+          if (!m) return false;
+          const fn = m[1], inner = m[2].trim();
+          if (fn === "var" || fn === "env") continue;
+          const range = FN_ARGS[fn];
+          if (!range) return false;
+          if (!inner) return false;
+          const args = [];
+          let cur = "", d = 0;
+          for (let k = 0; k < inner.length; k++) {
+            const c = inner[k];
+            if (c === "(") d++;
+            else if (c === ")" && d > 0) d--;
+            if (d === 0 && c === ",") { args.push(cur.trim()); cur = ""; }
+            else cur += c;
+          }
+          args.push(cur.trim());
+          if (args.some(a => !a) || args.length < range[0] || args.length > range[1]) return false;
+          if (fn === "perspective" && args[0] !== "none" && !/^(?:calc|min|max|clamp|var|env)\(/i.test(args[0])) {
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(args[0]) && args[0] !== "0") return false;
+          }
         }
         return true;
       }

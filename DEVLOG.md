@@ -2355,3 +2355,7 @@
 ### Phase 461: CSSOM Flexbox / Align / Inset 语法门禁
 - `flex-grow` 采纳 CSS Values 规范数字格式，拒绝 `1.` 这类带孤立小数点的输入。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 462: CSSOM `all`/`z-index`/`vertical-align`/`transform` 语法门禁
+- 为 `transform` 函数建立参数个数表并在括号深度 0 处校验逗号参数，防止 `scaleX(2), scaleY(3)`、`matrix(1, 2)` 及无单位 `perspective(1000)` 漏过。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

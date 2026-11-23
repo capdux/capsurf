@@ -3145,3 +3145,11 @@
   - `row-gap` / `column-gap` / `gap` / `grid-*gap`: 校验 `normal | <length-percentage [0,∞]>`（单值 1 token，简写 1~2 token）。
   - `top` / `right` / `bottom` / `left` / `inset*`: 校验 `auto | <length-percentage>`（支持负值）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 462: CSSOM `all`, `z-index`, `vertical-align`, `transform` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `all`: 仅允许 `inherit | initial | unset | revert | revert-layer`。
+  - `z-index`: 仅允许 `auto | <integer>` 及数学/变量函数。
+  - `vertical-align`: 按 `baseline-source` / `baseline-shift` / `alignment-baseline` 三组互斥校验，拒绝逗号、`none`、`auto` 及同组重复。
+  - `transform`: 校验函数名与参数个数（`matrix(6)`, `translate(1..2)`, `scale(1..2)`, `rotate(1)`, `skew(1..2)`, `perspective(1)` 等），拒绝顶层逗号与无单位 `perspective(1000)`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
