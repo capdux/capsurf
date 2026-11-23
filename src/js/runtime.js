@@ -5034,6 +5034,65 @@
         }
         return true;
       }
+      function isValidSymbolsFn(tok) {
+        const m = /^symbols\((.*)\)$/i.exec(tok);
+        if (!m) return false;
+        const args = splitCssTokens(m[1].trim());
+        if (args.length === 0) return false;
+        const TYPES = new Set(["cyclic", "numeric", "alphabetic", "symbolic", "fixed"]);
+        let type = "", idx = 0;
+        const firstLow = args[0].toLowerCase();
+        if (TYPES.has(firstLow)) { type = firstLow; idx = 1; }
+        const count = args.length - idx;
+        if (count < ((type === "numeric" || type === "alphabetic") ? 2 : 1)) return false;
+        for (let i = idx; i < args.length; i++) {
+          if (!(/^"[^"]*"$/.test(args[i]) || /^'[^']*'$/.test(args[i]))) return false;
+        }
+        return true;
+      }
+      if (prop === "list-style-type") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length !== 1) return false;
+        const t = toks[0], tl = t.toLowerCase();
+        if (tl === "none" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t)) return true;
+        if (/^symbols\(/i.test(t)) return isValidSymbolsFn(t);
+        return !/^(?:auto|inherit|initial|unset|revert|revert-layer|default)$/i.test(tl) && /^-?[a-z_][a-z0-9_-]*$/i.test(t);
+      }
+      if (prop === "list-style-image") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length !== 1) return false;
+        const t = toks[0], tl = t.toLowerCase();
+        return tl === "none" || /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|image-set)\(/i.test(tl);
+      }
+      if (prop === "list-style") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length < 1 || toks.length > 3) return false;
+        let sPos = false, sImg = false, sType = false, noneCnt = 0;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (tl === "inside" || tl === "outside") { if (sPos) return false; sPos = true; }
+          else if (tl === "none") { noneCnt++; if (noneCnt > 2) return false; }
+          else if (/^(?:url|linear-gradient|radial-gradient|conic-gradient|image-set)\(/i.test(tl)) { if (sImg) return false; sImg = true; }
+          else if (/^symbols\(/i.test(t)) { if (sType || !isValidSymbolsFn(t)) return false; sType = true; }
+          else if (/^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t) || (/^-?[a-z_][a-z0-9_-]*$/i.test(t) && !/^(?:auto|inherit|initial|unset|revert|revert-layer)$/i.test(tl))) {
+            if (sType) return false; sType = true;
+          } else return false;
+        }
+        if (noneCnt > 0 && ((sImg && sType) || (noneCnt === 2 && (sImg || sType)))) return false;
+        return true;
+      }
+      if (prop === "content") {
+        const toks = splitCssTokens(trimmed);
+        for (let i = 0; i < toks.length; i++) {
+          const cm = /^counters?\((.*)\)$/i.exec(toks[i]);
+          if (cm) {
+            const parts = cm[1].split(",").map(x => x.trim().toLowerCase());
+            const styleArg = parts[parts.length - 1];
+            if (parts.length >= 2 && /^(?:none|unset|initial|inherit|revert|revert-layer|default)$/.test(styleArg)) return false;
+          }
+        }
+        return true;
+      }
 
       return true;
     }

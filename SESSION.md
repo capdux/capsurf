@@ -7239,3 +7239,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]** 明确答复：PW 全量 123 个 spec 文件已全部跑过首轮并建档，当前为持续回归与清理 358 项预期 FAIL；WPT 全量 11,795 个测试文件已完成基线 9,696 个（PASS 6,990 / FAIL 2,334 / TIMEOUT 318 / SKIP/ERR 54），尚余 2,099 个未建档（其中 1,916 个在 `/css/`）。
 
 - **[Phase 478 CSSOM `outline-style` / `text-decoration` / `grid-template-areas` 与引号分词修复]** 修复 `src/js/shim/cssom.js` `splitCssTokens` 引号与转义感知、禁用 `outline-style`/`outline` 的 `hidden`，并新增 `text-decoration`（连续装饰线组与样式/颜色/粗细互斥校验）与 `grid-template-areas`（`none|<string>+` 非空与列数一致校验）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B219` 并派发 `WPT Batch 220 Runner`。
+
+- **[Phase 479 CSSOM `list-style*` 与 `content: counter()` 校验]** 在 `src/js/shim/cssom.js` 中新增 `list-style-type`（含 `symbols(...)` 语法与 `numeric`/`alphabetic` 至少 2 项限制）、`list-style-image`、`list-style` 简写及 `content` 内 `counter()/counters()` 非法样式拦截；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。

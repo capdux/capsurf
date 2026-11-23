@@ -3278,3 +3278,10 @@
   - `text-decoration`: 校验装饰线连续分组（拦截 `overline blue underline`）与样式/颜色/粗细互斥。
   - `grid-template-areas`: 校验 `none | <string>+`，拦截空串/纯空白与行列数不一致。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 479: CSSOM `list-style-type`, `list-style-image`, `list-style`, `content` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - 新增 `isValidSymbolsFn` 校验 `symbols(<symbols-type>? <string>+)`（`numeric`/`alphabetic` 至少 2 个字符串，拒绝 `url()` 与 `repeating`）。
+  - `list-style-type` / `list-style-image` / `list-style` 简写：校验位置、图像与类型互斥组合。
+  - `content`: 拦截 `counter(name, none|unset|initial|inherit|revert|revert-layer|default)` 与 `counters(...)` 同类非法样式。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -2423,3 +2423,7 @@
 ### Phase 478: CSSOM 引号分词与 `text-decoration`/`grid-template-areas` 门禁
 - `splitCssTokens` 增加引号态，使 `grid-template-areas: "a b" "c d"` 与 `text-overflow: "a b"` 等带空格字符串不再被错误切分。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 479: CSSOM 列表样式与计数器函数门禁
+- `list-style-type` 与 `list-style` 复用 `isValidSymbolsFn`，保证非法 `symbols()` 使整个简写声明失效；`content` 拦截 `counter()`/`counters()` 中的全局/禁用关键字。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
