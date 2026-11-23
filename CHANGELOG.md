@@ -3487,3 +3487,6 @@
 - **Phase 520**:
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 新增 `transition-property` 规范化。
   - `src/js/shim/window.js`: 为 `transition-delay`、`transition-duration`、`animation-delay`、`animation-duration` 补充 `<time>` 与 `calc(...)` 求值。
+- **Phase 521**:
+  - `src/js/shim/cssom.js`: 新增 `splitTopLevelComma` 括号感知逗号切分、`transition-behavior` 支持、`transition-property` 合法性校验及 `transition` 多层 shorthand 展开/反序列化。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B267`（`/css/css-grid/parsing/` 6/61，+2 `FAIL→PASS`）与 `PW Batch 155`（106/176 PASS）。

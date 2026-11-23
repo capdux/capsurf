@@ -7330,3 +7330,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 519 完成 (`text-wrap*` 与 `white-space-collapse` 支持及 shorthand 展开)**：在 `src/js/shim/cssom.js` `SUPPORTED_CSS_PROPS` 新增 `text-wrap`、`text-wrap-mode`、`text-wrap-style`、`white-space-collapse`，并实现 `text-wrap` 校验、规范化及无残留 shorthand 展开/反序列化（`text-wrap-mode` + `text-wrap-style`）。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
 
 - **Phase 520 完成 (`transition-property` 关键字规范化 + `<time>` 计算值求值)**：在 `src/js/shim/cssom.js` `normalizeCssSpecifiedValue` 新增 `transition-property`（`all`/`none` 小写化且保留自定义属性大小写）；在 `src/js/shim/window.js` 为 `transition-delay`、`transition-duration`、`animation-delay`、`animation-duration` 补充 `<time>`（`ms -> s`、`calc(...)`）求值。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
+
+- **Phase 521 完成 (`transition-property` 校验 + `transition` shorthand 展开 + `transition-behavior`)**：在 `src/js/shim/cssom.js` 新增 `transition-behavior`、`transition-property` 合法性校验、`splitTopLevelComma` 括号感知切分及 `transition` 多层展开与反序列化。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B267` 与 `PW Batch 155`。

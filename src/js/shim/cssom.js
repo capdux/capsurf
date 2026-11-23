@@ -94,7 +94,7 @@
     "text-transform", "text-underline-offset", "text-underline-position",
     "text-wrap", "text-wrap-mode", "text-wrap-style", "top",
     "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
-    "transition", "transition-delay", "transition-duration", "transition-property",
+    "transition", "transition-behavior", "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "unicode-range",
     "user-select", "vertical-align", "visibility", "white-space", "white-space-collapse", "widows", "width",
     "will-change", "word-break", "word-spacing", "word-wrap", "writing-mode", "z-index",
@@ -182,6 +182,31 @@
       "whitesmoke", "yellowgreen"
     ]);
     return NAMED_COLORS.has(v);
+  }
+
+  function splitTopLevelComma(s) {
+    const out = [];
+    let cur = "", depth = 0, quote = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (quote) {
+        cur += ch;
+        if (ch === "\\" && i + 1 < s.length) { cur += s[++i]; continue; }
+        if (ch === quote) quote = "";
+        continue;
+      }
+      if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+      if (ch === "(") depth++;
+      else if (ch === ")" && depth > 0) depth--;
+      if (depth === 0 && ch === ",") {
+        out.push(cur.trim());
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur.trim() || out.length > 0) out.push(cur.trim());
+    return out;
   }
 
   function splitCssTokens(s) {
@@ -318,6 +343,7 @@
       "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
       "scrollbar-width": ["auto", "thin", "none"],
       "field-sizing": ["fixed", "content"],
+      "transition-behavior": ["normal", "allow-discrete"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1195,6 +1221,18 @@
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
     }
+    if (prop === "transition-property") {
+      const items = trimmed.split(",");
+      if (items.length === 1 && items[0].trim().toLowerCase() === "none") return true;
+      const BAD = new Set(["none", "initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i].trim());
+        if (toks.length !== 1) return false;
+        const t = toks[0], tl = t.toLowerCase();
+        if (BAD.has(tl) || !/^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+      }
+      return true;
+    }
     if (prop === "text-wrap") {
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > 2) return false;
@@ -1933,6 +1971,34 @@
       if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
       if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
     }
+    if (key === "transition") {
+      const layers = splitTopLevelComma(normV);
+      const props = [], durs = [], tfs = [], dels = [], behs = [];
+      const TF_KW = new Set(["ease", "linear", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      for (let li = 0; li < layers.length; li++) {
+        const p = splitCssTokens(layers[li].trim());
+        let pr = "all", du = "0s", tf = "ease", dl = "0s", bh = "normal", seenTime = 0;
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (tl === "normal" || tl === "allow-discrete") bh = tl;
+          else if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t;
+          else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl) || tl === "0") {
+            const tv = tl === "0" ? "0s" : t;
+            if (seenTime === 0) du = tv;
+            else dl = tv;
+            seenTime++;
+          } else pr = (tl === "all" || tl === "none") ? tl : t;
+        }
+        props.push(pr); durs.push(du); tfs.push(tf); dels.push(dl); behs.push(bh);
+      }
+      return [
+        ["transition-property", props.join(", ")],
+        ["transition-duration", durs.join(", ")],
+        ["transition-timing-function", tfs.join(", ")],
+        ["transition-delay", dels.join(", ")],
+        ["transition-behavior", behs.join(", ")]
+      ];
+    }
     if (key === "text-wrap") {
       const p = splitCssTokens(normV.toLowerCase());
       let m = "wrap", st = "auto";
@@ -1972,6 +2038,7 @@
     flex: ["flex-grow", "flex-shrink", "flex-basis"],
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
     "text-wrap": ["text-wrap-mode", "text-wrap-style"],
+    transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
     overflow: ["overflow-x", "overflow-y"],
@@ -2013,6 +2080,23 @@
     if (key === "text-emphasis") {
       if (vals[1] === "currentcolor") return vals[0];
       return vals[0] + " " + vals[1];
+    }
+    if (key === "transition") {
+      const pArr = splitTopLevelComma(vals[0]), dArr = splitTopLevelComma(vals[1]), tArr = splitTopLevelComma(vals[2]), dlArr = splitTopLevelComma(vals[3]), bArr = splitTopLevelComma(vals[4]);
+      const n = pArr.length;
+      if (dArr.length !== n || tArr.length !== n || dlArr.length !== n || bArr.length !== n) return "";
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const pr = pArr[i].trim(), du = dArr[i].trim(), tf = tArr[i].trim(), dl = dlArr[i].trim(), bh = bArr[i].trim();
+        const parts = [];
+        if (pr !== "all") parts.push(pr);
+        if (du !== "0s" || dl !== "0s") parts.push(du);
+        if (tf !== "ease") parts.push(tf);
+        if (dl !== "0s") parts.push(dl);
+        if (bh !== "normal") parts.push(bh);
+        out.push(parts.length > 0 ? parts.join(" ") : "all");
+      }
+      return out.join(", ");
     }
     if (key === "text-wrap") {
       if (vals[0] === "wrap" && vals[1] === "auto") return "wrap";

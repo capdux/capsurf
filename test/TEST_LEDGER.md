@@ -1358,3 +1358,20 @@
 - `/css/css-text/parsing/`: 86 total | **52 PASS (up from 47, `text-wrap*` & `white-space-collapse-computed` green!)** | 34 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-display/parsing/`: 5 total | 1 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **53 PASS / 38 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B266 (port=19700, Phase 520 verification, 49 tests)
+- `/css/css-transitions/parsing/`: 14 total | **8 PASS (up from 5, `transition-property-valid` & `transition-{delay,duration}-computed` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | 17 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **25 PASS / 24 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B267 (port=19700, Phase 520 verification, 61 tests)
+- `/css/css-grid/parsing/ --shard 1/2`: 31 total | 3 PASS (`FAIL→PASS`: `grid-template-rows-repeat-intrinsic-valid.tentative`) | 27 FAIL | 1 TIMEOUT | 0 CRASH
+- `/css/css-grid/parsing/ --shard 2/2`: 30 total | 3 PASS (`FAIL→PASS`: `grid-template-columns-repeat-intrinsic-valid.tentative`) | 26 FAIL | 1 TIMEOUT | 0 CRASH
+- Totals: **6 PASS / 53 FAIL / 2 TIMEOUT / 0 CRASH**
+
+### PW Batch 155 (port=19386, Phase 517 verification, 176 tests)
+- `page-evaluate.spec.ts`: 35 PASS | 1 FAIL | 59 TIMEOUT | 0 SKIP
+- `page-network-response.spec.ts`: **18 / 21 PASS** | 2 FAIL | 1 TIMEOUT | 0 SKIP
+- `page-keyboard.spec.ts`: **38 / 44 PASS** | 3 FAIL | 3 TIMEOUT | 0 SKIP
+- `page-dispatchevent.spec.ts`: **15 / 16 PASS** | 1 FAIL | 0 TIMEOUT | 0 SKIP
+- Totals: **106 PASS / 7 FAIL / 63 TIMEOUT / 0 SKIP**

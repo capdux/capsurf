@@ -2537,3 +2537,4 @@
 - **Phase 518**: 补全 `transform-box`、`line-break`、`word-wrap` 等 7 个 `getComputedStyle` 长手属性注册，打通对应 `*-computed.html` WPT 测试。
 - **Phase 519**: 补齐 `text-wrap*` 与 `white-space-collapse` 支持声明及 `text-wrap` 双向 shorthand 展开，打通 `css-text` 中 `text-wrap*` 与 `white-space-collapse` 测试。
 - **Phase 520**: 补全 `<time>` 计算值转换（`ms` 转 `s` 与 `calc()` 时间表达式求值）及 `transition-property` 保留大小写规范序列化。
+- **Phase 521**: 引入 `splitTopLevelComma` 避免 `cubic-bezier(...)`/`steps(...)` 内逗号破坏 `transition` 多层拆分，打通 `transition-property-invalid` 与 `transition-shorthand`。
