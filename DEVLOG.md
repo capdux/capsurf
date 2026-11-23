@@ -2339,3 +2339,7 @@
 - Phase 456 (`src/js/shim/cssom.js`): 扩展 `KEYWORD_CSS_PROPS` 并增加 `overflow` 1~2 关键字校验。
 
 - Phase 457 (`cssom.js`): 抽离 `splitCssTokens` 与 `isValidLenPct` 对齐盒模型尺寸/内外边距 CSS 语法校验。
+
+### Phase 458: CSSOM 排版与透明度属性语法门禁
+- `tab-size` 在 CSS Text 3 中仅支持 `<number [0,∞]> | <length [0,∞]>`，不允许百分比（包括 `calc(40% + 50px)`），需在 `cssom.js` 中对 `%` 显式拦截。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

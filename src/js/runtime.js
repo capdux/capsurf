@@ -4132,6 +4132,37 @@
         if (/^fit-content\(/i.test(t)) return true;
         return isValidLenPct(t, false);
       }
+      if (prop === "orphans" || prop === "widows") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        return /^\+?[1-9]\d*$/.test(t);
+      }
+      if (prop === "tab-size") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (/^(?:var|env)\(/i.test(t)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) return !t.includes("%");
+        if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
+          return Number(t) >= 0 && !t.startsWith("-");
+        }
+        if (t.endsWith("%")) return false;
+        return isValidLenPct(t, false);
+      }
+      if (prop === "letter-spacing" || prop === "word-spacing") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        return toks[0] === "normal" || isValidLenPct(toks[0], true);
+      }
+      if (prop === "opacity") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
+      }
 
       return true;
     }

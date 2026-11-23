@@ -3112,3 +3112,11 @@
 - **Phase 456 (`src/js/shim/cssom.js`, `src/js/runtime_source.cp`)**：新增 `break-*` / `box-decoration-break` / `text-decoration-style` / `text-decoration-skip-ink` 及 `overflow` 合法性校验。
 
 - **Phase 457 (`src/js/shim/cssom.js`, `src/js/runtime_source.cp`)**：新增 `margin*`/`padding*`/`width`/`height`/`min-*`/`max-*`/`block-size`/`inline-size` 盒模型尺寸合法性校验与多 token 精确切分。
+
+### Phase 458: CSSOM `orphans`/`widows`, `tab-size`, `letter-spacing`/`word-spacing`, `opacity` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `orphans` / `widows`: 仅允许正整数（`>= 1`）或数学/变量函数，拒绝 `0`、负数、小数、关键字及多 token。
+  - `tab-size`: 仅允许非负 `<number>` 或非负 `<length>`（显式拒绝 `%` 与含 `%` 的 `calc(...)`）。
+  - `letter-spacing` / `word-spacing`: 仅允许 `normal` 或 `<length-percentage>`（支持负值与 `calc`）。
+  - `opacity`: 仅允许 `<number>` 或 `<percentage>`（含数学/变量函数），拒绝关键字与长度单位。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
