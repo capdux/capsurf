@@ -12659,11 +12659,38 @@
     if (!proto.click) {
       proto.click = function () {
         const MouseCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.MouseEvent) || MouseEvent;
-        const EventCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.Event) || Event;
+        const dispatchTrusted = typeof dispatchTrustedEvent === "function"
+          ? dispatchTrustedEvent
+          : function (t, e) { return t.dispatchEvent(e); };
+        const selfTag = String(this.tagName || this.localName || "").toLowerCase();
+        const selfType = selfTag === "input" ? String(this.getAttribute ? (this.getAttribute("type") || "text") : "text").toLowerCase() : "";
+        const isMutableInput = selfTag === "input" && !this.disabled && !(this.hasAttribute && this.hasAttribute("disabled"));
+        let preSaved = null;
+        if (isMutableInput && selfType === "checkbox") {
+          preSaved = { type: "checkbox", checked: Boolean(this.checked), indeterminate: Boolean(this.indeterminate) };
+          this.indeterminate = false;
+          this.checked = !preSaved.checked;
+        } else if (isMutableInput && selfType === "radio") {
+          preSaved = { type: "radio", checked: Boolean(this.checked) };
+          this.checked = true;
+        }
         const evt = new MouseCtor("click", { bubbles: true, cancelable: true, composed: true });
         this.dispatchEvent(evt);
-        if (!evt.defaultPrevented) {
-          const tag = String(this.tagName || this.localName || "").toLowerCase();
+        if (evt.defaultPrevented) {
+          if (preSaved) {
+            this.checked = preSaved.checked;
+            if (preSaved.type === "checkbox") this.indeterminate = preSaved.indeterminate;
+          }
+          return;
+        }
+        if (preSaved) {
+          if (preSaved.type === "checkbox" || (preSaved.type === "radio" && !preSaved.checked)) {
+            dispatchTrusted(this, new Event("input", { bubbles: true, cancelable: false, composed: true }));
+            dispatchTrusted(this, new Event("change", { bubbles: true, cancelable: false }));
+          }
+          return;
+        }
+        {
           // Walk up ancestors to find an <a>, <label>, or interactive control
           let anchor = null;
           let labelEl = null;
@@ -12677,16 +12704,14 @@
                   if (iType === "checkbox") {
                     cur.indeterminate = false;
                     cur.checked = !cur.checked;
-                    if (typeof cur.dispatchEvent === "function") {
-                      cur.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
-                      cur.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
-                    }
+                    dispatchTrusted(cur, new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                    dispatchTrusted(cur, new Event("change", { bubbles: true, cancelable: false }));
                   } else if (iType === "radio") {
                     const wasChecked = Boolean(cur.checked);
                     cur.checked = true;
-                    if (!wasChecked && typeof cur.dispatchEvent === "function") {
-                      cur.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
-                      cur.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                    if (!wasChecked) {
+                      dispatchTrusted(cur, new Event("input", { bubbles: true, cancelable: false, composed: true }));
+                      dispatchTrusted(cur, new Event("change", { bubbles: true, cancelable: false }));
                     }
                   }
                 }

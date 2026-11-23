@@ -3078,3 +3078,5 @@
 - **Phase 439 (`src/js/shim/events/dispatch.js`, `src/js/shim/range.js`, `src/js/shim/parser.js`, `src/js/runtime_source.cp`)**：修正 `AT_TARGET` 捕获先于冒泡顺序；补齐 `StaticRange` 参数与 `InvalidNodeTypeError` 校验；新增 `ParsedDocument.createCDATASection`。
 
 - **Phase 440 (`src/js/shim/index.js`, `src/js/shim/node-base.js`, `src/js/runtime_source.cp`)**：`cloneNode` 按 HTML 克隆步骤迁移 `<input>` 与 `<textarea>` 脏状态标志。
+
+- **Phase 441 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`checkbox`/`radio` `click()` 补齐预激活/取消回滚步骤及受信任 `input`/`change` 事件派发。

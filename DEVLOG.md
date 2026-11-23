@@ -2305,3 +2305,5 @@
 - Phase 439 (`events/dispatch.js`, `range.js`, `parser.js`): `PHASE_AT_TARGET` 按 `[true, false]` 两轮触发保证捕获优先于冒泡；`StaticRange` 补齐 `Node`/`DocumentType`/`Attr` 校验；`ParsedDocument` 实装 `createCDATASection`。
 
 - Phase 440 (`index.js`, `node-base.js`): 抽离 `copyCloneFormState` 在 `Element.prototype.cloneNode` 中递归迁移 `<input>` 与 `<textarea>` 脏状态。
+
+- Phase 441 (`src/js/shim/element/html-element.js`): 对齐 HTML `checkbox`/`radio` 预激活与 `defaultPrevented` 回滚规范，使用 `dispatchTrustedEvent` 派发可信 `input`/`change` 事件。
