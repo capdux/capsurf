@@ -3108,3 +3108,5 @@
 - **Phase 454 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`proto.click()` 遇交互式子元素（`<details>`/`<embed>`/`<iframe>`/`<audio/video[controls]>`/`<img/object[usemap]>`）提前中断 `<label>` 点击转发。
 
 - **Phase 455 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime_source.cp`)**：新增 28 个纯关键字 CSS 属性白名单校验并打通内联 `style` 赋值与 `CSS.supports` 统一校验路径。
+
+- **Phase 456 (`src/js/shim/cssom.js`, `src/js/runtime_source.cp`)**：新增 `break-*` / `box-decoration-break` / `text-decoration-style` / `text-decoration-skip-ink` 及 `overflow` 合法性校验。

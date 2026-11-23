@@ -249,10 +249,25 @@
       "border-block-end-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
       "border-inline-start-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
       "border-inline-end-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "break-before": ["auto", "avoid", "always", "all", "avoid-page", "page", "left", "right", "recto", "verso", "avoid-column", "column", "avoid-region", "region"],
+      "break-after": ["auto", "avoid", "always", "all", "avoid-page", "page", "left", "right", "recto", "verso", "avoid-column", "column", "avoid-region", "region"],
+      "break-inside": ["auto", "avoid", "avoid-page", "avoid-column", "avoid-region"],
+      "box-decoration-break": ["slice", "clone"],
+      "text-decoration-style": ["solid", "double", "dotted", "dashed", "wavy"],
+      "text-decoration-skip-ink": ["auto", "none", "all"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
       return allowedKeywords.indexOf(vLower) !== -1;
+    }
+    if (prop === "overflow") {
+      const parts = vLower.split(/\s+/);
+      if (parts.length < 1 || parts.length > 2) return false;
+      const ov = ["visible", "hidden", "clip", "scroll", "auto"];
+      for (let i = 0; i < parts.length; i++) {
+        if (ov.indexOf(parts[i]) === -1) return false;
+      }
+      return true;
     }
 
     return true;
