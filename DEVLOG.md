@@ -2479,3 +2479,7 @@
 ### Phase 492: CSS 指定值归一化统一接入
 - 确保 `el.style.prop = val`（`styleProxy.set`）、`el.style.setProperty` 与样式表 `CSSStyleDeclaration` 三条路径共用 `__capsurf_normalizeCssValue`。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 493: CSS 指定值 1~4 边最短序列化
+- 复用模块级 `splitCssTokens` 保证含 `calc(...)` 空格的简写属性（如 `margin: calc(1px + 2px) 0 calc(1px + 2px) 0`）也能安全折叠。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

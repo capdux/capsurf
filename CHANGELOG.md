@@ -3369,3 +3369,9 @@
 - `src/js/shim/cssom.js`: 新增 `normalizeCssSpecifiedValue` 并导出为 `global.__capsurf_normalizeCssValue`，接入 `decl.setProperty`（支持数值科学计数法/`-0`、`0 -> 0px` 及 `inset-block`/`inset-inline`/`margin-block`/`padding-block`/`gap`/`overflow`/`place-*` 双边同值折叠）。
 - `src/js/shim/element/element.js`: 将 `globalThis.__capsurf_normalizeCssValue` 接入 `declTarget.setProperty` 与 `styleProxy.set`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 493: CSS 指定值 1~4 边折叠与 `scale` 归一化
+- `src/js/shim/cssom.js`:
+  - `splitCssTokens`: 提升至模块作用域，供 `isValidCssValue` 与 `normalizeCssSpecifiedValue` 共享。
+  - `normalizeCssSpecifiedValue`: 新增 `margin`, `padding`, `inset`, `border-width`, `border-style` 的 1~4 边最短折叠及 `0 -> 0px`；新增 `scale` 百分比转数字、剔除冗余 `1` 与等值合并。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

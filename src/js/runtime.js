@@ -3973,6 +3973,31 @@
       return NAMED_COLORS.has(v);
     }
 
+    function splitCssTokens(s) {
+      const out = [];
+      let cur = "";
+      let depth = 0, quote = "";
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (quote) {
+          cur += ch;
+          if (ch === "\\" && i + 1 < s.length) { cur += s[++i]; continue; }
+          if (ch === quote) quote = "";
+          continue;
+        }
+        if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+        if (ch === "(") depth++;
+        else if (ch === ")" && depth > 0) depth--;
+        if (depth === 0 && /\s/.test(ch)) {
+          if (cur) { out.push(cur); cur = ""; }
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur) out.push(cur);
+      return out;
+    }
+
     function isValidCssValue(prop, value) {
       if (typeof value !== "string") value = String(value);
       const trimmed = value.trim();
@@ -4094,31 +4119,6 @@
           if (ov.indexOf(parts[i]) === -1) return false;
         }
         return true;
-      }
-
-      function splitCssTokens(s) {
-        const out = [];
-        let cur = "";
-        let depth = 0, quote = "";
-        for (let i = 0; i < s.length; i++) {
-          const ch = s[i];
-          if (quote) {
-            cur += ch;
-            if (ch === "\\" && i + 1 < s.length) { cur += s[++i]; continue; }
-            if (ch === quote) quote = "";
-            continue;
-          }
-          if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
-          if (ch === "(") depth++;
-          else if (ch === ")" && depth > 0) depth--;
-          if (depth === 0 && /\s/.test(ch)) {
-            if (cur) { out.push(cur); cur = ""; }
-          } else {
-            cur += ch;
-          }
-        }
-        if (cur) out.push(cur);
-        return out;
       }
 
       function isValidLenPct(tok, allowNegative) {
@@ -5121,7 +5121,7 @@
       }
       if (ZERO_PX_PROPS.has(key) && (s === "0" || s === "+0" || s === "-0")) return "0px";
       if (TWO_SIDE_PROPS.has(key)) {
-        const parts = s.split(/\s+/);
+        const parts = splitCssTokens(s);
         const isLenProp = !key.startsWith("overflow") && !key.startsWith("place-");
         if (isLenProp) {
           for (let i = 0; i < parts.length; i++) {
@@ -5129,6 +5129,38 @@
           }
         }
         if (parts.length === 2 && parts[0] === parts[1]) return parts[0];
+        return parts.join(" ");
+      }
+      if (key === "margin" || key === "padding" || key === "inset" || key === "border-width") {
+        const parts = splitCssTokens(s);
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+        }
+        if (parts.length === 4 && parts[1] === parts[3]) parts.pop();
+        if (parts.length === 3 && parts[0] === parts[2]) parts.pop();
+        if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
+        return parts.join(" ");
+      }
+      if (key === "border-style") {
+        const parts = splitCssTokens(s.toLowerCase());
+        if (parts.length === 4 && parts[1] === parts[3]) parts.pop();
+        if (parts.length === 3 && parts[0] === parts[2]) parts.pop();
+        if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
+        return parts.join(" ");
+      }
+      if (key === "scale") {
+        const parts = splitCssTokens(s);
+        for (let i = 0; i < parts.length; i++) {
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(parts[i])) {
+            const n = Number(parts[i]);
+            if (Number.isFinite(n)) parts[i] = String(n === 0 ? 0 : n);
+          } else {
+            const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(parts[i]);
+            if (pm) parts[i] = String(Number(pm[1]) / 100);
+          }
+        }
+        if (parts.length === 3 && parts[2] === "1") parts.pop();
+        if (parts.length === 2 && parts[1] === parts[0]) parts.pop();
         return parts.join(" ");
       }
       return s;
