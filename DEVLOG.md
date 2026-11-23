@@ -2278,3 +2278,4 @@
 - Phase 424 (`src/js/shim/window.js`, `src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`): 按字母序排列 `supportedEntryTypes`、实现 `link.fetchPriority` 反射、并对齐 `Option.prototype` 原型链。
 - Phase 425 (`src/js/shim/element/forms/form.js`, `button.js`, `input.js`): 提取 `resolveFormActionUrl` 公共函数，统一实现 `action`/`formAction` 相对 `<base href>` 解析与空串回退文档 URL。
 - Phase 426 (`src/js/shim/collections.js`, `element.js`, `fieldset.js`): 实现 `DOMTokenList.supports()`、`relList` 支持 token 集合及 `HTMLFieldSetElement.validationMessage`。
+- Phase 427 (`src/js/shim/element/html-classes.js`, `select.js`): 对齐 WebIDL `[LegacyFactoryFunction]` 规范，将 `Image.prototype` 与 `Option.prototype` 设为不可写/不可枚举/不可配置。

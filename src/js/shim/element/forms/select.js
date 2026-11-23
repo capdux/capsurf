@@ -297,7 +297,12 @@ function installSelectElement(global) {
     if (selected !== undefined) opt.selected = Boolean(selected);
     return opt;
   };
-  global.Option.prototype = HTMLOptionElement.prototype;
+  Object.defineProperty(global.Option, "prototype", {
+    value: HTMLOptionElement.prototype,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
   if (typeof globalThis !== "undefined") {
     globalThis.Option = global.Option;
   }

@@ -1645,7 +1645,12 @@ function installHtmlClasses(global) {
     if (height !== undefined) img.height = height;
     return img;
   }
-  Image.prototype = HTMLImageElement.prototype;
+  Object.defineProperty(Image, "prototype", {
+    value: HTMLImageElement.prototype,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
   markNative(Image, "Image");
   global.Image = Image;
   if (typeof globalThis !== "undefined") globalThis.Image = Image;

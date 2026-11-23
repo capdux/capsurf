@@ -842,3 +842,4 @@
 | WPT-B159 | `/css-pseudo/` + `/css-contain/` + `/css-transitions/` + `/css-writing-modes/ 1/2` | 63/109 PASS (`pseudo` 2/10, `contain` **56/69** **+1 FAIL→PASS**, `transitions` 2/20, `writing-modes 1/2` 3/10 **+1 FAIL→PASS**, 2 CRASH) |
 | WPT-B161 | `attributes-common-to-form-controls/` + `the-iframe-element/ 2/2` + `the-link-element/` + `the-option-element/` | 23/99 PASS (`form-controls` `7/8`匹配 `formaction`过!, `iframe 2/2` 16/76 **+1 ERROR→PASS**, `link` 5/8 `fetchpriority`过!, `option` 1/7, 0 CRASH) |
 | WPT-B162 | `/css-writing-modes/ 2/2` + `/css-animations/` + `/css-shapes/` + `/css-tables/` | 38/156 PASS (`writing-modes 2/2` 2/10, `animations` 20/58, `shapes` 12/70, `tables` 4/18, 0 CRASH) |
+| WPT-B163 | `/dom/abort/` + `/dom/collections/` + `/dom/traversal/` + `the-img-element/` | 17/40 PASS (`abort` 4/7, `collections` **7/11** (`domstringmap`过!), `traversal` 5/17, `img` 1/5, 0 CRASH) |
