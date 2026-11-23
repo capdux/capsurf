@@ -3549,3 +3549,6 @@
 - **Phase 545** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 解除 `-color` 通用分支对 `outline-color`/`caret-color` 的前置拦截。
 
 - **Phase 546** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `caret-color` 双值省略与计算、`cursor` `image-set`/`light-dark` 规范化及通用 `evalGradientComputed`。
+
+- **Phase 547** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 严化 `cursor` 图像候选校验规则拦截渐变生成图像，使 `cursor-invalid.html` 全绿通过；对齐 `css-ui/parsing/` 基线预期。
+

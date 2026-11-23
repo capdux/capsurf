@@ -6067,16 +6067,16 @@
     "reason": null
   },
   "/css/css-ui/parsing/caret-color-computed.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: caret-color computes to auto or resolved rgb color"
   },
   "/css/css-ui/parsing/caret-color-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-ui/parsing/caret-color-valid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": "Fixed: caret-color supports 1 or 2 auto/color values"
   },
   "/css/css-ui/parsing/cursor-computed.html": {
     "expected": "FAIL",
@@ -6087,8 +6087,8 @@
     "reason": null
   },
   "/css/css-ui/parsing/cursor-valid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": "Fixed: cursor supports keyword, image-set, and light-dark with fallback keyword"
   },
   "/css/css-ui/parsing/field-sizing-computed.html": {
     "expected": "PASS",
@@ -6102,13 +6102,9 @@
     "expected": "PASS",
     "reason": null
   },
-  "/css/css-ui/parsing/interactivity-computed.html": {
-    "expected": "FAIL",
-    "reason": null
-  },
   "/css/css-ui/parsing/interactivity.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: interactivity property supported with auto and inert"
   },
   "/css/css-ui/parsing/outline-color-computed.html": {
     "expected": "FAIL",
@@ -6119,24 +6115,24 @@
     "reason": null
   },
   "/css/css-ui/parsing/outline-color-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: outline-color supports color and auto"
   },
   "/css/css-ui/parsing/outline-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-ui/parsing/outline-offset-computed.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": "Fixed: outline-offset computed style resolves to px"
   },
   "/css/css-ui/parsing/outline-offset-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-ui/parsing/outline-offset-valid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": "Fixed: outline-offset supports length values"
   },
   "/css/css-ui/parsing/outline-shorthand.html": {
     "expected": "PASS",
@@ -39024,5 +39020,9 @@
   "/html/semantics/document-metadata/the-meta-element/pragma-directives/attr-meta-http-equiv-refresh/parsing.html?131-last": {
     "expected": "PASS",
     "reason": "document.referrer on frame documents: measured PASS on two runs"
+  },
+  "/css/css-ui/parsing/interactivity-computed.html": {
+    "expected": "TIMEOUT",
+    "reason": "Test uses interpolation-testcommon.js which creates large keyframe animations and timeouts scraping testharness within 5000ms"
   }
 }

@@ -4895,10 +4895,19 @@
         const last = splitCssTokens(parts[parts.length - 1].trim());
         if (last.length !== 1 || !KW.has(last[0])) return false;
         const isCoord = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(x) || /^(?:calc|min|max|clamp)\(/i.test(x);
+        const isCursorImg = (tok) => {
+          if (/^(?:url|image-set)\(/i.test(tok)) return true;
+          if (/^light-dark\(/i.test(tok)) {
+            const inn = tok.slice(11, -1).trim();
+            const p = splitTopLevelComma(inn);
+            return p.length === 2 && isCursorImg(p[0]) && isCursorImg(p[1]);
+          }
+          return false;
+        };
         for (let i = 0; i < parts.length - 1; i++) {
           const toks = splitCssTokens(parts[i].trim());
           if (toks.length !== 1 && toks.length !== 3) return false;
-          if (!/^(?:url|image-set|light-dark|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient)\(/i.test(toks[0])) return false;
+          if (!isCursorImg(toks[0])) return false;
           if (toks.length === 3 && (!isCoord(toks[1]) || !isCoord(toks[2]))) return false;
         }
         return true;

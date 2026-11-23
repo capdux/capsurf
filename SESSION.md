@@ -7399,3 +7399,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 546 (`caret-color` 双值计算与 `cursor` `image-set`/`light-dark`/渐变求值)
 - **[Agent]**: 完成 Phase 546：`caret-color` 第 2 值 `auto` 省略及 `auto->currentcolor` 解析；`cursor` 改用 `splitTopLevelComma` 支持 `image-set("..." -> url("..."))`、`light-dark(...)`、`calc()` 坐标；抽离通用 `evalGradientComputed` 并用于 `list-style-image` 与 `cursor`（支持 `grad`/`rad`/`turn` 转 `deg`、`radial-gradient` 补全 `50%`、`calc(% + px)`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 547 (`cursor` 图像候选严化拦截渐变、基线对齐与全绿稳态推进)
+- **[User]**: 配额不足, 不使用 子智能体,使用主智能体, 继续测试
+- **[Agent]**: 切换至主智能体零子智能体模式持续推进：严化 `cssom.js` 中 `cursor` 图像候选校验规则（仅允许 `url(...)`、`image-set(...)` 及嵌套在 `light-dark()` 内的合法图像，严格拦截不支持的生成式 `gradient`），使 `cursor-invalid.html` 10/10 全绿通过；将 `caret-color-*`、`cursor-valid`、`outline-color-valid`、`outline-offset-*` 与 `interactivity` 升级为 PASS 基线；CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿，完成原子提交。
+

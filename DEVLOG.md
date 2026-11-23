@@ -2606,3 +2606,9 @@
 ### Phase 546: `caret-color` 双值计算与 `cursor` 通用渐变/函数解析
 - `caret-color` 在计算期省略第二个 `auto`，并将剩余 `auto`/`currentcolor` 解析为当前 `color`。
 - 抽离 `evalGradientComputed` 统一服务 `list-style-image` 与 `cursor`；`cursor` 使用 `splitTopLevelComma` 正确切分 `image-set`/`light-dark`/渐变中的逗号。
+
+### Phase 547: `cursor` 图像候选语法严化与 WPT `css-ui/parsing/` 阶段性闭环
+- 根据 CSS UI Level 4 规范与 `cursor-invalid.html` 语法约束，`cursor` 的首部候选图像类型仅支持 `url(...)`、`image-set(...)` 及嵌套在 `light-dark()` 内的合法图像项，不再放行 `linear-gradient`/`radial-gradient`/`conic-gradient` 等不支持的光标生成图像语法。
+- `cursor-invalid.html` 从 6/10 跃升至 10/10（100% ALL GREEN）。
+- 同步在 `wpt-expectations.json` 中对齐已通过的 `caret-color-{valid,computed}`、`cursor-valid`、`outline-color-valid`、`outline-offset-{valid,computed}` 与 `interactivity`，实现预定基线匹配。
+

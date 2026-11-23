@@ -1521,3 +1521,10 @@
 
 ### WPT-B304 (bin_dev Phase 545, 2026-11-23)
 - **Filter `/css/css-lists/parsing/`**: `23` files (**23 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `23/23` matched expectations; **100% ALL GREEN**!).
+
+### WPT-B305 (bin_dev Phase 546, 2026-11-23)
+- **Filter `/css/css-ui/parsing/`**: `39` files (**34 PASS / 4 FAIL / 1 TIMEOUT / 0 ERROR**, `7` unexpected PASS: `caret-color-{valid,computed}`, `cursor-valid`, `interactivity`, `outline-color-valid`, `outline-offset-{valid,computed}`; `cursor-computed` 37/39, `outline-color-computed` 2/3, `cursor-invalid` 6/10).
+
+### WPT-B306 (bin_dev Phase 547, 2026-11-23)
+- **Filter `/css/css-ui/parsing/`**: `39` files (**35 PASS / 3 FAIL / 1 TIMEOUT / 0 ERROR**, `38/39` matched expectations); `cursor-invalid.html` 10/10 (100% PASS), `cursor-valid.html` 10/10 (100% PASS), `caret-color-{valid,computed}` PASS, `outline-*` (8 files PASS); `interactivity-computed.html` TIMEOUT.
+
