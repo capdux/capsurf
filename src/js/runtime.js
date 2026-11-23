@@ -38463,7 +38463,7 @@
           const pv = computedMap.get(pk);
           if (pv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(pv.trim())) {
             const px = evalCssLengthExpr(pv, cbW, fontSize);
-            if (px !== null) computedMap.set(pk, formatCssPx(px));
+            if (px !== null) computedMap.set(pk, formatCssPx(Math.max(0, px)));
           }
         }
 
@@ -38485,7 +38485,7 @@
         }
       }
 
-      // Sticky inset resolution against per-axis scrollport
+      // Sticky inset resolution against per-axis scrollport; static/other inset relative-unit resolution
       if (pos === "sticky") {
         const spW = findStickyScrollportSize(element, "x");
         const spH = findStickyScrollportSize(element, "y");
@@ -38504,6 +38504,16 @@
           const v = computedMap.get(k);
           if (v && v !== "auto") {
             const px = evalCssLengthExpr(v, spH, fontSize);
+            if (px !== null) computedMap.set(k, formatCssPx(px));
+          }
+        }
+      } else {
+        const insetProps = ["top", "right", "bottom", "left"];
+        for (let i = 0; i < insetProps.length; i++) {
+          const k = insetProps[i];
+          const v = computedMap.get(k);
+          if (v && v !== "auto" && v.indexOf("%") === -1) {
+            const px = evalCssLengthExpr(v, 0, fontSize);
             if (px !== null) computedMap.set(k, formatCssPx(px));
           }
         }
@@ -38640,11 +38650,23 @@
         return propList[idx];
       }, "item");
 
+      function serializeBoxShorthand(prefix) {
+        const t = computedMap.get(prefix + "-top") || "0px";
+        const r = computedMap.get(prefix + "-right") || "0px";
+        const b = computedMap.get(prefix + "-bottom") || "0px";
+        const l = computedMap.get(prefix + "-left") || "0px";
+        if (t === r && r === b && b === l) return t;
+        if (r === l) return t === b ? (t + " " + r) : (t + " " + r + " " + b);
+        return t + " " + r + " " + b + " " + l;
+      }
+
       declTarget.getPropertyValue = markNative(function (prop) {
         const p = String(prop).trim();
+        if (p === "margin" || p === "padding") return serializeBoxShorthand(p);
         if (computedMap.has(p)) return computedMap.get(p);
         if (p.startsWith("--")) return "";
         const lower = p.toLowerCase();
+        if (lower === "margin" || lower === "padding") return serializeBoxShorthand(lower);
         if (computedMap.has(lower)) return computedMap.get(lower);
         return "";
       }, "getPropertyValue");
@@ -38685,6 +38707,7 @@
           if (typeof prop === "symbol") return target[prop];
           if (prop in target) return target[prop];
           if (typeof prop === "string") {
+            if (prop === "margin" || prop === "padding") return serializeBoxShorthand(prop);
             if (prop === "cssFloat") return computedMap.get("float") || "";
             if (computedMap.has(prop)) return computedMap.get(prop);
             if (prop.startsWith("--")) return "";
@@ -38702,7 +38725,7 @@
         has: function (target, prop) {
           if (prop in target) return true;
           if (typeof prop === "string") {
-            if (prop === "cssFloat") return true;
+            if (prop === "cssFloat" || prop === "margin" || prop === "padding") return true;
             if (propSet.has(prop) || computedMap.has(prop)) return true;
             const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
             if (propSet.has(kebab) || computedMap.has(kebab)) return true;

@@ -2431,3 +2431,7 @@
 ### Phase 480: `getComputedStyle` 计算值序列化推进
 - `outline-width` 与 `border-*-width` 通过 `evalCssLengthExpr` + `Math.floor(Math.max(0, px))` 对齐 `2.5px -> 2px`、`calc(10px + 0.5em) -> 30px` 与 `thin/medium/thick` 计算值规范。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针全绿，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 481: `getComputedStyle` 盒模型简写与定位偏移计算值完善
+- `margin`/`padding` 简写按四边解析结果自动合并为最短 1/2/3/4 token 形式（如 `10px 40px 60px`），同时保持 `top: -40%` 在 `static` 下保留百分比。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

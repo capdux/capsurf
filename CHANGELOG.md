@@ -3292,3 +3292,9 @@
   - `applyUsedValuesToComputedMap`: 新增 `outline-width` 与 `border-{top,right,bottom,left}-width` 解析（`thin/medium/thick` 映射及非负整数像素截断）。
   - `applyUsedValuesToComputedMap`: 新增 `letter-spacing` / `word-spacing` 绝对长度计算（`letter-spacing: 0px` 归一化为 `"normal"`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 481: `getComputedStyle` `margin`/`padding` 简写序列化与 `top/right/bottom/left` 长度解析
+- `src/js/shim/window.js`:
+  - `getComputedStyle`: 新增 `serializeBoxShorthand` 并在 `get`/`getPropertyValue`/`has` trap 支持 `margin` 与 `padding` 简写。
+  - `applyUsedValuesToComputedMap`: 对 `padding-*` 应用 `Math.max(0, px)` 非负钳位；对非 `sticky` 元素的 `top/right/bottom/left`（非 `auto` 且不含 `%`）调用 `evalCssLengthExpr` 转换为绝对像素。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
