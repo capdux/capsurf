@@ -7219,3 +7219,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 470 CSSOM 字体属性校验]** 在 `src/js/shim/cssom.js` 中补齐 `SUPPORTED_CSS_PROPS`（`font-width`、`font-variant-emoji`、`font-synthesis-*`）与 `KEYWORD_CSS_PROPS`（`font-variant-caps/emoji/position`、`font-synthesis-*`），并新增 `font-size`、`font-style`（含 `oblique [-90deg,90deg]`）、`font-stretch`/`font-width` 校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 471 CSSOM `font-palette` / `font-size-adjust` / `font-synthesis` / `font-language-override` 校验]** 在 `src/js/shim/cssom.js` 中补全 `SUPPORTED_CSS_PROPS`（`"font-language-override"`）并新增上述 4 项字体属性语法校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 472 CSSOM `scale` 数学单位校验与 `font-variant-*` 组合校验]** 在 `src/js/shim/cssom.js` 中强化 `scale` 拦截 `calc(100px)` / `calc(1s)` / `calc(180deg)` 等带非数字单位表达式，并新增 `font-variant-numeric`、`font-variant-ligatures`、`font-variant-east-asian` 分组互斥校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。

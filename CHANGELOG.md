@@ -3224,3 +3224,11 @@
   - `font-synthesis`: 校验 `none | [ weight || [style | oblique-only] || small-caps || position ]`。
   - `font-language-override`: 校验 `normal | <string>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 472: CSSOM `scale` 单位拦截与 `font-variant-numeric/ligatures/east-asian` 校验
+- `src/js/shim/cssom.js`:
+  - `scale`: 拦截 `calc(...)`/`min(...)`/`max(...)`/`clamp(...)` 中的长度/角度/时间/频率/分辨率单位（如 `calc(100px)`, `calc(1s)`, `calc(180deg)`）。
+  - `font-variant-numeric`: 校验 5 个互斥特征组 + `normal`。
+  - `font-variant-ligatures`: 校验 4 个正反互斥特征组 + `normal | none`。
+  - `font-variant-east-asian`: 校验 3 个互斥特征组 + `normal`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

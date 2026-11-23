@@ -742,7 +742,11 @@
       if (toks.length < 1 || toks.length > 3) return false;
       for (let i = 0; i < toks.length; i++) {
         const t = toks[i];
-        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) continue;
+        if (/^(?:var|env)\(/i.test(t)) continue;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
+          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
+          continue;
+        }
         if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t)) return false;
       }
       return true;
@@ -949,6 +953,52 @@
       if (toks.length !== 1) return false;
       const t = toks[0];
       return t.toLowerCase() === "normal" || (/^"[^"]*"$/.test(t)) || (/^'[^']*'$/.test(t));
+    }
+    if (prop === "font-variant-numeric") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "normal") return true;
+      if (toks.length < 1 || toks.length > 5) return false;
+      let sFig = false, sSpc = false, sFrc = false, sOrd = false, sZero = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "lining-nums" || t === "oldstyle-nums") { if (sFig) return false; sFig = true; }
+        else if (t === "proportional-nums" || t === "tabular-nums") { if (sSpc) return false; sSpc = true; }
+        else if (t === "diagonal-fractions" || t === "stacked-fractions") { if (sFrc) return false; sFrc = true; }
+        else if (t === "ordinal") { if (sOrd) return false; sOrd = true; }
+        else if (t === "slashed-zero") { if (sZero) return false; sZero = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "font-variant-ligatures") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && (toks[0] === "normal" || toks[0] === "none")) return true;
+      if (toks.length < 1 || toks.length > 4) return false;
+      let sCom = false, sDis = false, sHis = false, sCtx = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "common-ligatures" || t === "no-common-ligatures") { if (sCom) return false; sCom = true; }
+        else if (t === "discretionary-ligatures" || t === "no-discretionary-ligatures") { if (sDis) return false; sDis = true; }
+        else if (t === "historical-ligatures" || t === "no-historical-ligatures") { if (sHis) return false; sHis = true; }
+        else if (t === "contextual" || t === "no-contextual") { if (sCtx) return false; sCtx = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "font-variant-east-asian") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "normal") return true;
+      if (toks.length < 1 || toks.length > 3) return false;
+      const VARS = new Set(["jis78", "jis83", "jis90", "jis04", "simplified", "traditional"]);
+      let sVar = false, sWid = false, sRuby = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (VARS.has(t)) { if (sVar) return false; sVar = true; }
+        else if (t === "full-width" || t === "proportional-width") { if (sWid) return false; sWid = true; }
+        else if (t === "ruby") { if (sRuby) return false; sRuby = true; }
+        else return false;
+      }
+      return true;
     }
 
     return true;
