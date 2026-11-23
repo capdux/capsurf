@@ -3986,6 +3986,7 @@
           continue;
         }
         if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+        if (ch === "\\" && i + 1 < s.length) { cur += ch + s[++i]; continue; }
         if (ch === "(") depth++;
         else if (ch === ")" && depth > 0) depth--;
         if (depth === 0 && /\s/.test(ch)) {
@@ -4865,7 +4866,7 @@
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length === 0) return false;
         const BAD_ID = new Set(["none", "default", "inherit", "initial", "unset", "revert", "revert-layer"]);
-        const isIdent = (s) => !BAD_ID.has(s) && /^-?[a-z_][a-z0-9_-]*$/i.test(s) && !s.startsWith("--");
+        const isIdent = (s) => !BAD_ID.has(s) && /^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(s) && !s.startsWith("--");
         let i = 0;
         while (i < toks.length) {
           const t = toks[i];
@@ -5598,7 +5599,7 @@
           const tl = p[i].toLowerCase();
           if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/.test(tl) && tl !== "0") {
             nums.push(String(Number(tl)));
-          } else if (tl === "0" && nums.length < 2 && !hasBasis && p.length <= 2) {
+          } else if (tl === "0" && nums.length < 2 && !hasBasis) {
             nums.push("0");
           } else if (/^(?:calc|min|max|clamp)\(/i.test(tl) && nums.length < 2 && !/[a-z%]/.test(tl.replace(/^(?:calc|min|max|clamp)\(/i, ""))) {
             nums.push(p[i]);

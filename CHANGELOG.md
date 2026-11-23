@@ -3460,3 +3460,6 @@
   - `src/js/shim/cssom.js`: 新增 `flex` 与 `text-emphasis` shorthand 校验、展开及反向序列化。
   - `src/js/shim/window.js`: `getShorthandComputed` 补充 `text-decoration`、`text-emphasis`、`list-style`。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B245`（`/css/css-box/parsing/` 23/29、`/css/css-multicol/parsing/` 18/31）。
+- **Phase 511**:
+  - `src/js/shim/cssom.js`: `splitCssTokens` 支持 `\` 转义；`counter-*` `isIdent` 支持转义标识符；修复 `flex: 1 0 max-content` 展开逻辑。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B248`（`/css/css-transforms/parsing/` 15/28 PASS）。

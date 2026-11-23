@@ -1237,3 +1237,32 @@
 - `/css/css-box/parsing/`: 29 total | **23 PASS (up from 22!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-multicol/parsing/`: 31 total | **18 PASS (up from 9!)** | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **41 PASS / 19 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 152 (port=19386, Phase 509 verification, 76 tests)
+- `page-event-pageerror.spec.ts`: **6 / 7 PASS** | 1 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-set-input-files.spec.ts`: **13 / 19 PASS** | 6 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-aria-snapshot.spec.ts`: **37 / 38 PASS** | 1 FAIL (`should include pseudo codepoints`) | 0 TIMEOUT | 0 SKIP
+- `page-emulate-media.spec.ts`: **12 / 12 PASS (100%)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- Totals: **68 PASS / 8 FAIL / 0 TIMEOUT / 0 SKIP**
+
+### WPT-B246 (port=19700, Phase 510 verification, 81 tests)
+- `/css/css-flexbox/parsing/`: 27 total | 21 PASS (`flex-shorthand` 36/40, `flex-computed` 9/14) | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | 24 PASS (`text-emphasis-style-computed-vertical-lr` 7/9) | 7 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-lists/parsing/`: 23 total | 14 PASS (`counter-reset-valid` 15/16, `counter-{increment,set}-valid` 9/10) | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **59 PASS / 22 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 153 (port=19386, Phase 510 verification, 40 tests)
+- `page-add-init-script.spec.ts`: **11 / 11 PASS (100%, +2 unexpected passes!)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-add-script-tag.spec.ts`: **9 / 9 PASS (100%, +1 unexpected pass!)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-add-style-tag.spec.ts`: **4 / 4 PASS (100%, +1 unexpected pass!)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-basic.spec.ts`: **12 / 16 PASS (+1 unexpected pass!)** | 4 FAIL | 0 TIMEOUT | 0 SKIP
+- Totals: **36 PASS / 4 FAIL / 0 TIMEOUT / 0 SKIP**
+
+### WPT-B247 (port=19700, Phase 510 verification, 49 tests)
+- `/css/css-transitions/parsing/`: 14 total | 5 PASS | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | 17 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **22 PASS / 27 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B248 (port=19700, Phase 510 verification, 28 tests)
+- `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **15 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**
