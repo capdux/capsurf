@@ -7245,6 +7245,57 @@ function installWindow(global) {
         }
       }
     }
+    const resolveContainerW = (el) => {
+      let cur = el && el.parentElement;
+      while (cur) {
+        const pMap = collectRawComputedMap(cur, "");
+        const ct = (pMap.get("container-type") || "").toLowerCase();
+        if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+          const w = pMap.get("width");
+          if (w) {
+            const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(w.trim());
+            if (m) return Number(m[1]);
+          }
+        }
+        cur = cur.parentElement;
+      }
+      return 800;
+    };
+    const evalSignCalls = (rawExpr, el) => {
+      if (rawExpr.indexOf("sign(") === -1) return rawExpr;
+      const cw = resolveContainerW(el);
+      const fs = parseFloat(computedMap.get("font-size")) || 16;
+      return rawExpr.replace(/sign\(([^()]+)\)/gi, (full, inner) => {
+        const rep = inner
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs));
+        if (/^[\d+\-*/().\s]+$/.test(rep)) {
+          try {
+            const v = Function("return (" + rep + ")")();
+            if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+          } catch (_) {}
+        }
+        return full;
+      });
+    };
+    const iterVal = computedMap.get("animation-iteration-count");
+    if (iterVal && iterVal.indexOf("calc(") !== -1) {
+      const iterItems = iterVal.split(",").map((part) => {
+        const p = part.trim();
+        if (/^calc\(/i.test(p)) {
+          const inner = evalSignCalls(p.slice(5, -1), element);
+          if (/^[\d+\-*/().\s]+$/.test(inner)) {
+            try {
+              const v = Function("return (" + inner + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.max(0, Number(v.toFixed(6))));
+            } catch (_) {}
+          }
+        }
+        return p;
+      });
+      computedMap.set("animation-iteration-count", iterItems.join(", "));
+    }
     const timeProps = ["transition-delay", "transition-duration", "animation-delay", "animation-duration"];
     for (let ti = 0; ti < timeProps.length; ti++) {
       const tk = timeProps[ti];
@@ -7261,7 +7312,7 @@ function installWindow(global) {
           } else if (p === "0" || p === "+0" || p === "-0") {
             sec = 0;
           } else if (/^calc\(/i.test(p)) {
-            const expr = p.slice(5, -1)
+            const expr = evalSignCalls(p.slice(5, -1), element)
               .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)ms\b/g, (_, n) => String(Number(n) / 1000))
               .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)s\b/g, (_, n) => String(Number(n)));
             if (/^[\d+\-*/().\s]+$/.test(expr)) {
@@ -7279,6 +7330,55 @@ function installWindow(global) {
         });
         computedMap.set(tk, items.join(", "));
       }
+    }
+    const rangeProps = ["animation-range-start", "animation-range-end"];
+    for (let ri = 0; ri < rangeProps.length; ri++) {
+      const rk = rangeProps[ri];
+      const rv = computedMap.get(rk);
+      if (!rv || rv === "initial" || rv === "unset") {
+        computedMap.set(rk, "normal");
+        continue;
+      }
+      const fs = parseFloat(computedMap.get("font-size")) || 16;
+      const items = rv.split(",").map((part) => {
+        const toks = part.trim().split(/\s+/).filter(Boolean);
+        if (toks.length === 0) return "normal";
+        const resolveOff = (tok) => {
+          const tl = tok.toLowerCase();
+          if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
+          const emM = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))em$/i.exec(tl);
+          if (emM) return String(Number((Number(emM[1]) * fs).toFixed(6))) + "px";
+          if (/^calc\(/i.test(tl)) {
+            const inner = tl.slice(5, -1).replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs) + "px");
+            if (/^[\d+\-*/().\s%]+$/.test(inner) && inner.indexOf("%") !== -1 && inner.indexOf("px") === -1) {
+              const expr = inner.replace(/%/g, "");
+              try {
+                const v = Function("return (" + expr + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%";
+              } catch (_) {}
+            }
+            if (/^[\d+\-*/().\spx]+$/i.test(inner) && inner.indexOf("px") !== -1) {
+              const expr = inner.replace(/px/gi, "");
+              try {
+                const v = Function("return (" + expr + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "px";
+              } catch (_) {}
+            }
+            return "calc(" + inner + ")";
+          }
+          return tl;
+        };
+        if (toks.length === 1) {
+          const tl = toks[0].toLowerCase();
+          if (tl === "normal" || tl === "cover" || tl === "contain" || tl === "entry" || tl === "exit" || tl === "entry-crossing" || tl === "exit-crossing") return tl;
+          return resolveOff(toks[0]);
+        }
+        const name = toks[0].toLowerCase();
+        const off = resolveOff(toks.slice(1).join(" "));
+        if (off === "0%") return name;
+        return name + " " + off;
+      });
+      computedMap.set(rk, items.join(", "));
     }
     if ((computedMap.get("text-align") || "").trim().toLowerCase() === "match-parent") {
       let resolvedAlign = "start";
@@ -7310,7 +7410,7 @@ function installWindow(global) {
   const STANDARD_COMPUTED_LONGHANDS = [
     "align-content", "align-items", "align-self", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
-    "animation-play-state", "animation-timing-function", "appearance", "aspect-ratio",
+    "animation-play-state", "animation-range-end", "animation-range-start", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
     "background-position-x", "background-position-y", "background-repeat", "background-size",
@@ -7458,14 +7558,17 @@ function installWindow(global) {
       }
       if (name === "animation" && typeof globalThis.__capsurf_serializeShorthand === "function") {
         const aDefs = {
-          "animation-duration": "0s",
+          "animation-duration": "auto",
           "animation-timing-function": "ease",
           "animation-delay": "0s",
           "animation-iteration-count": "1",
           "animation-direction": "normal",
           "animation-fill-mode": "none",
           "animation-play-state": "running",
-          "animation-name": "none"
+          "animation-name": "none",
+          "animation-timeline": "auto",
+          "animation-range-start": "normal",
+          "animation-range-end": "normal"
         };
         return globalThis.__capsurf_serializeShorthand("animation", (lh) => {
           const v = computedMap.get(lh);
@@ -10039,6 +10142,8 @@ const LIST_VALUED_PROPERTIES = new Set([
   "animation-iteration-count",
   "animation-name",
   "animation-play-state",
+  "animation-range-end",
+  "animation-range-start",
   "animation-timeline",
   "animation-timing-function",
   "background-attachment",

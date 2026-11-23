@@ -2546,3 +2546,7 @@
 - **Phase 527**: 打通 `white-space` 作为 `white-space-collapse` + `text-wrap-mode` 的 CSS Text 4 shorthand，以及 `text-transform` 多修饰符规范排序。
 - **Phase 528**: 打通 `<style>` 规则体内全部 shorthand 与 longhand 的层叠覆盖（解决 `white-space` 与 `text-wrap` 相互覆盖次序），并补全 `text-align: match-parent` 继承求值。
 - **Phase 529**: 打通 `animation` 8 子属性双向 shorthand 展开/序列化与严格校验，涵盖 `animation-valid`、`animation-invalid` 与 `animation-computed`。
+
+### Phase 530: `animation-range-{start,end}`、`animation` 11 长属性展开与 `sign(cqw)` 求值
+- `expandCssShorthand("animation")` 必须将省略 `duration` 层的 `animation-duration` 设为 `"auto"`（CSS Animations 2），并显式重置 `animation-timeline: auto`、`animation-range-start: normal`、`animation-range-end: normal`；`serializeExpandedShorthand` 仅在这 3 项为默认值时序列化为简写。
+- `window.js` 沿 `parentElement` 查找 `container-type: inline-size|size` 祖先宽度计算 `cqw`，在 `timeProps` 和 `animation-iteration-count` 的 `calc()` 求解前先替换 `sign(...)`。

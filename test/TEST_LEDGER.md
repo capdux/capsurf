@@ -1447,3 +1447,14 @@
 - `/css/css-text/parsing/`: 86 total | **58 PASS (up from 54, `text-transform-*`, `text-align-computed`, `white-space-shorthand` green!)** | 28 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-animations/parsing/`: 35 total | 22 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **80 PASS / 41 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B281 (port=19700, Phase 529 verification, 49 tests)
+- `/css/css-animations/parsing/`: 35 total | **25 PASS (up from 22, `animation-{valid,invalid,computed}` green!)** | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transitions/parsing/`: **14 / 14 PASS (100% ALL GREEN!)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **39 PASS / 10 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 157 (bin_dev Phase 529, 2026-11-23)
+- **Specs (`page-network-idle.spec.ts`, `page-network-request.spec.ts`, `page-listeners.spec.ts`, `page-emulate-media.spec.ts`)**: `52` total (`24 PASS / 16 FAIL / 11 TIMEOUT / 1 SKIP`, `page-emulate-media.spec.ts` **12/12 PASS** with 9 unexpected passes; `page-listeners.spec.ts` **3/3 PASS**).
+
+### WPT-B282 (bin_dev Phase 529, 2026-11-23)
+- **Filter `/css/css-text/parsing/`**: `86` files (`58 PASS / 28 FAIL / 0 TIMEOUT / 0 ERROR`, `53` matched expectations, `13` unexpected PASS, `20` unexpected FAIL). `white-space-shorthand-text-wrap.html` 3/6; `word-break-valid.html` 5/6; `letter-spacing-{valid,computed}` 8/9, 7/9; `word-spacing-{valid,computed}` 8/9, 7/9; `hyphenate-character-{valid,computed}` 4/5, 4/5; `tab-size-computed` 8/10.

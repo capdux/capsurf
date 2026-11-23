@@ -12,7 +12,8 @@
     "accent-color", "align-content", "align-items", "align-self", "all",
     "animation", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count",
-    "animation-name", "animation-play-state", "animation-timeline", "animation-timing-function",
+    "animation-name", "animation-play-state", "animation-range-end", "animation-range-start",
+    "animation-timeline", "animation-timing-function",
     "appearance", "aspect-ratio", "backdrop-filter", "backface-visibility",
     "background", "background-attachment", "background-blend-mode", "background-clip",
     "background-color", "background-image", "background-origin", "background-position",
@@ -1279,6 +1280,23 @@
       }
       return true;
     }
+    if (prop === "animation-range-start" || prop === "animation-range-end") {
+      const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+      const items = splitTopLevelComma(vLower);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length === 0 || toks.length > 2) return false;
+        if (toks.length === 1) {
+          if (toks[0] === "normal" || RANGE_NAMES.has(toks[0])) continue;
+          if (!isValidLenPct(toks[0], true)) return false;
+        } else {
+          if (!RANGE_NAMES.has(toks[0])) return false;
+          if (!isValidLenPct(toks[1], true)) return false;
+        }
+      }
+      return true;
+    }
     if (prop === "animation-name") {
       const items = splitTopLevelComma(trimmed);
       if (items.length === 0) return false;
@@ -2033,6 +2051,28 @@
         return part.toLowerCase() === "none" ? "none" : part;
       }).join(", ");
     }
+    if (key === "animation-range-start" || key === "animation-range-end") {
+      const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+      const normOffset = (tok) => {
+        if (/^[+-]?0(?:\.0+)?$/.test(tok)) return "0px";
+        return tok;
+      };
+      return splitTopLevelComma(s).map((part) => {
+        const toks = splitCssTokens(part);
+        if (toks.length === 1) {
+          const tl = toks[0].toLowerCase();
+          if (tl === "normal" || RANGE_NAMES.has(tl)) return tl;
+          return normOffset(toks[0]);
+        }
+        if (toks.length === 2) {
+          const name = toks[0].toLowerCase();
+          const off = normOffset(toks[1]);
+          if (/^[+-]?0(?:\.0+)?%$/.test(off)) return name;
+          return name + " " + off;
+        }
+        return part;
+      }).join(", ");
+    }
     if (key === "transition-property") {
       return s.split(",").map((part) => {
         const t = part.trim();
@@ -2215,7 +2255,7 @@
       const durs = [], tfs = [], dels = [], iters = [], dirs = [], fills = [], plays = [], names = [];
       for (let li = 0; li < layers.length; li++) {
         const p = splitCssTokens(layers[li]);
-        let du = "0s", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
+        let du = "auto", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
         for (let i = 0; i < p.length; i++) {
           const t = p[i], tl = t.toLowerCase();
           if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t;
@@ -2239,7 +2279,10 @@
         ["animation-direction", dirs.join(", ")],
         ["animation-fill-mode", fills.join(", ")],
         ["animation-play-state", plays.join(", ")],
-        ["animation-name", names.join(", ")]
+        ["animation-name", names.join(", ")],
+        ["animation-timeline", "auto"],
+        ["animation-range-start", "normal"],
+        ["animation-range-end", "normal"]
       ];
     }
     if (key === "transition") {
@@ -2326,7 +2369,7 @@
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
     "text-wrap": ["text-wrap-mode", "text-wrap-style"],
     "white-space": ["white-space-collapse", "text-wrap-mode", "text-wrap-style"],
-    animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name"],
+    animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name", "animation-timeline", "animation-range-start", "animation-range-end"],
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
@@ -2374,7 +2417,8 @@
       return vals[0] + " " + vals[1];
     }
     if (key === "animation") {
-      const splitVals = vals.map((v) => splitTopLevelComma(v));
+      if (vals[8].toLowerCase() !== "auto" || vals[9].toLowerCase() !== "normal" || vals[10].toLowerCase() !== "normal") return "";
+      const splitVals = vals.slice(0, 8).map((v) => splitTopLevelComma(v));
       const n = splitVals[0].length;
       if (!splitVals.every((a) => a.length === n)) return "";
       const out = [];
@@ -2382,7 +2426,7 @@
         const du = splitVals[0][i], tf = splitVals[1][i], dl = splitVals[2][i], it = splitVals[3][i],
               dr = splitVals[4][i], fl = splitVals[5][i], pl = splitVals[6][i], nm = splitVals[7][i];
         const parts = [];
-        if (du !== "0s" || dl !== "0s") parts.push(du);
+        if (du !== "auto" || dl !== "0s") parts.push(du === "auto" ? "0s" : du);
         if (tf !== "ease") parts.push(tf);
         if (dl !== "0s") parts.push(dl);
         if (it !== "1") parts.push(it);

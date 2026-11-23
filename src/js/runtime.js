@@ -3802,7 +3802,8 @@
       "accent-color", "align-content", "align-items", "align-self", "all",
       "animation", "animation-composition", "animation-delay", "animation-direction",
       "animation-duration", "animation-fill-mode", "animation-iteration-count",
-      "animation-name", "animation-play-state", "animation-timeline", "animation-timing-function",
+      "animation-name", "animation-play-state", "animation-range-end", "animation-range-start",
+      "animation-timeline", "animation-timing-function",
       "appearance", "aspect-ratio", "backdrop-filter", "backface-visibility",
       "background", "background-attachment", "background-blend-mode", "background-clip",
       "background-color", "background-image", "background-origin", "background-position",
@@ -5069,6 +5070,23 @@
         }
         return true;
       }
+      if (prop === "animation-range-start" || prop === "animation-range-end") {
+        const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+        const items = splitTopLevelComma(vLower);
+        if (items.length === 0) return false;
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i]);
+          if (toks.length === 0 || toks.length > 2) return false;
+          if (toks.length === 1) {
+            if (toks[0] === "normal" || RANGE_NAMES.has(toks[0])) continue;
+            if (!isValidLenPct(toks[0], true)) return false;
+          } else {
+            if (!RANGE_NAMES.has(toks[0])) return false;
+            if (!isValidLenPct(toks[1], true)) return false;
+          }
+        }
+        return true;
+      }
       if (prop === "animation-name") {
         const items = splitTopLevelComma(trimmed);
         if (items.length === 0) return false;
@@ -5823,6 +5841,28 @@
           return part.toLowerCase() === "none" ? "none" : part;
         }).join(", ");
       }
+      if (key === "animation-range-start" || key === "animation-range-end") {
+        const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+        const normOffset = (tok) => {
+          if (/^[+-]?0(?:\.0+)?$/.test(tok)) return "0px";
+          return tok;
+        };
+        return splitTopLevelComma(s).map((part) => {
+          const toks = splitCssTokens(part);
+          if (toks.length === 1) {
+            const tl = toks[0].toLowerCase();
+            if (tl === "normal" || RANGE_NAMES.has(tl)) return tl;
+            return normOffset(toks[0]);
+          }
+          if (toks.length === 2) {
+            const name = toks[0].toLowerCase();
+            const off = normOffset(toks[1]);
+            if (/^[+-]?0(?:\.0+)?%$/.test(off)) return name;
+            return name + " " + off;
+          }
+          return part;
+        }).join(", ");
+      }
       if (key === "transition-property") {
         return s.split(",").map((part) => {
           const t = part.trim();
@@ -6005,7 +6045,7 @@
         const durs = [], tfs = [], dels = [], iters = [], dirs = [], fills = [], plays = [], names = [];
         for (let li = 0; li < layers.length; li++) {
           const p = splitCssTokens(layers[li]);
-          let du = "0s", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
+          let du = "auto", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
           for (let i = 0; i < p.length; i++) {
             const t = p[i], tl = t.toLowerCase();
             if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t;
@@ -6029,7 +6069,10 @@
           ["animation-direction", dirs.join(", ")],
           ["animation-fill-mode", fills.join(", ")],
           ["animation-play-state", plays.join(", ")],
-          ["animation-name", names.join(", ")]
+          ["animation-name", names.join(", ")],
+          ["animation-timeline", "auto"],
+          ["animation-range-start", "normal"],
+          ["animation-range-end", "normal"]
         ];
       }
       if (key === "transition") {
@@ -6116,7 +6159,7 @@
       "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
       "text-wrap": ["text-wrap-mode", "text-wrap-style"],
       "white-space": ["white-space-collapse", "text-wrap-mode", "text-wrap-style"],
-      animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name"],
+      animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name", "animation-timeline", "animation-range-start", "animation-range-end"],
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
       "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
@@ -6164,7 +6207,8 @@
         return vals[0] + " " + vals[1];
       }
       if (key === "animation") {
-        const splitVals = vals.map((v) => splitTopLevelComma(v));
+        if (vals[8].toLowerCase() !== "auto" || vals[9].toLowerCase() !== "normal" || vals[10].toLowerCase() !== "normal") return "";
+        const splitVals = vals.slice(0, 8).map((v) => splitTopLevelComma(v));
         const n = splitVals[0].length;
         if (!splitVals.every((a) => a.length === n)) return "";
         const out = [];
@@ -6172,7 +6216,7 @@
           const du = splitVals[0][i], tf = splitVals[1][i], dl = splitVals[2][i], it = splitVals[3][i],
                 dr = splitVals[4][i], fl = splitVals[5][i], pl = splitVals[6][i], nm = splitVals[7][i];
           const parts = [];
-          if (du !== "0s" || dl !== "0s") parts.push(du);
+          if (du !== "auto" || dl !== "0s") parts.push(du === "auto" ? "0s" : du);
           if (tf !== "ease") parts.push(tf);
           if (dl !== "0s") parts.push(dl);
           if (it !== "1") parts.push(it);
@@ -40189,6 +40233,57 @@
           }
         }
       }
+      const resolveContainerW = (el) => {
+        let cur = el && el.parentElement;
+        while (cur) {
+          const pMap = collectRawComputedMap(cur, "");
+          const ct = (pMap.get("container-type") || "").toLowerCase();
+          if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+            const w = pMap.get("width");
+            if (w) {
+              const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(w.trim());
+              if (m) return Number(m[1]);
+            }
+          }
+          cur = cur.parentElement;
+        }
+        return 800;
+      };
+      const evalSignCalls = (rawExpr, el) => {
+        if (rawExpr.indexOf("sign(") === -1) return rawExpr;
+        const cw = resolveContainerW(el);
+        const fs = parseFloat(computedMap.get("font-size")) || 16;
+        return rawExpr.replace(/sign\(([^()]+)\)/gi, (full, inner) => {
+          const rep = inner
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs));
+          if (/^[\d+\-*/().\s]+$/.test(rep)) {
+            try {
+              const v = Function("return (" + rep + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+            } catch (_) {}
+          }
+          return full;
+        });
+      };
+      const iterVal = computedMap.get("animation-iteration-count");
+      if (iterVal && iterVal.indexOf("calc(") !== -1) {
+        const iterItems = iterVal.split(",").map((part) => {
+          const p = part.trim();
+          if (/^calc\(/i.test(p)) {
+            const inner = evalSignCalls(p.slice(5, -1), element);
+            if (/^[\d+\-*/().\s]+$/.test(inner)) {
+              try {
+                const v = Function("return (" + inner + ")")();
+                if (typeof v === "number" && isFinite(v)) return String(Math.max(0, Number(v.toFixed(6))));
+              } catch (_) {}
+            }
+          }
+          return p;
+        });
+        computedMap.set("animation-iteration-count", iterItems.join(", "));
+      }
       const timeProps = ["transition-delay", "transition-duration", "animation-delay", "animation-duration"];
       for (let ti = 0; ti < timeProps.length; ti++) {
         const tk = timeProps[ti];
@@ -40205,7 +40300,7 @@
             } else if (p === "0" || p === "+0" || p === "-0") {
               sec = 0;
             } else if (/^calc\(/i.test(p)) {
-              const expr = p.slice(5, -1)
+              const expr = evalSignCalls(p.slice(5, -1), element)
                 .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)ms\b/g, (_, n) => String(Number(n) / 1000))
                 .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)s\b/g, (_, n) => String(Number(n)));
               if (/^[\d+\-*/().\s]+$/.test(expr)) {
@@ -40223,6 +40318,55 @@
           });
           computedMap.set(tk, items.join(", "));
         }
+      }
+      const rangeProps = ["animation-range-start", "animation-range-end"];
+      for (let ri = 0; ri < rangeProps.length; ri++) {
+        const rk = rangeProps[ri];
+        const rv = computedMap.get(rk);
+        if (!rv || rv === "initial" || rv === "unset") {
+          computedMap.set(rk, "normal");
+          continue;
+        }
+        const fs = parseFloat(computedMap.get("font-size")) || 16;
+        const items = rv.split(",").map((part) => {
+          const toks = part.trim().split(/\s+/).filter(Boolean);
+          if (toks.length === 0) return "normal";
+          const resolveOff = (tok) => {
+            const tl = tok.toLowerCase();
+            if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
+            const emM = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))em$/i.exec(tl);
+            if (emM) return String(Number((Number(emM[1]) * fs).toFixed(6))) + "px";
+            if (/^calc\(/i.test(tl)) {
+              const inner = tl.slice(5, -1).replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs) + "px");
+              if (/^[\d+\-*/().\s%]+$/.test(inner) && inner.indexOf("%") !== -1 && inner.indexOf("px") === -1) {
+                const expr = inner.replace(/%/g, "");
+                try {
+                  const v = Function("return (" + expr + ")")();
+                  if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%";
+                } catch (_) {}
+              }
+              if (/^[\d+\-*/().\spx]+$/i.test(inner) && inner.indexOf("px") !== -1) {
+                const expr = inner.replace(/px/gi, "");
+                try {
+                  const v = Function("return (" + expr + ")")();
+                  if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "px";
+                } catch (_) {}
+              }
+              return "calc(" + inner + ")";
+            }
+            return tl;
+          };
+          if (toks.length === 1) {
+            const tl = toks[0].toLowerCase();
+            if (tl === "normal" || tl === "cover" || tl === "contain" || tl === "entry" || tl === "exit" || tl === "entry-crossing" || tl === "exit-crossing") return tl;
+            return resolveOff(toks[0]);
+          }
+          const name = toks[0].toLowerCase();
+          const off = resolveOff(toks.slice(1).join(" "));
+          if (off === "0%") return name;
+          return name + " " + off;
+        });
+        computedMap.set(rk, items.join(", "));
       }
       if ((computedMap.get("text-align") || "").trim().toLowerCase() === "match-parent") {
         let resolvedAlign = "start";
@@ -40254,7 +40398,7 @@
     const STANDARD_COMPUTED_LONGHANDS = [
       "align-content", "align-items", "align-self", "animation-composition", "animation-delay", "animation-direction",
       "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
-      "animation-play-state", "animation-timing-function", "appearance", "aspect-ratio",
+      "animation-play-state", "animation-range-end", "animation-range-start", "animation-timing-function", "appearance", "aspect-ratio",
       "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
       "background-clip", "background-color", "background-image", "background-origin",
       "background-position-x", "background-position-y", "background-repeat", "background-size",
@@ -40402,14 +40546,17 @@
         }
         if (name === "animation" && typeof globalThis.__capsurf_serializeShorthand === "function") {
           const aDefs = {
-            "animation-duration": "0s",
+            "animation-duration": "auto",
             "animation-timing-function": "ease",
             "animation-delay": "0s",
             "animation-iteration-count": "1",
             "animation-direction": "normal",
             "animation-fill-mode": "none",
             "animation-play-state": "running",
-            "animation-name": "none"
+            "animation-name": "none",
+            "animation-timeline": "auto",
+            "animation-range-start": "normal",
+            "animation-range-end": "normal"
           };
           return globalThis.__capsurf_serializeShorthand("animation", (lh) => {
             const v = computedMap.get(lh);
@@ -42983,6 +43130,8 @@
     "animation-iteration-count",
     "animation-name",
     "animation-play-state",
+    "animation-range-end",
+    "animation-range-start",
     "animation-timeline",
     "animation-timing-function",
     "background-attachment",
