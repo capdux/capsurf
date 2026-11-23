@@ -7273,7 +7273,7 @@ function installWindow(global) {
     }
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [
-        "counter-reset", "counter-increment", "counter-set", "animation-name",
+        "counter-reset", "counter-increment", "counter-set", "animation-name", "text-transform",
         "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
         "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
         "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
@@ -7447,6 +7447,9 @@ function installWindow(global) {
           const v = computedMap.get(lh);
           return (!v || v === "initial" || v === "unset") ? tDefs[lh] : v;
         });
+      }
+      if (name === "white-space" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        return globalThis.__capsurf_serializeShorthand("white-space", (lh) => computedMap.get(lh) || (lh === "white-space-collapse" ? "collapse" : "wrap"));
       }
       if (name === "text-wrap" && typeof globalThis.__capsurf_serializeShorthand === "function") {
         return globalThis.__capsurf_serializeShorthand("text-wrap", (lh) => computedMap.get(lh) || (lh === "text-wrap-mode" ? "wrap" : "auto"));

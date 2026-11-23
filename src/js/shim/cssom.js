@@ -289,7 +289,6 @@
       "text-align-all": ["start", "end", "left", "right", "center", "justify", "match-parent"],
       "text-align-last": ["auto", "start", "end", "left", "right", "center", "justify", "match-parent"],
       "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
-      "text-transform": ["none", "capitalize", "uppercase", "lowercase", "full-width", "full-size-kana"],
       "text-wrap-mode": ["wrap", "nowrap"],
       "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
       "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
@@ -851,15 +850,30 @@
       return seenLen;
     }
     if (prop === "white-space") {
-      const SINGLE = new Set(["normal", "pre", "nowrap", "pre-wrap", "break-spaces", "pre-line"]);
       const COL = new Set(["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"]);
       const WRP = new Set(["wrap", "nowrap"]);
+      const SINGLE = new Set(["normal", "pre", "nowrap", "pre-wrap", "break-spaces", "pre-line", "collapse", "preserve", "preserve-breaks", "preserve-spaces", "wrap"]);
       const toks = splitCssTokens(vLower);
       if (toks.length === 1) return SINGLE.has(toks[0]);
       if (toks.length === 2) {
         return (COL.has(toks[0]) && WRP.has(toks[1])) || (WRP.has(toks[0]) && COL.has(toks[1]));
       }
       return false;
+    }
+    if (prop === "text-transform") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && (toks[0] === "none" || toks[0] === "math-auto")) return true;
+      if (toks.length < 1 || toks.length > 3) return false;
+      const CASE = new Set(["capitalize", "uppercase", "lowercase"]);
+      let seenC = false, seenFW = false, seenFSK = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (CASE.has(t)) { if (seenC) return false; seenC = true; }
+        else if (t === "full-width") { if (seenFW) return false; seenFW = true; }
+        else if (t === "full-size-kana") { if (seenFSK) return false; seenFSK = true; }
+        else return false;
+      }
+      return true;
     }
     if (prop === "outline-offset") {
       const toks = splitCssTokens(vLower);
@@ -1840,6 +1854,47 @@
       }
       return s;
     }
+    if (key === "text-transform") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 1 && (p[0] === "none" || p[0] === "math-auto")) return p[0];
+      let c = "", fw = false, fsk = false;
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "capitalize" || p[i] === "uppercase" || p[i] === "lowercase") c = p[i];
+        else if (p[i] === "full-width") fw = true;
+        else if (p[i] === "full-size-kana") fsk = true;
+      }
+      return [c, fw ? "full-width" : "", fsk ? "full-size-kana" : ""].filter(Boolean).join(" ");
+    }
+    if (key === "white-space") {
+      const p = splitCssTokens(s.toLowerCase());
+      const SINGLE_MAP = {
+        normal: ["collapse", "wrap"],
+        pre: ["preserve", "nowrap"],
+        nowrap: ["collapse", "nowrap"],
+        "pre-wrap": ["preserve", "wrap"],
+        "break-spaces": ["break-spaces", "wrap"],
+        "pre-line": ["preserve-breaks", "wrap"],
+        collapse: ["collapse", "wrap"],
+        preserve: ["preserve", "wrap"],
+        "preserve-breaks": ["preserve-breaks", "wrap"],
+        "preserve-spaces": ["preserve-spaces", "wrap"],
+        wrap: ["collapse", "wrap"]
+      };
+      let col = "collapse", wr = "wrap";
+      if (p.length === 1 && SINGLE_MAP[p[0]]) {
+        col = SINGLE_MAP[p[0]][0]; wr = SINGLE_MAP[p[0]][1];
+      } else if (p.length === 2) {
+        if (p[0] === "wrap" || p[0] === "nowrap") { wr = p[0]; col = p[1]; }
+        else { col = p[0]; wr = p[1]; }
+      }
+      if (col === "collapse" && wr === "wrap") return "normal";
+      if (col === "preserve" && wr === "nowrap") return "pre";
+      if (col === "collapse" && wr === "nowrap") return "nowrap";
+      if (col === "preserve" && wr === "wrap") return "pre-wrap";
+      if (col === "break-spaces" && wr === "wrap") return "break-spaces";
+      if (col === "preserve-breaks" && wr === "wrap") return "pre-line";
+      return col + " " + wr;
+    }
     if (key === "text-wrap") {
       const p = splitCssTokens(s.toLowerCase());
       let m = "", st = "";
@@ -2116,6 +2171,22 @@
         ["transition-behavior", behs.join(", ")]
       ];
     }
+    if (key === "white-space") {
+      const canon = normalizeCssSpecifiedValue("white-space", normV);
+      const MAP = {
+        normal: ["collapse", "wrap"],
+        pre: ["preserve", "nowrap"],
+        nowrap: ["collapse", "nowrap"],
+        "pre-wrap": ["preserve", "wrap"],
+        "break-spaces": ["break-spaces", "wrap"],
+        "pre-line": ["preserve-breaks", "wrap"]
+      };
+      if (MAP[canon]) {
+        return [["white-space-collapse", MAP[canon][0]], ["text-wrap-mode", MAP[canon][1]]];
+      }
+      const p = splitCssTokens(canon);
+      return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"]];
+    }
     if (key === "text-wrap") {
       const p = splitCssTokens(normV.toLowerCase());
       let m = "wrap", st = "auto";
@@ -2155,6 +2226,7 @@
     flex: ["flex-grow", "flex-shrink", "flex-basis"],
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
     "text-wrap": ["text-wrap-mode", "text-wrap-style"],
+    "white-space": ["white-space-collapse", "text-wrap-mode"],
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
@@ -2217,6 +2289,9 @@
         out.push(parts.length > 0 ? parts.join(" ") : "all");
       }
       return out.join(", ");
+    }
+    if (key === "white-space") {
+      return normalizeCssSpecifiedValue("white-space", vals[0] + " " + vals[1]);
     }
     if (key === "text-wrap") {
       if (vals[0] === "wrap" && vals[1] === "auto") return "wrap";

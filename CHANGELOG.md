@@ -3505,3 +3505,6 @@
   - `test/TEST_LEDGER.md`: 记录 `WPT-B275`（`/css/css-text-decor/parsing/` 25/31、`/css/css-flexbox/parsing/` 23/27）。
 - **Phase 526**:
   - `src/js/shim/window.js`: 修复 `splitCssDeclarations` 转义字符跳过逻辑；`getShorthandComputed` 新增 `text-wrap`。
+- **Phase 527**:
+  - `src/js/shim/cssom.js`: 支持 `white-space` 单关键字校验、规范化及 shorthand 展开/反序列化；支持 `text-transform` 多关键字组合校验与规范化排序。
+  - `src/js/shim/window.js`: `canonComputedProps` 新增 `text-transform`；`getShorthandComputed` 新增 `white-space`。
