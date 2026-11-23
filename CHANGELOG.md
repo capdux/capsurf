@@ -3168,3 +3168,9 @@
   - `getComputedStyle` Proxy `get` trap 新增 `cssFloat` -> `computedMap.get("float")` 别名。
   - `STANDARD_COMPUTED_LONGHANDS` 补全 `box-decoration-break`、`orphans`、`widows`、`block-size`/`inline-size` 逻辑盒模型属性、`text-wrap*`、`white-space-collapse`、`text-align-last`、`text-justify`、`hyphenate-character` 等。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 465: CSSOM Flexbox/Multicol/Transform/Layout 关键字属性门禁
+- `src/js/shim/cssom.js`:
+  - `KEYWORD_CSS_PROPS` 扩充 20 个枚举关键字属性（`flex-direction`, `flex-wrap`, `column-fill`, `column-span`, `column-rule-style`, `transform-box`, `transform-style`, `backface-visibility`, `isolation`, `object-fit`, `table-layout`, `caption-side`, `empty-cells`, `border-collapse`, `resize`, `direction`, `unicode-bidi`, `writing-mode`, `pointer-events`, `user-select`）。
+  - `column-rule-width` 纳入 `<line-width>` 非负长度/关键字校验（拒绝 `%`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

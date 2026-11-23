@@ -2367,3 +2367,7 @@
 ### Phase 464: 修复 `getComputedStyle` Proxy `has` Trap 根因
 - 通过排查 `computed-testcommon.js`，定位到 `getComputedStyle` Proxy `has` trap 遗漏 `propSet` 检查是导致跨套件 `*-computed.html` 批量失败的共同根因。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `inOk: true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 465: CSSOM 21 项布局与视觉关键字属性校验
+- 通过扩展 `KEYWORD_CSS_PROPS` 与复用 `<line-width>` 校验分支，一次性覆盖 Flexbox/Multicol/Transform/Table/UI 枚举属性。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

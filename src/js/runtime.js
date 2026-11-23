@@ -4046,6 +4046,26 @@
         "box-decoration-break": ["slice", "clone"],
         "text-decoration-style": ["solid", "double", "dotted", "dashed", "wavy"],
         "text-decoration-skip-ink": ["auto", "none", "all"],
+        "flex-direction": ["row", "row-reverse", "column", "column-reverse"],
+        "flex-wrap": ["nowrap", "wrap", "wrap-reverse"],
+        "column-fill": ["auto", "balance", "balance-all"],
+        "column-span": ["none", "all"],
+        "column-rule-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+        "transform-box": ["content-box", "border-box", "fill-box", "stroke-box", "view-box"],
+        "transform-style": ["flat", "preserve-3d"],
+        "backface-visibility": ["visible", "hidden"],
+        "isolation": ["auto", "isolate"],
+        "object-fit": ["fill", "contain", "cover", "none", "scale-down"],
+        "table-layout": ["auto", "fixed"],
+        "caption-side": ["top", "bottom", "block-start", "block-end", "inline-start", "inline-end"],
+        "empty-cells": ["show", "hide"],
+        "border-collapse": ["collapse", "separate"],
+        "resize": ["none", "both", "horizontal", "vertical", "block", "inline"],
+        "direction": ["ltr", "rtl"],
+        "unicode-bidi": ["normal", "embed", "isolate", "bidi-override", "isolate-override", "plaintext"],
+        "writing-mode": ["horizontal-tb", "vertical-rl", "vertical-lr", "sideways-rl", "sideways-lr"],
+        "pointer-events": ["auto", "none", "visiblepainted", "visiblefill", "visiblestroke", "visible", "painted", "fill", "stroke", "all", "bounding-box"],
+        "user-select": ["auto", "text", "none", "contain", "all"],
       };
       const allowedKeywords = KEYWORD_CSS_PROPS[prop];
       if (allowedKeywords) {
@@ -4245,7 +4265,7 @@
         }
         return true;
       }
-      if (prop === "outline-width") {
+      if (prop === "outline-width" || prop === "column-rule-width") {
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
