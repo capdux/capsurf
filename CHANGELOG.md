@@ -3358,3 +3358,9 @@
   - `getShorthandComputed`: 新增 `place-content`, `place-items`, `place-self`, `flex-flow` 序列化。
   - `applyUsedValuesToComputedMap`: `flex-basis` 纳入非负长度求值。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 491: `getComputedStyle` `flex` 与 `overflow` 简写展开及序列化
+- `src/js/shim/window.js`:
+  - `collectRawComputedMap` (`setDecl`): 新增 `flex` 展开（`none -> 0 0 auto`, `auto -> 1 1 auto`, `<num> -> <num> 1 0%`）及 `overflow` 展开至 `overflow-x`/`overflow-y`。
+  - `getShorthandComputed`: 新增 `flex`（`<grow> <shrink> <basis>`）与 `overflow`（同值合并为单值）序列化。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

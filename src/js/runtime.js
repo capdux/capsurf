@@ -37701,6 +37701,42 @@
             if (DIR.has(pt)) setDecl("flex-direction", pt, isImp);
             else if (WRP.has(pt)) setDecl("flex-wrap", pt, isImp);
           }
+        } else if (key === "flex") {
+          const parts = splitCssTopLevelWhitespace(val);
+          const isNum = (s) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s);
+          if (parts.length === 1 && parts[0].toLowerCase() === "none") {
+            setDecl("flex-grow", "0", isImp);
+            setDecl("flex-shrink", "0", isImp);
+            setDecl("flex-basis", "auto", isImp);
+          } else if (parts.length === 1 && parts[0].toLowerCase() === "auto") {
+            setDecl("flex-grow", "1", isImp);
+            setDecl("flex-shrink", "1", isImp);
+            setDecl("flex-basis", "auto", isImp);
+          } else if (parts.length >= 1 && parts.length <= 3) {
+            let grow = "1", shrink = "1", basis = "0%";
+            const nums = [];
+            let foundBasis = "";
+            for (let pi = 0; pi < parts.length; pi++) {
+              const p = parts[pi];
+              if (isNum(p) && !(nums.length === 2 && p === "0")) nums.push(p);
+              else foundBasis = p;
+            }
+            if (nums.length >= 1) grow = nums[0];
+            if (nums.length >= 2) shrink = nums[1];
+            if (foundBasis) basis = foundBasis;
+            setDecl("flex-grow", grow, isImp);
+            setDecl("flex-shrink", shrink, isImp);
+            setDecl("flex-basis", basis, isImp);
+          }
+        } else if (key === "overflow") {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            setDecl("overflow-x", parts[0], isImp);
+            setDecl("overflow-y", parts[0], isImp);
+          } else if (parts.length === 2) {
+            setDecl("overflow-x", parts[0], isImp);
+            setDecl("overflow-y", parts[1], isImp);
+          }
         } else if (key === "border-style") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
@@ -39058,6 +39094,17 @@
           const fd = computedMap.get("flex-direction") || "row";
           const fw = computedMap.get("flex-wrap") || "nowrap";
           return fd + " " + fw;
+        }
+        if (name === "flex") {
+          const fg = computedMap.get("flex-grow") || "0";
+          const fs = computedMap.get("flex-shrink") || "1";
+          const fb = computedMap.get("flex-basis") || "auto";
+          return fg + " " + fs + " " + fb;
+        }
+        if (name === "overflow") {
+          const ox = computedMap.get("overflow-x") || "visible";
+          const oy = computedMap.get("overflow-y") || "visible";
+          return ox === oy ? ox : (ox + " " + oy);
         }
         return null;
       }

@@ -2471,3 +2471,7 @@
 ### Phase 490: `getComputedStyle` 对齐简写与弹性盒计算值
 - `place-*` 在 `setDecl` 中识别 `first`/`last`/`safe`/`unsafe`/`legacy` 修饰符边界，确保 `first baseline unsafe right` 正确拆分到 `align-content` 与 `justify-content`。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 491: `getComputedStyle` `flex` 与 `overflow` 简写闭环
+- `flex: 2` 经由 `setDecl` 展开至 `flex-grow: 2; flex-shrink: 1; flex-basis: 0%`，并由 `getShorthandComputed` 与 `flex-basis` 求值共同输出规范计算值。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

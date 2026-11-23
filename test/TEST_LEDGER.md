@@ -1126,3 +1126,8 @@
 - `/css/css-transforms/parsing/ --shard 1/2`: 14 total | **6 PASS (up from 4!)** | 8 FAIL | 0 TIMEOUT | 0 CRASH (`perspective-origin-computed`, `transform-origin-computed` PASS!)
 - `/css/css-transforms/parsing/ --shard 2/2`: 14 total | **9 PASS** | 5 FAIL | 0 TIMEOUT | 0 CRASH (`9/10` non-prefixed `*-invalid` + `rotate-parsing-computed` PASS!)
 - Totals: **15 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B231 (port=19700, Phase 490 verification, 39 tests, 22/39 matched)
+- `/css/css-flexbox/parsing/`: 27 total | **17 PASS (up from 16!)** | 10 FAIL | 0 TIMEOUT | 0 CRASH (`flex-flow-computed` PASS!)
+- `/css/css-align/parsing/place-`: 12 total | 3 PASS | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **20 PASS / 19 FAIL / 0 TIMEOUT / 0 CRASH**
