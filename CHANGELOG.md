@@ -3246,3 +3246,12 @@
   - `counter-reset` / `counter-increment` / `counter-set`: 校验 `none | [ <counter-name> <integer>? ]+`（`counter-reset` 支持 `reversed(<custom-ident>)`），拦截关键字与小数/逗号。
   - `aspect-ratio`: 校验 `auto || <ratio>`（正数或 `a / b`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 475: CSSOM `text-overflow`, `scrollbar-gutter`, `-webkit-line-clamp`, `block-ellipsis`, `continue`, `scrollbar-width`
+- `src/js/shim/cssom.js`:
+  - `KEYWORD_CSS_PROPS`: 新增 `continue`, `scrollbar-width`。
+  - `text-overflow`: 校验 1~2 个 `clip | ellipsis | <string>`。
+  - `scrollbar-gutter`: 校验 `auto | [ stable && both-edges? ]`。
+  - `-webkit-line-clamp` / `max-lines`: 校验 `none | <integer [1,∞]>`。
+  - `block-ellipsis`: 校验 `none | auto | <string>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

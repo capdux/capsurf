@@ -1017,3 +1017,8 @@
 - `/css/css-display/parsing/`: 5 total | 1 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH (`5/5 matched expectations`)
 - `/css/css-overflow/parsing/`: 32 total | 8 PASS | 24 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: `block-ellipsis-valid`, `continue-valid`, `scroll-markers-valid`, `scroll-target-group-valid`)
 - Totals: **9 PASS / 32 FAIL / 15 TIMEOUT / 0 CRASH**
+
+### WPT-B215 (port=19700, 73 tests, 35/73 matched)
+- `/css/css-align/parsing/`: 50 total | 25 PASS (up from 16!) | 25 FAIL | 0 TIMEOUT | 0 CRASH (all `*-invalid` PASS!)
+- `/css/css-lists/parsing/`: 23 total | 8 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH (`counter-*-invalid` & `list-style-position-*` PASS!)
+- Totals: **33 PASS / 40 FAIL / 0 TIMEOUT / 0 CRASH**

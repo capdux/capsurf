@@ -288,6 +288,8 @@
       "scroll-behavior": ["auto", "smooth"],
       "image-rendering": ["auto", "smooth", "high-quality", "crisp-edges", "pixelated"],
       "appearance": ["none", "auto", "textfield", "menulist-button"],
+      "continue": ["auto", "collapse"],
+      "scrollbar-width": ["auto", "thin", "none"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1091,6 +1093,36 @@
       if (rem === 1) return isPosNum(toks[idx]);
       if (rem === 3 && toks[idx + 1] === "/") return isPosNum(toks[idx]) && isPosNum(toks[idx + 2]);
       return false;
+    }
+    if (prop === "text-overflow") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length < 1 || toks.length > 2) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (tl !== "clip" && tl !== "ellipsis" && !/^"[^"]*"$/.test(t) && !/^'[^']*'$/.test(t)) return false;
+      }
+      return true;
+    }
+    if (prop === "scrollbar-gutter") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "auto" || toks[0] === "stable";
+      if (toks.length === 2) {
+        return (toks[0] === "stable" && toks[1] === "both-edges") || (toks[0] === "both-edges" && toks[1] === "stable");
+      }
+      return false;
+    }
+    if (prop === "-webkit-line-clamp" || prop === "max-lines") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t === "none" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      return /^\+?[1-9]\d*$/.test(t);
+    }
+    if (prop === "block-ellipsis") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length !== 1) return false;
+      const t = toks[0], tl = t.toLowerCase();
+      return tl === "none" || tl === "auto" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t);
     }
 
     return true;
