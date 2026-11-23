@@ -3215,3 +3215,12 @@
   - `font-style`: 校验 `normal | italic | oblique <angle [-90deg,90deg]>?`。
   - `font-stretch` / `font-width`: 校验关键字与非负 `<percentage>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 471: CSSOM `font-palette`, `font-size-adjust`, `font-synthesis`, `font-language-override` 校验
+- `src/js/shim/cssom.js`:
+  - `SUPPORTED_CSS_PROPS`: 补全 `"font-language-override"`。
+  - `font-palette`: 校验 `normal | light | dark | --<dashed-ident>`。
+  - `font-size-adjust`: 校验 `none | [metric]? [from-font | <number [0,∞]>]`。
+  - `font-synthesis`: 校验 `none | [ weight || [style | oblique-only] || small-caps || position ]`。
+  - `font-language-override`: 校验 `normal | <string>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

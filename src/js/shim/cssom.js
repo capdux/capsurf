@@ -43,7 +43,7 @@
     "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor",
     "direction", "display", "empty-cells", "filter", "flex", "flex-basis", "flex-direction",
     "flex-flow", "flex-grow", "flex-shrink", "flex-wrap", "float", "font", "font-family",
-    "font-feature-settings", "font-kerning", "font-optical-sizing", "font-palette",
+    "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette",
     "font-size", "font-size-adjust", "font-stretch", "font-style", "font-synthesis",
     "font-synthesis-position", "font-synthesis-small-caps", "font-synthesis-style", "font-synthesis-weight",
     "font-variant", "font-variant-alternates", "font-variant-caps", "font-variant-east-asian", "font-variant-emoji",
@@ -913,6 +913,42 @@
       if (KW.has(t) || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
       const m = /^([+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(t);
       return !!m && Number(m[1]) >= 0;
+    }
+    if (prop === "font-palette") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      return t === "normal" || t === "light" || t === "dark" || /^--[a-z0-9_-]+$/i.test(t);
+    }
+    if (prop === "font-size-adjust") {
+      const METRICS = new Set(["ex-height", "cap-height", "ch-width", "ic-height", "ic-width"]);
+      const isAdjVal = (t) => t === "from-font" || (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) ||
+        (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0);
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "none" || isAdjVal(toks[0]);
+      if (toks.length === 2) return METRICS.has(toks[0]) && isAdjVal(toks[1]);
+      return false;
+    }
+    if (prop === "font-synthesis") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      if (toks.length < 1 || toks.length > 4) return false;
+      let seenW = false, seenS = false, seenSC = false, seenP = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "weight") { if (seenW) return false; seenW = true; }
+        else if (t === "style" || t === "oblique-only") { if (seenS) return false; seenS = true; }
+        else if (t === "small-caps") { if (seenSC) return false; seenSC = true; }
+        else if (t === "position") { if (seenP) return false; seenP = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "font-language-override") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      return t.toLowerCase() === "normal" || (/^"[^"]*"$/.test(t)) || (/^'[^']*'$/.test(t));
     }
 
     return true;

@@ -2391,3 +2391,7 @@
 ### Phase 470: CSSOM 字体大小/斜体/字宽/变体与合成门禁
 - `font-style` 支持 `oblique` 角度范围校验（换算 `deg`/`rad`/`grad`/`turn` 至 `[-90, 90]`）。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 471: CSSOM 高级字体特性语法门禁
+- 补全 `SUPPORTED_CSS_PROPS` 中缺失的 `font-language-override`，并覆盖 `font-palette`/`font-size-adjust`/`font-synthesis` 的全部组合与互斥边界。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
