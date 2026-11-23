@@ -2515,3 +2515,7 @@
 ### Phase 501: CSS 指定值网格流与字体变体特征重排
 - 补齐 5 项乱序多关键字属性的指定值规范化序列化。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 502: CSS 指定值滚动条槽、装饰线与计数器序列规范化
+- 补全 `counter-*` 隐式默认值展开与 `scrollbar-gutter`/`text-decoration-line` 规范排序。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

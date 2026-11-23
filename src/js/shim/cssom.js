@@ -1608,6 +1608,35 @@
       const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
     }
+    if (key === "scrollbar-gutter") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2) return "stable both-edges";
+      return p.join(" ");
+    }
+    if (key === "text-decoration-line") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
+      const order = ["underline", "overline", "line-through", "blink"];
+      return order.filter(k => p.indexOf(k) !== -1).join(" ");
+    }
+    if (key === "counter-reset" || key === "counter-increment" || key === "counter-set") {
+      const p = splitCssTokens(s);
+      if (p.length === 1 && p[0].toLowerCase() === "none") return "none";
+      const defVal = key === "counter-increment" ? "1" : "0";
+      const out = [];
+      let i = 0;
+      while (i < p.length) {
+        out.push(p[i]);
+        if (i + 1 < p.length && /^[+-]?\d+$/.test(p[i + 1])) {
+          out.push(String(Number(p[i + 1])));
+          i += 2;
+        } else {
+          out.push(defVal);
+          i += 1;
+        }
+      }
+      return out.join(" ");
+    }
     return s;
   }
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;

@@ -3425,3 +3425,10 @@
   - `grid-auto-flow`: 按 `[row|column] dense?` 重排。
   - `font-synthesis` / `font-variant-numeric` / `font-variant-east-asian` / `font-variant-ligatures`: 按规范语法顺序输出特征关键字。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 502: CSS 指定值 `scrollbar-gutter`, `text-decoration-line`, `counter-*` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `scrollbar-gutter`: `both-edges stable -> stable both-edges`。
+  - `text-decoration-line`: 按 `underline overline line-through blink` 顺序输出。
+  - `counter-reset` / `counter-increment` / `counter-set`: 自动补齐缺省整数（`counter-increment` 为 `1`，其余为 `0`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
