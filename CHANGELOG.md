@@ -3394,3 +3394,8 @@
   - `isValidCssValue` (`flex`): 修复三元 `flex`（如 `0 1 0`）中第 3 项 `"0"` 被误拒的问题。
   - `normalizeCssSpecifiedValue`: 新增 `flex`、`text-indent` 与 `text-decoration` 的规范顺序与 `0 -> 0px` 序列化。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 497: CSS 指定值 `perspective-origin`, `transform-origin`, `object-position` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - 新增 `perspective-origin`, `transform-origin`, `object-position` 的水平/垂直轴序重排（`top left -> left top`, `center left -> left center`）与 `0 -> 0px`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

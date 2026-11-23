@@ -2495,3 +2495,7 @@
 ### Phase 496: CSS 指定值 `flex`/`text-indent`/`text-decoration` 门禁闭环
 - CDP 探针同时捕获并修复了 `flex: 0 1 0` 的指定值校验边界。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 497: CSS 指定值 `<position>` 轴序重排
+- 确保 `transform-origin: center right 0` 回读为 `"right center 0px"`，与 CSS Transforms 指定值序列化保持一致。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 3/3 `true`，`--smoke` 3/3 PASS (6/6)。

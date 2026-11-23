@@ -5283,6 +5283,21 @@
         }
         return [lines.join(" "), st, th, col].filter(Boolean).join(" ");
       }
+      if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
+        const parts = splitCssTokens(s);
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+        }
+        if (parts.length === 2 || (key === "transform-origin" && parts.length === 3)) {
+          const a = parts[0].toLowerCase(), b = parts[1].toLowerCase();
+          const isY = (x) => x === "top" || x === "bottom";
+          const isX = (x) => x === "left" || x === "right";
+          if (isY(a) || (a === "center" && isX(b))) {
+            const tmp = parts[0]; parts[0] = parts[1]; parts[1] = tmp;
+          }
+        }
+        return parts.join(" ");
+      }
       return s;
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
