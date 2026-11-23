@@ -2455,3 +2455,7 @@
 ### Phase 486: `getComputedStyle` 独立平移与缩放计算值归约
 - 按 CSS Transforms 2 序列化规范实现 `translate`（`100px 0px 0px -> 100px`）与 `scale`（`-100% -100% 1 -> -1`、`calc(200%) -> 2`）。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 487: `getComputedStyle` 圆角简写与不透明度计算值规范化
+- `border-radius` 经由 `setDecl` 展开至四角后统一走 `border-*-radius` 长度解析，再由 `serializeBorderRadius` 按 1~4 值与 `/` 双组规则合并序列化。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 6/6 `true`，`--smoke` 3/3 PASS (6/6)。

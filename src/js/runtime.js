@@ -37670,6 +37670,27 @@
             setDecl("border-bottom-style", sides[2], isImp);
             setDecl("border-left-style", sides[3], isImp);
           }
+        } else if (key === "border-color") {
+          const sides = expandFourSides(splitCssTopLevelWhitespace(val));
+          if (sides) {
+            setDecl("border-top-color", sides[0], isImp);
+            setDecl("border-right-color", sides[1], isImp);
+            setDecl("border-bottom-color", sides[2], isImp);
+            setDecl("border-left-color", sides[3], isImp);
+          }
+        } else if (key === "border-radius") {
+          const slashIdx = val.indexOf("/");
+          const hPart = slashIdx === -1 ? val : val.slice(0, slashIdx);
+          const vPart = slashIdx === -1 ? "" : val.slice(slashIdx + 1);
+          const hx = expandFourSides(splitCssTopLevelWhitespace(hPart));
+          const hy = vPart ? expandFourSides(splitCssTopLevelWhitespace(vPart)) : null;
+          if (hx) {
+            const corners = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+            for (let ci = 0; ci < 4; ci++) {
+              const cv = (hy && hy[ci] !== hx[ci]) ? (hx[ci] + " " + hy[ci]) : hx[ci];
+              setDecl(corners[ci], cv, isImp);
+            }
+          }
         } else if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
           const parts = splitCssTopLevelWhitespace(val);
           let bWidth = "";
@@ -38525,7 +38546,22 @@
       if (!computedMap.has("opacity") || computedMap.get("opacity") === "") {
         computedMap.set("opacity", "1");
       } else {
-        computedMap.set("opacity", String(computedMap.get("opacity")));
+        const opRaw = String(computedMap.get("opacity")).trim();
+        let opNum = null;
+        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(opRaw)) opNum = Number(opRaw);
+        else {
+          const opm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(opRaw);
+          if (opm) opNum = Number(opm[1]) / 100;
+          else if (/^calc\(/i.test(opRaw)) {
+            const norm = opRaw.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
+            opNum = evalCssLengthExpr(norm, 0, fontSize);
+          }
+        }
+        if (opNum !== null && !isNaN(opNum)) {
+          computedMap.set("opacity", String(Math.min(1, Math.max(0, Math.round(opNum * 1e6) / 1e6))));
+        } else {
+          computedMap.set("opacity", opRaw);
+        }
       }
       if (!computedMap.has("color") || computedMap.get("color") === "") {
         computedMap.set("color", "rgb(0, 0, 0)");
@@ -38866,6 +38902,12 @@
         return propList[idx];
       }, "item");
 
+      function shorten4(tl, tr, br, bl) {
+        if (tl === tr && tr === br && br === bl) return tl;
+        if (tr === bl) return tl === br ? (tl + " " + tr) : (tl + " " + tr + " " + br);
+        return tl + " " + tr + " " + br + " " + bl;
+      }
+
       function serializeBoxShorthand(prefix, suffix) {
         const sfx = suffix ? "-" + suffix : "";
         const defVal = suffix === "style" ? "none" : (suffix === "color" ? (computedMap.get("color") || "rgb(0, 0, 0)") : "0px");
@@ -38873,9 +38915,23 @@
         const r = computedMap.get(prefix + "-right" + sfx) || defVal;
         const b = computedMap.get(prefix + "-bottom" + sfx) || defVal;
         const l = computedMap.get(prefix + "-left" + sfx) || defVal;
-        if (t === r && r === b && b === l) return t;
-        if (r === l) return t === b ? (t + " " + r) : (t + " " + r + " " + b);
-        return t + " " + r + " " + b + " " + l;
+        return shorten4(t, r, b, l);
+      }
+
+      function serializeBorderRadius() {
+        const corners = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+        const hx = [], hy = [];
+        let diff = false;
+        for (let i = 0; i < 4; i++) {
+          const v = (computedMap.get(corners[i]) || "0px").trim().split(/\s+/);
+          hx.push(v[0] || "0px");
+          const y = v[1] || v[0] || "0px";
+          hy.push(y);
+          if (y !== hx[i]) diff = true;
+        }
+        const left = shorten4(hx[0], hx[1], hx[2], hx[3]);
+        if (!diff) return left;
+        return left + " / " + shorten4(hy[0], hy[1], hy[2], hy[3]);
       }
 
       function getShorthandComputed(name) {
@@ -38883,6 +38939,7 @@
         if (name === "border-width") return serializeBoxShorthand("border", "width");
         if (name === "border-style") return serializeBoxShorthand("border", "style");
         if (name === "border-color") return serializeBoxShorthand("border", "color");
+        if (name === "border-radius") return serializeBorderRadius();
         return null;
       }
 

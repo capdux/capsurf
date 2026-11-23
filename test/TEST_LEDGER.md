@@ -1078,3 +1078,25 @@
 - `/css/css-position/parsing/`: 22 total | **21 PASS (95.5%!)** | 1 FAIL | 0 TIMEOUT | 0 CRASH (`top/right/bottom/left-computed` & `inset-computed` PASS!)
 - `/css/css-backgrounds/parsing/border-width`: 4 total | **3 PASS** | 1 FAIL | 0 TIMEOUT | 0 CRASH (`border-width-computed` PASS!)
 - Totals: **47 PASS / 8 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B224 (port=19700, Phase 485 verification, 89 tests, 44/89 matched)
+- `/css/css-fonts/parsing/font-weight`: 3 total | 1 PASS | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/ --shard 1/2`: 43 total | **20 PASS** | 23 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: 4 — `text-align-last-computed`, `text-align-last-valid`, `text-indent-computed`, `word-break-computed`)
+- `/css/css-text/parsing/ --shard 2/2`: 43 total | **24 PASS** | 19 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: 7)
+- Totals: **45 PASS / 44 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 146 (port=19386, 31 tests)
+- `page-set-content.spec.ts`: 16 total | **14 PASS** | 0 FAIL | 2 TIMEOUT
+- `page-set-extra-http-headers.spec.ts`: 5 total | **4 PASS** | 1 FAIL | 0 TIMEOUT
+- `page-wait-for-load-state.spec.ts`: 10 total | **6 PASS** | 2 FAIL | 2 TIMEOUT
+- Totals: **24 PASS / 3 FAIL / 4 TIMEOUT / 0 SKIP**
+
+### WPT-B225 (port=19700, Phase 486 verification, 28 tests, 14/28 matched)
+- `/css/css-transforms/parsing/ --shard 1/2`: 14 total | 4 PASS | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transforms/parsing/ --shard 2/2`: 14 total | **9 PASS (up from 7!)** | 5 FAIL | 0 TIMEOUT | 0 CRASH (`rotate-parsing-computed`, `scale-parsing-invalid`, 7/7 non-prefixed `*-invalid` PASS!)
+- Totals: **13 PASS / 15 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B226 (port=19700, 74 tests, 36/74 matched)
+- `/css/css-backgrounds/parsing/ --shard 1/2`: 37 total | **12 PASS (up from 7!)** | 25 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-backgrounds/parsing/ --shard 2/2`: 37 total | **13 PASS (up from 10!)** | 24 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **25 PASS / 49 FAIL / 0 TIMEOUT / 0 CRASH**

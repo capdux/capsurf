@@ -3331,3 +3331,10 @@
   - `translate`: 括号感知分词 + 非 `%` 长度求值 + 裁剪多余尾随 `0px`（保留 `0%`）。
   - `scale`: 百分比转比例因子（`100% -> 1`）、支持 `calc()` 数值/百分比求值，并裁剪 `z === 1` 与 `y === x`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 487: `getComputedStyle` `border-radius` 简写序列化与 `opacity` 钳位
+- `src/js/shim/window.js`:
+  - `collectRawComputedMap` (`setDecl`): 新增 `border-color` 与 `border-radius`（含 `/` 双组展开至四角长属性）。
+  - `getShorthandComputed`: 新增 `serializeBorderRadius` 支持 `border-radius` 规范最简序列化。
+  - `applyUsedValuesToComputedMap`: `opacity` 支持百分比转 `[0, 1]` 小数、`calc()` 求值及 `[0, 1]` 区间钳位。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
