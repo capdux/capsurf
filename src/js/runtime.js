@@ -3877,11 +3877,11 @@
       "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
       "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
       "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
-      "text-align", "text-align-last", "text-combine-upright", "text-decoration",
+      "text-align", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
       "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
       "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent",
-      "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow",
+      "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow", "text-spacing", "text-spacing-trim",
       "text-transform", "text-underline-offset", "text-underline-position",
       "text-wrap", "text-wrap-mode", "text-wrap-style", "top",
       "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
@@ -4081,6 +4081,7 @@
         "text-align-last": ["auto", "start", "end", "left", "right", "center", "justify", "match-parent"],
         "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
         "text-group-align": ["none", "start", "end", "left", "right", "center"],
+        "text-spacing-trim": ["normal", "auto", "space-all", "trim-both", "trim-all", "trim-start", "space-first"],
         "text-wrap-mode": ["wrap", "nowrap"],
         "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
         "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
@@ -4720,6 +4721,44 @@
           } else return false;
         }
         return seenMain;
+      }
+      if (prop === "text-autospace") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 0 || toks.length > 4) return false;
+        if (toks.length === 1 && (toks[0] === "normal" || toks[0] === "no-autospace" || toks[0] === "auto")) return true;
+        let seenIA = false, seenIN = false, seenP = false, seenAct = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "ideograph-alpha") { if (seenIA) return false; seenIA = true; }
+          else if (t === "ideograph-numeric") { if (seenIN) return false; seenIN = true; }
+          else if (t === "punctuation") { if (seenP) return false; seenP = true; }
+          else if (t === "insert" || t === "replace") { if (seenAct) return false; seenAct = true; }
+          else return false;
+        }
+        return seenIA || seenIN || seenP;
+      }
+      if (prop === "text-spacing") {
+        const TRIM_KW = new Set(["space-all", "trim-both", "trim-all", "trim-start", "space-first"]);
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 0) return false;
+        if (toks.length === 1 && (toks[0] === "none" || toks[0] === "auto" || toks[0] === "normal" || toks[0] === "no-autospace" || TRIM_KW.has(toks[0]))) return true;
+        if (toks.some((t) => t === "none" || t === "auto")) return false;
+        let trimCount = 0, normalCount = 0;
+        const autoToks = [];
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (TRIM_KW.has(t)) trimCount++;
+          else if (t === "normal") normalCount++;
+          else autoToks.push(t);
+        }
+        if (trimCount > 1) return false;
+        if (trimCount + normalCount > 2) return false;
+        if (autoToks.length > 0) {
+          if (normalCount > 1 || (trimCount === 1 && normalCount > 0)) return false;
+          if (autoToks.length === 1 && autoToks[0] === "no-autospace") return true;
+          return declSupported("text-autospace", autoToks.join(" "));
+        }
+        return (trimCount + normalCount) <= 2;
       }
       if (prop === "hanging-punctuation") {
         const toks = splitCssTokens(vLower);
@@ -5975,6 +6014,35 @@
         if (p.length === 2 && p[0] === "auto-phrase") return p[1] + " auto-phrase";
         return p.join(" ");
       }
+      if (key === "text-autospace") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && (p[0] === "normal" || p[0] === "no-autospace" || p[0] === "auto")) return p[0];
+        const out = [];
+        if (p.indexOf("ideograph-alpha") !== -1) out.push("ideograph-alpha");
+        if (p.indexOf("ideograph-numeric") !== -1) out.push("ideograph-numeric");
+        if (p.indexOf("punctuation") !== -1) out.push("punctuation");
+        if (p.indexOf("insert") !== -1) out.push("insert");
+        else if (p.indexOf("replace") !== -1) out.push("replace");
+        return out.join(" ");
+      }
+      if (key === "text-spacing") {
+        const TRIM_KW = new Set(["space-all", "trim-both", "trim-all", "trim-start", "space-first"]);
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && (p[0] === "none" || p[0] === "auto" || p[0] === "normal")) return p[0];
+        let trim = "normal";
+        const autoToks = [];
+        for (let i = 0; i < p.length; i++) {
+          if (TRIM_KW.has(p[i])) trim = p[i];
+          else if (p[i] !== "normal") autoToks.push(p[i]);
+        }
+        const auto = autoToks.length > 0 ? normalizeCssSpecifiedValue("text-autospace", autoToks.join(" ")) : "normal";
+        if (trim === "space-all" && auto === "no-autospace") return "none";
+        if (trim === "auto" && auto === "auto") return "auto";
+        const out = [];
+        if (trim !== "normal") out.push(trim);
+        if (auto !== "normal") out.push(auto);
+        return out.length > 0 ? out.join(" ") : "normal";
+      }
       if (key === "hanging-punctuation") {
         const p = splitCssTokens(s.toLowerCase());
         if (p.length === 1 && p[0] === "none") return "none";
@@ -6234,6 +6302,20 @@
         const p = splitCssTokens(canon);
         return [["white-space-collapse", p[0] || "collapse"], ["text-wrap-mode", p[1] || "wrap"]];
       }
+      if (key === "text-spacing") {
+        const TRIM_KW = new Set(["space-all", "trim-both", "trim-all", "trim-start", "space-first"]);
+        const p = splitCssTokens(normV.toLowerCase());
+        if (p.length === 1 && p[0] === "none") return [["text-spacing-trim", "space-all"], ["text-autospace", "no-autospace"]];
+        if (p.length === 1 && p[0] === "auto") return [["text-spacing-trim", "auto"], ["text-autospace", "auto"]];
+        let trim = "normal";
+        const autoToks = [];
+        for (let i = 0; i < p.length; i++) {
+          if (TRIM_KW.has(p[i])) trim = p[i];
+          else if (p[i] !== "normal") autoToks.push(p[i]);
+        }
+        const auto = autoToks.length > 0 ? normalizeCssSpecifiedValue("text-autospace", autoToks.join(" ")) : "normal";
+        return [["text-spacing-trim", trim], ["text-autospace", auto]];
+      }
       if (key === "text-wrap") {
         const p = splitCssTokens(normV.toLowerCase());
         let m = "wrap", st = "auto";
@@ -6274,6 +6356,7 @@
       "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
       "text-wrap": ["text-wrap-mode", "text-wrap-style"],
       "white-space": ["white-space-collapse", "text-wrap-mode"],
+      "text-spacing": ["text-spacing-trim", "text-autospace"],
       animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name", "animation-timeline", "animation-range-start", "animation-range-end"],
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
@@ -6362,6 +6445,9 @@
       }
       if (key === "white-space") {
         return normalizeCssSpecifiedValue("white-space", vals[0] + " " + vals[1]);
+      }
+      if (key === "text-spacing") {
+        return normalizeCssSpecifiedValue("text-spacing", vals[0] + " " + vals[1]);
       }
       if (key === "text-wrap") {
         if (vals[0] === "wrap" && vals[1] === "auto") return "wrap";
@@ -40694,6 +40780,9 @@
         });
         computedMap.set("hyphenate-limit-chars", parts.join(" "));
       }
+      for (const nk of ["text-autospace", "text-spacing-trim"]) {
+        if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "normal");
+      }
       for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
         if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
       }
@@ -40756,9 +40845,9 @@
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
       "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
-      "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
+      "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
       "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
-      "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-transform",
+      "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",
       "text-underline-offset", "text-underline-position",
       "text-wrap", "text-wrap-mode", "text-wrap-style",
       "top", "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
@@ -40899,6 +40988,9 @@
         }
         if (name === "white-space" && typeof globalThis.__capsurf_serializeShorthand === "function") {
           return globalThis.__capsurf_serializeShorthand("white-space", (lh) => computedMap.get(lh) || (lh === "white-space-collapse" ? "collapse" : "wrap"));
+        }
+        if (name === "text-spacing" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+          return globalThis.__capsurf_serializeShorthand("text-spacing", (lh) => computedMap.get(lh) || "normal");
         }
         if (name === "text-wrap" && typeof globalThis.__capsurf_serializeShorthand === "function") {
           return globalThis.__capsurf_serializeShorthand("text-wrap", (lh) => computedMap.get(lh) || (lh === "text-wrap-mode" ? "wrap" : "auto"));

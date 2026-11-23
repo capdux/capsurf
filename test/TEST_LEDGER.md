@@ -1485,3 +1485,6 @@
 
 ### WPT-B290 (bin_dev Phase 535, 2026-11-23)
 - **Filter `/css/css-text-decor/parsing/`**: `31` files (**31 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `26` matched expectations, `5` unexpected PASS; **100% ALL GREEN**!).
+
+### WPT-B291 (bin_dev Phase 536, 2026-11-23)
+- **Filter `/css/css-text/parsing/`**: `86` files (**75 PASS / 11 FAIL / 0 TIMEOUT / 0 ERROR**, `70` matched expectations, `13` unexpected PASS, `3` unexpected FAIL). `hyphenate-limit-chars-computed` 11/11, `text-fit-invalid`, `text-group-align-invalid`, `word-space-transform-{invalid,computed}` all green!

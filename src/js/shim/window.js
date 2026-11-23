@@ -7587,6 +7587,9 @@ function installWindow(global) {
       });
       computedMap.set("hyphenate-limit-chars", parts.join(" "));
     }
+    for (const nk of ["text-autospace", "text-spacing-trim"]) {
+      if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "normal");
+    }
     for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
       if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
     }
@@ -7649,9 +7652,9 @@ function installWindow(global) {
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
-    "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
+    "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
     "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
-    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-transform",
+    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",
     "text-underline-offset", "text-underline-position",
     "text-wrap", "text-wrap-mode", "text-wrap-style",
     "top", "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
@@ -7792,6 +7795,9 @@ function installWindow(global) {
       }
       if (name === "white-space" && typeof globalThis.__capsurf_serializeShorthand === "function") {
         return globalThis.__capsurf_serializeShorthand("white-space", (lh) => computedMap.get(lh) || (lh === "white-space-collapse" ? "collapse" : "wrap"));
+      }
+      if (name === "text-spacing" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        return globalThis.__capsurf_serializeShorthand("text-spacing", (lh) => computedMap.get(lh) || "normal");
       }
       if (name === "text-wrap" && typeof globalThis.__capsurf_serializeShorthand === "function") {
         return globalThis.__capsurf_serializeShorthand("text-wrap", (lh) => computedMap.get(lh) || (lh === "text-wrap-mode" ? "wrap" : "auto"));

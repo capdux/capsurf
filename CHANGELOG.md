@@ -3529,3 +3529,5 @@
 - **Phase 535** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `font` 简写提取 `font-size` 与 `text-decoration-inset` 括号深度感知分词及 `Ahem` `ch` 求值。
 
 - **Phase 536** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `text-fit`、`text-group-align`、`word-space-transform` 解析与计算默认值，及 `hyphenate-limit-chars` `calc()` 整数求值。
+
+- **Phase 537** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `text-spacing-trim`、`text-autospace`、`text-spacing` 简写展开与规范序列化。

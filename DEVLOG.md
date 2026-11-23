@@ -2571,3 +2571,6 @@
 
 ### Phase 536: `text-fit` / `text-group-align` / `word-space-transform` 与 `hyphenate-limit-chars` `calc()`
 - 补充 `text-fit`、`text-group-align`、`word-space-transform` 到 `STANDARD_CSS_PROPERTIES` 与 `STANDARD_COMPUTED_LONGHANDS`，严格校验非法组合并给出默认计算值 `"none"`。
+
+### Phase 537: `text-autospace` / `text-spacing-trim` / `text-spacing`
+- `text-spacing` 简写映射：`none` <-> `space-all no-autospace`，`auto` <-> `auto auto`，其余省略 `normal` 输出 `trim + autospace`。
