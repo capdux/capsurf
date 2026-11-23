@@ -3052,3 +3052,5 @@
 - **Phase 425 (`src/js/shim/element/forms/form.js`, `src/js/shim/element/forms/button.js`, `src/js/shim/element/forms/input.js`, `src/js/runtime_source.cp`)**：抽离 `resolveFormActionUrl` 并为 `HTMLButtonElement.formAction` 与 `HTMLInputElement.formAction` 补齐标准 URL 反射。
 - **Phase 426 (`src/js/shim/collections.js`, `src/js/shim/element/element.js`, `src/js/shim/element/forms/fieldset.js`, `src/js/runtime_source.cp`)**：新增 `DOMTokenList.prototype.supports`、`relList` 支持表与 `HTMLFieldSetElement.validationMessage`。
 - **Phase 427 (`src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`, `src/js/runtime_source.cp`)**：收紧 `Image.prototype` 与 `Option.prototype` 描述符为不可写/不可枚举/不可配置。
+
+- **Phase 428 (`src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：修正 `DOMTokenList.prototype.contains` 参数字符串化（`undefined`/`null`/`0`）；新增 `HTMLTitleElement.prototype.text` 与 `HTMLProgressElement.prototype.{max, value, position}`。

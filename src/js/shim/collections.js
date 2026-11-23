@@ -56,7 +56,6 @@ DOMTokenList.prototype.item = function (index) {
 };
 
 DOMTokenList.prototype.contains = function (token) {
-  if (!token) return false;
   const tokens = this._getTokens();
   return tokens.indexOf(String(token)) !== -1;
 };

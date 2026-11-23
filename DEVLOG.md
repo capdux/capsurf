@@ -2279,3 +2279,5 @@
 - Phase 425 (`src/js/shim/element/forms/form.js`, `button.js`, `input.js`): 提取 `resolveFormActionUrl` 公共函数，统一实现 `action`/`formAction` 相对 `<base href>` 解析与空串回退文档 URL。
 - Phase 426 (`src/js/shim/collections.js`, `element.js`, `fieldset.js`): 实现 `DOMTokenList.supports()`、`relList` 支持 token 集合及 `HTMLFieldSetElement.validationMessage`。
 - Phase 427 (`src/js/shim/element/html-classes.js`, `select.js`): 对齐 WebIDL `[LegacyFactoryFunction]` 规范，将 `Image.prototype` 与 `Option.prototype` 设为不可写/不可枚举/不可配置。
+
+- Phase 428 (`src/js/shim/collections.js`, `html-classes.js`): 修正 `DOMTokenList.contains` 对非字符串参数（`undefined`/`null`/`0`）的 WebIDL 字符串化；新增 `HTMLTitleElement.text` 及 `HTMLProgressElement.{max, value, position}` 数值解析与不确定态处理。

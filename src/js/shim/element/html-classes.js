@@ -3389,6 +3389,88 @@ function installHtmlClasses(global) {
     if (typeof window !== "undefined") window[clsName] = Ctor;
   }
 
+  // HTMLTitleElement.prototype.text
+  if (typeof global.HTMLTitleElement === "function") {
+    Object.defineProperty(global.HTMLTitleElement.prototype, "text", {
+      get: function () {
+        let out = "";
+        const kids = this.childNodes;
+        if (kids && kids.length) {
+          for (let i = 0; i < kids.length; i++) {
+            const c = kids[i];
+            if (c && c.nodeType === 3) out += String(c.nodeValue != null ? c.nodeValue : "");
+          }
+          return out;
+        }
+        return this.textContent != null ? String(this.textContent) : "";
+      },
+      set: function (v) {
+        this.textContent = v == null ? "" : String(v);
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  // HTMLProgressElement.prototype.{max, value, position}
+  if (typeof global.HTMLProgressElement === "function") {
+    const parseValidFloat = function (s) {
+      if (s == null) return NaN;
+      const trimmed = String(s).trim();
+      if (!trimmed) return NaN;
+      if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return NaN;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : NaN;
+    };
+    const getMax = function (el) {
+      const raw = el.getAttribute("max");
+      const n = parseValidFloat(raw);
+      return Number.isFinite(n) && n > 0 ? n : 1.0;
+    };
+    Object.defineProperties(global.HTMLProgressElement.prototype, {
+      max: {
+        get: function () {
+          return getMax(this);
+        },
+        set: function (v) {
+          const n = Number(v);
+          if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
+          this.setAttribute("max", String(n > 0 ? n : 1));
+        },
+        enumerable: true,
+        configurable: true,
+      },
+      value: {
+        get: function () {
+          if (!this.hasAttribute("value")) return 0.0;
+          const n = parseValidFloat(this.getAttribute("value"));
+          if (!Number.isFinite(n) || n <= 0) return 0.0;
+          const m = getMax(this);
+          return n > m ? m : n;
+        },
+        set: function (v) {
+          const n = Number(v);
+          if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
+          this.setAttribute("value", String(n));
+        },
+        enumerable: true,
+        configurable: true,
+      },
+      position: {
+        get: function () {
+          if (!this.hasAttribute("value")) return -1.0;
+          const n = parseValidFloat(this.getAttribute("value"));
+          if (!Number.isFinite(n)) return -1.0;
+          const clamped = n <= 0 ? 0.0 : n;
+          const m = getMax(this);
+          return (clamped > m ? m : clamped) / m;
+        },
+        enumerable: true,
+        configurable: true,
+      },
+    });
+  }
+
   // W3C HTML Table DOM (HTMLTableElement, HTMLTableSectionElement, HTMLTableRowElement, HTMLTableCellElement)
   (function () {
     const HTML_NS = "http://www.w3.org/1999/xhtml";
