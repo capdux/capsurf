@@ -39028,5 +39028,53 @@
   "/css/css-overflow/parsing/scroll-axis-lock-invalid.html": {
     "expected": "FAIL",
     "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+  },
+  "/css/css-scroll-anchoring/parsing/overflow-anchor-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-anchoring/parsing/overflow-anchor-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-anchoring/parsing/overflow-anchor-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-type-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-type-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-type-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-align-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-align-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-align-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-stop-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-stop-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-snap-stop-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 550 validated"
   }
 }

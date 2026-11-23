@@ -6921,6 +6921,39 @@ function installWindow(global) {
       }
     }
 
+    if (!computedMap.has("overflow-anchor")) computedMap.set("overflow-anchor", "auto");
+    if (!computedMap.has("scroll-snap-stop")) computedMap.set("scroll-snap-stop", "normal");
+    if (!computedMap.has("scroll-snap-type")) computedMap.set("scroll-snap-type", "none");
+    if (!computedMap.has("scroll-snap-align")) computedMap.set("scroll-snap-align", "none");
+    if (!computedMap.has("shape-image-threshold")) {
+      computedMap.set("shape-image-threshold", "0");
+    } else {
+      const raw = String(computedMap.get("shape-image-threshold") || "").trim();
+      let num = null;
+      if (raw.endsWith("%")) {
+        num = Number(raw.slice(0, -1)) / 100;
+      } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) {
+        num = Number(raw);
+      } else if (/^(?:calc|min|max|clamp)\(/i.test(raw)) {
+        num = evalCssLengthExpr(raw, null, fontSize);
+      }
+      if (num !== null && isFinite(num)) {
+        const clamped = Math.min(1, Math.max(0, num));
+        computedMap.set("shape-image-threshold", String(Number(clamped.toFixed(6))));
+      }
+    }
+    if (!computedMap.has("shape-margin")) {
+      computedMap.set("shape-margin", "0px");
+    } else {
+      const raw = String(computedMap.get("shape-margin") || "").trim();
+      if (!raw.includes("%")) {
+        const px = evalCssLengthExpr(raw, null, fontSize);
+        if (px !== null && isFinite(px)) {
+          computedMap.set("shape-margin", formatCssPx(Math.max(0, px)));
+        }
+      }
+    }
+
     // min-width / min-height: auto resolves to 0px outside flex/grid parent
     const parentEl = element.parentElement || element.parentNode;
     let parentDisp = "block";
@@ -8089,10 +8122,11 @@ function installWindow(global) {
     "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
     "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
     "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
-    "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
+    "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+    "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin",
     "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
     "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",
@@ -8303,6 +8337,12 @@ function installWindow(global) {
         if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
         return "none";
       }
+      if (lower === "overflow-anchor") return "auto";
+      if (lower === "scroll-snap-stop") return "normal";
+      if (lower === "scroll-snap-type") return "none";
+      if (lower === "scroll-snap-align") return "none";
+      if (lower === "shape-image-threshold") return "0";
+      if (lower === "shape-margin") return "0px";
       return "";
     }, "getPropertyValue");
 

@@ -4213,6 +4213,8 @@
         "scrollbar-width": ["auto", "thin", "none"],
         "field-sizing": ["fixed", "content"],
         "content-visibility": ["visible", "auto", "hidden"],
+        "overflow-anchor": ["auto", "none"],
+        "scroll-snap-stop": ["normal", "always"],
       };
       const allowedKeywords = KEYWORD_CSS_PROPS[prop];
       if (allowedKeywords) {
@@ -5312,6 +5314,41 @@
         const toks = splitCssTokens(trimmed);
         return parseSingleIntrinsic(toks) !== null;
       }
+      if (prop === "shape-image-threshold") {
+        const tl = trimmed.toLowerCase();
+        if (tl.endsWith("%")) {
+          const num = Number(tl.slice(0, -1));
+          return !isNaN(num) && isFinite(num);
+        }
+        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return true;
+        return /^(?:calc|min|max|clamp)\(/i.test(tl);
+      }
+      if (prop === "shape-margin") {
+        const tl = trimmed.toLowerCase();
+        if (tl === "0" || tl === "+0") return true;
+        if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(tl)) return true;
+        return /^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)$/i.test(tl);
+      }
+      if (prop === "scroll-snap-type") {
+        const toks = splitCssTokens(trimmed.toLowerCase());
+        if (toks.length === 1) {
+          return toks[0] === "none" || toks[0] === "x" || toks[0] === "y" || toks[0] === "block" || toks[0] === "inline" || toks[0] === "both";
+        }
+        if (toks.length === 2) {
+          const AXIS = new Set(["x", "y", "block", "inline", "both"]);
+          const STRICT = new Set(["mandatory", "proximity"]);
+          return AXIS.has(toks[0]) && STRICT.has(toks[1]);
+        }
+        return false;
+      }
+      if (prop === "scroll-snap-align") {
+        const toks = splitCssTokens(trimmed.toLowerCase());
+        const VALS = new Set(["none", "start", "end", "center"]);
+        if (toks.length === 1) return VALS.has(toks[0]);
+        if (toks.length === 2) return VALS.has(toks[0]) && VALS.has(toks[1]);
+        return false;
+      }
       if (prop === "block-ellipsis") {
         const toks = splitCssTokens(trimmed);
         if (toks.length !== 1) return false;
@@ -6399,6 +6436,41 @@
         const toks = splitCssTokens(s);
         const single = parseSingleIntrinsic(toks);
         return single !== null ? single : s;
+      }
+      if (key === "shape-image-threshold") {
+        const tl = s.trim().toLowerCase();
+        if (tl.endsWith("%")) {
+          const num = Number(tl.slice(0, -1));
+          if (!isNaN(num) && isFinite(num)) {
+            return String(Number((num / 100).toFixed(6)));
+          }
+        }
+        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) {
+          return String(Number(tl));
+        }
+        return s;
+      }
+      if (key === "shape-margin") {
+        const tl = s.trim();
+        if (tl === "0" || tl === "+0") return "0px";
+        return s;
+      }
+      if (key === "scroll-snap-type") {
+        const toks = splitCssTokens(s.trim().toLowerCase());
+        if (toks.length === 1) return toks[0];
+        if (toks.length === 2) {
+          if (toks[1] === "proximity") return toks[0];
+          return toks[0] + " " + toks[1];
+        }
+        return s;
+      }
+      if (key === "scroll-snap-align") {
+        const toks = splitCssTokens(s.trim().toLowerCase());
+        if (toks.length === 1) return toks[0];
+        if (toks.length === 2) {
+          return toks[0] === toks[1] ? toks[0] : (toks[0] + " " + toks[1]);
+        }
+        return s;
       }
       if (key === "text-decoration-line") {
         const p = splitCssTokens(s.toLowerCase());
@@ -40544,6 +40616,39 @@
         }
       }
 
+      if (!computedMap.has("overflow-anchor")) computedMap.set("overflow-anchor", "auto");
+      if (!computedMap.has("scroll-snap-stop")) computedMap.set("scroll-snap-stop", "normal");
+      if (!computedMap.has("scroll-snap-type")) computedMap.set("scroll-snap-type", "none");
+      if (!computedMap.has("scroll-snap-align")) computedMap.set("scroll-snap-align", "none");
+      if (!computedMap.has("shape-image-threshold")) {
+        computedMap.set("shape-image-threshold", "0");
+      } else {
+        const raw = String(computedMap.get("shape-image-threshold") || "").trim();
+        let num = null;
+        if (raw.endsWith("%")) {
+          num = Number(raw.slice(0, -1)) / 100;
+        } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)) {
+          num = Number(raw);
+        } else if (/^(?:calc|min|max|clamp)\(/i.test(raw)) {
+          num = evalCssLengthExpr(raw, null, fontSize);
+        }
+        if (num !== null && isFinite(num)) {
+          const clamped = Math.min(1, Math.max(0, num));
+          computedMap.set("shape-image-threshold", String(Number(clamped.toFixed(6))));
+        }
+      }
+      if (!computedMap.has("shape-margin")) {
+        computedMap.set("shape-margin", "0px");
+      } else {
+        const raw = String(computedMap.get("shape-margin") || "").trim();
+        if (!raw.includes("%")) {
+          const px = evalCssLengthExpr(raw, null, fontSize);
+          if (px !== null && isFinite(px)) {
+            computedMap.set("shape-margin", formatCssPx(Math.max(0, px)));
+          }
+        }
+      }
+
       // min-width / min-height: auto resolves to 0px outside flex/grid parent
       const parentEl = element.parentElement || element.parentNode;
       let parentDisp = "block";
@@ -41712,10 +41817,11 @@
       "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
       "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
       "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
-      "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
+      "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
       "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+      "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin",
       "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
       "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",
@@ -41926,6 +42032,12 @@
           if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
           return "none";
         }
+        if (lower === "overflow-anchor") return "auto";
+        if (lower === "scroll-snap-stop") return "normal";
+        if (lower === "scroll-snap-type") return "none";
+        if (lower === "scroll-snap-align") return "none";
+        if (lower === "shape-image-threshold") return "0";
+        if (lower === "shape-margin") return "0px";
         return "";
       }, "getPropertyValue");
 

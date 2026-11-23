@@ -423,6 +423,8 @@
       "scrollbar-width": ["auto", "thin", "none"],
       "field-sizing": ["fixed", "content"],
       "content-visibility": ["visible", "auto", "hidden"],
+      "overflow-anchor": ["auto", "none"],
+      "scroll-snap-stop": ["normal", "always"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1522,6 +1524,41 @@
       const toks = splitCssTokens(trimmed);
       return parseSingleIntrinsic(toks) !== null;
     }
+    if (prop === "shape-image-threshold") {
+      const tl = trimmed.toLowerCase();
+      if (tl.endsWith("%")) {
+        const num = Number(tl.slice(0, -1));
+        return !isNaN(num) && isFinite(num);
+      }
+      if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return true;
+      return /^(?:calc|min|max|clamp)\(/i.test(tl);
+    }
+    if (prop === "shape-margin") {
+      const tl = trimmed.toLowerCase();
+      if (tl === "0" || tl === "+0") return true;
+      if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return true;
+      if (/^(?:calc|min|max|clamp)\(/i.test(tl)) return true;
+      return /^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)$/i.test(tl);
+    }
+    if (prop === "scroll-snap-type") {
+      const toks = splitCssTokens(trimmed.toLowerCase());
+      if (toks.length === 1) {
+        return toks[0] === "none" || toks[0] === "x" || toks[0] === "y" || toks[0] === "block" || toks[0] === "inline" || toks[0] === "both";
+      }
+      if (toks.length === 2) {
+        const AXIS = new Set(["x", "y", "block", "inline", "both"]);
+        const STRICT = new Set(["mandatory", "proximity"]);
+        return AXIS.has(toks[0]) && STRICT.has(toks[1]);
+      }
+      return false;
+    }
+    if (prop === "scroll-snap-align") {
+      const toks = splitCssTokens(trimmed.toLowerCase());
+      const VALS = new Set(["none", "start", "end", "center"]);
+      if (toks.length === 1) return VALS.has(toks[0]);
+      if (toks.length === 2) return VALS.has(toks[0]) && VALS.has(toks[1]);
+      return false;
+    }
     if (prop === "block-ellipsis") {
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
@@ -2609,6 +2646,41 @@
       const toks = splitCssTokens(s);
       const single = parseSingleIntrinsic(toks);
       return single !== null ? single : s;
+    }
+    if (key === "shape-image-threshold") {
+      const tl = s.trim().toLowerCase();
+      if (tl.endsWith("%")) {
+        const num = Number(tl.slice(0, -1));
+        if (!isNaN(num) && isFinite(num)) {
+          return String(Number((num / 100).toFixed(6)));
+        }
+      }
+      if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) {
+        return String(Number(tl));
+      }
+      return s;
+    }
+    if (key === "shape-margin") {
+      const tl = s.trim();
+      if (tl === "0" || tl === "+0") return "0px";
+      return s;
+    }
+    if (key === "scroll-snap-type") {
+      const toks = splitCssTokens(s.trim().toLowerCase());
+      if (toks.length === 1) return toks[0];
+      if (toks.length === 2) {
+        if (toks[1] === "proximity") return toks[0];
+        return toks[0] + " " + toks[1];
+      }
+      return s;
+    }
+    if (key === "scroll-snap-align") {
+      const toks = splitCssTokens(s.trim().toLowerCase());
+      if (toks.length === 1) return toks[0];
+      if (toks.length === 2) {
+        return toks[0] === toks[1] ? toks[0] : (toks[0] + " " + toks[1]);
+      }
+      return s;
     }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());

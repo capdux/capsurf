@@ -2633,5 +2633,21 @@
   - `/css/css-sizing/aspect-ratio/parsing/`: 3/3 PASS
   - 累计 34/34 用例 100% 全绿通过。
 
+### Phase 550: `overflow-anchor`、`shape-image-threshold`/`shape-margin` 与 `scroll-snap-*` 全量解析闭环
+- **`overflow-anchor`**：作为 CSS Scroll Anchoring Module 核心控制属性，加入 `KEYWORD_CSS_PROPS`（`auto`、`none`），在 `STANDARD_COMPUTED_LONGHANDS` 与 `window.js` 中确立默认计算值为 `"auto"`。
+- **`shape-image-threshold` 与 `shape-margin`**：
+  - `shape-image-threshold`：支持标准数值与百分比，百分比自动换算为 0~1 小数（`50% -> 0.5`）；计算期如果存在 `calc(...)` 进行相对表达式求值，并保证最终输出严格 clamp 在 `[0, 1]` 闭区间内。
+  - `shape-margin`：严格拦截负值长度，支持任意 CSS 长度单位与百分比（`0 -> 0px`）；计算期非百分比长度统一经过 `evalCssLengthExpr` 转换为对应像素数值，默认值为 `"0px"`。
+- **`scroll-snap-*` 系列规范解析**：
+  - `scroll-snap-type`：支持轴关键字（`none`、`x`、`y`、`block`、`inline`、`both`）和吸附严格度关键字（`mandatory`、`proximity`）；规范规定如果严格度为默认的 `proximity`，在序列化时予以省略（如 `x proximity` 规范化为 `x`）。
+  - `scroll-snap-align`：支持 1~2 个轴对齐值（`none`、`start`、`end`、`center`）；如果两个方向取值相同，规范化为单一值（如 `start start` 规范化为 `start`）。
+  - `scroll-snap-stop`：支持 `normal` 与 `always` 关键字校验。
+- **WPT 测试结果**：
+  - `/css/css-scroll-anchoring/parsing/`: 3/3 PASS
+  - `/css/css-shapes/parsing/`: 6/6 PASS
+  - `/css/css-scroll-snap/parsing/`: 9/9 PASS
+  - 累计 18/18 用例 100% 全绿通过。
+
+
 
 

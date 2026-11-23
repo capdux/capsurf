@@ -7421,5 +7421,25 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - 累计 34/34 个 WPT 测试用例 100% 全部通过。
   5. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
 
+### 2026-11-24 Phase 550 (`overflow-anchor`、`shape-image-threshold`/`shape-margin` 与 `scroll-snap-*` 全量解析闭环)
+- **[User]**: 配额不足, 不使用 子智能体,使用主智能体, 继续测试
+- **[Agent]**: 切换至主智能体零子智能体模式持续推进：
+  1. 梳理 PW 与 WPT 当前测试总体进展：
+     - **Playwright (PW)**：`pw-tests.json` 全量 123 个 spec 测试用例文件已在 `TEST_LEDGER.md` 全部完成初轮/复测覆盖（覆盖率 100%）。已测出的 123 个 spec 中，大量核心功能已全绿，剩余未完全结束的是部分 spec 中的深层边缘用例（例如复杂跨帧点击超时、复杂请求路由拦截网络重写等）。
+     - **Web Platform Tests (WPT)**：官方精选测试集 `wpt-tests.json` 共 11,795 个测试文件。截至目前已测分片/前缀覆盖 6,447 个测试（占比 54.7%），尚有 5,348 个测试文件（占比 45.3%）分布在未完全测试的前缀或新模块中（以 CSS 剩余模块、encoding、wasm、WebCrypto 等为主）。
+  2. 实现 Phase 550 属性解析与计算值：
+     - `overflow-anchor`：接入关键字校验（`auto`、`none`），默认计算值 `auto`。
+     - `shape-image-threshold`：支持数字与百分比（`% -> /100`），计算期非负 clamp 到 `[0, 1]`，默认 `0`。
+     - `shape-margin`：支持长度与百分比（`0 -> 0px`），计算期确定性长度 px 化。
+     - `scroll-snap-type`：支持 `none`、单轴（`x|y|block|inline|both`）与严格度（`mandatory|proximity`），规范化省略默认 `proximity`。
+     - `scroll-snap-align`：支持 `[none | start | end | center]{1,2}`，规范化双同值折叠（`start start -> start`）。
+     - `scroll-snap-stop`：支持 `normal | always`。
+  3. WPT 测试验证（18/18 100% ALL GREEN）：
+     - `/css/css-scroll-anchoring/parsing/`: 3/3 PASS
+     - `/css/css-shapes/parsing/`: 6/6 PASS
+     - `/css/css-scroll-snap/parsing/`: 9/9 PASS
+  4. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+
 
 

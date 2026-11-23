@@ -1542,5 +1542,12 @@
 - **Filter `/css/css-sizing/parsing/`**: `19` files (**19 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `19/19` matched expectations, **100% ALL GREEN**!); `box-sizing-*`, `height-*`, `width-*`, `min-width-*`, `max-width-*`, `min-height-*`, `max-height-*` 全绿通过。
 - **Filter `/css/css-sizing/aspect-ratio/parsing/`**: `3` files (**3 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `aspect-ratio-computed.html`, `aspect-ratio-invalid.html`, `aspect-ratio-valid.html` 全绿通过。
 
+### WPT-B309 (bin_dev Phase 550, 2026-11-24)
+- **Filter `/css/css-scroll-anchoring/parsing/`**: `3` files (**3 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `overflow-anchor-computed.html`, `overflow-anchor-invalid.html`, `overflow-anchor-valid.html` 全绿通过。
+- **Filter `/css/css-shapes/parsing/`**: `6` files (**6 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `shape-image-threshold-computed.html`, `shape-image-threshold-invalid.html`, `shape-image-threshold-valid.html`, `shape-margin-computed.html`, `shape-margin-invalid.html`, `shape-margin-valid.html` 全绿通过。
+- **Filter `/css/css-scroll-snap/parsing/`**: `9` files (**9 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `scroll-snap-type-computed.html`, `scroll-snap-type-invalid.html`, `scroll-snap-type-valid.html`, `scroll-snap-align-computed.html`, `scroll-snap-align-invalid.html`, `scroll-snap-align-valid.html`, `scroll-snap-stop-computed.html`, `scroll-snap-stop-invalid.html`, `scroll-snap-stop-valid.html` 全绿通过。
+- **累计**: 18/18 对应用例 100% 全部通过。
+
+
 
 

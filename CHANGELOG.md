@@ -3556,5 +3556,8 @@
 
 - **Phase 549** (`src/html/tokenizer.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 修复 HTML5 Tokenizer 中孤立 `&` 在 Data/RcData 模式下的死循环；实现 `contain`（规范序与计算值 `strict`/`content` 归纳）、`content-visibility`、`contain-intrinsic-*` 展开与解析，以及 `css-sizing`（`min/max-width/height`、`box-sizing`、`aspect-ratio`）全量计算值解析；WPT 5 大套件共 34/34 个用例 100% 全绿。
 
+- **Phase 550** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `overflow-anchor`（关键字 `auto|none`）、`shape-image-threshold`（百分比转数值与 `[0, 1]` clamp）、`shape-margin`（单位与计算期 px 化）、`scroll-snap-type`（轴与严格度解析、`proximity` 省略）、`scroll-snap-align`（双值去重折叠）、`scroll-snap-stop`（`normal|always`）；WPT 3 大模块 18/18 用例 100% 全绿通过。
+
+
 
 
