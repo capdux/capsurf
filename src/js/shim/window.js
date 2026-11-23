@@ -2136,7 +2136,11 @@ function installWindow(global) {
         (new Function(item.cb))();
       }
     } catch (e) {
-      if (typeof console !== "undefined" && console.error) console.error(e);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_report_exception === "function") {
+        globalThis.__capsurf_report_exception(e);
+      } else if (typeof console !== "undefined" && console.error) {
+        console.error(e);
+      }
     } finally {
       isExecutingTask = false;
     }

@@ -3435,3 +3435,7 @@
 - **Phase 503**:
   - `src/js/shim/window.js`: 在 `applyUsedValuesToComputedMap` 末尾接入 `__capsurf_normalizeCssValue`，对 `counter-*`、`grid-auto-flow`、`scrollbar-gutter`、`text-decoration-line`、`aspect-ratio`、`text-emphasis-position`、`text-underline-position`、`font-synthesis`、`font-variant-*` 执行计算值规范化。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B236`（`/css/css-lists/parsing/` 12/23、`/css/css-text-decor/parsing/` 15/31、`grid-auto-flow` 1/3）。
+- **Phase 504**:
+  - `src/js/shim/window.js`: `drainOneTask` 异常捕获优先调用 `globalThis.__capsurf_report_exception(e)` 上报 `Runtime.exceptionThrown`。
+  - `src/cdp/types.cp`: `normalizeExceptionMessage` 新增 `"unexpected character" -> "Invalid or unexpected token"` 规范化映射。
+  - `test/TEST_LEDGER.md`: 记录 `page-event-pageerror.spec.ts` 6/7 PASS（`clearPageErrors should work`、`should fire illegal character error` 等通过）。

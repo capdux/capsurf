@@ -1172,3 +1172,18 @@
 - `/css/css-text-decor/parsing/`: 31 total | **15 PASS (up from 13!)** | 16 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-line-*`, `text-underline-position-valid` PASS!)
 - `/css/css-grid/parsing/grid-auto-flow`: 3 total | 1 PASS | 2 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **28 PASS / 29 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 150 (port=19386, 78 tests)
+- `page-listeners.spec.ts`: **3 / 3 PASS (100%)** | 0 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-dispatchevent.spec.ts`: **15 / 16 PASS** | 1 FAIL | 0 TIMEOUT | 0 SKIP
+- `page-drag.spec.ts`: 0 PASS | 0 FAIL | 0 TIMEOUT | 15 SKIP
+- `page-screenshot.spec.ts`: 18 PASS | 21 FAIL | 5 TIMEOUT | 0 SKIP
+- Totals: **36 PASS / 22 FAIL / 5 TIMEOUT / 15 SKIP**
+
+### WPT-B237 (port=19700, 117 tests)
+- `/css/css-backgrounds/parsing/`: 74 total | 8 PASS | 66 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-color/parsing/`: 43 total | 1 PASS | 34 FAIL | 8 TIMEOUT | 0 CRASH
+- Totals: **9 PASS / 100 FAIL / 8 TIMEOUT / 0 CRASH**
+
+### PW Targeted Verification (Phase 504, port=19388, 7 tests)
+- `page-event-pageerror.spec.ts`: **6 / 7 PASS (+4 unexpected passes vs baseline)** | 1 FAIL (`should fire` stack col/eval) | 0 TIMEOUT | 0 SKIP

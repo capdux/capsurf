@@ -583,6 +583,16 @@ pub fn normalizeExceptionMessage(input: []const u8, out: []u8): []const u8 {
             }
         }
 
+        if (std.mem.startsWith(u8, rem, "unexpected character")) {
+            const repl = "Invalid or unexpected token";
+            if (out_idx + repl.len <= out.len) {
+                @memcpy(out[out_idx .. out_idx + repl.len], repl);
+                out_idx += repl.len;
+                in_idx += 20;
+                continue;
+            }
+        }
+
         out[out_idx] = input[in_idx];
         out_idx += 1;
         in_idx += 1;
