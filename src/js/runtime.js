@@ -5558,6 +5558,13 @@
         const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
         return order.filter(k => p.indexOf(k) !== -1).join(" ");
       }
+      if (key === "transition-property") {
+        return s.split(",").map((part) => {
+          const t = part.trim();
+          const tl = t.toLowerCase();
+          return (tl === "all" || tl === "none") ? tl : t;
+        }).join(", ");
+      }
       if (key === "scrollbar-gutter") {
         const p = splitCssTokens(s.toLowerCase());
         if (p.length === 2) return "stable both-edges";
@@ -39765,6 +39772,41 @@
               }
             } catch (_) {}
           }
+        }
+      }
+      const timeProps = ["transition-delay", "transition-duration", "animation-delay", "animation-duration"];
+      for (let ti = 0; ti < timeProps.length; ti++) {
+        const tk = timeProps[ti];
+        const tv = computedMap.get(tk);
+        if (tv) {
+          const isDur = tk.endsWith("-duration");
+          const items = tv.split(",").map((part) => {
+            const p = part.trim().toLowerCase();
+            if (p === "auto") return "auto";
+            let sec = null;
+            const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/.exec(p);
+            if (m) {
+              sec = m[2] === "ms" ? Number(m[1]) / 1000 : Number(m[1]);
+            } else if (p === "0" || p === "+0" || p === "-0") {
+              sec = 0;
+            } else if (/^calc\(/i.test(p)) {
+              const expr = p.slice(5, -1)
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)ms\b/g, (_, n) => String(Number(n) / 1000))
+                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)s\b/g, (_, n) => String(Number(n)));
+              if (/^[\d+\-*/().\s]+$/.test(expr)) {
+                try {
+                  const v = Function("return (" + expr + ")")();
+                  if (typeof v === "number" && isFinite(v)) sec = v;
+                } catch (_) {}
+              }
+            }
+            if (sec !== null) {
+              if (isDur && sec < 0) sec = 0;
+              return String(Number(sec.toFixed(6))) + "s";
+            }
+            return part.trim();
+          });
+          computedMap.set(tk, items.join(", "));
         }
       }
       if (typeof global.__capsurf_normalizeCssValue === "function") {

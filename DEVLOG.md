@@ -2536,3 +2536,4 @@
 - **Phase 517**: 补齐 `columns` 非法值拒绝规则与 `rotate` 负轴向量等价简写规范化。
 - **Phase 518**: 补全 `transform-box`、`line-break`、`word-wrap` 等 7 个 `getComputedStyle` 长手属性注册，打通对应 `*-computed.html` WPT 测试。
 - **Phase 519**: 补齐 `text-wrap*` 与 `white-space-collapse` 支持声明及 `text-wrap` 双向 shorthand 展开，打通 `css-text` 中 `text-wrap*` 与 `white-space-collapse` 测试。
+- **Phase 520**: 补全 `<time>` 计算值转换（`ms` 转 `s` 与 `calc()` 时间表达式求值）及 `transition-property` 保留大小写规范序列化。

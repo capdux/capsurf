@@ -1338,3 +1338,23 @@
 - `/css/css-multicol/parsing/`: 31 total | **25 PASS (31/31 matched, 0 unexpected!, `columns-invalid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-transforms/parsing/`: 28 total | **16 PASS (up from 15, `rotate-parsing-valid` green!)** | 12 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **41 PASS / 18 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B262 (port=19700, Phase 518 verification, 114 tests)
+- `/css/css-transforms/parsing/`: 28 total | **17 PASS (up from 16, `transform-box-computed` green!)** | 11 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/`: 86 total | **47 PASS (up from 45, `line-break-computed` & `word-wrap-computed` green!)** | 39 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **64 PASS / 50 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B263 (port=19700, Phase 518 verification, 119 tests)
+- `/css/css-backgrounds/parsing/`: 74 total | **29 PASS (up from 8!)** | 45 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-borders/tentative/parsing/`: 45 total | **13 PASS (+13 FAIL→PASS!)** | 32 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **42 PASS / 77 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B264 (port=19700, Phase 519 verification, 49 tests)
+- `/css/css-animations/parsing/`: 35 total | 17 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transitions/parsing/`: 14 total | 5 PASS | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **22 PASS / 27 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B265 (port=19700, Phase 519 verification, 91 tests)
+- `/css/css-text/parsing/`: 86 total | **52 PASS (up from 47, `text-wrap*` & `white-space-collapse-computed` green!)** | 34 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-display/parsing/`: 5 total | 1 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **53 PASS / 38 FAIL / 0 TIMEOUT / 0 CRASH**

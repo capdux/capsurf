@@ -1768,6 +1768,13 @@
       const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
     }
+    if (key === "transition-property") {
+      return s.split(",").map((part) => {
+        const t = part.trim();
+        const tl = t.toLowerCase();
+        return (tl === "all" || tl === "none") ? tl : t;
+      }).join(", ");
+    }
     if (key === "scrollbar-gutter") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 2) return "stable both-edges";
