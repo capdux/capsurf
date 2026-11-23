@@ -5098,6 +5098,43 @@
     }
     global.__capsurf_isValidCssValue = isValidCssValue;
 
+    const NUM_NORM_PROPS = new Set(["flex-grow", "flex-shrink", "opacity", "z-index", "order", "orphans", "widows", "column-count", "font-weight"]);
+    const ZERO_PX_PROPS = new Set([
+      "margin-top", "margin-right", "margin-bottom", "margin-left", "margin-block-start", "margin-block-end", "margin-inline-start", "margin-inline-end",
+      "padding-top", "padding-right", "padding-bottom", "padding-left", "padding-block-start", "padding-block-end", "padding-inline-start", "padding-inline-end",
+      "top", "right", "bottom", "left", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end",
+      "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
+      "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+      "outline-width", "outline-offset", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
+      "perspective", "column-width", "flex-basis", "translate"
+    ]);
+    const TWO_SIDE_PROPS = new Set([
+      "inset-block", "inset-inline", "margin-block", "margin-inline", "padding-block", "padding-inline",
+      "overflow", "gap", "grid-gap", "place-content", "place-items", "place-self"
+    ]);
+    function normalizeCssSpecifiedValue(key, raw) {
+      if (!raw || key.startsWith("--")) return raw;
+      const s = String(raw).trim();
+      if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
+        const n = Number(s);
+        if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
+      }
+      if (ZERO_PX_PROPS.has(key) && (s === "0" || s === "+0" || s === "-0")) return "0px";
+      if (TWO_SIDE_PROPS.has(key)) {
+        const parts = s.split(/\s+/);
+        const isLenProp = !key.startsWith("overflow") && !key.startsWith("place-");
+        if (isLenProp) {
+          for (let i = 0; i < parts.length; i++) {
+            if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+          }
+        }
+        if (parts.length === 2 && parts[0] === parts[1]) return parts[0];
+        return parts.join(" ");
+      }
+      return s;
+    }
+    global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
+
     function declSupported(name, value) {
       if (!name || typeof name !== "string") return false;
       if (name.startsWith("--")) return typeof value === "string" && value.trim() !== "";
@@ -5116,7 +5153,6 @@
       }
       return true;
     }
-    global.__capsurf_isValidCssValue = isValidCssValue;
 
     function matchParen(text, openParenIndex) {
       let depth = 0;
@@ -5599,6 +5635,7 @@
         const key = p.startsWith("--") ? p : p.toLowerCase();
         if (!p.startsWith("--")) {
           if (!isValidCssValue(key, v)) return;
+          v = normalizeCssSpecifiedValue(key, v);
         }
         if (context === "page" && key === "size") {
           v = v.toLowerCase();
@@ -10702,7 +10739,10 @@
           return;
         }
         if (!isValidInlinePropValue(key, vStr)) return;
-        setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
+        const normV = (!key.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
+          ? globalThis.__capsurf_normalizeCssValue(key, vStr)
+          : vStr;
+        setEntryInStyleMap(map, key, rawStr, normV, pPriority);
         if (key === "display") {
           element._displayNone = (vStr.toLowerCase() === "none");
         }
@@ -10794,7 +10834,10 @@
           if (normKey === "display") element._displayNone = false;
         } else {
           if (!isValidInlinePropValue(normKey, vStr)) return true;
-          setEntryInStyleMap(map, normKey, rawKey, vStr, "");
+          const normV = (!normKey.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
+            ? globalThis.__capsurf_normalizeCssValue(normKey, vStr)
+            : vStr;
+          setEntryInStyleMap(map, normKey, rawKey, normV, "");
           if (normKey === "display") {
             element._displayNone = (vStr.toLowerCase() === "none");
           }

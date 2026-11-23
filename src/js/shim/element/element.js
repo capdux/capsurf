@@ -384,7 +384,10 @@ function createStyleProxy(element) {
         return;
       }
       if (!isValidInlinePropValue(key, vStr)) return;
-      setEntryInStyleMap(map, key, rawStr, vStr, pPriority);
+      const normV = (!key.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
+        ? globalThis.__capsurf_normalizeCssValue(key, vStr)
+        : vStr;
+      setEntryInStyleMap(map, key, rawStr, normV, pPriority);
       if (key === "display") {
         element._displayNone = (vStr.toLowerCase() === "none");
       }
@@ -476,7 +479,10 @@ function createStyleProxy(element) {
         if (normKey === "display") element._displayNone = false;
       } else {
         if (!isValidInlinePropValue(normKey, vStr)) return true;
-        setEntryInStyleMap(map, normKey, rawKey, vStr, "");
+        const normV = (!normKey.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
+          ? globalThis.__capsurf_normalizeCssValue(normKey, vStr)
+          : vStr;
+        setEntryInStyleMap(map, normKey, rawKey, normV, "");
         if (normKey === "display") {
           element._displayNone = (vStr.toLowerCase() === "none");
         }

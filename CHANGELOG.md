@@ -3364,3 +3364,8 @@
   - `collectRawComputedMap` (`setDecl`): 新增 `flex` 展开（`none -> 0 0 auto`, `auto -> 1 1 auto`, `<num> -> <num> 1 0%`）及 `overflow` 展开至 `overflow-x`/`overflow-y`。
   - `getShorthandComputed`: 新增 `flex`（`<grow> <shrink> <basis>`）与 `overflow`（同值合并为单值）序列化。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 492: CSSOM 与内联样式指定值归一化 (`normalizeCssSpecifiedValue`)
+- `src/js/shim/cssom.js`: 新增 `normalizeCssSpecifiedValue` 并导出为 `global.__capsurf_normalizeCssValue`，接入 `decl.setProperty`（支持数值科学计数法/`-0`、`0 -> 0px` 及 `inset-block`/`inset-inline`/`margin-block`/`padding-block`/`gap`/`overflow`/`place-*` 双边同值折叠）。
+- `src/js/shim/element/element.js`: 将 `globalThis.__capsurf_normalizeCssValue` 接入 `declTarget.setProperty` 与 `styleProxy.set`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -2475,3 +2475,7 @@
 ### Phase 491: `getComputedStyle` `flex` 与 `overflow` 简写闭环
 - `flex: 2` 经由 `setDecl` 展开至 `flex-grow: 2; flex-shrink: 1; flex-basis: 0%`，并由 `getShorthandComputed` 与 `flex-basis` 求值共同输出规范计算值。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 492: CSS 指定值归一化统一接入
+- 确保 `el.style.prop = val`（`styleProxy.set`）、`el.style.setProperty` 与样式表 `CSSStyleDeclaration` 三条路径共用 `__capsurf_normalizeCssValue`。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
