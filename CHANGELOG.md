@@ -3552,3 +3552,6 @@
 
 - **Phase 547** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 严化 `cursor` 图像候选校验规则拦截渐变生成图像，使 `cursor-invalid.html` 全绿通过；对齐 `css-ui/parsing/` 基线预期。
 
+- **Phase 548** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 支持 `line-clamp`（正整数、`auto`、`block-ellipsis` 与 `-webkit-legacy`）、`max-lines`、`overflow-clip-margin` 解析及 `overflow` 计算期 `visible->auto` 映射；导出 `__capsurf_splitCssTokens`；WPT `/css/css-overflow/parsing/` 达 32/32 (100% MATCHED)。
+
+

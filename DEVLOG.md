@@ -2612,3 +2612,12 @@
 - `cursor-invalid.html` 从 6/10 跃升至 10/10（100% ALL GREEN）。
 - 同步在 `wpt-expectations.json` 中对齐已通过的 `caret-color-{valid,computed}`、`cursor-valid`、`outline-color-valid`、`outline-offset-{valid,computed}` 与 `interactivity`，实现预定基线匹配。
 
+### Phase 548: `css-overflow` 解析/级联计算闭环与 Playwright 键盘事件验证
+- `line-clamp`：支持 `none`、正整数/`auto`、`block-ellipsis`（`no-ellipsis`、字符串、`ellipsis`）以及 `-webkit-legacy` 语法，规范化序列化省略冗余项。
+- `max-lines`：支持正整数与 `auto` 组合。
+- `overflow-clip-margin`：支持视觉盒模型（`content-box`/`padding-box`/`border-box`）与长度组合，严格拦截百分比长度；在 `window.js` 中使用 `__capsurf_splitCssTokens` 正确解析并完成 `calc()` 表达式求值。
+- `overflow`：在计算期实现 `visible` 在另一轴为非 `visible`/`clip` 时自动计算为 `auto` 的规范规则。
+- WPT `/css/css-overflow/parsing/` 达到 32/32 全量符合基线预期（100% MATCHED）。
+- Playwright `page-keyboard.spec.ts` 44 个测试达成 38 通过。
+
+

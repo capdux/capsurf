@@ -1528,3 +1528,10 @@
 ### WPT-B306 (bin_dev Phase 547, 2026-11-23)
 - **Filter `/css/css-ui/parsing/`**: `39` files (**35 PASS / 3 FAIL / 1 TIMEOUT / 0 ERROR**, `38/39` matched expectations); `cursor-invalid.html` 10/10 (100% PASS), `cursor-valid.html` 10/10 (100% PASS), `caret-color-{valid,computed}` PASS, `outline-*` (8 files PASS); `interactivity-computed.html` TIMEOUT.
 
+### PW-B160 (bin_dev Phase 547, 2026-11-23)
+- **Spec `page-keyboard.spec.ts`**: `44` tests (**38 PASS / 3 FAIL / 3 TIMEOUT**), 20 expected FAIL promoted to PASS (`should move with the arrow keys`, `insertText`, `key events`, `selectAll`, `copy-pasting`, etc.).
+
+### WPT-B307 (bin_dev Phase 548, 2026-11-23)
+- **Filter `/css/css-overflow/parsing/`**: `32` files (**21 PASS / 11 FAIL / 0 TIMEOUT / 0 ERROR**, `32/32` matched expectations, **100% MATCHED**!); `block-ellipsis-*` PASS, `continue-*` PASS, `line-clamp-*` PASS, `max-lines-*` PASS, `overflow-clip-margin.html` PASS, `overflow-{valid,computed,invalid}` PASS, `scrollbar-gutter-*` PASS, `text-overflow-*` PASS, `webkit-line-clamp-*` PASS.
+
+

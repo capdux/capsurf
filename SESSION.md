@@ -7404,3 +7404,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[User]**: 配额不足, 不使用 子智能体,使用主智能体, 继续测试
 - **[Agent]**: 切换至主智能体零子智能体模式持续推进：严化 `cssom.js` 中 `cursor` 图像候选校验规则（仅允许 `url(...)`、`image-set(...)` 及嵌套在 `light-dark()` 内的合法图像，严格拦截不支持的生成式 `gradient`），使 `cursor-invalid.html` 10/10 全绿通过；将 `caret-color-*`、`cursor-valid`、`outline-color-valid`、`outline-offset-*` 与 `interactivity` 升级为 PASS 基线；CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿，完成原子提交。
 
+### 2026-11-23 Phase 548 (`line-clamp`/`max-lines`/`overflow-clip-margin` 解析与 `overflow` 级联计算全面打通)
+- **[Agent]**: 完成 Phase 548：在 `cssom.js` 扩展 `line-clamp`（支持正整数、`auto`、`block-ellipsis` 组合及 `-webkit-legacy` 语法）、`max-lines`（正整数与 `auto` 组合）、`overflow-clip-margin`（盒模型与长度组合及百分比拦截）；在 `window.js` 实现 `overflow-clip-margin` 计算期 px 化与 `overflow-x`/`overflow-y` 规则（`visible` 在另一轴非 `visible`/`clip` 时计算为 `auto`）；WPT `/css/css-overflow/parsing/` 达到 32/32 全量符合基线预期（100% MATCHED），`page-keyboard.spec.ts` 达 38/44 通过；CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+

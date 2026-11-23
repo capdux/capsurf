@@ -6796,13 +6796,17 @@ function installWindow(global) {
       }
     }
     let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
-    if (disp === "-webkit-box") {
+    if (disp === "-webkit-box" || disp === "-webkit-inline-box") {
       const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();
-      const lineClampRaw = (computedMap.get("-webkit-line-clamp") || "").trim();
-      const lineClampNum = parseInt(lineClampRaw, 10);
-      if (boxOrient === "vertical" && !isNaN(lineClampNum) && lineClampNum > 0 && String(lineClampNum) === lineClampRaw) {
-        disp = "flow-root";
-        computedMap.set("display", "flow-root");
+      const wlcRaw = (computedMap.get("-webkit-line-clamp") || "").trim();
+      const lcRaw = (computedMap.get("line-clamp") || "").trim();
+      const contRaw = (computedMap.get("continue") || "").trim().toLowerCase();
+      const hasWlc = wlcRaw && wlcRaw !== "none";
+      const hasLc = lcRaw && lcRaw !== "none";
+      const hasCont = contRaw === "discard";
+      if (boxOrient === "vertical" && (hasWlc || hasLc || hasCont)) {
+        disp = disp === "-webkit-box" ? "flow-root" : "inline-block";
+        computedMap.set("display", disp);
       }
     }
     if (!computedMap.has("display")) {
@@ -7140,6 +7144,36 @@ function installWindow(global) {
       const px = evalCssLengthExpr(ooRaw, 0, fontSize);
       if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
     }
+    const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
+    if (ocmRaw) {
+      const splitFn = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_splitCssTokens === "function")
+        ? globalThis.__capsurf_splitCssTokens
+        : (s) => s.split(/\s+/);
+      const BOXES = new Set(["content-box", "padding-box", "border-box"]);
+      const toks = splitFn(ocmRaw);
+      let box = null, len = null;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (BOXES.has(tl)) box = tl;
+        else len = t;
+      }
+      let px = 0;
+      if (len) {
+        const p = evalCssLengthExpr(len, 0, fontSize);
+        if (p !== null) px = p;
+      }
+      const pxStr = Math.max(0, px) + "px";
+      const res = (!box || box === "padding-box") ? pxStr : (pxStr === "0px" ? box : (box + " " + pxStr));
+      computedMap.set("overflow-clip-margin", res);
+    }
+    // overflow-x and overflow-y resolution: visible computes to auto if one is neither visible nor clip
+    let ox = (computedMap.get("overflow-x") || "visible").trim().toLowerCase();
+    let oy = (computedMap.get("overflow-y") || "visible").trim().toLowerCase();
+    const isVisOrClip = (v) => v === "visible" || v === "clip";
+    if (ox === "visible" && !isVisOrClip(oy)) ox = "auto";
+    if (oy === "visible" && !isVisOrClip(ox)) oy = "auto";
+    computedMap.set("overflow-x", ox);
+    computedMap.set("overflow-y", oy);
     const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
     for (let i = 0; i < nonNegLenProps.length; i++) {
       const nk = nonNegLenProps[i];

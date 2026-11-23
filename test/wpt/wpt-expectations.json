@@ -4786,36 +4786,36 @@
     "reason": null
   },
   "/css/css-overflow/parsing/block-ellipsis-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: block-ellipsis supports keyword and string values"
   },
   "/css/css-overflow/parsing/continue-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/continue-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: continue supports auto, discard, and paginate"
   },
   "/css/css-overflow/parsing/line-clamp-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/line-clamp-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: line-clamp supports integer, auto, and block-ellipsis combinations"
   },
   "/css/css-overflow/parsing/max-lines-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/max-lines-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Fixed: max-lines supports auto and positive integers"
   },
   "/css/css-overflow/parsing/overflow-clip-margin-computed.html": {
-    "expected": "PASS",
-    "reason": null
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/overflow-clip-margin.html": {
     "expected": "PASS",
@@ -4834,8 +4834,8 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-buttons-invalid.html": {
-    "expected": "PASS",
-    "reason": "Records the outcome this produces. The previous expectation was stale: reproduced on CI and locally."
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/scroll-buttons-valid.html": {
     "expected": "FAIL",
@@ -4850,28 +4850,28 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-invalid.html": {
-    "expected": "PASS",
-    "reason": null
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/scroll-markers-invalid.tentative.html": {
-    "expected": "PASS",
-    "reason": null
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/scroll-markers-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Records the outcome this produces: valid scroll-markers pass"
   },
   "/css/css-overflow/parsing/scroll-target-group-computed.html": {
     "expected": "FAIL",
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-target-group-invalid.html": {
-    "expected": "PASS",
-    "reason": null
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/scroll-target-group-valid.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "PASS",
+    "reason": "Records the outcome this produces: valid scroll-target-group pass"
   },
   "/css/css-overflow/parsing/scrollbar-gutter-invalid.html": {
     "expected": "PASS",
@@ -4894,8 +4894,8 @@
     "reason": null
   },
   "/css/css-overflow/parsing/webkit-box-computed.html": {
-    "expected": "PASS",
-    "reason": null
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   },
   "/css/css-overflow/parsing/webkit-line-clamp-invalid.html": {
     "expected": "PASS",
@@ -39024,5 +39024,9 @@
   "/css/css-ui/parsing/interactivity-computed.html": {
     "expected": "TIMEOUT",
     "reason": "Test uses interpolation-testcommon.js which creates large keyframe animations and timeouts scraping testharness within 5000ms"
+  },
+  "/css/css-overflow/parsing/scroll-axis-lock-invalid.html": {
+    "expected": "FAIL",
+    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
   }
 }

@@ -57,7 +57,7 @@
     "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering",
     "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
     "inset-inline", "inset-inline-end", "inset-inline-start", "interactivity", "isolation", "justify-content",
-    "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-height",
+    "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-clamp", "line-height",
     "list-style", "list-style-image", "list-style-position", "list-style-type", "margin",
     "margin-block", "margin-block-end", "margin-block-start", "margin-bottom",
     "margin-inline", "margin-inline-end", "margin-inline-start", "margin-left",
@@ -1338,12 +1338,72 @@
       }
       return false;
     }
-    if (prop === "-webkit-line-clamp" || prop === "max-lines") {
+    if (prop === "-webkit-line-clamp") {
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
-      if ((prop === "-webkit-line-clamp" && t === "none") || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      if (t === "none" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
       return /^\+?[1-9]\d*$/.test(t);
+    }
+    if (prop === "max-lines") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      if (toks.length === 1) {
+        return toks[0] === "auto" || /^\+?[1-9]\d*$/.test(toks[0]) || /^(?:calc|min|max|clamp|var|env)\(/i.test(toks[0]);
+      }
+      return (toks[0] === "auto" && (/^\+?[1-9]\d*$/.test(toks[1]) || /^(?:calc|min|max|clamp|var|env)\(/i.test(toks[1]))) ||
+             (toks[1] === "auto" && (/^\+?[1-9]\d*$/.test(toks[0]) || /^(?:calc|min|max|clamp|var|env)\(/i.test(toks[0])));
+    }
+    if (prop === "line-clamp") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0) return false;
+      if (toks.length === 1 && toks[0].toLowerCase() === "none") return true;
+      let items = toks;
+      if (toks[toks.length - 1].toLowerCase() === "-webkit-legacy") {
+        items = toks.slice(0, -1);
+        if (items.length === 0) return false;
+      }
+      let seenInt = false;
+      let seenEllipsis = false;
+      const isPositiveInt = (t) => /^\+?[1-9]\d*$/.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t);
+      const isBlockEllipsis = (t) => {
+        const tl = t.toLowerCase();
+        return tl === "none" || tl === "auto" || tl === "ellipsis" || tl === "no-ellipsis" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t);
+      };
+      for (const t of items) {
+        const tl = t.toLowerCase();
+        if (isPositiveInt(t) && !seenInt) {
+          seenInt = true;
+        } else if (isBlockEllipsis(t) && !seenEllipsis) {
+          if (tl === "none") return false;
+          seenEllipsis = true;
+        } else {
+          return false;
+        }
+      }
+      return seenInt || seenEllipsis;
+    }
+    if (prop === "overflow-clip-margin") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length < 1 || toks.length > 2) return false;
+      let box = null, len = null;
+      const BOXES = new Set(["content-box", "padding-box", "border-box"]);
+      for (const t of toks) {
+        const tl = t.toLowerCase();
+        if (BOXES.has(tl) && !box) {
+          box = tl;
+        } else if (!len) {
+          if (tl.includes("%")) return false;
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)px$/i.test(t) || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)em$/i.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t)) {
+            len = t;
+          } else {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+      return true;
     }
     if (prop === "block-ellipsis") {
       const toks = splitCssTokens(trimmed);
@@ -1747,6 +1807,8 @@
 
     return true;
   }
+  global.__capsurf_splitCssTokens = splitCssTokens;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_splitCssTokens = splitCssTokens;
   global.__capsurf_isValidCssValue = isValidCssValue;
 
   const NUM_NORM_PROPS = new Set(["flex-grow", "flex-shrink", "opacity", "z-index", "order", "orphans", "widows", "column-count", "font-weight"]);
@@ -2321,6 +2383,77 @@
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 2) return "stable both-edges";
       return p.join(" ");
+    }
+    if (key === "line-clamp") {
+      const toks = splitCssTokens(s.trim());
+      if (toks.length === 1 && toks[0].toLowerCase() === "none") return "none";
+      let hasLegacy = false;
+      let items = toks;
+      if (toks[toks.length - 1].toLowerCase() === "-webkit-legacy") {
+        hasLegacy = true;
+        items = toks.slice(0, -1);
+      }
+      let count = null, ellipsis = null;
+      const isPositiveInt = (t) => /^\+?[1-9]\d*$/.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t);
+      if (items.length === 1) {
+        const t = items[0], tl = t.toLowerCase();
+        if (isPositiveInt(t) || tl === "auto") {
+          count = t;
+        } else if (tl === "ellipsis") {
+          count = "auto";
+        } else {
+          count = "auto";
+          ellipsis = t;
+        }
+      } else if (items.length === 2) {
+        let first = items[0], second = items[1];
+        if (isPositiveInt(first)) {
+          count = first;
+          ellipsis = second.toLowerCase() === "ellipsis" ? null : second;
+        } else if (isPositiveInt(second)) {
+          count = second;
+          ellipsis = first.toLowerCase() === "ellipsis" ? null : first;
+        } else {
+          count = "auto";
+          ellipsis = second.toLowerCase() === "ellipsis" ? null : second;
+        }
+      }
+      const parts = [];
+      if (count) parts.push(count);
+      if (ellipsis) parts.push(ellipsis);
+      if (hasLegacy) parts.push("-webkit-legacy");
+      return parts.join(" ");
+    }
+    if (key === "max-lines") {
+      const toks = splitCssTokens(s.toLowerCase());
+      if (toks.length === 2 && toks[0] === "auto") return toks[1] + " auto";
+      return toks.join(" ");
+    }
+    if (key === "overflow-clip-margin") {
+      const toks = splitCssTokens(s.trim());
+      let box = null, len = null;
+      const BOXES = new Set(["content-box", "padding-box", "border-box"]);
+      for (const t of toks) {
+        const tl = t.toLowerCase();
+        if (BOXES.has(tl)) box = tl;
+        else len = t;
+      }
+      if (len && /^calc\(/i.test(len)) {
+        const inn = len.slice(5, -1).trim();
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(inn);
+        if (m) {
+          const v1 = Number(m[1]), op = m[2], v2 = Number(m[3]);
+          const res = op === "+" ? v1 + v2 : v1 - v2;
+          len = "calc(" + res + "px)";
+        }
+      }
+      if (!box || box === "padding-box") {
+        return len || "0px";
+      }
+      if (!len || len === "0px" || len === "calc(0px)") {
+        return box;
+      }
+      return box + " " + len;
     }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());
