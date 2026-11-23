@@ -2447,3 +2447,7 @@
 ### Phase 484: `getComputedStyle` 间距/缩进/多栏/透视计算值解析
 - 对齐 `word-spacing: normal -> 0px` 与 `tab-size` 数值/长度双分支求值。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 7/7 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 485: `getComputedStyle` 圆角与旋转计算值规范化
+- `rotate` 按 CSS Transforms 2 规范将 `0 0 -1 400grad` 归约为 `-360deg`、`-0.5 0 0 400grad` 归约为 `x -360deg`。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

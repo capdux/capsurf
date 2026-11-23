@@ -3319,3 +3319,9 @@
   - `column-rule-width`: 接入线宽解析与 `column-rule-style: none|hidden` 归 `0px`。
   - `column-width` / `perspective`: 非 `auto`/`none` 长度求值与非负钳位。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 485: `getComputedStyle` `border-*-radius` 与 `rotate` 规范化序列化
+- `src/js/shim/window.js` (`applyUsedValuesToComputedMap`):
+  - `border-{top-left,top-right,bottom-right,bottom-left}-radius`: 支持 1~2 项非 `%` 长度求值与非负像素钳位。
+  - `rotate`: 实现 `deg/rad/grad/turn` 转 `deg`、平行轴向量（`x`/`y`/`z`）归约及负向轴角度取反。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

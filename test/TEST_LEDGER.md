@@ -1072,3 +1072,9 @@
 - `page-add-init-script.spec.ts`: 11 total | **11 PASS (100%)** | 0 FAIL | 0 TIMEOUT
 - `page-expose-function.spec.ts`: 18 total | 0 PASS | 0 FAIL | 18 TIMEOUT
 - Totals: **36 PASS / 18 FAIL / 22 TIMEOUT / 1 SKIP**
+
+### WPT-B223 (port=19700, Phase 483 verification, 55 tests, 49/55 matched)
+- `/css/css-box/parsing/`: 29 total | 23 PASS (up from 22!) | 6 FAIL | 0 TIMEOUT | 0 CRASH (`margin-computed` PASS!)
+- `/css/css-position/parsing/`: 22 total | **21 PASS (95.5%!)** | 1 FAIL | 0 TIMEOUT | 0 CRASH (`top/right/bottom/left-computed` & `inset-computed` PASS!)
+- `/css/css-backgrounds/parsing/border-width`: 4 total | **3 PASS** | 1 FAIL | 0 TIMEOUT | 0 CRASH (`border-width-computed` PASS!)
+- Totals: **47 PASS / 8 FAIL / 0 TIMEOUT / 0 CRASH**

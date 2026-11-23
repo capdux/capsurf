@@ -7251,3 +7251,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 483 `getComputedStyle` `inset-*` 与 `font-weight` 计算值]** 在 `src/js/shim/window.js` 中扩展 `inset-block-start/end`、`inset-inline-start/end` 相对单位计算值解析，并实现 `font-weight` 计算值解析（`normal`→`400`、`bold`→`700`、`bolder`/`lighter` 按父级字重查表、`calc(...)` 求值并钳位 `[1, 1000]`）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 484 `getComputedStyle` `word-spacing`/`tab-size`/`outline-offset`/`column-*`/`perspective` 解析]** 在 `src/js/shim/window.js` 中补全 `word-spacing`（`normal`→`0px`）、`tab-size`（无单位数值保留、长度求值非负钳位）、`outline-offset`、`column-rule-width`、`column-width`、`perspective` 的计算值解析；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 7/7 `true`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B222` 与 `PW Batch 145`（`page-add-init-script` 11/11 PASS、`page-network-response` 18/21 PASS），派发 `WPT Batch 223 Runner` 与 `PW Batch 146 Runner`。
+
+- **[User]** 已重启agy并切换了配额账号，已恢复当前会话上下文。重开2个子智能体，读取 `/root/.agy/comm/COMM.md` 保持多 AGY 通信，继续自主推进。
+- **[Agent]** 已重新派发 2 路全新测试子智能体（`PW Batch 146 Runner` @ `:19386` 与 `WPT Batch 224 Runner` @ `:19700`），检查 `/root/.agy/comm/COMM.md` 与 `unacked` 队列，并立即编译验证 Phase 485（`rotate` 与 `border-*-radius` 计算值规范化）。
+
+- **[Phase 485 `getComputedStyle` `border-*-radius` 与 `rotate` 序列化]** 在 `src/js/shim/window.js` 中补全 `border-{top-left,top-right,bottom-right,bottom-left}-radius` 非负长度计算值解析与 `rotate` 规范化序列化（单位换算 `deg`、`x`/`y`/`z` 轴归约及反向负角归约）；`agy-comm.service` `active`，`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。

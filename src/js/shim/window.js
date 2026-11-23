@@ -6927,6 +6927,66 @@ function installWindow(global) {
         if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
       }
     }
+    const radProps = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+    for (let i = 0; i < radProps.length; i++) {
+      const rk = radProps[i];
+      const rv = (computedMap.get(rk) || "").trim();
+      if (!rv) continue;
+      const rParts = [];
+      let rCur = "", rD = 0;
+      for (let j = 0; j < rv.length; j++) {
+        const c = rv[j];
+        if (c === "(") rD++;
+        else if (c === ")" && rD > 0) rD--;
+        if (rD === 0 && /\s/.test(c)) { if (rCur) { rParts.push(rCur); rCur = ""; } }
+        else rCur += c;
+      }
+      if (rCur) rParts.push(rCur);
+      const outParts = [];
+      for (let j = 0; j < rParts.length; j++) {
+        let p = rParts[j];
+        if (p.indexOf("%") === -1) {
+          const px = evalCssLengthExpr(p, 0, fontSize);
+          if (px !== null) p = formatCssPx(Math.max(0, px));
+        }
+        outParts.push(p);
+      }
+      computedMap.set(rk, outParts.join(" "));
+    }
+    const rotRaw = (computedMap.get("rotate") || "").trim().toLowerCase();
+    if (rotRaw && rotRaw !== "none") {
+      const rotToks = rotRaw.split(/\s+/);
+      const toDeg = (s) => {
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)$/i.exec(s);
+        if (m) {
+          const v = Number(m[1]), u = m[2].toLowerCase();
+          return u === "deg" ? v : (u === "turn" ? v * 360 : (u === "grad" ? v * 0.9 : v * 180 / Math.PI));
+        }
+        return s === "0" ? 0 : null;
+      };
+      const fmtDeg = (d) => (Math.round(d * 1e6) / 1e6) + "deg";
+      if (rotToks.length === 1) {
+        const d = toDeg(rotToks[0]);
+        if (d !== null) computedMap.set("rotate", fmtDeg(d));
+      } else if (rotToks.length === 2) {
+        const ax = (rotToks[0] === "x" || rotToks[0] === "y" || rotToks[0] === "z") ? rotToks[0] : rotToks[1];
+        const angS = (ax === rotToks[0]) ? rotToks[1] : rotToks[0];
+        const d = toDeg(angS);
+        if (d !== null) computedMap.set("rotate", ax === "z" ? fmtDeg(d) : (ax + " " + fmtDeg(d)));
+      } else if (rotToks.length === 4) {
+        let angS = rotToks[3], vec = [rotToks[0], rotToks[1], rotToks[2]];
+        if (toDeg(rotToks[0]) !== null && isNaN(Number(rotToks[0]))) {
+          angS = rotToks[0]; vec = [rotToks[1], rotToks[2], rotToks[3]];
+        }
+        const d = toDeg(angS), x = Number(vec[0]), y = Number(vec[1]), z = Number(vec[2]);
+        if (d !== null && !isNaN(x) && !isNaN(y) && !isNaN(z)) {
+          if (x !== 0 && y === 0 && z === 0) computedMap.set("rotate", "x " + fmtDeg(x < 0 ? -d : d));
+          else if (x === 0 && y !== 0 && z === 0) computedMap.set("rotate", "y " + fmtDeg(y < 0 ? -d : d));
+          else if (x === 0 && y === 0 && z !== 0) computedMap.set("rotate", fmtDeg(z < 0 ? -d : d));
+          else computedMap.set("rotate", x + " " + y + " " + z + " " + fmtDeg(d));
+        }
+      }
+    }
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
