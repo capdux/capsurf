@@ -1112,7 +1112,12 @@ Node.prototype.lookupNamespaceURI = function (prefix) {
   return parent ? parent.lookupNamespaceURI(p) : null;
 };
 
+Node.prototype.isSameNode = function (otherNode) {
+  return this === otherNode;
+};
+
 markNative(Node, "Node");
+markNative(Node.prototype.isSameNode, "isSameNode");
 markNative(Node.prototype.contains, "contains");
 markNative(Node.prototype.compareDocumentPosition, "compareDocumentPosition");
 markNative(Node.prototype.cloneNode, "cloneNode");

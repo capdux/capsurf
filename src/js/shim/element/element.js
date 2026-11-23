@@ -1202,6 +1202,14 @@ function installElementExtensions(proto) {
   };
   markNative(proto.getAttribute, "getAttribute");
 
+  // hasAttributes
+  proto.hasAttributes = function () {
+    if (!this._attrs) this._syncAttrs();
+    if (this._attrList && this._attrList.length > 0) return true;
+    return !!(this._attrs && this._attrs.size > 0);
+  };
+  markNative(proto.hasAttributes, "hasAttributes");
+
   // hasAttribute
   const origHasAttribute = proto.hasAttribute;
   proto.hasAttribute = function (name) {
@@ -1276,6 +1284,14 @@ function installElementExtensions(proto) {
     return null;
   };
   markNative(proto.getAttributeNS, "getAttributeNS");
+
+  // hasAttributes
+  proto.hasAttributes = function () {
+    if (!this._attrs) this._syncAttrs();
+    if (this._attrList && this._attrList.length > 0) return true;
+    return !!(this._attrs && this._attrs.size > 0);
+  };
+  markNative(proto.hasAttributes, "hasAttributes");
 
   // hasAttributeNS
   proto.hasAttributeNS = function (namespace, localName) {
@@ -1443,30 +1459,18 @@ function installElementExtensions(proto) {
         origIdSet.call(this, v);
         const str = String(v);
         if (!this._attrs) this._syncAttrs();
-        if (str) {
-          const entry = { name: "id", value: str, namespaceURI: null, localName: "id", prefix: null };
-          this._attrs.set("id", entry);
-          if (this._attrList) {
-            let found = false;
-            for (let i = 0; i < this._attrList.length; i++) {
-              if (this._attrList[i].name.toLowerCase() === "id") {
-                this._attrList[i].value = str;
-                found = true;
-                break;
-              }
-            }
-            if (!found) this._attrList.push(entry);
-          }
-        } else {
-          this._attrs.delete("id");
-          if (this._attrList) {
-            for (let i = 0; i < this._attrList.length; i++) {
-              if (this._attrList[i].name.toLowerCase() === "id") {
-                this._attrList.splice(i, 1);
-                break;
-              }
+        const entry = { name: "id", value: str, namespaceURI: null, localName: "id", prefix: null };
+        this._attrs.set("id", entry);
+        if (this._attrList) {
+          let found = false;
+          for (let i = 0; i < this._attrList.length; i++) {
+            if (this._attrList[i].name.toLowerCase() === "id") {
+              this._attrList[i].value = str;
+              found = true;
+              break;
             }
           }
+          if (!found) this._attrList.push(entry);
         }
         if (this._attributesMap) this._attributesMap._sync();
         if (this.isConnected && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncNamedGlobals === "function") {

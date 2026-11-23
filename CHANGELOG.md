@@ -3058,3 +3058,5 @@
 - **Phase 429 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：抽离 `parseValidHtmlFloat` 并补齐 `HTMLMeterElement`（`min`/`max`/`value`/`low`/`high`/`optimum`）与 `HTMLOutputElement`（`type`/`value`/`defaultValue`/校验接口）。
 
 - **Phase 430 (`src/js/shim/element/html-classes.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：修正 `HTMLProgressElement.max` 非正数忽略语义；`HTMLOutputElement` 对接 `makeValidityState` 与 `willValidate=false`；`document.title` setter 失效 `<title>` 子节点缓存。
+
+- **Phase 431 (`src/js/shim/element/element.js`, `src/js/shim/node-base.js`, `src/js/shim/selector.js`, `src/js/runtime_source.cp`)**：新增 `Element.prototype.hasAttributes` 与 `Node.prototype.isSameNode`；修复 `id=""` 属性误删与 `DocumentFragment.getElementById("")` 误匹配。

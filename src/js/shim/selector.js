@@ -458,6 +458,7 @@ function findInSubtree(root, predicate, single) {
 if (typeof DocumentFragment !== "undefined" && DocumentFragment.prototype) {
   DocumentFragment.prototype.getElementById = function (id) {
     const targetId = String(id);
+    if (!targetId) return null;
     const found = findInSubtree(this, function (el) {
       return el.id === targetId || (typeof el.getAttribute === "function" && el.getAttribute("id") === targetId);
     }, true);

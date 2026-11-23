@@ -2285,3 +2285,5 @@
 - Phase 429 (`src/js/shim/element/html-classes.js`): 复用 `parseValidHtmlFloat` 实现 `HTMLMeterElement` 全属性夹紧规范，并实现 `HTMLOutputElement` 的 `default`/`value` 双模式状态机及自定义校验接口。
 
 - Phase 430 (`src/js/shim/element/html-classes.js`, `window.js`): 修正 `progress.max` setter 忽略 `<= 0` 值；将 `HTMLOutputElement` 校验状态接入共享 `makeValidityState` 并保持 `willValidate=false`/`validationMessage=""`；同步失效 `title` 节点缓存。
+
+- Phase 431 (`element.js`, `node-base.js`, `selector.js`): 实装 `hasAttributes()` 与 `isSameNode()`；修复 `proto.id` setter 对空串清空属性条目导致 `setAttribute("id", "")` 丢失属性的规范缺陷，以及 `DocumentFragment.getElementById("")` 过滤空串 ID。
