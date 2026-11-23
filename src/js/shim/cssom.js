@@ -1924,8 +1924,6 @@
       const p = splitCssTokens(s);
       if (p.length === 1) {
         const tl = p[0].toLowerCase();
-        if (tl === "filled") return "circle";
-        if (tl === "open") return "open circle";
         if (/^'[^']*'$/.test(p[0])) return '"' + p[0].slice(1, -1) + '"';
         if (/^"[^"]*"$/.test(p[0])) return p[0];
         return tl;
@@ -4838,6 +4836,8 @@
     }
     return res;
   }
+  global.__capsurf_normalizeSingleColor = normalizeSingleColor;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_normalizeSingleColor = normalizeSingleColor;
 
   const NAMED_COLORS_MAP = {
     lime: "rgb(0, 255, 0)",
@@ -5000,6 +5000,8 @@
     }
     return res;
   }
+  global.__capsurf_normalizeSingleColor = normalizeSingleColor;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_normalizeSingleColor = normalizeSingleColor;
 
   let _capturedGetComputedStyle = null;
 

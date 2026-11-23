@@ -1467,3 +1467,9 @@
 
 ### WPT-B285 (bin_dev Phase 531, 2026-11-23)
 - **Filter `/css/css-text-decor/parsing/`**: `31` files (`25 PASS / 6 FAIL / 0 TIMEOUT / 0 ERROR`, `26` matched expectations, `2` unexpected PASS: `text-decoration-skip-spaces-{computed,valid}`, `3` unexpected FAIL: `text-decoration-color-computed` 2/3, `text-decoration-computed` 8/14, `text-emphasis-computed` 0/7).
+
+### WPT-B286 (bin_dev Phase 532, 2026-11-23)
+- **Filter `/css/css-text/parsing/`**: `86` files (**71 PASS / 15 FAIL / 0 TIMEOUT / 0 ERROR**, jumped from 58/86 to **71/86**, `66` matched expectations, `13` unexpected PASS, `7` unexpected FAIL). `letter-spacing`, `word-spacing`, `tab-size`, `word-break`, `white-space-shorthand-text-wrap`, `hyphenate-character`, `hanging-punctuation-invalid`, `text-justify-computed-legacy` all green; `hyphenate-limit-chars-computed` 10/11.
+
+### WPT-B287 (bin_dev pre-533, 2026-11-23)
+- **Filter `/css/css-text-decor/parsing/`**: `31` files (`25 PASS / 6 FAIL / 0 TIMEOUT / 0 ERROR`), `text-decoration-computed` improved `8/14 -> 11/14`; remaining 6 issues (`rgb()` serialization, vertical `filled/open`, `text-decoration-color: inherit`, `text-decoration-inset` negative/%) targeted in Phase 533 & 534.

@@ -2557,3 +2557,7 @@
 
 ### Phase 532: `hyphenate-*` / `hanging-punctuation` / `text-justify` 收尾
 - `hyphenate-limit-chars` 需按 CSS Text 4 做尾部重复省略（3 项中第 3 项等于第 2 项时省去第 3 项，2 项均为 `auto` 时省去为 `auto`），且继承属性需列入 `INHERITED_CSS_PROPS`。
+
+### Phase 533: `text-decoration` / `text-emphasis` 颜色与书写模式计算值修复
+- `text-decoration` 在其余长属性非默认时不得输出 `none`，且 `text-decoration-color` 等于元素 `color`（含 `currentcolor` 解析结果）时省略；而 `text-emphasis` 必须始终序列化为 `<style> <resolved-color>`。
+- `text-emphasis-style` 的 `filled`/`open` 在指定期保持关键字，计算期按 `writing-mode` 分别解析为 `circle`/`open circle`（水平）或 `sesame`/`open sesame`（垂直）。

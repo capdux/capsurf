@@ -5714,8 +5714,6 @@
         const p = splitCssTokens(s);
         if (p.length === 1) {
           const tl = p[0].toLowerCase();
-          if (tl === "filled") return "circle";
-          if (tl === "open") return "open circle";
           if (/^'[^']*'$/.test(p[0])) return '"' + p[0].slice(1, -1) + '"';
           if (/^"[^"]*"$/.test(p[0])) return p[0];
           return tl;
@@ -8628,6 +8626,8 @@
       }
       return res;
     }
+    global.__capsurf_normalizeSingleColor = normalizeSingleColor;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_normalizeSingleColor = normalizeSingleColor;
 
     const NAMED_COLORS_MAP = {
       lime: "rgb(0, 255, 0)",
@@ -8790,6 +8790,8 @@
       }
       return res;
     }
+    global.__capsurf_normalizeSingleColor = normalizeSingleColor;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_normalizeSingleColor = normalizeSingleColor;
 
     let _capturedGetComputedStyle = null;
 
@@ -40522,6 +40524,26 @@
         }
         computedMap.set("text-align", resolvedAlign);
       }
+      const normCol = typeof global.__capsurf_normalizeSingleColor === "function"
+        ? global.__capsurf_normalizeSingleColor
+        : (v) => v;
+      const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
+      const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
+      computedMap.set("color", elColor);
+      for (const ck of ["text-decoration-color", "text-emphasis-color"]) {
+        const cv = (computedMap.get(ck) || "").trim();
+        if (!cv || cv.toLowerCase() === "currentcolor") computedMap.set(ck, elColor);
+        else computedMap.set(ck, normCol(cv));
+      }
+      const wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+      const tes = (computedMap.get("text-emphasis-style") || "").trim().toLowerCase();
+      if (wm.startsWith("vertical")) {
+        if (tes === "filled") computedMap.set("text-emphasis-style", "sesame");
+        else if (tes === "open") computedMap.set("text-emphasis-style", "open sesame");
+      } else {
+        if (tes === "filled") computedMap.set("text-emphasis-style", "circle");
+        else if (tes === "open") computedMap.set("text-emphasis-style", "open circle");
+      }
       if ((computedMap.get("text-justify") || "").trim().toLowerCase() === "distribute") {
         computedMap.set("text-justify", "inter-character");
       }
@@ -40743,19 +40765,23 @@
           return ox === oy ? ox : (ox + " " + oy);
         }
         if (name === "text-decoration") {
+          const elColor = computedMap.get("color") || "rgb(0, 0, 0)";
           const tdl = computedMap.get("text-decoration-line") || "none";
           const tds = computedMap.get("text-decoration-style") || "solid";
           const tdt = computedMap.get("text-decoration-thickness") || "auto";
-          const tdc = computedMap.get("text-decoration-color") || "rgb(0, 0, 0)";
-          const out = [tdl];
+          const tdc = computedMap.get("text-decoration-color") || elColor;
+          const out = [];
+          if (tdl !== "none") out.push(tdl);
           if (tds !== "solid") out.push(tds);
           if (tdt !== "auto") out.push(tdt);
-          if (tdc !== "currentcolor") out.push(tdc);
-          return out.join(" ");
+          if (tdc !== "currentcolor" && tdc !== elColor) out.push(tdc);
+          return out.length > 0 ? out.join(" ") : "none";
         }
         if (name === "text-emphasis") {
+          const elColor = computedMap.get("color") || "rgb(0, 0, 0)";
           const tes = computedMap.get("text-emphasis-style") || "none";
-          const tec = computedMap.get("text-emphasis-color") || "rgb(0, 0, 0)";
+          let tec = computedMap.get("text-emphasis-color") || elColor;
+          if (tec === "currentcolor") tec = elColor;
           return tes + " " + tec;
         }
         if (name === "list-style") {
