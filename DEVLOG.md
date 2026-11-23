@@ -2511,3 +2511,7 @@
 ### Phase 500: 里程碑节点 — CSSOM 指定值与计算值 500 Phase 门禁闭环
 - 完成第 500 个 Phase 迭代，`aspect-ratio` 与文本着重/下划线位置指定值序列化与计算值规则全面对齐。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 501: CSS 指定值网格流与字体变体特征重排
+- 补齐 5 项乱序多关键字属性的指定值规范化序列化。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

@@ -5365,6 +5365,39 @@
         if (p.length === 2 && (p[0] === "left" || p[0] === "right")) return p[1] + " " + p[0];
         return p.join(" ");
       }
+      if (key === "grid-auto-flow") {
+        const p = splitCssTokens(s.toLowerCase());
+        let ax = "", den = false;
+        for (let i = 0; i < p.length; i++) {
+          if (p[i] === "dense") den = true;
+          else ax = p[i];
+        }
+        return ax && den ? (ax + " dense") : (ax || (den ? "dense" : s));
+      }
+      if (key === "font-synthesis") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && p[0] === "none") return "none";
+        const order = ["weight", "style", "oblique-only", "small-caps", "position"];
+        return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "font-variant-numeric") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && p[0] === "normal") return "normal";
+        const order = ["lining-nums", "oldstyle-nums", "proportional-nums", "tabular-nums", "diagonal-fractions", "stacked-fractions", "ordinal", "slashed-zero"];
+        return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "font-variant-east-asian") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && p[0] === "normal") return "normal";
+        const order = ["jis78", "jis83", "jis90", "jis04", "simplified", "traditional", "full-width", "proportional-width", "ruby"];
+        return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "font-variant-ligatures") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && (p[0] === "normal" || p[0] === "none")) return p[0];
+        const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
+        return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
       return s;
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;

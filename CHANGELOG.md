@@ -3419,3 +3419,9 @@
   - `aspect-ratio`: 规范化 `/` 空格、补齐单数 `<ratio>` 为 `n / 1`，并将 `auto` 前置。
   - `text-emphasis-position` / `text-underline-position`: 将水平关键字后置为规范顺序（`[over|under|from-font] [left|right]`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 501: CSS 指定值 `grid-auto-flow`, `font-synthesis`, `font-variant-*` 规范重排
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `grid-auto-flow`: 按 `[row|column] dense?` 重排。
+  - `font-synthesis` / `font-variant-numeric` / `font-variant-east-asian` / `font-variant-ligatures`: 按规范语法顺序输出特征关键字。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
