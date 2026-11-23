@@ -3161,3 +3161,10 @@
   - `animation-direction` / `animation-fill-mode` / `animation-play-state`: 逗号分层关键字校验。
   - `column-count` (`auto | <integer [1,∞]>`) 与 `column-width` (`auto | <length [0,∞]>`, 拒绝 `%`)。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 464: `getComputedStyle` Proxy `has` Trap 与 `STANDARD_COMPUTED_LONGHANDS` 补全
+- `src/js/shim/window.js`:
+  - `getComputedStyle` Proxy `has` trap 新增 `propSet.has(prop)`、`propSet.has(kebab)` 与 `"cssFloat"` 支持，修复 `property in getComputedStyle(target)` 对未显式设置的标准属性返回 `false` 的缺陷。
+  - `getComputedStyle` Proxy `get` trap 新增 `cssFloat` -> `computedMap.get("float")` 别名。
+  - `STANDARD_COMPUTED_LONGHANDS` 补全 `box-decoration-break`、`orphans`、`widows`、`block-size`/`inline-size` 逻辑盒模型属性、`text-wrap*`、`white-space-collapse`、`text-align-last`、`text-justify`、`hyphenate-character` 等。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

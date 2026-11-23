@@ -6793,11 +6793,18 @@ function installWindow(global) {
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
     "background-position-x", "background-position-y", "background-repeat", "background-size",
+    "block-size", "border-block-end-color", "border-block-end-style", "border-block-end-width",
+    "border-block-start-color", "border-block-start-style", "border-block-start-width",
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
-    "border-bottom-style", "border-bottom-width", "border-collapse", "border-left-color",
-    "border-left-style", "border-left-width", "border-right-color", "border-right-style",
-    "border-right-width", "border-spacing", "border-top-color", "border-top-left-radius",
-    "border-top-right-radius", "border-top-style", "border-top-width", "bottom", "box-shadow",
+    "border-bottom-style", "border-bottom-width", "border-collapse",
+    "border-end-end-radius", "border-end-start-radius",
+    "border-inline-end-color", "border-inline-end-style", "border-inline-end-width",
+    "border-inline-start-color", "border-inline-start-style", "border-inline-start-width",
+    "border-left-color", "border-left-style", "border-left-width",
+    "border-right-color", "border-right-style", "border-right-width", "border-spacing",
+    "border-start-end-radius", "border-start-start-radius",
+    "border-top-color", "border-top-left-radius", "border-top-right-radius",
+    "border-top-style", "border-top-width", "bottom", "box-decoration-break", "box-shadow",
     "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
     "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-gap",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-width", "contain",
@@ -6807,21 +6814,25 @@ function installWindow(global) {
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
     "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
     "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-    "grid-template-rows", "height", "hyphens", "image-rendering", "isolation",
-    "justify-content", "justify-items", "justify-self", "left", "letter-spacing",
+    "grid-template-rows", "height", "hyphenate-character", "hyphens", "image-rendering",
+    "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
+    "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing",
     "line-height", "list-style-image", "list-style-position", "list-style-type",
-    "margin-bottom", "margin-left", "margin-right", "margin-top", "max-height", "max-width",
-    "min-height", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
-    "order", "outline-color", "outline-offset", "outline-style", "outline-width",
-    "overflow-wrap", "overflow-x", "overflow-y", "padding-bottom", "padding-left",
-    "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
+    "margin-block-end", "margin-block-start", "margin-bottom", "margin-inline-end", "margin-inline-start",
+    "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
+    "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
+    "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
+    "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
+    "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
+    "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
-    "tab-size", "table-layout", "text-align", "text-decoration-color", "text-decoration-line",
-    "text-decoration-style", "text-indent", "text-overflow", "text-shadow", "text-transform",
+    "tab-size", "table-layout", "text-align", "text-align-last", "text-decoration-color", "text-decoration-line",
+    "text-decoration-skip-ink", "text-decoration-style", "text-indent", "text-justify", "text-overflow", "text-shadow", "text-transform",
+    "text-wrap", "text-wrap-mode", "text-wrap-style",
     "top", "touch-action", "transform", "transform-origin", "transform-style",
     "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "user-select", "vertical-align",
-    "visibility", "white-space", "width", "will-change", "word-break", "word-spacing",
+    "visibility", "white-space", "white-space-collapse", "widows", "width", "will-change", "word-break", "word-spacing",
     "writing-mode", "z-index"
   ];
 
@@ -6904,6 +6915,7 @@ function installWindow(global) {
         if (typeof prop === "symbol") return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
+          if (prop === "cssFloat") return computedMap.get("float") || "";
           if (computedMap.has(prop)) return computedMap.get(prop);
           if (prop.startsWith("--")) return "";
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
@@ -6920,9 +6932,10 @@ function installWindow(global) {
       has: function (target, prop) {
         if (prop in target) return true;
         if (typeof prop === "string") {
-          if (computedMap.has(prop)) return true;
+          if (prop === "cssFloat") return true;
+          if (propSet.has(prop) || computedMap.has(prop)) return true;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-          if (computedMap.has(kebab)) return true;
+          if (propSet.has(kebab) || computedMap.has(kebab)) return true;
         }
         return false;
       },

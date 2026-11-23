@@ -2363,3 +2363,7 @@
 ### Phase 463: CSSOM 动画、过渡与多栏布局属性门禁
 - 发现 `WPT-B205` 中 `*-computed.html` 批量失败根因：`window.js` `getComputedStyle` Proxy 的 `has` trap 仅检查 `computedMap`，未检查 `propSet`（含 `STANDARD_COMPUTED_LONGHANDS`），导致 `"float" in getComputedStyle(el)` 等均返回 `false`。将在 Phase 464 修复。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 464: 修复 `getComputedStyle` Proxy `has` Trap 根因
+- 通过排查 `computed-testcommon.js`，定位到 `getComputedStyle` Proxy `has` trap 遗漏 `propSet` 检查是导致跨套件 `*-computed.html` 批量失败的共同根因。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `inOk: true`，`--smoke` 3/3 PASS (6/6)。
