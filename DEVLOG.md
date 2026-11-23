@@ -2399,3 +2399,7 @@
 ### Phase 472: CSSOM `scale` 与字体变体互斥组合门禁
 - `scale` 对 `calc()` 内非数字/百分比单位执行显式拦截；`font-variant-numeric/ligatures/east-asian` 分别按规范互斥组校验。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 473: CSSOM Box Alignment 全家桶门禁
+- 用单个 `consumeAlign` 状态机统一解析 9 个 Box Alignment 属性及 `place-*` 双段简写（支持 `first baseline` 等两词片段组合）。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

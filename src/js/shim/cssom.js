@@ -1000,6 +1000,48 @@
       }
       return true;
     }
+    if (prop === "align-content" || prop === "justify-content" ||
+        prop === "align-items" || prop === "justify-items" ||
+        prop === "align-self" || prop === "justify-self" ||
+        prop === "place-content" || prop === "place-items" || prop === "place-self") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 0) return false;
+      function consumeAlign(arr, i, p) {
+        if (i >= arr.length) return -1;
+        const t = arr[i];
+        if (t === "normal" || ((p === "align-self" || p === "justify-self") && t === "auto")) return i + 1;
+        if (t === "stretch") return i + 1;
+        if ((p === "align-content" || p === "justify-content") && (t === "space-between" || t === "space-around" || t === "space-evenly")) return i + 1;
+        if (p !== "justify-content") {
+          if ((t === "first" || t === "last") && i + 1 < arr.length && arr[i + 1] === "baseline") return i + 2;
+          if (t === "baseline") return i + 1;
+        }
+        if (p === "justify-items") {
+          const LEG = new Set(["left", "right", "center"]);
+          if (t === "legacy") return (i + 1 < arr.length && LEG.has(arr[i + 1])) ? i + 2 : i + 1;
+          if (LEG.has(t) && i + 1 < arr.length && arr[i + 1] === "legacy") return i + 2;
+        }
+        let posIdx = i;
+        if (t === "safe" || t === "unsafe") {
+          posIdx = i + 1;
+          if (posIdx >= arr.length) return -1;
+        }
+        const pt = arr[posIdx];
+        const base = pt === "center" || pt === "start" || pt === "end" || pt === "flex-start" || pt === "flex-end";
+        const selfPos = (p !== "align-content" && p !== "justify-content") && (pt === "self-start" || pt === "self-end");
+        const lrPos = (p === "justify-content" || p === "justify-items" || p === "justify-self") && (pt === "left" || pt === "right");
+        if (base || selfPos || lrPos) return posIdx + 1;
+        return -1;
+      }
+      if (prop.startsWith("place-")) {
+        const kind = prop.slice(6);
+        const next = consumeAlign(toks, 0, "align-" + kind);
+        if (next === -1) return false;
+        if (next === toks.length) return true;
+        return consumeAlign(toks, next, "justify-" + kind) === toks.length;
+      }
+      return consumeAlign(toks, 0, prop) === toks.length;
+    }
 
     return true;
   }

@@ -7221,3 +7221,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 471 CSSOM `font-palette` / `font-size-adjust` / `font-synthesis` / `font-language-override` 校验]** 在 `src/js/shim/cssom.js` 中补全 `SUPPORTED_CSS_PROPS`（`"font-language-override"`）并新增上述 4 项字体属性语法校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 472 CSSOM `scale` 数学单位校验与 `font-variant-*` 组合校验]** 在 `src/js/shim/cssom.js` 中强化 `scale` 拦截 `calc(100px)` / `calc(1s)` / `calc(180deg)` 等带非数字单位表达式，并新增 `font-variant-numeric`、`font-variant-ligatures`、`font-variant-east-asian` 分组互斥校验；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 473 CSSOM `css-align` 9 项对齐属性校验]** 在 `src/js/shim/cssom.js` 中新增统一 `consumeAlign` 解析器，覆盖 `align-content`、`justify-content`、`align-items`、`justify-items`、`align-self`、`justify-self`、`place-content`、`place-items`、`place-self`（含 `first|last baseline`、`safe|unsafe`、`legacy` 及左右轴区分）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 (6 pass, 0 fail)。

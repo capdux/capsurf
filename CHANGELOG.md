@@ -3232,3 +3232,9 @@
   - `font-variant-ligatures`: 校验 4 个正反互斥特征组 + `normal | none`。
   - `font-variant-east-asian`: 校验 3 个互斥特征组 + `normal`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 473: CSSOM `align-*`, `justify-*`, `place-*` 对齐属性校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - 新增统一 `consumeAlign` 语法解析器，覆盖 `align-content`, `justify-content`, `align-items`, `justify-items`, `align-self`, `justify-self` 6 个长属性及 `place-content`, `place-items`, `place-self` 3 个简写。
+  - 严格区分 `left`/`right`（仅 `justify-*`）、`self-start`/`self-end`（仅 `*-items`/`*-self`）、`legacy`（仅 `justify-items`）、`space-*`（仅 `*-content`）与 `baseline`（非 `justify-content`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
