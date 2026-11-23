@@ -262,7 +262,7 @@
       return validDisplays.has(vLower);
     }
 
-    if (prop === "color" || prop === "background-color" || prop.endsWith("-color")) {
+    if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color")) {
       return isValidColor(trimmed);
     }
 
@@ -909,16 +909,15 @@
       return isValidLenPct(t, true);
     }
     if (prop === "outline-color") {
-      const toks = splitCssTokens(vLower);
+      const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
-      if (toks[0] === "auto") return true;
-      return /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(toks[0]);
+      if (toks[0].toLowerCase() === "auto") return true;
+      return isValidColor(toks[0]);
     }
     if (prop === "caret-color") {
-      const toks = splitCssTokens(vLower);
+      const toks = splitCssTokens(trimmed);
       if (toks.length < 1 || toks.length > 2) return false;
-      const isColTok = (t) => t === "auto" || /^(?:currentcolor|transparent|#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(|[a-z]+)$/i.test(t);
-      return toks.every(isColTok);
+      return toks.every((t) => t.toLowerCase() === "auto" || isValidColor(t));
     }
     if (prop === "hyphenate-character") {
       const toks = splitCssTokens(trimmed);

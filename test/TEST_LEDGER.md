@@ -1512,3 +1512,6 @@
 
 ### WPT-B300 (bin_dev Phase 543, 2026-11-23)
 - **Filter `/css/css-ui/parsing/`**: `39` files (`28 PASS / 10 FAIL / 1 TIMEOUT / 0 ERROR`, `38/39` matched expectations); `outline-color-{valid,computed}` 1/2 & 2/3, `outline-offset-{valid,computed}` 4/5 & 6/7, `cursor-computed` 36/39, `interactivity` 6/9.
+
+### WPT-B302 (bin_dev Phase 544, 2026-11-23)
+- **Filter `/css/css-ui/parsing/`**: `39` files (**31 PASS / 8 FAIL / 0 TIMEOUT / 0 ERROR**, `3` unexpected PASS: `interactivity`, `outline-offset-{valid,computed}`; `interactivity-computed` 40/46). `outline-color` & `caret-color` fixed in Phase 545.

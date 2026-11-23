@@ -7393,3 +7393,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 544 (`list-style-image` 括号自动闭合、`interactivity`、`outline-offset: inset`、`outline-color: auto`、`caret-color`)
 - **[Agent]**: 完成 Phase 544：修复 `list-style-image`/`background-image` 未闭合 `)` 自动补齐（消除 `const s` 只读异常，使 `conic-gradient(black 1turn, white` 精准算出 `conic-gradient(rgb(0, 0, 0) 360deg, rgb(255, 255, 255))`）；新增 `interactivity`（`auto | inert` 及继承）、`outline-offset: inset`、`outline-color: auto` 及 `caret-color` 双值解析。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 545 (解除 `-color` 前置拦截，打通 `outline-color: auto` 与 `caret-color` 双值)
+- **[Agent]**: 完成 Phase 545：修复 `cssom.js` `prop.endsWith("-color")` 提前拦截 `outline-color`/`caret-color` 的问题，使 `outline-color: auto`（`outline-style: auto` -> `auto`，否则 `currentcolor`）与 `caret-color` 双值 `[auto | <color>]{1,2}` 全部生效。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

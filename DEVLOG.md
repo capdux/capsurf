@@ -2599,3 +2599,6 @@
 ### Phase 544: `list-style-image` 容错闭合与 `css-ui` 属性扩展
 - `normalizeCssSpecifiedValue` 对 `list-style-image`/`background-image` 自动补齐缺失右括号，解决 WPT 容错输入解析。
 - 扩展 `interactivity`（继承）、`outline-offset: inset`、`outline-color: auto` 与 `caret-color` 双值。
+
+### Phase 545: `outline-color: auto` 与 `caret-color` 双值校验打通
+- 将 `outline-color` 和 `caret-color` 从 `prop.endsWith("-color")` 快速分支排除，走各自专用多关键字/双值颜色校验路径。
