@@ -321,6 +321,19 @@ function createStyleProxy(element) {
       }
       return "";
     }
+    if (typeof globalThis.__capsurf_shorthandLonghands === "object" &&
+        globalThis.__capsurf_shorthandLonghands[key] &&
+        typeof globalThis.__capsurf_serializeShorthand === "function") {
+      const lhs = globalThis.__capsurf_shorthandLonghands[key];
+      let pri = null;
+      for (let i = 0; i < lhs.length; i++) {
+        const e = map.get(lhs[i]);
+        if (!e) return "";
+        if (pri === null) pri = e.priority;
+        else if (pri !== e.priority) return "";
+      }
+      return globalThis.__capsurf_serializeShorthand(key, (lh) => map.get(lh).value);
+    }
     if (key === "background") {
       for (let i = 0; i < BG_LONGHANDS.length; i++) {
         if (!map.has(BG_LONGHANDS[i])) return "";
@@ -347,15 +360,29 @@ function createStyleProxy(element) {
   }
 
   function setEntryWithShorthand(map, key, rawName, normV, pri) {
-    setEntryInStyleMap(map, key, rawName, normV, pri);
     if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
       const expanded = globalThis.__capsurf_expandShorthand(key, normV);
       if (expanded) {
+        map.delete(key);
         for (let i = 0; i < expanded.length; i++) {
           setEntryInStyleMap(map, expanded[i][0], expanded[i][0], expanded[i][1], pri);
         }
+        return;
       }
     }
+    setEntryInStyleMap(map, key, rawName, normV, pri);
+  }
+
+  function removeKeyWithShorthand(map, key) {
+    let prev = removeKeyFromStyleMap(map, key);
+    if (!key.startsWith("--") && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
+      const lhs = globalThis.__capsurf_shorthandLonghands[key];
+      for (let i = 0; i < lhs.length; i++) {
+        const p = removeKeyFromStyleMap(map, lhs[i]);
+        if (!prev && p) prev = p;
+      }
+    }
+    return prev;
   }
 
   const cachedMethods = {
@@ -390,7 +417,7 @@ function createStyleProxy(element) {
       const key = normalizeStylePropKey(rawStr);
       const vStr = val === null || val === undefined ? "" : String(val).trim();
       if (vStr === "") {
-        removeKeyFromStyleMap(map, key);
+        removeKeyWithShorthand(map, key);
         if (key === "display") element._displayNone = false;
         serializeStyleMap(map);
         return;
@@ -408,7 +435,7 @@ function createStyleProxy(element) {
     removeProperty: function (p) {
       const map = parseStyleMap();
       const key = normalizeStylePropKey(p);
-      const prev = removeKeyFromStyleMap(map, key);
+      const prev = removeKeyWithShorthand(map, key);
       if (key === "display") {
         element._displayNone = false;
       }
@@ -487,7 +514,7 @@ function createStyleProxy(element) {
       const map = parseStyleMap();
       const vStr = value === null || value === undefined ? "" : String(value).trim();
       if (vStr === "") {
-        removeKeyFromStyleMap(map, normKey);
+        removeKeyWithShorthand(map, normKey);
         if (normKey === "display") element._displayNone = false;
       } else {
         if (!isValidInlinePropValue(normKey, vStr)) return true;

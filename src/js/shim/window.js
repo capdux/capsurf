@@ -7219,7 +7219,7 @@ function installWindow(global) {
       const canonComputedProps = [
         "counter-reset", "counter-increment", "counter-set",
         "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
-        "aspect-ratio", "text-emphasis-position", "text-underline-position",
+        "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
         "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
       ];
       for (let ci = 0; ci < canonComputedProps.length; ci++) {

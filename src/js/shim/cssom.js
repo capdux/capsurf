@@ -1193,6 +1193,22 @@
       }
       return false;
     }
+    if (prop === "text-emphasis-style") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 1) {
+        const tl = toks[0].toLowerCase();
+        if (tl === "none" || tl === "filled" || tl === "open") return true;
+        if (tl === "dot" || tl === "circle" || tl === "double-circle" || tl === "triangle" || tl === "sesame") return true;
+        return /^"[^"]*"$/.test(toks[0]) || /^'[^']*'$/.test(toks[0]);
+      }
+      if (toks.length === 2) {
+        const a = toks[0].toLowerCase(), b = toks[1].toLowerCase();
+        const FILL = new Set(["filled", "open"]);
+        const SHAPE = new Set(["dot", "circle", "double-circle", "triangle", "sesame"]);
+        return (FILL.has(a) && SHAPE.has(b)) || (SHAPE.has(a) && FILL.has(b));
+      }
+      return false;
+    }
     if (prop === "outline" || prop === "border" || prop === "column-rule" ||
         prop === "border-top" || prop === "border-right" || prop === "border-bottom" || prop === "border-left" ||
         prop === "border-block" || prop === "border-inline" ||
@@ -1587,6 +1603,24 @@
       if (ordered.length === 2 && ordered[1] === "right") return ordered[0];
       return ordered.join(" ");
     }
+    if (key === "text-emphasis-style") {
+      const p = splitCssTokens(s);
+      if (p.length === 1) {
+        const tl = p[0].toLowerCase();
+        if (tl === "filled") return "circle";
+        if (tl === "open") return "open circle";
+        if (/^'[^']*'$/.test(p[0])) return '"' + p[0].slice(1, -1) + '"';
+        if (/^"[^"]*"$/.test(p[0])) return p[0];
+        return tl;
+      }
+      if (p.length === 2) {
+        const a = p[0].toLowerCase(), b = p[1].toLowerCase();
+        const fill = (a === "filled" || a === "open") ? a : b;
+        const shape = (a === "filled" || a === "open") ? b : a;
+        return fill === "filled" ? shape : ("open " + shape);
+      }
+      return s;
+    }
     if (key === "text-decoration-skip-spaces") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 2) return "start end";
@@ -1759,6 +1793,51 @@
   }
   global.__capsurf_expandShorthand = expandCssShorthand;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_expandShorthand = expandCssShorthand;
+
+  const SHORTHAND_EXPAND_LONGHANDS = {
+    "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
+    "list-style": ["list-style-position", "list-style-image", "list-style-type"],
+    "place-content": ["align-content", "justify-content"],
+    "place-items": ["align-items", "justify-items"],
+    "place-self": ["align-self", "justify-self"],
+    "flex-flow": ["flex-direction", "flex-wrap"],
+    overflow: ["overflow-x", "overflow-y"],
+    gap: ["row-gap", "column-gap"],
+    "grid-gap": ["row-gap", "column-gap"]
+  };
+  global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
+
+  function serializeExpandedShorthand(key, getVal) {
+    const lhs = SHORTHAND_EXPAND_LONGHANDS[key];
+    if (!lhs) return "";
+    const vals = [];
+    for (let i = 0; i < lhs.length; i++) {
+      const v = getVal(lhs[i]);
+      if (!v) return "";
+      vals.push(v);
+    }
+    if (key === "text-decoration") {
+      return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
+    }
+    if (key === "list-style") {
+      const out = [];
+      if (vals[0] !== "outside") out.push(vals[0]);
+      if (vals[1] !== "none") out.push(vals[1]);
+      if (vals[2] !== "disc" || out.length === 0) out.push(vals[2]);
+      return out.join(" ");
+    }
+    if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap") {
+      return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
+    }
+    if (key === "flex-flow") {
+      if (vals[0] === "row" && vals[1] === "nowrap") return "row";
+      return vals[0] === "row" ? vals[1] : (vals[1] === "nowrap" ? vals[0] : (vals[0] + " " + vals[1]));
+    }
+    return vals.join(" ");
+  }
+  global.__capsurf_serializeShorthand = serializeExpandedShorthand;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_serializeShorthand = serializeExpandedShorthand;
 
   function declSupported(name, value) {
     if (!name || typeof name !== "string") return false;
@@ -2279,11 +2358,17 @@
       } else {
         const expanded = expandCssShorthand(key, v);
         if (expanded) {
+          if (data.has(key)) {
+            data.delete(key);
+            authoredOrder = authoredOrder.filter((k) => k !== key);
+          }
           for (let i = 0; i < expanded.length; i++) {
             const lhKey = expanded[i][0];
             data.set(lhKey, { name: lhKey, value: expanded[i][1], priority: pPriority });
             if (!authoredOrder.includes(lhKey)) authoredOrder.push(lhKey);
           }
+          notify();
+          return;
         }
       }
 

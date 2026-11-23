@@ -3452,3 +3452,7 @@
   - `src/js/shim/element/element.js`: 抽取 `setEntryWithShorthand` 统一在 `setProperty` 与 `styleProxy.set` 展开 shorthand 子属性。
 - **Phase 508**:
   - `src/js/shim/cssom.js`: `expandCssShorthand` 新增 `place-content`、`place-items`、`place-self`、`flex-flow`、`overflow`、`gap`/`grid-gap` 子属性展开。
+- **Phase 509**:
+  - `src/js/shim/cssom.js`: 新增 `SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand`，展开时移除冗余 shorthand key；新增 `text-emphasis-style` 校验与规范化。
+  - `src/js/shim/element/element.js`: 新增 `removeKeyWithShorthand`，更新 `setEntryWithShorthand` 与 `lookupPropertyValue` 支持无残留双向 shorthand 序列化。
+  - `src/js/shim/window.js`: `canonComputedProps` 新增 `text-emphasis-style`。
