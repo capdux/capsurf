@@ -2371,3 +2371,7 @@
 ### Phase 465: CSSOM 21 项布局与视觉关键字属性校验
 - 通过扩展 `KEYWORD_CSS_PROPS` 与复用 `<line-width>` 校验分支，一次性覆盖 Flexbox/Multicol/Transform/Table/UI 枚举属性。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 466: CSSOM 复合简写与独立变换属性校验
+- 为 `flex` 简写区分无单位数字与带长度/百分比的 `calc(...)`，拦截 `1 2 calc(0)` 与 `2 3 4` 等三数字非法组合。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

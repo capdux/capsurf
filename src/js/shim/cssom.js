@@ -669,6 +669,71 @@
       if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
       return isValidLenPct(t, false);
     }
+    if (prop === "flex-flow") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      const DIR = new Set(["row", "row-reverse", "column", "column-reverse"]);
+      const WRP = new Set(["nowrap", "wrap", "wrap-reverse"]);
+      let seenDir = false, seenWrp = false;
+      for (let i = 0; i < toks.length; i++) {
+        if (DIR.has(toks[i])) { if (seenDir) return false; seenDir = true; }
+        else if (WRP.has(toks[i])) { if (seenWrp) return false; seenWrp = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "flex") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      if (toks.length < 1 || toks.length > 3) return false;
+      const isFlexNum = (t) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) && Number(t) >= 0;
+      const isFlexBasis = (t) => {
+        if (t === "auto" || t === "content" || t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch" || /^fit-content\(/i.test(t)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) return /(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(t);
+        if (/^(?:var|env)\(/i.test(t)) return true;
+        return isValidLenPct(t, false);
+      };
+      if (toks.length === 1) return isFlexNum(toks[0]) || isFlexBasis(toks[0]);
+      if (toks.length === 2) {
+        if (isFlexNum(toks[0]) && isFlexNum(toks[1])) return true;
+        if (isFlexNum(toks[0]) && isFlexBasis(toks[1])) return true;
+        if (isFlexBasis(toks[0]) && isFlexNum(toks[1])) return true;
+        return false;
+      }
+      if (isFlexNum(toks[0]) && isFlexNum(toks[1]) && isFlexBasis(toks[2]) && !isFlexNum(toks[2])) return true;
+      if (isFlexBasis(toks[0]) && !isFlexNum(toks[0]) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
+      return false;
+    }
+    if (prop === "rotate") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      const isAngle = (t) => t === "0" || t === "+0" || t === "-0" ||
+        /^(?:calc|min|max|clamp|var|env)\(/i.test(t) ||
+        /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:deg|rad|grad|turn)$/i.test(t);
+      const isNum = (t) => /^(?:calc|min|max|clamp|var|env)\(/i.test(t) ||
+        /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t);
+      if (toks.length === 1) return isAngle(toks[0]);
+      if (toks.length === 2) {
+        const ax = (t) => t === "x" || t === "y" || t === "z";
+        return (ax(toks[0]) && isAngle(toks[1])) || (isAngle(toks[0]) && ax(toks[1]));
+      }
+      if (toks.length === 4) {
+        if (isNum(toks[0]) && isNum(toks[1]) && isNum(toks[2]) && isAngle(toks[3])) return true;
+        if (isAngle(toks[0]) && isNum(toks[1]) && isNum(toks[2]) && isNum(toks[3])) return true;
+      }
+      return false;
+    }
+    if (prop === "scale") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      if (toks.length < 1 || toks.length > 3) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) continue;
+        if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t)) return false;
+      }
+      return true;
+    }
 
     return true;
   }

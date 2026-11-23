@@ -3174,3 +3174,11 @@
   - `KEYWORD_CSS_PROPS` 扩充 20 个枚举关键字属性（`flex-direction`, `flex-wrap`, `column-fill`, `column-span`, `column-rule-style`, `transform-box`, `transform-style`, `backface-visibility`, `isolation`, `object-fit`, `table-layout`, `caption-side`, `empty-cells`, `border-collapse`, `resize`, `direction`, `unicode-bidi`, `writing-mode`, `pointer-events`, `user-select`）。
   - `column-rule-width` 纳入 `<line-width>` 非负长度/关键字校验（拒绝 `%`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 466: CSSOM `flex-flow`, `flex`, `rotate`, `scale` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `flex-flow`: 支持 1~2 token，方向与换行关键字各至多出现 1 次。
+  - `flex`: 支持 `none` 或 1~3 token 合法组合，拒绝 `none 1`、`2 3 4`、`5px 7%`、`9 none` 及无长度单位的 `1 2 calc(0)`。
+  - `rotate`: 支持 `none`、单角度、轴+角度、3 向量+角度（正反序）。
+  - `scale`: 支持 `none` 或 1~3 个 `<number> | <percentage>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
