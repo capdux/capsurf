@@ -3068,3 +3068,5 @@
 - **Phase 434 (`src/js/shim/index.js`, `src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：新增 `Document.createAttribute`/`createAttributeNS` 与 `Attr.prototype.isSameNode`；`innerText` 支持沿祖先链继承 `text-transform`。
 
 - **Phase 435 (`src/js/shim/collections.js`, `src/js/runtime_source.cp`)**：`DOMTokenList` 按有序集合去重并补齐 `keys`、`forEach`、`[Symbol.iterator]` 与 `Symbol.toStringTag`。
+
+- **Phase 436 (`src/js/shim/element/element.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：修正 `relList` 空命名空间判定；抽离 `defineAttrTokenList` 并补齐 `link.sizes`、`iframe.sandbox`、`output.htmlFor`。

@@ -9937,7 +9937,7 @@
     // relList getter/setter (HTML a/area/link, SVG a, MathML a)
     Object.defineProperty(proto, "relList", {
       get: function () {
-        const ns = this.namespaceURI || "http://www.w3.org/1999/xhtml";
+        const ns = this.namespaceURI;
         const local = String(this.localName || this.tagName || "").toLowerCase();
         const ok =
           (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
@@ -13727,6 +13727,28 @@
     if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
     if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
 
+    function defineAttrTokenList(proto, propName, attrName, supportedSet) {
+      const slot = "_dtl_" + propName;
+      Object.defineProperty(proto, propName, {
+        get: function () {
+          if (!this[slot]) {
+            const self = this;
+            this[slot] = new DOMTokenList(
+              function () { return (self.getAttribute && self.getAttribute(attrName)) || ""; },
+              function (val) { if (self.setAttribute) self.setAttribute(attrName, String(val)); },
+              supportedSet || null
+            );
+          }
+          return this[slot];
+        },
+        set: function (v) {
+          if (this.setAttribute) this.setAttribute(attrName, String(v));
+        },
+        enumerable: true,
+        configurable: true,
+      });
+    }
+
     // 1.06 HTMLLinkElement
     function HTMLLinkElement() {}
     HTMLLinkElement.prototype = Object.create(HTMLElementProto);
@@ -13741,6 +13763,7 @@
       set: function (v) { this.setAttribute("rel", String(v)); },
       configurable: true,
     });
+    defineAttrTokenList(HTMLLinkElement.prototype, "sizes", "sizes", null);
     Object.defineProperty(HTMLLinkElement.prototype, "href", {
       get: function () { return this.getAttribute("href") || ""; },
       set: function (v) { this.setAttribute("href", String(v)); },
@@ -15859,6 +15882,18 @@
       value: "HTMLIFrameElement",
       configurable: true,
     });
+    defineAttrTokenList(
+      HTMLIFrameElement.prototype,
+      "sandbox",
+      "sandbox",
+      new Set([
+        "allow-downloads", "allow-forms", "allow-modals", "allow-orientation-lock",
+        "allow-pointer-lock", "allow-popups", "allow-popups-to-escape-sandbox",
+        "allow-presentation", "allow-same-origin", "allow-scripts",
+        "allow-top-navigation", "allow-top-navigation-by-user-activation",
+        "allow-top-navigation-to-custom-protocols",
+      ])
+    );
 
     Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", {
       get: function () {
@@ -16423,8 +16458,9 @@
       });
     }
 
-    // HTMLOutputElement.prototype.{type, value, defaultValue, validationMessage, checkValidity, reportValidity, setCustomValidity}
+    // HTMLOutputElement.prototype.{type, value, defaultValue, htmlFor, willValidate, validity, validationMessage, checkValidity, reportValidity, setCustomValidity}
     if (typeof global.HTMLOutputElement === "function") {
+      defineAttrTokenList(global.HTMLOutputElement.prototype, "htmlFor", "for", null);
       Object.defineProperties(global.HTMLOutputElement.prototype, {
         type: {
           get: function () { return "output"; },

@@ -820,7 +820,7 @@ function installElementExtensions(proto) {
   // relList getter/setter (HTML a/area/link, SVG a, MathML a)
   Object.defineProperty(proto, "relList", {
     get: function () {
-      const ns = this.namespaceURI || "http://www.w3.org/1999/xhtml";
+      const ns = this.namespaceURI;
       const local = String(this.localName || this.tagName || "").toLowerCase();
       const ok =
         (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
