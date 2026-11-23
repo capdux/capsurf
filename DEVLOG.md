@@ -2297,3 +2297,5 @@
 - Phase 435 (`src/js/shim/collections.js`): 为 `DOMTokenList._getTokens` 增加有序集合去重，并补齐 `keys()`、`forEach()`、`[Symbol.iterator]` 与 `Symbol.toStringTag = "DOMTokenList"`。
 
 - Phase 436 (`element.js`, `html-classes.js`): 移除 `relList` 命名空间 `HTML_NS` 错误回退；抽离 `defineAttrTokenList` 统一实装 `HTMLLinkElement.sizes`、`HTMLIFrameElement.sandbox` 与 `HTMLOutputElement.htmlFor`。
+
+- Phase 437 (`src/js/shim/range.js`): 抽离 `isInclusiveAncestorNode`，将 `Range.commonAncestorContainer` 改为动态遍历计算以匹配 DOM 规范。

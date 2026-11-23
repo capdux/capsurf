@@ -3070,3 +3070,5 @@
 - **Phase 435 (`src/js/shim/collections.js`, `src/js/runtime_source.cp`)**：`DOMTokenList` 按有序集合去重并补齐 `keys`、`forEach`、`[Symbol.iterator]` 与 `Symbol.toStringTag`。
 
 - **Phase 436 (`src/js/shim/element/element.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：修正 `relList` 空命名空间判定；抽离 `defineAttrTokenList` 并补齐 `link.sizes`、`iframe.sandbox`、`output.htmlFor`。
+
+- **Phase 437 (`src/js/shim/range.js`, `src/js/runtime_source.cp`)**：`Range.prototype.commonAncestorContainer` 改为动态计算最近公共祖先。

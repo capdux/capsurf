@@ -63,11 +63,25 @@ function Range() {
 }
 Range.prototype = Object.create(AbstractRange.prototype);
 Range.prototype.constructor = Range;
+function isInclusiveAncestorNode(a, b) {
+  let cur = b;
+  while (cur) {
+    if (cur === a) return true;
+    cur = cur.parentNode;
+  }
+  return false;
+}
+
 Object.defineProperty(Range.prototype, "commonAncestorContainer", {
   get: function () {
     const st = _rangeState.get(this);
     if (!st) throw new TypeError("Illegal invocation");
-    return st.commonAncestorContainer;
+    let container = st.startContainer;
+    const end = st.endContainer;
+    while (container && !isInclusiveAncestorNode(container, end)) {
+      container = container.parentNode;
+    }
+    return container || st.startContainer;
   },
   set: function (v) {
     const st = _rangeState.get(this);
