@@ -561,6 +561,7 @@
       const t = toks[0];
       if (t === "content" || t === "auto" || t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch") return true;
       if (/^fit-content\(/i.test(t)) return true;
+      if (/^(?:anchor|anchor-size)\(/i.test(t)) return false;
       return isValidLenPct(t, false);
     }
     if (prop === "row-gap" || prop === "column-gap" || prop === "grid-row-gap" || prop === "grid-column-gap" || prop === "gap" || prop === "grid-gap") {
@@ -1270,7 +1271,7 @@
         } else {
           inLineGroup = false;
           if (STYLES.has(tl)) { if (seenStyle) return false; seenStyle = true; }
-          else if (tl === "from-font" || isValidLenPct(tl, false)) { if (seenThick) return false; seenThick = true; }
+          else if (tl === "auto" || tl === "from-font" || isValidLenPct(tl, false)) { if (seenThick) return false; seenThick = true; }
           else if (isValidColor(t)) { if (seenColor) return false; seenColor = true; }
           else return false;
         }
@@ -1529,18 +1530,29 @@
     }
     if (key === "text-decoration") {
       const parts = splitCssTokens(s);
-      const LINES = new Set(["underline", "overline", "line-through", "blink"]);
+      const LINE_ORDER = ["underline", "overline", "line-through", "blink"];
+      const LINES = new Set(LINE_ORDER);
       const STY = new Set(["solid", "double", "dotted", "dashed", "wavy"]);
       const lines = [];
       let st = "", th = "", col = "";
       for (let i = 0; i < parts.length; i++) {
         const t = parts[i], tl = t.toLowerCase();
-        if (tl === "none" || tl === "spelling-error" || tl === "grammar-error" || LINES.has(tl)) lines.push(tl);
+        if (tl === "none") continue;
+        if (tl === "spelling-error" || tl === "grammar-error" || LINES.has(tl)) lines.push(tl);
         else if (STY.has(tl)) st = tl;
-        else if (tl === "from-font" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) th = tl;
-        else col = t;
+        else if (tl === "auto" || tl === "from-font" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          th = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : tl;
+        } else col = t;
       }
-      const outStr = [lines.join(" "), st === "solid" ? "" : st, th, col].filter(Boolean).join(" ");
+      const sortedLines = (lines.length === 1 && (lines[0] === "spelling-error" || lines[0] === "grammar-error"))
+        ? lines[0]
+        : LINE_ORDER.filter(k => lines.indexOf(k) !== -1).join(" ");
+      const outStr = [
+        sortedLines,
+        st === "solid" ? "" : st,
+        th === "auto" ? "" : th,
+        col.toLowerCase() === "currentcolor" ? "" : col
+      ].filter(Boolean).join(" ");
       return outStr || "none";
     }
     if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {

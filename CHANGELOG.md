@@ -3463,3 +3463,5 @@
 - **Phase 511**:
   - `src/js/shim/cssom.js`: `splitCssTokens` 支持 `\` 转义；`counter-*` `isIdent` 支持转义标识符；修复 `flex: 1 0 max-content` 展开逻辑。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B248`（`/css/css-transforms/parsing/` 15/28 PASS）。
+- **Phase 512**:
+  - `src/js/shim/cssom.js`: `flex-basis` 拒绝 `anchor`/`anchor-size`；`text-decoration` 校验放行 `auto` 并实现完整排序与默认值省略序列化。

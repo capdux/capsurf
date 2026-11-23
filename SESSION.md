@@ -7312,3 +7312,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 510 完成 (`flex` / `text-emphasis` shorthand 展开 + `getComputedStyle` shorthand 序列化)**：在 `src/js/shim/cssom.js` 新增 `flex` 与 `text-emphasis` 的校验、展开与反向序列化；在 `src/js/shim/window.js` `getShorthandComputed` 补充 `text-decoration`、`text-emphasis`、`list-style`。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B245`（`css-box` 23/29、`css-multicol` 18/31）。
 
 - **Phase 511 完成 (`splitCssTokens` 转义支持 + `counter-*` 转义标识符 + `flex: 1 0 max-content`)**：在 `src/js/shim/cssom.js` `splitCssTokens` 支持引号外 `\` 转义字符、`counter-*` `isIdent` 支持转义标识符、移除 `flex` 展开中 `p.length <= 2` 限制使 `flex: 1 0 max-content` 正确展开。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B248`。
+
+- **Phase 512 完成 (`flex-basis` 拒绝 `anchor-size` + `text-decoration` 完整规范序列化)**：在 `src/js/shim/cssom.js` 中限制 `flex-basis` 拒绝 `anchor(...)`/`anchor-size(...)`；完善 `text-decoration` 校验放行 `auto` 并在序列化时按 `underline overline line-through blink` 排序且省略默认 `solid`/`auto`/`currentcolor`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。

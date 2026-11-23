@@ -2528,3 +2528,4 @@
 - **Phase 509**: 解决 `test_shorthand_value` 校验 `div.style.length` 失败根因——展开 shorthand 后仅保存 longhands 并在读取时动态反序列化，移除时联动清理 longhands；同步打通 `text-emphasis-style` 计算值。
 - **Phase 510**: 完善 `flex` 与 `text-emphasis` shorthand 的无残留子属性展开与计算样式拼接，覆盖 `flex-shorthand`、`text-emphasis-computed`、`text-decoration-computed` 与 `list-style-computed`。
 - **Phase 511**: 打通 `splitCssTokens` 对反斜杠转义空格（如 `a\ 8`）的切分，以及 `flex` 3 参数中第 2 参为 `0` 时的解析边界。
+- **Phase 512**: 补齐 `text-decoration` 校验中的 `auto` 厚度关键字并按标准顺序规范化，消除 `underline auto` 被误拒及 `double overline underline` 序乱问题。
