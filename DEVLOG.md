@@ -2574,3 +2574,6 @@
 
 ### Phase 537: `text-autospace` / `text-spacing-trim` / `text-spacing`
 - `text-spacing` 简写映射：`none` <-> `space-all no-autospace`，`auto` <-> `auto auto`，其余省略 `normal` 输出 `trim + autospace`。
+
+### Phase 538: `hanging-punctuation` / `word-space-transform` / `text-fit` 细节对齐
+- `hanging-punctuation` 与 `word-space-transform` 规范序列化均保留用户输入关键字顺序；`text-fit` 指定值保留 `consistent`，计算值省略 `consistent`。

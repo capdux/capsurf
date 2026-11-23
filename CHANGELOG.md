@@ -3531,3 +3531,5 @@
 - **Phase 536** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 新增 `text-fit`、`text-group-align`、`word-space-transform` 解析与计算默认值，及 `hyphenate-limit-chars` `calc()` 整数求值。
 
 - **Phase 537** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 实现 `text-spacing-trim`、`text-autospace`、`text-spacing` 简写展开与规范序列化。
+
+- **Phase 538** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 修复 `hanging-punctuation` 与 `word-space-transform` 指定值保序，及 `text-fit` 计算值省略默认 `consistent`。

@@ -7593,6 +7593,10 @@ function installWindow(global) {
     for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
       if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
     }
+    const tfv = computedMap.get("text-fit");
+    if (tfv && tfv.indexOf("consistent") !== -1) {
+      computedMap.set("text-fit", tfv.split(/\s+/).filter((t) => t !== "consistent").join(" ") || "none");
+    }
     if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
       computedMap.set("hanging-punctuation", "none");
     }

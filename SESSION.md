@@ -7372,3 +7372,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 537 (`text-autospace`/`text-spacing-trim`/`text-spacing` 全套实现)
 - **[Agent]**: 完成 Phase 537：实现 `text-spacing-trim`、`text-autospace`（多关键字规范重排 `[ideograph-alpha?, ideograph-numeric?, punctuation?, (insert|replace)?]` 与互斥校验）、`text-spacing`（简写展开 `text-spacing-trim` + `text-autospace` 与 `none`/`auto` 映射序列化）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 538 (`hanging-punctuation`/`word-space-transform` 保序与 `text-fit` 计算值省略 `consistent`)
+- **[Agent]**: 完成 Phase 538：`hanging-punctuation` 与 `word-space-transform` 指定值保留原始 token 顺序；`text-fit` 计算值省略默认 `consistent`。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

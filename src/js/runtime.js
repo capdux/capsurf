@@ -6010,9 +6010,7 @@
         return p.join(" ");
       }
       if (key === "word-space-transform") {
-        const p = splitCssTokens(s.toLowerCase());
-        if (p.length === 2 && p[0] === "auto-phrase") return p[1] + " auto-phrase";
-        return p.join(" ");
+        return splitCssTokens(s.toLowerCase()).join(" ");
       }
       if (key === "text-autospace") {
         const p = splitCssTokens(s.toLowerCase());
@@ -6044,14 +6042,7 @@
         return out.length > 0 ? out.join(" ") : "normal";
       }
       if (key === "hanging-punctuation") {
-        const p = splitCssTokens(s.toLowerCase());
-        if (p.length === 1 && p[0] === "none") return "none";
-        const out = [];
-        if (p.indexOf("first") !== -1) out.push("first");
-        if (p.indexOf("force-end") !== -1) out.push("force-end");
-        else if (p.indexOf("allow-end") !== -1) out.push("allow-end");
-        if (p.indexOf("last") !== -1) out.push("last");
-        return out.join(" ");
+        return splitCssTokens(s.toLowerCase()).join(" ");
       }
       if (key === "scrollbar-gutter") {
         const p = splitCssTokens(s.toLowerCase());
@@ -40785,6 +40776,10 @@
       }
       for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
         if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
+      }
+      const tfv = computedMap.get("text-fit");
+      if (tfv && tfv.indexOf("consistent") !== -1) {
+        computedMap.set("text-fit", tfv.split(/\s+/).filter((t) => t !== "consistent").join(" ") || "none");
       }
       if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
         computedMap.set("hanging-punctuation", "none");
