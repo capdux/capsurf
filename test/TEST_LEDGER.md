@@ -1155,3 +1155,20 @@
 - `page-event-pageerror.spec.ts`: 7 total | 4 PASS | 3 FAIL | 0 TIMEOUT
 - `page-event-load.spec.ts`: 1 total | **1 PASS (100%)** | 0 FAIL | 0 TIMEOUT
 - Totals: **20 PASS / 3 FAIL / 16 TIMEOUT / 0 SKIP**
+
+### WPT-B234 (port=19700, Phase 498 verification, 114 tests, 58/114 matched)
+- `/css/css-values/ --shard 4/4`: 87 total | 16 PASS | 63 FAIL | 8 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | **19 PASS (up from 17!)** | 8 FAIL | 0 TIMEOUT | 0 CRASH (`flex-direction-*`, `flex-grow-*`, `flex-shrink-*`, `flex-wrap-*`, `order-*` 100% PASS!)
+- Totals: **35 PASS / 71 FAIL / 8 TIMEOUT / 0 CRASH**
+
+### WPT-B235 (port=19700, Phase 500 verification, 100 tests, 75/100 matched)
+- `/css/css-position/parsing/`: **22 / 22 PASS (100% ALL GREEN!)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-align/parsing/`: **35 PASS (up from 31!)** | 15 FAIL | 0 TIMEOUT | 0 CRASH (`gap`/`row-gap`/`column-gap`/`grid-*-gap` & all `*-invalid` 100% PASS!)
+- `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **72 PASS / 28 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B236 (port=19700, Phase 500 verification, 57 tests)
+- `/css/css-lists/parsing/`: 23 total | 12 PASS | 11 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | **15 PASS (up from 13!)** | 16 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-line-*`, `text-underline-position-valid` PASS!)
+- `/css/css-grid/parsing/grid-auto-flow`: 3 total | 1 PASS | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **28 PASS / 29 FAIL / 0 TIMEOUT / 0 CRASH**

@@ -39291,6 +39291,19 @@
           computedMap.set(ok, res);
         }
       }
+      if (typeof global.__capsurf_normalizeCssValue === "function") {
+        const canonComputedProps = [
+          "counter-reset", "counter-increment", "counter-set",
+          "grid-auto-flow", "scrollbar-gutter", "text-decoration-line",
+          "aspect-ratio", "text-emphasis-position", "text-underline-position",
+          "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
+        ];
+        for (let ci = 0; ci < canonComputedProps.length; ci++) {
+          const ck = canonComputedProps[ci];
+          const cv = computedMap.get(ck);
+          if (cv) computedMap.set(ck, global.__capsurf_normalizeCssValue(ck, cv));
+        }
+      }
     }
 
     const STANDARD_COMPUTED_LONGHANDS = [

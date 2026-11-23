@@ -2519,3 +2519,4 @@
 ### Phase 502: CSS 指定值滚动条槽、装饰线与计数器序列规范化
 - 补全 `counter-*` 隐式默认值展开与 `scrollbar-gutter`/`text-decoration-line` 规范排序。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+- **Phase 503**: 复用 `cssom.js` 的 `__capsurf_normalizeCssValue` 在 `window.js` 计算样式阶段对 13 个离散关键字/复合语法属性进行规范化，消除 `style` 侧与 `getComputedStyle` 侧序列化不一致问题。

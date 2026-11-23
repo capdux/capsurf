@@ -3432,3 +3432,6 @@
   - `text-decoration-line`: 按 `underline overline line-through blink` 顺序输出。
   - `counter-reset` / `counter-increment` / `counter-set`: 自动补齐缺省整数（`counter-increment` 为 `1`，其余为 `0`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+- **Phase 503**:
+  - `src/js/shim/window.js`: 在 `applyUsedValuesToComputedMap` 末尾接入 `__capsurf_normalizeCssValue`，对 `counter-*`、`grid-auto-flow`、`scrollbar-gutter`、`text-decoration-line`、`aspect-ratio`、`text-emphasis-position`、`text-underline-position`、`font-synthesis`、`font-variant-*` 执行计算值规范化。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B236`（`/css/css-lists/parsing/` 12/23、`/css/css-text-decor/parsing/` 15/31、`grid-auto-flow` 1/3）。
