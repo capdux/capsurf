@@ -5206,6 +5206,30 @@
         const l = col4(s.slice(0, si)), r = col4(s.slice(si + 1));
         return l === r ? l : (l + " / " + r);
       }
+      if (key === "flex-flow") {
+        const parts = splitCssTokens(s.toLowerCase());
+        const DIR = new Set(["row", "row-reverse", "column", "column-reverse"]);
+        let d = "", w = "";
+        for (let i = 0; i < parts.length; i++) {
+          if (DIR.has(parts[i])) d = parts[i];
+          else w = parts[i];
+        }
+        return d && w ? (d + " " + w) : (d || w || s);
+      }
+      if (key === "outline" || key === "border" || key === "column-rule" ||
+          key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
+        const parts = splitCssTokens(s);
+        const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
+        let w = "", st = "", c = "";
+        for (let i = 0; i < parts.length; i++) {
+          const t = parts[i], tl = t.toLowerCase();
+          if (STY.has(tl)) st = tl;
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+            w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+          } else c = t;
+        }
+        return [w, st, c].filter(Boolean).join(" ");
+      }
       return s;
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;

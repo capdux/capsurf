@@ -2487,3 +2487,7 @@
 ### Phase 494: CSS 指定值变换与圆角最短序列化
 - `translate`/`rotate`/`border-radius` 的指定值归一化与 `getComputedStyle` 计算值规则保持对称，覆盖 `parsing/*-valid.html` 的最短回读断言。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 495: CSS 指定值简写顺序规范化
+- 统一 `flex-flow` 与边框/轮廓/分栏线简写的指定值序列化顺序，确保 `el.style.border = "red solid 0"` 回读为 `"0px solid red"`。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

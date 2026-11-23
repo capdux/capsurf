@@ -7278,3 +7278,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 493 CSS 指定值 4 边折叠与 `scale` 规范化]** 在 `src/js/shim/cssom.js` 中将 `splitCssTokens` 提升至模块作用域复用，并扩充 `normalizeCssSpecifiedValue` 支持 `margin`/`padding`/`inset`/`border-width`/`border-style` 1~4 边折叠及 `scale` 指定值百分比/冗余 `1`/等值归一化；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 494 CSS 指定值 `translate`/`rotate`/`border-radius` 归一化]** 在 `src/js/shim/cssom.js` `normalizeCssSpecifiedValue` 中新增 `translate`（`0`→`0px` 及末尾 `0px` 裁剪）、`rotate`（`z`/正轴向量归约与轴序重排）、`border-radius`（`/` 双组最短折叠及相同左右组折叠）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 495 CSS 指定值 `flex-flow` 与 `outline`/`border*`/`column-rule` 规范重排]** 在 `src/js/shim/cssom.js` `normalizeCssSpecifiedValue` 中新增 `flex-flow`（`<direction> <wrap>`）与 `outline`/`border`/`border-*`/`column-rule`（`<width> <style> <color>` 及 `0`→`0px`）规范重排；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
