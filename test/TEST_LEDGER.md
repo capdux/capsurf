@@ -1415,3 +1415,35 @@
 - `/css/css-text-decor/parsing/`: 31 total | 25 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-flexbox/parsing/`: 27 total | 23 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **48 PASS / 10 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B276 (port=19700, Phase 525 verification, 121 tests)
+- `/css/css-animations/parsing/`: 35 total | **22 PASS (up from 18, `animation-composition-*` & `animation-name-{valid,invalid}` green!)** | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/`: 86 total | 52 PASS | 34 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **74 PASS / 47 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B277 (port=19700, Phase 525 verification, 162 tests)
+- `/css/css-values/ --shard 1/4`: 88 total | 19 PASS (`FAIL→PASS`: `random-in-keyframe`) | 60 FAIL | 9 TIMEOUT | 0 CRASH
+- `/css/css-backgrounds/parsing/`: 74 total | 29 PASS | 45 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **48 PASS / 105 FAIL / 9 TIMEOUT / 0 CRASH**
+
+### WPT-B278 (port=19700, Phase 526 verification, 121 tests)
+- `/css/css-animations/parsing/`: 35 total | 22 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/`: 86 total | **54 PASS (up from 52, `text-wrap-computed` & `text-wrap-pretty` green!)** | 32 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **76 PASS / 45 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 156 (port=19386, Phase 521 verification, 198 tests)
+- `page-dialog.spec.ts`: **7 / 9 PASS** | 2 FAIL (`prompt`/`confirm` accept return) | 0 TIMEOUT | 0 SKIP
+- `page-goto.spec.ts`: 41 PASS | 10 FAIL | 10 TIMEOUT | 0 SKIP
+- `page-click.spec.ts`: 39 PASS | 2 FAIL | 36 TIMEOUT | 0 SKIP
+- `page-route.spec.ts`: 5 PASS | 40 FAIL | 6 TIMEOUT | 0 SKIP
+- Totals: **92 PASS / 54 FAIL / 52 TIMEOUT / 0 SKIP**
+
+### WPT-B279 (port=19700, Phase 527 verification, 175 tests)
+- `/css/css-values/ --shard 2/4`: 88 total | 23 PASS (`FAIL→PASS`: `random-item-valid`, `various-values-important`) | 52 FAIL | 11 TIMEOUT | 0 CRASH
+- `/css/css-values/ --shard 3/4`: 87 total | 26 PASS | 50 FAIL | 10 TIMEOUT | 1 ERROR
+- Totals: **49 PASS / 102 FAIL / 21 TIMEOUT / 1 ERROR**
+
+### WPT-B280 (port=19700, Phase 528 verification, 121 tests)
+- `/css/css-text/parsing/`: 86 total | **58 PASS (up from 54, `text-transform-*`, `text-align-computed`, `white-space-shorthand` green!)** | 28 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | 22 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **80 PASS / 41 FAIL / 0 TIMEOUT / 0 CRASH**

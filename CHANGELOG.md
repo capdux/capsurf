@@ -3511,3 +3511,7 @@
 - **Phase 528**:
   - `src/js/shim/cssom.js`: `white-space` shorthand 展开补齐 `["text-wrap-style", "auto"]`。
   - `src/js/shim/window.js`: `parseDeclarationsBlockInto` 接入 `__capsurf_expandShorthand` 通用展开；支持 `text-align: match-parent` 解析。
+- **Phase 529**:
+  - `src/js/shim/cssom.js`: 新增 `animation` 校验、规范化、shorthand 展开（8 子属性）及反序列化。
+  - `src/js/shim/window.js`: `getShorthandComputed` 新增 `animation` 计算样式拼装。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B280`（`/css/css-text/parsing/` 58/86 PASS）。

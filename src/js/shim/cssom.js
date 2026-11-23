@@ -1234,6 +1234,43 @@
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
     }
+    if (prop === "animation") {
+      const items = splitTopLevelComma(trimmed);
+      if (items.length === 0) return false;
+      const TF_KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      const DIR = new Set(["normal", "reverse", "alternate", "alternate-reverse"]);
+      const FILL = new Set(["none", "forwards", "backwards", "both"]);
+      const PLAY = new Set(["running", "paused"]);
+      const BAD = new Set(["initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+      for (let li = 0; li < items.length; li++) {
+        const p = splitCssTokens(items[li]);
+        if (p.length === 0) return false;
+        let seenTime = 0, seenTf = false, seenIter = false, seenDir = false, seenFill = false, seenPlay = false, seenName = false;
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) {
+            if (seenTf) return false; seenTf = true;
+          } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
+            if (seenTime >= 2) return false;
+            if (seenTime === 0 && parseFloat(tl) < 0) return false;
+            seenTime++;
+          } else if (tl === "infinite" || (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl) && tl !== "")) {
+            if (seenIter) return false; seenIter = true;
+          } else if (!seenDir && DIR.has(tl)) {
+            seenDir = true;
+          } else if (!seenFill && FILL.has(tl)) {
+            seenFill = true;
+          } else if (!seenPlay && PLAY.has(tl)) {
+            seenPlay = true;
+          } else if (!seenName && !BAD.has(tl) && (/^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t) || (t.length > 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))))) {
+            seenName = true;
+          } else {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
     if (prop === "animation-composition") {
       const items = splitTopLevelComma(vLower);
       if (items.length === 0) return false;
@@ -1957,6 +1994,32 @@
       const order = ["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
     }
+    if (key === "animation") {
+      const TF_KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      const DIR = new Set(["normal", "reverse", "alternate", "alternate-reverse"]);
+      const FILL = new Set(["none", "forwards", "backwards", "both"]);
+      const PLAY = new Set(["running", "paused"]);
+      return splitTopLevelComma(s).map((layer) => {
+        const p = splitCssTokens(layer);
+        let du = "", tf = "", dl = "", it = "", dr = "", fl = "", pl = "", nm = "";
+        let seenTime = 0;
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (TF_KW.has(tl)) tf = tl;
+          else if (/^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+          else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
+            if (seenTime === 0) du = tl;
+            else dl = tl;
+            seenTime++;
+          } else if (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl)) it = tl;
+          else if (!dr && DIR.has(tl)) dr = tl;
+          else if (!fl && FILL.has(tl)) fl = tl;
+          else if (!pl && PLAY.has(tl)) pl = tl;
+          else if (!nm) nm = tl === "none" ? "none" : t;
+        }
+        return [du, tf, dl, it, dr, fl, pl, nm].filter(Boolean).join(" ") || "none";
+      }).join(", ");
+    }
     if (key === "animation-name") {
       const RESTRICTED = new Set(["none", "initial", "inherit", "unset", "revert", "revert-layer", "default"]);
       return splitTopLevelComma(s).map((part) => {
@@ -2143,6 +2206,42 @@
       if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
       if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
     }
+    if (key === "animation") {
+      const TF_KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      const DIR = new Set(["normal", "reverse", "alternate", "alternate-reverse"]);
+      const FILL = new Set(["none", "forwards", "backwards", "both"]);
+      const PLAY = new Set(["running", "paused"]);
+      const layers = splitTopLevelComma(normV);
+      const durs = [], tfs = [], dels = [], iters = [], dirs = [], fills = [], plays = [], names = [];
+      for (let li = 0; li < layers.length; li++) {
+        const p = splitCssTokens(layers[li]);
+        let du = "0s", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t;
+          else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
+            if (seenTime === 0) du = tl;
+            else dl = tl;
+            seenTime++;
+          } else if (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl)) it = tl;
+          else if (dr === "normal" && DIR.has(tl)) dr = tl;
+          else if (fl === "none" && FILL.has(tl) && tl !== "none") fl = tl;
+          else if (pl === "running" && PLAY.has(tl)) pl = tl;
+          else if (nm === "none") nm = tl === "none" ? "none" : t;
+        }
+        durs.push(du); tfs.push(tf); dels.push(dl); iters.push(it); dirs.push(dr); fills.push(fl); plays.push(pl); names.push(nm);
+      }
+      return [
+        ["animation-duration", durs.join(", ")],
+        ["animation-timing-function", tfs.join(", ")],
+        ["animation-delay", dels.join(", ")],
+        ["animation-iteration-count", iters.join(", ")],
+        ["animation-direction", dirs.join(", ")],
+        ["animation-fill-mode", fills.join(", ")],
+        ["animation-play-state", plays.join(", ")],
+        ["animation-name", names.join(", ")]
+      ];
+    }
     if (key === "transition") {
       const layers = splitTopLevelComma(normV);
       const props = [], durs = [], tfs = [], dels = [], behs = [];
@@ -2227,6 +2326,7 @@
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
     "text-wrap": ["text-wrap-mode", "text-wrap-style"],
     "white-space": ["white-space-collapse", "text-wrap-mode", "text-wrap-style"],
+    animation: ["animation-duration", "animation-timing-function", "animation-delay", "animation-iteration-count", "animation-direction", "animation-fill-mode", "animation-play-state", "animation-name"],
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
@@ -2272,6 +2372,27 @@
     if (key === "text-emphasis") {
       if (vals[1] === "currentcolor") return vals[0];
       return vals[0] + " " + vals[1];
+    }
+    if (key === "animation") {
+      const splitVals = vals.map((v) => splitTopLevelComma(v));
+      const n = splitVals[0].length;
+      if (!splitVals.every((a) => a.length === n)) return "";
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const du = splitVals[0][i], tf = splitVals[1][i], dl = splitVals[2][i], it = splitVals[3][i],
+              dr = splitVals[4][i], fl = splitVals[5][i], pl = splitVals[6][i], nm = splitVals[7][i];
+        const parts = [];
+        if (du !== "0s" || dl !== "0s") parts.push(du);
+        if (tf !== "ease") parts.push(tf);
+        if (dl !== "0s") parts.push(dl);
+        if (it !== "1") parts.push(it);
+        if (dr !== "normal") parts.push(dr);
+        if (fl !== "none") parts.push(fl);
+        if (pl !== "running") parts.push(pl);
+        if (nm !== "none") parts.push(nm);
+        out.push(parts.length > 0 ? parts.join(" ") : "none");
+      }
+      return out.join(", ");
     }
     if (key === "transition") {
       const pArr = splitTopLevelComma(vals[0]), dArr = splitTopLevelComma(vals[1]), tArr = splitTopLevelComma(vals[2]), dlArr = splitTopLevelComma(vals[3]), bArr = splitTopLevelComma(vals[4]);

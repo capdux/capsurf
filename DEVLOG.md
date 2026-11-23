@@ -2545,3 +2545,4 @@
 - **Phase 526**: 解决 `\"` 转义引号干扰 CSS 声明分号切分的问题，并补充 `getComputedStyle().textWrap` 计算样式拼装。
 - **Phase 527**: 打通 `white-space` 作为 `white-space-collapse` + `text-wrap-mode` 的 CSS Text 4 shorthand，以及 `text-transform` 多修饰符规范排序。
 - **Phase 528**: 打通 `<style>` 规则体内全部 shorthand 与 longhand 的层叠覆盖（解决 `white-space` 与 `text-wrap` 相互覆盖次序），并补全 `text-align: match-parent` 继承求值。
+- **Phase 529**: 打通 `animation` 8 子属性双向 shorthand 展开/序列化与严格校验，涵盖 `animation-valid`、`animation-invalid` 与 `animation-computed`。
