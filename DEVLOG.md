@@ -2535,3 +2535,4 @@
 - **Phase 516**: 按 CSSWG #11494 取消 `column-rule-width` 受 `column-rule-style: none` 清零逻辑，并补全 `column-fill`/`column-span` 计算属性暴露；`/css/css-break/parsing/` 达成 18/18 全绿。
 - **Phase 517**: 补齐 `columns` 非法值拒绝规则与 `rotate` 负轴向量等价简写规范化。
 - **Phase 518**: 补全 `transform-box`、`line-break`、`word-wrap` 等 7 个 `getComputedStyle` 长手属性注册，打通对应 `*-computed.html` WPT 测试。
+- **Phase 519**: 补齐 `text-wrap*` 与 `white-space-collapse` 支持声明及 `text-wrap` 双向 shorthand 展开，打通 `css-text` 中 `text-wrap*` 与 `white-space-collapse` 测试。

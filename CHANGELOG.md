@@ -3482,3 +3482,5 @@
 - **Phase 518**:
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `transform-box`、`line-break`、`word-wrap`、`hanging-punctuation`、`text-align-all`、`text-combine-upright`、`text-orientation`。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B261`（`/css/css-multicol/parsing/` 25/31 PASS，31/31 匹配；`/css/css-transforms/parsing/` 16/28 PASS）。
+- **Phase 519**:
+  - `src/js/shim/cssom.js`: `SUPPORTED_CSS_PROPS` 新增 `text-wrap`、`text-wrap-mode`、`text-wrap-style`、`white-space-collapse`；实现 `text-wrap` 校验、规范化及 shorthand 展开与反序列化。

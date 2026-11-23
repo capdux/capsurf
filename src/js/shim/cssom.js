@@ -91,11 +91,12 @@
     "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-indent",
     "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow",
-    "text-transform", "text-underline-offset", "text-underline-position", "top",
+    "text-transform", "text-underline-offset", "text-underline-position",
+    "text-wrap", "text-wrap-mode", "text-wrap-style", "top",
     "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
     "transition", "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "unicode-range",
-    "user-select", "vertical-align", "visibility", "white-space", "widows", "width",
+    "user-select", "vertical-align", "visibility", "white-space", "white-space-collapse", "widows", "width",
     "will-change", "word-break", "word-spacing", "word-wrap", "writing-mode", "z-index",
     // Vendor prefixed
     "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
@@ -1194,6 +1195,19 @@
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
     }
+    if (prop === "text-wrap") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      const MODES = new Set(["wrap", "nowrap"]);
+      const STYLES = new Set(["auto", "balance", "stable", "pretty", "avoid-orphans"]);
+      let seenM = false, seenS = false;
+      for (let i = 0; i < toks.length; i++) {
+        if (MODES.has(toks[i])) { if (seenM) return false; seenM = true; }
+        else if (STYLES.has(toks[i])) { if (seenS) return false; seenS = true; }
+        else return false;
+      }
+      return true;
+    }
     if (prop === "text-decoration-thickness") {
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], false));
@@ -1692,6 +1706,17 @@
       }
       return s;
     }
+    if (key === "text-wrap") {
+      const p = splitCssTokens(s.toLowerCase());
+      let m = "", st = "";
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "wrap" || p[i] === "nowrap") m = p[i];
+        else st = p[i];
+      }
+      if (m === "wrap" && st) return st;
+      if (st === "auto" && m) return m;
+      return [m, st].filter(Boolean).join(" ") || "wrap";
+    }
     if (key === "text-decoration-skip-spaces") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 2) return "start end";
@@ -1901,6 +1926,15 @@
       if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
       if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
     }
+    if (key === "text-wrap") {
+      const p = splitCssTokens(normV.toLowerCase());
+      let m = "wrap", st = "auto";
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "wrap" || p[i] === "nowrap") m = p[i];
+        else st = p[i];
+      }
+      return [["text-wrap-mode", m], ["text-wrap-style", st]];
+    }
     if (key === "outline" || key === "column-rule") {
       const p = splitCssTokens(normV);
       const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -1930,6 +1964,7 @@
     "flex-flow": ["flex-direction", "flex-wrap"],
     flex: ["flex-grow", "flex-shrink", "flex-basis"],
     "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
+    "text-wrap": ["text-wrap-mode", "text-wrap-style"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
     overflow: ["overflow-x", "overflow-y"],
@@ -1970,6 +2005,12 @@
     }
     if (key === "text-emphasis") {
       if (vals[1] === "currentcolor") return vals[0];
+      return vals[0] + " " + vals[1];
+    }
+    if (key === "text-wrap") {
+      if (vals[0] === "wrap" && vals[1] === "auto") return "wrap";
+      if (vals[0] === "wrap") return vals[1];
+      if (vals[1] === "auto") return vals[0];
       return vals[0] + " " + vals[1];
     }
     if (key === "outline") {
