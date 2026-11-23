@@ -2323,3 +2323,5 @@
 - Phase 448 (`parser.js`, `index.js`, `window.js`): 覆盖 `DOMParser`、`createHTMLDocument`、`createDocument` 三条路径补齐 `readyState = "complete"`。
 
 - Phase 449 (`src/js/shim/window.js`): 移除 `PerformanceObserver.observe` 中 `hasEntryTypes && options.buffered` 抛错分支，按 WPT 规范忽略 `buffered`。
+
+- Phase 450 (`src/js/shim/element/forms/label.js`): 修复 `getLabelsForControl` 未对原生祖先 `<label>` 调用 `upgradeElement` 导致 `.labels` 返回空集合的缺陷。

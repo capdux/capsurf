@@ -21017,10 +21017,11 @@
     let p = control.parentElement || control.parentNode;
     while (p) {
       if ((p.tagName || "").toLowerCase() === "label") {
-        const hasFor = typeof p.hasAttribute === "function" ? p.hasAttribute("for") : (p.getAttribute && p.getAttribute("for") !== null);
-        if (!hasFor && p.control === control && !seen.has(p)) {
-          seen.add(p);
-          matches.push(p);
+        const up = typeof upgradeElement === "function" ? upgradeElement(p) : p;
+        const hasFor = typeof up.hasAttribute === "function" ? up.hasAttribute("for") : (up.getAttribute && up.getAttribute("for") !== null);
+        if (!hasFor && up.control === control && !seen.has(up)) {
+          seen.add(up);
+          matches.push(up);
         }
       }
       p = p.parentElement || p.parentNode;

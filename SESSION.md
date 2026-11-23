@@ -7175,3 +7175,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 448] (`src/js/shim/parser.js`, `src/js/shim/index.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 为 `ParsedDocument` 及 `DOMImplementation.prototype.createHTMLDocument`/`createDocument` 返回文档补齐 `readyState = "complete"`；`docProto.compatMode` 对非 `text/html` 文档统一返回 `"CSS1Compat"`；`bin_dev` 编译 + CDP 探针 (`{"rs1":true,"rs2":true,"rs3":true,"rs4":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 449] (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) `PerformanceObserver.prototype.observe` 当传入 `entryTypes` 时按规范忽略 `options.buffered`（不再抛 `TypeError`），消除 `/performance-timeline/` 最后 1 例非预期失败；`bin_dev` 编译 + CDP 探针 (`{"countZero":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [Phase 450] (`src/js/shim/element/forms/label.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 在 `getLabelsForControl` 向上遍历祖先 `<label>` 时调用 `upgradeElement(p)`，使 `up.control === control` 正常命中隐式/嵌套 `<label>`；`bin_dev` 编译 + CDP 探针 (`{"isNL":true,"len1":2,"len2":1}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
