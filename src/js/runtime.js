@@ -4399,6 +4399,34 @@
         }
         return true;
       }
+      if (prop === "columns") {
+        const slashParts = vLower.split("/");
+        if (slashParts.length > 2) return false;
+        const lhs = splitCssTokens(slashParts[0].trim());
+        if (lhs.length < 1 || lhs.length > 2) return false;
+        let seenCount = false, seenWidth = false, autoCnt = 0;
+        for (let i = 0; i < lhs.length; i++) {
+          const t = lhs[i];
+          if (t === "auto") autoCnt++;
+          else if (/^\+?[1-9]\d*$/.test(t) || (/^(?:calc|min|max|clamp)\(/i.test(t) && !/[a-z%]/i.test(t.replace(/^(?:calc|min|max|clamp)\(/i, "")))) {
+            if (seenCount) return false;
+            seenCount = true;
+          } else if (!t.endsWith("%") && isValidLenPct(t, false)) {
+            if (seenWidth) return false;
+            seenWidth = true;
+          } else {
+            return false;
+          }
+        }
+        if (autoCnt + (seenCount ? 1 : 0) + (seenWidth ? 1 : 0) !== lhs.length) return false;
+        if (slashParts.length === 2) {
+          const rhs = splitCssTokens(slashParts[1].trim());
+          if (rhs.length !== 1) return false;
+          const h = rhs[0];
+          if (h !== "auto" && (h.endsWith("%") || !isValidLenPct(h, false))) return false;
+        }
+        return true;
+      }
       if (prop === "transform") {
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
@@ -5233,12 +5261,19 @@
           if (p1 === "x" || p1 === "y") return p1 + " " + parts[0];
         }
         if (parts.length === 4) {
-          const x = Number(parts[0]), y = Number(parts[1]), z = Number(parts[2]);
-          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
-            if (x > 0 && y === 0 && z === 0) return "x " + parts[3];
-            if (x === 0 && y > 0 && z === 0) return "y " + parts[3];
-            if (x === 0 && y === 0 && z > 0) return parts[3];
+          const neg = (a) => a.startsWith("-") ? a.slice(1) : (a.startsWith("+") ? ("-" + a.slice(1)) : ("-" + a));
+          let p = parts;
+          const isNumTok = (t) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t);
+          if (!isNumTok(p[0]) && isNumTok(p[1]) && isNumTok(p[2]) && isNumTok(p[3])) {
+            p = [p[1], p[2], p[3], p[0]];
           }
+          const x = Number(p[0]), y = Number(p[1]), z = Number(p[2]);
+          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+            if (y === 0 && z === 0 && x !== 0) return "x " + (x < 0 ? neg(p[3]) : p[3]);
+            if (x === 0 && z === 0 && y !== 0) return "y " + (y < 0 ? neg(p[3]) : p[3]);
+            if (x === 0 && y === 0 && z !== 0) return z < 0 ? neg(p[3]) : p[3];
+          }
+          return p.join(" ");
         }
         return parts.join(" ");
       }

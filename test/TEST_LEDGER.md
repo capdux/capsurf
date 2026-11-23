@@ -1323,3 +1323,13 @@
 - `/css/css-break/parsing/`: **18 / 18 PASS (100% ALL GREEN!, +4 FAIL→PASS)** | 0 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **33 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B259 (port=19700, Phase 516 verification, 70 tests)
+- `/css/css-multicol/parsing/`: 31 total | **24 PASS (up from 21, `column-{fill,span,rule-width}-computed` green!, 30/31 matched)** | 7 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-ui/parsing/`: 39 total | 28 PASS | 10 FAIL | 1 TIMEOUT | 0 CRASH
+- Totals: **52 PASS / 17 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B260 (port=19700, Phase 516 verification, 114 tests)
+- `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/`: 86 total | **45 PASS (+12 FAIL→PASS!)** | 41 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **60 PASS / 54 FAIL / 0 TIMEOUT / 0 CRASH**
