@@ -38525,6 +38525,35 @@
         const inlineTags = { span: 1, a: 1, em: 1, strong: 1, b: 1, i: 1, u: 1, s: 1, small: 1, code: 1, label: 1, abbr: 1, cite: 1, q: 1, sub: 1, sup: 1, time: 1 };
         computedMap.set("display", inlineTags[tag] ? "inline" : "block");
       }
+      if (!computedMap.has("field-sizing") || computedMap.get("field-sizing") === "") {
+        computedMap.set("field-sizing", "fixed");
+      }
+      const lineWidthMap = { thin: 1, medium: 3, thick: 5 };
+      const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"];
+      for (let i = 0; i < lwProps.length; i++) {
+        const lk = lwProps[i];
+        const lv = (computedMap.get(lk) || "").trim().toLowerCase();
+        if (!lv) continue;
+        if (lv in lineWidthMap) {
+          computedMap.set(lk, lineWidthMap[lv] + "px");
+        } else {
+          const px = evalCssLengthExpr(lv, 0, fontSize);
+          if (px !== null) {
+            computedMap.set(lk, formatCssPx(Math.floor(Math.max(0, px))));
+          }
+        }
+      }
+      const spProps = ["letter-spacing", "word-spacing"];
+      for (let i = 0; i < spProps.length; i++) {
+        const sk = spProps[i];
+        const sv = (computedMap.get(sk) || "").trim().toLowerCase();
+        if (sv && sv !== "normal" && sv.indexOf("%") === -1) {
+          const px = evalCssLengthExpr(sv, 0, fontSize);
+          if (px !== null) {
+            computedMap.set(sk, (sk === "letter-spacing" && px === 0) ? "normal" : formatCssPx(px));
+          }
+        }
+      }
     }
 
     const STANDARD_COMPUTED_LONGHANDS = [
@@ -38550,7 +38579,7 @@
       "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-gap",
       "column-rule-color", "column-rule-style", "column-rule-width", "column-width", "contain",
       "content", "counter-increment", "counter-reset", "cursor", "direction", "display",
-      "empty-cells", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
+      "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",

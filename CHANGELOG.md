@@ -3285,3 +3285,10 @@
   - `list-style-type` / `list-style-image` / `list-style` 简写：校验位置、图像与类型互斥组合。
   - `content`: 拦截 `counter(name, none|unset|initial|inherit|revert|revert-layer|default)` 与 `counters(...)` 同类非法样式。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 480: `getComputedStyle` 线宽、字距与 `field-sizing` 计算值解析
+- `src/js/shim/window.js`:
+  - `STANDARD_COMPUTED_LONGHANDS` 新增 `"field-sizing"`，默认回退 `"fixed"`。
+  - `applyUsedValuesToComputedMap`: 新增 `outline-width` 与 `border-{top,right,bottom,left}-width` 解析（`thin/medium/thick` 映射及非负整数像素截断）。
+  - `applyUsedValuesToComputedMap`: 新增 `letter-spacing` / `word-spacing` 绝对长度计算（`letter-spacing: 0px` 归一化为 `"normal"`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

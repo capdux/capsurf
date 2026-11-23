@@ -1049,3 +1049,14 @@
 - `page-wait-for-selector-2.spec.ts`: 32 total | **32 PASS (100%, +2 unexpected passes!)** | 0 FAIL | 0 TIMEOUT
 - `page-wait-for-function.spec.ts`: 26 total | 5 PASS | 2 FAIL | 19 TIMEOUT
 - Totals: **89 PASS / 2 FAIL / 77 TIMEOUT / 0 SKIP**
+
+### WPT-B220 (port=19700, Phase 478 verification, 74 tests, 51/74 matched)
+- `/css/css-text-decor/parsing/`: 31 total | 13 PASS (up from 12!) | 18 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-invalid` PASS!)
+- `/css/css-ui/parsing/`: 39 total | 22 PASS (up from 21!) | 16 FAIL | 1 TIMEOUT | 0 CRASH (`outline-style-invalid` PASS!)
+- `/css/css-grid/parsing/grid-template-areas`: 4 total | 1 PASS (`grid-template-areas-invalid`) | 3 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **36 PASS / 37 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B221 (port=19700, 26 tests, 13/26 matched)
+- `/css/css-lists/parsing/`: 23 total | 12 PASS (up from 8!) | 11 FAIL | 0 TIMEOUT | 0 CRASH (8/8 `*-invalid.html` PASS!)
+- `/css/css-grid/parsing/grid-auto-flow`: 3 total | 1 PASS (`grid-auto-flow-invalid`) | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **13 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**

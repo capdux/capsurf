@@ -2427,3 +2427,7 @@
 ### Phase 479: CSSOM 列表样式与计数器函数门禁
 - `list-style-type` 与 `list-style` 复用 `isValidSymbolsFn`，保证非法 `symbols()` 使整个简写声明失效；`content` 拦截 `counter()`/`counters()` 中的全局/禁用关键字。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 480: `getComputedStyle` 计算值序列化推进
+- `outline-width` 与 `border-*-width` 通过 `evalCssLengthExpr` + `Math.floor(Math.max(0, px))` 对齐 `2.5px -> 2px`、`calc(10px + 0.5em) -> 30px` 与 `thin/medium/thick` 计算值规范。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针全绿，`--smoke` 3/3 PASS (6/6)。
