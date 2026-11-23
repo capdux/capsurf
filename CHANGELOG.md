@@ -3465,3 +3465,5 @@
   - `test/TEST_LEDGER.md`: 记录 `WPT-B248`（`/css/css-transforms/parsing/` 15/28 PASS）。
 - **Phase 512**:
   - `src/js/shim/cssom.js`: `flex-basis` 拒绝 `anchor`/`anchor-size`；`text-decoration` 校验放行 `auto` 并实现完整排序与默认值省略序列化。
+- **Phase 513**:
+  - `src/js/shim/cssom.js`: 对齐 CSS Overflow 4 最新 `continue`、`max-lines`、`block-ellipsis` 语法校验。

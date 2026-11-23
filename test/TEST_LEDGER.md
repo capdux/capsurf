@@ -1266,3 +1266,18 @@
 ### WPT-B248 (port=19700, Phase 510 verification, 28 tests)
 - `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **15 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B249 (port=19700, Phase 511 verification, 50 tests)
+- `/css/css-lists/parsing/`: 23 total | **17 PASS (up from 14, `counter-{reset,increment,set}-valid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | **22 PASS (up from 21, `flex-shorthand` 40/40 green!)** | 5 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **39 PASS / 11 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B250 (port=19700, Phase 511 verification, 51 tests)
+- `/css/css-overflow/parsing/`: 32 total | 11 PASS (`FAIL→PASS`: `scroll-markers-valid`, `scroll-target-group-valid`) | 21 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-sizing/parsing/`: 19 total | 0 PASS | 4 FAIL | 15 TIMEOUT | 0 CRASH
+- Totals: **11 PASS / 25 FAIL / 15 TIMEOUT / 0 CRASH**
+
+### WPT-B251 (port=19700, Phase 512 verification, 58 tests)
+- `/css/css-text-decor/parsing/`: 31 total | **25 PASS (up from 24, `text-decoration-valid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | **23 PASS (up from 22, `flex-basis-invalid` green!)** | 4 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **48 PASS / 10 FAIL / 0 TIMEOUT / 0 CRASH**

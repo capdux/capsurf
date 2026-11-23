@@ -314,7 +314,7 @@
       "scroll-behavior": ["auto", "smooth"],
       "image-rendering": ["auto", "smooth", "high-quality", "crisp-edges", "pixelated"],
       "appearance": ["none", "auto", "textfield", "menulist-button"],
-      "continue": ["auto", "collapse"],
+      "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
       "scrollbar-width": ["auto", "thin", "none"],
       "field-sizing": ["fixed", "content"],
     };
@@ -1128,14 +1128,14 @@
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
-      if (t === "none" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      if ((prop === "-webkit-line-clamp" && t === "none") || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
       return /^\+?[1-9]\d*$/.test(t);
     }
     if (prop === "block-ellipsis") {
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
       const t = toks[0], tl = t.toLowerCase();
-      return tl === "none" || tl === "auto" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t);
+      return tl === "no-ellipsis" || tl === "ellipsis" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t);
     }
     if (prop === "text-decoration-line") {
       const toks = splitCssTokens(vLower);

@@ -7314,3 +7314,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 511 完成 (`splitCssTokens` 转义支持 + `counter-*` 转义标识符 + `flex: 1 0 max-content`)**：在 `src/js/shim/cssom.js` `splitCssTokens` 支持引号外 `\` 转义字符、`counter-*` `isIdent` 支持转义标识符、移除 `flex` 展开中 `p.length <= 2` 限制使 `flex: 1 0 max-content` 正确展开。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B248`。
 
 - **Phase 512 完成 (`flex-basis` 拒绝 `anchor-size` + `text-decoration` 完整规范序列化)**：在 `src/js/shim/cssom.js` 中限制 `flex-basis` 拒绝 `anchor(...)`/`anchor-size(...)`；完善 `text-decoration` 校验放行 `auto` 并在序列化时按 `underline overline line-through blink` 排序且省略默认 `solid`/`auto`/`currentcolor`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
+
+- **Phase 513 完成 (`block-ellipsis` / `continue` / `max-lines` 对齐 CSS Overflow 4)**：在 `src/js/shim/cssom.js` 将 `continue` 更新为 `normal | discard | collapse | -webkit-legacy`、`max-lines` 拒绝 `none`、`block-ellipsis` 更新为 `no-ellipsis | ellipsis | <string>`；`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
