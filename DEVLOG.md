@@ -2337,3 +2337,5 @@
 - Phase 455 (`cssom.js`, `element.js`): 抽离 `KEYWORD_CSS_PROPS` 并导出 `__capsurf_isValidCssValue` 接入 `isValidInlinePropValue` 与 `cssFloat/float`，拦截 `*-invalid.html` 无效值赋值。
 
 - Phase 456 (`src/js/shim/cssom.js`): 扩展 `KEYWORD_CSS_PROPS` 并增加 `overflow` 1~2 关键字校验。
+
+- Phase 457 (`cssom.js`): 抽离 `splitCssTokens` 与 `isValidLenPct` 对齐盒模型尺寸/内外边距 CSS 语法校验。

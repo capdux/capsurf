@@ -212,7 +212,7 @@
       return ["auto", "block", "swap", "fallback", "optional"].includes(vLower);
     }
 
-    if (/^(?:url|var|calc|env|attr|min|max|clamp)\(/i.test(trimmed)) {
+    if (/^(?:var|env)\(/i.test(trimmed) && !/\s/.test(trimmed)) {
       return true;
     }
 
@@ -268,6 +268,79 @@
         if (ov.indexOf(parts[i]) === -1) return false;
       }
       return true;
+    }
+
+    function splitCssTokens(s) {
+      const out = [];
+      let cur = "";
+      let depth = 0;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === "(") depth++;
+        else if (ch === ")" && depth > 0) depth--;
+        if (depth === 0 && /\s/.test(ch)) {
+          if (cur) { out.push(cur); cur = ""; }
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur) out.push(cur);
+      return out;
+    }
+
+    function isValidLenPct(tok, allowNegative) {
+      if (/^(?:calc|min|max|clamp|var|env|attr|anchor|anchor-size)\(/i.test(tok)) {
+        if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
+          return false;
+        }
+        return true;
+      }
+      if (tok === "0" || tok === "+0" || tok === "-0") return allowNegative || tok !== "-0";
+      const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%)$/i.exec(tok);
+      if (!m) return false;
+      if (!allowNegative && Number(m[1]) < 0) return false;
+      return true;
+    }
+
+    if (prop === "margin-top" || prop === "margin-right" || prop === "margin-bottom" || prop === "margin-left" ||
+        prop === "margin-block-start" || prop === "margin-block-end" || prop === "margin-inline-start" || prop === "margin-inline-end") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
+    }
+    if (prop === "margin" || prop === "margin-block" || prop === "margin-inline") {
+      const maxN = prop === "margin" ? 4 : 2;
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > maxN) return false;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] !== "auto" && !isValidLenPct(toks[i], true)) return false;
+      }
+      return true;
+    }
+    if (prop === "padding-top" || prop === "padding-right" || prop === "padding-bottom" || prop === "padding-left" ||
+        prop === "padding-block-start" || prop === "padding-block-end" || prop === "padding-inline-start" || prop === "padding-inline-end") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && isValidLenPct(toks[0], false);
+    }
+    if (prop === "padding" || prop === "padding-block" || prop === "padding-inline") {
+      const maxN = prop === "padding" ? 4 : 2;
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > maxN) return false;
+      for (let i = 0; i < toks.length; i++) {
+        if (!isValidLenPct(toks[i], false)) return false;
+      }
+      return true;
+    }
+    if (prop === "width" || prop === "height" || prop === "min-width" || prop === "min-height" ||
+        prop === "max-width" || prop === "max-height" || prop === "block-size" || prop === "inline-size" ||
+        prop === "min-block-size" || prop === "min-inline-size" || prop === "max-block-size" || prop === "max-inline-size") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      const isMax = prop.startsWith("max-");
+      if (isMax ? t === "none" : t === "auto") return true;
+      if (t === "min-content" || t === "max-content" || t === "fit-content" || t === "stretch") return true;
+      if (/^fit-content\(/i.test(t)) return true;
+      return isValidLenPct(t, false);
     }
 
     return true;

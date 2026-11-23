@@ -3110,3 +3110,5 @@
 - **Phase 455 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime_source.cp`)**：新增 28 个纯关键字 CSS 属性白名单校验并打通内联 `style` 赋值与 `CSS.supports` 统一校验路径。
 
 - **Phase 456 (`src/js/shim/cssom.js`, `src/js/runtime_source.cp`)**：新增 `break-*` / `box-decoration-break` / `text-decoration-style` / `text-decoration-skip-ink` 及 `overflow` 合法性校验。
+
+- **Phase 457 (`src/js/shim/cssom.js`, `src/js/runtime_source.cp`)**：新增 `margin*`/`padding*`/`width`/`height`/`min-*`/`max-*`/`block-size`/`inline-size` 盒模型尺寸合法性校验与多 token 精确切分。
