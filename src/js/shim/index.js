@@ -2299,6 +2299,9 @@ function installShim(global) {
                   return found;
                 };
               }
+              try {
+                Object.defineProperty(doc, "readyState", { value: "complete", writable: true, configurable: true });
+              } catch (e) {}
               return doc;
             }, "createHTMLDocument");
           }

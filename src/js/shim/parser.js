@@ -680,6 +680,7 @@ function ParsedDocument(contentType, compatMode) {
   this.URL = "";
   this.documentURI = "";
   this.baseURI = "";
+  this.readyState = "complete";
   this.defaultView = null;
   this.location = null;
   this.ownerDocument = null;

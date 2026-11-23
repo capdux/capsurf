@@ -25041,6 +25041,7 @@
     this.URL = "";
     this.documentURI = "";
     this.baseURI = "";
+    this.readyState = "complete";
     this.defaultView = null;
     this.location = null;
     this.ownerDocument = null;
@@ -41199,6 +41200,7 @@
     if (!Object.getOwnPropertyDescriptor(docProto, "compatMode")) {
       Object.defineProperty(docProto, "compatMode", {
         get: function () {
+          if (this.contentType && String(this.contentType).toLowerCase() !== "text/html") return "CSS1Compat";
           if (!this.doctype) return "BackCompat";
           const dtName = String(this.doctype.name || "").toLowerCase();
           if (dtName !== "html") return "BackCompat";
@@ -47844,6 +47846,9 @@
                     return found;
                   };
                 }
+                try {
+                  Object.defineProperty(doc, "readyState", { value: "complete", writable: true, configurable: true });
+                } catch (e) {}
                 return doc;
               }, "createHTMLDocument");
             }
