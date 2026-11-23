@@ -3547,3 +3547,5 @@
 - **Phase 544** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `list-style-image` 缺失右括号补全、`interactivity` 属性与继承、`outline-offset: inset`、`outline-color: auto` 及 `caret-color` 双值计算。
 
 - **Phase 545** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 解除 `-color` 通用分支对 `outline-color`/`caret-color` 的前置拦截。
+
+- **Phase 546** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`): 支持 `caret-color` 双值省略与计算、`cursor` `image-set`/`light-dark` 规范化及通用 `evalGradientComputed`。

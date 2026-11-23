@@ -2602,3 +2602,7 @@
 
 ### Phase 545: `outline-color: auto` 与 `caret-color` 双值校验打通
 - 将 `outline-color` 和 `caret-color` 从 `prop.endsWith("-color")` 快速分支排除，走各自专用多关键字/双值颜色校验路径。
+
+### Phase 546: `caret-color` 双值计算与 `cursor` 通用渐变/函数解析
+- `caret-color` 在计算期省略第二个 `auto`，并将剩余 `auto`/`currentcolor` 解析为当前 `color`。
+- 抽离 `evalGradientComputed` 统一服务 `list-style-image` 与 `cursor`；`cursor` 使用 `splitTopLevelComma` 正确切分 `image-set`/`light-dark`/渐变中的逗号。

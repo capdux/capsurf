@@ -7396,3 +7396,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 545 (解除 `-color` 前置拦截，打通 `outline-color: auto` 与 `caret-color` 双值)
 - **[Agent]**: 完成 Phase 545：修复 `cssom.js` `prop.endsWith("-color")` 提前拦截 `outline-color`/`caret-color` 的问题，使 `outline-color: auto`（`outline-style: auto` -> `auto`，否则 `currentcolor`）与 `caret-color` 双值 `[auto | <color>]{1,2}` 全部生效。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 546 (`caret-color` 双值计算与 `cursor` `image-set`/`light-dark`/渐变求值)
+- **[Agent]**: 完成 Phase 546：`caret-color` 第 2 值 `auto` 省略及 `auto->currentcolor` 解析；`cursor` 改用 `splitTopLevelComma` 支持 `image-set("..." -> url("..."))`、`light-dark(...)`、`calc()` 坐标；抽离通用 `evalGradientComputed` 并用于 `list-style-image` 与 `cursor`（支持 `grad`/`rad`/`turn` 转 `deg`、`radial-gradient` 补全 `50%`、`calc(% + px)`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

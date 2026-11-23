@@ -4891,14 +4891,15 @@
           "s-resize", "se-resize", "sw-resize", "w-resize", "ew-resize", "ns-resize",
           "nesw-resize", "nwse-resize", "col-resize", "row-resize", "all-scroll", "zoom-in", "zoom-out"
         ]);
-        const parts = vLower.split(",");
+        const parts = splitTopLevelComma(vLower);
         const last = splitCssTokens(parts[parts.length - 1].trim());
         if (last.length !== 1 || !KW.has(last[0])) return false;
+        const isCoord = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(x) || /^(?:calc|min|max|clamp)\(/i.test(x);
         for (let i = 0; i < parts.length - 1; i++) {
           const toks = splitCssTokens(parts[i].trim());
           if (toks.length !== 1 && toks.length !== 3) return false;
-          if (!/^url\(/i.test(toks[0])) return false;
-          if (toks.length === 3 && (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[1]) || !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[2]))) return false;
+          if (!/^(?:url|image-set|light-dark|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient)\(/i.test(toks[0])) return false;
+          if (toks.length === 3 && (!isCoord(toks[1]) || !isCoord(toks[2]))) return false;
         }
         return true;
       }
@@ -6107,6 +6108,32 @@
         if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
         const order = ["underline", "overline", "line-through", "blink"];
         return order.filter(k => p.indexOf(k) !== -1).join(" ");
+      }
+      if (key === "cursor") {
+        const normImg = (fn) => {
+          if (/^(?:image-set|light-dark)\(/i.test(fn)) {
+            return fn.replace(/,\s*/g, ", ").replace(/(image-set\()([^)]+)\)/gi, (_, pfx, inn) => {
+              const items = splitTopLevelComma(inn).map((it) => it.replace(/^("[^"]*"|'[^']*')(\s+.*)$/, (_, u, rest) => "url(" + u + ")" + rest));
+              return pfx + items.join(", ") + ")";
+            });
+          }
+          return fn;
+        };
+        const normNumCalc = (t) => {
+          if (!/^calc\(/i.test(t)) return t;
+          const inn = t.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inn)) {
+            try { const v = Function("return (" + inn + ")")(); if (typeof v === "number" && isFinite(v)) return "calc(" + String(Number(v.toFixed(6))) + ")"; } catch (_) {}
+          }
+          return t;
+        };
+        return splitTopLevelComma(s).map((part, idx, arr) => {
+          if (idx === arr.length - 1) return part.trim().toLowerCase();
+          const toks = splitCssTokens(part);
+          if (toks.length === 1) return normImg(toks[0]);
+          if (toks.length === 3) return normImg(toks[0]) + " " + normNumCalc(toks[1]) + " " + normNumCalc(toks[2]);
+          return part;
+        }).join(", ");
       }
       if (key === "list-style-image" || key === "background-image") {
         let open = 0, close = 0;
@@ -40920,10 +40947,10 @@
           else cCur += ch;
         }
         if (cCur) ccToks.push(cCur);
+        if (ccToks.length === 2 && ccToks[1].toLowerCase() === "auto") ccToks.pop();
         computedMap.set("caret-color", ccToks.map((t) => {
           const tl = t.toLowerCase();
-          if (tl === "auto") return "auto";
-          if (tl === "currentcolor") return elColor;
+          if (tl === "auto" || tl === "currentcolor") return elColor;
           return normCol(t);
         }).join(" "));
       }
@@ -40997,102 +41024,152 @@
         if (tdiToks.length === 2 && tdiToks[0] === tdiToks[1]) tdiToks.pop();
         computedMap.set("text-decoration-inset", tdiToks.join(" "));
       }
-      const lsiRaw = (computedMap.get("list-style-image") || "").trim();
-      if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
-        const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(lsiRaw);
-        if (gm) {
-          const fn = gm[1].toLowerCase();
-          const normCol = typeof global.__capsurf_normalizeSingleColor === "function" ? global.__capsurf_normalizeSingleColor : (v) => v;
-          const args = [];
-          let cur = "", dpt = 0;
-          for (let i = 0; i < gm[2].length; i++) {
-            const ch = gm[2][i];
-            if (ch === "(") dpt++;
-            else if (ch === ")" && dpt > 0) dpt--;
-            if (dpt === 0 && ch === ",") { args.push(cur.trim()); cur = ""; }
-            else cur += ch;
+      const evalGradientComputed = (gradRaw) => {
+        const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(gradRaw);
+        if (!gm) return gradRaw;
+        const fn = gm[1].toLowerCase();
+        const args = [];
+        let cur = "", dpt = 0;
+        for (let i = 0; i < gm[2].length; i++) {
+          const ch = gm[2][i];
+          if (ch === "(") dpt++;
+          else if (ch === ")" && dpt > 0) dpt--;
+          if (dpt === 0 && ch === ",") { args.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        if (cur.trim()) args.push(cur.trim());
+        const splitTop = (str) => {
+          const res = []; let sCur = "", sD = 0;
+          for (let j = 0; j < str.length; j++) {
+            const c = str[j];
+            if (c === "(") sD++; else if (c === ")" && sD > 0) sD--;
+            if (sD === 0 && /\s/.test(c)) { if (sCur) { res.push(sCur); sCur = ""; } }
+            else sCur += c;
           }
-          if (cur.trim()) args.push(cur.trim());
-          const splitTop = (str) => {
-            const res = []; let sCur = "", sD = 0;
-            for (let j = 0; j < str.length; j++) {
-              const c = str[j];
-              if (c === "(") sD++; else if (c === ")" && sD > 0) sD--;
-              if (sD === 0 && /\s/.test(c)) { if (sCur) { res.push(sCur); sCur = ""; } }
-              else sCur += c;
+          if (sCur) res.push(sCur);
+          return res;
+        };
+        const evalAng = (tok) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            const e = tl.slice(5, -1)
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))deg\b/g, "$1")
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))grad\b/g, (_, n) => String(Number(n) * 0.9))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))rad\b/g, (_, n) => String(Number(n) * 180 / Math.PI))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn\b/g, (_, n) => String(Number(n) * 360));
+            if (/^[\d+\-*/().\s]+$/.test(e)) {
+              try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(4))) + "deg"; } catch (_) {}
             }
-            if (sCur) res.push(sCur);
-            return res;
-          };
-          const evalAng = (tok) => {
-            const tl = tok.toLowerCase();
-            if (/^calc\(/i.test(tl)) {
-              const e = tl.slice(5, -1)
-                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))deg\b/g, "$1")
-                .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn\b/g, (_, n) => String(Number(n) * 360));
+          }
+          const tm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(turn|grad|rad)$/i.exec(tl);
+          if (tm) {
+            const u = tm[2].toLowerCase(), n = Number(tm[1]);
+            const deg = u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI);
+            return String(Number(deg.toFixed(4))) + "deg";
+          }
+          return tl;
+        };
+        const evalStopPos = (tok, nonNeg) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            if (/(?:deg|turn|grad|rad)\b/.test(tl)) return evalAng(tok);
+            const inn = tl.slice(5, -1);
+            if (inn.indexOf("%") !== -1 && !/(?:px|em|rem)/.test(inn)) {
+              const e = inn.replace(/%/g, "");
               if (/^[\d+\-*/().\s]+$/.test(e)) {
-                try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "deg"; } catch (_) {}
+                try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%"; } catch (_) {}
               }
-            }
-            const tm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn$/i.exec(tl);
-            if (tm) return String(Number((Number(tm[1]) * 360).toFixed(6))) + "deg";
-            return tl;
-          };
-          const evalStopPos = (tok, nonNeg) => {
-            const tl = tok.toLowerCase();
-            if (/^calc\(/i.test(tl)) {
-              if (tl.indexOf("deg") !== -1 || tl.indexOf("turn") !== -1) return evalAng(tok);
-              const inn = tl.slice(5, -1);
-              if (inn.indexOf("%") !== -1 && !/(?:px|em|rem)/.test(inn)) {
-                const e = inn.replace(/%/g, "");
+            } else if (inn.indexOf("%") !== -1 && /(?:px|em|rem)/.test(inn)) {
+              const evalL = (pv, xv) => {
+                const e = inn
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pv))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * xv))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * xv));
                 if (/^[\d+\-*/().\s]+$/.test(e)) {
-                  try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%"; } catch (_) {}
+                  try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return v; } catch (_) {}
                 }
-              } else if (inn.indexOf("%") === -1) {
-                const px = evalCssLengthExpr(tl, 0, fontSize);
-                if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+                return null;
+              };
+              const pxC = evalL(0, 1), pctC = evalL(1, 0);
+              if (pxC !== null && pctC !== null) {
+                const pR = Number(pctC.toFixed(6)), xR = Number(pxC.toFixed(6));
+                if (xR === 0) return String(pR) + "%";
+                if (pR === 0) return formatCssPx(xR);
+                return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
               }
-            }
-            if (tl.endsWith("em") || tl.endsWith("px") || tl.endsWith("rem")) {
+            } else {
               const px = evalCssLengthExpr(tl, 0, fontSize);
               if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
             }
-            if (tl.endsWith("turn")) return evalAng(tok);
-            return tl;
-          };
-          const outArgs = [];
-          for (let ai = 0; ai < args.length; ai++) {
-            const toks = splitTop(args[ai]);
-            if (ai === 0 && fn === "linear-gradient" && (toks[0].toLowerCase() === "to" || /(?:deg|turn|rad|grad)\)?$/i.test(toks[0]))) {
-              outArgs.push(toks[0].toLowerCase() === "to" ? toks.map(t => t.toLowerCase()).join(" ") : evalAng(toks[0]));
-              continue;
-            }
-            if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || toks[0].toLowerCase() === "circle" || toks[0].toLowerCase() === "ellipse")) {
-              const rOut = [];
-              let inAt = false;
-              for (let ti = 0; ti < toks.length; ti++) {
-                const tl = toks[ti].toLowerCase();
-                if (tl === "at") { inAt = true; rOut.push("at"); continue; }
-                if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
-                rOut.push(evalStopPos(toks[ti], !inAt));
-              }
-              outArgs.push(rOut.join(" "));
-              continue;
-            }
-            if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
-              outArgs.push(evalStopPos(toks[0], false));
-              continue;
-            }
-            const col = normCol(toks[0]);
-            if (toks.length === 1) outArgs.push(col);
-            else if (toks.length === 2) outArgs.push(col + " " + evalStopPos(toks[1], false));
-            else if (toks.length === 3) {
-              outArgs.push(col + " " + evalStopPos(toks[1], false));
-              outArgs.push(col + " " + evalStopPos(toks[2], false));
-            } else outArgs.push(args[ai]);
           }
-          computedMap.set("list-style-image", fn + "(" + outArgs.join(", ") + ")");
+          if (tl.endsWith("em") || tl.endsWith("px") || tl.endsWith("rem")) {
+            const px = evalCssLengthExpr(tl, 0, fontSize);
+            if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+          }
+          if (/(?:turn|grad|rad)$/.test(tl)) return evalAng(tok);
+          return tl;
+        };
+        const outArgs = [];
+        for (let ai = 0; ai < args.length; ai++) {
+          const toks = splitTop(args[ai]);
+          if (ai === 0 && fn === "linear-gradient" && (toks[0].toLowerCase() === "to" || /(?:deg|turn|grad|rad)\)?$/i.test(toks[0]))) {
+            outArgs.push(toks[0].toLowerCase() === "to" ? toks.map(t => t.toLowerCase()).join(" ") : evalAng(toks[0]));
+            continue;
+          }
+          if (ai === 0 && fn === "conic-gradient" && (toks[0].toLowerCase() === "from" || toks[0].toLowerCase() === "at")) {
+            const cOut = [];
+            for (let ti = 0; ti < toks.length; ti++) {
+              const tl = toks[ti].toLowerCase();
+              if (tl === "from" || tl === "at") { cOut.push(tl); continue; }
+              cOut.push(evalStopPos(toks[ti], false));
+            }
+            outArgs.push(cOut.join(" "));
+            continue;
+          }
+          if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || /^(?:circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)$/i.test(toks[0]))) {
+            const rOut = [];
+            let inAt = false, atPos = [];
+            for (let ti = 0; ti < toks.length; ti++) {
+              const tl = toks[ti].toLowerCase();
+              if (tl === "at") { inAt = true; rOut.push("at"); continue; }
+              if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
+              if (inAt) atPos.push(evalStopPos(toks[ti], false));
+              else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
+            }
+            if (inAt && atPos.length === 1) atPos.push("50%");
+            outArgs.push(rOut.concat(atPos).join(" "));
+            continue;
+          }
+          if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
+            outArgs.push(evalStopPos(toks[0], false));
+            continue;
+          }
+          const col = normCol(toks[0]);
+          if (toks.length === 1) outArgs.push(col);
+          else if (toks.length === 2) outArgs.push(col + " " + evalStopPos(toks[1], false));
+          else if (toks.length === 3) {
+            outArgs.push(col + " " + evalStopPos(toks[1], false));
+            outArgs.push(col + " " + evalStopPos(toks[2], false));
+          } else outArgs.push(args[ai]);
         }
+        return fn + "(" + outArgs.join(", ") + ")";
+      };
+      const lsiRaw = (computedMap.get("list-style-image") || "").trim();
+      if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
+        computedMap.set("list-style-image", evalGradientComputed(lsiRaw));
+      }
+      const curRaw = (computedMap.get("cursor") || "").trim();
+      if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
+        const cParts = [];
+        let cCur = "", cD = 0;
+        for (let i = 0; i < curRaw.length; i++) {
+          const ch = curRaw[i];
+          if (ch === "(") cD++; else if (ch === ")" && cD > 0) cD--;
+          if (cD === 0 && ch === ",") { cParts.push(cCur.trim()); cCur = ""; }
+          else cCur += ch;
+        }
+        if (cCur.trim()) cParts.push(cCur.trim());
+        computedMap.set("cursor", cParts.map((p) => /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(p) ? evalGradientComputed(p) : p).join(", "));
       }
       if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
         computedMap.set("hyphenate-character", "auto");

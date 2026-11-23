@@ -1101,14 +1101,15 @@
         "s-resize", "se-resize", "sw-resize", "w-resize", "ew-resize", "ns-resize",
         "nesw-resize", "nwse-resize", "col-resize", "row-resize", "all-scroll", "zoom-in", "zoom-out"
       ]);
-      const parts = vLower.split(",");
+      const parts = splitTopLevelComma(vLower);
       const last = splitCssTokens(parts[parts.length - 1].trim());
       if (last.length !== 1 || !KW.has(last[0])) return false;
+      const isCoord = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(x) || /^(?:calc|min|max|clamp)\(/i.test(x);
       for (let i = 0; i < parts.length - 1; i++) {
         const toks = splitCssTokens(parts[i].trim());
         if (toks.length !== 1 && toks.length !== 3) return false;
-        if (!/^url\(/i.test(toks[0])) return false;
-        if (toks.length === 3 && (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[1]) || !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(toks[2]))) return false;
+        if (!/^(?:url|image-set|light-dark|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient)\(/i.test(toks[0])) return false;
+        if (toks.length === 3 && (!isCoord(toks[1]) || !isCoord(toks[2]))) return false;
       }
       return true;
     }
@@ -2317,6 +2318,32 @@
       if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
       const order = ["underline", "overline", "line-through", "blink"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
+    }
+    if (key === "cursor") {
+      const normImg = (fn) => {
+        if (/^(?:image-set|light-dark)\(/i.test(fn)) {
+          return fn.replace(/,\s*/g, ", ").replace(/(image-set\()([^)]+)\)/gi, (_, pfx, inn) => {
+            const items = splitTopLevelComma(inn).map((it) => it.replace(/^("[^"]*"|'[^']*')(\s+.*)$/, (_, u, rest) => "url(" + u + ")" + rest));
+            return pfx + items.join(", ") + ")";
+          });
+        }
+        return fn;
+      };
+      const normNumCalc = (t) => {
+        if (!/^calc\(/i.test(t)) return t;
+        const inn = t.slice(5, -1).trim();
+        if (/^[\d+\-*/().\s]+$/.test(inn)) {
+          try { const v = Function("return (" + inn + ")")(); if (typeof v === "number" && isFinite(v)) return "calc(" + String(Number(v.toFixed(6))) + ")"; } catch (_) {}
+        }
+        return t;
+      };
+      return splitTopLevelComma(s).map((part, idx, arr) => {
+        if (idx === arr.length - 1) return part.trim().toLowerCase();
+        const toks = splitCssTokens(part);
+        if (toks.length === 1) return normImg(toks[0]);
+        if (toks.length === 3) return normImg(toks[0]) + " " + normNumCalc(toks[1]) + " " + normNumCalc(toks[2]);
+        return part;
+      }).join(", ");
     }
     if (key === "list-style-image" || key === "background-image") {
       let open = 0, close = 0;
