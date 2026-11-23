@@ -259,7 +259,29 @@ function createStyleProxy(element) {
 
   function serializeStyleMap(map) {
     const arr = [];
+    const skip = new Set();
+    const foldPairs = [
+      ["flex", ["flex-grow", "flex-shrink", "flex-basis"]],
+      ["flex-flow", ["flex-direction", "flex-wrap"]]
+    ];
+    const folded = new Map();
+    for (let fi = 0; fi < foldPairs.length; fi++) {
+      const [sh, lhs] = foldPairs[fi];
+      const entries = lhs.map((lh) => map.get(lh));
+      if (entries.every((e) => e && entries[0] && e.priority === entries[0].priority && /^(?:inherit|initial|unset|revert|revert-layer)$/i.test(e.value) && e.value.toLowerCase() === entries[0].value.toLowerCase())) {
+        lhs.forEach((lh) => skip.add(lh));
+        folded.set(lhs[0], { name: sh, value: entries[0].value.toLowerCase(), priority: entries[0].priority });
+      }
+    }
     for (const [k, entry] of map.entries()) {
+      if (folded.has(k)) {
+        const fe = folded.get(k);
+        let s = fe.name + ": " + fe.value;
+        if (fe.priority) s += " !" + fe.priority;
+        arr.push(s + ";");
+        continue;
+      }
+      if (skip.has(k)) continue;
       let s = entry.name + ": " + entry.value;
       if (entry.priority) s += " !" + entry.priority;
       arr.push(s + ";");

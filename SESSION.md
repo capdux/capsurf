@@ -7381,3 +7381,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 540 (`flex`/`flex-basis` `calc(sign(cqw))` 与 `-webkit-*` Flexbox 别名映射)
 - **[Agent]**: 完成 Phase 540：`flex` 简写与 `flex-grow`/`flex-shrink` 支持纯数字 `calc()`（含 `sign(20cqw - 10px)`），`flex-basis` 支持 `calc(10% + 0px) -> 10%` 并保留 `calc(0% + 10px)`；在 `element.js` 与 `cssom.js` 建立 `LEGACY_CSS_ALIASES` 映射表统一处理 12 个 `-webkit-*` Flexbox 别名。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 541 (`flex` `sign(cqw)` 展开与 `serializeStyleMap` `inherit` 简写折叠)
+- **[Agent]**: 完成 Phase 541：修复 `expandCssShorthand("flex")` 对含 `sign(...cqw...)` 的纯数字 `calc()` 识别，及 `serializeStyleMap` 中 `flex`/`flex-flow` CSS-wide keyword 折叠序列化（对齐 `-webkit-flex`/`-webkit-flex-flow` 别名测试）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

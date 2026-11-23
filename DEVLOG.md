@@ -2583,3 +2583,7 @@
 
 ### Phase 540: `flex` `calc(sign(cqw))`、`flex-basis` 与 `-webkit-*` Flexbox 别名
 - `element.js` 抽离 `LEGACY_CSS_ALIASES` 统一重定向 `-webkit-*` 读写删与简写展开；`flex-basis` 仅在偏移量为 `0px` 时化简 `calc(P% + 0px) -> P%`，保留 `calc(0% + 10px)`。
+
+### Phase 541: `flex` `sign(cqw)` 展开与 `serializeStyleMap` 简写折叠
+- `expandCssShorthand("flex")` 剥离 `sign(...)` 内单位后判断纯数字 `calc()`，解决 `flex-grow`/`flex-shrink` 误归类为 `flex-basis` 的问题。
+- `serializeStyleMap` 对 `flex`/`flex-flow` 长属性均等为 CSS-wide keyword 时折叠输出简写声明。

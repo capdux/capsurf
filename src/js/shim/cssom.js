@@ -2419,7 +2419,7 @@
           nums.push(String(Number(tl)));
         } else if (tl === "0" && nums.length < 2 && !hasBasis) {
           nums.push("0");
-        } else if (/^(?:calc|min|max|clamp)\(/i.test(tl) && nums.length < 2 && !/[a-z%]/.test(tl.replace(/^(?:calc|min|max|clamp)\(/i, ""))) {
+        } else if (/^(?:calc|min|max|clamp)\(/i.test(tl) && nums.length < 2 && !/[a-z%]/.test(tl.replace(/sign\([^()]+\)/gi, "").replace(/^(?:calc|min|max|clamp)\(/i, ""))) {
           nums.push(p[i]);
         } else {
           basis = tl === "0" ? "0px" : p[i];
