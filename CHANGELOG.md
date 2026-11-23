@@ -3238,3 +3238,11 @@
   - 新增统一 `consumeAlign` 语法解析器，覆盖 `align-content`, `justify-content`, `align-items`, `justify-items`, `align-self`, `justify-self` 6 个长属性及 `place-content`, `place-items`, `place-self` 3 个简写。
   - 严格区分 `left`/`right`（仅 `justify-*`）、`self-start`/`self-end`（仅 `*-items`/`*-self`）、`legacy`（仅 `justify-items`）、`space-*`（仅 `*-content`）与 `baseline`（非 `justify-content`）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 474: CSSOM `grid-auto-flow`, `counter-*`, `aspect-ratio`, `list-style-position` 校验
+- `src/js/shim/cssom.js`:
+  - `KEYWORD_CSS_PROPS`: 新增 `list-style-position`, `scroll-behavior`, `image-rendering`, `appearance`。
+  - `grid-auto-flow`: 校验 `[ row | column ] || dense`。
+  - `counter-reset` / `counter-increment` / `counter-set`: 校验 `none | [ <counter-name> <integer>? ]+`（`counter-reset` 支持 `reversed(<custom-ident>)`），拦截关键字与小数/逗号。
+  - `aspect-ratio`: 校验 `auto || <ratio>`（正数或 `a / b`）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

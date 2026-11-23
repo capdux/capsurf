@@ -1001,3 +1001,19 @@
 - `/css/css-position/parsing/`: 22 total | 16 PASS (up from 15!) | 6 FAIL | 0 TIMEOUT | 0 CRASH (`inset-invalid` PASS)
 - `/css/css-transforms/parsing/ --shard 1/2`: 14 total | 4 PASS (up from 1!) | 10 FAIL | 0 TIMEOUT | 0 CRASH (`transform-box-invalid`, `backface-visibility-computed`, `rotate-parsing-invalid` PASS)
 - Totals: **36 PASS / 27 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B212 (port=19700, 80 tests, 24/80 matched)
+- `/css/css-grid/parsing/ --shard 2/2`: 30 total | 3 PASS | 26 FAIL | 1 TIMEOUT | 0 CRASH (`FAIL→PASS`: `grid-template-columns-repeat-intrinsic-valid.tentative.html`)
+- `/css/css-align/parsing/`: 50 total | 16 PASS | 34 FAIL | 0 TIMEOUT | 0 CRASH (all `*-gap-invalid` + `gap-valid/shorthand` + `align/justify-computed` PASS)
+- Totals: **19 PASS / 60 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B213 (port=19700, 96 tests, 47/96 matched)
+- `/css/css-fonts/parsing/`: 82 total | 29 PASS (up from 18!) | 51 FAIL | 2 TIMEOUT | 0 CRASH
+- `/css/css-transforms/parsing/ --shard 2/2`: 14 total | 7 PASS (up from 3!) | 7 FAIL | 0 TIMEOUT | 0 CRASH (`perspective-invalid`, `perspective-origin-invalid`, `translate-parsing-invalid`, `transform-origin-invalid` PASS)
+- Totals: **36 PASS / 58 FAIL / 2 TIMEOUT / 0 CRASH**
+
+### WPT-B214 (port=19700, 56 tests, 15/56 matched)
+- `/css/css-sizing/parsing/`: 19 total | 0 PASS | 4 FAIL | 15 TIMEOUT | 0 CRASH
+- `/css/css-display/parsing/`: 5 total | 1 PASS | 4 FAIL | 0 TIMEOUT | 0 CRASH (`5/5 matched expectations`)
+- `/css/css-overflow/parsing/`: 32 total | 8 PASS | 24 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: `block-ellipsis-valid`, `continue-valid`, `scroll-markers-valid`, `scroll-target-group-valid`)
+- Totals: **9 PASS / 32 FAIL / 15 TIMEOUT / 0 CRASH**

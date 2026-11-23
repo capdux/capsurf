@@ -284,6 +284,10 @@
       "font-synthesis-style": ["auto", "none"],
       "font-synthesis-small-caps": ["auto", "none"],
       "font-synthesis-position": ["auto", "none"],
+      "list-style-position": ["inside", "outside"],
+      "scroll-behavior": ["auto", "smooth"],
+      "image-rendering": ["auto", "smooth", "high-quality", "crisp-edges", "pixelated"],
+      "appearance": ["none", "auto", "textfield", "menulist-button"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1041,6 +1045,52 @@
         return consumeAlign(toks, next, "justify-" + kind) === toks.length;
       }
       return consumeAlign(toks, 0, prop) === toks.length;
+    }
+    if (prop === "grid-auto-flow") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      let seenAxis = false, seenDense = false;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] === "row" || toks[i] === "column") { if (seenAxis) return false; seenAxis = true; }
+        else if (toks[i] === "dense") { if (seenDense) return false; seenDense = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "counter-reset" || prop === "counter-increment" || prop === "counter-set") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "none") return true;
+      if (toks.length === 0) return false;
+      const BAD_ID = new Set(["none", "default", "inherit", "initial", "unset", "revert", "revert-layer"]);
+      const isIdent = (s) => !BAD_ID.has(s) && /^-?[a-z_][a-z0-9_-]*$/i.test(s) && !s.startsWith("--");
+      let i = 0;
+      while (i < toks.length) {
+        const t = toks[i];
+        if (t.includes(",")) return false;
+        let okName = isIdent(t);
+        if (!okName && prop === "counter-reset") {
+          const rm = /^reversed\(([^)]+)\)$/.exec(t);
+          if (rm && isIdent(rm[1].trim())) okName = true;
+        }
+        if (!okName) return false;
+        i++;
+        if (i < toks.length && /^[+-]?\d+$/.test(toks[i])) i++;
+      }
+      return true;
+    }
+    if (prop === "aspect-ratio") {
+      const norm = vLower.replace(/\s*\/\s*/g, " / ");
+      const toks = splitCssTokens(norm);
+      if (toks.length === 1 && toks[0] === "auto") return true;
+      const isPosNum = (s) => (/^(?:calc|min|max|clamp|var|env)\(/i.test(s)) ||
+        (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s) && Number(s) >= 0);
+      let idx = 0, len = toks.length;
+      if (toks[0] === "auto") { idx = 1; }
+      else if (toks[len - 1] === "auto") { len--; }
+      const rem = len - idx;
+      if (rem === 1) return isPosNum(toks[idx]);
+      if (rem === 3 && toks[idx + 1] === "/") return isPosNum(toks[idx]) && isPosNum(toks[idx + 2]);
+      return false;
     }
 
     return true;
