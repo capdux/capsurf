@@ -2237,6 +2237,7 @@
       const TRIM_KW = new Set(["space-all", "trim-both", "trim-all", "trim-start", "space-first"]);
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 1 && (p[0] === "none" || p[0] === "auto" || p[0] === "normal")) return p[0];
+      if (p.length === 2 && p[0] === "auto" && p[1] === "auto") return "auto";
       let trim = "normal";
       const autoToks = [];
       for (let i = 0; i < p.length; i++) {
@@ -2648,6 +2649,7 @@
       return normalizeCssSpecifiedValue("white-space", vals[0] + " " + vals[1]);
     }
     if (key === "text-spacing") {
+      if (vals[0] === "auto" && vals[1] === "auto") return "auto";
       return normalizeCssSpecifiedValue("text-spacing", vals[0] + " " + vals[1]);
     }
     if (key === "text-wrap") {

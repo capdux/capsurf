@@ -2577,3 +2577,6 @@
 
 ### Phase 538: `hanging-punctuation` / `word-space-transform` / `text-fit` 细节对齐
 - `hanging-punctuation` 与 `word-space-transform` 规范序列化均保留用户输入关键字顺序；`text-fit` 指定值保留 `consistent`，计算值省略 `consistent`。
+
+### Phase 539: `text-spacing: auto` 简写反序列化
+- `serializeExpandedShorthand("text-spacing")` 与 `normalizeCssSpecifiedValue("text-spacing")` 显式识别 `auto auto -> auto`，补齐 `text-spacing-{valid,computed}` 最后 1 个用例。
