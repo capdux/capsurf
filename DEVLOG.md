@@ -2287,3 +2287,5 @@
 - Phase 430 (`src/js/shim/element/html-classes.js`, `window.js`): 修正 `progress.max` setter 忽略 `<= 0` 值；将 `HTMLOutputElement` 校验状态接入共享 `makeValidityState` 并保持 `willValidate=false`/`validationMessage=""`；同步失效 `title` 节点缓存。
 
 - Phase 431 (`element.js`, `node-base.js`, `selector.js`): 实装 `hasAttributes()` 与 `isSameNode()`；修复 `proto.id` setter 对空串清空属性条目导致 `setAttribute("id", "")` 丢失属性的规范缺陷，以及 `DocumentFragment.getElementById("")` 过滤空串 ID。
+
+- Phase 432 (`src/js/shim/element/html-classes.js`): 在 `collectRenderedText` 中传递 `inheritedTt` 支持 `text-transform`，并在 `outerText` setter 中对单文本节点直接预合并相邻 `Text` 节点后再 `removeChild(this)`。

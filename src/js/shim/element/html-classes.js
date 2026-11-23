@@ -273,16 +273,24 @@ function installHtmlClasses(global) {
       return false;
     }
 
-    function walk(node, inheritedVis, inheritedWs, isRoot) {
+    function applyTextTransform(str, tt) {
+      if (tt === "uppercase") return str.toUpperCase();
+      if (tt === "lowercase") return str.toLowerCase();
+      if (tt === "capitalize") return str.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+      return str;
+    }
+
+    function walk(node, inheritedVis, inheritedWs, inheritedTt, isRoot) {
       if (!node) return;
       if (node.nodeType === 3) {
         if (inheritedVis === "hidden" || inheritedVis === "collapse") return;
-        const raw = String(
+        let raw = String(
           (node.textContent !== undefined && node.textContent !== null && node.textContent !== "")
             ? node.textContent
             : (node.nodeValue !== undefined && node.nodeValue !== null ? node.nodeValue : (node.data || ""))
         );
         if (!raw) return;
+        if (inheritedTt && inheritedTt !== "none") raw = applyTextTransform(raw, inheritedTt);
         const preserve = inheritedWs === "pre" || inheritedWs === "pre-wrap" || inheritedWs === "break-spaces";
         if (preserve) {
           items.push({ type: "text", text: raw.replace(/\r\n?/g, "\n"), preserveWs: true });
@@ -314,9 +322,13 @@ function installHtmlClasses(global) {
       if (ownVis) vis = ownVis;
 
       let ws = inheritedWs;
-      const ownWs = cs ? String(cs.whiteSpace || cs["white-space"] || "").trim().toLowerCase() : (node.style && node.style.whiteSpace ? String(node.style.whiteSpace).trim().toLowerCase() : "");
+      const ownWs = (cs && (cs.whiteSpace || cs["white-space"]) ? String(cs.whiteSpace || cs["white-space"]).trim().toLowerCase() : "") || (node.style && node.style.whiteSpace ? String(node.style.whiteSpace).trim().toLowerCase() : "");
       if (ownWs) ws = ownWs;
       else if (tag === "pre" || tag === "textarea") ws = "pre";
+
+      let tt = inheritedTt;
+      const ownTt = (cs && (cs.textTransform || cs["text-transform"]) ? String(cs.textTransform || cs["text-transform"]).trim().toLowerCase() : "") || (node.style && node.style.textTransform ? String(node.style.textTransform).trim().toLowerCase() : "");
+      if (ownTt) tt = ownTt;
 
       if (tag === "br") {
         if (vis !== "hidden" && vis !== "collapse") {
@@ -334,12 +346,12 @@ function installHtmlClasses(global) {
       const kids = node.childNodes || node._children || [];
       if (kids && kids.length > 0) {
         for (let ki = 0; ki < kids.length; ki++) {
-          walk(kids[ki], vis, ws, false);
+          walk(kids[ki], vis, ws, tt, false);
         }
       } else {
         let ch = node.firstChild;
         while (ch) {
-          walk(ch, vis, ws, false);
+          walk(ch, vis, ws, tt, false);
           ch = ch.nextSibling;
         }
       }
@@ -363,7 +375,8 @@ function installHtmlClasses(global) {
     const rootVis = (rootCs && rootCs.visibility ? String(rootCs.visibility).trim().toLowerCase() : "") || "visible";
     const rootTag = String(root.localName || root.tagName || "").toLowerCase();
     const rootWs = (rootCs && (rootCs.whiteSpace || rootCs["white-space"]) ? String(rootCs.whiteSpace || rootCs["white-space"]).trim().toLowerCase() : "") || (rootTag === "pre" ? "pre" : "normal");
-    walk(root, rootVis, rootWs, true);
+    const rootTt = (rootCs && (rootCs.textTransform || rootCs["text-transform"]) ? String(rootCs.textTransform || rootCs["text-transform"]).trim().toLowerCase() : "") || (root.style && root.style.textTransform ? String(root.style.textTransform).trim().toLowerCase() : "none");
+    walk(root, rootVis, rootWs, rootTt, true);
 
     // 1. Merge consecutive collapsible text items and collapse adjacent spaces
     const merged = [];
@@ -480,6 +493,26 @@ function installHtmlClasses(global) {
           ? doc.createTextNode("")
           : new Text("");
         frag.appendChild(emptyText);
+      }
+      if (frag.firstChild && frag.firstChild === frag.lastChild && frag.firstChild.nodeType === 3 &&
+          ((prev && prev.nodeType === 3) || (next && next.nodeType === 3))) {
+        const txt = frag.firstChild.data != null ? String(frag.firstChild.data) : "";
+        if (prev && prev.nodeType === 3 && next && next.nodeType === 3) {
+          prev.data = (prev.data != null ? String(prev.data) : "") + txt + (next.data != null ? String(next.data) : "");
+          parent.removeChild(this);
+          parent.removeChild(next);
+          return;
+        }
+        if (prev && prev.nodeType === 3) {
+          prev.data = (prev.data != null ? String(prev.data) : "") + txt;
+          parent.removeChild(this);
+          return;
+        }
+        if (next && next.nodeType === 3) {
+          next.data = txt + (next.data != null ? String(next.data) : "");
+          parent.removeChild(this);
+          return;
+        }
       }
       parent.replaceChild(frag, this);
       // Merge adjacent Text nodes per HTML spec

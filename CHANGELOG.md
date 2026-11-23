@@ -3060,3 +3060,5 @@
 - **Phase 430 (`src/js/shim/element/html-classes.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：修正 `HTMLProgressElement.max` 非正数忽略语义；`HTMLOutputElement` 对接 `makeValidityState` 与 `willValidate=false`；`document.title` setter 失效 `<title>` 子节点缓存。
 
 - **Phase 431 (`src/js/shim/element/element.js`, `src/js/shim/node-base.js`, `src/js/shim/selector.js`, `src/js/runtime_source.cp`)**：新增 `Element.prototype.hasAttributes` 与 `Node.prototype.isSameNode`；修复 `id=""` 属性误删与 `DocumentFragment.getElementById("")` 误匹配。
+
+- **Phase 432 (`src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：`innerText`/`outerText` 支持 `text-transform` 继承变换；修复 `outerText` 相邻文本节点合并时的原生文本残留。
