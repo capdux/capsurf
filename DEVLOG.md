@@ -2311,3 +2311,5 @@
 - Phase 442 (`collections.js`, `validity.js`): `RadioNodeList` 支持动态 `getter` 函数代理以响应表单控件增删变化；`sanitizeInputValue("email")` 在 `multiple` 分支先执行 `stripInputNewlines`。
 
 - Phase 443 (`src/js/shim/collections.js`): 在 `RadioNodeList` Proxy 的 `has` trap 中放行 `"length"` 与 `"item"`，修复 `testharness.js` `assert_array_equals` 判定失败。
+
+- Phase 444 (`src/js/shim/element/html-element.js`): 修复 Phase 441 重命名 `tag->selfTag` 后 `summary` 分支残留未定义 `tag` 导致的 `ReferenceError`。

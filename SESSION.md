@@ -7163,3 +7163,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 442] (`src/js/shim/collections.js`, `src/js/shim/element/forms/validity.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 将 `RadioNodeList` 升级为支持动态 `getter` 的活体 `Proxy`（保持 `instanceof RadioNodeList` 与 `NodeList`），并在 `HTMLFormControlsCollection` 的 `namedItem`/索引访问中返回活体 `RadioNodeList`；为 `email` + `multiple` 值净化补充 `stripInputNewlines`；`bin_dev` 编译 + CDP 探针 (`{"beforeOk":true,"afterOk":true,"emOk":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 443] (`src/js/shim/collections.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 在 `RadioNodeList` 活体 Proxy 的 `has` trap 中返回 `"length"` 与 `"item"` 为 `true`，修复 `assert_array_equals` 等基于 `"length" in nl` 的类数组判定；`bin_dev` 编译 + CDP 探针 (`{"hasLen":true,"has0":true,"len":2}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [Phase 444] (`src/js/shim/element/html-element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 将 `proto.click()` 中残留的 `else if (tag === "summary")` 修正为 `else if (selfTag === "summary")`，消除未定义变量 `ReferenceError`；`bin_dev` 编译 + CDP 探针 (`{"open1":true,"open2":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

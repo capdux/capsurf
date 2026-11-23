@@ -12853,7 +12853,7 @@
                 }
               }
             }
-          } else if (tag === "summary") {
+          } else if (selfTag === "summary") {
             const parent = this.parentElement || this.parentNode;
             if (parent && String(parent.localName || parent.tagName || "").toLowerCase() === "details") {
               const kids = parent._children || (parent.childNodes ? Array.from(parent.childNodes) : []);
