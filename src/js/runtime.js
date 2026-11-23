@@ -38508,7 +38508,10 @@
           }
         }
       } else {
-        const insetProps = ["top", "right", "bottom", "left"];
+        const insetProps = [
+          "top", "right", "bottom", "left",
+          "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end"
+        ];
         for (let i = 0; i < insetProps.length; i++) {
           const k = insetProps[i];
           const v = computedMap.get(k);
@@ -38596,6 +38599,35 @@
           if (hasHang) out += " hanging";
           if (hasEach) out += " each-line";
           computedMap.set("text-indent", out);
+        }
+      }
+      const fwRaw = (computedMap.get("font-weight") || "").trim().toLowerCase();
+      if (fwRaw) {
+        if (fwRaw === "normal") computedMap.set("font-weight", "400");
+        else if (fwRaw === "bold") computedMap.set("font-weight", "700");
+        else if (fwRaw === "bolder" || fwRaw === "lighter") {
+          let inh = 400;
+          const p = element && element.parentElement;
+          if (p) {
+            const pcs = collectRawComputedMap(p, "");
+            const pfw = (pcs.get("font-weight") || "400").trim().toLowerCase();
+            if (pfw === "bold") inh = 700;
+            else if (pfw !== "normal" && !isNaN(Number(pfw))) inh = Math.min(1000, Math.max(1, Number(pfw)));
+          }
+          let resW = inh;
+          if (fwRaw === "bolder") {
+            if (inh < 350) resW = 400;
+            else if (inh < 550) resW = 700;
+            else if (inh < 750) resW = 900;
+          } else {
+            if (inh >= 750) resW = 700;
+            else if (inh >= 550) resW = 400;
+            else if (inh >= 100) resW = 100;
+          }
+          computedMap.set("font-weight", String(resW));
+        } else if (/^calc\(/i.test(fwRaw)) {
+          const val = evalCssLengthExpr(fwRaw, 0, fontSize);
+          if (val !== null) computedMap.set("font-weight", String(Math.min(1000, Math.max(1, val))));
         }
       }
       const spProps = ["letter-spacing", "word-spacing"];

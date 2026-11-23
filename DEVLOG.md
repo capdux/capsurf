@@ -2439,3 +2439,7 @@
 ### Phase 482: `getComputedStyle` 边框简写与首行缩进计算值序列化
 - 修复 `text-indent` 对 `calc(10px + 0.5em)` 内部空格的误切分问题，并对齐 `border-style: none` 下的 `0px` 计算值规则。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 483: `getComputedStyle` 字重与逻辑偏移计算值解析
+- `font-weight` 对 `bolder`/`lighter` 沿 `parentElement` 读取原始计算字重并按 CSS Fonts 4 阶梯规则映射。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

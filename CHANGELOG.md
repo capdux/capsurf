@@ -3304,3 +3304,9 @@
   - `getShorthandComputed`: 新增 `border-width`, `border-style`, `border-color` 四边简写序列化及 `in` 检查支持。
   - `applyUsedValuesToComputedMap`: 当 `border-*-style` 为 `none` 或 `hidden` 时强制 `border-*-width` 计算为 `0px`；对 `text-indent` 进行括号感知分词、`evalCssLengthExpr` 求值及 `<len> [hanging]? [each-line]?` 规范重排。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 483: `getComputedStyle` `inset-*` 逻辑偏移与 `font-weight` 计算值解析
+- `src/js/shim/window.js`:
+  - `applyUsedValuesToComputedMap`: `insetProps` 扩充 `inset-block-start`, `inset-block-end`, `inset-inline-start`, `inset-inline-end`。
+  - `applyUsedValuesToComputedMap`: 新增 `font-weight` 计算值解析（`normal/bold` 数值化、`bolder/lighter` 依据 `parentElement` 继承字重查表、`calc(...)` 数值求值与 `[1, 1000]` 钳位）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
