@@ -7384,6 +7384,28 @@ function installWindow(global) {
         const oy = computedMap.get("overflow-y") || "visible";
         return ox === oy ? ox : (ox + " " + oy);
       }
+      if (name === "text-decoration") {
+        const tdl = computedMap.get("text-decoration-line") || "none";
+        const tds = computedMap.get("text-decoration-style") || "solid";
+        const tdt = computedMap.get("text-decoration-thickness") || "auto";
+        const tdc = computedMap.get("text-decoration-color") || "rgb(0, 0, 0)";
+        const out = [tdl];
+        if (tds !== "solid") out.push(tds);
+        if (tdt !== "auto") out.push(tdt);
+        if (tdc !== "currentcolor") out.push(tdc);
+        return out.join(" ");
+      }
+      if (name === "text-emphasis") {
+        const tes = computedMap.get("text-emphasis-style") || "none";
+        const tec = computedMap.get("text-emphasis-color") || "rgb(0, 0, 0)";
+        return tes + " " + tec;
+      }
+      if (name === "list-style") {
+        const lsp = computedMap.get("list-style-position") || "outside";
+        const lsi = computedMap.get("list-style-image") || "none";
+        const lst = computedMap.get("list-style-type") || "disc";
+        return lsp + " " + lsi + " " + lst;
+      }
       return null;
     }
 

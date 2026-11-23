@@ -3456,3 +3456,7 @@
   - `src/js/shim/cssom.js`: 新增 `SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand`，展开时移除冗余 shorthand key；新增 `text-emphasis-style` 校验与规范化。
   - `src/js/shim/element/element.js`: 新增 `removeKeyWithShorthand`，更新 `setEntryWithShorthand` 与 `lookupPropertyValue` 支持无残留双向 shorthand 序列化。
   - `src/js/shim/window.js`: `canonComputedProps` 新增 `text-emphasis-style`。
+- **Phase 510**:
+  - `src/js/shim/cssom.js`: 新增 `flex` 与 `text-emphasis` shorthand 校验、展开及反向序列化。
+  - `src/js/shim/window.js`: `getShorthandComputed` 补充 `text-decoration`、`text-emphasis`、`list-style`。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B245`（`/css/css-box/parsing/` 23/29、`/css/css-multicol/parsing/` 18/31）。

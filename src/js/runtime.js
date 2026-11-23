@@ -4999,6 +4999,23 @@
         }
         return false;
       }
+      if (prop === "text-emphasis") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length < 1 || toks.length > 3) return false;
+        const FILL = new Set(["filled", "open"]);
+        const SHAPE = new Set(["dot", "circle", "double-circle", "triangle", "sesame"]);
+        let hasFill = false, hasShape = false, hasStr = false, hasColor = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (tl === "none") { if (hasFill || hasShape || hasStr) return false; hasShape = true; }
+          else if (FILL.has(tl)) { if (hasFill || hasStr) return false; hasFill = true; }
+          else if (SHAPE.has(tl)) { if (hasShape || hasStr) return false; hasShape = true; }
+          else if (/^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t)) { if (hasFill || hasShape || hasStr) return false; hasStr = true; }
+          else if (isValidColor(t)) { if (hasColor) return false; hasColor = true; }
+          else return false;
+        }
+        return true;
+      }
       if (prop === "outline" || prop === "border" || prop === "column-rule" ||
           prop === "border-top" || prop === "border-right" || prop === "border-bottom" || prop === "border-left" ||
           prop === "border-block" || prop === "border-inline" ||
@@ -5569,6 +5586,47 @@
         }
         return [["flex-direction", dir], ["flex-wrap", wr]];
       }
+      if (key === "flex") {
+        const p = splitCssTokens(normV);
+        if (p.length === 1 && p[0].toLowerCase() === "none") {
+          return [["flex-grow", "0"], ["flex-shrink", "0"], ["flex-basis", "auto"]];
+        }
+        const nums = [];
+        let basis = "0%";
+        let hasBasis = false;
+        for (let i = 0; i < p.length; i++) {
+          const tl = p[i].toLowerCase();
+          if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/.test(tl) && tl !== "0") {
+            nums.push(String(Number(tl)));
+          } else if (tl === "0" && nums.length < 2 && !hasBasis && p.length <= 2) {
+            nums.push("0");
+          } else if (/^(?:calc|min|max|clamp)\(/i.test(tl) && nums.length < 2 && !/[a-z%]/.test(tl.replace(/^(?:calc|min|max|clamp)\(/i, ""))) {
+            nums.push(p[i]);
+          } else {
+            basis = tl === "0" ? "0px" : p[i];
+            hasBasis = true;
+          }
+        }
+        const fg = nums.length >= 1 ? nums[0] : "1";
+        const fs = nums.length >= 2 ? nums[1] : "1";
+        return [["flex-grow", fg], ["flex-shrink", fs], ["flex-basis", basis]];
+      }
+      if (key === "text-emphasis") {
+        const p = splitCssTokens(normV);
+        const styleToks = [];
+        let col = "currentcolor";
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (tl === "none" || tl === "filled" || tl === "open" || tl === "dot" || tl === "circle" ||
+              tl === "double-circle" || tl === "triangle" || tl === "sesame" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t)) {
+            styleToks.push(t);
+          } else {
+            col = t;
+          }
+        }
+        const st = styleToks.length > 0 ? normalizeCssSpecifiedValue("text-emphasis-style", styleToks.join(" ")) : "none";
+        return [["text-emphasis-style", st], ["text-emphasis-color", col]];
+      }
       if (key === "overflow") {
         const p = splitCssTokens(normV.toLowerCase());
         if (p.length === 1) return [["overflow-x", p[0]], ["overflow-y", p[0]]];
@@ -5591,6 +5649,8 @@
       "place-items": ["align-items", "justify-items"],
       "place-self": ["align-self", "justify-self"],
       "flex-flow": ["flex-direction", "flex-wrap"],
+      flex: ["flex-grow", "flex-shrink", "flex-basis"],
+      "text-emphasis": ["text-emphasis-style", "text-emphasis-color"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
       "grid-gap": ["row-gap", "column-gap"]
@@ -5623,6 +5683,13 @@
       if (key === "flex-flow") {
         if (vals[0] === "row" && vals[1] === "nowrap") return "row";
         return vals[0] === "row" ? vals[1] : (vals[1] === "nowrap" ? vals[0] : (vals[0] + " " + vals[1]));
+      }
+      if (key === "flex") {
+        return vals[0] + " " + vals[1] + " " + vals[2];
+      }
+      if (key === "text-emphasis") {
+        if (vals[1] === "currentcolor") return vals[0];
+        return vals[0] + " " + vals[1];
       }
       return vals.join(" ");
     }
@@ -39715,6 +39782,28 @@
           const ox = computedMap.get("overflow-x") || "visible";
           const oy = computedMap.get("overflow-y") || "visible";
           return ox === oy ? ox : (ox + " " + oy);
+        }
+        if (name === "text-decoration") {
+          const tdl = computedMap.get("text-decoration-line") || "none";
+          const tds = computedMap.get("text-decoration-style") || "solid";
+          const tdt = computedMap.get("text-decoration-thickness") || "auto";
+          const tdc = computedMap.get("text-decoration-color") || "rgb(0, 0, 0)";
+          const out = [tdl];
+          if (tds !== "solid") out.push(tds);
+          if (tdt !== "auto") out.push(tdt);
+          if (tdc !== "currentcolor") out.push(tdc);
+          return out.join(" ");
+        }
+        if (name === "text-emphasis") {
+          const tes = computedMap.get("text-emphasis-style") || "none";
+          const tec = computedMap.get("text-emphasis-color") || "rgb(0, 0, 0)";
+          return tes + " " + tec;
+        }
+        if (name === "list-style") {
+          const lsp = computedMap.get("list-style-position") || "outside";
+          const lsi = computedMap.get("list-style-image") || "none";
+          const lst = computedMap.get("list-style-type") || "disc";
+          return lsp + " " + lsi + " " + lst;
         }
         return null;
       }

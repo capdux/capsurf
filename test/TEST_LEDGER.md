@@ -1198,3 +1198,42 @@
 - `/css/css-lists/parsing/`: 23 total | **13 PASS (up from 12, `list-style-type-valid` green!)** | 10 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-text-decor/parsing/`: 31 total | **18 PASS (up from 15, `text-emphasis-position-*` & `text-underline-position-computed` green!)** | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **31 PASS / 23 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B240 (port=19700, Phase 506 verification, 81 tests)
+- `/css/css-text-decor/parsing/`: 31 total | **22 PASS (up from 18, `text-decoration-skip-spaces-*` & `inset-invalid` green!)** | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **57 PASS / 24 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B241 (port=19700, default ./bin/main baseline, 60 tests)
+- `/css/css-multicol/parsing/`: 31 total | 6 PASS | 25 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-box/parsing/`: 29 total | 11 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **17 PASS / 43 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B242 (port=19700, Phase 507 verification, 54 tests)
+- `/css/css-lists/parsing/`: 23 total | 13 PASS | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | 22 PASS | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **35 PASS / 19 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B243 (port=19700, Phase 508 verification, 77 tests)
+- `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | 19 PASS | 8 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **54 PASS / 23 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B244 (port=19700, Phase 509 verification, 131 tests)
+- `/css/css-lists/parsing/`: 23 total | **14 PASS (`list-style-shorthand.sub` green!)** | 9 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | **24 PASS (`text-decoration-shorthand` & `text-emphasis-style-computed` green!)** | 7 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-flexbox/parsing/`: 27 total | **21 PASS (`flex-flow-shorthand` & `flex-flow-valid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **94 PASS / 37 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 151 (port=19386, 56 tests)
+- `page-wait-for-load-state.spec.ts`: 10 total | 6 PASS | 2 FAIL | 2 TIMEOUT
+- `page-wait-for-function.spec.ts`: 26 total | 4 PASS | 3 FAIL | 19 TIMEOUT
+- `page-wait-for-navigation.spec.ts`: 12 total | 7 PASS | 0 FAIL | 5 TIMEOUT
+- `page-wait-for-request.spec.ts`: 8 total | 7 PASS | 0 FAIL | 1 TIMEOUT
+- Totals: **24 PASS / 5 FAIL / 27 TIMEOUT / 0 SKIP**
+
+### WPT-B245 (port=19700, Phase 509 verification, 60 tests)
+- `/css/css-box/parsing/`: 29 total | **23 PASS (up from 22!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-multicol/parsing/`: 31 total | **18 PASS (up from 9!)** | 13 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **41 PASS / 19 FAIL / 0 TIMEOUT / 0 CRASH**

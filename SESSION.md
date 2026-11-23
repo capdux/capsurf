@@ -7308,3 +7308,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 508 完成 (`place-*` / `flex-flow` / `overflow` / `gap` shorthand 展开)**：在 `src/js/shim/cssom.js` `expandCssShorthand` 新增 `place-content`、`place-items`、`place-self`、`flex-flow`、`overflow`、`gap`/`grid-gap` 子属性展开；`bin_dev/main` 编译通过，CDP 探针验证全部子属性展开正确，`--smoke` 3/3 PASS。
 
 - **Phase 509 完成 (`shorthand` 无残留展开与反向序列化 + `text-emphasis-style`)**：在 `src/js/shim/cssom.js` 与 `src/js/shim/element/element.js` 实现 shorthand 展开不保留冗余 shorthand key、移除时同步移除 longhands、读取时通过 `serializeExpandedShorthand` 反向拼接；新增 `text-emphasis-style` 校验与规范化并接入 `window.js` `canonComputedProps`。`bin_dev/main` 编译通过，CDP 探针验证删除 longhands 后 `style.length === 0`，`--smoke` 3/3 PASS。
+
+- **Phase 510 完成 (`flex` / `text-emphasis` shorthand 展开 + `getComputedStyle` shorthand 序列化)**：在 `src/js/shim/cssom.js` 新增 `flex` 与 `text-emphasis` 的校验、展开与反向序列化；在 `src/js/shim/window.js` `getShorthandComputed` 补充 `text-decoration`、`text-emphasis`、`list-style`。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B245`（`css-box` 23/29、`css-multicol` 18/31）。

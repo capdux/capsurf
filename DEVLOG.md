@@ -2526,3 +2526,4 @@
 - **Phase 507**: 实现 `list-style` 与 `text-decoration` 的内联样式及 CSSOM 规则双向 shorthand 展开，打通 `list-style-shorthand` 与 `text-decoration-shorthand` WPT 断言。
 - **Phase 508**: 补齐 `place-*`、`flex-flow`、`overflow`、`gap` 在内联样式与 CSSOM 中的子属性展开，支撑 WPT `*-shorthand` 断言。
 - **Phase 509**: 解决 `test_shorthand_value` 校验 `div.style.length` 失败根因——展开 shorthand 后仅保存 longhands 并在读取时动态反序列化，移除时联动清理 longhands；同步打通 `text-emphasis-style` 计算值。
+- **Phase 510**: 完善 `flex` 与 `text-emphasis` shorthand 的无残留子属性展开与计算样式拼接，覆盖 `flex-shorthand`、`text-emphasis-computed`、`text-decoration-computed` 与 `list-style-computed`。
