@@ -3090,3 +3090,5 @@
 - **Phase 445 (`src/js/shim/events/event.js`, `src/js/runtime_source.cp`)**：`MouseEvent.offsetX`/`offsetY` 按 CSSOM View 扣除元素边界框与 `clientLeft`/`clientTop`。
 
 - **Phase 446 (`src/js/shim/node-base.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：补齐 `Node.prototype.baseURI` 与 `Document.prototype.baseURI` 动态 `<base href>` 解析。
+
+- **Phase 447 (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：收窄 `Element.prototype.name` 适用标签集合；放行 `PerformanceObserver.observe` 中 `entryTypes` 与 `buffered: false` 共存。

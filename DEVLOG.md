@@ -2317,3 +2317,5 @@
 - Phase 445 (`events/event.js`): 在未显式传入 `offsetX`/`offsetY` 时，动态计算 `clientX - (rect.left + target.clientLeft)` 与 `clientY - (rect.top + target.clientTop)`。
 
 - Phase 446 (`node-base.js`, `window.js`): 抽离 `computeDocumentBaseURI` 实装 `Node.baseURI` 与 `Document.baseURI` 动态 `<base href>` 解析，修复 `base_href_specified` 与 `form-action-reflection*`。
+
+- Phase 447 (`element.js`, `window.js`): 将 `Element.prototype.name` 限制在 `ELEMENTS_WITH_NAME` 集合以修复 `nameditem-03.html`；`PerformanceObserver.observe` 仅在 `options.buffered` 为 truthy 时禁止与 `entryTypes` 混用。

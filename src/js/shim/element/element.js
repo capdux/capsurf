@@ -2961,10 +2961,26 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
-  // Universal Form & Control Properties on Element
+  // Universal Form & Control Properties on Element (only for elements that define .name in HTML)
+  const ELEMENTS_WITH_NAME = new Set([
+    "a", "button", "embed", "fieldset", "form", "frame", "frameset",
+    "iframe", "img", "input", "map", "meta", "object", "output",
+    "param", "select", "slot", "textarea",
+  ]);
   Object.defineProperty(proto, "name", {
-    get: function () { return this.getAttribute("name") || ""; },
-    set: function (v) { this.setAttribute("name", String(v)); },
+    get: function () {
+      const tag = String(this.localName || this.tagName || "").toLowerCase();
+      if (!ELEMENTS_WITH_NAME.has(tag)) return undefined;
+      return this.getAttribute("name") || "";
+    },
+    set: function (v) {
+      const tag = String(this.localName || this.tagName || "").toLowerCase();
+      if (!ELEMENTS_WITH_NAME.has(tag)) {
+        Object.defineProperty(this, "name", { value: v, writable: true, enumerable: true, configurable: true });
+        return;
+      }
+      this.setAttribute("name", String(v));
+    },
     configurable: true,
   });
 
