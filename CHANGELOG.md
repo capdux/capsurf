@@ -3298,3 +3298,9 @@
   - `getComputedStyle`: 新增 `serializeBoxShorthand` 并在 `get`/`getPropertyValue`/`has` trap 支持 `margin` 与 `padding` 简写。
   - `applyUsedValuesToComputedMap`: 对 `padding-*` 应用 `Math.max(0, px)` 非负钳位；对非 `sticky` 元素的 `top/right/bottom/left`（非 `auto` 且不含 `%`）调用 `evalCssLengthExpr` 转换为绝对像素。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 482: `getComputedStyle` `border-width/style/color` 简写与 `text-indent` 规范化
+- `src/js/shim/window.js`:
+  - `getShorthandComputed`: 新增 `border-width`, `border-style`, `border-color` 四边简写序列化及 `in` 检查支持。
+  - `applyUsedValuesToComputedMap`: 当 `border-*-style` 为 `none` 或 `hidden` 时强制 `border-*-width` 计算为 `0px`；对 `text-indent` 进行括号感知分词、`evalCssLengthExpr` 求值及 `<len> [hanging]? [each-line]?` 规范重排。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

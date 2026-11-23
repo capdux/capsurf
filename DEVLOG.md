@@ -2435,3 +2435,7 @@
 ### Phase 481: `getComputedStyle` 盒模型简写与定位偏移计算值完善
 - `margin`/`padding` 简写按四边解析结果自动合并为最短 1/2/3/4 token 形式（如 `10px 40px 60px`），同时保持 `top: -40%` 在 `static` 下保留百分比。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 482: `getComputedStyle` 边框简写与首行缩进计算值序列化
+- 修复 `text-indent` 对 `calc(10px + 0.5em)` 内部空格的误切分问题，并对齐 `border-style: none` 下的 `0px` 计算值规则。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

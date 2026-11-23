@@ -6798,9 +6798,23 @@ function installWindow(global) {
       computedMap.set("field-sizing", "fixed");
     }
     const lineWidthMap = { thin: 1, medium: 3, thick: 5 };
+    const borderSideMap = {
+      "border-top-width": "border-top-style",
+      "border-right-width": "border-right-style",
+      "border-bottom-width": "border-bottom-style",
+      "border-left-width": "border-left-style",
+    };
     const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"];
     for (let i = 0; i < lwProps.length; i++) {
       const lk = lwProps[i];
+      const bsProp = borderSideMap[lk];
+      if (bsProp) {
+        const bsVal = (computedMap.get(bsProp) || "none").trim().toLowerCase();
+        if (bsVal === "none" || bsVal === "hidden") {
+          computedMap.set(lk, "0px");
+          continue;
+        }
+      }
       const lv = (computedMap.get(lk) || "").trim().toLowerCase();
       if (!lv) continue;
       if (lv in lineWidthMap) {
@@ -6810,6 +6824,37 @@ function installWindow(global) {
         if (px !== null) {
           computedMap.set(lk, formatCssPx(Math.floor(Math.max(0, px))));
         }
+      }
+    }
+    const tiRaw = (computedMap.get("text-indent") || "").trim();
+    if (tiRaw) {
+      const tiParts = [];
+      let tiCur = "", tiD = 0;
+      for (let i = 0; i < tiRaw.length; i++) {
+        const c = tiRaw[i];
+        if (c === "(") tiD++;
+        else if (c === ")" && tiD > 0) tiD--;
+        if (tiD === 0 && /\s/.test(c)) {
+          if (tiCur) { tiParts.push(tiCur); tiCur = ""; }
+        } else tiCur += c;
+      }
+      if (tiCur) tiParts.push(tiCur);
+      let tiLen = "", hasHang = false, hasEach = false;
+      for (let i = 0; i < tiParts.length; i++) {
+        const p = tiParts[i], pl = p.toLowerCase();
+        if (pl === "hanging") hasHang = true;
+        else if (pl === "each-line") hasEach = true;
+        else tiLen = p;
+      }
+      if (tiLen && tiLen.indexOf("%") === -1) {
+        const px = evalCssLengthExpr(tiLen, 0, fontSize);
+        if (px !== null) tiLen = formatCssPx(px);
+      }
+      if (tiLen) {
+        let out = tiLen;
+        if (hasHang) out += " hanging";
+        if (hasEach) out += " each-line";
+        computedMap.set("text-indent", out);
       }
     }
     const spProps = ["letter-spacing", "word-spacing"];
@@ -6909,23 +6954,35 @@ function installWindow(global) {
       return propList[idx];
     }, "item");
 
-    function serializeBoxShorthand(prefix) {
-      const t = computedMap.get(prefix + "-top") || "0px";
-      const r = computedMap.get(prefix + "-right") || "0px";
-      const b = computedMap.get(prefix + "-bottom") || "0px";
-      const l = computedMap.get(prefix + "-left") || "0px";
+    function serializeBoxShorthand(prefix, suffix) {
+      const sfx = suffix ? "-" + suffix : "";
+      const defVal = suffix === "style" ? "none" : (suffix === "color" ? (computedMap.get("color") || "rgb(0, 0, 0)") : "0px");
+      const t = computedMap.get(prefix + "-top" + sfx) || defVal;
+      const r = computedMap.get(prefix + "-right" + sfx) || defVal;
+      const b = computedMap.get(prefix + "-bottom" + sfx) || defVal;
+      const l = computedMap.get(prefix + "-left" + sfx) || defVal;
       if (t === r && r === b && b === l) return t;
       if (r === l) return t === b ? (t + " " + r) : (t + " " + r + " " + b);
       return t + " " + r + " " + b + " " + l;
     }
 
+    function getShorthandComputed(name) {
+      if (name === "margin" || name === "padding") return serializeBoxShorthand(name, "");
+      if (name === "border-width") return serializeBoxShorthand("border", "width");
+      if (name === "border-style") return serializeBoxShorthand("border", "style");
+      if (name === "border-color") return serializeBoxShorthand("border", "color");
+      return null;
+    }
+
     declTarget.getPropertyValue = markNative(function (prop) {
       const p = String(prop).trim();
-      if (p === "margin" || p === "padding") return serializeBoxShorthand(p);
+      const sh = getShorthandComputed(p);
+      if (sh !== null) return sh;
       if (computedMap.has(p)) return computedMap.get(p);
       if (p.startsWith("--")) return "";
       const lower = p.toLowerCase();
-      if (lower === "margin" || lower === "padding") return serializeBoxShorthand(lower);
+      const shL = getShorthandComputed(lower);
+      if (shL !== null) return shL;
       if (computedMap.has(lower)) return computedMap.get(lower);
       return "";
     }, "getPropertyValue");
@@ -6966,11 +7023,14 @@ function installWindow(global) {
         if (typeof prop === "symbol") return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
-          if (prop === "margin" || prop === "padding") return serializeBoxShorthand(prop);
+          const shDirect = getShorthandComputed(prop);
+          if (shDirect !== null) return shDirect;
           if (prop === "cssFloat") return computedMap.get("float") || "";
           if (computedMap.has(prop)) return computedMap.get(prop);
           if (prop.startsWith("--")) return "";
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+          const shKebab = getShorthandComputed(kebab);
+          if (shKebab !== null) return shKebab;
           if (computedMap.has(kebab)) return computedMap.get(kebab);
           const lower = prop.toLowerCase();
           if (computedMap.has(lower)) return computedMap.get(lower);
@@ -6984,9 +7044,10 @@ function installWindow(global) {
       has: function (target, prop) {
         if (prop in target) return true;
         if (typeof prop === "string") {
-          if (prop === "cssFloat" || prop === "margin" || prop === "padding") return true;
+          if (prop === "cssFloat" || getShorthandComputed(prop) !== null) return true;
           if (propSet.has(prop) || computedMap.has(prop)) return true;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+          if (getShorthandComputed(kebab) !== null) return true;
           if (propSet.has(kebab) || computedMap.has(kebab)) return true;
         }
         return false;
