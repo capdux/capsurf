@@ -9,7 +9,7 @@
 1. **方法接收者与可见性**：
    - 彻底废除 `self`/`this`（`E0121`）。方法体内访问当前实例统一用 `_`；
    - 只读方法**省略首参** `fn foo(): T`（形参写 `(_)` 报 `E0123`）；可变修改首参写 `*_`（如 `fn set(*_, val: i32)`）；消耗所有权首参写 `move _` 或 `own _`；
-   - **`struct` / `enum` 内部成员与方法默认全部 `pub`**（内部直接写 `fn` / `static fn`，**严禁**写冗余 `pub`）；**`class` 成员默认 `priv`**（公开成员/方法才加 `pub`）；`static class`/`static struct` 严禁实例化与声明 `init`/`~init`/`extends`。
+   - **`struct` / `enum` 内部成员与方法默认全部 `pub`**（内部直接写 `fn` / `static fn`，**严禁**写冗余 `pub`）；**`class` 成员默认 `priv`**（公开成员/方法才加 `pub`）；`static class`/`static struct` 严禁实例化与声明 `init`/`~init`/`extends`；**混合容器支持 `static { ... }` 分组块**（块内字段与方法自动全部 `static`，无需逐行重复写 `static`，严禁在块内声明 `init`/`~init`/`_`；若对非静态方法误写 `Type.method(...)` 无首参调用将触发 `E0219`）。
 2. **变量声明、形参契约、直接赋值三态与五态解构（2026-11-21 升级）**：
    - 变量声明仅用 `const`（只读）、`let`（可变）、`@tls let`（彻底废除 `var`/`let mut`/`threadlocal var`）；抛弃返回值统一写 `* = expr;`（严禁 `_ = expr;` / `let _ = expr;`，`E0120`）；
    - **形参契约**：只读 `v: T`；安全可变 `v: *T`（编译器自动推导值拷贝或可变借用；**牢记 `*T` 是借用，绝非裸指针**）；所有权转移 `move v: T`；跨线程独占所有权 `own v: T`（自动析构，可作结构成员）；**绝对禁手**：严禁 `*v: T`、`mut v: T`、`let v: T`、`v: move T`（`E0104`/`E0125`）；

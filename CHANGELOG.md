@@ -3554,4 +3554,7 @@
 
 - **Phase 548** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 支持 `line-clamp`（正整数、`auto`、`block-ellipsis` 与 `-webkit-legacy`）、`max-lines`、`overflow-clip-margin` 解析及 `overflow` 计算期 `visible->auto` 映射；导出 `__capsurf_splitCssTokens`；WPT `/css/css-overflow/parsing/` 达 32/32 (100% MATCHED)。
 
+- **Phase 549** (`src/html/tokenizer.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 修复 HTML5 Tokenizer 中孤立 `&` 在 Data/RcData 模式下的死循环；实现 `contain`（规范序与计算值 `strict`/`content` 归纳）、`content-visibility`、`contain-intrinsic-*` 展开与解析，以及 `css-sizing`（`min/max-width/height`、`box-sizing`、`aspect-ratio`）全量计算值解析；WPT 5 大套件共 34/34 个用例 100% 全绿。
+
+
 

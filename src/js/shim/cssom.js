@@ -239,6 +239,79 @@
     return out;
   }
 
+  function isIntrinsicLength(t) {
+    if (!t || typeof t !== "string") return false;
+    const tl = t.toLowerCase().trim();
+    if (tl.includes("%")) return false;
+    if (/^-[0-9]/.test(tl)) return false;
+    if (/^(?:calc|min|max|clamp)\(/i.test(tl)) return true;
+    return /^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)?$/i.test(tl) && (tl === "0" || tl === "+0" || !/^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl));
+  }
+
+  function parseSingleIntrinsic(toks) {
+    if (!toks || toks.length === 0) return null;
+    if (toks.length === 1) {
+      const t = toks[0].toLowerCase();
+      if (t === "none") return "none";
+      if (isIntrinsicLength(t)) return toks[0];
+      return null;
+    }
+    if (toks.length === 2) {
+      if (toks[0].toLowerCase() === "auto") {
+        const t1 = toks[1].toLowerCase();
+        if (t1 === "none") return "auto none";
+        if (isIntrinsicLength(t1)) return "auto " + toks[1];
+      }
+      return null;
+    }
+    return null;
+  }
+
+  function parseContainIntrinsicSize(str) {
+    const toks = splitCssTokens(String(str || "").trim());
+    if (toks.length === 0) return null;
+    if (toks.length === 1) {
+      const it = parseSingleIntrinsic([toks[0]]);
+      return it ? [it, it] : null;
+    }
+    if (toks.length === 2) {
+      if (toks[0].toLowerCase() === "auto") {
+        const it = parseSingleIntrinsic(toks);
+        return it ? [it, it] : null;
+      }
+      const it1 = parseSingleIntrinsic([toks[0]]);
+      const it2 = parseSingleIntrinsic([toks[1]]);
+      if (it1 && it2) return [it1, it2];
+      return null;
+    }
+    if (toks.length === 3) {
+      if (toks[0].toLowerCase() === "auto") {
+        const it1 = parseSingleIntrinsic([toks[0], toks[1]]);
+        const it2 = parseSingleIntrinsic([toks[2]]);
+        if (it1 && it2) return [it1, it2];
+        return null;
+      } else if (toks[1].toLowerCase() === "auto") {
+        const it1 = parseSingleIntrinsic([toks[0]]);
+        const it2 = parseSingleIntrinsic([toks[1], toks[2]]);
+        if (it1 && it2) return [it1, it2];
+        return null;
+      }
+      return null;
+    }
+    if (toks.length === 4) {
+      if (toks[0].toLowerCase() === "auto" && toks[2].toLowerCase() === "auto") {
+        const it1 = parseSingleIntrinsic([toks[0], toks[1]]);
+        const it2 = parseSingleIntrinsic([toks[2], toks[3]]);
+        if (it1 && it2) return [it1, it2];
+        return null;
+      }
+      return null;
+    }
+    return null;
+  }
+  global.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
+
   function isValidCssValue(prop, value) {
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
@@ -349,6 +422,7 @@
       "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
       "scrollbar-width": ["auto", "thin", "none"],
       "field-sizing": ["fixed", "content"],
+      "content-visibility": ["visible", "auto", "hidden"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1405,6 +1479,49 @@
       }
       return true;
     }
+    if (prop === "contain") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0) return false;
+      if (toks.length === 1) {
+        const t0 = toks[0].toLowerCase();
+        if (t0 === "none" || t0 === "strict" || t0 === "content") return true;
+      }
+      let hasSize = false;
+      let hasInlineSize = false;
+      let hasLayout = false;
+      let hasStyle = false;
+      let hasPaint = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i].toLowerCase();
+        if (t === "size") {
+          if (hasSize || hasInlineSize) return false;
+          hasSize = true;
+        } else if (t === "inline-size") {
+          if (hasSize || hasInlineSize) return false;
+          hasInlineSize = true;
+        } else if (t === "layout") {
+          if (hasLayout) return false;
+          hasLayout = true;
+        } else if (t === "style") {
+          if (hasStyle) return false;
+          hasStyle = true;
+        } else if (t === "paint") {
+          if (hasPaint) return false;
+          hasPaint = true;
+        } else {
+          return false;
+        }
+      }
+      return hasSize || hasInlineSize || hasLayout || hasStyle || hasPaint;
+    }
+    if (prop === "contain-intrinsic-size") {
+      return parseContainIntrinsicSize(trimmed) !== null;
+    }
+    if (prop === "contain-intrinsic-width" || prop === "contain-intrinsic-height" ||
+        prop === "contain-intrinsic-inline-size" || prop === "contain-intrinsic-block-size") {
+      const toks = splitCssTokens(trimmed);
+      return parseSingleIntrinsic(toks) !== null;
+    }
     if (prop === "block-ellipsis") {
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
@@ -2455,6 +2572,44 @@
       }
       return box + " " + len;
     }
+    if (key === "contain") {
+      const toks = splitCssTokens(s);
+      if (toks.length === 1) {
+        const t0 = toks[0].toLowerCase();
+        if (t0 === "none" || t0 === "strict" || t0 === "content") return t0;
+      }
+      let hasSize = false;
+      let hasInlineSize = false;
+      let hasLayout = false;
+      let hasStyle = false;
+      let hasPaint = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i].toLowerCase();
+        if (t === "size") hasSize = true;
+        else if (t === "inline-size") hasInlineSize = true;
+        else if (t === "layout") hasLayout = true;
+        else if (t === "style") hasStyle = true;
+        else if (t === "paint") hasPaint = true;
+      }
+      const parts = [];
+      if (hasSize) parts.push("size");
+      else if (hasInlineSize) parts.push("inline-size");
+      if (hasLayout) parts.push("layout");
+      if (hasStyle) parts.push("style");
+      if (hasPaint) parts.push("paint");
+      return parts.length > 0 ? parts.join(" ") : s;
+    }
+    if (key === "contain-intrinsic-size") {
+      const p = parseContainIntrinsicSize(s);
+      if (!p) return s;
+      return p[0] === p[1] ? p[0] : (p[0] + " " + p[1]);
+    }
+    if (key === "contain-intrinsic-width" || key === "contain-intrinsic-height" ||
+        key === "contain-intrinsic-inline-size" || key === "contain-intrinsic-block-size") {
+      const toks = splitCssTokens(s);
+      const single = parseSingleIntrinsic(toks);
+      return single !== null ? single : s;
+    }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
@@ -2775,6 +2930,11 @@
         ? [["outline-color", c], ["outline-style", st], ["outline-width", w]]
         : [["column-rule-width", w], ["column-rule-style", st], ["column-rule-color", c]];
     }
+    if (key === "contain-intrinsic-size") {
+      const p = parseContainIntrinsicSize(normV);
+      if (!p) return null;
+      return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
+    }
     return null;
   }
   global.__capsurf_expandShorthand = expandCssShorthand;
@@ -2798,7 +2958,8 @@
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
     overflow: ["overflow-x", "overflow-y"],
     gap: ["row-gap", "column-gap"],
-    "grid-gap": ["row-gap", "column-gap"]
+    "grid-gap": ["row-gap", "column-gap"],
+    "contain-intrinsic-size": ["contain-intrinsic-width", "contain-intrinsic-height"]
   };
   global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -2826,7 +2987,7 @@
       if (vals[2] !== "disc") out.push(vals[2]);
       return out.length > 0 ? out.join(" ") : "outside";
     }
-    if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap") {
+    if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
     }
     if (key === "flex-flow") {

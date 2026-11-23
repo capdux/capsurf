@@ -7407,4 +7407,19 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 ### 2026-11-23 Phase 548 (`line-clamp`/`max-lines`/`overflow-clip-margin` 解析与 `overflow` 级联计算全面打通)
 - **[Agent]**: 完成 Phase 548：在 `cssom.js` 扩展 `line-clamp`（支持正整数、`auto`、`block-ellipsis` 组合及 `-webkit-legacy` 语法）、`max-lines`（正整数与 `auto` 组合）、`overflow-clip-margin`（盒模型与长度组合及百分比拦截）；在 `window.js` 实现 `overflow-clip-margin` 计算期 px 化与 `overflow-x`/`overflow-y` 规则（`visible` 在另一轴非 `visible`/`clip` 时计算为 `auto`）；WPT `/css/css-overflow/parsing/` 达到 32/32 全量符合基线预期（100% MATCHED），`page-keyboard.spec.ts` 达 38/44 通过；CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
 
+### 2026-11-24 Phase 549 (HTML5 Tokenizer 死循环根治、`contain` 与 `contain-intrinsic-size` 及 `css-sizing` 全量解析闭环)
+- **[Agent]**: 完成 Phase 549：
+  1. 修复 `src/html/tokenizer.cp` 中 `State.Data` 与 `State.RcData` 处理孤立 `&` 实体解析失败时，因起始下标等于 `&` 导致 while 循环首轮 break 且未步进指针引发的严重死循环。
+  2. 在 `src/js/shim/cssom.js` 补齐 `contain` 规范化与严格合法性校验（规范序 `[size | inline-size] layout style paint`）、`content-visibility` 关键字；实现 `contain-intrinsic-size` 展开至宽高长手属性、长手属性校验（`none`、`<length>`、`auto <length>`、`auto none`）及序列化去重。
+  3. 在 `src/js/shim/window.js` 实现计算期 `contain`（`strict`/`content` 规约且不继承）、`content-visibility`（默认 `visible`）、`contain-intrinsic-*` 长度 px 化；在 `applyUsedValuesToComputedMap` 中实现 `min-width`、`max-width`、`min-height`、`max-height` 确定性相对单位（`em`/`rem`/`vw`/`vh`/`calc()`）向 px 的计算解析（保留百分比 `%` 与 `fit-content` 表达式）；支持 `display: none` 元素上确定性尺寸的直接计算。
+  4. WPT 测试全绿验收：
+     - `/css/css-contain/parsing/`: 4/4 (100% PASS)
+     - `/css/css-contain/content-visibility/`: 4/4 (100% PASS)
+     - `/css/css-sizing/contain-intrinsic-size/parsing/`: 3/3 (100% PASS)
+     - `/css/css-sizing/parsing/`: 19/19 (100% PASS)
+     - `/css/css-sizing/aspect-ratio/parsing/`: 3/3 (100% PASS)
+     - 累计 34/34 个 WPT 测试用例 100% 全部通过。
+  5. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+
 

@@ -2620,4 +2620,18 @@
 - WPT `/css/css-overflow/parsing/` 达到 32/32 全量符合基线预期（100% MATCHED）。
 - Playwright `page-keyboard.spec.ts` 44 个测试达成 38 通过。
 
+### Phase 549: HTML5 Tokenizer 死循环根治、`contain` 与 `contain-intrinsic-size` 及 `css-sizing` 全量解析闭环
+- **HTML5 Tokenizer 死循环修复**：在 `src/html/tokenizer.cp` 中，`State.Data` 与 `State.RcData` 遇到孤立的 `&`（例如 `<title>CSS Intrinsic & Extrinsic Sizing: ...</title>`）且未构成命名/数字实体时，`decodeEntity` 返回 `null`。原逻辑在未步进 `pos` 的情况下直接执行 `while (c == '<' || c == '&') break;`，导致在起始字符即发生中断，`pos` 无法递增从而死循环耗尽超时。修复后在未命中实体时将裸 `&` 正常作为文本处理并步进下标。
+- **`contain` 规范序与级联归纳**：按 W3C CSS Containment Module Level 3 标准，严格校验语法 `none | strict | content | [ [ size | inline-size ] || layout || style || paint ]` 并按规范序序列化；在计算期将四元组 `size layout style paint` 归约计算为 `strict`，三元组 `layout style paint` 归约计算为 `content`；规范约束子元素绝不继承容器的 `contain` 属性。
+- **`contain-intrinsic-size` 与长手展开**：完整支持简写属性及其在宽高/行内/块向的长手展开映射；长手属性支持 `none`、`<length>`、`auto <length>` 与 `auto none`；对双值一致的简写值执行去重序列化。
+- **`css-sizing` 计算期确定性尺寸解析**：在 `applyUsedValuesToComputedMap` 中解析 `min-width`、`max-width`、`min-height`、`max-height` 上的相对长度单位（`em`/`rem`/`vw`/`vh` 及非负 `calc()` 计算值），同时对百分比 `%` 及 `fit-content` 内嵌计算式按规范保留；对无布局框（`display: none`）元素上独立于布局的确定性视口/绝对尺寸同样提供准确的绝对长度计算值，支撑如 `length_ref` 等测试桩的对比断言。
+- **WPT 测试结果**：
+  - `/css/css-contain/parsing/`: 4/4 PASS
+  - `/css/css-contain/content-visibility/`: 4/4 PASS
+  - `/css/css-sizing/contain-intrinsic-size/parsing/`: 3/3 PASS
+  - `/css/css-sizing/parsing/`: 19/19 PASS
+  - `/css/css-sizing/aspect-ratio/parsing/`: 3/3 PASS
+  - 累计 34/34 用例 100% 全绿通过。
+
+
 

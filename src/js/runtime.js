@@ -4029,6 +4029,79 @@
       return out;
     }
 
+    function isIntrinsicLength(t) {
+      if (!t || typeof t !== "string") return false;
+      const tl = t.toLowerCase().trim();
+      if (tl.includes("%")) return false;
+      if (/^-[0-9]/.test(tl)) return false;
+      if (/^(?:calc|min|max|clamp)\(/i.test(tl)) return true;
+      return /^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)?$/i.test(tl) && (tl === "0" || tl === "+0" || !/^(?:\+)?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl));
+    }
+
+    function parseSingleIntrinsic(toks) {
+      if (!toks || toks.length === 0) return null;
+      if (toks.length === 1) {
+        const t = toks[0].toLowerCase();
+        if (t === "none") return "none";
+        if (isIntrinsicLength(t)) return toks[0];
+        return null;
+      }
+      if (toks.length === 2) {
+        if (toks[0].toLowerCase() === "auto") {
+          const t1 = toks[1].toLowerCase();
+          if (t1 === "none") return "auto none";
+          if (isIntrinsicLength(t1)) return "auto " + toks[1];
+        }
+        return null;
+      }
+      return null;
+    }
+
+    function parseContainIntrinsicSize(str) {
+      const toks = splitCssTokens(String(str || "").trim());
+      if (toks.length === 0) return null;
+      if (toks.length === 1) {
+        const it = parseSingleIntrinsic([toks[0]]);
+        return it ? [it, it] : null;
+      }
+      if (toks.length === 2) {
+        if (toks[0].toLowerCase() === "auto") {
+          const it = parseSingleIntrinsic(toks);
+          return it ? [it, it] : null;
+        }
+        const it1 = parseSingleIntrinsic([toks[0]]);
+        const it2 = parseSingleIntrinsic([toks[1]]);
+        if (it1 && it2) return [it1, it2];
+        return null;
+      }
+      if (toks.length === 3) {
+        if (toks[0].toLowerCase() === "auto") {
+          const it1 = parseSingleIntrinsic([toks[0], toks[1]]);
+          const it2 = parseSingleIntrinsic([toks[2]]);
+          if (it1 && it2) return [it1, it2];
+          return null;
+        } else if (toks[1].toLowerCase() === "auto") {
+          const it1 = parseSingleIntrinsic([toks[0]]);
+          const it2 = parseSingleIntrinsic([toks[1], toks[2]]);
+          if (it1 && it2) return [it1, it2];
+          return null;
+        }
+        return null;
+      }
+      if (toks.length === 4) {
+        if (toks[0].toLowerCase() === "auto" && toks[2].toLowerCase() === "auto") {
+          const it1 = parseSingleIntrinsic([toks[0], toks[1]]);
+          const it2 = parseSingleIntrinsic([toks[2], toks[3]]);
+          if (it1 && it2) return [it1, it2];
+          return null;
+        }
+        return null;
+      }
+      return null;
+    }
+    global.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
+
     function isValidCssValue(prop, value) {
       if (typeof value !== "string") value = String(value);
       const trimmed = value.trim();
@@ -4139,6 +4212,7 @@
         "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
         "scrollbar-width": ["auto", "thin", "none"],
         "field-sizing": ["fixed", "content"],
+        "content-visibility": ["visible", "auto", "hidden"],
       };
       const allowedKeywords = KEYWORD_CSS_PROPS[prop];
       if (allowedKeywords) {
@@ -5195,6 +5269,49 @@
         }
         return true;
       }
+      if (prop === "contain") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0) return false;
+        if (toks.length === 1) {
+          const t0 = toks[0].toLowerCase();
+          if (t0 === "none" || t0 === "strict" || t0 === "content") return true;
+        }
+        let hasSize = false;
+        let hasInlineSize = false;
+        let hasLayout = false;
+        let hasStyle = false;
+        let hasPaint = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i].toLowerCase();
+          if (t === "size") {
+            if (hasSize || hasInlineSize) return false;
+            hasSize = true;
+          } else if (t === "inline-size") {
+            if (hasSize || hasInlineSize) return false;
+            hasInlineSize = true;
+          } else if (t === "layout") {
+            if (hasLayout) return false;
+            hasLayout = true;
+          } else if (t === "style") {
+            if (hasStyle) return false;
+            hasStyle = true;
+          } else if (t === "paint") {
+            if (hasPaint) return false;
+            hasPaint = true;
+          } else {
+            return false;
+          }
+        }
+        return hasSize || hasInlineSize || hasLayout || hasStyle || hasPaint;
+      }
+      if (prop === "contain-intrinsic-size") {
+        return parseContainIntrinsicSize(trimmed) !== null;
+      }
+      if (prop === "contain-intrinsic-width" || prop === "contain-intrinsic-height" ||
+          prop === "contain-intrinsic-inline-size" || prop === "contain-intrinsic-block-size") {
+        const toks = splitCssTokens(trimmed);
+        return parseSingleIntrinsic(toks) !== null;
+      }
       if (prop === "block-ellipsis") {
         const toks = splitCssTokens(trimmed);
         if (toks.length !== 1) return false;
@@ -6245,6 +6362,44 @@
         }
         return box + " " + len;
       }
+      if (key === "contain") {
+        const toks = splitCssTokens(s);
+        if (toks.length === 1) {
+          const t0 = toks[0].toLowerCase();
+          if (t0 === "none" || t0 === "strict" || t0 === "content") return t0;
+        }
+        let hasSize = false;
+        let hasInlineSize = false;
+        let hasLayout = false;
+        let hasStyle = false;
+        let hasPaint = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i].toLowerCase();
+          if (t === "size") hasSize = true;
+          else if (t === "inline-size") hasInlineSize = true;
+          else if (t === "layout") hasLayout = true;
+          else if (t === "style") hasStyle = true;
+          else if (t === "paint") hasPaint = true;
+        }
+        const parts = [];
+        if (hasSize) parts.push("size");
+        else if (hasInlineSize) parts.push("inline-size");
+        if (hasLayout) parts.push("layout");
+        if (hasStyle) parts.push("style");
+        if (hasPaint) parts.push("paint");
+        return parts.length > 0 ? parts.join(" ") : s;
+      }
+      if (key === "contain-intrinsic-size") {
+        const p = parseContainIntrinsicSize(s);
+        if (!p) return s;
+        return p[0] === p[1] ? p[0] : (p[0] + " " + p[1]);
+      }
+      if (key === "contain-intrinsic-width" || key === "contain-intrinsic-height" ||
+          key === "contain-intrinsic-inline-size" || key === "contain-intrinsic-block-size") {
+        const toks = splitCssTokens(s);
+        const single = parseSingleIntrinsic(toks);
+        return single !== null ? single : s;
+      }
       if (key === "text-decoration-line") {
         const p = splitCssTokens(s.toLowerCase());
         if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
@@ -6565,6 +6720,11 @@
           ? [["outline-color", c], ["outline-style", st], ["outline-width", w]]
           : [["column-rule-width", w], ["column-rule-style", st], ["column-rule-color", c]];
       }
+      if (key === "contain-intrinsic-size") {
+        const p = parseContainIntrinsicSize(normV);
+        if (!p) return null;
+        return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
+      }
       return null;
     }
     global.__capsurf_expandShorthand = expandCssShorthand;
@@ -6588,7 +6748,8 @@
       "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
-      "grid-gap": ["row-gap", "column-gap"]
+      "grid-gap": ["row-gap", "column-gap"],
+      "contain-intrinsic-size": ["contain-intrinsic-width", "contain-intrinsic-height"]
     };
     global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -6616,7 +6777,7 @@
         if (vals[2] !== "disc") out.push(vals[2]);
         return out.length > 0 ? out.join(" ") : "outside";
       }
-      if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap") {
+      if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
         return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
       }
       if (key === "flex-flow") {
@@ -40274,6 +40435,114 @@
       if (!computedMap.has("display")) {
         computedMap.set("display", disp);
       }
+      if (!computedMap.has("content-visibility")) {
+        computedMap.set("content-visibility", "visible");
+      }
+      if (!computedMap.has("contain")) {
+        computedMap.set("contain", "none");
+      } else {
+        const cRaw = String(computedMap.get("contain") || "").trim();
+        const toks = typeof globalThis.__capsurf_splitCssTokens === "function"
+          ? globalThis.__capsurf_splitCssTokens(cRaw)
+          : cRaw.toLowerCase().split(/\s+/).filter(Boolean);
+        if (toks.length === 1 && (toks[0] === "none" || toks[0] === "strict" || toks[0] === "content")) {
+          computedMap.set("contain", toks[0]);
+        } else {
+          let hasSize = false;
+          let hasInlineSize = false;
+          let hasLayout = false;
+          let hasStyle = false;
+          let hasPaint = false;
+          for (let i = 0; i < toks.length; i++) {
+            const t = toks[i].toLowerCase();
+            if (t === "size") hasSize = true;
+            else if (t === "inline-size") hasInlineSize = true;
+            else if (t === "layout") hasLayout = true;
+            else if (t === "style") hasStyle = true;
+            else if (t === "paint") hasPaint = true;
+          }
+          if (hasSize && hasLayout && hasStyle && hasPaint) {
+            computedMap.set("contain", "strict");
+          } else if (!hasSize && !hasInlineSize && hasLayout && hasStyle && hasPaint) {
+            computedMap.set("contain", "content");
+          } else {
+            const parts = [];
+            if (hasSize) parts.push("size");
+            else if (hasInlineSize) parts.push("inline-size");
+            if (hasLayout) parts.push("layout");
+            if (hasStyle) parts.push("style");
+            if (hasPaint) parts.push("paint");
+            computedMap.set("contain", parts.length > 0 ? parts.join(" ") : "none");
+          }
+        }
+      }
+      const intrinsicProps = ["contain-intrinsic-width", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-block-size"];
+      for (let ip = 0; ip < intrinsicProps.length; ip++) {
+        const pk = intrinsicProps[ip];
+        if (!computedMap.has(pk)) {
+          computedMap.set(pk, "none");
+        } else {
+          const raw = String(computedMap.get(pk) || "").trim();
+          const toks = raw.split(/\s+/).filter(Boolean);
+          if (toks.length === 1) {
+            const t0 = toks[0].toLowerCase();
+            if (t0 === "none") {
+              computedMap.set(pk, "none");
+            } else {
+              const px = evalCssLengthExpr(t0, 0, 16);
+              computedMap.set(pk, px !== null ? formatCssPx(px) : t0);
+            }
+          } else if (toks.length === 2 && toks[0].toLowerCase() === "auto") {
+            const t1 = toks[1].toLowerCase();
+            if (t1 === "none") {
+              computedMap.set(pk, "auto none");
+            } else {
+              const px = evalCssLengthExpr(t1, 0, 16);
+              computedMap.set(pk, px !== null ? ("auto " + formatCssPx(px)) : ("auto " + t1));
+            }
+          }
+        }
+      }
+
+      if (!computedMap.has("font-size") && computedMap.has("font")) {
+        const fm = String(computedMap.get("font") || "").match(/(?:^|\s)([+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|%))(?=\s|\/|$)/i);
+        if (fm) computedMap.set("font-size", fm[1]);
+      }
+      const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+
+      function resolveMinMaxSizing(val, fSize) {
+        if (!val || typeof val !== "string") return val;
+        const s = val.trim();
+        if (s === "none" || s === "auto" || s === "min-content" || s === "max-content") return s;
+        const fm = s.match(/^fit-content\((.*)\)$/i);
+        if (fm) {
+          const inner = fm[1].trim();
+          if (!inner.includes("%") && (inner.includes("(") || /em|rem|vw|vh|pt/i.test(inner))) {
+            const px = evalCssLengthExpr(inner, null, fSize);
+            if (px !== null && isFinite(px)) {
+              return "fit-content(" + formatCssPx(Math.max(0, px)) + ")";
+            }
+          }
+          return s;
+        }
+        if (s.includes("%")) return s;
+        if (s.startsWith("calc(") || /em|rem|vw|vh|pt/i.test(s)) {
+          const px = evalCssLengthExpr(s, null, fSize);
+          if (px !== null && isFinite(px)) {
+            return formatCssPx(Math.max(0, px));
+          }
+        }
+        return s;
+      }
+
+      const minMaxProps = ["min-width", "max-width", "min-height", "max-height"];
+      for (let mi = 0; mi < minMaxProps.length; mi++) {
+        const mp = minMaxProps[mi];
+        const mv = computedMap.get(mp);
+        if (mv) {
+          computedMap.set(mp, resolveMinMaxSizing(mv, fontSize));
+        }
+      }
 
       // min-width / min-height: auto resolves to 0px outside flex/grid parent
       const parentEl = element.parentElement || element.parentNode;
@@ -40295,6 +40564,18 @@
       }
 
       if (!hasLayoutBox(element, computedMap)) {
+        // For elements without a layout box (e.g. display: none), resolve definite non-percentage length expressions
+        const boxSizingProps = ["width", "height", "min-width", "max-width", "min-height", "max-height"];
+        for (let bi = 0; bi < boxSizingProps.length; bi++) {
+          const bp = boxSizingProps[bi];
+          const bv = computedMap.get(bp);
+          if (bv && bv !== "auto" && bv !== "none" && !bv.includes("%")) {
+            const px = evalCssLengthExpr(bv, null, fontSize);
+            if (px !== null && isFinite(px)) {
+              computedMap.set(bp, formatCssPx(px));
+            }
+          }
+        }
         return;
       }
 
@@ -40308,11 +40589,6 @@
         pos !== "absolute" &&
         pos !== "fixed";
 
-      if (!computedMap.has("font-size") && computedMap.has("font")) {
-        const fm = String(computedMap.get("font") || "").match(/(?:^|\s)([+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|%))(?=\s|\/|$)/i);
-        if (fm) computedMap.set("font-size", fm[1]);
-      }
-      const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
       const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
 
       // Resolve width for elements with a box (except non-replaced inline)
@@ -41421,7 +41697,8 @@
       "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
       "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
-      "content", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
+      "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
+      "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
@@ -41530,6 +41807,11 @@
         }
         if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
         if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
+        if (name === "contain-intrinsic-size") {
+          const w = computedMap.get("contain-intrinsic-width") || "none";
+          const h = computedMap.get("contain-intrinsic-height") || "none";
+          return w === h ? w : (w + " " + h);
+        }
         if (name === "place-content" || name === "place-items" || name === "place-self") {
           const kind = name.slice(6);
           const def = kind === "self" ? "auto" : "normal";
@@ -41638,6 +41920,12 @@
         const shL = getShorthandComputed(lower);
         if (shL !== null) return shL;
         if (computedMap.has(lower)) return computedMap.get(lower);
+        if (lower === "contain") return "none";
+        if (lower === "content-visibility") return "visible";
+        if (lower.startsWith("contain-intrinsic-")) {
+          if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
+          return "none";
+        }
         return "";
       }, "getPropertyValue");
 

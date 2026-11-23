@@ -4,5 +4,9 @@
   "type": "module",
   "imports": {
     "#cloudflare-test": "./test/e2e/shim/cloudflare-test.ts"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0",
+    "puppeteer-core": "^25.18.1"
   }
 }

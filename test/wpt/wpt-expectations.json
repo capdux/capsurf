@@ -2390,11 +2390,11 @@
     "reason": null
   },
   "/css/css-contain/content-visibility/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-contain/content-visibility/parsing/content-visibility-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-contain/content-visibility/parsing/content-visibility-invalid.html": {
@@ -2402,7 +2402,7 @@
     "reason": null
   },
   "/css/css-contain/content-visibility/parsing/content-visibility-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-contain/inheritance.html": {
@@ -2414,7 +2414,7 @@
     "reason": null
   },
   "/css/css-contain/parsing/contain-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-contain/parsing/contain-invalid.html": {
@@ -2422,7 +2422,7 @@
     "reason": null
   },
   "/css/css-contain/parsing/contain-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-content/inheritance.html": {

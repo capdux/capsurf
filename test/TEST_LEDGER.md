@@ -1534,4 +1534,13 @@
 ### WPT-B307 (bin_dev Phase 548, 2026-11-23)
 - **Filter `/css/css-overflow/parsing/`**: `32` files (**21 PASS / 11 FAIL / 0 TIMEOUT / 0 ERROR**, `32/32` matched expectations, **100% MATCHED**!); `block-ellipsis-*` PASS, `continue-*` PASS, `line-clamp-*` PASS, `max-lines-*` PASS, `overflow-clip-margin.html` PASS, `overflow-{valid,computed,invalid}` PASS, `scrollbar-gutter-*` PASS, `text-overflow-*` PASS, `webkit-line-clamp-*` PASS.
 
+### WPT-B308 (bin_dev Phase 549, 2026-11-24)
+- **HTML5 Tokenizer Crash/Hang Fix (`src/html/tokenizer.cp`)**: 修复 `State.Data` 与 `State.RcData` 中遇到未转义 `&`（如 `<title>CSS Intrinsic & Extrinsic Sizing: ...</title>`）且 `decodeEntity` 返回 `null` 时死循环悬停崩溃的严重缺陷。
+- **Filter `/css/css-contain/parsing/`**: `4` files (**4 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `4/4` matched expectations, **100% ALL GREEN**!); `contain-computed-children.html`, `contain-computed.html`, `contain-invalid.html`, `contain-valid.html` 全绿通过。
+- **Filter `/css/css-contain/content-visibility/`**: `4` files (**4 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `content-visibility-computed.html`, `content-visibility-invalid.html`, `content-visibility-valid.html`, `inheritance.html` 全绿通过。
+- **Filter `/css/css-sizing/contain-intrinsic-size/parsing/`**: `3` files (**3 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `3/3` matched expectations, **100% ALL GREEN**!); `contain-intrinsic-size-computed.html`, `contain-intrinsic-size-invalid.html`, `contain-intrinsic-size-valid.html` 全绿通过。
+- **Filter `/css/css-sizing/parsing/`**: `19` files (**19 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `19/19` matched expectations, **100% ALL GREEN**!); `box-sizing-*`, `height-*`, `width-*`, `min-width-*`, `max-width-*`, `min-height-*`, `max-height-*` 全绿通过。
+- **Filter `/css/css-sizing/aspect-ratio/parsing/`**: `3` files (**3 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `aspect-ratio-computed.html`, `aspect-ratio-invalid.html`, `aspect-ratio-valid.html` 全绿通过。
+
+
 

@@ -253,6 +253,19 @@ pub struct Tokenizer {
                             return Token {
                                 .Characters = _.entity_buf[0..written],
                             };
+                        } else {
+                            // Bare '&' is literal character data
+                            const start = _.pos;
+                            _.pos += 1;
+                            while (_.pos < _.input.len) : (_.pos += 1) {
+                                const c = _.input[_.pos];
+                                if (c == '<' || c == '&') {
+                                    break;
+                                }
+                            }
+                            return Token {
+                                .Characters = _.input[start.._.pos],
+                            };
                         }
                     }
 
@@ -569,6 +582,15 @@ pub struct Tokenizer {
                             _.pos += ent.bytes_consumed;
                             const written = ent.toUtf8(_.entity_buf[0..8]);
                             return Token { .Characters = _.entity_buf[0..written] };
+                        } else {
+                            // Bare '&' is literal character data
+                            const start = _.pos;
+                            _.pos += 1;
+                            while (_.pos < _.input.len) : (_.pos += 1) {
+                                const c = _.input[_.pos];
+                                if (c == '<' || c == '&') break;
+                            }
+                            return Token { .Characters = _.input[start.._.pos] };
                         }
                     }
 

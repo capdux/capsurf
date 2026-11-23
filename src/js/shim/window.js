@@ -6812,6 +6812,114 @@ function installWindow(global) {
     if (!computedMap.has("display")) {
       computedMap.set("display", disp);
     }
+    if (!computedMap.has("content-visibility")) {
+      computedMap.set("content-visibility", "visible");
+    }
+    if (!computedMap.has("contain")) {
+      computedMap.set("contain", "none");
+    } else {
+      const cRaw = String(computedMap.get("contain") || "").trim();
+      const toks = typeof globalThis.__capsurf_splitCssTokens === "function"
+        ? globalThis.__capsurf_splitCssTokens(cRaw)
+        : cRaw.toLowerCase().split(/\s+/).filter(Boolean);
+      if (toks.length === 1 && (toks[0] === "none" || toks[0] === "strict" || toks[0] === "content")) {
+        computedMap.set("contain", toks[0]);
+      } else {
+        let hasSize = false;
+        let hasInlineSize = false;
+        let hasLayout = false;
+        let hasStyle = false;
+        let hasPaint = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i].toLowerCase();
+          if (t === "size") hasSize = true;
+          else if (t === "inline-size") hasInlineSize = true;
+          else if (t === "layout") hasLayout = true;
+          else if (t === "style") hasStyle = true;
+          else if (t === "paint") hasPaint = true;
+        }
+        if (hasSize && hasLayout && hasStyle && hasPaint) {
+          computedMap.set("contain", "strict");
+        } else if (!hasSize && !hasInlineSize && hasLayout && hasStyle && hasPaint) {
+          computedMap.set("contain", "content");
+        } else {
+          const parts = [];
+          if (hasSize) parts.push("size");
+          else if (hasInlineSize) parts.push("inline-size");
+          if (hasLayout) parts.push("layout");
+          if (hasStyle) parts.push("style");
+          if (hasPaint) parts.push("paint");
+          computedMap.set("contain", parts.length > 0 ? parts.join(" ") : "none");
+        }
+      }
+    }
+    const intrinsicProps = ["contain-intrinsic-width", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-block-size"];
+    for (let ip = 0; ip < intrinsicProps.length; ip++) {
+      const pk = intrinsicProps[ip];
+      if (!computedMap.has(pk)) {
+        computedMap.set(pk, "none");
+      } else {
+        const raw = String(computedMap.get(pk) || "").trim();
+        const toks = raw.split(/\s+/).filter(Boolean);
+        if (toks.length === 1) {
+          const t0 = toks[0].toLowerCase();
+          if (t0 === "none") {
+            computedMap.set(pk, "none");
+          } else {
+            const px = evalCssLengthExpr(t0, 0, 16);
+            computedMap.set(pk, px !== null ? formatCssPx(px) : t0);
+          }
+        } else if (toks.length === 2 && toks[0].toLowerCase() === "auto") {
+          const t1 = toks[1].toLowerCase();
+          if (t1 === "none") {
+            computedMap.set(pk, "auto none");
+          } else {
+            const px = evalCssLengthExpr(t1, 0, 16);
+            computedMap.set(pk, px !== null ? ("auto " + formatCssPx(px)) : ("auto " + t1));
+          }
+        }
+      }
+    }
+
+    if (!computedMap.has("font-size") && computedMap.has("font")) {
+      const fm = String(computedMap.get("font") || "").match(/(?:^|\s)([+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|%))(?=\s|\/|$)/i);
+      if (fm) computedMap.set("font-size", fm[1]);
+    }
+    const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+
+    function resolveMinMaxSizing(val, fSize) {
+      if (!val || typeof val !== "string") return val;
+      const s = val.trim();
+      if (s === "none" || s === "auto" || s === "min-content" || s === "max-content") return s;
+      const fm = s.match(/^fit-content\((.*)\)$/i);
+      if (fm) {
+        const inner = fm[1].trim();
+        if (!inner.includes("%") && (inner.includes("(") || /em|rem|vw|vh|pt/i.test(inner))) {
+          const px = evalCssLengthExpr(inner, null, fSize);
+          if (px !== null && isFinite(px)) {
+            return "fit-content(" + formatCssPx(Math.max(0, px)) + ")";
+          }
+        }
+        return s;
+      }
+      if (s.includes("%")) return s;
+      if (s.startsWith("calc(") || /em|rem|vw|vh|pt/i.test(s)) {
+        const px = evalCssLengthExpr(s, null, fSize);
+        if (px !== null && isFinite(px)) {
+          return formatCssPx(Math.max(0, px));
+        }
+      }
+      return s;
+    }
+
+    const minMaxProps = ["min-width", "max-width", "min-height", "max-height"];
+    for (let mi = 0; mi < minMaxProps.length; mi++) {
+      const mp = minMaxProps[mi];
+      const mv = computedMap.get(mp);
+      if (mv) {
+        computedMap.set(mp, resolveMinMaxSizing(mv, fontSize));
+      }
+    }
 
     // min-width / min-height: auto resolves to 0px outside flex/grid parent
     const parentEl = element.parentElement || element.parentNode;
@@ -6833,6 +6941,18 @@ function installWindow(global) {
     }
 
     if (!hasLayoutBox(element, computedMap)) {
+      // For elements without a layout box (e.g. display: none), resolve definite non-percentage length expressions
+      const boxSizingProps = ["width", "height", "min-width", "max-width", "min-height", "max-height"];
+      for (let bi = 0; bi < boxSizingProps.length; bi++) {
+        const bp = boxSizingProps[bi];
+        const bv = computedMap.get(bp);
+        if (bv && bv !== "auto" && bv !== "none" && !bv.includes("%")) {
+          const px = evalCssLengthExpr(bv, null, fontSize);
+          if (px !== null && isFinite(px)) {
+            computedMap.set(bp, formatCssPx(px));
+          }
+        }
+      }
       return;
     }
 
@@ -6846,11 +6966,6 @@ function installWindow(global) {
       pos !== "absolute" &&
       pos !== "fixed";
 
-    if (!computedMap.has("font-size") && computedMap.has("font")) {
-      const fm = String(computedMap.get("font") || "").match(/(?:^|\s)([+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|%))(?=\s|\/|$)/i);
-      if (fm) computedMap.set("font-size", fm[1]);
-    }
-    const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
     const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
 
     // Resolve width for elements with a box (except non-replaced inline)
@@ -7959,7 +8074,8 @@ function installWindow(global) {
     "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
     "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
-    "content", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
+    "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
+    "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
@@ -8068,6 +8184,11 @@ function installWindow(global) {
       }
       if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
       if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
+      if (name === "contain-intrinsic-size") {
+        const w = computedMap.get("contain-intrinsic-width") || "none";
+        const h = computedMap.get("contain-intrinsic-height") || "none";
+        return w === h ? w : (w + " " + h);
+      }
       if (name === "place-content" || name === "place-items" || name === "place-self") {
         const kind = name.slice(6);
         const def = kind === "self" ? "auto" : "normal";
@@ -8176,6 +8297,12 @@ function installWindow(global) {
       const shL = getShorthandComputed(lower);
       if (shL !== null) return shL;
       if (computedMap.has(lower)) return computedMap.get(lower);
+      if (lower === "contain") return "none";
+      if (lower === "content-visibility") return "visible";
+      if (lower.startsWith("contain-intrinsic-")) {
+        if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
+        return "none";
+      }
       return "";
     }, "getPropertyValue");
 
