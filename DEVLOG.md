@@ -2411,3 +2411,7 @@
 ### Phase 475: CSSOM 溢出截断与滚动条槽门禁
 - `scrollbar-gutter` 与 `-webkit-line-clamp` 拦截 `auto both`、`force`、`both-edges` 孤立值及 `0`/`-5`/`1 no-ellipsis` 等非法值。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 476: CSSOM 文本装饰线与下划线位置门禁
+- `text-decoration-line` 与 `text-underline-position` 按 CSS Text Decor 4 互斥组校验，拦截重复装饰线及 `under from-font` 冲突组合。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

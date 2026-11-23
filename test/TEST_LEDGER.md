@@ -1022,3 +1022,8 @@
 - `/css/css-align/parsing/`: 50 total | 25 PASS (up from 16!) | 25 FAIL | 0 TIMEOUT | 0 CRASH (all `*-invalid` PASS!)
 - `/css/css-lists/parsing/`: 23 total | 8 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH (`counter-*-invalid` & `list-style-position-*` PASS!)
 - Totals: **33 PASS / 40 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B216 (port=19700, 70 tests, 43/70 matched)
+- `/css/css-text-decor/parsing/`: 31 total | 9 PASS | 22 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-style-*`, `text-decoration-skip-ink-*`, `text-decoration-color-valid/invalid` PASS)
+- `/css/css-ui/parsing/`: 39 total | 19 PASS | 19 FAIL | 1 TIMEOUT | 0 CRASH (`box-sizing-*`, `resize-*`, `user-select-*`, `outline-style-valid/computed`, `outline-width/color/offset-invalid` PASS)
+- Totals: **28 PASS / 41 FAIL / 1 TIMEOUT / 0 CRASH**

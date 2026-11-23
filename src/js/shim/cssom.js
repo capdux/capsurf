@@ -1124,6 +1124,39 @@
       const t = toks[0], tl = t.toLowerCase();
       return tl === "none" || tl === "auto" || /^"[^"]*"$/.test(t) || /^'[^']*'$/.test(t);
     }
+    if (prop === "text-decoration-line") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && (toks[0] === "none" || toks[0] === "spelling-error" || toks[0] === "grammar-error")) return true;
+      if (toks.length < 1 || toks.length > 4) return false;
+      const FLAGS = new Set(["underline", "overline", "line-through", "blink"]);
+      const seen = new Set();
+      for (let i = 0; i < toks.length; i++) {
+        if (!FLAGS.has(toks[i]) || seen.has(toks[i])) return false;
+        seen.add(toks[i]);
+      }
+      return true;
+    }
+    if (prop === "text-underline-position") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1 && toks[0] === "auto") return true;
+      if (toks.length < 1 || toks.length > 2) return false;
+      let sEdge = false, sSide = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "under" || t === "from-font") { if (sEdge) return false; sEdge = true; }
+        else if (t === "left" || t === "right") { if (sSide) return false; sSide = true; }
+        else return false;
+      }
+      return true;
+    }
+    if (prop === "text-underline-offset") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
+    }
+    if (prop === "text-decoration-thickness") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], false));
+    }
 
     return true;
   }

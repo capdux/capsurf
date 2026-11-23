@@ -3255,3 +3255,11 @@
   - `-webkit-line-clamp` / `max-lines`: 校验 `none | <integer [1,∞]>`。
   - `block-ellipsis`: 校验 `none | auto | <string>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 476: CSSOM `text-decoration-line`, `text-underline-position`, `text-underline-offset`, `text-decoration-thickness`
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `text-decoration-line`: 校验 `none | spelling-error | grammar-error | [ underline || overline || line-through || blink ]`（禁止重复与混用）。
+  - `text-underline-position`: 校验 `auto | [ under | from-font ] || [ left | right ]`。
+  - `text-underline-offset`: 校验 `auto | <length-percentage>`。
+  - `text-decoration-thickness`: 校验 `auto | from-font | <length-percentage [0,∞]>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
