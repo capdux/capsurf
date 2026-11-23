@@ -3106,3 +3106,5 @@
 - **Phase 453 (`src/js/shim/element/forms/button.js`, `src/js/shim/element/forms/input.js`, `src/js/runtime_source.cp`)**：支持 `<button command/commandfor>` 隐式 `"button"` 类型；对齐 `input.files` setter 的 `FileList` 引用共享与 `TypeError` 校验。
 
 - **Phase 454 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`proto.click()` 遇交互式子元素（`<details>`/`<embed>`/`<iframe>`/`<audio/video[controls]>`/`<img/object[usemap]>`）提前中断 `<label>` 点击转发。
+
+- **Phase 455 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime_source.cp`)**：新增 28 个纯关键字 CSS 属性白名单校验并打通内联 `style` 赋值与 `CSS.supports` 统一校验路径。

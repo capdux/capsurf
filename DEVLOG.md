@@ -2333,3 +2333,5 @@
 - Phase 453 (`button.js`, `input.js`): `getButtonType` 增加 `command`/`commandfor` 隐式 `"button"` 判定；`input.files` setter 直接保留 `FileList` 对象引用并严格校验 WebIDL 类型。
 
 - Phase 454 (`src/js/shim/element/html-element.js`): 完善 `proto.click()` 中 HTML 交互式内容判定，避免 `<label>` 内嵌交互控件时向关联控件转发多余点击。
+
+- Phase 455 (`cssom.js`, `element.js`): 抽离 `KEYWORD_CSS_PROPS` 并导出 `__capsurf_isValidCssValue` 接入 `isValidInlinePropValue` 与 `cssFloat/float`，拦截 `*-invalid.html` 无效值赋值。

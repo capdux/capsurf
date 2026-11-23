@@ -216,8 +216,48 @@
       return true;
     }
 
+    const KEYWORD_CSS_PROPS = {
+      "float": ["none", "left", "right", "inline-start", "inline-end"],
+      "clear": ["none", "left", "right", "both", "inline-start", "inline-end"],
+      "visibility": ["visible", "hidden", "collapse"],
+      "position": ["static", "relative", "absolute", "fixed", "sticky"],
+      "box-sizing": ["content-box", "border-box"],
+      "overflow-x": ["visible", "hidden", "clip", "scroll", "auto"],
+      "overflow-y": ["visible", "hidden", "clip", "scroll", "auto"],
+      "overflow-block": ["visible", "hidden", "clip", "scroll", "auto"],
+      "overflow-inline": ["visible", "hidden", "clip", "scroll", "auto"],
+      "overflow-wrap": ["normal", "break-word", "anywhere"],
+      "word-wrap": ["normal", "break-word", "anywhere"],
+      "word-break": ["normal", "break-all", "keep-all", "break-word", "auto-phrase"],
+      "hyphens": ["none", "manual", "auto"],
+      "line-break": ["auto", "loose", "normal", "strict", "anywhere"],
+      "text-align": ["start", "end", "left", "right", "center", "justify", "match-parent", "justify-all"],
+      "text-align-all": ["start", "end", "left", "right", "center", "justify", "match-parent"],
+      "text-align-last": ["auto", "start", "end", "left", "right", "center", "justify", "match-parent"],
+      "text-justify": ["auto", "none", "inter-word", "inter-character", "distribute"],
+      "text-transform": ["none", "capitalize", "uppercase", "lowercase", "full-width", "full-size-kana"],
+      "text-wrap-mode": ["wrap", "nowrap"],
+      "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
+      "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
+      "font-kerning": ["auto", "normal", "none"],
+      "font-optical-sizing": ["auto", "none"],
+      "border-top-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-right-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-bottom-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-left-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-block-start-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-block-end-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-inline-start-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+      "border-inline-end-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+    };
+    const allowedKeywords = KEYWORD_CSS_PROPS[prop];
+    if (allowedKeywords) {
+      return allowedKeywords.indexOf(vLower) !== -1;
+    }
+
     return true;
   }
+  global.__capsurf_isValidCssValue = isValidCssValue;
 
   function declSupported(name, value) {
     if (!name || typeof name !== "string") return false;
@@ -237,6 +277,7 @@
     }
     return true;
   }
+  global.__capsurf_isValidCssValue = isValidCssValue;
 
   function matchParen(text, openParenIndex) {
     let depth = 0;

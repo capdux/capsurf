@@ -89,6 +89,9 @@ function isValidInlinePropValue(key, val) {
   const lower = v.toLowerCase();
   if (CSS_WIDE_KEYWORDS.has(lower)) return true;
   if (lower.indexOf("var(") !== -1) return true;
+  if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(key, v)) {
+    return false;
+  }
   if (key === "z-index") {
     if (lower === "auto") return true;
     if (/^[+-]?\d+$/.test(v)) return true;
@@ -458,6 +461,7 @@ function createStyleProxy(element) {
         if (vStr === "") {
           map.delete("float");
         } else {
+          if (!isValidInlinePropValue("float", vStr)) return true;
           map.set("float", { name: "float", value: vStr, priority: "" });
         }
         serializeStyleMap(map);
