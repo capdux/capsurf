@@ -1157,7 +1157,7 @@ pub struct TreeBuilder {
                         return NextTokenizerState.PlainText;
                     } else {
                         // General block/inline element
-                        if (tag.isSpecial() && _.inButtonScope(HtmlTag.P)) {
+                        if (tag.closesP() && _.inButtonScope(HtmlTag.P)) {
                             _.generateImpliedEndTags(HtmlTag.P);
                             _.popUntil(HtmlTag.P);
                         }

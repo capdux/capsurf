@@ -7177,3 +7177,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 449] (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) `PerformanceObserver.prototype.observe` 当传入 `entryTypes` 时按规范忽略 `options.buffered`（不再抛 `TypeError`），消除 `/performance-timeline/` 最后 1 例非预期失败；`bin_dev` 编译 + CDP 探针 (`{"countZero":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 450] (`src/js/shim/element/forms/label.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 在 `getLabelsForControl` 向上遍历祖先 `<label>` 时调用 `upgradeElement(p)`，使 `up.control === control` 正常命中隐式/嵌套 `<label>`；`bin_dev` 编译 + CDP 探针 (`{"isNL":true,"len1":2,"len2":1}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [Phase 451] (`src/html/tags.cp`, `src/html/tree_builder.cp`) 新增 `HtmlTag.closesP()` 精确匹配 HTML5 `InBody` 规范中实际关闭 `<p>` 的块级标签集合，替换 `tree_builder.cp` 中过宽的 `tag.isSpecial()` 判定，修复 `<p>` 内 `<button>`/`<input>`/`<select>`/`<textarea>`/`<img>` 等内联/表单控件误关闭 `<p>` 与祖先 `<label>` 的建树缺陷；`cpc brief` + `bin_dev` 编译 + CDP 探针 (`{"b1Len":2,"b2Len":1,"b2Parent":"LABEL"}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

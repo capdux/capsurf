@@ -205,6 +205,15 @@ pub enum HtmlTag: u8 {
         };
     }
 
+    fn closesP(): bool {
+        return switch (_) {
+            .Address, .Article, .Aside, .Blockquote, .Center, .Details, .Div, .Dl,
+            .Fieldset, .Figcaption, .Figure, .Footer, .Header, .Hgroup, .Main,
+            .Menu, .Nav, .Ol, .P, .Section, .Summary, .Ul => true,
+            * => false,
+        };
+    }
+
     fn isHeading(): bool {
         return switch (_) {
             .H1, .H2, .H3, .H4, .H5, .H6 => true,

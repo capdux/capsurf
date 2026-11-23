@@ -3098,3 +3098,5 @@
 - **Phase 449 (`src/js/shim/window.js`, `src/js/runtime_source.cp`)**：`PerformanceObserver.observe` 在 `entryTypes` 模式下按规范忽略 `buffered` 选项。
 
 - **Phase 450 (`src/js/shim/element/forms/label.js`, `src/js/runtime_source.cp`)**：`getLabelsForControl` 升级祖先 `<label>` 节点以修复 `.labels` 隐式关联。
+
+- **Phase 451 (`src/html/tags.cp`, `src/html/tree_builder.cp`)**：新增 `HtmlTag.closesP()` 修复 HTML5 解析器遇 `<button>`/`<input>`/`<img>` 等误关闭 `<p>` 与外层 `<label>` 的缺陷。
