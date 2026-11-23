@@ -7440,6 +7440,21 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `/css/css-scroll-snap/parsing/`: 9/9 PASS
   4. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
 
+### 2026-11-24 Phase 551 (`scroll-margin` 与 `scroll-padding` 简写、逻辑属性及全套计算值闭环)
+- **[Agent]**: 完成 Phase 551：
+  1. 在 `src/js/shim/cssom.js` 扩展 `scroll-margin` 与 `scroll-padding` 全系解析：
+     - `scroll-margin`（及物理 4 方向与块向/行内逻辑属性）：支持 `<length>{1,4}`（允许负值），严格拦截 `%` 与 `auto`；
+     - `scroll-padding`（及物理 4 方向与块向/行内逻辑属性）：支持 `[ <length-percentage> | auto ]{1,4}`（非负值），严格拦截负值字面量与 `calc(auto)`；
+     - 在 `expandCssShorthand`、`SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand` 中建立标准 4 盒模型与 2 方向展开与折叠去重序列化；并在 `CSSStyleDeclaration.prototype.getPropertyValue` 与 `getPropertyPriority` 中实现简写属性一致性派发。
+  2. 在 `src/js/shim/window.js` 实现计算值：
+     - 补齐 16 个长手属性至 `STANDARD_COMPUTED_LONGHANDS`；
+     - `scroll-margin-*` 计算期求值为 px（允许负值，默认 `0px`）；
+     - `scroll-padding-*` 计算期求值为 px 或保留百分比（非负截断，默认 `auto`）；
+     - 在 `getShorthandComputed` 支持 `scroll-margin*` 与 `scroll-padding*` 简写计算值按规范序返回。
+  3. WPT 验收：`/css/css-scroll-snap/parsing/` 16 个测试用例 100% 全部通过（16/16 ALL GREEN）。
+  4. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+
 
 
 

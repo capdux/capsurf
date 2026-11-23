@@ -2648,6 +2648,19 @@
   - `/css/css-scroll-snap/parsing/`: 9/9 PASS
   - 累计 18/18 用例 100% 全绿通过。
 
+### Phase 551: `scroll-margin` 与 `scroll-padding` 简写、逻辑长手与计算值全链路闭环
+- **`scroll-margin` 全系（物理 4 方向、逻辑 block/inline 与简写）**：
+  - 语法约束为 `<length>{1,4}`，支持负值长度（如 `-10px`、`calc(10px - 0.5em)`），严格拒绝百分比 `%` 以及 `auto`。
+  - 简写展开至物理长手（`top`/`right`/`bottom`/`left`），逻辑简写展开至逻辑长手（`start`/`end`）。
+  - 在 `window.js` 中将各长手属性求值为 px，默认值为 `"0px"`。
+- **`scroll-padding` 全系（物理 4 方向、逻辑 block/inline 与简写）**：
+  - 语法约束为 `[ <length-percentage> | auto ]{1,4}`，只能为非负值（负值如 `-20px` 必须严格拦截），且严格拦截 `calc(auto)` 等非法内联函数。
+  - 简写展开支持 1~4 盒模型标准映射与 1~2 逻辑映射，长手序列化时支持等值折叠。
+  - 计算期若为 `auto` 返回 `auto`，百分比保持原样，其他长度单位求值为非负 px，默认值为 `"auto"`。
+- **WPT 测试结果**：
+  - `/css/css-scroll-snap/parsing/` 16/16 用例 100% 全绿通过。
+
+
 
 
 

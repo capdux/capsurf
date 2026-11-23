@@ -1548,6 +1548,15 @@
 - **Filter `/css/css-scroll-snap/parsing/`**: `9` files (**9 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `scroll-snap-type-computed.html`, `scroll-snap-type-invalid.html`, `scroll-snap-type-valid.html`, `scroll-snap-align-computed.html`, `scroll-snap-align-invalid.html`, `scroll-snap-align-valid.html`, `scroll-snap-stop-computed.html`, `scroll-snap-stop-invalid.html`, `scroll-snap-stop-valid.html` 全绿通过。
 - **累计**: 18/18 对应用例 100% 全部通过。
 
+### WPT-B310 (bin_dev Phase 551, 2026-11-24)
+- **Filter `/css/css-scroll-snap/parsing/` (scroll-margin & scroll-padding 全系)**: `16` files (**16 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!);
+  - `scroll-margin-block-inline-computed.html` (PASS), `scroll-margin-block-inline-invalid.html` (PASS), `scroll-margin-block-inline-shorthand.html` (PASS), `scroll-margin-block-inline-valid.html` (PASS)
+  - `scroll-margin-computed.html` (PASS), `scroll-margin-invalid.html` (PASS), `scroll-margin-shorthand.html` (PASS), `scroll-margin-valid.html` (PASS)
+  - `scroll-padding-block-inline-computed.html` (PASS), `scroll-padding-block-inline-invalid.html` (PASS), `scroll-padding-block-inline-shorthand.html` (PASS), `scroll-padding-block-inline-valid.html` (PASS)
+  - `scroll-padding-computed.html` (PASS), `scroll-padding-invalid.html` (PASS), `scroll-padding-shorthand.html` (PASS), `scroll-padding-valid.html` (PASS)
+- **累计**: 16/16 用例 100% 全部通过。
+
+
 
 
 

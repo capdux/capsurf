@@ -39076,5 +39076,69 @@
   "/css/css-scroll-snap/parsing/scroll-snap-stop-computed.html": {
     "expected": "PASS",
     "reason": "Phase 550 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-block-inline-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-block-inline-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-block-inline-shorthand.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-block-inline-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-shorthand.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-margin-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-block-inline-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-block-inline-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-block-inline-shorthand.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-block-inline-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-computed.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-invalid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-shorthand.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
+  },
+  "/css/css-scroll-snap/parsing/scroll-padding-valid.html": {
+    "expected": "PASS",
+    "reason": "Phase 551 validated"
   }
 }

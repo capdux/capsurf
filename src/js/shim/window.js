@@ -6954,6 +6954,49 @@ function installWindow(global) {
       }
     }
 
+    const SCROLL_MARGIN_PROPS = [
+      "scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left",
+      "scroll-margin-block-start", "scroll-margin-block-end",
+      "scroll-margin-inline-start", "scroll-margin-inline-end"
+    ];
+    for (let i = 0; i < SCROLL_MARGIN_PROPS.length; i++) {
+      const p = SCROLL_MARGIN_PROPS[i];
+      if (!computedMap.has(p)) {
+        computedMap.set(p, "0px");
+      } else {
+        const raw = String(computedMap.get(p) || "").trim();
+        const px = evalCssLengthExpr(raw, null, fontSize);
+        if (px !== null && isFinite(px)) {
+          computedMap.set(p, formatCssPx(px));
+        }
+      }
+    }
+
+    const SCROLL_PADDING_PROPS = [
+      "scroll-padding-top", "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left",
+      "scroll-padding-block-start", "scroll-padding-block-end",
+      "scroll-padding-inline-start", "scroll-padding-inline-end"
+    ];
+    for (let i = 0; i < SCROLL_PADDING_PROPS.length; i++) {
+      const p = SCROLL_PADDING_PROPS[i];
+      if (!computedMap.has(p)) {
+        computedMap.set(p, "auto");
+      } else {
+        const raw = String(computedMap.get(p) || "").trim();
+        if (raw.toLowerCase() === "auto") {
+          computedMap.set(p, "auto");
+        } else if (raw.includes("%")) {
+          // Keep percentage or calc with %
+        } else {
+          const px = evalCssLengthExpr(raw, null, fontSize);
+          if (px !== null && isFinite(px)) {
+            computedMap.set(p, formatCssPx(Math.max(0, px)));
+          }
+        }
+      }
+    }
+
+
     // min-width / min-height: auto resolves to 0px outside flex/grid parent
     const parentEl = element.parentElement || element.parentNode;
     let parentDisp = "block";
@@ -8126,6 +8169,12 @@ function installWindow(global) {
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+    "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
+    "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
+    "scroll-margin-right", "scroll-margin-top",
+    "scroll-padding-block-end", "scroll-padding-block-start", "scroll-padding-bottom",
+    "scroll-padding-inline-end", "scroll-padding-inline-start", "scroll-padding-left",
+    "scroll-padding-right", "scroll-padding-top",
     "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin",
     "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
     "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
@@ -8222,6 +8271,40 @@ function installWindow(global) {
         const w = computedMap.get("contain-intrinsic-width") || "none";
         const h = computedMap.get("contain-intrinsic-height") || "none";
         return w === h ? w : (w + " " + h);
+      }
+      if (name === "scroll-margin") {
+        const t = computedMap.get("scroll-margin-top") || "0px";
+        const r = computedMap.get("scroll-margin-right") || "0px";
+        const b = computedMap.get("scroll-margin-bottom") || "0px";
+        const l = computedMap.get("scroll-margin-left") || "0px";
+        return shorten4(t, r, b, l);
+      }
+      if (name === "scroll-padding") {
+        const t = computedMap.get("scroll-padding-top") || "auto";
+        const r = computedMap.get("scroll-padding-right") || "auto";
+        const b = computedMap.get("scroll-padding-bottom") || "auto";
+        const l = computedMap.get("scroll-padding-left") || "auto";
+        return shorten4(t, r, b, l);
+      }
+      if (name === "scroll-margin-block") {
+        const s = computedMap.get("scroll-margin-block-start") || "0px";
+        const e = computedMap.get("scroll-margin-block-end") || "0px";
+        return s === e ? s : (s + " " + e);
+      }
+      if (name === "scroll-margin-inline") {
+        const s = computedMap.get("scroll-margin-inline-start") || "0px";
+        const e = computedMap.get("scroll-margin-inline-end") || "0px";
+        return s === e ? s : (s + " " + e);
+      }
+      if (name === "scroll-padding-block") {
+        const s = computedMap.get("scroll-padding-block-start") || "auto";
+        const e = computedMap.get("scroll-padding-block-end") || "auto";
+        return s === e ? s : (s + " " + e);
+      }
+      if (name === "scroll-padding-inline") {
+        const s = computedMap.get("scroll-padding-inline-start") || "auto";
+        const e = computedMap.get("scroll-padding-inline-end") || "auto";
+        return s === e ? s : (s + " " + e);
       }
       if (name === "place-content" || name === "place-items" || name === "place-self") {
         const kind = name.slice(6);
@@ -8343,6 +8426,8 @@ function installWindow(global) {
       if (lower === "scroll-snap-align") return "none";
       if (lower === "shape-image-threshold") return "0";
       if (lower === "shape-margin") return "0px";
+      if (lower.startsWith("scroll-margin")) return "0px";
+      if (lower.startsWith("scroll-padding")) return "auto";
       return "";
     }, "getPropertyValue");
 

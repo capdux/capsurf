@@ -3558,6 +3558,9 @@
 
 - **Phase 550** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `overflow-anchor`（关键字 `auto|none`）、`shape-image-threshold`（百分比转数值与 `[0, 1]` clamp）、`shape-margin`（单位与计算期 px 化）、`scroll-snap-type`（轴与严格度解析、`proximity` 省略）、`scroll-snap-align`（双值去重折叠）、`scroll-snap-stop`（`normal|always`）；WPT 3 大模块 18/18 用例 100% 全绿通过。
 
+- **Phase 551** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `scroll-margin` 与 `scroll-padding` 全系物理与逻辑长手/简写属性解析、展开、折叠序列化与计算期求值，严格拦截非法单位与 `calc(auto)`；WPT `css-scroll-snap/parsing/` 16/16 用例 100% 全绿通过。
+
+
 
 
 

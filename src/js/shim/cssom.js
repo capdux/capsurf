@@ -1559,6 +1559,49 @@
       if (toks.length === 2) return VALS.has(toks[0]) && VALS.has(toks[1]);
       return false;
     }
+    const isSingleScrollMarginValue = (t) => {
+      const tl = t.toLowerCase();
+      if (tl === "0" || tl === "+0" || tl === "-0") return true;
+      if (/(?:auto|none|fit-content|max-content|min-content)/i.test(tl)) return false;
+      if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)$/i.test(tl)) return true;
+      return /^(?:calc|min|max|clamp)\(/i.test(tl);
+    };
+    const isSingleScrollPaddingValue = (t) => {
+      const tl = t.toLowerCase();
+      if (tl === "auto") return true;
+      if (tl === "0" || tl === "+0") return true;
+      if (/(?:auto|none|fit-content|max-content|min-content)/i.test(tl)) return false;
+      if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return true;
+      if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|vw|vh|vmin|vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|ex|ch|pt|pc|in|cm|mm|q)$/i.test(tl)) return true;
+      return /^(?:calc|min|max|clamp)\(/i.test(tl);
+    };
+    if (prop === "scroll-margin-top" || prop === "scroll-margin-right" || prop === "scroll-margin-bottom" || prop === "scroll-margin-left" ||
+        prop === "scroll-margin-block-start" || prop === "scroll-margin-block-end" || prop === "scroll-margin-inline-start" || prop === "scroll-margin-inline-end") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length === 1 && isSingleScrollMarginValue(toks[0]);
+    }
+    if (prop === "scroll-margin-block" || prop === "scroll-margin-inline") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length >= 1 && toks.length <= 2 && toks.every(isSingleScrollMarginValue);
+    }
+    if (prop === "scroll-margin") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length >= 1 && toks.length <= 4 && toks.every(isSingleScrollMarginValue);
+    }
+    if (prop === "scroll-padding-top" || prop === "scroll-padding-right" || prop === "scroll-padding-bottom" || prop === "scroll-padding-left" ||
+        prop === "scroll-padding-block-start" || prop === "scroll-padding-block-end" || prop === "scroll-padding-inline-start" || prop === "scroll-padding-inline-end") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length === 1 && isSingleScrollPaddingValue(toks[0]);
+    }
+    if (prop === "scroll-padding-block" || prop === "scroll-padding-inline") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length >= 1 && toks.length <= 2 && toks.every(isSingleScrollPaddingValue);
+    }
+    if (prop === "scroll-padding") {
+      const toks = splitCssTokens(trimmed);
+      return toks.length >= 1 && toks.length <= 4 && toks.every(isSingleScrollPaddingValue);
+    }
+
     if (prop === "block-ellipsis") {
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
@@ -2682,6 +2725,29 @@
       }
       return s;
     }
+    const normLenZero = (t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t;
+    if (key.startsWith("scroll-margin") || key.startsWith("scroll-padding")) {
+      const toks = splitCssTokens(s.trim());
+      if (toks.length === 1) return normLenZero(toks[0]);
+      if (toks.length === 2) {
+        const a = normLenZero(toks[0]), b = normLenZero(toks[1]);
+        return a === b ? a : (a + " " + b);
+      }
+      if (toks.length === 3) {
+        const a = normLenZero(toks[0]), b = normLenZero(toks[1]), c = normLenZero(toks[2]);
+        return (a === c) ? (a === b ? a : (a + " " + b)) : (a + " " + b + " " + c);
+      }
+      if (toks.length === 4) {
+        const a = normLenZero(toks[0]), b = normLenZero(toks[1]), c = normLenZero(toks[2]), d = normLenZero(toks[3]);
+        if (b === d) {
+          if (a === c) {
+            return a === b ? a : (a + " " + b);
+          }
+          return a + " " + b + " " + c;
+        }
+        return a + " " + b + " " + c + " " + d;
+      }
+    }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
@@ -3007,6 +3073,31 @@
       if (!p) return null;
       return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
     }
+    if (key === "scroll-margin" || key === "scroll-padding") {
+      const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+      if (toks.length === 0) return null;
+      let t = toks[0], r = toks[0], b = toks[0], l = toks[0];
+      if (toks.length === 2) { r = toks[1]; l = toks[1]; }
+      else if (toks.length === 3) { r = toks[1]; b = toks[2]; l = toks[1]; }
+      else if (toks.length === 4) { r = toks[1]; b = toks[2]; l = toks[3]; }
+      return [
+        [key + "-top", t],
+        [key + "-right", r],
+        [key + "-bottom", b],
+        [key + "-left", l]
+      ];
+    }
+    if (key === "scroll-margin-block" || key === "scroll-margin-inline" ||
+        key === "scroll-padding-block" || key === "scroll-padding-inline") {
+      const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+      if (toks.length === 0) return null;
+      const start = toks[0];
+      const end = toks.length > 1 ? toks[1] : toks[0];
+      return [
+        [key + "-start", start],
+        [key + "-end", end]
+      ];
+    }
     return null;
   }
   global.__capsurf_expandShorthand = expandCssShorthand;
@@ -3031,7 +3122,13 @@
     overflow: ["overflow-x", "overflow-y"],
     gap: ["row-gap", "column-gap"],
     "grid-gap": ["row-gap", "column-gap"],
-    "contain-intrinsic-size": ["contain-intrinsic-width", "contain-intrinsic-height"]
+    "contain-intrinsic-size": ["contain-intrinsic-width", "contain-intrinsic-height"],
+    "scroll-margin": ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"],
+    "scroll-margin-block": ["scroll-margin-block-start", "scroll-margin-block-end"],
+    "scroll-margin-inline": ["scroll-margin-inline-start", "scroll-margin-inline-end"],
+    "scroll-padding": ["scroll-padding-top", "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left"],
+    "scroll-padding-block": ["scroll-padding-block-start", "scroll-padding-block-end"],
+    "scroll-padding-inline": ["scroll-padding-inline-start", "scroll-padding-inline-end"]
   };
   global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -3060,6 +3157,21 @@
       return out.length > 0 ? out.join(" ") : "outside";
     }
     if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
+      return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
+    }
+    if (key === "scroll-margin" || key === "scroll-padding") {
+      const [t, r, b, l] = vals;
+      if (r === l) {
+        if (b === t) {
+          if (r === t) return t;
+          return t + " " + r;
+        }
+        return t + " " + r + " " + b;
+      }
+      return t + " " + r + " " + b + " " + l;
+    }
+    if (key === "scroll-margin-block" || key === "scroll-margin-inline" ||
+        key === "scroll-padding-block" || key === "scroll-padding-inline") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
     }
     if (key === "flex-flow") {
@@ -3612,6 +3724,14 @@
           return vals.join(" ");
         }
       }
+      if (typeof serializeExpandedShorthand === "function" && SHORTHAND_EXPAND_LONGHANDS[key]) {
+        const lhs = SHORTHAND_EXPAND_LONGHANDS[key];
+        const pri0 = decl.getPropertyPriority(lhs[0]);
+        for (let i = 1; i < lhs.length; i++) {
+          if (decl.getPropertyPriority(lhs[i]) !== pri0) return "";
+        }
+        return serializeExpandedShorthand(key, (lh) => (data.has(lh) ? serializeCssValue(data.get(lh).value) : ""));
+      }
       return "";
     };
 
@@ -3619,7 +3739,18 @@
       const p = String(prop).trim();
       const key = p.startsWith("--") ? p : p.toLowerCase();
       const entry = data.get(key);
-      return entry ? entry.priority : "";
+      if (entry) return entry.priority;
+      if (SHORTHAND_EXPAND_LONGHANDS[key]) {
+        const lhs = SHORTHAND_EXPAND_LONGHANDS[key];
+        let pri = null;
+        for (let i = 0; i < lhs.length; i++) {
+          const ep = data.has(lhs[i]) ? data.get(lhs[i]).priority : "";
+          if (pri === null) pri = ep;
+          else if (pri !== ep) return "";
+        }
+        return pri || "";
+      }
+      return "";
     };
 
     decl.setProperty = function (prop, val, priority) {
@@ -3693,6 +3824,17 @@
       }
       if (SHORTHAND_LONGHANDS[key]) {
         const longhands = SHORTHAND_LONGHANDS[key];
+        for (let i = 0; i < longhands.length; i++) {
+          const lhKey = longhands[i];
+          if (data.has(lhKey)) {
+            if (!prev) prev = data.get(lhKey).value;
+            data.delete(lhKey);
+            authoredOrder = authoredOrder.filter((k) => k !== lhKey);
+          }
+        }
+      }
+      if (SHORTHAND_EXPAND_LONGHANDS[key]) {
+        const longhands = SHORTHAND_EXPAND_LONGHANDS[key];
         for (let i = 0; i < longhands.length; i++) {
           const lhKey = longhands[i];
           if (data.has(lhKey)) {
