@@ -1333,3 +1333,8 @@
 - `/css/css-transforms/parsing/`: 28 total | 15 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-text/parsing/`: 86 total | **45 PASS (+12 FAIL→PASS!)** | 41 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **60 PASS / 54 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B261 (port=19700, Phase 517 verification, 59 tests)
+- `/css/css-multicol/parsing/`: 31 total | **25 PASS (31/31 matched, 0 unexpected!, `columns-invalid` green!)** | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-transforms/parsing/`: 28 total | **16 PASS (up from 15, `rotate-parsing-valid` green!)** | 12 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **41 PASS / 18 FAIL / 0 TIMEOUT / 0 CRASH**

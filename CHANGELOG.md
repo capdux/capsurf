@@ -3479,3 +3479,6 @@
   - `test/TEST_LEDGER.md`: 记录 `WPT-B258`（`/css/css-break/parsing/` **18/18 100% ALL GREEN!**，`/css/css-transforms/parsing/` 15/28）。
 - **Phase 517**:
   - `src/js/shim/cssom.js`: 新增 `columns` shorthand 校验；完善 `rotate` 负轴角度取反及 `<angle> x y z` 重排。
+- **Phase 518**:
+  - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `transform-box`、`line-break`、`word-wrap`、`hanging-punctuation`、`text-align-all`、`text-combine-upright`、`text-orientation`。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B261`（`/css/css-multicol/parsing/` 25/31 PASS，31/31 匹配；`/css/css-transforms/parsing/` 16/28 PASS）。

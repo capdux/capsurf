@@ -2534,3 +2534,4 @@
 - **Phase 515**: 打通 `column-rule-width` `0px` 规范化、`-webkit-appearance` 传统别名一致性及 `column-count`/`orphans`/`widows` 整数 `calc(...)` 计算值求值。
 - **Phase 516**: 按 CSSWG #11494 取消 `column-rule-width` 受 `column-rule-style: none` 清零逻辑，并补全 `column-fill`/`column-span` 计算属性暴露；`/css/css-break/parsing/` 达成 18/18 全绿。
 - **Phase 517**: 补齐 `columns` 非法值拒绝规则与 `rotate` 负轴向量等价简写规范化。
+- **Phase 518**: 补全 `transform-box`、`line-break`、`word-wrap` 等 7 个 `getComputedStyle` 长手属性注册，打通对应 `*-computed.html` WPT 测试。
