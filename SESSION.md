@@ -7268,3 +7268,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 488 `getComputedStyle` `perspective-origin`/`transform-origin` 解析]** 在 `src/js/shim/window.js` 中新增 `perspective-origin`（1/2/4 token `<position>`）与 `transform-origin`（1/2/3 token 含非零 Z 轴长度）基于盒宽高的绝对像素计算；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 489 `getComputedStyle` `gap`/`grid-gap`/`min-max` 解析]** 在 `src/js/shim/window.js` 中新增 `gap`/`grid-gap`/`grid-row-gap`/`grid-column-gap` 展开与 `getComputedStyle` 简写序列化，以及 `row-gap`/`column-gap`/`min-width`/`max-width`/`min-height`/`max-height` 非负像素求值；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 490 `getComputedStyle` `place-*`/`flex-flow`/`flex-basis` 解析]** 在 `src/js/shim/window.js` 中新增 `place-content`/`place-items`/`place-self` 与 `flex-flow` 简写展开及 `getComputedStyle` 序列化，并将 `flex-basis` 纳入非负长度求值；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B230`（`css-transforms/parsing` 升至 15/28 PASS）并派发 `WPT Batch 231 Runner`。

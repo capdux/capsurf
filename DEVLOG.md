@@ -2467,3 +2467,7 @@
 ### Phase 489: `getComputedStyle` 间距简写与尺寸极值计算值解析
 - `gap`/`grid-gap` 与 `min/max-{width,height}` 经由 `evalCssLengthExpr` + `Math.max(0, px)` 对齐负值 `calc` 归零规则。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 490: `getComputedStyle` 对齐简写与弹性盒计算值
+- `place-*` 在 `setDecl` 中识别 `first`/`last`/`safe`/`unsafe`/`legacy` 修饰符边界，确保 `first baseline unsafe right` 正确拆分到 `align-content` 与 `justify-content`。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

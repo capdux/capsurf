@@ -1100,3 +1100,29 @@
 - `/css/css-backgrounds/parsing/ --shard 1/2`: 37 total | **12 PASS (up from 7!)** | 25 FAIL | 0 TIMEOUT | 0 CRASH
 - `/css/css-backgrounds/parsing/ --shard 2/2`: 37 total | **13 PASS (up from 10!)** | 24 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **25 PASS / 49 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### PW Batch 147 (port=19386, 34 tests)
+- `page-set-input-files.spec.ts`: 19 total | **13 PASS (+7 unexpected passes!)** | 6 FAIL | 0 TIMEOUT
+- `page-mouse.spec.ts`: 15 total | **14 PASS (+7 unexpected passes!)** | 0 FAIL | 1 TIMEOUT
+- Totals: **27 PASS / 6 FAIL / 1 TIMEOUT / 0 SKIP**
+
+### WPT-B227 (port=19700, 28 tests, 5/28 matched)
+- `/css/css-color/ --shard 3/4`: 14 total | 2 PASS | 10 FAIL | 2 TIMEOUT | 0 CRASH
+- `/css/css-color/ --shard 4/4`: 14 total | 2 PASS | 9 FAIL | 3 TIMEOUT | 0 CRASH
+- Totals: **4 PASS / 19 FAIL / 5 TIMEOUT / 0 CRASH**
+
+### WPT-B228 (port=19700, 224 tests, 77/224 matched)
+- `/css/css-variables/ --shard 1/2`: 112 total | 31 PASS | 81 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-variables/ --shard 2/2`: 112 total | 29 PASS | 79 FAIL | 2 TIMEOUT | 2 ERROR
+- Totals: **60 PASS / 160 FAIL / 2 TIMEOUT / 2 ERROR**
+
+### WPT-B229 (port=19700, Phase 489 verification, 56 tests, 36/56 matched)
+- `/css/css-backgrounds/parsing/border-radius`: 3 total | **2 PASS** (`border-radius-invalid`, `border-radius-computed`!) | 1 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-color/parsing/opacity`: 3 total | 1 PASS | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-align/parsing/`: 50 total | **31 PASS (up from 25!)** | 19 FAIL | 0 TIMEOUT | 0 CRASH (`gap-*`, `grid-gap-*`, `*-gap-computed`, `justify-content-*` PASS!)
+- Totals: **34 PASS / 22 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B230 (port=19700, Phase 488 verification, 28 tests, 16/28 matched)
+- `/css/css-transforms/parsing/ --shard 1/2`: 14 total | **6 PASS (up from 4!)** | 8 FAIL | 0 TIMEOUT | 0 CRASH (`perspective-origin-computed`, `transform-origin-computed` PASS!)
+- `/css/css-transforms/parsing/ --shard 2/2`: 14 total | **9 PASS** | 5 FAIL | 0 TIMEOUT | 0 CRASH (`9/10` non-prefixed `*-invalid` + `rotate-parsing-computed` PASS!)
+- Totals: **15 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**

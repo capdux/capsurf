@@ -5934,6 +5934,32 @@ function installWindow(global) {
         setDecl("row-gap", val, isImp);
       } else if (key === "grid-column-gap") {
         setDecl("column-gap", val, isImp);
+      } else if (key === "place-content" || key === "place-items" || key === "place-self") {
+        const kind = key.slice(6);
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          setDecl("align-" + kind, parts[0], isImp);
+          setDecl("justify-" + kind, parts[0], isImp);
+        } else if (parts.length >= 2) {
+          const p0 = parts[0].toLowerCase();
+          const splitAt = (p0 === "first" || p0 === "last" || p0 === "safe" || p0 === "unsafe" || p0 === "legacy") ? 2 : 1;
+          if (splitAt < parts.length) {
+            setDecl("align-" + kind, parts.slice(0, splitAt).join(" "), isImp);
+            setDecl("justify-" + kind, parts.slice(splitAt).join(" "), isImp);
+          } else {
+            setDecl("align-" + kind, val, isImp);
+            setDecl("justify-" + kind, val, isImp);
+          }
+        }
+      } else if (key === "flex-flow") {
+        const parts = splitCssTopLevelWhitespace(val);
+        const DIR = new Set(["row", "row-reverse", "column", "column-reverse"]);
+        const WRP = new Set(["nowrap", "wrap", "wrap-reverse"]);
+        for (let pi = 0; pi < parts.length; pi++) {
+          const pt = parts[pi].toLowerCase();
+          if (DIR.has(pt)) setDecl("flex-direction", pt, isImp);
+          else if (WRP.has(pt)) setDecl("flex-wrap", pt, isImp);
+        }
       } else if (key === "border-style") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
@@ -6967,7 +6993,7 @@ function installWindow(global) {
       const px = evalCssLengthExpr(ooRaw, 0, fontSize);
       if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
     }
-    const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height"];
+    const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
     for (let i = 0; i < nonNegLenProps.length; i++) {
       const nk = nonNegLenProps[i];
       const nv = (computedMap.get(nk) || "").trim().toLowerCase();
@@ -7280,6 +7306,18 @@ function installWindow(global) {
       }
       if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
       if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
+      if (name === "place-content" || name === "place-items" || name === "place-self") {
+        const kind = name.slice(6);
+        const def = kind === "self" ? "auto" : "normal";
+        const a = computedMap.get("align-" + kind) || def;
+        const j = computedMap.get("justify-" + kind) || def;
+        return a === j ? a : (a + " " + j);
+      }
+      if (name === "flex-flow") {
+        const fd = computedMap.get("flex-direction") || "row";
+        const fw = computedMap.get("flex-wrap") || "nowrap";
+        return fd + " " + fw;
+      }
       return null;
     }
 

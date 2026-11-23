@@ -3351,3 +3351,10 @@
   - `getShorthandComputed`: 支持 `gap`, `grid-gap`, `grid-row-gap`, `grid-column-gap` 序列化。
   - `applyUsedValuesToComputedMap`: 新增 `row-gap`, `column-gap`, `min-width`, `max-width`, `min-height`, `max-height` 非负长度求值。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 490: `getComputedStyle` `place-*`, `flex-flow`, `flex-basis` 简写与计算值
+- `src/js/shim/window.js`:
+  - `collectRawComputedMap` (`setDecl`): 新增 `place-content`, `place-items`, `place-self` 展开（支持 `first baseline`, `safe`/`unsafe`, `legacy` 双词前缀切分）及 `flex-flow` 展开至 `flex-direction`/`flex-wrap`。
+  - `getShorthandComputed`: 新增 `place-content`, `place-items`, `place-self`, `flex-flow` 序列化。
+  - `applyUsedValuesToComputedMap`: `flex-basis` 纳入非负长度求值。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
