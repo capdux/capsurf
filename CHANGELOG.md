@@ -3447,3 +3447,6 @@
   - `src/js/shim/cssom.js`: 支持并校验 `text-decoration-inset` 与 `text-decoration-skip-spaces`，规范化省略 `text-decoration` 默认 `solid`。
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 接入 `text-decoration-skip-spaces` 与 `text-decoration-inset` 计算值规范化。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B239`（`/css/css-lists/parsing/` 13/23 PASS，`/css/css-text-decor/parsing/` 18/31 PASS）。
+- **Phase 507**:
+  - `src/js/shim/cssom.js`: 新增 `expandCssShorthand` / `__capsurf_expandShorthand` 支持 `list-style` 与 `text-decoration` 展开，并接入 `decl.setProperty`。
+  - `src/js/shim/element/element.js`: 抽取 `setEntryWithShorthand` 统一在 `setProperty` 与 `styleProxy.set` 展开 shorthand 子属性。

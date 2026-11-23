@@ -346,6 +346,18 @@ function createStyleProxy(element) {
     return "";
   }
 
+  function setEntryWithShorthand(map, key, rawName, normV, pri) {
+    setEntryInStyleMap(map, key, rawName, normV, pri);
+    if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
+      const expanded = globalThis.__capsurf_expandShorthand(key, normV);
+      if (expanded) {
+        for (let i = 0; i < expanded.length; i++) {
+          setEntryInStyleMap(map, expanded[i][0], expanded[i][0], expanded[i][1], pri);
+        }
+      }
+    }
+  }
+
   const cachedMethods = {
     item: function (idx) {
       const i = Number(idx) >>> 0;
@@ -387,7 +399,7 @@ function createStyleProxy(element) {
       const normV = (!key.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
         ? globalThis.__capsurf_normalizeCssValue(key, vStr)
         : vStr;
-      setEntryInStyleMap(map, key, rawStr, normV, pPriority);
+      setEntryWithShorthand(map, key, rawStr, normV, pPriority);
       if (key === "display") {
         element._displayNone = (vStr.toLowerCase() === "none");
       }
@@ -482,7 +494,7 @@ function createStyleProxy(element) {
         const normV = (!normKey.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
           ? globalThis.__capsurf_normalizeCssValue(normKey, vStr)
           : vStr;
-        setEntryInStyleMap(map, normKey, rawKey, normV, "");
+        setEntryWithShorthand(map, normKey, rawKey, normV, "");
         if (normKey === "display") {
           element._displayNone = (vStr.toLowerCase() === "none");
         }

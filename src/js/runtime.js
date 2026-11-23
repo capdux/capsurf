@@ -5468,6 +5468,52 @@
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
+    function expandCssShorthand(key, normV) {
+      if (key === "text-decoration") {
+        const parts = splitCssTokens(normV);
+        const LINES = new Set(["underline", "overline", "line-through", "blink"]);
+        const STY = new Set(["solid", "double", "dotted", "dashed", "wavy"]);
+        const lines = [];
+        let st = "solid", th = "auto", col = "currentcolor";
+        for (let i = 0; i < parts.length; i++) {
+          const t = parts[i], tl = t.toLowerCase();
+          if (tl === "none" || tl === "spelling-error" || tl === "grammar-error" || LINES.has(tl)) lines.push(tl);
+          else if (STY.has(tl)) st = tl;
+          else if (tl === "from-font" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) th = tl;
+          else col = t;
+        }
+        return [
+          ["text-decoration-line", lines.length > 0 ? lines.join(" ") : "none"],
+          ["text-decoration-style", st],
+          ["text-decoration-thickness", th],
+          ["text-decoration-color", col]
+        ];
+      }
+      if (key === "list-style") {
+        const parts = splitCssTokens(normV);
+        let pos = "outside", img = "none", typ = "disc", noneCnt = 0;
+        for (let i = 0; i < parts.length; i++) {
+          const t = parts[i], tl = t.toLowerCase();
+          if (tl === "inside" || tl === "outside") pos = tl;
+          else if (tl === "none") noneCnt++;
+          else if (/^(?:url|linear-gradient|radial-gradient|conic-gradient|image-set)\(/i.test(tl)) img = t;
+          else typ = t;
+        }
+        if (noneCnt >= 2) { img = "none"; typ = "none"; }
+        else if (noneCnt === 1) {
+          if (img === "none" && typ === "disc") typ = "none";
+        }
+        return [
+          ["list-style-position", pos],
+          ["list-style-image", img],
+          ["list-style-type", typ]
+        ];
+      }
+      return null;
+    }
+    global.__capsurf_expandShorthand = expandCssShorthand;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_expandShorthand = expandCssShorthand;
+
     function declSupported(name, value) {
       if (!name || typeof name !== "string") return false;
       if (name.startsWith("--")) return typeof value === "string" && value.trim() !== "";
@@ -5983,6 +6029,15 @@
             const lhKey = longhands[i];
             data.set(lhKey, { name: lhKey, value: v, priority: pPriority });
             if (!authoredOrder.includes(lhKey)) authoredOrder.push(lhKey);
+          }
+        } else {
+          const expanded = expandCssShorthand(key, v);
+          if (expanded) {
+            for (let i = 0; i < expanded.length; i++) {
+              const lhKey = expanded[i][0];
+              data.set(lhKey, { name: lhKey, value: expanded[i][1], priority: pPriority });
+              if (!authoredOrder.includes(lhKey)) authoredOrder.push(lhKey);
+            }
           }
         }
 
@@ -11034,6 +11089,18 @@
       return "";
     }
 
+    function setEntryWithShorthand(map, key, rawName, normV, pri) {
+      setEntryInStyleMap(map, key, rawName, normV, pri);
+      if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
+        const expanded = globalThis.__capsurf_expandShorthand(key, normV);
+        if (expanded) {
+          for (let i = 0; i < expanded.length; i++) {
+            setEntryInStyleMap(map, expanded[i][0], expanded[i][0], expanded[i][1], pri);
+          }
+        }
+      }
+    }
+
     const cachedMethods = {
       item: function (idx) {
         const i = Number(idx) >>> 0;
@@ -11075,7 +11142,7 @@
         const normV = (!key.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
           ? globalThis.__capsurf_normalizeCssValue(key, vStr)
           : vStr;
-        setEntryInStyleMap(map, key, rawStr, normV, pPriority);
+        setEntryWithShorthand(map, key, rawStr, normV, pPriority);
         if (key === "display") {
           element._displayNone = (vStr.toLowerCase() === "none");
         }
@@ -11170,7 +11237,7 @@
           const normV = (!normKey.startsWith("--") && typeof globalThis.__capsurf_normalizeCssValue === "function")
             ? globalThis.__capsurf_normalizeCssValue(normKey, vStr)
             : vStr;
-          setEntryInStyleMap(map, normKey, rawKey, normV, "");
+          setEntryWithShorthand(map, normKey, rawKey, normV, "");
           if (normKey === "display") {
             element._displayNone = (vStr.toLowerCase() === "none");
           }
