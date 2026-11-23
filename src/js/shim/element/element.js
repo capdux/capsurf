@@ -828,13 +828,17 @@ function installElementExtensions(proto) {
       if (!ok) return undefined;
       if (!this._relList) {
         const self = this;
+        const supportedRel = local === "link"
+          ? new Set(["stylesheet", "icon", "preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "canonical", "manifest", "alternate", "pingback"])
+          : new Set(["noopener", "noreferrer", "opener", "nofollow", "external", "help", "license", "next", "prev", "search", "tag"]);
         this._relList = new DOMTokenList(
           function () {
             return (self.getAttribute && self.getAttribute("rel")) || "";
           },
           function (val) {
             if (self.setAttribute) self.setAttribute("rel", String(val));
-          }
+          },
+          supportedRel
         );
       }
       return this._relList;

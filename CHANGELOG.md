@@ -3050,3 +3050,4 @@
 - **Phase 423 (`src/js/shim/file.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：新增 `Blob.prototype.bytes()` 与 W3C `PerformanceObserver` / `PerformanceObserverEntryList`。
 - **Phase 424 (`src/js/shim/window.js`, `src/js/shim/element/html-classes.js`, `src/js/shim/element/forms/select.js`, `src/js/runtime_source.cp`)**：修正 `PerformanceObserver.supportedEntryTypes` 字母序；新增 `HTMLLinkElement.fetchPriority`；补齐 `Option.prototype`。
 - **Phase 425 (`src/js/shim/element/forms/form.js`, `src/js/shim/element/forms/button.js`, `src/js/shim/element/forms/input.js`, `src/js/runtime_source.cp`)**：抽离 `resolveFormActionUrl` 并为 `HTMLButtonElement.formAction` 与 `HTMLInputElement.formAction` 补齐标准 URL 反射。
+- **Phase 426 (`src/js/shim/collections.js`, `src/js/shim/element/element.js`, `src/js/shim/element/forms/fieldset.js`, `src/js/runtime_source.cp`)**：新增 `DOMTokenList.prototype.supports`、`relList` 支持表与 `HTMLFieldSetElement.validationMessage`。

@@ -69,6 +69,11 @@ function installFieldSetElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLFieldSetElement.prototype, "validationMessage", {
+    get: function () { return ""; },
+    configurable: true,
+  });
+
   markNative(HTMLFieldSetElement, "HTMLFieldSetElement");
   global.HTMLFieldSetElement = HTMLFieldSetElement;
   if (typeof globalThis !== "undefined") {

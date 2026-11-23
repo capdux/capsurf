@@ -3,8 +3,8 @@
 
 const _dtlState = new WeakMap();
 
-function DOMTokenList(getter, setter) {
-  const st = { getter: getter, setter: setter };
+function DOMTokenList(getter, setter, supportedSet) {
+  const st = { getter: getter, setter: setter, supportedSet: supportedSet || null };
   _dtlState.set(this, st);
   const proxy = new Proxy(this, {
     get: function (target, prop, receiver) {
@@ -139,6 +139,14 @@ DOMTokenList.prototype.entries = function () {
 DOMTokenList.prototype.toString = function () {
   const st = _dtlState.get(this);
   return st ? (st.getter() || "") : "";
+};
+
+DOMTokenList.prototype.supports = function (token) {
+  const st = _dtlState.get(this);
+  if (!st || !st.supportedSet) {
+    throw new TypeError("Failed to execute 'supports' on 'DOMTokenList': DOMTokenList has no supported tokens.");
+  }
+  return st.supportedSet.has(String(token).toLowerCase());
 };
 
 DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];

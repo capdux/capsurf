@@ -2596,8 +2596,8 @@
 
   const _dtlState = new WeakMap();
 
-  function DOMTokenList(getter, setter) {
-    const st = { getter: getter, setter: setter };
+  function DOMTokenList(getter, setter, supportedSet) {
+    const st = { getter: getter, setter: setter, supportedSet: supportedSet || null };
     _dtlState.set(this, st);
     const proxy = new Proxy(this, {
       get: function (target, prop, receiver) {
@@ -2732,6 +2732,14 @@
   DOMTokenList.prototype.toString = function () {
     const st = _dtlState.get(this);
     return st ? (st.getter() || "") : "";
+  };
+
+  DOMTokenList.prototype.supports = function (token) {
+    const st = _dtlState.get(this);
+    if (!st || !st.supportedSet) {
+      throw new TypeError("Failed to execute 'supports' on 'DOMTokenList': DOMTokenList has no supported tokens.");
+    }
+    return st.supportedSet.has(String(token).toLowerCase());
   };
 
   DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
@@ -9901,13 +9909,17 @@
         if (!ok) return undefined;
         if (!this._relList) {
           const self = this;
+          const supportedRel = local === "link"
+            ? new Set(["stylesheet", "icon", "preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "canonical", "manifest", "alternate", "pingback"])
+            : new Set(["noopener", "noreferrer", "opener", "nofollow", "external", "help", "license", "next", "prev", "search", "tag"]);
           this._relList = new DOMTokenList(
             function () {
               return (self.getAttribute && self.getAttribute("rel")) || "";
             },
             function (val) {
               if (self.setAttribute) self.setAttribute("rel", String(val));
-            }
+            },
+            supportedRel
           );
         }
         return this._relList;
@@ -20408,6 +20420,11 @@
           return formListedDescendants(self);
         });
       },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFieldSetElement.prototype, "validationMessage", {
+      get: function () { return ""; },
       configurable: true,
     });
 
