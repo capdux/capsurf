@@ -3375,3 +3375,10 @@
   - `splitCssTokens`: 提升至模块作用域，供 `isValidCssValue` 与 `normalizeCssSpecifiedValue` 共享。
   - `normalizeCssSpecifiedValue`: 新增 `margin`, `padding`, `inset`, `border-width`, `border-style` 的 1~4 边最短折叠及 `0 -> 0px`；新增 `scale` 百分比转数字、剔除冗余 `1` 与等值合并。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 494: CSS 指定值 `translate`, `rotate`, `border-radius` 规范化
+- `src/js/shim/cssom.js` (`normalizeCssSpecifiedValue`):
+  - `translate`: `0 -> 0px` 与尾随 `0px` 归约。
+  - `rotate`: `z` 轴省略、`<angle> x|y -> x|y <angle>`、正轴向量 `1 0 0 -> x` 归约。
+  - `border-radius`: 左右两侧各自 1~4 值折叠，两侧相同时省略 `/ ...`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

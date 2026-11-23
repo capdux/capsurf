@@ -7276,3 +7276,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 492 CSS 指定值归一化 (`normalizeCssSpecifiedValue`)]** 在 `src/js/shim/cssom.js` 新增 `normalizeCssSpecifiedValue` 并接入 `CSSStyleDeclaration.setProperty` 及 `src/js/shim/element/element.js` 的 `setProperty` / `styleProxy.set`（覆盖数值科学计数法/`-0` 归一化、`0`→`0px` 归一化及双边同值折叠）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
 
 - **[Phase 493 CSS 指定值 4 边折叠与 `scale` 规范化]** 在 `src/js/shim/cssom.js` 中将 `splitCssTokens` 提升至模块作用域复用，并扩充 `normalizeCssSpecifiedValue` 支持 `margin`/`padding`/`inset`/`border-width`/`border-style` 1~4 边折叠及 `scale` 指定值百分比/冗余 `1`/等值归一化；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 494 CSS 指定值 `translate`/`rotate`/`border-radius` 归一化]** 在 `src/js/shim/cssom.js` `normalizeCssSpecifiedValue` 中新增 `translate`（`0`→`0px` 及末尾 `0px` 裁剪）、`rotate`（`z`/正轴向量归约与轴序重排）、`border-radius`（`/` 双组最短折叠及相同左右组折叠）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。

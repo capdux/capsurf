@@ -5163,6 +5163,49 @@
         if (parts.length === 2 && parts[1] === parts[0]) parts.pop();
         return parts.join(" ");
       }
+      if (key === "translate") {
+        const parts = splitCssTokens(s);
+        if (parts.length === 1 && parts[0].toLowerCase() === "none") return "none";
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+        }
+        if (parts.length === 3 && parts[2] === "0px") parts.pop();
+        if (parts.length === 2 && parts[1] === "0px") parts.pop();
+        return parts.join(" ");
+      }
+      if (key === "rotate") {
+        const parts = splitCssTokens(s);
+        if (parts.length === 1 && parts[0].toLowerCase() === "none") return "none";
+        if (parts.length === 2) {
+          const p0 = parts[0].toLowerCase(), p1 = parts[1].toLowerCase();
+          if (p0 === "z") return parts[1];
+          if (p1 === "z") return parts[0];
+          if (p1 === "x" || p1 === "y") return p1 + " " + parts[0];
+        }
+        if (parts.length === 4) {
+          const x = Number(parts[0]), y = Number(parts[1]), z = Number(parts[2]);
+          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+            if (x > 0 && y === 0 && z === 0) return "x " + parts[3];
+            if (x === 0 && y > 0 && z === 0) return "y " + parts[3];
+            if (x === 0 && y === 0 && z > 0) return parts[3];
+          }
+        }
+        return parts.join(" ");
+      }
+      if (key === "border-radius") {
+        const si = s.indexOf("/");
+        const col4 = (str) => {
+          const p = splitCssTokens(str);
+          for (let i = 0; i < p.length; i++) if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") p[i] = "0px";
+          if (p.length === 4 && p[1] === p[3]) p.pop();
+          if (p.length === 3 && p[0] === p[2]) p.pop();
+          if (p.length === 2 && p[0] === p[1]) p.pop();
+          return p.join(" ");
+        };
+        if (si === -1) return col4(s);
+        const l = col4(s.slice(0, si)), r = col4(s.slice(si + 1));
+        return l === r ? l : (l + " / " + r);
+      }
       return s;
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
