@@ -2443,3 +2443,7 @@
 ### Phase 483: `getComputedStyle` 字重与逻辑偏移计算值解析
 - `font-weight` 对 `bolder`/`lighter` 沿 `parentElement` 读取原始计算字重并按 CSS Fonts 4 阶梯规则映射。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 484: `getComputedStyle` 间距/缩进/多栏/透视计算值解析
+- 对齐 `word-spacing: normal -> 0px` 与 `tab-size` 数值/长度双分支求值。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 7/7 `true`，`--smoke` 3/3 PASS (6/6)。

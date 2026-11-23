@@ -6806,8 +6806,9 @@ function installWindow(global) {
       "border-right-width": "border-right-style",
       "border-bottom-width": "border-bottom-style",
       "border-left-width": "border-left-style",
+      "column-rule-width": "column-rule-style",
     };
-    const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"];
+    const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width"];
     for (let i = 0; i < lwProps.length; i++) {
       const lk = lwProps[i];
       const bsProp = borderSideMap[lk];
@@ -6893,11 +6894,37 @@ function installWindow(global) {
     for (let i = 0; i < spProps.length; i++) {
       const sk = spProps[i];
       const sv = (computedMap.get(sk) || "").trim().toLowerCase();
-      if (sv && sv !== "normal" && sv.indexOf("%") === -1) {
+      if (!sv) continue;
+      if (sk === "word-spacing" && sv === "normal") {
+        computedMap.set(sk, "0px");
+        continue;
+      }
+      if (sv !== "normal" && sv.indexOf("%") === -1) {
         const px = evalCssLengthExpr(sv, 0, fontSize);
         if (px !== null) {
           computedMap.set(sk, (sk === "letter-spacing" && px === 0) ? "normal" : formatCssPx(px));
         }
+      }
+    }
+    const tsRaw = (computedMap.get("tab-size") || "").trim().toLowerCase();
+    if (tsRaw && !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tsRaw)) {
+      if (/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)/i.test(tsRaw)) {
+        const px = evalCssLengthExpr(tsRaw, 0, fontSize);
+        if (px !== null) computedMap.set("tab-size", formatCssPx(Math.max(0, px)));
+      }
+    }
+    const ooRaw = (computedMap.get("outline-offset") || "").trim().toLowerCase();
+    if (ooRaw) {
+      const px = evalCssLengthExpr(ooRaw, 0, fontSize);
+      if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
+    }
+    const nonNegLenProps = ["column-width", "perspective"];
+    for (let i = 0; i < nonNegLenProps.length; i++) {
+      const nk = nonNegLenProps[i];
+      const nv = (computedMap.get(nk) || "").trim().toLowerCase();
+      if (nv && nv !== "auto" && nv !== "none") {
+        const px = evalCssLengthExpr(nv, 0, fontSize);
+        if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
       }
     }
   }

@@ -3310,3 +3310,12 @@
   - `applyUsedValuesToComputedMap`: `insetProps` 扩充 `inset-block-start`, `inset-block-end`, `inset-inline-start`, `inset-inline-end`。
   - `applyUsedValuesToComputedMap`: 新增 `font-weight` 计算值解析（`normal/bold` 数值化、`bolder/lighter` 依据 `parentElement` 继承字重查表、`calc(...)` 数值求值与 `[1, 1000]` 钳位）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 484: `getComputedStyle` `word-spacing`, `tab-size`, `outline-offset`, `column-*`, `perspective` 计算值
+- `src/js/shim/window.js` (`applyUsedValuesToComputedMap`):
+  - `word-spacing`: `"normal"` 归一化为 `"0px"`。
+  - `tab-size`: 区分无单位数值（原样保留）与长度值（求值并 `Math.max(0, px)` 钳位）。
+  - `outline-offset`: 对非 `%` 长度求值保留正负号。
+  - `column-rule-width`: 接入线宽解析与 `column-rule-style: none|hidden` 归 `0px`。
+  - `column-width` / `perspective`: 非 `auto`/`none` 长度求值与非负钳位。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

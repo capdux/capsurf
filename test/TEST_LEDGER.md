@@ -1060,3 +1060,15 @@
 - `/css/css-lists/parsing/`: 23 total | 12 PASS (up from 8!) | 11 FAIL | 0 TIMEOUT | 0 CRASH (8/8 `*-invalid.html` PASS!)
 - `/css/css-grid/parsing/grid-auto-flow`: 3 total | 1 PASS (`grid-auto-flow-invalid`) | 2 FAIL | 0 TIMEOUT | 0 CRASH
 - Totals: **13 PASS / 13 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B222 (port=19700, 33 tests, 2/33 matched)
+- `/css/css-sizing/parsing/`: 19 total | 0 PASS | 4 FAIL | 15 TIMEOUT | 0 CRASH
+- `/css/css-color/ --shard 2/4`: 14 total | 2 PASS | 8 FAIL | 4 TIMEOUT | 0 CRASH
+- Totals: **2 PASS / 12 FAIL / 19 TIMEOUT / 0 CRASH**
+
+### PW Batch 145 (port=19386, 77 tests)
+- `page-network-request.spec.ts`: 27 total | 7 PASS | 16 FAIL | 3 TIMEOUT | 1 SKIP
+- `page-network-response.spec.ts`: 21 total | 18 PASS | 2 FAIL | 1 TIMEOUT
+- `page-add-init-script.spec.ts`: 11 total | **11 PASS (100%)** | 0 FAIL | 0 TIMEOUT
+- `page-expose-function.spec.ts`: 18 total | 0 PASS | 0 FAIL | 18 TIMEOUT
+- Totals: **36 PASS / 18 FAIL / 22 TIMEOUT / 1 SKIP**
