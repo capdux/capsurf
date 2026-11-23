@@ -1087,7 +1087,7 @@
         }
         if (!okName) return false;
         i++;
-        if (i < toks.length && /^[+-]?\d+$/.test(toks[i])) i++;
+        if (i < toks.length && (/^[+-]?\d+$/.test(toks[i]) || /^(?:calc|min|max|clamp)\(/i.test(toks[i]))) i++;
       }
       return true;
     }
@@ -1567,8 +1567,9 @@
     }
     if (key === "text-emphasis-position") {
       const p = splitCssTokens(s.toLowerCase());
-      if (p.length === 2 && (p[0] === "left" || p[0] === "right")) return p[1] + " " + p[0];
-      return p.join(" ");
+      const ordered = (p.length === 2 && (p[0] === "left" || p[0] === "right")) ? [p[1], p[0]] : p;
+      if (ordered.length === 2 && ordered[1] === "right") return ordered[0];
+      return ordered.join(" ");
     }
     if (key === "text-underline-position") {
       const p = splitCssTokens(s.toLowerCase());
@@ -1619,6 +1620,12 @@
       const order = ["underline", "overline", "line-through", "blink"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
     }
+    if (key === "list-style-type") {
+      if (/^symbols\(\s*symbolic\s+/i.test(s)) {
+        return "symbols(" + s.replace(/^symbols\(\s*symbolic\s+/i, "");
+      }
+      return s;
+    }
     if (key === "counter-reset" || key === "counter-increment" || key === "counter-set") {
       const p = splitCssTokens(s);
       if (p.length === 1 && p[0].toLowerCase() === "none") return "none";
@@ -1627,11 +1634,12 @@
       let i = 0;
       while (i < p.length) {
         out.push(p[i]);
-        if (i + 1 < p.length && /^[+-]?\d+$/.test(p[i + 1])) {
-          out.push(String(Number(p[i + 1])));
+        const isRev = /^reversed\(/i.test(p[i]);
+        if (i + 1 < p.length && (/^[+-]?\d+$/.test(p[i + 1]) || /^(?:calc|min|max|clamp)\(/i.test(p[i + 1]))) {
+          out.push(/^[+-]?\d+$/.test(p[i + 1]) ? String(Number(p[i + 1])) : p[i + 1]);
           i += 2;
         } else {
-          out.push(defVal);
+          if (!isRev) out.push(defVal);
           i += 1;
         }
       }

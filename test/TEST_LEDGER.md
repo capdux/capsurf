@@ -1187,3 +1187,9 @@
 
 ### PW Targeted Verification (Phase 504, port=19388, 7 tests)
 - `page-event-pageerror.spec.ts`: **6 / 7 PASS (+4 unexpected passes vs baseline)** | 1 FAIL (`should fire` stack col/eval) | 0 TIMEOUT | 0 SKIP
+
+### WPT-B238 (port=19700, Phase 504 verification, 85 tests)
+- `/css/css-lists/parsing/`: 23 total | 12 PASS | 11 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text-decor/parsing/`: 31 total | 15 PASS | 16 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-grid/parsing/ --shard 1/2`: 31 total | 3 PASS (`FAIL→PASS`: `grid-template-rows-repeat-intrinsic-valid.tentative.html`) | 27 FAIL | 1 TIMEOUT | 0 CRASH
+- Totals: **30 PASS / 54 FAIL / 1 TIMEOUT / 0 CRASH**

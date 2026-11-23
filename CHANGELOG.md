@@ -3439,3 +3439,7 @@
   - `src/js/shim/window.js`: `drainOneTask` 异常捕获优先调用 `globalThis.__capsurf_report_exception(e)` 上报 `Runtime.exceptionThrown`。
   - `src/cdp/types.cp`: `normalizeExceptionMessage` 新增 `"unexpected character" -> "Invalid or unexpected token"` 规范化映射。
   - `test/TEST_LEDGER.md`: 记录 `page-event-pageerror.spec.ts` 6/7 PASS（`clearPageErrors should work`、`should fire illegal character error` 等通过）。
+- **Phase 505**:
+  - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `counter-set`、`text-decoration-{inset,skip-spaces,thickness}`、`text-emphasis-{color,position,style}`、`text-underline-{offset,position}`。
+  - `src/js/shim/cssom.js`: `counter-*` 支持 `calc/min/max/clamp` 计数值与 `reversed(...)` 规范化；`text-emphasis-position` 省略默认 `right`；`list-style-type` 去除 `symbols(symbolic ...)` 默认 `symbolic`。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B238`（`/css/css-lists/parsing/` 12/23、`/css/css-text-decor/parsing/` 15/31、`/css/css-grid/parsing/ 1/2` 3/31）。

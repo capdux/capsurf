@@ -2521,3 +2521,4 @@
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
 - **Phase 503**: 复用 `cssom.js` 的 `__capsurf_normalizeCssValue` 在 `window.js` 计算样式阶段对 13 个离散关键字/复合语法属性进行规范化，消除 `style` 侧与 `getComputedStyle` 侧序列化不一致问题。
 - **Phase 504**: 补齐 `window.js` `drainOneTask` 异步微任务定时器通道的 `__capsurf_report_exception` 上报，消除 `setTimeout(..., 0)` 在单步 `evaluate` 返回后只进 `consoleAPICalled` 而不触发 `Runtime.exceptionThrown` 的漏报。
+- **Phase 505**: 针对 `WPT-B238` 暴露的 `css-lists`/`css-text-decor` 解析与 `getComputedStyle` 支持性问题，一次性补齐长手属性表与 4 类指定值规范化规则。
