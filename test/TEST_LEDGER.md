@@ -1395,3 +1395,13 @@
 - `/css/css-cascade/ --shard 1/2`: 45 total | 20 PASS | 24 FAIL | 0 TIMEOUT | 1 ERROR
 - `/css/css-cascade/ --shard 2/2`: 45 total | 17 PASS (`FAIL→PASS`: `layer-counter-style-override`) | 26 FAIL | 2 TIMEOUT | 0 CRASH
 - Totals: **37 PASS / 50 FAIL / 2 TIMEOUT / 1 ERROR**
+
+### WPT-B272 (port=19700, Phase 523 verification, 100 tests)
+- `/css/css-transitions/parsing/`: 14 total | **13 PASS (`transition-computed` & `transition-invalid` green!, only `transition-valid` left!)** | 1 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/`: 86 total | 51 PASS | 35 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **64 PASS / 36 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B273 (port=19700, Phase 523 verification, 73 tests)
+- `/css/css-lists/parsing/`: 23 total | 17 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-align/parsing/`: 50 total | 35 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **52 PASS / 21 FAIL / 0 TIMEOUT / 0 CRASH**

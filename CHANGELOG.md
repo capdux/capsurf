@@ -3496,3 +3496,6 @@
   - `src/js/shim/cssom.js`: 新增 `transition` 合法性校验；`expandCssShorthand` 支持全局关键字展开至 longhands。
   - `src/js/shim/window.js`: `getShorthandComputed` 新增 `transition` 计算值序列化（含 `initial`/`unset` 回退）。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B271`（`/css/css-cascade/` 37/90，+1 `FAIL→PASS`）。
+- **Phase 524**:
+  - `src/js/shim/cssom.js`: `serializeExpandedShorthand` 支持全部子属性同为全局关键字时折叠返回该关键字。
+  - `test/TEST_LEDGER.md`: 记录 `WPT-B273`（`/css/css-lists/parsing/` 17/23、`/css/css-align/parsing/` 35/50）。

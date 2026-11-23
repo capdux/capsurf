@@ -2137,6 +2137,9 @@
       if (!v) return "";
       vals.push(v);
     }
+    if (vals.length > 0 && /^(?:initial|inherit|unset|revert|revert-layer)$/i.test(vals[0]) && vals.every((v) => v.toLowerCase() === vals[0].toLowerCase())) {
+      return vals[0].toLowerCase();
+    }
     if (key === "text-decoration") {
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
     }
