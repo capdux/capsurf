@@ -3153,3 +3153,11 @@
   - `vertical-align`: 按 `baseline-source` / `baseline-shift` / `alignment-baseline` 三组互斥校验，拒绝逗号、`none`、`auto` 及同组重复。
   - `transform`: 校验函数名与参数个数（`matrix(6)`, `translate(1..2)`, `scale(1..2)`, `rotate(1)`, `skew(1..2)`, `perspective(1)` 等），拒绝顶层逗号与无单位 `perspective(1000)`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 463: CSSOM `animation-*`, `transition-*`, `column-count/width` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `animation-iteration-count`: 逗号分层校验 `infinite | <number [0,∞]>`, 拒绝 `initial, 4`、负数及多 token。
+  - `animation-duration` / `transition-duration` / `animation-delay` / `transition-delay`: 逗号分层校验 `<time>`（`duration` 拒绝负值，`animation-duration` 允许 `auto`）。
+  - `animation-direction` / `animation-fill-mode` / `animation-play-state`: 逗号分层关键字校验。
+  - `column-count` (`auto | <integer [1,∞]>`) 与 `column-width` (`auto | <length [0,∞]>`, 拒绝 `%`)。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -595,6 +595,60 @@
       }
       return true;
     }
+    if (prop === "animation-iteration-count") {
+      const layers = vLower.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const toks = splitCssTokens(layers[i].trim());
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t === "infinite" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) continue;
+        if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t) || Number(t) < 0) return false;
+      }
+      return true;
+    }
+    if (prop === "animation-duration" || prop === "transition-duration" || prop === "animation-delay" || prop === "transition-delay") {
+      const allowNeg = prop.endsWith("-delay");
+      const allowAuto = prop === "animation-duration";
+      const layers = vLower.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const toks = splitCssTokens(layers[i].trim());
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if ((allowAuto && t === "auto") || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) continue;
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/i.exec(t);
+        if (!m) return false;
+        if (!allowNeg && (Number(m[1]) < 0 || t.startsWith("-"))) return false;
+      }
+      return true;
+    }
+    if (prop === "animation-direction" || prop === "animation-fill-mode" || prop === "animation-play-state") {
+      const allowed = prop === "animation-direction"
+        ? new Set(["normal", "reverse", "alternate", "alternate-reverse"])
+        : (prop === "animation-fill-mode"
+          ? new Set(["none", "forwards", "backwards", "both"])
+          : new Set(["running", "paused"]));
+      const layers = vLower.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const toks = splitCssTokens(layers[i].trim());
+        if (toks.length !== 1 || !allowed.has(toks[0])) return false;
+      }
+      return true;
+    }
+    if (prop === "column-count") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t === "auto" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+      return /^\+?[1-9]\d*$/.test(t);
+    }
+    if (prop === "column-width") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (t === "auto") return true;
+      if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
+      return isValidLenPct(t, false);
+    }
 
     return true;
   }

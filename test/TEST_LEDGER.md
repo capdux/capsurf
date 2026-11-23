@@ -952,3 +952,10 @@
 - `/css/css-cascade/ --shard 2/2`: 45 total | 16 PASS | 27 FAIL | 2 TIMEOUT | 0 CRASH (`FAIL→PASS`: `layer-counter-style-override.html`)
 - `/css/css-color/ --shard 1/4`: 14 total | 1 PASS | 10 FAIL | 3 TIMEOUT | 0 CRASH
 - Totals: **37 PASS / 61 FAIL / 5 TIMEOUT / 1 ERROR**
+
+### WPT-B205 (port=19700, 127 tests, 64/127 matched)
+- `/css/css-box/parsing/`: 29 total | 19 PASS | 10 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-break/parsing/`: 18 total | 12 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: `orphans-valid`, `widows-valid`)
+- `/css/css-backgrounds/parsing/ --shard 1/2`: 37 total | 7 PASS | 30 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-text/parsing/ --shard 1/2`: 43 total | 13 PASS | 30 FAIL | 0 TIMEOUT | 0 CRASH (`FAIL→PASS`: `text-align-last-valid`)
+- Totals: **51 PASS / 76 FAIL / 0 TIMEOUT / 0 CRASH**
