@@ -2327,3 +2327,5 @@
 - Phase 450 (`src/js/shim/element/forms/label.js`): 修复 `getLabelsForControl` 未对原生祖先 `<label>` 调用 `upgradeElement` 导致 `.labels` 返回空集合的缺陷。
 
 - Phase 451 (`src/html/tags.cp`, `src/html/tree_builder.cp`): 将 `InBody` 隐式闭合 `<p>` 的判断由 `isSpecial()` 收窄为 `closesP()`，根治 `<p><label><button>` 被拆散为 `<form>` 直接子节点的建树缺陷。
+
+- Phase 452 (`src/js/shim/element/forms/label.js`): 抽离 `collectLabelsArray` 与 `_labelsCache` 活体 Proxy，修复 `labelable-elements.html` 的 `[SameObject]`、`hidden` 动态切换与非可关联元素 `undefined` 语义。

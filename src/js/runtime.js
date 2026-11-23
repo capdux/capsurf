@@ -20978,7 +20978,10 @@
            tag === "meter" || tag === "output" || tag === "progress";
   }
 
-  function getLabelsForControl(control) {
+  const _labelsCache = new WeakMap();
+
+  function collectLabelsArray(control) {
+    if (!isLabelable(control)) return [];
     const matches = [];
     const seen = new Set();
 
@@ -21027,7 +21030,39 @@
       p = p.parentElement || p.parentNode;
     }
 
-    return new NodeList(matches);
+    return matches;
+  }
+
+  function getLabelsForControl(control) {
+    let cached = _labelsCache.get(control);
+    if (cached) return cached;
+    const target = new NodeList([]);
+    const proxy = new Proxy(target, {
+      get: function (t, prop, receiver) {
+        if (prop === "length") return collectLabelsArray(control).length;
+        if (prop === "item") return function (idx) { const l = collectLabelsArray(control); const i = Number(idx); return i >= 0 && i < l.length ? l[i] : null; };
+        if (prop === Symbol.iterator) {
+          return function () {
+            const l = collectLabelsArray(control);
+            let idx = 0;
+            return { next: function () { return idx < l.length ? { value: l[idx++], done: false } : { value: undefined, done: true }; } };
+          };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const l = collectLabelsArray(control);
+          const i = Number(prop);
+          return i >= 0 && i < l.length ? l[i] : undefined;
+        }
+        return Reflect.get(t, prop, receiver);
+      },
+      has: function (t, prop) {
+        if (prop === "length" || prop === "item") return true;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < collectLabelsArray(control).length;
+        return Reflect.has(t, prop);
+      },
+    });
+    _labelsCache.set(control, proxy);
+    return proxy;
   }
 
   function installLabelElement(global) {
@@ -21098,7 +21133,7 @@
           const type = (this.type || (typeof this.getAttribute === "function" ? this.getAttribute("type") : "") || "text").toLowerCase();
           if (type === "hidden") return null;
         } else if (tag !== "button" && tag !== "select" && tag !== "textarea" && tag !== "meter" && tag !== "output" && tag !== "progress") {
-          return null;
+          return undefined;
         }
         return getLabelsForControl(this);
       },
