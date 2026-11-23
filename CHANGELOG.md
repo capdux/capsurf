@@ -3503,3 +3503,5 @@
   - `src/js/shim/cssom.js`: 新增 `animation-composition` 与 `animation-name` 合法性校验及规范化（含引号字符串转转义标识符）。
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 新增 `animation-composition`；`canonComputedProps` 新增 `animation-name`。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B275`（`/css/css-text-decor/parsing/` 25/31、`/css/css-flexbox/parsing/` 23/27）。
+- **Phase 526**:
+  - `src/js/shim/window.js`: 修复 `splitCssDeclarations` 转义字符跳过逻辑；`getShorthandComputed` 新增 `text-wrap`。

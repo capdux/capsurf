@@ -7340,3 +7340,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 524 完成 (`serializeExpandedShorthand` 全局关键字折叠)**：在 `src/js/shim/cssom.js` `serializeExpandedShorthand` 入口新增全局关键字（`initial`/`inherit`/`unset`/`revert`/`revert-layer`）统一折叠返回，解决 `transition-valid.html` 中 `test_valid_value("transition", "initial", "initial")` 断言。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B273`。
 
 - **Phase 525 完成 (`animation-composition` + `animation-name` 校验与规范化)**：在 `src/js/shim/cssom.js` 新增 `animation-composition` 与 `animation-name` 校验及规范化（`NONE -> none`、普通字符串转转义标识符、受限关键字保留引号）；在 `src/js/shim/window.js` `STANDARD_COMPUTED_LONGHANDS` 新增 `animation-composition`，`canonComputedProps` 新增 `animation-name`。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B275`。
+
+- **Phase 526 完成 (`splitCssDeclarations` 转义引号修复 + `getComputedStyle().textWrap`)**：修复 `src/js/shim/window.js` `splitCssDeclarations` 误将 `\"` 识别为引号开启导致末尾 `;` 泄漏（打通 `animation-name-computed`），并在 `getShorthandComputed` 新增 `text-wrap` 分支（打通 `text-wrap-computed`）。`bin_dev/main` 编译通过，CDP 探针与 `--smoke` 3/3 PASS。

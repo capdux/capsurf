@@ -5676,9 +5676,15 @@ function installWindow(global) {
     for (let i = 0; i < block.length; i++) {
       const c = block[i];
       if (inQuote) {
-        if (c === inQuote && block[i - 1] !== "\\") {
+        if (c === "\\" && i + 1 < block.length) {
+          i++;
+          continue;
+        }
+        if (c === inQuote) {
           inQuote = null;
         }
+      } else if (c === "\\" && i + 1 < block.length) {
+        i++;
       } else if (c === '"' || c === "'") {
         inQuote = c;
       } else if (c === "(") {
@@ -7441,6 +7447,9 @@ function installWindow(global) {
           const v = computedMap.get(lh);
           return (!v || v === "initial" || v === "unset") ? tDefs[lh] : v;
         });
+      }
+      if (name === "text-wrap" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        return globalThis.__capsurf_serializeShorthand("text-wrap", (lh) => computedMap.get(lh) || (lh === "text-wrap-mode" ? "wrap" : "auto"));
       }
       if (name === "overflow") {
         const ox = computedMap.get("overflow-x") || "visible";
