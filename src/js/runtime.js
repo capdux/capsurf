@@ -3843,8 +3843,8 @@
       "grid", "grid-area", "grid-auto-columns", "grid-auto-flow", "grid-auto-rows",
       "grid-column", "grid-column-end", "grid-column-gap", "grid-column-start", "grid-gap",
       "grid-row", "grid-row-end", "grid-row-gap", "grid-row-start", "grid-template",
-      "grid-template-areas", "grid-template-columns", "grid-template-rows", "height",
-      "hyphenate-character", "hyphens", "image-orientation", "image-rendering",
+      "grid-template-areas", "grid-template-columns", "grid-template-rows", "hanging-punctuation", "height",
+      "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering",
       "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
       "inset-inline", "inset-inline-end", "inset-inline-start", "isolation", "justify-content",
       "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-height",
@@ -4672,6 +4672,35 @@
         const t = toks[0];
         if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
         return isValidLenPct(t, true);
+      }
+      if (prop === "hyphenate-character") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t.toLowerCase() === "auto") return true;
+        return (t.startsWith('"') && t.endsWith('"') && t.length >= 2) || (t.startsWith("'") && t.endsWith("'") && t.length >= 2);
+      }
+      if (prop === "hyphenate-limit-chars") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 3) return false;
+        for (let i = 0; i < toks.length; i++) {
+          if (toks[i] !== "auto" && !/^(?:\+?\d+)$/.test(toks[i])) return false;
+        }
+        return true;
+      }
+      if (prop === "hanging-punctuation") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 0 || toks.length > 3) return false;
+        if (toks.length === 1 && toks[0] === "none") return true;
+        let seenFirst = false, seenEnd = false, seenLast = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "first") { if (seenFirst) return false; seenFirst = true; }
+          else if (t === "force-end" || t === "allow-end") { if (seenEnd) return false; seenEnd = true; }
+          else if (t === "last") { if (seenLast) return false; seenLast = true; }
+          else return false;
+        }
+        return true;
       }
       if (prop === "perspective") {
         const toks = splitCssTokens(vLower);
@@ -5886,6 +5915,36 @@
           });
         }
         return sl;
+      }
+      if (key === "hyphenate-character") {
+        const toks = splitCssTokens(s);
+        if (toks.length === 1) {
+          const t = toks[0];
+          if (t.toLowerCase() === "auto") return "auto";
+          if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+            const decoded = t.slice(1, -1).replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, hex) => {
+              try { return String.fromCodePoint(parseInt(hex, 16)); } catch (_) { return _; }
+            });
+            return '"' + decoded.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+          }
+        }
+        return s;
+      }
+      if (key === "hyphenate-limit-chars") {
+        const p = splitCssTokens(s.toLowerCase()).map((t) => (t === "auto" ? "auto" : String(parseInt(t, 10))));
+        if (p.length === 3 && p[2] === p[1]) p.pop();
+        if (p.length === 2 && p[0] === "auto" && p[1] === "auto") return "auto";
+        return p.join(" ");
+      }
+      if (key === "hanging-punctuation") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 1 && p[0] === "none") return "none";
+        const out = [];
+        if (p.indexOf("first") !== -1) out.push("first");
+        if (p.indexOf("force-end") !== -1) out.push("force-end");
+        else if (p.indexOf("allow-end") !== -1) out.push("allow-end");
+        if (p.indexOf("last") !== -1) out.push("last");
+        return out.join(" ");
       }
       if (key === "scrollbar-gutter") {
         const p = splitCssTokens(s.toLowerCase());
@@ -39235,7 +39294,7 @@
       "color", "font-size", "font-family", "font-weight", "font-style",
       "line-height", "text-align", "visibility", "direction", "white-space",
       "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
-      "letter-spacing", "word-spacing", "cursor",
+      "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -40463,12 +40522,25 @@
         }
         computedMap.set("text-align", resolvedAlign);
       }
+      if ((computedMap.get("text-justify") || "").trim().toLowerCase() === "distribute") {
+        computedMap.set("text-justify", "inter-character");
+      }
+      if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
+        computedMap.set("hyphenate-character", "auto");
+      }
+      if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
+        computedMap.set("hyphenate-limit-chars", "auto");
+      }
+      if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
+        computedMap.set("hanging-punctuation", "none");
+      }
       if (typeof global.__capsurf_normalizeCssValue === "function") {
         const canonComputedProps = [
           "counter-reset", "counter-increment", "counter-set", "animation-name", "text-transform",
           "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
           "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
-          "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
+          "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures",
+          "hyphenate-character", "hyphenate-limit-chars", "hanging-punctuation"
         ];
         for (let ci = 0; ci < canonComputedProps.length; ci++) {
           const ck = canonComputedProps[ci];
@@ -40506,7 +40578,7 @@
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphens", "image-rendering",
+      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering",
       "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
       "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
       "line-height", "list-style-image", "list-style-position", "list-style-type",

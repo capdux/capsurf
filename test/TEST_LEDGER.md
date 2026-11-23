@@ -1458,3 +1458,12 @@
 
 ### WPT-B282 (bin_dev Phase 529, 2026-11-23)
 - **Filter `/css/css-text/parsing/`**: `86` files (`58 PASS / 28 FAIL / 0 TIMEOUT / 0 ERROR`, `53` matched expectations, `13` unexpected PASS, `20` unexpected FAIL). `white-space-shorthand-text-wrap.html` 3/6; `word-break-valid.html` 5/6; `letter-spacing-{valid,computed}` 8/9, 7/9; `word-spacing-{valid,computed}` 8/9, 7/9; `hyphenate-character-{valid,computed}` 4/5, 4/5; `tab-size-computed` 8/10.
+
+### WPT-B283 (bin_dev Phase 530, 2026-11-23)
+- **Filter `/css/css-animations/parsing/`**: `35` files (`31 PASS / 4 FAIL / 0 TIMEOUT / 0 ERROR`, `30` matched expectations, `1` unexpected PASS: `animation-shorthand.html` FAIL->PASS, `4` unexpected FAIL: `animation-name-computed` 26/27, `animation-range-end-computed` 23/29, `animation-range-end-valid` 19/24, `animation-range-start-valid` 24/26).
+
+### WPT-B284 (bin_dev Phase 531, 2026-11-23)
+- **Filter `/css/css-animations/parsing/`**: `35` files (**35 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, `34` matched expectations, `1` unexpected PASS: `animation-shorthand.html`; **100% ALL GREEN**).
+
+### WPT-B285 (bin_dev Phase 531, 2026-11-23)
+- **Filter `/css/css-text-decor/parsing/`**: `31` files (`25 PASS / 6 FAIL / 0 TIMEOUT / 0 ERROR`, `26` matched expectations, `2` unexpected PASS: `text-decoration-skip-spaces-{computed,valid}`, `3` unexpected FAIL: `text-decoration-color-computed` 2/3, `text-decoration-computed` 8/14, `text-emphasis-computed` 0/7).

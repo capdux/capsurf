@@ -7354,3 +7354,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 531 (`animation-name`/`animation-range-end` 完美收尾、`word-break`/`letter-spacing`/`tab-size`/`white-space` 级联)
 - **[Agent]**: 完成 Phase 531：修复 `animation-name` 多连字符 custom-ident（`---\"---` round-trip）、`animation-range-end` 默认 `100%` 省略及 `calc` 项顺序；新增 `word-break: manual`、`letter-spacing`/`word-spacing` `calc(% + len)` 规范化与线性求值、`tab-size` `sign(cqw)` 求值、`white-space-collapse`/`text-wrap-mode`/`text-wrap-style` 继承且 `white-space` 展开不覆写 `text-wrap-style`。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 532 (`hyphenate-character`/`hyphenate-limit-chars`/`hanging-punctuation`/`text-justify`)
+- **[Agent]**: 完成 Phase 532：新增 `hyphenate-character`（`auto | <string>` 与 `\hex` 解码）、`hyphenate-limit-chars`（`[auto | <integer>]{1,3}` 校验与尾部省略及继承）、`hanging-punctuation`（语法校验与规范排序）、`text-justify: distribute -> inter-character` 计算值映射。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

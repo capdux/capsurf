@@ -2554,3 +2554,6 @@
 ### Phase 531: `animation-range-end` `100%` 默认省略与 `css-text` 6 项收尾
 - `animation-range-start` 默认百分比为 `0%`，而 `animation-range-end` 默认百分比为 `100%`；同时 `<custom-ident>` 校验需允许任意前导 `-`（`-*(?:[a-z_]|\\.)`），解决 `---\"---` round-trip 失败。
 - `white-space` 简写展开仅写 `white-space-collapse` 与 `text-wrap-mode`，并将 `white-space-collapse`/`text-wrap-mode`/`text-wrap-style`/`text-wrap` 加入 `INHERITED_CSS_PROPS`。
+
+### Phase 532: `hyphenate-*` / `hanging-punctuation` / `text-justify` 收尾
+- `hyphenate-limit-chars` 需按 CSS Text 4 做尾部重复省略（3 项中第 3 项等于第 2 项时省去第 3 项，2 项均为 `auto` 时省去为 `auto`），且继承属性需列入 `INHERITED_CSS_PROPS`。

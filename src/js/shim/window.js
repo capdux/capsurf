@@ -6230,7 +6230,7 @@ function installWindow(global) {
     "color", "font-size", "font-family", "font-weight", "font-style",
     "line-height", "text-align", "visibility", "direction", "white-space",
     "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
-    "letter-spacing", "word-spacing", "cursor",
+    "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -7458,12 +7458,25 @@ function installWindow(global) {
       }
       computedMap.set("text-align", resolvedAlign);
     }
+    if ((computedMap.get("text-justify") || "").trim().toLowerCase() === "distribute") {
+      computedMap.set("text-justify", "inter-character");
+    }
+    if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
+      computedMap.set("hyphenate-character", "auto");
+    }
+    if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
+      computedMap.set("hyphenate-limit-chars", "auto");
+    }
+    if (!computedMap.get("hanging-punctuation") || computedMap.get("hanging-punctuation") === "initial") {
+      computedMap.set("hanging-punctuation", "none");
+    }
     if (typeof global.__capsurf_normalizeCssValue === "function") {
       const canonComputedProps = [
         "counter-reset", "counter-increment", "counter-set", "animation-name", "text-transform",
         "grid-auto-flow", "scrollbar-gutter", "text-decoration-line", "text-decoration-skip-spaces", "text-decoration-inset",
         "aspect-ratio", "text-emphasis-position", "text-emphasis-style", "text-underline-position",
-        "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures"
+        "font-synthesis", "font-variant-numeric", "font-variant-east-asian", "font-variant-ligatures",
+        "hyphenate-character", "hyphenate-limit-chars", "hanging-punctuation"
       ];
       for (let ci = 0; ci < canonComputedProps.length; ci++) {
         const ck = canonComputedProps[ci];
@@ -7501,7 +7514,7 @@ function installWindow(global) {
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
     "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
     "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphens", "image-rendering",
+    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering",
     "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
     "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
     "line-height", "list-style-image", "list-style-position", "list-style-type",
