@@ -3831,7 +3831,7 @@
       "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-size",
       "contain-intrinsic-width", "container", "container-name", "container-type", "content",
       "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor",
-      "direction", "display", "empty-cells", "filter", "flex", "flex-basis", "flex-direction",
+      "direction", "display", "empty-cells", "field-sizing", "filter", "flex", "flex-basis", "flex-direction",
       "flex-flow", "flex-grow", "flex-shrink", "flex-wrap", "float", "font", "font-family",
       "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette",
       "font-size", "font-size-adjust", "font-stretch", "font-style", "font-synthesis",
@@ -4080,6 +4080,7 @@
         "appearance": ["none", "auto", "textfield", "menulist-button"],
         "continue": ["auto", "collapse"],
         "scrollbar-width": ["auto", "thin", "none"],
+        "field-sizing": ["fixed", "content"],
       };
       const allowedKeywords = KEYWORD_CSS_PROPS[prop];
       if (allowedKeywords) {
@@ -4946,6 +4947,39 @@
       if (prop === "text-decoration-thickness") {
         const toks = splitCssTokens(vLower);
         return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], false));
+      }
+      if (prop === "text-emphasis-position") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 1) return toks[0] === "auto" || toks[0] === "over" || toks[0] === "under";
+        if (toks.length === 2) {
+          const OU = new Set(["over", "under"]);
+          const LR = new Set(["left", "right"]);
+          return (OU.has(toks[0]) && LR.has(toks[1])) || (LR.has(toks[0]) && OU.has(toks[1]));
+        }
+        return false;
+      }
+      if (prop === "outline" || prop === "border" || prop === "column-rule" ||
+          prop === "border-top" || prop === "border-right" || prop === "border-bottom" || prop === "border-left" ||
+          prop === "border-block" || prop === "border-inline" ||
+          prop === "border-block-start" || prop === "border-block-end" || prop === "border-inline-start" || prop === "border-inline-end") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length < 1 || toks.length > 3) return false;
+        const STYLES = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+        let seenW = false, seenS = false, seenC = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (STYLES.has(tl) || (prop === "outline" && tl === "auto")) {
+            if (seenS) return false; seenS = true;
+          } else if (tl === "thin" || tl === "medium" || tl === "thick" ||
+                     (!tl.endsWith("%") && !(/^(?:calc|min|max|clamp)\(/i.test(tl) && tl.includes("%")) && isValidLenPct(tl, false))) {
+            if (seenW) return false; seenW = true;
+          } else if (isValidColor(t)) {
+            if (seenC) return false; seenC = true;
+          } else {
+            return false;
+          }
+        }
+        return true;
       }
 
       return true;

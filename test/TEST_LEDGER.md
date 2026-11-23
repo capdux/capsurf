@@ -1027,3 +1027,13 @@
 - `/css/css-text-decor/parsing/`: 31 total | 9 PASS | 22 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-style-*`, `text-decoration-skip-ink-*`, `text-decoration-color-valid/invalid` PASS)
 - `/css/css-ui/parsing/`: 39 total | 19 PASS | 19 FAIL | 1 TIMEOUT | 0 CRASH (`box-sizing-*`, `resize-*`, `user-select-*`, `outline-style-valid/computed`, `outline-width/color/offset-invalid` PASS)
 - Totals: **28 PASS / 41 FAIL / 1 TIMEOUT / 0 CRASH**
+
+### WPT-B217 (port=19700, 63 tests, 29/63 matched)
+- `/css/css-overflow/parsing/`: 32 total | 7 PASS | 25 FAIL | 0 TIMEOUT | 0 CRASH (`scrollbar-gutter-invalid`, `webkit-line-clamp-invalid`, `text-overflow-invalid` PASS!)
+- `/css/css-text-decor/parsing/`: 31 total | 11 PASS (up from 9!) | 20 FAIL | 0 TIMEOUT | 0 CRASH (`text-decoration-line-invalid`, `text-underline-position-invalid` PASS!)
+- Totals: **18 PASS / 45 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B218 (port=19700, 70 tests, 53/70 matched)
+- `/css/css-ui/parsing/`: 39 total | 21 PASS (up from 19!) | 17 FAIL | 1 TIMEOUT | 0 CRASH (`field-sizing-invalid`, `outline-invalid` PASS!)
+- `/css/css-multicol/parsing/`: 31 total | 16 PASS (up from 9!) | 15 FAIL | 0 TIMEOUT | 0 CRASH (`column-fill/rule/rule-style/rule-width/span-invalid`, `column-rule-style/color-computed` PASS!)
+- Totals: **37 PASS / 32 FAIL / 1 TIMEOUT / 0 CRASH**

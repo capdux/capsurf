@@ -3263,3 +3263,10 @@
   - `text-underline-offset`: 校验 `auto | <length-percentage>`。
   - `text-decoration-thickness`: 校验 `auto | from-font | <length-percentage [0,∞]>`。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 477: CSSOM `field-sizing`, `text-emphasis-position`, `outline`, `border*`, `column-rule`
+- `src/js/shim/cssom.js`:
+  - `SUPPORTED_CSS_PROPS` / `KEYWORD_CSS_PROPS`: 新增 `field-sizing` (`fixed | content`)。
+  - `text-emphasis-position`: 校验 `auto | [ over | under ] && [ left | right ]?`。
+  - `outline` / `border` / `border-*` / `column-rule`: 校验 `[ <line-width> || <line-style> || <color> ]`（`outline` 额外允许 `auto` 样式，拒绝废弃的 `invert` 与重复类别）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

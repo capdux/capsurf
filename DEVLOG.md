@@ -2415,3 +2415,7 @@
 ### Phase 476: CSSOM 文本装饰线与下划线位置门禁
 - `text-decoration-line` 与 `text-underline-position` 按 CSS Text Decor 4 互斥组校验，拦截重复装饰线及 `under from-font` 冲突组合。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 477: CSSOM 边框/轮廓简写与着重号位置门禁
+- 统一 `outline`/`border*`/`column-rule` 的 1~3 token 乱序简写校验，拦截重复线宽/线型及 `outline: invert` 等非法声明。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
