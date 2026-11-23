@@ -2565,3 +2565,6 @@
 ### Phase 534: 全属性 `inherit` 解析与 `text-decoration-inset` 负长度/百分比
 - `collectRawComputedMap` 此前仅传递 `INHERITED_CSS_PROPS`，未处理非继承属性的显式 `inherit`/`unset`；统一回溯 `ancestors` 链解析所有 `inherit` 声明。
 - `text-decoration-inset` 放开 `<length-percentage>` 负值与 `%`，并在 `normalizeCssSpecifiedValue` 支持 `calc(X / N)` 常量除数化简。
+
+### Phase 535: `font` 简写字号兜底与 `text-decoration-inset` 括号分词
+- 仅设 `font: 20px Ahem` 时需在 `applyUsedValuesToComputedMap` 提取 `font-size` 并识别 `Ahem`（`1ch === fontSize`），同时按括号深度切分 `calc(...)` 复合表达式。

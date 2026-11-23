@@ -39911,6 +39911,10 @@
         pos !== "absolute" &&
         pos !== "fixed";
 
+      if (!computedMap.has("font-size") && computedMap.has("font")) {
+        const fm = String(computedMap.get("font") || "").match(/(?:^|\s)([+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|pt|%))(?=\s|\/|$)/i);
+        if (fm) computedMap.set("font-size", fm[1]);
+      }
       const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
       const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
 
@@ -40578,7 +40582,21 @@
       if (tdiRaw && tdiRaw.toLowerCase() !== "auto") {
         const isAhem = /ahem/i.test(computedMap.get("font-family") || computedMap.get("font") || "");
         const chUnit = isAhem ? fontSize : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8);
-        const tdiToks = tdiRaw.split(/\s+/).filter(Boolean).map((tok) => {
+        const tdiParts = [];
+        let dpt = 0, stIdx = 0;
+        for (let ti = 0; ti < tdiRaw.length; ti++) {
+          const ch = tdiRaw[ti];
+          if (ch === "(") dpt++;
+          else if (ch === ")" && dpt > 0) dpt--;
+          else if (dpt === 0 && /\s/.test(ch)) {
+            const seg = tdiRaw.slice(stIdx, ti).trim();
+            if (seg) tdiParts.push(seg);
+            stIdx = ti + 1;
+          }
+        }
+        const tailSeg = tdiRaw.slice(stIdx).trim();
+        if (tailSeg) tdiParts.push(tailSeg);
+        const tdiToks = tdiParts.map((tok) => {
           const tl = tok.toLowerCase();
           if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
           if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return tl;

@@ -7363,3 +7363,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 534 (全属性 `inherit`/`initial`/`unset` 解析与 `text-decoration-inset` 负值/百分比)
 - **[Agent]**: 完成 Phase 534：在 `collectRawComputedMap` 新增全属性 `inherit`/`initial`/`unset` 祖先链解析（修复 `text-decoration-color: inherit` 计算为 `rgb(0, 255, 0)`）；扩展 `text-decoration-inset` 支持负长度、`%` 与 `calc(1em / 4)` 化简。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 535 (`font` 简写 `font-size` 提取与 `text-decoration-inset` 括号安全切分)
+- **[Agent]**: 完成 Phase 535：在 `applyUsedValuesToComputedMap` 从 `font` 简写兜底提取 `font-size`（支撑 `font: 20px Ahem` 场景下的 `em`/`ch` 计算），并将 `text-decoration-inset` 分词改为括号深度感知切分（修复 `calc(10% + 1ch) calc(-20%)` 计算值为 `calc(10% + 20px) -20%`）。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
