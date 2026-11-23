@@ -3142,6 +3142,7 @@
           return Reflect.get(target, prop, receiver);
         },
         has: function (target, prop) {
+          if (prop === "length" || prop === "item") return true;
           if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < getItems().length;
           return Reflect.has(target, prop);
         },

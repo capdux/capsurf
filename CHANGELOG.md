@@ -3082,3 +3082,5 @@
 - **Phase 441 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：`checkbox`/`radio` `click()` 补齐预激活/取消回滚步骤及受信任 `input`/`change` 事件派发。
 
 - **Phase 442 (`src/js/shim/collections.js`, `src/js/shim/element/forms/validity.js`, `src/js/runtime_source.cp`)**：`RadioNodeList` 升级为活体 `Proxy` 对接 `HTMLFormControlsCollection`；`email` + `multiple` 补充换行符剥离。
+
+- **Phase 443 (`src/js/shim/collections.js`, `src/js/runtime_source.cp`)**：`RadioNodeList` 活体 Proxy 补齐 `"length"` / `"item"` 的 `has` trap。
