@@ -2343,3 +2343,7 @@
 ### Phase 458: CSSOM 排版与透明度属性语法门禁
 - `tab-size` 在 CSS Text 3 中仅支持 `<number [0,∞]> | <length [0,∞]>`，不允许百分比（包括 `calc(40% + 50px)`），需在 `cssom.js` 中对 `%` 显式拦截。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 459: CSSOM 边框半径/宽度与字体排版校验
+- `border-radius` 通过括号深度感知的 `/` 拆分，精确拦截 `1em /`、`1px / 2px / 3px` 及 5+ token 等畸形简写。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 `{"badOk":true,"goodOk":true}`，`--smoke` 3/3 PASS (6/6)。

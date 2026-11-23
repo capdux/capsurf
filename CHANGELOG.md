@@ -3120,3 +3120,11 @@
   - `letter-spacing` / `word-spacing`: 仅允许 `normal` 或 `<length-percentage>`（支持负值与 `calc`）。
   - `opacity`: 仅允许 `<number>` 或 `<percentage>`（含数学/变量函数），拒绝关键字与长度单位。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 459: CSSOM `border-radius`, `border-width`, `font-weight`, `line-height` 校验
+- `src/js/shim/cssom.js` (`isValidCssValue`):
+  - `border-radius`: 校验顶层 `/` 至多 1 个，左右各 1~4 个非负 `<length-percentage>`；单角 `border-*-radius` 允许 1~2 个非负 `<length-percentage>`。
+  - `border-width` / `border-*-width`: 支持 `thin | medium | thick | <length [0,∞]>`，拒绝 `%` 及含 `%` 的 `calc`。
+  - `font-weight`: 支持 `normal | bold | bolder | lighter | [1, 1000]` 及数学/变量函数。
+  - `line-height`: 支持 `normal | <number [0,∞]> | <length-percentage [0,∞]>`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

@@ -843,3 +843,106 @@
 | WPT-B161 | `attributes-common-to-form-controls/` + `the-iframe-element/ 2/2` + `the-link-element/` + `the-option-element/` | 23/99 PASS (`form-controls` `7/8`匹配 `formaction`过!, `iframe 2/2` 16/76 **+1 ERROR→PASS**, `link` 5/8 `fetchpriority`过!, `option` 1/7, 0 CRASH) |
 | WPT-B162 | `/css-writing-modes/ 2/2` + `/css-animations/` + `/css-shapes/` + `/css-tables/` | 38/156 PASS (`writing-modes 2/2` 2/10, `animations` 20/58, `shapes` 12/70, `tables` 4/18, 0 CRASH) |
 | WPT-B163 | `/dom/abort/` + `/dom/collections/` + `/dom/traversal/` + `the-img-element/` | 17/40 PASS (`abort` 4/7, `collections` **7/11** (`domstringmap`过!), `traversal` 5/17, `img` 1/5, 0 CRASH) |
+| WPT-B164 | `/css-masking/` (107/179) + `/css-scroll-snap/` + `/css-multicol/` + `/css-break/` | 173/356 PASS (`masking` 16/107 **+1 FAIL→PASS**, `scroll-snap` 0/8, `multicol` 6/32, `css-break` **151/209** **+2 FAIL→PASS**, 0 CRASH) |
+| WPT-B165 | `the-link-element/` + `the-fieldset-element/` + `/dom/nodes/ 1/4..2/4` | 60/142 PASS (`link` 5/8, `fieldset` **7/8** (`validationMessage`过!), `nodes 1/4` 25/63 **+1 FAIL→PASS**, `nodes 2/4` 23/63 **+1 FAIL→PASS**, 0 CRASH) |
+
+| WPT-B166 | `/css/css-text-decor/` + `/css/css-will-change/` + `/css/css-overscroll-behavior/` + `/css/css-logical/` | 12/104 PASS (`text-decor` 5/41, `will-change` 1/3, `overscroll` 0/2, `logical` 6/58 (2 timeout), 0 CRASH) |
+
+| WPT-B168 | `the-title-element/` + `the-progress-element/` + `the-meter-element/` + `the-output-element/` | 6/11 PASS (`title` 1/3, `progress` **3/4** (`0/4→3/4`!), `meter` **2/2全绿!**, `output` 0/2, 0 CRASH) |
+
+| WPT-B167 | `the-img-element/` + `/dom/nodes/ 3/4..4/4` + `/css/css-syntax/` | 58/154 PASS (`img` 2/5, `nodes 3/4` 25/63 (`getElementsByClassName-22`过!), `nodes 4/4` 26/62 (`Node-isConnected`过! 1 crash), `css-syntax` 5/24 (23/24匹配!)) |
+
+| 2026-11-23 11:29 | `page-wait-for-navigation.spec.ts` | 7/12 PASS (5 timeout) | PW Batch 138 |
+| 2026-11-23 11:29 | `page-wait-for-load-state.spec.ts` | 6/10 PASS (2 fail, 2 timeout) | PW Batch 138 |
+| 2026-11-23 11:29 | `page-wait-for-url.spec.ts` | 6/9 PASS (3 timeout) | PW Batch 138 |
+| 2026-11-23 11:29 | `page-fill.spec.ts` | 25/40 PASS (1 fail, 14 timeout at CDP connect) | PW Batch 138 |
+
+| WPT-B170 | `the-innertext-and-outertext-properties/` + `the-embed-element/` + `the-object-element/` + `the-video-element/` | 4/21 PASS (`innertext` 4/20 (14 timeout), `object` 0/1 (1/1匹配), 0 CRASH) |
+
+| WPT-B171 | `the-progress-element/` + `the-output-element/` + `the-title-element/` + `/dom/traversal/` | 14/26 PASS (`progress` **4/4全绿!**, `output` **2/2全绿!**, `title` **3/3全绿!**, `traversal` 5/17 (2 timeout), 0 CRASH) |
+
+| WPT-B172 | `the-fieldset-element/` + `the-link-element/` + `the-base-element/` + `the-meta-element/` | 17/25 PASS (`fieldset` **7/8**, `link` **6/8** (`5/8→6/8`, `link-rellist`过!), `base` 2/3, `meta` 2/6, 0 CRASH) |
+
+| WPT-B173 | `/dom/traversal/` + `the-option-element/` + `the-button-element/` + `the-select-element/` | 31/65 PASS (`traversal` **8/17 (`5/17→8/17`, 0 timeout!)**, `option` 1/7, `button` **13/16**, `select` 9/25 (29未跑), 0 CRASH) |
+
+| WPT-B174 | `dynamic-getter` + `outertext-setter` + `Element-hasAttributes` + `Node-isSameNode` | 2/4 PASS (`outertext-setter` **PASS!**, `Element-hasAttributes` **PASS!**, `dynamic-getter` 6/7, `Node-isSameNode` 8/9, 0 CRASH) |
+
+| WPT-B175 | `DocumentFragment-getElementById` + `/dom/collections/` + `/dom/abort/` + `/dom/lists/` | 12/24 PASS (`DocumentFragment-getElementById` **1/1 PASS!**, `collections` 7/11, `abort` 4/7, `lists` 0/5, 0 CRASH) |
+
+| 2026-11-23 12:07 | `page-select-option.spec.ts` | 0/33 PASS (33 timeout at teardown/CDP connect) | PW Batch 139 |
+| 2026-11-23 12:07 | `page-check.spec.ts` | **16/16 PASS** (全绿!) | PW Batch 139 |
+| 2026-11-23 12:07 | `page-focus.spec.ts` | **7/7 PASS** (**+1 FAIL→PASS**, 全绿!) | PW Batch 139 |
+
+| 2026-11-23 12:12 | `matchers.misc.spec.ts` | **2/2 PASS** (全绿! `123/123` PW清单全覆盖) | PW Batch 140 |
+| 2026-11-23 12:12 | `page-mouse.spec.ts` | **14/15 PASS** (**+7 FAIL→PASS**, 1 timeout) | PW Batch 140 |
+
+| WPT-B176 | `/css/css-color/` + `/css/css-variables/` + `/css/css-env/` + `/dom/ranges/ 1/2` | 67/307 PASS (`color` 2/56, `variables` 60/224, `env` 1/9, `ranges 1/2` 4/18 (8 timeout), 0 CRASH) |
+
+| WPT-B177 | `/dom/lists/` + `dynamic-getter` + `Node-isSameNode` + `/dom/events/ 1/2` | 31/72 PASS (`lists` **3/5 (`0/5→3/5`!)**, `dynamic-getter` **1/1 PASS!**, `Node-isSameNode` **1/1 PASS!**, `events 1/2` 26/65 (44/65匹配), 0 CRASH) |
+
+| WPT-B178 | `Range-commonAncestorContainer` + `/dom/events/ 2/2` + `/dom/ranges/ 2/2` + `the-canvas-element/` | 32/84 PASS (`Range-commonAncestorContainer` **1/1 PASS!**, `events 2/2` 23/64 (`Event-dispatch-throwing` **FAIL→PASS!**), `ranges 2/2` 7/18 (7 timeout), `canvas` **1/1 PASS!**, 0 CRASH) |
+
+| WPT-B179 | `/dom/lists/` + `Event-isTrusted` + `the-label-element/` + `the-legend-element/` | 8/15 PASS (`lists` **4/5 (`3/5→4/5`!)**, `Event-isTrusted` **1/1 PASS!**, `label` 1/7, `legend` **2/2全绿!**, 0 CRASH) |
+
+| WPT-B180 | `the-textarea-element/` + `the-form-element/` + `the-input-element/ 1/4` | 44/58 PASS (`textarea` **13/17**, `form` **11/15**, `input 1/4` **20/26**, 0 CRASH) |
+
+| WPT-B181 | `the-input-element/ 2/4..4/4` + `StaticRange-constructor` | 60/78 PASS (`input 2/4` **19/26**, `3/4` **20/26**, `4/4` **20/25**, `StaticRange-constructor` **1/1 PASS!**, 0 CRASH) |
+
+| WPT-B182 | `textarea/cloning-steps` + `input/clone` + `constraints/` + `resetting-a-form/` | 12/18 PASS (`textarea/cloning-steps` **1/1 PASS!**, `input/clone` **1/1 PASS!**, `constraints` 8/12, `resetting` 2/4, 0 CRASH) |
+
+| WPT-B183 | `checkbox` + `email` + `form-elements-nameditem-01` + `form-submission-0/` | 2/8 PASS (`form-submission-0` 2/5 (4/5匹配), `checkbox`/`email`/`nameditem` 各余子测试待查, 0 CRASH) |
+
+| WPT-B184 | `attributes-common-to-form-controls/` + `the-datalist-element/` + `the-img-element/` | 6/16 PASS (`datalist` **3/3全绿!**, `img` 2/5 (4/5匹配), `form-controls` 1/8 (`ReferenceError: tag` 3例待修), 0 CRASH) |
+
+| WPT-B185 | `form-elements-nameditem-01` + `checkbox` + `email` + `/dom/collections/` | 8/14 PASS (`form-elements-nameditem-01` **1/1 PASS!**, `collections` 7/11, 0 CRASH, 0 TIMEOUT) |
+
+| 2026-11-23 13:18 | `page-emulate-media.spec.ts` | **12/12 PASS** (**+9 FAIL→PASS**, 全绿!) | PW Batch 141 |
+| 2026-11-23 13:18 | `page-set-input-files.spec.ts` | **13/19 PASS** (**+7 FAIL→PASS**, 6 fail) | PW Batch 141 |
+| 2026-11-23 13:18 | `page-expose-function.spec.ts` | 0/18 PASS (18 timeout at teardown/CDP connect) | PW Batch 141 |
+| 2026-11-23 13:18 | `page-click.spec.ts` | 37/77 PASS (4 fail, 36 timeout) | PW Batch 141 |
+
+| WPT-B186 | `attributes-common-to-form-controls/` + `the-form-element/` + `the-base-element/` + `the-meta-element/` | 17/32 PASS (`form-controls` 7/8匹配, `the-form-element` **12/15 (`11/15→12/15`)**, `base` 2/3, `meta` 2/6, 0 CRASH) |
+
+| WPT-B187 | `history/` + `documents/` + `dataset` + `/console/` | 52/70 PASS (`history` **18/18匹配**, `documents` 28/32, `dataset` **7/7全绿!**, `console` **13/13匹配**, 0 CRASH) |
+
+| WPT-B188 | `the-base-element/` + `form-action-reflection*` + `dom-tree-accessors/` + `/performance-timeline/` | 34/51 PASS (`base` **3/3全绿!**, `form-action-reflection` **2/2全绿!**, `dom-tree-accessors` **24/25**, `perf-timeline` **20/21匹配!**, 0 CRASH) |
+
+| WPT-B189 | `resource-metadata-management/` + `the-link-element/` + `the-fieldset-element/` + `the-form-element/` | 31/38 PASS (`metadata` 4/7, `link` 6/8, `fieldset` 7/8, `form` **14/15** (`0`FAIL, 1超时), 0 CRASH) |
+
+| WPT-B190 | `dom-tree-accessors/` + `/performance-timeline/` + `/css/css-display/` + `/css/css-position/` | 128/367 PASS (`dom-tree-accessors` **25/25全绿!**, `perf-timeline` 20/21匹配, `css-display` 16/52 (**+2 FAIL→PASS**), `css-position` 82/269 (**+5 FAIL→PASS**), 0 CRASH) |
+
+| 2026-11-23 13:52 | `page-screenshot.spec.ts` | 18/44 PASS (19 fail, 7 timeout) | PW Batch 142 |
+| 2026-11-23 13:52 | `page-network-request.spec.ts` | 7/27 PASS (16 fail, 3 timeout, 1 skip) | PW Batch 142 |
+| 2026-11-23 13:52 | `page-network-response.spec.ts` | **18/21 PASS** (2 fail, 1 timeout) | PW Batch 142 |
+| 2026-11-23 13:52 | `page-aria-snapshot.spec.ts` | **37/38 PASS** (仅1例伪元素空格待修) | PW Batch 142 |
+
+| WPT-B191 | `resource-metadata-management/` + `/css/css-sizing/ 1/2..2/2` + `/css/css-overflow/ 1/2` | 10/56 PASS (`metadata` **5/7 (`4/7→5/7`, `readyState`过!)**, `sizing` 1/32, `overflow 1/2` 4/17 (**+3 FAIL→PASS**), 0 CRASH) |
+
+| WPT-B192 | `the-button-element/` + `/css/css-overflow/ 2/2` + `/css/css-fonts/ 1/2..2/2` | 44/153 PASS (`button` 13/16, `overflow 2/2` 2/16 (**+1 FAIL→PASS**), `fonts 1/2` 16/61, `fonts 2/2` 13/60, 0 CRASH) |
+
+| WPT-B193 | `/css/css-backgrounds/ 1/4..4/4` | 33/115 PASS (`1/4` 9/29, `2/4` 8/29, `3/4` 7/29, `4/4` 9/28, 44/115匹配, 0 CRASH) |
+
+| WPT-B194 | `the-button-element/` + `the-label-element/` + `resource-metadata-management/` + `the-input-element/ 1/4` | 41/56 PASS (`button` **14/16 (`button-labels`过!)**, `input 1/4` **22/26 (`20/26→22/26`)**, `metadata` 5/7, `label` 0/7 (2 crash)) |
+
+| WPT-B195 | `labelable-elements` + `clicking-interactive-content` + `/css/css-text/ 1/4..2/4` | 15/65 PASS (`labelable-elements` **1/1 PASS!**, `css-text 1/4` 7/32 (**+1 FAIL→PASS**), `2/4` 7/31 (**+3 FAIL→PASS**), 0超时, 0 CRASH) |
+
+| WPT-B196 | `button-commandfor` + `input/files` + `/css/css-text/ 3/4..4/4` | 11/64 PASS (`button-commandfor` **1/1 PASS!**, `css-text 3/4` 4/31 (**+1 FAIL→PASS**), `4/4` 6/31 (**+4 FAIL→PASS**), 0超时, 0 CRASH) |
+
+| WPT-B197 | `/css/css-borders/ 1/2..2/2` + `/css/css-box/ 1/2..2/2` | 73/133 PASS (`borders 1/2` 30/50 (**+6 FAIL→PASS**), `2/2` 30/50 (**+7 FAIL→PASS**), `box` 13/33, 0 CRASH) |
+
+| WPT-B198 | `clicking-interactive-content` + `input/files` + `/css/css-transforms/ 1/4..2/4` | 3/18 PASS (`clicking-interactive-content` **1/1 PASS!**, `transforms 1/4..2/4` 2/16, 0超时, 0 CRASH) |
+
+| WPT-B199 | `/css/css-transforms/ 3/4..4/4` + `/css/css-multicol/` + `/css/css-break/ 1/4` | 46/100 PASS (`transforms` 0/15, `multicol` 6/32, `css-break 1/4` **40/53 (`+1 FAIL→PASS`)**, 0超时, 0 CRASH) |
+
+| WPT-B200 | `/css/css-break/ 2/4..4/4` + `/css/css-box/ 1/2` | 118/173 PASS (`break 2/4` 38/52 (**+1 FAIL→PASS**), `3/4` 38/52, `4/4` 35/52, `box 1/2` 7/17 (`float-invalid`过!), 0 CRASH) |
+
+| WPT-B201 | `/css/css-box/ 2/2` + `/css/css-text/ 1/4..2/4` + `/css/css-borders/ 1/2` | 58/129 PASS (`box 2/2` **9/16 (`7→9`)**, `text 1/4` **9/32 (`7→9`)**, `text 2/4` **10/31 (`7→10`, +3 FAIL→PASS)**, `borders 1/2` 30/50 (+6 FAIL→PASS), 0超时, 0 CRASH) |
+
+| WPT-B202 | `/css/css-text/ 3/4..4/4` + `/css/css-break/ 1/4` + `/css/css-box/ 1/2` | 70/132 PASS (`text 3/4` 5/31, `4/4` **12/31 (`6→12`, +4 FAIL→PASS!)**, `break 1/4` **41/53 (+1 FAIL→PASS)**, `box 1/2` **12/17 (`7→12`!)**, 0超时, 0 CRASH) |
+
+### WPT-B203 (port=19700, 172 tests, 143/172 matched)
+- `/css/css-box/ --shard 2/2`: 16 total | 10 PASS | 6 FAIL | 0 TIMEOUT | 0 CRASH (`PASS→FAIL`: `float-computed`, `margin-invalid`, `padding-invalid`, `padding-valid`)
+- `/css/css-break/ --shard 2/4`: 52 total | 39 PASS | 12 FAIL | 1 TIMEOUT | 0 CRASH (`FAIL→PASS`: `orphans-valid`; `PASS→FAIL`: 8; `PASS→TIMEOUT`: `special-elements-crash`)
+- `/css/css-break/ --shard 3/4`: 52 total | 39 PASS | 13 FAIL | 0 TIMEOUT | 0 CRASH (`PASS→FAIL`: 7)
+- `/css/css-break/ --shard 4/4`: 52 total | 37 PASS | 15 FAIL | 0 TIMEOUT | 0 CRASH (`PASS→FAIL`: 8)
+- Totals: **125 PASS / 46 FAIL / 1 TIMEOUT / 0 CRASH** (27 `PASS→FAIL`, 1 `PASS→TIMEOUT`, 1 `FAIL→PASS`)

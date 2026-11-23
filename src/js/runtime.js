@@ -4163,6 +4163,73 @@
         if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
         return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
       }
+      if (prop === "border-radius") {
+        let slashIdx = -1, depth = 0;
+        for (let i = 0; i < vLower.length; i++) {
+          const ch = vLower[i];
+          if (ch === "(") depth++;
+          else if (ch === ")" && depth > 0) depth--;
+          else if (depth === 0 && ch === "/") {
+            if (slashIdx !== -1) return false;
+            slashIdx = i;
+          }
+        }
+        const parts = slashIdx === -1 ? [vLower] : [vLower.slice(0, slashIdx), vLower.slice(slashIdx + 1)];
+        for (let p = 0; p < parts.length; p++) {
+          const toks = splitCssTokens(parts[p]);
+          if (toks.length < 1 || toks.length > 4) return false;
+          for (let i = 0; i < toks.length; i++) {
+            if (!isValidLenPct(toks[i], false)) return false;
+          }
+        }
+        return true;
+      }
+      if (prop === "border-top-left-radius" || prop === "border-top-right-radius" ||
+          prop === "border-bottom-right-radius" || prop === "border-bottom-left-radius" ||
+          prop === "border-start-start-radius" || prop === "border-start-end-radius" ||
+          prop === "border-end-start-radius" || prop === "border-end-end-radius") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 2) return false;
+        for (let i = 0; i < toks.length; i++) {
+          if (!isValidLenPct(toks[i], false)) return false;
+        }
+        return true;
+      }
+      if (prop === "border-width" || prop === "border-block-width" || prop === "border-inline-width" ||
+          prop === "border-top-width" || prop === "border-right-width" || prop === "border-bottom-width" || prop === "border-left-width" ||
+          prop === "border-block-start-width" || prop === "border-block-end-width" || prop === "border-inline-start-width" || prop === "border-inline-end-width") {
+        const maxN = prop === "border-width" ? 4 : (prop === "border-block-width" || prop === "border-inline-width" ? 2 : 1);
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > maxN) return false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "thin" || t === "medium" || t === "thick") continue;
+          if (t.endsWith("%")) return false;
+          if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
+          if (!isValidLenPct(t, false)) return false;
+        }
+        return true;
+      }
+      if (prop === "font-weight") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t === "normal" || t === "bold" || t === "bolder" || t === "lighter") return true;
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) return false;
+        const n = Number(t);
+        return n >= 1 && n <= 1000;
+      }
+      if (prop === "line-height") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (t === "normal") return true;
+        if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
+          return Number(t) >= 0 && !t.startsWith("-");
+        }
+        return isValidLenPct(t, false);
+      }
 
       return true;
     }
