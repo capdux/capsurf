@@ -2463,3 +2463,7 @@
 ### Phase 488: `getComputedStyle` 透视/变换原点计算值解析
 - 依托 `computeElementUsedWidthPx` 与 `height` 解析值，将 `<position>` 关键字及百分比精确映射为像素坐标。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 489: `getComputedStyle` 间距简写与尺寸极值计算值解析
+- `gap`/`grid-gap` 与 `min/max-{width,height}` 经由 `evalCssLengthExpr` + `Math.max(0, px)` 对齐负值 `calc` 归零规则。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

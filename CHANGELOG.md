@@ -3344,3 +3344,10 @@
   - `perspective-origin`: 支持 1/2/4-token `<position>` 结合元素盒宽高求值（含 `right 20px bottom 30px`、`center left` 与 `calc`）。
   - `transform-origin`: 支持 1/2/3-token（保留非零第 3 维 Z 轴长度）。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 489: `getComputedStyle` `gap`/`grid-gap` 与 `min/max-*` 计算值解析
+- `src/js/shim/window.js`:
+  - `collectRawComputedMap` (`setDecl`): 新增 `gap`, `grid-gap`, `grid-row-gap`, `grid-column-gap` 展开至 `row-gap`/`column-gap`。
+  - `getShorthandComputed`: 支持 `gap`, `grid-gap`, `grid-row-gap`, `grid-column-gap` 序列化。
+  - `applyUsedValuesToComputedMap`: 新增 `row-gap`, `column-gap`, `min-width`, `max-width`, `min-height`, `max-height` 非负长度求值。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

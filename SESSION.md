@@ -7266,3 +7266,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[cp_agy 结单]** `task-capsurf-20261123-pack-gzip-u32` 已修复（`lib/pack/gzip.cp:1269-1270` 显式使用 `const thirty_one: u32 = 31;` 修复 `u32`/`i32` 隐式类型不匹配）；已执行 `ack`，`cap build -m -d -o bin_dev src/main.cp` 已通过 `cpc` 转译并正在 Native 编译（`task-13948`）。
 
 - **[Phase 488 `getComputedStyle` `perspective-origin`/`transform-origin` 解析]** 在 `src/js/shim/window.js` 中新增 `perspective-origin`（1/2/4 token `<position>`）与 `transform-origin`（1/2/3 token 含非零 Z 轴长度）基于盒宽高的绝对像素计算；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 489 `getComputedStyle` `gap`/`grid-gap`/`min-max` 解析]** 在 `src/js/shim/window.js` 中新增 `gap`/`grid-gap`/`grid-row-gap`/`grid-column-gap` 展开与 `getComputedStyle` 简写序列化，以及 `row-gap`/`column-gap`/`min-width`/`max-width`/`min-height`/`max-height` 非负像素求值；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。

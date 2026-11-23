@@ -37662,6 +37662,19 @@
             setDecl("border-bottom-width", sides[2], isImp);
             setDecl("border-left-width", sides[3], isImp);
           }
+        } else if (key === "gap" || key === "grid-gap") {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            setDecl("row-gap", parts[0], isImp);
+            setDecl("column-gap", parts[0], isImp);
+          } else if (parts.length === 2) {
+            setDecl("row-gap", parts[0], isImp);
+            setDecl("column-gap", parts[1], isImp);
+          }
+        } else if (key === "grid-row-gap") {
+          setDecl("row-gap", val, isImp);
+        } else if (key === "grid-column-gap") {
+          setDecl("column-gap", val, isImp);
         } else if (key === "border-style") {
           const sides = expandFourSides(splitCssTopLevelWhitespace(val));
           if (sides) {
@@ -38695,11 +38708,11 @@
         const px = evalCssLengthExpr(ooRaw, 0, fontSize);
         if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
       }
-      const nonNegLenProps = ["column-width", "perspective"];
+      const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height"];
       for (let i = 0; i < nonNegLenProps.length; i++) {
         const nk = nonNegLenProps[i];
         const nv = (computedMap.get(nk) || "").trim().toLowerCase();
-        if (nv && nv !== "auto" && nv !== "none") {
+        if (nv && nv !== "auto" && nv !== "none" && nv !== "normal" && nv !== "min-content" && nv !== "max-content" && nv !== "fit-content" && nv.indexOf("%") === -1) {
           const px = evalCssLengthExpr(nv, 0, fontSize);
           if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
         }
@@ -39001,6 +39014,13 @@
         if (name === "border-style") return serializeBoxShorthand("border", "style");
         if (name === "border-color") return serializeBoxShorthand("border", "color");
         if (name === "border-radius") return serializeBorderRadius();
+        if (name === "gap" || name === "grid-gap") {
+          const rg = computedMap.get("row-gap") || "normal";
+          const cg = computedMap.get("column-gap") || "normal";
+          return rg === cg ? rg : (rg + " " + cg);
+        }
+        if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
+        if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
         return null;
       }
 
