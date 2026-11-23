@@ -1220,6 +1220,34 @@
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
     }
+    if (prop === "transition") {
+      const items = splitTopLevelComma(trimmed);
+      if (items.length === 0) return false;
+      const TF_KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      const BAD_PROP = new Set(["initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+      for (let li = 0; li < items.length; li++) {
+        const p = splitCssTokens(items[li]);
+        if (p.length === 0) return false;
+        let seenProp = false, seenTf = false, seenBeh = false, seenTime = 0;
+        for (let i = 0; i < p.length; i++) {
+          const t = p[i], tl = t.toLowerCase();
+          if (tl === "normal" || tl === "allow-discrete") {
+            if (seenBeh) return false; seenBeh = true;
+          } else if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) {
+            if (seenTf) return false; seenTf = true;
+          } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl) || tl === "0") {
+            if (seenTime >= 2) return false;
+            if (seenTime === 0 && parseFloat(tl) < 0) return false;
+            seenTime++;
+          } else if (!BAD_PROP.has(tl) && /^(?:-?(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) {
+            if (seenProp) return false; seenProp = true;
+          } else {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
     if (prop === "transition-behavior") {
       const items = splitTopLevelComma(vLower);
       if (items.length === 0) return false;
@@ -1898,6 +1926,14 @@
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
   function expandCssShorthand(key, normV) {
+    if (/^(?:initial|inherit|unset|revert|revert-layer)$/i.test(normV)) {
+      const lhs = SHORTHAND_EXPAND_LONGHANDS[key];
+      if (lhs) {
+        const kw = normV.toLowerCase();
+        return lhs.map((lh) => [lh, kw]);
+      }
+      return null;
+    }
     if (key === "text-decoration") {
       const parts = splitCssTokens(normV);
       const LINES = new Set(["underline", "overline", "line-through", "blink"]);

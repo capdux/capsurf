@@ -7334,3 +7334,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 521 完成 (`transition-property` 校验 + `transition` shorthand 展开 + `transition-behavior`)**：在 `src/js/shim/cssom.js` 新增 `transition-behavior`、`transition-property` 合法性校验、`splitTopLevelComma` 括号感知切分及 `transition` 多层展开与反序列化。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B267` 与 `PW Batch 155`。
 
 - **Phase 522 完成 (`transition-behavior` 列表校验 + `*-timing-function` 校验)**：在 `src/js/shim/cssom.js` 将 `transition-behavior` 改为逗号列表校验（`[ normal | allow-discrete ] #`），并新增 `transition-timing-function` / `animation-timing-function` 严格校验（`cubic-bezier` `x1/x2 ∈ [0,1]`、`steps` 正整数与 `jump-none >= 2`）。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
+
+- **Phase 523 完成 (`transition` 校验 + `getComputedStyle().transition` + 全局关键字展开)**：在 `src/js/shim/cssom.js` 新增 `transition` 合法性校验及 `expandCssShorthand` 全局关键字（`initial`/`inherit`/`unset`/`revert`/`revert-layer`）展开支持；在 `src/js/shim/window.js` `getShorthandComputed` 新增 `transition` 计算样式拼接（含 `initial`/`unset` 回退默认值）。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B271`。

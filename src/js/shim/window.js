@@ -7429,6 +7429,19 @@ function installWindow(global) {
         const fb = computedMap.get("flex-basis") || "auto";
         return fg + " " + fs + " " + fb;
       }
+      if (name === "transition" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        const tDefs = {
+          "transition-property": "all",
+          "transition-duration": "0s",
+          "transition-timing-function": "ease",
+          "transition-delay": "0s",
+          "transition-behavior": "normal"
+        };
+        return globalThis.__capsurf_serializeShorthand("transition", (lh) => {
+          const v = computedMap.get(lh);
+          return (!v || v === "initial" || v === "unset") ? tDefs[lh] : v;
+        });
+      }
       if (name === "overflow") {
         const ox = computedMap.get("overflow-x") || "visible";
         const oy = computedMap.get("overflow-y") || "visible";

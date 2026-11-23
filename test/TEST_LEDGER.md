@@ -1385,3 +1385,13 @@
 - `/css/css-fonts/parsing/ --shard 1/2`: 41 total | 16 PASS | 24 FAIL | 1 TIMEOUT | 0 CRASH
 - `/css/css-fonts/parsing/ --shard 2/2`: 41 total | 18 PASS | 22 FAIL | 1 TIMEOUT | 0 CRASH
 - Totals: **34 PASS / 46 FAIL / 2 TIMEOUT / 0 CRASH**
+
+### WPT-B270 (port=19700, Phase 522 verification, 49 tests)
+- `/css/css-transitions/parsing/`: 14 total | **12 PASS (up from 10, `transition-shorthand` & `transition-timing-function-invalid` green!)** | 2 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | **18 PASS (up from 17, `animation-timing-function-invalid` green!)** | 17 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **30 PASS / 19 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B271 (port=19700, Phase 522 verification, 90 tests)
+- `/css/css-cascade/ --shard 1/2`: 45 total | 20 PASS | 24 FAIL | 0 TIMEOUT | 1 ERROR
+- `/css/css-cascade/ --shard 2/2`: 45 total | 17 PASS (`FAIL→PASS`: `layer-counter-style-override`) | 26 FAIL | 2 TIMEOUT | 0 CRASH
+- Totals: **37 PASS / 50 FAIL / 2 TIMEOUT / 1 ERROR**
