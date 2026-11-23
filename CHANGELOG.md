@@ -3086,3 +3086,5 @@
 - **Phase 443 (`src/js/shim/collections.js`, `src/js/runtime_source.cp`)**：`RadioNodeList` 活体 Proxy 补齐 `"length"` / `"item"` 的 `has` trap。
 
 - **Phase 444 (`src/js/shim/element/html-element.js`, `src/js/runtime_source.cp`)**：修正 `proto.click()` 中 `tag === "summary"` 为 `selfTag === "summary"`，消除 `ReferenceError`。
+
+- **Phase 445 (`src/js/shim/events/event.js`, `src/js/runtime_source.cp`)**：`MouseEvent.offsetX`/`offsetY` 按 CSSOM View 扣除元素边界框与 `clientLeft`/`clientTop`。

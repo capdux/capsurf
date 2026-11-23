@@ -2313,3 +2313,5 @@
 - Phase 443 (`src/js/shim/collections.js`): 在 `RadioNodeList` Proxy 的 `has` trap 中放行 `"length"` 与 `"item"`，修复 `testharness.js` `assert_array_equals` 判定失败。
 
 - Phase 444 (`src/js/shim/element/html-element.js`): 修复 Phase 441 重命名 `tag->selfTag` 后 `summary` 分支残留未定义 `tag` 导致的 `ReferenceError`。
+
+- Phase 445 (`events/event.js`): 在未显式传入 `offsetX`/`offsetY` 时，动态计算 `clientX - (rect.left + target.clientLeft)` 与 `clientY - (rect.top + target.clientTop)`。

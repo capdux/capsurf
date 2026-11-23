@@ -7165,3 +7165,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 443] (`src/js/shim/collections.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 在 `RadioNodeList` 活体 Proxy 的 `has` trap 中返回 `"length"` 与 `"item"` 为 `true`，修复 `assert_array_equals` 等基于 `"length" in nl` 的类数组判定；`bin_dev` 编译 + CDP 探针 (`{"hasLen":true,"has0":true,"len":2}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
 
 - [Phase 444] (`src/js/shim/element/html-element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 将 `proto.click()` 中残留的 `else if (tag === "summary")` 修正为 `else if (selfTag === "summary")`，消除未定义变量 `ReferenceError`；`bin_dev` 编译 + CDP 探针 (`{"open1":true,"open2":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。
+
+- [Phase 445] (`src/js/shim/events/event.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`) 修复 `MouseEvent.prototype.{offsetX, offsetY}` 未扣除 `target.getBoundingClientRect().{left, top} + clientLeft/clientTop` 的偏差，消除带 border 元素的点击坐标偏移；`bin_dev` 编译 + CDP 探针 (`{"ox":20,"oy":12,"ok":true}`) + `--smoke` 3/3 (6 pass, 0 fail) 全过。

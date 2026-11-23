@@ -477,6 +477,8 @@ function MouseEvent(type, options) {
     pageY: typeof opts.pageY === "number" ? opts.pageY : clientY,
     offsetX: typeof opts.offsetX === "number" ? opts.offsetX : clientX,
     offsetY: typeof opts.offsetY === "number" ? opts.offsetY : clientY,
+    hasExplicitOffsetX: typeof opts.offsetX === "number",
+    hasExplicitOffsetY: typeof opts.offsetY === "number",
     movementX: typeof opts.movementX === "number" ? opts.movementX : 0,
     movementY: typeof opts.movementY === "number" ? opts.movementY : 0,
     button: typeof opts.button === "number" ? opts.button : 0,
@@ -500,6 +502,14 @@ markNative(MouseEvent, "MouseEvent");
     get: function () {
       const s = _mouseEventState.get(this);
       if (!s) throw new TypeError("Illegal invocation");
+      if (prop === "offsetX" && !s.hasExplicitOffsetX && this.target && this.target.nodeType === 1 && typeof this.target.getBoundingClientRect === "function") {
+        const rect = this.target.getBoundingClientRect();
+        return s.clientX - ((rect ? rect.left : 0) + (Number(this.target.clientLeft) || 0));
+      }
+      if (prop === "offsetY" && !s.hasExplicitOffsetY && this.target && this.target.nodeType === 1 && typeof this.target.getBoundingClientRect === "function") {
+        const rect = this.target.getBoundingClientRect();
+        return s.clientY - ((rect ? rect.top : 0) + (Number(this.target.clientTop) || 0));
+      }
       return s[prop];
     },
     enumerable: false,
