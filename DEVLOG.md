@@ -2459,3 +2459,7 @@
 ### Phase 487: `getComputedStyle` 圆角简写与不透明度计算值规范化
 - `border-radius` 经由 `setDecl` 展开至四角后统一走 `border-*-radius` 长度解析，再由 `serializeBorderRadius` 按 1~4 值与 `/` 双组规则合并序列化。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 6/6 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 488: `getComputedStyle` 透视/变换原点计算值解析
+- 依托 `computeElementUsedWidthPx` 与 `height` 解析值，将 `<position>` 关键字及百分比精确映射为像素坐标。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

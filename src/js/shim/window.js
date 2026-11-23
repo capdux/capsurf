@@ -7075,6 +7075,67 @@ function installWindow(global) {
         computedMap.set("scale", nums.map(n => String(Math.round(n * 1e6) / 1e6)).join(" "));
       }
     }
+    const originProps = ["perspective-origin", "transform-origin"];
+    for (let oi = 0; oi < originProps.length; oi++) {
+      const ok = originProps[oi];
+      const ov = (computedMap.get(ok) || "").trim();
+      if (!ov) continue;
+      const oToks = [];
+      let oCur = "", oD = 0;
+      for (let i = 0; i < ov.length; i++) {
+        const c = ov[i];
+        if (c === "(") oD++;
+        else if (c === ")" && oD > 0) oD--;
+        if (oD === 0 && /\s/.test(c)) { if (oCur) { oToks.push(oCur); oCur = ""; } }
+        else oCur += c;
+      }
+      if (oCur) oToks.push(oCur);
+      const boxW = computeElementUsedWidthPx(element, 0) || 0;
+      const hStr = computedMap.get("height") || "0px";
+      const boxH = evalCssLengthExpr(hStr, 0, fontSize) || 0;
+      const resolveAxis = (t, ref) => {
+        const tl = t.toLowerCase();
+        if (tl === "left" || tl === "top") return 0;
+        if (tl === "center") return ref * 0.5;
+        if (tl === "right" || tl === "bottom") return ref;
+        return evalCssLengthExpr(t, ref, fontSize);
+      };
+      let xPx = null, yPx = null, zPx = null;
+      if (oToks.length === 1) {
+        const t0 = oToks[0].toLowerCase();
+        if (t0 === "top" || t0 === "bottom") { xPx = boxW * 0.5; yPx = resolveAxis(t0, boxH); }
+        else { xPx = resolveAxis(t0, boxW); yPx = boxH * 0.5; }
+      } else if (oToks.length === 2 || (ok === "transform-origin" && oToks.length === 3)) {
+        const a = oToks[0].toLowerCase(), b = oToks[1].toLowerCase();
+        const isY = (s) => s === "top" || s === "bottom";
+        const isX = (s) => s === "left" || s === "right";
+        if (isY(a) || (a === "center" && isX(b))) {
+          yPx = resolveAxis(a, boxH); xPx = resolveAxis(b, boxW);
+        } else {
+          xPx = resolveAxis(a, boxW); yPx = resolveAxis(b, boxH);
+        }
+        if (oToks.length === 3) zPx = evalCssLengthExpr(oToks[2], 0, fontSize);
+      } else if (ok === "perspective-origin" && oToks.length === 4) {
+        const parseEdgePair = (edge, off, ref, negEdge) => {
+          const d = evalCssLengthExpr(off, ref, fontSize);
+          if (d === null) return null;
+          return edge === negEdge ? (ref - d) : d;
+        };
+        const e0 = oToks[0].toLowerCase(), e2 = oToks[2].toLowerCase();
+        if (e0 === "left" || e0 === "right") {
+          xPx = parseEdgePair(e0, oToks[1], boxW, "right");
+          yPx = parseEdgePair(e2, oToks[3], boxH, "bottom");
+        } else {
+          yPx = parseEdgePair(e0, oToks[1], boxH, "bottom");
+          xPx = parseEdgePair(e2, oToks[3], boxW, "right");
+        }
+      }
+      if (xPx !== null && yPx !== null) {
+        let res = formatCssPx(xPx) + " " + formatCssPx(yPx);
+        if (zPx !== null && zPx !== 0) res += " " + formatCssPx(zPx);
+        computedMap.set(ok, res);
+      }
+    }
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [

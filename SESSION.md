@@ -7260,3 +7260,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Phase 486 `getComputedStyle` `translate`/`scale` 规范化序列化]** 在 `src/js/shim/window.js` 中新增 `translate`（非 `%` 长度求值与末尾 `0px` 归约）与 `scale`（`%` 转小数、`calc` 数值求值及末尾 `1` / 等值归约）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B224`（`css-text/parsing` 共 11 项 `FAIL→PASS`）并派发 `WPT Batch 225 Runner`。
 
 - **[Phase 487 `getComputedStyle` `border-radius` 简写扩展/序列化与 `opacity` 钳位]** 在 `src/js/shim/window.js` 中新增 `border-radius`/`border-color` 四边展开、`serializeBorderRadius`（支持水平/垂直双组 `/` 最简归约）及 `opacity` 百分比转小数与 `[0, 1]` 钳位；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 6/6 `true`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B226`（`css-backgrounds/parsing` 升至 25/74 PASS）并派发 `WPT Batch 227 Runner`。
+
+- **[COMM -> cp_agy]** 提交工单 `task-capsurf-20261123-pack-gzip-u32`（复现 `/data/dev/cp/temp/repro_pack_gzip_fcheck.cp`）：`cap build` 编译 `/data/dev/cp/lib/pack/gzip.cp:1269` 报错 `E0207: type mismatch: expected 'U32', found 'I32'`（`const fcheck: u32 = if (rem == 0) 0 else (31 - rem);`）。
+
+- **[cp_agy 结单]** `task-capsurf-20261123-pack-gzip-u32` 已修复（`lib/pack/gzip.cp:1269-1270` 显式使用 `const thirty_one: u32 = 31;` 修复 `u32`/`i32` 隐式类型不匹配）；已执行 `ack`，`cap build -m -d -o bin_dev src/main.cp` 已通过 `cpc` 转译并正在 Native 编译（`task-13948`）。
+
+- **[Phase 488 `getComputedStyle` `perspective-origin`/`transform-origin` 解析]** 在 `src/js/shim/window.js` 中新增 `perspective-origin`（1/2/4 token `<position>`）与 `transform-origin`（1/2/3 token 含非零 Z 轴长度）基于盒宽高的绝对像素计算；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 4/4 `true`，`--smoke` 3/3 (6 pass, 0 fail)。

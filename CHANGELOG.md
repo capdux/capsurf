@@ -3338,3 +3338,9 @@
   - `getShorthandComputed`: 新增 `serializeBorderRadius` 支持 `border-radius` 规范最简序列化。
   - `applyUsedValuesToComputedMap`: `opacity` 支持百分比转 `[0, 1]` 小数、`calc()` 求值及 `[0, 1]` 区间钳位。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 488: `getComputedStyle` `perspective-origin` 与 `transform-origin` 计算值解析
+- `src/js/shim/window.js` (`applyUsedValuesToComputedMap`):
+  - `perspective-origin`: 支持 1/2/4-token `<position>` 结合元素盒宽高求值（含 `right 20px bottom 30px`、`center left` 与 `calc`）。
+  - `transform-origin`: 支持 1/2/3-token（保留非零第 3 维 Z 轴长度）。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
