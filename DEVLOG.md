@@ -2293,3 +2293,5 @@
 - Phase 433 (`src/js/shim/traversal.js`): 抽离 `traverseChildren`/`traverseSiblings` 重写 `TreeWalker` 算法，修复 `FILTER_REJECT` 子树跳过、`SKIP` 向上回溯及 `currentNode` 非法类型 `TypeError`。
 
 - Phase 434 (`index.js`, `collections.js`, `html-classes.js`): 实装 `Document.createAttribute`/`createAttributeNS` 及 `Attr.prototype.isSameNode`；修复 `collectRenderedText` 仅检查自身未向祖先继承 `text-transform` 的问题。
+
+- Phase 435 (`src/js/shim/collections.js`): 为 `DOMTokenList._getTokens` 增加有序集合去重，并补齐 `keys()`、`forEach()`、`[Symbol.iterator]` 与 `Symbol.toStringTag = "DOMTokenList"`。

@@ -3066,3 +3066,5 @@
 - **Phase 433 (`src/js/shim/traversal.js`, `src/js/runtime_source.cp`)**：按 WHATWG DOM 规范重写 `TreeWalker` 五向遍历算法并补齐 `FILTER_REJECT`、`whatToShow >>> 0` 与 `currentNode` 校验。
 
 - **Phase 434 (`src/js/shim/index.js`, `src/js/shim/collections.js`, `src/js/shim/element/html-classes.js`, `src/js/runtime_source.cp`)**：新增 `Document.createAttribute`/`createAttributeNS` 与 `Attr.prototype.isSameNode`；`innerText` 支持沿祖先链继承 `text-transform`。
+
+- **Phase 435 (`src/js/shim/collections.js`, `src/js/runtime_source.cp`)**：`DOMTokenList` 按有序集合去重并补齐 `keys`、`forEach`、`[Symbol.iterator]` 与 `Symbol.toStringTag`。

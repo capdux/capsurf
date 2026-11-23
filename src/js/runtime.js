@@ -2613,9 +2613,19 @@
 
   DOMTokenList.prototype._getTokens = function () {
     const st = _dtlState.get(this);
-    const str = (st ? st.getter() : "" || "").trim();
+    const str = (st ? (st.getter() || "") : "").trim();
     if (!str) return [];
-    return str.split(/\s+/);
+    const raw = str.split(/\s+/);
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < raw.length; i++) {
+      const tok = raw[i];
+      if (tok && !seen.has(tok)) {
+        seen.add(tok);
+        out.push(tok);
+      }
+    }
+    return out;
   };
 
   DOMTokenList.prototype._setTokens = function (tokens) {
@@ -2715,7 +2725,19 @@
     return true;
   };
 
-  DOMTokenList.prototype.forEach = Array.prototype.forEach;
+  DOMTokenList.prototype.forEach = function (callback, thisArg) {
+    const tokens = this._getTokens();
+    for (let i = 0; i < tokens.length; i++) {
+      callback.call(thisArg, tokens[i], i, this);
+    }
+  };
+
+  DOMTokenList.prototype.keys = function () {
+    const tokens = this._getTokens();
+    const arr = [];
+    for (let i = 0; i < tokens.length; i++) arr.push(i);
+    return arr[Symbol.iterator]();
+  };
 
   DOMTokenList.prototype.values = function () {
     return this._getTokens()[Symbol.iterator]();
@@ -2741,7 +2763,11 @@
     return st.supportedSet.has(String(token).toLowerCase());
   };
 
-  DOMTokenList.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+  DOMTokenList.prototype[Symbol.iterator] = DOMTokenList.prototype.values;
+  Object.defineProperty(DOMTokenList.prototype, Symbol.toStringTag, {
+    value: "DOMTokenList",
+    configurable: true,
+  });
 
   markNative(DOMTokenList, "DOMTokenList");
   markNative(DOMTokenList.prototype.add, "add");
