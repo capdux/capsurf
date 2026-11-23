@@ -3490,3 +3490,5 @@
 - **Phase 521**:
   - `src/js/shim/cssom.js`: 新增 `splitTopLevelComma` 括号感知逗号切分、`transition-behavior` 支持、`transition-property` 合法性校验及 `transition` 多层 shorthand 展开/反序列化。
   - `test/TEST_LEDGER.md`: 记录 `WPT-B267`（`/css/css-grid/parsing/` 6/61，+2 `FAIL→PASS`）与 `PW Batch 155`（106/176 PASS）。
+- **Phase 522**:
+  - `src/js/shim/cssom.js`: `transition-behavior` 改为逗号列表校验；新增 `transition-timing-function` 与 `animation-timing-function` 严格校验。

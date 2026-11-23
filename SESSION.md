@@ -7332,3 +7332,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **Phase 520 完成 (`transition-property` 关键字规范化 + `<time>` 计算值求值)**：在 `src/js/shim/cssom.js` `normalizeCssSpecifiedValue` 新增 `transition-property`（`all`/`none` 小写化且保留自定义属性大小写）；在 `src/js/shim/window.js` 为 `transition-delay`、`transition-duration`、`animation-delay`、`animation-duration` 补充 `<time>`（`ms -> s`、`calc(...)`）求值。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。
 
 - **Phase 521 完成 (`transition-property` 校验 + `transition` shorthand 展开 + `transition-behavior`)**：在 `src/js/shim/cssom.js` 新增 `transition-behavior`、`transition-property` 合法性校验、`splitTopLevelComma` 括号感知切分及 `transition` 多层展开与反序列化。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS；`test/TEST_LEDGER.md` 记录 `WPT-B267` 与 `PW Batch 155`。
+
+- **Phase 522 完成 (`transition-behavior` 列表校验 + `*-timing-function` 校验)**：在 `src/js/shim/cssom.js` 将 `transition-behavior` 改为逗号列表校验（`[ normal | allow-discrete ] #`），并新增 `transition-timing-function` / `animation-timing-function` 严格校验（`cubic-bezier` `x1/x2 ∈ [0,1]`、`steps` 正整数与 `jump-none >= 2`）。`bin_dev/main` 编译通过，CDP 探针全绿，`--smoke` 3/3 PASS。

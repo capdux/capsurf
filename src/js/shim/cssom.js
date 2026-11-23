@@ -343,7 +343,6 @@
       "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
       "scrollbar-width": ["auto", "thin", "none"],
       "field-sizing": ["fixed", "content"],
-      "transition-behavior": ["normal", "allow-discrete"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (allowedKeywords) {
@@ -1220,6 +1219,51 @@
     if (prop === "text-underline-offset") {
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
+    }
+    if (prop === "transition-behavior") {
+      const items = splitTopLevelComma(vLower);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i] !== "normal" && items[i] !== "allow-discrete") return false;
+      }
+      return true;
+    }
+    if (prop === "transition-timing-function" || prop === "animation-timing-function") {
+      const items = splitTopLevelComma(vLower);
+      if (items.length === 0) return false;
+      const KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+      const STEP_POS = new Set(["start", "end", "jump-start", "jump-end", "jump-none", "jump-both"]);
+      const isNum = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x);
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (KW.has(t)) continue;
+        if (t.startsWith("cubic-bezier(") && t.endsWith(")")) {
+          const args = splitTopLevelComma(t.slice(13, -1));
+          if (args.length !== 4) return false;
+          if (!args.every(a => isNum(a) || /^(?:calc|var|env)\(/i.test(a))) return false;
+          if (isNum(args[0]) && (Number(args[0]) < 0 || Number(args[0]) > 1)) return false;
+          if (isNum(args[2]) && (Number(args[2]) < 0 || Number(args[2]) > 1)) return false;
+          continue;
+        }
+        if (t.startsWith("steps(") && t.endsWith(")")) {
+          const args = splitTopLevelComma(t.slice(6, -1));
+          if (args.length < 1 || args.length > 2) return false;
+          if (!/^\+?\d+$/.test(args[0])) return false;
+          const n = Number(args[0]);
+          if (args.length === 2 && !STEP_POS.has(args[1])) return false;
+          if (n < (args[1] === "jump-none" ? 2 : 1)) return false;
+          continue;
+        }
+        if (t.startsWith("linear(") && t.endsWith(")")) {
+          const inner = t.slice(7, -1).trim();
+          if (!inner) return false;
+          continue;
+        }
+        return false;
+      }
+      return true;
     }
     if (prop === "transition-property") {
       const items = trimmed.split(",");

@@ -1375,3 +1375,13 @@
 - `page-keyboard.spec.ts`: **38 / 44 PASS** | 3 FAIL | 3 TIMEOUT | 0 SKIP
 - `page-dispatchevent.spec.ts`: **15 / 16 PASS** | 1 FAIL | 0 TIMEOUT | 0 SKIP
 - Totals: **106 PASS / 7 FAIL / 63 TIMEOUT / 0 SKIP**
+
+### WPT-B268 (port=19700, Phase 521 verification, 49 tests)
+- `/css/css-transitions/parsing/`: 14 total | **10 PASS (up from 8, `transition-property-invalid` & `transition-valid` green!)** | 4 FAIL | 0 TIMEOUT | 0 CRASH
+- `/css/css-animations/parsing/`: 35 total | 17 PASS | 18 FAIL | 0 TIMEOUT | 0 CRASH
+- Totals: **27 PASS / 22 FAIL / 0 TIMEOUT / 0 CRASH**
+
+### WPT-B269 (port=19700, Phase 521 verification, 82 tests)
+- `/css/css-fonts/parsing/ --shard 1/2`: 41 total | 16 PASS | 24 FAIL | 1 TIMEOUT | 0 CRASH
+- `/css/css-fonts/parsing/ --shard 2/2`: 41 total | 18 PASS | 22 FAIL | 1 TIMEOUT | 0 CRASH
+- Totals: **34 PASS / 46 FAIL / 2 TIMEOUT / 0 CRASH**
