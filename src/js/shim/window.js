@@ -7678,6 +7678,103 @@ function installWindow(global) {
       if (tdiToks.length === 2 && tdiToks[0] === tdiToks[1]) tdiToks.pop();
       computedMap.set("text-decoration-inset", tdiToks.join(" "));
     }
+    const lsiRaw = (computedMap.get("list-style-image") || "").trim();
+    if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
+      const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(lsiRaw);
+      if (gm) {
+        const fn = gm[1].toLowerCase();
+        const normCol = typeof global.__capsurf_normalizeSingleColor === "function" ? global.__capsurf_normalizeSingleColor : (v) => v;
+        const args = [];
+        let cur = "", dpt = 0;
+        for (let i = 0; i < gm[2].length; i++) {
+          const ch = gm[2][i];
+          if (ch === "(") dpt++;
+          else if (ch === ")" && dpt > 0) dpt--;
+          if (dpt === 0 && ch === ",") { args.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        if (cur.trim()) args.push(cur.trim());
+        const splitTop = (str) => {
+          const res = []; let sCur = "", sD = 0;
+          for (let j = 0; j < str.length; j++) {
+            const c = str[j];
+            if (c === "(") sD++; else if (c === ")" && sD > 0) sD--;
+            if (sD === 0 && /\s/.test(c)) { if (sCur) { res.push(sCur); sCur = ""; } }
+            else sCur += c;
+          }
+          if (sCur) res.push(sCur);
+          return res;
+        };
+        const evalAng = (tok) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            const e = tl.slice(5, -1)
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))deg\b/g, "$1")
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn\b/g, (_, n) => String(Number(n) * 360));
+            if (/^[\d+\-*/().\s]+$/.test(e)) {
+              try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "deg"; } catch (_) {}
+            }
+          }
+          const tm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn$/i.exec(tl);
+          if (tm) return String(Number((Number(tm[1]) * 360).toFixed(6))) + "deg";
+          return tl;
+        };
+        const evalStopPos = (tok, nonNeg) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            if (tl.indexOf("deg") !== -1 || tl.indexOf("turn") !== -1) return evalAng(tok);
+            const inn = tl.slice(5, -1);
+            if (inn.indexOf("%") !== -1 && !/(?:px|em|rem)/.test(inn)) {
+              const e = inn.replace(/%/g, "");
+              if (/^[\d+\-*/().\s]+$/.test(e)) {
+                try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%"; } catch (_) {}
+              }
+            } else if (inn.indexOf("%") === -1) {
+              const px = evalCssLengthExpr(tl, 0, fontSize);
+              if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+            }
+          }
+          if (tl.endsWith("em") || tl.endsWith("px") || tl.endsWith("rem")) {
+            const px = evalCssLengthExpr(tl, 0, fontSize);
+            if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+          }
+          if (tl.endsWith("turn")) return evalAng(tok);
+          return tl;
+        };
+        const outArgs = [];
+        for (let ai = 0; ai < args.length; ai++) {
+          const toks = splitTop(args[ai]);
+          if (ai === 0 && fn === "linear-gradient" && (toks[0].toLowerCase() === "to" || /(?:deg|turn|rad|grad)\)?$/i.test(toks[0]))) {
+            outArgs.push(toks[0].toLowerCase() === "to" ? toks.map(t => t.toLowerCase()).join(" ") : evalAng(toks[0]));
+            continue;
+          }
+          if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || toks[0].toLowerCase() === "circle" || toks[0].toLowerCase() === "ellipse")) {
+            const rOut = [];
+            let inAt = false;
+            for (let ti = 0; ti < toks.length; ti++) {
+              const tl = toks[ti].toLowerCase();
+              if (tl === "at") { inAt = true; rOut.push("at"); continue; }
+              if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
+              rOut.push(evalStopPos(toks[ti], !inAt));
+            }
+            outArgs.push(rOut.join(" "));
+            continue;
+          }
+          if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
+            outArgs.push(evalStopPos(toks[0], false));
+            continue;
+          }
+          const col = normCol(toks[0]);
+          if (toks.length === 1) outArgs.push(col);
+          else if (toks.length === 2) outArgs.push(col + " " + evalStopPos(toks[1], false));
+          else if (toks.length === 3) {
+            outArgs.push(col + " " + evalStopPos(toks[1], false));
+            outArgs.push(col + " " + evalStopPos(toks[2], false));
+          } else outArgs.push(args[ai]);
+        }
+        computedMap.set("list-style-image", fn + "(" + outArgs.join(", ") + ")");
+      }
+    }
     if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
       computedMap.set("hyphenate-character", "auto");
     }

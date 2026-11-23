@@ -7387,3 +7387,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 ### 2026-11-23 Phase 542 (`counter-*` `calc(sign(cqw))`、`list-style` 简写计算与展开规范化)
 - **[Agent]**: 完成 Phase 542：在 `window.js` 对 `counter-reset`/`counter-increment`/`counter-set` 新增 `evalSignCalls` 整数求值；让 `getShorthandComputed("list-style")` 调用 `serializeExpandedShorthand("list-style")` 省略默认 `outside`/`none`/`disc`；改进 `list-style` 展开与 `outside outside` 校验。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+
+### 2026-11-23 Phase 543 (`counter-*` 独立 `sign()`、`list-style` `outside outside`/`none url` 与渐变计算值)
+- **[Agent]**: 完成 Phase 543：修复 `counter-*` 独立 `sign(...)` 校验、修复 `list-style: none url(...)` 与 `outside outside` 序列化、补全 `gold` 颜色映射并在 `window.js` 实现 `linear-gradient`/`radial-gradient`/`conic-gradient` 计算期颜色/角度/长度/双色标解析。CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。

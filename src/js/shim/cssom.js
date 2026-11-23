@@ -1280,7 +1280,7 @@
         }
         if (!okName) return false;
         i++;
-        if (i < toks.length && (/^[+-]?\d+$/.test(toks[i]) || /^(?:calc|min|max|clamp)\(/i.test(toks[i]))) i++;
+        if (i < toks.length && (/^[+-]?\d+$/.test(toks[i]) || /^(?:calc|min|max|clamp|sign)\(/i.test(toks[i]))) i++;
       }
       return true;
     }
@@ -2320,7 +2320,7 @@
       while (i < p.length) {
         out.push(p[i]);
         const isRev = /^reversed\(/i.test(p[i]);
-        if (i + 1 < p.length && (/^[+-]?\d+$/.test(p[i + 1]) || /^(?:calc|min|max|clamp)\(/i.test(p[i + 1]))) {
+        if (i + 1 < p.length && (/^[+-]?\d+$/.test(p[i + 1]) || /^(?:calc|min|max|clamp|sign)\(/i.test(p[i + 1]))) {
           out.push(/^[+-]?\d+$/.test(p[i + 1]) ? String(Number(p[i + 1])) : p[i + 1]);
           i += 2;
         } else {
@@ -2379,7 +2379,7 @@
       }
       if (noneCnt >= 2) { img = "none"; typ = "none"; }
       else if (noneCnt === 1) {
-        if (!hasType && img === "none") typ = "none";
+        if (!hasType) typ = "none";
       }
       return [
         ["list-style-position", pos],
@@ -2629,6 +2629,7 @@
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
     }
     if (key === "list-style") {
+      if (vals[0] === "outside" && vals[1] === "none" && vals[2] === "outside") return "outside outside";
       const out = [];
       if (vals[0] !== "outside") out.push(vals[0]);
       if (vals[1] !== "none") out.push(vals[1]);
@@ -5016,6 +5017,7 @@
     fuchsia: "rgb(255, 0, 255)",
     orange: "rgb(255, 165, 0)",
     purple: "rgb(128, 0, 128)",
+    gold: "rgb(255, 215, 0)",
     transparent: "rgba(0, 0, 0, 0)",
   };
 

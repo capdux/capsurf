@@ -1500,3 +1500,9 @@
 
 ### WPT-B295 (bin_dev Phase 540, 2026-11-23)
 - **Filter `/css/css-flexbox/parsing/`**: `27` files (`24 PASS / 3 FAIL / 0 TIMEOUT / 0 ERROR`), `flex-basis-computed` 12/12 all green, `flex-valid` 15/16, `flex-computed` 13/14, `webkit-aliases` jumped `0/12 -> 10/12`.
+
+### WPT-B296 (bin_dev Phase 541, 2026-11-23)
+- **Filter `/css/css-flexbox/parsing/`**: `27` files (**26 PASS / 1 FAIL / 0 TIMEOUT / 0 ERROR**, `27/27` matched expectations, `0` unexpected FAIL; `flex-valid` & `flex-computed` & `flex-basis-computed` all green, only `webkit-aliases` 10/12 expected FAIL).
+
+### WPT-B298 (bin_dev Phase 542, 2026-11-23)
+- **Filter `/css/css-lists/parsing/`**: `23` files (**21 PASS / 2 FAIL / 0 TIMEOUT / 0 ERROR**; `counter-{reset,increment,set}-computed` & `list-style-computed` all green!). Only `list-style-valid` (22/24) and `list-style-image-computed` (3/11) remained, fixed in Phase 543.

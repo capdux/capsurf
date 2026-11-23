@@ -2591,3 +2591,7 @@
 ### Phase 542: `counter-*` `sign(cqw)` 与 `list-style` 简写计算值
 - `getShorthandComputed("list-style")` 统一走 `serializeExpandedShorthand("list-style")`，避免输出冗余 `outside`/`none`/`disc`。
 - `counter-reset`/`counter-increment`/`counter-set` 复用 `evalSignCalls` 计算容器单位 `sign()` 表达式。
+
+### Phase 543: `list-style-image` 渐变计算求值与 `counter-*` / `list-style` 收尾
+- `expandCssShorthand("list-style")` 按 `!hasType` 判定 `none` 归属，`serializeExpandedShorthand("list-style")` 保留 `outside outside` 防回环歧义。
+- `window.js` 对 `linear-gradient` / `radial-gradient` / `conic-gradient` 实现色值 `rgb()`、角度 `calc()/turn -> deg`、长度/百分比 `calc()` 与双位置色标拆分。
