@@ -2491,3 +2491,7 @@
 ### Phase 495: CSS 指定值简写顺序规范化
 - 统一 `flex-flow` 与边框/轮廓/分栏线简写的指定值序列化顺序，确保 `el.style.border = "red solid 0"` 回读为 `"0px solid red"`。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 496: CSS 指定值 `flex`/`text-indent`/`text-decoration` 门禁闭环
+- CDP 探针同时捕获并修复了 `flex: 0 1 0` 的指定值校验边界。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 4/4 `true`，`--smoke` 3/3 PASS (6/6)。

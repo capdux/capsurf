@@ -730,8 +730,8 @@
         if (isFlexBasis(toks[0]) && isFlexNum(toks[1])) return true;
         return false;
       }
-      if (isFlexNum(toks[0]) && isFlexNum(toks[1]) && isFlexBasis(toks[2]) && !isFlexNum(toks[2])) return true;
-      if (isFlexBasis(toks[0]) && !isFlexNum(toks[0]) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
+      if (isFlexNum(toks[0]) && isFlexNum(toks[1]) && (toks[2] === "0" || (isFlexBasis(toks[2]) && !isFlexNum(toks[2])))) return true;
+      if ((toks[0] === "0" || (isFlexBasis(toks[0]) && !isFlexNum(toks[0]))) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
       return false;
     }
     if (prop === "rotate") {
@@ -1439,6 +1439,59 @@
         } else c = t;
       }
       return [w, st, c].filter(Boolean).join(" ");
+    }
+    if (key === "flex") {
+      const parts = splitCssTokens(s);
+      if (parts.length === 1) {
+        const p0 = parts[0].toLowerCase();
+        if (p0 === "none") return "0 0 auto";
+        if (p0 === "auto") return "1 1 auto";
+        if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(p0)) {
+          return String(Number(p0) === 0 ? 0 : Number(p0)) + " 1 0%";
+        }
+        return "1 1 " + (p0 === "0" ? "0px" : parts[0]);
+      }
+      const isNum = (x) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(x);
+      let grow = "1", shrink = "1", basis = "0%";
+      const nums = [];
+      let bRaw = "";
+      for (let i = 0; i < parts.length; i++) {
+        if (isNum(parts[i]) && !(nums.length === 2 && parts[i] === "0")) nums.push(String(Number(parts[i])));
+        else bRaw = parts[i];
+      }
+      if (nums.length >= 1) grow = nums[0];
+      if (nums.length >= 2) shrink = nums[1];
+      if (bRaw) basis = (bRaw === "0" || bRaw === "+0" || bRaw === "-0") ? "0px" : bRaw;
+      return grow + " " + shrink + " " + basis;
+    }
+    if (key === "text-indent") {
+      const parts = splitCssTokens(s);
+      let len = "", hang = false, each = false;
+      for (let i = 0; i < parts.length; i++) {
+        const pl = parts[i].toLowerCase();
+        if (pl === "hanging") hang = true;
+        else if (pl === "each-line") each = true;
+        else len = (pl === "0" || pl === "+0" || pl === "-0") ? "0px" : parts[i];
+      }
+      let out = len;
+      if (hang) out += " hanging";
+      if (each) out += " each-line";
+      return out;
+    }
+    if (key === "text-decoration") {
+      const parts = splitCssTokens(s);
+      const LINES = new Set(["underline", "overline", "line-through", "blink"]);
+      const STY = new Set(["solid", "double", "dotted", "dashed", "wavy"]);
+      const lines = [];
+      let st = "", th = "", col = "";
+      for (let i = 0; i < parts.length; i++) {
+        const t = parts[i], tl = t.toLowerCase();
+        if (tl === "none" || tl === "spelling-error" || tl === "grammar-error" || LINES.has(tl)) lines.push(tl);
+        else if (STY.has(tl)) st = tl;
+        else if (tl === "from-font" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) th = tl;
+        else col = t;
+      }
+      return [lines.join(" "), st, th, col].filter(Boolean).join(" ");
     }
     return s;
   }
