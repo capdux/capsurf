@@ -38728,6 +38728,58 @@
           }
         }
       }
+      const trRaw = (computedMap.get("translate") || "").trim();
+      if (trRaw && trRaw.toLowerCase() !== "none") {
+        const trToks = [];
+        let tCur = "", tD = 0;
+        for (let i = 0; i < trRaw.length; i++) {
+          const c = trRaw[i];
+          if (c === "(") tD++;
+          else if (c === ")" && tD > 0) tD--;
+          if (tD === 0 && /\s/.test(c)) { if (tCur) { trToks.push(tCur); tCur = ""; } }
+          else tCur += c;
+        }
+        if (tCur) trToks.push(tCur);
+        for (let i = 0; i < trToks.length; i++) {
+          if (trToks[i].indexOf("%") === -1) {
+            const px = evalCssLengthExpr(trToks[i], 0, fontSize);
+            if (px !== null) trToks[i] = formatCssPx(px);
+          }
+        }
+        if (trToks.length === 3 && trToks[2] === "0px") trToks.pop();
+        if (trToks.length === 2 && trToks[1] === "0px") trToks.pop();
+        if (trToks.length > 0) computedMap.set("translate", trToks.join(" "));
+      }
+      const scRaw = (computedMap.get("scale") || "").trim();
+      if (scRaw && scRaw.toLowerCase() !== "none") {
+        const scToks = [];
+        let sCur = "", sD = 0;
+        for (let i = 0; i < scRaw.length; i++) {
+          const c = scRaw[i];
+          if (c === "(") sD++;
+          else if (c === ")" && sD > 0) sD--;
+          if (sD === 0 && /\s/.test(c)) { if (sCur) { scToks.push(sCur); sCur = ""; } }
+          else sCur += c;
+        }
+        if (sCur) scToks.push(sCur);
+        const evalScaleNum = (tok) => {
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tok)) return Number(tok);
+          const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(tok);
+          if (pm) return Number(pm[1]) / 100;
+          if (/^calc\(/i.test(tok)) {
+            const norm = tok.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
+            const v = evalCssLengthExpr(norm, 0, fontSize);
+            if (v !== null) return v;
+          }
+          return null;
+        };
+        const nums = scToks.map(evalScaleNum);
+        if (nums.every(n => n !== null)) {
+          if (nums.length === 3 && nums[2] === 1) nums.pop();
+          if (nums.length === 2 && nums[1] === nums[0]) nums.pop();
+          computedMap.set("scale", nums.map(n => String(Math.round(n * 1e6) / 1e6)).join(" "));
+        }
+      }
     }
 
     const STANDARD_COMPUTED_LONGHANDS = [

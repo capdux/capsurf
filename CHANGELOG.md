@@ -3325,3 +3325,9 @@
   - `border-{top-left,top-right,bottom-right,bottom-left}-radius`: 支持 1~2 项非 `%` 长度求值与非负像素钳位。
   - `rotate`: 实现 `deg/rad/grad/turn` 转 `deg`、平行轴向量（`x`/`y`/`z`）归约及负向轴角度取反。
 - 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。
+
+### Phase 486: `getComputedStyle` `translate` 与 `scale` 规范化序列化
+- `src/js/shim/window.js` (`applyUsedValuesToComputedMap`):
+  - `translate`: 括号感知分词 + 非 `%` 长度求值 + 裁剪多余尾随 `0px`（保留 `0%`）。
+  - `scale`: 百分比转比例因子（`100% -> 1`）、支持 `calc()` 数值/百分比求值，并裁剪 `z === 1` 与 `y === x`。
+- 重新生成 `src/js/runtime.js` 与 `src/js/runtime_source.cp`。

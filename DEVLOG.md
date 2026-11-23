@@ -2451,3 +2451,7 @@
 ### Phase 485: `getComputedStyle` 圆角与旋转计算值规范化
 - `rotate` 按 CSS Transforms 2 规范将 `0 0 -1 400grad` 归约为 `-360deg`、`-0.5 0 0 400grad` 归约为 `x -360deg`。
 - 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。
+
+### Phase 486: `getComputedStyle` 独立平移与缩放计算值归约
+- 按 CSS Transforms 2 序列化规范实现 `translate`（`100px 0px 0px -> 100px`）与 `scale`（`-100% -100% 1 -> -1`、`calc(200%) -> 2`）。
+- 验证：`cpc brief -n 8 src/js/runtime_source.cp` PASS，`bin_dev` 编译成功，CDP 探针 5/5 `true`，`--smoke` 3/3 PASS (6/6)。

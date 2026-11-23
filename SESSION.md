@@ -7256,3 +7256,5 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]** 已重新派发 2 路全新测试子智能体（`PW Batch 146 Runner` @ `:19386` 与 `WPT Batch 224 Runner` @ `:19700`），检查 `/root/.agy/comm/COMM.md` 与 `unacked` 队列，并立即编译验证 Phase 485（`rotate` 与 `border-*-radius` 计算值规范化）。
 
 - **[Phase 485 `getComputedStyle` `border-*-radius` 与 `rotate` 序列化]** 在 `src/js/shim/window.js` 中补全 `border-{top-left,top-right,bottom-right,bottom-left}-radius` 非负长度计算值解析与 `rotate` 规范化序列化（单位换算 `deg`、`x`/`y`/`z` 轴归约及反向负角归约）；`agy-comm.service` `active`，`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)。
+
+- **[Phase 486 `getComputedStyle` `translate`/`scale` 规范化序列化]** 在 `src/js/shim/window.js` 中新增 `translate`（非 `%` 长度求值与末尾 `0px` 归约）与 `scale`（`%` 转小数、`calc` 数值求值及末尾 `1` / 等值归约）；`cpc brief -n 8` PASS，`bin_dev` 编译通过，CDP 探针 5/5 `true`，`--smoke` 3/3 (6 pass, 0 fail)；同步记录 `WPT-B224`（`css-text/parsing` 共 11 项 `FAIL→PASS`）并派发 `WPT Batch 225 Runner`。
