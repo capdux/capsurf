@@ -35363,9 +35363,6 @@
       if (hasEntryTypes && hasType) {
         throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': Cannot specify both 'entryTypes' and 'type'.");
       }
-      if (hasEntryTypes && options.buffered) {
-        throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': 'buffered' cannot be used with 'entryTypes'.");
-      }
       this._types.clear();
       if (hasEntryTypes) {
         const list = Array.from(options.entryTypes || []);

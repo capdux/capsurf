@@ -2321,3 +2321,5 @@
 - Phase 447 (`element.js`, `window.js`): 将 `Element.prototype.name` 限制在 `ELEMENTS_WITH_NAME` 集合以修复 `nameditem-03.html`；`PerformanceObserver.observe` 仅在 `options.buffered` 为 truthy 时禁止与 `entryTypes` 混用。
 
 - Phase 448 (`parser.js`, `index.js`, `window.js`): 覆盖 `DOMParser`、`createHTMLDocument`、`createDocument` 三条路径补齐 `readyState = "complete"`。
+
+- Phase 449 (`src/js/shim/window.js`): 移除 `PerformanceObserver.observe` 中 `hasEntryTypes && options.buffered` 抛错分支，按 WPT 规范忽略 `buffered`。

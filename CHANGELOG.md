@@ -3094,3 +3094,5 @@
 - **Phase 447 (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：收窄 `Element.prototype.name` 适用标签集合；放行 `PerformanceObserver.observe` 中 `entryTypes` 与 `buffered: false` 共存。
 
 - **Phase 448 (`src/js/shim/parser.js`, `src/js/shim/index.js`, `src/js/shim/window.js`, `src/js/runtime_source.cp`)**：为 `ParsedDocument` 与 `createHTMLDocument`/`createDocument` 补齐 `readyState = "complete"`，并完善 `docProto.compatMode` 非 HTML 文档判断。
+
+- **Phase 449 (`src/js/shim/window.js`, `src/js/runtime_source.cp`)**：`PerformanceObserver.observe` 在 `entryTypes` 模式下按规范忽略 `buffered` 选项。
