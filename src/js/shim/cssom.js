@@ -5078,6 +5078,30 @@
       }
       return [["column-width", w], ["column-count", c], ["column-height", h]];
     }
+    if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
+      const p = splitCssTokens(normV);
+      const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+      let w = "medium", st = "none", c = "currentcolor";
+      for (let i = 0; i < p.length; i++) {
+        const t = p[i], tl = t.toLowerCase();
+        if (STY.has(tl)) st = tl;
+        else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
+        } else c = t;
+      }
+      if (key !== "border") return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
+      return [
+        ["border-top-width", w], ["border-top-style", st], ["border-top-color", c],
+        ["border-right-width", w], ["border-right-style", st], ["border-right-color", c],
+        ["border-bottom-width", w], ["border-bottom-style", st], ["border-bottom-color", c],
+        ["border-left-width", w], ["border-left-style", st], ["border-left-color", c],
+        ["border-image-source", "none"],
+        ["border-image-slice", "100%"],
+        ["border-image-width", "1"],
+        ["border-image-outset", "0"],
+        ["border-image-repeat", "stretch"]
+      ];
+    }
     if (key === "outline" || key === "column-rule") {
       const p = splitCssTokens(normV);
       const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -5177,6 +5201,13 @@
     "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
     "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
     "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
+    "border": [
+      "border-top-width", "border-top-style", "border-top-color",
+      "border-right-width", "border-right-style", "border-right-color",
+      "border-bottom-width", "border-bottom-style", "border-bottom-color",
+      "border-left-width", "border-left-style", "border-left-color",
+      "border-image-source", "border-image-slice", "border-image-width", "border-image-outset", "border-image-repeat"
+    ],
     "border-top": ["border-top-width", "border-top-style", "border-top-color"],
     "border-right": ["border-right-width", "border-right-style", "border-right-color"],
     "border-bottom": ["border-bottom-width", "border-bottom-style", "border-bottom-color"],
@@ -5302,6 +5333,18 @@
         key === "border-block-width" || key === "border-block-style" || key === "border-block-color" ||
         key === "border-inline-width" || key === "border-inline-style" || key === "border-inline-color") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
+    }
+    if (key === "border") {
+      if (vals[0] !== vals[3] || vals[0] !== vals[6] || vals[0] !== vals[9] ||
+          vals[1] !== vals[4] || vals[1] !== vals[7] || vals[1] !== vals[10] ||
+          vals[2].toLowerCase() !== vals[5].toLowerCase() || vals[2].toLowerCase() !== vals[8].toLowerCase() || vals[2].toLowerCase() !== vals[11].toLowerCase() ||
+          vals[12] !== "none" || vals[13] !== "100%" || vals[14] !== "1" || vals[15] !== "0" || vals[16] !== "stretch") {
+        return "";
+      }
+      const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[0];
+      const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
+      const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
+      return [cw, cst, cc].filter(Boolean).join(" ") || "none";
     }
     if (key === "border-block-start" || key === "border-block-end" ||
         key === "border-inline-start" || key === "border-inline-end" ||

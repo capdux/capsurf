@@ -3202,3 +3202,5 @@
 - 在 `normalizeSingleColor` 中实现 `hwb()` 至 `rgb()`/`rgba()` 转换及 `lab`/`lch`/`oklab`/`oklch` 透明度规范化，`color-computed-hwb` 由 7/56 跃升至 45/56。
 ### Phase 681 — `hwb()` 舍入精度与 `none` 通道收口
 - 修正 `hwb()` 转 `rgb()` 时 `1 - w - b` 浮点误差导致的 `127` vs `128` 舍入偏差，并补全 `none` 通道规范化，使 `color-valid-hwb` 提升至 28/38、`color-computed-hwb` 提升至 46/56。
+### Phase 682 — `border` 与 `border-{top,right,bottom,left}` 简写展开与序列化闭环
+- 在 `cssom.js` 中补全 `border` 与四向 `border-{top,right,bottom,left}` 的 `expandCssShorthand` 展开（`border` 同步重置 `border-image-{source,slice,width,outset,repeat}`）与 `serializeExpandedShorthand` 序列化，`border-shorthand.html` 全数 36/36 子测试 PASS。
