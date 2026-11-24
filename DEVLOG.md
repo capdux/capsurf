@@ -3296,3 +3296,5 @@
 - 在 `cssom.js` 新增 `isValidEnvSyntax` 并在 `isValidCssValue` / `isValidCalcSyntax` / `isValidLenPct` 中统一调用，拒绝 `env()` 与 `env(name ())` 非法形式，打通 `env-parsing.html` (8/8 PASS) 与 `seralization-round-tripping.tentative.html` (PASS)。
 ### Phase 728 — WPT 5 项基线收紧与 3 小时自进化流程固化
 - 实测确认 5 项历史 `TIMEOUT`/`FAIL` 用例在当前 `bin_dev/main` 下稳定全绿并收紧为 `PASS`；同步在 `GEMINI.md` 固化 `;` 串联防早退与 `--tests-file` 跨目录合批规范。
+### Phase 729 — `/css/css-page/cssom/` `margin`/`padding` 4-longhand 展开全绿 (`5/5 PASS`)
+- 修复 `cssom.js` `SHORTHAND_LONGHANDS` 对 `margin`/`padding` 展开后仍额外写入简写键导致 `style.length` 多 1 的问题，统一并入 `SHORTHAND_EXPAND_LONGHANDS`，打通 `/css/css-page/cssom/` 5/5 全绿。

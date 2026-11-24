@@ -112,8 +112,6 @@
   ]);
 
   const SHORTHAND_LONGHANDS = {
-    margin: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
-    padding: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
     "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
     "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
     "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
@@ -6092,7 +6090,7 @@
         ["grid-column-end", c2.canon]
       ];
     }
-    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset") {
+    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset" || key === "margin" || key === "padding") {
       const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
       if (toks.length === 0) return null;
       let t = toks[0], r = toks[0], b = toks[0], l = toks[0];
@@ -6272,6 +6270,8 @@
     "scroll-padding-block": ["scroll-padding-block-start", "scroll-padding-block-end"],
     "scroll-padding-inline": ["scroll-padding-inline-start", "scroll-padding-inline-end"],
     inset: ["top", "right", "bottom", "left"],
+    margin: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+    padding: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
     "inset-block": ["inset-block-start", "inset-block-end"],
     "inset-inline": ["inset-inline-start", "inset-inline-end"],
     "margin-block": ["margin-block-start", "margin-block-end"],
@@ -6384,7 +6384,7 @@
     if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
     }
-    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset") {
+    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset" || key === "margin" || key === "padding") {
       const [t, r, b, l] = vals;
       if (r === l) {
         if (b === t) {
@@ -6967,6 +6967,17 @@
         const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
         if (key === "--") continue;
         if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
+        if ((context === "page" || context === "margin") && (key === "margin" || key === "padding")) {
+          const expanded = expandCssShorthand(key, val);
+          if (expanded) {
+            for (let ei = 0; ei < expanded.length; ei++) {
+              const lhKey = expanded[ei][0];
+              if (!data.has(lhKey)) authoredOrder.push(lhKey);
+              data.set(lhKey, { name: lhKey, value: expanded[ei][1], priority: priority });
+            }
+            continue;
+          }
+        }
         if (!data.has(key)) {
           authoredOrder.push(key);
         }

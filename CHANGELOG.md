@@ -4030,3 +4030,7 @@
 - **Phase 728**:
   - `test/wpt/wpt-expectations.json`: 收紧 5 项实测通过用例为 `PASS`（`css-text/inheritance`, `layer-counter-style-override`, `list-and-grid-001`, `ol-change-display-type`, `mask-clip-8`）。
   - `GEMINI.md`: 固化 11.11 节 WPT `;` 串联防早退与 `--tests-file` 跨目录合批规范。
+- **Phase 729**:
+  - `src/js/shim/cssom.js`: 将 `margin` 与 `padding` 移入 `SHORTHAND_EXPAND_LONGHANDS` / `expandCssShorthand` / `serializeExpandedShorthand`，消除 `setProperty` 多余的简写键计数并在 `@page`/`@margin` 初始声明解析中展开。
+  - `test/wpt/wpt-expectations.json`: 将 `margin-001.html`, `margin-002.html`, `page-001.html`, `page-002.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

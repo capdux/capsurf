@@ -4905,11 +4905,11 @@
     "reason": null
   },
   "/css/css-page/cssom/margin-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/cssom/margin-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/cssom/margin-003.html": {
@@ -4917,11 +4917,11 @@
     "reason": null
   },
   "/css/css-page/cssom/page-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/cssom/page-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/inheritance.html": {
