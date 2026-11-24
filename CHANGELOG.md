@@ -3764,3 +3764,5 @@
 - **Phase 647** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `font-size` 绝对/相对关键字与 `<font size="1..7">` 计算值像素求值；`font-size-computed` (21/21) 全绿并收紧基线为 `PASS`。
 
 - **Phase 648** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-feature-settings` 合法性校验及计算值去重、排序与嵌套 `calc()` 求值；`font-feature-settings-{invalid,valid,computed}` 3/3 全绿。
+
+- **Phase 649** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `isValidColor` 新增 `light-dark()` 校验，并将 `color` 与 `hsl`/`hsla` 接入 `normalizeSingleColor`；`color-valid` (17/17) 与 `color-invalid` (12/12) 全绿。

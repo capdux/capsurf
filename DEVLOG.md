@@ -3095,3 +3095,7 @@
 ### Phase 648: `font-feature-settings-{invalid,valid,computed}` (3/3) 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`isValidCssValue` 校验 `font-feature-settings` 4 字节 ASCII 字符串标签与数值/`on`/`off`/`calc()`；`applyUsedValuesToComputedMap` 使用平衡括号解析替代 `[^)]*` 并按 tag 去重排序。
 - **WPT & Smoke 验收**：`font-feature-settings-{invalid,valid,computed}` 3/3 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 649: `color-valid` (17/17) & `color-invalid` (12/12) 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidColor` 支持 `light-dark(<color>, <color>)`；`normalizeCssSpecifiedValue` 将 `color` 及 `hsl`/`hsla` 接入 `normalizeSingleColor` 规范化输出。
+- **WPT & Smoke 验收**：`color-valid.html` (17/17) 与 `color-invalid.html` (12/12) 全绿，`--smoke` 3/3 suites PASS。

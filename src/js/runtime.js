@@ -3952,11 +3952,15 @@
       if (v === "currentcolor" || v === "transparent") return true;
       if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)) return true;
       if (v.startsWith("#")) return false;
-      const fnMatch = /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\((.*)\)$/i.exec(v);
+      const fnMatch = /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|light-dark)\((.*)\)$/i.exec(v);
       if (fnMatch) {
         const fn = fnMatch[1];
         const inner = fnMatch[2].trim();
         if (!inner) return false;
+        if (fn === "light-dark") {
+          const parts = splitTopLevelComma(inner);
+          return parts.length === 2 && isValidColor(parts[0]) && isValidColor(parts[1]);
+        }
         if (fn === "rgb" || fn === "rgba" || fn === "hsl" || fn === "hsla") {
           const isCalc = (s) => /^(?:calc|min|max|clamp)\(/i.test(s) && (!_isValidCalcSyntax || _isValidCalcSyntax(s));
           if (inner.includes(",")) {
@@ -7336,12 +7340,13 @@
         }
         return s;
       }
-      if (key === "background-color" || key === "accent-color" || key === "scrollbar-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
+      if (key === "color" || key === "background-color" || key === "accent-color" || key === "scrollbar-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
+        if (/\blight-dark\(/i.test(s)) return s.toLowerCase();
         const toks = splitCssTokens(s);
         return toks.map((t) => {
           const tl = t.toLowerCase();
           if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
-          if (tl.startsWith("#") || /^rgba?\(/i.test(tl)) return normalizeSingleColor(t);
+          if (tl.startsWith("#") || /^(?:rgba?|hsla?)\(/i.test(tl)) return normalizeSingleColor(t);
           return tl;
         }).join(" ");
       }

@@ -8041,3 +8041,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 648（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
   1. **`cssom.js` & `window.js`**：补全 `font-feature-settings` 4 字符 ASCII 标签合法性校验，以及计算值括号深度感知 `calc()` 求值、tag 去重与字典序排序。
   2. **全绿验证**：`font-feature-settings-{invalid,valid,computed}` **3/3 全绿**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 649（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`isValidColor` 新增 `light-dark()` 双色校验；`normalizeCssSpecifiedValue` 将 `color` 属性与 `hsl`/`hsla` 接入 `normalizeSingleColor`。
+  2. **全绿验证**：`color-valid.html`（17/17）与 `color-invalid.html`（12/12）全绿，`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`9294fa46` 完成 `/css/css-flexbox/` 摸底（96/120 PASS），已接力派发 `cee0e63d`（`19720`, `/css/css-selectors/`）。

@@ -2273,3 +2273,7 @@
 ### Phase 648: `font-feature-settings-{invalid,valid,computed}` (3/3) 全绿
 - **Filter `/css/css-fonts/parsing/font-feature-settings`**: **FAIL->PASS (3/3: `invalid`, `valid`, `computed`)**（`cssom.js` 新增 `font-feature-settings` 4 字符 ASCII 标签与合法数值/`on`/`off`/`calc()` 语法校验；`window.js` 使用引号与括号深度感知拆分实现 `calc()` 嵌套求值、重复 tag 去重覆盖与字典序排序）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 649: `color-valid` (17/17) & `color-invalid` (12/12) 全绿
+- **Filter `/css/css-color/parsing/color-valid.html` & `/css/css-color/parsing/color-invalid.html`**: **FAIL->PASS (2/2: 17/17 + 12/12)**（`cssom.js` `isValidColor` 新增 `light-dark(<color>, <color>)` 校验，`normalizeCssSpecifiedValue` 将 `color` 属性及 `hsl`/`hsla` 函数接入 `normalizeSingleColor` 规范化为 `rgb(...)`/`rgba(...)`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
