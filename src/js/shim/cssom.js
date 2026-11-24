@@ -7174,11 +7174,13 @@
         const rawName = d.slice(0, colon).trim();
         let val = d.slice(colon + 1).trim();
         let priority = "";
-        if (/!important\s*$/i.test(val)) {
+        if (/!\s*important\s*$/i.test(val)) {
           priority = "important";
-          val = val.replace(/\s*!important\s*$/i, "").trim();
+          val = val.replace(/\s*!\s*important\s*$/i, "").trim();
         }
-        if (context === "keyframe" && priority === "important") continue;
+        const lowerName = rawName.toLowerCase();
+        if (context === "keyframe" && (priority === "important" || lowerName === "animation" || (lowerName.startsWith("animation-") && lowerName !== "animation-timing-function"))) continue;
+        if (context === "page" && lowerName === "transform") continue;
         if (context === "font-face" && rawName === "font-display") {
           if (!["auto", "block", "swap", "fallback", "optional"].includes(val.toLowerCase())) continue;
         }
@@ -7396,6 +7398,12 @@
         }
       }
       if (context === "margin" && key === "size") {
+        return;
+      }
+      if (context === "page" && key === "transform") {
+        return;
+      }
+      if (context === "keyframe" && (key === "animation" || (key.startsWith("animation-") && key !== "animation-timing-function"))) {
         return;
       }
 
@@ -8606,6 +8614,23 @@
       return rule;
     }
 
+    if (kind === "namespace") {
+      const rule = new CSSNamespaceRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule._onMutate = onMutate || null;
+      const m = raw.match(/^@namespace\s+(?:([a-zA-Z_-][a-zA-Z0-9_-]*)\s+)?(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*))\s*\)|"([^"]*)"|'([^']*)')\s*;?\s*$/i);
+      if (m) {
+        rule.prefix = m[1] || "";
+        rule.namespaceURI = m[2] ?? m[3] ?? (m[4] !== undefined ? m[4].trim() : undefined) ?? m[5] ?? m[6] ?? "";
+      }
+      rule._serialize = function () {
+        const p = rule.prefix ? (rule.prefix + " ") : "";
+        return "@namespace " + p + 'url("' + rule.namespaceURI + '");';
+      };
+      return rule;
+    }
+
     if (kind === "import") {
       const rule = new CSSImportRule();
       rule.parentRule = parentRule || null;
@@ -9098,18 +9123,17 @@
       if (rule) this._rules.push(rule);
     }
     this._lastParsedText = text;
+    this._cascadeCssText = text;
   };
 
   CSSStyleSheet.prototype._remirror = function () {
+    const text = this._rules.map((r) => r.cssText).join("\n");
+    this._cascadeCssText = text;
     if (!this.ownerNode) return;
     const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
-    const text = this._rules.map((r) => r.cssText).join("\n");
-    this._lastParsedText = text;
-    if (tag === "link") {
-      this._cascadeCssText = text;
-      return;
+    if (tag !== "link") {
+      this._lastParsedText = String(this.ownerNode.textContent || "");
     }
-    this.ownerNode.textContent = text;
   };
 
   CSSStyleSheet.prototype._isCrossOriginOpaque = function () {

@@ -4124,3 +4124,7 @@
 - **Phase 751**:
   - `src/js/shim/node-base.js`: `Element.prototype.innerHTML` getter 在 `Array.isArray(this._children)` 时直接序列化 `_children`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 752**:
+  - `src/js/shim/element/element.js`: `createStyleProxy` 支持 `! important` 空白解析，新增 `formatStyleMap` 使 `style.cssText` 返回规范化序列化字符串。
+  - `src/js/shim/cssom.js`: `parseInitial`/`setProperty` 增加 `@page` 禁用 `transform` 与 `@keyframes` 禁用 `animation*` 限制并支持 `! important`；`constructRule` 补全 `CSSNamespaceRule`；`CSSStyleSheet._remirror` 同步 `_cascadeCssText` 而不再覆写 `ownerNode.textContent`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

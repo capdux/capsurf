@@ -262,9 +262,9 @@ function createStyleProxy(element) {
         const k = normalizeStylePropKey(rawKey);
         let v = p.slice(colon + 1).trim();
         let pri = "";
-        if (/!important\s*$/i.test(v)) {
+        if (/!\s*important\s*$/i.test(v)) {
           pri = "important";
-          v = v.replace(/\s*!important\s*$/i, "").trim();
+          v = v.replace(/\s*!\s*important\s*$/i, "").trim();
         }
         if (v !== "") {
           if (k === "place-self" || k === "place-items" || k === "place-content") {
@@ -278,7 +278,7 @@ function createStyleProxy(element) {
     return map;
   }
 
-  function serializeStyleMap(map) {
+  function formatStyleMap(map) {
     const arr = [];
     const skip = new Set();
     const foldPairs = [
@@ -317,7 +317,11 @@ function createStyleProxy(element) {
       if (entry.priority) s += " !" + entry.priority;
       arr.push(s + ";");
     }
-    const res = arr.join(" ");
+    return arr.join(" ");
+  }
+
+  function serializeStyleMap(map) {
+    const res = formatStyleMap(map);
     if (res.length > 0) {
       element.setAttribute("style", res);
     } else {
@@ -558,7 +562,7 @@ function createStyleProxy(element) {
         return target[prop];
       }
       if (typeof prop !== "string") return undefined;
-      if (prop === "cssText") return element.getAttribute("style") || "";
+      if (prop === "cssText") return formatStyleMap(parseStyleMap());
       if (prop === "length") return parseStyleMap().size;
       if (prop === "parentRule") return null;
       if (Object.prototype.hasOwnProperty.call(cachedMethods, prop)) return cachedMethods[prop];
@@ -595,6 +599,7 @@ function createStyleProxy(element) {
       if (prop === "cssText") {
         const valStr = String(value);
         element.setAttribute("style", valStr);
+        serializeStyleMap(parseStyleMap());
         element._displayNone = /(?:^|;)\s*display\s*:\s*none\b/i.test(valStr);
         return true;
       }

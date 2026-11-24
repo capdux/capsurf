@@ -3342,3 +3342,5 @@
 - 修复 `filterNode` 重复读取 `acceptNode`、缺失/非可调用未抛 `TypeError` 及布尔返回值 `true !== 1` 未按 WebIDL `unsigned short` 转换的问题，一次性打通 `TreeWalker-acceptNode-filter.html` 与 `TreeWalker-currentNode.html`。
 ### Phase 751 — `ChildNode-replaceWith.html` (`33/33 PASS`) 与 `ChildNode-*` 全套全绿
 - 修复 `Element.prototype.innerHTML` getter 仅在 `hasJsOnlyChild(this._children)` 时才序列化 `_children` 的漏洞，彻底解决 `Text.replaceWith()` 移除文本节点后回退原生 DOM 的残余问题，实现 `ChildNode-before/after/replaceWith` 全绿。
+### Phase 752 — `/css/cssom/` 6 项高 ROI 用例集中全绿
+- 统一解决内联 `style.cssText` 未规范化、`! important` 空白、`@page`/`@keyframes` 属性限制、`CSSNamespaceRule` 构造缺失及 `CSSStyleSheet._remirror` 覆写 `<style>.textContent` 导致的 `insertRule`/`CSSGroupingRule.cssRules` 失效，一次打通 6 项 `/css/cssom/` 用例。
