@@ -2169,3 +2169,7 @@
 ### Phase 622: `border` 全局关键字派生查询与 `background-position` `calc()` 归一化
 - **Filter `/css/css-cascade/unset-value-storage` & `/css/css-values/calc-background-position-002`**: **FAIL->PASS (2/2: 1/1 + 6/6)**（`cssom.js` `SHORTHAND_EXPAND_LONGHANDS`/`serializeExpandedShorthand` 补全 `border-{top,right,bottom,left}` 展开/序列化，并在 `makeRuleStyleDeclaration.getPropertyValue` 支持 `border` 全局关键字向下派生查询；`window.js` 将 `background-position` 纳入 `evalLinLenPctTok` 归一化）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 623: `reading-flow`/`reading-order` 全套 + 根元素 `display: contents` 块化全绿
+- **Filter `display-contents-computed-style` / `reading-flow-invalid` / `reading-order-invalid` / `reading-flow-computed` / `reading-order-computed`**: **FAIL->PASS (5/5)**（`cssom.js` 与 `window.js` 新增 `reading-flow`/`reading-order` 校验、初始值与 `calc()` 整数化简；`window.js` 补齐 `display: initial|unset` 归位 `inline` 与根元素 `contents` 块化为 `block`；已收紧 `reading-flow-computed`/`reading-order-computed` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

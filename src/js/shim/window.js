@@ -6905,6 +6905,13 @@ function installWindow(global) {
       }
     }
     let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (disp === "initial" || disp === "unset") {
+      disp = "inline";
+      computedMap.set("display", "inline");
+    } else if (disp === "contents" && element === (element.ownerDocument && element.ownerDocument.documentElement)) {
+      disp = "block";
+      computedMap.set("display", "block");
+    }
     if (disp === "-webkit-box" || disp === "-webkit-inline-box") {
       const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();
       const wlcRaw = (computedMap.get("-webkit-line-clamp") || "").trim();
@@ -8734,8 +8741,15 @@ function installWindow(global) {
       ["transform", "none"],
       ["transform-box", "view-box"],
       ["transform-style", "flat"],
-      ["translate", "none"]
+      ["translate", "none"],
+      ["reading-flow", "normal"],
+      ["reading-order", "0"]
     ];
+    const roRaw = (computedMap.get("reading-order") || "").trim();
+    if (roRaw && /^(?:calc|min|max|clamp)\(/i.test(roRaw)) {
+      const rv = evalCssLengthExpr(roRaw, 0, fontSize);
+      if (rv !== null && isFinite(rv)) computedMap.set("reading-order", String(Math.round(rv)));
+    }
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {
       const acl = acRaw.toLowerCase();
@@ -9013,7 +9027,7 @@ function installWindow(global) {
     "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-    "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
+    "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
     "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-target-group", "scrollbar-gutter",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",

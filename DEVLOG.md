@@ -2991,3 +2991,7 @@
 ### Phase 622: `border` 全局关键字派生查询与 `background-position` `calc()` 归一化
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`SHORTHAND_EXPAND_LONGHANDS`/`serializeExpandedShorthand` 补全 `border-{top,right,bottom,left}`，`makeRuleStyleDeclaration.getPropertyValue` 支持 `border` 全局关键字向下派生；`window.js` 将 `background-position` 纳入 `evalLinLenPctTok`。
 - **WPT & Smoke 验收**：`unset-value-storage.html` (1/1) & `calc-background-position-002.html` (6/6) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 623: `reading-flow`/`reading-order` 全套 + 根元素 `display: contents` 块化全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：新增 `reading-flow`/`reading-order` 语法校验、默认初始值与 `calc()` 整数化简；`window.js` 补全根元素 `display: contents` 块化为 `block` 与 `display: initial|unset` 归位 `inline`。
+- **WPT & Smoke 验收**：`display-contents-computed-style`、`reading-flow-{invalid,computed}`、`reading-order-{invalid,computed}` 5 项全绿（收紧 2 项 `PASS` 基线），`--smoke` 3/3 suites PASS。

@@ -7949,3 +7949,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：补全 `border-{top,right,bottom,left}` 展开/序列化与 `border` 全局关键字派生查询，并将 `background-position` 纳入 `evalLinLenPctTok` 归一化。
   2. **全绿验证**：`unset-value-storage.html` **FAIL->PASS (1/1)**、`calc-background-position-002.html` **FAIL->PASS (6/6)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`f1605206` 完成 `/css/css-display/` 摸底（**16/52 PASS**），已接力派发 `0302000f`（`19720`, `/css/css-flexbox/`）。
+- **[Agent]**: 完成 Phase 623（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js` & `window.js`**：新增 `reading-flow`/`reading-order` 校验与计算值支持，补全根元素 `display: contents` 块化为 `block`。
+  2. **全绿验证与基线收紧**：`display-contents-computed-style`、`reading-flow-invalid`、`reading-order-invalid`、`reading-flow-computed`、`reading-order-computed` **5/5 FAIL->PASS**（已收紧 2 项 `PASS` 基线）、`--smoke` **3/3 suites, 6/6 tests PASS**。

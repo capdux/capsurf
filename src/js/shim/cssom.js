@@ -77,7 +77,7 @@
     "padding-inline-end", "padding-inline-start", "padding-left", "padding-right",
     "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
     "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
-    "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate",
+    "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
     "row-gap", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
@@ -684,6 +684,21 @@
       const t = toks[0];
       if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
       return /^\+?[1-9]\d*$/.test(t);
+    }
+    if (prop === "reading-flow") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && (toks[0] === "normal" || toks[0] === "source-order" || toks[0] === "flex-visual" || toks[0] === "flex-flow" || toks[0] === "grid-rows" || toks[0] === "grid-columns" || toks[0] === "grid-order");
+    }
+    if (prop === "reading-order") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      if (/^[+-]?\d+$/.test(t)) return true;
+      if (/^(?:var|env)\(/i.test(t)) return true;
+      if (/^(?:calc|min|max|clamp)\(/i.test(t) && isValidCalcSyntax(t)) {
+        return !/[%a-z]/i.test(t.replace(/\b(?:calc|min|max|clamp|round|mod|rem|abs|sign|e|pi|infinity|nan)\b/gi, ""));
+      }
+      return false;
     }
     if (prop === "tab-size") {
       const toks = splitCssTokens(vLower);

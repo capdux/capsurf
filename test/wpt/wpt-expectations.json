@@ -2662,8 +2662,8 @@
     "reason": "T18 enrollment (css-display): 0/6 subtests pass"
   },
   "/css/css-display/reading-flow/tentative/reading-flow-computed.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/7 subtests pass"
+    "expected": "PASS",
+    "reason": "Phase 623: reading-flow supported in cssom.js and window.js"
   },
   "/css/css-display/reading-flow/tentative/reading-flow-invalid.html": {
     "expected": "PASS",
@@ -2674,8 +2674,8 @@
     "reason": "T18 enrollment (css-display): 0/7 subtests pass"
   },
   "/css/css-display/reading-flow/tentative/reading-order-computed.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/4 subtests pass"
+    "expected": "PASS",
+    "reason": "Phase 623: reading-order supported in cssom.js and window.js"
   },
   "/css/css-display/reading-flow/tentative/reading-order-invalid.html": {
     "expected": "PASS",

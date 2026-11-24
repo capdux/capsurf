@@ -3867,7 +3867,7 @@
       "padding-inline-end", "padding-inline-start", "padding-left", "padding-right",
       "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
       "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
-      "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate",
+      "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
       "row-gap", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
@@ -4474,6 +4474,21 @@
         const t = toks[0];
         if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
         return /^\+?[1-9]\d*$/.test(t);
+      }
+      if (prop === "reading-flow") {
+        const toks = splitCssTokens(vLower);
+        return toks.length === 1 && (toks[0] === "normal" || toks[0] === "source-order" || toks[0] === "flex-visual" || toks[0] === "flex-flow" || toks[0] === "grid-rows" || toks[0] === "grid-columns" || toks[0] === "grid-order");
+      }
+      if (prop === "reading-order") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (/^[+-]?\d+$/.test(t)) return true;
+        if (/^(?:var|env)\(/i.test(t)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t) && isValidCalcSyntax(t)) {
+          return !/[%a-z]/i.test(t.replace(/\b(?:calc|min|max|clamp|round|mod|rem|abs|sign|e|pi|infinity|nan)\b/gi, ""));
+        }
+        return false;
       }
       if (prop === "tab-size") {
         const toks = splitCssTokens(vLower);
@@ -42460,6 +42475,13 @@
         }
       }
       let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (disp === "initial" || disp === "unset") {
+        disp = "inline";
+        computedMap.set("display", "inline");
+      } else if (disp === "contents" && element === (element.ownerDocument && element.ownerDocument.documentElement)) {
+        disp = "block";
+        computedMap.set("display", "block");
+      }
       if (disp === "-webkit-box" || disp === "-webkit-inline-box") {
         const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();
         const wlcRaw = (computedMap.get("-webkit-line-clamp") || "").trim();
@@ -44289,8 +44311,15 @@
         ["transform", "none"],
         ["transform-box", "view-box"],
         ["transform-style", "flat"],
-        ["translate", "none"]
+        ["translate", "none"],
+        ["reading-flow", "normal"],
+        ["reading-order", "0"]
       ];
+      const roRaw = (computedMap.get("reading-order") || "").trim();
+      if (roRaw && /^(?:calc|min|max|clamp)\(/i.test(roRaw)) {
+        const rv = evalCssLengthExpr(roRaw, 0, fontSize);
+        if (rv !== null && isFinite(rv)) computedMap.set("reading-order", String(Math.round(rv)));
+      }
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
         const acl = acRaw.toLowerCase();
@@ -44568,7 +44597,7 @@
       "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-      "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
+      "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
       "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-target-group", "scrollbar-gutter",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
