@@ -4669,6 +4669,32 @@
         if (/^(?:calc|min|max|clamp)\(/i.test(t)) return isValidCalcSyntax(t);
         return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
       }
+      if (prop === "font-feature-settings") {
+        if (vLower === "normal") return true;
+        const items = splitTopLevelComma(trimmed);
+        if (items.length === 0) return false;
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i].trim());
+          if (toks.length < 1 || toks.length > 2) return false;
+          const tag = toks[0];
+          if (!((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'")))) return false;
+          const unescaped = tag.slice(1, -1)
+            .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+            .replace(/\\(.)/g, "$1");
+          if (unescaped.length !== 4 || !/^[\x20-\x7e]{4}$/.test(unescaped)) return false;
+          if (toks.length === 2) {
+            const val = toks[1].toLowerCase();
+            if (val !== "on" && val !== "off" && !/^\d+$/.test(val)) {
+              if (/^(?:calc|min|max|clamp)\(/i.test(val)) {
+                if (!isValidCalcSyntax(toks[1])) return false;
+              } else if (!/^(?:var|env)\(/i.test(val)) {
+                return false;
+              }
+            }
+          }
+        }
+        return true;
+      }
       if (prop === "border-radius") {
         let slashIdx = -1, depth = 0;
         for (let i = 0; i < vLower.length; i++) {
@@ -44814,11 +44840,47 @@
         computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
       }
       const ffsRaw = (computedMap.get("font-feature-settings") || "").trim();
-      if (ffsRaw && /\b(?:calc|min|max|clamp)\(/i.test(ffsRaw)) {
-        computedMap.set("font-feature-settings", ffsRaw.replace(/\b(?:calc|min|max|clamp)\([^)]*\)/gi, (m) => {
-          const v = evalCssLengthExpr(m, 0, fontSize);
-          return (v !== null && isFinite(v)) ? String(Math.round(v)) : m;
-        }));
+      if (ffsRaw && ffsRaw.toLowerCase() !== "normal") {
+        const ffsItems = [];
+        let fc = "", fq = "", fd = 0;
+        for (let i = 0; i < ffsRaw.length; i++) {
+          const ch = ffsRaw[i];
+          if (fq) {
+            fc += ch;
+            if (ch === "\\" && i + 1 < ffsRaw.length) { fc += ffsRaw[++i]; continue; }
+            if (ch === fq) fq = "";
+          } else {
+            if (ch === '"' || ch === "'") { fq = ch; fc += ch; }
+            else if (ch === "(") { fd++; fc += ch; }
+            else if (ch === ")" && fd > 0) { fd--; fc += ch; }
+            else if (ch === "," && fd === 0) { if (fc.trim()) ffsItems.push(fc.trim()); fc = ""; }
+            else fc += ch;
+          }
+        }
+        if (fc.trim()) ffsItems.push(fc.trim());
+        const ffsMap = new Map();
+        let ffsOk = ffsItems.length > 0;
+        for (let i = 0; i < ffsItems.length; i++) {
+          const it = ffsItems[i];
+          const qm = /^("(?:[^"\\]|\\.)*")(?:\s+([\s\S]+))?$/.exec(it);
+          if (!qm) { ffsOk = false; break; }
+          const tag = qm[1];
+          let valStr = (qm[2] || "").trim();
+          if (valStr && /^(?:calc|min|max|clamp)\(/i.test(valStr)) {
+            const v = evalCssLengthExpr(valStr, 0, fontSize);
+            if (v !== null && isFinite(v)) valStr = String(Math.round(v));
+          }
+          if (valStr === "1" || valStr.toLowerCase() === "on") valStr = "";
+          else if (valStr.toLowerCase() === "off") valStr = "0";
+          ffsMap.set(tag, valStr);
+        }
+        if (ffsOk) {
+          const sortedTags = Array.from(ffsMap.keys()).sort();
+          computedMap.set("font-feature-settings", sortedTags.map((t) => {
+            const vs = ffsMap.get(t);
+            return vs === "" ? t : (t + " " + vs);
+          }).join(", "));
+        }
       }
       const ffRaw = (computedMap.get("font-family") || "").trim();
       if (ffRaw) {

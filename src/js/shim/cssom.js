@@ -879,6 +879,32 @@
       if (/^(?:calc|min|max|clamp)\(/i.test(t)) return isValidCalcSyntax(t);
       return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
     }
+    if (prop === "font-feature-settings") {
+      if (vLower === "normal") return true;
+      const items = splitTopLevelComma(trimmed);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i].trim());
+        if (toks.length < 1 || toks.length > 2) return false;
+        const tag = toks[0];
+        if (!((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'")))) return false;
+        const unescaped = tag.slice(1, -1)
+          .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+          .replace(/\\(.)/g, "$1");
+        if (unescaped.length !== 4 || !/^[\x20-\x7e]{4}$/.test(unescaped)) return false;
+        if (toks.length === 2) {
+          const val = toks[1].toLowerCase();
+          if (val !== "on" && val !== "off" && !/^\d+$/.test(val)) {
+            if (/^(?:calc|min|max|clamp)\(/i.test(val)) {
+              if (!isValidCalcSyntax(toks[1])) return false;
+            } else if (!/^(?:var|env)\(/i.test(val)) {
+              return false;
+            }
+          }
+        }
+      }
+      return true;
+    }
     if (prop === "border-radius") {
       let slashIdx = -1, depth = 0;
       for (let i = 0; i < vLower.length; i++) {

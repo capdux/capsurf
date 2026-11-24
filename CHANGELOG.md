@@ -3762,3 +3762,5 @@
 - **Phase 646** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 `scrollbar-color` 单色误拦截与 `parseStyleMap` 中 `place-*` 简写展开前的合法性校验；`/css/css-scrollbars/` (2/2) 与 `place-{content,self}-shorthand-004` 全绿。
 
 - **Phase 647** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `font-size` 绝对/相对关键字与 `<font size="1..7">` 计算值像素求值；`font-size-computed` (21/21) 全绿并收紧基线为 `PASS`。
+
+- **Phase 648** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-feature-settings` 合法性校验及计算值去重、排序与嵌套 `calc()` 求值；`font-feature-settings-{invalid,valid,computed}` 3/3 全绿。

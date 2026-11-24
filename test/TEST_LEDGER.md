@@ -2269,3 +2269,7 @@
 ### Phase 647: `font-size-computed` (21/21) 全绿
 - **Filter `/css/css-fonts/parsing/font-size-computed` & `/css/css-fonts/font-size-`**: **FAIL->PASS (1/1: 21/21) + 4/4 回归全绿**（`window.js` 在 `collectElementOwnDeclarations` 映射 `<font size="1..7">` 到 `xx-small..xxx-large`，并在 `applyUsedValuesToComputedMap` 补全 `font-size` 绝对/相对关键字与任意 `%`/长度表达式对父级字号的像素求值，收紧 `font-size-computed.html` 基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 648: `font-feature-settings-{invalid,valid,computed}` (3/3) 全绿
+- **Filter `/css/css-fonts/parsing/font-feature-settings`**: **FAIL->PASS (3/3: `invalid`, `valid`, `computed`)**（`cssom.js` 新增 `font-feature-settings` 4 字符 ASCII 标签与合法数值/`on`/`off`/`calc()` 语法校验；`window.js` 使用引号与括号深度感知拆分实现 `calc()` 嵌套求值、重复 tag 去重覆盖与字典序排序）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

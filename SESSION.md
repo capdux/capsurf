@@ -8038,3 +8038,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 647（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js`**：新增 `<font size="1..7">` 映射及 `font-size` 绝对/相对关键字、百分比/长度对父级字号的计算值求值。
   2. **全绿验证**：`font-size-computed.html`（21/21，收紧为 `PASS`）、4 个 `font-size-*` 回归与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+- **[Agent]**: 完成 Phase 648（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：补全 `font-feature-settings` 4 字符 ASCII 标签合法性校验，以及计算值括号深度感知 `calc()` 求值、tag 去重与字典序排序。
+  2. **全绿验证**：`font-feature-settings-{invalid,valid,computed}` **3/3 全绿**，`--smoke` **3/3 suites, 6/6 tests PASS**。

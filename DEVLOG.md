@@ -3091,3 +3091,7 @@
 ### Phase 647: `font-size-computed` (21/21) 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`collectElementOwnDeclarations` 注入 `<font size="1..7">` 映射；`applyUsedValuesToComputedMap` 补全 `xx-small..xxx-large`、`larger`/`smaller` 及百分比/长度对父级字号的像素求值。
 - **WPT & Smoke 验收**：`font-size-computed.html` (21/21，基线收紧为 `PASS`) 与 4 个 `font-size-*` 回归均 PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 648: `font-feature-settings-{invalid,valid,computed}` (3/3) 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`isValidCssValue` 校验 `font-feature-settings` 4 字节 ASCII 字符串标签与数值/`on`/`off`/`calc()`；`applyUsedValuesToComputedMap` 使用平衡括号解析替代 `[^)]*` 并按 tag 去重排序。
+- **WPT & Smoke 验收**：`font-feature-settings-{invalid,valid,computed}` 3/3 全绿，`--smoke` 3/3 suites PASS。

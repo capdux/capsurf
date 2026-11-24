@@ -8908,11 +8908,47 @@ function installWindow(global) {
       computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
     }
     const ffsRaw = (computedMap.get("font-feature-settings") || "").trim();
-    if (ffsRaw && /\b(?:calc|min|max|clamp)\(/i.test(ffsRaw)) {
-      computedMap.set("font-feature-settings", ffsRaw.replace(/\b(?:calc|min|max|clamp)\([^)]*\)/gi, (m) => {
-        const v = evalCssLengthExpr(m, 0, fontSize);
-        return (v !== null && isFinite(v)) ? String(Math.round(v)) : m;
-      }));
+    if (ffsRaw && ffsRaw.toLowerCase() !== "normal") {
+      const ffsItems = [];
+      let fc = "", fq = "", fd = 0;
+      for (let i = 0; i < ffsRaw.length; i++) {
+        const ch = ffsRaw[i];
+        if (fq) {
+          fc += ch;
+          if (ch === "\\" && i + 1 < ffsRaw.length) { fc += ffsRaw[++i]; continue; }
+          if (ch === fq) fq = "";
+        } else {
+          if (ch === '"' || ch === "'") { fq = ch; fc += ch; }
+          else if (ch === "(") { fd++; fc += ch; }
+          else if (ch === ")" && fd > 0) { fd--; fc += ch; }
+          else if (ch === "," && fd === 0) { if (fc.trim()) ffsItems.push(fc.trim()); fc = ""; }
+          else fc += ch;
+        }
+      }
+      if (fc.trim()) ffsItems.push(fc.trim());
+      const ffsMap = new Map();
+      let ffsOk = ffsItems.length > 0;
+      for (let i = 0; i < ffsItems.length; i++) {
+        const it = ffsItems[i];
+        const qm = /^("(?:[^"\\]|\\.)*")(?:\s+([\s\S]+))?$/.exec(it);
+        if (!qm) { ffsOk = false; break; }
+        const tag = qm[1];
+        let valStr = (qm[2] || "").trim();
+        if (valStr && /^(?:calc|min|max|clamp)\(/i.test(valStr)) {
+          const v = evalCssLengthExpr(valStr, 0, fontSize);
+          if (v !== null && isFinite(v)) valStr = String(Math.round(v));
+        }
+        if (valStr === "1" || valStr.toLowerCase() === "on") valStr = "";
+        else if (valStr.toLowerCase() === "off") valStr = "0";
+        ffsMap.set(tag, valStr);
+      }
+      if (ffsOk) {
+        const sortedTags = Array.from(ffsMap.keys()).sort();
+        computedMap.set("font-feature-settings", sortedTags.map((t) => {
+          const vs = ffsMap.get(t);
+          return vs === "" ? t : (t + " " + vs);
+        }).join(", "));
+      }
     }
     const ffRaw = (computedMap.get("font-family") || "").trim();
     if (ffRaw) {
