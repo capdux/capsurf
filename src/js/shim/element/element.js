@@ -1097,6 +1097,29 @@ function installElementExtensions(proto) {
     }
   };
 
+  if (!Object.getOwnPropertyDescriptor(proto, "currentCSSZoom")) {
+    Object.defineProperty(proto, "currentCSSZoom", {
+      get: function () {
+        if (!this.isConnected) return 1;
+        let total = 1;
+        let cur = this;
+        while (cur && cur.nodeType === 1) {
+          const cs = (typeof getComputedStyle === "function") ? getComputedStyle(cur) : null;
+          if (!cs || cs.display === "none") return 1;
+          const rawZoom = String(cs.zoom || "1").trim();
+          if (rawZoom && rawZoom !== "normal" && rawZoom !== "1") {
+            let z = parseFloat(rawZoom);
+            if (rawZoom.endsWith("%")) z /= 100;
+            if (Number.isFinite(z) && z > 0) total *= z;
+          }
+          cur = cur.parentElement;
+        }
+        return total;
+      },
+      configurable: true,
+    });
+  }
+
   // attributes getter returning live NamedNodeMap
   Object.defineProperty(proto, "attributes", {
     get: function () {

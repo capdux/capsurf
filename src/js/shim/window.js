@@ -5622,15 +5622,47 @@ function installWindow(global) {
     return false;
   }
 
-  // 7. matchMedia
+  // 7. matchMedia & MediaQueryListEvent
+  function MediaQueryListEvent(type, eventInitDict) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'MediaQueryListEvent': 1 argument required, but only 0 present.");
+    }
+    const init = eventInitDict || {};
+    if (typeof Event === "function") {
+      Event.call(this, type, init);
+    } else {
+      this.type = String(type);
+      this.bubbles = Boolean(init.bubbles);
+      this.cancelable = Boolean(init.cancelable);
+    }
+    this.media = init.media !== undefined ? String(init.media) : "";
+    this.matches = Boolean(init.matches);
+  }
+  if (typeof Event === "function") {
+    MediaQueryListEvent.prototype = Object.create(Event.prototype);
+    MediaQueryListEvent.prototype.constructor = MediaQueryListEvent;
+  }
+  markNative(MediaQueryListEvent, "MediaQueryListEvent");
+  global.MediaQueryListEvent = MediaQueryListEvent;
+  if (typeof globalThis !== "undefined") globalThis.MediaQueryListEvent = MediaQueryListEvent;
+  if (typeof window !== "undefined") window.MediaQueryListEvent = MediaQueryListEvent;
+
   global.matchMedia = markNative(function (query) {
-    return {
-      matches: evaluateMediaQuery(query),
-      media: String(query),
-      addEventListener: markNative(function () {}, "addEventListener"),
-      removeEventListener: markNative(function () {}, "removeEventListener"),
-      onchange: null,
-    };
+    const mql = (typeof EventTarget === "function") ? new EventTarget() : {};
+    mql.matches = evaluateMediaQuery(query);
+    mql.media = String(query);
+    mql.onchange = null;
+    mql.addListener = markNative(function (fn) {
+      if (typeof fn === "function" && typeof mql.addEventListener === "function") mql.addEventListener("change", fn);
+    }, "addListener");
+    mql.removeListener = markNative(function (fn) {
+      if (typeof fn === "function" && typeof mql.removeEventListener === "function") mql.removeEventListener("change", fn);
+    }, "removeListener");
+    if (typeof mql.addEventListener !== "function") {
+      mql.addEventListener = markNative(function () {}, "addEventListener");
+      mql.removeEventListener = markNative(function () {}, "removeEventListener");
+    }
+    return mql;
   }, "matchMedia");
 
   // 8. AudioContext
@@ -6742,10 +6774,22 @@ function installWindow(global) {
           text = sheet._cascadeCssText || "";
         }
       } else {
-        text = sn.textContent || "";
+        text = (sn._sheet && sn._sheet._cascadeCssText) ? sn._sheet._cascadeCssText : (sn.textContent || "");
       }
       if (text) {
         parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+      }
+    }
+    const ownerDoc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
+    const adopted = ownerDoc && ownerDoc.adoptedStyleSheets;
+    if (adopted && adopted.length > 0) {
+      for (let ai = 0; ai < adopted.length; ai++) {
+        const sheet = adopted[ai];
+        if (!sheet || sheet.disabled) continue;
+        const text = sheet._cascadeCssText || "";
+        if (text) {
+          parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+        }
       }
     }
     if (!normalizedPseudo) {

@@ -13285,6 +13285,42 @@
       });
     }
 
+    const _adoptedSheetsMap = new WeakMap();
+    function getAdoptedStyleSheets(doc) {
+      let arr = _adoptedSheetsMap.get(doc);
+      if (!arr) {
+        arr = [];
+        _adoptedSheetsMap.set(doc, arr);
+      }
+      return arr;
+    }
+    function setAdoptedStyleSheets(doc, val) {
+      if (!val || typeof val[Symbol.iterator] !== "function") {
+        throw new TypeError("Failed to set 'adoptedStyleSheets': Value cannot be converted to sequence.");
+      }
+      const next = Array.from(val);
+      for (let i = 0; i < next.length; i++) {
+        if (!(next[i] instanceof CSSStyleSheet)) {
+          throw new TypeError("Failed to set 'adoptedStyleSheets': Failed to convert value to 'CSSStyleSheet'.");
+        }
+      }
+      _adoptedSheetsMap.set(doc, next);
+    }
+    if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "adoptedStyleSheets")) {
+      Object.defineProperty(docProtoForStylesheets, "adoptedStyleSheets", {
+        get: function () { return getAdoptedStyleSheets(this); },
+        set: function (v) { setAdoptedStyleSheets(this, v); },
+        configurable: true,
+      });
+    }
+    if (global.document && !Object.getOwnPropertyDescriptor(global.document, "adoptedStyleSheets")) {
+      Object.defineProperty(global.document, "adoptedStyleSheets", {
+        get: function () { return getAdoptedStyleSheets(this); },
+        set: function (v) { setAdoptedStyleSheets(this, v); },
+        configurable: true,
+      });
+    }
+
     // =========================================================================
     // 8. Global getComputedStyle wrapper for var() resolution & padding/margin expansion
     // =========================================================================
@@ -18097,6 +18133,29 @@
         }
       }
     };
+
+    if (!Object.getOwnPropertyDescriptor(proto, "currentCSSZoom")) {
+      Object.defineProperty(proto, "currentCSSZoom", {
+        get: function () {
+          if (!this.isConnected) return 1;
+          let total = 1;
+          let cur = this;
+          while (cur && cur.nodeType === 1) {
+            const cs = (typeof getComputedStyle === "function") ? getComputedStyle(cur) : null;
+            if (!cs || cs.display === "none") return 1;
+            const rawZoom = String(cs.zoom || "1").trim();
+            if (rawZoom && rawZoom !== "normal" && rawZoom !== "1") {
+              let z = parseFloat(rawZoom);
+              if (rawZoom.endsWith("%")) z /= 100;
+              if (Number.isFinite(z) && z > 0) total *= z;
+            }
+            cur = cur.parentElement;
+          }
+          return total;
+        },
+        configurable: true,
+      });
+    }
 
     // attributes getter returning live NamedNodeMap
     Object.defineProperty(proto, "attributes", {
@@ -44293,15 +44352,47 @@
       return false;
     }
 
-    // 7. matchMedia
+    // 7. matchMedia & MediaQueryListEvent
+    function MediaQueryListEvent(type, eventInitDict) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to construct 'MediaQueryListEvent': 1 argument required, but only 0 present.");
+      }
+      const init = eventInitDict || {};
+      if (typeof Event === "function") {
+        Event.call(this, type, init);
+      } else {
+        this.type = String(type);
+        this.bubbles = Boolean(init.bubbles);
+        this.cancelable = Boolean(init.cancelable);
+      }
+      this.media = init.media !== undefined ? String(init.media) : "";
+      this.matches = Boolean(init.matches);
+    }
+    if (typeof Event === "function") {
+      MediaQueryListEvent.prototype = Object.create(Event.prototype);
+      MediaQueryListEvent.prototype.constructor = MediaQueryListEvent;
+    }
+    markNative(MediaQueryListEvent, "MediaQueryListEvent");
+    global.MediaQueryListEvent = MediaQueryListEvent;
+    if (typeof globalThis !== "undefined") globalThis.MediaQueryListEvent = MediaQueryListEvent;
+    if (typeof window !== "undefined") window.MediaQueryListEvent = MediaQueryListEvent;
+
     global.matchMedia = markNative(function (query) {
-      return {
-        matches: evaluateMediaQuery(query),
-        media: String(query),
-        addEventListener: markNative(function () {}, "addEventListener"),
-        removeEventListener: markNative(function () {}, "removeEventListener"),
-        onchange: null,
-      };
+      const mql = (typeof EventTarget === "function") ? new EventTarget() : {};
+      mql.matches = evaluateMediaQuery(query);
+      mql.media = String(query);
+      mql.onchange = null;
+      mql.addListener = markNative(function (fn) {
+        if (typeof fn === "function" && typeof mql.addEventListener === "function") mql.addEventListener("change", fn);
+      }, "addListener");
+      mql.removeListener = markNative(function (fn) {
+        if (typeof fn === "function" && typeof mql.removeEventListener === "function") mql.removeEventListener("change", fn);
+      }, "removeListener");
+      if (typeof mql.addEventListener !== "function") {
+        mql.addEventListener = markNative(function () {}, "addEventListener");
+        mql.removeEventListener = markNative(function () {}, "removeEventListener");
+      }
+      return mql;
     }, "matchMedia");
 
     // 8. AudioContext
@@ -45413,10 +45504,22 @@
             text = sheet._cascadeCssText || "";
           }
         } else {
-          text = sn.textContent || "";
+          text = (sn._sheet && sn._sheet._cascadeCssText) ? sn._sheet._cascadeCssText : (sn.textContent || "");
         }
         if (text) {
           parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+        }
+      }
+      const ownerDoc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const adopted = ownerDoc && ownerDoc.adoptedStyleSheets;
+      if (adopted && adopted.length > 0) {
+        for (let ai = 0; ai < adopted.length; ai++) {
+          const sheet = adopted[ai];
+          if (!sheet || sheet.disabled) continue;
+          const text = sheet._cascadeCssText || "";
+          if (text) {
+            parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+          }
         }
       }
       if (!normalizedPseudo) {

@@ -9390,6 +9390,42 @@
     });
   }
 
+  const _adoptedSheetsMap = new WeakMap();
+  function getAdoptedStyleSheets(doc) {
+    let arr = _adoptedSheetsMap.get(doc);
+    if (!arr) {
+      arr = [];
+      _adoptedSheetsMap.set(doc, arr);
+    }
+    return arr;
+  }
+  function setAdoptedStyleSheets(doc, val) {
+    if (!val || typeof val[Symbol.iterator] !== "function") {
+      throw new TypeError("Failed to set 'adoptedStyleSheets': Value cannot be converted to sequence.");
+    }
+    const next = Array.from(val);
+    for (let i = 0; i < next.length; i++) {
+      if (!(next[i] instanceof CSSStyleSheet)) {
+        throw new TypeError("Failed to set 'adoptedStyleSheets': Failed to convert value to 'CSSStyleSheet'.");
+      }
+    }
+    _adoptedSheetsMap.set(doc, next);
+  }
+  if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "adoptedStyleSheets")) {
+    Object.defineProperty(docProtoForStylesheets, "adoptedStyleSheets", {
+      get: function () { return getAdoptedStyleSheets(this); },
+      set: function (v) { setAdoptedStyleSheets(this, v); },
+      configurable: true,
+    });
+  }
+  if (global.document && !Object.getOwnPropertyDescriptor(global.document, "adoptedStyleSheets")) {
+    Object.defineProperty(global.document, "adoptedStyleSheets", {
+      get: function () { return getAdoptedStyleSheets(this); },
+      set: function (v) { setAdoptedStyleSheets(this, v); },
+      configurable: true,
+    });
+  }
+
   // =========================================================================
   // 8. Global getComputedStyle wrapper for var() resolution & padding/margin expansion
   // =========================================================================
