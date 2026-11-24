@@ -3352,3 +3352,5 @@
 - 在原生 `cascade.cp` 补全自定义属性 `<declaration-value>` 校验（拦截顶级 `!`、不匹配括号、非法 `var()`）与 `CssRuleKind.Supports` 条件求值，批量打通 `variable-declaration-*` 与 `variable-supports-*` 共 79 项（含 3 项 `FAIL→PASS`，基线达 `7,201/9,725`）。
 ### Phase 756 — `font-weight` `sign(cqw)`、`attribute-case/cssom` 与 `highlight-cascade` 继承全绿（5/5 PASS，+2 `FAIL→PASS`）
 - 批量修复 `font-weight` `sign(20cqw - 10px)` 校验、`CSSStyleRule#selectorText` 注释与 `[attr="val"i]` 规范化，以及 highlight 伪元素继承与 `currentcolor` 解析，实现 5/5 全部 PASS（基线增至 `7,203/9,725`）。
+### Phase 757 — `/css/css-overflow/parsing/` 全目录 `32/32 (100% PASS)` 达标
+- 在 `canonicalizeDisplayValue` 补全 `-webkit-box` / `-webkit-inline-box` / `-webkit-flex` / `-webkit-inline-flex` 支持，打通 `webkit-box-computed.html`（`FAIL→PASS`，26/26 subtests 全绿），实现 `/css/css-overflow/parsing/` 32/32 100% PASS（基线达 `7,204/9,725`）。

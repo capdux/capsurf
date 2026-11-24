@@ -4890,10 +4890,7 @@
     "expected": "PASS",
     "reason": null
   },
-  "/css/css-overflow/parsing/webkit-box-computed.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
-  },
+  "/css/css-overflow/parsing/webkit-box-computed.html": "PASS",
   "/css/css-overflow/parsing/webkit-line-clamp-invalid.html": {
     "expected": "PASS",
     "reason": null

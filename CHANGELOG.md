@@ -4149,3 +4149,7 @@
   - `src/js/shim/window.js`: 补全 highlight 系列伪元素匹配、祖先继承链与 `currentcolor` 计算值解析。
   - `test/wpt/wpt-expectations.json`: 收紧 2 项 `/css/css-pseudo/highlight-cascade/` 用例为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 757**:
+  - `src/js/shim/cssom.js`: `canonicalizeDisplayValue` 补齐 `-webkit-box`/`-webkit-inline-box` 与 `-webkit-flex`/`-webkit-inline-flex` 别名映射。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-overflow/parsing/webkit-box-computed.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

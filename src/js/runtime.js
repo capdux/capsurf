@@ -7802,12 +7802,15 @@
       if (toks.length === 0) return "";
       if (toks.length === 1) {
         const t = toks[0];
+        if (t === "-webkit-flex") return "flex";
+        if (t === "-webkit-inline-flex") return "inline-flex";
         const SINGLE = new Set([
           "none", "contents", "inline-block", "inline-table", "inline-flex", "inline-grid",
           "table-row-group", "table-header-group", "table-footer-group", "table-row",
           "table-cell", "table-column-group", "table-column", "table-caption",
           "ruby-base", "ruby-text", "ruby-base-container", "ruby-text-container",
-          "math", "inline", "block", "run-in", "flow", "flow-root", "table", "flex", "grid", "ruby", "list-item"
+          "math", "inline", "block", "run-in", "flow", "flow-root", "table", "flex", "grid", "ruby", "list-item",
+          "-webkit-box", "-webkit-inline-box"
         ]);
         if (!SINGLE.has(t)) return "";
         return t === "flow" ? "block" : t;
