@@ -3860,3 +3860,6 @@
 - **Phase 682**:
   - `src/js/shim/cssom.js`: `expandCssShorthand`、`SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand` 补齐 `border`（含 12 个边长属性与 5 个 `border-image-*` 重置）及 `border-{top,right,bottom,left}` 展开与序列化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 683**:
+  - `src/js/shim/cssom.js`: `border-image` 补齐 `SHORTHAND_EXPAND_LONGHANDS`、`serializeExpandedShorthand` 最小化序列化、`isValidCssValue` 校验及 `expandCssShorthand` 严格解析与子属性规范化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

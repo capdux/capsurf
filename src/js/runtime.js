@@ -6642,6 +6642,9 @@
         }
         return nums.length >= 1 && nums.length <= 4;
       }
+      if (prop === "border-image") {
+        return !!expandCssShorthand("border-image", trimmed);
+      }
       if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0) return false;
@@ -8545,28 +8548,48 @@
           else sc += ch;
         }
         slashes.push(sc.trim());
+        if (slashes.length > 3) return null;
         const REP = new Set(["stretch", "repeat", "round", "space"]);
         const lastToks = splitCssTokens(slashes[slashes.length - 1]);
         const repToks = [];
         while (lastToks.length > 0 && REP.has(lastToks[lastToks.length - 1].toLowerCase())) {
           repToks.unshift(lastToks.pop().toLowerCase());
         }
+        if (repToks.length > 2) return null;
         slashes[slashes.length - 1] = lastToks.join(" ");
+        if (slashes.length >= 2 && !slashes[0]) return null;
+        if (slashes.length === 2 && !slashes[1]) return null;
+        if (slashes.length === 3 && !slashes[2]) return null;
         const seg0 = splitCssTokens(slashes[0]);
-        let srcVal = "none";
+        let srcVal = "none", hasSrc = false;
         const sliceToks = [];
         for (let i = 0; i < seg0.length; i++) {
           const t = seg0[i];
-          if (srcVal === "none" && /^(?:none|url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\(|image-set\()/i.test(t)) {
+          if (!hasSrc && /^(?:none|url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\(|image\(|image-set\(|cross-fade\(|-webkit-(?:linear|radial)-gradient\()/i.test(t)) {
             srcVal = t;
+            hasSrc = true;
+          } else if (slashes.length === 1 && repToks.length === 0 && sliceToks.length === 0 && REP.has(t.toLowerCase())) {
+            repToks.push(t.toLowerCase());
+            while (i + 1 < seg0.length && repToks.length < 2 && REP.has(seg0[i + 1].toLowerCase())) {
+              repToks.push(seg0[++i].toLowerCase());
+            }
           } else {
             sliceToks.push(t);
           }
         }
-        const sliceVal = sliceToks.length ? sliceToks.join(" ") : "100%";
-        const widthVal = (slashes[1] && slashes[1].trim()) ? slashes[1].trim() : "1";
-        const outsetVal = (slashes[2] && slashes[2].trim()) ? slashes[2].trim() : "0";
-        const repVal = repToks.length ? repToks.join(" ") : "stretch";
+        if (!isValidCssValue("border-image-source", srcVal)) return null;
+        const sliceRaw = sliceToks.length ? sliceToks.join(" ") : "100%";
+        if (!isValidCssValue("border-image-slice", sliceRaw)) return null;
+        const sliceVal = normalizeCssSpecifiedValue("border-image-slice", sliceRaw);
+        const widthRaw = (slashes.length >= 2 && slashes[1]) ? slashes[1] : "1";
+        if (!isValidCssValue("border-image-width", widthRaw)) return null;
+        const widthVal = normalizeCssSpecifiedValue("border-image-width", widthRaw);
+        const outsetRaw = (slashes.length === 3 && slashes[2]) ? slashes[2] : "0";
+        if (!isValidCssValue("border-image-outset", outsetRaw)) return null;
+        const outsetVal = normalizeCssSpecifiedValue("border-image-outset", outsetRaw);
+        const repRaw = repToks.length ? repToks.join(" ") : "stretch";
+        if (!isValidCssValue("border-image-repeat", repRaw)) return null;
+        const repVal = normalizeCssSpecifiedValue("border-image-repeat", repRaw);
         return [
           ["border-image-source", srcVal],
           ["border-image-slice", sliceVal],
@@ -9002,6 +9025,7 @@
       "border-right": ["border-right-width", "border-right-style", "border-right-color"],
       "border-bottom": ["border-bottom-width", "border-bottom-style", "border-bottom-color"],
       "border-left": ["border-left-width", "border-left-style", "border-left-color"],
+      "border-image": ["border-image-source", "border-image-slice", "border-image-width", "border-image-outset", "border-image-repeat"],
       "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
       "list-style": ["list-style-position", "list-style-image", "list-style-type"],
       "place-content": ["align-content", "justify-content"],
@@ -9151,6 +9175,20 @@
         const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
         return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+      }
+      if (key === "border-image") {
+        const src = vals[0], slice = vals[1], width = vals[2], outset = vals[3], rep = vals[4];
+        if (src === "none" && slice === "100%" && width === "1" && outset === "0" && rep === "stretch") return "none";
+        const out = [];
+        if (src !== "none") out.push(src);
+        if (slice !== "100%" || width !== "1" || outset !== "0") {
+          let s = slice;
+          if (outset !== "0") s += (width !== "1" ? " / " + width : " /") + " / " + outset;
+          else if (width !== "1") s += " / " + width;
+          out.push(s);
+        }
+        if (rep !== "stretch") out.push(rep);
+        return out.join(" ");
       }
       if (key === "flex-flow") {
         if (vals[0] === "row" && vals[1] === "nowrap") return "row";

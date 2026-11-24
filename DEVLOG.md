@@ -3204,3 +3204,5 @@
 - 修正 `hwb()` 转 `rgb()` 时 `1 - w - b` 浮点误差导致的 `127` vs `128` 舍入偏差，并补全 `none` 通道规范化，使 `color-valid-hwb` 提升至 28/38、`color-computed-hwb` 提升至 46/56。
 ### Phase 682 — `border` 与 `border-{top,right,bottom,left}` 简写展开与序列化闭环
 - 在 `cssom.js` 中补全 `border` 与四向 `border-{top,right,bottom,left}` 的 `expandCssShorthand` 展开（`border` 同步重置 `border-image-{source,slice,width,outset,repeat}`）与 `serializeExpandedShorthand` 序列化，`border-shorthand.html` 全数 36/36 子测试 PASS。
+### Phase 683 — `border-image` 简写校验、展开与序列化闭环
+- 为 `border-image` 补齐 `SHORTHAND_EXPAND_LONGHANDS` 映射、`serializeExpandedShorthand` 最小化序列化（省略默认 `width` `1` 时保留 ` / / outset`）、`isValidCssValue` 校验及 `expandCssShorthand` 子属性校验/规范化，`border-image*` 18/18 用例全通。

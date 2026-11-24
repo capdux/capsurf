@@ -2349,3 +2349,4 @@
 | Phase 680 | WPT `color-computed-hwb` (7->45/56), `color-valid-hwb` (8->15/38), `color-valid-lab` (50->64/150) | `src/js/shim/cssom.js` | `color-computed-hwb` 45/56; `color-valid-hwb` 15/38; `color-valid-lab` 64/150; `--smoke` 3/3 PASS |
 | Phase 681 | WPT `color-computed-hwb` (46/56) + `color-valid-hwb` (15->28/38) | `src/js/shim/cssom.js` | `color-computed-hwb` 46/56 (`rgb(77, 128, 77)` 舍入全通); `color-valid-hwb` 28/38 (`none` 通道全通); `--smoke` 3/3 PASS |
 | Phase 682 | WPT `border` 与 `border-{top,right,bottom,left}` 简写展开/序列化 | `src/js/shim/cssom.js` | `/css/css-backgrounds/parsing/border-shorthand.html` 36/36 全通 PASS; `--smoke` 3/3 PASS |
+| Phase 683 | WPT `border-image` 简写校验、展开与序列化闭环 | `src/js/shim/cssom.js` | `/css/css-backgrounds/parsing/border-image*` 全套 18/18 PASS (`border-image-valid` 30/30, `border-image-invalid` 17/17); `--smoke` 3/3 PASS |
