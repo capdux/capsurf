@@ -2153,3 +2153,7 @@
 ### Phase 618: `getComputedStyle` Proxy `ownKeys` trap + `background-*` 初始值补全
 - **Filter `/css/css-logical/getComputedStyle-listing`**: **FAIL->PASS (30/30)**（`window.js` `getComputedStyle` Proxy 补齐 `ownKeys` 陷阱返回 `Reflect.ownKeys(target)` 与 `propList` 去重并集，使 `Reflect.ownKeys(cs)` 完整枚举所有标准与逻辑属性；同步补全 `textDecorDefs` 中 `background-{clip,origin,size,image,position-x,position-y,repeat}` 初始默认值）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 619: `/css/css-transforms/inheritance` 20/20 全绿
+- **Filter `/css/css-transforms/inheritance`**: **FAIL->PASS (20/20, 10.78s under `--timeout 20000`)**（`window.js` `textDecorDefs` 补全 `backface-visibility`, `perspective`, `rotate`, `scale`, `transform`, `transform-box`, `transform-style`, `translate` 初始默认值，并在 `getComputedStyle` 懒加载 `getDefaultOriginComputed()` 解析 `perspective-origin`/`transform-origin` 默认 `50% 50%` 像素坐标）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

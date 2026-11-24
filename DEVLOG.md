@@ -2975,3 +2975,7 @@
 ### Phase 618: `getComputedStyle` Proxy `ownKeys` trap + `background-*` 初始值补全
 - **核心修复 (`src/js/shim/window.js`)**：`getComputedStyle` Proxy 补齐 `ownKeys` 陷阱（合并 `Reflect.ownKeys(target)` 与 `propList`），修复 `Reflect.ownKeys(cs)` 无法枚举 `STANDARD_COMPUTED_LONGHANDS` 的问题；`textDecorDefs` 补全 `background-{clip,origin,size,image,position-x,position-y,repeat}` 初始值。
 - **WPT & Smoke 验收**：`/css/css-logical/getComputedStyle-listing.html` FAIL->PASS (30/30)、`--smoke` 3/3 suites PASS。
+
+### Phase 619: `/css/css-transforms/inheritance` 20/20 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`textDecorDefs` 补全 `backface-visibility`/`perspective`/`rotate`/`scale`/`transform`/`transform-box`/`transform-style`/`translate` 初始值；在 `getComputedStyle` 中新增 `getDefaultOriginComputed()` 按需惰性解析 `perspective-origin`/`transform-origin` 默认 `50% 50%` 像素值，避免全量急切计算导致的祖先盒模型遍历开销。
+- **WPT & Smoke 验收**：`/css/css-transforms/inheritance.html` FAIL->PASS (20/20, `--timeout 20000` 10.78s)、`--smoke` 3/3 suites PASS。

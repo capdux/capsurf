@@ -8063,6 +8063,10 @@ function installWindow(global) {
       const ok = originProps[oi];
       const ov = (computedMap.get(ok) || "").trim();
       if (!ov) continue;
+      if (/^(?:initial|unset|revert|revert-layer)$/i.test(ov)) {
+        computedMap.delete(ok);
+        continue;
+      }
       const oToks = [];
       let oCur = "", oD = 0;
       for (let i = 0; i < ov.length; i++) {
@@ -8722,7 +8726,15 @@ function installWindow(global) {
       ["background-image", "none"],
       ["background-position-x", "0%"],
       ["background-position-y", "0%"],
-      ["background-repeat", "repeat"]
+      ["background-repeat", "repeat"],
+      ["backface-visibility", "visible"],
+      ["perspective", "none"],
+      ["rotate", "none"],
+      ["scale", "none"],
+      ["transform", "none"],
+      ["transform-box", "view-box"],
+      ["transform-style", "flat"],
+      ["translate", "none"]
     ];
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {
@@ -9294,6 +9306,13 @@ function installWindow(global) {
       return null;
     }
 
+    function getDefaultOriginComputed() {
+      const boxW = computeElementUsedWidthPx(element, 0) || 0;
+      const fs = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+      const boxH = evalCssLengthExpr(computedMap.get("height") || "0px", 0, fs) || 0;
+      return formatCssPx(boxW * 0.5) + " " + formatCssPx(boxH * 0.5);
+    }
+
     declTarget.getPropertyValue = markNative(function (prop) {
       const p = String(prop).trim();
       const pLow = p.toLowerCase();
@@ -9319,6 +9338,7 @@ function installWindow(global) {
       }
       if (lower === "text-combine-upright") return "none";
       if (lower === "text-orientation") return "mixed";
+      if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
       if (lower === "image-orientation") return "from-image";
       if (lower === "content") return "normal";
       if (lower === "overflow-anchor") return "auto";
@@ -9399,6 +9419,7 @@ function installWindow(global) {
           if (computedMap.has(lower)) return computedMap.get(lower);
           if (kebab === "text-combine-upright") return "none";
           if (kebab === "text-orientation") return "mixed";
+          if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
           if (kebab === "content") return "normal";
           return "";
         }

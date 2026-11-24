@@ -3704,3 +3704,5 @@
 - **Phase 617** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `evalCssLengthExpr` 抽离 `resolveUnitPx(num, unit)` 支持 `in`/`cm`/`mm`/`pc`/`q` 绝对长度单位换算；`tab-size-computed-value-001` 与 `word-spacing-computed-001` 全绿。
 
 - **Phase 618** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `getComputedStyle` Proxy 补齐 `ownKeys` trap 枚举标准/逻辑属性，并补全 `background-*` 初始值；`/css/css-logical/getComputedStyle-listing.html` 实现 30/30 全绿。
+
+- **Phase 619** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `backface-visibility`/`perspective`/`rotate`/`scale`/`transform*`/`translate` 初始默认值与 `perspective-origin`/`transform-origin` 惰性求值；`/css/css-transforms/inheritance.html` 实现 20/20 全绿。
