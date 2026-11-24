@@ -3870,3 +3870,7 @@
   - `src/js/shim/cssom.js`: `isValidCssValue` 修复 `radial-gradient` 首参为 `<color>`（无 `at` 与 shape/size 关键字）时误当长度校验失败的问题。
   - `src/js/shim/window.js`: `background-position-x/y` 双 token 逻辑边关键字分支统一走 `resolveEdge`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 686**:
+  - `src/js/shim/window.js`: `background-position-x/y` 单层保留 `x-start`/`x-end`/`y-start`/`y-end` 关键字，多层解析为 `0%`/`100%`。
+  - `test/wpt/wpt-expectations.json`: 将 `background-position-x-computed.html` 与 `background-position-y-computed.html` 从 `FAIL` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

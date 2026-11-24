@@ -46231,9 +46231,12 @@
           if (tc) toks.push(tc);
           const norm1 = (t) => {
             const tl = t.toLowerCase();
-            if (tl === "left" || tl === "top" || tl === "x-start" || tl === "y-start") return "0%";
+            if (tl === "left" || tl === "top") return "0%";
             if (tl === "center") return "50%";
-            if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
+            if (tl === "right" || tl === "bottom") return "100%";
+            if (tl === "x-start" || tl === "x-end" || tl === "y-start" || tl === "y-end") {
+              return (bpKey === "background-position" || bpLayers.length > 1) ? ((tl === "x-start" || tl === "y-start") ? "0%" : "100%") : tl;
+            }
             return evalLinLenPctTok(t);
           };
           const resolveEdge = (edge, rawOff) => {
@@ -46285,8 +46288,8 @@
           if (toks.length === 1) return norm1(toks[0]);
           if (toks.length === 2) {
             const edge = toks[0].toLowerCase();
-            if (edge === "x-start" || edge === "y-start") return resolveEdge("left", toks[1]);
-            if (edge === "x-end" || edge === "y-end") return resolveEdge("right", toks[1]);
+            const off = evalLinLenPctTok(toks[1]);
+            if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
             return resolveEdge(edge, toks[1]);
           }
           return layer;
