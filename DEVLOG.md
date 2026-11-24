@@ -3173,3 +3173,6 @@
 ### Phase 670 — `flood-color` / `lighting-color` / `color-interpolation-filters` / `dominant-baseline` 收口
 - 在 `cssom.js` 的已知属性集合、语法校验与指定值规范化中补全 `flood-color`、`lighting-color`、`color-interpolation-filters` 与 `dominant-baseline`。
 - 在 `window.js` 中补全 `flood-color`（初始 `rgb(0, 0, 0)`）、`lighting-color`（初始 `rgb(255, 255, 255)`）及继承属性 `color-interpolation-filters`（初始 `linearrgb`）的计算值解析与 `CSSStyleDeclaration` 属性暴露，并通过 10 项 WPT 与 `--smoke` 回归。
+### Phase 671 — `filter`/`backdrop-filter` 与 `offset-*` 语法校验补齐
+- 为 `filter` 与 `backdrop-filter` 补全全部标准滤镜函数参数类型、非负约束与 `drop-shadow` 长度/颜色组合校验。
+- 为 CSS Motion Path 的 `offset-distance`、`offset-rotate`、`offset-position` 与 `offset-anchor` 补全指定值语法校验，并通过 6 项 WPT invalid 测试与 `--smoke` 回归。

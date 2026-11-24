@@ -3821,3 +3821,6 @@
   - `src/js/shim/window.js`: `INHERITED_CSS_PROPS`、`COMPUTED_STYLE_PROPS`、`getPropertyValue` 兜底及颜色/关键词计算值逻辑补齐 `flood-color`（默认 `rgb(0, 0, 0)`）、`lighting-color`（默认 `rgb(255, 255, 255)`）与 `color-interpolation-filters`（默认 `linearrgb`）。
   - `test/wpt/wpt-expectations.json`: 将 `color-interpolation-filters-computed.html` 与 `color-interpolation-filters-parsing-valid.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 671**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 新增 `filter` 与 `backdrop-filter`（`none | [<filter-function> | url()]+`，含 `blur`/`brightness`/`contrast`/`grayscale`/`invert`/`opacity`/`saturate`/`sepia`/`hue-rotate`/`drop-shadow` 参数校验）及 `offset-distance`、`offset-rotate`、`offset-position`、`offset-anchor` 语法校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

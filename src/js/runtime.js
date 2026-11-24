@@ -6784,6 +6784,66 @@
         return vLower === "auto" || vLower === "text-bottom" || vLower === "alphabetic" || vLower === "ideographic" ||
                vLower === "middle" || vLower === "central" || vLower === "mathematical" || vLower === "hanging" || vLower === "text-top";
       }
+      if (prop === "filter" || prop === "backdrop-filter") {
+        if (vLower === "none") return true;
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0) return false;
+        const isAng = (t) => t === "0" || t === "+0" || t === "-0" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:deg|rad|grad|turn)$/i.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t);
+        const isNumPct0 = (t) => {
+          if (/^(?:calc|min|max|clamp)\(/i.test(t)) return true;
+          const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%)?$/i.exec(t);
+          return !!(m && parseFloat(m[1]) >= 0);
+        };
+        for (let i = 0; i < toks.length; i++) {
+          const fm = /^([a-z-]+)\((.*)\)$/i.exec(toks[i]);
+          if (!fm) return false;
+          const fn = fm[1].toLowerCase(), body = fm[2].trim();
+          if (fn === "url") { if (!body) return false; continue; }
+          const args = body ? splitCssTokens(body) : [];
+          if (fn === "blur") {
+            if (args.length > 1) return false;
+            if (args.length === 1 && (args[0].endsWith("%") || !isValidLenPct(args[0], false))) return false;
+          } else if (fn === "brightness" || fn === "contrast" || fn === "grayscale" || fn === "invert" || fn === "opacity" || fn === "saturate" || fn === "sepia") {
+            if (args.length > 1) return false;
+            if (args.length === 1 && !isNumPct0(args[0])) return false;
+          } else if (fn === "hue-rotate") {
+            if (args.length > 1) return false;
+            if (args.length === 1 && !isAng(args[0].toLowerCase())) return false;
+          } else if (fn === "drop-shadow") {
+            if (args.length < 2 || args.length > 4) return false;
+            let lens = [], hasCol = false;
+            for (let j = 0; j < args.length; j++) {
+              const a = args[j];
+              if (!a.endsWith("%") && isValidLenPct(a, true)) lens.push(a);
+              else if (!hasCol && isValidColor(a)) hasCol = true;
+              else return false;
+            }
+            if (lens.length < 2 || lens.length > 3) return false;
+            if (lens.length === 3 && !isValidLenPct(lens[2], false)) return false;
+          } else return false;
+        }
+        return true;
+      }
+      if (prop === "offset-distance") {
+        return isValidLenPct(trimmed, true);
+      }
+      if (prop === "offset-rotate") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 2) return false;
+        const isAng = (t) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:deg|rad|grad|turn)$/i.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t);
+        let seenKw = false, seenAng = false;
+        for (let i = 0; i < toks.length; i++) {
+          if (toks[i] === "auto" || toks[i] === "reverse") { if (seenKw) return false; seenKw = true; }
+          else if (isAng(toks[i])) { if (seenAng) return false; seenAng = true; }
+          else return false;
+        }
+        return seenKw || seenAng;
+      }
+      if (prop === "offset-position" || prop === "offset-anchor") {
+        if (vLower === "auto" || (prop === "offset-position" && vLower === "normal")) return true;
+        const toks = splitCssTokens(vLower);
+        return toks.length !== 3 && isValidCssPositionTokens(toks);
+      }
       if (prop === "overscroll-behavior") {
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > 2) return false;
