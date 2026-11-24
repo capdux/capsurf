@@ -3892,7 +3892,7 @@
       "visibility", "white-space", "white-space-collapse", "widows", "width",
       "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap", "writing-mode", "z-index",
       // Vendor prefixed
-      "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
+      "-webkit-transform", "-webkit-transform-origin", "-webkit-perspective", "-webkit-transition", "-webkit-animation",
       "-webkit-user-select", "-webkit-box-sizing", "-webkit-appearance", "-webkit-line-clamp",
       "-webkit-align-content", "-webkit-align-items", "-webkit-align-self", "-webkit-flex",
       "-webkit-flex-basis", "-webkit-flex-direction", "-webkit-flex-flow", "-webkit-flex-grow",
@@ -4955,12 +4955,14 @@
         }
         return true;
       }
-      if (prop === "perspective") {
+      if (prop === "perspective" || prop === "-webkit-perspective") {
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
         if (t === "none") return true;
         if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
+        if (prop === "-webkit-perspective" && /^(?:0|[+]?(?:\d+(?:\.\d+)?|\.\d+))$/.test(t)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t) && !/(?:px|em|rem|ex|ch|cap|ic|lh|rlh|vw|vh|vi|vb|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t)) return false;
         return isValidLenPct(t, false);
       }
       const isValidCssPositionTokens = (toks) => {
@@ -6597,6 +6599,13 @@
           col.toLowerCase() === "currentcolor" ? "" : col
         ].filter(Boolean).join(" ");
         return outStr || "none";
+      }
+      if (key === "-webkit-perspective") {
+        if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)) return String(Number(s)) + "px";
+        return s;
+      }
+      if (key === "-webkit-transform") {
+        return s.replace(/\bperspective\(\s*([+]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)/gi, (_, n) => "perspective(" + String(Number(n)) + "px)");
       }
       if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
         const parts = splitCssTokens(s);

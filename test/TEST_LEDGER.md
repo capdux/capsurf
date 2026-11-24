@@ -2044,3 +2044,12 @@
 - **子智能体只读摸底记录**：
   - `/css/css-images/parsing/` (`b504`, 24 files): `21 PASS (197/197 subtests) / 1 FAIL / 2 TIMEOUT`
   - `/css/css-transforms/parsing/` (`b505`, 28 files): `21 PASS / 7 FAIL / 0 TIMEOUT` -> Phase 602 修复 `transform-computed.html` 后 `22/28 PASS`
+
+### Phase 603: `webkit-perspective-{invalid,valid}.tentative` & `webkit-transform-valid.tentative` 全绿 & Sizing/Align 摸底
+- **Filter `/css/css-transforms/parsing/webkit-perspective-invalid.tentative`**: **PASS (2/2)**（`cssom.js` `STANDARD_CSS_PROPERTIES` 补充 `"-webkit-perspective"` 并拒绝无单位 `calc(...)`）。
+- **Filter `/css/css-transforms/parsing/webkit-perspective-valid.tentative`**: **PASS (10/10)**（`cssom.js` 为 `-webkit-perspective` 无单位非负数值补全 `px` 规范化序列化）。
+- **Filter `/css/css-transforms/parsing/webkit-transform-valid.tentative`**: **PASS (9/9)**（`cssom.js` 为 `-webkit-transform` 中 `perspective(<number>)` 补全 `px` 规范化序列化）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-sizing/parsing/` (`b507`, 19 files): **19/19 PASS (100% ALL GREEN, 145/145 subtests)**
+  - `/css/css-align/` (`b506`, 49 recorded of 119): `37 PASS / 3 FAIL / 9 TIMEOUT`

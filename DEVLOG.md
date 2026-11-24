@@ -2907,3 +2907,7 @@
 ### Phase 602: `/css/css-transforms/parsing/transform-computed` 9/9 全绿
 - **核心修复 (`window.js`, `element.js`, `cssom.js`)**：`getComputedStyle` Proxy `get` 与 `getPropertyValue` 前置 `-webkit-transform`/`-moz-transform` -> `transform` 映射，`removeKeyFromStyleMap` 三者互斥清理，补全 `perspective(<len>)` 与 2D `matrix3d()` 降维计算；`NAMED_COLORS` 惰性单例缓存。
 - **WPT & Smoke 验收**：`transform-computed.html` 9/9 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 603: `webkit-perspective-{invalid,valid}.tentative` & `webkit-transform-valid.tentative` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`STANDARD_CSS_PROPERTIES` 增加 `"-webkit-perspective"`；`isValidCssValue` 拦截无单位 `calc()`；`normalizeCssSpecifiedValue` 对 `-webkit-perspective` 纯数字与 `-webkit-transform` `perspective(<number>)` 自动补全 `px` 单位。
+- **WPT & Smoke 验收**：3 项 `.tentative` 用例全部 PASS、`--smoke` 3/3 suites PASS；并行确认 `/css/css-sizing/parsing/` 19/19 PASS。

@@ -7842,3 +7842,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`cssom.js`**：`NAMED_COLORS` `Set` 改为惰性单例缓存。
   3. **全绿验证**：`transform-computed.html` **PASS (9/9)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/css-images/parsing/` 21/24 PASS（197/197 subtests）；`/css/css-transforms/parsing/` 22/28 PASS。
+
+### 2026-11-24 Phase 603 (`webkit-perspective-{invalid,valid}.tentative` & `webkit-transform-valid.tentative` 全绿)
+- **[Agent]**: 完成 Phase 603（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`STANDARD_CSS_PROPERTIES` 补全 `"-webkit-perspective"`，`isValidCssValue` 拒绝无单位 `calc()`，`normalizeCssSpecifiedValue` 为 `-webkit-perspective` 与 `-webkit-transform` `perspective(<number>)` 补全 `px` 序列化。
+  2. **全绿验证**：3 项 `.tentative` 用例全部 **PASS**（`/css/css-transforms/parsing/` 推进至 **25/28 PASS**）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-sizing/parsing/` **19/19 PASS (145/145 subtests)**；`/css/css-align/` 37/49 PASS。
