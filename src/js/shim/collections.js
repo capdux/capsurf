@@ -169,6 +169,19 @@ markNative(DOMTokenList.prototype.toggle, "toggle");
 markNative(DOMTokenList.prototype.contains, "contains");
 markNative(DOMTokenList.prototype.item, "item");
 
+function isArrayIndex(prop) {
+  if (typeof prop !== "string") return false;
+  if (prop === "0") return true;
+  if (!/^[1-9]\d*$/.test(prop)) return false;
+  const n = Number(prop);
+  return n >= 0 && n < 4294967295;
+}
+
+function isHtmlNsElement(el) {
+  const ns = el && el.namespaceURI;
+  return !ns || ns === "http://www.w3.org/1999/xhtml";
+}
+
 function findNamedItemInList(list, name) {
   if (name == null || name === "") return null;
   const key = String(name);
@@ -182,7 +195,7 @@ function findNamedItemInList(list, name) {
   }
   for (let i = 0; i < len; i++) {
     const el = list[i];
-    if (!el) continue;
+    if (!el || !isHtmlNsElement(el)) continue;
     if (el.name === key || (el.getAttribute && el.getAttribute("name") === key)) {
       return el;
     }
@@ -195,9 +208,12 @@ function makeHtmlCollection(getList, customTarget) {
   const proxy = new Proxy(target, {
     get: function (t, prop, receiver) {
       if (prop === "length") {
+        if (receiver !== proxy) {
+          throw new TypeError("Illegal invocation");
+        }
         return getList().length;
       }
-      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      if (isArrayIndex(prop)) {
         const i = Number(prop);
         const list = getList();
         if (i >= 0 && i < list.length) {
@@ -208,8 +224,8 @@ function makeHtmlCollection(getList, customTarget) {
       if (prop === "item") {
         return function (index) {
           const list = getList();
-          const i = Number(index);
-          return (i >= 0 && i < list.length) ? list[i] : null;
+          const i = Number(index) >>> 0;
+          return i < list.length ? list[i] : null;
         };
       }
       if (prop === "namedItem") {
@@ -307,19 +323,34 @@ function makeHtmlCollection(getList, customTarget) {
           setSelectOptionsLength(t._owner, value);
           return true;
         }
-        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        if (isArrayIndex(prop)) {
           setSelectOptionAt(t._owner, Number(prop), value);
           return true;
         }
       } else {
         if (prop === "length") return false;
-        if (typeof prop === "string" && /^\d+$/.test(prop)) return false;
+        if (isArrayIndex(prop)) return false;
+      }
+      if (receiver === proxy && typeof prop === "string" && !Object.prototype.hasOwnProperty.call(t, prop)) {
+        if (findNamedItemInList(getList(), prop) !== null) {
+          return false;
+        }
       }
       return Reflect.set(t, prop, value, receiver);
     },
+    defineProperty: function (t, prop, desc) {
+      if (prop === "length") return false;
+      if (!t._isOptionsCollection && isArrayIndex(prop)) return false;
+      if (typeof prop === "string" && !Object.prototype.hasOwnProperty.call(t, prop)) {
+        if (findNamedItemInList(getList(), prop) !== null) {
+          return false;
+        }
+      }
+      return Reflect.defineProperty(t, prop, desc);
+    },
     has: function (t, prop) {
       if (prop === "length") return true;
-      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      if (isArrayIndex(prop)) {
         return Number(prop) < getList().length;
       }
       if (prop in t) return true;
@@ -339,20 +370,27 @@ function makeHtmlCollection(getList, customTarget) {
         if (!el) continue;
         const id = el.id || (el.getAttribute && el.getAttribute("id"));
         if (id && !(id in t) && keys.indexOf(id) === -1) keys.push(id);
-        const name = el.name || (el.getAttribute && el.getAttribute("name"));
-        if (name && !(name in t) && keys.indexOf(name) === -1) keys.push(name);
+        if (isHtmlNsElement(el)) {
+          const name = el.name || (el.getAttribute && el.getAttribute("name"));
+          if (name && !(name in t) && keys.indexOf(name) === -1) keys.push(name);
+        }
+      }
+      const own = Reflect.ownKeys(t);
+      for (let i = 0; i < own.length; i++) {
+        if (keys.indexOf(own[i]) === -1) keys.push(own[i]);
       }
       return keys;
     },
     getOwnPropertyDescriptor: function (t, prop) {
-      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      if (isArrayIndex(prop)) {
         const i = Number(prop);
         const list = getList();
         if (i >= 0 && i < list.length) {
           return { value: list[i], writable: !!t._isOptionsCollection, enumerable: true, configurable: true };
         }
+        return undefined;
       }
-      if (prop in t) {
+      if (Object.prototype.hasOwnProperty.call(t, prop)) {
         return Reflect.getOwnPropertyDescriptor(t, prop);
       }
       if (typeof prop === "string") {
@@ -364,7 +402,7 @@ function makeHtmlCollection(getList, customTarget) {
             const item = list[i];
             if (!item) continue;
             const itemId = item.id || (typeof item.getAttribute === "function" ? item.getAttribute("id") : "");
-            const itemName = item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "");
+            const itemName = isHtmlNsElement(item) ? (item.name || (typeof item.getAttribute === "function" ? item.getAttribute("name") : "")) : "";
             if (itemId === key || itemName === key) {
               matches.push(item);
             }
@@ -382,13 +420,13 @@ function makeHtmlCollection(getList, customTarget) {
           }
         }
       }
-      return Reflect.getOwnPropertyDescriptor(t, prop);
+      return undefined;
     },
     deleteProperty: function (t, prop) {
-      if (typeof prop === "string" && /^\d+$/.test(prop)) {
-        if (Number(prop) < getList().length) return false;
+      if (isArrayIndex(prop)) {
+        return Number(prop) >= getList().length;
       }
-      if (prop in t) {
+      if (Object.prototype.hasOwnProperty.call(t, prop)) {
         return Reflect.deleteProperty(t, prop);
       }
       if (typeof prop === "string") {
@@ -467,8 +505,8 @@ function HTMLCollection(items) {
   return makeHtmlCollection(function () { return list; });
 }
 HTMLCollection.prototype.item = function (index) {
-  const i = Number(index);
-  return (i >= 0 && i < this.length) ? this[i] : null;
+  const i = Number(index) >>> 0;
+  return i < this.length ? this[i] : null;
 };
 HTMLCollection.prototype.namedItem = function (name) {
   return findNamedItemInList(this, name);
@@ -1001,6 +1039,72 @@ function NamedNodeMap(ownerElement) {
     configurable: true,
   });
   this._sync();
+  return new Proxy(this, {
+    get: function (t, prop, receiver) {
+      if (prop === "length") {
+        t._sync();
+        return t._list.length;
+      }
+      if (isArrayIndex(prop)) {
+        t._sync();
+        const i = Number(prop);
+        return i < t._list.length ? t._list[i] : undefined;
+      }
+      if (typeof prop === "string" && prop !== "_owner" && prop !== "_list" && prop !== "_byName" && prop !== "_length" && !(prop in t)) {
+        t._sync();
+        const attr = t._byName[prop.toLowerCase()];
+        if (attr) return attr;
+      }
+      return Reflect.get(t, prop, receiver);
+    },
+    has: function (t, prop) {
+      if (isArrayIndex(prop)) {
+        t._sync();
+        return Number(prop) < t._list.length;
+      }
+      if (typeof prop === "string" && prop !== "_owner" && prop !== "_list" && prop !== "_byName" && prop !== "_length") {
+        if (prop in t) return true;
+        t._sync();
+        return !!t._byName[prop.toLowerCase()];
+      }
+      return prop in t;
+    },
+    ownKeys: function (t) {
+      t._sync();
+      const keys = [];
+      for (let i = 0; i < t._list.length; i++) {
+        keys.push(String(i));
+      }
+      for (let i = 0; i < t._list.length; i++) {
+        const n = t._list[i] && t._list[i].name;
+        if (n && keys.indexOf(n) === -1) keys.push(n);
+      }
+      const own = Reflect.ownKeys(t);
+      for (let i = 0; i < own.length; i++) {
+        const k = own[i];
+        if (k === "_owner" || k === "_list" || k === "_byName" || k === "_length") continue;
+        if (keys.indexOf(k) === -1) keys.push(k);
+      }
+      return keys;
+    },
+    getOwnPropertyDescriptor: function (t, prop) {
+      t._sync();
+      if (isArrayIndex(prop)) {
+        const i = Number(prop);
+        if (i < t._list.length) {
+          return { value: t._list[i], writable: false, enumerable: true, configurable: true };
+        }
+        return undefined;
+      }
+      if (typeof prop === "string" && prop !== "_owner" && prop !== "_list" && prop !== "_byName" && prop !== "_length") {
+        const attr = t._byName[prop.toLowerCase()];
+        if (attr) {
+          return { value: attr, writable: false, enumerable: false, configurable: true };
+        }
+      }
+      return Reflect.getOwnPropertyDescriptor(t, prop);
+    }
+  });
 }
 
 NamedNodeMap.prototype._sync = function () {
@@ -1009,10 +1113,6 @@ NamedNodeMap.prototype._sync = function () {
     this._owner._syncAttrs();
   }
   const currentAttrs = this._owner._attrList || (this._owner._attrs ? Array.from(this._owner._attrs.values()) : []);
-
-  for (let i = 0; i < this._length; i++) {
-    delete this[i];
-  }
 
   const prevByName = this._byName;
   this._list = [];
@@ -1036,7 +1136,6 @@ NamedNodeMap.prototype._sync = function () {
     } else {
       attrNode = new Attr(item.name, item.value, this._owner, ns, loc, pfx);
     }
-    this[i] = attrNode;
     this._list.push(attrNode);
     this._byName[key] = attrNode;
   }
@@ -1053,7 +1152,7 @@ NamedNodeMap.prototype._sync = function () {
 Object.defineProperty(NamedNodeMap.prototype, "length", {
   get: function () {
     this._sync();
-    return this._length;
+    return this._list.length;
   },
   configurable: true,
   enumerable: false,
@@ -1061,8 +1160,8 @@ Object.defineProperty(NamedNodeMap.prototype, "length", {
 
 NamedNodeMap.prototype.item = function (index) {
   this._sync();
-  const i = Number(index);
-  return (i >= 0 && i < this._length) ? this[i] : null;
+  const i = Number(index) >>> 0;
+  return i < this._list.length ? this[i] : null;
 };
 
 NamedNodeMap.prototype.getNamedItem = function (name) {

@@ -4115,3 +4115,6 @@
 - **Phase 748**:
   - `src/js/shim/node-base.js`: 将 `Node.prototype` 上 `childNodes`/`firstChild`/`lastChild`/`nextSibling`/`previousSibling` 描述符同步至 `Element.prototype`，统一 JS 树访问。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 749**:
+  - `src/js/shim/collections.js`: 完善 `HTMLCollection` Proxy 索引/命名/原型/expando/defineProperty/deleteProperty 规范语义及非 HTML 命名空间 `name` 过滤；为 `NamedNodeMap` 返回 Proxy 隐藏内部字段并同步 `length` 与索引/命名属性访问。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

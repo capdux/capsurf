@@ -3336,3 +3336,5 @@
 - 补全 `frameset` 原型映射及 `HTMLBodyElement`/`HTMLFrameSetElement` 事件处理器属性反射与窗口转发逻辑，打通 `Body-FrameSet-Event-Handlers.html` 48/48 全绿。
 ### Phase 748 — `ChildNode-before/after` 与 `Node-textContent` 等 5 项 `/dom/nodes/` 全绿
 - 解决 `Element.prototype` 原生子节点/兄弟节点 getter 遮蔽 `Node.prototype` JS 树的问题，一举打通 `ChildNode-before` (45/45)、`ChildNode-after` (45/45)、`DocumentType-remove` (4/4)、`CharacterData-remove` (12/12) 与 `Node-textContent` (81/81)。
+### Phase 749 — `/dom/collections/` 全目录 `11/11 (100% PASS)` 达标
+- 修复 `HTMLCollection` 的 `ArrayIndex` 边界 (`2^32 - 1` 视为命名属性)、`item()` `ToUint32`、`Object.create(collection).length` 抛 `TypeError`、非 HTML 命名空间忽略 `name`、以及 `NamedNodeMap` Proxy 隐藏内部槽位与 `_sync` 长度一致性，实现 `/dom/collections/` 11/11 100% 全绿。
