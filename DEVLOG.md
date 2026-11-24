@@ -3162,3 +3162,5 @@
 ### Phase 666 — `basic-shape` 规范化与 `polygon` `round` 组合收口
 - `isValidShape("polygon")` 重写首段解析，支持 `nonzero`/`evenodd` 与 `round <length>` 任意顺序组合。
 - `normalizeCssSpecifiedValue` 为 `shape-outside` 与 `clip-path` 统一补齐 `circle`/`ellipse` 省略 `closest-side`、`inset`/`xywh`/`rect` 零值补 `px`、以及 `polygon` 省略默认 `nonzero` 的规范化序列化。
+### Phase 667 — `clip-path-valid` 54/54 全量收口
+- 在 `normalizeCssSpecifiedValue` 中为 `shape-outside`/`clip-path` 统一处理前置 `<geometry-box>` 重排（`clip-path` 存在形状时省略默认 `border-box`），并剥离 `inset`/`xywh`/`rect`/`polygon` 中等价于零的 `round 0px` 子句，使 `clip-path-valid.html` 54/54 全部通过并收紧预期基线。

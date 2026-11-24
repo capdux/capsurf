@@ -3805,3 +3805,7 @@
 - **Phase 666**:
   - `src/js/shim/cssom.js`: `isValidShape("polygon")` 支持 `<fill-rule> || round <length>` 任意顺序组合；`normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 统一规范化 `circle`/`ellipse`（省略默认 `closest-side`）、`inset`/`xywh`/`rect`（`0`->`0px`）与 `polygon`（省略 `nonzero`、`0`->`0px`）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 667**:
+  - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 提取前置 `<geometry-box>` 并后置、`clip-path` 省略默认 `border-box`、`inset`/`xywh`/`rect`/`polygon` 省略 `round 0px`、以及 `circle`/`ellipse` 内 `calc()` 规范化。
+  - `test/wpt/wpt-expectations.json`: `/css/css-masking/parsing/clip-path-valid.html` 从 `FAIL` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -7385,44 +7385,62 @@
         return normalizePositionLayer(s, key === "transform-origin");
       }
       if (key === "shape-outside" || key === "clip-path") {
-        const fnM = /^(circle|ellipse|shape|path|inset|xywh|rect|polygon)\(/i.exec(s);
+        let leadBox = "", shapeSrc = s;
+        const leadM = /^(content-box|padding-box|border-box|margin-box|fill-box|stroke-box|view-box)\s+(.+)$/i.exec(s);
+        if (leadM) { leadBox = leadM[1].toLowerCase(); shapeSrc = leadM[2].trim(); }
+        const fnM = /^(circle|ellipse|shape|path|inset|xywh|rect|polygon)\(/i.exec(shapeSrc);
         if (fnM) {
           const fnName = fnM[1].toLowerCase();
           let depth = 1, i = fnM[0].length, q = "";
-          for (; i < s.length && depth > 0; i++) {
-            const ch = s[i];
-            if (q) { if (ch === "\\" && i + 1 < s.length) i++; else if (ch === q) q = ""; continue; }
+          for (; i < shapeSrc.length && depth > 0; i++) {
+            const ch = shapeSrc[i];
+            if (q) { if (ch === "\\" && i + 1 < shapeSrc.length) i++; else if (ch === q) q = ""; continue; }
             if (ch === '"' || ch === "'") { q = ch; continue; }
             if (ch === "(") depth++;
             else if (ch === ")") depth--;
           }
           if (depth === 0) {
-            const inner = s.slice(fnM[0].length, i - 1).trim();
-            const tail = s.slice(i);
+            const inner = shapeSrc.slice(fnM[0].length, i - 1).trim();
+            const tailBox = shapeSrc.slice(i).trim().toLowerCase();
+            let box = leadBox || tailBox;
+            if (key === "clip-path" && box === "border-box") box = "";
+            const suffix = box ? " " + box : "";
+            const normCalcTok = (t) => /^calc\(/i.test(t) ? canonicalizeCalcToken(t) : ((t === "0" || t === "+0" || t === "-0") ? "0px" : t);
             if (fnName === "circle" || fnName === "ellipse") {
               const toks = splitCssTokens(inner);
               const atIdx = toks.findIndex((t) => t.toLowerCase() === "at");
               let preToks = atIdx === -1 ? toks : toks.slice(0, atIdx);
               if (fnName === "circle" && preToks.length === 1 && preToks[0].toLowerCase() === "closest-side") preToks = [];
               else if (fnName === "ellipse" && preToks.length === 2 && preToks[0].toLowerCase() === "closest-side" && preToks[1].toLowerCase() === "closest-side") preToks = [];
-              preToks = preToks.map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+              preToks = preToks.map(normCalcTok);
               const preStr = preToks.join(" ");
               if (atIdx !== -1 && atIdx + 1 < toks.length) {
-                const pos = normalizePositionLayer(toks.slice(atIdx + 1).join(" "), false);
-                return fnName + "(" + (preStr ? preStr + " at " : "at ") + pos + ")" + tail;
+                const pos = normalizePositionLayer(toks.slice(atIdx + 1).map(normCalcTok).join(" "), false);
+                return fnName + "(" + (preStr ? preStr + " at " : "at ") + pos + ")" + suffix;
               }
-              return fnName + "(" + preStr + ")" + tail;
+              return fnName + "(" + preStr + ")" + suffix;
             } else if (fnName === "inset" || fnName === "xywh" || fnName === "rect") {
-              const toks = splitCssTokens(inner).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
-              return fnName + "(" + toks.join(" ") + ")" + tail;
+              const toks = splitCssTokens(inner).map(normCalcTok);
+              const rIdx = toks.findIndex((t) => t.toLowerCase() === "round");
+              if (rIdx !== -1) {
+                const rPost = toks.slice(rIdx + 1);
+                if (rPost.length > 0 && rPost.every((t) => t === "0px" || t === "0%" || t === "/")) {
+                  toks.length = rIdx;
+                }
+              }
+              return fnName + "(" + toks.join(" ") + ")" + suffix;
             } else if (fnName === "polygon") {
-              const segs = splitTopLevelComma(inner).map((seg) => splitCssTokens(seg).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t));
+              const segs = splitTopLevelComma(inner).map((seg) => splitCssTokens(seg).map(normCalcTok));
               if (segs.length > 1) {
-                const s0 = segs[0].filter((t) => t.toLowerCase() !== "nonzero");
+                let s0 = segs[0].filter((t) => t.toLowerCase() !== "nonzero");
+                const rIdx = s0.findIndex((t) => t.toLowerCase() === "round");
+                if (rIdx !== -1 && rIdx + 1 < s0.length && s0[rIdx + 1] === "0px") {
+                  s0.splice(rIdx, 2);
+                }
                 if (s0.length === 0) segs.shift();
                 else segs[0] = s0;
               }
-              return "polygon(" + segs.map((t) => t.join(" ")).join(", ") + ")" + tail;
+              return "polygon(" + segs.map((t) => t.join(" ")).join(", ") + ")" + suffix;
             } else if (fnName === "path") {
               const parts = splitTopLevelComma(inner);
               let fr = "", strTok = parts[0].trim();
@@ -7433,16 +7451,13 @@
               const rawPath = strTok.slice(1, -1).trim();
               const pToks = rawPath.match(/[MmLlHhVvCcSsQqTtAa]|[Zz]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?/g) || [];
               const normPath = pToks.map((t) => (t === "z" ? "Z" : t)).join(" ");
-              return "path(" + (fr === "evenodd" ? "evenodd, " : "") + '"' + normPath + '")' + tail;
+              return "path(" + (fr === "evenodd" ? "evenodd, " : "") + '"' + normPath + '")' + suffix;
             } else {
               const segs = splitTopLevelComma(inner).map((seg) => {
-                const toks = splitCssTokens(seg);
-                for (let j = 0; j < toks.length; j++) {
-                  if (toks[j] === "0" || toks[j] === "+0" || toks[j] === "-0") toks[j] = "0px";
-                }
+                const toks = splitCssTokens(seg).map(normCalcTok);
                 return toks.join(" ");
               });
-              return "shape(" + segs.join(", ") + ")" + tail;
+              return "shape(" + segs.join(", ") + ")" + suffix;
             }
           }
         }

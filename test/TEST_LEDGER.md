@@ -2333,3 +2333,4 @@
 | Phase 664 | WPT `/css/css-color-adjust/parsing/color-scheme-*` | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `color-scheme-invalid` (16/16), `color-scheme-valid` (22/22), `color-scheme-computed` (13/13) 3/3 PASS; `--smoke` 3/3 PASS |
 | Phase 665 | WPT `shape-outside-{path,shape}-{valid,invalid}` + `shape-function-invalid` | `src/js/shim/cssom.js` | `shape-outside-path-{invalid,valid}` 2/2 PASS; `shape-outside-shape-{invalid,valid}` 2/2 PASS; `shape-function-invalid` PASS; `--smoke` 3/3 PASS |
 | Phase 666 | WPT `{inset,rect,xywh}-function-valid` + `clip-path-valid` 收口 | `src/js/shim/cssom.js` | `{inset,rect,xywh}-function-valid` 3/3 PASS; `clip-path-valid` 35/54 -> 49/54; `--smoke` 3/3 PASS |
+| Phase 667 | WPT `clip-path-valid` 全量收口 (54/54) | `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json` | `clip-path-valid` 49/54 -> 54/54 PASS (基线由 FAIL 收紧为 PASS); `--smoke` 3/3 PASS |
