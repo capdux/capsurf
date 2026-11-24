@@ -47623,6 +47623,29 @@
           return mapped.join(" ");
         }).join(", "));
       }
+      for (const gKey of ["grid-auto-columns", "grid-auto-rows"]) {
+        const gRaw = (computedMap.get(gKey) || "").trim();
+        if (!gRaw || gRaw === "auto") continue;
+        const evalTrackTok = (tok) => {
+          const tl = tok.toLowerCase();
+          if (tl === "auto" || tl === "min-content" || tl === "max-content" || /^[+-]?(?:\d+\.?\d*|\.\d+)fr$/i.test(tl)) return tl;
+          const mm = /^(minmax|fit-content)\((.*)\)$/i.exec(tok);
+          if (mm) {
+            const fn = mm[1].toLowerCase();
+            const args = []; let c = "", d = 0;
+            for (let i = 0; i < mm[2].length; i++) {
+              const ch = mm[2][i];
+              if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+              if (d === 0 && ch === ",") { args.push(c.trim()); c = ""; } else c += ch;
+            }
+            if (c.trim()) args.push(c.trim());
+            return fn + "(" + args.map(evalTrackTok).join(", ") + ")";
+          }
+          const ev = evalLinLenPctTok(tok);
+          return /^-[\d.]+px$/.test(ev) ? "0px" : ev;
+        };
+        computedMap.set(gKey, splitCssTopLevelWhitespace(gRaw).map(evalTrackTok).join(" "));
+      }
       const curRaw = (computedMap.get("cursor") || "").trim();
       if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
         const cParts = [];

@@ -3278,3 +3278,5 @@
 - `isValidCalcSyntax` 此前在遇到 `sibling-index()` 空参数括号时因 `expectVal === true` 误判失败；放行零参数函数后修复 `shape-outside-valid-position.html` 全量通过，并补全 `window.js` `path(...)` 相对转绝对与 `shape(...)` 关键字百分比化。
 ### Phase 719 — `::scroll-button()` 伪元素与 `background-clip: border-area` 闭环
 - 在 `selector.js` 补齐 CSS Overflow 5 `::scroll-button(...)` 及其链式交互伪类，同时在 `cssom.js` 为 `background-clip` 与 `background` 简写补全 `border-area` / `border-area text` 支持，一次性将 3 项 WPT 推进至 `FAIL -> PASS` 并收紧基线。
+### Phase 720 — `grid-auto-columns` / `grid-auto-rows` 计算值 `calc()` 求值闭环
+- 在 `window.js` 中对 `grid-auto-columns` 与 `grid-auto-rows` 递归解析 `minmax(...)` / `fit-content(...)` 参数并调用 `evalLinLenPctTok` + 负值 `0px` 钳位，打通 `grid-auto-*` 9/9 全绿。

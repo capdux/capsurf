@@ -3996,3 +3996,6 @@
   - `src/js/shim/cssom.js`: 支持 `background-clip` `border-area` 与 `border-area text` / `text border-area` 规范化及 `background` 简写中的 `border-area`。
   - `test/wpt/wpt-expectations.json`: 将 `scroll-buttons-valid.html`, `background-clip-computed.html`, `background-clip-valid.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 720**:
+  - `src/js/shim/window.js`: 为 `grid-auto-columns` 与 `grid-auto-rows` 补全 `calc()`/`minmax()`/`fit-content()` 计算值长度求值与负值 `0px` 钳位。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
