@@ -1287,11 +1287,21 @@
       return true;
     }
     if (prop === "background-attachment" || prop === "background-clip" || prop === "background-origin") {
+      if (prop === "background-clip") {
+        const BC_SINGLE = new Set(["border-box", "padding-box", "content-box", "border-area", "text"]);
+        const layers = vLower.split(",");
+        for (let i = 0; i < layers.length; i++) {
+          const toks = splitCssTokens(layers[i].trim());
+          if (toks.length === 1) { if (!BC_SINGLE.has(toks[0])) return false; }
+          else if (toks.length === 2) {
+            if (!((toks[0] === "border-area" && toks[1] === "text") || (toks[0] === "text" && toks[1] === "border-area"))) return false;
+          } else return false;
+        }
+        return true;
+      }
       const allowed = prop === "background-attachment"
         ? new Set(["scroll", "fixed", "local"])
-        : (prop === "background-clip"
-          ? new Set(["border-box", "padding-box", "content-box", "text"])
-          : new Set(["border-box", "padding-box", "content-box"]));
+        : new Set(["border-box", "padding-box", "content-box"]);
       const layers = vLower.split(",");
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
@@ -3828,6 +3838,15 @@
       }
       return p.join(" ");
     }
+    if (key === "background-clip") {
+      return splitTopLevelComma(s.toLowerCase()).map((layer) => {
+        const p = splitCssTokens(layer.trim());
+        if (p.length === 2 && ((p[0] === "border-area" && p[1] === "text") || (p[0] === "text" && p[1] === "border-area"))) {
+          return "border-area text";
+        }
+        return p.join(" ");
+      }).join(", ");
+    }
     if (TWO_SIDE_PROPS.has(key)) {
       const parts = splitCssTokens(s);
       const isLenProp = !key.startsWith("overflow") && !key.startsWith("place-");
@@ -5265,6 +5284,9 @@
             if (boxCount === 0) { origin = tl; clip = tl; boxCount = 1; }
             else if (boxCount === 1) { clip = tl; boxCount = 2; }
             else return false;
+          } else if (tl === "border-area") {
+            if (boxCount >= 2) return false;
+            clip = "border-area"; boxCount = 2;
           } else if (ATT_KW.has(tl)) {
             if (seenAtt) return false;
             seenAtt = true; att = tl;

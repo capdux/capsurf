@@ -1208,7 +1208,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-clip-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-clip-invalid.html": {
@@ -1216,7 +1216,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-clip-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-color-computed.html": {
@@ -4837,7 +4837,7 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-buttons-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-computed.html": {

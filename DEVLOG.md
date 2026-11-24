@@ -3276,3 +3276,5 @@
 - `window.js` 解析样式表声明时会调用 `globalThis.__capsurf_expandShorthand`，此前 `cssom.js` 缺少 `background` 展开实现且 `window.js` 默认值表遗漏 `background-attachment: "scroll"`；补齐 `parseBackgroundLayers` + `expandCssShorthand("background")` 后一次性打通 `background-331/332/333/335/336.html` 全绿。
 ### Phase 718 — `css-shapes/parsing` 回归修复与 `path()`/`shape()`/`sibling-index()` 增强
 - `isValidCalcSyntax` 此前在遇到 `sibling-index()` 空参数括号时因 `expectVal === true` 误判失败；放行零参数函数后修复 `shape-outside-valid-position.html` 全量通过，并补全 `window.js` `path(...)` 相对转绝对与 `shape(...)` 关键字百分比化。
+### Phase 719 — `::scroll-button()` 伪元素与 `background-clip: border-area` 闭环
+- 在 `selector.js` 补齐 CSS Overflow 5 `::scroll-button(...)` 及其链式交互伪类，同时在 `cssom.js` 为 `background-clip` 与 `background` 简写补全 `border-area` / `border-area text` 支持，一次性将 3 项 WPT 推进至 `FAIL -> PASS` 并收紧基线。

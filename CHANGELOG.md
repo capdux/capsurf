@@ -3991,3 +3991,8 @@
   - `src/js/shim/cssom.js`: 修复 `isValidCalcSyntax` 对零参数 `sibling-index()`/`sibling-count()` 的解析拦截。
   - `src/js/shim/window.js`: `shape-outside` 计算值中 `evalTok` 接入 `evalSignCalls`、新增 `path(...)` 相对指令转绝对坐标、`shape(...)` 位置关键字转百分比。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 719**:
+  - `src/js/shim/selector.js`: 支持 `::scroll-button(up|down|left|right|block-start|block-end|inline-start|inline-end|*)` 及链式状态伪类。
+  - `src/js/shim/cssom.js`: 支持 `background-clip` `border-area` 与 `border-area text` / `text border-area` 规范化及 `background` 简写中的 `border-area`。
+  - `test/wpt/wpt-expectations.json`: 将 `scroll-buttons-valid.html`, `background-clip-computed.html`, `background-clip-valid.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

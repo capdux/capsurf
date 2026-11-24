@@ -28,7 +28,7 @@ const KNOWN_PSEUDO_ELEMENTS = new Set([
   "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
   "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
   "::highlight", "::search-text", "::view-transition", "::details-content",
-  "::column", "::scroll-marker"
+  "::column", "::scroll-marker", "::scroll-button"
 ]);
 
 function splitTopLevelSelectorList(str) {
@@ -164,6 +164,9 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
           pName === ":is" || pName === ":where"
         )) || (!isDouble && lastPseudoEl === "::search-text" && (
           pName === ":current" || pName === ":not"
+        )) || (!isDouble && lastPseudoEl === "::scroll-button" && (
+          pName === ":focus" || pName === ":disabled" || pName === ":enabled" ||
+          pName === ":hover" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within"
         ));
         if (!allowChain) return null;
       }
@@ -250,6 +253,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
             anbStr += " of " + sub;
           }
           out += pName + "(" + anbStr + ")";
+        } else if (pName === "::scroll-button") {
+          const sbArg = inner.toLowerCase();
+          const SB_ARGS = new Set(["*", "up", "down", "left", "right", "block-start", "block-end", "inline-start", "inline-end"]);
+          if (!SB_ARGS.has(sbArg)) return null;
+          out += "::scroll-button(" + sbArg + ")";
+          seenTerminalPseudoEl = true;
+          lastPseudoEl = "::scroll-button";
         } else {
           out += pName + "(" + inner + ")";
           if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
