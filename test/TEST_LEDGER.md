@@ -2149,3 +2149,7 @@
 ### Phase 617: `evalCssLengthExpr` 绝对物理单位 (`in`/`cm`/`mm`/`pc`/`q`) 全绿
 - **Filter `/css/css-text/tab-size/tab-size-computed-value-001` & `/css/css-text/word-spacing/word-spacing-computed-001`**: **PASS (11/11 + 12/12)**（`window.js` `evalCssLengthExpr` 抽离 `resolveUnitPx(num, unit)`，在 `simple` 与 `parsePrimary` 中统一支持 `px`/`%`/`em`/`rem`/`pt`/`pc`/`in`/`cm`/`mm`/`q`/`vw`/`vh`/`ch`/`lh` 换算）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 618: `getComputedStyle` Proxy `ownKeys` trap + `background-*` 初始值补全
+- **Filter `/css/css-logical/getComputedStyle-listing`**: **FAIL->PASS (30/30)**（`window.js` `getComputedStyle` Proxy 补齐 `ownKeys` 陷阱返回 `Reflect.ownKeys(target)` 与 `propList` 去重并集，使 `Reflect.ownKeys(cs)` 完整枚举所有标准与逻辑属性；同步补全 `textDecorDefs` 中 `background-{clip,origin,size,image,position-x,position-y,repeat}` 初始默认值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -2971,3 +2971,7 @@
 ### Phase 617: `evalCssLengthExpr` 绝对物理单位 (`in`/`cm`/`mm`/`pc`/`q`) 全绿
 - **核心修复 (`src/js/shim/window.js`)**：在 `evalCssLengthExpr` 内部抽离 `resolveUnitPx(num, unit)` 统一处理 `px`/`%`/`em`/`rem`/`pt`/`pc`/`in`/`cm`/`mm`/`q`/`vw`/`vh`/`ch`/`lh`，消除 `simple` 与 `parsePrimary` 重复逻辑并补齐绝对物理长度换算。
 - **WPT & Smoke 验收**：`tab-size-computed-value-001.html` (11/11) & `word-spacing-computed-001.html` (12/12) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 618: `getComputedStyle` Proxy `ownKeys` trap + `background-*` 初始值补全
+- **核心修复 (`src/js/shim/window.js`)**：`getComputedStyle` Proxy 补齐 `ownKeys` 陷阱（合并 `Reflect.ownKeys(target)` 与 `propList`），修复 `Reflect.ownKeys(cs)` 无法枚举 `STANDARD_COMPUTED_LONGHANDS` 的问题；`textDecorDefs` 补全 `background-{clip,origin,size,image,position-x,position-y,repeat}` 初始值。
+- **WPT & Smoke 验收**：`/css/css-logical/getComputedStyle-listing.html` FAIL->PASS (30/30)、`--smoke` 3/3 suites PASS。

@@ -7931,3 +7931,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 617（`src/js/shim/window.js`）：
   1. **`window.js`**：在 `evalCssLengthExpr` 中抽离 `resolveUnitPx(num, unit)` 统一支持 `in`/`cm`/`mm`/`pc`/`q` 等绝对物理长度单位换算（`96px/in`）。
   2. **全绿验证**：`tab-size-computed-value-001.html` **11/11 PASS**、`word-spacing-computed-001.html` **12/12 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 618（`src/js/shim/window.js`）：
+  1. **`window.js`**：为 `getComputedStyle` Proxy 补齐 `ownKeys` trap，并补全 `textDecorDefs` 中 `background-{clip,origin,size,image,position-x,position-y,repeat}` 初始值。
+  2. **全绿验证**：`/css/css-logical/getComputedStyle-listing.html` **FAIL->PASS (30/30)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`3faa2b30` 完成 `/css/css-logical/` 全量摸底（**54/58 PASS**）；`0b2d9f8e` 完成 `/css/css-values/calc-` 摸底（**27/71 PASS**）；已接力派发 `da739a3e`（`19720`, `/css/css-cascade/`）与 `363a0b3a`（`19710`, `/css/css-transforms/`）。

@@ -8715,7 +8715,14 @@ function installWindow(global) {
       ["break-before", "auto"],
       ["break-inside", "auto"],
       ["orphans", "2"],
-      ["widows", "2"]
+      ["widows", "2"],
+      ["background-clip", "border-box"],
+      ["background-origin", "padding-box"],
+      ["background-size", "auto"],
+      ["background-image", "none"],
+      ["background-position-x", "0%"],
+      ["background-position-y", "0%"],
+      ["background-repeat", "repeat"]
     ];
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {
@@ -9422,6 +9429,18 @@ function installWindow(global) {
           }
         }
         return undefined;
+      },
+      ownKeys: function (target) {
+        const base = Reflect.ownKeys(target);
+        const seen = new Set(base);
+        for (let i = 0; i < propList.length; i++) {
+          const p = propList[i];
+          if (!seen.has(p)) {
+            seen.add(p);
+            base.push(p);
+          }
+        }
+        return base;
       },
       preventExtensions: function () {
         return false;

@@ -3702,3 +3702,5 @@
 - **Phase 616** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `box-decoration-break`/`break-*`/`orphans`/`widows` 初始值与继承集；`/css/css-break/inheritance.html` 实现 12/12 全绿并收紧基线为 `PASS`。
 
 - **Phase 617** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `evalCssLengthExpr` 抽离 `resolveUnitPx(num, unit)` 支持 `in`/`cm`/`mm`/`pc`/`q` 绝对长度单位换算；`tab-size-computed-value-001` 与 `word-spacing-computed-001` 全绿。
+
+- **Phase 618** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `getComputedStyle` Proxy 补齐 `ownKeys` trap 枚举标准/逻辑属性，并补全 `background-*` 初始值；`/css/css-logical/getComputedStyle-listing.html` 实现 30/30 全绿。
