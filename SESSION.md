@@ -8113,3 +8113,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 681] `cssom.js` (`hwb()` `toFixed(10)` 消除 IEEE-754 舍入偏差 + `none` 通道剥离 `%` 与省略 `/ 1`): `color-computed-hwb` 46/56、`color-valid-hwb` 15/38 -> 28/38，`--smoke` 3/3 PASS。
 - [Phase 682] `cssom.js` (`expandCssShorthand` / `SHORTHAND_EXPAND_LONGHANDS` / `serializeExpandedShorthand` 补齐 `border` 与 `border-{top,right,bottom,left}` 展开及 `border-image-*` 重置): `/css/css-backgrounds/parsing/border-shorthand.html` 36/36 PASS，`--smoke` 3/3 PASS。
 - [Phase 683] `cssom.js` (`border-image` 接入 `SHORTHAND_EXPAND_LONGHANDS`、`serializeExpandedShorthand`、`isValidCssValue` 与 `expandCssShorthand` 严格校验/规范化): `/css/css-backgrounds/parsing/border-image*` 全套 18/18 PASS，`--smoke` 3/3 PASS。
+- [Phase 684] `cssom.js` (`isValidCssValue("background")` 拒绝非末层 `<color>` 与非紧跟 `<bg-position>` 的 `/ <bg-size>`): `/css/css-backgrounds/parsing/background-invalid.html` 2/2 PASS，`--smoke` 3/3 PASS。

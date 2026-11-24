@@ -3863,3 +3863,6 @@
 - **Phase 683**:
   - `src/js/shim/cssom.js`: `border-image` 补齐 `SHORTHAND_EXPAND_LONGHANDS`、`serializeExpandedShorthand` 最小化序列化、`isValidCssValue` 校验及 `expandCssShorthand` 严格解析与子属性规范化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 684**:
+  - `src/js/shim/cssom.js`: `isValidCssValue("background")` 补充多层逗号分隔检验，拒绝非末层 `<bg-layer>` 中的 `<color>` 及 `/` 左侧非 `<bg-position>` 的 `/ <bg-size>`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

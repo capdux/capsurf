@@ -3206,3 +3206,5 @@
 - 在 `cssom.js` 中补全 `border` 与四向 `border-{top,right,bottom,left}` 的 `expandCssShorthand` 展开（`border` 同步重置 `border-image-{source,slice,width,outset,repeat}`）与 `serializeExpandedShorthand` 序列化，`border-shorthand.html` 全数 36/36 子测试 PASS。
 ### Phase 683 — `border-image` 简写校验、展开与序列化闭环
 - 为 `border-image` 补齐 `SHORTHAND_EXPAND_LONGHANDS` 映射、`serializeExpandedShorthand` 最小化序列化（省略默认 `width` `1` 时保留 ` / / outset`）、`isValidCssValue` 校验及 `expandCssShorthand` 子属性校验/规范化，`border-image*` 18/18 用例全通。
+### Phase 684 — `background` 简写多层与 `/ <bg-size>` 语法校验修复
+- 在 `cssom.js` `isValidCssValue("background")` 中新增多层 `<bg-layer>` `<color>` 禁令与 `/ <bg-size>` 前置 `<bg-position>` 校验，修复 `/css/css-backgrounds/parsing/background-invalid.html` 全部 2/2 用例。

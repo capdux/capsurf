@@ -2855,6 +2855,45 @@
     if (prop === "border-image") {
       return !!expandCssShorthand("border-image", trimmed);
     }
+    if (prop === "background") {
+      const layers = splitTopLevelComma(trimmed);
+      if (layers.length === 0) return false;
+      const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
+      const isPosTok = (t) => POS_KW.has(t.toLowerCase()) || isValidLenPct(t, true);
+      for (let li = 0; li < layers.length; li++) {
+        const layer = layers[li].trim();
+        if (!layer) return false;
+        const slashes = [];
+        let cur = "", d = 0, q = "";
+        for (let ci = 0; ci < layer.length; ci++) {
+          const ch = layer[ci];
+          if (q) { cur += ch; if (ch === q && layer[ci - 1] !== "\\") q = ""; continue; }
+          if (ch === "\"" || ch === "'") { q = ch; cur += ch; continue; }
+          if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        slashes.push(cur.trim());
+        if (slashes.length > 2) return false;
+        if (slashes.length === 2) {
+          const leftToks = splitCssTokens(slashes[0]);
+          const rightToks = splitCssTokens(slashes[1]);
+          if (leftToks.length === 0 || rightToks.length === 0) return false;
+          if (!isPosTok(leftToks[leftToks.length - 1])) return false;
+          const sz0 = rightToks[0].toLowerCase();
+          if (sz0 !== "cover" && sz0 !== "contain" && sz0 !== "auto" && !isValidLenPct(rightToks[0], false)) return false;
+        }
+        if (li < layers.length - 1) {
+          const allToks = splitCssTokens(layer);
+          for (let ti = 0; ti < allToks.length; ti++) {
+            const tl = allToks[ti].toLowerCase();
+            if (tl === "none" || tl === "auto" || tl === "transparent" && false) continue;
+            if (isValidColor(allToks[ti])) return false;
+          }
+        }
+      }
+      return true;
+    }
     if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
       const toks = splitCssTokens(trimmed);
       if (toks.length === 0) return false;
