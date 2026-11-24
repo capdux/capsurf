@@ -6442,7 +6442,7 @@ function installWindow(global) {
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
     "border-collapse", "border-spacing", "caption-side", "empty-cells",
-    "image-orientation", "image-rendering", "image-resolution", "accent-color",
+    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme",
     "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     "list-style-image", "list-style-position", "list-style-type",
     "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -9548,6 +9548,10 @@ function installWindow(global) {
     if (!vtGroup || vtGroup === "initial" || vtGroup === "revert" || vtGroup === "revert-layer") {
       computedMap.set("view-transition-group", "normal");
     }
+    const csVal = computedMap.get("color-scheme");
+    if (!csVal || csVal === "initial" || csVal === "revert" || csVal === "revert-layer") {
+      computedMap.set("color-scheme", "normal");
+    }
     if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
       computedMap.set("hyphenate-limit-chars", "auto");
     } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -9992,7 +9996,7 @@ function installWindow(global) {
       if (lower === "text-orientation") return "mixed";
       if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
       if (lower === "image-orientation") return "from-image";
-      if (lower === "content") return "normal";
+      if (lower === "content" || lower === "color-scheme") return "normal";
       if (lower === "overflow-anchor") return "auto";
       if (lower === "scroll-snap-stop") return "normal";
       if (lower === "scroll-snap-type") return "none";

@@ -6622,6 +6622,24 @@
         const t0 = toks[0].toLowerCase();
         return t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
       }
+      if (prop === "color-scheme") {
+        if (trimmed.includes(",")) return false;
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0) return false;
+        if (toks.length === 1 && toks[0].toLowerCase() === "normal") return true;
+        const BAD_KW = new Set(["normal", "inherit", "initial", "unset", "revert", "revert-layer", "default"]);
+        let onlyCount = 0;
+        let start = 0, end = toks.length;
+        if (toks[0].toLowerCase() === "only") { onlyCount++; start = 1; }
+        else if (toks[toks.length - 1].toLowerCase() === "only") { onlyCount++; end = toks.length - 1; }
+        if (start >= end) return false;
+        for (let i = start; i < end; i++) {
+          const tl = toks[i].toLowerCase();
+          if (tl === "only" || BAD_KW.has(tl)) return false;
+          if (!/^(?:--|[a-z_-]|[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(toks[i])) return false;
+        }
+        return onlyCount <= 1;
+      }
       if (prop === "image-resolution") {
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > 3) return false;
@@ -7341,6 +7359,17 @@
           }
         }
         return parts.join(" ");
+      }
+      if (key === "color-scheme") {
+        const toks = splitCssTokens(s.trim());
+        if (toks.length === 1 && toks[0].toLowerCase() === "normal") return "normal";
+        if (toks.length > 1 && toks[0].toLowerCase() === "only") {
+          return toks.slice(1).map((t) => (t.toLowerCase() === "light" || t.toLowerCase() === "dark") ? t.toLowerCase() : t).concat("only").join(" ");
+        }
+        if (toks.length > 1 && toks[toks.length - 1].toLowerCase() === "only") {
+          return toks.slice(0, -1).map((t) => (t.toLowerCase() === "light" || t.toLowerCase() === "dark") ? t.toLowerCase() : t).concat("only").join(" ");
+        }
+        return toks.map((t) => (t.toLowerCase() === "light" || t.toLowerCase() === "dark") ? t.toLowerCase() : t).join(" ");
       }
       if (key === "mask-position") {
         return s.split(",").map((l) => normalizePositionLayer(l.trim(), false)).join(", ");
@@ -42674,7 +42703,7 @@
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
-      "image-orientation", "image-rendering", "image-resolution", "accent-color",
+      "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme",
       "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
       "list-style-image", "list-style-position", "list-style-type",
       "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -45780,6 +45809,10 @@
       if (!vtGroup || vtGroup === "initial" || vtGroup === "revert" || vtGroup === "revert-layer") {
         computedMap.set("view-transition-group", "normal");
       }
+      const csVal = computedMap.get("color-scheme");
+      if (!csVal || csVal === "initial" || csVal === "revert" || csVal === "revert-layer") {
+        computedMap.set("color-scheme", "normal");
+      }
       if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
         computedMap.set("hyphenate-limit-chars", "auto");
       } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -46224,7 +46257,7 @@
         if (lower === "text-orientation") return "mixed";
         if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
         if (lower === "image-orientation") return "from-image";
-        if (lower === "content") return "normal";
+        if (lower === "content" || lower === "color-scheme") return "normal";
         if (lower === "overflow-anchor") return "auto";
         if (lower === "scroll-snap-stop") return "normal";
         if (lower === "scroll-snap-type") return "none";

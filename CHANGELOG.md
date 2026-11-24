@@ -3795,3 +3795,7 @@
 - **Phase 663**:
   - `src/js/shim/cssom.js`: `canonicalizeCalcToken` 保留 `0deg`；`shape-outside` 复用 `clip-path` 的 `isValidShape`（禁用 `path()`），提升 `isValidCssPositionTokens` 消除 TDZ，补齐 `circle`/`ellipse`/`inset`/`xywh`/`rect` 逗号检查与 `rect`/`xywh` `round` 圆角校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 664**:
+  - `src/js/shim/cssom.js`: `isValidCssValue("color-scheme")` 校验 `normal` / `[<custom-ident>]+ && only?`（拒绝逗号、`default`、CSS 全局关键字混用与中置/重复 `only`）；`normalizeCssSpecifiedValue("color-scheme")` 将前置 `only` 规范化至末尾。
+  - `src/js/shim/window.js`: 将 `color-scheme` 加入 `INHERITED_CSS_PROPS`，并在计算样式与 `getPropertyValue` 兜底中默认/回退为 `"normal"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

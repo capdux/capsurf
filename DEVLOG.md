@@ -3153,3 +3153,6 @@
 ### Phase 663 — `calc(0deg + 100%)` 与 `shape-outside` / `shape-functions` 校验收口
 - `canonicalizeCalcToken` 对 `deg` 单位保留 `0deg`，使 `calc(0deg + 100%)` 规范化为 `calc(100% + 0deg)`。
 - `shape-outside` 统一复用 `clip-path` 的 `isValidShape` 验证管线（禁用 `path()`），同时提取 `isValidRoundRadii` 统一校验 `inset`/`xywh`/`rect` 的 `round` 圆角参数并禁止函数内多余逗号；将 `isValidCssPositionTokens` 提升至调用点之前消除 TDZ `ReferenceError`。
+### Phase 664 — `color-scheme` 解析校验、规范化与计算值收口
+- 实现 `color-scheme` 的完整语法校验（`normal | [ light | dark | <custom-ident> ]+ && only?`）与规范化（将前置 `only` 移至末尾，规范化 `light`/`dark`/`normal` 大小写）。
+- 将 `color-scheme` 纳入继承属性集 `INHERITED_CSS_PROPS`，并在 `getComputedStyle` 中将 `initial`/`revert`/`revert-layer`/未设置值统一解析为 `"normal"`。
