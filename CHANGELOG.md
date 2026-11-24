@@ -3644,3 +3644,5 @@
 - **Phase 588** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 10 个 `grid-*` 计算期默认初始值；`/css/css-grid/inheritance.html` 达成 20/20 全绿。
 
 - **Phase 589** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 8 个 `animation-*` 与 4 个 `transition-*` 计算期默认初始值；`/css/css-animations/inheritance.html` 与 `/css/css-transitions/inheritance.html` 全绿。
+
+- **Phase 590** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 `appearance`, `cursor`, `outline-{offset,style,width}`, `resize`, `user-select` 默认初始值；`/css/css-ui/inheritance.html` 由 10/28 跃升至 17/28 PASS。

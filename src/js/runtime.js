@@ -43730,7 +43730,14 @@
         ["transition-delay", "0s"],
         ["transition-duration", "0s"],
         ["transition-property", "all"],
-        ["transition-timing-function", "ease"]
+        ["transition-timing-function", "ease"],
+        ["appearance", "none"],
+        ["cursor", "auto"],
+        ["outline-offset", "0px"],
+        ["outline-style", "none"],
+        ["outline-width", "3px"],
+        ["resize", "none"],
+        ["user-select", "auto"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {

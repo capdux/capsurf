@@ -2855,3 +2855,7 @@
 ### Phase 589: `/css/css-animations/inheritance` & `/css/css-transitions/inheritance` 全绿
 - **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 中补齐 8 个 `animation-*`（`delay/direction/duration/fill-mode/iteration-count/name/play-state/timing-function`）与 4 个 `transition-*`（`delay/duration/property/timing-function`）默认初始值。
 - **WPT & Smoke 验收**：`/css/css-animations/inheritance.html` 16/16 PASS、`/css/css-transitions/inheritance.html` 8/8 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 590: `/css/css-ui/inheritance` Subtest 跃升 (`10/28 -> 17/28`)
+- **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 中补齐 7 个 CSS UI 默认初始值（`appearance: "none"`, `cursor: "auto"`, `outline-offset: "0px"`, `outline-style: "none"`, `outline-width: "3px"`, `resize: "none"`, `user-select: "auto"`）。
+- **WPT & Smoke 验收**：`/css/css-ui/inheritance.html` 17/28 PASS、`--smoke` 3/3 suites PASS；并行确认 `/css/css-position/inheritance` 12/12 PASS 与 `/css/css-contain/inheritance` 2/2 PASS。

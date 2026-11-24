@@ -1953,3 +1953,12 @@
 - **子智能体只读摸底记录**：
   - `/css/css-color/inheritance` (`b487`): **PASS (4/4)**
   - `/css/css-ui/inheritance` (`b487`): `0 PASS / 1 FAIL`（10/28 subtests PASS；缺 `appearance`, `cursor`, `outline-{offset,style,width}`, `resize`, `user-select`, `caret-shape`, `nav-{up,down,left,right}` 初始值/支持与 `caret-color: currentColor`）
+
+### Phase 590: `/css/css-ui/inheritance` Subtest 跃升 (`10/28 -> 17/28`) & Position/Contain 摸底全绿
+- **Filter `/css/css-ui/inheritance`**: `17/28 PASS`（`10/28 -> 17/28`，`window.js` `textDecorDefs` 补全 `appearance`, `cursor`, `outline-{offset,style,width}`, `resize`, `user-select` 7 个初始默认值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-position/inheritance` (`b489`): **PASS (12/12)**
+  - `/css/css-contain/inheritance` (`b490`): **PASS (2/2)**
+  - `/css/css-overflow/inheritance` (`b490`): `0 PASS / 1 FAIL`（7/18 subtests PASS；缺 `overflow-block`, `overflow-inline`, `text-overflow` 默认初始值及 `scrollbar-gutter`, `block-ellipsis`, `continue`, `max-lines`）
+  - `/css/css-backgrounds/inheritance` (`b489`): `TIMEOUT`（`inheritance.sub.html`）
