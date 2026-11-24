@@ -7914,3 +7914,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` / `cssom.js`**：`STANDARD_COMPUTED_LONGHANDS`、`textDecorDefs` 与 `getShorthandComputed` 补全 `container` / `container-name` / `container-type`；`container` 序列化省略 `/ normal`。
   2. **验证**：`container-type-computed.html` **5/5 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-conditional/` 38/135 PASS；`/css/css-box/` 31/33 PASS（0 FAIL）。
+
+### 2026-11-24 Phase 615 (`container-computed` 14/14 全绿)
+- **[Agent]**: 完成 Phase 615（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` / `window.js`**：实现 `container` 简写展开（`container-name` / `container-type`）及非继承属性 `unset` 计算值还原。
+  2. **全绿验证**：`container-computed.html` **14/14 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。

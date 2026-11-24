@@ -7879,6 +7879,12 @@
         }
         return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
       }
+      if (key === "container") {
+        const slash = normV.split("/");
+        const cn = slash[0].trim() || "none";
+        const ct = slash.length === 2 ? (slash[1].trim() || "normal") : "normal";
+        return [["container-name", cn], ["container-type", ct]];
+      }
       return null;
     }
     global.__capsurf_expandShorthand = expandCssShorthand;
@@ -7908,6 +7914,7 @@
       gap: ["row-gap", "column-gap"],
       "grid-gap": ["row-gap", "column-gap"],
       "contain-intrinsic-size": ["contain-intrinsic-width", "contain-intrinsic-height"],
+      container: ["container-name", "container-type"],
       "scroll-margin": ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"],
       "scroll-margin-block": ["scroll-margin-block-start", "scroll-margin-block-end"],
       "scroll-margin-inline": ["scroll-margin-inline-start", "scroll-margin-inline-end"],
@@ -44065,7 +44072,7 @@
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];
         const cur = (computedMap.get(dk) || "").trim().toLowerCase();
-        if (!cur || cur === "initial" || cur === "revert" || cur === "revert-layer") {
+        if (!cur || cur === "initial" || (!INHERITED_CSS_PROPS.has(dk) && cur === "unset") || cur === "revert" || cur === "revert-layer") {
           computedMap.set(dk, dv);
         }
       }

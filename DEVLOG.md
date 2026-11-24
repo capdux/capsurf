@@ -2956,3 +2956,7 @@
 ### Phase 614: `container-type-computed` 全绿
 - **核心修复 (`window.js`, `cssom.js`)**：`STANDARD_COMPUTED_LONGHANDS`、`textDecorDefs`、`getShorthandComputed` 补全 `container` / `container-name` / `container-type`，`cssom.js` 省略 `container` 末尾 `/ normal`。
 - **WPT & Smoke 验收**：`container-type-computed.html` 5/5 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 615: `container-computed` (14/14) 全绿
+- **核心修复 (`cssom.js`, `window.js`)**：`SHORTHAND_EXPAND_LONGHANDS` 与 `expandCssShorthand` 新增 `container` 展开；`textDecorDefs` 循环支持非继承属性 `unset` 还原为初始值。
+- **WPT & Smoke 验收**：`container-computed.html` 14/14 PASS、`--smoke` 3/3 suites PASS。

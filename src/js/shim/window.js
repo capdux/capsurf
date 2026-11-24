@@ -8726,7 +8726,7 @@ function installWindow(global) {
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];
       const cur = (computedMap.get(dk) || "").trim().toLowerCase();
-      if (!cur || cur === "initial" || cur === "revert" || cur === "revert-layer") {
+      if (!cur || cur === "initial" || (!INHERITED_CSS_PROPS.has(dk) && cur === "unset") || cur === "revert" || cur === "revert-layer") {
         computedMap.set(dk, dv);
       }
     }

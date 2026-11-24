@@ -2137,3 +2137,7 @@
 - **子智能体只读摸底记录**：
   - `/css/css-conditional/` (`b521`, 135 files): `38 PASS / 93 FAIL / 4 TIMEOUT`
   - `/css/css-box/` (`b523`, 33 files): `31 PASS / 0 FAIL / 2 TIMEOUT`
+
+### Phase 615: `container-computed` (14/14) 全绿
+- **Filter `/css/css-conditional/container-queries/container-computed`**: **PASS (14/14)**（`cssom.js` `SHORTHAND_EXPAND_LONGHANDS` 与 `expandCssShorthand` 补充 `container` 简写展开至 `container-name` / `container-type`；`window.js` `textDecorDefs` 循环对非继承属性补充 `unset` 还原）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
