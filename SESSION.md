@@ -7602,3 +7602,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **全绿验证与并行摸底**：
      - `object-position-{valid,invalid,computed}.html`: **3/3 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 子智能体完成 `/css/css-position/`（50/117 PASS）与 `/css/css-grid/`（`1/3` 74/282、`2/3` 58/282 PASS）全目录摸底。
+
+### 2026-11-24 Phase 565 (`gradient-position` 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 565（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`gradient-position` 指定值与计算值全闭环 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js`：提取 `isValidCssPositionTokens(toks)` 复用校验 `object-position` 与 `(radial|conic)-gradient` 的 `at <position>`，并在 `normalizeCssSpecifiedValue` 中将 `at <pos>` 规范为水平边前置（`bottom 10% right 20% -> right 20% bottom 10%`、`center left -> left center`、`0 -> 0px`）。
+     - `window.js`：`evalGradientComputed` 提取 `resolveGradientAtPos(atPos)` 公共函数，统一对 `radial-gradient` 与 `conic-gradient` 的 `at <pos>` 做 1/2/4 令牌解析并省略默认的 `at 50% 50%`。
+  2. **全绿验证**：`gradient-position-{valid,invalid,computed}.html` **3/3 PASS (100% ALL GREEN)**、`object-position-*` **3/3 PASS**、`scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

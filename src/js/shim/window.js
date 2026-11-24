@@ -7074,14 +7074,68 @@ function installWindow(global) {
           }
           continue;
         }
+        const resolveGradientAtPos = (atPos) => {
+          const normAxis = (edge, off) => {
+            const el = edge.toLowerCase();
+            if (!off) {
+              if (el === "left" || el === "top") return "0%";
+              if (el === "center") return "50%";
+              if (el === "right" || el === "bottom") return "100%";
+              if (el.endsWith("%")) return el;
+              const px = evalCssLengthExpr(el, null, fontSize);
+              return px !== null ? formatCssPx(px) : el;
+            }
+            const ol = off.toLowerCase();
+            if (ol.endsWith("%")) {
+              const n = parseFloat(ol);
+              return (el === "right" || el === "bottom") ? String(Number((100 - n).toFixed(6))) + "%" : ol;
+            }
+            const px = evalCssLengthExpr(ol, null, fontSize);
+            if (px !== null) {
+              if (el === "right" || el === "bottom") return px === 0 ? "100%" : ("calc(100% - " + formatCssPx(px) + ")");
+              return formatCssPx(px);
+            }
+            return ol;
+          };
+          let gx = "50%", gy = "50%";
+          if (atPos.length === 1) {
+            const t0 = atPos[0].toLowerCase();
+            if (t0 === "top" || t0 === "bottom") { gx = "50%"; gy = normAxis(t0, null); }
+            else { gx = normAxis(t0, null); gy = "50%"; }
+          } else if (atPos.length === 2) {
+            const a = atPos[0].toLowerCase(), b = atPos[1].toLowerCase();
+            if (a === "top" || a === "bottom" || (a === "center" && (b === "left" || b === "right"))) {
+              gy = normAxis(atPos[0], null); gx = normAxis(atPos[1], null);
+            } else {
+              gx = normAxis(atPos[0], null); gy = normAxis(atPos[1], null);
+            }
+          } else if (atPos.length === 4) {
+            const e0 = atPos[0].toLowerCase();
+            if (e0 === "left" || e0 === "right") {
+              gx = normAxis(atPos[0], atPos[1]); gy = normAxis(atPos[2], atPos[3]);
+            } else {
+              gy = normAxis(atPos[0], atPos[1]); gx = normAxis(atPos[2], atPos[3]);
+            }
+          }
+          return [gx, gy];
+        };
         if (ai === 0 && fn === "conic-gradient" && (toks[0].toLowerCase() === "from" || toks[0].toLowerCase() === "at")) {
           const cOut = [];
+          let inAt = false, atPos = [];
           for (let ti = 0; ti < toks.length; ti++) {
             const tl = toks[ti].toLowerCase();
-            if (tl === "from" || tl === "at") { cOut.push(tl); continue; }
+            if (tl === "at") { inAt = true; continue; }
+            if (inAt) { atPos.push(evalStopPos(toks[ti], false)); continue; }
+            if (tl === "from") { cOut.push(tl); continue; }
             cOut.push(evalStopPos(toks[ti], false));
           }
-          outArgs.push(cOut.join(" "));
+          if (inAt && atPos.length >= 1) {
+            const resolved = resolveGradientAtPos(atPos);
+            if (resolved[0] !== "50%" || resolved[1] !== "50%") {
+              cOut.push("at", resolved[0], resolved[1]);
+            }
+          }
+          if (cOut.length > 0) outArgs.push(cOut.join(" "));
           continue;
         }
         if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || /^(?:circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)$/i.test(toks[0]))) {
@@ -7089,13 +7143,18 @@ function installWindow(global) {
           let inAt = false, atPos = [];
           for (let ti = 0; ti < toks.length; ti++) {
             const tl = toks[ti].toLowerCase();
-            if (tl === "at") { inAt = true; rOut.push("at"); continue; }
+            if (tl === "at") { inAt = true; continue; }
             if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
             if (inAt) atPos.push(evalStopPos(toks[ti], false));
             else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
           }
-          if (inAt && atPos.length === 1) atPos.push("50%");
-          outArgs.push(rOut.concat(atPos).join(" "));
+          if (inAt && atPos.length >= 1) {
+            const resolved = resolveGradientAtPos(atPos);
+            if (resolved[0] !== "50%" || resolved[1] !== "50%") {
+              rOut.push("at", resolved[0], resolved[1]);
+            }
+          }
+          if (rOut.length > 0) outArgs.push(rOut.join(" "));
           continue;
         }
         if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
@@ -8356,6 +8415,8 @@ function installWindow(global) {
     if (bgImgRaw && /^image\(/i.test(bgImgRaw)) {
       const im = /^image\(\s*(.*)\s*\)$/i.exec(bgImgRaw);
       if (im && im[1]) computedMap.set("background-image", "image(" + normCol(im[1].trim()) + ")");
+    } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
+      computedMap.set("background-image", evalGradientComputed(bgImgRaw));
     }
     const curRaw = (computedMap.get("cursor") || "").trim();
     if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {

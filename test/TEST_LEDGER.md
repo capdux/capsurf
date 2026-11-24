@@ -1711,3 +1711,10 @@
 - **子智能体只读摸底记录**：
   - `/css/css-position/`: `117` files (`50 PASS / 55 FAIL / 11 TIMEOUT / 1 ERROR`)
   - `/css/css-grid/` (`1/3`, `2/3`): `74/282`, `58/282` PASS
+
+### Phase 565 `gradient-position` 全绿闭环 & WPT-B384 摸底 (bin_dev Phase 565, 2026-11-24)
+- **Filter `/css/css-images/parsing/gradient-position`**: **3/3 PASS (100% ALL GREEN)**（`gradient-position-invalid.html`, `gradient-position-valid.html`, `gradient-position-computed.html` 全绿）；`cssom.js` 提取 `isValidCssPositionTokens` 校验 `(radial|conic)-gradient` 的 `at <position>` 并规范化指定值序，`window.js` 提取 `resolveGradientAtPos` 统一解析 `radial-gradient`/`conic-gradient` 计算期 `at <pos>` 并省略默认 `at 50% 50%`。
+- **Filter `/css/css-images/parsing/object-position`**: **3/3 PASS** 保持全绿。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-grid/` (`3/3`): `57/278` PASS

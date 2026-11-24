@@ -3594,3 +3594,5 @@
 - **Phase 563** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `GEMINI.md`, `test/TEST_LEDGER.md`): 实现 `image-orientation`（`from-image | none` 及计算期默认值）、`image-resolution`（`[from-image || <resolution>] && snap?`）、`object-fit` 双值（`[contain|cover] || scale-down`）与 `image(<color>)` 校验及计算期颜色归一化；并在 `GEMINI.md` 11.9 节固化 `node -e` 0.1s 预检与大文件多行上下文替换铁律。
 
 - **Phase 564** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `object-position` 单值补全 `center`、4 值水平优先规范序及计算期 1/2/4 令牌 `%`/`px`/`calc(100% - px)` 解析；WPT `object-position-{valid,invalid,computed}.html` 3/3 100% 全绿通过。
+
+- **Phase 565** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 提取 `isValidCssPositionTokens` 与 `resolveGradientAtPos` 公共逻辑，补全 `(radial|conic)-gradient` 的 `at <position>` 文法校验、规范序及计算期默认 `at 50% 50%` 省略；WPT `gradient-position-{valid,invalid,computed}.html` 3/3 全绿，`object-position-*` 3/3 保持全绿。

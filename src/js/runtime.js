@@ -4945,29 +4945,18 @@
         if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
         return isValidLenPct(t, false);
       }
-      if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
-        const toks = splitCssTokens(vLower);
+      const isValidCssPositionTokens = (toks) => {
         const HX = new Set(["left", "center", "right"]);
         const VY = new Set(["top", "center", "bottom"]);
         const is2Pos = (a, b) => {
-          if (HX.has(a) && VY.has(b)) return !(a === "center" && b === "center") || true;
+          if (HX.has(a) && VY.has(b)) return true;
           if (VY.has(a) && HX.has(b)) return true;
           if (isValidLenPct(a, true) && (VY.has(b) || isValidLenPct(b, true))) return true;
           if (HX.has(a) && isValidLenPct(b, true)) return true;
           return false;
         };
-        if (toks.length === 1) {
-          return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
-        }
+        if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
         if (toks.length === 2) return is2Pos(toks[0], toks[1]);
-        if (prop === "transform-origin") {
-          if (toks.length === 3 && is2Pos(toks[0], toks[1])) {
-            const z = toks[2];
-            if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
-            return isValidLenPct(z, true);
-          }
-          return false;
-        }
         if (toks.length === 4) {
           const EX = new Set(["left", "right"]);
           const EY = new Set(["top", "bottom"]);
@@ -4975,6 +4964,15 @@
           if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
         }
         return false;
+      };
+      if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
+        const toks = splitCssTokens(vLower);
+        if (prop === "transform-origin" && toks.length === 3) {
+          const z = toks[2];
+          if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
+          return isValidCssPositionTokens(toks.slice(0, 2)) && isValidLenPct(z, true);
+        }
+        return isValidCssPositionTokens(toks);
       }
       if (prop === "background-size") {
         const layers = vLower.split(",");
@@ -5952,6 +5950,20 @@
         const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
         return !!(im && im[1] && isValidColor(im[1]));
       }
+      if ((prop === "background-image" || prop === "list-style-image") && /(?:radial|conic)-gradient\(/i.test(trimmed)) {
+        const gm = /^(?:repeating-)?(radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(trimmed);
+        if (gm) {
+          const args = splitTopLevelComma(gm[2]);
+          if (args.length >= 2) {
+            const toks0 = splitCssTokens(args[0].toLowerCase());
+            const atIdx = toks0.indexOf("at");
+            if (atIdx !== -1) {
+              const posToks = toks0.slice(atIdx + 1);
+              if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+            }
+          }
+        }
+      }
       if (prop === "scroll-initial-target") {
         return vLower === "none" || vLower === "nearest";
       }
@@ -6928,6 +6940,31 @@
           else c = normBorderSpecColor(t);
         }
         return [w, st, c].filter(Boolean).join(" ");
+      }
+      if (key === "background-image" || key === "list-style-image") {
+        const gm = /^((?:repeating-)?(?:radial|conic)-gradient)\(\s*(.*)\s*\)$/i.exec(s);
+        if (gm) {
+          const args = splitTopLevelComma(gm[2]);
+          if (args.length >= 2) {
+            const toks0 = splitCssTokens(args[0]);
+            const atIdx = toks0.findIndex((t) => t.toLowerCase() === "at");
+            if (atIdx !== -1 && atIdx + 1 < toks0.length) {
+              const pos = toks0.slice(atIdx + 1).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+              let normPos = pos;
+              if (pos.length === 2) {
+                const a = pos[0].toLowerCase(), b = pos[1].toLowerCase();
+                if (a === "top" || a === "bottom" || (a === "center" && (b === "left" || b === "right"))) {
+                  normPos = [pos[1], pos[0]];
+                }
+              } else if (pos.length === 4) {
+                const a = pos[0].toLowerCase();
+                if (a === "top" || a === "bottom") normPos = [pos[2], pos[3], pos[0], pos[1]];
+              }
+              args[0] = toks0.slice(0, atIdx + 1).concat(normPos).join(" ");
+              return gm[1].toLowerCase() + "(" + args.join(", ") + ")";
+            }
+          }
+        }
       }
       if (key === "text-decoration-line") {
         const p = splitCssTokens(s.toLowerCase());
@@ -41752,14 +41789,68 @@
             }
             continue;
           }
+          const resolveGradientAtPos = (atPos) => {
+            const normAxis = (edge, off) => {
+              const el = edge.toLowerCase();
+              if (!off) {
+                if (el === "left" || el === "top") return "0%";
+                if (el === "center") return "50%";
+                if (el === "right" || el === "bottom") return "100%";
+                if (el.endsWith("%")) return el;
+                const px = evalCssLengthExpr(el, null, fontSize);
+                return px !== null ? formatCssPx(px) : el;
+              }
+              const ol = off.toLowerCase();
+              if (ol.endsWith("%")) {
+                const n = parseFloat(ol);
+                return (el === "right" || el === "bottom") ? String(Number((100 - n).toFixed(6))) + "%" : ol;
+              }
+              const px = evalCssLengthExpr(ol, null, fontSize);
+              if (px !== null) {
+                if (el === "right" || el === "bottom") return px === 0 ? "100%" : ("calc(100% - " + formatCssPx(px) + ")");
+                return formatCssPx(px);
+              }
+              return ol;
+            };
+            let gx = "50%", gy = "50%";
+            if (atPos.length === 1) {
+              const t0 = atPos[0].toLowerCase();
+              if (t0 === "top" || t0 === "bottom") { gx = "50%"; gy = normAxis(t0, null); }
+              else { gx = normAxis(t0, null); gy = "50%"; }
+            } else if (atPos.length === 2) {
+              const a = atPos[0].toLowerCase(), b = atPos[1].toLowerCase();
+              if (a === "top" || a === "bottom" || (a === "center" && (b === "left" || b === "right"))) {
+                gy = normAxis(atPos[0], null); gx = normAxis(atPos[1], null);
+              } else {
+                gx = normAxis(atPos[0], null); gy = normAxis(atPos[1], null);
+              }
+            } else if (atPos.length === 4) {
+              const e0 = atPos[0].toLowerCase();
+              if (e0 === "left" || e0 === "right") {
+                gx = normAxis(atPos[0], atPos[1]); gy = normAxis(atPos[2], atPos[3]);
+              } else {
+                gy = normAxis(atPos[0], atPos[1]); gx = normAxis(atPos[2], atPos[3]);
+              }
+            }
+            return [gx, gy];
+          };
           if (ai === 0 && fn === "conic-gradient" && (toks[0].toLowerCase() === "from" || toks[0].toLowerCase() === "at")) {
             const cOut = [];
+            let inAt = false, atPos = [];
             for (let ti = 0; ti < toks.length; ti++) {
               const tl = toks[ti].toLowerCase();
-              if (tl === "from" || tl === "at") { cOut.push(tl); continue; }
+              if (tl === "at") { inAt = true; continue; }
+              if (inAt) { atPos.push(evalStopPos(toks[ti], false)); continue; }
+              if (tl === "from") { cOut.push(tl); continue; }
               cOut.push(evalStopPos(toks[ti], false));
             }
-            outArgs.push(cOut.join(" "));
+            if (inAt && atPos.length >= 1) {
+              const resolved = resolveGradientAtPos(atPos);
+              if (resolved[0] !== "50%" || resolved[1] !== "50%") {
+                cOut.push("at", resolved[0], resolved[1]);
+              }
+            }
+            if (cOut.length > 0) outArgs.push(cOut.join(" "));
             continue;
           }
           if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || /^(?:circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)$/i.test(toks[0]))) {
@@ -41767,13 +41858,18 @@
             let inAt = false, atPos = [];
             for (let ti = 0; ti < toks.length; ti++) {
               const tl = toks[ti].toLowerCase();
-              if (tl === "at") { inAt = true; rOut.push("at"); continue; }
+              if (tl === "at") { inAt = true; continue; }
               if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
               if (inAt) atPos.push(evalStopPos(toks[ti], false));
               else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
             }
-            if (inAt && atPos.length === 1) atPos.push("50%");
-            outArgs.push(rOut.concat(atPos).join(" "));
+            if (inAt && atPos.length >= 1) {
+              const resolved = resolveGradientAtPos(atPos);
+              if (resolved[0] !== "50%" || resolved[1] !== "50%") {
+                rOut.push("at", resolved[0], resolved[1]);
+              }
+            }
+            if (rOut.length > 0) outArgs.push(rOut.join(" "));
             continue;
           }
           if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
@@ -43034,6 +43130,8 @@
       if (bgImgRaw && /^image\(/i.test(bgImgRaw)) {
         const im = /^image\(\s*(.*)\s*\)$/i.exec(bgImgRaw);
         if (im && im[1]) computedMap.set("background-image", "image(" + normCol(im[1].trim()) + ")");
+      } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
+        computedMap.set("background-image", evalGradientComputed(bgImgRaw));
       }
       const curRaw = (computedMap.get("cursor") || "").trim();
       if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {

@@ -1155,29 +1155,18 @@
       if (t.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"))) return false;
       return isValidLenPct(t, false);
     }
-    if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
-      const toks = splitCssTokens(vLower);
+    const isValidCssPositionTokens = (toks) => {
       const HX = new Set(["left", "center", "right"]);
       const VY = new Set(["top", "center", "bottom"]);
       const is2Pos = (a, b) => {
-        if (HX.has(a) && VY.has(b)) return !(a === "center" && b === "center") || true;
+        if (HX.has(a) && VY.has(b)) return true;
         if (VY.has(a) && HX.has(b)) return true;
         if (isValidLenPct(a, true) && (VY.has(b) || isValidLenPct(b, true))) return true;
         if (HX.has(a) && isValidLenPct(b, true)) return true;
         return false;
       };
-      if (toks.length === 1) {
-        return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
-      }
+      if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
       if (toks.length === 2) return is2Pos(toks[0], toks[1]);
-      if (prop === "transform-origin") {
-        if (toks.length === 3 && is2Pos(toks[0], toks[1])) {
-          const z = toks[2];
-          if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
-          return isValidLenPct(z, true);
-        }
-        return false;
-      }
       if (toks.length === 4) {
         const EX = new Set(["left", "right"]);
         const EY = new Set(["top", "bottom"]);
@@ -1185,6 +1174,15 @@
         if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
       }
       return false;
+    };
+    if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
+      const toks = splitCssTokens(vLower);
+      if (prop === "transform-origin" && toks.length === 3) {
+        const z = toks[2];
+        if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
+        return isValidCssPositionTokens(toks.slice(0, 2)) && isValidLenPct(z, true);
+      }
+      return isValidCssPositionTokens(toks);
     }
     if (prop === "background-size") {
       const layers = vLower.split(",");
@@ -2162,6 +2160,20 @@
       const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
       return !!(im && im[1] && isValidColor(im[1]));
     }
+    if ((prop === "background-image" || prop === "list-style-image") && /(?:radial|conic)-gradient\(/i.test(trimmed)) {
+      const gm = /^(?:repeating-)?(radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(trimmed);
+      if (gm) {
+        const args = splitTopLevelComma(gm[2]);
+        if (args.length >= 2) {
+          const toks0 = splitCssTokens(args[0].toLowerCase());
+          const atIdx = toks0.indexOf("at");
+          if (atIdx !== -1) {
+            const posToks = toks0.slice(atIdx + 1);
+            if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+          }
+        }
+      }
+    }
     if (prop === "scroll-initial-target") {
       return vLower === "none" || vLower === "nearest";
     }
@@ -3138,6 +3150,31 @@
         else c = normBorderSpecColor(t);
       }
       return [w, st, c].filter(Boolean).join(" ");
+    }
+    if (key === "background-image" || key === "list-style-image") {
+      const gm = /^((?:repeating-)?(?:radial|conic)-gradient)\(\s*(.*)\s*\)$/i.exec(s);
+      if (gm) {
+        const args = splitTopLevelComma(gm[2]);
+        if (args.length >= 2) {
+          const toks0 = splitCssTokens(args[0]);
+          const atIdx = toks0.findIndex((t) => t.toLowerCase() === "at");
+          if (atIdx !== -1 && atIdx + 1 < toks0.length) {
+            const pos = toks0.slice(atIdx + 1).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+            let normPos = pos;
+            if (pos.length === 2) {
+              const a = pos[0].toLowerCase(), b = pos[1].toLowerCase();
+              if (a === "top" || a === "bottom" || (a === "center" && (b === "left" || b === "right"))) {
+                normPos = [pos[1], pos[0]];
+              }
+            } else if (pos.length === 4) {
+              const a = pos[0].toLowerCase();
+              if (a === "top" || a === "bottom") normPos = [pos[2], pos[3], pos[0], pos[1]];
+            }
+            args[0] = toks0.slice(0, atIdx + 1).concat(normPos).join(" ");
+            return gm[1].toLowerCase() + "(" + args.join(", ") + ")";
+          }
+        }
+      }
     }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());

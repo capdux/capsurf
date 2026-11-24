@@ -2756,3 +2756,7 @@
 ### Phase 564: `object-position` 全绿闭环
 - **`object-position` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：指定值补全 `center` 与 4 值水平边前置，计算值按 1/2/4 令牌规范解析为 `%`/`px`/`calc(100% - px)`。
 - **WPT 验收**：`object-position-{valid,invalid,computed}.html` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 565: `gradient-position` 全绿闭环
+- **`(radial|conic)-gradient` `at <position>` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：复用 `isValidCssPositionTokens` 校验并规范 `at <pos>` 指定值序；在 `evalGradientComputed` 中提取 `resolveGradientAtPos` 统一计算 `radial-gradient` 与 `conic-gradient` 的 1/2/4 令牌位置并省略默认 `at 50% 50%`。
+- **WPT & Smoke 验收**：`gradient-position-*` **3/3 PASS**、`object-position-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
