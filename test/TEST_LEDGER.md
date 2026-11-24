@@ -2002,3 +2002,8 @@
 - **子智能体只读摸底记录**：
   - `/css/css-syntax/` (`b498`, 24 files): `7 PASS / 17 FAIL / 0 TIMEOUT`
   - `/css/css-backgrounds/parsing/` (`b499`, 74 files): `51 PASS / 23 FAIL / 0 TIMEOUT`
+
+### Phase 597: `/css/css-backgrounds/parsing/background-size-valid` 全绿 & `background-size-computed` 14/16
+- **Filter `/css/css-backgrounds/parsing/background-size-valid`**: **PASS**（`cssom.js` `background-size` 单值非关键字补全第二个 `"auto"`，仅 `"auto auto"` 缩为 `"auto"`）。
+- **Filter `/css/css-backgrounds/parsing/background-size-computed`**: `14/16 PASS`（`10/16 -> 14/16`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

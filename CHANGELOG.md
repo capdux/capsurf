@@ -3658,3 +3658,5 @@
 - **Phase 595** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 为 `@import ... supports(...)` 实现括号平衡扫描解析；`/css/css-cascade/parsing/supports-import-parsing.html` 全绿。
 
 - **Phase 596** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `constructRule` 丢弃 `@charset`/`invalid` 规则并拦截常规声明中的非法 `{`/`}` 块；`charset-is-not-a-rule.html` 与 `trailing-braces.html` 全绿。
+
+- **Phase 597** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修正 `background-size` 单值补 `"auto"` 与 `"auto auto" -> "auto"` 规范化；`background-size-valid.html` 全绿，`background-size-computed.html` 跃升至 14/16 PASS。

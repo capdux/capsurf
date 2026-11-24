@@ -2883,3 +2883,7 @@
 ### Phase 596: `/css/css-syntax/{charset-is-not-a-rule,trailing-braces}` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`constructRule` 对 `charset`/`invalid` 返回 `null`；`isValidCssValue` 与 `makeRuleStyleDeclaration.parseInitial` 对非 `--*` 且非 `var(...)` 的 `{`/`}` 块直接拒绝。
 - **WPT & Smoke 验收**：`charset-is-not-a-rule.html`、`trailing-braces.html` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 597: `background-size-valid` 全绿 & `background-size-computed` 14/16
+- **核心修复 (`src/js/shim/cssom.js`)**：调整 `background-size` 序列化逻辑，单值长度/百分比补全第二项 `"auto"`，`"auto auto"` 简写为 `"auto"`。
+- **WPT & Smoke 验收**：`background-size-valid.html` PASS、`background-size-computed.html` 14/16 PASS、`--smoke` 3/3 suites PASS。

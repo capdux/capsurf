@@ -2833,7 +2833,8 @@
       for (let i = 0; i < layers.length; i++) {
         const p = splitCssTokens(layers[i].trim());
         for (let j = 0; j < p.length; j++) if (p[j] === "0" || p[j] === "+0" || p[j] === "-0") p[j] = "0px";
-        if (p.length === 2 && p[1].toLowerCase() === "auto") p.pop();
+        if (p.length === 2 && p[0].toLowerCase() === "auto" && p[1].toLowerCase() === "auto") p.pop();
+        else if (p.length === 1 && !/^(?:auto|contain|cover|inherit|initial|unset|revert|revert-layer)$/i.test(p[0])) p.push("auto");
         layers[i] = p.join(" ");
       }
       return layers.join(", ");

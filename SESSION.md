@@ -7804,3 +7804,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：`constructRule` 丢弃 `charset`/`invalid` 规则；`isValidCssValue` 与 `makeRuleStyleDeclaration.parseInitial` 拦截非 `var(...)` 的 `{`/`}` 块声明。
   2. **全绿验证**：`charset-is-not-a-rule.html` **PASS**、`trailing-braces.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-syntax/` 7/24 PASS；`/css/css-backgrounds/parsing/` 51/74 PASS。
+
+### 2026-11-24 Phase 597 (`background-size-valid` 全绿 & `background-size-computed` 14/16)
+- **[Agent]**: 完成 Phase 597（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`background-size` 规范化序列化时单值非关键字补 `"auto"`，`"auto auto"` 规范化为 `"auto"`。
+  2. **验证**：`background-size-valid.html` **PASS**、`background-size-computed.html` **10/16 -> 14/16 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
