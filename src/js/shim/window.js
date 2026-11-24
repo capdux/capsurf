@@ -9624,9 +9624,12 @@ function installWindow(global) {
       });
       computedMap.set("hyphenate-limit-chars", parts.join(" "));
     }
-    for (const nk of ["text-autospace", "text-spacing-trim"]) {
-      if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "normal");
+    for (const nk of ["text-autospace", "text-spacing-trim", "background-blend-mode", "mix-blend-mode"]) {
+      const nv = computedMap.get(nk);
+      if (!nv || nv === "initial" || nv === "revert" || nv === "revert-layer") computedMap.set(nk, "normal");
     }
+    const isoVal = computedMap.get("isolation");
+    if (!isoVal || isoVal === "initial" || isoVal === "revert" || isoVal === "revert-layer") computedMap.set("isolation", "auto");
     for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
       if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
     }
@@ -10062,7 +10065,8 @@ function installWindow(global) {
       if (lower === "color-interpolation-filters") return "linearrgb";
       if (lower === "flood-color") return "rgb(0, 0, 0)";
       if (lower === "lighting-color") return "rgb(255, 255, 255)";
-      if (lower === "overflow-anchor" || lower === "forced-color-adjust") return "auto";
+      if (lower === "overflow-anchor" || lower === "forced-color-adjust" || lower === "isolation") return "auto";
+      if (lower === "background-blend-mode" || lower === "mix-blend-mode") return "normal";
       if (lower === "scroll-snap-stop") return "normal";
       if (lower === "scroll-snap-type") return "none";
       if (lower === "scroll-snap-align") return "none";

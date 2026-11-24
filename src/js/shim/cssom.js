@@ -3005,6 +3005,18 @@
     if (prop === "forced-color-adjust") {
       return vLower === "auto" || vLower === "none" || vLower === "preserve-parent-color";
     }
+    if (prop === "mix-blend-mode" || prop === "background-blend-mode") {
+      const BLEND_MODES = new Set([
+        "normal", "multiply", "screen", "overlay", "darken", "lighten",
+        "color-dodge", "color-burn", "hard-light", "soft-light",
+        "difference", "exclusion", "hue", "saturation", "color", "luminosity", "plus-lighter"
+      ]);
+      if (prop === "mix-blend-mode") return BLEND_MODES.has(vLower);
+      return splitTopLevelComma(vLower).every((part) => {
+        const t = part.trim();
+        return t.length > 0 && BLEND_MODES.has(t);
+      });
+    }
     if (prop === "filter" || prop === "backdrop-filter") {
       if (vLower === "none") return true;
       const toks = splitCssTokens(trimmed);

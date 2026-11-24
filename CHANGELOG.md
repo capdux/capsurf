@@ -3835,3 +3835,7 @@
   - `src/js/shim/cssom.js`: `isValidCssPositionTokens` 新增 `allow3 = false` 参数（仅 `background-position` 传 `true`，其余 `<position>` 拒绝 3 值）；新增 `mask-position` 与 `forced-color-adjust`（`auto | none | preserve-parent-color`）语法校验。
   - `src/js/shim/window.js`: 将 `forced-color-adjust` 纳入 `INHERITED_CSS_PROPS` 及计算值默认/兜底 `"auto"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 675**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 新增 `mix-blend-mode` 与 `background-blend-mode`（逗号分隔 `<blend-mode>` 校验，拒绝 `auto` 及空格分隔多值）。
+  - `src/js/shim/window.js`: 在 `computedMap` 与 `getPropertyValue` 兜底中补齐 `background-blend-mode`/`mix-blend-mode`（初始 `"normal"`）与 `isolation`（初始 `"auto"`）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

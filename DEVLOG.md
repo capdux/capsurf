@@ -3185,3 +3185,6 @@
 ### Phase 674 — `<position>` 3 值语法精准收窄与 `forced-color-adjust` 全量通过
 - 通过 `allow3` 参数将 CSS Backgrounds 3 的 3 值 `<position>` 语法严格限定于 `background-position`，恢复 `gradient-position-invalid`、`object-position-invalid` 与 `mask-position-invalid` 全部通过且保持 `background-position-valid` 零回退。
 - 补全 `forced-color-adjust` 语法校验、继承性与 `"auto"` 初始计算值，使 `/css/css-forced-color-adjust/` 2/2 全数通过。
+### Phase 675 — `/css/compositing/` 17/17 全量收口
+- 为 `mix-blend-mode` 与 `background-blend-mode` 补全 `<blend-mode>` 语法校验（区分单值与逗号列表）。
+- 在 `window.js` 中补全 `background-blend-mode`、`mix-blend-mode`（初始 `"normal"`）与 `isolation`（初始 `"auto"`）的初始计算值与 `initial`/`revert` 解析，使 `/css/compositing/` 17/17 全数通过。

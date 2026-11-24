@@ -6795,6 +6795,18 @@
       if (prop === "forced-color-adjust") {
         return vLower === "auto" || vLower === "none" || vLower === "preserve-parent-color";
       }
+      if (prop === "mix-blend-mode" || prop === "background-blend-mode") {
+        const BLEND_MODES = new Set([
+          "normal", "multiply", "screen", "overlay", "darken", "lighten",
+          "color-dodge", "color-burn", "hard-light", "soft-light",
+          "difference", "exclusion", "hue", "saturation", "color", "luminosity", "plus-lighter"
+        ]);
+        if (prop === "mix-blend-mode") return BLEND_MODES.has(vLower);
+        return splitTopLevelComma(vLower).every((part) => {
+          const t = part.trim();
+          return t.length > 0 && BLEND_MODES.has(t);
+        });
+      }
       if (prop === "filter" || prop === "backdrop-filter") {
         if (vLower === "none") return true;
         const toks = splitCssTokens(trimmed);
@@ -46121,9 +46133,12 @@
         });
         computedMap.set("hyphenate-limit-chars", parts.join(" "));
       }
-      for (const nk of ["text-autospace", "text-spacing-trim"]) {
-        if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "normal");
+      for (const nk of ["text-autospace", "text-spacing-trim", "background-blend-mode", "mix-blend-mode"]) {
+        const nv = computedMap.get(nk);
+        if (!nv || nv === "initial" || nv === "revert" || nv === "revert-layer") computedMap.set(nk, "normal");
       }
+      const isoVal = computedMap.get("isolation");
+      if (!isoVal || isoVal === "initial" || isoVal === "revert" || isoVal === "revert-layer") computedMap.set("isolation", "auto");
       for (const nk of ["text-fit", "text-group-align", "word-space-transform"]) {
         if (!computedMap.get(nk) || computedMap.get(nk) === "initial") computedMap.set(nk, "none");
       }
@@ -46559,7 +46574,8 @@
         if (lower === "color-interpolation-filters") return "linearrgb";
         if (lower === "flood-color") return "rgb(0, 0, 0)";
         if (lower === "lighting-color") return "rgb(255, 255, 255)";
-        if (lower === "overflow-anchor" || lower === "forced-color-adjust") return "auto";
+        if (lower === "overflow-anchor" || lower === "forced-color-adjust" || lower === "isolation") return "auto";
+        if (lower === "background-blend-mode" || lower === "mix-blend-mode") return "normal";
         if (lower === "scroll-snap-stop") return "normal";
         if (lower === "scroll-snap-type") return "none";
         if (lower === "scroll-snap-align") return "none";
