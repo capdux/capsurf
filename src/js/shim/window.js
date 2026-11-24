@@ -8549,7 +8549,17 @@ function installWindow(global) {
       ["ruby-align", "space-around"],
       ["ruby-position", "alternate"],
       ["ruby-merge", "separate"],
-      ["ruby-overhang", "auto"]
+      ["ruby-overhang", "auto"],
+      ["grid-auto-columns", "auto"],
+      ["grid-auto-flow", "row"],
+      ["grid-auto-rows", "auto"],
+      ["grid-column-end", "auto"],
+      ["grid-column-start", "auto"],
+      ["grid-row-end", "auto"],
+      ["grid-row-start", "auto"],
+      ["grid-template-areas", "none"],
+      ["grid-template-columns", "none"],
+      ["grid-template-rows", "none"]
     ];
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {

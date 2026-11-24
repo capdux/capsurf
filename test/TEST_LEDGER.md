@@ -1937,3 +1937,11 @@
   - `/css/css-logical/` (`b476`): `58` files (`54 PASS / 1 FAIL / 3 TIMEOUT`) -> Phase 587 修复 `getComputedStyle-listing.html` 后 `55/58 PASS`
   - `/css/css-text/parsing/` (`b479`): **86/86 PASS (100% ALL GREEN)**
   - `/css/css-grid/inheritance` (`b482`): `1` file (`0 PASS / 1 FAIL`, 10/20 subtests)
+
+### Phase 588: `/css/css-grid/inheritance` 全绿 & Flexbox/Anim/Trans 继承摸底
+- **Filter `/css/css-grid/inheritance`**: **PASS (20/20)**（`window.js` `textDecorDefs` 补全 10 个 `grid-*` 计算期默认初始值：`grid-auto-{columns,flow,rows}`, `grid-{column,row}-{start,end}`, `grid-template-{areas,columns,rows}`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-flexbox/inheritance` (`b484`): **PASS (20/20)**
+  - `/css/css-animations/inheritance` (`b485`): `0 PASS / 1 FAIL`（8/16 subtests PASS，仅缺 8 个 `animation-*` 默认初始值）
+  - `/css/css-transitions/inheritance` (`b485`): `0 PASS / 1 FAIL`（4/8 subtests PASS，仅缺 4 个 `transition-*` 默认初始值）

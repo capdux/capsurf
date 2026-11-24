@@ -2847,3 +2847,7 @@
 ### Phase 587: `getComputedStyle-listing` 30/30 与 `/css/css-text/parsing/` 86/86 全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：为 `getComputedStyle` Proxy 添加 `getOwnPropertyDescriptor` trap。
 - **WPT & Smoke 验收**：`css-logical/getComputedStyle-listing.html` PASS（30/30）、`/css/css-text/parsing/` 86/86 PASS（收紧 21 项基线）、`--smoke` 3/3 suites PASS。
+
+### Phase 588: `/css/css-grid/inheritance` 20/20 全绿
+- **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 中补齐 `grid-auto-{columns,flow,rows}`、`grid-{column,row}-{start,end}`、`grid-template-{areas,columns,rows}` 默认初始值。
+- **WPT & Smoke 验收**：`/css/css-grid/inheritance.html` PASS（20/20）、`--smoke` 3/3 suites PASS；并行确认 `/css/css-flexbox/inheritance.html` 20/20 PASS。

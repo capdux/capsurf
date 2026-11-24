@@ -7751,3 +7751,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap，暴露 `STANDARD_COMPUTED_LONGHANDS` 与简写属性描述符。
   2. **全绿验证与基线收紧**：`/css/css-logical/getComputedStyle-listing.html` **PASS (30/30)**、`/css/css-text/parsing/` **86/86 PASS (100% ALL GREEN)**（收紧 21 项基线为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-contain/`（49/55 PASS）、`/css/css-logical/`（55/58 PASS）、`/css/css-grid/inheritance`（10/20 subtests）。
+
+### 2026-11-24 Phase 588 (`/css/css-grid/inheritance` 20/20 全绿 & Flexbox/Anim/Trans 继承摸底)
+- **[Agent]**: 完成 Phase 588（`src/js/shim/window.js`）：
+  1. **`window.js`**：在 `textDecorDefs` 中补全 10 个 `grid-*` 计算期默认初始值。
+  2. **全绿验证**：`/css/css-grid/inheritance.html` **PASS (20/20)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-flexbox/inheritance` **20/20 PASS**；`/css/css-animations/inheritance` 8/16 PASS（缺 8 个 `animation-*` 初始值）；`/css/css-transitions/inheritance` 4/8 PASS（缺 4 个 `transition-*` 初始值）。

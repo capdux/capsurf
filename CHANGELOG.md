@@ -3640,3 +3640,5 @@
 - **Phase 586** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补齐 `ruby-{align,position,merge,overhang}` 继承集、`STANDARD_COMPUTED_LONGHANDS` 与默认初始值；`/css/css-ruby/inheritance.html` 转绿并收紧基线。
 
 - **Phase 587** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap；`css-logical/getComputedStyle-listing` 30/30 全绿，收紧 `/css/css-text/parsing/` 21 项基线实现 86/86 全绿。
+
+- **Phase 588** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 10 个 `grid-*` 计算期默认初始值；`/css/css-grid/inheritance.html` 达成 20/20 全绿。
