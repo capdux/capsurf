@@ -4552,10 +4552,8 @@
     "reason": "T18 enrollment (css-masking): measured PASS"
   },
   "/css/css-masking/parsing/mask-computed.html": {
-    "expected": "FAIL",
-    "slow": true,
-    "timeout": 20000,
-    "reason": "slow: finishes at 4.9-5.0 s against the 5000ms default budget, so fresh draws alternate FAIL and TIMEOUT. T18 enrollment (css-masking): 25/32 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-masking/parsing/mask-image-computed.html": {
     "expected": "PASS",

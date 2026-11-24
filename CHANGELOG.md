@@ -4063,3 +4063,8 @@
 - **Phase 736**:
   - `src/js/dom_binding.cp`: `_wrappedGcs` 对 `container-name`/`container-type` 过滤原生返回的 CSS-wide 关键字，回落到 `window.js` `applyUsedValuesToComputedMap` 规范化。
   - `test/wpt/wpt-expectations.json`: 将 `dir-pseudo-in-has.html`, `dir-selector-auto-direction-change-001.html`, `dir-selector-change-004.html`, `invalidation/dir-pseudo-class-in-has.html` 收紧为 `PASS`。
+- **Phase 737**:
+  - `src/js/shim/window.js`: `resolveContentGradients` 补充对 `background-image`/`mask-image` 渐变在 `!hasLayoutBox` (`display: none`) 分支的 `evalGradientComputed` 求值。
+  - `src/js/shim/cssom.js`: `parseMaskLayers` 自动闭合 EOF 缺失的右括号 `)`。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-masking/parsing/mask-computed.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -3312,3 +3312,5 @@
 - 在 `cssom.js` 补全 `container-name`（拒绝 `none none`/`default`/`not`/`and`/`or`/引号，支持 `\!escaped`）、`container-type` 与 `container` 简写校验与规范序列化，打通 `container-name-parsing` (29/29)、`container-type-parsing` (30/30)、`container-parsing` (48/48) 全绿。
 ### Phase 736 — `container-name-computed` 修复闭环与 4 项 `:dir()`/`:has()` 基线收紧
 - 定位 `dom_binding.cp` `_wrappedGcs` 对 `container-name`/`container-type` 直接透传 `__capsurf_get_computed_prop` 导致 `"initial"`/`"unset"` 短路跳过 `window.js` 规范化的问题，过滤 CSS-wide 关键字后 `container-name-computed.html` 恢复 **10/10 PASS**；同步收紧 4 项实测 byte-equal PASS 的 `:dir()`/`:has()` reftest。
+### Phase 737 — `/css/css-masking/parsing/` `28/28 (100% PASS)` 全绿闭环
+- 在 `window.js` `resolveContentGradients` 中补全 `background-image`/`mask-image` 渐变求值以覆盖 `display: none` 提前返回分支，并在 `cssom.js` `parseMaskLayers` 自动闭合 EOF 缺失括号，打通 `mask-computed.html` (32/32 **FAIL→PASS**)，实现 `/css/css-masking/parsing/` 28/28 全绿。

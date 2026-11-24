@@ -7458,6 +7458,26 @@ function installWindow(global) {
           return t;
         }).join(" "));
       }
+      for (const imgProp of ["background-image", "mask-image"]) {
+        const imgRaw = (computedMap.get(imgProp) || "").trim();
+        if (!imgRaw || !/(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(imgRaw)) continue;
+        const imgLayers = [];
+        let ic = "", id = 0, iq = "";
+        for (let i = 0; i < imgRaw.length; i++) {
+          const ch = imgRaw[i];
+          if (iq) { ic += ch; if (ch === "\\" && i + 1 < imgRaw.length) ic += imgRaw[++i]; else if (ch === iq) iq = ""; continue; }
+          if (ch === '"' || ch === "'") { iq = ch; ic += ch; }
+          else if (ch === "(") { id++; ic += ch; }
+          else if (ch === ")" && id > 0) { id--; ic += ch; }
+          else if (ch === "," && id === 0) { if (ic.trim()) imgLayers.push(ic.trim()); ic = ""; }
+          else ic += ch;
+        }
+        if (ic.trim()) imgLayers.push(ic.trim());
+        computedMap.set(imgProp, imgLayers.map((layer) => {
+          if (/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return evalGradientComputed(layer);
+          return layer;
+        }).join(", "));
+      }
     };
 
     function resolveMinMaxSizing(val, fSize) {

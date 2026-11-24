@@ -9094,8 +9094,19 @@
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
     function parseMaskLayers(raw) {
-      const s = String(raw || "").trim();
+      let s = String(raw || "").trim();
       if (!s) return null;
+      {
+        let pd = 0, pq = "";
+        for (let pi = 0; pi < s.length; pi++) {
+          const ch = s[pi];
+          if (pq) { if (ch === "\\" && pi + 1 < s.length) { pi++; continue; } if (ch === pq) pq = ""; continue; }
+          if (ch === '"' || ch === "'") { pq = ch; continue; }
+          if (ch === "(") pd++;
+          else if (ch === ")" && pd > 0) pd--;
+        }
+        if (pd > 0) s += ")".repeat(pd);
+      }
       const layers = splitTopLevelComma(s);
       if (layers.length === 0) return null;
       const REP1 = new Set(["repeat-x", "repeat-y"]);
@@ -45721,6 +45732,26 @@
             }
             return t;
           }).join(" "));
+        }
+        for (const imgProp of ["background-image", "mask-image"]) {
+          const imgRaw = (computedMap.get(imgProp) || "").trim();
+          if (!imgRaw || !/(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(imgRaw)) continue;
+          const imgLayers = [];
+          let ic = "", id = 0, iq = "";
+          for (let i = 0; i < imgRaw.length; i++) {
+            const ch = imgRaw[i];
+            if (iq) { ic += ch; if (ch === "\\" && i + 1 < imgRaw.length) ic += imgRaw[++i]; else if (ch === iq) iq = ""; continue; }
+            if (ch === '"' || ch === "'") { iq = ch; ic += ch; }
+            else if (ch === "(") { id++; ic += ch; }
+            else if (ch === ")" && id > 0) { id--; ic += ch; }
+            else if (ch === "," && id === 0) { if (ic.trim()) imgLayers.push(ic.trim()); ic = ""; }
+            else ic += ch;
+          }
+          if (ic.trim()) imgLayers.push(ic.trim());
+          computedMap.set(imgProp, imgLayers.map((layer) => {
+            if (/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return evalGradientComputed(layer);
+            return layer;
+          }).join(", "));
         }
       };
 

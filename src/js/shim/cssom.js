@@ -5304,8 +5304,19 @@
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
   function parseMaskLayers(raw) {
-    const s = String(raw || "").trim();
+    let s = String(raw || "").trim();
     if (!s) return null;
+    {
+      let pd = 0, pq = "";
+      for (let pi = 0; pi < s.length; pi++) {
+        const ch = s[pi];
+        if (pq) { if (ch === "\\" && pi + 1 < s.length) { pi++; continue; } if (ch === pq) pq = ""; continue; }
+        if (ch === '"' || ch === "'") { pq = ch; continue; }
+        if (ch === "(") pd++;
+        else if (ch === ")" && pd > 0) pd--;
+      }
+      if (pd > 0) s += ")".repeat(pd);
+    }
     const layers = splitTopLevelComma(s);
     if (layers.length === 0) return null;
     const REP1 = new Set(["repeat-x", "repeat-y"]);
