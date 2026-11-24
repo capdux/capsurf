@@ -7735,3 +7735,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 自主推导并完成 Phase 584（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js`**：补全 `column-rule-color`（颜色求值）、`column-{count,fill,rule-style,rule-width,span,width}`、`clear`/`float`/`margin-trim`、`aspect-ratio`/`box-sizing`/`min-*`/`max-*` 默认初始值。
   2. **全绿验证与基线收紧**：`/css/css-multicol/inheritance` **PASS**（全目录 **32/32 PASS**）、`/css/css-box/inheritance` **FAIL->PASS**（已收紧为 `PASS`）、`/css/css-sizing/aspect-ratio/inheritance` & `inheritance-001` **2/2 PASS**、`--smoke` **3/3 suites PASS**。
+
+### 2026-11-24 Phase 585 (`css-align` `parse-justify-self-002` & `place-self-shorthand-001` 全绿)
+- **[Agent]**: 自主推导并完成 Phase 585（`src/js/shim/element/element.js`, `src/js/shim/window.js`）：
+  1. **`element.js` & `window.js`**：内联 `place-self`/`place-items`/`place-content` 接入 `setEntryWithShorthand` 简写展开；补全 `justify-self: auto`、`justify-items: normal`、`align-content: normal`、`justify-content: normal` 默认初始值。
+  2. **全绿验证**：`parse-justify-self-002.html` **PASS**、`place-self-shorthand-001.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。

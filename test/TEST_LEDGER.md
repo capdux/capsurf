@@ -1913,3 +1913,12 @@
 - **子智能体只读摸底记录**：
   - `/css/css-box/` (`b470`): `33` files (`30 PASS / 1 FAIL / 2 TIMEOUT`) -> Phase 584 修复 `inheritance.html` 后 `31/33 PASS`
   - `/css/css-sizing/` (`b471`): `32` files (`27 PASS / 5 FAIL`) -> Phase 584 修复 2 项 `inheritance` 后 `29/32 PASS`
+
+### Phase 585 `css-align` (`parse-justify-self-002` & `place-self-shorthand-001`) 全绿 & WPT-B468/B472/B474 摸底 (bin_dev Phase 585, 2026-11-24)
+- **Filter `/css/css-align/self-alignment/parse-justify-self-002`**: **PASS (7/7)**（补全 `justify-self: auto`, `justify-items: normal`, `align-content: normal`, `justify-content: normal` 默认初始值）。
+- **Filter `/css/css-align/self-alignment/place-self-shorthand-001`**: **PASS (18/18)**（`element.js` 内联 `place-self`/`place-items`/`place-content` 接入 `setEntryWithShorthand`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-align/` (`b468`, partial 35 recorded): `24 PASS / 3 FAIL / 8 TIMEOUT` -> Phase 585 修复 2 项 FAIL 后 `26/35 PASS`
+  - `/css/css-display/` (`b472`): `52` files (`15 PASS / 33 FAIL / 4 TIMEOUT`)
+  - `/css/css-syntax/anb-` (`b474`): `2` files (`0 PASS / 2 FAIL`)
