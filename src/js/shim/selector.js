@@ -218,6 +218,33 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
         } else if (pName === ":state") {
           if (!/^--?[a-zA-Z0-9_-]+$|^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(inner)) return null;
           out += ":state(" + inner + ")";
+        } else if (pName === ":nth-child" || pName === ":nth-last-child" || pName === ":nth-of-type" || pName === ":nth-last-of-type") {
+          let anbPart = inner, ofPart = null;
+          if (pName === ":nth-child" || pName === ":nth-last-child") {
+            const ofM = /^([\s\S]*?)\s+of\s+([\s\S]+)$/i.exec(inner);
+            if (ofM) { anbPart = ofM[1].trim(); ofPart = ofM[2].trim(); }
+          }
+          const al = anbPart.toLowerCase();
+          let A = 0, B = 0, ok = true;
+          if (al === "odd") { A = 2; B = 1; }
+          else if (al === "even") { A = 2; B = 0; }
+          else if (/^[+-]?\d+$/.test(al)) { A = 0; B = parseInt(al, 10); }
+          else {
+            const am = /^([+-]?\d*)n(?:\s*([+-])\s*(\d+))?$/.exec(al);
+            if (!am) ok = false;
+            else {
+              A = am[1] === "" || am[1] === "+" ? 1 : (am[1] === "-" ? -1 : parseInt(am[1], 10));
+              B = am[2] ? parseInt(am[2] + am[3], 10) : 0;
+            }
+          }
+          if (!ok) return null;
+          let anbStr = A === 0 ? String(B) : ((A === 1 ? "n" : (A === -1 ? "-n" : A + "n")) + (B === 0 ? "" : (B > 0 ? "+" + B : String(B))));
+          if (ofPart !== null) {
+            const sub = canonicalizeSelectorList(ofPart, inHas, true);
+            if (sub === null) return null;
+            anbStr += " of " + sub;
+          }
+          out += pName + "(" + anbStr + ")";
         } else {
           out += pName + "(" + inner + ")";
           if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }

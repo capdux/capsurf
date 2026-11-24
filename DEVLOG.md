@@ -3220,3 +3220,5 @@
 - 在 `window.js` 中补全 `scroll-marker-group` 单关键字计算值补全 ` links` 与 `caret-color` 默认/initial 值回落 `elColor`，`scroll-markers-computed.html`（收紧为 `PASS`）与 `caret-color-013.html` 均全数 PASS。
 ### Phase 690 — `css-syntax` `url(...)` 空白与维度小数规范化修复
 - 修复 `cssom.js` `serializeCssValue` 对 `url( "foo")` 误包外层引号的正则缺陷，并规范独立数字/维度字面量序列化，打通 `decimal-points-in-numbers.html` 与 `url-whitespace-consumption.html`。
+### Phase 691 — `CSSStyleRule.selectorText` 与 `An+B` 语法解析序列化闭环
+- 在 `cssom.js` 为 `CSSStyleRule.prototype.selectorText` 接入合法性校验与规范化 setter，并在 `selector.js` 实现 `:nth-*` 的 `An+B [of S]` 解析及最小化序列化，`anb-parsing.html` (67/67) 与 `anb-serialization.html` (20/20) 全数 PASS。

@@ -6430,9 +6430,27 @@
   function CSSStyleRule() {
     CSSGroupingRule.call(this);
     this._type = 1;
+    this._selectorText = "";
   }
   CSSStyleRule.prototype = Object.create(CSSGroupingRule.prototype);
   CSSStyleRule.prototype.constructor = CSSStyleRule;
+  Object.defineProperty(CSSStyleRule.prototype, "selectorText", {
+    get: function () { return this._selectorText || ""; },
+    set: function (val) {
+      const s = String(val || "").trim();
+      if (!s) return;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+        const canon = globalThis.__capsurf_canonicalizeSelector(s, false);
+        if (canon === null) return;
+        this._selectorText = canon;
+      } else {
+        this._selectorText = s;
+      }
+      if (this._onMutate) this._onMutate();
+    },
+    enumerable: true,
+    configurable: true,
+  });
   markNative(CSSStyleRule, "CSSStyleRule");
   global.CSSStyleRule = CSSStyleRule;
 

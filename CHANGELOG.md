@@ -3889,3 +3889,7 @@
 - **Phase 690**:
   - `src/js/shim/cssom.js`: `serializeCssValue` 修复 `url( "..." )` 空白未吸收导致的嵌套双引号问题，并规范化独立数字/维度字面量（如 `1.0px` -> `1px`、`.1px` -> `0.1px`）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 691**:
+  - `src/js/shim/cssom.js`: `CSSStyleRule.prototype` 新增 `selectorText` getter/setter，非法选择器静默忽略并触发变更回调。
+  - `src/js/shim/selector.js`: 为 `:nth-child`/`nth-last-child`/`nth-of-type`/`nth-last-of-type` 实现完整 `An+B` 与 `of <selector-list>` 校验及规范序列化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
