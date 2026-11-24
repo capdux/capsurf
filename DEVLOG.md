@@ -3159,3 +3159,6 @@
 ### Phase 665 — `path()` 与 `shape()` 解析/规范化收口
 - 为 `shape()` 的 `arc` 子句增加 `seenSweep`/`seenSize`/`seenRot` 去重校验，同时在 `move`/`line`/`smooth`/`curve` 坐标中支持 `left`/`center`/`right`/`top`/`bottom` 关键字。
 - 为 `path()` 增加 SVG 路径首指令 `M/m` 与合法指令集校验，并在 `normalizeCssSpecifiedValue` 中对 `shape-outside` 与 `clip-path` 统一规范化 `path(...)`（单引号转双引号、省略 `nonzero`、`z` 转 `Z` 及命令/数字单空格分隔）。
+### Phase 666 — `basic-shape` 规范化与 `polygon` `round` 组合收口
+- `isValidShape("polygon")` 重写首段解析，支持 `nonzero`/`evenodd` 与 `round <length>` 任意顺序组合。
+- `normalizeCssSpecifiedValue` 为 `shape-outside` 与 `clip-path` 统一补齐 `circle`/`ellipse` 省略 `closest-side`、`inset`/`xywh`/`rect` 零值补 `px`、以及 `polygon` 省略默认 `nonzero` 的规范化序列化。

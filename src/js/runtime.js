@@ -4889,9 +4889,12 @@
             const p0 = splitCssTokens(parts[0].toLowerCase());
             if (p0.length === 0) return false;
             if (p0[0] === "nonzero" || p0[0] === "evenodd" || p0[0] === "round") {
-              if (p0[0] === "round") {
-                if (p0.length !== 2 || p0[1].endsWith("%") || !isValidLenPct(p0[1], false)) return false;
-              } else if (p0.length !== 1) return false;
+              let pi = 0, seenFR = false, seenR = false;
+              while (pi < p0.length) {
+                if (!seenFR && (p0[pi] === "nonzero" || p0[pi] === "evenodd")) { seenFR = true; pi++; }
+                else if (!seenR && p0[pi] === "round" && pi + 1 < p0.length && !p0[pi + 1].endsWith("%") && isValidLenPct(p0[pi + 1], false)) { seenR = true; pi += 2; }
+                else return false;
+              }
               idx = 1;
             }
             if (idx >= parts.length) return false;
@@ -7382,7 +7385,7 @@
         return normalizePositionLayer(s, key === "transform-origin");
       }
       if (key === "shape-outside" || key === "clip-path") {
-        const fnM = /^(circle|ellipse|shape|path)\(/i.exec(s);
+        const fnM = /^(circle|ellipse|shape|path|inset|xywh|rect|polygon)\(/i.exec(s);
         if (fnM) {
           const fnName = fnM[1].toLowerCase();
           let depth = 1, i = fnM[0].length, q = "";
@@ -7399,11 +7402,27 @@
             if (fnName === "circle" || fnName === "ellipse") {
               const toks = splitCssTokens(inner);
               const atIdx = toks.findIndex((t) => t.toLowerCase() === "at");
+              let preToks = atIdx === -1 ? toks : toks.slice(0, atIdx);
+              if (fnName === "circle" && preToks.length === 1 && preToks[0].toLowerCase() === "closest-side") preToks = [];
+              else if (fnName === "ellipse" && preToks.length === 2 && preToks[0].toLowerCase() === "closest-side" && preToks[1].toLowerCase() === "closest-side") preToks = [];
+              preToks = preToks.map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+              const preStr = preToks.join(" ");
               if (atIdx !== -1 && atIdx + 1 < toks.length) {
-                const pre = toks.slice(0, atIdx + 1).join(" ");
                 const pos = normalizePositionLayer(toks.slice(atIdx + 1).join(" "), false);
-                return fnName + "(" + (pre ? pre + " " : "") + pos + ")" + tail;
+                return fnName + "(" + (preStr ? preStr + " at " : "at ") + pos + ")" + tail;
               }
+              return fnName + "(" + preStr + ")" + tail;
+            } else if (fnName === "inset" || fnName === "xywh" || fnName === "rect") {
+              const toks = splitCssTokens(inner).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+              return fnName + "(" + toks.join(" ") + ")" + tail;
+            } else if (fnName === "polygon") {
+              const segs = splitTopLevelComma(inner).map((seg) => splitCssTokens(seg).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t));
+              if (segs.length > 1) {
+                const s0 = segs[0].filter((t) => t.toLowerCase() !== "nonzero");
+                if (s0.length === 0) segs.shift();
+                else segs[0] = s0;
+              }
+              return "polygon(" + segs.map((t) => t.join(" ")).join(", ") + ")" + tail;
             } else if (fnName === "path") {
               const parts = splitTopLevelComma(inner);
               let fr = "", strTok = parts[0].trim();

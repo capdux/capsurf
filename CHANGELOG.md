@@ -3802,3 +3802,6 @@
 - **Phase 665**:
   - `src/js/shim/cssom.js`: `isValidShape` 增加 `shape()` `arc` 关键字重复校验（`cw`/`ccw`、`small`/`large`、`rotate`）、`move`/`line`/`smooth`/`curve` 位置关键字支持，以及 `path()` SVG 路径首字符 `M/m` 与合法指令校验；`normalizeCssSpecifiedValue` 对 `shape-outside` / `clip-path` 的 `path()` 执行双引号、命令空格与省略 `nonzero` 规范化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 666**:
+  - `src/js/shim/cssom.js`: `isValidShape("polygon")` 支持 `<fill-rule> || round <length>` 任意顺序组合；`normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 统一规范化 `circle`/`ellipse`（省略默认 `closest-side`）、`inset`/`xywh`/`rect`（`0`->`0px`）与 `polygon`（省略 `nonzero`、`0`->`0px`）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
