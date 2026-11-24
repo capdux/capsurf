@@ -378,12 +378,6 @@ function createStyleProxy(element) {
     if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
       return lookupPropertyValue(map, LEGACY_CSS_ALIASES[key]);
     }
-    if (key === "background") {
-      for (let i = 0; i < BG_LONGHANDS.length; i++) {
-        if (!map.has(BG_LONGHANDS[i])) return "";
-      }
-      return map.get("background-image").value;
-    }
     if (key === "float") {
       const e = map.get("css-float");
       if (e) return e.value;

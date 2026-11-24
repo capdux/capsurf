@@ -9114,7 +9114,7 @@
         slashes.push(cur.trim());
         if (slashes.length > 2) return null;
         let img = "none", pos = "0% 0%", size = "auto", rep = "repeat", att = "scroll";
-        let origin = "padding-box", clip = "border-box", color = "transparent";
+        let origin = "padding-box", clip = "border-box", color = "rgba(0, 0, 0, 0)";
         let seenImg = false, seenPos = false, seenRep = false, seenAtt = false, seenCol = false, boxCount = 0;
         const parseTokens = (toks, startIdx) => {
           for (let i = startIdx; i < toks.length; i++) {
@@ -10061,6 +10061,7 @@
       "grid-column": ["grid-column-start", "grid-column-end"],
       "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
       "font-variant": ["font-variant-ligatures", "font-variant-caps", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"],
+      background: ["background-image", "background-position", "background-size", "background-repeat", "background-attachment", "background-origin", "background-clip", "background-color"],
       mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
     };
     global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -10121,6 +10122,31 @@
           return vals.slice(1).every((v) => v === "normal") ? "none" : "";
         }
         return vals.filter((v) => v !== "normal").join(" ");
+      }
+      if (key === "background") {
+        const imgs = splitTopLevelComma(vals[0]), poss = splitTopLevelComma(vals[1]), sizes = splitTopLevelComma(vals[2]);
+        const reps = splitTopLevelComma(vals[3]), atts = splitTopLevelComma(vals[4]), origs = splitTopLevelComma(vals[5]), clips = splitTopLevelComma(vals[6]);
+        const n = imgs.length;
+        if (!n || poss.length !== n || sizes.length !== n || reps.length !== n || atts.length !== n || origs.length !== n || clips.length !== n) return "";
+        const col = vals[7];
+        const out = [];
+        for (let i = 0; i < n; i++) {
+          const parts = [];
+          const img = imgs[i].trim(), pos = poss[i].trim(), sz = sizes[i].trim(), rep = reps[i].trim(), att = atts[i].trim(), orig = origs[i].trim(), clip = clips[i].trim();
+          if (img !== "none") parts.push(img);
+          if (pos !== "0% 0%" || sz !== "auto") {
+            parts.push(sz !== "auto" ? (pos + " / " + sz) : pos);
+          }
+          if (rep !== "repeat") parts.push(rep);
+          if (att !== "scroll") parts.push(att);
+          if (orig !== "padding-box" || clip !== "border-box") {
+            if (orig === clip) parts.push(orig);
+            else parts.push(orig, clip);
+          }
+          if (i === n - 1 && col && col !== "transparent" && col !== "rgba(0, 0, 0, 0)") parts.push(col);
+          out.push(parts.length > 0 ? parts.join(" ") : "none");
+        }
+        return out.join(", ");
       }
       if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
         return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
@@ -16827,12 +16853,6 @@
       }
       if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
         return lookupPropertyValue(map, LEGACY_CSS_ALIASES[key]);
-      }
-      if (key === "background") {
-        for (let i = 0; i < BG_LONGHANDS.length; i++) {
-          if (!map.has(BG_LONGHANDS[i])) return "";
-        }
-        return map.get("background-image").value;
       }
       if (key === "float") {
         const e = map.get("css-float");

@@ -4020,3 +4020,7 @@
   - `src/js/shim/cssom.js`: 新增 `canonicalizePageSize` 校验与序列化 `@page` `size`，补全 `@page` `page-orientation` 校验与非 `@page` 规则拦截，以及 `CSSGroupingRule.prototype.insertRule` 防护。
   - `test/wpt/wpt-expectations.json`: 将 `page-orientation.tentative.html` 与 `page-rule-declarations-000.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 726**:
+  - `src/js/shim/element/element.js`: 移除仅返回 `background-image` 的旧 `background` 截断分支，统一走 `SHORTHAND_EXPAND_LONGHANDS`。
+  - `src/js/shim/cssom.js`: 补齐 `background` 8-longhand 规范序列化并将默认 `background-color` 规范化为 `"rgba(0, 0, 0, 0)"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
