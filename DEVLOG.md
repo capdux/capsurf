@@ -3280,3 +3280,5 @@
 - 在 `selector.js` 补齐 CSS Overflow 5 `::scroll-button(...)` 及其链式交互伪类，同时在 `cssom.js` 为 `background-clip` 与 `background` 简写补全 `border-area` / `border-area text` 支持，一次性将 3 项 WPT 推进至 `FAIL -> PASS` 并收紧基线。
 ### Phase 720 — `grid-auto-columns` / `grid-auto-rows` 计算值 `calc()` 求值闭环
 - 在 `window.js` 中对 `grid-auto-columns` 与 `grid-auto-rows` 递归解析 `minmax(...)` / `fit-content(...)` 参数并调用 `evalLinLenPctTok` + 负值 `0px` 钳位，打通 `grid-auto-*` 9/9 全绿。
+### Phase 721 — CSS Display 3 多关键字 `display` 校验与规范序列化闭环
+- 在 `cssom.js` 实现 `canonicalizeDisplayValue` 统一处理 `<display-outside>`/`<display-inside>`/`list-item` 任意顺序组合并输出最短规范形式，`display-valid.html` 108/108 全数通过并收紧为 `PASS`，`display-computed.html` 由 19/112 提升至 108/112。

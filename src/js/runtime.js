@@ -4238,13 +4238,7 @@
       if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
       if (prop === "display") {
-        const validDisplays = new Set([
-          "none", "inline", "block", "inline-block", "flex", "inline-flex",
-          "grid", "inline-grid", "flow-root", "contents", "table", "inline-table",
-          "table-row", "table-row-group", "table-column", "table-column-group",
-          "table-cell", "table-caption", "list-item"
-        ]);
-        return validDisplays.has(vLower);
+        return !!canonicalizeDisplayValue(trimmed);
       }
 
       if (prop === "border-color" || prop === "border-block-color" || prop === "border-inline-color") {
@@ -7457,10 +7451,60 @@
       return "calc(" + out + ")";
     }
 
+    function canonicalizeDisplayValue(raw) {
+      const toks = splitCssTokens(String(raw || "").trim().toLowerCase());
+      if (toks.length === 0) return "";
+      if (toks.length === 1) {
+        const t = toks[0];
+        const SINGLE = new Set([
+          "none", "contents", "inline-block", "inline-table", "inline-flex", "inline-grid",
+          "table-row-group", "table-header-group", "table-footer-group", "table-row",
+          "table-cell", "table-column-group", "table-column", "table-caption",
+          "ruby-base", "ruby-text", "ruby-base-container", "ruby-text-container",
+          "math", "inline", "block", "run-in", "flow", "flow-root", "table", "flex", "grid", "ruby", "list-item"
+        ]);
+        if (!SINGLE.has(t)) return "";
+        return t === "flow" ? "block" : t;
+      }
+      const OUTSIDE = new Set(["block", "inline", "run-in"]);
+      const INSIDE = new Set(["flow", "flow-root", "table", "flex", "grid", "ruby", "math"]);
+      let outer = null, inner = null, listItem = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (OUTSIDE.has(t)) { if (outer) return ""; outer = t; }
+        else if (INSIDE.has(t)) { if (inner) return ""; inner = t; }
+        else if (t === "list-item") { if (listItem) return ""; listItem = true; }
+        else return "";
+      }
+      if (listItem && inner && inner !== "flow" && inner !== "flow-root") return "";
+      if (!outer) outer = (inner === "ruby" && !listItem) ? "inline" : "block";
+      if (!inner) inner = "flow";
+      if (outer === "block") {
+        if (inner === "flow") return listItem ? "list-item" : "block";
+        if (inner === "flow-root") return listItem ? "flow-root list-item" : "flow-root";
+        if (inner === "ruby") return "block ruby";
+        if (inner === "math") return "block math";
+        return inner;
+      }
+      if (outer === "inline") {
+        if (listItem) return inner === "flow-root" ? "inline flow-root list-item" : "inline list-item";
+        if (inner === "flow") return "inline";
+        if (inner === "flow-root") return "inline-block";
+        if (inner === "ruby") return "ruby";
+        if (inner === "math") return "inline math";
+        return "inline-" + inner;
+      }
+      if (listItem) return inner === "flow-root" ? "run-in flow-root list-item" : "run-in list-item";
+      return inner === "flow" ? "run-in" : ("run-in " + inner);
+    }
+    global.__capsurf_canonicalizeDisplay = canonicalizeDisplayValue;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_canonicalizeDisplay = canonicalizeDisplayValue;
+
     function normalizeCssSpecifiedValue(key, raw) {
       if (!raw || key.startsWith("--")) return raw;
       const s = String(raw).trim();
       if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
+      if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
       if (/\bvar\(/i.test(s)) return s;
       if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
         const n = Number(s);
@@ -45074,6 +45118,10 @@
         }
       }
       let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+      if (typeof globalThis.__capsurf_canonicalizeDisplay === "function") {
+        const cd = globalThis.__capsurf_canonicalizeDisplay(disp);
+        if (cd) { disp = cd; computedMap.set("display", disp); }
+      }
       if (disp === "initial" || disp === "unset") {
         disp = "inline";
         computedMap.set("display", "inline");
@@ -45100,6 +45148,21 @@
       }
       if (!computedMap.has("display")) {
         computedMap.set("display", disp);
+      }
+      {
+        const posRaw = (computedMap.get("position") || "static").trim().toLowerCase();
+        const flRaw = (computedMap.get("float") || "none").trim().toLowerCase();
+        if (posRaw === "absolute" || posRaw === "fixed" || (flRaw && flRaw !== "none")) {
+          const BLOCKIFY = {
+            "inline": "block", "inline-block": "block", "run-in": "block",
+            "inline-flex": "flex", "inline-grid": "grid", "inline-table": "table",
+            "inline list-item": "list-item", "inline flow-root list-item": "flow-root list-item"
+          };
+          if (Object.prototype.hasOwnProperty.call(BLOCKIFY, disp)) {
+            disp = BLOCKIFY[disp];
+            computedMap.set("display", disp);
+          }
+        }
       }
       if (!computedMap.has("content-visibility")) {
         computedMap.set("content-visibility", "visible");

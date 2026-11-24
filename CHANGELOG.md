@@ -3999,3 +3999,8 @@
 - **Phase 720**:
   - `src/js/shim/window.js`: 为 `grid-auto-columns` 与 `grid-auto-rows` 补全 `calc()`/`minmax()`/`fit-content()` 计算值长度求值与负值 `0px` 钳位。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 721**:
+  - `src/js/shim/cssom.js`: 实现 `canonicalizeDisplayValue` 完整支持 CSS Display 3 `<display-outside> || <display-inside> || list-item`、`run-in`、`ruby`、`table-header/footer-group` 与规范序列化。
+  - `src/js/shim/window.js`: `getComputedStyle` 接入 `__capsurf_canonicalizeDisplay` 与 `display` 块级化映射。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-display/parsing/display-valid.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

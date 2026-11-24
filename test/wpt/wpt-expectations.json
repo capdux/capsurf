@@ -2650,8 +2650,8 @@
     "reason": "T18 enrollment (css-display): measured PASS"
   },
   "/css/css-display/parsing/display-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 60/108 subtests pass"
+    "expected": "PASS",
+    "reason": "T18 enrollment (css-display): 108/108 subtests pass"
   },
   "/css/css-display/parsing/tentative/display-computed.html": {
     "expected": "FAIL",

@@ -7105,6 +7105,10 @@ function installWindow(global) {
       }
     }
     let disp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
+    if (typeof globalThis.__capsurf_canonicalizeDisplay === "function") {
+      const cd = globalThis.__capsurf_canonicalizeDisplay(disp);
+      if (cd) { disp = cd; computedMap.set("display", disp); }
+    }
     if (disp === "initial" || disp === "unset") {
       disp = "inline";
       computedMap.set("display", "inline");
@@ -7131,6 +7135,21 @@ function installWindow(global) {
     }
     if (!computedMap.has("display")) {
       computedMap.set("display", disp);
+    }
+    {
+      const posRaw = (computedMap.get("position") || "static").trim().toLowerCase();
+      const flRaw = (computedMap.get("float") || "none").trim().toLowerCase();
+      if (posRaw === "absolute" || posRaw === "fixed" || (flRaw && flRaw !== "none")) {
+        const BLOCKIFY = {
+          "inline": "block", "inline-block": "block", "run-in": "block",
+          "inline-flex": "flex", "inline-grid": "grid", "inline-table": "table",
+          "inline list-item": "list-item", "inline flow-root list-item": "flow-root list-item"
+        };
+        if (Object.prototype.hasOwnProperty.call(BLOCKIFY, disp)) {
+          disp = BLOCKIFY[disp];
+          computedMap.set("display", disp);
+        }
+      }
     }
     if (!computedMap.has("content-visibility")) {
       computedMap.set("content-visibility", "visible");
