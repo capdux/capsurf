@@ -3927,3 +3927,6 @@
 - **Phase 702**:
   - `src/js/shim/cssom.js`: `isValidColor` 新增 19 个 CSS System Colors 关键字与 `lab`/`oklab`/`lch`/`oklch`/`color()` 通道数量、色空间与单位合法性校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 703**:
+  - `src/js/shim/window.js`: `color: currentcolor` 向上沿父链继承最近的非 `currentcolor` 颜色并规范化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

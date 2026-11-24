@@ -45873,7 +45873,17 @@
         computedMap.set("text-align", resolvedAlign);
       }
       const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
-      const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
+      let elColor = "rgb(0, 0, 0)";
+      if (rawCol.toLowerCase() === "currentcolor") {
+        let curP = element && element.parentElement;
+        while (curP) {
+          const pCol = (collectRawComputedMap(curP, "").get("color") || "").trim();
+          if (pCol && pCol.toLowerCase() !== "currentcolor") { elColor = normCol(pCol); break; }
+          curP = curP.parentElement;
+        }
+      } else {
+        elColor = normCol(rawCol);
+      }
       computedMap.set("color", elColor);
       for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "flood-color", "lighting-color"]) {
         const cv = (computedMap.get(ck) || "").trim();

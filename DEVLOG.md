@@ -3244,3 +3244,5 @@
 - 在 `cssom.js` `parseCounterStyleRule` 中补齐内置列表符号禁用名与 `system`/`pad`/`additive-symbols`/`negative`/`fallback`/`range`/`prefix`/`suffix` 描述符严格校验，使 `@counter-style` 7 项回归测试全部 PASS。
 ### Phase 702 — CSS System Colors 与 `lab`/`lch`/`color()` 语法校验闭环
 - 在 `cssom.js` `isValidColor` 中补全 19 个系统色关键字以及 `lab`/`oklab`/`lch`/`oklch`/`color()` 的色空间、通道数和单位校验，一次性打通 `color-valid-system-color` (19/19)、`color-invalid-lab` (18/18) 与 `color-invalid-color-function` (124/124)。
+### Phase 703 — `color: currentcolor` 父元素继承求值修复
+- 修复 `window.js` 中 `color: currentcolor` 硬编码回退 `rgb(0, 0, 0)` 的缺陷，改为沿父链查找首个非 `currentcolor` 祖先色，打通 `/css/css-color/parsing/color-computed.html` 全部 16/16 子测试。
