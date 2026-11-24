@@ -2297,3 +2297,7 @@
 ### Phase 654: `/css/css-transforms/` 目录 31/31 全绿（`transform-with-sign-function` & `transform-valid`）
 - **Filter `/css/css-transforms/transform-with-sign-function` & `/css/css-transforms/parsing/transform-valid`**: **FAIL->PASS (2/2: 11/11 + 42/42)，目录 31/31 全绿**（`window.js` 新增共享 `evalCssMathInValue` 对 `transform` 与 `rotate` 的嵌套 `calc`/`min`/`max`/`clamp`/`sign`/`abs` 平衡括号求值及角度/矩阵化 `skew`/`skewX`/`skewY`/`rotate`/`rotateZ`；`cssom.js` 为 `transform` 规范化 `scale*` 百分比与 `rotate`/`skew*` `0`->`0deg` 并保留 `translateX`/`translateY` 驼峰大小写，收紧 `transform-valid.html` 基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 655: `important-vs-inline-002` (4/4) & `border-image-slice-shorthand-reset` (1/1) 全绿
+- **Filter `/css/css-cascade/important-vs-inline-002` & `/css/css-backgrounds/border-image-slice-shorthand-reset`**: **FAIL->PASS (2/2: 4/4 + 1/1)**（`window.js` 将非纯数字 `line-height` 表达式接入 `evalCssLengthExpr(..., fontSize, fontSize)` 计算像素值；`cssom.js` `expandCssShorthand` 新增 `border-image` 5 长手属性展开与初始值 `100%`/`1`/`0`/`stretch` 重置）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

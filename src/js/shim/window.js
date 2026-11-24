@@ -7763,6 +7763,13 @@ function installWindow(global) {
       }
     }
     // Ensure standard initial computed values for opacity and color
+    const lhRaw = (computedMap.get("line-height") || "").trim();
+    if (lhRaw && lhRaw.toLowerCase() !== "normal" && !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(lhRaw)) {
+      const lhPx = evalCssLengthExpr(lhRaw, fontSize, fontSize);
+      if (lhPx !== null && isFinite(lhPx)) {
+        computedMap.set("line-height", formatCssPx(Math.max(0, lhPx)));
+      }
+    }
     if (!computedMap.has("opacity") || computedMap.get("opacity") === "") {
       computedMap.set("opacity", "1");
     } else {

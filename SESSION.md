@@ -8062,3 +8062,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 654（`src/js/shim/window.js`, `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js` & `cssom.js`**：新增 `evalCssMathInValue` 支撑 `transform`/`rotate` 嵌套数学函数求值与 `skew`/`rotate` 矩阵化；`transform` 指定值补全 `scale*` `%` 转小数与 `0`->`0deg`。
   2. **全绿验证**：`transform-with-sign-function.html`（11/11）、`transform-valid.html`（42/42，收紧为 `PASS`），`/css/css-transforms/` 目录 **31/31 全绿**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 655（`src/js/shim/window.js`, `src/js/shim/cssom.js`）：
+  1. **`window.js` & `cssom.js`**：`line-height` 长度/数学表达式对 `fontSize` 求值；`expandCssShorthand` 新增 `border-image` 5 长手展开与初始值重置。
+  2. **全绿验证**：`important-vs-inline-002.html`（4/4）、`border-image-slice-shorthand-reset.html`（1/1）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **子智能体并发汇报**：`af40828f` 完成 `/css/css-backgrounds/`（34/52 PASS）、`259ea22d` 完成 `/css/css-animations/`（50/58 PASS）；已接力派发 `fec82af8`（`19710`, `/css/css-break/`）与 `f9da26cb`（`19720`, `/css/css-values/`）。

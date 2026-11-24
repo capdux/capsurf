@@ -4239,6 +4239,49 @@
       }
       return null;
     }
+    if (key === "border-image") {
+      const slashes = [];
+      let sc = "", sd = 0, sq = "";
+      for (let i = 0; i < normV.length; i++) {
+        const ch = normV[i];
+        if (sq) { sc += ch; if (ch === sq && normV[i - 1] !== "\\") sq = ""; continue; }
+        if (ch === "\"" || ch === "'") { sq = ch; sc += ch; continue; }
+        if (ch === "(") sd++;
+        else if (ch === ")" && sd > 0) sd--;
+        if (sd === 0 && ch === "/") { slashes.push(sc.trim()); sc = ""; }
+        else sc += ch;
+      }
+      slashes.push(sc.trim());
+      const REP = new Set(["stretch", "repeat", "round", "space"]);
+      const lastToks = splitCssTokens(slashes[slashes.length - 1]);
+      const repToks = [];
+      while (lastToks.length > 0 && REP.has(lastToks[lastToks.length - 1].toLowerCase())) {
+        repToks.unshift(lastToks.pop().toLowerCase());
+      }
+      slashes[slashes.length - 1] = lastToks.join(" ");
+      const seg0 = splitCssTokens(slashes[0]);
+      let srcVal = "none";
+      const sliceToks = [];
+      for (let i = 0; i < seg0.length; i++) {
+        const t = seg0[i];
+        if (srcVal === "none" && /^(?:none|url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\(|image-set\()/i.test(t)) {
+          srcVal = t;
+        } else {
+          sliceToks.push(t);
+        }
+      }
+      const sliceVal = sliceToks.length ? sliceToks.join(" ") : "100%";
+      const widthVal = (slashes[1] && slashes[1].trim()) ? slashes[1].trim() : "1";
+      const outsetVal = (slashes[2] && slashes[2].trim()) ? slashes[2].trim() : "0";
+      const repVal = repToks.length ? repToks.join(" ") : "stretch";
+      return [
+        ["border-image-source", srcVal],
+        ["border-image-slice", sliceVal],
+        ["border-image-width", widthVal],
+        ["border-image-outset", outsetVal],
+        ["border-image-repeat", repVal],
+      ];
+    }
     if (key === "border-color" || key === "border-style" || key === "border-width") {
       const p = splitCssTokens(normV);
       if (p.length < 1 || p.length > 4) return null;

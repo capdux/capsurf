@@ -3776,3 +3776,5 @@
 - **Phase 653** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `parseCssRulesInto` 选择器优先级计算与排序，及 `matchesSelector` 括号深度感知逗号拆分；`has-specificity.html` (8/8) 全绿。
 
 - **Phase 654** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `transform`/`rotate` 数学函数求值、`skew`/`rotate` 矩阵化与 `transform` 指定值规范化；`/css/css-transforms/` 目录 31/31 全绿，收紧 `transform-valid.html` 基线为 `PASS`。
+
+- **Phase 655** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `line-height` 像素求值与 `border-image` 简写展开重置；`important-vs-inline-002` (4/4) 与 `border-image-slice-shorthand-reset` (1/1) 全绿。

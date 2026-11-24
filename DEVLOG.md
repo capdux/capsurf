@@ -3119,3 +3119,7 @@
 ### Phase 654: `/css/css-transforms/` 目录 31/31 全绿
 - **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`evalCssMathInValue` 剔除 `sign()`/`abs()` 内部长度单位后对 `transform`/`rotate` 求值并矩阵化；`cssom.js` 规范化 `scale*` 百分比与角度 `0deg`。
 - **WPT & Smoke 验收**：`transform-with-sign-function` (11/11) & `transform-valid` (42/42，收紧为 `PASS`) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 655: `important-vs-inline-002` & `border-image-slice-shorthand-reset` 全绿
+- **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`line-height` 非纯数字值对 `fontSize` 求值；`expandCssShorthand("border-image")` 展开为 5 个长手属性并正确重置 `border-image-slice: 100%`。
+- **WPT & Smoke 验收**：`important-vs-inline-002` (4/4) 与 `border-image-slice-shorthand-reset` (1/1) 全绿，`--smoke` 3/3 suites PASS。
