@@ -8710,7 +8710,7 @@
         const tl = s.trim();
         if (tl === "0" || tl === "+0") return "0px";
         if (/^calc\(/i.test(tl)) return canonicalizeCalcToken(tl);
-        return s;
+        return tl.replace(/^\+/, "").replace(/^(-?)\.(\d)/, "$10.$2");
       }
       if (key === "scroll-snap-type") {
         const toks = splitCssTokens(s.trim().toLowerCase());
@@ -47225,7 +47225,7 @@
           computedMap.set(sk, "none");
           continue;
         }
-        const fm = /^(inset|circle|ellipse|polygon|shape)\(/i.exec(sv);
+        const fm = /^(inset|circle|ellipse|polygon|shape|rect|xywh)\(/i.exec(sv);
         if (!fm) continue;
         const fn = fm[1].toLowerCase();
         let d = 1, i = fm[0].length, q = "";
@@ -47280,7 +47280,7 @@
         } else if (fn === "inset") {
           const toks = splitWs(inner);
           const rI = toks.findIndex((t) => t.toLowerCase() === "round");
-          const pre = (rI === -1 ? toks : toks.slice(0, rI)).map(evalTok);
+          const pre = (rI === -1 ? toks : toks.slice(0, rI)).map((t) => /^calc\(\s*0%\s*[+-]\s*[\d.]+px\s*\)$/i.test(t) ? t : evalTok(t));
           let postStr = "";
           if (rI !== -1) {
             const rToks = toks.slice(rI + 1).map((t) => t === "/" ? "/" : clamp0(evalTok(t)));
@@ -47289,6 +47289,62 @@
             }
           }
           res = "inset(" + pre.join(" ") + postStr + ")";
+        } else if (fn === "rect" || fn === "xywh") {
+          const toks = splitWs(inner);
+          const rI = toks.findIndex((t) => t.toLowerCase() === "round");
+          const raw4 = rI === -1 ? toks : toks.slice(0, rI);
+          const parsePctPx = (evStr) => {
+            const ev = String(evStr || "").trim();
+            const mP = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ev);
+            if (mP) return { pct: Number(mP[1]), px: 0 };
+            const mX = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(ev);
+            if (mX) return { pct: 0, px: Number(mX[1]) };
+            const mC = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\s*\)$/i.exec(ev);
+            if (mC) return { pct: Number(mC[1]), px: (mC[2] === "-" ? -1 : 1) * Number(mC[3]) };
+            return null;
+          };
+          const sub100Sum = (ev1, ev2) => {
+            const a = parsePctPx(ev1), b = ev2 ? parsePctPx(ev2) : { pct: 0, px: 0 };
+            if (a && b) {
+              const pRem = Math.round((100 - a.pct - b.pct) * 1e6) / 1e6;
+              const xRem = Math.round((-a.px - b.px) * 1e6) / 1e6;
+              if (xRem === 0) return pRem + "%";
+              return "calc(" + pRem + "% " + (xRem < 0 ? "- " + (-xRem) : "+ " + xRem) + "px)";
+            }
+            return ev2 ? ("calc(100% - (" + ev1 + " + " + ev2 + "))") : ("calc(100% - (" + ev1 + "))");
+          };
+          let tVal, rVal, bVal, lVal;
+          if (fn === "rect" && raw4.length >= 4) {
+            tVal = raw4[0].toLowerCase() === "auto" ? "0%" : evalTok(raw4[0]);
+            rVal = raw4[1].toLowerCase() === "auto" ? "0%" : sub100Sum(evalTok(raw4[1]), null);
+            bVal = raw4[2].toLowerCase() === "auto" ? "0%" : sub100Sum(evalTok(raw4[2]), null);
+            lVal = raw4[3].toLowerCase() === "auto" ? "0%" : evalTok(raw4[3]);
+          } else if (fn === "xywh" && raw4.length >= 4) {
+            const xEv = evalTok(raw4[0]), yEv = evalTok(raw4[1]);
+            const wEv = evalTok(raw4[2]), hEv = evalTok(raw4[3]);
+            lVal = xEv;
+            tVal = yEv;
+            rVal = sub100Sum(xEv, wEv);
+            bVal = sub100Sum(yEv, hEv);
+          } else {
+            tVal = "0%"; rVal = "0%"; bVal = "0%"; lVal = "0%";
+          }
+          let sides = [tVal, rVal, bVal, lVal];
+          if (rVal === lVal && tVal === bVal && tVal === rVal) {
+            sides = [tVal];
+          } else if (rVal === lVal && tVal === bVal) {
+            sides = [tVal, rVal];
+          } else if (rVal === lVal) {
+            sides = [tVal, rVal, bVal];
+          }
+          let postStr = "";
+          if (rI !== -1) {
+            const rToks = toks.slice(rI + 1).map((t) => t === "/" ? "/" : clamp0(evalTok(t)));
+            if (!rToks.every((t) => t === "0px" || t === "0%" || t === "/")) {
+              postStr = " round " + rToks.join(" ");
+            }
+          }
+          res = "inset(" + sides.join(" ") + postStr + ")";
         } else {
           const segs = []; let cur = "", pd = 0;
           for (let k = 0; k < inner.length; k++) {

@@ -3955,3 +3955,7 @@
   - `src/js/shim/selector.js`: 允许 `::before::marker`、`::after::marker` 及 `::search-text` 链式 `:current`/`:not`。
   - `test/wpt/wpt-expectations.json`: 将 `layer-import-parsing.html`、`layer.html`、`tree-abiding-pseudo-elements.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 710**:
+  - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-margin")` 剥离前导 `+` 并补全省略前导 `0`（`.5px` -> `0.5px`）。
+  - `src/js/shim/window.js`: `getComputedStyle` 中将 `rect()` 与 `xywh()` 转换为等价 `inset()`（支持 `auto`、`round` 与 4->1 边折叠，并保留 `calc(0% - Npx)` round-trip）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

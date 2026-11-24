@@ -3258,3 +3258,5 @@
 - 在 `cssom.js` 实现统一 `parseGridLine` 与 `splitGridSlashParts`（支持 `\31 st` 十六进制转义保护、`span` 禁止夹心、`<integer> && <custom-ident>` 重排及 `grid-row`/`grid-column`/`grid-area` 4->1 段最短折叠），并在 `window.js` `getComputedStyle` 接入 `calc`/`sign(cqw)`/`sibling-index()` 计算求值，一次性打通 `/css/css-grid/parsing/` 全部 10 项 `grid-{area,row,column}*` 测试。
 ### Phase 709 — `@layer` 规则闭环与 `::before/::after::marker` 链式伪元素
 - 在 `cssom.js` 补全 `@layer` 语句与块规则校验/序列化（含 `@import` 无效 `layer(...)` 回退为 `<general-enclosed>` 媒体查询），打通 `/css/css-cascade/parsing/` 全目录 5/5 PASS；在 `selector.js` 放行 `::before::marker`/`::after::marker`，打通 `tree-abiding-pseudo-elements.html` 全部 41/41 子测试。
+### Phase 710 — CSS Shapes `rect()`/`xywh()` 等价 `inset()` 求值与 `shape-margin` 规范化
+- 在 `window.js` 将 `rect()`/`xywh()` 计算值按规范折算为等价 `inset()`（含 `100% - (x + w)` 线性组合及 `calc(0% - Npx)` round-trip），并在 `cssom.js` 为 `shape-margin` 规范化前导 `+` 与 `.5px`，一次性打通 `rect-function-computed.html`、`xywh-function-computed.html` 与 `shape-margin-002.html`。

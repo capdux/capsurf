@@ -4920,7 +4920,7 @@
       const tl = s.trim();
       if (tl === "0" || tl === "+0") return "0px";
       if (/^calc\(/i.test(tl)) return canonicalizeCalcToken(tl);
-      return s;
+      return tl.replace(/^\+/, "").replace(/^(-?)\.(\d)/, "$10.$2");
     }
     if (key === "scroll-snap-type") {
       const toks = splitCssTokens(s.trim().toLowerCase());
