@@ -46138,6 +46138,91 @@
         computedMap.set("cursor", cParts.map((p) => /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(p) ? evalGradientComputed(p) : p).join(", "));
       }
       resolveContentGradients();
+      for (const sk of ["shape-outside", "clip-path"]) {
+        const sv = (computedMap.get(sk) || "").trim();
+        if (!sv || sv === "initial" || sv === "revert" || sv === "revert-layer") {
+          computedMap.set(sk, "none");
+          continue;
+        }
+        const fm = /^(inset|circle|ellipse|polygon|shape)\(/i.exec(sv);
+        if (!fm) continue;
+        const fn = fm[1].toLowerCase();
+        let d = 1, i = fm[0].length, q = "";
+        for (; i < sv.length && d > 0; i++) {
+          const ch = sv[i];
+          if (q) { if (ch === "\\" && i + 1 < sv.length) i++; else if (ch === q) q = ""; continue; }
+          if (ch === '"' || ch === "'") { q = ch; continue; }
+          if (ch === "(") d++; else if (ch === ")") d--;
+        }
+        if (d !== 0) continue;
+        const inner = sv.slice(fm[0].length, i - 1).trim();
+        const tail = sv.slice(i).trim();
+        const splitWs = (s) => {
+          const out = []; let cur = "", pd = 0;
+          for (let k = 0; k < s.length; k++) {
+            const c = s[k];
+            if (c === "(") pd++; else if (c === ")" && pd > 0) pd--;
+            if (pd === 0 && /\s/.test(c)) { if (cur) { out.push(cur); cur = ""; } }
+            else cur += c;
+          }
+          if (cur) out.push(cur);
+          return out;
+        };
+        const evalTok = (t) => (/^[+-]?(?:\d|\.)/.test(t) || /^calc\(/i.test(t)) ? evalLinLenPctTok(t) : t;
+        const clamp0 = (t) => (/^-\d/.test(t)) ? "0px" : t;
+        let res = sv;
+        if (fn === "circle" || fn === "ellipse") {
+          const toks = splitWs(inner);
+          const atI = toks.findIndex((t) => t.toLowerCase() === "at");
+          const pre = (atI === -1 ? toks : toks.slice(0, atI)).map((t) => clamp0(evalTok(t)));
+          let posStr = "";
+          if (atI !== -1 && atI + 1 < toks.length) {
+            const pt = toks.slice(atI + 1);
+            const p1 = (t) => {
+              const tl = t.toLowerCase();
+              if (tl === "left" || tl === "top") return "0%";
+              if (tl === "center") return "50%";
+              if (tl === "right" || tl === "bottom") return "100%";
+              return evalTok(t);
+            };
+            if (pt.length === 1) {
+              const tl = pt[0].toLowerCase();
+              posStr = (tl === "top" || tl === "bottom") ? ("50% " + p1(pt[0])) : (p1(pt[0]) + " 50%");
+            } else if (pt.length === 2) {
+              posStr = p1(pt[0]) + " " + p1(pt[1]);
+            } else {
+              posStr = pt.map(evalTok).join(" ");
+            }
+          }
+          const preStr = pre.join(" ");
+          res = fn + "(" + (posStr ? (preStr ? preStr + " at " + posStr : "at " + posStr) : preStr) + ")";
+        } else if (fn === "inset") {
+          const toks = splitWs(inner);
+          const rI = toks.findIndex((t) => t.toLowerCase() === "round");
+          const pre = (rI === -1 ? toks : toks.slice(0, rI)).map(evalTok);
+          let postStr = "";
+          if (rI !== -1) {
+            const rToks = toks.slice(rI + 1).map((t) => t === "/" ? "/" : clamp0(evalTok(t)));
+            if (!rToks.every((t) => t === "0px" || t === "0%" || t === "/")) {
+              postStr = " round " + rToks.join(" ");
+            }
+          }
+          res = "inset(" + pre.join(" ") + postStr + ")";
+        } else {
+          const segs = []; let cur = "", pd = 0;
+          for (let k = 0; k < inner.length; k++) {
+            const c = inner[k];
+            if (c === "(") pd++; else if (c === ")" && pd > 0) pd--;
+            if (pd === 0 && c === ",") { segs.push(cur.trim()); cur = ""; }
+            else cur += c;
+          }
+          if (cur.trim()) segs.push(cur.trim());
+          const outSegs = segs.map((seg) => splitWs(seg).map(evalTok).join(" "));
+          if (fn === "polygon" && outSegs.length > 1 && outSegs[0] === "round 0px") outSegs.shift();
+          res = fn + "(" + outSegs.join(", ") + ")";
+        }
+        computedMap.set(sk, res + (tail ? " " + tail : ""));
+      }
       if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
         computedMap.set("hyphenate-character", "auto");
       }

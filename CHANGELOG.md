@@ -3848,3 +3848,6 @@
 - **Phase 678**:
   - `src/js/shim/cssom.js`: `isValidRoundRadii` 改用括号深度感知的 `splitTopLevelSlashStr` 避免误拆 `calc()` 内部 `/`；`normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 为 `inset(... round ...)` 补齐水平/垂直圆角 1~4 边折叠及等值省略 `/ ry`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 679**:
+  - `src/js/shim/window.js`: 在 `getComputedStyle` 中为 `shape-outside` 与 `clip-path` 补齐 `inset`/`circle`/`ellipse`/`polygon`/`shape` 的 `calc()` 化简、长度单位求值（`em`/`in` 等转 `px`）、`at` 位置关键字转百分比、负半径/圆角截断为 `0px` 及 `round 0px` 省略。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

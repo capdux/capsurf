@@ -3196,3 +3196,5 @@
 ### Phase 678 — `inset()` `round` 深度感知分隔与圆角折叠
 - 修复 `isValidRoundRadii` 直接 `split("/")` 误拆 `calc(100%/4)` 的问题，改为括号深度感知 `splitTopLevelSlashStr`。
 - 为 `inset(... round ...)` 补齐圆角 1~4 边折叠与对称 `/` 省略，使 `shape-outside-inset-009.html` 全部 14 项 inline style 用例通过。
+### Phase 679 — `shape-outside` / `clip-path` 计算值求值收口
+- 在 `window.js` 中为 `shape-outside` 与 `clip-path` 接入 `evalLinLenPctTok` 计算值求值、负半径/圆角归零及 `at` 位置百分比解析，一次性打通 `shape-outside-{inset-008,inset-009,circle-009,ellipse-009}` 与 `inset-function-computed.html` 全部 5 项 WPT 测试。
