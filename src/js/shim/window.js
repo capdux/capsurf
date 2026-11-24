@@ -8310,9 +8310,11 @@ function installWindow(global) {
     const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
     const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
     computedMap.set("color", elColor);
-    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color"]) {
+    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color"]) {
       const cv = (computedMap.get(ck) || "").trim();
-      if (ck === "outline-color" && cv.toLowerCase() === "auto") {
+      if (ck === "background-color" && (!cv || cv.toLowerCase() === "transparent")) {
+        computedMap.set(ck, "rgba(0, 0, 0, 0)");
+      } else if (ck === "outline-color" && cv.toLowerCase() === "auto") {
         const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
         computedMap.set(ck, os === "auto" ? "auto" : elColor);
       } else if (!cv || cv.toLowerCase() === "currentcolor") {

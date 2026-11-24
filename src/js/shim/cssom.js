@@ -2847,6 +2847,12 @@
     if (key === "ruby-overhang") {
       return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
     }
+    if (key === "background-color") {
+      const sl = s.toLowerCase();
+      if (sl === "currentcolor" || sl === "transparent") return sl;
+      if (sl.startsWith("#") || /^rgba?\(/i.test(sl)) return normalizeSingleColor(s);
+      return sl;
+    }
     if (key === "content") {
       const normCounterTok = (tok) => {
         const cm = /^(counters?)\((.*)\)$/i.exec(tok);
@@ -6366,6 +6372,67 @@
         if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) {
           if (a >= 1) return "rgb(" + r + ", " + g + ", " + b + ")";
           return "rgba(" + r + ", " + g + ", " + b + ", " + Number(a.toFixed(3)) + ")";
+        }
+      }
+    }
+    const fmtRgb = (r, g, b, a) => {
+      const rr = Math.max(0, Math.min(255, Math.round(r)));
+      const gg = Math.max(0, Math.min(255, Math.round(g)));
+      const bb = Math.max(0, Math.min(255, Math.round(b)));
+      if (a === undefined || a >= 1) return "rgb(" + rr + ", " + gg + ", " + bb + ")";
+      const aa = Math.max(0, Math.min(1, a));
+      return "rgba(" + rr + ", " + gg + ", " + bb + ", " + Number(aa.toFixed(6)) + ")";
+    };
+    const rgbM = /^rgba?\(\s*(.+)\s*\)$/i.exec(s);
+    if (rgbM && !/\bfrom\b/i.test(rgbM[1])) {
+      const slash = rgbM[1].split("/");
+      const chParts = slash[0].trim().split(/[\s,]+/).filter(Boolean);
+      if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
+        const parseCh = (t) => t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
+        const r = parseCh(chParts[0]), g = parseCh(chParts[1]), b = parseCh(chParts[2]);
+        let a = 1;
+        if (slash.length === 2) {
+          const at = slash[1].trim();
+          a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+        } else if (chParts.length === 4) {
+          const at = chParts[3];
+          a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+        }
+        if (isFinite(r) && isFinite(g) && isFinite(b) && isFinite(a)) return fmtRgb(r, g, b, a);
+      }
+    }
+    const hslM = /^hsla?\(\s*(.+)\s*\)$/i.exec(s);
+    if (hslM && !/\bfrom\b/i.test(hslM[1])) {
+      const slash = hslM[1].split("/");
+      const chParts = slash[0].trim().split(/[\s,]+/).filter(Boolean);
+      if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
+        let h = parseFloat(chParts[0]);
+        if (chParts[0].endsWith("rad")) h = h * 180 / Math.PI;
+        else if (chParts[0].endsWith("grad")) h = h * 0.9;
+        else if (chParts[0].endsWith("turn")) h = h * 360;
+        h = ((h % 360) + 360) % 360;
+        const sat = Math.max(0, Math.min(1, parseFloat(chParts[1]) / 100));
+        const lit = Math.max(0, Math.min(1, parseFloat(chParts[2]) / 100));
+        let a = 1;
+        if (slash.length === 2) {
+          const at = slash[1].trim();
+          a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+        } else if (chParts.length === 4) {
+          const at = chParts[3];
+          a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+        }
+        if (isFinite(h) && isFinite(sat) && isFinite(lit) && isFinite(a)) {
+          const c = (1 - Math.abs(2 * lit - 1)) * sat;
+          const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+          const m = lit - c / 2;
+          let r1 = 0, g1 = 0, b1 = 0;
+          if (h < 60) { r1 = c; g1 = x; }
+          else if (h < 120) { r1 = x; g1 = c; }
+          else if (h < 180) { g1 = c; b1 = x; }
+          else if (h < 240) { g1 = x; b1 = c; }
+          else if (h < 300) { r1 = x; b1 = c; }
+          else { r1 = c; b1 = x; }
+          return fmtRgb((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255, a);
         }
       }
     }

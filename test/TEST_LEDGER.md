@@ -1794,3 +1794,12 @@
   - `/css/css-overflow/parsing/` (`b420`): `32` files (`22 PASS / 10 FAIL`)
   - `/css/css-box/parsing/` (`b421`): **29/29 PASS (100% ALL GREEN)**
   - `/css/css-ruby/parsing/` (`b423`): **8/8 PASS (100% ALL GREEN)**
+
+### Phase 573 `background-color` 3/3 全绿 & `normalizeSingleColor` `rgb(%)`/`hsl()` 闭环 (bin_dev Phase 573, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/background-color`**: **3/3 PASS (100% ALL GREEN)**（`background-color-invalid.html`, `background-color-computed.html`, `background-color-valid.html` 全绿）：
+  - `cssom.js`：`background-color` 指定值归一化 `#hex`/`rgb(%)`/`currentColor`，并在 `normalizeSingleColor` 补齐 `rgb(%)` 与 `hsl()/hsla()` 到 `rgb()/rgba()` 的转换。
+  - `window.js`：`background-color` 纳入颜色计算求值循环（`transparent -> rgba(0, 0, 0, 0)`、`currentcolor -> elColor`、`hsl(...) -> rgb(...)`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-multicol/parsing/` (`b424`): **31/31 PASS (100% ALL GREEN)**
+  - `/css/css-cascade/` (`b425`, partial 54 recorded): `30 PASS / 19 FAIL / 4 TIMEOUT / 1 ERROR`

@@ -7661,3 +7661,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `window.js`：全部纳入 `STANDARD_COMPUTED_LONGHANDS`（默认 `0` / `stretch` / `100%`），`border-image-outset` 计算期解析 `<length>`/`calc` 并钳位负值 `0px`。
   2. **验证与基线收紧**：`border-image-repeat-*` **3/3 PASS**、`border-image-outset-{valid,invalid}` **2/2 PASS**、`border-image-slice-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**；收紧 `css-break/parsing` 4 项基线实现 **18/18 PASS**。
   3. **并行摸底汇总**：`/css/css-align/parsing/` **50/50 PASS**、`/css/css-box/parsing/` **29/29 PASS**、`/css/css-ruby/parsing/` **8/8 PASS**、`/css/css-overflow/parsing/` **22/32 PASS**。
+
+### 2026-11-24 Phase 573 (`background-color` 3/3 全绿 & `rgb(%)`/`hsl()` 规范化)
+- **[Agent]**: 自主推导并完成 Phase 573（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`normalizeSingleColor` & `background-color` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js`：`normalizeSingleColor` 补齐 `rgb()`/`rgba()`（含 `%` 通道）与 `hsl()`/`hsla()` 到 `rgb()`/`rgba()` 的规范转换；`normalizeCssSpecifiedValue` 对 `background-color` 归一化 `#hex`、`rgb(%)` 与 `currentColor`。
+     - `window.js`：将 `background-color` 纳入 `applyUsedValuesToComputedMap` 颜色求值循环（`transparent -> rgba(0, 0, 0, 0)`、`currentcolor` 与 `hsl(...)` 解析）。
+  2. **全绿验证**：`background-color-{invalid,computed,valid}.html` **3/3 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

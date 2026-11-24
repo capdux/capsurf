@@ -2788,3 +2788,7 @@
 ### Phase 572: `border-image-{outset,repeat,slice}` 闭环与 `css-break/parsing` 18/18 收紧
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `border-image-outset`/`repeat`/`slice` 文法校验、对称折叠、`fill` 后置及 `STANDARD_COMPUTED_LONGHANDS` 默认值/计算期求值。
 - **WPT & Smoke 验收**：`border-image-repeat` 3/3 PASS、`outset/slice-{valid,invalid}` 4/4 PASS、收紧 `css-break/parsing` 4 项实现 18/18 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 573: `background-color` 3/3 全绿与 `rgb(%)`/`hsl()` 颜色规范化
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`normalizeSingleColor` 支持 `rgb(%)` 与 `hsl()/hsla()` 转 `rgb()/rgba()`，`background-color` 接入指定值规范化与计算期求值（含 `transparent -> rgba(0, 0, 0, 0)`）。
+- **WPT & Smoke 验收**：`background-color-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
