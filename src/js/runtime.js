@@ -10686,33 +10686,49 @@
       fallback: "fallback",
     };
     const COUNTER_STYLE_RESERVED_NAMES = new Set([
-      "none", "decimal", "initial", "inherit", "unset", "revert", "revert-layer", "default"
+      "none", "decimal", "disc", "square", "circle", "disclosure-open", "disclosure-closed",
+      "initial", "inherit", "unset", "revert", "revert-layer", "default"
     ]);
     const COUNTER_STYLE_SYSTEM_FAMILIES = new Set([
       "cyclic", "numeric", "alphabetic", "symbolic", "additive", "fixed", "extends"
     ]);
+    const COUNTER_STYLE_WIDE = new Set(["initial", "inherit", "unset", "revert", "revert-layer", "default"]);
+
+    function isCounterStyleSymbol(t) {
+      if (!t) return false;
+      if ((t.startsWith('"') && t.endsWith('"') && t.length >= 2) || (t.startsWith("'") && t.endsWith("'") && t.length >= 2)) return true;
+      if (/^(?:url|image)\(/i.test(t)) return true;
+      return !COUNTER_STYLE_WIDE.has(t.toLowerCase()) && !/^[+-]?\d/.test(t);
+    }
 
     function canonicalizePad(val) {
-      const s = String(val == null ? "" : val).trim();
-      if (!s) return "";
-      const m1 = s.match(/^(\d+)\s+(.+)$/);
-      if (m1) return m1[1] + " " + m1[2];
-      const m2 = s.match(/^(.+?)\s+(\d+)$/);
-      if (m2) return m2[2] + " " + m2[1];
-      return s;
+      const toks = splitCssTokens(String(val == null ? "" : val).trim());
+      if (toks.length !== 2) return null;
+      if (/^\d+$/.test(toks[0]) && isCounterStyleSymbol(toks[1])) return toks[0] + " " + toks[1];
+      if (/^\d+$/.test(toks[1]) && isCounterStyleSymbol(toks[0])) return toks[1] + " " + toks[0];
+      return null;
     }
 
     function canonicalizeAdditiveSymbols(val) {
       const s = String(val == null ? "" : val).trim();
-      if (!s) return "";
-      const pairs = s.split(",").map((p) => p.trim()).filter(Boolean);
-      return pairs.map((p) => {
-        const m1 = p.match(/^(\d+)\s+(.+)$/);
-        if (m1) return m1[1] + " " + m1[2];
-        const m2 = p.match(/^(.+?)\s+(\d+)$/);
-        if (m2) return m2[2] + " " + m2[1];
-        return p;
-      }).join(", ");
+      if (!s) return null;
+      const pairs = splitTopLevelComma(s);
+      if (pairs.length === 0) return null;
+      let prevW = Infinity;
+      const out = [];
+      for (let i = 0; i < pairs.length; i++) {
+        const toks = splitCssTokens(pairs[i]);
+        if (toks.length !== 2) return null;
+        let wStr = null, sym = null;
+        if (/^\d+$/.test(toks[0]) && isCounterStyleSymbol(toks[1])) { wStr = toks[0]; sym = toks[1]; }
+        else if (/^\d+$/.test(toks[1]) && isCounterStyleSymbol(toks[0])) { wStr = toks[1]; sym = toks[0]; }
+        else return null;
+        const w = parseInt(wStr, 10);
+        if (w >= prevW) return null;
+        prevW = w;
+        out.push(w + " " + sym);
+      }
+      return out.join(", ");
     }
 
     function parseCounterStyleRule(cssText) {
@@ -10742,16 +10758,53 @@
         let val = d.slice(colon + 1).trim();
 
         if (rawName === "system") {
-          const fam = val.split(/\s+/)[0]?.toLowerCase();
-          if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(fam)) {
+          const toks = splitCssTokens(val);
+          if (toks.length === 0) continue;
+          const fam = toks[0].toLowerCase();
+          if (!COUNTER_STYLE_SYSTEM_FAMILIES.has(fam)) continue;
+          if (fam === "fixed") {
+            if (toks.length > 2 || (toks.length === 2 && !/^[+-]?\d+$/.test(toks[1]))) continue;
+          } else if (fam === "extends") {
+            if (toks.length !== 2) continue;
+            const ext = toks[1].toLowerCase();
+            if (ext === "none" || COUNTER_STYLE_WIDE.has(ext) || toks[1].startsWith('"') || toks[1].startsWith("'")) continue;
+          } else if (toks.length !== 1) {
             continue;
           }
         } else if (rawName === "pad") {
           val = canonicalizePad(val);
+          if (!val) continue;
         } else if (rawName === "additive-symbols") {
           val = canonicalizeAdditiveSymbols(val);
-        } else if (rawName === "suffix") {
           if (!val) continue;
+        } else if (rawName === "negative") {
+          const toks = splitCssTokens(val);
+          if (toks.length < 1 || toks.length > 2 || !toks.every(isCounterStyleSymbol)) continue;
+        } else if (rawName === "fallback") {
+          const toks = splitCssTokens(val);
+          if (toks.length !== 1) continue;
+          const fl = toks[0].toLowerCase();
+          if (fl === "none" || COUNTER_STYLE_WIDE.has(fl) || toks[0].startsWith('"') || toks[0].startsWith("'")) continue;
+        } else if (rawName === "range") {
+          if (!val) continue;
+          if (val.toLowerCase() !== "auto") {
+            const pairs = splitTopLevelComma(val);
+            if (pairs.length === 0) continue;
+            let rOk = true;
+            for (let ri = 0; ri < pairs.length; ri++) {
+              const rt = splitCssTokens(pairs[ri]);
+              if (rt.length !== 2) { rOk = false; break; }
+              const isB = (x) => x.toLowerCase() === "infinite" || /^[+-]?\d+$/.test(x);
+              if (!isB(rt[0]) || !isB(rt[1])) { rOk = false; break; }
+              if (/^[+-]?\d+$/.test(rt[0]) && /^[+-]?\d+$/.test(rt[1]) && parseInt(rt[0], 10) > parseInt(rt[1], 10)) {
+                rOk = false; break;
+              }
+            }
+            if (!rOk) continue;
+          }
+        } else if (rawName === "suffix" || rawName === "prefix") {
+          const toks = splitCssTokens(val);
+          if (toks.length !== 1 || !isCounterStyleSymbol(toks[0])) continue;
         } else if (!Object.values(COUNTER_STYLE_IDL_TO_DESC).includes(rawName)) {
           continue;
         }

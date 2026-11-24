@@ -3921,3 +3921,6 @@
 - **Phase 700**:
   - `src/js/shim/window.js`: 提升 `resolveContainerW` 与 `evalSignCalls` 至 `font-weight`/`font-style` 之前，使 `sign(20cqw - 10px)` 正确读取容器 `width`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 701**:
+  - `src/js/shim/cssom.js`: `COUNTER_STYLE_RESERVED_NAMES` 与 `parseCounterStyleRule` 补齐 `@counter-style` 禁用名与 `system`/`pad`/`additive-symbols`/`negative`/`fallback`/`range`/`prefix`/`suffix` 严格校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

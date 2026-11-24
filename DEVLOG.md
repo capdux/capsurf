@@ -3240,3 +3240,5 @@
 - 在 `window.js` 中补全 `font-width` 关键字至百分比转换、`font-stretch` Proxy 属性可见性及 `resolveContainerW` 原生 `container-type` 回退，打通 `/css/css-fonts/parsing/font-width-computed.html` 全部 30/30 子测试。
 ### Phase 700 — `font-weight-computed` 与 `font-style` `sign(cqw)` 容器宽度求值闭环
 - 提升 `resolveContainerW` 与 `evalSignCalls` 作用域并为 `font-weight`/`font-style` 接入容器 `cqw` 单位求值，打通 `/css/css-fonts/parsing/font-weight-computed.html` 全部 58/58 子测试。
+### Phase 701 — `@counter-style` 禁用名与描述符语法校验闭环
+- 在 `cssom.js` `parseCounterStyleRule` 中补齐内置列表符号禁用名与 `system`/`pad`/`additive-symbols`/`negative`/`fallback`/`range`/`prefix`/`suffix` 描述符严格校验，使 `@counter-style` 7 项回归测试全部 PASS。
