@@ -3851,3 +3851,6 @@
 - **Phase 679**:
   - `src/js/shim/window.js`: 在 `getComputedStyle` 中为 `shape-outside` 与 `clip-path` 补齐 `inset`/`circle`/`ellipse`/`polygon`/`shape` 的 `calc()` 化简、长度单位求值（`em`/`in` 等转 `px`）、`at` 位置关键字转百分比、负半径/圆角截断为 `0px` 及 `round 0px` 省略。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 680**:
+  - `src/js/shim/cssom.js`: `normalizeSingleColor` 与 `normalizeCssSpecifiedValue` 新增 `hwb()` 转 `rgb()`/`rgba()` 及 `lab`/`lch`/`oklab`/`oklch` 省略 `/ 1`、规范 `/` 空格与 `%` alpha 转小数。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

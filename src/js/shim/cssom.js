@@ -4079,7 +4079,7 @@
       return toks.map((t) => {
         const tl = t.toLowerCase();
         if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
-        if (tl.startsWith("#") || /^(?:rgba?|hsla?)\(/i.test(tl)) return normalizeSingleColor(t);
+        if (tl.startsWith("#") || /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/i.test(tl)) return normalizeSingleColor(t);
         return tl;
       }).join(" ");
     }
@@ -7985,6 +7985,60 @@
           else { r1 = c; b1 = x; }
           return fmtRgb((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255, a);
         }
+      }
+    }
+    const hwbM = /^hwb\(\s*(.+)\s*\)$/i.exec(s);
+    if (hwbM && !/\bfrom\b/i.test(hwbM[1]) && !/\bnone\b/i.test(hwbM[1])) {
+      const slash = splitTopSlash(hwbM[1]);
+      const chParts = splitColorCh(slash[0]);
+      if (chParts.length === 3 && slash.length <= 2) {
+        const hTok = evalColorExpr(chParts[0]);
+        let h = parseFloat(hTok);
+        if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
+        else if (hTok.endsWith("grad")) h = h * 0.9;
+        else if (hTok.endsWith("turn")) h = h * 360;
+        h = ((h % 360) + 360) % 360;
+        const w = Math.max(0, parseFloat(evalColorExpr(chParts[1])) / 100);
+        const bk = Math.max(0, parseFloat(evalColorExpr(chParts[2])) / 100);
+        let a = 1;
+        if (slash.length === 2) {
+          const at = evalColorExpr(slash[1]);
+          a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+        }
+        if (isFinite(h) && isFinite(w) && isFinite(bk) && isFinite(a)) {
+          if (w + bk >= 1) {
+            const g = (w / (w + bk)) * 255;
+            return fmtRgb(g, g, g, a);
+          }
+          const x = 1 - Math.abs(((h / 60) % 2) - 1);
+          let r1 = 0, g1 = 0, b1 = 0;
+          if (h < 60) { r1 = 1; g1 = x; }
+          else if (h < 120) { r1 = x; g1 = 1; }
+          else if (h < 180) { g1 = 1; b1 = x; }
+          else if (h < 240) { g1 = x; b1 = 1; }
+          else if (h < 300) { r1 = x; b1 = 1; }
+          else { r1 = 1; b1 = x; }
+          const f = 1 - w - bk;
+          return fmtRgb((r1 * f + w) * 255, (g1 * f + w) * 255, (b1 * f + w) * 255, a);
+        }
+      }
+    }
+    const labM = /^(lab|lch|oklab|oklch)\(\s*(.+)\s*\)$/i.exec(s);
+    if (labM && !/\bfrom\b/i.test(labM[2])) {
+      const fn = labM[1].toLowerCase();
+      const slash = splitTopSlash(labM[2]);
+      const chParts = splitColorCh(slash[0]);
+      if (chParts.length === 3 && slash.length <= 2) {
+        let aStr = "";
+        if (slash.length === 2) {
+          const at = evalColorExpr(slash[1]);
+          if (at === "none") aStr = " / none";
+          else {
+            const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+            if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+          }
+        }
+        return fn + "(" + chParts.join(" ") + aStr + ")";
       }
     }
     return val;
