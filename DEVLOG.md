@@ -2764,3 +2764,7 @@
 ### Phase 566: `css-images/parsing` 剩余可修项全绿收官
 - **`cssom.js` 修复**：`object-fit` 将 `contain scale-down`/`scale-down contain` 规范为 `"scale-down"`；`image-resolution` 支持 `[+-]?` 分辨率；渐变 `calc(...)` 复用 `canonicalizeCalcToken` 规范排序并增加 `linear/radial` 禁止 `%`+`<angle>`、`conic(from calc(...%))` 与无单位混算校验。
 - **WPT & Smoke 验收**：`conic-gradient-calc-angle-percentage` 2/2、`image-resolution` 2/2、`object-fit` 3/3 全部 PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 567: `css-transforms` 4 组全绿闭环
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`transform` 拒绝未配对 `)`；`transform-origin` 限制 1~3 令牌并与 `perspective-origin` 统一单值补齐 `center`；`translate` 接入 `canonicalizeCalcToken`；`perspective(none)` 计算期输出 `matrix(1, 0, 0, 1, 0, 0)`。
+- **WPT & Smoke 验收**：`perspective-origin-*` 3/3、`transform-origin-*` 3/3、`translate-parsing-*` 3/3、`css-transform-style-evaluation-validation` 1/1 PASS，`--smoke` 3/3 suites PASS。

@@ -1729,3 +1729,20 @@
   - `/css/css-fonts/`: `121` files (`49 PASS / 69 FAIL / 3 TIMEOUT`)
   - `/css/css-text/`: `125` files (`90 PASS / 34 FAIL / 1 TIMEOUT`)
   - `/css/css-backgrounds/` (`partial`, 34 recorded): `18 PASS / 12 FAIL / 4 TIMEOUT` (`animations/border-*-width-composition.html`)
+
+### Phase 567 `/css/css-transforms/` (`perspective-origin`, `transform-origin`, `translate`, `evaluation-validation`) 全绿闭环 & WPT-B391~B397 摸底 (bin_dev Phase 567, 2026-11-24)
+- **Filter `/css/css-transforms/parsing/`**:
+  - `perspective-origin-{invalid,valid,computed}.html`: **3/3 PASS (100% ALL GREEN)**（1 值 `<position>` 补齐 `center` 规范序列化）。
+  - `transform-origin-{invalid,valid,computed}.html`: **3/3 PASS (100% ALL GREEN)**（1 值补齐 `center` 且严格拒绝 4 令牌位置）。
+  - `translate-parsing-{invalid,computed,valid}.html`: **3/3 PASS (100% ALL GREEN)**（`translate` 指定值接入 `canonicalizeCalcToken`）。
+- **Filter `/css/css-transforms/css-transform-style-evaluation-validation`**: **PASS (13/13)**（`transform` 函数参数拒绝不匹配右括号如 `rotate(30deg)|rotateX(60deg)`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-transforms/` (`b391` initial): `31` files (`16 PASS / 14 FAIL / 1 TIMEOUT`) -> Phase 567 转绿 6 项至 `22/31 PASS`
+  - `/css/css-color/` (`b385`): `56` files (`12 PASS / 34 FAIL / 10 TIMEOUT`)
+  - `/css/css-lists/` (`b392`): `182` files (`45 PASS / 137 FAIL / 0 TIMEOUT`)
+  - `/css/css-counter-styles/` (`b393`): `11` files (`0 PASS / 11 FAIL / 0 TIMEOUT`)
+  - `/css/css-page/` (`b394`): `23` files (`8 PASS / 15 FAIL / 0 TIMEOUT`)
+  - `/css/css-pseudo/` (`b395`): `10` files (`4 PASS / 6 FAIL / 0 TIMEOUT`)
+  - `/css/css-masking/parsing/` (`b396`): `28` files (`4 PASS / 24 FAIL / 0 TIMEOUT`)
+  - `/css/css-shapes/parsing/` (`b397`): `13` files (`6 PASS / 7 FAIL / 0 TIMEOUT`)

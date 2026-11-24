@@ -3598,3 +3598,5 @@
 - **Phase 565** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 提取 `isValidCssPositionTokens` 与 `resolveGradientAtPos` 公共逻辑，补全 `(radial|conic)-gradient` 的 `at <position>` 文法校验、规范序及计算期默认 `at 50% 50%` 省略；WPT `gradient-position-{valid,invalid,computed}.html` 3/3 全绿，`object-position-*` 3/3 保持全绿。
 
 - **Phase 566** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 折叠 `object-fit: contain scale-down -> scale-down`，放行 `image-resolution` 负分辨率，为渐变 `calc` 接入规范排序并拦截跨维度/无单位非法混算；`conic-gradient-calc-angle-percentage` 2/2、`image-resolution` 2/2、`object-fit` 3/3 全绿，收紧 3 项基线。
+
+- **Phase 567** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 `transform` 括号配平校验、`transform-origin` 拒绝 4 令牌、`perspective-origin`/`transform-origin` 单值补齐 `center`、`translate` 接入 `canonicalizeCalcToken` 及 `perspective(none)` 计算值矩阵化；`perspective-origin-*` 3/3、`transform-origin-*` 3/3、`translate-parsing-*` 3/3、`css-transform-style-evaluation-validation` 1/1 全绿通过。

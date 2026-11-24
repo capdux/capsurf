@@ -7618,3 +7618,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - 渐变 `calc(...)`：为 `background-image`/`list-style-image` 的 `(radial|conic)-gradient` 参数接入 `canonicalizeCalcToken`（`calc(0deg + 100%) -> calc(100% + 0deg)`），并拦截 `linear/radial-gradient` 混用 `%` 与 `<angle>`、`conic-gradient(from calc(...%))` 及无单位混算。
   2. **验证与基线收紧**：`conic-gradient-calc-angle-percentage` 2/2 PASS、`image-resolution` 2/2 PASS、`object-fit` 3/3 PASS、`--smoke` 3/3 suites PASS；收紧 3 项基线为 `PASS`。
   3. **并行摸底汇总**：子智能体完成 `/css/css-fonts/`（49/121 PASS）、`/css/css-text/`（90/125 PASS）、`/css/css-backgrounds/`（18/34 recorded PASS）。
+
+### 2026-11-24 Phase 567 (`css-transforms` 4 组全绿闭环 & 多目录 WPT 摸底)
+- **[Agent]**: 自主推导并完成 Phase 567（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`css-transforms` 解析与求值修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js`：`transform` 函数参数校验拒绝多余未配对 `)`（修复 `rotate(30deg)|rotateX(60deg)`）；`transform-origin` 严格拒绝 4 令牌位置；`perspective-origin` 与 `transform-origin` 单值 `<position>` 补齐 `center`；`translate` 接入 `canonicalizeCalcToken`；`scale` 支持 `calc(num * num[%])` 常量折叠。
+     - `window.js`：`applyUsedValuesToComputedMap` 将 `transform: perspective(none)` 规范化为 `matrix(1, 0, 0, 1, 0, 0)`。
+  2. **全绿验证**：`perspective-origin-*` 3/3、`transform-origin-*` 3/3、`translate-parsing-*` 3/3、`css-transform-style-evaluation-validation` 1/1 全部 **PASS**，`--smoke` **3/3 suites PASS**。
+  3. **并行摸底汇总**：子智能体完成 `css-color` (12/56)、`css-lists` (45/182)、`css-counter-styles` (0/11)、`css-page` (8/23)、`css-pseudo` (4/10)、`css-masking/parsing` (4/28)、`css-shapes/parsing` (6/13)。

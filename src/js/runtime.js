@@ -4614,10 +4614,11 @@
           for (let k = 0; k < inner.length; k++) {
             const c = inner[k];
             if (c === "(") d++;
-            else if (c === ")" && d > 0) d--;
+            else if (c === ")") { if (d === 0) return false; d--; }
             if (d === 0 && c === ",") { args.push(cur.trim()); cur = ""; }
             else cur += c;
           }
+          if (d !== 0) return false;
           args.push(cur.trim());
           if (args.some(a => !a) || args.length < range[0] || args.length > range[1]) return false;
           if (fn === "perspective" && args[0] !== "none" && !/^(?:calc|min|max|clamp|var|env)\(/i.test(args[0])) {
@@ -4967,10 +4968,13 @@
       };
       if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
         const toks = splitCssTokens(vLower);
-        if (prop === "transform-origin" && toks.length === 3) {
-          const z = toks[2];
-          if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
-          return isValidCssPositionTokens(toks.slice(0, 2)) && isValidLenPct(z, true);
+        if (prop === "transform-origin") {
+          if (toks.length === 4) return false;
+          if (toks.length === 3) {
+            const z = toks[2];
+            if (z.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(z) && z.includes("%"))) return false;
+            return isValidCssPositionTokens(toks.slice(0, 2)) && isValidLenPct(z, true);
+          }
         }
         return isValidCssPositionTokens(toks);
       }
@@ -6188,8 +6192,14 @@
             const n = Number(parts[i]);
             if (Number.isFinite(n)) parts[i] = String(n === 0 ? 0 : n);
           } else {
-            const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(parts[i]);
-            if (pm) parts[i] = String(Number(pm[1]) / 100);
+            const cm = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(%)?)\s*\)$/i.exec(parts[i]);
+            if (cm) {
+              const prod = Number((Number(cm[1]) * Number(cm[2].replace(/%$/, ""))).toFixed(6));
+              parts[i] = "calc(" + String(prod === 0 ? 0 : prod) + (cm[3] || "") + ")";
+            } else {
+              const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(parts[i]);
+              if (pm) parts[i] = String(Number(pm[1]) / 100);
+            }
           }
         }
         if (parts.length === 3 && parts[2] === "1") parts.pop();
@@ -6201,6 +6211,7 @@
         if (parts.length === 1 && parts[0].toLowerCase() === "none") return "none";
         for (let i = 0; i < parts.length; i++) {
           if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+          else if (/^calc\(/i.test(parts[i])) parts[i] = canonicalizeCalcToken(parts[i]);
         }
         if (parts.length === 3 && parts[2] === "0px") parts.pop();
         if (parts.length === 2 && parts[1] === "0px") parts.pop();
@@ -6360,7 +6371,7 @@
         for (let i = 0; i < parts.length; i++) {
           if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
         }
-        if (key === "object-position" && parts.length === 1) {
+        if ((key === "object-position" || key === "perspective-origin" || key === "transform-origin") && parts.length === 1) {
           const a = parts[0].toLowerCase();
           return (a === "top" || a === "bottom") ? ("center " + a) : (parts[0] + " center");
         }
@@ -42299,6 +42310,8 @@
       }
       if (!computedMap.has("transform") || computedMap.get("transform") === "") {
         computedMap.set("transform", "none");
+      } else if (computedMap.get("transform") === "perspective(none)") {
+        computedMap.set("transform", "matrix(1, 0, 0, 1, 0, 0)");
       }
       if (!computedMap.has("display") || computedMap.get("display") === "") {
         const tag = String(element && (element.localName || element.tagName) || "").toLowerCase();

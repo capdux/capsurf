@@ -7549,6 +7549,8 @@ function installWindow(global) {
     }
     if (!computedMap.has("transform") || computedMap.get("transform") === "") {
       computedMap.set("transform", "none");
+    } else if (computedMap.get("transform") === "perspective(none)") {
+      computedMap.set("transform", "matrix(1, 0, 0, 1, 0, 0)");
     }
     if (!computedMap.has("display") || computedMap.get("display") === "") {
       const tag = String(element && (element.localName || element.tagName) || "").toLowerCase();
