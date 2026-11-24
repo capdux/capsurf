@@ -8743,6 +8743,7 @@ function installWindow(global) {
       ["word-wrap", "normal"],
       ["direction", "ltr"],
       ["clip-rule", "nonzero"],
+      ["mask-image", "none"],
       ["mask-type", "luminance"],
       ["mask-composite", "add"],
       ["mask-repeat", "repeat"],
@@ -8837,6 +8838,22 @@ function installWindow(global) {
         if (lens.length >= 3 && /^-[\d.]+px$/.test(lens[2])) lens[2] = "0px";
         return [col].concat(lens).join(" ");
       }).join(", "));
+    }
+    const clipRaw = (computedMap.get("clip") || "").trim();
+    const clipM = /^rect\(\s*(.+)\s*\)$/i.exec(clipRaw);
+    if (clipM) {
+      const cArgs = [];
+      let cc = "", cd = 0;
+      for (let i = 0; i < clipM[1].length; i++) {
+        const ch = clipM[1][i];
+        if (ch === "(") cd++; else if (ch === ")" && cd > 0) cd--;
+        if (cd === 0 && ch === ",") { cArgs.push(cc.trim()); cc = ""; }
+        else cc += ch;
+      }
+      if (cc.trim()) cArgs.push(cc.trim());
+      if (cArgs.length === 4) {
+        computedMap.set("clip", "rect(" + cArgs.map((a) => a.toLowerCase() === "auto" ? "auto" : evalLinLenPctTok(a)).join(", ") + ")");
+      }
     }
     const bsRaw = (computedMap.get("box-shadow") || "").trim();
     if (!bsRaw || bsRaw.toLowerCase() === "none" || bsRaw.toLowerCase() === "initial" || bsRaw.toLowerCase() === "revert" || bsRaw.toLowerCase() === "revert-layer") {
@@ -9142,7 +9159,7 @@ function installWindow(global) {
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
     "content", "content-visibility", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
-    "clip-rule", "mask-composite", "mask-repeat", "mask-size", "mask-type",
+    "clip-rule", "mask-composite", "mask-image", "mask-repeat", "mask-size", "mask-type",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size",
     "font-width", "font-style", "font-variant", "font-variant-emoji", "font-variant-position", "font-weight", "grid-auto-columns",

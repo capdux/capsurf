@@ -2233,3 +2233,7 @@
 ### Phase 638: `mask-size-computed` (16/16) & `outline-width-rounding.tentative` (4/4) 全绿
 - **Filter `/css/css-masking/parsing/mask-size-computed` & `/css/css-ui/outline-width-rounding.tentative`**: **FAIL->PASS (2/2: 16/16 + 4/4)**（`window.js` 将 `mask-size` 纳入 `background-size` 同源计算值求值循环，并为 `outline-width`/`border-*-width`/`column-rule-width` 补充 `(0px, 1px)` 正小数向上吸附 `1px`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 639: `clip-computed` (4/4) & `mask-repeat-invalid` (5/5) 全绿收紧
+- **Filter `/css/css-masking/parsing/clip-computed` & `/css/css-masking/parsing/mask-repeat-invalid`**: **FAIL->PASS (2/2: 4/4 + 5/5)**（`cssom.js` `mask-repeat` 复用 `background-repeat` 校验器；`window.js` 补齐 `mask-image` 默认值/枚举及 `clip: rect(...)` 4 参长度计算值求值；已收紧 `mask-repeat-invalid.html` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

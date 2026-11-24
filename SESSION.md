@@ -8005,3 +8005,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：`mask-size` 纳入 `background-size` 计算值求值循环，并为 `outline-width` 等线宽属性补充 `(0px, 1px)` 正小数吸附 `1px`。
   2. **全绿验证**：`mask-size-computed.html` **FAIL->PASS (16/16)**、`outline-width-rounding.tentative.html` **FAIL->PASS (4/4)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`0d15fac9` 完成 `/css/css-tables/` 摸底（**16/18 PASS**，17/18 符合预期），已接力派发 `91b2ae4c`（`19720`, `/css/css-lists/`）。
+- **[Agent]**: 完成 Phase 639（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js` & `window.js`**：`mask-repeat` 复用 `background-repeat` 校验器；`window.js` 补全 `mask-image` 默认值/枚举与 `clip: rect(...)` 计算值求值。
+  2. **全绿验证与基线收紧**：`clip-computed.html` **FAIL->PASS (4/4)**、`mask-repeat-invalid.html` **FAIL->PASS (5/5)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`91b2ae4c` 完成 `/css/css-lists/` 全量摸底（**46/182 PASS**，全部 parsing 类通过），已接力派发 `4333ceda`（`19720`, `/css/css-shapes/`）。

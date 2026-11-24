@@ -4579,8 +4579,8 @@
     "reason": "T18 enrollment (css-masking): measured PASS"
   },
   "/css/css-masking/parsing/mask-repeat-invalid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-masking): 4/5 subtests pass"
+    "expected": "PASS",
+    "reason": "Phase 639: mask-repeat reuses background-repeat validator in cssom.js"
   },
   "/css/css-masking/parsing/mask-repeat-valid.html": {
     "expected": "PASS",

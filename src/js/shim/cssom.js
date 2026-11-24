@@ -938,7 +938,7 @@
       if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
       return isValidLenPct(t, false);
     }
-    if (prop === "background-repeat") {
+    if (prop === "background-repeat" || prop === "mask-repeat") {
       const layers = vLower.split(",");
       const SINGLE = new Set(["repeat-x", "repeat-y", "repeat", "space", "round", "no-repeat"]);
       const PAIR = new Set(["repeat", "space", "round", "no-repeat"]);

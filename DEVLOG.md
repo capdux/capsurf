@@ -3055,3 +3055,7 @@
 ### Phase 638: `mask-size-computed` & `outline-width-rounding.tentative` 全绿
 - **核心修复 (`src/js/shim/window.js`)**：将 `mask-size` 纳入 `background-size` 计算值求值循环，并在 `lwProps` 线宽计算中将 `(0px, 1px)` 区间正小数向上吸附为 `1px`。
 - **WPT & Smoke 验收**：`mask-size-computed.html` (16/16) & `outline-width-rounding.tentative.html` (4/4) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 639: `clip-computed` & `mask-repeat-invalid` 全绿收紧
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`mask-repeat` 复用 `background-repeat` 校验器；`window.js` 补全 `mask-image` 初始默认值/枚举与 `clip: rect(...)` 4 参长度计算值求值。
+- **WPT & Smoke 验收**：`clip-computed.html` (4/4) & `mask-repeat-invalid.html` (5/5，收紧基线为 `PASS`) PASS，`--smoke` 3/3 suites PASS。
