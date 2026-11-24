@@ -7713,3 +7713,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` & `cssom.js`**：`flex` 简写补充 `initial`/CSS-wide 关键字与合法性校验，修复 `cssom.js` `flex: 0 1 1` 误放行；计算期过滤 `align-items`/`align-self`/`flex-*`/`order` 非法值并补齐 `align-items: normal`, `align-self: auto`, `order: 0` 默认初始值。
   2. **全绿验证**：`/css/css-flexbox/getcomputedstyle/` **74/74 PASS (100% ALL GREEN)**、`/css/css-flexbox/parsing/` **27/27 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-highlight-api/`（24/119）、`/css/css-fonts/parsing/`（34/82）、`/css/css-env/`（1/9）。
+
+### 2026-11-24 Phase 581 (`/css/css-fonts/parsing/` 6 组属性 18/18 全绿)
+- **[Agent]**: 自主推导并完成 Phase 581（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js`**：`font-synthesis-style` 支持 `oblique-only`；`font-palette` 支持 `--`；`font-language-override` 校验 1~4 位 ASCII 可打印串并裁剪尾部空格规范序列化。
+  2. **`window.js`**：将 `font-optical-sizing`、`font-palette`、`font-variant-emoji`、`font-variant-position`、`font-language-override` 纳入 `STANDARD_COMPUTED_LONGHANDS` 并补全默认初始值。
+  3. **全绿验证**：上述 6 组共 **18/18 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**。

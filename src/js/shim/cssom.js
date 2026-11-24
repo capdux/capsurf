@@ -466,7 +466,7 @@
       "font-variant-emoji": ["normal", "text", "emoji", "unicode"],
       "font-variant-position": ["normal", "sub", "super"],
       "font-synthesis-weight": ["auto", "none"],
-      "font-synthesis-style": ["auto", "none"],
+      "font-synthesis-style": ["auto", "none", "oblique-only"],
       "font-synthesis-small-caps": ["auto", "none"],
       "font-synthesis-position": ["auto", "none"],
       "list-style-position": ["inside", "outside"],
@@ -1308,7 +1308,7 @@
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
-      return t === "normal" || t === "light" || t === "dark" || /^--[a-z0-9_-]+$/i.test(t);
+      return t === "normal" || t === "light" || t === "dark" || /^--[a-z0-9_-]*$/i.test(t);
     }
     if (prop === "font-size-adjust") {
       const METRICS = new Set(["ex-height", "cap-height", "ch-width", "ic-height", "ic-width"]);
@@ -1338,7 +1338,11 @@
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
       const t = toks[0];
-      return t.toLowerCase() === "normal" || (/^"[^"]*"$/.test(t)) || (/^'[^']*'$/.test(t));
+      if (t.toLowerCase() === "normal") return true;
+      const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(t);
+      if (!qm) return false;
+      const inner = qm[1] !== undefined ? qm[1] : qm[2];
+      return /^[\x21-\x7e][\x20-\x7e]{0,3}$/.test(inner);
     }
     if (prop === "font-variant-numeric") {
       const toks = splitCssTokens(vLower);
@@ -2903,6 +2907,15 @@
     }
     if (key === "ruby-overhang") {
       return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
+    }
+    if (key === "font-language-override") {
+      if (s.toLowerCase() === "normal") return "normal";
+      const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(s);
+      if (qm) {
+        const inner = (qm[1] !== undefined ? qm[1] : qm[2]).replace(/\s+$/, "");
+        return "\"" + inner + "\"";
+      }
+      return s;
     }
     if (key === "background-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
       const toks = splitCssTokens(s);

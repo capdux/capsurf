@@ -4256,7 +4256,7 @@
         "font-variant-emoji": ["normal", "text", "emoji", "unicode"],
         "font-variant-position": ["normal", "sub", "super"],
         "font-synthesis-weight": ["auto", "none"],
-        "font-synthesis-style": ["auto", "none"],
+        "font-synthesis-style": ["auto", "none", "oblique-only"],
         "font-synthesis-small-caps": ["auto", "none"],
         "font-synthesis-position": ["auto", "none"],
         "list-style-position": ["inside", "outside"],
@@ -5098,7 +5098,7 @@
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
-        return t === "normal" || t === "light" || t === "dark" || /^--[a-z0-9_-]+$/i.test(t);
+        return t === "normal" || t === "light" || t === "dark" || /^--[a-z0-9_-]*$/i.test(t);
       }
       if (prop === "font-size-adjust") {
         const METRICS = new Set(["ex-height", "cap-height", "ch-width", "ic-height", "ic-width"]);
@@ -5128,7 +5128,11 @@
         const toks = splitCssTokens(trimmed);
         if (toks.length !== 1) return false;
         const t = toks[0];
-        return t.toLowerCase() === "normal" || (/^"[^"]*"$/.test(t)) || (/^'[^']*'$/.test(t));
+        if (t.toLowerCase() === "normal") return true;
+        const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(t);
+        if (!qm) return false;
+        const inner = qm[1] !== undefined ? qm[1] : qm[2];
+        return /^[\x21-\x7e][\x20-\x7e]{0,3}$/.test(inner);
       }
       if (prop === "font-variant-numeric") {
         const toks = splitCssTokens(vLower);
@@ -6693,6 +6697,15 @@
       }
       if (key === "ruby-overhang") {
         return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
+      }
+      if (key === "font-language-override") {
+        if (s.toLowerCase() === "normal") return "normal";
+        const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(s);
+        if (qm) {
+          const inner = (qm[1] !== undefined ? qm[1] : qm[2]).replace(/\s+$/, "");
+          return "\"" + inner + "\"";
+        }
+        return s;
       }
       if (key === "background-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
         const toks = splitCssTokens(s);
@@ -43606,6 +43619,11 @@
         ["align-items", "normal"],
         ["align-self", "auto"],
         ["order", "0"],
+        ["font-language-override", "normal"],
+        ["font-optical-sizing", "auto"],
+        ["font-palette", "normal"],
+        ["font-variant-emoji", "normal"],
+        ["font-variant-position", "normal"],
         ["image-orientation", "from-image"],
         ["image-rendering", "auto"],
         ["image-resolution", "1dppx"],
@@ -43855,8 +43873,8 @@
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
       "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
-      "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
-      "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
+      "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size",
+      "font-stretch", "font-style", "font-variant", "font-variant-emoji", "font-variant-position", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
       "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "image-resolution", "interactivity",

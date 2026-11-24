@@ -2819,3 +2819,7 @@
 ### Phase 580: `/css/css-flexbox/getcomputedstyle/` 74/74 全绿闭环
 - **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`flex` 简写补齐 `initial` 与合法性校验并拒绝 `flex: 0 1 1`；计算期过滤 `align-items`/`align-self`/`flex-*`/`order` 非法声明并补全默认初始值。
 - **WPT & Smoke 验收**：`/css/css-flexbox/getcomputedstyle/` **74/74 PASS**、`/css/css-flexbox/parsing/` **27/27 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 581: `/css/css-fonts/parsing/` 6 组属性 18/18 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `font-synthesis-style: oblique-only`、`font-palette: --`、`font-language-override` 1~4 ASCII 校验与尾部空格裁剪，以及 5 项字体属性 `STANDARD_COMPUTED_LONGHANDS` 默认值。
+- **WPT & Smoke 验收**：6 组 18 项全部 **PASS**、`--smoke` 3/3 suites PASS。

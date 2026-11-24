@@ -1868,3 +1868,16 @@
   - `/css/css-highlight-api/` (`b449`): `119` files (`24 PASS / 88 FAIL / 4 TIMEOUT / 3 ERROR`)
   - `/css/css-fonts/parsing/` (`b452`): `82` files (`34 PASS / 47 FAIL / 1 TIMEOUT`)
   - `/css/css-env/` (`b454`): `9` files (`1 PASS / 8 FAIL`)
+
+### Phase 581 `/css/css-fonts/parsing/` 6 组属性 18/18 全绿 & WPT-B455/B457 摸底 (bin_dev Phase 581, 2026-11-24)
+- **Filter `/css/css-fonts/parsing/` (6 组全绿 18/18 PASS)**:
+  - `font-optical-sizing-{computed,invalid,valid}.html`: **3/3 PASS**
+  - `font-palette-{computed,invalid,valid}.html`: **3/3 PASS**（放行 `"--"`）
+  - `font-variant-emoji-{computed,invalid,valid}.html`: **3/3 PASS**
+  - `font-variant-position-{computed,invalid,valid}.html`: **3/3 PASS**
+  - `font-synthesis-style-{computed,invalid,valid}.html`: **3/3 PASS**（支持 `oblique-only`）
+  - `font-language-override-{computed,invalid,valid}.html`: **3/3 PASS**（校验 1~4 位可打印 ASCII 串并裁剪尾部空格）
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-anchor-position/` (`b455`, partial 29 recorded): `17 PASS / 7 FAIL / 5 TIMEOUT`
+  - `/css/css-anchor-position/parsing/` (`b457`): `10` files (`0 PASS / 10 FAIL`)
