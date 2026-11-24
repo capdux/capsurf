@@ -3620,3 +3620,5 @@
 - **Phase 576** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `border-color` 简写展开与 4 边折叠序列化，修复 `border-image` 顶层 `/` 切分与 `fill` 后置；`border-color-*` 4/4 全绿、`border-image-valid` 转绿，收紧 `animation-shorthand.html` 为 `PASS`（`css-animations/parsing` 35/35 全绿）。
 
 - **Phase 577** (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 参数化合并 `border-{color,style,width}` 简写展开与 4 边折叠序列化，补全 `background-position-x/y` 计算期求值；`border-style-*` 4/4 全绿、`border-width-*` 4/4 全绿。
+
+- **Phase 578** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 完善 `background-position-x/y` 计算期逻辑关键字与 `calc(100% - px)` 符号格式化，子测试通过率从 `5/19` 提升至 `18/19`。

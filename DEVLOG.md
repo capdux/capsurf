@@ -2808,3 +2808,6 @@
 ### Phase 577: `border-style` 4/4 与 `border-width` 4/4 全绿闭环
 - **核心修复 (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`)**：参数化统一 `border-{color,style,width}` 四边展开与对称折叠，补齐 `background-position-x/y` 计算期关键词与偏移求值。
 - **WPT & Smoke 验收**：`border-style-*` 4/4 PASS、`border-width-*` 4/4 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 578: `background-position-{x,y}-computed` 18/19 推进
+- **核心修复 (`src/js/shim/window.js`)**：`background-position-x/y` 保留逻辑关键字并修复 `calc(100% - px)` 负号格式，子测试由 `5/19` 升至 `18/19` PASS；`--smoke` 3/3 suites PASS。

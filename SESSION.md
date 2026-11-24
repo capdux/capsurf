@@ -7697,3 +7697,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `element.js` 将 `border-style`/`border-width` 接入 `setEntryWithShorthand`；`cssom.js` 参数化合并 `border-{color,style,width}` 四边展开与对称折叠序列化。
   2. **`background-position-{x,y}` 计算值 (`src/js/shim/window.js`)**：补全 `center -> 50%`、`left/top -> 0%`、`right/bottom <off>` 计算期解析。
   3. **全绿验证**：`border-style-*` **4/4 PASS**、`border-width-*` **4/4 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 578 (`background-position-{x,y}-computed` 18/19 & `/css/css-images/` 摸底)
+- **[Agent]**: 自主推导并完成 Phase 578（`src/js/shim/window.js`）：
+  1. **`window.js`**：完善 `background-position-{x,y}` 计算期 `x-start`/`x-end`/`y-start`/`y-end` 与 `calc(100% - px)` 符号处理，`computed` 子测试由 `5/19` 提升至 `18/19` PASS。
+  2. **验收与摸底**：`--smoke` **3/3 suites, 6/6 tests PASS**；子智能体完成 `/css/css-images/` 全目录摸底（21/26 PASS）。

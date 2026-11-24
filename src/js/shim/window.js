@@ -8608,19 +8608,21 @@ function installWindow(global) {
         if (tc) toks.push(tc);
         const norm1 = (t) => {
           const tl = t.toLowerCase();
-          if (tl === "left" || tl === "top" || tl === "x-start" || tl === "y-start") return "0%";
+          if (tl === "left" || tl === "top") return "0%";
           if (tl === "center") return "50%";
-          if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
+          if (tl === "right" || tl === "bottom") return "100%";
+          if (tl === "x-start" || tl === "x-end" || tl === "y-start" || tl === "y-end") return tl;
           return evalLinLenPctTok(t);
         };
         if (toks.length === 1) return norm1(toks[0]);
         if (toks.length === 2) {
           const edge = toks[0].toLowerCase();
           const off = evalLinLenPctTok(toks[1]);
-          if (edge === "right" || edge === "bottom" || edge === "x-end" || edge === "y-end") {
+          if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+          if (edge === "right" || edge === "bottom") {
             if (off.endsWith("%")) return String(Number((100 - parseFloat(off)).toFixed(6))) + "%";
             const px = evalCssLengthExpr(off, 0, fontSize);
-            if (px !== null) return px === 0 ? "100%" : ("calc(100% + " + formatCssPx(-px) + ")");
+            if (px !== null) return px === 0 ? "100%" : (px > 0 ? ("calc(100% - " + formatCssPx(px) + ")") : ("calc(100% + " + formatCssPx(-px) + ")"));
           }
           return off;
         }

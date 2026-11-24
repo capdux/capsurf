@@ -1844,3 +1844,9 @@
   - `cssom.js`：将 `border-style`/`border-width` 与 `border-color` 参数化合并至 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand` 4 边展开与 `serializeExpandedShorthand` 4 边折叠序列化。
   - `window.js`：补全 `background-position-{x,y}` 计算期 `left`/`center`/`right`/`top`/`bottom` 及 `right/bottom <off>` 求值。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 578 `background-position-{x,y}-computed` 推进至 18/19 & WPT-B445 摸底 (bin_dev Phase 578, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/background-position-{x,y}`**: `valid`/`invalid` **4/4 PASS**，`computed` 从 `5/19` 提升至 `18/19` PASS（逻辑关键字 `x-start`/`x-end`/`y-start`/`y-end` 与 `calc(100% - px)` 精确求解）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-images/` (`b445`): `26` files (`21 PASS / 2 FAIL / 3 TIMEOUT`)
