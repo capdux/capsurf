@@ -3268,3 +3268,5 @@
 - 在 `cssom.js` 提取 `parseMaskLayers` 统一校验与解析 `<mask-layer>#`（修正 `no-clip` 先于 `<geometry-box>` 时仍固定归属 `mask-clip` 的语义），并在 `window.js` 接入 `getComputedStyle().mask`，打通 `mask-valid.sub.html` (55/55 FAIL→PASS) 与 `mask-invalid.html` (13/13 PASS)。
 ### Phase 714 — `line-height` 无单位数值与 `sign(cqw)` 计算值 `px` 转换闭环
 - 修复 `window.js` `applyUsedValuesToComputedMap` 中 `line-height` 对纯数字及含 `sign(cqw)` 的无单位 `calc()` 未乘以 `fontSize` 的缺陷，并解决 `evalSignCalls` 前置调用 TDZ 问题，打通 `/css/css-inline/parsing/` 9/9 全绿与 `getComputedStyle-line-height.html`。
+### Phase 715 — `wrapComputedStyleDecl` 多值颜色截断根因修复
+- 定位 `cssom.js` `wrapComputedStyleDecl` 对所有 `*-color` 属性整串调用 `normalizeCssColor` 导致 `border-color`、`border-block-color`、`border-inline-color`、`caret-color` 丢失第 2~4 个颜色的隐蔽缺陷；新增 `MULTI_COLOR_PROPS` + `normalizePropColors` 逐 token 规范化，一次性打通上述 4 项 WPT 计算值测试。

@@ -3974,3 +3974,6 @@
 - **Phase 714**:
   - `src/js/shim/window.js`: 将 `line-height` 计算值求值移至 `evalSignCalls` 声明之后，支持无单位 `<number>` 及无单位 `calc()`/`sign(cqw)` 乘以 `fontSize` 转为绝对 `px`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 715**:
+  - `src/js/shim/cssom.js`: `wrapComputedStyleDecl` 新增 `MULTI_COLOR_PROPS` 与 `normalizePropColors`，按 token 逐个规范化多值颜色属性（解决 `border-color`/`border-block-color`/`border-inline-color`/`caret-color` 在 `getComputedStyle` 中仅保留首个颜色的问题）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

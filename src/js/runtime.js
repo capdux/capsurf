@@ -13273,6 +13273,20 @@
       return overrides;
     }
 
+    const MULTI_COLOR_PROPS = new Set(["border-color", "border-block-color", "border-inline-color", "caret-color", "scrollbar-color"]);
+    function normalizePropColors(k, val, curColor) {
+      if (!val || typeof val !== "string") return val;
+      if (MULTI_COLOR_PROPS.has(k)) {
+        return splitCssTokens(val).map((t) => {
+          const tl = t.trim().toLowerCase();
+          if (tl === "currentcolor") return curColor || "rgb(0, 0, 0)";
+          if (/\bfrom\s+/i.test(t)) return resolveRelativeColor(t, curColor || "rgb(0, 0, 0)");
+          return normalizeCssColor(t);
+        }).join(" ");
+      }
+      return normalizeCssColor(val);
+    }
+
     function wrapComputedStyleDecl(decl, element) {
       if (!decl || typeof decl !== "object") return decl;
       const linkOverrides = getDynamicLinkOverrides(element);
@@ -13315,7 +13329,7 @@
                     val = val.replace(/\bpath\(\s*'([^']*)'\s*\)/gi, 'path("$1")');
                   }
                   if (!k.startsWith("--")) {
-                    val = normalizeCssColor(val);
+                    val = normalizePropColors(k, val, receiver.color);
                   }
                 }
                 return val || "";
@@ -13386,7 +13400,7 @@
                 if (/\bfrom\s+/i.test(val)) {
                   val = resolveRelativeColor(val, receiver.color || "rgb(0, 0, 0)");
                 }
-                val = normalizeCssColor(val);
+                val = normalizePropColors(kebab, val, receiver.color);
               }
               return val || "";
             }
