@@ -13572,6 +13572,7 @@
     const MULTI_COLOR_PROPS = new Set(["border-color", "border-block-color", "border-inline-color", "caret-color", "scrollbar-color"]);
     function normalizePropColors(k, val, curColor) {
       if (!val || typeof val !== "string") return val;
+      if (k === "outline-color" && val.trim().toLowerCase() === "auto") return "auto";
       if (MULTI_COLOR_PROPS.has(k)) {
         return splitCssTokens(val).map((t) => {
           const tl = t.trim().toLowerCase();
@@ -48247,6 +48248,12 @@
           if (typeof globalThis.__capsurf_serializeShorthand === "function") {
             return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "");
           }
+        }
+        if (name === "outline") {
+          const ow = computedMap.get("outline-width") || "0px";
+          const os = computedMap.get("outline-style") || "none";
+          const oc = computedMap.get("outline-color") || "rgb(0, 0, 0)";
+          return ow + " " + os + " " + oc;
         }
         if (name === "contain-intrinsic-size") {
           const w = computedMap.get("contain-intrinsic-width") || "none";

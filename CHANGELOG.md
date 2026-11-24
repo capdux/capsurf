@@ -4004,3 +4004,7 @@
   - `src/js/shim/window.js`: `getComputedStyle` 接入 `__capsurf_canonicalizeDisplay` 与 `display` 块级化映射。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-display/parsing/display-valid.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 722**:
+  - `src/js/shim/window.js`: `getShorthandComputed("outline")` 补充 `width style color` 计算值序列化。
+  - `src/js/shim/cssom.js`: `normalizePropColors` 保留 `outline-color: auto`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

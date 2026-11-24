@@ -10235,6 +10235,12 @@ function installWindow(global) {
           return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "");
         }
       }
+      if (name === "outline") {
+        const ow = computedMap.get("outline-width") || "0px";
+        const os = computedMap.get("outline-style") || "none";
+        const oc = computedMap.get("outline-color") || "rgb(0, 0, 0)";
+        return ow + " " + os + " " + oc;
+      }
       if (name === "contain-intrinsic-size") {
         const w = computedMap.get("contain-intrinsic-width") || "none";
         const h = computedMap.get("contain-intrinsic-height") || "none";

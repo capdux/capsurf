@@ -3282,3 +3282,5 @@
 - 在 `window.js` 中对 `grid-auto-columns` 与 `grid-auto-rows` 递归解析 `minmax(...)` / `fit-content(...)` 参数并调用 `evalLinLenPctTok` + 负值 `0px` 钳位，打通 `grid-auto-*` 9/9 全绿。
 ### Phase 721 — CSS Display 3 多关键字 `display` 校验与规范序列化闭环
 - 在 `cssom.js` 实现 `canonicalizeDisplayValue` 统一处理 `<display-outside>`/`<display-inside>`/`list-item` 任意顺序组合并输出最短规范形式，`display-valid.html` 108/108 全数通过并收紧为 `PASS`，`display-computed.html` 由 19/112 提升至 108/112。
+### Phase 722 — `outline` 计算值简写序列化与 `outline-color: auto` 保留
+- 在 `window.js` `getShorthandComputed` 补全 `outline` 计算值（`outline-width outline-style outline-color`），并在 `cssom.js` `normalizePropColors` 保留 `outline-color: auto`，保持 `/css/css-ui/parsing/outline-*` 15/15 匹配基线。

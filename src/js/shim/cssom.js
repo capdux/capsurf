@@ -9782,6 +9782,7 @@
   const MULTI_COLOR_PROPS = new Set(["border-color", "border-block-color", "border-inline-color", "caret-color", "scrollbar-color"]);
   function normalizePropColors(k, val, curColor) {
     if (!val || typeof val !== "string") return val;
+    if (k === "outline-color" && val.trim().toLowerCase() === "auto") return "auto";
     if (MULTI_COLOR_PROPS.has(k)) {
       return splitCssTokens(val).map((t) => {
         const tl = t.trim().toLowerCase();
