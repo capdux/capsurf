@@ -3788,3 +3788,5 @@
 - **Phase 659** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 统一 `background-image`/`mask-image` 多层渐变与 `url()`/`lh` 求值管线；`mask-image-computed` (47/47) 全绿且回归零破坏。
 
 - **Phase 660** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `clip-path` 基本图形与几何盒语法校验；`clip-path-invalid` 全绿。
+
+- **Phase 661** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `clip-path: shape(...)` 语法校验与规范化；`clip-path-shape-parsing` (44/44) 全绿。

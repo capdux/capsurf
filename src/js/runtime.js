@@ -4757,7 +4757,64 @@
           if (!sm) return false;
           const fn = sm[1].toLowerCase(), body = sm[2].trim();
           if (fn === "url") return body.length > 0;
-          if (fn === "shape") return body.length > 0;
+          if (fn === "shape") {
+            if (!body) return false;
+            const segs = splitTopLevelComma(body);
+            if (segs.length < 2) return false;
+            const s0 = splitCssTokens(segs[0].toLowerCase());
+            let fIdx = 0;
+            if (s0[0] === "nonzero" || s0[0] === "evenodd") fIdx = 1;
+            if (s0[fIdx] !== "from" || s0.length !== fIdx + 3) return false;
+            if (!isValidLenPct(s0[fIdx + 1], true) || !isValidLenPct(s0[fIdx + 2], true)) return false;
+            for (let k = 1; k < segs.length; k++) {
+              const st = splitCssTokens(segs[k].toLowerCase());
+              if (st.length === 0) return false;
+              const cmd = st[0];
+              if (cmd === "close") { if (st.length !== 1) return false; continue; }
+              if (cmd === "hline" || cmd === "vline") {
+                if (st.length !== 3 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true)) return false;
+                continue;
+              }
+              if (cmd === "move" || cmd === "line") {
+                if (st.length !== 4 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true) || !isValidLenPct(st[3], true)) return false;
+                continue;
+              }
+              if (cmd === "curve" || cmd === "smooth") {
+                if (st.length < 4 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true) || !isValidLenPct(st[3], true)) return false;
+                if (cmd === "curve" && st[4] !== "with") return false;
+                if (st.length > 4) {
+                  if (st[4] !== "with") return false;
+                  const rest = st.slice(5);
+                  if (cmd === "smooth") {
+                    if (rest.length !== 2 || !isValidLenPct(rest[0], true) || !isValidLenPct(rest[1], true)) return false;
+                  } else {
+                    const slash = rest.indexOf("/");
+                    if (slash === -1) {
+                      if (rest.length !== 2 || !isValidLenPct(rest[0], true) || !isValidLenPct(rest[1], true)) return false;
+                    } else {
+                      const p1 = rest.slice(0, slash), p2 = rest.slice(slash + 1);
+                      if (p1.length !== 2 || p2.length !== 2 || !p1.every((t) => isValidLenPct(t, true)) || !p2.every((t) => isValidLenPct(t, true))) return false;
+                    }
+                  }
+                }
+                continue;
+              }
+              if (cmd === "arc") {
+                if (st.length < 6 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true) || !isValidLenPct(st[3], true) || st[4] !== "of") return false;
+                let ai = 5, rCnt = 0;
+                while (ai < st.length && rCnt < 2 && isValidLenPct(st[ai], true)) { ai++; rCnt++; }
+                if (rCnt === 0) return false;
+                while (ai < st.length) {
+                  if (st[ai] === "cw" || st[ai] === "ccw" || st[ai] === "large" || st[ai] === "small") { ai++; }
+                  else if (st[ai] === "rotate" && ai + 1 < st.length) { ai += 2; }
+                  else return false;
+                }
+                continue;
+              }
+              return false;
+            }
+            return true;
+          }
           if (fn === "inset") {
             const st = splitCssTokens(body.toLowerCase());
             const rIdx = st.indexOf("round");
@@ -6937,6 +6994,26 @@
           }
           return fn + "(" + args + ")";
         });
+      }
+      if (key === "clip-path") {
+        const shm = /^shape\(\s*(.+)\s*\)$/i.exec(s);
+        if (shm) {
+          const segs = splitTopLevelComma(shm[1]).map((seg, idx) => {
+            const toks = splitCssTokens(seg.trim()).map((t) => (/^(?:var|env)\(/i.test(t) ? t : t.toLowerCase()));
+            if (idx === 0 && toks[0] === "nonzero") toks.shift();
+            if (toks[0] === "arc") {
+              const out = [];
+              for (let i = 0; i < toks.length; i++) {
+                if (toks[i] === "small" || toks[i] === "ccw") continue;
+                if (toks[i] === "rotate" && i + 1 < toks.length && (toks[i + 1] === "0deg" || toks[i + 1] === "0")) { i++; continue; }
+                out.push(toks[i]);
+              }
+              return out.join(" ");
+            }
+            return toks.join(" ");
+          });
+          return "shape(" + segs.join(", ") + ")";
+        }
       }
       if (key === "font-feature-settings") {
         if (s.toLowerCase() === "normal") return "normal";

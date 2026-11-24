@@ -2321,3 +2321,7 @@
 ### Phase 660: `clip-path-invalid` 全绿
 - **Filter `/css/css-masking/parsing/clip-path-invalid`**: **FAIL->PASS**（`cssom.js` `isValidCssValue` 新增 `clip-path` 完整语法校验，涵盖 `none`、`url()`、`<geometry-box>`、`inset()`/`circle()`/`ellipse()`/`polygon()`/`path()`/`xywh()`/`rect()` 参数数量与非法负半径/无单位数值拦截）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 661: `clip-path-shape-parsing` (44/44) 全绿
+- **Filter `/css/css-masking/parsing/clip-path-shape-parsing` & `clip-path-invalid`**: **FAIL->PASS (2/2: 44/44 + PASS)**（`cssom.js` 为 `clip-path: shape(...)` 补全 `from`/`close`/`move`/`line`/`hline`/`vline`/`curve`/`smooth`/`arc` 分段校验与指定值规范化，省略默认 `nonzero`、`small`/`ccw`/`rotate 0deg` 并统一小写化）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

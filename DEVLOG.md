@@ -3143,3 +3143,7 @@
 ### Phase 660: `clip-path-invalid` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue("clip-path")` 校验 `inset`/`circle`/`ellipse`/`polygon`/`path`/`xywh`/`rect` 与 `<geometry-box>`/`url()`。
 - **WPT & Smoke 验收**：`clip-path-invalid.html` 与 `--smoke` 3/3 suites PASS。
+
+### Phase 661: `clip-path-shape-parsing` (44/44) 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 与 `normalizeCssSpecifiedValue` 支持 `shape()` 各绘制命令校验与默认关键字省略。
+- **WPT & Smoke 验收**：`clip-path-shape-parsing` (44/44)、`clip-path-invalid` 与 `--smoke` 3/3 suites PASS。
