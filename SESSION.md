@@ -7511,3 +7511,13 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   3. **全绿验证与并行摸底**：
      - `/css/css-will-change/parsing/`: **3/3 PASS (100% ALL GREEN)**；`/css/css-align/parsing/`: **50/50 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 双子智能体并行摸底发现 `/css/css-text/parsing/`（86/86）、`/css/css-text-decor/parsing/`（31/31）、`/css/css-lists/parsing/`（23/23）均已 100% 全绿；`/css/css-writing-modes/parsing/` 仅差 2 个 invalid 用例（13/15），`/css/css-flexbox/parsing/` 仅差 1 个 `webkit-aliases.html`（26/27）。
+
+### 2026-11-24 Phase 556 (`/css/css-writing-modes/parsing/` 15/15 + `/css/css-flexbox/parsing/` 27/27 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 556（`src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
+  1. **Writing Modes 严格校验 (`src/js/shim/cssom.js`)**：
+     - 为 `text-combine-upright`（仅 `none | all`）与 `text-orientation`（仅 `mixed | upright | sideways`）添加严格文法校验，收紧 `writing-mode-computed.html` 与 `writing-mode-valid.html` 基线为 `PASS`。
+  2. **Flexbox 遗留别名与 `var(...)` 待替换简写保护 (`src/js/shim/cssom.js`)**：
+     - 在 `normalizeCssSpecifiedValue` 与 `expandCssShorthand` 入口跳过含 `var(...)` 的待替换简写值，避免 `flex: var(--w)` 被错误展开为 `1 1 var(--w)`，使 `-webkit-flex` / `-webkit-flex-flow` 遗留别名 `webkit-aliases.html` 全绿通过。
+  3. **全绿验证与并行摸底**：
+     - `/css/css-writing-modes/parsing/`: **15/15 PASS (100% ALL GREEN)**；`/css/css-flexbox/parsing/`: **27/27 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 双子智能体摸底确认 `/css/css-contain/parsing/`（4/4）与 `/css/css-scroll-anchoring/`（1/1）均 100% 全绿；`/css/css-content/parsing/`（1/4）与 `/css/css-overscroll-behavior/parsing/`（0/1）缺口明确，将作为后续 Phase 目标。

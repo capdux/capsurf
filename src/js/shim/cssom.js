@@ -1223,6 +1223,12 @@
       }
       return true;
     }
+    if (prop === "text-combine-upright") {
+      return vLower === "none" || vLower === "all";
+    }
+    if (prop === "text-orientation") {
+      return vLower === "mixed" || vLower === "upright" || vLower === "sideways";
+    }
     if (prop === "will-change") {
       if (vLower === "auto") return true;
       const BAD_WC = new Set(["auto", "will-change", "none", "all", "initial", "inherit", "unset", "revert", "revert-layer", "revert-rule", "default"]);
@@ -2128,6 +2134,7 @@
   function normalizeCssSpecifiedValue(key, raw) {
     if (!raw || key.startsWith("--")) return raw;
     const s = String(raw).trim();
+    if (/\bvar\(/i.test(s)) return s;
     if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
       if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
@@ -2967,6 +2974,7 @@
   global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
   function expandCssShorthand(key, normV) {
+    if (/\bvar\(/i.test(normV)) return null;
     if (/^(?:initial|inherit|unset|revert|revert-layer)$/i.test(normV)) {
       const lhs = SHORTHAND_EXPAND_LONGHANDS[key];
       if (lhs) {

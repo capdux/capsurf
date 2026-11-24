@@ -2810,7 +2810,7 @@
     "reason": null
   },
   "/css/css-flexbox/parsing/webkit-aliases.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/font-variant-caps-01.html": {
@@ -8588,7 +8588,7 @@
     "reason": null
   },
   "/css/css-writing-modes/parsing/writing-mode-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-writing-modes/parsing/writing-mode-invalid.html": {
@@ -8596,7 +8596,7 @@
     "reason": null
   },
   "/css/css-writing-modes/parsing/writing-mode-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/cssom-view/CaretPosition-001.html": {

@@ -1616,3 +1616,18 @@
   - `/css/css-ruby/parsing/`: `8` files (`3 PASS / 5 FAIL`)
   - `/css/css-counter-styles/`: `11` files (`0 PASS / 11 FAIL`)
   - `/css/css-grid/parsing/`: `61` files (`6 PASS / 51 FAIL / 4 TIMEOUT`)
+
+### WPT-B342 ~ B355 摸底与 Phase 556 `/css/css-writing-modes/parsing/` 15/15 + `/css/css-flexbox/parsing/` 27/27 全绿闭环 (bin_dev Phase 556, 2026-11-24)
+- **Filter `/css/css-writing-modes/parsing/`**: `15` files (**15 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 新增 `text-combine-upright`（`none | all`）与 `text-orientation`（`mixed | upright | sideways`）严格校验；收紧 `writing-mode-computed.html`、`writing-mode-valid.html` 基线为 `PASS`。
+- **Filter `/css/css-flexbox/parsing/`**: `27` files (**27 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 在 `expandCssShorthand` 与 `normalizeCssSpecifiedValue` 中跳过含 `var(...)` 的待替换简写值（修复 `-webkit-flex` / `-webkit-flex-flow` 遗留别名测试 `webkit-aliases.html`）；收紧 `webkit-aliases.html` 基线为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-contain/parsing/`: `4` files (**4/4 PASS, 100% ALL GREEN**)
+  - `/css/css-scroll-anchoring/`: `1` file (**1/1 PASS, 100% ALL GREEN**)
+  - `/css/css-content/parsing/`: `4` files (`1 PASS / 3 FAIL`)
+  - `/css/css-cascade/parsing/`: `5` files (`2 PASS / 3 FAIL`)
+  - `/css/css-view-transitions/parsing/`: `9` files (`3 PASS / 5 FAIL / 1 TIMEOUT`)
+  - `/css/css-anchor-position/parsing/`: `10` files (`0 PASS / 10 FAIL`)
+  - `/css/css-overscroll-behavior/parsing/`: `1` file (`0 PASS / 1 FAIL`)
+  - `/css/css-page/parsing/`: `11` files (`5 PASS / 6 FAIL`)
+  - `/css/css-rhythm/parsing/`: `5` files (`0 PASS / 5 FAIL`)
