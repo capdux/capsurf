@@ -7769,3 +7769,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：在 `textDecorDefs` 中补全 `appearance`, `cursor`, `outline-offset`, `outline-style`, `outline-width`, `resize`, `user-select` 7 个 CSS UI 计算期默认初始值。
   2. **验证**：`/css/css-ui/inheritance.html` **10/28 -> 17/28 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-position/inheritance` **12/12 PASS**、`/css/css-contain/inheritance` **2/2 PASS**；`/css/css-overflow/inheritance` 7/18 PASS。
+
+### 2026-11-24 Phase 591 (`/css/css-overflow/inheritance` 12/18 PASS & Lists/WM/Fonts 摸底)
+- **[Agent]**: 完成 Phase 591（`src/js/shim/window.js`）：
+  1. **`window.js`**：在 `textDecorDefs` 中补全 `overflow-block`, `overflow-inline`, `text-overflow`, `scrollbar-gutter` 默认初始值，并将 `scrollbar-gutter` 加入 `STANDARD_COMPUTED_LONGHANDS`。
+  2. **验证**：`/css/css-overflow/inheritance.html` **7/18 -> 12/18 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-lists/inheritance` 2/10 PASS、`/css/css-writing-modes/inheritance` 9/10 PASS、`/css/css-fonts/inheritance` 8/39 PASS。

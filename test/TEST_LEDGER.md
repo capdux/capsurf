@@ -1962,3 +1962,11 @@
   - `/css/css-contain/inheritance` (`b490`): **PASS (2/2)**
   - `/css/css-overflow/inheritance` (`b490`): `0 PASS / 1 FAIL`（7/18 subtests PASS；缺 `overflow-block`, `overflow-inline`, `text-overflow` 默认初始值及 `scrollbar-gutter`, `block-ellipsis`, `continue`, `max-lines`）
   - `/css/css-backgrounds/inheritance` (`b489`): `TIMEOUT`（`inheritance.sub.html`）
+
+### Phase 591: `/css/css-overflow/inheritance` Subtest 跃升 (`7/18 -> 12/18`) & Lists/WM/Fonts 摸底
+- **Filter `/css/css-overflow/inheritance`**: `12/18 PASS`（`7/18 -> 12/18`，`window.js` 补全 `overflow-block`, `overflow-inline`, `text-overflow`, `scrollbar-gutter` 默认初始值并将 `scrollbar-gutter` 纳入 `STANDARD_COMPUTED_LONGHANDS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-lists/inheritance` (`b491`): `0 PASS / 1 FAIL`（2/10 subtests PASS；缺 `counter-{increment,reset}` 与 `list-style-{image,position,type}` 默认初始值及 `list-style-*` 继承集）
+  - `/css/css-writing-modes/inheritance` (`b491`): `0 PASS / 1 FAIL`（9/10 subtests PASS；仅 `direction inherits`）
+  - `/css/css-fonts/inheritance` (`b492`): `0 PASS / 1 FAIL`（8/39 subtests PASS；缺 `font-{feature-settings,kerning,size,stretch,style,variant,weight}` 默认初始值及 `font-{language-override,optical-sizing,variant-emoji,variant-position}` 继承等）

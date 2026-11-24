@@ -43737,7 +43737,11 @@
         ["outline-style", "none"],
         ["outline-width", "3px"],
         ["resize", "none"],
-        ["user-select", "auto"]
+        ["user-select", "auto"],
+        ["overflow-block", "visible"],
+        ["overflow-inline", "visible"],
+        ["text-overflow", "clip"],
+        ["scrollbar-gutter", "auto"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
@@ -44006,7 +44010,7 @@
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
-      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scrollbar-gutter",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
       "scroll-margin-right", "scroll-margin-top",
