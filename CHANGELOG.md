@@ -3977,3 +3977,9 @@
 - **Phase 715**:
   - `src/js/shim/cssom.js`: `wrapComputedStyleDecl` 新增 `MULTI_COLOR_PROPS` 与 `normalizePropColors`，按 token 逐个规范化多值颜色属性（解决 `border-color`/`border-block-color`/`border-inline-color`/`caret-color` 在 `getComputedStyle` 中仅保留首个颜色的问题）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 716**:
+  - `src/js/shim/cssom.js`: 修复 `font-language-override` 前导空格校验、补充 `font-weight`/`font-width`/`font-stretch`/`font-style` `calc()` 折叠与 `sign(...)` 因子重排、实现 `font-variant` 7-longhand 展开/序列化与 `font-variant-alternates` 规范序重排。
+  - `src/js/shim/element/element.js`: `setEntryWithShorthand` 补充 `font` 简写对 `font-variant-*` 7 个长属性的 `"normal"` 重置。
+  - `src/js/shim/window.js`: 修复 `font-style` 计算值 `oblique 14deg` 不再错误折叠为 `oblique`。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-fonts/parsing/font-style-computed.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -8088,7 +8088,7 @@ function installWindow(global) {
       if (deg !== null && isFinite(deg)) {
         const clamped = Math.max(-90, Math.min(90, deg));
         const r = Number(clamped.toFixed(4));
-        computedMap.set("font-style", r === 0 ? "normal" : (r === 14 ? "oblique" : ("oblique " + r + "deg")));
+        computedMap.set("font-style", r === 0 ? "normal" : ("oblique " + r + "deg"));
       }
     }
     const spProps = ["letter-spacing", "word-spacing"];

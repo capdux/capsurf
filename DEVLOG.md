@@ -3270,3 +3270,5 @@
 - 修复 `window.js` `applyUsedValuesToComputedMap` 中 `line-height` 对纯数字及含 `sign(cqw)` 的无单位 `calc()` 未乘以 `fontSize` 的缺陷，并解决 `evalSignCalls` 前置调用 TDZ 问题，打通 `/css/css-inline/parsing/` 9/9 全绿与 `getComputedStyle-line-height.html`。
 ### Phase 715 — `wrapComputedStyleDecl` 多值颜色截断根因修复
 - 定位 `cssom.js` `wrapComputedStyleDecl` 对所有 `*-color` 属性整串调用 `normalizeCssColor` 导致 `border-color`、`border-block-color`、`border-inline-color`、`caret-color` 丢失第 2~4 个颜色的隐蔽缺陷；新增 `MULTI_COLOR_PROPS` + `normalizePropColors` 逐 token 规范化，一次性打通上述 4 项 WPT 计算值测试。
+### Phase 716 — `css-fonts/parsing` 批量高 ROI 修复 (`font-variant`, `font-language-override`, `font-style`, `calc`)
+- `element.js` 内联样式与 `cssom.js` CSSOM 声明各自维护 shorthand 展开逻辑，`font` 简写需在 `setEntryWithShorthand` 中显式将 7 个 `font-variant-*` 长属性重置为 `"normal"`，才能让 `font-variant` 简写序列化与重置保持幂等；同步修复 `font-variant-alternates` 规范序、`font-language-override` 前导空格校验及 `oblique 14deg` 计算值保留。

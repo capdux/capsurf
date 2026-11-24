@@ -449,6 +449,12 @@ function createStyleProxy(element) {
       }
     }
     setEntryInStyleMap(map, key, rawName, normV, pri);
+    if (key === "font" && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands["font-variant"]) {
+      const fvLhs = globalThis.__capsurf_shorthandLonghands["font-variant"];
+      for (let i = 0; i < fvLhs.length; i++) {
+        setEntryInStyleMap(map, fvLhs[i], fvLhs[i], "normal", pri);
+      }
+    }
   }
 
   function removeKeyWithShorthand(map, key) {

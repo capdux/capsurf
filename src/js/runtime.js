@@ -5754,7 +5754,7 @@
         const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(t);
         if (!qm) return false;
         const inner = qm[1] !== undefined ? qm[1] : qm[2];
-        return /^[\x21-\x7e][\x20-\x7e]{0,3}$/.test(inner);
+        return /^[\x20-\x7e]{1,4}$/.test(inner) && /[\x21-\x7e]/.test(inner);
       }
       if (prop === "font-variant-numeric") {
         const toks = splitCssTokens(vLower);
@@ -7443,6 +7443,17 @@
         const n = Number(s);
         if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
       }
+      if (key === "font-weight" || key === "font-width" || key === "font-stretch") {
+        if (/^calc\(/i.test(s)) {
+          const folded = canonicalizeCalcToken(s);
+          return folded.replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%?)\s*\)/gi, "($2 * $1)");
+        }
+      }
+      if (key === "font-style" && /^oblique\s+calc\(/i.test(s)) {
+        const tok = s.slice(s.indexOf("calc("));
+        const folded = canonicalizeCalcToken(tok).replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn))\s*\)/gi, "($2 * $1)");
+        return "oblique " + folded;
+      }
       if (key === "opacity") {
         const pctM = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(s);
         if (pctM) {
@@ -7578,7 +7589,14 @@
         return out.join(", ");
       }
       if (key === "font-variant-alternates") {
-        return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
+        const FVA_ORDER = ["stylistic", "historical-forms", "styleset", "character-variant", "swash", "ornaments", "annotation"];
+        const toks = splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk));
+        toks.sort((a, b) => {
+          const ka = (/^([a-z-]+)\(/i.exec(a) || ["", a.toLowerCase()])[1].toLowerCase();
+          const kb = (/^([a-z-]+)\(/i.exec(b) || ["", b.toLowerCase()])[1].toLowerCase();
+          return FVA_ORDER.indexOf(ka) - FVA_ORDER.indexOf(kb);
+        });
+        return toks.join(" ");
       }
       if (key === "margin-trim") {
         const p = splitCssTokens(s.toLowerCase());
@@ -9703,6 +9721,44 @@
         const ct = slash.length === 2 ? (slash[1].trim() || "normal") : "normal";
         return [["container-name", cn], ["container-type", ct]];
       }
+      if (key === "font-variant") {
+        const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
+        const vl = normV.toLowerCase();
+        if (/^(?:inherit|initial|unset|revert|revert-layer|normal)$/i.test(vl)) {
+          return fvLhs.map((lh) => [lh, vl]);
+        }
+        if (vl === "none") {
+          return fvLhs.map((lh) => [lh, lh === "font-variant-ligatures" ? "none" : "normal"]);
+        }
+        const LIG = new Set(["common-ligatures", "no-common-ligatures", "discretionary-ligatures", "no-discretionary-ligatures", "historical-ligatures", "no-historical-ligatures", "contextual", "no-contextual"]);
+        const CAPS = new Set(["small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps"]);
+        const NUM = new Set(["lining-nums", "oldstyle-nums", "proportional-nums", "tabular-nums", "diagonal-fractions", "stacked-fractions", "ordinal", "slashed-zero"]);
+        const EA = new Set(["jis78", "jis83", "jis90", "jis04", "simplified", "traditional", "full-width", "proportional-width", "ruby"]);
+        const POS = new Set(["sub", "super"]);
+        const EMO = new Set(["text", "emoji", "unicode"]);
+        const lig = [], alt = [], num = [], ea = [];
+        let caps = "normal", pos = "normal", emo = "normal";
+        const toks = splitCssTokens(normV);
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (LIG.has(tl)) lig.push(tl);
+          else if (CAPS.has(tl)) caps = tl;
+          else if (NUM.has(tl)) num.push(tl);
+          else if (EA.has(tl)) ea.push(tl);
+          else if (POS.has(tl)) pos = tl;
+          else if (EMO.has(tl)) emo = tl;
+          else alt.push(t);
+        }
+        return [
+          ["font-variant-ligatures", lig.length ? normalizeCssSpecifiedValue("font-variant-ligatures", lig.join(" ")) : "normal"],
+          ["font-variant-caps", caps],
+          ["font-variant-alternates", alt.length ? normalizeCssSpecifiedValue("font-variant-alternates", alt.join(" ")) : "normal"],
+          ["font-variant-numeric", num.length ? normalizeCssSpecifiedValue("font-variant-numeric", num.join(" ")) : "normal"],
+          ["font-variant-east-asian", ea.length ? normalizeCssSpecifiedValue("font-variant-east-asian", ea.join(" ")) : "normal"],
+          ["font-variant-position", pos],
+          ["font-variant-emoji", emo]
+        ];
+      }
       return null;
     }
     global.__capsurf_expandShorthand = expandCssShorthand;
@@ -9775,6 +9831,7 @@
       "grid-row": ["grid-row-start", "grid-row-end"],
       "grid-column": ["grid-column-start", "grid-column-end"],
       "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
+      "font-variant": ["font-variant-ligatures", "font-variant-caps", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"],
       mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
     };
     global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -9828,6 +9885,13 @@
         if (vals[1] !== "none") out.push(vals[1]);
         if (vals[2] !== "disc") out.push(vals[2]);
         return out.length > 0 ? out.join(" ") : "outside";
+      }
+      if (key === "font-variant") {
+        if (vals.every((v) => v === "normal")) return "normal";
+        if (vals[0] === "none") {
+          return vals.slice(1).every((v) => v === "normal") ? "none" : "";
+        }
+        return vals.filter((v) => v !== "normal").join(" ");
       }
       if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
         return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
@@ -10614,6 +10678,14 @@
           authoredOrder.push(key);
         }
         data.set(key, { name: p, value: v, priority: pPriority });
+        if (key === "font") {
+          const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
+          for (let i = 0; i < fvLhs.length; i++) {
+            const lhKey = fvLhs[i];
+            data.set(lhKey, { name: lhKey, value: "normal", priority: pPriority });
+            if (!authoredOrder.includes(lhKey)) authoredOrder.push(lhKey);
+          }
+        }
         notify();
       };
 
@@ -16533,6 +16605,12 @@
         }
       }
       setEntryInStyleMap(map, key, rawName, normV, pri);
+      if (key === "font" && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands["font-variant"]) {
+        const fvLhs = globalThis.__capsurf_shorthandLonghands["font-variant"];
+        for (let i = 0; i < fvLhs.length; i++) {
+          setEntryInStyleMap(map, fvLhs[i], fvLhs[i], "normal", pri);
+        }
+      }
     }
 
     function removeKeyWithShorthand(map, key) {
@@ -45789,7 +45867,7 @@
         if (deg !== null && isFinite(deg)) {
           const clamped = Math.max(-90, Math.min(90, deg));
           const r = Number(clamped.toFixed(4));
-          computedMap.set("font-style", r === 0 ? "normal" : (r === 14 ? "oblique" : ("oblique " + r + "deg")));
+          computedMap.set("font-style", r === 0 ? "normal" : ("oblique " + r + "deg"));
         }
       }
       const spProps = ["letter-spacing", "word-spacing"];
