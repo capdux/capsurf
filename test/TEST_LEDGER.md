@@ -1850,3 +1850,10 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-images/` (`b445`): `26` files (`21 PASS / 2 FAIL / 3 TIMEOUT`)
+
+### Phase 579 `/css/css-images/inheritance` & `/css/css-shapes/inheritance` 全绿闭环 & WPT-B446 摸底 (bin_dev Phase 579, 2026-11-24)
+- **Filter `/css/css-images/inheritance`**: **PASS**（`image-orientation`, `image-rendering`, `image-resolution` 纳入 `INHERITED_CSS_PROPS`；补齐 `image-orientation: from-image`, `image-rendering: auto`, `image-resolution: 1dppx`, `object-fit: fill`, `object-position: 50% 50%` 默认初始值）。
+- **Filter `/css/css-shapes/inheritance`**: **PASS**（`shape-outside: none`, `shape-margin: 0px`, `shape-image-threshold: 0` 纳入 `STANDARD_COMPUTED_LONGHANDS` 与默认初始值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-flexbox/` (`b446`, partial 120 recorded): `85 PASS / 25 FAIL / 10 TIMEOUT`

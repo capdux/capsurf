@@ -41385,6 +41385,7 @@
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
+      "image-orientation", "image-rendering", "image-resolution",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43592,7 +43593,15 @@
         ["overscroll-behavior-block", "auto"],
         ["overscroll-behavior-inline", "auto"],
         ["overscroll-behavior-x", "auto"],
-        ["overscroll-behavior-y", "auto"]
+        ["overscroll-behavior-y", "auto"],
+        ["image-orientation", "from-image"],
+        ["image-rendering", "auto"],
+        ["image-resolution", "1dppx"],
+        ["object-fit", "fill"],
+        ["object-position", "50% 50%"],
+        ["shape-outside", "none"],
+        ["shape-margin", "0px"],
+        ["shape-image-threshold", "0"]
       ];
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];
@@ -43838,7 +43847,7 @@
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "interactivity",
+      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "image-resolution", "interactivity",
       "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
       "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
       "line-height", "list-style-image", "list-style-position", "list-style-type",
@@ -43857,7 +43866,7 @@
       "scroll-padding-block-end", "scroll-padding-block-start", "scroll-padding-bottom",
       "scroll-padding-inline-end", "scroll-padding-inline-start", "scroll-padding-left",
       "scroll-padding-right", "scroll-padding-top",
-      "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin",
+      "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin", "shape-outside",
       "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
       "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",

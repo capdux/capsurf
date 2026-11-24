@@ -3622,3 +3622,5 @@
 - **Phase 577** (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 参数化合并 `border-{color,style,width}` 简写展开与 4 边折叠序列化，补全 `background-position-x/y` 计算期求值；`border-style-*` 4/4 全绿、`border-width-*` 4/4 全绿。
 
 - **Phase 578** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 完善 `background-position-x/y` 计算期逻辑关键字与 `calc(100% - px)` 符号格式化，子测试通过率从 `5/19` 提升至 `18/19`。
+
+- **Phase 579** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补齐 `css-images` 与 `css-shapes` 共 8 项属性继承集、`STANDARD_COMPUTED_LONGHANDS` 与默认初始值；`/css/css-images/inheritance.html` 与 `/css/css-shapes/inheritance.html` 转绿。

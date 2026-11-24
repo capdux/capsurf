@@ -7702,3 +7702,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 自主推导并完成 Phase 578（`src/js/shim/window.js`）：
   1. **`window.js`**：完善 `background-position-{x,y}` 计算期 `x-start`/`x-end`/`y-start`/`y-end` 与 `calc(100% - px)` 符号处理，`computed` 子测试由 `5/19` 提升至 `18/19` PASS。
   2. **验收与摸底**：`--smoke` **3/3 suites, 6/6 tests PASS**；子智能体完成 `/css/css-images/` 全目录摸底（21/26 PASS）。
+
+### 2026-11-24 Phase 579 (`css-images/inheritance` & `css-shapes/inheritance` 全绿)
+- **[Agent]**: 自主推导并完成 Phase 579（`src/js/shim/window.js`）：
+  1. **`window.js`**：将 `image-orientation`/`image-rendering`/`image-resolution` 纳入 `INHERITED_CSS_PROPS`，并将 `image-resolution`/`shape-outside` 纳入 `STANDARD_COMPUTED_LONGHANDS`，补齐 8 项属性默认初始值。
+  2. **全绿验证**：`css-images/inheritance.html` **PASS**、`css-shapes/inheritance.html` **PASS**、`--smoke` **3/3 suites PASS**。

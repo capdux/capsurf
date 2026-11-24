@@ -2811,3 +2811,7 @@
 
 ### Phase 578: `background-position-{x,y}-computed` 18/19 推进
 - **核心修复 (`src/js/shim/window.js`)**：`background-position-x/y` 保留逻辑关键字并修复 `calc(100% - px)` 负号格式，子测试由 `5/19` 升至 `18/19` PASS；`--smoke` 3/3 suites PASS。
+
+### Phase 579: `css-images/inheritance` 与 `css-shapes/inheritance` 全绿
+- **核心修复 (`src/js/shim/window.js`)**：补全 `image-{orientation,rendering,resolution}` 继承与 `object-{fit,position}`/`shape-{outside,margin,image-threshold}` 默认初始值。
+- **WPT & Smoke 验收**：`css-images/inheritance.html` PASS、`css-shapes/inheritance.html` PASS、`--smoke` 3/3 suites PASS。
