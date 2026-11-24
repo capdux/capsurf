@@ -2366,3 +2366,4 @@
 | Phase 697 | WPT `font-variation-settings` 校验、去重、排序与 `calc()` 求值闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `font-variation-settings-{valid,invalid,computed}` 3/3 全数 PASS; `--smoke` 3/3 PASS |
 | Phase 698 | WPT `font-variant-alternates` 与 `font-variant` 互斥组/函数校验闭环 | `src/js/shim/cssom.js` | `font-variant-alternates-{valid,invalid}` (15/15) 与 `font-variant-invalid` (21/21) 全数 PASS; `--smoke` 3/3 PASS |
 | Phase 699 | WPT `font-width-computed` 关键字/calc/cqw 求值与 `font-stretch` 别名注册 | `src/js/shim/window.js` | `font-width-computed.html` (30/30 PASS); `--smoke` 3/3 PASS |
+| Phase 700 | WPT `font-weight-computed` + `font-style` `sign(cqw)` 容器宽度求值闭环 | `src/js/shim/window.js` | `font-weight-computed.html` (58/58 PASS), `font-width-computed.html` (30/30 PASS); `--smoke` 3/3 PASS |

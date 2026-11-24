@@ -3918,3 +3918,6 @@
 - **Phase 699**:
   - `src/js/shim/window.js`: 实现 `font-width` 关键字转百分比与 `calc()`/`evalSignCalls` 求值；`resolveContainerW` 补充从 `__capsurf_get_computed_prop` 读取 `container-type`；`getComputedStyle` Proxy `has`/`getOwnPropertyDescriptor` 注册 `font-stretch`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 700**:
+  - `src/js/shim/window.js`: 提升 `resolveContainerW` 与 `evalSignCalls` 至 `font-weight`/`font-style` 之前，使 `sign(20cqw - 10px)` 正确读取容器 `width`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

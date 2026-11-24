@@ -44983,6 +44983,40 @@
           computedMap.set("text-indent", out);
         }
       }
+      const resolveContainerW = (el) => {
+        let cur = el && el.parentElement;
+        while (cur) {
+          const pMap = collectRawComputedMap(cur, "");
+          const ct = (pMap.get("container-type") || (typeof globalThis.__capsurf_get_computed_prop === "function" && typeof cur._nid === "number" && cur._nid > 0 ? (globalThis.__capsurf_get_computed_prop(cur._nid, "container-type") || "") : "")).toLowerCase();
+          if (ct.indexOf("inline-size") !== -1 || ct === "size") {
+            const w = pMap.get("width");
+            if (w) {
+              const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(w.trim());
+              if (m) return Number(m[1]);
+            }
+          }
+          cur = cur.parentElement;
+        }
+        return 800;
+      };
+      const evalSignCalls = (rawExpr, el) => {
+        if (rawExpr.indexOf("sign(") === -1) return rawExpr;
+        const cw = resolveContainerW(el);
+        const fs = parseFloat(computedMap.get("font-size")) || 16;
+        return rawExpr.replace(/sign\(([^()]+)\)/gi, (full, inner) => {
+          const rep = inner
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs));
+          if (/^[\d+\-*/().\s]+$/.test(rep)) {
+            try {
+              const v = Function("return (" + rep + ")")();
+              if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
+            } catch (_) {}
+          }
+          return full;
+        });
+      };
       const fwRaw = (computedMap.get("font-weight") || "").trim().toLowerCase();
       if (fwRaw) {
         if (fwRaw === "normal") computedMap.set("font-weight", "400");
@@ -45008,7 +45042,7 @@
           }
           computedMap.set("font-weight", String(resW));
         } else if (/^calc\(/i.test(fwRaw)) {
-          const val = evalCssLengthExpr(fwRaw, 0, fontSize);
+          const val = evalCssLengthExpr(evalSignCalls(fwRaw, element), 0, fontSize);
           if (val !== null) computedMap.set("font-weight", String(Math.min(1000, Math.max(1, val))));
         }
       }
@@ -45023,7 +45057,7 @@
             return u === "deg" ? n : (u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI));
           }
           if (/^calc\(/i.test(tl)) {
-            const norm = tl
+            const norm = evalSignCalls(tl, element)
               .replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(rad|grad|turn|deg)\b/gi, (_, n, u) => {
                 const v = Number(n), ul = u.toLowerCase();
                 return String(ul === "deg" ? v : (ul === "turn" ? v * 360 : (ul === "grad" ? v * 0.9 : v * 180 / Math.PI)));
@@ -45537,40 +45571,6 @@
           }
         }
       }
-      const resolveContainerW = (el) => {
-        let cur = el && el.parentElement;
-        while (cur) {
-          const pMap = collectRawComputedMap(cur, "");
-          const ct = (pMap.get("container-type") || (typeof globalThis.__capsurf_get_computed_prop === "function" && typeof cur._nid === "number" && cur._nid > 0 ? (globalThis.__capsurf_get_computed_prop(cur._nid, "container-type") || "") : "")).toLowerCase();
-          if (ct.indexOf("inline-size") !== -1 || ct === "size") {
-            const w = pMap.get("width");
-            if (w) {
-              const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(w.trim());
-              if (m) return Number(m[1]);
-            }
-          }
-          cur = cur.parentElement;
-        }
-        return 800;
-      };
-      const evalSignCalls = (rawExpr, el) => {
-        if (rawExpr.indexOf("sign(") === -1) return rawExpr;
-        const cw = resolveContainerW(el);
-        const fs = parseFloat(computedMap.get("font-size")) || 16;
-        return rawExpr.replace(/sign\(([^()]+)\)/gi, (full, inner) => {
-          const rep = inner
-            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
-            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
-            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs));
-          if (/^[\d+\-*/().\s]+$/.test(rep)) {
-            try {
-              const v = Function("return (" + rep + ")")();
-              if (typeof v === "number" && isFinite(v)) return String(Math.sign(v));
-            } catch (_) {}
-          }
-          return full;
-        });
-      };
       const iterVal = computedMap.get("animation-iteration-count");
       if (iterVal && iterVal.indexOf("calc(") !== -1) {
         const iterItems = iterVal.split(",").map((part) => {

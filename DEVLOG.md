@@ -3238,3 +3238,5 @@
 - 在 `cssom.js` 中补全 `font-variant-alternates` 函数参数及 `font-variant` 全组互斥关键字校验，`font-variant-alternates-{valid,invalid}` 与 `font-variant-invalid` 全数 PASS。
 ### Phase 699 — `font-width-computed` 与 `cqw` 容器宽度解析闭环
 - 在 `window.js` 中补全 `font-width` 关键字至百分比转换、`font-stretch` Proxy 属性可见性及 `resolveContainerW` 原生 `container-type` 回退，打通 `/css/css-fonts/parsing/font-width-computed.html` 全部 30/30 子测试。
+### Phase 700 — `font-weight-computed` 与 `font-style` `sign(cqw)` 容器宽度求值闭环
+- 提升 `resolveContainerW` 与 `evalSignCalls` 作用域并为 `font-weight`/`font-style` 接入容器 `cqw` 单位求值，打通 `/css/css-fonts/parsing/font-weight-computed.html` 全部 58/58 子测试。
