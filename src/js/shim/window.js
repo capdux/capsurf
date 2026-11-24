@@ -9291,10 +9291,10 @@ function installWindow(global) {
       let ffsOk = ffsItems.length > 0;
       for (let i = 0; i < ffsItems.length; i++) {
         const it = ffsItems[i];
-        const qm = /^("(?:[^"\\]|\\.)*")(?:\s+([\s\S]+))?$/.exec(it);
+        const qm = /^(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')(?:\s+([\s\S]+))?$/.exec(it);
         if (!qm) { ffsOk = false; break; }
-        const tag = qm[1];
-        let valStr = (qm[2] || "").trim();
+        const tag = '"' + (qm[1] !== undefined ? qm[1] : qm[2].replace(/\\'/g, "'").replace(/"/g, '\\"')) + '"';
+        let valStr = (qm[3] || "").trim();
         if (valStr && /^(?:calc|min|max|clamp)\(/i.test(valStr)) {
           const v = evalCssLengthExpr(valStr, 0, fontSize);
           if (v !== null && isFinite(v)) valStr = String(Math.round(v));

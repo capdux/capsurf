@@ -3298,3 +3298,5 @@
 - 实测确认 5 项历史 `TIMEOUT`/`FAIL` 用例在当前 `bin_dev/main` 下稳定全绿并收紧为 `PASS`；同步在 `GEMINI.md` 固化 `;` 串联防早退与 `--tests-file` 跨目录合批规范。
 ### Phase 729 — `/css/css-page/cssom/` `margin`/`padding` 4-longhand 展开全绿 (`5/5 PASS`)
 - 修复 `cssom.js` `SHORTHAND_LONGHANDS` 对 `margin`/`padding` 展开后仍额外写入简写键导致 `style.length` 多 1 的问题，统一并入 `SHORTHAND_EXPAND_LONGHANDS`，打通 `/css/css-page/cssom/` 5/5 全绿。
+### Phase 730 — `css-fonts` 5 项语法与计算值序列化全绿闭环 (`5/5 PASS`)
+- 集中修复 `font-feature-settings` 单引号计算值、`font-weight` 含单位 `calc`、`font-style: oblique 0deg`、`font-size-adjust` 默认 `ex-height` 省略及 `font-family` 引号规范化，5 项 `css-fonts` 测试一次性全 PASS，其中 2 项收紧为 `PASS`。

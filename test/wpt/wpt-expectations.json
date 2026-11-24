@@ -2858,7 +2858,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-family-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-feature-settings-computed.html": {
@@ -2974,7 +2974,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-style-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-synthesis-computed.html": {

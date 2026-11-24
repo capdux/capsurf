@@ -4034,3 +4034,8 @@
   - `src/js/shim/cssom.js`: 将 `margin` 与 `padding` 移入 `SHORTHAND_EXPAND_LONGHANDS` / `expandCssShorthand` / `serializeExpandedShorthand`，消除 `setProperty` 多余的简写键计数并在 `@page`/`@margin` 初始声明解析中展开。
   - `test/wpt/wpt-expectations.json`: 将 `margin-001.html`, `margin-002.html`, `page-001.html`, `page-002.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 730**:
+  - `src/js/shim/window.js`: `font-feature-settings` 计算值解析支持单引号 `'tag'` 并统一转双引号 `"tag"`。
+  - `src/js/shim/cssom.js`: 拒绝 `font-weight` 含单位 `calc()`、规范化 `font-style: oblique 0deg -> normal`、`font-size-adjust` 剥离 `ex-height` 与 `calc`/`sign` 折叠、`font-family` 去引号与单引号转双引号。
+  - `test/wpt/wpt-expectations.json`: 将 `font-style-valid.html` 与 `font-family-valid.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

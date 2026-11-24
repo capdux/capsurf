@@ -5043,7 +5043,10 @@
         if (toks.length !== 1) return false;
         const t = toks[0];
         if (t === "normal" || t === "bold" || t === "bolder" || t === "lighter") return true;
-        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) {
+          if (/^(?:calc|min|max|clamp)\(/i.test(t) && /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(t)) return false;
+          return true;
+        }
         if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) return false;
         const n = Number(t);
         return n >= 1 && n <= 1000;
@@ -7542,10 +7545,25 @@
           return folded.replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%?)\s*\)/gi, "($2 * $1)");
         }
       }
-      if (key === "font-style" && /^oblique\s+calc\(/i.test(s)) {
-        const tok = s.slice(s.indexOf("calc("));
-        const folded = canonicalizeCalcToken(tok).replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn))\s*\)/gi, "($2 * $1)");
-        return "oblique " + folded;
+      if (key === "font-style") {
+        if (/^oblique\s+0(?:deg|rad|grad|turn)?$/i.test(s)) return "normal";
+        if (/^oblique\s+calc\(/i.test(s)) {
+          const tok = s.slice(s.indexOf("calc("));
+          const folded = canonicalizeCalcToken(tok).replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn))\s*\)/gi, "($2 * $1)");
+          return "oblique " + folded;
+        }
+      }
+      if (key === "font-size-adjust") {
+        const toks = splitCssTokens(s);
+        if (toks.length === 2 && toks[0].toLowerCase() === "ex-height") {
+          toks.shift();
+        }
+        return toks.map((tk) => {
+          if (/^calc\(/i.test(tk)) {
+            return canonicalizeCalcToken(tk).replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)/gi, "($2 * $1)");
+          }
+          return /^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk;
+        }).join(" ");
       }
       if (key === "opacity") {
         const pctM = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(s);
@@ -7590,9 +7608,19 @@
       }
       if (key === "font-family") {
         const GEN = new Set(["serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);
+        const WIDE = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "default"]);
+        const isSimpleIdent = (w) => /^[a-z_-][a-z0-9_-]*$/i.test(w) && !GEN.has(w.toLowerCase()) && !WIDE.has(w.toLowerCase());
         return splitTopLevelComma(s).map((it) => {
           const tr = it.trim();
-          return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
+          if (GEN.has(tr.toLowerCase())) return tr.toLowerCase();
+          const qm = /^(?:"([^"]*)"|'([^']*)')$/.exec(tr);
+          if (qm) {
+            const inner = qm[1] !== undefined ? qm[1] : qm[2];
+            const words = inner.trim().split(/\s+/).filter(Boolean);
+            if (words.length > 0 && words.every(isSimpleIdent)) return words.join(" ");
+            return '"' + inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+          }
+          return tr;
         }).join(", ");
       }
       if (key === "transform") {
@@ -47418,10 +47446,10 @@
         let ffsOk = ffsItems.length > 0;
         for (let i = 0; i < ffsItems.length; i++) {
           const it = ffsItems[i];
-          const qm = /^("(?:[^"\\]|\\.)*")(?:\s+([\s\S]+))?$/.exec(it);
+          const qm = /^(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')(?:\s+([\s\S]+))?$/.exec(it);
           if (!qm) { ffsOk = false; break; }
-          const tag = qm[1];
-          let valStr = (qm[2] || "").trim();
+          const tag = '"' + (qm[1] !== undefined ? qm[1] : qm[2].replace(/\\'/g, "'").replace(/"/g, '\\"')) + '"';
+          let valStr = (qm[3] || "").trim();
           if (valStr && /^(?:calc|min|max|clamp)\(/i.test(valStr)) {
             const v = evalCssLengthExpr(valStr, 0, fontSize);
             if (v !== null && isFinite(v)) valStr = String(Math.round(v));
