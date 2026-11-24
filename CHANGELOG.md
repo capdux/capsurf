@@ -4039,3 +4039,8 @@
   - `src/js/shim/cssom.js`: 拒绝 `font-weight` 含单位 `calc()`、规范化 `font-style: oblique 0deg -> normal`、`font-size-adjust` 剥离 `ex-height` 与 `calc`/`sign` 折叠、`font-family` 去引号与单引号转双引号。
   - `test/wpt/wpt-expectations.json`: 将 `font-style-valid.html` 与 `font-family-valid.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 731**:
+  - `src/js/shim/window.js`: 补全 `font-size-adjust` 计算值 `from-font` 字体度量解析与 `calc`/`sign` 负值 `0` 钳位。
+  - `src/js/shim/element/element.js`: `lookupPropertyValue("font")` 补充 `font-variant: small-caps` 前缀联动。
+  - `test/wpt/wpt-expectations.json`: 将 `font-size-adjust-computed.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

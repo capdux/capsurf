@@ -3300,3 +3300,5 @@
 - 修复 `cssom.js` `SHORTHAND_LONGHANDS` 对 `margin`/`padding` 展开后仍额外写入简写键导致 `style.length` 多 1 的问题，统一并入 `SHORTHAND_EXPAND_LONGHANDS`，打通 `/css/css-page/cssom/` 5/5 全绿。
 ### Phase 730 — `css-fonts` 5 项语法与计算值序列化全绿闭环 (`5/5 PASS`)
 - 集中修复 `font-feature-settings` 单引号计算值、`font-weight` 含单位 `calc`、`font-style: oblique 0deg`、`font-size-adjust` 默认 `ex-height` 省略及 `font-family` 引号规范化，5 项 `css-fonts` 测试一次性全 PASS，其中 2 项收紧为 `PASS`。
+### Phase 731 — `font-size-adjust-computed.html` 全绿闭环 (`20/20 PASS`)
+- 在 `window.js` 中为 `font-size-adjust` 计算值补齐 `from-font` 字体度量（`ex-height`/`cap-height` -> `0.5`，`ch-width`/`ic-width`/`ic-height` -> `1`）及 `calc`/`sign` 负值钳位，`/css/css-fonts/parsing/font-size-adjust-computed.html` 20/20 全数通过并收紧为 `PASS`。

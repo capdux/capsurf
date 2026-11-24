@@ -2938,7 +2938,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-size-adjust-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-size-adjust-invalid.html": {

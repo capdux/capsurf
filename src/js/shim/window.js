@@ -9311,6 +9311,21 @@ function installWindow(global) {
         }).join(", "));
       }
     }
+    const fsaRaw = (computedMap.get("font-size-adjust") || "").trim();
+    if (fsaRaw && fsaRaw.toLowerCase() !== "none") {
+      const fsaToks = splitCssTopLevelWhitespace(fsaRaw);
+      let metric = "ex-height", valTok = fsaToks[0];
+      if (fsaToks.length >= 2) { metric = fsaToks[0].toLowerCase(); valTok = fsaToks[1]; }
+      let numStr = valTok;
+      if (valTok.toLowerCase() === "from-font") {
+        numStr = (metric === "ch-width" || metric === "ic-width" || metric === "ic-height") ? "1" : "0.5";
+      } else {
+        const expr = /sign\(/i.test(valTok) ? evalSignCalls(valTok, element) : valTok;
+        const n = evalCssLengthExpr(expr, 0, fontSize);
+        if (n !== null && isFinite(n)) numStr = String(Number(Math.max(0, n).toFixed(6)));
+      }
+      computedMap.set("font-size-adjust", (metric === "ex-height" ? "" : (metric + " ")) + numStr);
+    }
     const ffRaw = (computedMap.get("font-family") || "").trim();
     if (ffRaw) {
       const KW_SET = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "default", "serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);

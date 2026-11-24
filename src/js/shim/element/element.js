@@ -378,6 +378,15 @@ function createStyleProxy(element) {
     if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
       return lookupPropertyValue(map, LEGACY_CSS_ALIASES[key]);
     }
+    if (key === "font" && map.has("font")) {
+      const fVal = map.get("font").value;
+      const fv = lookupPropertyValue(map, "font-variant");
+      if (fv && fv !== "normal") {
+        if (fv === "small-caps") return fVal.startsWith("small-caps ") ? fVal : ("small-caps " + fVal);
+        return "";
+      }
+      return fVal;
+    }
     if (key === "float") {
       const e = map.get("css-float");
       if (e) return e.value;
