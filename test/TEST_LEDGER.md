@@ -2372,3 +2372,4 @@
 | Phase 703 | WPT `color-computed.html` `currentcolor` 父元素继承求值修复 | `src/js/shim/window.js` | `/css/css-color/parsing/color-computed.html` (16/16 PASS); `--smoke` 3/3 PASS |
 | Phase 704 | WPT `color-valid-hsl` `none` 通道 `hsla->hsl` 与 `%` 剥离规范化 | `src/js/shim/cssom.js` | `color-valid-hsl.html` 30/59 fails -> 24/59 fails (全部 `none` 通道通过); `--smoke` 3/3 PASS |
 | Phase 705 | WPT `/css/css-anchor-position/parsing/` `position-try` 与 `position-try-fallbacks` 全量闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `/css/css-anchor-position/parsing/` **10/10 PASS** (`position-try-computed` 9/9, `position-try-fallbacks-computed` 24/24, `position-try-fallbacks-parsing` 57/57, `position-try-parsing` 35/35); `--smoke` 3/3 PASS |
+| Phase 706 | WPT `mask` 简写 `<mask-layer>#` 严格语法校验闭环 | `src/js/shim/cssom.js` | `/css/css-masking/parsing/mask-invalid.html` (13/13 PASS); `--smoke` 3/3 PASS |

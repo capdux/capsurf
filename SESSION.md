@@ -8135,3 +8135,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 703] `window.js` (`elColor` 在 `color: currentcolor` 时向上继承父元素非 `currentcolor` 计算色): `color-computed.html` (16/16 PASS)，`--smoke` 3/3 PASS。
 - [Phase 704] `cssom.js` (`normalizeSingleColor` 为 `hsl`/`hsla` 补齐 `none` 通道规范化): `color-valid-hsl.html` 30/59 fails -> 24/59 fails，`--smoke` 3/3 PASS。
 - [Phase 705] `cssom.js` & `window.js` (补全 `position-try-fallbacks` 校验/规范化、`position-try` 简写展开/序列化与 `getComputedStyle` 支持): `/css/css-anchor-position/parsing/` 10/10 PASS，`--smoke` 3/3 PASS。
+- [Phase 706] `cssom.js` (`isValidCssValue("mask")` 实现 `<mask-layer>#` 位置、`/ <bg-size>`、重复、几何框/`no-clip`、合成与遮罩模式校验): `mask-invalid.html` (13/13 PASS)，`--smoke` 3/3 PASS。

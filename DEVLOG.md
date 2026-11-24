@@ -3250,3 +3250,5 @@
 - 在 `cssom.js` `normalizeSingleColor` 中补全含 `none` 通道的 `hsl`/`hsla` 规范化序列化（`hsla` 转 `hsl`、剥离百分比符号、省略 `/ 1`），`color-valid-hsl.html` 全部 `none` 通道用例通过。
 ### Phase 705 — `/css/css-anchor-position/parsing/` `position-try` 与 `position-try-fallbacks` 全量闭环
 - 在 `cssom.js` 与 `window.js` 中补全 `position-try-fallbacks` 的 `<position-area>` / `[--ident || <try-tactic>]` 校验与规范排序，以及 `position-try` 简写展开、序列化和 `getComputedStyle` 支持，使 `/css/css-anchor-position/parsing/` 全目录 10/10 PASS。
+### Phase 706 — `mask` 简写 `<mask-layer>#` 语法校验闭环
+- 在 `cssom.js` `isValidCssValue("mask")` 中实现完整 `<mask-layer>#` 校验，使 `/css/css-masking/parsing/mask-invalid.html` 全部 13/13 子测试 PASS。

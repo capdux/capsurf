@@ -3937,3 +3937,6 @@
   - `src/js/shim/cssom.js`: 新增 `normalizePositionTryFallbacks`、`position-try-fallbacks` 校验与规范化，以及 `position-try` 简写展开（`position-try-order` + `position-try-fallbacks`）与序列化。
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS`、默认值表及 `getShorthandComputed` 补齐 `position-try-fallbacks` 与 `position-try`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 706**:
+  - `src/js/shim/cssom.js`: `isValidCssValue("mask")` 补齐 `<mask-layer>#` 全分支校验（拒绝多余位置长度、`margin-box`、`no-clip` 重复、多合成算子等）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

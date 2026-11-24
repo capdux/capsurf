@@ -5622,6 +5622,87 @@
         }
         return true;
       }
+      if (prop === "mask") {
+        const layers = splitTopLevelComma(trimmed);
+        if (layers.length === 0) return false;
+        const REP1 = new Set(["repeat-x", "repeat-y"]);
+        const REP2 = new Set(["repeat", "space", "round", "no-repeat"]);
+        const GEO = new Set(["content-box", "padding-box", "border-box", "fill-box", "stroke-box", "view-box"]);
+        const COMP = new Set(["add", "subtract", "intersect", "exclude"]);
+        const MODE = new Set(["alpha", "luminance", "match-source"]);
+        const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
+        const isPosTok = (t) => POS_KW.has(t.toLowerCase()) || isValidLenPct(t, true);
+        for (let li = 0; li < layers.length; li++) {
+          const layer = layers[li].trim();
+          if (!layer) return false;
+          const slashes = [];
+          let cur = "", d = 0, q = "";
+          for (let ci = 0; ci < layer.length; ci++) {
+            const ch = layer[ci];
+            if (q) { cur += ch; if (ch === q && layer[ci - 1] !== "\\") q = ""; continue; }
+            if (ch === "\"" || ch === "'") { q = ch; cur += ch; continue; }
+            if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+            if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
+            else cur += ch;
+          }
+          slashes.push(cur.trim());
+          if (slashes.length > 2) return false;
+          let seenImg = false, seenPos = false, seenRep = false, boxCnt = 0, seenNoClip = false, seenComp = false, seenMode = false;
+          const checkNonPos = (toks, startIdx) => {
+            for (let ti = startIdx; ti < toks.length; ti++) {
+              const t = toks[ti], tl = t.toLowerCase();
+              if (tl === "none" || /^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(t)) {
+                if (seenImg) return false; seenImg = true;
+              } else if (REP1.has(tl)) {
+                if (seenRep) return false; seenRep = true;
+              } else if (REP2.has(tl)) {
+                if (seenRep) return false; seenRep = true;
+                if (ti + 1 < toks.length && REP2.has(toks[ti + 1].toLowerCase())) ti++;
+              } else if (GEO.has(tl)) {
+                if (boxCnt >= 2) return false; boxCnt++;
+              } else if (tl === "no-clip") {
+                if (seenNoClip || boxCnt >= 2) return false; seenNoClip = true; boxCnt++;
+              } else if (COMP.has(tl)) {
+                if (seenComp) return false; seenComp = true;
+              } else if (MODE.has(tl)) {
+                if (seenMode) return false; seenMode = true;
+              } else if (isPosTok(t)) {
+                if (seenPos) return false;
+                const pToks = [t];
+                while (ti + 1 < toks.length && isPosTok(toks[ti + 1])) pToks.push(toks[++ti]);
+                if (!isValidCssPositionTokens(pToks, true)) return false;
+                seenPos = true;
+              } else {
+                return false;
+              }
+            }
+            return true;
+          };
+          if (slashes.length === 1) {
+            if (!checkNonPos(splitCssTokens(slashes[0]), 0)) return false;
+          } else {
+            const leftToks = splitCssTokens(slashes[0]);
+            const rightToks = splitCssTokens(slashes[1]);
+            if (leftToks.length === 0 || rightToks.length === 0) return false;
+            let posEnd = leftToks.length;
+            let posStart = posEnd;
+            while (posStart > 0 && isPosTok(leftToks[posStart - 1])) posStart--;
+            if (posStart === posEnd) return false;
+            if (!isValidCssPositionTokens(leftToks.slice(posStart, posEnd), true)) return false;
+            seenPos = true;
+            if (!checkNonPos(leftToks.slice(0, posStart), 0)) return false;
+            const sz0 = rightToks[0].toLowerCase();
+            let szUsed = 0;
+            if (sz0 === "cover" || sz0 === "contain") szUsed = 1;
+            else if (sz0 === "auto" || isValidLenPct(rightToks[0], false)) {
+              szUsed = 1;
+              if (rightToks.length >= 2 && (rightToks[1].toLowerCase() === "auto" || isValidLenPct(rightToks[1], false))) szUsed = 2;
+            } else return false;
+            if (!checkNonPos(rightToks, szUsed)) return false;
+          }
+        }
+        return true;
+      }
       if (prop === "border-spacing") {
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > 2) return false;
