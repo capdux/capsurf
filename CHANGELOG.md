@@ -3874,3 +3874,6 @@
   - `src/js/shim/window.js`: `background-position-x/y` 单层保留 `x-start`/`x-end`/`y-start`/`y-end` 关键字，多层解析为 `0%`/`100%`。
   - `test/wpt/wpt-expectations.json`: 将 `background-position-x-computed.html` 与 `background-position-y-computed.html` 从 `FAIL` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 687**:
+  - `src/js/shim/cssom.js`: `KEYWORD_PROPS` 新增 `row-rule-style`/`rule-style`；`isValidCssValue` 接入 `row-rule-width`/`rule-width`、`row-rule`/`rule` 及 15 个 `*-rule-inset*` 属性校验（含 `overlap-join` 与 `/` 分隔）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

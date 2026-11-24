@@ -2353,3 +2353,4 @@
 | Phase 684 | WPT `background` 简写非末层 `<color>` 与 `/ <bg-size>` 位置前置校验 | `src/js/shim/cssom.js` | `/css/css-backgrounds/parsing/background-invalid.html` 2/2 PASS; `--smoke` 3/3 PASS |
 | Phase 685 | WPT `radial-gradient` 无 shape/size 首参色值校验修复 + `x-start/y-start` 计算分支对齐 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `/css/css-images/parsing/gradient-position-computed.html` 43/43 PASS; `background-position-*` 9/9 匹配基线; `--smoke` 3/3 PASS |
 | Phase 686 | WPT `background-position-{x,y}-computed` 逻辑边单/多层序列化对齐与基线收紧 | `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `/css/css-backgrounds/parsing/background-position-*` 9/9 全数 PASS (`background-position-{x,y}-computed` 收紧为 `PASS`); `--smoke` 3/3 PASS |
+| Phase 687 | WPT `/css/css-gaps/` 全量 `row-rule`/`rule` 与 15 项 `*-rule-inset*` 语法校验补全 | `src/js/shim/cssom.js` | `/css/css-gaps/` 全目录 **32/32 PASS**（8 个 `*-invalid.html` 全部转绿）; `--smoke` 3/3 PASS |

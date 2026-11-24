@@ -3212,3 +3212,5 @@
 - 修复 `cssom.js` 中 `radial-gradient(rgb(...), ...)` 因首个色标被误判为 `<radial-size>` 长度而无法 round-trip 的问题，打通 `/css/css-images/parsing/gradient-position-computed.html` 全部 43/43 子测试。
 ### Phase 686 — `background-position-{x,y}-computed` 逻辑边单/多层对齐与基线收紧
 - 区分 `background-position-x/y` 单层保留逻辑关键字与多层解析为 `0%`/`100%` 的行为，打通 `/css/css-backgrounds/parsing/background-position-*` 全部 9/9 测试并将 `background-position-{x,y}-computed.html` 收紧为 `PASS`。
+### Phase 687 — `/css/css-gaps/` 全量规则与 `rule-inset` 语法校验闭环
+- 在 `cssom.js` 中补全 `row-rule*`/`rule*` 与全套 `*-rule-inset*`（含 `cap`/`junction`/`start`/`end` 与 `overlap-join`）语法校验，使 `/css/css-gaps/` 全目录 32/32 用例全数 PASS。

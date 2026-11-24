@@ -4281,6 +4281,8 @@
         "column-fill": ["auto", "balance", "balance-all"],
         "column-span": ["none", "all"],
         "column-rule-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+        "row-rule-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
+        "rule-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
         "transform-box": ["content-box", "border-box", "fill-box", "stroke-box", "view-box"],
         "transform-style": ["flat", "preserve-3d"],
         "backface-visibility": ["visible", "hidden"],
@@ -4991,7 +4993,7 @@
         }
         return true;
       }
-      if (prop === "outline-width" || prop === "column-rule-width") {
+      if (prop === "outline-width" || prop === "column-rule-width" || prop === "row-rule-width" || prop === "rule-width") {
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -6363,7 +6365,7 @@
         }
         return true;
       }
-      if (prop === "outline" || prop === "border" || prop === "column-rule" ||
+      if (prop === "outline" || prop === "border" || prop === "column-rule" || prop === "row-rule" || prop === "rule" ||
           prop === "border-top" || prop === "border-right" || prop === "border-bottom" || prop === "border-left" ||
           prop === "border-block" || prop === "border-inline" ||
           prop === "border-block-start" || prop === "border-block-end" || prop === "border-inline-start" || prop === "border-inline-end") {
@@ -6858,6 +6860,39 @@
       }
       if (prop === "column-rule-visibility-items" || prop === "row-rule-visibility-items" || prop === "rule-visibility-items") {
         return vLower === "all" || vLower === "around" || vLower === "between";
+      }
+      if (prop === "column-rule-inset-start" || prop === "column-rule-inset-end" ||
+          prop === "row-rule-inset-start" || prop === "row-rule-inset-end" ||
+          prop === "rule-inset-start" || prop === "rule-inset-end" ||
+          prop === "column-rule-inset-cap-start" || prop === "column-rule-inset-cap-end" ||
+          prop === "row-rule-inset-cap-start" || prop === "row-rule-inset-cap-end" ||
+          prop === "column-rule-inset-junction-start" || prop === "column-rule-inset-junction-end" ||
+          prop === "row-rule-inset-junction-start" || prop === "row-rule-inset-junction-end") {
+        const toks = splitCssTokens(vLower);
+        return toks.length === 1 && (toks[0] === "overlap-join" || isValidLenPct(toks[0], true));
+      }
+      if (prop === "column-rule-inset-cap" || prop === "row-rule-inset-cap" || prop === "rule-inset-cap" ||
+          prop === "column-rule-inset-junction" || prop === "row-rule-inset-junction" || prop === "rule-inset-junction") {
+        const toks = splitCssTokens(vLower);
+        return toks.length >= 1 && toks.length <= 2 && toks.every((t) => t === "overlap-join" || isValidLenPct(t, true));
+      }
+      if (prop === "column-rule-inset" || prop === "row-rule-inset" || prop === "rule-inset") {
+        const slashes = [];
+        let cur = "", d = 0;
+        for (let i = 0; i < vLower.length; i++) {
+          const ch = vLower[i];
+          if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        slashes.push(cur.trim());
+        if (slashes.length < 1 || slashes.length > 2) return false;
+        for (let si = 0; si < slashes.length; si++) {
+          if (!slashes[si]) return false;
+          const toks = splitCssTokens(slashes[si]);
+          if (toks.length < 1 || toks.length > 2 || !toks.every((t) => t === "overlap-join" || isValidLenPct(t, true))) return false;
+        }
+        return true;
       }
       if (prop === "mix-blend-mode" || prop === "background-blend-mode") {
         const BLEND_MODES = new Set([
