@@ -2950,7 +2950,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-size-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-size-invalid.html": {

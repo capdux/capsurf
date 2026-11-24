@@ -3087,3 +3087,7 @@
 ### Phase 646: `scrollbar-color-parsing` & `place-{content,self}-shorthand-004` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`)**：`scrollbar-color` 独立校验 `auto | <color>{2}` 并规范化颜色；`parseStyleMap()` 对 `place-self`/`place-items`/`place-content` 先过 `isValidInlinePropValue` 再展开。
 - **WPT & Smoke 验收**：`/css/css-scrollbars/` (2/2)、`place-content-shorthand-004`、`place-self-shorthand-004` 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 647: `font-size-computed` (21/21) 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`collectElementOwnDeclarations` 注入 `<font size="1..7">` 映射；`applyUsedValuesToComputedMap` 补全 `xx-small..xxx-large`、`larger`/`smaller` 及百分比/长度对父级字号的像素求值。
+- **WPT & Smoke 验收**：`font-size-computed.html` (21/21，基线收紧为 `PASS`) 与 4 个 `font-size-*` 回归均 PASS，`--smoke` 3/3 suites PASS。

@@ -8035,3 +8035,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 646（`src/js/shim/cssom.js`, `src/js/shim/element/element.js`）：
   1. **`cssom.js` & `element.js`**：排除 `scrollbar-color` 的 `-color` 单色误拦截并补全双色校验/规范化；`parseStyleMap()` 展开 `place-*` 简写前增加 `isValidInlinePropValue` 校验。
   2. **全绿验证**：`/css/css-scrollbars/` **2/2 全绿**、`place-content-shorthand-004.html` **PASS**、`place-self-shorthand-004.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 647（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：新增 `<font size="1..7">` 映射及 `font-size` 绝对/相对关键字、百分比/长度对父级字号的计算值求值。
+  2. **全绿验证**：`font-size-computed.html`（21/21，收紧为 `PASS`）、4 个 `font-size-*` 回归与 `--smoke`（3/3 suites, 6/6 tests）全绿。

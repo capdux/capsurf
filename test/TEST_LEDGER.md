@@ -2265,3 +2265,7 @@
 ### Phase 646: `scrollbar-color-parsing` (2/2) & `place-content`/`place-self-shorthand-004` 全绿
 - **Filter `/css/css-scrollbars/` & `place-{content,self}-shorthand-004`**: **FAIL->PASS (3/3 新增通过，`/css/css-scrollbars/` 目录 2/2 全绿)**（`cssom.js` 将 `scrollbar-color` 从 `prop.endsWith("-color")` 误拦截中排除，补全 `auto | <color> <color>` 校验与 `#hex`->`rgb(...)` 规范化；`element.js` 在 `parseStyleMap()` 展开 `place-self`/`place-items`/`place-content` 前补充 `isValidInlinePropValue(k, v)` 拦截）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 647: `font-size-computed` (21/21) 全绿
+- **Filter `/css/css-fonts/parsing/font-size-computed` & `/css/css-fonts/font-size-`**: **FAIL->PASS (1/1: 21/21) + 4/4 回归全绿**（`window.js` 在 `collectElementOwnDeclarations` 映射 `<font size="1..7">` 到 `xx-small..xxx-large`，并在 `applyUsedValuesToComputedMap` 补全 `font-size` 绝对/相对关键字与任意 `%`/长度表达式对父级字号的像素求值，收紧 `font-size-computed.html` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

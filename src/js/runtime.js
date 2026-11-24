@@ -42338,6 +42338,13 @@
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text) {
         parseCssRulesInto(element, globalThis.__capsurf_tty_ua_css_text, targetMap, normalizedPseudo);
       }
+      if (!normalizedPseudo && element && element.getAttribute && String(element.localName || element.tagName || "").toLowerCase() === "font") {
+        const fsz = String(element.getAttribute("size") || "").trim();
+        const FONT_ATTR_MAP = { "1": "xx-small", "2": "small", "3": "medium", "4": "large", "5": "x-large", "6": "xx-large", "7": "xxx-large" };
+        if (Object.prototype.hasOwnProperty.call(FONT_ATTR_MAP, fsz)) {
+          targetMap.set("font-size", FONT_ATTR_MAP[fsz]);
+        }
+      }
       for (let i = 0; i < styleNodes.length; i++) {
         const sn = styleNodes[i];
         if (!sn) continue;
@@ -42786,20 +42793,36 @@
         }
         return;
       }
+      const FONT_ABS_KW = {
+        "xx-small": 9, "x-small": 10, "small": 13, "medium": 16,
+        "large": 18, "x-large": 24, "xx-large": 32, "xxx-large": 48
+      };
       const fsRaw = computedMap.get("font-size");
       if (fsRaw !== undefined) {
-        const fst = fsRaw.trim();
-        if (fst === "0") {
-          computedMap.set("font-size", "0px");
-        } else if (/^(?:calc|min|max|clamp)\s*\(/i.test(fst)) {
-          let parentFs = 16;
+        const fst = fsRaw.trim().toLowerCase();
+        const getParentFs = () => {
+          let pFs = 16;
           const pEl = element.parentElement || element.parentNode;
           if (pEl && pEl.nodeType === 1) {
             const pMap = collectRawComputedMap(pEl, "");
-            const pVal = evalCssLengthExpr(pMap.get("font-size") || "16px", 16, 16);
-            if (pVal !== null && isFinite(pVal)) parentFs = Math.max(0, pVal);
+            const pRaw = (pMap.get("font-size") || "16px").trim().toLowerCase();
+            if (Object.prototype.hasOwnProperty.call(FONT_ABS_KW, pRaw)) return FONT_ABS_KW[pRaw];
+            const pVal = evalCssLengthExpr(pRaw, 16, 16);
+            if (pVal !== null && isFinite(pVal)) pFs = Math.max(0, pVal);
           }
-          const fpx = evalCssLengthExpr(fst, parentFs, parentFs);
+          return pFs;
+        };
+        if (fst === "0") {
+          computedMap.set("font-size", "0px");
+        } else if (Object.prototype.hasOwnProperty.call(FONT_ABS_KW, fst)) {
+          computedMap.set("font-size", FONT_ABS_KW[fst] + "px");
+        } else if (fst === "larger") {
+          computedMap.set("font-size", formatCssPx(Math.round(getParentFs() * 1.2 * 100) / 100));
+        } else if (fst === "smaller") {
+          computedMap.set("font-size", formatCssPx(Math.round((getParentFs() / 1.2) * 100) / 100));
+        } else if (fst !== "inherit" && fst !== "initial" && fst !== "unset" && fst !== "revert" && fst !== "revert-layer") {
+          const parentFs = getParentFs();
+          const fpx = evalCssLengthExpr(fsRaw.trim(), parentFs, parentFs);
           if (fpx !== null && isFinite(fpx)) {
             computedMap.set("font-size", formatCssPx(Math.max(0, fpx)));
           }
