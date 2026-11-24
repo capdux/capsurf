@@ -3630,3 +3630,5 @@
 - **Phase 581** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-optical-sizing`/`font-palette`/`font-variant-emoji`/`font-variant-position`/`font-synthesis-style`/`font-language-override` 校验、规范序列化与计算期默认值；6 组共 18 项 WPT 全绿通过。
 
 - **Phase 582** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 注册并实现 `anchor-scope`、`position-try-order`、`position-visibility` 文法校验、规范序列化与计算期默认值；3 组共 6 项 WPT 全绿通过。
+
+- **Phase 583** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `accent-color`、`alignment-baseline` 与 `baseline-shift` 文法校验、规范序列化、继承与计算期求值；`accent-color-*` 2/2、`baseline-shift-*` 3/3、`alignment-baseline-invalid` 全绿，收紧 `scroll-buttons-invalid.html` 为 `PASS`。

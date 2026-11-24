@@ -1893,3 +1893,14 @@
   - `/css/css-conditional/` (`b460`): `135` files (`38 PASS / 91 FAIL / 6 TIMEOUT`)
   - `/css/css-position/parsing/` (`b461`): **22/22 PASS (100% ALL GREEN)**
   - `/css/css-inline/` (`b463`): `16` files (`4 PASS / 10 FAIL`)
+
+### Phase 583 `accent-color` 2/2 & `baseline-shift` 3/3 & `alignment-baseline-invalid` 全绿 & WPT-B464~B467 摸底 (bin_dev Phase 583, 2026-11-24)
+- **Filter `/css/css-ui/accent-color`**: **2/2 PASS (100% ALL GREEN)**（`accent-color-parsing.html`, `accent-color-computed.html` 全绿；跳过 `-color` 通用拦截以放行 `auto`，纳入 `INHERITED_CSS_PROPS` 与 `STANDARD_COMPUTED_LONGHANDS` 默认 `"auto"`）。
+- **Filter `/css/css-inline/parsing/baseline-shift`**: **3/3 PASS (100% ALL GREEN)**（`0 -> 0px`、`sub|super|top|center|bottom|<length-percentage>` 校验与计算期求值）。
+- **Filter `/css/css-inline/parsing/alignment-baseline`**: **PASS**。
+- **Expectations Tightened**: `/css/css-overflow/parsing/scroll-buttons-invalid.html` 收紧为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-ui/` (`b464`): `47` files (`35 PASS / 10 FAIL / 2 TIMEOUT`)
+  - `/css/css-overflow/` (`b466`): `33` files (`22 PASS / 11 FAIL`)
+  - `/css/css-multicol/` (`b467`): `32` files (`31 PASS / 1 FAIL`)

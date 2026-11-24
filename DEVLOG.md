@@ -2827,3 +2827,7 @@
 ### Phase 582: `css-anchor-position/parsing/` 3 组 6/6 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `anchor-scope`、`position-try-order`、`position-visibility` 校验、规范序及计算期默认初始值（`"none"` / `"normal"` / `"anchors-visible"`）。
 - **WPT & Smoke 验收**：3 组 6 项全部 **PASS**、`--smoke` 3/3 suites PASS。
+
+### Phase 583: `accent-color` 2/2 与 `baseline-shift` 3/3 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `accent-color`、`alignment-baseline` 与 `baseline-shift` 校验及计算期默认值/求值，收紧 `scroll-buttons-invalid.html` 基线。
+- **WPT & Smoke 验收**：`accent-color-*` 2/2 PASS、`baseline-shift-*` 3/3 PASS、`alignment-baseline-invalid` PASS、`--smoke` 3/3 suites PASS。

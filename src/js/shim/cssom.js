@@ -9,7 +9,7 @@
   // =========================================================================
 
   const STANDARD_CSS_PROPERTIES = new Set([
-    "accent-color", "align-content", "align-items", "align-self", "all",
+    "accent-color", "align-content", "align-items", "align-self", "alignment-baseline", "all",
     "anchor-scope",
     "animation", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count",
@@ -19,7 +19,7 @@
     "background", "background-attachment", "background-blend-mode", "background-clip",
     "background-color", "background-image", "background-origin", "background-position",
     "background-position-x", "background-position-y", "background-repeat", "background-size",
-    "base-palette", "block-size",
+    "base-palette", "baseline-shift", "block-size",
     "border", "border-block", "border-block-color", "border-block-end", "border-block-end-color",
     "border-block-end-style", "border-block-end-width", "border-block-start", "border-block-start-color",
     "border-block-start-style", "border-block-start-width", "border-block-style", "border-block-width",
@@ -391,7 +391,7 @@
       return true;
     }
 
-    if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color")) {
+    if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color" && prop !== "accent-color")) {
       return isValidColor(trimmed);
     }
 
@@ -2195,6 +2195,20 @@
     if (prop === "image-orientation") {
       return vLower === "from-image" || vLower === "none";
     }
+    if (prop === "accent-color") {
+      return vLower === "auto" || isValidColor(trimmed);
+    }
+    if (prop === "alignment-baseline") {
+      return vLower === "baseline" || vLower === "text-bottom" || vLower === "alphabetic" ||
+        vLower === "ideographic" || vLower === "middle" || vLower === "central" ||
+        vLower === "mathematical" || vLower === "text-top";
+    }
+    if (prop === "baseline-shift") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      return t === "sub" || t === "super" || t === "top" || t === "center" || t === "bottom" || isValidLenPct(t, true);
+    }
     if (prop === "anchor-scope") {
       if (vLower === "none" || vLower === "all") return true;
       const items = splitTopLevelComma(trimmed);
@@ -2483,7 +2497,7 @@
     "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
     "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
     "outline-width", "outline-offset", "column-rule-width", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
-    "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness"
+    "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness", "baseline-shift"
   ]);
   const TWO_SIDE_PROPS = new Set([
     "inset-block", "inset-inline", "margin-block", "margin-inline", "padding-block", "padding-inline",
@@ -2950,11 +2964,11 @@
       }
       return s;
     }
-    if (key === "background-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
+    if (key === "background-color" || key === "accent-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
       const toks = splitCssTokens(s);
       return toks.map((t) => {
         const tl = t.toLowerCase();
-        if (tl === "currentcolor" || tl === "transparent") return tl;
+        if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
         if (tl.startsWith("#") || /^rgba?\(/i.test(tl)) return normalizeSingleColor(t);
         return tl;
       }).join(" ");

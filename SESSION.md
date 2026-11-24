@@ -7724,3 +7724,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 自主推导并完成 Phase 582（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
   1. **`cssom.js` & `window.js`**：注册并严格校验 `anchor-scope`、`position-try-order`、`position-visibility`（含规范序），纳入 `STANDARD_COMPUTED_LONGHANDS` 并设置默认初始值（`"none"` / `"normal"` / `"anchors-visible"`）。
   2. **全绿验证与摸底**：上述 3 组共 **6/6 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**；子智能体完成 `/css/css-position/parsing/` **22/22 PASS**、`/css/css-view-transitions/` **8/9 PASS**、`/css/css-conditional/`（38/135）、`/css/css-inline/`（4/16）。
+
+### 2026-11-24 Phase 583 (`accent-color` 2/2 & `baseline-shift` 3/3 & `alignment-baseline-invalid` 全绿)
+- **[Agent]**: 自主推导并完成 Phase 583（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js` & `window.js`**：实现 `accent-color`（`auto | <color>`，跳过通用 `-color` 拦截，纳入继承与默认 `"auto"`）、`alignment-baseline` 与 `baseline-shift`（`0 -> 0px` 及计算期线性 `calc` 求值）的校验与求值。
+  2. **全绿验证与基线收紧**：`accent-color-*` **2/2 PASS**、`baseline-shift-*` **3/3 PASS**、`alignment-baseline-invalid` **PASS**、`--smoke` **3/3 suites PASS**；收紧 `scroll-buttons-invalid.html` 为 `PASS`。
+  3. **并行摸底汇总**：`/css/css-multicol/` **31/32 PASS**、`/css/css-ui/` **35/47 PASS**、`/css/css-overflow/` **22/33 PASS**。

@@ -4834,8 +4834,8 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-buttons-invalid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-overflow/parsing/scroll-buttons-valid.html": {
     "expected": "FAIL",

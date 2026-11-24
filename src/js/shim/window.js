@@ -6295,7 +6295,7 @@ function installWindow(global) {
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
     "border-collapse", "border-spacing", "caption-side", "empty-cells",
-    "image-orientation", "image-rendering", "image-resolution",
+    "image-orientation", "image-rendering", "image-resolution", "accent-color",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -8522,8 +8522,21 @@ function installWindow(global) {
       ["object-position", "50% 50%"],
       ["shape-outside", "none"],
       ["shape-margin", "0px"],
-      ["shape-image-threshold", "0"]
+      ["shape-image-threshold", "0"],
+      ["accent-color", "auto"],
+      ["alignment-baseline", "baseline"],
+      ["baseline-shift", "0px"]
     ];
+    const acRaw = (computedMap.get("accent-color") || "").trim();
+    if (acRaw) {
+      const acl = acRaw.toLowerCase();
+      if (acl === "initial" || acl === "revert" || acl === "revert-layer") computedMap.set("accent-color", "auto");
+      else if (acl !== "auto") computedMap.set("accent-color", acl === "currentcolor" ? elColor : normCol(acRaw));
+    }
+    const bsftRaw = (computedMap.get("baseline-shift") || "").trim();
+    if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
+      computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
+    }
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];
       const cur = (computedMap.get(dk) || "").trim().toLowerCase();
@@ -8739,12 +8752,12 @@ function installWindow(global) {
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
-    "align-content", "align-items", "align-self", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
+    "align-content", "align-items", "align-self", "alignment-baseline", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
     "animation-play-state", "animation-range-end", "animation-range-start", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
-    "background-position-x", "background-position-y", "background-repeat", "background-size",
+    "background-position-x", "background-position-y", "background-repeat", "background-size", "baseline-shift",
     "block-size", "border-block-end-color", "border-block-end-style", "border-block-end-width",
     "border-block-start-color", "border-block-start-style", "border-block-start-width",
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
