@@ -7955,8 +7955,8 @@
     "reason": "T18 enrollment (css-variables): 26/73 subtests pass"
   },
   "/css/css-variables/variable-empty-name-reserved.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-variables): 0/1 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-variables/variable-exponential-blowup.html": {
     "expected": "PASS",

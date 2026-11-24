@@ -85,7 +85,7 @@ function collapseFourSideValues(vals) {
 function isValidInlinePropValue(key, val) {
   const v = String(val).trim();
   if (!v) return false;
-  if (key.startsWith("--")) return true;
+  if (key.startsWith("--")) return key.length > 2;
   const lower = v.toLowerCase();
   if (CSS_WIDE_KEYWORDS.has(lower)) return true;
   if (lower.indexOf("var(") !== -1) return true;

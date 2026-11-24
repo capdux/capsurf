@@ -3934,7 +3934,7 @@
       if (typeof prop !== "string") return false;
       const p = prop.trim();
       if (!p) return false;
-      if (p.startsWith("--")) return true;
+      if (p.startsWith("--")) return p.length > 2;
       if (STANDARD_CSS_PROPERTIES.has(p)) return true;
       const kebab = cssPropCamelToKebab(p);
       return STANDARD_CSS_PROPERTIES.has(kebab);
@@ -4139,7 +4139,7 @@
       if (typeof value !== "string") value = String(value);
       const trimmed = value.trim();
       if (!trimmed) return false;
-      if (prop.startsWith("--")) return true;
+      if (prop.startsWith("--")) return prop.length > 2;
 
       const vLower = trimmed.toLowerCase();
       if (vLower === "inherit" || vLower === "initial" || vLower === "unset" || vLower === "revert" || vLower === "revert-layer") {
@@ -7975,7 +7975,7 @@
 
     function declSupported(name, value) {
       if (!name || typeof name !== "string") return false;
-      if (name.startsWith("--")) return typeof value === "string" && value.trim() !== "";
+      if (name.startsWith("--")) return name.length > 2 && typeof value === "string" && value.trim() !== "";
       const kebab = cssPropCamelToKebab(name);
       if (!isCssPropertySupported(kebab)) return false;
       return isValidCssValue(kebab, value);
@@ -8325,6 +8325,7 @@
             continue;
           }
           const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
+          if (key === "--") continue;
           if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
           if (!data.has(key)) {
             authoredOrder.push(key);
@@ -13679,7 +13680,7 @@
   function isValidInlinePropValue(key, val) {
     const v = String(val).trim();
     if (!v) return false;
-    if (key.startsWith("--")) return true;
+    if (key.startsWith("--")) return key.length > 2;
     const lower = v.toLowerCase();
     if (CSS_WIDE_KEYWORDS.has(lower)) return true;
     if (lower.indexOf("var(") !== -1) return true;
@@ -41550,6 +41551,7 @@
     }
 
     function resolveVarsInMap(computedMap) {
+      const MAX_VAR_LEN = 65536;
       function substitute(val, depth) {
         if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 16) return val;
         let out = "";
@@ -41558,9 +41560,11 @@
           const idx = val.indexOf("var(", i);
           if (idx === -1) {
             out += val.slice(i);
+            if (out.length > MAX_VAR_LEN) return null;
             break;
           }
           out += val.slice(i, idx);
+          if (out.length > MAX_VAR_LEN) return null;
           let d = 1;
           let j = idx + 4;
           while (j < val.length && d > 0) {
@@ -41585,15 +41589,19 @@
           if (!rep && fallback) rep = fallback;
           if (rep && rep.indexOf("var(") !== -1) {
             rep = substitute(rep, depth + 1);
+            if (rep === null) return null;
           }
           out += rep;
+          if (out.length > MAX_VAR_LEN) return null;
           i = j;
         }
         return out;
       }
       for (const [k, v] of computedMap.entries()) {
         if (typeof v === "string" && v.indexOf("var(") !== -1) {
-          computedMap.set(k, substitute(v, 0));
+          const res = substitute(v, 0);
+          if (res === null) computedMap.delete(k);
+          else computedMap.set(k, res);
         }
       }
     }

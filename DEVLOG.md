@@ -2887,3 +2887,7 @@
 ### Phase 597: `background-size-valid` 全绿 & `background-size-computed` 14/16
 - **核心修复 (`src/js/shim/cssom.js`)**：调整 `background-size` 序列化逻辑，单值长度/百分比补全第二项 `"auto"`，`"auto auto"` 简写为 `"auto"`。
 - **WPT & Smoke 验收**：`background-size-valid.html` PASS、`background-size-computed.html` 14/16 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 598: `/css/css-variables/{variable-empty-name-reserved,variable-exponential-blowup}` 全绿
+- **核心修复 (`window.js`, `cssom.js`, `element.js`)**：`resolveVarsInMap` 增加 `MAX_VAR_LEN = 65536` 展开长度熔断保护（超出按 guaranteed-invalid 清除），并在 `isCssPropertySupported` / `isValidCssValue` / `declSupported` / `isValidInlinePropValue` 中拒绝 `--` 空名称自定义属性。
+- **WPT & Smoke 验收**：`variable-empty-name-reserved.html` FAIL->PASS（收紧基线）、`variable-exponential-blowup.html` ERROR->PASS、`--smoke` 3/3 suites PASS。

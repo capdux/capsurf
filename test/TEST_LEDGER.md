@@ -2007,3 +2007,11 @@
 - **Filter `/css/css-backgrounds/parsing/background-size-valid`**: **PASS**（`cssom.js` `background-size` 单值非关键字补全第二个 `"auto"`，仅 `"auto auto"` 缩为 `"auto"`）。
 - **Filter `/css/css-backgrounds/parsing/background-size-computed`**: `14/16 PASS`（`10/16 -> 14/16`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 598: `/css/css-variables/{variable-empty-name-reserved,variable-exponential-blowup}` 全绿 & OOM 熔断防护
+- **Filter `/css/css-variables/variable-empty-name-reserved`**: **FAIL->PASS**（`cssom.js` & `element.js` 拒绝 `--` 空名称自定义属性；已收紧 `wpt-expectations.json` 基线为 `PASS`）。
+- **Filter `/css/css-variables/variable-exponential-blowup`**: **ERROR (OOM)->PASS**（`window.js` `resolveVarsInMap` 增加 `MAX_VAR_LEN = 65536` 展开长度熔断保护）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-variables/` (`b497`, 194 files): `60 PASS / 124 FAIL / 9 TIMEOUT / 1 ERROR`
+  - `/css/css-masking/parsing/` (`b501`, 28 files): `4 PASS / 24 FAIL / 0 TIMEOUT`

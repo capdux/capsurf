@@ -7809,3 +7809,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 597（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：`background-size` 规范化序列化时单值非关键字补 `"auto"`，`"auto auto"` 规范化为 `"auto"`。
   2. **验证**：`background-size-valid.html` **PASS**、`background-size-computed.html` **10/16 -> 14/16 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 598 (`/css/css-variables/{variable-empty-name-reserved,variable-exponential-blowup}` 全绿)
+- **[Agent]**: 完成 Phase 598（`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：`resolveVarsInMap` 增加 65536 字符展开熔断，消除指数级变量展开 OOM。
+  2. **`cssom.js` / `element.js`**：拒绝 `--` 保留空自定义属性名。
+  3. **全绿验证与基线收紧**：`variable-empty-name-reserved.html` **FAIL->PASS**（已收紧）、`variable-exponential-blowup.html` **ERROR->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/css-variables/` 60/194 PASS；`/css/css-masking/parsing/` 4/28 PASS。

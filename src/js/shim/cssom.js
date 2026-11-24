@@ -144,7 +144,7 @@
     if (typeof prop !== "string") return false;
     const p = prop.trim();
     if (!p) return false;
-    if (p.startsWith("--")) return true;
+    if (p.startsWith("--")) return p.length > 2;
     if (STANDARD_CSS_PROPERTIES.has(p)) return true;
     const kebab = cssPropCamelToKebab(p);
     return STANDARD_CSS_PROPERTIES.has(kebab);
@@ -349,7 +349,7 @@
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
     if (!trimmed) return false;
-    if (prop.startsWith("--")) return true;
+    if (prop.startsWith("--")) return prop.length > 2;
 
     const vLower = trimmed.toLowerCase();
     if (vLower === "inherit" || vLower === "initial" || vLower === "unset" || vLower === "revert" || vLower === "revert-layer") {
@@ -4185,7 +4185,7 @@
 
   function declSupported(name, value) {
     if (!name || typeof name !== "string") return false;
-    if (name.startsWith("--")) return typeof value === "string" && value.trim() !== "";
+    if (name.startsWith("--")) return name.length > 2 && typeof value === "string" && value.trim() !== "";
     const kebab = cssPropCamelToKebab(name);
     if (!isCssPropertySupported(kebab)) return false;
     return isValidCssValue(kebab, value);
@@ -4535,6 +4535,7 @@
           continue;
         }
         const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
+        if (key === "--") continue;
         if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
         if (!data.has(key)) {
           authoredOrder.push(key);

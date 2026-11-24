@@ -6371,6 +6371,7 @@ function installWindow(global) {
   }
 
   function resolveVarsInMap(computedMap) {
+    const MAX_VAR_LEN = 65536;
     function substitute(val, depth) {
       if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 16) return val;
       let out = "";
@@ -6379,9 +6380,11 @@ function installWindow(global) {
         const idx = val.indexOf("var(", i);
         if (idx === -1) {
           out += val.slice(i);
+          if (out.length > MAX_VAR_LEN) return null;
           break;
         }
         out += val.slice(i, idx);
+        if (out.length > MAX_VAR_LEN) return null;
         let d = 1;
         let j = idx + 4;
         while (j < val.length && d > 0) {
@@ -6406,15 +6409,19 @@ function installWindow(global) {
         if (!rep && fallback) rep = fallback;
         if (rep && rep.indexOf("var(") !== -1) {
           rep = substitute(rep, depth + 1);
+          if (rep === null) return null;
         }
         out += rep;
+        if (out.length > MAX_VAR_LEN) return null;
         i = j;
       }
       return out;
     }
     for (const [k, v] of computedMap.entries()) {
       if (typeof v === "string" && v.indexOf("var(") !== -1) {
-        computedMap.set(k, substitute(v, 0));
+        const res = substitute(v, 0);
+        if (res === null) computedMap.delete(k);
+        else computedMap.set(k, res);
       }
     }
   }
