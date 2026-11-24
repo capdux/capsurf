@@ -7579,3 +7579,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - 将 `text-combine-upright`、`text-orientation`、`writing-mode` 纳入 `INHERITED_CSS_PROPS`，补充 `getComputedStyle` 默认值 `"none"` / `"mixed"` / `"normal"`，并在 `collectRawComputedMap` 中丢弃非法 `text-combine-upright`/`text-orientation` 声明，使 `text-combine-upright-parsing-invalid-001/002.html` 全绿。
   3. **全绿验证**：
      - `/css/css-scroll-snap/`: **8/8 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 562 (`gap-decorations-important`, `highlight-pseudos` 转绿与 `*::pseudo` 规范化)
+- **[Agent]**: 自主推导并完成 Phase 562（`src/js/shim/element/element.js`, `src/js/shim/selector.js`, `test/wpt/wpt-expectations.json`）：
+  1. **内联简写 `!important` 展开 (`src/js/shim/element/element.js`)**：`parseStyleMap` 读取内联 `style` 时对 `column-rule`/`columns` 调用 `setEntryWithShorthand`，打通 `gap-decorations-important.html`。
+  2. **`*::pseudo` 与 `::file-selector-button` (`src/js/shim/selector.js`)**：规范化 `*::pseudo -> ::pseudo` 并放行 `::file-selector-button` 后续用户交互伪类，保持 `/css/selectors/parsing/` **16/16 PASS** 并收紧 `highlight-pseudos.html` 基线为 `PASS`。
+  3. **回归验证**：`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。

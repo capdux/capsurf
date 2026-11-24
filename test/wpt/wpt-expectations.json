@@ -5102,7 +5102,7 @@
     "reason": null
   },
   "/css/css-pseudo/parsing/highlight-pseudos.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-pseudo/parsing/marker-supported-properties-in-animation.html": {

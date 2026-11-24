@@ -154,10 +154,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
       while (j < s.length && /[a-zA-Z0-9_-]/.test(s[j])) j++;
       const pName = s.slice(i, j).toLowerCase();
       if (seenTerminalPseudoEl) {
-        const allowChain = isDouble && (
+        const allowChain = (isDouble && (
           (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
           (pName === "::scroll-marker" && lastPseudoEl === "::column")
-        );
+        )) || (!isDouble && lastPseudoEl === "::file-selector-button" && (
+          pName === ":hover" || pName === ":focus" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within" ||
+          pName === ":is" || pName === ":where"
+        ));
         if (!allowChain) return null;
       }
       if (isDouble) {
@@ -239,6 +242,14 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
         out += "*";
       }
       i += 3;
+      continue;
+    }
+    if (s[i] === "*") {
+      if (s[i + 1] === ":" && s[i + 2] === ":") {
+        i++;
+        continue;
+      }
+      out += s[i++];
       continue;
     }
 

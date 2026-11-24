@@ -2742,3 +2742,8 @@
 - **`scroll-initial-target` (`src/js/shim/cssom.js`)**：限定 `none | nearest`，打通 `scroll-initial-target-invalid.html`。
 - **Writing Modes & `content` (`src/js/shim/window.js`)**：补齐 `INHERITED_CSS_PROPS`（`text-combine-upright`, `text-orientation`, `writing-mode`）、`getComputedStyle` 默认值（`"none"`, `"mixed"`, `"normal"`）及 `collectRawComputedMap` 非法声明剔除。
 - **WPT 验收**：`/css/css-scroll-snap/` **8/8 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 562: 内联简写展开与 `*::pseudo` 规范化
+- **内联 `style` 解析 (`src/js/shim/element/element.js`)**：`parseStyleMap` 遇到 `column-rule`/`columns` 时走 `setEntryWithShorthand`，修复内联 `!important` 简写未展开至长手的问题。
+- **选择器规范化 (`src/js/shim/selector.js`)**：剥离 `::` 前多余 `*` 通配符并放行 `::file-selector-button` 的 `:hover`/`:focus`/`:active`/`:is`/`:where` 组合。
+- **WPT 验收**：`gap-decorations-important.html` PASS、`highlight-pseudos.html` PASS、`/css/selectors/parsing/` **16/16 PASS**、`--smoke` **3/3 suites PASS**。

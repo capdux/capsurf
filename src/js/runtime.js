@@ -12443,10 +12443,13 @@
         while (j < s.length && /[a-zA-Z0-9_-]/.test(s[j])) j++;
         const pName = s.slice(i, j).toLowerCase();
         if (seenTerminalPseudoEl) {
-          const allowChain = isDouble && (
+          const allowChain = (isDouble && (
             (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
             (pName === "::scroll-marker" && lastPseudoEl === "::column")
-          );
+          )) || (!isDouble && lastPseudoEl === "::file-selector-button" && (
+            pName === ":hover" || pName === ":focus" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within" ||
+            pName === ":is" || pName === ":where"
+          ));
           if (!allowChain) return null;
         }
         if (isDouble) {
@@ -12528,6 +12531,14 @@
           out += "*";
         }
         i += 3;
+        continue;
+      }
+      if (s[i] === "*") {
+        if (s[i + 1] === ":" && s[i + 2] === ":") {
+          i++;
+          continue;
+        }
+        out += s[i++];
         continue;
       }
 
@@ -13280,7 +13291,8 @@
             v = v.replace(/\s*!important\s*$/i, "").trim();
           }
           if (v !== "") {
-            setEntryInStyleMap(map, k, rawKey, v, pri);
+            if (k === "column-rule" || k === "columns") setEntryWithShorthand(map, k, rawKey, v, pri);
+            else setEntryInStyleMap(map, k, rawKey, v, pri);
           }
         }
       }

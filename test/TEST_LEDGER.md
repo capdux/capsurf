@@ -1691,3 +1691,8 @@
 - **Filter `/css/css-scroll-snap/`**: `8` files (**8 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 新增 `scroll-initial-target`（`none | nearest`）严格校验并加入 `STANDARD_CSS_PROPERTIES`。
 - **Writing Modes (`text-combine-upright`, `text-orientation`) & `content`**: 将 `text-combine-upright`、`text-orientation`、`writing-mode` 加入 `INHERITED_CSS_PROPS`，补全 `getComputedStyle` 默认值（`"none"` / `"mixed"` / `"normal"`），并在 `collectRawComputedMap` 过滤非法内联声明使 `text-combine-upright-parsing-invalid-001/002.html` 转绿（`/css/css-writing-modes/` 17/20 PASS）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 562 `/css/css-gaps/parsing/gap-decorations-important.html` & `/css/css-pseudo/parsing/highlight-pseudos.html` 转绿与选择器和解 (bin_dev Phase 562, 2026-11-24)
+- **Filter `/css/css-gaps/parsing/gap-decorations-important.html`**: **1/1 PASS**; 在 `element.js` `parseStyleMap` 对 `column-rule`/`columns` 启用 `setEntryWithShorthand`，使内联 `!important` 简写展开至长手属性。
+- **Selectors & Pseudo**: `selector.js` 支持 `*::pseudo -> ::pseudo` 归一化及 `::file-selector-button` 用户交互伪类组合；`/css/selectors/parsing/` **16/16 PASS**、`/css/css-pseudo/parsing/highlight-pseudos.html` **PASS**（基线收紧为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
