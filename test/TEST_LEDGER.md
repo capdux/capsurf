@@ -2427,3 +2427,4 @@
 | Phase 758 | WPT `@font-face src` 全校验、`Webkit*` 前缀与 `CSSCounterStyleRule` WebIDL | `src/js/shim/cssom.js`, `GEMINI.md` | `font-face-src-{local,format,list}` **3/3 PASS**, `idlharness` 36/37; `--smoke` 3/3 PASS |
 | Phase 759 | WPT CSS Color 4 `canvastext`、`lab`/`lch`、`color()` 与 `hwb()` 规范化 | `src/js/shim/cssom.js` | `color-initial-canvastext` **PASS**, `color-valid-lab` (+53), `color-valid-hwb` (+6); `--smoke` 3/3 PASS |
 | Phase 760 | WPT `list-style` 计算值简写最短序列化闭环 | `src/js/shim/window.js` | `/css/css-lists/parsing/list-style-computed.sub.html` (**5/5 PASS**); `--smoke` 3/3 PASS |
+| Phase 761 | WPT `/css/css-animations/` 小数 `iterationCount` 末态进度 | `src/js/shim/animations.js` | `animation-iteration-count-009.html` (**4/4 PASS**); `--smoke` 3/3 PASS |

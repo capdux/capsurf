@@ -3360,3 +3360,5 @@
 - 补齐 `canvastext`、无百分比 `hwb(... none)`、`hwb(calc(0 / 0) ...)`、`lab`/`lch`/`oklab`/`oklch` 边界钳位与 `color()` 百分比换算，`color-initial-canvastext.html` 全绿，`color-valid-lab` 净增 +53 子测试、`color-valid-hwb` 净增 +6 子测试。
 ### Phase 760 — `list-style-computed.sub.html` (`5/5 PASS`)
 - 修复 `getComputedStyle(...).listStyle` 未按最短序列化原则省略默认值（`outside`/`none`/`disc`）的问题，实现 `list-style-computed.sub.html` 5/5 全绿。
+### Phase 761 — `animation-iteration-count-009.html` (`4/4 PASS`)
+- 修复小数 `animation-iteration-count` 在 `forwards` 末态未取余数进度的问题，`animation-iteration-count-009.html` 4/4 全绿。

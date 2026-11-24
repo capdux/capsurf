@@ -4163,3 +4163,6 @@
 - **Phase 760**:
   - `src/js/shim/window.js`: `list-style` 计算值简写序列化省略默认值 `outside`/`none`/`disc`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 761**:
+  - `src/js/shim/animations.js`: `evalCssAnimationStyles` 支持小数 `iterationCount` 末态进度及交替方向计算。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -38676,11 +38676,18 @@
       if (activeMs <= 0) {
         progress = (anim.direction === "reverse" || anim.direction === "alternate-reverse") ? 1 : 0;
       } else if (activeMs >= totalMs) {
-        const lastIter = Math.max(0, Math.ceil(anim.iterations) - 1);
-        const rev = anim.direction === "reverse" ||
-          (anim.direction === "alternate" && (lastIter % 2) === 1) ||
-          (anim.direction === "alternate-reverse" && (lastIter % 2) === 0);
-        progress = rev ? 0 : 1;
+        if (anim.iterations === 0) {
+          const rev0 = anim.direction === "reverse" || anim.direction === "alternate-reverse";
+          progress = rev0 ? 1 : 0;
+        } else {
+          const frac = anim.iterations % 1;
+          const baseP = frac === 0 ? 1 : frac;
+          const lastIter = Math.max(0, Math.ceil(anim.iterations) - 1);
+          const rev = anim.direction === "reverse" ||
+            (anim.direction === "alternate" && (lastIter % 2) === 1) ||
+            (anim.direction === "alternate-reverse" && (lastIter % 2) === 0);
+          progress = rev ? (1 - baseP) : baseP;
+        }
       } else {
         const iterIdx = Math.floor(activeMs / anim.durationMs);
         progress = (activeMs % anim.durationMs) / anim.durationMs;
