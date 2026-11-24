@@ -1084,7 +1084,7 @@ function installShim(global) {
 
 
     docProto.createRange = markNative(function () {
-      return new Range();
+      return new Range(this);
     }, "createRange");
 
     if (!docProto.open) {

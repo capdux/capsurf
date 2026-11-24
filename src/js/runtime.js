@@ -31221,8 +31221,10 @@
   StaticRange.prototype.constructor = StaticRange;
   markNative(StaticRange, "StaticRange");
 
-  function Range() {
-    const doc = typeof document !== "undefined" ? document : null;
+  function Range(ownerDoc) {
+    const doc = (ownerDoc && typeof ownerDoc.nodeType === "number")
+      ? ownerDoc
+      : (typeof document !== "undefined" ? document : null);
     _rangeState.set(this, {
       startContainer: doc,
       startOffset: 0,
@@ -31771,7 +31773,7 @@
 
   function getNodeLength(node) {
     if (!node) return 0;
-    if (node.nodeType === 3 || node.nodeType === 8) { // TEXT_NODE or COMMENT_NODE
+    if (node.nodeType === 3 || node.nodeType === 4 || node.nodeType === 7 || node.nodeType === 8) {
       if (typeof node.data === "string") return node.data.length;
       if (typeof node.textContent === "string") return node.textContent.length;
       return 0;
@@ -31779,6 +31781,14 @@
     if (node.childNodes) return node.childNodes.length;
     if (node._children) return node._children.length;
     return 0;
+  }
+
+  function getRangeRoot(node) {
+    let cur = node;
+    while (cur && cur.parentNode) {
+      cur = cur.parentNode;
+    }
+    return cur;
   }
 
   function isNodeInDocument(node, doc) {
@@ -32391,6 +32401,67 @@
     global.__capsurf_get_selection_rects = __capsurf_get_selection_rects;
   }
 
+  Range.prototype.comparePoint = function (node, offset) {
+    const st = _rangeState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (arguments.length < 2 || !node || typeof node.nodeType !== "number") {
+      throw new TypeError("Failed to execute 'comparePoint' on 'Range': parameter 1 is not of type 'Node'.");
+    }
+    const off = Number(offset) >>> 0;
+    if (getRangeRoot(node) !== getRangeRoot(st.startContainer)) {
+      throw new DOMException("The node is not in the same tree as the range.", "WrongDocumentError");
+    }
+    if (node.nodeType === 10) {
+      throw new DOMException("DocumentType node cannot be used.", "InvalidNodeTypeError");
+    }
+    if (off > getNodeLength(node)) {
+      throw new DOMException("The offset is larger than the node's length.", "IndexSizeError");
+    }
+    if (compareBoundaryPoints(node, off, st.startContainer, st.startOffset) < 0) return -1;
+    if (compareBoundaryPoints(node, off, st.endContainer, st.endOffset) > 0) return 1;
+    return 0;
+  };
+
+  Range.prototype.isPointInRange = function (node, offset) {
+    const st = _rangeState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (arguments.length < 2 || !node || typeof node.nodeType !== "number") {
+      throw new TypeError("Failed to execute 'isPointInRange' on 'Range': parameter 1 is not of type 'Node'.");
+    }
+    const off = Number(offset) >>> 0;
+    if (getRangeRoot(node) !== getRangeRoot(st.startContainer)) return false;
+    if (node.nodeType === 10) {
+      throw new DOMException("DocumentType node cannot be used.", "InvalidNodeTypeError");
+    }
+    if (off > getNodeLength(node)) {
+      throw new DOMException("The offset is larger than the node's length.", "IndexSizeError");
+    }
+    return compareBoundaryPoints(node, off, st.startContainer, st.startOffset) >= 0 &&
+           compareBoundaryPoints(node, off, st.endContainer, st.endOffset) <= 0;
+  };
+
+  Range.prototype.intersectsNode = function (node) {
+    const st = _rangeState.get(this);
+    if (!st) throw new TypeError("Illegal invocation");
+    if (arguments.length < 1 || !node || typeof node.nodeType !== "number") {
+      throw new TypeError("Failed to execute 'intersectsNode' on 'Range': parameter 1 is not of type 'Node'.");
+    }
+    if (getRangeRoot(node) !== getRangeRoot(st.startContainer)) return false;
+    const parent = node.parentNode;
+    if (!parent) return true;
+    let offset = 0;
+    let s = parent.firstChild;
+    while (s && s !== node) {
+      offset++;
+      s = s.nextSibling;
+    }
+    return compareBoundaryPoints(parent, offset, st.endContainer, st.endOffset) < 0 &&
+           compareBoundaryPoints(parent, offset + 1, st.startContainer, st.startOffset) > 0;
+  };
+
+  markNative(Range.prototype.comparePoint, "comparePoint");
+  markNative(Range.prototype.isPointInRange, "isPointInRange");
+  markNative(Range.prototype.intersectsNode, "intersectsNode");
   markNative(Range.prototype.getClientRects, "getClientRects");
   markNative(Range.prototype.getBoundingClientRect, "getBoundingClientRect");
 
@@ -58747,7 +58818,7 @@
 
 
       docProto.createRange = markNative(function () {
-        return new Range();
+        return new Range(this);
       }, "createRange");
 
       if (!docProto.open) {

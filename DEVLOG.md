@@ -3346,3 +3346,5 @@
 - 统一解决内联 `style.cssText` 未规范化、`! important` 空白、`@page`/`@keyframes` 属性限制、`CSSNamespaceRule` 构造缺失及 `CSSStyleSheet._remirror` 覆写 `<style>.textContent` 导致的 `insertRule`/`CSSGroupingRule.cssRules` 失效，一次打通 6 项 `/css/cssom/` 用例。
 ### Phase 753 — `adoptedStyleSheets` / `constructable` / `Element.currentCSSZoom` 全绿闭环
 - 补齐 `document.adoptedStyleSheets` 与级联接入、`<style>` CSSOM 变更级联读取、`MediaQueryListEvent` 及 `Element.currentCSSZoom`，一次打通 `CSSGroupingRule-insertRule`、`CSSStyleSheet-constructable-{cssRules,replace-cssRules}` 与 `Element-currentCSSZoom`（`FAIL→PASS`，基线 PASS 增至 7,198）。
+### Phase 754 — `doc.createRange(this)` 与 `Range.prototype.{comparePoint,isPointInRange,intersectsNode}` 补齐
+- 修复跨文档 `doc.createRange()` 默认绑定主 `document` 导致的 `Range-cloneRange` 13 项失败，并实现 `comparePoint`/`isPointInRange`/`intersectsNode`，实测 `Range-comparePoint-2`、`Range-intersectsNode-2` 与 `Range-cloneRange`（长超时模式）全部 PASS。

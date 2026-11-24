@@ -4134,3 +4134,7 @@
   - `src/js/shim/element/element.js`: 新增 `Element.prototype.currentCSSZoom` getter。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/cssom-view/Element-currentCSSZoom.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 754**:
+  - `src/js/shim/index.js`: `docProto.createRange` 传入 `this` 给 `new Range(this)`。
+  - `src/js/shim/range.js`: `Range(ownerDoc)` 绑定所属文档；新增 `getRangeRoot` 与 `Range.prototype.{comparePoint,isPointInRange,intersectsNode}`，`getNodeLength` 补齐 CDATA/PI 节点类型。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
