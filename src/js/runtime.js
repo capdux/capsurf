@@ -15322,7 +15322,7 @@
       if (typeof globalThis !== "undefined") globalThis.__capsurf_raw_setInnerHTML = origSetInnerHtml;
       Object.defineProperty(Element.prototype, "innerHTML", {
         get: function () {
-          if (this._children && this._children.length > 0 && hasJsOnlyChild(this._children)) {
+          if (Array.isArray(this._children)) {
             const parentTag = String(this.localName || this.tagName || "").toLowerCase();
             const isRawText = Boolean(RAW_TEXT_TAGS[parentTag]);
             let html = "";

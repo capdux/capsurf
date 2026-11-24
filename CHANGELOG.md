@@ -4121,3 +4121,6 @@
 - **Phase 750**:
   - `src/js/shim/traversal.js`: 修复 `filterNode` 单次 `Get(filter, "acceptNode")`、非函数抛 `TypeError` 与 WebIDL `unsigned short` 返回值转换。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 751**:
+  - `src/js/shim/node-base.js`: `Element.prototype.innerHTML` getter 在 `Array.isArray(this._children)` 时直接序列化 `_children`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

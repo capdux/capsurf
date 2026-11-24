@@ -3340,3 +3340,5 @@
 - 修复 `HTMLCollection` 的 `ArrayIndex` 边界 (`2^32 - 1` 视为命名属性)、`item()` `ToUint32`、`Object.create(collection).length` 抛 `TypeError`、非 HTML 命名空间忽略 `name`、以及 `NamedNodeMap` Proxy 隐藏内部槽位与 `_sync` 长度一致性，实现 `/dom/collections/` 11/11 100% 全绿。
 ### Phase 750 — `TreeWalker-acceptNode-filter` (12/12) & `TreeWalker-currentNode` (4/4) 全绿
 - 修复 `filterNode` 重复读取 `acceptNode`、缺失/非可调用未抛 `TypeError` 及布尔返回值 `true !== 1` 未按 WebIDL `unsigned short` 转换的问题，一次性打通 `TreeWalker-acceptNode-filter.html` 与 `TreeWalker-currentNode.html`。
+### Phase 751 — `ChildNode-replaceWith.html` (`33/33 PASS`) 与 `ChildNode-*` 全套全绿
+- 修复 `Element.prototype.innerHTML` getter 仅在 `hasJsOnlyChild(this._children)` 时才序列化 `_children` 的漏洞，彻底解决 `Text.replaceWith()` 移除文本节点后回退原生 DOM 的残余问题，实现 `ChildNode-before/after/replaceWith` 全绿。

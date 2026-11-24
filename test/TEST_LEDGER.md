@@ -2417,3 +2417,4 @@
 | Phase 735 | WPT `container`/`container-name`/`container-type` 严格校验与简写序列化闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `container-name-parsing` (29/29 PASS), `container-type-parsing` (30/30 PASS), `container-parsing` (48/48 PASS); `--smoke` 3/3 PASS |
 | Phase 749 | WPT `/dom/collections/` `HTMLCollection` & `NamedNodeMap` 全规范代理闭环 | `src/js/shim/collections.js` | `/dom/collections/` **11/11 (100% PASS)**; `--smoke` 3/3 PASS |
 | Phase 750 | WPT `TreeWalker` `acceptNode` 单次 `Get` 与 `unsigned short` 返回值合规 | `src/js/shim/traversal.js` | `TreeWalker-acceptNode-filter.html` (**12/12 PASS**), `TreeWalker-currentNode.html` (**4/4 PASS**); `--smoke` 3/3 PASS |
+| Phase 751 | WPT `ChildNode-replaceWith` `Element.innerHTML` `_children` 一致性闭环 | `src/js/shim/node-base.js` | `ChildNode-replaceWith.html` (**33/33 PASS**), `ChildNode-{before,after}` & `Node-textContent` **5/5 PASS**; `--smoke` 3/3 PASS |
