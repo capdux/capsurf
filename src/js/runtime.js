@@ -43604,6 +43604,7 @@
         const tv = computedMap.get(tk);
         if (tv) {
           const isDur = tk.endsWith("-duration");
+          let hasInvalidTime = false;
           const items = tv.split(",").map((part) => {
             const p = part.trim().toLowerCase();
             if (p === "auto") return "auto";
@@ -43628,9 +43629,10 @@
               if (isDur && sec < 0) sec = 0;
               return String(Number(sec.toFixed(6))) + "s";
             }
+            if (!/^(?:calc|min|max|clamp|var|env)\(/i.test(p)) hasInvalidTime = true;
             return part.trim();
           });
-          computedMap.set(tk, items.join(", "));
+          computedMap.set(tk, hasInvalidTime ? "0s" : items.join(", "));
         }
       }
       const rangeProps = ["animation-range-start", "animation-range-end"];

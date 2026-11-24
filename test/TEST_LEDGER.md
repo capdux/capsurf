@@ -2115,3 +2115,10 @@
 - **子智能体只读摸底记录**：
   - `/css/css-color/` (`b514`, 56 files): `14 PASS / 35 FAIL / 7 TIMEOUT`（定位 `color-initial-canvastext`, `light-dark-currentcolor-in-color`, `color-computed` 等快速修复点）
 - **自进化固化**：响应 `task-17699` 3 小时定时触发，将「合并同批 `wpt-batched.mjs` 减少引擎冷启动 + 单行 Python 失败差异提取」固化至 `GEMINI.md` 第 11.10 节。
+
+### Phase 612: `transition-delay-001` (21/21) & `transition-duration-001` (21/21) 全绿 & Sizing 摸底
+- **Filter `/css/css-transitions/transition-delay-001`**: **PASS (21/21)**（`window.js` `timeProps` 计算期对非法非时间值回退 `"0s"`）。
+- **Filter `/css/css-transitions/transition-duration-001`**: **PASS (21/21)**（`/css/css-transitions/` 推进至 **17/20 PASS**）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-sizing/` (`b517`, 32 files): `29 PASS / 3 FAIL / 0 TIMEOUT`

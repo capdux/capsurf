@@ -7896,3 +7896,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **全绿验证**：`font-stretch-alias.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-color/` 14/56 PASS。
   4. **3小时自进化固化 (`GEMINI.md` 11.10)**：固化「合并同批 `wpt-batched.mjs` 减少冷启动 + 单行 Python 失败差异提取」。
+
+### 2026-11-24 Phase 612 (`transition-delay-001` & `transition-duration-001` 全绿 & Sizing 摸底)
+- **[Agent]**: 完成 Phase 612（`src/js/shim/window.js`）：
+  1. **`window.js`**：`timeProps` 计算期遇到非法非时间值（非 `calc/min/max/clamp/var/env`）回退 `"0s"`。
+  2. **双连全绿验证**：`transition-delay-001.html` **21/21 PASS**、`transition-duration-001.html` **21/21 PASS**（`/css/css-transitions/` 达 **17/20 PASS**）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-sizing/` 29/32 PASS。

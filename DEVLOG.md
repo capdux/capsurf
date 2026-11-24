@@ -2944,3 +2944,7 @@
 - **核心修复 (`element.js`, `window.js`)**：`LEGACY_CSS_ALIASES` 加入 `"font-stretch": "font-width"`，`STANDARD_COMPUTED_LONGHANDS` 替换 `font-stretch` 为 `font-width`，`textDecorDefs` 移除 `font-stretch` 并保留 `getPropertyValue` / Proxy `get` 别名读取。
 - **自进化固化 (`GEMINI.md` 11.10)**：固化合并同批 `wpt-batched.mjs` 与单行 Python 失败摘要提取规范。
 - **WPT & Smoke 验收**：`font-stretch-alias.html` PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 612: `transition-delay-001` & `transition-duration-001` 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`timeProps`（`transition-{delay,duration}` / `animation-{delay,duration}`）计算期检测到非时间、非 CSS 数学/变量函数词时整体回退为 `"0s"`。
+- **WPT & Smoke 验收**：`transition-delay-001.html` 21/21 PASS、`transition-duration-001.html` 21/21 PASS、`--smoke` 3/3 suites PASS。

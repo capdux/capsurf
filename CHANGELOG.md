@@ -3688,3 +3688,5 @@
 - **Phase 610** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修正 `animation` 默认 `0s` 省略返回 `"none"` 与 `@font-face size-adjust` 负百分比拒绝；`animation-computed.html` 与 `font-face-size-adjust.html` 全绿。
 
 - **Phase 611** (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `GEMINI.md`, `test/TEST_LEDGER.md`): 完善 `font-stretch` -> `font-width` 传统别名映射与 `STANDARD_COMPUTED_LONGHANDS` 替换，并固化 `GEMINI.md` 第 11.10 节自进化规范；`font-stretch-alias.html` 全绿。
+
+- **Phase 612** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `timeProps` 计算期将非法非时间值回退为 `"0s"`；`transition-delay-001.html` 与 `transition-duration-001.html` 全绿（`css-transitions` 达 17/20 PASS）。
