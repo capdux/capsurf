@@ -8125,3 +8125,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 693] `cssom.js` (`<custom-ident>` 接入 CSS Syntax 3 非 ASCII ident 码点表) & `selector.js` (`canonicalizeSelectorList` 在 `.trim()` 前拦截 `[\x00-\x08\x0b\x0e-\x1f\x7f]`): `non-ascii-codepoints.html` 与 `inclusive-ranges.html` (38/38) PASS，`--smoke` 3/3 PASS。
 - [Phase 694] `selector.js` (顶层选择器列表与 `[attr` / `:nth-*(` 在 EOF 自动闭合): `unclosed-constructs.html` (4/4 PASS)、`/css/selectors/parsing/` (16/16 PASS)、`--smoke` 3/3 PASS。
 - [Phase 695] `cssom.js` (`grid-auto-columns`/`grid-auto-rows` `<track-size>+` 校验 + 注释剥离规范化): `grid-auto-{columns,rows}-{valid,invalid}` 4/4 PASS，`--smoke` 3/3 PASS。
+- [Phase 696] `window.js` (`STANDARD_COMPUTED_LONGHANDS` 与默认值表补齐 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings`、`font-size-adjust`): `font-variant-*-computed` 4/4 与 `font-synthesis-computed` (21/21) PASS，`--smoke` 3/3 PASS。

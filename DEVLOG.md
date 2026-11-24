@@ -3230,3 +3230,5 @@
 - 在 `selector.js` 中允许顶层选择器列表在 EOF 自动闭合未闭合的属性选择器和函数伪类，打通 `/css/css-syntax/unclosed-constructs.html` 全部 4/4 用例并保持 `/css/selectors/parsing/` 16/16 全绿。
 ### Phase 695 — `grid-auto-columns` / `grid-auto-rows` `<track-size>+` 校验与规范化闭环
 - 在 `cssom.js` 中补全 `grid-auto-columns` 与 `grid-auto-rows` 的 `<track-size>+` 语法校验及内联注释剥离，`grid-auto-{columns,rows}-{valid,invalid}` 4 项测试全部 PASS。
+### Phase 696 — `font-variant-*` 与 `font-synthesis` 计算样式暴露
+- 在 `window.js` 中补全 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings` 与 `font-size-adjust` 的默认值与 `STANDARD_COMPUTED_LONGHANDS` 注册，`font-variant-*-computed` (4/4) 与 `font-synthesis-computed` (21/21) 全数 PASS。

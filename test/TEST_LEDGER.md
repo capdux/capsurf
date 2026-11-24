@@ -2362,3 +2362,4 @@
 | Phase 693 | WPT `css-syntax` 非 ASCII ident 码点与不可打印控制字符拦截 | `src/js/shim/cssom.js`, `src/js/shim/selector.js` | `non-ascii-codepoints.html` (PASS), `inclusive-ranges.html` (38/38 PASS); `--smoke` 3/3 PASS |
 | Phase 694 | WPT `css-syntax` 选择器顶层 EOF 未闭合 `[attr` 与 `:nth-*(` 自动收口 | `src/js/shim/selector.js` | `unclosed-constructs.html` (4/4 PASS), `/css/selectors/parsing/` (16/16 PASS); `--smoke` 3/3 PASS |
 | Phase 695 | WPT `grid-auto-columns` / `grid-auto-rows` `<track-size>+` 校验与注释剥离闭环 | `src/js/shim/cssom.js` | `grid-auto-{columns,rows}-{valid,invalid}` 4/4 全数 PASS (91/91 子测试); `--smoke` 3/3 PASS |
+| Phase 696 | WPT `font-variant-{caps,east-asian,ligatures,numeric}` + `font-synthesis` 计算样式暴露 | `src/js/shim/window.js` | `font-variant-caps-computed` (7/7), `font-variant-east-asian-computed` (12/12), `font-variant-ligatures-computed` (10/10), `font-variant-numeric-computed` (11/11), `font-synthesis-computed` (21/21) 全通 PASS; `--smoke` 3/3 PASS |
