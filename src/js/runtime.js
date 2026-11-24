@@ -11012,6 +11012,9 @@
       parseInitial(initialDeclText);
 
       function notify() {
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        }
         if (onMutate) onMutate();
       }
 
@@ -44259,7 +44262,7 @@
       return null;
     }
 
-    function parseDeclarationsBlockInto(element, declBlock, computedMap, impFilter) {
+    function parseDeclarationsBlockInto(element, declBlock, computedMap, impFilter, prevLayerSnapshot) {
       const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
       function setDecl(k, v, isImp) {
         if (!isImp && impSet.has(k)) return;
@@ -44285,6 +44288,46 @@
         val = resolveAttrExpressions(element, val);
         const pLowDecl = prop.toLowerCase();
         const key = prop.startsWith("--") ? prop : (pLowDecl === "-webkit-border-radius" ? "border-radius" : pLowDecl);
+        const valLow = val.trim().toLowerCase();
+        if (key === "all") {
+          if (valLow === "revert-layer") {
+            for (const ck of Array.from(computedMap.keys())) {
+              if (ck.startsWith("--")) continue;
+              if (!isImp && impSet.has(ck)) continue;
+              if (prevLayerSnapshot && prevLayerSnapshot.has(ck)) computedMap.set(ck, prevLayerSnapshot.get(ck));
+              else computedMap.delete(ck);
+            }
+            if (prevLayerSnapshot) {
+              for (const [pk, pv] of prevLayerSnapshot.entries()) {
+                if (!pk.startsWith("--") && (isImp || !impSet.has(pk))) computedMap.set(pk, pv);
+              }
+            }
+          } else if (valLow === "initial") {
+            for (const ck of Array.from(computedMap.keys())) {
+              if (!ck.startsWith("--") && (isImp || !impSet.has(ck))) computedMap.delete(ck);
+            }
+          } else if (valLow === "unset") {
+            for (const ck of Array.from(computedMap.keys())) {
+              if (ck.startsWith("--") || (!isImp && impSet.has(ck))) continue;
+              if (INHERITED_CSS_PROPS.has(ck)) computedMap.set(ck, "inherit");
+              else computedMap.delete(ck);
+            }
+          } else if (valLow === "inherit") {
+            for (const ck of Array.from(computedMap.keys())) {
+              if (!ck.startsWith("--") && (isImp || !impSet.has(ck))) computedMap.set(ck, "inherit");
+            }
+          }
+          continue;
+        }
+        if (valLow === "revert-layer") {
+          if (!isImp && impSet.has(key)) continue;
+          if (prevLayerSnapshot && prevLayerSnapshot.has(key)) {
+            setDecl(key, prevLayerSnapshot.get(key), isImp);
+          } else {
+            computedMap.delete(key);
+          }
+          continue;
+        }
         setDecl(key, val, isImp);
 
         if (typeof globalThis.__capsurf_expandShorthand === "function") {
@@ -44795,9 +44838,19 @@
       return maxSpec;
     }
 
+    const _parsedRulesCache = new Map();
     function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
-      const cleanCss = String(cssText || "").replace(/\/\*[\s\S]*?\*\//g, "");
+      const rawText = String(cssText || "");
       const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
+      const getParsedRules = (txt) => {
+        if (_parsedRulesCache.has(txt)) return _parsedRulesCache.get(txt);
+        const cleanTxt = txt.indexOf("/*") !== -1 ? txt.replace(/\/\*[\s\S]*?\*\//g, "") : txt;
+        const parsed = parseFn(cleanTxt);
+        if (_parsedRulesCache.size >= 128) _parsedRulesCache.clear();
+        _parsedRulesCache.set(txt, parsed);
+        return parsed;
+      };
+      const cleanCss = rawText;
       const matched = [];
       let seq = 0;
       const layerOrder = new Map();
@@ -44832,7 +44885,7 @@
       };
       const collectFromText = (text, layerPrefix) => {
         if (typeof parseFn === "function") {
-          const rules = parseFn(text);
+          const rules = getParsedRules(text);
           for (let i = 0; i < rules.length; i++) {
             const r = rules[i];
             if (!r) continue;
@@ -44884,13 +44937,20 @@
       };
       collectFromText(cleanCss, "");
       if (matched.length > 0) {
+        const hasRevertLayer = cleanCss.indexOf("revert-layer") !== -1;
         const normalSorted = matched.slice().sort((x, y) => {
           const lc = cmpLayer(x.layer, y.layer);
           if (lc !== 0) return lc;
           return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
         });
+        let curLayer = normalSorted[0].layer;
+        let prevLayerSnapshot = hasRevertLayer ? new Map(computedMap) : null;
         for (let i = 0; i < normalSorted.length; i++) {
-          parseDeclarationsBlockInto(element, normalSorted[i].decl, computedMap, "normal");
+          if (hasRevertLayer && normalSorted[i].layer !== curLayer) {
+            curLayer = normalSorted[i].layer;
+            prevLayerSnapshot = new Map(computedMap);
+          }
+          parseDeclarationsBlockInto(element, normalSorted[i].decl, computedMap, "normal", prevLayerSnapshot);
         }
         const hasAnyImp = matched.some((m) => m.decl.toLowerCase().indexOf("!important") !== -1);
         if (hasAnyImp) {
@@ -44899,8 +44959,14 @@
             if (lc !== 0) return lc;
             return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
           });
+          let curImpLayer = impSorted[0].layer;
+          let prevImpSnapshot = hasRevertLayer ? new Map(computedMap) : null;
           for (let i = 0; i < impSorted.length; i++) {
-            parseDeclarationsBlockInto(element, impSorted[i].decl, computedMap, "important");
+            if (hasRevertLayer && impSorted[i].layer !== curImpLayer) {
+              curImpLayer = impSorted[i].layer;
+              prevImpSnapshot = new Map(computedMap);
+            }
+            parseDeclarationsBlockInto(element, impSorted[i].decl, computedMap, "important", prevImpSnapshot);
           }
         }
       }

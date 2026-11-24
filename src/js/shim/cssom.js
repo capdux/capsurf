@@ -7222,6 +7222,9 @@
     parseInitial(initialDeclText);
 
     function notify() {
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+      }
       if (onMutate) onMutate();
     }
 

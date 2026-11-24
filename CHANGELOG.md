@@ -4089,3 +4089,8 @@
   - `src/js/shim/window.js`: `parseCssRulesInto` & `parseDeclarationsBlockInto` 完整实现 `@layer` 级联排序与 `!important` 层反转。
   - `src/js/shim/cssom.js`: `serializeDecls` 在 `@page` 上下文将四边一致 `margin-*` 折叠为 `margin` 简写。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 743**:
+  - `src/js/shim/window.js`: `parseDeclarationsBlockInto` 与 `parseCssRulesInto` 支持 `all` 简写及 `revert-layer` 跨层快照回退，并新增 `_parsedRulesCache` 缓存。
+  - `src/js/shim/cssom.js`: `notify()` 递增 `__capsurf_cssom_epoch`。
+  - `src/cdp/input.cp`: `hitTest` 按 `(z_index, positioned, dom_order)` 判定最上层命中节点。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

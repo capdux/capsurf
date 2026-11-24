@@ -107,6 +107,8 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
         session.ctx.freeValue(sval);
     }
     let best_node: NodeId = NULL_NODE;
+    let best_z: i32 = -2147483648;
+    let best_pos: i32 = -1;
     let i: usize = 0;
     const count = session.layout.boxes.items.len;
     while (i < count) : (i += 1) {
@@ -116,7 +118,13 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
             const ty = if (box.position == .Fixed) y else y + sy;
             if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&
                 ty >= box.rect.y && ty <= (box.rect.y + box.rect.height)) {
-                best_node = box.node_id;
+                const bz: i32 = if (box.has_z_index) box.z_index else 0;
+                const bpos: i32 = if (box.position != .Static) 1 else 0;
+                if (best_node == NULL_NODE || bz > best_z || (bz == best_z && bpos >= best_pos)) {
+                    best_node = box.node_id;
+                    best_z = bz;
+                    best_pos = bpos;
+                }
             }
         }
     }
