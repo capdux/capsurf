@@ -7593,3 +7593,12 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **3 小时自进化定时触发 (`task-17699`, `GEMINI.md` 11.9 节)**：
      - 固化两项高回报提效/省 Token 铁律：① 纯 JS shim（`selector.js`/`cssom.js`/`xpath.js`）修改后先用 `node -e` 0.1 秒冒烟验证再 `cap build`；② 在 `window.js`/`cssom.js` 等万行大文件使用 `edit_file` 时 `Target` 必须包含至少 2~3 行上下文，杜绝短匹配误替换带来的返工。
   3. **全绿验证**：`image-orientation` **3/3 PASS**、`image-function-{invalid,computed}` **PASS**、`image-resolution-invalid` **PASS**、`object-fit-computed` **PASS**、`--smoke` **3/3 PASS**。
+
+### 2026-11-24 Phase 564 (`object-position` 全绿闭环 & `css-position`/`css-grid` 摸底)
+- **[Agent]**: 自主推导并完成 Phase 564（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`object-position` 规范序列化与计算值解析 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js` `normalizeCssSpecifiedValue` 支持 `object-position` 单值补全 `center` 与 4 值（`bottom 10% right 20% -> right 20% bottom 10%`）水平优先规范序。
+     - `window.js` `applyUsedValuesToComputedMap` 新增 `object-position` 计算期 1/2/4 令牌解析（`center -> 50%`、`right 30% -> 70%`、`right 10px -> calc(100% - 10px)`），保持百分比而不错误折叠为像素。
+  2. **全绿验证与并行摸底**：
+     - `object-position-{valid,invalid,computed}.html`: **3/3 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 子智能体完成 `/css/css-position/`（50/117 PASS）与 `/css/css-grid/`（`1/3` 74/282、`2/3` 58/282 PASS）全目录摸底。

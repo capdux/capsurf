@@ -3592,3 +3592,5 @@
 - **Phase 562** (`src/js/shim/element/element.js`, `src/js/shim/selector.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 在 `parseStyleMap` 中为 `column-rule`/`columns` 启用内联简写展开，规范化 `*::pseudo -> ::pseudo` 并支持 `::file-selector-button` 交互伪类组合；`gap-decorations-important.html` 与 `highlight-pseudos.html` 转绿，`/css/selectors/parsing/` 16/16 保持全绿。
 
 - **Phase 563** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `GEMINI.md`, `test/TEST_LEDGER.md`): 实现 `image-orientation`（`from-image | none` 及计算期默认值）、`image-resolution`（`[from-image || <resolution>] && snap?`）、`object-fit` 双值（`[contain|cover] || scale-down`）与 `image(<color>)` 校验及计算期颜色归一化；并在 `GEMINI.md` 11.9 节固化 `node -e` 0.1s 预检与大文件多行上下文替换铁律。
+
+- **Phase 564** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `object-position` 单值补全 `center`、4 值水平优先规范序及计算期 1/2/4 令牌 `%`/`px`/`calc(100% - px)` 解析；WPT `object-position-{valid,invalid,computed}.html` 3/3 100% 全绿通过。

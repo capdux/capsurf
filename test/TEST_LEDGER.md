@@ -1704,3 +1704,10 @@
   - `image-resolution-invalid.html`: **PASS**（校验 `[ from-image || <resolution> ] && snap?`）。
   - `object-fit-computed.html`: **PASS**（支持 `[ contain | cover ] || scale-down` 双值语法与 `scale-down` 后置归一化，基线收紧为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### WPT-B381 ~ B383 摸底与 Phase 564 `object-position` 全绿闭环 (bin_dev Phase 564, 2026-11-24)
+- **Filter `/css/css-images/parsing/object-position-*`**: **3/3 PASS (100% ALL GREEN)**（`object-position-valid.html`, `object-position-invalid.html`, `object-position-computed.html` 全绿）；`cssom.js` 实现 1 值补齐 `center` 与 4 值水平边优先规范序，`window.js` 实现 `object-position` 计算期 `%`/`px`/`calc(100% - px)` 精确解析。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-position/`: `117` files (`50 PASS / 55 FAIL / 11 TIMEOUT / 1 ERROR`)
+  - `/css/css-grid/` (`1/3`, `2/3`): `74/282`, `58/282` PASS

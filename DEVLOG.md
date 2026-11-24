@@ -2752,3 +2752,7 @@
 - **`css-images` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `image-orientation`、`image-resolution`、`object-fit` 双值及 `image(<color>)` 校验与计算期求值，`image-orientation-*` 3/3、`image-function-{invalid,computed}`、`image-resolution-invalid`、`object-fit-computed` 全部 PASS。
 - **自进化固化 (`GEMINI.md` 11.9)**：新增 `node -e` 纯 JS shim 编译前预检与大文件 `edit_file` 多行上下文防误替换规范。
 - **WPT & Smoke 验收**：`image-orientation` 3/3 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 564: `object-position` 全绿闭环
+- **`object-position` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：指定值补全 `center` 与 4 值水平边前置，计算值按 1/2/4 令牌规范解析为 `%`/`px`/`calc(100% - px)`。
+- **WPT 验收**：`object-position-{valid,invalid,computed}.html` **3/3 PASS**、`--smoke` **3/3 suites PASS**。

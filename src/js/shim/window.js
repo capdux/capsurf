@@ -8004,6 +8004,53 @@ function installWindow(global) {
         computedMap.set(ok, res);
       }
     }
+    if (computedMap.has("object-position")) {
+      const opv = (computedMap.get("object-position") || "").trim();
+      const opToks = (typeof globalThis.__capsurf_splitCssTokens === "function") ? globalThis.__capsurf_splitCssTokens(opv) : opv.split(/\s+/);
+      const normOpAxis = (edge, off) => {
+        const el = edge.toLowerCase();
+        if (!off) {
+          if (el === "left" || el === "top") return "0%";
+          if (el === "center") return "50%";
+          if (el === "right" || el === "bottom") return "100%";
+          if (el.endsWith("%")) return el;
+          const px = evalCssLengthExpr(el, null, fontSize);
+          return px !== null ? formatCssPx(px) : el;
+        }
+        const ol = off.toLowerCase();
+        if (ol.endsWith("%")) {
+          const n = parseFloat(ol);
+          return (el === "right" || el === "bottom") ? String(Number((100 - n).toFixed(6))) + "%" : ol;
+        }
+        const px = evalCssLengthExpr(ol, null, fontSize);
+        if (px !== null) {
+          if (el === "right" || el === "bottom") return px === 0 ? "100%" : ("calc(100% - " + formatCssPx(px) + ")");
+          return formatCssPx(px);
+        }
+        return ol;
+      };
+      let ox = "50%", oy = "50%";
+      if (opToks.length === 1) {
+        const t0 = opToks[0].toLowerCase();
+        if (t0 === "top" || t0 === "bottom") { ox = "50%"; oy = normOpAxis(t0, null); }
+        else { ox = normOpAxis(t0, null); oy = "50%"; }
+      } else if (opToks.length === 2) {
+        const a = opToks[0].toLowerCase(), b = opToks[1].toLowerCase();
+        if (a === "top" || a === "bottom" || (a === "center" && (b === "left" || b === "right"))) {
+          oy = normOpAxis(opToks[0], null); ox = normOpAxis(opToks[1], null);
+        } else {
+          ox = normOpAxis(opToks[0], null); oy = normOpAxis(opToks[1], null);
+        }
+      } else if (opToks.length === 4) {
+        const e0 = opToks[0].toLowerCase();
+        if (e0 === "left" || e0 === "right") {
+          ox = normOpAxis(opToks[0], opToks[1]); oy = normOpAxis(opToks[2], opToks[3]);
+        } else {
+          oy = normOpAxis(opToks[0], opToks[1]); ox = normOpAxis(opToks[2], opToks[3]);
+        }
+      }
+      computedMap.set("object-position", ox + " " + oy);
+    }
     const intCalcProps = ["column-count", "orphans", "widows"];
     for (let ii = 0; ii < intCalcProps.length; ii++) {
       const ik = intCalcProps[ii];
