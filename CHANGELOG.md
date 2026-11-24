@@ -3700,3 +3700,5 @@
 - **Test Stats** (`test/stats.md`): 按 Unit / E2E / WPT / Playwright / Puppeteer 类别汇总完整测试资产规模、基线分布、Phase 588–615 全绿与摸底统计及后续修复计划。
 
 - **Phase 616** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `box-decoration-break`/`break-*`/`orphans`/`widows` 初始值与继承集；`/css/css-break/inheritance.html` 实现 12/12 全绿并收紧基线为 `PASS`。
+
+- **Phase 617** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `evalCssLengthExpr` 抽离 `resolveUnitPx(num, unit)` 支持 `in`/`cm`/`mm`/`pc`/`q` 绝对长度单位换算；`tab-size-computed-value-001` 与 `word-spacing-computed-001` 全绿。

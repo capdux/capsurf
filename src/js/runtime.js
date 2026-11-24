@@ -41948,16 +41948,17 @@
       if (!s) return null;
       if (s === "0") return 0;
 
-      // Fast path for simple length/percentage
-      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh|ch|lh)?$/i);
-      if (simple) {
-        const num = parseFloat(simple[1]);
-        const unit = (simple[2] || "").toLowerCase();
+      function resolveUnitPx(num, unit) {
         if (unit === "px" || unit === "") return num;
         if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
         if (unit === "em") return num * (fontSizePx || 16);
         if (unit === "rem") return num * 16;
         if (unit === "pt") return num * (96 / 72);
+        if (unit === "pc") return num * 16;
+        if (unit === "in") return num * 96;
+        if (unit === "cm") return num * (96 / 2.54);
+        if (unit === "mm") return num * (96 / 25.4);
+        if (unit === "q") return num * (96 / 101.6);
         if (unit === "vw") return (num / 100) * 800;
         if (unit === "vh") return (num / 100) * 600;
         if (unit === "ch") {
@@ -41969,6 +41970,12 @@
           return num * ch;
         }
         return null;
+      }
+
+      // Fast path for simple length/percentage
+      const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)?$/i);
+      if (simple) {
+        return resolveUnitPx(parseFloat(simple[1]), (simple[2] || "").toLowerCase());
       }
 
       // Recursive descent parser for calc(), min(), max(), clamp()
@@ -42049,19 +42056,10 @@
           }
         }
         // Number + optional unit
-        const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|vw|vh)?/i);
+        const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)?/i);
         if (numMatch) {
           pos += numMatch[0].length;
-          const num = parseFloat(numMatch[1]);
-          const unit = (numMatch[2] || "").toLowerCase();
-          if (unit === "px" || unit === "") return num;
-          if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
-          if (unit === "em") return num * (fontSizePx || 16);
-          if (unit === "rem") return num * 16;
-          if (unit === "pt") return num * (96 / 72);
-          if (unit === "vw") return (num / 100) * 800;
-          if (unit === "vh") return (num / 100) * 600;
-          return null;
+          return resolveUnitPx(parseFloat(numMatch[1]), (numMatch[2] || "").toLowerCase());
         }
         return null;
       }

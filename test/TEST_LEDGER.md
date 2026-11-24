@@ -2145,3 +2145,7 @@
 ### Phase 616: `/css/css-break/inheritance` 12/12 全绿收紧
 - **Filter `/css/css-break/inheritance`**: **FAIL->PASS (12/12)**（`window.js` `INHERITED_CSS_PROPS` 补全 `orphans`/`widows`，`textDecorDefs` 补全 `box-decoration-break`, `break-after`, `break-before`, `break-inside`, `orphans`, `widows` 默认初始值；已收紧 `wpt-expectations.json` 基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 617: `evalCssLengthExpr` 绝对物理单位 (`in`/`cm`/`mm`/`pc`/`q`) 全绿
+- **Filter `/css/css-text/tab-size/tab-size-computed-value-001` & `/css/css-text/word-spacing/word-spacing-computed-001`**: **PASS (11/11 + 12/12)**（`window.js` `evalCssLengthExpr` 抽离 `resolveUnitPx(num, unit)`，在 `simple` 与 `parsePrimary` 中统一支持 `px`/`%`/`em`/`rem`/`pt`/`pc`/`in`/`cm`/`mm`/`q`/`vw`/`vh`/`ch`/`lh` 换算）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

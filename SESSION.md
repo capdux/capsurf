@@ -7928,3 +7928,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 616（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js`**：补全 `orphans`/`widows` 继承集与 6 项 `css-break` 默认初始值。
   2. **全绿验证与基线收紧**：`/css/css-break/inheritance.html` **FAIL->PASS (12/12)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 617（`src/js/shim/window.js`）：
+  1. **`window.js`**：在 `evalCssLengthExpr` 中抽离 `resolveUnitPx(num, unit)` 统一支持 `in`/`cm`/`mm`/`pc`/`q` 等绝对物理长度单位换算（`96px/in`）。
+  2. **全绿验证**：`tab-size-computed-value-001.html` **11/11 PASS**、`word-spacing-computed-001.html` **12/12 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。

@@ -2967,3 +2967,7 @@
 ### Phase 616: `/css/css-break/inheritance` 12/12 全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：`INHERITED_CSS_PROPS` 补全 `orphans`, `widows`，`textDecorDefs` 补全 `box-decoration-break: "slice"`, `break-{after,before,inside}: "auto"`, `orphans: "2"`, `widows: "2"`。
 - **WPT & Smoke 验收**：`/css/css-break/inheritance.html` FAIL->PASS (12/12，收紧基线)、`--smoke` 3/3 suites PASS。
+
+### Phase 617: `evalCssLengthExpr` 绝对物理单位 (`in`/`cm`/`mm`/`pc`/`q`) 全绿
+- **核心修复 (`src/js/shim/window.js`)**：在 `evalCssLengthExpr` 内部抽离 `resolveUnitPx(num, unit)` 统一处理 `px`/`%`/`em`/`rem`/`pt`/`pc`/`in`/`cm`/`mm`/`q`/`vw`/`vh`/`ch`/`lh`，消除 `simple` 与 `parsePrimary` 重复逻辑并补齐绝对物理长度换算。
+- **WPT & Smoke 验收**：`tab-size-computed-value-001.html` (11/11) & `word-spacing-computed-001.html` (12/12) PASS，`--smoke` 3/3 suites PASS。
