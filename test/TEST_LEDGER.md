@@ -2293,3 +2293,7 @@
 ### Phase 653: `has-specificity` (8/8) 全绿
 - **Filter `/css/selectors/has-specificity`**: **FAIL->PASS (1/1: 8/8)**（`window.js` 新增 `calcSingleSelectorSpecificity` 与 `calcMatchedSelectorSpecificity` 计算 `#id`/`.class`/`[attr]`/`:is`/`:not`/`:has`/`:where`/标签选择器权重，在 `parseCssRulesInto` 按 `(spec, order)` 升序应用规则；并将 `matchesSelector` 的 `selectorStr.split(",")` 升级为括号与引号深度感知顶层逗号拆分，彻底修复 `:has(.bar, #foo)` 等复杂选择器匹配）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 654: `/css/css-transforms/` 目录 31/31 全绿（`transform-with-sign-function` & `transform-valid`）
+- **Filter `/css/css-transforms/transform-with-sign-function` & `/css/css-transforms/parsing/transform-valid`**: **FAIL->PASS (2/2: 11/11 + 42/42)，目录 31/31 全绿**（`window.js` 新增共享 `evalCssMathInValue` 对 `transform` 与 `rotate` 的嵌套 `calc`/`min`/`max`/`clamp`/`sign`/`abs` 平衡括号求值及角度/矩阵化 `skew`/`skewX`/`skewY`/`rotate`/`rotateZ`；`cssom.js` 为 `transform` 规范化 `scale*` 百分比与 `rotate`/`skew*` `0`->`0deg` 并保留 `translateX`/`translateY` 驼峰大小写，收紧 `transform-valid.html` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

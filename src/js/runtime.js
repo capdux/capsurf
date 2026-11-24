@@ -6827,6 +6827,26 @@
           return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
         }).join(", ");
       }
+      if (key === "transform") {
+        return s.replace(/\b([a-zA-Z0-9]+)\(([^()]+)\)/g, (_, fn, args) => {
+          const fnLow = fn.toLowerCase();
+          if (fnLow.startsWith("scale")) {
+            const normArgs = splitTopLevelComma(args).map((a) => {
+              const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(a.trim());
+              return pm ? String(Number(pm[1]) / 100) : a.trim();
+            });
+            return fnLow + "(" + normArgs.join(", ") + ")";
+          }
+          if (fnLow === "rotate" || fnLow === "rotatez" || fnLow === "skew" || fnLow === "skewx" || fnLow === "skewy") {
+            const normArgs = splitTopLevelComma(args).map((a) => {
+              const t = a.trim();
+              return (t === "0" || t === "+0" || t === "-0") ? "0deg" : t;
+            });
+            return fnLow + "(" + normArgs.join(", ") + ")";
+          }
+          return fn + "(" + args + ")";
+        });
+      }
       if (key === "font-feature-settings") {
         if (s.toLowerCase() === "normal") return "normal";
         const items = splitTopLevelComma(s);
@@ -43740,12 +43760,78 @@
       } else if ((!computedMap.has("transform") || !computedMap.get("transform") || computedMap.get("transform") === "none") && wkTf) {
         computedMap.set("transform", wkTf);
       }
+      const evalCssMathInValue = (rawVal) => {
+        let out = "", pos = 0;
+        while (pos < rawVal.length) {
+          const m = /\b(calc|min|max|clamp|sign|abs)\(/i.exec(rawVal.slice(pos));
+          if (!m) { out += rawVal.slice(pos); break; }
+          out += rawVal.slice(pos, pos + m.index);
+          const fnStart = pos + m.index;
+          let i = fnStart + m[0].length, d = 1;
+          while (i < rawVal.length && d > 0) {
+            if (rawVal[i] === "(") d++;
+            else if (rawVal[i] === ")") d--;
+            i++;
+          }
+          const sub = rawVal.slice(fnStart, i);
+          const hasAng = /(?:deg|rad|grad|turn)\b/i.test(sub);
+          const subNoUnitless = sub.replace(/\b(?:sign|abs)\([^()]*\)/gi, "");
+          const hasLen = /(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)\b/i.test(subNoUnitless);
+          if (hasAng) {
+            const normSub = sub.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)\b/gi, (_, n, u) => {
+              const ul = u.toLowerCase();
+              const k = ul === "deg" ? 1 : (ul === "rad" ? 180 / Math.PI : (ul === "grad" ? 0.9 : 360));
+              return String(Number(n) * k);
+            });
+            const av = evalCssLengthExpr(normSub, 0, fontSize);
+            if (av !== null && isFinite(av)) out += String(Number(av.toFixed(6))) + "deg";
+            else out += sub;
+          } else {
+            const lv = evalCssLengthExpr(sub, 0, fontSize);
+            if (lv !== null && isFinite(lv)) out += String(Number(lv.toFixed(6))) + (hasLen ? "px" : "");
+            else out += sub;
+          }
+          pos = i;
+        }
+        return out;
+      };
+      const rotSignRaw = (computedMap.get("rotate") || "").trim();
+      if (rotSignRaw && /\b(?:calc|min|max|clamp|sign|abs)\(/i.test(rotSignRaw)) {
+        computedMap.set("rotate", evalCssMathInValue(rotSignRaw));
+      }
       if (!computedMap.has("transform") || computedMap.get("transform") === "") {
         computedMap.set("transform", "none");
       } else {
-        const tfVal = computedMap.get("transform").trim();
+        let tfVal = computedMap.get("transform").trim();
+        if (/\b(?:calc|min|max|clamp|sign|abs)\(/i.test(tfVal)) {
+          tfVal = evalCssMathInValue(tfVal);
+          computedMap.set("transform", tfVal);
+        }
+        const fmtMat = (arr) => "matrix(" + arr.map((n) => { const r = Number(n.toFixed(7)); return r === 0 ? 0 : r; }).join(", ") + ")";
+        const toRad = (tok) => {
+          const am = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)?$/i.exec(tok.trim());
+          if (!am) return null;
+          const v = Number(am[1]), u = (am[2] || "deg").toLowerCase();
+          if (u === "rad") return v;
+          if (u === "grad") return v * Math.PI / 200;
+          if (u === "turn") return v * 2 * Math.PI;
+          return v * Math.PI / 180;
+        };
         if (tfVal === "perspective(none)") {
           computedMap.set("transform", "matrix(1, 0, 0, 1, 0, 0)");
+        } else if (/^skew\(\s*([^,]+)(?:,\s*([^)]+))?\s*\)$/i.test(tfVal)) {
+          const sm = /^skew\(\s*([^,]+)(?:,\s*([^)]+))?\s*\)$/i.exec(tfVal);
+          const rx = toRad(sm[1]), ry = sm[2] ? toRad(sm[2]) : 0;
+          if (rx !== null && ry !== null) computedMap.set("transform", fmtMat([1, Math.tan(ry), Math.tan(rx), 1, 0, 0]));
+        } else if (/^skewX\(\s*([^)]+)\s*\)$/i.test(tfVal)) {
+          const rx = toRad(/^skewX\(\s*([^)]+)\s*\)$/i.exec(tfVal)[1]);
+          if (rx !== null) computedMap.set("transform", fmtMat([1, 0, Math.tan(rx), 1, 0, 0]));
+        } else if (/^skewY\(\s*([^)]+)\s*\)$/i.test(tfVal)) {
+          const ry = toRad(/^skewY\(\s*([^)]+)\s*\)$/i.exec(tfVal)[1]);
+          if (ry !== null) computedMap.set("transform", fmtMat([1, Math.tan(ry), 0, 1, 0, 0]));
+        } else if (/^rotateZ?\(\s*([^)]+)\s*\)$/i.test(tfVal)) {
+          const ra = toRad(/^rotateZ?\(\s*([^)]+)\s*\)$/i.exec(tfVal)[1]);
+          if (ra !== null) computedMap.set("transform", fmtMat([Math.cos(ra), Math.sin(ra), -Math.sin(ra), Math.cos(ra), 0, 0]));
         } else {
           const pm = /^perspective\(\s*([^)]+)\s*\)$/i.exec(tfVal);
           if (pm) {

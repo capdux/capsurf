@@ -3115,3 +3115,7 @@
 ### Phase 653: `has-specificity` (8/8) 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`calcSingleSelectorSpecificity` 支持 `#id`/`.class`/`[attr]`/`:is`/`:not`/`:has`/`:where` 权重计算并在 `parseCssRulesInto` 按 `(spec, order)` 排序；`matchesSelector` 改用括号/引号深度感知拆分。
 - **WPT & Smoke 验收**：`has-specificity.html` (8/8) 与 `--smoke` 3/3 suites PASS。
+
+### Phase 654: `/css/css-transforms/` 目录 31/31 全绿
+- **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`evalCssMathInValue` 剔除 `sign()`/`abs()` 内部长度单位后对 `transform`/`rotate` 求值并矩阵化；`cssom.js` 规范化 `scale*` 百分比与角度 `0deg`。
+- **WPT & Smoke 验收**：`transform-with-sign-function` (11/11) & `transform-valid` (42/42，收紧为 `PASS`) 全绿，`--smoke` 3/3 suites PASS。

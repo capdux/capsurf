@@ -3037,6 +3037,26 @@
         return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
       }).join(", ");
     }
+    if (key === "transform") {
+      return s.replace(/\b([a-zA-Z0-9]+)\(([^()]+)\)/g, (_, fn, args) => {
+        const fnLow = fn.toLowerCase();
+        if (fnLow.startsWith("scale")) {
+          const normArgs = splitTopLevelComma(args).map((a) => {
+            const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(a.trim());
+            return pm ? String(Number(pm[1]) / 100) : a.trim();
+          });
+          return fnLow + "(" + normArgs.join(", ") + ")";
+        }
+        if (fnLow === "rotate" || fnLow === "rotatez" || fnLow === "skew" || fnLow === "skewx" || fnLow === "skewy") {
+          const normArgs = splitTopLevelComma(args).map((a) => {
+            const t = a.trim();
+            return (t === "0" || t === "+0" || t === "-0") ? "0deg" : t;
+          });
+          return fnLow + "(" + normArgs.join(", ") + ")";
+        }
+        return fn + "(" + args + ")";
+      });
+    }
     if (key === "font-feature-settings") {
       if (s.toLowerCase() === "normal") return "normal";
       const items = splitTopLevelComma(s);

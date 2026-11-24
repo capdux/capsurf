@@ -6019,7 +6019,7 @@
     "reason": null
   },
   "/css/css-transforms/parsing/transform-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-transforms/parsing/translate-parsing-computed.html": {

@@ -8059,3 +8059,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：新增 `calcSingleSelectorSpecificity`/`calcMatchedSelectorSpecificity` 与 `parseCssRulesInto` 优先级排序；将 `matchesSelector` 逗号拆分升级为括号深度感知解析，支持 `:has(.bar, #foo)` 等逗号列表。
   2. **全绿验证**：`has-specificity.html`（8/8）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **子智能体并发汇报**：`588db2f6` 完成 `/css/css-transitions/`（19/20 PASS）、`0612b4f1` 完成 `/css/css-transforms/`（29/31 PASS）；已接力派发 `7ea13cb8`（`19720`, `/css/css-sizing/`）。
+- **[Agent]**: 完成 Phase 654（`src/js/shim/window.js`, `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js` & `cssom.js`**：新增 `evalCssMathInValue` 支撑 `transform`/`rotate` 嵌套数学函数求值与 `skew`/`rotate` 矩阵化；`transform` 指定值补全 `scale*` `%` 转小数与 `0`->`0deg`。
+  2. **全绿验证**：`transform-with-sign-function.html`（11/11）、`transform-valid.html`（42/42，收紧为 `PASS`），`/css/css-transforms/` 目录 **31/31 全绿**，`--smoke` **3/3 suites, 6/6 tests PASS**。
