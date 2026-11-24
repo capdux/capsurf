@@ -3842,3 +3842,6 @@
 - **Phase 676**:
   - `src/js/shim/cssom.js`: `isValidShape("circle"|"ellipse")` 支持 `closest-corner` 与 `farthest-corner`；`normalizeCssSpecifiedValue("shape-outside")` 在存在形状时省略默认 `margin-box`；`isValidCssValue` 新增 `rule-overlap`、`*-rule-break` 与 `*-rule-visibility-items` 校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 677**:
+  - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 中 `normCalcTok` 规范化数字（去 `+`、补前导 `0`、去尾随小数 `0`、无单位 `0` 补 `px`），并为 `inset()` 补齐 `round` 之前 1~4 边折叠逻辑。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

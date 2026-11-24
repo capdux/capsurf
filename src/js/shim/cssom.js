@@ -3783,7 +3783,18 @@
           let box = leadBox || tailBox;
           if ((key === "clip-path" && box === "border-box") || (key === "shape-outside" && box === "margin-box")) box = "";
           const suffix = box ? " " + box : "";
-          const normCalcTok = (t) => /^calc\(/i.test(t) ? canonicalizeCalcToken(t) : ((t === "0" || t === "+0" || t === "-0") ? "0px" : t);
+          const normCalcTok = (t) => {
+            if (/^calc\(/i.test(t)) return canonicalizeCalcToken(t);
+            const nm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)$/i.exec(t);
+            if (nm) {
+              const n = Number(nm[1]);
+              if (Number.isFinite(n)) {
+                const u = nm[2].toLowerCase();
+                return (n === 0 ? "0" : String(n)) + (u || "px");
+              }
+            }
+            return t;
+          };
           if (fnName === "circle" || fnName === "ellipse") {
             const toks = splitCssTokens(inner);
             const atIdx = toks.findIndex((t) => t.toLowerCase() === "at");
@@ -3805,6 +3816,15 @@
               if (rPost.length > 0 && rPost.every((t) => t === "0px" || t === "0%" || t === "/")) {
                 toks.length = rIdx;
               }
+            }
+            if (fnName === "inset") {
+              const rI = toks.findIndex((t) => t.toLowerCase() === "round");
+              let pre = rI === -1 ? toks : toks.slice(0, rI);
+              const post = rI === -1 ? [] : toks.slice(rI);
+              if (pre.length === 4 && pre[1] === pre[3]) pre = pre.slice(0, 3);
+              if (pre.length === 3 && pre[0] === pre[2]) pre = pre.slice(0, 2);
+              if (pre.length === 2 && pre[0] === pre[1]) pre = pre.slice(0, 1);
+              return "inset(" + pre.concat(post).join(" ") + ")" + suffix;
             }
             return fnName + "(" + toks.join(" ") + ")" + suffix;
           } else if (fnName === "polygon") {

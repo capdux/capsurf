@@ -3191,3 +3191,5 @@
 ### Phase 676 — `css-shapes` 与 `css-gaps` 解析校验收口
 - 为 `circle()`/`ellipse()` 补全 `closest-corner`/`farthest-corner` 半径关键字支持，并在 `shape-outside` 存在基础形状时省略默认 `margin-box`。
 - 补全 `rule-overlap`、`column/row/rule-break` 与 `column/row/rule-visibility-items` 枚举校验，5 项 WPT 与 `--smoke` 回归全数通过。
+### Phase 677 — `shape-outside` 数字规范化与 `inset()` 边折叠
+- 为 `shape-outside`/`clip-path` 补齐数值词法规范化（去除正号 `+`、去小数尾零、无单位零补 `px`）及 `inset()` 四边对称折叠，使 `shape-outside-{circle-006,ellipse-006,polygon-005}` 全数通过且 `clip-path-valid` 无回退。
