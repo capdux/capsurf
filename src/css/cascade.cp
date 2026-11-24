@@ -2561,9 +2561,141 @@ pub struct ComputedStyle {
     }
 
     /// Applies a single `CssProperty` with prepacked 64-bit `weight` onto this ComputedStyle.
+    static fn isValidVarCall(inner: []const u8): bool {
+        // Split top-level comma inside var(...)
+        let depth: i32 = 0;
+        let in_sq = false;
+        let in_dq = false;
+        let comma_idx: usize? = null;
+        let i: usize = 0;
+        while (i < inner.len) : (i += 1) {
+            const c = inner[i];
+            if (in_sq) {
+                if (c == '\\' && i + 1 < inner.len) { i += 1; continue; }
+                if (c == '\'') in_sq = false;
+                continue;
+            }
+            if (in_dq) {
+                if (c == '\\' && i + 1 < inner.len) { i += 1; continue; }
+                if (c == '"') in_dq = false;
+                continue;
+            }
+            if (c == '\'') { in_sq = true; continue; }
+            if (c == '"') { in_dq = true; continue; }
+            if (c == '(' || c == '[' || c == '{') { depth += 1; continue; }
+            if (c == ')' || c == ']' || c == '}') {
+                if (depth == 0) return false;
+                depth -= 1;
+                continue;
+            }
+            if (c == ',' && depth == 0) {
+                comma_idx = i;
+                break;
+            }
+        }
+        if (in_sq || in_dq || depth != 0) return false;
+        const name_raw = if (comma_idx != null) inner[0..comma_idx.?] else inner;
+        const name_trim = std.mem.trim(u8, name_raw, " \t\r\n");
+        if (name_trim.len == 0) return false;
+        if (name_trim[0] == '{') {
+            if (name_trim[name_trim.len - 1] != '}') return false;
+            const b_inner = std.mem.trim(u8, name_trim[1 .. name_trim.len - 1], " \t\r\n");
+            if (b_inner.len == 0) return false;
+        } else {
+            if (std.mem.indexOfAny(u8, name_trim, "{}") != null) return false;
+        }
+        if (comma_idx != null) {
+            const fb = inner[comma_idx.? + 1 ..];
+            if (!ComputedStyle.isValidDeclValueInner(fb, true)) return false;
+        }
+        return true;
+    }
+
+    static fn isValidDeclValueInner(raw: []const u8, allow_empty: bool): bool {
+        const trimmed = std.mem.trim(u8, raw, " \t\r\n");
+        if (!allow_empty && raw.len == 0) return false;
+        if (!allow_empty && trimmed.len == 0 && raw.len == 0) return false;
+        let stack: [64]u8 = undefined;
+        let sp: usize = 0;
+        let in_sq = false;
+        let in_dq = false;
+        let i: usize = 0;
+        while (i < raw.len) : (i += 1) {
+            const c = raw[i];
+            if (in_sq) {
+                if (c == '\\' && i + 1 < raw.len) { i += 1; continue; }
+                if (c == '\n' || c == '\r') return false;
+                if (c == '\'') in_sq = false;
+                continue;
+            }
+            if (in_dq) {
+                if (c == '\\' && i + 1 < raw.len) { i += 1; continue; }
+                if (c == '\n' || c == '\r') return false;
+                if (c == '"') in_dq = false;
+                continue;
+            }
+            if (c == '\'') { in_sq = true; continue; }
+            if (c == '"') { in_dq = true; continue; }
+            if (sp == 0 && (c == '!' || c == ';')) return false;
+            if (c == '(' || c == '[' || c == '{') {
+                // Check var(...)
+                if (c == '(' && i >= 3) {
+                    const prev3 = raw[i - 3 .. i];
+                    const is_ident_boundary = (i == 3) || (!std.ascii.isAlphanumeric(raw[i - 4]) && raw[i - 4] != '_' && raw[i - 4] != '-');
+                    if (is_ident_boundary && std.ascii.eqlIgnoreCase(prev3, "var")) {
+                        // Find matching ')'
+                        let vdepth: i32 = 1;
+                        let vsq = false;
+                        let vdq = false;
+                        let j = i + 1;
+                        while (j < raw.len && vdepth > 0) : (j += 1) {
+                            const vc = raw[j];
+                            if (vsq) {
+                                if (vc == '\\' && j + 1 < raw.len) { j += 1; continue; }
+                                if (vc == '\'') vsq = false;
+                                continue;
+                            }
+                            if (vdq) {
+                                if (vc == '\\' && j + 1 < raw.len) { j += 1; continue; }
+                                if (vc == '"') vdq = false;
+                                continue;
+                            }
+                            if (vc == '\'') { vsq = true; continue; }
+                            if (vc == '"') { vdq = true; continue; }
+                            if (vc == '(') vdepth += 1;
+                            else if (vc == ')') vdepth -= 1;
+                        }
+                        if (vdepth != 0) return false;
+                        if (!ComputedStyle.isValidVarCall(raw[i + 1 .. j - 1])) return false;
+                        i = j - 1;
+                        continue;
+                    }
+                }
+                if (sp >= 64) return false;
+                stack[sp] = c;
+                sp += 1;
+                continue;
+            }
+            if (c == ')' || c == ']' || c == '}') {
+                if (sp == 0) return false;
+                const open = stack[sp - 1];
+                if ((c == ')' && open != '(') || (c == ']' && open != '[') || (c == '}' && open != '{')) return false;
+                sp -= 1;
+                continue;
+            }
+        }
+        return !in_sq && !in_dq && sp == 0;
+    }
+
+    static fn isValidCustomPropValue(raw: []const u8): bool {
+        if (raw.len == 0) return false;
+        return ComputedStyle.isValidDeclValueInner(raw, false);
+    }
+
     fn applyProperty(*_, prop: *const CssProperty, weight: u64, root_font_px: f32) {
         const raw_name = std.mem.trim(u8, prop.name, " \t\r\n");
         if (std.mem.startsWith(u8, raw_name, "--")) {
+            if (!ComputedStyle.isValidCustomPropValue(prop.value)) return;
             _.setCustomProp(raw_name, std.mem.trim(u8, prop.value, " \t\r\n"), weight);
             return;
         }
@@ -4463,6 +4595,92 @@ pub struct StyleSheet {
     font_face_count: usize = 0;
     page_margin: PageMarginRule = PageMarginRule{};
 
+    static fn evalSupportsCondition(cond_raw: []const u8): bool {
+        let s = std.mem.trim(u8, cond_raw, " \t\r\n");
+        if (s.len >= 9 && std.ascii.startsWithIgnoreCase(s, "@supports")) {
+            s = std.mem.trim(u8, s[9..], " \t\r\n");
+        }
+        if (s.len == 0) return false;
+        while (s.len >= 2 && s[0] == '(' && s[s.len - 1] == ')') {
+            let depth: i32 = 0;
+            let wraps = true;
+            let i: usize = 0;
+            while (i < s.len) : (i += 1) {
+                if (s[i] == '(') depth += 1;
+                else if (s[i] == ')') depth -= 1;
+                if (depth == 0 && i + 1 < s.len) {
+                    wraps = false;
+                    break;
+                }
+            }
+            if (!wraps) break;
+            s = std.mem.trim(u8, s[1 .. s.len - 1], " \t\r\n");
+        }
+        if (s.len >= 4 && std.ascii.startsWithIgnoreCase(s, "not") && (s[3] == ' ' || s[3] == '\t' || s[3] == '(')) {
+            return !evalSupportsCondition(s[3..]);
+        }
+        let depth: i32 = 0;
+        let i: usize = 0;
+        while (i < s.len) : (i += 1) {
+            if (s[i] == '(') { depth += 1; continue; }
+            if (s[i] == ')') { if (depth > 0) depth -= 1; continue; }
+            if (depth == 0) {
+                if (i + 4 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 4], " or ")) {
+                    return evalSupportsCondition(s[0..i]) || evalSupportsCondition(s[i + 4 ..]);
+                }
+                if (i + 5 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 5], " and ")) {
+                    return evalSupportsCondition(s[0..i]) && evalSupportsCondition(s[i + 5 ..]);
+                }
+            }
+        }
+        if (std.ascii.startsWithIgnoreCase(s, "selector(") && s[s.len - 1] == ')') {
+            const sel_in = std.mem.trim(u8, s[9 .. s.len - 1], " \t\r\n");
+            return SelectorList.parse(sel_in).count > 0;
+        }
+        if (colon := std.mem.indexOfScalar(u8, s, ':')) {
+            const p_name = std.mem.trim(u8, s[0..colon], " \t\r\n");
+            let p_val = std.mem.trim(u8, s[colon + 1 ..], " \t\r\n");
+            if (p_val.len >= 10 && std.ascii.endsWithIgnoreCase(p_val, "important")) {
+                if (bang := std.mem.lastIndexOfScalar(u8, p_val, '!')) {
+                    const after_bang = std.mem.trim(u8, p_val[bang + 1 ..], " \t\r\n");
+                    if (std.ascii.eqlIgnoreCase(after_bang, "important")) {
+                        p_val = std.mem.trim(u8, p_val[0..bang], " \t\r\n");
+                    }
+                }
+            }
+            if (std.mem.startsWith(u8, p_name, "--") && p_name.len > 2) {
+                return ComputedStyle.isValidCustomPropValue(p_val);
+            }
+            if (p_val.len == 0) return false;
+            return ComputedStyle.isValidCustomPropValue(p_val);
+        }
+        return false;
+    }
+
+    static fn appendNestedRules(sheet: *StyleSheet, nested_body: []const u8) {
+        const nested_opt = std.heap.page_allocator.alloc(CssRule, 32) catch null;
+        if (nested_opt != null) {
+            let nested_rules = nested_opt.?;
+            defer std.heap.page_allocator.free(nested_rules);
+            let ni_init: usize = 0;
+            while (ni_init < 32) : (ni_init += 1) {
+                nested_rules[ni_init] = CssRule{};
+            }
+            const n_cnt = CssStylesheetParser.parseStylesheet(nested_body, nested_rules);
+            let j: usize = 0;
+            while (j < n_cnt) : (j += 1) {
+                if (nested_rules[j].kind == CssRuleKind.Style && sheet.rule_count < 64) {
+                    StyleSheet.appendStyleRule(sheet, &nested_rules[j]);
+                } else if (nested_rules[j].kind == CssRuleKind.FontFace && sheet.font_face_count < 16) {
+                    if (ff := CssFontFaceRule.parseBlock(nested_rules[j].nested_body)) {
+                        sheet.font_faces[sheet.font_face_count] = ff;
+                        sheet.font_face_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
     static fn parse(css_text: []const u8, viewport_w: f32, is_dark: bool): StyleSheet {
         let sheet = StyleSheet{};
         let raw_rules_opt = std.heap.page_allocator.alloc(CssRule, 64) catch null;
@@ -4496,27 +4714,11 @@ pub struct StyleSheet {
                 }
             } else if (r.kind == CssRuleKind.Media) {
                 if (r.media.matches(@as(f64, viewport_w), is_dark)) {
-                    const nested_opt = std.heap.page_allocator.alloc(CssRule, 32) catch null;
-                    if (nested_opt != null) {
-                        let nested_rules = nested_opt.?;
-                        defer std.heap.page_allocator.free(nested_rules);
-                        let ni_init: usize = 0;
-                        while (ni_init < 32) : (ni_init += 1) {
-                            nested_rules[ni_init] = CssRule{};
-                        }
-                        const n_cnt = CssStylesheetParser.parseStylesheet(r.nested_body, nested_rules);
-                        let j: usize = 0;
-                        while (j < n_cnt) : (j += 1) {
-                            if (nested_rules[j].kind == CssRuleKind.Style && sheet.rule_count < 64) {
-                                StyleSheet.appendStyleRule(&sheet, &nested_rules[j]);
-                            } else if (nested_rules[j].kind == CssRuleKind.FontFace && sheet.font_face_count < 16) {
-                                if (ff := CssFontFaceRule.parseBlock(nested_rules[j].nested_body)) {
-                                    sheet.font_faces[sheet.font_face_count] = ff;
-                                    sheet.font_face_count += 1;
-                                }
-                            }
-                        }
-                    }
+                    StyleSheet.appendNestedRules(&sheet, r.nested_body);
+                }
+            } else if (r.kind == CssRuleKind.Supports) {
+                if (StyleSheet.evalSupportsCondition(r.prelude)) {
+                    StyleSheet.appendNestedRules(&sheet, r.nested_body);
                 }
             } else if (r.kind == CssRuleKind.Container && sheet.container_rule_count < 8) {
                 StyleSheet.appendContainerRule(&sheet, r);

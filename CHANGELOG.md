@@ -4138,3 +4138,8 @@
   - `src/js/shim/index.js`: `docProto.createRange` 传入 `this` 给 `new Range(this)`。
   - `src/js/shim/range.js`: `Range(ownerDoc)` 绑定所属文档；新增 `getRangeRoot` 与 `Range.prototype.{comparePoint,isPointInRange,intersectsNode}`，`getNodeLength` 补齐 CDATA/PI 节点类型。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 755**:
+  - `src/css/cascade.cp`: 新增 `isValidVarCall` / `isValidDeclValueInner` / `isValidCustomPropValue`、新增 `evalSupportsCondition` / `appendNestedRules` 并接入 `CssRuleKind.Supports`。
+  - `src/js/shim/cssom.js`: 新增 `isValidVarCallSyntax` / `isValidCustomDeclValue` 对接 `var()` 校验。
+  - `test/wpt/wpt-expectations.json`: 收紧 3 项 `/css/css-variables/` `FAIL→PASS` 用例为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

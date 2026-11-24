@@ -7991,10 +7991,7 @@
     "expected": "PASS",
     "reason": "T18 enrollment (css-variables): measured PASS"
   },
-  "/css/css-variables/variable-invalidation.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-variables): 0/4 subtests pass"
-  },
+  "/css/css-variables/variable-invalidation.html": "PASS",
   "/css/css-variables/variable-presentation-attribute.html": {
     "expected": "FAIL",
     "reason": "T18 enrollment (css-variables): 16/48 subtests pass"
@@ -8339,16 +8336,7 @@
     "expected": "PASS",
     "reason": "T18 enrollment (css-variables): measured PASS"
   },
-  "/css/css-variables/variable-supports-30.html": {
-    "expected": "FAIL",
-    "corpusChange": {
-      "revision": "6efb1b12b95725c026cb1f5a451138345cfca937",
-      "kind": "outcome",
-      "from": "PASS",
-      "to": "FAIL"
-    },
-    "reason": "Upstream now expects @supports (color: var(1px)) to pass parse-time validation. Stylo rejects the free-form var() name."
-  },
+  "/css/css-variables/variable-supports-30.html": "PASS",
   "/css/css-variables/variable-supports-31.html": {
     "expected": "PASS",
     "reason": "T18 enrollment (css-variables): measured PASS"
@@ -8481,16 +8469,7 @@
     "expected": "PASS",
     "reason": "T18 enrollment (css-variables): measured PASS"
   },
-  "/css/css-variables/variable-supports-64.html": {
-    "expected": "FAIL",
-    "corpusChange": {
-      "revision": "6efb1b12b95725c026cb1f5a451138345cfca937",
-      "kind": "outcome",
-      "from": "PASS",
-      "to": "FAIL"
-    },
-    "reason": "Upstream now expects @supports (--a: var(1px)) to pass parse-time validation. Stylo rejects the free-form var() name."
-  },
+  "/css/css-variables/variable-supports-64.html": "PASS",
   "/css/css-variables/variable-supports-65.html": {
     "expected": "PASS",
     "reason": "T18 enrollment (css-variables): measured PASS"

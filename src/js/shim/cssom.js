@@ -509,11 +509,80 @@
       return true;
     }
 
+    function isValidVarCallSyntax(inner) {
+      let depth = 0, inSq = false, inDq = false, commaIdx = -1;
+      for (let i = 0; i < inner.length; i++) {
+        const c = inner[i];
+        if (inSq) { if (c === "\\" && i + 1 < inner.length) { i++; continue; } if (c === "'") inSq = false; continue; }
+        if (inDq) { if (c === "\\" && i + 1 < inner.length) { i++; continue; } if (c === '"') inDq = false; continue; }
+        if (c === "'") { inSq = true; continue; }
+        if (c === '"') { inDq = true; continue; }
+        if (c === "(" || c === "[" || c === "{") { depth++; continue; }
+        if (c === ")" || c === "]" || c === "}") { if (depth === 0) return false; depth--; continue; }
+        if (c === "," && depth === 0) { commaIdx = i; break; }
+      }
+      if (inSq || inDq || depth !== 0) return false;
+      const nameRaw = commaIdx !== -1 ? inner.slice(0, commaIdx) : inner;
+      const nameTrim = nameRaw.trim();
+      if (!nameTrim) return false;
+      if (nameTrim[0] === "{") {
+        if (nameTrim[nameTrim.length - 1] !== "}") return false;
+        if (!nameTrim.slice(1, -1).trim()) return false;
+      } else {
+        if (/[{}]/.test(nameTrim)) return false;
+      }
+      if (commaIdx !== -1) {
+        if (!isValidCustomDeclValue(inner.slice(commaIdx + 1), true)) return false;
+      }
+      return true;
+    }
+
+    function isValidCustomDeclValue(raw, allowEmpty) {
+      if (typeof raw !== "string") return false;
+      if (!allowEmpty && raw.length === 0) return false;
+      const stack = [];
+      let inSq = false, inDq = false;
+      for (let i = 0; i < raw.length; i++) {
+        const c = raw[i];
+        if (inSq) { if (c === "\\" && i + 1 < raw.length) { i++; continue; } if (c === "\n" || c === "\r") return false; if (c === "'") inSq = false; continue; }
+        if (inDq) { if (c === "\\" && i + 1 < raw.length) { i++; continue; } if (c === "\n" || c === "\r") return false; if (c === '"') inDq = false; continue; }
+        if (c === "'") { inSq = true; continue; }
+        if (c === '"') { inDq = true; continue; }
+        if (stack.length === 0 && (c === "!" || c === ";")) return false;
+        if (c === "(" || c === "[" || c === "{") {
+          if (c === "(" && i >= 3 && /^var$/i.test(raw.slice(i - 3, i)) && (i === 3 || !/[a-zA-Z0-9_-]/.test(raw[i - 4]))) {
+            let vdepth = 1, vsq = false, vdq = false, j = i + 1;
+            for (; j < raw.length && vdepth > 0; j++) {
+              const vc = raw[j];
+              if (vsq) { if (vc === "\\" && j + 1 < raw.length) { j++; continue; } if (vc === "'") vsq = false; continue; }
+              if (vdq) { if (vc === "\\" && j + 1 < raw.length) { j++; continue; } if (vc === '"') vdq = false; continue; }
+              if (vc === "'") { vsq = true; continue; }
+              if (vc === '"') { vdq = true; continue; }
+              if (vc === "(") vdepth++;
+              else if (vc === ")") vdepth--;
+            }
+            if (vdepth !== 0) return false;
+            if (!isValidVarCallSyntax(raw.slice(i + 1, j - 1))) return false;
+            i = j - 1;
+            continue;
+          }
+          stack.push(c);
+          continue;
+        }
+        if (c === ")" || c === "]" || c === "}") {
+          if (stack.length === 0) return false;
+          const open = stack.pop();
+          if ((c === ")" && open !== "(") || (c === "]" && open !== "[") || (c === "}" && open !== "{")) return false;
+        }
+      }
+      return !inSq && !inDq && stack.length === 0;
+    }
+
     if (/^env\(/i.test(trimmed) && splitCssTokens(trimmed).length === 1) {
       return isValidEnvSyntax(trimmed);
     }
-    if (/^var\(/i.test(trimmed) && !/\s/.test(trimmed)) {
-      return true;
+    if (/(?:^|[^a-z0-9_-])var\(/i.test(trimmed)) {
+      return isValidCustomDeclValue(trimmed, false);
     }
 
     const KEYWORD_CSS_PROPS = {
