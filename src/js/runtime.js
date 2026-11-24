@@ -6986,6 +6986,11 @@
         }
         return ax && den ? (ax === "row" ? "dense" : (ax + " dense")) : (ax || (den ? "dense" : s));
       }
+      if (key === "container") {
+        const slash = s.split("/");
+        if (slash.length === 2 && slash[1].trim().toLowerCase() === "normal") return slash[0].trim();
+        return s;
+      }
       if (key === "grid-template-areas") {
         if (s.toLowerCase() === "none") return "none";
         const toks = splitCssTokens(s);
@@ -44043,7 +44048,9 @@
         ["mask-composite", "add"],
         ["mask-repeat", "repeat"],
         ["mask-size", "auto"],
-        ["scroll-target-group", "none"]
+        ["scroll-target-group", "none"],
+        ["container-name", "none"],
+        ["container-type", "normal"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
@@ -44293,7 +44300,7 @@
       "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
-      "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
+      "content", "content-visibility", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
       "clip-rule", "mask-composite", "mask-repeat", "mask-size", "mask-type",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size",
@@ -44606,6 +44613,11 @@
           const h = computedMap.get("column-height") || "auto";
           const left = (w === "auto" && c === "auto") ? "auto" : (w === "auto" ? c : (c === "auto" ? w : (w + " " + c)));
           return h === "auto" ? left : (left + " / " + h);
+        }
+        if (name === "container") {
+          const cn = computedMap.get("container-name") || "none";
+          const ct = computedMap.get("container-type") || "normal";
+          return ct === "normal" ? cn : (cn + " / " + ct);
         }
         return null;
       }

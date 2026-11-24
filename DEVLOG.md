@@ -2952,3 +2952,7 @@
 ### Phase 613: `/css/css-transitions/transition-001` (13/13) 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`linear()` 缓动函数支持双位置停靠点拆分与 `0%`/`100%`/中间点线性插值计算；`transition-property` 多值列表含 `none` 时回退 `"all"`。
 - **WPT & Smoke 验收**：`transition-001.html` 13/13 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 614: `container-type-computed` 全绿
+- **核心修复 (`window.js`, `cssom.js`)**：`STANDARD_COMPUTED_LONGHANDS`、`textDecorDefs`、`getShorthandComputed` 补全 `container` / `container-name` / `container-type`，`cssom.js` 省略 `container` 末尾 `/ normal`。
+- **WPT & Smoke 验收**：`container-type-computed.html` 5/5 PASS、`--smoke` 3/3 suites PASS。

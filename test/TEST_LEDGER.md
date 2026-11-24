@@ -2130,3 +2130,10 @@
   - `/css/css-tables/` (`b518`, 18 files): `16 PASS / 1 FAIL / 1 TIMEOUT` (17/18 matched)
   - `/css/css-lists/` (`b519`, 182 files): `46 PASS (testharness 24/24) / 136 FAIL / 0 TIMEOUT`（`list-and-grid-001.html`, `ol-change-display-type.html` 2 项 unexpected PASS）
   - `/css/css-values/minmax-` (`b520`, 19 files): `2 PASS / 15 FAIL / 2 TIMEOUT`
+
+### Phase 614: `container-type-computed` 全绿 & Conditional/Box 摸底
+- **Filter `/css/css-conditional/container-queries/container-type-computed`**: **PASS (5/5)**（`window.js` `STANDARD_COMPUTED_LONGHANDS`、`textDecorDefs` 与 `getShorthandComputed` 补全 `container` / `container-name` / `container-type`；`cssom.js` `container` 序列化省略 `/ normal`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-conditional/` (`b521`, 135 files): `38 PASS / 93 FAIL / 4 TIMEOUT`
+  - `/css/css-box/` (`b523`, 33 files): `31 PASS / 0 FAIL / 2 TIMEOUT`

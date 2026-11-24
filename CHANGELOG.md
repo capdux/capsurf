@@ -3692,3 +3692,5 @@
 - **Phase 612** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `timeProps` 计算期将非法非时间值回退为 `"0s"`；`transition-delay-001.html` 与 `transition-duration-001.html` 全绿（`css-transitions` 达 17/20 PASS）。
 
 - **Phase 613** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `linear()` 缓动函数计算期百分比插值展开与 `transition-property` 含 `none` 回退 `"all"`；`transition-001.html` 13/13 全绿（`css-transitions` 达 18/20 PASS）。
+
+- **Phase 614** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `container` / `container-name` / `container-type` computed 支持与 `/ normal` 规范化序列化；`container-type-computed.html` 5/5 全绿。

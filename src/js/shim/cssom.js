@@ -3196,6 +3196,11 @@
       }
       return ax && den ? (ax === "row" ? "dense" : (ax + " dense")) : (ax || (den ? "dense" : s));
     }
+    if (key === "container") {
+      const slash = s.split("/");
+      if (slash.length === 2 && slash[1].trim().toLowerCase() === "normal") return slash[0].trim();
+      return s;
+    }
     if (key === "grid-template-areas") {
       if (s.toLowerCase() === "none") return "none";
       const toks = splitCssTokens(s);
