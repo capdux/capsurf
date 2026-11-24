@@ -7541,3 +7541,21 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **全绿验证与并行摸底**：
      - `/css/css-ruby/parsing/`: **8/8 PASS (100% ALL GREEN)**；`/css/css-rhythm/parsing/`: **5/5 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 子智能体完成 `/css/css-multicol/`（25/32）与 `/css/css-tables/`（15/18）全目录摸底，并继续并行扫描 `/css/css-overflow/`、`/css/css-display/`、`/css/css-animations/` 与 `/css/css-backgrounds/`。
+
+### 2026-11-24 Phase 559 (`/css/css-box/parsing/` 29/29 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 559（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **CSS Box `margin-*` / `padding-*` 与 `margin-trim` 闭环 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - 在 `ZERO_PX_PROPS` 分支接入 `canonicalizeCalcToken`，规范序列化 `padding-right: calc(2em + 3%)` 为 `calc(3% + 2em)`。
+     - 对 `margin-*` / `padding-*` 前缀检查 `KNOWN_CSS_PROPS.has(prop)`，拦截 `margin-bottom-left` 与 `padding-bottom-left` 等非法属性名。
+     - 将 `margin-trim` 加入 `KNOWN_CSS_PROPS` 与 `STANDARD_COMPUTED_LONGHANDS`，实现 `none | block | block-start | block-end` 文法校验及 `block-start block-end` -> `block` 折叠。
+  2. **全绿验证**：
+     - `/css/css-box/parsing/`: **29/29 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 559 (`/css/css-box/parsing/` 29/29 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 559（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **CSS Box `margin-*` / `padding-*` 与 `margin-trim` 闭环 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - 在 `ZERO_PX_PROPS` 分支接入 `canonicalizeCalcToken`，规范序列化 `padding-right: calc(2em + 3%)` 为 `calc(3% + 2em)`。
+     - 对 `margin-*` / `padding-*` 前缀检查 `STANDARD_CSS_PROPERTIES.has(prop)`，拦截 `margin-bottom-left` 与 `padding-bottom-left` 等非法属性名。
+     - 将 `margin-trim` 加入 `STANDARD_CSS_PROPERTIES` 与 `STANDARD_COMPUTED_LONGHANDS`，实现 `none | block | block-start | block-end` 文法校验及 `block-start block-end` -> `block` 折叠，并收紧基线为 `PASS`。
+  2. **全绿验证**：
+     - `/css/css-box/parsing/`: **29/29 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。

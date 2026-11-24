@@ -2722,3 +2722,13 @@
 - **CSS Ruby (`src/js/shim/cssom.js`)**：实现 `ruby-align`、`ruby-merge`、`ruby-overhang`（`none` 规范序列化为 `spaces`）及 `ruby-position` 严格关键字校验。
 - **CSS Rhythm (`src/js/shim/cssom.js`)**：实现 `block-step-align`、`block-step-insert`、`block-step-round`、`block-step-size`（非负无 `%` 长度）及 `block-step` 简写去重校验。
 - **WPT 验收**：`/css/css-ruby/parsing/` **8/8 PASS**、`/css/css-rhythm/parsing/` **5/5 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 559: CSS Box Parsing 29/29 全绿闭环
+- **`margin-*` / `padding-*` 与 `calc()` (`src/js/shim/cssom.js`)**：在 `ZERO_PX_PROPS` 归一化路径增加 `canonicalizeCalcToken`，并拦截不在 `KNOWN_CSS_PROPS` 中的 `margin-*`/`padding-*` 属性。
+- **`margin-trim` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：支持 `none | block | block-start | block-end` 解析校验、双值折叠 `block` 以及 `getComputedStyle().marginTrim` 默认值 `"none"`。
+- **WPT 验收**：`/css/css-box/parsing/` **29/29 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 559: CSS Box Parsing 29/29 全绿闭环
+- **`margin-*` / `padding-*` 与 `calc()` (`src/js/shim/cssom.js`)**：在 `ZERO_PX_PROPS` 归一化路径增加 `canonicalizeCalcToken`，并拦截不在 `STANDARD_CSS_PROPERTIES` 中的 `margin-*`/`padding-*` 属性。
+- **`margin-trim` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：支持 `none | block | block-start | block-end` 解析校验、双值折叠 `block` 以及 `getComputedStyle().marginTrim` 默认值 `"none"`。
+- **WPT 验收**：`/css/css-box/parsing/` **29/29 PASS**、`--smoke` **3/3 suites PASS**。

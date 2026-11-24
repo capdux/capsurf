@@ -3851,7 +3851,7 @@
       "list-style", "list-style-image", "list-style-position", "list-style-type", "margin",
       "margin-block", "margin-block-end", "margin-block-start", "margin-bottom",
       "margin-inline", "margin-inline-end", "margin-inline-start", "margin-left",
-      "margin-right", "margin-top", "mask", "mask-clip", "mask-composite", "mask-image",
+      "margin-right", "margin-top", "margin-trim", "mask", "mask-clip", "mask-composite", "mask-image",
       "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type",
       "max-block-size", "max-height", "max-inline-size", "max-width", "min-block-size",
       "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit",
@@ -5854,6 +5854,15 @@
         if (noneCnt > 0 && ((sImg && sType) || (noneCnt === 2 && (sImg || sType)))) return false;
         return true;
       }
+      if ((prop.startsWith("margin-") || prop.startsWith("padding-")) && !STANDARD_CSS_PROPERTIES.has(prop)) {
+        return false;
+      }
+      if (prop === "margin-trim") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 1) return toks[0] === "none" || toks[0] === "block" || toks[0] === "block-start" || toks[0] === "block-end";
+        if (toks.length === 2) return (toks[0] === "block-start" && toks[1] === "block-end") || (toks[0] === "block-end" && toks[1] === "block-start");
+        return false;
+      }
       if (prop === "ruby-align") {
         return vLower === "space-around" || vLower === "start" || vLower === "center" || vLower === "space-between";
       }
@@ -6060,7 +6069,17 @@
         const n = Number(s);
         if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
       }
-      if (ZERO_PX_PROPS.has(key) && (s === "0" || s === "+0" || s === "-0")) return "0px";
+      if (ZERO_PX_PROPS.has(key)) {
+        if (s === "0" || s === "+0" || s === "-0") return "0px";
+        if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
+      }
+      if (key === "margin-trim") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 2 && ((p[0] === "block-start" && p[1] === "block-end") || (p[0] === "block-end" && p[1] === "block-start"))) {
+          return "block";
+        }
+        return p.join(" ");
+      }
       if (TWO_SIDE_PROPS.has(key)) {
         const parts = splitCssTokens(s);
         const isLenProp = !key.startsWith("overflow") && !key.startsWith("place-");
@@ -42924,7 +42943,7 @@
       "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
-      "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
+      "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",

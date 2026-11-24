@@ -1720,11 +1720,11 @@
     "reason": null
   },
   "/css/css-box/parsing/margin-trim-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-box/parsing/margin-trim.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-box/parsing/margin-valid.html": {

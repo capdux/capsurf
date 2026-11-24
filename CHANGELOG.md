@@ -3580,3 +3580,7 @@
 - **Phase 557** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `overscroll-behavior*` 严格关键字校验、`content` alt-text/`attr()`/`counter()`/`counters()`/`symbols()` 校验与 `decimal`/`symbolic` 省略规范化，修复 `window.js` `content` 多令牌字符串转义与 `display: none` 下渐变计算值求值（含 `to right top` 规范序）；WPT `/css/css-overscroll-behavior/parsing/` 1/1 与 `/css/css-content/parsing/` 4/4 均 100% 全绿通过。
 
 - **Phase 558** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补齐 `ruby-align`/`ruby-merge`/`ruby-overhang`（`none -> spaces`）/`ruby-position` 与 `block-step*`（`align`/`insert`/`round`/`size` 及简写）严格文法校验，收紧 `css-ruby/parsing` 基线；WPT `/css/css-ruby/parsing/` 8/8 与 `/css/css-rhythm/parsing/` 5/5 均 100% 全绿通过。
+
+- **Phase 559** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`、拦截未注册 `margin-*`/`padding-*` 属性名，并实现 `margin-trim` 文法校验与 `block` 折叠序列化及计算值默认值；WPT `/css/css-box/parsing/` 29/29 用例 100% 全绿通过。
+
+- **Phase 559** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`、拦截未注册 `margin-*`/`padding-*` 属性名，并实现 `margin-trim` 文法校验与 `block` 折叠序列化及计算值默认值；WPT `/css/css-box/parsing/` 29/29 用例 100% 全绿通过。

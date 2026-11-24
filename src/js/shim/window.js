@@ -8372,7 +8372,7 @@ function installWindow(global) {
     "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
-    "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display",
+    "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-size",
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",

@@ -1654,3 +1654,17 @@
 - **子智能体只读摸底记录**：
   - `/css/css-multicol/`: `32` files (`25 PASS / 7 FAIL`)
   - `/css/css-tables/`: `18` files (`15 PASS / 2 FAIL / 1 TIMEOUT`)
+
+### WPT-B367 ~ B368 摸底与 Phase 559 `/css/css-box/parsing/` 29/29 全绿闭环 (bin_dev Phase 559, 2026-11-24)
+- **Filter `/css/css-box/parsing/`**: `29` files (**29 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`（修复 `padding-right: calc(2em + 3%) -> calc(3% + 2em)`），拦截未知 `margin-*`/`padding-*` 伪属性（`margin-bottom-left`、`padding-bottom-left`），并实现 `margin-trim`（`none | block | block-start | block-end`、双值折叠 `block` 与 `STANDARD_COMPUTED_LONGHANDS` 默认值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-animations/` (partial): `16/58` ran (`8 PASS / 5 FAIL / 3 TIMEOUT`)
+  - `/css/css-backgrounds/` (partial): `50/115` ran (`22 PASS / 22 FAIL / 5 TIMEOUT / 1 ERROR`)
+
+### WPT-B367 ~ B368 摸底与 Phase 559 `/css/css-box/parsing/` 29/29 全绿闭环 (bin_dev Phase 559, 2026-11-24)
+- **Filter `/css/css-box/parsing/`**: `29` files (**29 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`（修复 `padding-right: calc(2em + 3%) -> calc(3% + 2em)`），拦截未知 `margin-*`/`padding-*` 属性名（`margin-bottom-left`、`padding-bottom-left`），并实现 `margin-trim`（`none | block | block-start | block-end`、双值折叠 `block` 与 `STANDARD_COMPUTED_LONGHANDS` 默认值）；收紧 `margin-trim.html`、`margin-trim-computed.html` 基线为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-animations/` (partial): `16/58` ran (`8 PASS / 5 FAIL / 3 TIMEOUT`)
+  - `/css/css-backgrounds/` (partial): `50/115` ran (`22 PASS / 22 FAIL / 5 TIMEOUT / 1 ERROR`)
