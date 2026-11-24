@@ -2466,20 +2466,20 @@
     "reason": null
   },
   "/css/css-counter-styles/counter-style-at-rule/prefix-suffix-syntax.html": {
-    "expected": "FAIL",
-    "reason": "20/26 subtests pass. `prefix`/`suffix: url(...)` and `linear-gradient(...)` fail \u2014 pristine Stylo 0.20.0 counter_style has `Symbol { String, Ident }` only (`// Not implemented: Image(Image)`); the earlier TS parser accepted <image> but review moved parsing into Stylo. Needs a stylo vendor patch."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-counter-styles/counter-style-at-rule/range-syntax.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-counter-styles/counter-style-at-rule/speak-as-syntax.html": {
-    "expected": "FAIL",
-    "reason": "11/12 subtests pass. `speak-as: spell-out` is rejected by pristine Stylo 0.20.0 (`\"spell-out\" => Err`, Gecko bug 1024178). Needs a stylo vendor patch."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-counter-styles/counter-style-at-rule/symbols-syntax.html": {
-    "expected": "FAIL",
-    "reason": "10/11 subtests pass. `symbols: ident \"X\" url(\"foo.jpg\")` drops the whole rule \u2014 Stylo 0.20.0 has no `Symbol::Image`. Needs a stylo vendor patch."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-counter-styles/counter-style-at-rule/system-syntax.html": {
     "expected": "PASS",

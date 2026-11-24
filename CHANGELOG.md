@@ -4012,3 +4012,7 @@
   - `src/js/shim/cssom.js`: 修复空格分隔非相对 `rgb()`/`hsl()` 的 alpha token 合法性校验（拒绝 `rgb(0 0 0 / alpha)`），修复 `hwb(... none)` 保留 `%` 序列化。
   - `src/js/shim/window.js`: `normCol` 接入 `evalSignCalls` 折叠颜色函数内的 `sign(...)`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 724**:
+  - `src/js/shim/cssom.js`: `parseCounterStyleRule` 补全 `prefix`/`suffix` 无引号 `url(...)` 序列化、`symbols` 校验与 `speak-as` 校验。
+  - `test/wpt/wpt-expectations.json`: 将 `prefix-suffix-syntax.html`, `speak-as-syntax.html`, `symbols-syntax.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

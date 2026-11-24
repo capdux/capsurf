@@ -3286,3 +3286,5 @@
 - 在 `window.js` `getShorthandComputed` 补全 `outline` 计算值（`outline-width outline-style outline-color`），并在 `cssom.js` `normalizePropColors` 保留 `outline-color: auto`，保持 `/css/css-ui/parsing/outline-*` 15/15 匹配基线。
 ### Phase 723 — `css-color/parsing` (`color-computed-hwb` & `color-invalid-relative-color`) 全绿闭环
 - 修复 `cssom.js` `hwb(... none)` 误剥离 `%` 与非相对 `rgb(... / alpha)` 放行非法标识符的问题，并在 `window.js` `normCol` 中接入 `evalSignCalls`，打通 `color-computed-hwb.html` (56/56 PASS) 与 `color-invalid-relative-color.html` (161/161 PASS)。
+### Phase 724 — `@counter-style` 规则语法校验全绿闭环 (`10/10 PASS`)
+- 补齐 `parseCounterStyleRule` 对 `symbols`（拒绝空值与 CSS 全局关键字）、`speak-as`（拒绝多 token 与 `none`/全局关键字/字符串/数字）及 `prefix`/`suffix` 无引号 `url(...)` 序列化，`/css/css-counter-styles/counter-style-at-rule/` 全部 10 项测试达成 100% PASS。

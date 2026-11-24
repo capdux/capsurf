@@ -11638,6 +11638,20 @@
         } else if (rawName === "suffix" || rawName === "prefix") {
           const toks = splitCssTokens(val);
           if (toks.length !== 1 || !isCounterStyleSymbol(toks[0])) continue;
+          if (/^url\(\s*([^'")\s]+)\s*\)$/i.test(val)) {
+            val = val.replace(/^url\(\s*([^'")\s]+)\s*\)$/i, 'url("$1")');
+          }
+        } else if (rawName === "symbols") {
+          const toks = splitCssTokens(val);
+          if (toks.length === 0 || !toks.every(isCounterStyleSymbol)) continue;
+        } else if (rawName === "speak-as") {
+          const toks = splitCssTokens(val);
+          if (toks.length !== 1) continue;
+          const sl = toks[0].toLowerCase();
+          if (sl !== "auto" && sl !== "bullets" && sl !== "numbers" && sl !== "words" && sl !== "spell-out" &&
+              (sl === "none" || COUNTER_STYLE_WIDE.has(sl) || toks[0].startsWith('"') || toks[0].startsWith("'") || /^[+-]?\d/.test(toks[0]))) {
+            continue;
+          }
         } else if (!Object.values(COUNTER_STYLE_IDL_TO_DESC).includes(rawName)) {
           continue;
         }
