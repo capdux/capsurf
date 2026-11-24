@@ -3306,3 +3306,5 @@
 - 在 `window.js` `shape-outside`/`clip-path` 计算值正则中补入 `path` 并于 `evalTok` 内展开 `sibling-index()`，打通 `shape-outside-computed.html` (32/32 PASS) 并实现 `/css/css-shapes/parsing/` **13/13 (100% PASS)**。
 ### Phase 733 — `::scroll-button` 与 `::search-text:current(*)` 选择器校验闭环
 - 在 `selector.js` 中补全 `::scroll-button` 必须带括号校验与 `:current(...)` 非法函数参数拒绝，打通 `scroll-buttons-invalid.html` (8/8 PASS) 与 `highlight-pseudos-search-text.tentative.html` (39/39 **FAIL→PASS**)。
+### Phase 734 — `/css/css-shapes/shape-functions/` `16/16 PASS` 全绿闭环
+- 在 `cssom.js` 新增 `parseAndNormalizeShape` 并通过 `_parseAndNormalizeShape` 共享于校验与指定值规范化，配合 `window.js` 逻辑关键字与角度计算值转换，打通 `shape-function-valid.html` (51/51)、`shape-function-computed.html` (35/35) 与 `shape-function-invalid.html`，实现 `/css/css-shapes/shape-functions/` 16/16 全绿。

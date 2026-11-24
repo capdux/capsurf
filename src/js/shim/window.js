@@ -9964,9 +9964,13 @@ function installWindow(global) {
         const outSegs = segs.map((seg) => splitWs(seg).map((tk) => {
           if (fn === "shape") {
             const tl = tk.toLowerCase();
-            if (tl === "left" || tl === "top") return "0%";
+            if (tl === "left" || tl === "top" || tl === "x-start" || tl === "y-start") return "0%";
             if (tl === "center") return "50%";
-            if (tl === "right" || tl === "bottom") return "100%";
+            if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn)$/i.test(tl)) {
+              const deg = evalCssAngleDeg(tl);
+              if (deg !== null && isFinite(deg)) return String(Number(deg.toFixed(6))) + "deg";
+            }
           }
           return evalTok(tk);
         }).join(" "));
