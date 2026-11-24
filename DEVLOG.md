@@ -2963,3 +2963,7 @@
 
 ### 测试计划与结果统计归档 (`test/stats.md`)
 - 按测试类别汇总 5 大测试资产规模（Unit 138、E2E 392、WPT 9725、PW 619、PPTR 79）、31 组全绿 WPT 子目录、27 个全量摸底模块实测结果与后续修复优先级计划。
+
+### Phase 616: `/css/css-break/inheritance` 12/12 全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：`INHERITED_CSS_PROPS` 补全 `orphans`, `widows`，`textDecorDefs` 补全 `box-decoration-break: "slice"`, `break-{after,before,inside}: "auto"`, `orphans: "2"`, `widows: "2"`。
+- **WPT & Smoke 验收**：`/css/css-break/inheritance.html` FAIL->PASS (12/12，收紧基线)、`--smoke` 3/3 suites PASS。

@@ -41648,7 +41648,7 @@
       "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
       "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
       "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-      "text-transform", "word-break", "word-wrap", "clip-rule",
+      "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -44057,7 +44057,13 @@
         ["mask-size", "auto"],
         ["scroll-target-group", "none"],
         ["container-name", "none"],
-        ["container-type", "normal"]
+        ["container-type", "normal"],
+        ["box-decoration-break", "slice"],
+        ["break-after", "auto"],
+        ["break-before", "auto"],
+        ["break-inside", "auto"],
+        ["orphans", "2"],
+        ["widows", "2"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {

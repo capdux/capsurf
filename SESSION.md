@@ -7923,3 +7923,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 ### 2026-11-24 测试计划与结果汇总归档 (`test/stats.md`)
 - **[User]**: 将所有测试计划与测试结果按类别保存到 `test/stats.md` 中做好记录。
 - **[Agent]**: 汇总本地真实基线统计（Unit 138、E2E 392、WPT 9725、PW 619、PPTR 79）及 Phase 588–615 全量 WPT 摸底/修复结果，按类别创建并提交 [test/stats.md](file:///data/dev/capsurf/test/stats.md)。
+
+### 2026-11-24 Phase 616 (`/css/css-break/inheritance` 12/12 全绿收紧)
+- **[Agent]**: 完成 Phase 616（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：补全 `orphans`/`widows` 继承集与 6 项 `css-break` 默认初始值。
+  2. **全绿验证与基线收紧**：`/css/css-break/inheritance.html` **FAIL->PASS (12/12)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。

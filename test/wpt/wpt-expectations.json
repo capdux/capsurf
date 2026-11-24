@@ -1968,7 +1968,7 @@
     "reason": null
   },
   "/css/css-break/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-break/ink-overflow-001-print.html": {

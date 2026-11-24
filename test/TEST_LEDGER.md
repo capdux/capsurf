@@ -2141,3 +2141,7 @@
 ### Phase 615: `container-computed` (14/14) 全绿
 - **Filter `/css/css-conditional/container-queries/container-computed`**: **PASS (14/14)**（`cssom.js` `SHORTHAND_EXPAND_LONGHANDS` 与 `expandCssShorthand` 补充 `container` 简写展开至 `container-name` / `container-type`；`window.js` `textDecorDefs` 循环对非继承属性补充 `unset` 还原）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 616: `/css/css-break/inheritance` 12/12 全绿收紧
+- **Filter `/css/css-break/inheritance`**: **FAIL->PASS (12/12)**（`window.js` `INHERITED_CSS_PROPS` 补全 `orphans`/`widows`，`textDecorDefs` 补全 `box-decoration-break`, `break-after`, `break-before`, `break-inside`, `orphans`, `widows` 默认初始值；已收紧 `wpt-expectations.json` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

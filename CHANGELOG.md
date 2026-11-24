@@ -3698,3 +3698,5 @@
 - **Phase 615** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `container` 简写展开及非继承属性 `unset` 计算值还原；`container-computed.html` 14/14 全绿。
 
 - **Test Stats** (`test/stats.md`): 按 Unit / E2E / WPT / Playwright / Puppeteer 类别汇总完整测试资产规模、基线分布、Phase 588–615 全绿与摸底统计及后续修复计划。
+
+- **Phase 616** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `box-decoration-break`/`break-*`/`orphans`/`widows` 初始值与继承集；`/css/css-break/inheritance.html` 实现 12/12 全绿并收紧基线为 `PASS`。
