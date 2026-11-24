@@ -1904,3 +1904,12 @@
   - `/css/css-ui/` (`b464`): `47` files (`35 PASS / 10 FAIL / 2 TIMEOUT`)
   - `/css/css-overflow/` (`b466`): `33` files (`22 PASS / 11 FAIL`)
   - `/css/css-multicol/` (`b467`): `32` files (`31 PASS / 1 FAIL`)
+
+### Phase 584 `/css/css-multicol/` 32/32 全绿 & `css-box`/`css-sizing` `inheritance` 全绿闭环 & WPT-B470~B471 摸底 (bin_dev Phase 584, 2026-11-24)
+- **Filter `/css/css-multicol/inheritance`**: **PASS**（补全 `column-count: auto`, `column-fill: balance`, `column-rule-color`, `column-rule-style: none`, `column-rule-width: 3px`, `column-span: none`, `column-width: auto` 默认初始值，`/css/css-multicol/` 达成 **32/32 PASS 100% ALL GREEN**）。
+- **Filter `/css/css-box/inheritance`**: **PASS (FAIL -> PASS)**（补全 `clear: none`, `float: none`, `margin-trim: none` 默认初始值，已收紧基线为 `PASS`）。
+- **Filter `/css/css-sizing/aspect-ratio/inheritance` & `inheritance-001`**: **2/2 PASS**（补全 `aspect-ratio: auto`, `box-sizing: content-box`, `max-height/width: none`, `min-height/width: auto` 默认初始值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-box/` (`b470`): `33` files (`30 PASS / 1 FAIL / 2 TIMEOUT`) -> Phase 584 修复 `inheritance.html` 后 `31/33 PASS`
+  - `/css/css-sizing/` (`b471`): `32` files (`27 PASS / 5 FAIL`) -> Phase 584 修复 2 项 `inheritance` 后 `29/32 PASS`

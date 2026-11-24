@@ -8320,7 +8320,7 @@ function installWindow(global) {
     const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
     const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
     computedMap.set("color", elColor);
-    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color"]) {
+    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color"]) {
       const cv = (computedMap.get(ck) || "").trim();
       if (ck === "background-color" && (!cv || cv.toLowerCase() === "transparent")) {
         computedMap.set(ck, "rgba(0, 0, 0, 0)");
@@ -8525,7 +8525,22 @@ function installWindow(global) {
       ["shape-image-threshold", "0"],
       ["accent-color", "auto"],
       ["alignment-baseline", "baseline"],
-      ["baseline-shift", "0px"]
+      ["baseline-shift", "0px"],
+      ["clear", "none"],
+      ["float", "none"],
+      ["column-count", "auto"],
+      ["column-fill", "balance"],
+      ["column-rule-style", "none"],
+      ["column-rule-width", "3px"],
+      ["column-span", "none"],
+      ["column-width", "auto"],
+      ["margin-trim", "none"],
+      ["aspect-ratio", "auto"],
+      ["box-sizing", "content-box"],
+      ["max-height", "none"],
+      ["max-width", "none"],
+      ["min-height", "auto"],
+      ["min-width", "auto"]
     ];
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {

@@ -1672,7 +1672,7 @@
     "reason": null
   },
   "/css/css-box/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-box/parsing/clear-computed.html": {

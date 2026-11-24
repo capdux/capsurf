@@ -7730,3 +7730,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：实现 `accent-color`（`auto | <color>`，跳过通用 `-color` 拦截，纳入继承与默认 `"auto"`）、`alignment-baseline` 与 `baseline-shift`（`0 -> 0px` 及计算期线性 `calc` 求值）的校验与求值。
   2. **全绿验证与基线收紧**：`accent-color-*` **2/2 PASS**、`baseline-shift-*` **3/3 PASS**、`alignment-baseline-invalid` **PASS**、`--smoke` **3/3 suites PASS**；收紧 `scroll-buttons-invalid.html` 为 `PASS`。
   3. **并行摸底汇总**：`/css/css-multicol/` **31/32 PASS**、`/css/css-ui/` **35/47 PASS**、`/css/css-overflow/` **22/33 PASS**。
+
+### 2026-11-24 Phase 584 (`/css/css-multicol/` 32/32 全绿 & `css-box`/`css-sizing` 继承闭环)
+- **[Agent]**: 自主推导并完成 Phase 584（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：补全 `column-rule-color`（颜色求值）、`column-{count,fill,rule-style,rule-width,span,width}`、`clear`/`float`/`margin-trim`、`aspect-ratio`/`box-sizing`/`min-*`/`max-*` 默认初始值。
+  2. **全绿验证与基线收紧**：`/css/css-multicol/inheritance` **PASS**（全目录 **32/32 PASS**）、`/css/css-box/inheritance` **FAIL->PASS**（已收紧为 `PASS`）、`/css/css-sizing/aspect-ratio/inheritance` & `inheritance-001` **2/2 PASS**、`--smoke` **3/3 suites PASS**。

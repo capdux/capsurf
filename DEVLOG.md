@@ -2831,3 +2831,7 @@
 ### Phase 583: `accent-color` 2/2 与 `baseline-shift` 3/3 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `accent-color`、`alignment-baseline` 与 `baseline-shift` 校验及计算期默认值/求值，收紧 `scroll-buttons-invalid.html` 基线。
 - **WPT & Smoke 验收**：`accent-color-*` 2/2 PASS、`baseline-shift-*` 3/3 PASS、`alignment-baseline-invalid` PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 584: `/css/css-multicol/` 32/32 全绿与 `css-box`/`css-sizing` 继承闭环
+- **核心修复 (`src/js/shim/window.js`)**：补全 `column-*`、`clear`/`float`/`margin-trim`、`aspect-ratio`/`box-sizing`/`min-*`/`max-*` 默认初始值。
+- **WPT & Smoke 验收**：`css-multicol/inheritance` PASS（32/32 全绿）、`css-box/inheritance` FAIL->PASS（已收紧）、`css-sizing` 2 项继承 PASS、`--smoke` 3/3 suites PASS。
