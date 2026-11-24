@@ -3839,3 +3839,6 @@
   - `src/js/shim/cssom.js`: `isValidCssValue` 新增 `mix-blend-mode` 与 `background-blend-mode`（逗号分隔 `<blend-mode>` 校验，拒绝 `auto` 及空格分隔多值）。
   - `src/js/shim/window.js`: 在 `computedMap` 与 `getPropertyValue` 兜底中补齐 `background-blend-mode`/`mix-blend-mode`（初始 `"normal"`）与 `isolation`（初始 `"auto"`）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 676**:
+  - `src/js/shim/cssom.js`: `isValidShape("circle"|"ellipse")` 支持 `closest-corner` 与 `farthest-corner`；`normalizeCssSpecifiedValue("shape-outside")` 在存在形状时省略默认 `margin-box`；`isValidCssValue` 新增 `rule-overlap`、`*-rule-break` 与 `*-rule-visibility-items` 校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

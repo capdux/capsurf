@@ -3188,3 +3188,6 @@
 ### Phase 675 — `/css/compositing/` 17/17 全量收口
 - 为 `mix-blend-mode` 与 `background-blend-mode` 补全 `<blend-mode>` 语法校验（区分单值与逗号列表）。
 - 在 `window.js` 中补全 `background-blend-mode`、`mix-blend-mode`（初始 `"normal"`）与 `isolation`（初始 `"auto"`）的初始计算值与 `initial`/`revert` 解析，使 `/css/compositing/` 17/17 全数通过。
+### Phase 676 — `css-shapes` 与 `css-gaps` 解析校验收口
+- 为 `circle()`/`ellipse()` 补全 `closest-corner`/`farthest-corner` 半径关键字支持，并在 `shape-outside` 存在基础形状时省略默认 `margin-box`。
+- 补全 `rule-overlap`、`column/row/rule-break` 与 `column/row/rule-visibility-items` 枚举校验，5 项 WPT 与 `--smoke` 回归全数通过。

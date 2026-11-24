@@ -1090,11 +1090,11 @@
           }
           if (fn === "circle") {
             if (pre.length > 1) return false;
-            if (pre.length === 1 && pre[0] !== "closest-side" && pre[0] !== "farthest-side" && !isValidLenPct(pre[0], false)) return false;
+            if (pre.length === 1 && pre[0] !== "closest-side" && pre[0] !== "farthest-side" && pre[0] !== "closest-corner" && pre[0] !== "farthest-corner" && !isValidLenPct(pre[0], false)) return false;
           } else {
             if (pre.length !== 0 && pre.length !== 2) return false;
             for (let k = 0; k < pre.length; k++) {
-              if (pre[k] !== "closest-side" && pre[k] !== "farthest-side" && !isValidLenPct(pre[k], false)) return false;
+              if (pre[k] !== "closest-side" && pre[k] !== "farthest-side" && pre[k] !== "closest-corner" && pre[k] !== "farthest-corner" && !isValidLenPct(pre[k], false)) return false;
             }
           }
           return true;
@@ -3005,6 +3005,15 @@
     if (prop === "forced-color-adjust") {
       return vLower === "auto" || vLower === "none" || vLower === "preserve-parent-color";
     }
+    if (prop === "rule-overlap") {
+      return vLower === "row-over-column" || vLower === "column-over-row";
+    }
+    if (prop === "column-rule-break" || prop === "row-rule-break" || prop === "rule-break") {
+      return vLower === "none" || vLower === "spanning-item" || vLower === "intersection";
+    }
+    if (prop === "column-rule-visibility-items" || prop === "row-rule-visibility-items" || prop === "rule-visibility-items") {
+      return vLower === "all" || vLower === "around" || vLower === "between";
+    }
     if (prop === "mix-blend-mode" || prop === "background-blend-mode") {
       const BLEND_MODES = new Set([
         "normal", "multiply", "screen", "overlay", "darken", "lighten",
@@ -3772,7 +3781,7 @@
           const inner = shapeSrc.slice(fnM[0].length, i - 1).trim();
           const tailBox = shapeSrc.slice(i).trim().toLowerCase();
           let box = leadBox || tailBox;
-          if (key === "clip-path" && box === "border-box") box = "";
+          if ((key === "clip-path" && box === "border-box") || (key === "shape-outside" && box === "margin-box")) box = "";
           const suffix = box ? " " + box : "";
           const normCalcTok = (t) => /^calc\(/i.test(t) ? canonicalizeCalcToken(t) : ((t === "0" || t === "+0" || t === "-0") ? "0px" : t);
           if (fnName === "circle" || fnName === "ellipse") {
