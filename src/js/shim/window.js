@@ -5998,18 +5998,28 @@ function installWindow(global) {
       } else if (key === "place-content" || key === "place-items" || key === "place-self") {
         const kind = key.slice(6);
         const parts = splitCssTopLevelWhitespace(val);
+        const normAlignPart = (arr) => {
+          const low = arr.map((x) => x.toLowerCase());
+          if (low.length === 2 && low[0] === "first" && low[1] === "baseline") return "baseline";
+          if (low.length === 2 && low[1] === "legacy") return "legacy " + low[0];
+          return low.join(" ");
+        };
         if (parts.length === 1) {
-          setDecl("align-" + kind, parts[0], isImp);
-          setDecl("justify-" + kind, parts[0], isImp);
+          const single = parts[0].toLowerCase();
+          const jVal = (key === "place-content" && single === "baseline") ? "start" : single;
+          setDecl("align-" + kind, single, isImp);
+          setDecl("justify-" + kind, jVal, isImp);
         } else if (parts.length >= 2) {
           const p0 = parts[0].toLowerCase();
           const splitAt = (p0 === "first" || p0 === "last" || p0 === "safe" || p0 === "unsafe" || p0 === "legacy") ? 2 : 1;
           if (splitAt < parts.length) {
-            setDecl("align-" + kind, parts.slice(0, splitAt).join(" "), isImp);
-            setDecl("justify-" + kind, parts.slice(splitAt).join(" "), isImp);
+            setDecl("align-" + kind, normAlignPart(parts.slice(0, splitAt)), isImp);
+            setDecl("justify-" + kind, normAlignPart(parts.slice(splitAt)), isImp);
           } else {
-            setDecl("align-" + kind, val, isImp);
-            setDecl("justify-" + kind, val, isImp);
+            const single = normAlignPart(parts);
+            const jVal = (key === "place-content" && (single === "baseline" || single === "last baseline")) ? "start" : single;
+            setDecl("align-" + kind, single, isImp);
+            setDecl("justify-" + kind, jVal, isImp);
           }
         }
       } else if (key === "flex-flow") {
@@ -7518,6 +7528,36 @@ function installWindow(global) {
     if (oy === "visible" && !isVisOrClip(ox)) oy = "auto";
     computedMap.set("overflow-x", ox);
     computedMap.set("overflow-y", oy);
+    // align-* / justify-* canonicalization + justify-items: 'legacy' inheritance
+    {
+      const alignProps = ["align-content", "align-items", "align-self", "justify-items", "justify-self"];
+      for (let ai = 0; ai < alignProps.length; ai++) {
+        const ap = alignProps[ai];
+        const av = (computedMap.get(ap) || "").trim().toLowerCase();
+        if (av === "first baseline") computedMap.set(ap, "baseline");
+        else if (ap === "justify-items" && /^(?:left|right|center)\s+legacy$/.test(av)) {
+          computedMap.set(ap, "legacy " + av.split(/\s+/)[0]);
+        }
+      }
+      let ji = (computedMap.get("justify-items") || "").trim().toLowerCase();
+      if (ji === "legacy") {
+        let resolvedJi = "normal";
+        let cur = element && element.parentElement;
+        while (cur) {
+          const pMap = collectRawComputedMap(cur, "");
+          const pJi = (pMap.get("justify-items") || "").trim().toLowerCase();
+          if (pJi === "legacy") {
+            cur = cur.parentElement;
+            continue;
+          }
+          if (pJi.startsWith("legacy ")) {
+            resolvedJi = pJi;
+          }
+          break;
+        }
+        computedMap.set("justify-items", resolvedJi);
+      }
+    }
     const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
     for (let i = 0; i < nonNegLenProps.length; i++) {
       const nk = nonNegLenProps[i];

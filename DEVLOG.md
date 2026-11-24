@@ -2696,3 +2696,11 @@
   - `resolvePrefix` 捕获回调异常并派发 `ErrorEvent` 后抛出 `NAMESPACE_ERR`；`localName` 与 XPath 匹配统一采用 ASCII 小写且对 SVG/MathML 外部元素保留原始大小写。
   - `createHTMLDocument().body` 改为动态查找 `BODY`/`FRAMESET` 子节点；`serializeXmlNode` 直接读取 `ParsedElement._attrs` Map 避免与 `outerHTML` 互相递归。
 - **WPT 验收**：`/domxpath/` **28/28 PASS (100% ALL GREEN)**；`--smoke` **3/3 suites PASS**。
+
+### Phase 555: `will-change` 文法校验与 `css-align` 50/50 全绿闭环
+- **`will-change` 校验 (`src/js/shim/cssom.js`)**：
+  - 支持 `auto` 单值或逗号分隔的 `<animateable-feature>` 列表，严格排除 `auto`/`will-change`/`none`/`all` 及 CSS 全局关键字，同时允许 `--` 开头的合法 `<custom-ident>`（如 `--var`）。
+- **CSS Align 规范序列化与继承 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+  - `normalizeCssPropertyValue`、`expandCssShorthand` 与 `window.js` `setDecl` 协同将 `first baseline` 归一化为 `baseline`、`<pos> legacy` 归一化为 `legacy <pos>`，并在 `place-content` 单值基线时补全 `justify-content: start`。
+  - `getComputedStyle` 中为 `justify-items: legacy` 实现父元素链 `collectRawComputedMap` 继承解析，匹配 `justify-items-computed.html` 与 `place-items-computed.html`。
+- **WPT 验收**：`/css/css-will-change/parsing/` **3/3 PASS**、`/css/css-align/parsing/` **50/50 PASS**、`--smoke` **3/3 suites PASS**。

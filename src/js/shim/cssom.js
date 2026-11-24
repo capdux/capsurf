@@ -1223,6 +1223,21 @@
       }
       return true;
     }
+    if (prop === "will-change") {
+      if (vLower === "auto") return true;
+      const BAD_WC = new Set(["auto", "will-change", "none", "all", "initial", "inherit", "unset", "revert", "revert-layer", "revert-rule", "default"]);
+      const parts = splitTopLevelComma(trimmed);
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i].trim();
+        if (!p) return false;
+        const toks = splitCssTokens(p);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        if (BAD_WC.has(t.toLowerCase())) return false;
+        if (!/^(?:--[a-z0-9_-]|-?(?:[a-z_]|\\.))(?:[a-z0-9_-]|\\.)*$/i.test(t)) return false;
+      }
+      return true;
+    }
     if (prop === "cursor") {
       const KW = new Set([
         "auto", "default", "none", "context-menu", "help", "pointer", "progress", "wait",
@@ -2369,16 +2384,34 @@
       }
       return layers.join(", ");
     }
+    if (key === "align-content" || key === "justify-content" ||
+        key === "align-items" || key === "justify-items" ||
+        key === "align-self" || key === "justify-self") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && p[0] === "first" && p[1] === "baseline") return "baseline";
+      if (key === "justify-items" && p.length === 2 && p[1] === "legacy") return "legacy " + p[0];
+      return p.join(" ");
+    }
     if (key === "place-content" || key === "place-items" || key === "place-self") {
       const p = splitCssTokens(s.toLowerCase());
+      const normAlignPart = (arr) => {
+        if (arr.length === 2 && arr[0] === "first" && arr[1] === "baseline") return "baseline";
+        if (arr.length === 2 && arr[1] === "legacy") return "legacy " + arr[0];
+        return arr.join(" ");
+      };
       if (p.length >= 2) {
         const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
         if (splitAt < p.length) {
-          const a = p.slice(0, splitAt).join(" "), b = p.slice(splitAt).join(" ");
+          const a = normAlignPart(p.slice(0, splitAt));
+          const b = normAlignPart(p.slice(splitAt));
           return a === b ? a : (a + " " + b);
         }
       }
-      return p.join(" ");
+      const single = normAlignPart(p);
+      if (key === "place-content" && (single === "baseline" || single === "last baseline")) {
+        return single + " start";
+      }
+      return single;
     }
     if (key === "line-height" && /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
@@ -2989,18 +3022,26 @@
     if (key === "place-content" || key === "place-items" || key === "place-self") {
       const kind = key.slice(6);
       const p = splitCssTokens(normV.toLowerCase());
+      const normAlignPart = (arr) => {
+        if (arr.length === 2 && arr[0] === "first" && arr[1] === "baseline") return "baseline";
+        if (arr.length === 2 && arr[1] === "legacy") return "legacy " + arr[0];
+        return arr.join(" ");
+      };
       if (p.length === 1) {
-        return [["align-" + kind, p[0]], ["justify-" + kind, p[0]]];
+        const jVal = (key === "place-content" && p[0] === "baseline") ? "start" : p[0];
+        return [["align-" + kind, p[0]], ["justify-" + kind, jVal]];
       }
       if (p.length >= 2) {
         const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
         if (splitAt < p.length) {
           return [
-            ["align-" + kind, p.slice(0, splitAt).join(" ")],
-            ["justify-" + kind, p.slice(splitAt).join(" ")]
+            ["align-" + kind, normAlignPart(p.slice(0, splitAt))],
+            ["justify-" + kind, normAlignPart(p.slice(splitAt))]
           ];
         }
-        return [["align-" + kind, p.join(" ")], ["justify-" + kind, p.join(" ")]];
+        const single = normAlignPart(p);
+        const jVal = (key === "place-content" && (single === "baseline" || single === "last baseline")) ? "start" : single;
+        return [["align-" + kind, single], ["justify-" + kind, jVal]];
       }
     }
     if (key === "flex-flow") {

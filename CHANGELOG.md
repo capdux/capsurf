@@ -3572,3 +3572,5 @@
 
 
 - **Phase 554** (`src/html/tree_builder.cp`, `src/js/shim/xpath.js`, `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`, `src/js/shim/parser.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 HTML5 TreeBuilder `InCell` 模式遇到 `</table>`/`</tr>` 结束标签未退出单元格导致同级表格嵌套的缺陷并补全 SVG 属性名大小写调整；完善 XPath `resolvePrefix` 异常上报与 `NAMESPACE_ERR`、SVG/MathML 大小写保留、`lang()`/`localName` ASCII 小写、`Node/Attr.prototype.lookupNamespaceURI`、`createHTMLDocument().body` 实时 getter 及 `ParsedElement.outerHTML`；WPT `/domxpath/` 28/28 用例 100% 全绿通过。
+
+- **Phase 555** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `will-change` 严格文法校验（拦截 `auto` 混用与排除关键字，支持 `--var` `<custom-ident>`），以及 `align-*`/`justify-*`/`place-*` 的 `first baseline -> baseline`、`legacy` 前置、`place-content` 基线补全 `start` 与 `justify-items: legacy` 继承计算；WPT `/css/css-will-change/parsing/` 3/3 与 `/css/css-align/parsing/` 50/50 均 100% 全绿通过。

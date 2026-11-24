@@ -5013,6 +5013,21 @@
         }
         return true;
       }
+      if (prop === "will-change") {
+        if (vLower === "auto") return true;
+        const BAD_WC = new Set(["auto", "will-change", "none", "all", "initial", "inherit", "unset", "revert", "revert-layer", "revert-rule", "default"]);
+        const parts = splitTopLevelComma(trimmed);
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i].trim();
+          if (!p) return false;
+          const toks = splitCssTokens(p);
+          if (toks.length !== 1) return false;
+          const t = toks[0];
+          if (BAD_WC.has(t.toLowerCase())) return false;
+          if (!/^(?:--[a-z0-9_-]|-?(?:[a-z_]|\\.))(?:[a-z0-9_-]|\\.)*$/i.test(t)) return false;
+        }
+        return true;
+      }
       if (prop === "cursor") {
         const KW = new Set([
           "auto", "default", "none", "context-menu", "help", "pointer", "progress", "wait",
@@ -6159,16 +6174,34 @@
         }
         return layers.join(", ");
       }
+      if (key === "align-content" || key === "justify-content" ||
+          key === "align-items" || key === "justify-items" ||
+          key === "align-self" || key === "justify-self") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 2 && p[0] === "first" && p[1] === "baseline") return "baseline";
+        if (key === "justify-items" && p.length === 2 && p[1] === "legacy") return "legacy " + p[0];
+        return p.join(" ");
+      }
       if (key === "place-content" || key === "place-items" || key === "place-self") {
         const p = splitCssTokens(s.toLowerCase());
+        const normAlignPart = (arr) => {
+          if (arr.length === 2 && arr[0] === "first" && arr[1] === "baseline") return "baseline";
+          if (arr.length === 2 && arr[1] === "legacy") return "legacy " + arr[0];
+          return arr.join(" ");
+        };
         if (p.length >= 2) {
           const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
           if (splitAt < p.length) {
-            const a = p.slice(0, splitAt).join(" "), b = p.slice(splitAt).join(" ");
+            const a = normAlignPart(p.slice(0, splitAt));
+            const b = normAlignPart(p.slice(splitAt));
             return a === b ? a : (a + " " + b);
           }
         }
-        return p.join(" ");
+        const single = normAlignPart(p);
+        if (key === "place-content" && (single === "baseline" || single === "last baseline")) {
+          return single + " start";
+        }
+        return single;
       }
       if (key === "line-height" && /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
         const n = Number(s);
@@ -6779,18 +6812,26 @@
       if (key === "place-content" || key === "place-items" || key === "place-self") {
         const kind = key.slice(6);
         const p = splitCssTokens(normV.toLowerCase());
+        const normAlignPart = (arr) => {
+          if (arr.length === 2 && arr[0] === "first" && arr[1] === "baseline") return "baseline";
+          if (arr.length === 2 && arr[1] === "legacy") return "legacy " + arr[0];
+          return arr.join(" ");
+        };
         if (p.length === 1) {
-          return [["align-" + kind, p[0]], ["justify-" + kind, p[0]]];
+          const jVal = (key === "place-content" && p[0] === "baseline") ? "start" : p[0];
+          return [["align-" + kind, p[0]], ["justify-" + kind, jVal]];
         }
         if (p.length >= 2) {
           const splitAt = (p[0] === "first" || p[0] === "last" || p[0] === "safe" || p[0] === "unsafe" || p[0] === "legacy") ? 2 : 1;
           if (splitAt < p.length) {
             return [
-              ["align-" + kind, p.slice(0, splitAt).join(" ")],
-              ["justify-" + kind, p.slice(splitAt).join(" ")]
+              ["align-" + kind, normAlignPart(p.slice(0, splitAt))],
+              ["justify-" + kind, normAlignPart(p.slice(splitAt))]
             ];
           }
-          return [["align-" + kind, p.join(" ")], ["justify-" + kind, p.join(" ")]];
+          const single = normAlignPart(p);
+          const jVal = (key === "place-content" && (single === "baseline" || single === "last baseline")) ? "start" : single;
+          return [["align-" + kind, single], ["justify-" + kind, jVal]];
         }
       }
       if (key === "flex-flow") {
@@ -40340,18 +40381,28 @@
         } else if (key === "place-content" || key === "place-items" || key === "place-self") {
           const kind = key.slice(6);
           const parts = splitCssTopLevelWhitespace(val);
+          const normAlignPart = (arr) => {
+            const low = arr.map((x) => x.toLowerCase());
+            if (low.length === 2 && low[0] === "first" && low[1] === "baseline") return "baseline";
+            if (low.length === 2 && low[1] === "legacy") return "legacy " + low[0];
+            return low.join(" ");
+          };
           if (parts.length === 1) {
-            setDecl("align-" + kind, parts[0], isImp);
-            setDecl("justify-" + kind, parts[0], isImp);
+            const single = parts[0].toLowerCase();
+            const jVal = (key === "place-content" && single === "baseline") ? "start" : single;
+            setDecl("align-" + kind, single, isImp);
+            setDecl("justify-" + kind, jVal, isImp);
           } else if (parts.length >= 2) {
             const p0 = parts[0].toLowerCase();
             const splitAt = (p0 === "first" || p0 === "last" || p0 === "safe" || p0 === "unsafe" || p0 === "legacy") ? 2 : 1;
             if (splitAt < parts.length) {
-              setDecl("align-" + kind, parts.slice(0, splitAt).join(" "), isImp);
-              setDecl("justify-" + kind, parts.slice(splitAt).join(" "), isImp);
+              setDecl("align-" + kind, normAlignPart(parts.slice(0, splitAt)), isImp);
+              setDecl("justify-" + kind, normAlignPart(parts.slice(splitAt)), isImp);
             } else {
-              setDecl("align-" + kind, val, isImp);
-              setDecl("justify-" + kind, val, isImp);
+              const single = normAlignPart(parts);
+              const jVal = (key === "place-content" && (single === "baseline" || single === "last baseline")) ? "start" : single;
+              setDecl("align-" + kind, single, isImp);
+              setDecl("justify-" + kind, jVal, isImp);
             }
           }
         } else if (key === "flex-flow") {
@@ -41860,6 +41911,36 @@
       if (oy === "visible" && !isVisOrClip(ox)) oy = "auto";
       computedMap.set("overflow-x", ox);
       computedMap.set("overflow-y", oy);
+      // align-* / justify-* canonicalization + justify-items: 'legacy' inheritance
+      {
+        const alignProps = ["align-content", "align-items", "align-self", "justify-items", "justify-self"];
+        for (let ai = 0; ai < alignProps.length; ai++) {
+          const ap = alignProps[ai];
+          const av = (computedMap.get(ap) || "").trim().toLowerCase();
+          if (av === "first baseline") computedMap.set(ap, "baseline");
+          else if (ap === "justify-items" && /^(?:left|right|center)\s+legacy$/.test(av)) {
+            computedMap.set(ap, "legacy " + av.split(/\s+/)[0]);
+          }
+        }
+        let ji = (computedMap.get("justify-items") || "").trim().toLowerCase();
+        if (ji === "legacy") {
+          let resolvedJi = "normal";
+          let cur = element && element.parentElement;
+          while (cur) {
+            const pMap = collectRawComputedMap(cur, "");
+            const pJi = (pMap.get("justify-items") || "").trim().toLowerCase();
+            if (pJi === "legacy") {
+              cur = cur.parentElement;
+              continue;
+            }
+            if (pJi.startsWith("legacy ")) {
+              resolvedJi = pJi;
+            }
+            break;
+          }
+          computedMap.set("justify-items", resolvedJi);
+        }
+      }
       const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
       for (let i = 0; i < nonNegLenProps.length; i++) {
         const nk = nonNegLenProps[i];

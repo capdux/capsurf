@@ -1601,3 +1601,18 @@
   - `/custom-elements/`: `17` files (`10 PASS / 7 FAIL`); `/shadow-dom/` (`1/2`): `60` files (`18 PASS`)
   - `/user-timing/`: `36` files (`17 PASS`); `/hr-time/`: `14` files (`4 PASS`); `/webidl/`: `43` files (`8 PASS`)
   - `/console/`: `13` files (`4 PASS`); `/url/`: `18` files (`0 PASS`); `/urlpattern/`: `5` files (`0 PASS`)
+
+### WPT-B332 ~ B341 摸底与 Phase 555 `/css/css-will-change/parsing/` 3/3 + `/css/css-align/parsing/` 50/50 全绿闭环 (bin_dev Phase 555, 2026-11-24)
+- **Filter `/css/css-will-change/parsing/`**: `3` files (**3 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 实现 `will-change` 严格文法校验（拦截 `auto` 混用及 `none`/`all`/`will-change`/CSS 全局关键字，放行 `--var` 前缀 `<custom-ident>`）。
+- **Filter `/css/css-align/parsing/`**: `50` files (**50 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 实现 `first baseline -> baseline`、`<pos> legacy -> legacy <pos>`、`place-content` 单基线值补全 `start`、以及 `justify-items: legacy` 沿父链继承解析；同步收紧 `test/wpt/wpt-expectations.json`（`justify-items-computed.html`, `place-items-computed.html`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-text/parsing/`: `86` files (**86/86 PASS, 100% ALL GREEN**, 21 unexpected PASS)
+  - `/css/css-text-decor/parsing/`: `31` files (**31/31 PASS, 100% ALL GREEN**, 5 unexpected PASS)
+  - `/css/css-lists/parsing/`: `23` files (**23/23 PASS, 100% ALL GREEN**)
+  - `/css/css-flexbox/parsing/`: `27` files (`26 PASS / 1 FAIL`: `webkit-aliases.html`)
+  - `/css/css-writing-modes/parsing/`: `15` files (`13 PASS / 2 FAIL`: `text-combine-upright-invalid`, `text-orientation-invalid`)
+  - `/css/css-shapes/parsing/`: `13` files (`6 PASS / 7 FAIL`)
+  - `/css/css-ruby/parsing/`: `8` files (`3 PASS / 5 FAIL`)
+  - `/css/css-counter-styles/`: `11` files (`0 PASS / 11 FAIL`)
+  - `/css/css-grid/parsing/`: `61` files (`6 PASS / 51 FAIL / 4 TIMEOUT`)

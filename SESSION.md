@@ -7499,3 +7499,15 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   3. **全绿验证与并行摸底**：
      - `/domxpath/`: **28/28 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 双子智能体并行摸底确认 `/css/css-animations/parsing/`（35/35）、`/css/css-transitions/parsing/`（14/14）、`/css/css-break/parsing/`（18/18）、`/css/css-sizing/parsing/`（19/19）、`/css/css-position/parsing/`（22/22）均已全绿；识别出下一批待攻克目标 `/css/css-will-change/parsing/`（2/3）与 `/css/css-align/parsing/`（35/50）。
+
+### 2026-11-24 Phase 555 (`/css/css-will-change/parsing/` 3/3 + `/css/css-align/parsing/` 50/50 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 555（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`will-change` 严格文法校验 (`src/js/shim/cssom.js`)**：
+     - 实现 `auto | <animateable-feature>#` 校验：拦截 `auto` 与其他特性混用及 `will-change`/`none`/`all`/CSS 全局关键字（`initial`/`inherit`/`unset`/`revert`/`revert-layer`/`revert-rule`/`default`），同时支持 `--var` 合法 `<custom-ident>`。
+  2. **CSS Box Alignment 规范序列化与 `legacy` 继承 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `align-*` / `justify-*` / `place-*` 统一将 `first baseline` 归一化为 `baseline`，将 `left/right/center legacy` 归一化为 `legacy left/right/center`。
+     - `place-content` 单值基线（`baseline`/`first baseline`/`last baseline`）展开并序列化为 `<baseline> start`。
+     - `window.js` `getComputedStyle` 中实现 `justify-items: legacy` 沿父链 `collectRawComputedMap` 解析继承 `legacy <pos>`（无祖先 `legacy <pos>` 时回落为 `normal`）。
+  3. **全绿验证与并行摸底**：
+     - `/css/css-will-change/parsing/`: **3/3 PASS (100% ALL GREEN)**；`/css/css-align/parsing/`: **50/50 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 双子智能体并行摸底发现 `/css/css-text/parsing/`（86/86）、`/css/css-text-decor/parsing/`（31/31）、`/css/css-lists/parsing/`（23/23）均已 100% 全绿；`/css/css-writing-modes/parsing/` 仅差 2 个 invalid 用例（13/15），`/css/css-flexbox/parsing/` 仅差 1 个 `webkit-aliases.html`（26/27）。

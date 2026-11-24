@@ -832,7 +832,7 @@
     "reason": null
   },
   "/css/css-align/parsing/justify-items-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-align/parsing/justify-items-invalid.html": {
@@ -872,7 +872,7 @@
     "reason": null
   },
   "/css/css-align/parsing/place-items-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-align/parsing/place-items-invalid.html": {
