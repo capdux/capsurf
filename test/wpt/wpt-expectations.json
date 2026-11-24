@@ -5575,8 +5575,8 @@
     "reason": null
   },
   "/css/css-text/inheritance.html": {
-    "expected": "FAIL",
-    "reason": null
+    "expected": "TIMEOUT",
+    "reason": "42/42 PASS in 11.9s under --timeout 15000; exceeds 10s hard deadline in debug bin_dev"
   },
   "/css/css-text/parsing/hanging-punctuation-invalid.html": {
     "expected": "PASS",

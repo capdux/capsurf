@@ -1977,3 +1977,7 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-text/inheritance` (`b493`): `0 PASS / 1 FAIL`（12/42 subtests PASS，缺 13 个继承属性与 17 个默认初始值）
+
+### Phase 593: `/css/css-text/inheritance` 42/42 功能全绿（`--timeout 15000` PASS）
+- **Filter `/css/css-text/inheritance`**: **42/42 PASS**（`--timeout 15000` 下 11933ms PASS；`INHERITED_CSS_PROPS` 补全 `hanging-punctuation`, `hyphens`, `line-break`, `overflow-wrap`, `tab-size`, `text-align-all`, `text-align-last`, `text-fit`, `text-indent`, `text-justify`, `text-transform`, `word-break`, `word-wrap` 13 项，`textDecorDefs` 补全 17 项初始默认值；因 debug `bin_dev` 耗时超出 10s 硬超时，基线暂标 `TIMEOUT`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

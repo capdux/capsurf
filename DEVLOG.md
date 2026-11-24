@@ -2867,3 +2867,7 @@
 ### Phase 592: `/css/css-lists/inheritance` 10/10 全绿 & `/css/css-fonts/inheritance` 8/39 -> 22/39
 - **核心修复 (`src/js/shim/window.js`)**：补齐 `list-style-*`（3）与 `font-*`（8）继承属性，以及 `counter-{increment,reset}`, `list-style-*`, `font-{feature-settings,kerning,stretch,style,variant,weight}` 默认初始值。
 - **WPT & Smoke 验收**：`/css/css-lists/inheritance.html` 10/10 PASS、`/css/css-fonts/inheritance.html` 22/39 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 593: `/css/css-text/inheritance` 42/42 功能全绿
+- **核心修复 (`src/js/shim/window.js`)**：补齐 `hanging-punctuation`, `hyphens`, `line-break`, `overflow-wrap`, `tab-size`, `text-align-all`, `text-align-last`, `text-fit`, `text-indent`, `text-justify`, `text-transform`, `word-break`, `word-wrap` 继承集及 17 项默认初始值。
+- **WPT & Smoke 验收**：`--timeout 15000` 下 `/css/css-text/inheritance.html` 42/42 PASS（11.9s，暂标 `TIMEOUT` 基线）；`--smoke` 3/3 suites PASS。

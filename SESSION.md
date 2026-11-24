@@ -7781,3 +7781,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：补全 `list-style-{image,position,type}`、`font-*` 8 项至 `INHERITED_CSS_PROPS`，补全 `counter-{increment,reset}`、`list-style-*`、`font-{feature-settings,kerning,stretch,style,variant,weight}` 默认初始值。
   2. **验证**：`/css/css-lists/inheritance.html` **10/10 PASS**、`/css/css-fonts/inheritance.html` **8/39 -> 22/39 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-text/inheritance` 12/42 PASS。
+
+### 2026-11-24 Phase 593 (`/css/css-text/inheritance` 42/42 功能全绿)
+- **[Agent]**: 完成 Phase 593（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：补全 13 项 `css-text` 继承属性至 `INHERITED_CSS_PROPS` 与 17 项默认初始值至 `textDecorDefs`。
+  2. **验证**：`/css/css-text/inheritance.html` 在 `--timeout 15000` 下 **42/42 PASS**（11.9s，因 debug 版超 10s 硬超时暂标基线 `TIMEOUT`）；`--smoke` **3/3 suites, 6/6 tests PASS**。

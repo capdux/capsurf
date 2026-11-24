@@ -3650,3 +3650,5 @@
 - **Phase 591** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `overflow-block`, `overflow-inline`, `text-overflow`, `scrollbar-gutter` 默认初始值并纳入 `STANDARD_COMPUTED_LONGHANDS`；`/css/css-overflow/inheritance.html` 由 7/18 跃升至 12/18 PASS。
 
 - **Phase 592** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `list-style-*` 与 `font-*` 继承集及 `counter-*`/`list-style-*`/`font-*` 默认初始值；`/css/css-lists/inheritance.html` 达成 10/10 全绿，`/css/css-fonts/inheritance.html` 跃升至 22/39 PASS。
+
+- **Phase 593** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `css-text` 13 项继承属性与 17 项默认初始值；`/css/css-text/inheritance.html` 在 `--timeout 15000` 下实现 42/42 全绿（debug 版超 10s 暂标 `TIMEOUT`）。

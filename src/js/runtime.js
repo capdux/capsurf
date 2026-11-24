@@ -41459,6 +41459,9 @@
       "list-style-image", "list-style-position", "list-style-type",
       "font-feature-settings", "font-kerning", "font-stretch", "font-variant",
       "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
+      "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
+      "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
+      "text-transform", "word-break", "word-wrap",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43755,7 +43758,24 @@
         ["font-stretch", "100%"],
         ["font-style", "normal"],
         ["font-variant", "normal"],
-        ["font-weight", "400"]
+        ["font-weight", "400"],
+        ["hyphens", "manual"],
+        ["letter-spacing", "normal"],
+        ["line-break", "auto"],
+        ["overflow-wrap", "normal"],
+        ["tab-size", "8"],
+        ["text-align", "start"],
+        ["text-align-all", "start"],
+        ["text-align-last", "auto"],
+        ["text-indent", "0px"],
+        ["text-justify", "auto"],
+        ["text-transform", "none"],
+        ["text-wrap-mode", "wrap"],
+        ["text-wrap-style", "auto"],
+        ["white-space-collapse", "collapse"],
+        ["word-break", "normal"],
+        ["word-spacing", "0px"],
+        ["word-wrap", "normal"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
