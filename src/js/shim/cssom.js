@@ -3942,14 +3942,14 @@
         "table-row-group", "table-header-group", "table-footer-group", "table-row",
         "table-cell", "table-column-group", "table-column", "table-caption",
         "ruby-base", "ruby-text", "ruby-base-container", "ruby-text-container",
-        "math", "inline", "block", "run-in", "flow", "flow-root", "table", "flex", "grid", "ruby", "list-item",
+        "math", "inline", "block", "run-in", "flow", "flow-root", "table", "flex", "grid", "grid-lanes", "inline-grid-lanes", "ruby", "list-item",
         "-webkit-box", "-webkit-inline-box"
       ]);
       if (!SINGLE.has(t)) return "";
       return t === "flow" ? "block" : t;
     }
     const OUTSIDE = new Set(["block", "inline", "run-in"]);
-    const INSIDE = new Set(["flow", "flow-root", "table", "flex", "grid", "ruby", "math"]);
+    const INSIDE = new Set(["flow", "flow-root", "table", "flex", "grid", "grid-lanes", "ruby", "math"]);
     let outer = null, inner = null, listItem = false;
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i];
@@ -3974,6 +3974,7 @@
       if (inner === "flow-root") return "inline-block";
       if (inner === "ruby") return "ruby";
       if (inner === "math") return "inline math";
+      if (inner === "grid-lanes") return "inline grid-lanes";
       return "inline-" + inner;
     }
     if (listItem) return inner === "flow-root" ? "run-in flow-root list-item" : "run-in list-item";

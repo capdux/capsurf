@@ -4172,3 +4172,8 @@
   - `src/js/shim/window.js`: `INHERITED_CSS_PROPS` 新增 `quotes`；`STANDARD_COMPUTED_LONGHANDS` 新增 `bookmark-level`、`bookmark-state`；`getComputedStyle` 区分伪元素 `content` 默认 `"none"` 与普通元素 `"normal"`。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-content/inheritance.html` 为 `PASS`（`7,205` PASS）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 763**:
+  - `src/js/shim/cssom.js`: `canonicalizeDisplayValue` 新增 `grid-lanes`、`inline-grid-lanes` 及 `inline grid-lanes` 支持。
+  - `src/js/shim/window.js`: `BLOCKIFY` 新增 `inline-grid-lanes` 与 `inline grid-lanes` 映射至 `grid-lanes`。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-display/parsing/tentative/display-{computed,valid}.html` 为 `PASS`（`7,207` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

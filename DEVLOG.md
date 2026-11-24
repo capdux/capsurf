@@ -3364,3 +3364,5 @@
 - 修复小数 `animation-iteration-count` 在 `forwards` 末态未取余数进度的问题，`animation-iteration-count-009.html` 4/4 全绿。
 ### Phase 762 — `ch`/`ex` 元素字体缩放、`content` 伪元素初始值与 `css-content` 继承闭环
 - 修复 `cascade.cp` 中 `ch`/`ex` 单位未按 `element_font_px` 缩放导致 `4ch` 容器折行失效的问题（`bidi-line-break-001.html` 回归修复）；区分普通元素（`normal`）与 `::before`/`::after`/`::marker`（`none`）的 `content` 初始计算值（`computed-value.html` 回归修复）；补齐 `quotes`/`bookmark-level`/`bookmark-state` 解析与继承，打通 `/css/css-content/inheritance.html`（`FAIL→PASS`，基线增至 `7,205`）。
+### Phase 763 — `grid-lanes` / `inline-grid-lanes` 显示值解析与块化闭环
+- 在 `canonicalizeDisplayValue` 与 `BLOCKIFY` 中补齐 CSS Grid Level 3 `grid-lanes` / `inline-grid-lanes` / `inline grid-lanes` 解析与绝对定位/浮动块化规则，打通 `/css/css-display/parsing/tentative/display-{computed,valid}.html`（2 项 `FAIL→PASS`，基线增至 `7,207`）。

@@ -7353,7 +7353,7 @@ function installWindow(global) {
       if (posRaw === "absolute" || posRaw === "fixed" || (flRaw && flRaw !== "none")) {
         const BLOCKIFY = {
           "inline": "block", "inline-block": "block", "run-in": "block",
-          "inline-flex": "flex", "inline-grid": "grid", "inline-table": "table",
+          "inline-flex": "flex", "inline-grid": "grid", "inline-grid-lanes": "grid-lanes", "inline grid-lanes": "grid-lanes", "inline-table": "table",
           "inline list-item": "list-item", "inline flow-root list-item": "flow-root list-item"
         };
         if (Object.prototype.hasOwnProperty.call(BLOCKIFY, disp)) {
