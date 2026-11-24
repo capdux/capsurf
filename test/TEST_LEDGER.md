@@ -1988,3 +1988,9 @@
 - **子智能体只读摸底记录**：
   - `/css/css-display/` (`b494`, 52 files): `16 PASS / 32 FAIL / 4 TIMEOUT`（`reading-flow-valid.html`, `reading-order-valid.html` unexpected PASS）
   - `/css/css-cascade/` (`b495`, 54 recorded of 90): `31 PASS / 18 FAIL / 4 TIMEOUT / 1 ERROR`（`layer-counter-style-override.html` unexpected PASS；`supports-import-parsing.html` 仅多尾随空格）
+
+### Phase 595: `/css/css-cascade/parsing/supports-import-parsing` 全绿 & Tables Parsing 15/15 全绿
+- **Filter `/css/css-cascade/parsing/supports-import-parsing`**: **PASS**（`cssom.js` 为 `@import ... supports(...)` 改用括号深度平衡扫描，消除嵌套括号截断导致的尾随空格）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-tables/parsing/` (`b496`): **15/15 PASS (100% ALL GREEN, 37/37 subtests)**

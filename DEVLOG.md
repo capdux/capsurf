@@ -2875,3 +2875,7 @@
 ### Phase 594: `/css/css-writing-modes/inheritance` 10/10 全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 补齐 `direction: "ltr"`，使 `direction: initial` 不再沿用继承值。
 - **WPT & Smoke 验收**：`/css/css-writing-modes/inheritance.html` 10/10 PASS（收紧基线）、`--smoke` 3/3 suites PASS。
+
+### Phase 595: `/css/css-cascade/parsing/supports-import-parsing` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：替换 `@import ... supports(...)` 的非贪婪正则为带引号感知的括号平衡扫描，消除嵌套括号（如 `supports((display:flex))` / `supports(selector(p > a))`）被提前截断的问题。
+- **WPT & Smoke 验收**：`supports-import-parsing.html` PASS、`--smoke` 3/3 suites PASS；并行确认 `/css/css-tables/parsing/` 15/15 PASS。

@@ -7792,3 +7792,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：在 `textDecorDefs` 中补全 `direction: "ltr"`。
   2. **全绿验证与基线收紧**：`/css/css-writing-modes/inheritance.html` **10/10 PASS**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-display/` 16/52 PASS；`/css/css-cascade/` 31/54 PASS。
+
+### 2026-11-24 Phase 595 (`/css/css-cascade/parsing/supports-import-parsing` 全绿 & Tables Parsing 15/15)
+- **[Agent]**: 完成 Phase 595（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：将 `@import ... supports(...)` 解析从非贪婪正则替换为括号深度平衡扫描，修复嵌套括号截断问题。
+  2. **全绿验证**：`/css/css-cascade/parsing/supports-import-parsing.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-tables/parsing/` **15/15 PASS (37/37 subtests)**。

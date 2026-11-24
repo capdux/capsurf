@@ -5737,12 +5737,28 @@
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;
-      const m = raw.match(/^@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*))\s*\)|"([^"]*)"|'([^']*)')\s*(layer(?:\(([^)]*)\))?)?\s*(?:supports\(([\s\S]*?)\))?\s*([^;]*);?\s*$/i);
+      const m = raw.match(/^@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*))\s*\)|"([^"]*)"|'([^']*)')\s*(layer(?:\(([^)]*)\))?)?\s*([\s\S]*?);?\s*$/i);
       if (m) {
         rule.href = m[1] ?? m[2] ?? (m[3] !== undefined ? m[3].trim() : undefined) ?? m[4] ?? m[5] ?? "";
         rule.layerName = m[6] ? (m[7] !== undefined ? m[7].trim() : "") : null;
-        rule.supportsText = m[8] !== undefined ? m[8].trim() : null;
-        rule.media = new MediaList((m[9] || "").trim(), onMutate);
+        let rest = (m[8] || "").trim();
+        let supText = null;
+        if (/^supports\(/i.test(rest)) {
+          let depth = 1, i = 9, q = "";
+          for (; i < rest.length && depth > 0; i++) {
+            const ch = rest[i];
+            if (q) { if (ch === "\\" && i + 1 < rest.length) i++; else if (ch === q) q = ""; continue; }
+            if (ch === '"' || ch === "'") { q = ch; continue; }
+            if (ch === "(") depth++;
+            else if (ch === ")") depth--;
+          }
+          if (depth === 0) {
+            supText = rest.slice(9, i - 1).trim();
+            rest = rest.slice(i).trim();
+          }
+        }
+        rule.supportsText = supText;
+        rule.media = new MediaList(rest, onMutate);
       }
       rule._serialize = function () {
         let out = '@import url("' + rule.href + '")';
