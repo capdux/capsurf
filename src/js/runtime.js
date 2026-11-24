@@ -3914,7 +3914,7 @@
       "background", "background-attachment", "background-blend-mode", "background-clip",
       "background-color", "background-image", "background-origin", "background-position",
       "background-position-x", "background-position-y", "background-repeat", "background-size",
-      "base-palette", "baseline-shift", "block-size",
+      "base-palette", "baseline-shift", "block-size", "bookmark-level", "bookmark-state",
       "border", "border-block", "border-block-color", "border-block-end", "border-block-end-color",
       "border-block-end-style", "border-block-end-width", "border-block-start", "border-block-start-color",
       "border-block-start-style", "border-block-start-width", "border-block-style", "border-block-width",
@@ -5953,6 +5953,23 @@
       }
       if (prop === "text-orientation") {
         return vLower === "mixed" || vLower === "upright" || vLower === "sideways";
+      }
+      if (prop === "bookmark-level") {
+        if (vLower === "none") return true;
+        return /^[1-9]\d*$/.test(trimmed);
+      }
+      if (prop === "bookmark-state") {
+        return vLower === "open" || vLower === "closed";
+      }
+      if (prop === "quotes") {
+        if (vLower === "auto" || vLower === "none") return true;
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0 || toks.length % 2 !== 0) return false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (!((t.startsWith('"') && t.endsWith('"') && t.length >= 2) || (t.startsWith("'") && t.endsWith("'") && t.length >= 2))) return false;
+        }
+        return true;
       }
       if (prop === "will-change") {
         if (vLower === "auto") return true;
@@ -45736,7 +45753,7 @@
       "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
       "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
       "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-      "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows",
+      "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -49497,7 +49514,7 @@
       "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
       "background-clip", "background-color", "background-image", "background-origin",
       "background-position-x", "background-position-y", "background-repeat", "background-size", "baseline-shift",
-      "block-size", "border-block-end-color", "border-block-end-style", "border-block-end-width",
+      "block-size", "bookmark-level", "bookmark-state", "border-block-end-color", "border-block-end-style", "border-block-end-width",
       "border-block-start-color", "border-block-start-style", "border-block-start-width",
       "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
       "border-bottom-style", "border-bottom-width", "border-collapse",
@@ -49936,7 +49953,13 @@
         if (lower === "text-orientation") return "mixed";
         if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
         if (lower === "image-orientation") return "from-image";
-        if (lower === "content" || lower === "color-scheme") return "normal";
+        if (lower === "content") {
+          return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+        }
+        if (lower === "color-scheme") return "normal";
+        if (lower === "quotes") return "auto";
+        if (lower === "bookmark-level") return "none";
+        if (lower === "bookmark-state") return "open";
         if (lower === "color-interpolation-filters") return "linearrgb";
         if (lower === "flood-color") return "rgb(0, 0, 0)";
         if (lower === "lighting-color") return "rgb(255, 255, 255)";
@@ -50024,7 +50047,12 @@
             if (kebab === "text-combine-upright") return "none";
             if (kebab === "text-orientation") return "mixed";
             if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
-            if (kebab === "content") return "normal";
+            if (kebab === "content") {
+              return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+            }
+            if (kebab === "quotes") return "auto";
+            if (kebab === "bookmark-level") return "none";
+            if (kebab === "bookmark-state") return "open";
             return "";
           }
           return undefined;

@@ -19,7 +19,7 @@
     "background", "background-attachment", "background-blend-mode", "background-clip",
     "background-color", "background-image", "background-origin", "background-position",
     "background-position-x", "background-position-y", "background-repeat", "background-size",
-    "base-palette", "baseline-shift", "block-size",
+    "base-palette", "baseline-shift", "block-size", "bookmark-level", "bookmark-state",
     "border", "border-block", "border-block-color", "border-block-end", "border-block-end-color",
     "border-block-end-style", "border-block-end-width", "border-block-start", "border-block-start-color",
     "border-block-start-style", "border-block-start-width", "border-block-style", "border-block-width",
@@ -2058,6 +2058,23 @@
     }
     if (prop === "text-orientation") {
       return vLower === "mixed" || vLower === "upright" || vLower === "sideways";
+    }
+    if (prop === "bookmark-level") {
+      if (vLower === "none") return true;
+      return /^[1-9]\d*$/.test(trimmed);
+    }
+    if (prop === "bookmark-state") {
+      return vLower === "open" || vLower === "closed";
+    }
+    if (prop === "quotes") {
+      if (vLower === "auto" || vLower === "none") return true;
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0 || toks.length % 2 !== 0) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (!((t.startsWith('"') && t.endsWith('"') && t.length >= 2) || (t.startsWith("'") && t.endsWith("'") && t.length >= 2))) return false;
+      }
+      return true;
     }
     if (prop === "will-change") {
       if (vLower === "auto") return true;

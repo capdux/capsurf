@@ -4166,3 +4166,9 @@
 - **Phase 761**:
   - `src/js/shim/animations.js`: `evalCssAnimationStyles` 支持小数 `iterationCount` 末态进度及交替方向计算。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 762**:
+  - `src/css/cascade.cp`: `resolvePx` 与 `evalCalcPx` 中 `CssUnit.Ch`/`CssUnit.Ex` 按元素字体大小 `element_font_px * 0.5` 计算。
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS` 与 `isValidPropertyValue` 新增 `bookmark-level`、`bookmark-state`、`quotes` 校验。
+  - `src/js/shim/window.js`: `INHERITED_CSS_PROPS` 新增 `quotes`；`STANDARD_COMPUTED_LONGHANDS` 新增 `bookmark-level`、`bookmark-state`；`getComputedStyle` 区分伪元素 `content` 默认 `"none"` 与普通元素 `"normal"`。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-content/inheritance.html` 为 `PASS`（`7,205` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -857,6 +857,8 @@ pub struct LengthPercentageOrAuto {
                         term_v = (len_val.value / 100.0) * @as(f64, parent_px);
                     } else if (len_val.unit == CssUnit.Em) {
                         term_v = len_val.value * @as(f64, element_font_px);
+                    } else if (len_val.unit == CssUnit.Ch || len_val.unit == CssUnit.Ex) {
+                        term_v = len_val.value * @as(f64, element_font_px) * 0.5;
                     } else {
                         term_v = len_val.toPx(@as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h));
                     }
@@ -937,6 +939,10 @@ pub struct LengthPercentageOrAuto {
         if (_.length.unit == CssUnit.Em) {
             const em_mult: f32 = @floatCast(_.length.value);
             return em_mult * element_font_px;
+        }
+        if (_.length.unit == CssUnit.Ch || _.length.unit == CssUnit.Ex) {
+            const ch_mult: f32 = @floatCast(_.length.value);
+            return ch_mult * element_font_px * 0.5;
         }
         const px_f64 = _.length.toPx(@as(f64, root_font_px), @as(f64, viewport_w), @as(f64, viewport_h));
         return @floatCast(px_f64);

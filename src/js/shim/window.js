@@ -6609,7 +6609,7 @@ function installWindow(global) {
     "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
     "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
     "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows",
+    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -10370,7 +10370,7 @@ function installWindow(global) {
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
     "background-position-x", "background-position-y", "background-repeat", "background-size", "baseline-shift",
-    "block-size", "border-block-end-color", "border-block-end-style", "border-block-end-width",
+    "block-size", "bookmark-level", "bookmark-state", "border-block-end-color", "border-block-end-style", "border-block-end-width",
     "border-block-start-color", "border-block-start-style", "border-block-start-width",
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
     "border-bottom-style", "border-bottom-width", "border-collapse",
@@ -10809,7 +10809,13 @@ function installWindow(global) {
       if (lower === "text-orientation") return "mixed";
       if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
       if (lower === "image-orientation") return "from-image";
-      if (lower === "content" || lower === "color-scheme") return "normal";
+      if (lower === "content") {
+        return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+      }
+      if (lower === "color-scheme") return "normal";
+      if (lower === "quotes") return "auto";
+      if (lower === "bookmark-level") return "none";
+      if (lower === "bookmark-state") return "open";
       if (lower === "color-interpolation-filters") return "linearrgb";
       if (lower === "flood-color") return "rgb(0, 0, 0)";
       if (lower === "lighting-color") return "rgb(255, 255, 255)";
@@ -10897,7 +10903,12 @@ function installWindow(global) {
           if (kebab === "text-combine-upright") return "none";
           if (kebab === "text-orientation") return "mixed";
           if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
-          if (kebab === "content") return "normal";
+          if (kebab === "content") {
+            return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+          }
+          if (kebab === "quotes") return "auto";
+          if (kebab === "bookmark-level") return "none";
+          if (kebab === "bookmark-state") return "open";
           return "";
         }
         return undefined;

@@ -2426,7 +2426,7 @@
     "reason": null
   },
   "/css/css-content/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-content/parsing/content-computed.html": {
