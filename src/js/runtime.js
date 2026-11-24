@@ -43635,6 +43635,53 @@
           computedMap.set(tk, hasInvalidTime ? "0s" : items.join(", "));
         }
       }
+      const tpVal = (computedMap.get("transition-property") || "").trim();
+      if (tpVal && tpVal.includes(",")) {
+        const tpParts = tpVal.split(",").map((s) => s.trim().toLowerCase());
+        if (tpParts.includes("none") || tpParts.some((s) => !s)) {
+          computedMap.set("transition-property", "all");
+        }
+      }
+      for (const tfKey of ["transition-timing-function", "animation-timing-function"]) {
+        const tfRaw = computedMap.get(tfKey);
+        if (tfRaw && /\blinear\(/i.test(tfRaw)) {
+          computedMap.set(tfKey, tfRaw.replace(/\blinear\(([^)]*)\)/gi, (_, body) => {
+            const rawStops = body.split(",").map((s) => s.trim()).filter(Boolean);
+            if (!rawStops.length) return "linear()";
+            const stops = [];
+            for (let i = 0; i < rawStops.length; i++) {
+              const toks = rawStops[i].split(/\s+/);
+              const y = String(Number(toks[0]));
+              if (toks.length === 1) stops.push({ y, p: null });
+              else if (toks.length === 2) stops.push({ y, p: parseFloat(toks[1]) });
+              else {
+                stops.push({ y, p: parseFloat(toks[1]) });
+                stops.push({ y, p: parseFloat(toks[2]) });
+              }
+            }
+            if (stops[0].p === null) stops[0].p = 0;
+            if (stops.length > 1 && stops[stops.length - 1].p === null) stops[stops.length - 1].p = 100;
+            let maxSeen = stops[0].p;
+            for (let i = 0; i < stops.length; i++) {
+              if (stops[i].p !== null) {
+                if (stops[i].p < maxSeen) stops[i].p = maxSeen;
+                maxSeen = stops[i].p;
+              }
+            }
+            let i = 0;
+            while (i < stops.length) {
+              if (stops[i].p === null) {
+                let j = i + 1;
+                while (j < stops.length && stops[j].p === null) j++;
+                const p0 = stops[i - 1].p, p1 = stops[j].p, cnt = j - i + 1;
+                for (let k = i; k < j; k++) stops[k].p = p0 + ((p1 - p0) * (k - i + 1)) / cnt;
+                i = j;
+              } else i++;
+            }
+            return "linear(" + stops.map((st) => st.y + " " + Number(st.p.toFixed(6)) + "%").join(", ") + ")";
+          }));
+        }
+      }
       const rangeProps = ["animation-range-start", "animation-range-end"];
       for (let ri = 0; ri < rangeProps.length; ri++) {
         const rk = rangeProps[ri];

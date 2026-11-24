@@ -2948,3 +2948,7 @@
 ### Phase 612: `transition-delay-001` & `transition-duration-001` 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`timeProps`（`transition-{delay,duration}` / `animation-{delay,duration}`）计算期检测到非时间、非 CSS 数学/变量函数词时整体回退为 `"0s"`。
 - **WPT & Smoke 验收**：`transition-delay-001.html` 21/21 PASS、`transition-duration-001.html` 21/21 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 613: `/css/css-transitions/transition-001` (13/13) 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`linear()` 缓动函数支持双位置停靠点拆分与 `0%`/`100%`/中间点线性插值计算；`transition-property` 多值列表含 `none` 时回退 `"all"`。
+- **WPT & Smoke 验收**：`transition-001.html` 13/13 PASS、`--smoke` 3/3 suites PASS。

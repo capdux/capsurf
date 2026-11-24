@@ -2122,3 +2122,11 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-sizing/` (`b517`, 32 files): `29 PASS / 3 FAIL / 0 TIMEOUT`
+
+### Phase 613: `/css/css-transitions/transition-001` (13/13) 全绿 & Tables/Lists/Values 摸底
+- **Filter `/css/css-transitions/transition-001`**: **PASS (13/13)**（`window.js` 为 `transition-timing-function` / `animation-timing-function` 的 `linear()` 缓动函数补全双停靠点展开与缺省百分比线性插值；`/css/css-transitions/` 推进至 **18/20 PASS**）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-tables/` (`b518`, 18 files): `16 PASS / 1 FAIL / 1 TIMEOUT` (17/18 matched)
+  - `/css/css-lists/` (`b519`, 182 files): `46 PASS (testharness 24/24) / 136 FAIL / 0 TIMEOUT`（`list-and-grid-001.html`, `ol-change-display-type.html` 2 项 unexpected PASS）
+  - `/css/css-values/minmax-` (`b520`, 19 files): `2 PASS / 15 FAIL / 2 TIMEOUT`

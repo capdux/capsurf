@@ -7902,3 +7902,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：`timeProps` 计算期遇到非法非时间值（非 `calc/min/max/clamp/var/env`）回退 `"0s"`。
   2. **双连全绿验证**：`transition-delay-001.html` **21/21 PASS**、`transition-duration-001.html` **21/21 PASS**（`/css/css-transitions/` 达 **17/20 PASS**）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-sizing/` 29/32 PASS。
+
+### 2026-11-24 Phase 613 (`/css/css-transitions/transition-001` 全绿 & Tables/Lists/Values 摸底)
+- **[Agent]**: 完成 Phase 613（`src/js/shim/window.js`）：
+  1. **`window.js`**：为 `linear()` 缓动函数计算期补全双停靠点展开与缺省百分比插值，以及 `transition-property` 多值含 `none` 回退 `"all"`。
+  2. **全绿验证**：`transition-001.html` **13/13 PASS**（`/css/css-transitions/` 达 **18/20 PASS**）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-tables/` 16/18 PASS；`/css/css-lists/` 46/182 PASS（testharness 24/24）；`/css/css-values/minmax-` 2/19 PASS。

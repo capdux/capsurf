@@ -3690,3 +3690,5 @@
 - **Phase 611** (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `GEMINI.md`, `test/TEST_LEDGER.md`): 完善 `font-stretch` -> `font-width` 传统别名映射与 `STANDARD_COMPUTED_LONGHANDS` 替换，并固化 `GEMINI.md` 第 11.10 节自进化规范；`font-stretch-alias.html` 全绿。
 
 - **Phase 612** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `timeProps` 计算期将非法非时间值回退为 `"0s"`；`transition-delay-001.html` 与 `transition-duration-001.html` 全绿（`css-transitions` 达 17/20 PASS）。
+
+- **Phase 613** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `linear()` 缓动函数计算期百分比插值展开与 `transition-property` 含 `none` 回退 `"all"`；`transition-001.html` 13/13 全绿（`css-transitions` 达 18/20 PASS）。
