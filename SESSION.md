@@ -7626,3 +7626,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `window.js`：`applyUsedValuesToComputedMap` 将 `transform: perspective(none)` 规范化为 `matrix(1, 0, 0, 1, 0, 0)`。
   2. **全绿验证**：`perspective-origin-*` 3/3、`transform-origin-*` 3/3、`translate-parsing-*` 3/3、`css-transform-style-evaluation-validation` 1/1 全部 **PASS**，`--smoke` **3/3 suites PASS**。
   3. **并行摸底汇总**：子智能体完成 `css-color` (12/56)、`css-lists` (45/182)、`css-counter-styles` (0/11)、`css-page` (8/23)、`css-pseudo` (4/10)、`css-masking/parsing` (4/28)、`css-shapes/parsing` (6/13)。
+
+### 2026-11-24 Phase 568 (`view-transition-*` 7/7 全绿 & `css-text-decor/parsing` 31/31 收紧)
+- **[Agent]**: 自主推导并完成 Phase 568（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`view-transition-{name,class,group}` 全支持 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js` 注册 3 个属性并实现 `<custom-ident>` 校验（拒绝 `default`/CSS-wide/引号/`#hex`/长度等非法值）。
+     - `window.js` 将 3 个属性纳入 `STANDARD_COMPUTED_LONGHANDS`（默认 `none`/`none`/`normal`），支持 `initial`/`revert`/`revert-layer` 回退及 `maTch-element -> match-element` 规范化。
+  2. **全绿验证与基线收紧**：`view-transition-*` **7/7 PASS**、`/css/css-text-decor/parsing/` **31/31 PASS**（收紧 5 项基线为 `PASS`）、`--smoke` **3/3 suites PASS**。
+  3. **并行摸底汇总**：`/css/css-contain/parsing/` **4/4 PASS**、`/css/css-sizing/parsing/` **19/19 PASS**、`/css/css-text-decor/` **34/41 PASS**、`/css/css-nesting/` **11/45 PASS**。

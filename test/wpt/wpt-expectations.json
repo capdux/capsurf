@@ -5455,7 +5455,7 @@
     "reason": "Rebaselined 2026-09-16: measures PASS on main (CI and locally, 14/14 subtests); the FAIL pin had drifted behind work that landed without a rebaseline. Previous pin: 10/14 pass. Remaining 4 need text-decoration-thickness ('auto'/'from-font'/'10px'), a css-text-decor-4 longhand the servo stylo build excludes. The earlier regression (resolved currentcolor leaking into the shorthand assembly, six subtests) was fixed by shipping computed-but-unresolved forms alongside resolved values."
   },
   "/css/css-text-decor/parsing/text-decoration-inset-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-inset-invalid.html": {
@@ -5463,7 +5463,7 @@
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-inset-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-invalid.html": {
@@ -5499,7 +5499,7 @@
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-skip-spaces-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-skip-spaces-invalid.html": {
@@ -5507,7 +5507,7 @@
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-skip-spaces-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text-decor/parsing/text-decoration-style-computed.html": {
@@ -5543,7 +5543,7 @@
     "reason": null
   },
   "/css/css-text-decor/parsing/text-emphasis-style-computed-vertical-lr.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text-decor/parsing/text-emphasis-style-computed.html": {

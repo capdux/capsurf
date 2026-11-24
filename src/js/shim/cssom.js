@@ -97,7 +97,8 @@
     "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
     "transition", "transition-behavior", "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "unicode-range",
-    "user-select", "vertical-align", "visibility", "white-space", "white-space-collapse", "widows", "width",
+    "user-select", "vertical-align", "view-transition-class", "view-transition-group", "view-transition-name",
+    "visibility", "white-space", "white-space-collapse", "widows", "width",
     "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap", "writing-mode", "z-index",
     // Vendor prefixed
     "-webkit-transform", "-webkit-transform-origin", "-webkit-transition", "-webkit-animation",
@@ -2128,6 +2129,25 @@
     }
     if (prop === "image-orientation") {
       return vLower === "from-image" || vLower === "none";
+    }
+    if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0) return false;
+      const isCustomIdent = (t) => {
+        const tl = t.toLowerCase();
+        if (tl === "none" || tl === "default" || tl === "inherit" || tl === "initial" || tl === "unset" || tl === "revert" || tl === "revert-layer") return false;
+        return /^(?:--|[a-z_-]|[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(t);
+      };
+      if (prop === "view-transition-name") {
+        return toks.length === 1 && (toks[0].toLowerCase() === "none" || isCustomIdent(toks[0]));
+      }
+      if (prop === "view-transition-class") {
+        if (toks.length === 1 && toks[0].toLowerCase() === "none") return true;
+        return toks.every(isCustomIdent);
+      }
+      if (toks.length !== 1) return false;
+      const t0 = toks[0].toLowerCase();
+      return t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
     }
     if (prop === "image-resolution") {
       const toks = splitCssTokens(vLower);

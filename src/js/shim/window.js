@@ -8437,6 +8437,20 @@ function installWindow(global) {
     if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
       computedMap.set("hyphenate-character", "auto");
     }
+    const vtName = computedMap.get("view-transition-name");
+    if (!vtName || vtName === "initial" || vtName === "revert" || vtName === "revert-layer") {
+      computedMap.set("view-transition-name", "none");
+    } else if (vtName.toLowerCase() === "match-element") {
+      computedMap.set("view-transition-name", "match-element");
+    }
+    const vtClass = computedMap.get("view-transition-class");
+    if (!vtClass || vtClass === "initial" || vtClass === "revert" || vtClass === "revert-layer") {
+      computedMap.set("view-transition-class", "none");
+    }
+    const vtGroup = computedMap.get("view-transition-group");
+    if (!vtGroup || vtGroup === "initial" || vtGroup === "revert" || vtGroup === "revert-layer") {
+      computedMap.set("view-transition-group", "normal");
+    }
     if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
       computedMap.set("hyphenate-limit-chars", "auto");
     } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -8542,6 +8556,7 @@ function installWindow(global) {
     "top", "touch-action", "transform", "transform-box", "transform-origin", "transform-style",
     "transition-delay", "transition-duration", "transition-property",
     "transition-timing-function", "translate", "unicode-bidi", "user-select", "vertical-align",
+    "view-transition-class", "view-transition-group", "view-transition-name",
     "visibility", "white-space", "white-space-collapse", "widows", "width", "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap",
     "writing-mode", "z-index"
   ];

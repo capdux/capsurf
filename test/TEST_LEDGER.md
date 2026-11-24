@@ -1746,3 +1746,13 @@
   - `/css/css-pseudo/` (`b395`): `10` files (`4 PASS / 6 FAIL / 0 TIMEOUT`)
   - `/css/css-masking/parsing/` (`b396`): `28` files (`4 PASS / 24 FAIL / 0 TIMEOUT`)
   - `/css/css-shapes/parsing/` (`b397`): `13` files (`6 PASS / 7 FAIL / 0 TIMEOUT`)
+
+### Phase 568 `view-transition-*` 全绿 & `text-decor/parsing` 31/31 基线收紧 & WPT-B400~B406 摸底 (bin_dev Phase 568, 2026-11-24)
+- **Filter `/css/css-view-transitions/parsing/view-transition-`**: **7/7 PASS (100% ALL GREEN)**（`cssom.js` 注册并严格校验 `view-transition-{name,class,group}` `<custom-ident>`；`window.js` 纳入 `STANDARD_COMPUTED_LONGHANDS`，`revert`/`revert-layer` 回退初始值、`maTch-element -> match-element`）。
+- **Filter `/css/css-text-decor/parsing/`**: **31/31 PASS (100% ALL GREEN)**（收紧 `text-decoration-inset-{computed,valid}`, `text-decoration-skip-spaces-{computed,valid}`, `text-emphasis-style-computed-vertical-lr` 共 5 项基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-text-decor/` (`b402`): `41` files (`34 PASS / 7 FAIL`)
+  - `/css/css-nesting/` (`b401`): `45` files (`11 PASS / 34 FAIL`)
+  - `/css/css-contain/parsing/` (`b404`): **4/4 PASS (100% ALL GREEN)**
+  - `/css/css-sizing/parsing/` (`b406`): **19/19 PASS (100% ALL GREEN, 155/155 subtests)**

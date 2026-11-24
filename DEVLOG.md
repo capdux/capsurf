@@ -2768,3 +2768,7 @@
 ### Phase 567: `css-transforms` 4 组全绿闭环
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`transform` 拒绝未配对 `)`；`transform-origin` 限制 1~3 令牌并与 `perspective-origin` 统一单值补齐 `center`；`translate` 接入 `canonicalizeCalcToken`；`perspective(none)` 计算期输出 `matrix(1, 0, 0, 1, 0, 0)`。
 - **WPT & Smoke 验收**：`perspective-origin-*` 3/3、`transform-origin-*` 3/3、`translate-parsing-*` 3/3、`css-transform-style-evaluation-validation` 1/1 PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 568: `view-transition-*` 全绿与 `css-text-decor/parsing` 31/31 基线收紧
+- **`view-transition-*` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `<custom-ident>` 文法校验与 `STANDARD_COMPUTED_LONGHANDS` 默认值、`revert`/`revert-layer` 回退及 `match-element` 规范化，`view-transition-*` 7/7 PASS。
+- **基线收紧与验收**：收紧 `/css/css-text-decor/parsing/` 5 项为 `PASS`（31/31 全绿），`--smoke` 3/3 suites PASS。
