@@ -3099,3 +3099,7 @@
 ### Phase 649: `color-valid` (17/17) & `color-invalid` (12/12) 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidColor` 支持 `light-dark(<color>, <color>)`；`normalizeCssSpecifiedValue` 将 `color` 及 `hsl`/`hsla` 接入 `normalizeSingleColor` 规范化输出。
 - **WPT & Smoke 验收**：`color-valid.html` (17/17) 与 `color-invalid.html` (12/12) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 650: 消除 `CALC_FUNCS` / `CALC_CONSTS` TDZ 死区
+- **核心修复 (`src/js/shim/cssom.js`)**：`CALC_FUNCS` 与 `CALC_CONSTS` 移至 IIFE 顶层，避免 `isValidCssValue` 入口处 `isValidColor` 调用 `isValidCalcSyntax` 时触发 `ReferenceError`。
+- **WPT & Smoke 验收**：`color-valid.html`、`color-invalid.html`、`--smoke` 3/3 suites PASS。

@@ -153,6 +153,8 @@
   if (typeof globalThis !== "undefined") globalThis.__isCssPropertySupported = isCssPropertySupported;
 
   let _NAMED_COLORS_CACHE = null;
+  const CALC_FUNCS = new Set(["calc", "min", "max", "clamp", "round", "mod", "rem", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp", "abs", "sign", "sibling-index", "sibling-count", "progress", "media-progress", "container-progress"]);
+  const CALC_CONSTS = new Set(["e", "pi", "infinity", "-infinity", "nan", "nearest", "up", "down", "to-zero"]);
   let _isValidCalcSyntax = null;
   function isValidColor(val) {
     const rawTrimmed = val.trim();
@@ -535,8 +537,6 @@
       return true;
     }
 
-    const CALC_FUNCS = new Set(["calc", "min", "max", "clamp", "round", "mod", "rem", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp", "abs", "sign", "sibling-index", "sibling-count", "progress", "media-progress", "container-progress"]);
-    const CALC_CONSTS = new Set(["e", "pi", "infinity", "-infinity", "nan", "nearest", "up", "down", "to-zero"]);
     function isValidCalcSyntax(tok) {
       if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
       const m = /^(calc|min|max|clamp)\((.*)\)$/i.exec(tok);

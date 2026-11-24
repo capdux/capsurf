@@ -8045,3 +8045,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：`isValidColor` 新增 `light-dark()` 双色校验；`normalizeCssSpecifiedValue` 将 `color` 属性与 `hsl`/`hsla` 接入 `normalizeSingleColor`。
   2. **全绿验证**：`color-valid.html`（17/17）与 `color-invalid.html`（12/12）全绿，`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`9294fa46` 完成 `/css/css-flexbox/` 摸底（96/120 PASS），已接力派发 `cee0e63d`（`19720`, `/css/css-selectors/`）。
+- **[Agent]**: 完成 Phase 650（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：将 `CALC_FUNCS` 与 `CALC_CONSTS` 提升至模块顶层，消除 `isValidColor` 触发 `isValidCalcSyntax` 时的 TDZ `ReferenceError`。
+  2. **全绿验证**：`color-valid.html`、`color-invalid.html` 与 `--smoke`（3/3 suites, 6/6 tests）全绿。

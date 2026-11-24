@@ -2277,3 +2277,7 @@
 ### Phase 649: `color-valid` (17/17) & `color-invalid` (12/12) 全绿
 - **Filter `/css/css-color/parsing/color-valid.html` & `/css/css-color/parsing/color-invalid.html`**: **FAIL->PASS (2/2: 17/17 + 12/12)**（`cssom.js` `isValidColor` 新增 `light-dark(<color>, <color>)` 校验，`normalizeCssSpecifiedValue` 将 `color` 属性及 `hsl`/`hsla` 函数接入 `normalizeSingleColor` 规范化为 `rgb(...)`/`rgba(...)`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 650: 消除 `CALC_FUNCS` / `CALC_CONSTS` TDZ 死区
+- **Filter `/css/css-color/parsing/color-valid.html` & `color-invalid.html`**: **PASS (2/2)**（`cssom.js` 将 `CALC_FUNCS` 与 `CALC_CONSTS` 提升至模块顶层作用域，彻底消除 `isValidColor` 首次调用 `isValidCalcSyntax` 时的 `ReferenceError` TDZ 异常，并减少每次 `isValidCssValue` 调用的 Set 重复分配）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
