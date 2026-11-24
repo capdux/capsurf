@@ -3236,3 +3236,5 @@
 - 在 `cssom.js` 与 `window.js` 中补全 `font-variation-settings` 的 4 字符 tag + `<number>` 语法校验、去重保留最右项、字母序排序及 `calc()` 数值求值，`font-variation-settings-{valid,invalid,computed}` 全部 PASS。
 ### Phase 698 — `font-variant-alternates` 与 `font-variant` 互斥校验闭环
 - 在 `cssom.js` 中补全 `font-variant-alternates` 函数参数及 `font-variant` 全组互斥关键字校验，`font-variant-alternates-{valid,invalid}` 与 `font-variant-invalid` 全数 PASS。
+### Phase 699 — `font-width-computed` 与 `cqw` 容器宽度解析闭环
+- 在 `window.js` 中补全 `font-width` 关键字至百分比转换、`font-stretch` Proxy 属性可见性及 `resolveContainerW` 原生 `container-type` 回退，打通 `/css/css-fonts/parsing/font-width-computed.html` 全部 30/30 子测试。

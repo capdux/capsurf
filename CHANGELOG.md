@@ -3915,3 +3915,6 @@
 - **Phase 698**:
   - `src/js/shim/cssom.js`: `isValidCssValue` 补齐 `font-variant-alternates` 与 `font-variant` 互斥组与函数参数校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 699**:
+  - `src/js/shim/window.js`: 实现 `font-width` 关键字转百分比与 `calc()`/`evalSignCalls` 求值；`resolveContainerW` 补充从 `__capsurf_get_computed_prop` 读取 `container-type`；`getComputedStyle` Proxy `has`/`getOwnPropertyDescriptor` 注册 `font-stretch`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

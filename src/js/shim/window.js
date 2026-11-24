@@ -8543,7 +8543,7 @@ function installWindow(global) {
       let cur = el && el.parentElement;
       while (cur) {
         const pMap = collectRawComputedMap(cur, "");
-        const ct = (pMap.get("container-type") || "").toLowerCase();
+        const ct = (pMap.get("container-type") || (typeof globalThis.__capsurf_get_computed_prop === "function" && typeof cur._nid === "number" && cur._nid > 0 ? (globalThis.__capsurf_get_computed_prop(cur._nid, "container-type") || "") : "")).toLowerCase();
         if (ct.indexOf("inline-size") !== -1 || ct === "size") {
           const w = pMap.get("width");
           if (w) {
@@ -9790,6 +9790,23 @@ function installWindow(global) {
         computedMap.set("font-variation-settings", sorted.map((e) => '"' + e[0] + '" ' + e[1]).join(", "));
       }
     }
+    const fWidthRaw = (computedMap.get("font-width") || computedMap.get("font-stretch") || "100%").trim();
+    const FW_KW = {
+      "ultra-condensed": "50%", "extra-condensed": "62.5%", "condensed": "75%", "semi-condensed": "87.5%",
+      "normal": "100%", "semi-expanded": "112.5%", "expanded": "125%", "extra-expanded": "150%", "ultra-expanded": "200%"
+    };
+    const fWidthLow = fWidthRaw.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(FW_KW, fWidthLow)) {
+      computedMap.set("font-width", FW_KW[fWidthLow]);
+    } else if (/^calc\(/i.test(fWidthRaw)) {
+      const inner = evalSignCalls(fWidthRaw.slice(5, -1), element).trim().replace(/%/g, "");
+      if (/^[\d+\-*/().\s]+$/.test(inner)) {
+        try {
+          const nv = Function("return (" + inner + ")")();
+          if (typeof nv === "number" && isFinite(nv)) computedMap.set("font-width", String(Math.max(0, Number(nv.toFixed(6)))) + "%");
+        } catch (_) {}
+      }
+    }
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
@@ -10290,7 +10307,7 @@ function installWindow(global) {
       has: function (target, prop) {
         if (prop in target) return true;
         if (typeof prop === "string") {
-          if (prop === "cssFloat" || getShorthandComputed(prop) !== null) return true;
+          if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null) return true;
           if (propSet.has(prop) || computedMap.has(prop)) return true;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
           if (getShorthandComputed(kebab) !== null) return true;
@@ -10303,7 +10320,7 @@ function installWindow(global) {
         if (own) return own;
         if (typeof prop === "string") {
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-          if (prop === "cssFloat" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
+          if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
               getShorthandComputed(kebab) !== null || propSet.has(kebab) || computedMap.has(kebab)) {
             return { value: target.getPropertyValue(kebab), writable: false, enumerable: false, configurable: true };
           }
