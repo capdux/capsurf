@@ -2064,14 +2064,93 @@
       if (noneCnt > 0 && ((sImg && sType) || (noneCnt === 2 && (sImg || sType)))) return false;
       return true;
     }
-    if (prop === "content") {
-      const toks = splitCssTokens(trimmed);
+    if (prop === "overscroll-behavior") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
       for (let i = 0; i < toks.length; i++) {
-        const cm = /^counters?\((.*)\)$/i.exec(toks[i]);
-        if (cm) {
-          const parts = cm[1].split(",").map(x => x.trim().toLowerCase());
-          const styleArg = parts[parts.length - 1];
-          if (parts.length >= 2 && /^(?:none|unset|initial|inherit|revert|revert-layer|default)$/.test(styleArg)) return false;
+        if (toks[i] !== "contain" && toks[i] !== "none" && toks[i] !== "auto" && toks[i] !== "chain") return false;
+      }
+      return true;
+    }
+    if (prop === "overscroll-behavior-x" || prop === "overscroll-behavior-y" ||
+        prop === "overscroll-behavior-inline" || prop === "overscroll-behavior-block") {
+      return vLower === "contain" || vLower === "none" || vLower === "auto" || vLower === "chain";
+    }
+    if (prop === "content") {
+      const isValidSymbolsFn = (fnStr) => {
+        const sm = /^symbols\(\s*(.*)\s*\)$/i.exec(fnStr);
+        if (!sm) return false;
+        const inner = sm[1].trim();
+        if (!inner) return false;
+        const stoks = splitCssTokens(inner);
+        let idx = 0;
+        let symType = "symbolic";
+        const t0 = stoks[0].toLowerCase();
+        if (t0 === "cyclic" || t0 === "numeric" || t0 === "alphabetic" || t0 === "symbolic" || t0 === "fixed") {
+          symType = t0;
+          idx = 1;
+        } else if (/^[a-z_-]/i.test(stoks[0]) && !/^(?:url|image|linear-gradient|radial-gradient)\(/i.test(stoks[0])) {
+          return false;
+        }
+        const syms = stoks.slice(idx);
+        if (syms.length === 0) return false;
+        if ((symType === "alphabetic" || symType === "numeric") && syms.length < 2) return false;
+        for (let k = 0; k < syms.length; k++) {
+          const sk = syms[k];
+          if (!((sk.startsWith('"') && sk.endsWith('"')) || (sk.startsWith("'") && sk.endsWith("'")) || /^(?:url|image)\(/i.test(sk))) {
+            return false;
+          }
+        }
+        return true;
+      };
+      const isValidCounterStyle = (cs) => {
+        const low = cs.trim().toLowerCase();
+        if (!low) return false;
+        if (low.startsWith("symbols(")) return isValidSymbolsFn(cs.trim());
+        if (/^(?:none|unset|initial|inherit|revert|revert-layer|revert-rule|default)$/.test(low)) return false;
+        return /^(?:--[a-z0-9_-]|-?(?:[a-z_]|\\.))(?:[a-z0-9_-]|\\.)*$/i.test(cs.trim());
+      };
+      const isValidCounterTok = (tok) => {
+        const cm = /^(counters?)\((.*)\)$/i.exec(tok);
+        if (!cm) return false;
+        const isPlural = cm[1].toLowerCase() === "counters";
+        const parts = splitTopLevelComma(cm[2]).map(x => x.trim());
+        if (isPlural) {
+          if (parts.length < 2 || parts.length > 3) return false;
+          if (!parts[0] || !((parts[1].startsWith('"') && parts[1].endsWith('"')) || (parts[1].startsWith("'") && parts[1].endsWith("'")))) return false;
+          if (parts.length === 3 && !isValidCounterStyle(parts[2])) return false;
+        } else {
+          if (parts.length < 1 || parts.length > 2 || !parts[0]) return false;
+          if (parts.length === 2 && !isValidCounterStyle(parts[1])) return false;
+        }
+        return true;
+      };
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0) return false;
+      const slashIdx = toks.indexOf("/");
+      const mainToks = slashIdx === -1 ? toks : toks.slice(0, slashIdx);
+      const altToks = slashIdx === -1 ? null : toks.slice(slashIdx + 1);
+      if (mainToks.length === 0) return false;
+      if (altToks !== null) {
+        if (altToks.length === 0) return false;
+        if (mainToks.length === 1 && (mainToks[0].toLowerCase() === "none" || mainToks[0].toLowerCase() === "normal")) return false;
+        for (let i = 0; i < altToks.length; i++) {
+          const at = altToks[i];
+          if (at === "/") return false;
+          const isStr = (at.startsWith('"') && at.endsWith('"')) || (at.startsWith("'") && at.endsWith("'"));
+          if (!isStr && !isValidCounterTok(at)) return false;
+        }
+      }
+      for (let i = 0; i < mainToks.length; i++) {
+        const tk = mainToks[i];
+        const tl = tk.toLowerCase();
+        if (/^attr\(/i.test(tk)) {
+          const am = /^attr\(\s*(.*)\s*\)$/i.exec(tk);
+          if (!am || !am[1]) return false;
+        } else if (/^counters?\(/i.test(tk)) {
+          if (!isValidCounterTok(tk)) return false;
+        } else if (tl === "none" || tl === "normal") {
+          if (mainToks.length > 1) return false;
         }
       }
       return true;
@@ -2458,6 +2537,33 @@
         return fill === "filled" ? shape : ("open " + shape);
       }
       return s;
+    }
+    if (key === "content") {
+      const normCounterTok = (tok) => {
+        const cm = /^(counters?)\((.*)\)$/i.exec(tok);
+        if (!cm) return tok;
+        const fn = cm[1].toLowerCase();
+        const parts = splitTopLevelComma(cm[2]).map(x => x.trim());
+        const normStyle = (st) => {
+          const low = st.toLowerCase();
+          if (low === "decimal") return "";
+          if (low.startsWith("symbols(")) {
+            const sm = /^symbols\(\s*symbolic\s+([\s\S]+)\)$/i.exec(st);
+            if (sm) return "symbols(" + sm[1].trim() + ")";
+          }
+          return st;
+        };
+        if (fn === "counter" && parts.length === 2) {
+          const ns = normStyle(parts[1]);
+          return ns ? ("counter(" + parts[0] + ", " + ns + ")") : ("counter(" + parts[0] + ")");
+        }
+        if (fn === "counters" && parts.length === 3) {
+          const ns = normStyle(parts[2]);
+          return ns ? ("counters(" + parts[0] + ", " + parts[1] + ", " + ns + ")") : ("counters(" + parts[0] + ", " + parts[1] + ")");
+        }
+        return fn + "(" + parts.join(", ") + ")";
+      };
+      return splitCssTokens(s).map(normCounterTok).join(" ");
     }
     if (key === "text-transform") {
       const p = splitCssTokens(s.toLowerCase());

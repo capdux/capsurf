@@ -1631,3 +1631,18 @@
   - `/css/css-overscroll-behavior/parsing/`: `1` file (`0 PASS / 1 FAIL`)
   - `/css/css-page/parsing/`: `11` files (`5 PASS / 6 FAIL`)
   - `/css/css-rhythm/parsing/`: `5` files (`0 PASS / 5 FAIL`)
+
+### WPT-B356 ~ B366 摸底与 Phase 557 `/css/css-overscroll-behavior/parsing/` 1/1 + `/css/css-content/parsing/` 4/4 全绿闭环 (bin_dev Phase 557, 2026-11-24)
+- **Filter `/css/css-overscroll-behavior/parsing/`**: `1` file (**1 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 实现 `overscroll-behavior`（`[ contain | none | auto | chain ]{1,2}`）与长手属性严格校验。
+- **Filter `/css/css-content/parsing/`**: `4` files (**4 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 严格校验 `content` 的 `/` alt-text 语义、`attr()`/`counter()`/`counters()`/`symbols()` 参数约束，规范化 `counter(..., decimal)`/`symbols(symbolic ...)`，修复 `window.js` 中多令牌字符串误转义问题，并将 `evalGradientComputed` 与 `resolveContentGradients` 提升至 `display: none` 提前返回分支之前以支持无布局盒元素上的渐变计算值（含 `to top right -> to right top` 与未闭合括号容错）；收紧 `content-counter-valid.html` 基线为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-logical/`: `58` files (`54 PASS / 1 FAIL / 3 TIMEOUT`)
+  - `/css/css-sizing/`: `32` files (`27 PASS / 4 FAIL / 1 TIMEOUT`)
+  - `/css/css-ui/`: `47` files (`35 PASS / 10 FAIL / 2 TIMEOUT`)
+  - `/css/css-transitions/`: `20` files (`14 PASS / 5 FAIL / 1 TIMEOUT`)
+  - `/css/css-properties-values-api/`: `14` files (`8 PASS / 6 FAIL`)
+  - `/css/css-pseudo/`: `10` files (`3 PASS / 7 FAIL`)
+  - `/css/css-syntax/`: `24` files (`7 PASS / 17 FAIL`)
+  - `/css/css-borders/tentative/parsing/`: `45` files (`14 PASS / 31 FAIL`)
+  - `/css/css-values/` (`1/3`, `2/3`, `3/3`): `23/59`, `18/62`, `19/63` PASS

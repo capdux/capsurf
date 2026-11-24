@@ -5854,14 +5854,93 @@
         if (noneCnt > 0 && ((sImg && sType) || (noneCnt === 2 && (sImg || sType)))) return false;
         return true;
       }
-      if (prop === "content") {
-        const toks = splitCssTokens(trimmed);
+      if (prop === "overscroll-behavior") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 2) return false;
         for (let i = 0; i < toks.length; i++) {
-          const cm = /^counters?\((.*)\)$/i.exec(toks[i]);
-          if (cm) {
-            const parts = cm[1].split(",").map(x => x.trim().toLowerCase());
-            const styleArg = parts[parts.length - 1];
-            if (parts.length >= 2 && /^(?:none|unset|initial|inherit|revert|revert-layer|default)$/.test(styleArg)) return false;
+          if (toks[i] !== "contain" && toks[i] !== "none" && toks[i] !== "auto" && toks[i] !== "chain") return false;
+        }
+        return true;
+      }
+      if (prop === "overscroll-behavior-x" || prop === "overscroll-behavior-y" ||
+          prop === "overscroll-behavior-inline" || prop === "overscroll-behavior-block") {
+        return vLower === "contain" || vLower === "none" || vLower === "auto" || vLower === "chain";
+      }
+      if (prop === "content") {
+        const isValidSymbolsFn = (fnStr) => {
+          const sm = /^symbols\(\s*(.*)\s*\)$/i.exec(fnStr);
+          if (!sm) return false;
+          const inner = sm[1].trim();
+          if (!inner) return false;
+          const stoks = splitCssTokens(inner);
+          let idx = 0;
+          let symType = "symbolic";
+          const t0 = stoks[0].toLowerCase();
+          if (t0 === "cyclic" || t0 === "numeric" || t0 === "alphabetic" || t0 === "symbolic" || t0 === "fixed") {
+            symType = t0;
+            idx = 1;
+          } else if (/^[a-z_-]/i.test(stoks[0]) && !/^(?:url|image|linear-gradient|radial-gradient)\(/i.test(stoks[0])) {
+            return false;
+          }
+          const syms = stoks.slice(idx);
+          if (syms.length === 0) return false;
+          if ((symType === "alphabetic" || symType === "numeric") && syms.length < 2) return false;
+          for (let k = 0; k < syms.length; k++) {
+            const sk = syms[k];
+            if (!((sk.startsWith('"') && sk.endsWith('"')) || (sk.startsWith("'") && sk.endsWith("'")) || /^(?:url|image)\(/i.test(sk))) {
+              return false;
+            }
+          }
+          return true;
+        };
+        const isValidCounterStyle = (cs) => {
+          const low = cs.trim().toLowerCase();
+          if (!low) return false;
+          if (low.startsWith("symbols(")) return isValidSymbolsFn(cs.trim());
+          if (/^(?:none|unset|initial|inherit|revert|revert-layer|revert-rule|default)$/.test(low)) return false;
+          return /^(?:--[a-z0-9_-]|-?(?:[a-z_]|\\.))(?:[a-z0-9_-]|\\.)*$/i.test(cs.trim());
+        };
+        const isValidCounterTok = (tok) => {
+          const cm = /^(counters?)\((.*)\)$/i.exec(tok);
+          if (!cm) return false;
+          const isPlural = cm[1].toLowerCase() === "counters";
+          const parts = splitTopLevelComma(cm[2]).map(x => x.trim());
+          if (isPlural) {
+            if (parts.length < 2 || parts.length > 3) return false;
+            if (!parts[0] || !((parts[1].startsWith('"') && parts[1].endsWith('"')) || (parts[1].startsWith("'") && parts[1].endsWith("'")))) return false;
+            if (parts.length === 3 && !isValidCounterStyle(parts[2])) return false;
+          } else {
+            if (parts.length < 1 || parts.length > 2 || !parts[0]) return false;
+            if (parts.length === 2 && !isValidCounterStyle(parts[1])) return false;
+          }
+          return true;
+        };
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0) return false;
+        const slashIdx = toks.indexOf("/");
+        const mainToks = slashIdx === -1 ? toks : toks.slice(0, slashIdx);
+        const altToks = slashIdx === -1 ? null : toks.slice(slashIdx + 1);
+        if (mainToks.length === 0) return false;
+        if (altToks !== null) {
+          if (altToks.length === 0) return false;
+          if (mainToks.length === 1 && (mainToks[0].toLowerCase() === "none" || mainToks[0].toLowerCase() === "normal")) return false;
+          for (let i = 0; i < altToks.length; i++) {
+            const at = altToks[i];
+            if (at === "/") return false;
+            const isStr = (at.startsWith('"') && at.endsWith('"')) || (at.startsWith("'") && at.endsWith("'"));
+            if (!isStr && !isValidCounterTok(at)) return false;
+          }
+        }
+        for (let i = 0; i < mainToks.length; i++) {
+          const tk = mainToks[i];
+          const tl = tk.toLowerCase();
+          if (/^attr\(/i.test(tk)) {
+            const am = /^attr\(\s*(.*)\s*\)$/i.exec(tk);
+            if (!am || !am[1]) return false;
+          } else if (/^counters?\(/i.test(tk)) {
+            if (!isValidCounterTok(tk)) return false;
+          } else if (tl === "none" || tl === "normal") {
+            if (mainToks.length > 1) return false;
           }
         }
         return true;
@@ -6248,6 +6327,33 @@
           return fill === "filled" ? shape : ("open " + shape);
         }
         return s;
+      }
+      if (key === "content") {
+        const normCounterTok = (tok) => {
+          const cm = /^(counters?)\((.*)\)$/i.exec(tok);
+          if (!cm) return tok;
+          const fn = cm[1].toLowerCase();
+          const parts = splitTopLevelComma(cm[2]).map(x => x.trim());
+          const normStyle = (st) => {
+            const low = st.toLowerCase();
+            if (low === "decimal") return "";
+            if (low.startsWith("symbols(")) {
+              const sm = /^symbols\(\s*symbolic\s+([\s\S]+)\)$/i.exec(st);
+              if (sm) return "symbols(" + sm[1].trim() + ")";
+            }
+            return st;
+          };
+          if (fn === "counter" && parts.length === 2) {
+            const ns = normStyle(parts[1]);
+            return ns ? ("counter(" + parts[0] + ", " + ns + ")") : ("counter(" + parts[0] + ")");
+          }
+          if (fn === "counters" && parts.length === 3) {
+            const ns = normStyle(parts[2]);
+            return ns ? ("counters(" + parts[0] + ", " + parts[1] + ", " + ns + ")") : ("counters(" + parts[0] + ", " + parts[1] + ")");
+          }
+          return fn + "(" + parts.join(", ") + ")";
+        };
+        return splitCssTokens(s).map(normCounterTok).join(" ");
       }
       if (key === "text-transform") {
         const p = splitCssTokens(s.toLowerCase());
@@ -40913,20 +41019,24 @@
 
       if (computedMap.has("content")) {
         const cRaw = String(computedMap.get("content") || "").trim();
-        if ((cRaw.startsWith("\"") && cRaw.endsWith("\"") && cRaw.length >= 2) ||
-            (cRaw.startsWith("'") && cRaw.endsWith("'") && cRaw.length >= 2)) {
-          const inner = cRaw.slice(1, -1);
-          const decoded = inner.replace(/\\([0-9a-fA-F]{1,6})[\t\n\f\r ]?|\\(.)/g, function (_, hex, ch) {
-            if (hex) {
-              const cp = parseInt(hex, 16);
-              if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return "\uFFFD";
-              try { return String.fromCodePoint(cp); } catch (e) { return "\uFFFD"; }
-            }
-            return ch;
-          });
-          const reserialized = "\"" + decoded.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"";
-          computedMap.set("content", reserialized);
-        }
+        const toks = (typeof globalThis.__capsurf_splitCssTokens === "function") ? globalThis.__capsurf_splitCssTokens(cRaw) : [cRaw];
+        const outToks = toks.map((tk) => {
+          if ((tk.startsWith("\"") && tk.endsWith("\"") && tk.length >= 2) ||
+              (tk.startsWith("'") && tk.endsWith("'") && tk.length >= 2)) {
+            const inner = tk.slice(1, -1);
+            const decoded = inner.replace(/\\([0-9a-fA-F]{1,6})[\t\n\f\r ]?|\\(.)/g, function (_, hex, ch) {
+              if (hex) {
+                const cp = parseInt(hex, 16);
+                if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return "\uFFFD";
+                try { return String.fromCodePoint(cp); } catch (e) { return "\uFFFD"; }
+              }
+              return ch;
+            });
+            return "\"" + decoded.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"";
+          }
+          return tk;
+        });
+        computedMap.set("content", outToks.join(" "));
       }
 
       // Pseudo element defaults
@@ -41335,6 +41445,161 @@
         if (fm) computedMap.set("font-size", fm[1]);
       }
       const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+      const normCol = typeof global.__capsurf_normalizeSingleColor === "function"
+        ? global.__capsurf_normalizeSingleColor
+        : (v) => v;
+      const evalGradientComputed = (gradRaw) => {
+        const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(gradRaw);
+        if (!gm) return gradRaw;
+        const fn = gm[1].toLowerCase();
+        const args = [];
+        let cur = "", dpt = 0;
+        for (let i = 0; i < gm[2].length; i++) {
+          const ch = gm[2][i];
+          if (ch === "(") dpt++;
+          else if (ch === ")" && dpt > 0) dpt--;
+          if (dpt === 0 && ch === ",") { args.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        if (cur.trim()) args.push(cur.trim());
+        const splitTop = (str) => {
+          const res = []; let sCur = "", sD = 0;
+          for (let j = 0; j < str.length; j++) {
+            const c = str[j];
+            if (c === "(") sD++; else if (c === ")" && sD > 0) sD--;
+            if (sD === 0 && /\s/.test(c)) { if (sCur) { res.push(sCur); sCur = ""; } }
+            else sCur += c;
+          }
+          if (sCur) res.push(sCur);
+          return res;
+        };
+        const evalAng = (tok) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            const e = tl.slice(5, -1)
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))deg\b/g, "$1")
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))grad\b/g, (_, n) => String(Number(n) * 0.9))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))rad\b/g, (_, n) => String(Number(n) * 180 / Math.PI))
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn\b/g, (_, n) => String(Number(n) * 360));
+            if (/^[\d+\-*/().\s]+$/.test(e)) {
+              try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(4))) + "deg"; } catch (_) {}
+            }
+          }
+          const tm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(turn|grad|rad)$/i.exec(tl);
+          if (tm) {
+            const u = tm[2].toLowerCase(), n = Number(tm[1]);
+            const deg = u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI);
+            return String(Number(deg.toFixed(4))) + "deg";
+          }
+          return tl;
+        };
+        const evalStopPos = (tok, nonNeg) => {
+          const tl = tok.toLowerCase();
+          if (/^calc\(/i.test(tl)) {
+            if (/(?:deg|turn|grad|rad)\b/.test(tl)) return evalAng(tok);
+            const inn = tl.slice(5, -1);
+            if (inn.indexOf("%") !== -1 && !/(?:px|em|rem)/.test(inn)) {
+              const e = inn.replace(/%/g, "");
+              if (/^[\d+\-*/().\s]+$/.test(e)) {
+                try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%"; } catch (_) {}
+              }
+            } else if (inn.indexOf("%") !== -1 && /(?:px|em|rem)/.test(inn)) {
+              const evalL = (pv, xv) => {
+                const e = inn
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pv))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * xv))
+                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * xv));
+                if (/^[\d+\-*/().\s]+$/.test(e)) {
+                  try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return v; } catch (_) {}
+                }
+                return null;
+              };
+              const pxC = evalL(0, 1), pctC = evalL(1, 0);
+              if (pxC !== null && pctC !== null) {
+                const pR = Number(pctC.toFixed(6)), xR = Number(pxC.toFixed(6));
+                if (xR === 0) return String(pR) + "%";
+                if (pR === 0) return formatCssPx(xR);
+                return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
+              }
+            } else {
+              const px = evalCssLengthExpr(tl, 0, fontSize);
+              if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+            }
+          }
+          if (tl.endsWith("em") || tl.endsWith("px") || tl.endsWith("rem")) {
+            const px = evalCssLengthExpr(tl, 0, fontSize);
+            if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
+          }
+          if (/(?:turn|grad|rad)$/.test(tl)) return evalAng(tok);
+          return tl;
+        };
+        const outArgs = [];
+        for (let ai = 0; ai < args.length; ai++) {
+          const toks = splitTop(args[ai]);
+          if (ai === 0 && fn === "linear-gradient" && (toks[0].toLowerCase() === "to" || /(?:deg|turn|grad|rad)\)?$/i.test(toks[0]))) {
+            if (toks[0].toLowerCase() === "to") {
+              const sideToks = toks.map(t => t.toLowerCase());
+              if (sideToks.length === 3 && (sideToks[1] === "top" || sideToks[1] === "bottom") && (sideToks[2] === "left" || sideToks[2] === "right")) {
+                outArgs.push("to " + sideToks[2] + " " + sideToks[1]);
+              } else {
+                outArgs.push(sideToks.join(" "));
+              }
+            } else {
+              outArgs.push(evalAng(toks[0]));
+            }
+            continue;
+          }
+          if (ai === 0 && fn === "conic-gradient" && (toks[0].toLowerCase() === "from" || toks[0].toLowerCase() === "at")) {
+            const cOut = [];
+            for (let ti = 0; ti < toks.length; ti++) {
+              const tl = toks[ti].toLowerCase();
+              if (tl === "from" || tl === "at") { cOut.push(tl); continue; }
+              cOut.push(evalStopPos(toks[ti], false));
+            }
+            outArgs.push(cOut.join(" "));
+            continue;
+          }
+          if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || /^(?:circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)$/i.test(toks[0]))) {
+            const rOut = [];
+            let inAt = false, atPos = [];
+            for (let ti = 0; ti < toks.length; ti++) {
+              const tl = toks[ti].toLowerCase();
+              if (tl === "at") { inAt = true; rOut.push("at"); continue; }
+              if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
+              if (inAt) atPos.push(evalStopPos(toks[ti], false));
+              else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
+            }
+            if (inAt && atPos.length === 1) atPos.push("50%");
+            outArgs.push(rOut.concat(atPos).join(" "));
+            continue;
+          }
+          if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
+            outArgs.push(evalStopPos(toks[0], false));
+            continue;
+          }
+          const col = normCol(toks[0]);
+          if (toks.length === 1) outArgs.push(col);
+          else if (toks.length === 2) outArgs.push(col + " " + evalStopPos(toks[1], false));
+          else if (toks.length === 3) {
+            outArgs.push(col + " " + evalStopPos(toks[1], false));
+            outArgs.push(col + " " + evalStopPos(toks[2], false));
+          } else outArgs.push(args[ai]);
+        }
+        return fn + "(" + outArgs.join(", ") + ")";
+      };
+      const resolveContentGradients = () => {
+        const cntRaw = computedMap.get("content");
+        if (cntRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(cntRaw)) {
+          const cleanCnt = cntRaw.replace(/;+$/, "");
+          const cToks = (typeof globalThis.__capsurf_splitCssTokens === "function") ? globalThis.__capsurf_splitCssTokens(cleanCnt) : [cleanCnt];
+          computedMap.set("content", cToks.map((t) => {
+            if (/^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(t)) {
+              return evalGradientComputed(t.endsWith(")") ? t : (t + ")"));
+            }
+            return t;
+          }).join(" "));
+        }
+      };
 
       function resolveMinMaxSizing(val, fSize) {
         if (!val || typeof val !== "string") return val;
@@ -41524,6 +41789,7 @@
             }
           }
         }
+        resolveContentGradients();
         return;
       }
 
@@ -42406,9 +42672,6 @@
         }
         computedMap.set("text-align", resolvedAlign);
       }
-      const normCol = typeof global.__capsurf_normalizeSingleColor === "function"
-        ? global.__capsurf_normalizeSingleColor
-        : (v) => v;
       const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
       const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
       computedMap.set("color", elColor);
@@ -42513,136 +42776,6 @@
         if (tdiToks.length === 2 && tdiToks[0] === tdiToks[1]) tdiToks.pop();
         computedMap.set("text-decoration-inset", tdiToks.join(" "));
       }
-      const evalGradientComputed = (gradRaw) => {
-        const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(gradRaw);
-        if (!gm) return gradRaw;
-        const fn = gm[1].toLowerCase();
-        const args = [];
-        let cur = "", dpt = 0;
-        for (let i = 0; i < gm[2].length; i++) {
-          const ch = gm[2][i];
-          if (ch === "(") dpt++;
-          else if (ch === ")" && dpt > 0) dpt--;
-          if (dpt === 0 && ch === ",") { args.push(cur.trim()); cur = ""; }
-          else cur += ch;
-        }
-        if (cur.trim()) args.push(cur.trim());
-        const splitTop = (str) => {
-          const res = []; let sCur = "", sD = 0;
-          for (let j = 0; j < str.length; j++) {
-            const c = str[j];
-            if (c === "(") sD++; else if (c === ")" && sD > 0) sD--;
-            if (sD === 0 && /\s/.test(c)) { if (sCur) { res.push(sCur); sCur = ""; } }
-            else sCur += c;
-          }
-          if (sCur) res.push(sCur);
-          return res;
-        };
-        const evalAng = (tok) => {
-          const tl = tok.toLowerCase();
-          if (/^calc\(/i.test(tl)) {
-            const e = tl.slice(5, -1)
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))deg\b/g, "$1")
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))grad\b/g, (_, n) => String(Number(n) * 0.9))
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))rad\b/g, (_, n) => String(Number(n) * 180 / Math.PI))
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))turn\b/g, (_, n) => String(Number(n) * 360));
-            if (/^[\d+\-*/().\s]+$/.test(e)) {
-              try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(4))) + "deg"; } catch (_) {}
-            }
-          }
-          const tm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(turn|grad|rad)$/i.exec(tl);
-          if (tm) {
-            const u = tm[2].toLowerCase(), n = Number(tm[1]);
-            const deg = u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI);
-            return String(Number(deg.toFixed(4))) + "deg";
-          }
-          return tl;
-        };
-        const evalStopPos = (tok, nonNeg) => {
-          const tl = tok.toLowerCase();
-          if (/^calc\(/i.test(tl)) {
-            if (/(?:deg|turn|grad|rad)\b/.test(tl)) return evalAng(tok);
-            const inn = tl.slice(5, -1);
-            if (inn.indexOf("%") !== -1 && !/(?:px|em|rem)/.test(inn)) {
-              const e = inn.replace(/%/g, "");
-              if (/^[\d+\-*/().\s]+$/.test(e)) {
-                try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return String(Number(v.toFixed(6))) + "%"; } catch (_) {}
-              }
-            } else if (inn.indexOf("%") !== -1 && /(?:px|em|rem)/.test(inn)) {
-              const evalL = (pv, xv) => {
-                const e = inn
-                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pv))
-                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * xv))
-                  .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * xv));
-                if (/^[\d+\-*/().\s]+$/.test(e)) {
-                  try { const v = Function("return (" + e + ")")(); if (typeof v === "number" && isFinite(v)) return v; } catch (_) {}
-                }
-                return null;
-              };
-              const pxC = evalL(0, 1), pctC = evalL(1, 0);
-              if (pxC !== null && pctC !== null) {
-                const pR = Number(pctC.toFixed(6)), xR = Number(pxC.toFixed(6));
-                if (xR === 0) return String(pR) + "%";
-                if (pR === 0) return formatCssPx(xR);
-                return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
-              }
-            } else {
-              const px = evalCssLengthExpr(tl, 0, fontSize);
-              if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
-            }
-          }
-          if (tl.endsWith("em") || tl.endsWith("px") || tl.endsWith("rem")) {
-            const px = evalCssLengthExpr(tl, 0, fontSize);
-            if (px !== null) return formatCssPx(nonNeg ? Math.max(0, px) : px);
-          }
-          if (/(?:turn|grad|rad)$/.test(tl)) return evalAng(tok);
-          return tl;
-        };
-        const outArgs = [];
-        for (let ai = 0; ai < args.length; ai++) {
-          const toks = splitTop(args[ai]);
-          if (ai === 0 && fn === "linear-gradient" && (toks[0].toLowerCase() === "to" || /(?:deg|turn|grad|rad)\)?$/i.test(toks[0]))) {
-            outArgs.push(toks[0].toLowerCase() === "to" ? toks.map(t => t.toLowerCase()).join(" ") : evalAng(toks[0]));
-            continue;
-          }
-          if (ai === 0 && fn === "conic-gradient" && (toks[0].toLowerCase() === "from" || toks[0].toLowerCase() === "at")) {
-            const cOut = [];
-            for (let ti = 0; ti < toks.length; ti++) {
-              const tl = toks[ti].toLowerCase();
-              if (tl === "from" || tl === "at") { cOut.push(tl); continue; }
-              cOut.push(evalStopPos(toks[ti], false));
-            }
-            outArgs.push(cOut.join(" "));
-            continue;
-          }
-          if (ai === 0 && fn === "radial-gradient" && (toks.indexOf("at") !== -1 || /^(?:circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner)$/i.test(toks[0]))) {
-            const rOut = [];
-            let inAt = false, atPos = [];
-            for (let ti = 0; ti < toks.length; ti++) {
-              const tl = toks[ti].toLowerCase();
-              if (tl === "at") { inAt = true; rOut.push("at"); continue; }
-              if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
-              if (inAt) atPos.push(evalStopPos(toks[ti], false));
-              else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
-            }
-            if (inAt && atPos.length === 1) atPos.push("50%");
-            outArgs.push(rOut.concat(atPos).join(" "));
-            continue;
-          }
-          if (toks.length === 1 && (/^(?:calc\(|[+-]?(?:\d|\.))/.test(toks[0]))) {
-            outArgs.push(evalStopPos(toks[0], false));
-            continue;
-          }
-          const col = normCol(toks[0]);
-          if (toks.length === 1) outArgs.push(col);
-          else if (toks.length === 2) outArgs.push(col + " " + evalStopPos(toks[1], false));
-          else if (toks.length === 3) {
-            outArgs.push(col + " " + evalStopPos(toks[1], false));
-            outArgs.push(col + " " + evalStopPos(toks[2], false));
-          } else outArgs.push(args[ai]);
-        }
-        return fn + "(" + outArgs.join(", ") + ")";
-      };
       const lsiRaw = (computedMap.get("list-style-image") || "").trim();
       if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
         computedMap.set("list-style-image", evalGradientComputed(lsiRaw));
@@ -42660,6 +42793,7 @@
         if (cCur.trim()) cParts.push(cCur.trim());
         computedMap.set("cursor", cParts.map((p) => /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(p) ? evalGradientComputed(p) : p).join(", "));
       }
+      resolveContentGradients();
       if (!computedMap.get("hyphenate-character") || computedMap.get("hyphenate-character") === "initial") {
         computedMap.set("hyphenate-character", "auto");
       }

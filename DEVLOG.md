@@ -2709,3 +2709,11 @@
 - **Writing Modes (`src/js/shim/cssom.js`)**：新增 `text-combine-upright`（`none | all`）与 `text-orientation`（`mixed | upright | sideways`）严格校验。
 - **`var(...)` 待替换简写保护 (`src/js/shim/cssom.js`)**：在 `normalizeCssSpecifiedValue` 与 `expandCssShorthand` 入口检测 `/\bvar\(/i` 并原样保留，避免将 `flex: var(--w)` 或 `flex-flow: var(--v)` 提前展开为默认长手值，使 `-webkit-flex`/`-webkit-flex-flow` 遗留别名行为完全符合 CSSOM 规范。
 - **WPT 验收**：`/css/css-writing-modes/parsing/` **15/15 PASS**、`/css/css-flexbox/parsing/` **27/27 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 557: `overscroll-behavior` 1/1 & `css-content/parsing` 4/4 全绿闭环
+- **`overscroll-behavior*` (`src/js/shim/cssom.js`)**：添加 `contain | none | auto | chain` 关键字及参数个数校验。
+- **`content` 全链路 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+  - `isValidCssValue` 校验 `/` alt-text、`attr()` 非空、`counter()`/`counters()` 参数数量与 `symbols()` 符号个数规则；`normalizeCssSpecifiedValue` 省略默认 `decimal` 与 `symbolic`。
+  - `collectRawComputedMap` 改用 `splitCssTokens` 逐令牌解码/转义字符串，消除 `"hello" / "alt text"` 被整体二次引号包裹的缺陷。
+  - 将 `normCol` 与 `evalGradientComputed` 提升至 `applyUsedValuesToComputedMap` 中 `!hasLayoutBox` 提前返回之前，补充 `to top right -> to right top` 方向关键字规范序，确保 `display: none` 元素上的 `content` 渐变函数仍能完成颜色与长度计算值求值。
+- **WPT 验收**：`/css/css-overscroll-behavior/parsing/` **1/1 PASS**、`/css/css-content/parsing/` **4/4 PASS**、`--smoke` **3/3 suites PASS**。

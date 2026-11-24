@@ -2434,7 +2434,7 @@
     "reason": null
   },
   "/css/css-content/parsing/content-counter-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-content/parsing/content-invalid.html": {

@@ -7521,3 +7521,14 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   3. **全绿验证与并行摸底**：
      - `/css/css-writing-modes/parsing/`: **15/15 PASS (100% ALL GREEN)**；`/css/css-flexbox/parsing/`: **27/27 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 双子智能体摸底确认 `/css/css-contain/parsing/`（4/4）与 `/css/css-scroll-anchoring/`（1/1）均 100% 全绿；`/css/css-content/parsing/`（1/4）与 `/css/css-overscroll-behavior/parsing/`（0/1）缺口明确，将作为后续 Phase 目标。
+
+### 2026-11-24 Phase 557 (`/css/css-overscroll-behavior/parsing/` 1/1 + `/css/css-content/parsing/` 4/4 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 557（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`overscroll-behavior*` 严格校验 (`src/js/shim/cssom.js`)**：
+     - 校验 `overscroll-behavior`（1~2 个 `contain|none|auto|chain`）及 `-x/-y/-inline/-block` 单关键字约束，拦截 `normal`/`0`/超长参数。
+  2. **`content` 语法校验、规范化与 `display: none` 渐变计算值 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - 校验 `content` `/` 后仅允许 `<string>` 与 `counter()`/`counters()`，`none`/`normal` 禁止附带 `/`，`attr()` 禁止空参，`counter()`/`counters()`/`symbols()` 按 CSS Content 3 / Counter Styles 3 严格校验；规范化省略 `decimal` 与 `symbolic`。
+     - `window.js` 中按令牌级解析字符串避免 `"hello" / "alt text"` 整体二次加引号；将 `evalGradientComputed` 提升至 `hasLayoutBox` 提前返回分支之前（补全 `to top right -> to right top`），使 `display: none` 元素上的渐变 `content` 同样完成计算值求值。
+  3. **全绿验证与并行摸底**：
+     - `/css/css-overscroll-behavior/parsing/`: **1/1 PASS (100% ALL GREEN)**；`/css/css-content/parsing/`: **4/4 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 双子智能体并行完成 `/css/css-values/`（3 个分片）、`/css/css-syntax/`、`/css/css-properties-values-api/`、`/css/css-logical/`、`/css/css-sizing/`、`/css/css-ui/`、`/css/css-transitions/` 与 `/css/css-pseudo/` 摸底。
