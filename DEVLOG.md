@@ -3051,3 +3051,7 @@
 ### Phase 637: `grid-template-columns`/`grid-template-rows` 完整语法校验全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 新增 `grid-template-columns`/`grid-template-rows` 校验器，严格校验负长度/负百分比/负 `fr`、`minmax()` 首参不可为 `fr`、相邻空/重复 `[line-names]`、`repeat(auto-fill/auto-fit)` 仅允许单一固定尺寸轨道及 `subgrid` 行线列表。
 - **WPT & Smoke 验收**：`grid-template-{rows,columns}-{invalid,valid}` 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 638: `mask-size-computed` & `outline-width-rounding.tentative` 全绿
+- **核心修复 (`src/js/shim/window.js`)**：将 `mask-size` 纳入 `background-size` 计算值求值循环，并在 `lwProps` 线宽计算中将 `(0px, 1px)` 区间正小数向上吸附为 `1px`。
+- **WPT & Smoke 验收**：`mask-size-computed.html` (16/16) & `outline-width-rounding.tentative.html` (4/4) PASS，`--smoke` 3/3 suites PASS。

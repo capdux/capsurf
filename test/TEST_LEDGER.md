@@ -2229,3 +2229,7 @@
 ### Phase 637: `grid-template-columns`/`grid-template-rows` 完整语法校验全绿
 - **Filter `grid-template-rows-invalid` / `grid-template-columns-invalid` (+ `-valid` 无回退)**: **FAIL->PASS (2/2 + 2/2 回归全绿)**（`cssom.js` `isValidCssValue` 新增 `splitGridTokens` 与 `grid-template-columns`/`grid-template-rows` 完整校验，覆盖 `<line-names>`、`<track-size>`、`minmax()`、`fit-content()`、`repeat(auto-fill/auto-fit)` 固定轨道限制与 `subgrid`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 638: `mask-size-computed` (16/16) & `outline-width-rounding.tentative` (4/4) 全绿
+- **Filter `/css/css-masking/parsing/mask-size-computed` & `/css/css-ui/outline-width-rounding.tentative`**: **FAIL->PASS (2/2: 16/16 + 4/4)**（`window.js` 将 `mask-size` 纳入 `background-size` 同源计算值求值循环，并为 `outline-width`/`border-*-width`/`column-rule-width` 补充 `(0px, 1px)` 正小数向上吸附 `1px`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

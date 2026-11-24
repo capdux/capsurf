@@ -8001,3 +8001,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：为 `grid-template-columns`/`grid-template-rows` 补全 `<track-list>`、`minmax()`、`fit-content()`、`repeat(auto-fill/auto-fit)` 与 `subgrid` 语法校验。
   2. **全绿验证**：`grid-template-rows-invalid`、`grid-template-columns-invalid` **2/2 FAIL->PASS**（`-valid` 2/2 无回退）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`624398e0` 完成 `/css/css-align/` 摸底（35/49 PASS）；`65eba7f3` 完成 `/css/css-masking/` 摸底（28/94 PASS）；`febd8991` 完成 `/css/css-ui/` 摸底（37/47 PASS）；已接力派发 `0d15fac9`（`19720`, `/css/css-tables/`）与 `bc82c8a1`（`19710`, `/css/css-fonts/`）。
+- **[Agent]**: 完成 Phase 638（`src/js/shim/window.js`）：
+  1. **`window.js`**：`mask-size` 纳入 `background-size` 计算值求值循环，并为 `outline-width` 等线宽属性补充 `(0px, 1px)` 正小数吸附 `1px`。
+  2. **全绿验证**：`mask-size-computed.html` **FAIL->PASS (16/16)**、`outline-width-rounding.tentative.html` **FAIL->PASS (4/4)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`0d15fac9` 完成 `/css/css-tables/` 摸底（**16/18 PASS**，17/18 符合预期），已接力派发 `91b2ae4c`（`19720`, `/css/css-lists/`）。

@@ -43449,7 +43449,8 @@
         } else {
           const px = evalCssLengthExpr(lv, 0, fontSize);
           if (px !== null) {
-            computedMap.set(lk, formatCssPx(Math.floor(Math.max(0, px))));
+            const snapped = (px > 0 && px < 1) ? 1 : Math.floor(Math.max(0, px));
+            computedMap.set(lk, formatCssPx(snapped));
           }
         }
       }
@@ -44795,8 +44796,9 @@
           return layer;
         }).join(", "));
       }
-      const bgSizeRaw = (computedMap.get("background-size") || "").trim();
-      if (bgSizeRaw && bgSizeRaw.toLowerCase() !== "auto") {
+      for (const szKey of ["background-size", "mask-size"]) {
+        const bgSizeRaw = (computedMap.get(szKey) || "").trim();
+        if (!bgSizeRaw || bgSizeRaw.toLowerCase() === "auto") continue;
         const bsLayers = [];
         let sCur = "", sD = 0;
         for (let i = 0; i < bgSizeRaw.length; i++) {
@@ -44806,7 +44808,7 @@
           else sCur += ch;
         }
         if (sCur.trim()) bsLayers.push(sCur.trim());
-        computedMap.set("background-size", bsLayers.map((layer) => {
+        computedMap.set(szKey, bsLayers.map((layer) => {
           const toks = splitCssTopLevelWhitespace(layer);
           return toks.map((tk) => {
             const tl = tk.toLowerCase();

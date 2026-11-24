@@ -3742,3 +3742,5 @@
 - **Phase 636** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `text-shadow` 负模糊半径归零为 `0px` 并扩展 `evalGradientComputed` 支持 `repeating-*-gradient`；`text-shadow-computed` 实现 7/7 全绿。
 
 - **Phase 637** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `grid-template-columns`/`grid-template-rows` 完整语法校验；`grid-template-{rows,columns}-{invalid,valid}` 全绿。
+
+- **Phase 638** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `mask-size` 纳入 `background-size` 计算值求值与线宽 `(0px, 1px)` 吸附 `1px`；`mask-size-computed` (16/16) 与 `outline-width-rounding.tentative` (4/4) 全绿。
